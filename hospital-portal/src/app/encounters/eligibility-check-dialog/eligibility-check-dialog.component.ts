@@ -1,3 +1,5 @@
+import { DatePipe } from '@angular/common';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -20,6 +22,8 @@ import {
 } from '../../services/eligibility.service';
 import { ToastService } from '../../core/toast.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
+import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
+import { refusalReason } from '../../shared/refusal-reason';
 
 interface SchemeOption {
   value: EligibilityScheme;
@@ -36,7 +40,14 @@ interface SchemeOption {
 @Component({
   selector: 'app-eligibility-check-dialog',
   standalone: true,
-  imports: [FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+    DatePipe,
+    ServerTimePipe,
+    ModalDialogDirective,
+  ],
   templateUrl: './eligibility-check-dialog.component.html',
   styleUrl: './eligibility-check-dialog.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -143,9 +154,11 @@ export class EligibilityCheckDialogComponent implements OnInit, OnChanges {
               }),
         );
       },
-      error: () => {
+      error: (err: unknown) => {
         this.running.set(false);
-        this.toast.error(this.translate.instant('ENCOUNTERS.ELIGIBILITY.CHECK_FAILED'));
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('ENCOUNTERS.ELIGIBILITY.CHECK_FAILED'),
+        );
       },
     });
   }

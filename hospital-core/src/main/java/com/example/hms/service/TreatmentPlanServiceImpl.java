@@ -89,6 +89,8 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
         validateHospitalContext(hospital, assignment, author, supervising, signOff);
         // QA D503 class: the author is the caller, not a colleague named in the body.
         com.example.hms.security.CallerIdentity.requireCallerUnlessSuperAdmin(author);
+        // QA D1127: a plan is not written straight as APPROVED; another clinician approves it.
+        requireNotApprovedByWrite(null, requestDTO.getStatus());
         validateEncounterContext(encounter, hospital, patient);
         // QA D401: the patient must be registered at the hospital the row is written in.
         patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
@@ -116,16 +118,67 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
         if (plan.getAuthor() == null || !java.util.Objects.equals(plan.getAuthor().getId(), author.getId())) {
             com.example.hms.security.CallerIdentity.requireCallerUnlessSuperAdmin(author);
         }
+        // QA D930 class: sending back the plan's own authorStaffId skipped the
+        // check above, so any colleague could rewrite the plan. The plan is
+        // rewritten by its author only (or a super-admin in global view).
+        if (plan.getAuthor() != null) {
+            // QA D1112: the authorship rule, not "act in your own name".
+            com.example.hms.security.CallerIdentity.requireAuthorUnlessSuperAdmin(plan.getAuthor(),
+                "treatmentPlan.authorOnly");
+        }
+        // QA D1127: the edit is the author's, so it never moves the plan to APPROVED.
+        requireNotApprovedByWrite(plan.getStatus(), requestDTO.getStatus());
+        // QA D1066 class (round 21, with D1162): a cancelled plan is closed to edits too.
+        com.example.hms.service.support.CancelledOrders.requireNotCancelled(plan.getStatus(),
+            "treatmentPlan.cancelled.locked");
         validateEncounterContext(encounter, hospital, patient);
         // QA D401: the patient must be registered at the hospital the row is written in.
         patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
 
         var context = new TreatmentPlanMapper.TreatmentPlanContext(hospital, encounter, assignment, author, supervising, signOff);
+        com.example.hms.enums.TreatmentPlanStatus statusBefore = plan.getStatus();
+        java.util.List<Object> contentBefore = clinicalContent(plan);
         plan.setPatient(patient);
         treatmentPlanMapper.applyRequest(plan, requestDTO, context);
+        // QA D1162 (round 21, user decision): the approval was given to the
+        // plan as it was. An edit of its content sends it back for review; it
+        // used to stay APPROVED under the colleague's approval.
+        plan.setStatus(statusAfterEdit(statusBefore, !contentBefore.equals(clinicalContent(plan)), plan.getStatus()));
         applyFollowUps(plan, requestDTO.getFollowUps());
         TreatmentPlan saved = treatmentPlanRepository.save(plan);
         return treatmentPlanMapper.toResponseDTO(saved);
+    }
+
+    /**
+     * QA D1162: an APPROVED plan whose clinical content an edit changed goes
+     * back to IN_REVIEW, unless the same edit archives or cancels it. An edit
+     * that echoes the approved content unchanged keeps the approval.
+     */
+    static com.example.hms.enums.TreatmentPlanStatus statusAfterEdit(
+            com.example.hms.enums.TreatmentPlanStatus before, boolean contentChanged,
+            com.example.hms.enums.TreatmentPlanStatus after) {
+        if (before == com.example.hms.enums.TreatmentPlanStatus.APPROVED && contentChanged
+                && after == com.example.hms.enums.TreatmentPlanStatus.APPROVED) {
+            return com.example.hms.enums.TreatmentPlanStatus.IN_REVIEW;
+        }
+        return after;
+    }
+
+    /** What a reviewer approved: the patient, the visit and every clinical field of the plan. */
+    private static java.util.List<Object> clinicalContent(TreatmentPlan plan) {
+        return java.util.Arrays.asList(
+            plan.getPatient() != null ? plan.getPatient().getId() : null,
+            plan.getEncounter() != null ? plan.getEncounter().getId() : null,
+            plan.getProblemStatement(),
+            plan.getTherapeuticGoalsJson(),
+            plan.getMedicationPlanJson(),
+            plan.getLifestylePlanJson(),
+            plan.getTimelineSummary(),
+            plan.getFollowUpSummary(),
+            plan.getReferralPlanJson(),
+            plan.getResponsiblePartiesJson(),
+            plan.getTimelineStartDate(),
+            plan.getTimelineReviewDate());
     }
 
     @Override
@@ -217,6 +270,20 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
     public TreatmentPlanReviewDTO addReview(UUID planId, TreatmentPlanReviewRequestDTO requestDTO) {
         TreatmentPlan plan = getPlanOrThrow(planId);
     Staff reviewer = fetchStaff(requestDTO.getReviewerStaffId());
+        // QA D503 class: the reviewer is the signed-in clinician, not a name in the body.
+        com.example.hms.security.CallerIdentity.requireCallerUnlessSuperAdmin(reviewer);
+        // QA D955 class: a plan is approved or signed off by someone other than its author.
+        boolean approves = requestDTO.getAction() == com.example.hms.enums.TreatmentPlanReviewAction.APPROVED
+            || requestDTO.getAction() == com.example.hms.enums.TreatmentPlanReviewAction.SIGNED_OFF;
+        if (approves && plan.getAuthor() != null && (java.util.Objects.equals(plan.getAuthor().getId(), reviewer.getId())
+                || com.example.hms.security.CallerIdentity.sameUser(plan.getAuthor(), reviewer))) {
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("treatmentPlan.review.notAuthor"));
+        }
+        // QA D1066 class (round 20, D1127): a review moves the status now, so a
+        // cancelled plan is refused before anything is written; it is never revived.
+        com.example.hms.service.support.CancelledOrders.requireNotCancelled(plan.getStatus(),
+            "treatmentPlan.cancelled.locked");
         TreatmentPlanReview review = TreatmentPlanReview.builder()
             .treatmentPlan(plan)
             .reviewer(reviewer)
@@ -225,7 +292,44 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
             .build();
         TreatmentPlanReview saved = treatmentPlanReviewRepository.save(review);
         plan.addReview(saved);
+        // QA D1127: the review by another clinician is the one road to APPROVED
+        // (the create and the edit refuse it); a request for changes sends the
+        // plan back to its author.
+        com.example.hms.enums.TreatmentPlanStatus reviewed = statusAfterReview(requestDTO.getAction());
+        // QA D1066 class: nor does it reopen an archived plan.
+        if (reviewed != null && plan.getStatus() != com.example.hms.enums.TreatmentPlanStatus.ARCHIVED) {
+            plan.setStatus(reviewed);
+            treatmentPlanRepository.save(plan);
+        }
         return treatmentPlanMapper.toReviewDTO(saved);
+    }
+
+    /**
+     * QA D1127 (round 20): a treatment plan's author could approve it himself
+     * by creating it as APPROVED or by an edit to APPROVED, around the
+     * "approved by another clinician" rule the review enforces (QA D955). The
+     * create and the edit are the author's writes, so neither moves a plan
+     * into APPROVED; a plan that is already APPROVED keeps its status on an
+     * edit that does not touch it.
+     */
+    static void requireNotApprovedByWrite(com.example.hms.enums.TreatmentPlanStatus current,
+                                          com.example.hms.enums.TreatmentPlanStatus requested) {
+        if (requested == com.example.hms.enums.TreatmentPlanStatus.APPROVED
+                && current != com.example.hms.enums.TreatmentPlanStatus.APPROVED) {
+            throw new com.example.hms.exception.BusinessException("treatmentPlan.approve.byReviewOnly");
+        }
+    }
+
+    /** The plan status a review moves to, or null when the review leaves it as it is. */
+    static com.example.hms.enums.TreatmentPlanStatus statusAfterReview(
+            com.example.hms.enums.TreatmentPlanReviewAction action) {
+        if (action == null) {
+            return null;
+        }
+        return switch (action) {
+            case APPROVED, SIGNED_OFF -> com.example.hms.enums.TreatmentPlanStatus.APPROVED;
+            case CHANGES_REQUESTED, SENT_BACK -> com.example.hms.enums.TreatmentPlanStatus.REVISIONS_REQUIRED;
+        };
     }
 
     private TreatmentPlan getPlanOrThrow(UUID id) {

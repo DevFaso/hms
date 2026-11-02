@@ -7,7 +7,8 @@
     aria-labelledby="checkout-title"
     tabindex="-1"
     (click)="$event.stopPropagation()"
-    (keydown.escape)="close()"
+    (keydown.escape)="close(); $event.stopPropagation()"
+    appModalDialog
   >
     <!-- Header -->
     <header class="dialog-header">
@@ -23,7 +24,8 @@
         @if (encounter) {
           <div class="patient-banner">
             <strong>{{ encounter.patientName }}</strong>
-            <span class="encounter-badge">{{
+            {{ ' '
+            }}<span class="encounter-badge">{{
               encounter.status | enumLabel: 'encounterStatus'
             }}</span>
           </div>
@@ -133,7 +135,12 @@
           <button type="button" class="btn btn-secondary" (click)="close()">
             {{ 'CHECKOUT.CANCEL' | translate }}
           </button>
-          <button type="submit" class="btn btn-primary" [disabled]="!canSubmit">
+          <button
+            type="submit"
+            class="btn btn-primary"
+            [disabled]="saving()"
+            [appSubmitGuard]="!encounter && ('SUBMIT_GUARD.ENCOUNTER' | translate)"
+          >
             @if (saving()) {
               <span>{{ 'CHECKOUT.CHECKING_OUT' | translate }}</span>
             } @else {
@@ -216,7 +223,7 @@
           @if (avs()!.followUpAppointmentDate) {
             <div>
               <dt>{{ 'CHECKOUT.AVS_FOLLOWUP_DATE' | translate }}</dt>
-              <dd>{{ avs()!.followUpAppointmentDate }}</dd>
+              <dd>{{ avs()!.followUpAppointmentDate | serverTime | date: 'mediumDate' }}</dd>
             </div>
           }
         </dl>

@@ -295,7 +295,8 @@ class StockOutRoutingServiceImplTest {
 
         assertThatThrownBy(() -> service.confirmPartnerDispense(decisionId))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("ACCEPTED status");
+                // QA D1090 class: worded for people, the raw status code is gone from the message.
+                .extracting("messageKey").isEqualTo("stock.routing.dispenseNotAccepted");
     }
 
     @Nested
@@ -1237,7 +1238,11 @@ class StockOutRoutingServiceImplTest {
 
             assertThatThrownBy(() -> service.partnerNoShow(decision.getId(), "never came"))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("ACCEPTED");
+                    // QA D1090 class: the status is passed as its label, never the raw code.
+                    .satisfies(e -> {
+                        assertThat(((BusinessException) e).getMessageKey()).isEqualTo("stock.routing.noShowNotAccepted");
+                        assertThat(((BusinessException) e).getArgs()).doesNotContain("PENDING");
+                    });
             verify(prescriptionRepository, never()).save(any());
         }
 

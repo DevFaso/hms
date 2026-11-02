@@ -27,6 +27,9 @@ export type ImagingPriority = 'ROUTINE' | 'URGENT' | 'STAT';
 export type ImagingLaterality = 'LEFT' | 'RIGHT' | 'BILATERAL' | 'MIDLINE' | 'NOT_APPLICABLE';
 
 export interface ImagingOrderResponse {
+  /** QA D1081: the user the server's author check compares with (shared/authorship.service). */
+  authorUserId?: string | null;
+
   id: string;
   patientId: string;
   patientDisplayName: string;

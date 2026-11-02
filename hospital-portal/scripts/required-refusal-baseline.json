@@ -1,0 +1,529 @@
+{
+  "$comment": [
+    "Client-side \"required / missing\" refusals that mark no field, as they stand today.",
+    "Each key is \"file::rule::method::KEY\"; \"why\" is the QA defect id or the reason.",
+    "A site not listed fails the build; call refuseFields()/focusFirstInvalid(), then delete its pin."
+  ],
+  "pinned": {
+    "src/app/admin-assignments/admin-assignments.ts::unmarked-refusal::submitCreate::ASSIGN_ADMIN.FORM_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/admin-assignments/admin-assignments.ts::unmarked-refusal::submitImport::ASSIGN_ADMIN.IMPORT_FILE_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/admin-assignments/admin-assignments.ts::unmarked-refusal::submitMulti::ASSIGN_ADMIN.MULTI_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/admin-governance/matrix-tab.ts::unmarked-refusal::submitCreate::ADMIN_GOV.MATRIX_ROWS_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/admin-governance/policies-tab.ts::unmarked-refusal::submitPolicy::ADMIN_GOV.POLICY_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/admin-governance/policies-tab.ts::unmarked-refusal::submitRule::ADMIN_GOV.RULE_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/admin-governance/security-tab.ts::unmarked-refusal::runSimulation::ADMIN_GOV.SCENARIO_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/admin-governance/security-tab.ts::unmarked-refusal::runSimulation::ADMIN_GOV.SIM_RULES_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/admin-governance/security-tab.ts::unmarked-refusal::submitBaseline::ADMIN_GOV.BASELINE_TITLE_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/admin-governance/users-tab.ts::unmarked-refusal::submitImport::ASSIGN_ADMIN.IMPORT_FILE_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/admin-governance/users-tab.ts::unmarked-refusal::submitReset::ADMIN_GOV.RESET_IDENTIFIERS_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/admin/order-sets/order-set-edit.component.ts::unmarked-refusal::save::ORDER_SETS.CONTEXT_MISSING": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/admin/order-sets/order-set-edit.component.ts::unmarked-refusal::save::ORDER_SETS.ITEM_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/admin/order-sets/order-set-edit.component.ts::unmarked-refusal::save::ORDER_SETS.NAME_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/admissions/admissions.ts::unmarked-refusal::openOrderSetPicker::ORDER_SETS.MISSING_ORDERING_STAFF": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/announcements/announcement-list.ts::unmarked-refusal::submitForm::ANNOUNCEMENTS.TOAST.TEXT_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/bed-management/bed-management.ts::unmarked-refusal::submitBed::BEDS.TOAST.BED_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/bed-management/bed-management.ts::unmarked-refusal::submitWard::BEDS.TOAST.WARD_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/billing/billing.ts::unmarked-refusal::recordPayment::BILLING.PAYMENT_REFERENCE_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/billing/billing.ts::unmarked-refusal::submitAdjustment::BILLING.ADJUSTMENT_LINE_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/billing/billing.ts::unmarked-refusal::submitAdjustment::BILLING.ADJUSTMENT_REASON_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/consultations/consultations.ts::unmarked-refusal::executeCancel::CONSULTATIONS.CANCEL_REASON_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/consultations/consultations.ts::unmarked-refusal::submitAssign::CONSULTATIONS.CONSULTANT_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/consultations/consultations.ts::unmarked-refusal::submitAssign::CONSULTATIONS.REASSIGN_REASON_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/consultations/consultations.ts::unmarked-refusal::submitComplete::CONSULTATIONS.RECOMMENDATIONS_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/consultations/consultations.ts::unmarked-refusal::submitDecline::CONSULTATIONS.DECLINE_REASON_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/consultations/consultations.ts::unmarked-refusal::submitSchedule::CONSULTATIONS.SCHEDULED_AT_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/departments/department-list.ts::unmarked-refusal::submitForm::DEPARTMENTS.TOAST.REQUIRED_FIELDS": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/digital-signatures/digital-signatures.ts::unmarked-refusal::doRevoke::SIGNATURES.REVOKE_REASON_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/digital-signatures/digital-signatures.ts::unmarked-refusal::doSign::SIGNATURES.SIGN_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/digital-signatures/digital-signatures.ts::unmarked-refusal::doVerify::SIGNATURES.VERIFY_VALUE_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/digital-signatures/digital-signatures.ts::unmarked-refusal::runLookup::SIGNATURES.LOOKUP_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/discharge/discharge.ts::unmarked-refusal::submitDecision::DISCHARGE.DIAGNOSIS_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/discharge/discharge.ts::unmarked-refusal::submitDecision::DISCHARGE.REJECTION_REASON_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/discharge/discharge.ts::unmarked-refusal::submitFinalize::DISCHARGE.SIGNATURE_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/discharge/discharge.ts::unmarked-refusal::submitSummary::DISCHARGE.SUMMARY_REQUIRED_FIELDS": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/encounters/eligibility-check-dialog/eligibility-check-dialog.component.ts::unmarked-refusal::run::ENCOUNTERS.ELIGIBILITY.MEMBER_ID_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/encounters/eligibility-check-dialog/eligibility-check-dialog.component.ts::unmarked-refusal::run::ENCOUNTERS.ELIGIBILITY.MISSING_CONTEXT": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/encounters/eligibility-check-dialog/eligibility-check-dialog.component.ts::unmarked-refusal::run::ENCOUNTERS.ELIGIBILITY.SERVICE_CODE_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/feature-flags/feature-flags.ts::unmarked-refusal::createFlag::FLAGS.KEY_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/hospitals/hospital-list.ts::unmarked-refusal::submitForm::HOSPITALS.REQUIRED_FIELDS": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/imaging/imaging.ts::unmarked-refusal::submitStatusUpdate::IMAGING.VOID_REASON_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/lab/lab-results/lab-results.ts::unmarked-refusal::submitForm::LAB_RESULTS.SAVE_VALIDATION_ERROR": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/login/login.ts::unmarked-refusal::submit::LOGIN.CREDENTIALS_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/login/login.ts::unmarked-refusal::submit::LOGIN.TOKEN_MISSING": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/login/login.ts::unmarked-refusal::submitBootstrap::LOGIN.ALL_FIELDS_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/maternity/birth-plan-tab.ts::unmarked-refusal::submitPlan::BIRTH_PLAN.REQUIRED_FIELDS": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/maternity/birth-plan-tab.ts::unmarked-refusal::submitReview::BIRTH_PLAN.SIGNATURE_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/maternity/labor-tab.ts::unmarked-refusal::submitDelivery::LABOR.DELIVERY_MODE_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/maternity/labor-tab.ts::unmarked-refusal::submitEntry::LABOR.ENTRY_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/maternity/maternity.ts::unmarked-refusal::submitHistory::MATERNITY.HISTORY_REQUIRED_FIELDS": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/maternity/maternity.ts::unmarked-refusal::submitReferral::MATERNITY.REFERRAL_REQUIRED_FIELDS": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/maternity/maternity.ts::unmarked-refusal::submitReferral::MATERNITY.URGENCY_ATTACHMENT_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/maternity/prenatal-tab.ts::unmarked-refusal::generate::PRENATAL.REQUIRED_FIELDS": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/maternity/prenatal-tab.ts::unmarked-refusal::submitReschedule::PRENATAL.RESCHEDULE_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/medication-history/medication-history.ts::unmarked-refusal::submitFill::MED_TIMELINE.FILL_REQUIRED_FIELDS": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/micro/microbiology.ts::unmarked-refusal::missingCorrectionReason::MICRO.CORRECTION_REASON_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/micro/microbiology.ts::unmarked-refusal::submitCreate::MICRO.ORDER_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/micro/microbiology.ts::unmarked-refusal::submitIsolate::MICRO.ORGANISM_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/micro/microbiology.ts::unmarked-refusal::submitSusc::MICRO.ANTIBIOTIC_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/micro/microbiology.ts::unmarked-refusal::submitSusc::MICRO.INTERPRETATION_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/nurse-station/nurse-station.ts::unmarked-refusal::confirmHoldRefuse::NURSE.TOAST.REASON_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/nurse-station/nurse-station.ts::unmarked-refusal::confirmHoldRefuse::NURSE.WITNESS.REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/nurse-station/nurse-station.ts::unmarked-refusal::submitCreateHandoff::NURSE.TOAST.HANDOFF_RECIPIENT_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/nurse-station/nurse-station.ts::unmarked-refusal::submitCreateHandoff::NURSE.TOAST.HANDOFF_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/nurse-station/nurse-station.ts::unmarked-refusal::submitCreateHandoff::NURSE.TOAST.HANDOFF_SITUATION_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/nurse-station/nurse-station.ts::unmarked-refusal::submitCreateTask::NURSE.TOAST.TASK_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/nurse-station/nurse-station.ts::unmarked-refusal::submitVitals::NURSE.TOAST.VITALS_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/on-call/on-call.ts::unmarked-refusal::submit::ON_CALL.STAFF_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/on-call/on-call.ts::unmarked-refusal::submit::ON_CALL.WINDOW_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/organizations/organization-detail.ts::unmarked-refusal::ngOnInit::TENANT_LIFECYCLE.TOAST.MISSING_ID": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/organizations/organization-list.ts::unmarked-refusal::submitCreate::ORGANIZATIONS.REQUIRED_FIELDS": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/patient-education/patient-education.ts::unmarked-refusal::submitResource::EDUCATION.TITLE_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/patient-portal/my-billing/my-billing.component.ts::unmarked-refusal::submitPayment::PORTAL.BILLING.REFERENCE_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/patient-portal/my-documents/my-documents.component.ts::unmarked-refusal::uploadDocument::PORTAL.DOCUMENTS.FILE_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/patient-portal/my-family-access/my-family-access.component.ts::unmarked-refusal::grantAccess::PORTAL.FAMILY.REQUIRED_FIELDS": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/patients/bpa-panel/bpa-panel.component.ts::unmarked-refusal::override::BPA.OVERRIDE_REASON_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/patients/break-glass-banner/break-glass-banner.component.ts::unmarked-refusal::submit::BREAK_GLASS.MISSING_CONTEXT": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/patients/coverage-tab/coverage-tab.component.ts::unmarked-refusal::submitEdit::COVERAGE.EDIT_REQUIRED_FIELDS": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/patients/coverage-tab/coverage-tab.component.ts::unmarked-refusal::submitGuarantor::COVERAGE.GUARANTOR_NAME_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/patients/coverage-tab/coverage-tab.component.ts::unmarked-refusal::submitLink::COVERAGE.LINK_REQUIRED_FIELDS": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/patients/coverage-tab/coverage-tab.component.ts::unmarked-refusal::submitRevoke::COVERAGE.CONSENT_REVOKE_REASON_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/patients/fluid-balance/fluid-balance-tab.component.ts::unmarked-refusal::submit::FLUID_BALANCE.ROUTE_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/patients/fluid-balance/fluid-balance-tab.component.ts::unmarked-refusal::submit::FLUID_BALANCE.VOLUME_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/patients/medical-history-tab/medical-history-tab.component.ts::unmarked-refusal::submitFamily::MED_HISTORY.FAMILY_REQUIRED_FIELDS": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/patients/medical-history-tab/medical-history-tab.component.ts::unmarked-refusal::submitImmunization::MED_HISTORY.IMMUNIZATION_REQUIRED_FIELDS": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/patients/patient-chart/patient-chart.component.ts::unmarked-refusal::submitAllergy::CHART.ALLERGEN_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/patients/patient-chart/patient-chart.component.ts::unmarked-refusal::submitDeactivateAllergy::CHART.REASON_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/patients/patient-chart/patient-chart.component.ts::unmarked-refusal::submitDeleteProblem::CHART.REASON_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/patients/patient-chart/patient-chart.component.ts::unmarked-refusal::submitProblem::CHART.PROBLEM_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/patients/patient-chart/patient-chart.component.ts::unmarked-refusal::submitTimelineReason::CHART.REASON_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/patients/patient-chart/patient-chart.component.ts::unmarked-refusal::submitUpdate::CHART.UPDATE_REASON_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/patients/patient-detail.ts::unmarked-refusal::setChartRestriction::PATIENTS.CHART_RESTRICTION_REASON_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/pharmacy/drug-interactions.ts::unmarked-refusal::submit::DRUG_INTERACTIONS.NAMES_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/pharmacy/drug-interactions.ts::unmarked-refusal::submit::DRUG_INTERACTIONS.RECOMMENDATION_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/pharmacy/goods-receipt.ts::unmarked-refusal::submitForm::PHARMACY.LOT_FIELDS_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/pharmacy/goods-receipt.ts::unmarked-refusal::submitForm::PHARMACY.SELECT_ITEM_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/pharmacy/goods-receipt.ts::unmarked-refusal::submitForm::PHARMACY.WITNESS_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/pharmacy/inventory-dashboard.ts::unmarked-refusal::submitCreateForm::PHARMACY.ITEM_REQUIRED_FIELDS": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/pharmacy/medication-catalog.ts::unmarked-refusal::submitForm::PHARMACY.MED_REQUIRED_FIELDS": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/pharmacy/mtm-review.ts::unmarked-refusal::submit::PHARMACY.MTM_PATIENT_HOSPITAL_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/pharmacy/pharmacy-checkout.ts::unmarked-refusal::loadDispense::PHARMACY.CHECKOUT_DISPENSE_ID_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/pharmacy/pharmacy-checkout.ts::unmarked-refusal::submit::PHARMACY_CHECKOUT.REFERENCE_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/pharmacy/pharmacy-checkout.ts::unmarked-refusal::submit::PHARMACY.CHECKOUT_USER_OR_HOSPITAL_MISSING": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/pharmacy/pharmacy-registry.ts::unmarked-refusal::submitForm::PHARMACY.TOAST.REQUIRED_FIELDS": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/pharmacy/stock-adjustment.ts::unmarked-refusal::submitForm::PHARMACY.TX_REQUIRED_FIELDS": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/platform/platform.ts::unmarked-refusal::scheduleRelease::PLATFORM.TOAST.RELEASE_REQUIRED_FIELDS": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/prescriptions/prescriptions.ts::unmarked-refusal::submitForm::PRESCRIPTIONS.PRESCRIBED_QUANTITY_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/procedure-orders/procedure-orders.ts::unmarked-refusal::submitOrder::PROCEDURES.REQUIRED_FIELDS": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/profile/profile.ts::unmarked-refusal::saveProfile::PROFILE.EMAIL_CHANGE_PASSWORD_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/profile/profile.ts::unmarked-refusal::saveRecoveryContact::PROFILE.RECOVERY_VALUE_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/profile/profile.ts::unmarked-refusal::submitMfaStepUp::PROFILE.MFA_STEPUP_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/reception/close-unseen-dialog/close-unseen-dialog.component.ts::unmarked-refusal::submit::RECEPTION.CLOSE_UNSEEN_REASON_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/refills/refill-approval-list.component.ts::unmarked-refusal::pause::REFILLS.NOTES_REQUIRED_PAUSE": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/refills/refill-approval-list.component.ts::unmarked-refusal::reject::REFILLS.NOTES_REQUIRED_REJECT": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/registrations/registrations.ts::unmarked-refusal::submitForm::REGISTRATIONS.PATIENT_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/registries/registries.ts::unmarked-refusal::submitEnroll::REGISTRIES.ENROLL_FIELDS_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/registries/registries.ts::unmarked-refusal::submitStatus::REGISTRIES.REASON_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/reports/reports.ts::unmarked-refusal::submitCreate::REPORTS.FIELDS_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/roles/role-list.ts::unmarked-refusal::submitCreate::ROLES.TOAST.NAME_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/scheduling/scheduling.ts::unmarked-refusal::submitBulk::SCHEDULING.TOAST.DATE_RANGE_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/scheduling/scheduling.ts::unmarked-refusal::submitBulk::SCHEDULING.TOAST.DOW_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/scheduling/scheduling.ts::unmarked-refusal::submitBulk::SCHEDULING.TOAST.IDS_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/slot-admin/slot-admin.ts::unmarked-refusal::submitTemplate::SLOT_ADMIN.TPL_EFFECTIVE_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/slot-admin/slot-admin.ts::unmarked-refusal::submitTemplate::SLOT_ADMIN.TPL_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/slot-admin/slot-admin.ts::unmarked-refusal::submitVisitType::SLOT_ADMIN.VT_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/staff/staff-list.ts::unmarked-refusal::submitForm::STAFF.USER_AND_HOSPITAL_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/users/user-list.ts::unmarked-refusal::submitCreate::USERS.TOAST.REQUIRED_FIELDS": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/users/user-list.ts::unmarked-refusal::submitCreate::USERS.TOAST.ROLE_REQUIRED": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/users/user-list.ts::unmarked-refusal::submitCreate::USERS.TOAST.VALIDATION_ERRORS": {
+      "count": 1,
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    }
+  }
+}

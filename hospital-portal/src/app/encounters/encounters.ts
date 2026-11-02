@@ -1,6 +1,9 @@
+import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
+import { textMatches } from '../shared/person-search';
 import {
   Component,
   computed,
+  ElementRef,
   inject,
   OnInit,
   signal,
@@ -28,6 +31,9 @@ import { PatientService, PatientResponse } from '../services/patient.service';
 import { DepartmentLookupService, DepartmentOption } from '../services/department-lookup.service';
 import { ToastService } from '../core/toast.service';
 import { AuthService } from '../auth/auth.service';
+import { NursingNotesPanelComponent } from './nursing-notes-panel/nursing-notes-panel.component';
+import { NursingNoteService } from '../services/nursing-note.service';
+import { MedicalCertificateDialogComponent } from './medical-certificate-dialog/medical-certificate-dialog.component';
 import { RoleContextService } from '../core/role-context.service';
 import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -37,14 +43,27 @@ import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospit
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { CheckoutDialogComponent } from '../checkout/checkout-dialog/checkout-dialog.component';
 import { actionRoles, SERVICE_RULE_ROLES } from '../core/action-permissions';
+import { CloseUnseenDialogComponent } from '../reception/close-unseen-dialog/close-unseen-dialog.component';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { serverLocalDate, toServerDateTime } from '../shared/date-utils';
 import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import {
+  isNeverSeenVisit,
+  mayEndExamination,
+  mayStartVisit,
+  StartActor,
+} from '../core/encounter-start';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { focusWhenRendered } from '../shared/a11y/focus-when-rendered';
 @Component({
   selector: 'app-encounters',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
+    PersonNamePipe,
+    ModalDialogDirective,
     PatientSublinePipe,
     ServerTimePipe,
     CommonModule,
@@ -52,9 +71,12 @@ import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
     TranslateModule,
     EncounterNoteFormComponent,
     EligibilityCheckDialogComponent,
+    CloseUnseenDialogComponent,
     HospitalScopeChipComponent,
     EnumLabelPipe,
     CheckoutDialogComponent,
+    NursingNotesPanelComponent,
+    MedicalCertificateDialogComponent,
   ],
   templateUrl: './encounters.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -97,6 +119,37 @@ export class EncountersComponent implements OnInit {
   protected readonly canDeleteEncounter = computed(() =>
     this.roleContext.hasAnyActiveRole(actionRoles('encounterDelete')),
   );
+  /**
+   * QA D954: a visit nobody has seen (EncounterClosureRules.NEVER_SEEN) is
+   * closed as "left without being seen" from its detail too, by the roles the
+   * endpoint admits (the reception's close-unseen dialog, reused).
+   */
+  protected readonly canCloseUnseen = computed(() =>
+    this.roleContext.hasAnyActiveRole(actionRoles('encounterCloseUnseen')),
+  );
+  readonly closeUnseenEncounter = signal<EncounterResponse | null>(null);
+
+  isNeverSeen(status: string | null | undefined): boolean {
+    // QA D1108: the one never-seen rule (core/encounter-start), the server's own.
+    return isNeverSeenVisit(status);
+  }
+
+  /**
+   * QA D1024: the LWBS dialog opened from the visit's detail rendered under the
+   * drawer (whose focus trap also kept the keyboard out of it), so it could
+   * not be submitted. The drawer is closed first; the dialog is then the only
+   * modal on the page.
+   */
+  openCloseUnseenFromDetail(enc: EncounterResponse): void {
+    this.closeDetail();
+    this.closeUnseenEncounter.set(enc);
+  }
+
+  onUnseenVisitClosed(): void {
+    this.closeUnseenEncounter.set(null);
+    this.closeDetail();
+    this.loadEncounters();
+  }
   /** Non-null when the user is locked to a single hospital (all non-admin staff) */
   lockedHospitalId: string | null = null;
   /** Human-readable name of the locked hospital */
@@ -145,6 +198,9 @@ export class EncountersComponent implements OnInit {
   addendumContent = '';
   showAddendumForm = signal(false);
   addendumSaving = signal(false);
+  /** QA D1131: Escape was pressed over typed addendum text; the form asks before discarding it. */
+  readonly addendumDiscardAsk = signal(false);
+  private readonly hostEl = inject(ElementRef);
   /**
    * QA D831 (#965 review): the entry the open addendum form corrects. On a
    * stay an earlier entry is signed and locked, so an addendum is its only
@@ -315,7 +371,6 @@ export class EncountersComponent implements OnInit {
     this.patientSearch$
       .pipe(
         debounceTime(220),
-        distinctUntilChanged(),
         switchMap((q) => {
           this.patientSearchLoading.set(true);
           // ── TENANT ISOLATION: always scope patient search to the form's hospital ──
@@ -554,8 +609,8 @@ export class EncountersComponent implements OnInit {
         this.loadEncounters();
         this.deleting.set(false);
       },
-      error: () => {
-        this.toast.error(this.translate.instant('ENCOUNTERS.DELETE_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('ENCOUNTERS.DELETE_FAILED'));
         this.deleting.set(false);
       },
     });
@@ -619,8 +674,8 @@ export class EncountersComponent implements OnInit {
     if (term) {
       list = list.filter(
         (e) =>
-          (e.patientName ?? '').toLowerCase().includes(term) ||
-          (e.staffName ?? '').toLowerCase().includes(term) ||
+          textMatches(e.patientName, term) ||
+          textMatches(e.staffName, term) ||
           (e.departmentName ?? '').toLowerCase().includes(term) ||
           (e.notes ?? '').toLowerCase().includes(term),
       );
@@ -663,7 +718,7 @@ export class EncountersComponent implements OnInit {
         // Surface the backend refusal verbatim (house rule) — a signed-note
         // lock or client-asserted-signature refusal must reach the clinician.
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('ENCOUNTERS.NOTE_SAVE_FAILED'),
+          refusalReason(err) ?? this.translate.instant('ENCOUNTERS.NOTE_SAVE_FAILED'),
         );
         this.savingNote.set(false);
       },
@@ -672,8 +727,52 @@ export class EncountersComponent implements OnInit {
 
   /* ── Note sign/co-sign ceremony (P3 #20) ── */
 
-  /** No client-side role gate, matching the prescriptions pattern: whoever
-   *  passes the route guard sees the button; the backend arbitrates
+  /** QA D961: the certificate dialog. */
+  readonly showCertificateDialog = signal(false);
+
+  /**
+   * QA D961: a doctor issues a certificate from a visit the patient was seen
+   * in (the server refuses a visit closed unseen, cancelled or not started).
+   */
+  canIssueCertificate(enc: EncounterResponse): boolean {
+    const unseen = [
+      'SCHEDULED',
+      'ARRIVED',
+      'TRIAGE',
+      'WAITING_FOR_PHYSICIAN',
+      'CANCELLED',
+      'LEFT_WITHOUT_BEING_SEEN',
+    ];
+    return (
+      this.auth.hasAnyRole(actionRoles('encounterMedicalCertificate')) &&
+      !!enc.status &&
+      !unseen.includes(enc.status)
+    );
+  }
+
+  /** QA D927: only the roles `GET /nurse/notes` admits load the panel (a refused read would leave the page). */
+  get canReadNursingNotes(): boolean {
+    return this.auth.hasAnyRole(NursingNoteService.READER_ROLES);
+  }
+
+  /**
+   * QA D995: only the note's author signs it and only another clinician
+   * co-signs it (the server refuses the rest), so the buttons are offered
+   * accordingly instead of leading to a refusal. A note with no recorded
+   * author keeps both, and the server decides.
+   */
+  isNoteAuthor(note: EncounterNoteResponse | null): boolean {
+    const me = this.auth.getUserId();
+    return !note?.authorUserId || (!!me && note.authorUserId === me);
+  }
+
+  isOtherClinicianNote(note: EncounterNoteResponse | null): boolean {
+    const me = this.auth.getUserId();
+    return !note?.authorUserId || !me || note.authorUserId !== me;
+  }
+
+  /** Matching the prescriptions pattern, the backend arbitrates; whoever
+   *  is offered the button (see isNoteAuthor) has it checked again there
    *  (author-only for sign, non-author DOCTOR at the hospital for co-sign)
    *  and its refusal is surfaced verbatim. */
   signNote(): void {
@@ -693,7 +792,7 @@ export class EncountersComponent implements OnInit {
       error: (err) => {
         this.signingNote.set(false);
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('ENCOUNTERS.NOTE_SIGN_FAILED'),
+          refusalReason(err) ?? this.translate.instant('ENCOUNTERS.NOTE_SIGN_FAILED'),
         );
       },
     });
@@ -714,7 +813,7 @@ export class EncountersComponent implements OnInit {
       error: (err) => {
         this.signingEntryId.set(null);
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('ENCOUNTERS.NOTE_SIGN_FAILED'),
+          refusalReason(err) ?? this.translate.instant('ENCOUNTERS.NOTE_SIGN_FAILED'),
         );
       },
     });
@@ -735,7 +834,7 @@ export class EncountersComponent implements OnInit {
       error: (err) => {
         this.cosigningEntryId.set(null);
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('ENCOUNTERS.NOTE_COSIGN_FAILED'),
+          refusalReason(err) ?? this.translate.instant('ENCOUNTERS.NOTE_COSIGN_FAILED'),
         );
       },
     });
@@ -777,7 +876,7 @@ export class EncountersComponent implements OnInit {
       error: (err) => {
         this.cosigningNote.set(false);
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('ENCOUNTERS.NOTE_COSIGN_FAILED'),
+          refusalReason(err) ?? this.translate.instant('ENCOUNTERS.NOTE_COSIGN_FAILED'),
         );
       },
     });
@@ -813,13 +912,55 @@ export class EncountersComponent implements OnInit {
   openAddendumForm(entryId: string | null | undefined): void {
     this.addendumTargetId.set(entryId ?? null);
     this.addendumContent = '';
+    this.addendumDiscardAsk.set(false);
     this.showAddendumForm.set(true);
+    // QA D1131: the keyboard lands in the box, not on the page body.
+    this.focusSoon('[data-testid="addendum-content"]');
   }
 
-  closeAddendumForm(): void {
+  /**
+   * Closes the addendum form. `returnFocus` (Cancel, Escape, discard) gives
+   * the keyboard back to the "Add an addendum" button it was opened from.
+   */
+  closeAddendumForm(returnFocus = false): void {
+    const opener = this.addendumOnEarlierEntry() ? this.addendumTargetId() : 'current';
     this.showAddendumForm.set(false);
     this.addendumTargetId.set(null);
     this.addendumContent = '';
+    this.addendumDiscardAsk.set(false);
+    if (returnFocus && opener) {
+      this.focusSoon(`[data-addendum-for="${CSS.escape(opener)}"]`);
+    }
+  }
+
+  /**
+   * QA D1131: Escape inside the addendum is the addendum's own — it never
+   * reaches the visit panel (which closed and lost the text). An empty
+   * addendum closes; typed text asks first; Escape on that question goes back
+   * to the text.
+   */
+  onAddendumEscape(event: Event): void {
+    event.preventDefault();
+    event.stopPropagation();
+    if (this.addendumDiscardAsk()) {
+      this.keepAddendum();
+    } else if (this.addendumContent.trim()) {
+      this.addendumDiscardAsk.set(true);
+      this.focusSoon('[data-testid="addendum-keep"]');
+    } else {
+      this.closeAddendumForm(true);
+    }
+  }
+
+  /** Back to the typed addendum, text intact. */
+  keepAddendum(): void {
+    this.addendumDiscardAsk.set(false);
+    this.focusSoon('[data-testid="addendum-content"]');
+  }
+
+  /** Focuses `selector` inside this page once the view has rendered it. */
+  private focusSoon(selector: string): void {
+    focusWhenRendered(this.hostEl.nativeElement as HTMLElement, selector);
   }
 
   addAddendum(): void {
@@ -837,8 +978,10 @@ export class EncountersComponent implements OnInit {
           this.addendumSaving.set(false);
           this.loadNoteHistory(enc.id);
         },
-        error: () => {
-          this.toast.error(this.translate.instant('ENCOUNTERS.ADDENDUM_FAILED'));
+        error: (err: unknown) => {
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('ENCOUNTERS.ADDENDUM_FAILED'),
+          );
           this.addendumSaving.set(false);
         },
       });
@@ -848,9 +991,36 @@ export class EncountersComponent implements OnInit {
 
   /** D96: a doctor picks up a patient who is waiting for one. */
   canStartEncounter(enc: EncounterResponse): boolean {
-    return (
-      enc.status === 'WAITING_FOR_PHYSICIAN' && this.auth.hasAnyRole(actionRoles('encounterStart'))
-    );
+    if (
+      enc.status !== 'WAITING_FOR_PHYSICIAN' ||
+      !this.auth.hasAnyRole(actionRoles('encounterStart'))
+    ) {
+      return false;
+    }
+    // QA D1085: per visit, the server's rule (core/encounter-start).
+    return mayStartVisit(this.visitActor(), this.assignedUserOf(enc));
+  }
+
+  /**
+   * The assigned clinician, named by user when the server sends it, else by
+   * the staff record the session carries (QA D1085).
+   */
+  private assignedUserOf(enc: EncounterResponse): string | null {
+    const myStaffId = this.auth.getUserProfile()?.staffId ?? null;
+    if (enc.staffUserId !== undefined) return enc.staffUserId;
+    if (!enc.staffId) return null;
+    return enc.staffId === myStaffId ? this.auth.getUserId() : `staff:${enc.staffId}`;
+  }
+
+  private visitActor(): StartActor {
+    return {
+      superAdmin: this.roleContext.isSuperAdmin(),
+      // rbac-inline-ok: mirrors EncounterController#startEncounter's midwifeOnly test (ROLE_DOCTOR held or not).
+      doctor: this.auth.hasAnyRole(['ROLE_DOCTOR']),
+      // rbac-inline-ok: mirrors EncounterController#startEncounter (a midwife leads her own visits).
+      midwife: this.auth.hasAnyRole(['ROLE_MIDWIFE']),
+      userId: this.auth.getUserId(),
+    };
   }
 
   /** D96: a visit ready for discharge can be checked out from here too. */
@@ -869,8 +1039,10 @@ export class EncountersComponent implements OnInit {
         this.selectedEncounter.set(updated);
         this.loadEncounters();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('ENCOUNTERS.STATUS_UPDATE_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('ENCOUNTERS.STATUS_UPDATE_FAILED'),
+        );
         this.transitioning.set(false);
       },
     });
@@ -896,7 +1068,10 @@ export class EncountersComponent implements OnInit {
   }
 
   canCompleteExamination(enc: EncounterResponse): boolean {
-    return enc.status === 'IN_PROGRESS';
+    // QA D1099: the examining clinician ends the examination (the server refuses anyone else).
+    return (
+      enc.status === 'IN_PROGRESS' && mayEndExamination(this.visitActor(), this.assignedUserOf(enc))
+    );
   }
 
   /**
@@ -909,7 +1084,9 @@ export class EncountersComponent implements OnInit {
     }
     return (
       enc.status === 'IN_PROGRESS' &&
-      this.auth.hasAnyRole([...SERVICE_RULE_ROLES.readyForDischargeFromInProgress])
+      this.auth.hasAnyRole([...SERVICE_RULE_ROLES.readyForDischargeFromInProgress]) &&
+      // QA D1099: from IN_PROGRESS it ends the examination, the examining clinician's step.
+      mayEndExamination(this.visitActor(), this.assignedUserOf(enc))
     );
   }
 
@@ -922,8 +1099,10 @@ export class EncountersComponent implements OnInit {
         this.selectedEncounter.set(updated);
         this.loadEncounters();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('ENCOUNTERS.EXAM_COMPLETE_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('ENCOUNTERS.EXAM_COMPLETE_FAILED'),
+        );
         this.transitioning.set(false);
       },
     });
@@ -938,8 +1117,10 @@ export class EncountersComponent implements OnInit {
         this.selectedEncounter.set(updated);
         this.loadEncounters();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('ENCOUNTERS.STATUS_UPDATE_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('ENCOUNTERS.STATUS_UPDATE_FAILED'),
+        );
         this.transitioning.set(false);
       },
     });

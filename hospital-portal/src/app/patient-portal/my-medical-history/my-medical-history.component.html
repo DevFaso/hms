@@ -50,12 +50,22 @@
           {{ 'PORTAL.MEDICAL_HISTORY.NOTES_DISCLAIMER' | translate }}
         </p>
         @if (editingSection() === 'medical') {
-          <textarea
-            class="notes-textarea"
-            [value]="medicalNotes()"
-            (input)="onNoteChange('medical', $any($event.target).value)"
-            rows="3"
-          ></textarea>
+          <!-- QA D1191 / D1195 class (round 22): Escape closes only the note, asking
+               first over typed text, and puts back the saved note. -->
+          <div
+            appInlineSubForm
+            #medicalNote="inlineSubForm"
+            (dismissed)="cancelNoteEdit('medical')"
+          >
+            <textarea
+              class="notes-textarea"
+              [attr.aria-label]="'PORTAL.MEDICAL_HISTORY.PERSONAL_NOTES_MEDICAL' | translate"
+              [value]="medicalNotes()"
+              (input)="onNoteChange('medical', $any($event.target).value)"
+              rows="3"
+            ></textarea>
+            <app-inline-discard-ask [form]="medicalNote" />
+          </div>
         } @else if (medicalNotes()) {
           <p class="notes-content">{{ medicalNotes() }}</p>
         }
@@ -113,12 +123,22 @@
           {{ 'PORTAL.MEDICAL_HISTORY.NOTES_DISCLAIMER' | translate }}
         </p>
         @if (editingSection() === 'surgical') {
-          <textarea
-            class="notes-textarea"
-            [value]="surgicalNotes()"
-            (input)="onNoteChange('surgical', $any($event.target).value)"
-            rows="3"
-          ></textarea>
+          <!-- QA D1191 / D1195 class (round 22): Escape closes only the note, asking
+               first over typed text, and puts back the saved note. -->
+          <div
+            appInlineSubForm
+            #surgicalNote="inlineSubForm"
+            (dismissed)="cancelNoteEdit('surgical')"
+          >
+            <textarea
+              class="notes-textarea"
+              [attr.aria-label]="'PORTAL.MEDICAL_HISTORY.PERSONAL_NOTES_SURGICAL' | translate"
+              [value]="surgicalNotes()"
+              (input)="onNoteChange('surgical', $any($event.target).value)"
+              rows="3"
+            ></textarea>
+            <app-inline-discard-ask [form]="surgicalNote" />
+          </div>
         } @else if (surgicalNotes()) {
           <p class="notes-content">{{ surgicalNotes() }}</p>
         }
@@ -162,8 +182,8 @@
                 }}</span>
                 @if (item.ageAtOnset) {
                   <span class="pli-meta"
-                    >{{ 'PORTAL.MEDICAL_HISTORY.AGE_AT_ONSET' | translate }}:
-                    {{ item.ageAtOnset }}</span
+                    >{{ 'PORTAL.MEDICAL_HISTORY.AGE_AT_ONSET' | translate
+                    }}{{ 'COMMON.COLON' | translate }} {{ item.ageAtOnset }}</span
                   >
                 }
               </div>
@@ -185,12 +205,18 @@
           {{ 'PORTAL.MEDICAL_HISTORY.NOTES_DISCLAIMER' | translate }}
         </p>
         @if (editingSection() === 'family') {
-          <textarea
-            class="notes-textarea"
-            [value]="familyNotes()"
-            (input)="onNoteChange('family', $any($event.target).value)"
-            rows="3"
-          ></textarea>
+          <!-- QA D1191 / D1195 class (round 22): Escape closes only the note, asking
+               first over typed text, and puts back the saved note. -->
+          <div appInlineSubForm #familyNote="inlineSubForm" (dismissed)="cancelNoteEdit('family')">
+            <textarea
+              class="notes-textarea"
+              [attr.aria-label]="'PORTAL.MEDICAL_HISTORY.PERSONAL_NOTES_FAMILY' | translate"
+              [value]="familyNotes()"
+              (input)="onNoteChange('family', $any($event.target).value)"
+              rows="3"
+            ></textarea>
+            <app-inline-discard-ask [form]="familyNote" />
+          </div>
         } @else if (familyNotes()) {
           <p class="notes-content">{{ familyNotes() }}</p>
         }
@@ -289,12 +315,18 @@
           {{ 'PORTAL.MEDICAL_HISTORY.NOTES_DISCLAIMER' | translate }}
         </p>
         @if (editingSection() === 'social') {
-          <textarea
-            class="notes-textarea"
-            [value]="socialNotes()"
-            (input)="onNoteChange('social', $any($event.target).value)"
-            rows="3"
-          ></textarea>
+          <!-- QA D1191 / D1195 class (round 22): Escape closes only the note, asking
+               first over typed text, and puts back the saved note. -->
+          <div appInlineSubForm #socialNote="inlineSubForm" (dismissed)="cancelNoteEdit('social')">
+            <textarea
+              class="notes-textarea"
+              [attr.aria-label]="'PORTAL.MEDICAL_HISTORY.PERSONAL_NOTES_SOCIAL' | translate"
+              [value]="socialNotes()"
+              (input)="onNoteChange('social', $any($event.target).value)"
+              rows="3"
+            ></textarea>
+            <app-inline-discard-ask [form]="socialNote" />
+          </div>
         } @else if (socialNotes()) {
           <p class="notes-content">{{ socialNotes() }}</p>
         }

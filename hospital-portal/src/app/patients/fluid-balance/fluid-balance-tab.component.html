@@ -136,13 +136,15 @@
     >
       <div
         class="modal"
+        appModalDialog
+        aria-labelledby="fluid-balance-tab-dialog-1-title"
         role="dialog"
         aria-modal="true"
         tabindex="-1"
         (click)="$event.stopPropagation()"
         (keydown.escape)="closeModal()"
       >
-        <h3>{{ 'FLUID_BALANCE.MODAL_TITLE' | translate }}</h3>
+        <h3 id="fluid-balance-tab-dialog-1-title">{{ 'FLUID_BALANCE.MODAL_TITLE' | translate }}</h3>
 
         <div class="form-field">
           <label for="io-route">{{ 'FLUID_BALANCE.FIELD_ROUTE' | translate }}</label>

@@ -1,7 +1,7 @@
 import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { debounceTime, distinctUntilChanged, Subject, switchMap, of } from 'rxjs';
+import { debounceTime, Subject, switchMap, of } from 'rxjs';
 import {
   StaffSchedulingService,
   StaffShiftResponse,
@@ -19,11 +19,19 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
 import { currentLocale, formatClockTime } from '../shared/i18n/app-locale';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 @Component({
   selector: 'app-scheduling',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe, RoleLabelPipe],
+  imports: [
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+    RoleLabelPipe,
+    ModalDialogDirective,
+  ],
   templateUrl: './scheduling.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './scheduling.scss',
@@ -85,7 +93,6 @@ export class SchedulingComponent implements OnInit {
     this.staffSearch$
       .pipe(
         debounceTime(220),
-        distinctUntilChanged(),
         switchMap((q) => {
           const query = q.trim().toLowerCase();
           if (!query) return of([]);

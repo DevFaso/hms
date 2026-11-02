@@ -151,8 +151,23 @@ public class BillingInvoiceController {
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST','ROLE_ACCOUNTANT','ROLE_RECEPTIONIST')")
     @Operation(summary = "Billing KPIs over every invoice in scope")
     public ResponseEntity<com.example.hms.payload.dto.BillingSummaryDTO> summary(
+        @RequestParam(name = "fromDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+        @RequestParam(name = "toDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
         @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
-        return ResponseEntity.ok(invoiceService.summarize(locale));
+        // QA D1059: the tiles follow the list's date filter; no filter, every invoice in scope.
+        if (fromDate == null && toDate == null) {
+            return ResponseEntity.ok(invoiceService.summarize(locale));
+        }
+        return ResponseEntity.ok(invoiceService.summarize(fromDate, toDate, locale));
+    }
+
+    @GetMapping("/cash-closing")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST','ROLE_ACCOUNTANT','ROLE_RECEPTIONIST')")
+    @Operation(summary = "The signed-in cashier's daily cash closing (QA D1059)")
+    public ResponseEntity<com.example.hms.payload.dto.CashClosingDTO> cashClosing(
+        @RequestParam(name = "date", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+        @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
+        return ResponseEntity.ok(invoiceService.cashClosing(date, locale));
     }
 
     @PostMapping("/search")
@@ -175,6 +190,45 @@ public class BillingInvoiceController {
         org.springframework.security.core.Authentication authentication) {
         UUID recordedBy = authUtils.resolveUserId(authentication).orElse(null);
         return ResponseEntity.ok(invoiceService.recordStaffPayment(invoiceId, request, recordedBy, locale));
+    }
+
+    /** QA D974: billing lowers an issued invoice with a reason; the front desk cannot. */
+    @PostMapping("/{invoiceId}/adjustments")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST')")
+    @Operation(summary = "Discount, waive or credit part of an issued invoice")
+    public ResponseEntity<BillingInvoiceResponseDTO> addAdjustment(
+        @PathVariable UUID invoiceId,
+        @Valid @RequestBody com.example.hms.payload.dto.InvoiceAdjustmentRequestDTO request,
+        @RequestHeader(name = "Accept-Language", required = false) Locale locale,
+        org.springframework.security.core.Authentication authentication) {
+        UUID staffId = authUtils.resolveUserId(authentication).orElse(null);
+        return ResponseEntity.ok(invoiceService.addAdjustment(invoiceId, request, staffId, locale));
+    }
+
+    /**
+     * QA D1105: billing undoes a mistaken discount, waiver or credit note,
+     * with a reason; the money received (a folded copay) stays as it is.
+     */
+    @PostMapping("/{invoiceId}/adjustments/{adjustmentId}/reverse")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST')")
+    @Operation(summary = "Reverse a discount, waiver or credit note of an invoice")
+    public ResponseEntity<BillingInvoiceResponseDTO> reverseAdjustment(
+        @PathVariable UUID invoiceId,
+        @PathVariable UUID adjustmentId,
+        @Valid @RequestBody com.example.hms.payload.dto.AdjustmentReversalRequestDTO request,
+        @RequestHeader(name = "Accept-Language", required = false) Locale locale,
+        org.springframework.security.core.Authentication authentication) {
+        UUID staffId = authUtils.resolveUserId(authentication).orElse(null);
+        return ResponseEntity.ok(invoiceService.reverseAdjustment(invoiceId, adjustmentId, request.reason(), staffId,
+            locale));
+    }
+
+    @GetMapping("/{invoiceId}/adjustments")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST','ROLE_ACCOUNTANT','ROLE_RECEPTIONIST')")
+    @Operation(summary = "List the discounts, waivers and credit notes of an invoice")
+    public ResponseEntity<java.util.List<com.example.hms.payload.dto.InvoiceAdjustmentResponseDTO>> listAdjustments(
+        @PathVariable UUID invoiceId) {
+        return ResponseEntity.ok(invoiceService.listAdjustments(invoiceId));
     }
 
     @GetMapping("/{invoiceId}/payments")

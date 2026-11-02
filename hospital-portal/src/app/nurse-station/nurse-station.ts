@@ -10,7 +10,9 @@ import {
   ElementRef,
   AfterViewChecked,
   ChangeDetectionStrategy,
+  DestroyRef,
 } from '@angular/core';
+import { isNeverSeenVisit } from '../core/encounter-start';
 import { firstImplausibleVital } from '../shared/vital-sign-limits';
 import { glucoseMmolToMgDl } from '../shared/glucose-units';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
@@ -38,12 +40,20 @@ import {
   NurseInboxItem,
   NurseCareNoteRequest,
   NurseCareNoteResponse,
+  MedicationAdministrationRequest,
 } from '../services/nurse-task.service';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
-import { PatientResponse } from '../services/patient.service';
+import { PatientResponse, PatientService } from '../services/patient.service';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ToastService } from '../core/toast.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { fromServerDateTime, localDateString, toServerDateTime } from '../shared/date-utils';
+import {
+  fromServerDateTime,
+  isServerTimeToday,
+  localDateString,
+  serverInstant,
+  toServerDateTime,
+} from '../shared/date-utils';
 import {
   EncounterService,
   EncounterResponse,
@@ -54,9 +64,18 @@ import { AuthService } from '../auth/auth.service';
 import { TriageFormComponent } from './triage-form/triage-form.component';
 import { NursingIntakeFormComponent } from './nursing-intake-form/nursing-intake-form.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { WitnessPickerComponent } from './witness-picker/witness-picker.component';
 import { CdsCardListComponent } from '../shared/cds-card/cds-card.component';
 import { CdsCard } from '../shared/cds-card/cds-card.model';
+import { MedicationRoutePipe } from '../shared/pipes/medication-route.pipe';
+import { CloseUnseenDialogComponent } from '../reception/close-unseen-dialog/close-unseen-dialog.component';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { offersHeadCircumference } from '../shared/patient-measures';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { refusalReason } from '../shared/refusal-reason';
+import { ReasonDialogComponent } from '../shared/reason-dialog/reason-dialog.component';
+import { earlyDoseRefusal } from './early-dose';
 type FilterMode = 'me' | 'unit' | 'all';
 type SectionType =
   | 'vitals'
@@ -83,16 +102,22 @@ export function localInputToUtcIso(value: string | undefined | null): string | u
   selector: 'app-nurse-station',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
+    ModalDialogDirective,
+    MedicationRoutePipe,
     CommonModule,
     FormsModule,
     RouterLink,
     TranslateModule,
     TriageFormComponent,
+    CloseUnseenDialogComponent,
     NursingIntakeFormComponent,
     EnumLabelPipe,
     PatientPickerComponent,
     ServerTimePipe,
     CdsCardListComponent,
+    WitnessPickerComponent,
+    ReasonDialogComponent,
   ],
   templateUrl: './nurse-station.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -121,6 +146,15 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   medications = signal<NurseMedicationTask[]>([]);
   orders = signal<NurseOrderTask[]>([]);
   handoffs = signal<NurseHandoff[]>([]);
+
+  /**
+   * QA D1075: "Rapporté par … <time>" is when the handoff was reported. The
+   * row's updatedAt moves when it is completed, so it showed the completion
+   * time; it is only the fallback for a server that sends no createdAt.
+   */
+  handoffReportedAt(h: NurseHandoff): string {
+    return h.createdAt ?? h.updatedAt;
+  }
   /**
    * Completed handoffs, fetched on demand. The ?status= endpoint parameter
    * shipped in PR #462 with zero callers — the record of who handed off what,
@@ -143,6 +177,15 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
 
   /* Vitals capture dialog state */
   vitalsCaptureFor = signal<{ patientId: string; patientName: string } | null>(null);
+  /**
+   * QA D1077 (sibling): head circumference is a growth measurement. The ward
+   * vitals offered it for a 65-year-old; it is offered only on the growth
+   * tab's age rule (shared/patient-measures), read from the patient's DOB.
+   */
+  readonly vitalsPatientDob = signal<string | null>(null);
+  readonly showHeadCircumference = computed(() => offersHeadCircumference(this.vitalsPatientDob()));
+  private readonly patientLookup = inject(PatientService);
+  private readonly destroyRef = inject(DestroyRef);
   vitalsForm = signal<NurseVitalCaptureRequest>({});
   vitalsCapturing = signal(false);
 
@@ -461,6 +504,7 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   administerMedication(taskId: string): void {
     this.reasonPrompt.set({ taskId, action: 'GIVEN' });
     this.reasonText.set('');
+    this.witnessUserId.set(null);
   }
 
   /**
@@ -494,6 +538,41 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
     this.reasonText.set('');
   }
 
+  /**
+   * QA D1039: when the patient started waiting, read as the server reads it
+   * (EncounterWait): the arrival time; else when the visit was recorded, if
+   * that is within the 24 hours after its date (a date picked as a day is
+   * midnight); else the visit's date.
+   */
+  waitStart(e: {
+    arrivalTimestamp?: string | null;
+    createdAt?: string | null;
+    encounterDate?: string | null;
+  }): string | null {
+    if (e.arrivalTimestamp) return e.arrivalTimestamp;
+    const date = e.encounterDate ? serverInstant(e.encounterDate).getTime() : Number.NaN;
+    const created = e.createdAt ? serverInstant(e.createdAt).getTime() : Number.NaN;
+    if (
+      !Number.isNaN(date) &&
+      !Number.isNaN(created) &&
+      created > date &&
+      created < date + 86_400_000
+    ) {
+      return e.createdAt ?? null;
+    }
+    return e.encounterDate ?? e.createdAt ?? null;
+  }
+
+  /** QA D922: the second clinician who witnesses a controlled dose given from this table. */
+  readonly witnessUserId = signal<string | null>(null);
+
+  /** QA D922: the prompt is giving a controlled drug, so a witness is asked for. */
+  promptNeedsWitness(): boolean {
+    const prompt = this.reasonPrompt();
+    if (prompt?.action !== 'GIVEN') return false;
+    return !!this.medications().find((m) => m.id === prompt.taskId)?.controlledSubstance;
+  }
+
   confirmHoldRefuse(): void {
     const prompt = this.reasonPrompt();
     if (!prompt) return;
@@ -502,11 +581,46 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
       this.toast.error(this.translate.instant('NURSE.TOAST.REASON_REQUIRED'));
       return;
     }
-    this.actionInProgress.set(prompt.taskId);
-    const payload =
+    if (this.promptNeedsWitness() && !this.witnessUserId()) {
+      this.toast.error(this.translate.instant('NURSE.WITNESS.REQUIRED'));
+      return;
+    }
+    const witness = this.witnessUserId();
+    const payload: MedicationAdministrationRequest =
       prompt.action === 'GIVEN'
-        ? { status: 'GIVEN', overrideReason: reason }
+        ? {
+            status: 'GIVEN',
+            overrideReason: reason,
+            ...(this.promptNeedsWitness() && witness ? { witnessUserId: witness } : {}),
+          }
         : { status: prompt.action, note: reason };
+    this.sendAdministration(prompt, payload);
+  }
+
+  /**
+   * QA D1210 (round 23): the dose the server refused as too soon after the
+   * last one, with its reason (last dose, earliest next time). It opens over
+   * the Give prompt, which stays open underneath; the nurse may give the dose
+   * early with a reason, or go back to the prompt.
+   */
+  readonly earlyDose = signal<{
+    prompt: { taskId: string; action: 'GIVEN' | 'HELD' | 'REFUSED' };
+    payload: MedicationAdministrationRequest;
+    why: string;
+  } | null>(null);
+
+  /** QA D1210: the same dose again, with the nurse's reason for giving it early. */
+  confirmEarlyDose(reason: string): void {
+    const early = this.earlyDose();
+    if (!early || this.actionInProgress()) return;
+    this.sendAdministration(early.prompt, { ...early.payload, earlyDoseReason: reason });
+  }
+
+  private sendAdministration(
+    prompt: { taskId: string; action: 'GIVEN' | 'HELD' | 'REFUSED' },
+    payload: MedicationAdministrationRequest,
+  ): void {
+    this.actionInProgress.set(prompt.taskId);
     this.nurseService.administerMedication(prompt.taskId, payload).subscribe({
       next: () => {
         // prompt.action is already 'HELD' | 'REFUSED' (see promptHoldRefuse
@@ -519,19 +633,29 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
           }),
         );
         this.actionInProgress.set(null);
+        this.earlyDose.set(null);
         this.reasonPrompt.set(null);
         this.loadAll();
       },
       error: (err: unknown) => {
-        this.toast.error(this.actionError(err));
         this.actionInProgress.set(null);
+        // QA D1210: too soon after the last dose: say why and ask for the reason.
+        const tooSoon = earlyDoseRefusal(err);
+        if (tooSoon && !payload.earlyDoseReason) {
+          this.earlyDose.set({ prompt, payload, why: tooSoon });
+          return;
+        }
+        this.earlyDose.set(null);
+        this.toast.error(this.actionError(err));
       },
     });
   }
 
   cancelHoldRefuse(): void {
+    this.earlyDose.set(null);
     this.reasonPrompt.set(null);
     this.reasonText.set('');
+    this.witnessUserId.set(null);
   }
 
   /* ── Vitals: open inline capture dialog ────────────────── */
@@ -547,6 +671,19 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
     });
     this.vitalsForm.set({});
     this.glucoseMmol.set('');
+    this.vitalsPatientDob.set(null);
+    this.patientLookup
+      .getById(patientId, this.hospitalId() ?? undefined)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (p) => {
+          if (this.vitalsCaptureFor()?.patientId === patientId) {
+            this.vitalsPatientDob.set(p?.dateOfBirth ?? null);
+          }
+        },
+        // Unknown DOB keeps the field (the server's limits still apply).
+        error: () => undefined,
+      });
   }
 
   /** QA D530: glucose is typed in mmol/L, like the lab reports it; sent as mg/dL. */
@@ -609,8 +746,12 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   submitVitals(): void {
     const target = this.vitalsCaptureFor();
     if (!target) return;
-    const form = this.vitalsForm();
-    const hasAtLeastOne = Object.values(form).some((v) => v !== undefined && v !== '');
+    // QA D1043: the oxygen box is a yes/no the nurse answers by leaving it
+    // unticked; sent as false (never omitted) so NEWS2 is complete, as from triage.
+    // It is not a reading, so it alone does not make the set "not empty".
+    const { onOxygen, ...readings } = this.vitalsForm();
+    const form: NurseVitalCaptureRequest = { ...readings, onOxygen: onOxygen === true };
+    const hasAtLeastOne = Object.values(readings).some((v) => v !== undefined && v !== '');
     if (!hasAtLeastOne) {
       this.toast.error(this.translate.instant('NURSE.TOAST.VITALS_REQUIRED'));
       return;
@@ -733,8 +874,10 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
         this.closeHandoffCreate();
         this.loadAll();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('NURSE.TOAST.HANDOFF_CREATE_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('NURSE.TOAST.HANDOFF_CREATE_FAILED'),
+        );
         this.handoffCreating.set(false);
       },
     });
@@ -780,8 +923,10 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
         this.actionInProgress.set(null);
         this.loadAll();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('NURSE.TOAST.HANDOFF_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('NURSE.TOAST.HANDOFF_FAILED'),
+        );
         this.actionInProgress.set(null);
       },
     });
@@ -832,8 +977,10 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
         this.closeTaskCreate();
         this.loadAll();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('NURSE.TOAST.TASK_CREATE_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('NURSE.TOAST.TASK_CREATE_FAILED'),
+        );
         this.taskCreating.set(false);
       },
     });
@@ -849,8 +996,10 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
           this.actionInProgress.set(null);
           this.loadAll();
         },
-        error: () => {
-          this.toast.error(this.translate.instant('NURSE.TOAST.TASK_COMPLETE_FAILED'));
+        error: (err: unknown) => {
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('NURSE.TOAST.TASK_COMPLETE_FAILED'),
+          );
           this.actionInProgress.set(null);
         },
       });
@@ -894,7 +1043,10 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
         );
         this.inboxUnreadCount.update((n) => Math.max(0, n - 1));
       },
-      error: () => this.toast.error(this.translate.instant('NURSE.TOAST.MARK_READ_FAILED')),
+      error: (err: unknown) =>
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('NURSE.TOAST.MARK_READ_FAILED'),
+        ),
     });
   }
 
@@ -919,9 +1071,34 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
     this.careNoteForm.update((f) => ({ ...f, [field]: value }));
   }
 
+  /**
+   * QA D1189 (round 22): the server refuses a care note with nothing written
+   * in it (nurse.careNote.contentRequired, any of the DAR / SOAPIE parts or the
+   * narrative counts; the title does not). The same rule here, so the reason
+   * is said at the field before anything is sent.
+   */
+  careNoteEmptyReason(): string | null {
+    const form = this.careNoteForm();
+    const parts = [
+      form.dataPart,
+      form.actionPart,
+      form.responsePart,
+      form.subjective,
+      form.objective,
+      form.assessment,
+      form.plan,
+      form.implementation,
+      form.evaluation,
+      form.narrative,
+    ];
+    return parts.some((p) => (p ?? '').trim() !== '')
+      ? null
+      : this.translate.instant('NURSE.CARE_NOTE_EMPTY');
+  }
+
   submitCareNote(): void {
     const target = this.careNoteFor();
-    if (!target) return;
+    if (!target || this.careNoteEmptyReason()) return;
     const form = this.careNoteForm();
     this.careNoteCreating.set(true);
     this.nurseService.createCareNote(target.patientId, form).subscribe({
@@ -932,8 +1109,8 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
         this.careNoteCreating.set(false);
         this.closeCareNote();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('NURSE.TOAST.NOTE_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('NURSE.TOAST.NOTE_FAILED'));
         this.careNoteCreating.set(false);
       },
     });
@@ -977,6 +1154,37 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
         [...arrived, ...triage].filter((e) => e.encounterType !== 'INPATIENT'),
       ),
     );
+  }
+
+  /**
+   * QA D954: the visit the nurse is closing as "left without being seen"
+   * (the reception's close-unseen dialog, reused; the endpoint admits the nurse).
+   */
+  readonly closeUnseenEncounter = signal<EncounterResponse | null>(null);
+
+  /** QA D1108: LWBS is offered until the patient is seen, the server's rule. */
+  readonly isNeverSeenVisit = isNeverSeenVisit;
+
+  openCloseUnseen(encounter: EncounterResponse): void {
+    this.closeUnseenEncounter.set(encounter);
+  }
+
+  onUnseenVisitClosed(): void {
+    this.closeUnseenEncounter.set(null);
+    this.loadAll();
+  }
+
+  /**
+   * QA D949: a dose whose slot is not today shows its date, so tomorrow's
+   * 23:04 never reads as a time to give today.
+   */
+  isDueToday(dueTime: string | null | undefined): boolean {
+    return isServerTimeToday(dueTime);
+  }
+
+  /** QA D929/D949: Give/Hold/Refuse only on a dose that can be recorded now. */
+  canRecordDose(m: NurseMedicationTask): boolean {
+    return m.status === 'DUE' || m.status === 'OVERDUE';
   }
 
   /** Open the triage form on the exact encounter listed (no lookup needed). */
@@ -1025,9 +1233,11 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
           this.toast.error(this.translate.instant('NURSE.TOAST.NO_ENCOUNTER'));
         }
       },
-      error: () => {
+      error: (err: unknown) => {
         this.encounterLookupInProgress.set(false);
-        this.toast.error(this.translate.instant('NURSE.TOAST.ENCOUNTER_LOOKUP_FAILED'));
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('NURSE.TOAST.ENCOUNTER_LOOKUP_FAILED'),
+        );
       },
     });
   }

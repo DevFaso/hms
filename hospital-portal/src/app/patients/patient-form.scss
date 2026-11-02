@@ -290,3 +290,26 @@
   color: var(--danger);
   font-size: 0.875rem;
 }
+
+/* QA D1037: the server's reason under the field it refused. */
+.field-error {
+  display: block;
+  margin-top: 4px;
+  color: var(--danger, #b42318);
+  font-size: 0.8rem;
+}
+
+/* QA D1061: another patient only shares the typed contact (a parent's number). */
+.shared-contact-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  background: var(--primary-soft);
+  border: 1px solid var(--primary-light);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 16px;
+}
+.shared-contact-note p {
+  margin: 0;
+}

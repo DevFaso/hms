@@ -15,29 +15,44 @@ import {
 import { EncounterService, EncounterResponse } from '../services/encounter.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
 import { ProfileService } from '../services/profile.service';
+import { AdmissionService } from '../services/admission.service';
 import { AuthService } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { serverLocalDate } from '../shared/date-utils';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { AuthorshipService } from '../shared/authorship.service';
+import { refusalReason } from '../shared/refusal-reason';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 type ApprovalFilter = DischargeStatus | 'ALL';
 type SummaryFilter = 'unfinalized' | 'pending-results' | 'range';
 
 @Component({
   selector: 'app-discharge',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule, PatientPickerComponent],
+  imports: [
+    SubmitGuardDirective,
+    ModalDialogDirective,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    PatientPickerComponent,
+  ],
   templateUrl: './discharge.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './discharge.scss',
 })
 export class DischargeComponent implements OnInit {
   private readonly dischargeService = inject(DischargeService);
+  private readonly authorship = inject(AuthorshipService);
   private readonly encounterService = inject(EncounterService);
   private readonly patientService = inject(PatientService);
   private readonly profileService = inject(ProfileService);
+  private readonly admissionService = inject(AdmissionService);
   private readonly auth = inject(AuthService);
   private readonly roleContext = inject(RoleContextService);
   private readonly toast = inject(ToastService);
@@ -58,6 +73,36 @@ export class DischargeComponent implements OnInit {
     'ROLE_DOCTOR',
     'ROLE_SUPER_ADMIN',
   ]);
+  private readonly isSuperAdmin = this.roleContext.hasAnyActiveRole(['ROLE_SUPER_ADMIN']);
+
+  /**
+   * QA D930: a draft summary is edited, finalized or deleted by its
+   * discharging provider only (the server refuses everyone else), so the
+   * buttons are not offered on another doctor's row.
+   */
+  canWriteSummary(summary: DischargeSummary): boolean {
+    if (!this.canEditSummaries) return false;
+    // The server says who may (the same rule its update and delete apply).
+    if (summary.editableByCaller !== undefined && summary.editableByCaller !== null) {
+      return summary.editableByCaller;
+    }
+    // An older server: the discharging provider, or a super-admin in global view.
+    if (this.isSuperAdmin && this.roleContext.globalView()) return true;
+    return !!this.staffId && summary.dischargingProviderId === this.staffId;
+  }
+  /**
+   * Review of #971 (D930): finalize is the discharging provider's only (the
+   * server's rule). A treating doctor who edits a nurse-held draft becomes its
+   * provider, and then sees Finalize.
+   */
+  canFinalizeSummary(summary: DischargeSummary): boolean {
+    return (
+      this.canWriteSummary(summary) &&
+      !!this.staffId &&
+      summary.dischargingProviderId === this.staffId
+    );
+  }
+
   /** Backend allows NURSE/MIDWIFE on by-hospital + pending-results (NOT unfinalized). */
   readonly canViewSummaries = this.roleContext.hasAnyActiveRole([
     'ROLE_DOCTOR',
@@ -270,11 +315,25 @@ export class DischargeComponent implements OnInit {
         this.closeDecision();
         this.loadApprovals();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('DISCHARGE.DECISION_ERROR'));
+      error: (err: unknown) => {
+        // QA D1111: the server's localized reason (a second request, a colleague's
+        // record…), the generic text only when it gives none.
+        this.toast.error(refusalReason(err) ?? this.translate.instant('DISCHARGE.DECISION_ERROR'));
         this.decisionSubmitting.set(false);
       },
     });
+  }
+
+  /**
+   * QA D1081: only the nurse who requested a discharge withdraws it
+   * (DischargeApprovalServiceImpl.cancel: requireCallerUnlessSuperAdmin).
+   */
+  canCancelApproval(a: DischargeApproval): boolean {
+    return (
+      a.status === 'PENDING' &&
+      this.canRequest &&
+      this.authorship.isAuthor(a, !a.nurseStaffId || a.nurseStaffId === this.staffId)
+    );
   }
 
   openCancel(approval: DischargeApproval): void {
@@ -291,28 +350,31 @@ export class DischargeComponent implements OnInit {
 
   submitCancel(): void {
     const target = this.cancelTarget();
-    if (!target || !this.staffId) return;
+    // QA D1160: never sent without the reason (the button's guard says so first).
+    const reason = this.cancelReason.trim();
+    if (!target || !this.staffId || !reason) return;
     this.cancelSubmitting.set(true);
-    this.dischargeService
-      .cancel(target.id, this.staffId, this.cancelReason.trim() || undefined)
-      .subscribe({
-        next: () => {
-          this.toast.success(this.translate.instant('DISCHARGE.CANCELLED_SUCCESS'));
-          this.cancelSubmitting.set(false);
-          this.closeCancel();
-          this.loadApprovals();
-        },
-        error: () => {
-          this.toast.error(this.translate.instant('DISCHARGE.CANCEL_ERROR'));
-          this.cancelSubmitting.set(false);
-        },
-      });
+    this.dischargeService.cancel(target.id, this.staffId, reason).subscribe({
+      next: () => {
+        this.toast.success(this.translate.instant('DISCHARGE.CANCELLED_SUCCESS'));
+        this.cancelSubmitting.set(false);
+        this.closeCancel();
+        this.loadApprovals();
+      },
+      error: (err: unknown) => {
+        // QA D1111: the server's localized reason (a second request, a colleague's
+        // record…), the generic text only when it gives none.
+        this.toast.error(refusalReason(err) ?? this.translate.instant('DISCHARGE.CANCEL_ERROR'));
+        this.cancelSubmitting.set(false);
+      },
+    });
   }
 
   openRequest(): void {
     if (!this.requireStaffContext(true)) return;
     this.resetPatientPicker();
     this.requestSummaryText = '';
+    this.requestStay.set('idle');
     this.showRequestModal.set(true);
   }
 
@@ -320,9 +382,64 @@ export class DischargeComponent implements OnInit {
     this.showRequestModal.set(false);
   }
 
+  /**
+   * QA D1065: a discharge is requested for a stay. The picker searches every
+   * patient (it is the shared one), so the pick is checked against the open
+   * admission here (GET /admissions/patient/{id}/current, 204 when none) and
+   * a patient never admitted cannot be sent; the server refuses one too
+   * (discharge.request.notAdmitted). A failed check leaves the decision to it.
+   */
+  readonly requestStay = signal<'idle' | 'checking' | 'admitted' | 'not-admitted' | 'unknown'>(
+    'idle',
+  );
+
+  onRequestPatientPicked(p: PatientResponse | null): void {
+    this.selectedPatient.set(p);
+    if (!p) {
+      this.requestStay.set('idle');
+      return;
+    }
+    this.requestStay.set('checking');
+    const asked = p.id;
+    this.admissionService.getCurrentByPatient(asked).subscribe({
+      next: (admission) => {
+        if (this.selectedPatient()?.id !== asked) return;
+        this.requestStay.set(admission ? 'admitted' : 'not-admitted');
+      },
+      error: () => {
+        if (this.selectedPatient()?.id !== asked) return;
+        this.requestStay.set('unknown');
+      },
+    });
+  }
+
+  /** Whether the request can be sent for the picked patient. */
+  /**
+   * QA D1124: why "Request discharge" refuses, shown next to it; null when it
+   * may be sent. The button is never silently disabled.
+   */
+  requestBlockReason(): string | null {
+    if (!this.selectedPatient()) return this.translate.instant('SUBMIT_GUARD.PATIENT');
+    const stay = this.requestStay();
+    if (stay === 'not-admitted') return this.translate.instant('DISCHARGE.NOT_ADMITTED');
+    if (stay !== 'admitted' && stay !== 'unknown') {
+      return this.translate.instant('SUBMIT_GUARD.LOADING');
+    }
+    return null;
+  }
+
+  canSubmitRequest(): boolean {
+    const stay = this.requestStay();
+    return (
+      !!this.selectedPatient() &&
+      !this.requestSubmitting() &&
+      (stay === 'admitted' || stay === 'unknown')
+    );
+  }
+
   submitRequest(): void {
     const patient = this.selectedPatient();
-    if (!patient || !this.requireStaffContext(true)) return;
+    if (!patient || !this.requireStaffContext(true) || !this.canSubmitRequest()) return;
     this.requestSubmitting.set(true);
     this.dischargeService.findActiveRegistration(patient.id, this.hospitalId!).subscribe({
       next: (registrations) => {
@@ -350,8 +467,12 @@ export class DischargeComponent implements OnInit {
               this.closeRequest();
               this.loadApprovals();
             },
-            error: () => {
-              this.toast.error(this.translate.instant('DISCHARGE.REQUEST_ERROR'));
+            error: (err: unknown) => {
+              // QA D1111: the server's localized reason (a second request, a colleague's
+              // record…), the generic text only when it gives none.
+              this.toast.error(
+                refusalReason(err) ?? this.translate.instant('DISCHARGE.REQUEST_ERROR'),
+              );
               this.requestSubmitting.set(false);
             },
           });
@@ -497,8 +618,12 @@ export class DischargeComponent implements OnInit {
         this.closeSummaryModal();
         this.loadSummaries();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('DISCHARGE.SUMMARY_SAVE_ERROR'));
+      error: (err: unknown) => {
+        // QA D1111: the server's localized reason (a second request, a colleague's
+        // record…), the generic text only when it gives none.
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('DISCHARGE.SUMMARY_SAVE_ERROR'),
+        );
         this.summarySaving.set(false);
       },
     });
@@ -543,8 +668,12 @@ export class DischargeComponent implements OnInit {
           this.closeFinalize();
           this.loadSummaries();
         },
-        error: () => {
-          this.toast.error(this.translate.instant('DISCHARGE.FINALIZE_ERROR'));
+        error: (err: unknown) => {
+          // QA D1111: the server's localized reason (a second request, a colleague's
+          // record…), the generic text only when it gives none.
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('DISCHARGE.FINALIZE_ERROR'),
+          );
           this.finalizeSubmitting.set(false);
         },
       });
@@ -572,8 +701,10 @@ export class DischargeComponent implements OnInit {
         this.closeDelete();
         this.loadSummaries();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('DISCHARGE.DELETE_ERROR'));
+      error: (err: unknown) => {
+        // QA D1111: the server's localized reason (a second request, a colleague's
+        // record…), the generic text only when it gives none.
+        this.toast.error(refusalReason(err) ?? this.translate.instant('DISCHARGE.DELETE_ERROR'));
         this.deleteSubmitting.set(false);
       },
     });

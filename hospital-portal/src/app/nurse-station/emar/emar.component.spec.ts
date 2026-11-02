@@ -1,3 +1,4 @@
+import { formatDate } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
@@ -10,6 +11,8 @@ import {
   NurseTaskService,
 } from '../../services/nurse-task.service';
 import { ToastService } from '../../core/toast.service';
+import { mouseClick } from '../../testing/mouse-click';
+import { reasonDialog } from '../../shared/reason-dialog/reason-dialog.testing';
 
 describe('EmarComponent (P1 #8 — five-rights barcode-scan loop)', () => {
   let fixture: ComponentFixture<EmarComponent>;
@@ -33,7 +36,11 @@ describe('EmarComponent (P1 #8 — five-rights barcode-scan loop)', () => {
       'getMedicationMAR',
       'verifyMedication',
       'administerMedication',
+      'getAdministrationWitnessCandidates',
     ]);
+    nurseSpy.getAdministrationWitnessCandidates.and.returnValue(
+      of([{ userId: 'u-witness', displayName: 'Awa Kaboré' }]),
+    );
     toastSpy = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error', 'info']);
 
     await TestBed.configureTestingModule({
@@ -72,18 +79,28 @@ describe('EmarComponent (P1 #8 — five-rights barcode-scan loop)', () => {
 
   it("QA D647: shows the due time in the reader's local zone, not the server's UTC clock", () => {
     // The server sends a zone-less UTC wall time; the header clock is local.
-    nurseSpy.getMedicationMAR.and.returnValue(
-      of([{ ...sampleTask, dueTime: '2026-04-30T08:00:00' }]),
-    );
+    // QA D949: a dose of another day shows its date, so the zone is checked on
+    // a time of the reader's today (one minute ago, as UTC wall clock).
+    const local = new Date(Date.now() - 60_000);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const utcWall = `${local.getUTCFullYear()}-${pad(local.getUTCMonth() + 1)}-${pad(local.getUTCDate())}T${pad(local.getUTCHours())}:${pad(local.getUTCMinutes())}:00`;
+    nurseSpy.getMedicationMAR.and.returnValue(of([{ ...sampleTask, dueTime: utcWall }]));
 
     fixture.detectChanges();
 
-    const local = new Date(Date.UTC(2026, 3, 30, 8, 0, 0));
-    const hh = String(local.getHours()).padStart(2, '0');
-    const mm = String(local.getMinutes()).padStart(2, '0');
     const text =
       root().querySelector(`[data-testid="emar-task-${sampleTask.id}"]`)?.textContent ?? '';
-    expect(text).toContain(`${hh}:${mm}`);
+    expect(text).toContain(`${pad(local.getHours())}:${pad(local.getMinutes())}`);
+  });
+
+  it('QA D949: an overdue dose of another day shows its date, not the time alone', () => {
+    nurseSpy.getMedicationMAR.and.returnValue(
+      of([{ ...sampleTask, dueTime: '2026-04-30T08:00:00' }]),
+    );
+    fixture.detectChanges();
+    const text =
+      root().querySelector(`[data-testid="emar-task-${sampleTask.id}"]`)?.textContent ?? '';
+    expect(text).toContain(formatDate(new Date(Date.UTC(2026, 3, 30, 8)), 'short', 'en-US'));
   });
 
   describe('QA D799: the beta-lactam cross-reactivity advisory reaches the nurse', () => {
@@ -196,6 +213,47 @@ describe('EmarComponent (P1 #8 — five-rights barcode-scan loop)', () => {
     expect(toastSpy.success).toHaveBeenCalled();
   });
 
+  it('QA D1025: choosing a dose prefills neither the dose nor the route the nurse must confirm', () => {
+    nurseSpy.getMedicationMAR.and.returnValue(of([sampleTask]));
+    fixture.detectChanges();
+    component['selectTask'](sampleTask);
+    expect(component['doseScan']()).toBe('');
+    expect(component['routeScan']()).toBe('');
+  });
+
+  it('QA D922: a controlled dose is given only with a witness, sent with the dose', () => {
+    const morphine: NurseMedicationTask = {
+      ...sampleTask,
+      id: 'task-mor',
+      controlledSubstance: true,
+    };
+    nurseSpy.getMedicationMAR.and.returnValue(of([morphine]));
+    nurseSpy.administerMedication.and.returnValue(of(morphine));
+    fixture.detectChanges();
+    component['selectTask'](morphine);
+    fixture.detectChanges();
+    component['verification'].set({
+      marId: morphine.id,
+      outcomes: { PATIENT: true, DRUG: true, DOSE: true, ROUTE: true, TIME: true },
+      failedChecks: [],
+      failureReasons: {},
+      allPassed: true,
+      verifiedAt: '2026-04-30T08:01:00',
+    });
+    expect(root().querySelector('[data-testid="witness-picker"]')).not.toBeNull();
+    expect(component['canAdminister']()).toBeFalse();
+    component['administer']('GIVEN');
+    expect(nurseSpy.administerMedication).not.toHaveBeenCalled();
+
+    component['witnessUserId'].set('u-witness');
+    expect(component['canAdminister']()).toBeTrue();
+    component['administer']('GIVEN');
+    expect(nurseSpy.administerMedication).toHaveBeenCalledOnceWith(morphine.id, {
+      status: 'GIVEN',
+      witnessUserId: 'u-witness',
+    });
+  });
+
   it('records GIVEN with the override reason when the five-rights check failed', () => {
     nurseSpy.getMedicationMAR.and.returnValue(of([sampleTask]));
     nurseSpy.administerMedication.and.returnValue(of(sampleTask));
@@ -220,6 +278,29 @@ describe('EmarComponent (P1 #8 — five-rights barcode-scan loop)', () => {
     });
   });
 
+  it('QA D1159: "Suspendre" and "Refus du patient" need a reason, sent as the note', () => {
+    nurseSpy.getMedicationMAR.and.returnValue(of([sampleTask]));
+    nurseSpy.administerMedication.and.returnValue(of(sampleTask));
+    fixture.detectChanges();
+    component['selectTask'](sampleTask);
+    fixture.detectChanges();
+    const held = root().querySelector<HTMLButtonElement>('[data-testid="emar-administer-held"]')!;
+    held.click();
+    fixture.detectChanges();
+    expect(nurseSpy.administerMedication).not.toHaveBeenCalled();
+    expect(root().querySelector('#emar-hold-reason')?.getAttribute('aria-invalid')).toBe('true');
+
+    const reason = root().querySelector<HTMLTextAreaElement>('#emar-hold-reason')!;
+    reason.value = 'Patiente à jeun pour le bloc';
+    reason.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    held.click();
+    expect(nurseSpy.administerMedication).toHaveBeenCalledOnceWith(sampleTask.id, {
+      status: 'HELD',
+      note: 'Patiente à jeun pour le bloc',
+    });
+  });
+
   it('QA D233: a refused administration shows the server reason', () => {
     nurseSpy.getMedicationMAR.and.returnValue(of([sampleTask]));
     nurseSpy.administerMedication.and.returnValue(
@@ -234,11 +315,109 @@ describe('EmarComponent (P1 #8 — five-rights barcode-scan loop)', () => {
 
     fixture.detectChanges();
     component['selectTask'](sampleTask);
+    // QA D1159: a refusal is recorded with its reason.
+    component['holdRefuseReason'].set('Nausées');
     component['administer']('REFUSED');
 
     expect(toastSpy.error).toHaveBeenCalledOnceWith(
       'Les cinq vérifications ont échoué : motif de dérogation requis.',
     );
+  });
+
+  // QA D1210 (round 23, portal half): the server refuses a dose given before
+  // the minimum gap since the last one (nurse.mar.doseTooSoon on the field
+  // earlyDoseReason) unless the nurse says why. The eMAR showed the refusal as
+  // a toast and offered no way to give the dose early: a dead end.
+  const tooSoon = () =>
+    throwError(
+      () =>
+        new HttpErrorResponse({
+          status: 400,
+          error: {
+            message:
+              'Dose trop rapprochée : dernière dose le 01/11 10:00, prochaine au plus tôt 13:00 (toutes les 4 h).',
+            field: 'earlyDoseReason',
+            fieldErrors: {
+              earlyDoseReason:
+                'Dose trop rapprochée : dernière dose le 01/11 10:00, prochaine au plus tôt 13:00 (toutes les 4 h).',
+            },
+          },
+        }),
+    ) as Observable<NurseMedicationTask>;
+
+  it('QA D1210: a dose refused as too soon shows why and is given early with the reason (witness kept)', () => {
+    const morphine: NurseMedicationTask = {
+      ...sampleTask,
+      id: 'task-mor',
+      controlledSubstance: true,
+    };
+    nurseSpy.getMedicationMAR.and.returnValue(of([morphine]));
+    nurseSpy.administerMedication.and.returnValues(tooSoon(), of(morphine));
+    fixture.detectChanges();
+    component['selectTask'](morphine);
+    component['verification'].set({
+      marId: morphine.id,
+      outcomes: { PATIENT: true, DRUG: true, DOSE: true, ROUTE: true, TIME: true },
+      failedChecks: [],
+      failureReasons: {},
+      allPassed: true,
+      verifiedAt: '2026-04-30T08:01:00',
+    });
+    component['witnessUserId'].set('u-witness');
+    fixture.detectChanges();
+    // The panel's button sits below the test window's fold; the dialog it opens is a fixed overlay.
+    root().querySelector<HTMLButtonElement>('[data-testid="emar-administer-given"]')!.click();
+    fixture.detectChanges();
+
+    const dialog = reasonDialog(fixture)!;
+    expect(dialog).withContext('the reason is asked for').not.toBeNull();
+    expect(dialog.querySelector('[data-testid="early-dose-why"]')?.textContent).toContain(
+      'prochaine au plus tôt 13:00',
+    );
+    expect(toastSpy.error).not.toHaveBeenCalled();
+    const field = dialog.querySelector<HTMLTextAreaElement>(
+      '[data-testid="reason-dialog-reason"]',
+    )!;
+    mouseClick(field);
+    field.value = 'Douleur EVA 9/10, avis du médecin de garde';
+    field.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    mouseClick(dialog.querySelector<HTMLElement>('[data-testid="reason-dialog-confirm"]')!);
+    fixture.detectChanges();
+
+    expect(nurseSpy.administerMedication).toHaveBeenCalledTimes(2);
+    expect(nurseSpy.administerMedication.calls.mostRecent().args).toEqual([
+      morphine.id,
+      {
+        status: 'GIVEN',
+        witnessUserId: 'u-witness',
+        earlyDoseReason: 'Douleur EVA 9/10, avis du médecin de garde',
+      },
+    ]);
+    expect(reasonDialog(fixture)).toBeNull();
+    expect(toastSpy.success).toHaveBeenCalled();
+  });
+
+  it('QA D1210: "Retour" on the early-dose reason records nothing', () => {
+    nurseSpy.getMedicationMAR.and.returnValue(of([sampleTask]));
+    nurseSpy.administerMedication.and.returnValue(tooSoon());
+    fixture.detectChanges();
+    component['selectTask'](sampleTask);
+    component['holdRefuseReason'].set('');
+    component['verification'].set({
+      marId: sampleTask.id,
+      outcomes: { PATIENT: true, DRUG: true, DOSE: true, ROUTE: true, TIME: true },
+      failedChecks: [],
+      failureReasons: {},
+      allPassed: true,
+      verifiedAt: '2026-04-30T08:01:00',
+    });
+    component['administer']('GIVEN');
+    const dialog = reasonDialog(fixture)!;
+    mouseClick(dialog.querySelector<HTMLElement>('[data-testid="reason-dialog-cancel"]')!);
+    fixture.detectChanges();
+    expect(reasonDialog(fixture)).toBeNull();
+    expect(nurseSpy.administerMedication).toHaveBeenCalledTimes(1);
   });
 
   it('does not call administer when GIVEN is requested without verification or override', () => {
@@ -365,10 +544,15 @@ describe('EmarComponent (P1 #8 — five-rights barcode-scan loop)', () => {
 
     fixture.detectChanges();
     component['selectTask'](blockedTask);
+    // QA D1159: with its reason, as every hold is recorded.
+    component['holdRefuseReason'].set('En attente de la pharmacie');
 
     component['administer']('HELD');
 
-    expect(nurseSpy.administerMedication).toHaveBeenCalledWith(blockedTask.id, { status: 'HELD' });
+    expect(nurseSpy.administerMedication).toHaveBeenCalledWith(blockedTask.id, {
+      status: 'HELD',
+      note: 'En attente de la pharmacie',
+    });
   });
 
   it('states the block before the scan steps, and marks the row in the queue', () => {

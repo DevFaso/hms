@@ -1,5 +1,5 @@
 import { TestBed, ComponentFixture } from '@angular/core/testing';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 import { GrowthChartTabComponent } from './growth-chart-tab.component';
 import {
@@ -7,6 +7,7 @@ import {
   GrowthPoint,
   VitalSignService,
 } from '../../services/vital-sign.service';
+import { resetStoredLangForTests } from '../../shared/i18n/app-locale';
 
 describe('GrowthChartTabComponent', () => {
   let fixture: ComponentFixture<GrowthChartTabComponent>;
@@ -42,6 +43,27 @@ describe('GrowthChartTabComponent', () => {
     fixture = TestBed.createComponent(GrowthChartTabComponent);
     component = fixture.componentInstance;
     component.patientId = 'p1';
+  });
+
+  // QA D1087: 6 years 7 months 15 days was shown as "6 a 8 mois".
+  it('D1087: tells the age in completed years and months, never rounded up', () => {
+    const asked: Record<string, unknown>[] = [];
+    spyOn(TestBed.inject(TranslateService), 'instant').and.callFake(((
+      key: string,
+      params?: Record<string, unknown>,
+    ) => {
+      asked.push({ key, ...(params ?? {}) });
+      return key;
+    }) as never);
+    // 6 y 7 m 15 d
+    component.formatAge(Math.floor(6 * 365.25 + 7 * 30.4375 + 15));
+    expect(asked.pop()).toEqual({ key: 'GROWTH.AGE_YEARS_MONTHS', years: 6, months: 7 });
+    // 6 y 11 m 29 d must not print 12 months
+    component.formatAge(Math.floor(6 * 365.25 + 11 * 30.4375 + 29));
+    expect(asked.pop()).toEqual({ key: 'GROWTH.AGE_YEARS_MONTHS', years: 6, months: 11 });
+    // 7 months 20 days, under two years
+    component.formatAge(Math.floor(7 * 30.4375 + 20));
+    expect(asked.pop()).toEqual({ key: 'GROWTH.AGE_MONTHS', months: 7 });
   });
 
   it('plots the weight trajectory by default, oldest first', () => {
@@ -151,5 +173,63 @@ describe('GrowthChartTabComponent', () => {
 
     const rows = fixture.nativeElement.querySelectorAll('[data-testid="growth-table"] tbody tr');
     expect(rows.length).toBe(3);
+  });
+  describe('in French (QA D1115, D1117)', () => {
+    let previousLang: string | null;
+    beforeEach(() => {
+      previousLang = localStorage.getItem('lang');
+      localStorage.setItem('lang', 'fr');
+      resetStoredLangForTests();
+    });
+    afterEach(() => {
+      if (previousLang === null) localStorage.removeItem('lang');
+      else localStorage.setItem('lang', previousLang);
+      resetStoredLangForTests();
+    });
+
+    it('D1115: writes the table and the axis with a decimal comma', () => {
+      vitalServiceSpy.getGrowthChart.and.returnValue(
+        of(
+          chart([
+            point({ ageDays: 31, weightKg: 4.8, heightCm: 54.5 }),
+            point({ ageDays: 60, weightKg: 4.6 }),
+          ]),
+        ),
+      );
+      fixture.detectChanges();
+      const table: HTMLElement = fixture.nativeElement.querySelector(
+        '[data-testid="growth-table"]',
+      );
+      expect(table.textContent).toContain('4,8 kg');
+      expect(table.textContent).toContain('54,5 cm');
+      expect(table.textContent).not.toMatch(/\d\.\d/);
+      const labels = component.chartModel()!.yTicks.map((t) => t.label);
+      expect(labels.some((l) => l.includes(','))).toBeTrue();
+      expect(labels.every((l) => !l.includes('.'))).toBeTrue();
+    });
+
+    it('D1117: names every source in words, never the code', () => {
+      vitalServiceSpy.getGrowthChart.and.returnValue(
+        of(
+          chart([
+            point({ ageDays: 0, weightKg: 3.2, source: 'DELIVERY' }),
+            point({ ageDays: 31, weightKg: 4.1, source: 'TRIAGE' }),
+            point({ ageDays: 60, weightKg: 4.6, source: 'NURSE_STATION' }),
+            point({ ageDays: 90, weightKg: 5.1, source: null }),
+          ]),
+        ),
+      );
+      fixture.detectChanges();
+      const cells = Array.from(
+        fixture.nativeElement.querySelectorAll(
+          '[data-testid="growth-table"] tbody tr td:last-child',
+        ),
+      ).map((td) => (td as HTMLElement).textContent!.trim());
+      expect(cells.length).toBe(4);
+      for (const cell of cells) {
+        expect(cell).not.toMatch(/^[A-Z_]+$/);
+      }
+      expect(cells[3]).toBe('—');
+    });
   });
 });

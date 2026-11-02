@@ -88,7 +88,7 @@ public class EligibilityServiceImpl implements EligibilityService {
     @Transactional
     public EligibilityResponseDTO submit(EligibilityCheckRequestDTO request) {
         if (request == null) {
-            throw new BusinessException("EligibilityCheckRequest is required");
+            throw new BusinessException("eligibility.request.required");
         }
         Patient patient = patientRepository.findById(request.getPatientId())
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));
@@ -104,15 +104,13 @@ public class EligibilityServiceImpl implements EligibilityService {
                 .orElseThrow(() -> new ResourceNotFoundException("patientinsurance.notfound", request.getPatientInsuranceId()));
             if (insurance.getPatient() != null
                 && !insurance.getPatient().getId().equals(patient.getId())) {
-                throw new BusinessException(
-                    "PatientInsurance does not belong to the requested patient");
+                throw new BusinessException("eligibility.insurance.otherPatient");
             }
         }
         EligibilityProvider provider = providers.stream()
             .filter(p -> p.supports(request.getScheme()))
             .findFirst()
-            .orElseThrow(() -> new BusinessException(
-                "No eligibility provider configured for scheme " + request.getScheme()));
+            .orElseThrow(() -> new BusinessException("eligibility.provider.none", request.getScheme()));
 
         LocalDateTime requestedAt = LocalDateTime.now(clock);
         User caller = currentUserOrNull();

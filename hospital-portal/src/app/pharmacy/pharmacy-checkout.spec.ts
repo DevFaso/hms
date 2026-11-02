@@ -101,4 +101,62 @@ describe('PharmacyCheckoutComponent (QA D264)', () => {
       jasmine.objectContaining({ dispenseId: 'd-1', amount: 3600 }),
     );
   });
+
+  it('QA D1033: a mobile-money payment needs the typed reference, and sends it as typed', () => {
+    const c = create(3600, false);
+    svc.createPayment.and.returnValue(of({ data: { id: 'pay-1' } }) as never);
+    c.paymentMethod = 'MOBILE_MONEY';
+    c.referenceNumber = '   ';
+    c.submit();
+    expect(svc.createPayment).not.toHaveBeenCalled();
+
+    c.referenceNumber = ' OM-R17-662001 ';
+    c.submit();
+    expect(svc.createPayment).toHaveBeenCalledWith(
+      jasmine.objectContaining({ paymentMethod: 'MOBILE_MONEY', referenceNumber: 'OM-R17-662001' }),
+    );
+  });
+
+  it('QA D1032: the receipt shows the server receipt number, never a slice of the payment id', () => {
+    const c = create(3600, false);
+    const fixture = TestBed.createComponent(PharmacyCheckoutComponent);
+    const view = fixture.componentInstance;
+    view.receipt.set({
+      id: '38d0fcfe-16aa-4b33-8f43-37e1658a240d',
+      receiptNumber: 'CHW75C64-PH-2026-000012',
+      dispenseId: 'd-1',
+      patientId: 'p-1',
+      hospitalId: 'h-1',
+      paymentMethod: 'CASH',
+      amount: 3600,
+    } as never);
+    fixture.detectChanges();
+    const text = (fixture.nativeElement as HTMLElement).querySelector('.receipt-meta')?.textContent;
+    expect(text).toContain('CHW75C64-PH-2026-000012');
+    expect(text).not.toContain('38D0FCFE16');
+    expect(c).toBeTruthy();
+  });
+
+  it('QA D1058: the fill picker names the patient before the medicine', () => {
+    create(3600, false);
+    const fixture = TestBed.createComponent(PharmacyCheckoutComponent);
+    const view = fixture.componentInstance;
+    fixture.detectChanges();
+    view.dispenses.set([
+      {
+        id: 'd-9',
+        medicationName: 'Paracétamol',
+        patientName: 'Salif Kaboré',
+        quantityDispensed: 9,
+      },
+    ] as never);
+    fixture.detectChanges();
+    const option = (fixture.nativeElement as HTMLElement).querySelector(
+      '#dispenseId option[value="d-9"]',
+    );
+    expect(option?.textContent).toContain('Salif Kaboré');
+    expect(option?.textContent?.indexOf('Salif')).toBeLessThan(
+      option?.textContent?.indexOf('Paracétamol') ?? 0,
+    );
+  });
 });

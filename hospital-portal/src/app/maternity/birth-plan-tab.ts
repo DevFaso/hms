@@ -1,3 +1,5 @@
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { personName } from '../shared/pipes/person-name.pipe';
 import { ChangeDetectionStrategy, Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -15,12 +17,22 @@ import { ToastService } from '../core/toast.service';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { refusalReason } from '../shared/refusal-reason';
 type BirthPlanFilter = 'all' | 'pending-review' | 'reviewed';
 
 @Component({
   selector: 'app-birth-plan-tab',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule, PatientPickerComponent],
+  imports: [
+    SubmitGuardDirective,
+    ModalDialogDirective,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    PatientPickerComponent,
+  ],
   templateUrl: './birth-plan-tab.html',
   styleUrl: './maternity.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -221,7 +233,7 @@ export class BirthPlanTabComponent implements OnInit {
     this.planPatient.set(p);
     this.planForm.patientId = p?.id ?? '';
     if (p && !this.planForm.introduction.patientName) {
-      this.planForm.introduction.patientName = `${p.firstName ?? ''} ${p.lastName ?? ''}`.trim();
+      this.planForm.introduction.patientName = personName(p);
     }
   }
 
@@ -263,8 +275,8 @@ export class BirthPlanTabComponent implements OnInit {
         this.closePlanModal();
         this.load();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('BIRTH_PLAN.SAVE_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('BIRTH_PLAN.SAVE_ERROR'));
         this.planSaving.set(false);
       },
     });
@@ -308,8 +320,8 @@ export class BirthPlanTabComponent implements OnInit {
           this.closeReview();
           this.load();
         },
-        error: () => {
-          this.toast.error(this.translate.instant('BIRTH_PLAN.REVIEW_ERROR'));
+        error: (err: unknown) => {
+          this.toast.error(refusalReason(err) ?? this.translate.instant('BIRTH_PLAN.REVIEW_ERROR'));
           this.reviewBusy.set(false);
         },
       });
@@ -336,8 +348,8 @@ export class BirthPlanTabComponent implements OnInit {
         this.closeDelete();
         this.load();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('BIRTH_PLAN.DELETE_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('BIRTH_PLAN.DELETE_ERROR'));
         this.deleteBusy.set(false);
       },
     });

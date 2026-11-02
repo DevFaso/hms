@@ -20,12 +20,23 @@ import {
 
 import { RoleLabelPipe } from '../../shared/pipes/role-label.pipe';
 
-type PageState = 'loading' | 'loaded' | 'already-verified' | 'success' | 'not-found' | 'error';
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+import { PhoneFieldDirective } from '../../shared/forms/phone-field.directive';
+
+type PageState =
+  'loading' | 'loaded' | 'already-verified' | 'success' | 'not-found' | 'error' | 'by-phone';
 
 @Component({
   selector: 'app-role-welcome',
   standalone: true,
-  imports: [FormsModule, RouterModule, TranslateModule, RoleLabelPipe],
+  imports: [
+    PhoneFieldDirective,
+    SubmitGuardDirective,
+    FormsModule,
+    RouterModule,
+    TranslateModule,
+    RoleLabelPipe,
+  ],
   templateUrl: './role-welcome.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./role-welcome.scss'],
@@ -62,8 +73,9 @@ export class RoleWelcomeComponent implements OnInit {
 
     const code = this.route.snapshot.queryParamMap.get('assignment');
     if (!code) {
-      this.pageState = 'not-found';
-      this.errorMessage = 'ONBOARDING.ERR_NO_LINK_CODE';
+      // QA D1123: no link (an SMS reader, or "I have a code" on the login
+      // page): the page takes the phone number and the code instead.
+      this.pageState = 'by-phone';
       return;
     }
 
@@ -192,6 +204,50 @@ export class RoleWelcomeComponent implements OnInit {
         }
       },
     });
+  }
+
+  // ─── "I have a code": phone + code, no e-mail (QA D1123) ─────────────────
+
+  phone = '';
+  phoneCode = '';
+
+  submitByPhone(): void {
+    if (this.verifying) return;
+    const phone = this.phone.trim();
+    const code = this.phoneCode.replaceAll(/\D/g, '');
+    if (!phone) {
+      this.verifyError = 'ONBOARDING.ERR_PHONE_REQUIRED';
+      this.focusField('rw-phone');
+      return;
+    }
+    if (code.length !== 6) {
+      this.verifyError = 'ONBOARDING.ERR_CODE_FORMAT';
+      this.focusField('rw-phone-code');
+      return;
+    }
+    this.verifying = true;
+    this.verifyError = '';
+    this.service.verifyByPhone(phone, code).subscribe({
+      next: (data) => {
+        this.assignment = data;
+        this.verifying = false;
+        this.pageState = 'success';
+      },
+      error: (err) => {
+        this.verifying = false;
+        this.phoneCode = '';
+        // The server's own sentence (wrong code, too many tries) is already
+        // in the reader's language; the generic key covers a silent failure.
+        const serverMessage = err?.status === 400 ? err?.error?.message : null;
+        this.verifyError = serverMessage || 'ONBOARDING.ERR_PHONE_CODE_INCORRECT';
+        this.focusField('rw-phone-code');
+      },
+    });
+  }
+
+  private focusField(id: string): void {
+    if (!this.isBrowser) return;
+    setTimeout(() => document.getElementById(id)?.focus());
   }
 
   goToLogin(): void {

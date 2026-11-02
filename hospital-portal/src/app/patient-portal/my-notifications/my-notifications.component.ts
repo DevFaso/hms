@@ -3,8 +3,10 @@ import { DatePipe } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { PatientPortalService, PortalNotification } from '../../services/patient-portal.service';
 import { ToastService } from '../../core/toast.service';
+import { Router } from '@angular/router';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { refusalReason } from '../../shared/refusal-reason';
 
 @Component({
   selector: 'app-my-notifications',
@@ -18,6 +20,40 @@ export class MyNotificationsComponent implements OnInit {
   private readonly portalService = inject(PatientPortalService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly router = inject(Router);
+
+  /**
+   * QA D983: where a notification leads. Clicking a chat notification only
+   * marked it read; it now opens the conversation, and the others open the
+   * page they are about. QA D1110: every type the server writes is either
+   * here or declared without a page, with its reason, in
+   * scripts/lib/notification-destinations.test.mjs.
+   */
+  private static readonly DESTINATIONS: Record<
+    string,
+    { path: string; query?: Record<string, string> }
+  > = {
+    CHAT_MESSAGE: { path: '/chat', query: { open: 'unread' } },
+    // QA D1110: a released (or corrected) lab result opens the patient's results.
+    LAB_RESULT: { path: '/my-lab-results' },
+    APPOINTMENT_REMINDER: { path: '/my-appointments' },
+    PRENATAL_REMINDER: { path: '/my-appointments' },
+    MEDICATION_REFILL: { path: '/my-medications' },
+    DISCHARGE_SUMMARY: { path: '/my-summaries' },
+    BREAK_GLASS_OPT_OUT_OVERRIDE: { path: '/my-sharing' },
+    PHARMACY_EVENT: { path: '/my-medications' },
+  };
+
+  destinationOf(n: PortalNotification): { path: string; query?: Record<string, string> } | null {
+    return (n.type && MyNotificationsComponent.DESTINATIONS[n.type]) || null;
+  }
+
+  /** Marks it read and, when it is about something, opens it. */
+  open(n: PortalNotification): void {
+    this.markRead(n);
+    const to = this.destinationOf(n);
+    if (to) void this.router.navigate([to.path], { queryParams: to.query });
+  }
 
   notifications = signal<PortalNotification[]>([]);
   totalElements = signal(0);
@@ -40,8 +76,10 @@ export class MyNotificationsComponent implements OnInit {
         this.totalElements.set(result.totalElements);
         this.loading.set(false);
       },
-      error: () => {
-        this.toast.error(this.translate.instant('PORTAL.NOTIFICATIONS.LOAD_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PORTAL.NOTIFICATIONS.LOAD_FAILED'),
+        );
         this.loading.set(false);
       },
     });
@@ -67,8 +105,10 @@ export class MyNotificationsComponent implements OnInit {
         );
         this.unreadCount.update((c) => Math.max(c - 1, 0));
       },
-      error: () =>
-        this.toast.error(this.translate.instant('PORTAL.NOTIFICATIONS.MARK_READ_FAILED')),
+      error: (err: unknown) =>
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PORTAL.NOTIFICATIONS.MARK_READ_FAILED'),
+        ),
     });
   }
 
@@ -82,9 +122,11 @@ export class MyNotificationsComponent implements OnInit {
         if (updated > 0)
           this.toast.success(this.translate.instant('PORTAL.NOTIFICATIONS.MARK_ALL_SUCCESS'));
       },
-      error: () => {
+      error: (err: unknown) => {
         this.markingAll.set(false);
-        this.toast.error(this.translate.instant('PORTAL.NOTIFICATIONS.MARK_READ_FAILED'));
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PORTAL.NOTIFICATIONS.MARK_READ_FAILED'),
+        );
       },
     });
   }

@@ -174,7 +174,8 @@ describe('IntegrationMessagesComponent (MVP-c3)', () => {
     expect(el.querySelector('[data-test-purged="msg-live"]')).toBeNull();
     const purgedReplay = el.querySelector<HTMLButtonElement>('[data-test-replay="msg-purged"]');
     const liveReplay = el.querySelector<HTMLButtonElement>('[data-test-replay="msg-live"]');
-    expect(purgedReplay?.disabled).toBeTrue();
+    // QA D1124: a purged message offers no replay (the "content purged" note says why).
+    expect(purgedReplay).toBeNull();
     expect(liveReplay?.disabled).toBeFalse();
     expect(el.querySelector('[data-test="retention-note"]')).not.toBeNull();
   });

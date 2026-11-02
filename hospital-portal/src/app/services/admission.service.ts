@@ -141,16 +141,18 @@ export class AdmissionService {
     return this.http.post<AdmissionResponse>(`${this.baseUrl}/${id}/assign-bed`, { bedId });
   }
 
-  unassignBed(id: string): Observable<AdmissionResponse> {
-    return this.http.delete<AdmissionResponse>(`${this.baseUrl}/${id}/bed`);
+  /** QA D1100: freeing an inpatient's bed states why (required, audited by the server). */
+  unassignBed(id: string, reason: string): Observable<AdmissionResponse> {
+    return this.http.delete<AdmissionResponse>(`${this.baseUrl}/${id}/bed`, { body: { reason } });
   }
 
   getByPatient(patientId: string): Observable<AdmissionResponse[]> {
     return this.http.get<AdmissionResponse[]>(`${this.baseUrl}/patient/${patientId}`);
   }
 
-  getCurrentByPatient(patientId: string): Observable<AdmissionResponse> {
-    return this.http.get<AdmissionResponse>(`${this.baseUrl}/patient/${patientId}/current`);
+  /** QA D1082 class: null (204 No Content) when the patient has no open stay. */
+  getCurrentByPatient(patientId: string): Observable<AdmissionResponse | null> {
+    return this.http.get<AdmissionResponse | null>(`${this.baseUrl}/patient/${patientId}/current`);
   }
 
   getByHospital(

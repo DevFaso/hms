@@ -113,7 +113,18 @@
                 <div class="cell-primary">{{ order.patientFullName || '—' }}</div>
               </td>
               <td>
-                <div class="cell-primary">{{ order.labTestName || '—' }}</div>
+                <div class="cell-primary">
+                  {{ order.labTestName || '—' }}
+                  @if (isUrgentPriority(order.priority)) {
+                    <!-- QA D963: STAT and URGENT stand out on the worklist. -->
+                    <span
+                      class="priority-badge"
+                      [class.priority-stat]="order.priority === 'STAT'"
+                      [attr.data-testid]="'lab-priority-' + order.id"
+                      >{{ order.priority | enumLabel: 'labOrderPriority' }}</span
+                    >
+                  }
+                </div>
                 <div class="cell-secondary">{{ order.labTestCode || '' }}</div>
               </td>
               <td>
@@ -125,7 +136,7 @@
                       isIncomingExternal(order) ? 'routing-incoming' : 'routing-outgoing'
                     "
                   >
-                    {{ counterpartLabelKey(order) | translate }}:
+                    {{ counterpartLabelKey(order) | translate }}{{ 'COMMON.COLON' | translate }}
                     {{ counterpartHospitalName(order) }}
                   </div>
                 } @else {
@@ -147,6 +158,7 @@
                   <button
                     class="action-link view-link"
                     [title]="'LAB.VIEW_DETAILS' | translate"
+                    [attr.aria-label]="'LAB.VIEW_DETAILS' | translate"
                     (click)="viewOrder(order)"
                   >
                     <span class="material-symbols-outlined">visibility</span>
@@ -155,6 +167,7 @@
                     <button
                       class="action-link edit-link"
                       [title]="'COMMON.EDIT' | translate"
+                      [attr.aria-label]="'COMMON.EDIT' | translate"
                       (click)="openEdit(order)"
                     >
                       <span class="material-symbols-outlined">edit</span>
@@ -164,6 +177,7 @@
                     <button
                       class="action-link specimen-link"
                       [title]="'LAB.SPECIMENS' | translate"
+                      [attr.aria-label]="'LAB.SPECIMENS' | translate"
                       (click)="openSpecimens(order)"
                     >
                       <span class="material-symbols-outlined">labs</span>
@@ -184,6 +198,7 @@
                     <button
                       class="action-link delete-link"
                       [title]="'COMMON.DELETE' | translate"
+                      [attr.aria-label]="'COMMON.DELETE' | translate"
                       (click)="confirmDelete(order)"
                     >
                       <span class="material-symbols-outlined">delete</span>
@@ -210,12 +225,23 @@
 
   @if (selectedOrder(); as o) {
     <div class="detail-overlay" tabindex="-1" (keydown.escape)="closeDetail()">
-      <div class="detail-panel">
+      <div
+        class="detail-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="lab-dialog-title-1"
+        appModalDialog
+        (escaped)="closeDetail()"
+        (keydown.escape)="$event.stopPropagation()"
+      >
         <div class="panel-header">
-          <h2>{{ 'LAB.ORDER' | translate }} {{ shortOrderCode(o.labOrderCode) }}</h2>
+          <h2 id="lab-dialog-title-1">
+            {{ 'LAB.ORDER' | translate }} {{ shortOrderCode(o.labOrderCode) }}
+          </h2>
           <button
             class="close-btn"
             [title]="'COMMON.CLOSE_DETAIL_PANEL' | translate"
+            [attr.aria-label]="'COMMON.CLOSE_DETAIL_PANEL' | translate"
             (click)="closeDetail()"
           >
             <span class="material-symbols-outlined">close</span>
@@ -247,9 +273,19 @@
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span
-              ><span class="status-badge" [class]="getStatusClass(o.status)">{{
+              >{{ ' '
+              }}<span class="status-badge" [class]="getStatusClass(o.status)">{{
                 o.status | enumLabel: 'labOrderStatus'
               }}</span>
+            </div>
+            <div class="detail-field" data-testid="detail-priority">
+              <span class="field-label">{{ 'LAB.PRIORITY' | translate }}</span
+              ><span
+                class="field-value"
+                [class.priority-badge]="isUrgentPriority(o.priority)"
+                [class.priority-stat]="o.priority === 'STAT'"
+                >{{ o.priority ? (o.priority | enumLabel: 'labOrderPriority') : '—' }}</span
+              >
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'LAB.DIAGNOSIS_CODE' | translate }}</span
@@ -257,7 +293,9 @@
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'LAB.ORDER_CHANNEL' | translate }}</span
-              ><span class="field-value">{{ o.orderChannel || '—' }}</span>
+              ><span class="field-value">{{
+                o.orderChannel ? (o.orderChannel | enumLabel: 'labOrderChannel') : '—'
+              }}</span>
             </div>
           </div>
           @if (o.clinicalIndication) {
@@ -282,6 +320,22 @@
               <p>{{ o.cancellationReason }}</p>
             </div>
           }
+          @for (rs of rejectedDetailSpecimens(); track rs.id) {
+            <!-- QA D962: the laboratory refused a specimen; a new sample is needed. -->
+            <div class="notes-section" [attr.data-testid]="'lab-order-rejected-' + rs.id">
+              <span class="field-label">{{
+                'LAB.REJECT_SPECIMEN.REJECTED_ON_ORDER' | translate
+              }}</span>
+              <p>
+                {{ rs.rejectionReason || '—' }}
+                @if (rs.rejectedAt) {
+                  <span class="cell-secondary">
+                    — {{ rs.rejectedAt | serverTime | date: 'medium' }}</span
+                  >
+                }
+              </p>
+            </div>
+          }
         </div>
       </div>
     </div>
@@ -293,13 +347,24 @@
   <div class="modal-backdrop" tabindex="-1" (click)="closeModal()" (keydown.escape)="closeModal()">
     <div
       class="modal modal-lg"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="lab-dialog-title-2"
+      appModalDialog
+      (escaped)="closeModal()"
+      (keydown.escape)="$event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ editing() ? ('LAB.EDIT_ORDER' | translate) : ('LAB.NEW_ORDER' | translate) }}</h2>
-        <button class="modal-close" (click)="closeModal()">
+        <h2 id="lab-dialog-title-2">
+          {{ editing() ? ('LAB.EDIT_ORDER' | translate) : ('LAB.NEW_ORDER' | translate) }}
+        </h2>
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="modal-close"
+          (click)="closeModal()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
@@ -311,11 +376,9 @@
               <div class="picker-chip">
                 <div class="chip-avatar">{{ patientInitials(selectedPatient()!) }}</div>
                 <div class="chip-info">
-                  <span class="chip-name"
-                    >{{ selectedPatient()!.firstName }} {{ selectedPatient()!.lastName }}</span
-                  >
+                  <span class="chip-name">{{ selectedPatient() | personName }}</span>
                   @if (selectedPatient() | patientSubline; as sub) {
-                    <span class="chip-sub">{{ sub }}</span>
+                    {{ ' ' }}<span class="chip-sub">{{ sub }}</span>
                   }
                 </div>
                 <button
@@ -323,6 +386,7 @@
                   class="chip-clear"
                   (click)="clearPatient()"
                   [title]="'COMMON.CHANGE_PATIENT' | translate"
+                  [attr.aria-label]="'COMMON.CHANGE_PATIENT' | translate"
                 >
                   <span class="material-symbols-outlined">close</span>
                 </button>
@@ -331,6 +395,7 @@
               <div class="patient-picker-wrap">
                 <span class="material-symbols-outlined picker-search-icon">person_search</span>
                 <input
+                  data-escape-discards
                   id="lab-patientSearch"
                   class="picker-input"
                   type="text"
@@ -352,7 +417,7 @@
                       <li class="picker-option" (mousedown)="selectPatient(p)">
                         <div class="opt-avatar">{{ patientInitials(p) }}</div>
                         <div class="opt-info">
-                          <span class="opt-name">{{ p.firstName }} {{ p.lastName }}</span>
+                          <span class="opt-name">{{ p | personName }}</span>
                           @if (p | patientSubline; as sub) {
                             <span class="opt-meta">{{ sub }}</span>
                           }
@@ -435,7 +500,7 @@
             <select id="lab-priority" [(ngModel)]="form.priority">
               <option value="">{{ 'LAB.SELECT_PRIORITY' | translate }}</option>
               @for (p of priorities; track p) {
-                <option [value]="p">{{ p }}</option>
+                <option [value]="p">{{ p | enumLabel: 'labOrderPriority' }}</option>
               }
             </select>
           </div>
@@ -504,8 +569,8 @@
           <div class="field">
             <label for="lab-orderChannel">{{ 'LAB.ORDER_CHANNEL' | translate }} *</label>
             <select id="lab-orderChannel" [(ngModel)]="form.orderChannel" required>
-              @for (ch of orderChannels; track ch.value) {
-                <option [value]="ch.value">{{ ch.label }}</option>
+              @for (ch of orderChannels; track ch) {
+                <option [value]="ch">{{ ch | enumLabel: 'labOrderChannel' }}</option>
               }
             </select>
           </div>
@@ -534,8 +599,8 @@
         <button
           class="btn-primary"
           (click)="submitForm()"
-          [disabled]="
-            saving() ||
+          [disabled]="saving()"
+          [appSubmitGuard]="
             !form.patientId ||
             !form.hospitalId ||
             !form.labTestDefinitionId ||
@@ -545,6 +610,12 @@
             !form.primaryDiagnosisCode ||
             !form.providerSignature
           "
+          [submitGuardFields]="[
+            'lab-testDef',
+            'lab-clinicalIndication',
+            'lab-medNecessity',
+            'lab-diagnosisCode',
+          ]"
         >
           {{
             saving()
@@ -566,10 +637,12 @@
       class="modal"
       role="dialog"
       aria-modal="true"
+      appModalDialog
+      (escaped)="closeVoid()"
+      (keydown.escape)="$event.stopPropagation()"
       aria-labelledby="lab-void-title"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
         <h2 id="lab-void-title">{{ 'LAB.VOID.TITLE' | translate }}</h2>
@@ -607,7 +680,9 @@
           class="btn-danger"
           data-testid="lab-void-confirm"
           (click)="executeVoid()"
-          [disabled]="voiding() || !voidReason().trim()"
+          [disabled]="voiding()"
+          [appSubmitGuard]="!voidReason().trim()"
+          [submitGuardFields]="['lab-void-reason']"
         >
           {{ 'LAB.VOID.CONFIRM' | translate }}
         </button>
@@ -626,13 +701,22 @@
   >
     <div
       class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="lab-dialog-title-3"
+      appModalDialog
+      (escaped)="cancelDelete()"
+      (keydown.escape)="$event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ 'LAB.DELETE_TITLE' | translate }}</h2>
-        <button class="modal-close" (click)="cancelDelete()">
+        <h2 id="lab-dialog-title-3">{{ 'LAB.DELETE_TITLE' | translate }}</h2>
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="modal-close"
+          (click)="cancelDelete()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
@@ -665,15 +749,24 @@
   >
     <div
       class="modal modal-lg"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="lab-dialog-title-4"
+      appModalDialog
+      (escaped)="closeSpecimens()"
+      (keydown.escape)="$event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>
+        <h2 id="lab-dialog-title-4">
           {{ 'LAB.SPECIMENS' | translate }} — {{ shortOrderCode(specimensOrder()?.labOrderCode) }}
         </h2>
-        <button class="modal-close" (click)="closeSpecimens()">
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="modal-close"
+          (click)="closeSpecimens()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
@@ -714,8 +807,16 @@
                     <td>{{ s.currentLocation || '—' }}</td>
                     <td>
                       <span [class]="getSpecimenStatusClass(s.status)">{{
-                        'LAB.SPECIMEN_STATUS_' + s.status | translate
+                        s.status | enumLabel: 'labSpecimenStatus'
                       }}</span>
+                      @if (s.status === 'REJECTED' && s.rejectionReason) {
+                        <div class="cell-secondary" [attr.data-testid]="'specimen-reason-' + s.id">
+                          {{
+                            'LAB.REJECT_SPECIMEN.REASON_VALUE'
+                              | translate: { reason: s.rejectionReason }
+                          }}
+                        </div>
+                      }
                     </td>
                     <td>
                       @if (canReceive(s)) {
@@ -725,6 +826,15 @@
                           [disabled]="receivingSpecimenId() === s.id"
                         >
                           {{ 'LAB.RECEIVE' | translate }}
+                        </button>
+                      }
+                      @if (canReject(s)) {
+                        <button
+                          class="btn-secondary btn-sm"
+                          [attr.data-testid]="'reject-specimen-' + s.id"
+                          (click)="openReject(s)"
+                        >
+                          {{ 'LAB.REJECT_SPECIMEN.ACTION' | translate }}
                         </button>
                       }
                       <button
@@ -745,6 +855,12 @@
           </div>
         }
 
+        @if (!specimensOrderAcceptsSpecimens()) {
+          <!-- QA D1109: an answered or cancelled order takes no new specimen -->
+          <p class="cell-secondary" role="note" data-testid="specimen-order-closed">
+            {{ 'LAB.SPECIMEN_ORDER_CLOSED' | translate }}
+          </p>
+        }
         @if (specimensOrderAcceptsSpecimens()) {
           <h3 class="specimen-form-title">{{ 'LAB.COLLECT_SPECIMEN' | translate }}</h3>
           <div class="form-row">
@@ -753,6 +869,7 @@
               <input
                 id="specimen-type"
                 type="text"
+                maxlength="50"
                 [placeholder]="'LAB.SPECIMEN_TYPE_PLACEHOLDER' | translate"
                 [(ngModel)]="specimenForm.specimenType"
               />
@@ -762,13 +879,20 @@
               <input
                 id="specimen-location"
                 type="text"
+                maxlength="100"
                 [(ngModel)]="specimenForm.currentLocation"
               />
             </div>
           </div>
           <div class="field">
             <label for="specimen-notes">{{ 'COMMON.NOTES' | translate }}</label>
-            <textarea id="specimen-notes" rows="2" [(ngModel)]="specimenForm.notes"></textarea>
+            <!-- QA D1050: each field holds what its column holds (50 / 100 / 2048) -->
+            <textarea
+              id="specimen-notes"
+              rows="2"
+              maxlength="2048"
+              [(ngModel)]="specimenForm.notes"
+            ></textarea>
           </div>
         }
       </div>
@@ -780,11 +904,80 @@
           <button
             class="btn-primary"
             (click)="collectSpecimen()"
-            [disabled]="specimenSaving() || !specimenForm.specimenType.trim()"
+            [disabled]="specimenSaving()"
+            [appSubmitGuard]="!specimenForm.specimenType.trim()"
+            [submitGuardFields]="['specimen-type']"
           >
             {{ 'LAB.COLLECT' | translate }}
           </button>
         }
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ═══ REJECT SPECIMEN, QA D962 ═══ -->
+@if (rejectingSpecimen(); as rs) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeReject()"
+    (keydown.escape)="closeReject()"
+  >
+    <div
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="lab-reject-title"
+      appModalDialog
+      (escaped)="closeReject()"
+      (keydown.escape)="$event.stopPropagation()"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      data-testid="lab-reject-modal"
+    >
+      <div class="modal-header">
+        <h2 id="lab-reject-title">{{ 'LAB.REJECT_SPECIMEN.TITLE' | translate }}</h2>
+        <button
+          class="modal-close"
+          (click)="closeReject()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p class="delete-warning">
+          {{ 'LAB.REJECT_SPECIMEN.EXPLAIN' | translate }}
+          <strong>{{ rs.accessionNumber || '—' }}</strong>
+        </p>
+        <div class="field">
+          <label for="lab-reject-reason">{{ 'LAB.REJECT_SPECIMEN.REASON' | translate }} *</label>
+          <textarea
+            id="lab-reject-reason"
+            data-testid="lab-reject-reason"
+            rows="3"
+            maxlength="500"
+            [value]="rejectReason()"
+            (input)="onRejectReasonInput($event)"
+            [placeholder]="'LAB.REJECT_SPECIMEN.REASON_PLACEHOLDER' | translate"
+          ></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="closeReject()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          class="btn-danger"
+          data-testid="lab-reject-confirm"
+          (click)="executeReject()"
+          [disabled]="rejecting()"
+          [appSubmitGuard]="!rejectReason().trim()"
+          [submitGuardFields]="['lab-reject-reason']"
+        >
+          {{ 'LAB.REJECT_SPECIMEN.CONFIRM' | translate }}
+        </button>
       </div>
     </div>
   </div>

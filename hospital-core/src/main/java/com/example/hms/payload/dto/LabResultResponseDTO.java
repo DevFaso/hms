@@ -19,6 +19,8 @@ public class LabResultResponseDTO {
     private String id;
     private String labOrderId;
     private String labOrderCode;
+    /** QA D963: the order's clinical priority (ROUTINE, URGENT, STAT), so the lab sees a STAT result first. */
+    private String orderPriority;
     private String labTestCode;
     private String patientId;
     private String patientFullName;
@@ -42,6 +44,13 @@ public class LabResultResponseDTO {
     private LocalDateTime resultDate;
     private String notes;
     private List<LabResultReferenceRangeDTO> referenceRanges;
+
+    /**
+     * Round 18: the range this result was graded against (its sex and age
+     * band, in its unit), or null when none graded it. The screen marks it
+     * among {@link #referenceRanges}.
+     */
+    private LabResultReferenceRangeDTO gradedReferenceRange;
     /** QA D834: the expected answer of a qualitative test ("Négatif"), shown where it has no range. */
     private String expectedResult;
     private List<LabResultTrendPointDTO> trendHistory;

@@ -10,10 +10,15 @@ GET /me/patient/access-log
 GET /me/patient/after-visit-summaries
 GET /me/patient/appointments
 GET /me/patient/appointments/{appointmentId}/questionnaires
+GET /me/patient/appointments/{appointmentId}/reschedule-slots
 GET /me/patient/billing/invoices
+GET /me/patient/billing/invoices/{invoiceId}
+GET /me/patient/billing/invoices/{invoiceId}/payments/{paymentId}/receipt
+GET /me/patient/billing/invoices/{invoiceId}/pdf
 GET /me/patient/booking/hospitals
 GET /me/patient/booking/hospitals/{hospitalId}/departments
 GET /me/patient/booking/hospitals/{hospitalId}/departments/{departmentId}/providers
+GET /me/patient/booking/hospitals/{hospitalId}/departments/{departmentId}/slots
 GET /me/patient/care-team
 GET /me/patient/consents
 GET /me/patient/consultations
@@ -37,6 +42,7 @@ GET /me/patient/notifications/unread-count
 GET /me/patient/pharmacy/claims
 GET /me/patient/pharmacy/payments
 GET /me/patient/prescriptions
+GET /me/patient/prescriptions/{prescriptionId}/printed-copy
 GET /me/patient/pro-instruments/{code}
 GET /me/patient/pro-screenings
 GET /me/patient/profile

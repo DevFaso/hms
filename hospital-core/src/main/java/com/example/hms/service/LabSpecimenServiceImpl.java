@@ -32,12 +32,29 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyyMMdd");
     private static final java.security.SecureRandom SECURE_RNG = new java.security.SecureRandom();
+    private static final String SPECIMEN_NOT_FOUND = "labspecimen.notfound";
 
     private final LabSpecimenRepository labSpecimenRepository;
     private final LabOrderRepository labOrderRepository;
     private final LabSpecimenMapper labSpecimenMapper;
     private final RoleValidator roleValidator;
     private final InstrumentOutboxService instrumentOutboxService;
+    /** QA D962: tells the ordering clinician a specimen was rejected. */
+    private final com.example.hms.service.lab.LabSpecimenRejectionNotifier rejectionNotifier;
+    /** Review of #975: a result already recorded from the tube (even preliminary) bars its rejection. */
+    private final com.example.hms.repository.LabResultRepository labResultRepository;
+
+    /** The specimen.rejection_reason column width (V239). */
+    static final int MAX_REJECTION_REASON = 500;
+
+    /** Specimens the laboratory can still refuse: not yet analysed, not already refused. */
+    private static final java.util.Set<LabSpecimenStatus> REJECTABLE = java.util.EnumSet.of(
+        LabSpecimenStatus.COLLECTED, LabSpecimenStatus.IN_TRANSIT, LabSpecimenStatus.RECEIVED);
+
+    /** Specimens still standing for the order: another one of these means no re-collection is needed. */
+    private static final java.util.Set<LabSpecimenStatus> LIVE = java.util.EnumSet.of(
+        LabSpecimenStatus.PENDING, LabSpecimenStatus.COLLECTED, LabSpecimenStatus.IN_TRANSIT,
+        LabSpecimenStatus.RECEIVED, LabSpecimenStatus.PROCESSING);
 
     private static final java.time.Duration COLLECTION_SKEW = java.time.Duration.ofMinutes(5);
 
@@ -57,6 +74,11 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
         // QA D820: an order voided as entered in error takes nothing further.
         if (labOrder.getStatus() == LabOrderStatus.ENTERED_IN_ERROR) {
             throw new BusinessException("lab.order.enteredInError");
+        }
+        // QA D1109: nor does an order already answered (a result exists) or
+        // cancelled: the collection left a dangling tube on a released order.
+        if (!com.example.hms.service.lab.LabOrderLifecycle.acceptsNewSpecimen(labOrder.getStatus())) {
+            throw new BusinessException("lab.specimen.orderClosed");
         }
 
         // QA D637: a specimen cannot be collected before the test was ordered
@@ -98,10 +120,10 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
     @Transactional(readOnly = true)
     public LabSpecimenResponseDTO getSpecimenById(UUID specimenId, Locale locale) {
         LabSpecimen specimen = labSpecimenRepository.findById(specimenId)
-            .orElseThrow(() -> new ResourceNotFoundException("labspecimen.notfound", specimenId));
+            .orElseThrow(() -> new ResourceNotFoundException(SPECIMEN_NOT_FOUND, specimenId));
 
         if (!specimen.getLabOrder().isHandledBy(roleValidator.requireActiveHospitalId())) {
-            throw new ResourceNotFoundException("labspecimen.notfound", specimenId);
+            throw new ResourceNotFoundException(SPECIMEN_NOT_FOUND, specimenId);
         }
         return labSpecimenMapper.toResponseDTO(specimen);
     }
@@ -125,10 +147,10 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
     @Transactional
     public LabSpecimenResponseDTO receiveSpecimen(UUID specimenId, Locale locale) {
         LabSpecimen specimen = labSpecimenRepository.findById(specimenId)
-            .orElseThrow(() -> new ResourceNotFoundException("labspecimen.notfound", specimenId));
+            .orElseThrow(() -> new ResourceNotFoundException(SPECIMEN_NOT_FOUND, specimenId));
 
         if (!specimen.getLabOrder().isHandledBy(roleValidator.requireActiveHospitalId())) {
-            throw new ResourceNotFoundException("labspecimen.notfound", specimenId);
+            throw new ResourceNotFoundException(SPECIMEN_NOT_FOUND, specimenId);
         }
         // QA D820: a specimen collected before its order was voided is not
         // received either - the receipt would queue an analyzer work order
@@ -136,11 +158,19 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
         if (specimen.getLabOrder().getStatus() == LabOrderStatus.ENTERED_IN_ERROR) {
             throw new BusinessException("lab.order.enteredInError");
         }
+        // QA D1109: nor on a cancelled order.
+        if (!com.example.hms.service.lab.LabOrderLifecycle.acceptsSpecimenReceipt(specimen.getLabOrder().getStatus())) {
+            throw new BusinessException("lab.specimen.orderCancelled");
+        }
 
         if (specimen.getStatus() != LabSpecimenStatus.COLLECTED
                 && specimen.getStatus() != LabSpecimenStatus.IN_TRANSIT) {
             throw new BusinessException("lab.specimen.notReceivable", specimen.getStatus().name());
         }
+        // Review of #975: a rejection that committed after this specimen was
+        // read is seen here, under the order lock, instead of being written
+        // over with RECEIVED and a work order queued for a refused tube.
+        requireUnchangedUnderLock(specimen);
 
         specimen.setReceivedAt(LocalDateTime.now());
         specimen.setReceivedById(roleValidator.getCurrentUserId());
@@ -148,6 +178,71 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
         LabSpecimen saved = labSpecimenRepository.save(specimen);
         advanceOrder(specimen.getLabOrder(), LabOrderStatus.RECEIVED);
         instrumentOutboxService.enqueueSpecimenReceived(saved);
+        return labSpecimenMapper.toResponseDTO(saved);
+    }
+
+    @Override
+    @Transactional
+    public LabSpecimenResponseDTO rejectSpecimen(UUID specimenId, String reason, Locale locale) {
+        LabSpecimen specimen = labSpecimenRepository.findById(specimenId)
+            .orElseThrow(() -> new ResourceNotFoundException(SPECIMEN_NOT_FOUND, specimenId));
+        LabOrder labOrder = specimen.getLabOrder();
+        if (!labOrder.isHandledBy(roleValidator.requireActiveHospitalId())) {
+            throw new ResourceNotFoundException(SPECIMEN_NOT_FOUND, specimenId);
+        }
+        String trimmed = reason == null ? "" : reason.trim();
+        if (trimmed.isEmpty()) {
+            throw new BusinessException("lab.specimen.rejectReasonRequired");
+        }
+        if (trimmed.length() > MAX_REJECTION_REASON) {
+            throw new BusinessException("lab.specimen.rejectReasonTooLong", MAX_REJECTION_REASON);
+        }
+        if (labOrder.getStatus() == LabOrderStatus.ENTERED_IN_ERROR) {
+            throw new BusinessException("lab.order.enteredInError");
+        }
+        if (!REJECTABLE.contains(specimen.getStatus())) {
+            throw new BusinessException("lab.specimen.notRejectable");
+        }
+
+        // The order row is locked first, as every status writer here does, and
+        // the decision is made on the committed status read under that lock.
+        // Review of #975: the specimen too - a receipt or a second rejection
+        // that committed after it was read must not be written over.
+        requireUnchangedUnderLock(specimen);
+        LabOrderStatus committedStatus = labOrderRepository.findStatusById(labOrder.getId());
+        if (committedStatus == LabOrderStatus.ENTERED_IN_ERROR) {
+            throw new BusinessException("lab.order.enteredInError");
+        }
+        if (!LabOrderLifecycle.acceptsSpecimenRejection(committedStatus)) {
+            throw new BusinessException("lab.specimen.rejectAfterResult");
+        }
+        // Review of #975: an analyser's preliminary result leaves the order
+        // short of RESULTED, so the status alone would let the tube be refused
+        // while its value stays on the order. Any result row bars it; the
+        // result is corrected instead.
+        if (labResultRepository.existsByLabOrder_Id(labOrder.getId())) {
+            throw new BusinessException("lab.specimen.rejectAfterResult");
+        }
+
+        specimen.setStatus(LabSpecimenStatus.REJECTED);
+        specimen.setRejectionReason(trimmed);
+        specimen.setRejectedAt(LocalDateTime.now(ZoneId.systemDefault()));
+        specimen.setRejectedById(roleValidator.getCurrentUserId());
+        LabSpecimen saved = labSpecimenRepository.save(specimen);
+
+        // Back to awaiting collection, unless another specimen still stands
+        // for the order (a second tube drawn at the same time).
+        boolean anotherLive = labSpecimenRepository.findByLabOrder_Id(labOrder.getId()).stream()
+            .anyMatch(other -> !java.util.Objects.equals(other.getId(), saved.getId())
+                && LIVE.contains(other.getStatus()));
+        LabOrderStatus moveTo = anotherLive ? null : LabOrderLifecycle.statusAfterSpecimenRejected(committedStatus);
+        if (moveTo != null && labOrderRepository.updateStatusFrom(labOrder.getId(), committedStatus, moveTo) == 0) {
+            log.debug("Lab order {} moved from {} while its specimen was being rejected; status left alone",
+                labOrder.getId(), committedStatus);
+        }
+        if (rejectionNotifier != null) {
+            rejectionNotifier.specimenRejected(saved);
+        }
         return labSpecimenMapper.toResponseDTO(saved);
     }
 
@@ -170,8 +265,7 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
         // concurrent move makes the update match nothing, and the only thing
         // that happened was a debug line — the order stays short of where
         // this specimen event should have put it, and nothing revisits it.
-        labOrderRepository.findWithLockById(labOrder.getId());
-        LabOrderStatus committedStatus = labOrderRepository.findStatusById(labOrder.getId());
+        LabOrderStatus committedStatus = lockedStatusOf(labOrder.getId());
         // QA D820: the void takes this same lock, so a void that committed
         // after the caller's status check is seen here. Refusing rolls back
         // the specimen write, and the receipt's outbox row is never queued.
@@ -210,4 +304,28 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
         }
         return sb.toString();
     }
+
+    /**
+     * The order's committed status, read under the order row lock (the lock is
+     * the point of the first read; its result is not needed).
+     */
+    private LabOrderStatus lockedStatusOf(UUID labOrderId) {
+        labOrderRepository.findWithLockById(labOrderId);
+        return labOrderRepository.findStatusById(labOrderId);
+    }
+
+    /**
+     * Takes the order lock (every specimen writer takes it) and refuses when
+     * the specimen's committed status is no longer the one it was read with:
+     * the entity is saved whole, so a stale copy would write a concurrent
+     * receipt or rejection back out (review of #975).
+     */
+    private void requireUnchangedUnderLock(LabSpecimen specimen) {
+        labOrderRepository.findWithLockById(specimen.getLabOrder().getId());
+        LabSpecimenStatus committed = labSpecimenRepository.findStatusById(specimen.getId());
+        if (committed != specimen.getStatus()) {
+            throw new BusinessException("lab.specimen.changedConcurrently");
+        }
+    }
+
 }

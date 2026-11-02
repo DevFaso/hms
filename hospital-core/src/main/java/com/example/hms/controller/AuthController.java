@@ -478,9 +478,8 @@ public class AuthController {
             // every activation path clears the counter —
             // UserRoleHospitalAssignmentServiceImpl#activateVerifiedAssignment
             // (behind verifyAssignmentByCode, which the holder drives, and
-            // confirmAssignment, which their registrar drives), #verifyEmail
-            // below, which is the endpoint that actually serves verification
-            // (UserServiceImpl#verifyEmail has no caller), and
+            // confirmAssignment, which their registrar drives),
+            // UserServiceImpl#verifyEmail (behind #verifyEmail below), and
             // UserServiceImpl#updateUser / #restoreUser when an administrator
             // switches an account back on. The welcome mail hands out temp
             // credentials, so trying them before confirming the code is the
@@ -532,57 +531,15 @@ public class AuthController {
 
     @PostMapping("/verify-email")
     public ResponseEntity<Object> verifyEmail(@Valid @RequestBody EmailVerificationRequestDTO dto) {
-        var userOpt = userRepository.findByEmail(dto.getEmail());
-        if (userOpt.isEmpty()) {
+        // QA D921: the account and its patient assignments are switched on in
+        // ONE transaction inside the service (the Patient row is not touched). This controller
+        // runs with no session (open-in-view is off): the account save used to
+        // commit on its own, then the assignment loop's lazy getRole() threw,
+        // so the link answered 500 with the account half activated.
+        if (!userService.verifyEmail(dto.getEmail(), dto.getToken())) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(new EmailVerificationResponseDTO(EMAIL_VERIFICATION_FAILED, false));
         }
-        var user = userOpt.get();
-        if (!java.util.Objects.equals(dto.getToken(), user.getActivationToken())
-                || user.getActivationTokenExpiresAt() == null
-                || user.getActivationTokenExpiresAt().isBefore(LocalDateTime.now())) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new EmailVerificationResponseDTO(EMAIL_VERIFICATION_FAILED, false));
-        }
-
-        // An account an administrator switched off (V184) is not verified
-        // from below: no activation, no lockout reset, no assignment change.
-        if (user.getDeactivatedByAdminAt() != null) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new EmailVerificationResponseDTO(EMAIL_VERIFICATION_FAILED, false));
-        }
-
-        // 1. Activate the user account
-        user.setActive(true);
-        user.setActivationToken(null);
-        user.setActivationTokenExpiresAt(null);
-        userRepository.save(user);
-        // Refusals collected while the account was inactive must not outlive
-        // the activation: the disabled arm of /auth/login counts toward the
-        // lockout, so five attempts before verifying would otherwise leave the
-        // holder locked out at the moment the link finally works. This is the
-        // endpoint that actually runs — UserService#verifyEmail has no caller.
-        loginAttemptService.resetAttempts(user.getId());
-
-        // 2. Activate all patient role assignments for this user
-        var assignments = assignmentRepository.findByUserId(user.getId());
-        int activated = 0;
-        for (var assignment : assignments) {
-            // QA D789: a patient row at a hospital archived since stays off; the
-            // account itself is still verified.
-            if ("ROLE_PATIENT".equalsIgnoreCase(assignment.getRole().getCode())
-                    && !Boolean.TRUE.equals(assignment.getActive())
-                    && (assignment.getHospital() == null
-                        || !com.example.hms.security.provider.FacilityAssignmentGuard
-                            .isClosed(assignment.getHospital().getLifecycleState()))) {
-                assignment.setActive(true);
-                assignmentRepository.save(assignment);
-                activated++;
-            }
-        }
-        log.info("✅ Email verified for user '{}'. Activated {} patient assignment(s).",
-                user.getUsername(), activated);
-
         return ResponseEntity.ok(new EmailVerificationResponseDTO("Email verified successfully.", true));
     }
 
@@ -590,7 +547,7 @@ public class AuthController {
                description = "GET version for email verification links. Activates user and patient role assignments.")
     @GetMapping("/verify-email")
     public ResponseEntity<Object> verifyEmailViaLink(
-            @RequestParam("email") @Email @NotBlank String email,
+            @RequestParam("email") @Email(message = "{validation.email.invalid}") @NotBlank String email,
             @RequestParam("token") @NotBlank String token) {
         var dto = new EmailVerificationRequestDTO();
         dto.setEmail(email);
@@ -602,7 +559,7 @@ public class AuthController {
                description = "Generates a new activation token and resends the verification email.")
     @PostMapping("/resend-verification")
     public ResponseEntity<Object> resendVerificationEmail(
-            @RequestParam(value = "email", required = false) @Email String emailParam,
+            @RequestParam(value = "email", required = false) @Email(message = "{validation.email.invalid}") String emailParam,
             @RequestParam(value = "phone", required = false) String phoneParam,
             @RequestBody(required = false) java.util.Map<String, String> body) {
         // QA D542: the portal now sends the contact in the body - a phone
@@ -616,17 +573,15 @@ public class AuthController {
             }
             return resendActivationByPhone(phone.trim());
         }
+        // QA D1017: one answer whatever the address: unknown, active or
+        // waiting. An active account used to answer "already verified", which
+        // told an anonymous caller which addresses hold a live account.
+        MessageResponse neutral = new MessageResponse(MessageUtil.resolve("auth.resend.emailNeutral"));
         var userOpt = userRepository.findByEmail(email);
-        if (userOpt.isEmpty()) {
-            // Don't reveal whether email exists
-            return ResponseEntity.ok(new MessageResponse(
-                    "If the email is registered, a new verification link has been sent."));
+        if (userOpt.isEmpty() || userOpt.get().isActive()) {
+            return ResponseEntity.ok(neutral);
         }
         var user = userOpt.get();
-        if (user.isActive()) {
-            return ResponseEntity.ok(new MessageResponse(
-                    "Account is already verified. You can log in."));
-        }
 
         // Generate new token
         user.setActivationToken(java.util.UUID.randomUUID().toString());
@@ -644,8 +599,7 @@ public class AuthController {
         }
         resendPendingAssignmentCodes(user);
 
-        return ResponseEntity.ok(new MessageResponse(
-                "If the email is registered, a new verification link has been sent."));
+        return ResponseEntity.ok(neutral);
     }
 
     private static String firstNonBlank(String preferred, String fallback) {
@@ -660,8 +614,7 @@ public class AuthController {
      * not the number is known, so the endpoint does not reveal accounts.
      */
     private ResponseEntity<Object> resendActivationByPhone(String phone) {
-        MessageResponse neutral = new MessageResponse(
-                "If the number is registered, a new activation code has been sent.");
+        MessageResponse neutral = new MessageResponse(MessageUtil.resolve("auth.resend.phoneNeutral"));
         // Same lookup as the reset-by-phone flow: the number as typed at the
         // desk ("70 00 00 00") is stored in E.164.
         String e164 = com.example.hms.utility.PhoneNumbers.toE164(
@@ -1387,7 +1340,7 @@ public class AuthController {
 
     /**
      * The oldest reset request. QA D787: it answered 400 to a phone number or a
-     * username (the parameter was {@code @Email}); like
+     * username (the parameter was {@code @Email(message = "{validation.email.invalid}")}); like
      * {@code POST /auth/password/request} it now takes an e-mail address, a
      * username or a phone number, as {@code identifier}, {@code email} or
      * {@code phone}, in a JSON body or (older clients) the query string, and is

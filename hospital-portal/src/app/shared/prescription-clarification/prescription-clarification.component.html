@@ -24,6 +24,7 @@
     [attr.data-testid]="'rx-clarification-modal-' + prescriptionId()"
   >
     <div
+      appModalDialog
       #dialog
       class="modal clarify-modal"
       role="dialog"
@@ -31,7 +32,7 @@
       [attr.aria-labelledby]="titleId()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="requestClose()"
+      (keydown.escape)="requestClose(); $event.stopPropagation()"
       [attr.data-testid]="'rx-clarification-dialog-' + prescriptionId()"
     >
       <div class="modal-header">
@@ -154,6 +155,7 @@
             ) | translate
           }}</span>
           <textarea
+            [id]="'rx-clarification-text-' + prescriptionId()"
             rows="4"
             maxlength="1000"
             name="clarificationText"
@@ -199,7 +201,9 @@
         <button
           type="button"
           class="btn-primary"
-          [disabled]="submitting() || requiredTextMissing()"
+          [disabled]="submitting()"
+          [appSubmitGuard]="requiredTextMissing()"
+          [submitGuardFields]="['rx-clarification-text-' + prescriptionId()]"
           (click)="submit()"
           [attr.data-testid]="'rx-clarification-submit-' + prescriptionId()"
         >

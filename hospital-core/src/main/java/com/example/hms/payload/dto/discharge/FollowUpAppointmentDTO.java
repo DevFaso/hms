@@ -42,6 +42,7 @@ public class FollowUpAppointmentDTO {
     private String location;
 
     @Size(max = 50)
+    @com.example.hms.validation.PhoneNumber
     private String phoneNumber;
 
     @Size(max = 1000)

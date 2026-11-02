@@ -3,6 +3,7 @@ import { DOCUMENT } from '@angular/common';
 import { TestBed } from '@angular/core/testing';
 import { appConfig } from './app.config';
 import { OidcAuthService } from './auth/oidc-auth.service';
+import { focusRescueInstalledOn, uninstallFocusRescue } from './shared/a11y/focus-rescue';
 
 /**
  * QA D505: the comma-decimal fix lives entirely in one app initializer;
@@ -28,5 +29,19 @@ describe('appConfig start-up (QA D505 wiring)', () => {
     input.dispatchEvent(event);
 
     expect(event.defaultPrevented).toBeTrue();
+  });
+
+  it('QA D1202: installs the focus rescue on the document', async () => {
+    const doc = document.implementation.createHTMLDocument('d1202');
+    TestBed.configureTestingModule({
+      providers: [
+        ...appConfig.providers,
+        { provide: DOCUMENT, useValue: doc },
+        { provide: OidcAuthService, useValue: { initialize: () => Promise.resolve() } },
+      ],
+    });
+    await TestBed.inject(ApplicationInitStatus).donePromise;
+    expect(focusRescueInstalledOn()).toBe(doc);
+    uninstallFocusRescue();
   });
 });

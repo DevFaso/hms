@@ -45,7 +45,7 @@
       <div class="status-banner" [class]="getStatusClass(appt.status)">
         <span class="material-symbols-outlined">info</span>
         <span
-          >{{ 'COMMON.STATUS' | translate }}:
+          >{{ 'COMMON.STATUS' | translate }}{{ 'COMMON.COLON' | translate }}
           <strong>{{ appt.status | enumLabel: 'appointmentStatus' }}</strong></span
         >
 
@@ -82,7 +82,12 @@
                 <button
                   class="btn-xs btn-complete"
                   (click)="markAsCompleted()"
-                  [disabled]="saving() || !hasAppointmentStarted"
+                  [disabled]="saving()"
+                  [appSubmitGuard]="
+                    hasAppointmentStarted
+                      ? null
+                      : ('APPOINTMENTS.CANNOT_COMPLETE_BEFORE_START' | translate)
+                  "
                   [title]="
                     hasAppointmentStarted
                       ? ('APPOINTMENTS.MARK_COMPLETED' | translate)
@@ -92,10 +97,25 @@
                   {{ 'APPOINTMENTS.COMPLETE' | translate }}
                 </button>
               }
+            }
+            <!--
+              QA D946: "Absent" is for a patient who never came: a SCHEDULED or
+              CONFIRMED appointment whose time has passed. The desk no longer
+              records a confirmation the patient never gave to reach it, and a
+              patient who arrived (CHECKED_IN, IN_PROGRESS) leaves through the
+              "left without being seen" closure instead.
+            -->
+            @if (appt.status === 'SCHEDULED' || appt.status === 'CONFIRMED') {
               <button
                 class="btn-xs btn-noshow"
+                data-testid="mark-no-show"
                 (click)="markAsNoShow()"
-                [disabled]="saving() || !hasAppointmentStarted"
+                [disabled]="saving()"
+                [appSubmitGuard]="
+                  hasAppointmentStarted
+                    ? null
+                    : ('APPOINTMENTS.CANNOT_NO_SHOW_BEFORE_START' | translate)
+                "
                 [title]="
                   hasAppointmentStarted
                     ? ('APPOINTMENTS.MARK_NO_SHOW' | translate)
@@ -118,7 +138,9 @@
         <div class="detail-fields">
           <div class="field-row">
             <span class="field-label">{{ 'APPOINTMENTS.DATE' | translate }}</span>
-            <span class="field-value">{{ appt.appointmentDate }}</span>
+            <span class="field-value">{{
+              appt.appointmentDate | serverTime | date: 'mediumDate'
+            }}</span>
           </div>
           <div class="field-row">
             <span class="field-label">{{ 'APPOINTMENTS.TIME' | translate }}</span>
@@ -134,6 +156,25 @@
             <div class="field-row">
               <span class="field-label">{{ 'APPOINTMENTS.NOTES' | translate }}</span>
               <span class="field-value">{{ appt.notes }}</span>
+            </div>
+          }
+          <!-- QA D1126 / D1132: why the visit was cancelled or marked a no-show. -->
+          @if (appt.statusReason) {
+            <div class="field-row" data-testid="status-reason">
+              <!-- QA D1171: never a second "Motif" next to the visit's own reason. -->
+              <span class="field-label">{{
+                (appt.status === 'CANCELLED'
+                  ? 'APPOINTMENTS.STATUS_REASON_CANCELLED'
+                  : appt.status === 'NO_SHOW'
+                    ? 'APPOINTMENTS.STATUS_REASON_NO_SHOW'
+                    : appt.status === 'SCHEDULED' ||
+                        appt.status === 'PENDING' ||
+                        appt.status === 'CONFIRMED'
+                      ? 'APPOINTMENTS.STATUS_REASON_RESCHEDULED'
+                      : 'APPOINTMENTS.STATUS_REASON'
+                ) | translate
+              }}</span>
+              <span class="field-value">{{ appt.statusReason }}</span>
             </div>
           }
           <div class="field-row">
@@ -227,15 +268,26 @@
     tabindex="-1"
   >
     <dialog
+      aria-modal="true"
       class="modal"
       [open]="showReschedule()"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="closeReschedule()"
+      (keydown.escape)="$event.stopPropagation()"
+      appDialogFocus
+      (dialogDismiss)="closeReschedule()"
       tabindex="-1"
+      aria-labelledby="appointment-detail-dialog-2-title"
     >
       <div class="modal-header">
-        <h2>{{ 'APPOINTMENTS.RESCHEDULE_APPOINTMENT' | translate }}</h2>
-        <button class="modal-close" (click)="closeReschedule()">
+        <h2 id="appointment-detail-dialog-2-title">
+          {{ 'APPOINTMENTS.RESCHEDULE_APPOINTMENT' | translate }}
+        </h2>
+        <button
+          type="button"
+          class="modal-close"
+          (click)="closeReschedule()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
@@ -251,27 +303,56 @@
               required
             />
           </div>
-          <div class="form-row-two">
-            <div class="field">
-              <label for="reschedStart">{{ 'APPOINTMENTS.START_TIME' | translate }} *</label>
-              <input
-                id="reschedStart"
-                type="time"
-                [(ngModel)]="rescheduleStart"
-                name="reschedStart"
-                required
-              />
-            </div>
-            <div class="field">
-              <label for="reschedEnd">{{ 'APPOINTMENTS.END_TIME' | translate }} *</label>
-              <input
-                id="reschedEnd"
-                type="time"
-                [(ngModel)]="rescheduleEnd"
-                name="reschedEnd"
-                required
-              />
-            </div>
+          <div class="field">
+            <label for="reschedStart">{{ 'APPOINTMENTS.START_TIME' | translate }} *</label>
+            <input
+              id="reschedStart"
+              type="time"
+              [(ngModel)]="rescheduleStart"
+              name="reschedStart"
+              required
+            />
+            <!-- QA D1060: the clinician's slot rules set how long the visit lasts. -->
+            <small class="field-hint" data-testid="resched-duration-note">{{
+              'APPOINTMENTS.DURATION_SET_BY_SLOTS' | translate
+            }}</small>
+          </div>
+          <!-- QA D1018 / D923: the clinician, the department and the reason
+               can change with the time. -->
+          <div class="field">
+            <label for="reschedStaff">{{ 'APPOINTMENTS.DOCTOR_STAFF' | translate }}</label>
+            <select
+              id="reschedStaff"
+              name="reschedStaff"
+              [ngModel]="rescheduleStaffId"
+              (ngModelChange)="onRescheduleStaffChange($event)"
+            >
+              @if (appointment(); as a) {
+                @if (!rescheduleStaffOptions().length || !hasRescheduleStaff(a.staffId)) {
+                  <option [value]="a.staffId">{{ a.staffName }}</option>
+                }
+              }
+              @for (s of rescheduleStaffOptions(); track s.id) {
+                <option [value]="s.id">{{ s.name }}</option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label for="reschedDept">{{ 'APPOINTMENTS.DEPARTMENT' | translate }}</label>
+            <select id="reschedDept" name="reschedDept" [(ngModel)]="rescheduleDepartmentId">
+              @for (d of rescheduleDepartments(); track d.id) {
+                <option [value]="d.id">{{ d.name }}</option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label for="reschedReason">{{ 'APPOINTMENTS.REASON' | translate }}</label>
+            <input
+              id="reschedReason"
+              name="reschedReason"
+              maxlength="2048"
+              [(ngModel)]="rescheduleReason"
+            />
           </div>
           <div class="field">
             <label for="reschedNotes">{{ 'APPOINTMENTS.NOTES_OPTIONAL' | translate }}</label>
@@ -310,23 +391,69 @@
     tabindex="-1"
   >
     <dialog
+      aria-modal="true"
       class="modal modal-confirm"
       [open]="showCancelConfirm()"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="closeCancelConfirm()"
+      (keydown.escape)="$event.stopPropagation()"
+      appDialogFocus
+      (dialogDismiss)="closeCancelConfirm()"
       tabindex="-1"
+      aria-labelledby="appointment-detail-dialog-1-title"
     >
       <div class="modal-header">
-        <h2>{{ 'APPOINTMENTS.CANCEL_APPOINTMENT' | translate }}</h2>
-        <button class="modal-close" (click)="closeCancelConfirm()">
+        <h2 id="appointment-detail-dialog-1-title">
+          {{
+            (dropAction() === 'CANCEL'
+              ? 'APPOINTMENTS.CANCEL_APPOINTMENT'
+              : 'APPOINTMENTS.NO_SHOW_DIALOG_TITLE'
+            ) | translate
+          }}
+        </h2>
+        <button
+          type="button"
+          class="modal-close"
+          (click)="closeCancelConfirm()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
       <div class="modal-body">
         <p class="confirm-message">
-          {{ 'APPOINTMENTS.CANCEL_CONFIRM_MESSAGE' | translate }}<br />
+          {{
+            (dropAction() === 'CANCEL'
+              ? 'APPOINTMENTS.CANCEL_CONFIRM_MESSAGE'
+              : 'APPOINTMENTS.NO_SHOW_CONFIRM_MESSAGE'
+            ) | translate
+          }}<br />
           <strong>{{ 'APPOINTMENTS.CANNOT_BE_UNDONE' | translate }}</strong>
         </p>
+        <!-- QA D1126 / D1132: the reason is required and kept with the appointment. -->
+        <div class="field">
+          <label for="dropReason">{{ 'APPOINTMENTS.STATUS_REASON_LABEL' | translate }}</label>
+          <textarea
+            id="dropReason"
+            name="dropReason"
+            rows="3"
+            data-testid="drop-reason"
+            [attr.maxlength]="dropReasonMax"
+            [(ngModel)]="dropReason"
+            (ngModelChange)="dropReasonError.set(false)"
+            [attr.aria-invalid]="dropReasonError() ? 'true' : null"
+            [attr.aria-describedby]="dropReasonError() ? 'dropReasonError' : null"
+          ></textarea>
+          @if (dropReasonError()) {
+            <p
+              id="dropReasonError"
+              class="field-error"
+              role="alert"
+              data-testid="drop-reason-error"
+            >
+              {{ 'APPOINTMENTS.STATUS_REASON_REQUIRED' | translate }}
+            </p>
+          }
+        </div>
       </div>
       <div class="modal-actions">
         <button type="button" class="btn-secondary" (click)="closeCancelConfirm()">
@@ -335,13 +462,19 @@
         <button
           type="button"
           class="btn-danger"
+          data-testid="drop-confirm"
           (click)="executeCancel()"
           [disabled]="cancelling()"
         >
           {{
-            cancelling()
-              ? ('APPOINTMENTS.CANCELLING' | translate)
-              : ('APPOINTMENTS.YES_CANCEL' | translate)
+            (cancelling()
+              ? dropAction() === 'CANCEL'
+                ? 'APPOINTMENTS.CANCELLING'
+                : 'COMMON.SAVING'
+              : dropAction() === 'CANCEL'
+                ? 'APPOINTMENTS.YES_CANCEL'
+                : 'APPOINTMENTS.CONFIRM_NO_SHOW'
+            ) | translate
           }}
         </button>
       </div>

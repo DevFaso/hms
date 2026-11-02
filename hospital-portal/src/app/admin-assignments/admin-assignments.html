@@ -134,6 +134,7 @@
                   class="icon-btn"
                   (click)="openDetail(row)"
                   [title]="'COMMON.VIEW' | translate"
+                  [attr.aria-label]="'COMMON.VIEW' | translate"
                 >
                   <span class="material-symbols-outlined">visibility</span>
                 </button>
@@ -142,6 +143,7 @@
                   class="icon-btn"
                   (click)="openEdit(row)"
                   [title]="'COMMON.EDIT' | translate"
+                  [attr.aria-label]="'COMMON.EDIT' | translate"
                 >
                   <span class="material-symbols-outlined">edit</span>
                 </button>
@@ -150,17 +152,22 @@
                   class="icon-btn"
                   (click)="openRegen(row)"
                   [title]="'ASSIGN_ADMIN.REGENERATE' | translate"
+                  [attr.aria-label]="'ASSIGN_ADMIN.REGENERATE' | translate"
                 >
                   <span class="material-symbols-outlined">key</span>
                 </button>
-                <button
-                  type="button"
-                  class="icon-btn"
-                  (click)="resendNotification(row)"
-                  [title]="'ASSIGN_ADMIN.RESEND' | translate"
-                >
-                  <span class="material-symbols-outlined">forward_to_inbox</span>
-                </button>
+                <!-- QA r22: an activated account has no activation message to re-send. -->
+                @if (!row.confirmationVerified) {
+                  <button
+                    type="button"
+                    class="icon-btn"
+                    (click)="resendNotification(row)"
+                    [title]="'ASSIGN_ADMIN.RESEND' | translate"
+                    [attr.aria-label]="'ASSIGN_ADMIN.RESEND' | translate"
+                  >
+                    <span class="material-symbols-outlined">forward_to_inbox</span>
+                  </button>
+                }
                 @if (!isOwnRow(row)) {
                   @if (row.active) {
                     <button
@@ -168,6 +175,7 @@
                       class="icon-btn warn"
                       (click)="deactivate(row)"
                       [title]="'ASSIGN_ADMIN.DEACTIVATE' | translate"
+                      [attr.aria-label]="'ASSIGN_ADMIN.DEACTIVATE' | translate"
                     >
                       <span class="material-symbols-outlined">block</span>
                     </button>
@@ -178,6 +186,7 @@
                     data-test="assignment-delete"
                     (click)="delete(row)"
                     [title]="'COMMON.DELETE' | translate"
+                    [attr.aria-label]="'COMMON.DELETE' | translate"
                   >
                     <span class="material-symbols-outlined">delete</span>
                   </button>
@@ -228,9 +237,11 @@
         aria-modal="true"
         tabindex="-1"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="$event.stopPropagation()"
+        (keydown.escape)="closeModal(); $event.stopPropagation()"
+        appModalDialog
+        aria-labelledby="admin-assignments-dialog-5-title"
       >
-        <h2>
+        <h2 id="admin-assignments-dialog-5-title">
           {{ (modal() === 'create' ? 'ASSIGN_ADMIN.NEW' : 'ASSIGN_ADMIN.EDIT') | translate }}
         </h2>
         @if (modal() === 'create') {
@@ -245,7 +256,7 @@
           </label>
         } @else {
           <p class="form-static">
-            <strong>{{ 'ASSIGN_ADMIN.USER' | translate }}:</strong>
+            <strong>{{ 'ASSIGN_ADMIN.USER' | translate }}{{ 'COMMON.COLON' | translate }}</strong>
             {{ selected()?.userName || selected()?.userEmail }}
           </p>
         }
@@ -323,9 +334,13 @@
         aria-modal="true"
         tabindex="-1"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="$event.stopPropagation()"
+        (keydown.escape)="closeModal(); $event.stopPropagation()"
+        appModalDialog
+        aria-labelledby="admin-assignments-dialog-4-title"
       >
-        <h2>{{ 'ASSIGN_ADMIN.MULTI_SCOPE_TITLE' | translate }}</h2>
+        <h2 id="admin-assignments-dialog-4-title">
+          {{ 'ASSIGN_ADMIN.MULTI_SCOPE_TITLE' | translate }}
+        </h2>
         @if (!multiResult()) {
           <label class="form-field">
             <span>{{ 'ASSIGN_ADMIN.USER_IDENTIFIER' | translate }} *</span>
@@ -395,13 +410,18 @@
         } @else {
           <div class="result-summary">
             <span class="badge badge-info">
-              {{ 'ASSIGN_ADMIN.REQUESTED' | translate }}: {{ multiResult()!.requestedAssignments }}
+              {{ 'ASSIGN_ADMIN.REQUESTED' | translate }}{{ 'COMMON.COLON' | translate }}
+              {{ multiResult()!.requestedAssignments }}
             </span>
-            <span class="badge badge-success">
-              {{ 'ASSIGN_ADMIN.CREATED_N' | translate }}: {{ multiResult()!.createdAssignments }}
+            {{ ' '
+            }}<span class="badge badge-success">
+              {{ 'ASSIGN_ADMIN.CREATED_N' | translate }}{{ 'COMMON.COLON' | translate }}
+              {{ multiResult()!.createdAssignments }}
             </span>
-            <span class="badge badge-muted">
-              {{ 'ASSIGN_ADMIN.SKIPPED' | translate }}: {{ multiResult()!.skippedAssignments }}
+            {{ ' '
+            }}<span class="badge badge-muted">
+              {{ 'ASSIGN_ADMIN.SKIPPED' | translate }}{{ 'COMMON.COLON' | translate }}
+              {{ multiResult()!.skippedAssignments }}
             </span>
           </div>
           @if (multiResult()!.failures.length > 0) {
@@ -438,9 +458,11 @@
         aria-modal="true"
         tabindex="-1"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="$event.stopPropagation()"
+        (keydown.escape)="closeModal(); $event.stopPropagation()"
+        appModalDialog
+        aria-labelledby="admin-assignments-dialog-3-title"
       >
-        <h2>{{ 'ASSIGN_ADMIN.DETAIL_TITLE' | translate }}</h2>
+        <h2 id="admin-assignments-dialog-3-title">{{ 'ASSIGN_ADMIN.DETAIL_TITLE' | translate }}</h2>
         <div class="detail-grid">
           <div>
             <span class="label">{{ 'ASSIGN_ADMIN.USER' | translate }}</span>
@@ -465,7 +487,9 @@
           </div>
           <div>
             <span class="label">{{ 'ASSIGN_ADMIN.START_DATE' | translate }}</span>
-            <span>{{ row.startDate || '—' }}</span>
+            <span>{{
+              row.startDate ? (row.startDate | serverTime | date: 'mediumDate') : '—'
+            }}</span>
           </div>
           <div>
             <span class="label">{{ 'ASSIGN_ADMIN.ASSIGNED_AT' | translate }}</span>
@@ -492,7 +516,9 @@
         </div>
         @if (row.profileCompletionUrl) {
           <p class="form-static">
-            <strong>{{ 'ASSIGN_ADMIN.PROFILE_URL' | translate }}:</strong>
+            <strong
+              >{{ 'ASSIGN_ADMIN.PROFILE_URL' | translate }}{{ 'COMMON.COLON' | translate }}</strong
+            >
             <code class="wrap-code">{{ row.profileCompletionUrl }}</code>
           </p>
         }
@@ -529,9 +555,13 @@
         aria-modal="true"
         tabindex="-1"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="$event.stopPropagation()"
+        (keydown.escape)="closeModal(); $event.stopPropagation()"
+        appModalDialog
+        aria-labelledby="admin-assignments-dialog-2-title"
       >
-        <h2>{{ 'ASSIGN_ADMIN.REGENERATE_TITLE' | translate }}</h2>
+        <h2 id="admin-assignments-dialog-2-title">
+          {{ 'ASSIGN_ADMIN.REGENERATE_TITLE' | translate }}
+        </h2>
         <p class="warning-note">
           <span class="material-symbols-outlined">warning</span>
           {{ 'ASSIGN_ADMIN.REGENERATE_WARNING' | translate }}
@@ -570,9 +600,11 @@
         aria-modal="true"
         tabindex="-1"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="$event.stopPropagation()"
+        (keydown.escape)="closeModal(); $event.stopPropagation()"
+        appModalDialog
+        aria-labelledby="admin-assignments-dialog-1-title"
       >
-        <h2>{{ 'ASSIGN_ADMIN.IMPORT_TITLE' | translate }}</h2>
+        <h2 id="admin-assignments-dialog-1-title">{{ 'ASSIGN_ADMIN.IMPORT_TITLE' | translate }}</h2>
         @if (!importResult()) {
           <p class="form-hint">{{ 'ASSIGN_ADMIN.IMPORT_HINT' | translate }}</p>
           <label class="form-field">
@@ -657,16 +689,23 @@
         } @else {
           <div class="result-summary">
             <span class="badge badge-info">
-              {{ 'ASSIGN_ADMIN.PROCESSED' | translate }}: {{ importResult()!.processed }}
+              {{ 'ASSIGN_ADMIN.PROCESSED' | translate }}{{ 'COMMON.COLON' | translate }}
+              {{ importResult()!.processed }}
             </span>
-            <span class="badge badge-success">
-              {{ 'ASSIGN_ADMIN.CREATED_N' | translate }}: {{ importResult()!.created }}
+            {{ ' '
+            }}<span class="badge badge-success">
+              {{ 'ASSIGN_ADMIN.CREATED_N' | translate }}{{ 'COMMON.COLON' | translate }}
+              {{ importResult()!.created }}
             </span>
-            <span class="badge badge-muted">
-              {{ 'ASSIGN_ADMIN.SKIPPED' | translate }}: {{ importResult()!.skipped }}
+            {{ ' '
+            }}<span class="badge badge-muted">
+              {{ 'ASSIGN_ADMIN.SKIPPED' | translate }}{{ 'COMMON.COLON' | translate }}
+              {{ importResult()!.skipped }}
             </span>
-            <span class="badge badge-danger">
-              {{ 'ASSIGN_ADMIN.FAILED' | translate }}: {{ importResult()!.failed }}
+            {{ ' '
+            }}<span class="badge badge-danger">
+              {{ 'ASSIGN_ADMIN.FAILED' | translate }}{{ 'COMMON.COLON' | translate }}
+              {{ importResult()!.failed }}
             </span>
           </div>
           <div class="table-wrap result-table">

@@ -53,13 +53,15 @@
             </span>
           }
           @if (specialization()) {
-            <span class="doctor-chip specialty-chip">
+            {{ ' '
+            }}<span class="doctor-chip specialty-chip">
               <span class="material-symbols-outlined">medical_services</span>
               {{ specialization() | enumLabel: 'specialization' }}
             </span>
           }
           @if (departmentName() && departmentName() !== specialization()) {
-            <span class="doctor-chip dept-chip">
+            {{ ' '
+            }}<span class="doctor-chip dept-chip">
               <span class="material-symbols-outlined">domain</span>
               {{ departmentName() }}
             </span>
@@ -85,7 +87,8 @@
             </span>
           }
           @if (departmentName(); as dept) {
-            <span class="doctor-chip dept-chip">
+            {{ ' '
+            }}<span class="doctor-chip dept-chip">
               <span class="material-symbols-outlined">domain</span>
               {{ dept }}
             </span>
@@ -110,7 +113,8 @@
             />
           </svg>
           <div class="ring-label">
-            <span class="ring-pct">{{ scheduleProgress() }}<small>%</small></span>
+            <!-- QA D1166: the sign from the formatter ("0 %" in FR/ES, "0%" in EN). -->
+            <span class="ring-pct">{{ scheduleProgress() | measure: '%' : 0 }}</span>
             <span class="ring-sub">{{ 'DASHBOARD.DONE' | translate }}</span>
           </div>
         </div>
@@ -124,21 +128,22 @@
       <!-- Shortcuts only where no Quick Actions strip already carries them
            (hasQuickActionsStrip), so Start Encounter is never on the page twice. -->
       @if (!hasQuickActionsStrip()) {
-        @if (permissions.hasPermission('Create Appointments')) {
+        <!-- QA D997: offered for the role the user is acting in, not every role held. -->
+        @if (permissions.hasActivePermission('Create Appointments')) {
           <a class="hero-btn hero-btn-primary" routerLink="/appointments/new">
             <span class="material-symbols-outlined">calendar_add_on</span>
             {{ 'DASHBOARD.NEW_APPOINTMENT' | translate }}
           </a>
         }
-        @if (permissions.hasPermission('Create Encounters')) {
+        @if (permissions.hasActivePermission('Create Encounters')) {
           <a class="hero-btn hero-btn-secondary" routerLink="/encounters">
             <span class="material-symbols-outlined">stethoscope</span>
             {{ 'DASHBOARD.START_ENCOUNTER' | translate }}
           </a>
         }
         @if (
-          permissions.hasPermission('Register Patients') &&
-          !permissions.hasPermission('Create Encounters')
+          permissions.hasActivePermission('Register Patients') &&
+          !permissions.hasActivePermission('Create Encounters')
         ) {
           <a class="hero-btn hero-btn-secondary" routerLink="/patients/new">
             <span class="material-symbols-outlined">person_add</span>
@@ -150,6 +155,7 @@
         class="hero-btn hero-btn-ghost"
         (click)="refreshDashboard()"
         [title]="'DASHBOARD.REFRESH' | translate"
+        [attr.aria-label]="'DASHBOARD.REFRESH' | translate"
       >
         <span class="material-symbols-outlined" [class.spin]="loading()">refresh</span>
       </button>
@@ -161,8 +167,14 @@
     <div class="critical-banner">
       <span class="material-symbols-outlined critical-pulse">emergency</span>
       <strong>
-        {{ criticalAlerts().length }} {{ 'DASHBOARD.CRITICAL_ALERT' | translate
-        }}{{ criticalAlerts().length > 1 ? 's' : '' }}
+        <!-- QA D1200 class (round 22): the count and its noun in one sentence per
+             language, not an English 's' glued to a translated label. -->
+        {{
+          (criticalAlerts().length > 1
+            ? 'DASHBOARD.CRITICAL_ALERTS_MANY'
+            : 'DASHBOARD.CRITICAL_ALERTS_ONE'
+          ) | translate: { count: criticalAlerts().length }
+        }}
         {{ 'DASHBOARD.REQUIRE_IMMEDIATE_ATTENTION' | translate }}
       </strong>
       <div class="critical-names">
@@ -413,7 +425,7 @@
                     {{ p.firstName.charAt(0) }}{{ p.lastName.charAt(0) }}
                   </div>
                   <div class="patient-info">
-                    <span class="patient-name">{{ p.firstName }} {{ p.lastName }}</span>
+                    <span class="patient-name">{{ p | personName }}</span>
                     <span class="patient-meta">
                       @if (p.mrn) {
                         <span class="mrn-tag">{{ p.mrn }}</span>
@@ -568,7 +580,7 @@
             "
           >
             <span class="kv-label">{{ 'DASHBOARD.OCCUPANCY_RATE' | translate }}</span>
-            <span class="kv-value">{{ bedOccupancy()!.occupancyRate | number: '1.1-1' }}%</span>
+            <span class="kv-value">{{ bedOccupancy()!.occupancyRate | measure: '%' }}</span>
           </div>
         </section>
       }
@@ -643,9 +655,9 @@
               <span style="font-size: 13px; color: #475569; font-weight: 500">{{
                 'DASHBOARD.COLLECTION_RATE' | translate
               }}</span>
-              <span style="font-size: 16px; font-weight: 700; color: #059669"
-                >{{ paymentCollectionRate() | number: '1.1-1' }}%</span
-              >
+              <span style="font-size: 16px; font-weight: 700; color: #059669">{{
+                paymentCollectionRate() | measure: '%'
+              }}</span>
             </div>
           </div>
         </section>
@@ -675,7 +687,7 @@
                     justify-content: flex-end;
                     height: 100%;
                   "
-                  [title]="point.date + ': $' + (point.amount | number: '1.0-0')"
+                  [title]="point.date + ('COMMON.COLON' | translate) + ' ' + (point.amount | cfa)"
                 >
                   <div
                     style="
@@ -698,9 +710,9 @@
                 margin-top: 4px;
               "
             >
-              <span>{{ paymentTrend()[0]?.date | serverTime | date: 'MMM d' }}</span>
+              <span>{{ paymentTrend()[0]?.date | serverTime | dayMonth }}</span>
               <span>{{
-                paymentTrend()[paymentTrend().length - 1]?.date | serverTime | date: 'MMM d'
+                paymentTrend()[paymentTrend().length - 1]?.date | serverTime | dayMonth
               }}</span>
             </div>
           </div>
@@ -837,7 +849,8 @@
               <h2 class="card-title">{{ 'DASHBOARD.CONSULTATION_BACKLOG' | translate }}</h2>
               <span class="count-badge">{{ consultBacklog().length }}</span>
               @if (overdueConsults() > 0) {
-                <span
+                {{ ' '
+                }}<span
                   class="count-badge"
                   style="background: #fee2e2; color: #dc2626; margin-left: 4px"
                   >{{ overdueConsults() }} {{ 'DASHBOARD.OVERDUE' | translate }}</span
@@ -882,7 +895,8 @@
               <h2 class="card-title">{{ 'DASHBOARD.LICENSE_EXPIRY_ALERTS' | translate }}</h2>
               <span class="count-badge">{{ licenseAlerts().length }}</span>
               @if (expiredLicenseCount() > 0) {
-                <span
+                {{ ' '
+                }}<span
                   class="count-badge"
                   style="background: #fee2e2; color: #dc2626; margin-left: 4px"
                   >{{ expiredLicenseCount() }} {{ 'DASHBOARD.EXPIRED' | translate }}</span
@@ -909,8 +923,10 @@
                     >{{ alert.jobTitle | enumLabel: 'jobTitle' }} — {{ alert.departmentName }}</span
                   >
                   <span class="sched-reason"
-                    >{{ 'CREDENTIALING.LICENSE_NUMBER' | translate }}: {{ alert.licenseNumber }} —
-                    {{ 'DASHBOARD.EXPIRES' | translate }}: {{ alert.licenseExpiryDate }}</span
+                    >{{ 'CREDENTIALING.LICENSE_NUMBER' | translate
+                    }}{{ 'COMMON.COLON' | translate }} {{ alert.licenseNumber }} —
+                    {{ 'DASHBOARD.EXPIRES' | translate }}{{ 'COMMON.COLON' | translate }}
+                    {{ alert.licenseExpiryDate | serverTime | date: 'mediumDate' }}</span
                   >
                 </div>
                 <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 2px">
@@ -920,10 +936,11 @@
                     @if (alert.severity === 'EXPIRED') {
                       {{ 'DASHBOARD.EXPIRED_LABEL' | translate }}
                     } @else if (alert.severity === 'CRITICAL') {
-                      {{ alert.daysUntilExpiry }}{{ 'DASHBOARD.DAYS_SHORT' | translate }} —
+                      {{ 'DASHBOARD.DAYS_LEFT_SHORT' | translate: { days: alert.daysUntilExpiry } }}
+                      —
                       {{ 'DASHBOARD.CRITICAL' | translate }}
                     } @else {
-                      {{ alert.daysUntilExpiry }}{{ 'DASHBOARD.DAYS_SHORT' | translate }}
+                      {{ 'DASHBOARD.DAYS_LEFT_SHORT' | translate: { days: alert.daysUntilExpiry } }}
                     }
                   </span>
                   <!-- Tier 2 item 40. The alert used to be the end of the
@@ -1093,7 +1110,7 @@
                             : '#059669'
                       "
                     >
-                      {{ row.occupancyRate | number: '1.1-1' }}%
+                      {{ row.occupancyRate | measure: '%' }}
                     </td>
                   </tr>
                 }
@@ -1336,7 +1353,8 @@
                   >
                     <span class="material-symbols-outlined inbox-group-icon">{{ group.icon }}</span>
                     <span class="inbox-group-label">{{ group.label }}</span>
-                    <span class="count-badge count-badge-sm">{{ group.items.length }}</span>
+                    {{ ' '
+                    }}<span class="count-badge count-badge-sm">{{ group.items.length }}</span>
                     <span class="material-symbols-outlined inbox-chevron">{{
                       inboxCollapsedSections().has(group.category) ? 'expand_more' : 'expand_less'
                     }}</span>
@@ -1424,7 +1442,7 @@
                     {{ p.firstName.charAt(0) }}{{ p.lastName.charAt(0) }}
                   </div>
                   <div class="patient-info">
-                    <span class="patient-name">{{ p.firstName }} {{ p.lastName }}</span>
+                    <span class="patient-name">{{ p | personName }}</span>
                     <span class="patient-meta">
                       @if (p.mrn) {
                         <span class="mrn-tag">{{ p.mrn }}</span>
@@ -1445,6 +1463,7 @@
                       class="row-action-btn"
                       routerLink="/encounters"
                       [title]="'DASHBOARD.NEW_ENCOUNTER' | translate"
+                      [attr.aria-label]="'DASHBOARD.NEW_ENCOUNTER' | translate"
                     >
                       <span class="material-symbols-outlined">stethoscope</span>
                     </a>
@@ -1452,6 +1471,7 @@
                       class="row-action-btn"
                       routerLink="/lab"
                       [title]="'DASHBOARD.VIEW_RESULTS' | translate"
+                      [attr.aria-label]="'DASHBOARD.VIEW_RESULTS' | translate"
                     >
                       <span class="material-symbols-outlined">science</span>
                     </a>
@@ -1836,7 +1856,7 @@
                     {{ p.firstName.charAt(0) }}{{ p.lastName.charAt(0) }}
                   </div>
                   <div class="patient-info">
-                    <span class="patient-name">{{ p.firstName }} {{ p.lastName }}</span>
+                    <span class="patient-name">{{ p | personName }}</span>
                   </div>
                   <span class="material-symbols-outlined chevron">chevron_right</span>
                 </a>
@@ -1867,7 +1887,8 @@
           <span class="material-symbols-outlined stat-icon">how_to_reg</span>
         </div>
         <div class="stat-body">
-          <span class="stat-value">{{ completedToday() }}</span
+          <!-- QA D945: the tile says "checked in", so it counts the checked-in visits. -->
+          <span class="stat-value">{{ checkedInToday() }}</span
           ><span class="stat-label">{{ 'DASHBOARD.CHECKED_IN' | translate }}</span>
         </div>
       </a>
@@ -1996,7 +2017,7 @@
                     {{ p.firstName.charAt(0) }}{{ p.lastName.charAt(0) }}
                   </div>
                   <div class="patient-info">
-                    <span class="patient-name">{{ p.firstName }} {{ p.lastName }}</span>
+                    <span class="patient-name">{{ p | personName }}</span>
                     <span class="patient-meta">
                       @if (p.mrn) {
                         <span class="mrn-tag">{{ p.mrn }}</span>
@@ -2359,7 +2380,7 @@
               <div class="stat-body">
                 <span class="stat-value" style="color: #059669">
                   @if ((qualityManagerDashboard()?.qualityPassRate ?? null) !== null) {
-                    {{ qualityManagerDashboard()!.qualityPassRate! | number: '1.1-1' }}%
+                    {{ qualityManagerDashboard()!.qualityPassRate! | measure: '%' }}
                   } @else {
                     N/A
                   }
@@ -2587,7 +2608,7 @@
                     {{ p.firstName.charAt(0) }}{{ p.lastName.charAt(0) }}
                   </div>
                   <div class="patient-info">
-                    <span class="patient-name">{{ p.firstName }} {{ p.lastName }}</span>
+                    <span class="patient-name">{{ p | personName }}</span>
                   </div>
                   <span class="material-symbols-outlined chevron">chevron_right</span>
                 </a>
@@ -2712,7 +2733,7 @@
                     {{ p.firstName.charAt(0) }}{{ p.lastName.charAt(0) }}
                   </div>
                   <div class="patient-info">
-                    <span class="patient-name">{{ p.firstName }} {{ p.lastName }}</span>
+                    <span class="patient-name">{{ p | personName }}</span>
                   </div>
                   <span class="material-symbols-outlined chevron">chevron_right</span>
                 </a>
@@ -2837,7 +2858,7 @@
                     {{ p.firstName.charAt(0) }}{{ p.lastName.charAt(0) }}
                   </div>
                   <div class="patient-info">
-                    <span class="patient-name">{{ p.firstName }} {{ p.lastName }}</span>
+                    <span class="patient-name">{{ p | personName }}</span>
                   </div>
                   <span class="material-symbols-outlined chevron">chevron_right</span>
                 </a>
@@ -2997,14 +3018,20 @@
                     }}</span>
                   } @else {
                     <span class="lab-value"
-                      >{{ lab.result }}
+                      >{{ lab.result | labValue }}
+                      <!-- QA D1095: the value is never shown without its unit -->
+                      @if (lab.unit) {
+                        <span class="lab-unit">{{ lab.unit }}</span>
+                      }
+                      <app-lab-correction-badge [corrected]="lab.corrected" audience="patient" />
                       @if (lab.referenceRange) {
-                        <span class="lab-range">({{ lab.referenceRange }})</span>
+                        <!-- QA D1140: the space is inside the span; between elements Angular drops it -->
+                        <span class="lab-range">&ngsp;({{ lab.referenceRange | labRange }})</span>
                       }
                     </span>
                   }
                 </div>
-                <span class="lab-date">{{ lab.collectedDate | serverTime | date: 'MMM d' }}</span>
+                <span class="lab-date">{{ lab.collectedDate | serverTime | dayMonth }}</span>
               </div>
             }
           }
@@ -3314,7 +3341,7 @@
                   {{ p.firstName.charAt(0) }}{{ p.lastName.charAt(0) }}
                 </div>
                 <div class="patient-info">
-                  <span class="patient-name">{{ p.firstName }} {{ p.lastName }}</span>
+                  <span class="patient-name">{{ p | personName }}</span>
                 </div>
                 <span class="material-symbols-outlined chevron">chevron_right</span>
               </a>

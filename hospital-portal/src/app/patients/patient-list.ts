@@ -1,3 +1,10 @@
+import { PersonNamePipe, personName } from '../shared/pipes/person-name.pipe';
+import {
+  exactIdentifierFirst,
+  personNameMatches,
+  phoneMatches,
+  textMatches,
+} from '../shared/person-search';
 import {
   Component,
   inject,
@@ -24,7 +31,7 @@ type SortDir = 'asc' | 'desc';
 @Component({
   selector: 'app-patient-list',
   standalone: true,
-  imports: [CommonModule, RouterLink, FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [PersonNamePipe, CommonModule, RouterLink, FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './patient-list.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './patient-list.scss',
@@ -138,15 +145,17 @@ export class PatientListComponent implements OnInit, OnDestroy {
   applyFilter(): void {
     let result = this.patients();
 
-    const term = this.searchTerm.toLowerCase().trim();
+    // QA D1019 / D1020: accents, the full name and every written phone
+    // format are folded, like the server's patient search.
+    const term = this.searchTerm.trim();
     if (term) {
       result = result.filter(
         (p) =>
-          p.firstName.toLowerCase().includes(term) ||
-          p.lastName.toLowerCase().includes(term) ||
-          (p.email?.toLowerCase().includes(term) ?? false) ||
-          (p.mrn?.toLowerCase().includes(term) ?? false) ||
-          (p.phoneNumberPrimary?.includes(term) ?? false),
+          personNameMatches(p, term) ||
+          textMatches(p.email, term) ||
+          textMatches(p.mrn, term) ||
+          phoneMatches(p.phoneNumberPrimary, term) ||
+          phoneMatches(p.phoneNumberSecondary, term),
       );
     }
     if (this.genderFilter) {
@@ -167,7 +176,7 @@ export class PatientListComponent implements OnInit, OnDestroy {
     result = [...result].sort((a, b) => {
       switch (field) {
         case 'name':
-          return dir * `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`);
+          return dir * personName(a).localeCompare(personName(b));
         case 'mrn':
           return dir * (a.mrn ?? '').localeCompare(b.mrn ?? '');
         case 'gender':
@@ -180,6 +189,8 @@ export class PatientListComponent implements OnInit, OnDestroy {
           return 0;
       }
     });
+    // QA D1218: the patient whose MRN is exactly what was typed comes first.
+    if (term) result = exactIdentifierFirst(result, term, (p) => p.mrn);
 
     this.filtered.set(result);
   }

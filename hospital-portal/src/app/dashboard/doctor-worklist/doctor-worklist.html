@@ -153,8 +153,8 @@
               </a>
             }
             <a
-              [routerLink]="['/lab/new']"
-              [queryParams]="{ patientId: item.patientId }"
+              [routerLink]="['/lab']"
+              [queryParams]="{ new: '1', patientId: item.patientId }"
               class="wl-action-btn"
               [title]="'DASHBOARD.ORDER_LABS' | translate"
               [attr.aria-label]="'DASHBOARD.ORDER_LABS' | translate"

@@ -34,7 +34,7 @@
           (click)="setFilter('')"
         >
           <span class="chip-label">{{ 'COMMON.ALL' | translate }}</span>
-          <span class="chip-count">{{ rows().length }}</span>
+          {{ ' ' }}<span class="chip-count">{{ rows().length }}</span>
         </button>
         @for (entry of distributionEntries(); track entry.region) {
           <button
@@ -44,7 +44,7 @@
             (click)="setFilter(entry.region)"
           >
             <span class="chip-label">{{ 'ORG_REGION.CODE.' + entry.region | translate }}</span>
-            <span class="chip-count">{{ entry.count }}</span>
+            {{ ' ' }}<span class="chip-count">{{ entry.count }}</span>
           </button>
         }
       </div>

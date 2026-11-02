@@ -18,6 +18,8 @@ import {
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import fr from '../../assets/i18n/fr.json';
 import es from '../../assets/i18n/es.json';
+import { RoleContextService } from '../core/role-context.service';
+import { ToastService } from '../core/toast.service';
 
 function mockItem(overrides: Partial<PatientTrackerItem> = {}): PatientTrackerItem {
   return {
@@ -73,7 +75,7 @@ describe('PatientTrackerComponent', () => {
     ]);
     trackerWsSpy.getEvents.and.returnValue(of());
     trackerWsSpy.getConnectionState.and.returnValue(of(false));
-    authSpy = jasmine.createSpyObj('AuthService', ['getHospitalId', 'hasAnyRole']);
+    authSpy = jasmine.createSpyObj('AuthService', ['getHospitalId', 'hasAnyRole', 'getUserId']);
     authSpy.hasAnyRole.and.returnValue(true);
     encounterSpy = jasmine.createSpyObj('EncounterService', [
       'getById',
@@ -112,6 +114,128 @@ describe('PatientTrackerComponent', () => {
     expect(component.board()).toBeTruthy();
     expect(component.totalPatients()).toBe(2);
     expect(component.averageWait()).toBe(15);
+  });
+
+  // QA D1085: the midwife was offered Démarrer on every waiting card.
+  it('D1085: offers Start per card on the server rule (midwife: only her own visits)', () => {
+    const roles = TestBed.inject(RoleContextService);
+    roles.setRoles(['ROLE_MIDWIFE']);
+    authSpy.getUserId.and.returnValue('u-mw');
+    const mine = mockItem({
+      encounterId: 'm',
+      currentStatus: 'WAITING_FOR_PHYSICIAN',
+      assignedProviderUserId: 'u-mw',
+    });
+    const doctors = mockItem({
+      encounterId: 'd',
+      currentStatus: 'WAITING_FOR_PHYSICIAN',
+      assignedProviderUserId: 'u-dr',
+    });
+    const unassigned = mockItem({
+      encounterId: 'u',
+      currentStatus: 'WAITING_FOR_PHYSICIAN',
+      assignedProviderUserId: null,
+    });
+    expect(component.canStartItem(mine)).toBeTrue();
+    expect(component.canStartItem(doctors)).toBeFalse();
+    expect(component.canStartItem(unassigned)).toBeFalse();
+    roles.setRoles(['ROLE_DOCTOR']);
+    authSpy.getUserId.and.returnValue('u-dr');
+    expect(component.canStartItem(unassigned)).toBeTrue();
+    expect(component.canStartItem(doctors)).toBeTrue();
+    expect(component.canStartItem(mine)).toBeFalse();
+    trackerSpy.getTrackerBoard.and.returnValue(
+      of(mockBoard({ waitingForPhysician: [mine, doctors, unassigned] })),
+    );
+    roles.setRoles(['ROLE_MIDWIFE']);
+    authSpy.getUserId.and.returnValue('u-mw');
+    fixture.detectChanges();
+    const starts = fixture.nativeElement.querySelectorAll('[data-testid="tracker-start"]');
+    expect(starts.length).withContext('one Start button, on her own visit').toBe(1);
+  });
+
+  it('QA D954: an arrived patient who left unseen is closed from the tracker', () => {
+    authSpy.hasAnyRole.and.callFake((roles: string[]) => roles.includes('ROLE_NURSE'));
+    fixture.detectChanges();
+    const btn = fixture.nativeElement.querySelector(
+      '[data-testid="tracker-lwbs"]',
+    ) as HTMLButtonElement;
+    expect(btn).withContext('LWBS action on the arrived card').toBeTruthy();
+    btn.click();
+    fixture.detectChanges();
+    expect(component.closeUnseenItem()?.encounterId).toBe('e1');
+    expect(fixture.nativeElement.querySelector('app-close-unseen-dialog')).toBeTruthy();
+    component.onUnseenVisitClosed();
+    expect(component.closeUnseenItem()).toBeNull();
+  });
+
+  // QA D1099 (round 19): a midwife ended a doctor's examination from his card.
+  it('QA D1099: ending the examination and checking out are the examining clinician only', () => {
+    const roles = TestBed.inject(RoleContextService);
+    const doctorsVisit = mockItem({
+      encounterId: 'e2',
+      currentStatus: 'IN_PROGRESS',
+      assignedProviderUserId: 'u-dr',
+    });
+    trackerSpy.getTrackerBoard.and.returnValue(of(mockBoard({ inProgress: [doctorsVisit] })));
+    roles.setRoles(['ROLE_MIDWIFE']);
+    authSpy.getUserId.and.returnValue('u-mw');
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    expect(component.canEndExamItem(doctorsVisit)).toBeFalse();
+    expect(el.querySelectorAll('.btn-complete-exam').length).withContext('no end-exam').toBe(0);
+    expect(el.querySelectorAll('.btn-checkout').length).withContext('no Sortie').toBe(0);
+
+    roles.setRoles(['ROLE_DOCTOR']);
+    authSpy.getUserId.and.returnValue('u-dr');
+    fixture.detectChanges();
+    expect(component.canEndExamItem(doctorsVisit)).toBeTrue();
+    expect(el.querySelectorAll('.btn-complete-exam').length).toBe(1);
+    expect(el.querySelectorAll('.btn-checkout').length).toBe(1);
+
+    authSpy.getUserId.and.returnValue('u-other-doctor');
+    expect(component.canEndExamItem(doctorsVisit)).withContext('another doctor').toBeFalse();
+  });
+
+  it('QA D1099: a refused end of examination shows the server reason', () => {
+    const toast = TestBed.inject(ToastService);
+    spyOn(toast, 'error');
+    encounterSpy.completeExamination.and.returnValue(
+      throwError(() => ({
+        status: 400,
+        error: { message: 'Seul le clinicien qui mène cet examen peut le terminer.' },
+      })),
+    );
+    component.completeExamination(mockItem({ encounterId: 'e2', currentStatus: 'IN_PROGRESS' }));
+    expect(toast.error).toHaveBeenCalledWith(
+      'Seul le clinicien qui mène cet examen peut le terminer.',
+    );
+  });
+
+  // QA D1108 (round 19): LWBS was offered only before triage.
+  it('QA D1108: LWBS is offered until the patient is seen, after triage too', () => {
+    authSpy.hasAnyRole.and.callFake((roles: string[]) => roles.includes('ROLE_NURSE'));
+    trackerSpy.getTrackerBoard.and.returnValue(
+      of(
+        mockBoard({
+          arrived: [],
+          waitingForPhysician: [
+            mockItem({ encounterId: 'w1', currentStatus: 'WAITING_FOR_PHYSICIAN' }),
+          ],
+        }),
+      ),
+    );
+    fixture.detectChanges();
+    const lwbs = fixture.nativeElement.querySelectorAll('[data-testid="tracker-lwbs"]');
+    expect(lwbs.length).withContext('the waiting card, not the card in progress').toBe(1);
+    (lwbs[0] as HTMLButtonElement).click();
+    expect(component.closeUnseenItem()?.encounterId).toBe('w1');
+  });
+
+  it('QA D954: a role the endpoint refuses is not offered the LWBS action', () => {
+    authSpy.hasAnyRole.and.callFake((roles: string[]) => roles.includes('ROLE_LAB_TECHNICIAN'));
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-testid="tracker-lwbs"]')).toBeNull();
   });
 
   it('should set loading to false after load', () => {
@@ -315,6 +439,8 @@ describe('PatientTrackerComponent', () => {
     expect(fixture.nativeElement.querySelectorAll('.btn-checkout').length).toBe(0);
 
     authSpy.hasAnyRole.and.returnValue(true);
+    // QA D1099: the clinician is a doctor acting on an unassigned visit (who may end it).
+    TestBed.inject(RoleContextService).setRoles(['ROLE_DOCTOR']);
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelectorAll('.btn-checkout').length).toBe(1);
     expect(authSpy.hasAnyRole).toHaveBeenCalledWith(['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE']);
@@ -378,6 +504,8 @@ describe('PatientTrackerComponent', () => {
   });
 
   it('should render complete-exam button in inProgress column', () => {
+    // QA D1099: offered to the examining clinician (here a doctor, the visit unassigned).
+    TestBed.inject(RoleContextService).setRoles(['ROLE_DOCTOR']);
     fixture.detectChanges();
     const el: HTMLElement = fixture.nativeElement;
     const examBtns = el.querySelectorAll('.btn-complete-exam');
@@ -452,7 +580,11 @@ describe('PatientTrackerComponent — the acuity badge is labelled (QA D528/D663
         provideHttpClientTesting(),
         { provide: PatientTrackerService, useValue: tracker },
         { provide: PatientTrackerWsService, useValue: ws },
-        { provide: AuthService, useValue: { getHospitalId: () => 'h1', hasAnyRole: () => true } },
+        {
+          provide: AuthService,
+          // getUserId: the per-card end-exam rule (QA D1099) reads the signed-in user.
+          useValue: { getHospitalId: () => 'h1', hasAnyRole: () => true, getUserId: () => null },
+        },
         { provide: EncounterService, useValue: {} },
       ],
     });

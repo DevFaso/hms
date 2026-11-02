@@ -1,3 +1,4 @@
+import { refusalReason } from '../shared/refusal-reason';
 import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -13,11 +14,19 @@ import {
 import { CfaPipe } from '../shared/pipes/cfa.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { localDateString } from '../shared/date-utils';
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 
 @Component({
   selector: 'app-goods-receipt',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule, CfaPipe],
+  imports: [
+    SubmitGuardDirective,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    CfaPipe,
+  ],
   templateUrl: './goods-receipt.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './goods-receipt.scss',
@@ -186,7 +195,7 @@ export class GoodsReceiptComponent implements OnInit {
         this.loadInventoryItems();
       },
       error: (err) => {
-        this.toast.error(err?.error?.message ?? this.translate.instant('PHARMACY.RECEIVE_FAILED'));
+        this.toast.error(refusalReason(err) ?? this.translate.instant('PHARMACY.RECEIVE_FAILED'));
         this.saving.set(false);
       },
     });

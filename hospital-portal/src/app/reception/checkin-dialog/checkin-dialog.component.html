@@ -4,14 +4,20 @@
   (keydown.escape)="dismissed.emit()"
   tabindex="-1"
 >
+  <!-- QA D988: a real modal dialog (role, name, focus in, Tab trap, Escape). -->
   <div
     class="checkin-dialog"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="checkinDialogTitle"
     (click)="$event.stopPropagation()"
-    (keydown.escape)="dismissed.emit()"
+    (keydown.escape)="$event.stopPropagation()"
     tabindex="-1"
+    appDialogFocus
+    (dialogDismiss)="dismissed.emit()"
   >
     <header class="checkin-dialog__header">
-      <h3>{{ 'RECEPTION.CHECKIN_TITLE' | translate }}</h3>
+      <h3 id="checkinDialogTitle">{{ 'RECEPTION.CHECKIN_TITLE' | translate }}</h3>
       <button
         class="btn-close"
         (click)="dismissed.emit()"
@@ -25,30 +31,40 @@
     @if (queueItem) {
       <div class="checkin-dialog__patient-info">
         <div class="info-row">
-          <span class="label">{{ 'RECEPTION.PATIENT_NAME' | translate }}:</span>
+          <span class="label"
+            >{{ 'RECEPTION.PATIENT_NAME' | translate }}{{ 'COMMON.COLON' | translate }}</span
+          >
           <span class="value">{{ queueItem.patientName }}</span>
         </div>
         @if (queueItem.mrn) {
           <div class="info-row">
-            <span class="label">{{ 'RECEPTION.MRN' | translate }}:</span>
+            <span class="label"
+              >{{ 'RECEPTION.MRN' | translate }}{{ 'COMMON.COLON' | translate }}</span
+            >
             <span class="value">{{ queueItem.mrn }}</span>
           </div>
         }
         @if (queueItem.appointmentTime) {
           <div class="info-row">
-            <span class="label">{{ 'RECEPTION.APPOINTMENT_TIME' | translate }}:</span>
+            <span class="label"
+              >{{ 'RECEPTION.APPOINTMENT_TIME' | translate }}{{ 'COMMON.COLON' | translate }}</span
+            >
             <span class="value">{{ queueItem.appointmentTime }}</span>
           </div>
         }
         @if (queueItem.providerName) {
           <div class="info-row">
-            <span class="label">{{ 'RECEPTION.PROVIDER' | translate }}:</span>
+            <span class="label"
+              >{{ 'RECEPTION.PROVIDER' | translate }}{{ 'COMMON.COLON' | translate }}</span
+            >
             <span class="value">{{ queueItem.providerName }}</span>
           </div>
         }
         @if (queueItem.departmentName) {
           <div class="info-row">
-            <span class="label">{{ 'RECEPTION.DEPARTMENT' | translate }}:</span>
+            <span class="label"
+              >{{ 'RECEPTION.DEPARTMENT' | translate }}{{ 'COMMON.COLON' | translate }}</span
+            >
             <span class="value">{{ queueItem.departmentName }}</span>
           </div>
         }
@@ -61,6 +77,7 @@
       <div class="form-group checkbox-group">
         <label>
           <input
+            id="checkinIdentityConfirmed"
             type="checkbox"
             [checked]="identityConfirmed()"
             (change)="identityConfirmed.set($any($event.target).checked)"
@@ -128,14 +145,49 @@
         <input
           id="copayAmount"
           type="number"
-          step="0.01"
+          step="1"
           min="0"
+          inputmode="numeric"
           [ngModel]="copayAmount()"
           (ngModelChange)="copayAmount.set($event)"
           name="copayAmount"
-          placeholder="0.00"
+          placeholder="0"
         />
       </div>
+
+      <!-- QA D975: how the copay was paid, with its reference; a receipt follows. -->
+      @if ((copayAmount() ?? 0) > 0) {
+        <div class="form-group">
+          <label for="copayMethod">{{ 'RECEPTION.METHOD' | translate }}</label>
+          <select
+            id="copayMethod"
+            name="copayMethod"
+            [ngModel]="copayMethod()"
+            (ngModelChange)="copayMethod.set($event)"
+          >
+            @for (m of methods; track m.value) {
+              <option [value]="m.value">{{ m.labelKey | translate }}</option>
+            }
+          </select>
+        </div>
+        @if (copayNeedsReference()) {
+          <div class="form-group">
+            <label for="copayReference"
+              >{{ 'RECEPTION.PAYMENT_REFERENCE' | translate }}
+              <span class="required">*</span></label
+            >
+            <input
+              id="copayReference"
+              name="copayReference"
+              type="text"
+              maxlength="100"
+              [ngModel]="copayReference()"
+              (ngModelChange)="copayReference.set($event)"
+              [placeholder]="'RECEPTION.PAYMENT_REFERENCE_PLACEHOLDER' | translate"
+            />
+          </div>
+        }
+      }
 
       <!-- Notes -->
       <div class="form-group">
@@ -155,7 +207,13 @@
         <button type="button" class="btn btn-secondary" (click)="dismissed.emit()">
           {{ 'COMMON.CANCEL' | translate }}
         </button>
-        <button type="submit" class="btn btn-primary" [disabled]="!canSubmit">
+        <button
+          type="submit"
+          class="btn btn-primary"
+          [disabled]="saving()"
+          [appSubmitGuard]="submitBlockReason()"
+          [submitGuardFields]="['checkinIdentityConfirmed', 'copayReference']"
+        >
           @if (saving()) {
             <span>{{ 'COMMON.SAVING' | translate }}...</span>
           }

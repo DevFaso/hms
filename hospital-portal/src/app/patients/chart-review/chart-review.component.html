@@ -102,8 +102,28 @@
                         {{ img.modality ? (img.modality | enumLabel: 'imagingModality') : '—'
                         }}{{ img.studyType ? ' — ' + img.studyType : '' }}
                       </p>
+                    } @else if (event.section === 'NOTE' && notesById().get(event.id); as note) {
+                      <p class="chart-review__timeline-title" data-testid="timeline-note-title">
+                        @if (note.source === 'NURSING') {
+                          {{ 'CHART_REVIEW.NURSING_NOTE' | translate }} ·
+                        }
+                        <!-- QA D1107: the title the nurse typed, as on the Notes tab -->
+                        {{
+                          note.title
+                            ? note.title
+                            : note.template
+                              ? (note.template | enumLabel: 'noteTemplate')
+                              : ('CHART_REVIEW.SECTION.NOTE' | translate)
+                        }}{{ note.authorName ? ' — ' + note.authorName : '' }}
+                      </p>
                     } @else if (event.title) {
-                      <p class="chart-review__timeline-title">{{ event.title }}</p>
+                      <p class="chart-review__timeline-title">
+                        {{ event.title }}
+                        @if (event.section === 'RESULT') {
+                          <!-- QA D1016 (round 18): the chronology marks a correction too -->
+                          <app-lab-correction-badge [corrected]="event.corrected" />
+                        }
+                      </p>
                     }
                     @if (event.summary) {
                       <p class="chart-review__timeline-summary">{{ event.summary }}</p>
@@ -176,8 +196,18 @@
               @for (n of c.notes; track n.id) {
                 <li class="chart-review__card">
                   <header class="chart-review__card-head">
+                    <!-- QA D1076: a nurse's note says so; the template by its name, never its code -->
+                    @if (n.source === 'NURSING') {
+                      <span
+                        class="chart-review__pill chart-review__pill--neutral"
+                        data-testid="note-source-nursing"
+                        >{{ 'CHART_REVIEW.NURSING_NOTE' | translate }}</span
+                      >
+                    }
                     <span class="chart-review__pill chart-review__pill--info">{{
-                      n.template || ('CHART_REVIEW.SECTION.NOTE' | translate)
+                      n.template
+                        ? (n.template | enumLabel: 'noteTemplate')
+                        : ('CHART_REVIEW.SECTION.NOTE' | translate)
                     }}</span>
                     @if (n.documentedAt) {
                       <time class="chart-review__card-date">
@@ -217,12 +247,20 @@
                       </span>
                     }
                   </header>
+                  @if (n.title) {
+                    <!-- QA D1107: the title the author gave the note -->
+                    <p class="chart-review__card-title" data-testid="note-title">
+                      <strong>{{ n.title }}</strong>
+                    </p>
+                  }
                   @if (n.authorName) {
                     <p class="chart-review__card-meta">
-                      {{ 'CHART_REVIEW.AUTHOR' | translate }}: {{ n.authorName }}
+                      {{ 'CHART_REVIEW.AUTHOR' | translate }}{{ 'COMMON.COLON' | translate }}
+                      <!-- QA D1136: the comma follows the name directly; the job title in the reader's language -->
+                      <span>{{ n.authorName }}</span>
                       @if (n.authorCredentials) {
                         <span class="chart-review__card-credentials"
-                          >, {{ n.authorCredentials }}</span
+                          >, {{ n.authorCredentials | credentialsLabel }}</span
                         >
                       }
                     </p>
@@ -269,9 +307,15 @@
                       }
                     </td>
                     <td>
-                      {{ r.resultValue }}
+                      {{ r.resultValue | labValue }}
                       @if (r.resultUnit) {
                         <span class="chart-review__muted">{{ r.resultUnit }}</span>
+                      }
+                      <!-- QA D1016: a correction of a released value. QA D1137: after the
+                           unit, never between the value and its unit ("6,8 [Corrigé] g/dL"),
+                           and a space before it so it is not read "g/dLCorrigé" -->
+                      @if (r.corrected) {
+                        &ngsp;<app-lab-correction-badge [corrected]="r.corrected" />
                       }
                     </td>
                     <td>
@@ -328,7 +372,8 @@
                     </td>
                     <td>{{ m.dosage || '—' }}</td>
                     <td>
-                      {{ m.frequency || '—' }} · {{ m.route || '—' }} · {{ m.duration || '—' }}
+                      {{ m.frequency || '—' }} · {{ (m.route | medicationRoute) || '—' }} ·
+                      {{ m.duration || '—' }}
                     </td>
                     <td>
                       <span class="chart-review__pill" [ngClass]="statusClass(m.status)">
@@ -378,13 +423,13 @@
                   <p class="chart-review__card-meta">
                     @if (i.orderedAt) {
                       <span
-                        >{{ 'CHART_REVIEW.ORDERED' | translate }}:
+                        >{{ 'CHART_REVIEW.ORDERED' | translate }}{{ 'COMMON.COLON' | translate }}
                         {{ i.orderedAt | serverTime | date: 'medium' }}</span
                       >
                     }
                     @if (i.scheduledFor) {
                       <span>
-                        · {{ 'CHART_REVIEW.SCHEDULED' | translate }}:
+                        · {{ 'CHART_REVIEW.SCHEDULED' | translate }}{{ 'COMMON.COLON' | translate }}
                         {{ i.scheduledFor | serverTime | date: 'mediumDate' }}</span
                       >
                     }
@@ -394,7 +439,10 @@
                   </p>
                   @if (i.clinicalQuestion) {
                     <p class="chart-review__card-body">
-                      <strong>{{ 'CHART_REVIEW.CLINICAL_QUESTION' | translate }}:</strong>
+                      <strong
+                        >{{ 'CHART_REVIEW.CLINICAL_QUESTION' | translate
+                        }}{{ 'COMMON.COLON' | translate }}</strong
+                      >
                       {{ i.clinicalQuestion }}
                     </p>
                   }

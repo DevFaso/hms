@@ -115,7 +115,7 @@
               <span class="stat-label">{{ 'PROFILE.ASSIGNMENTS' | translate }}</span>
             </div>
             <div class="stat-item">
-              <span class="stat-value">{{ securityScore() }}%</span>
+              <span class="stat-value">{{ securityScore() | measure: '%' }}</span>
               <span class="stat-label">{{ 'PROFILE.SECURITY' | translate }}</span>
             </div>
           </div>
@@ -188,7 +188,8 @@
                 </div>
                 <div class="info-item">
                   <span class="info-label">{{ 'PROFILE.ROLE' | translate }}</span>
-                  <span class="info-value profile-type-badge">{{ sessionProfileType() }}</span>
+                  {{ ' '
+                  }}<span class="info-value profile-type-badge">{{ sessionProfileType() }}</span>
                 </div>
                 @if (showLicenseNumber()) {
                   <div class="info-item">
@@ -315,8 +316,8 @@
                     />
                   </svg>
                   <div class="score-text">
-                    <span class="score-number">{{ securityScore() }}</span>
-                    <span class="score-percent">%</span>
+                    <!-- QA D1166 class: the percent follows the reader's typography (FR/ES "78 %"). -->
+                    <span class="score-number">{{ securityScore() | measure: '%' : 0 }}</span>
                   </div>
                 </div>
                 <div class="security-details">
@@ -377,7 +378,7 @@
               <form class="edit-form" (ngSubmit)="saveProfile()">
                 <div class="form-row">
                   <div class="form-group">
-                    <label for="editFirstName">{{ 'PROFILE.FIRST_NAME' | translate }}</label>
+                    <label for="editFirstName">{{ 'PROFILE.FIRST_NAME' | translate }} *</label>
                     <input
                       type="text"
                       id="editFirstName"
@@ -389,7 +390,7 @@
                     />
                   </div>
                   <div class="form-group">
-                    <label for="editLastName">{{ 'PROFILE.LAST_NAME' | translate }}</label>
+                    <label for="editLastName">{{ 'PROFILE.LAST_NAME' | translate }} *</label>
                     <input
                       type="text"
                       id="editLastName"
@@ -429,6 +430,7 @@
                     <label for="editPhone">{{ 'PROFILE.PHONE_NUMBER' | translate }}</label>
                     <input
                       type="tel"
+                      appPhoneField
                       id="editPhone"
                       [ngModel]="editForm().phoneNumber"
                       (ngModelChange)="updateField('phoneNumber', $event)"
@@ -484,7 +486,14 @@
                   <button
                     type="submit"
                     class="btn btn-primary"
-                    [disabled]="!formDirty() || saving() || !!pendingEmail()"
+                    [disabled]="saving()"
+                    [appSubmitGuard]="
+                      blankName() ||
+                      (pendingEmail()
+                        ? ('SUBMIT_GUARD.EMAIL_PENDING' | translate)
+                        : !formDirty() && ('SUBMIT_GUARD.NO_CHANGES' | translate))
+                    "
+                    [submitGuardFields]="['editFirstName', 'editLastName']"
                   >
                     @if (saving()) {
                       <span class="material-symbols-outlined spinning">progress_activity</span>
@@ -537,7 +546,11 @@
                     <button
                       type="submit"
                       class="btn btn-primary"
-                      [disabled]="confirmingEmail() || emailCode().trim().length < 6"
+                      [disabled]="confirmingEmail()"
+                      [appSubmitGuard]="
+                        emailCode().trim().length < 6 && ('SUBMIT_GUARD.CODE' | translate)
+                      "
+                      [submitGuardFields]="['emailChangeCode']"
                     >
                       {{ 'PROFILE.VERIFY' | translate }}
                     </button>
@@ -630,7 +643,9 @@
                   <button
                     type="submit"
                     class="btn btn-primary"
-                    [disabled]="changingPassword() || !pwdCurrent() || !pwdNew() || !pwdConfirm()"
+                    [disabled]="changingPassword()"
+                    [appSubmitGuard]="!pwdCurrent() || !pwdNew() || !pwdConfirm()"
+                    [submitGuardFields]="['pwdCurrent', 'pwdNew', 'pwdConfirm']"
                   >
                     <span class="material-symbols-outlined">key</span>
                     {{ 'PROFILE.SAVE_NEW_PASSWORD' | translate }}
@@ -653,7 +668,12 @@
 
               <!-- Replacing the authenticator: the step-up first -->
               @if (mfaStep() === 'stepup') {
-                <div class="mfa-enroll-inline" data-testid="mfa-stepup">
+                <div
+                  class="mfa-enroll-inline"
+                  data-testid="mfa-stepup"
+                  tabindex="-1"
+                  appFocusOnRender
+                >
                   <p>{{ 'PROFILE.MFA_REPLACE_INTRO' | translate }}</p>
                   <form (ngSubmit)="submitMfaStepUp()" class="mfa-verify-form">
                     <label class="sr-only" for="mfaStepUpCode">{{
@@ -681,7 +701,8 @@
 
               <!-- Inline enrollment: QR step -->
               @else if (mfaStep() === 'qr') {
-                <div class="mfa-enroll-inline">
+                <!-- QA D1198 (round 22): the panel that replaced the button takes the keyboard. -->
+                <div class="mfa-enroll-inline" data-testid="mfa-qr" tabindex="-1" appFocusOnRender>
                   @if (mfaReplacing()) {
                     <p class="hint">{{ 'PROFILE.MFA_REPLACE_PENDING' | translate }}</p>
                   }
@@ -706,7 +727,12 @@
 
               <!-- Inline enrollment: Verify step -->
               @else if (mfaStep() === 'verify') {
-                <div class="mfa-enroll-inline">
+                <div
+                  class="mfa-enroll-inline"
+                  data-testid="mfa-verify"
+                  tabindex="-1"
+                  appFocusOnRender
+                >
                   <p>{{ 'PROFILE.MFA_ENTER_CODE' | translate }}</p>
                   <form (ngSubmit)="verifyMfaCode()" class="mfa-verify-form">
                     <input
@@ -730,7 +756,12 @@
 
               <!-- Inline enrollment: Backup codes step -->
               @else if (mfaStep() === 'backup') {
-                <div class="mfa-enroll-inline">
+                <div
+                  class="mfa-enroll-inline"
+                  data-testid="mfa-backup"
+                  tabindex="-1"
+                  appFocusOnRender
+                >
                   <h4>{{ 'PROFILE.BACKUP_CODES' | translate }}</h4>
                   <p>{{ 'PROFILE.BACKUP_CODES_HINT' | translate }}</p>
                   <div class="backup-codes-grid">
@@ -772,7 +803,8 @@
                           }}</span>
                         }
                         @if (mfa.primaryFactor) {
-                          <span class="badge-primary">{{ 'PROFILE.PRIMARY' | translate }}</span>
+                          {{ ' '
+                          }}<span class="badge-primary">{{ 'PROFILE.PRIMARY' | translate }}</span>
                         }
                       </div>
                     </div>
@@ -923,6 +955,7 @@
                         <button
                           class="btn-icon-danger"
                           [title]="'COMMON.REMOVE' | translate"
+                          [attr.aria-label]="'COMMON.REMOVE' | translate"
                           (click)="removeRecoveryContact(rc)"
                           [disabled]="recoverySaving()"
                         >
@@ -957,7 +990,11 @@
                             <button
                               class="btn-primary"
                               (click)="submitVerificationCode()"
-                              [disabled]="verificationSending() || verificationCode().length < 6"
+                              [disabled]="verificationSending()"
+                              [appSubmitGuard]="
+                                verificationCode().length < 6 && ('SUBMIT_GUARD.CODE' | translate)
+                              "
+                              [submitGuardFields]="['verification-code']"
                             >
                               {{
                                 (verificationSending()

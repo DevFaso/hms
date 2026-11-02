@@ -13,7 +13,6 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -32,10 +31,9 @@ import java.util.Objects;
 @Table(
     name = "appointments",
     schema = "clinical",
-    uniqueConstraints = {
-        @UniqueConstraint(name = "uq_appt_staff_slot",
-            columnNames = {"staff_id", "appointment_date", "start_time", "end_time"})
-    },
+    // QA D937: no unique (staff, date, start, end) constraint. The database
+    // never had one (V1), and a cancelled booking must not keep its slot: the
+    // overlap checks filter on AppointmentStatus#holdsSlot instead.
     indexes = {
         @Index(name = "idx_appt_patient", columnList = "patient_id"),
         @Index(name = "idx_appt_staff", columnList = "staff_id"),
@@ -102,6 +100,15 @@ public class Appointment extends BaseEntity {
 
     @Column(name = "notes", length = 2048)
     private String notes;
+
+    /**
+     * QA D1126 / D1132 (V255): why the visit was cancelled or marked a
+     * no-show. Required on every staff move to CANCELLED or NO_SHOW; the
+     * close-unseen and death-record cancellations carry their own reason, a
+     * patient's self-cancellation the patient's when one was given.
+     */
+    @Column(name = "status_reason", length = 500)
+    private String statusReason;
 
     /** Timestamp when the patient was checked in by the receptionist (MVP 1). */
     @Column(name = "checked_in_at")

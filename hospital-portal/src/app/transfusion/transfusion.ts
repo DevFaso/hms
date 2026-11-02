@@ -7,6 +7,7 @@ import {
   signal,
   ChangeDetectionStrategy,
 } from '@angular/core';
+import { isOrderCancellable } from '../shared/order-lifecycle';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -36,7 +37,11 @@ import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { localDateString, nowLocalDatetime, toServerDateTime } from '../shared/date-utils';
 import { refusalReason } from '../shared/refusal-reason';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { AuthorshipService } from '../shared/authorship.service';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { ReasonDialogComponent } from '../shared/reason-dialog/reason-dialog.component';
 type Tab = 'requests' | 'units';
 
 /**
@@ -51,6 +56,9 @@ type Tab = 'requests' | 'units';
   selector: 'app-transfusion',
   standalone: true,
   imports: [
+    ReasonDialogComponent,
+    SubmitGuardDirective,
+    ModalDialogDirective,
     ServerTimePipe,
     CommonModule,
     FormsModule,
@@ -64,6 +72,7 @@ type Tab = 'requests' | 'units';
 })
 export class TransfusionComponent implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
+  private readonly authorship = inject(AuthorshipService);
   private readonly transfusion = inject(TransfusionService);
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
@@ -296,17 +305,34 @@ export class TransfusionComponent implements OnInit {
       });
   }
 
+  /** QA D1081: a transfusion request is cancelled by the clinician who asked for it. */
+  canCancelRequest(r: TransfusionRequestResponse): boolean {
+    return this.canRequest && isOrderCancellable(r.status) && this.authorship.isAuthor(r);
+  }
+
+  /** QA D1201: the request being cancelled; the shared reason dialog asks why. */
+  cancellingRequest = signal<TransfusionRequestResponse | null>(null);
+  cancelRequestBusy = signal(false);
+
   cancelRequest(request: TransfusionRequestResponse): void {
-    const reason = window.prompt(this.translate.instant('TRANSFUSION.CANCEL_PROMPT'));
-    if (!reason || !reason.trim()) return;
-    this.transfusion.cancelRequest(request.id, reason.trim()).subscribe({
+    this.cancellingRequest.set(request);
+  }
+
+  confirmCancelRequest(request: TransfusionRequestResponse, reason: string): void {
+    if (this.cancelRequestBusy()) return;
+    this.cancelRequestBusy.set(true);
+    this.transfusion.cancelRequest(request.id, reason).subscribe({
       next: (updated) => {
         this.toast.success(this.translate.instant('TRANSFUSION.REQUEST_CANCELLED'));
+        this.cancelRequestBusy.set(false);
+        this.cancellingRequest.set(null);
         this.selectedRequest.set(updated);
         this.loadRequests();
       },
-      error: (err: unknown) =>
-        this.toast.error(refusalReason(err) ?? this.translate.instant('TRANSFUSION.CANCEL_ERROR')),
+      error: (err: unknown) => {
+        this.cancelRequestBusy.set(false);
+        this.toast.error(refusalReason(err) ?? this.translate.instant('TRANSFUSION.CANCEL_ERROR'));
+      },
     });
   }
 
@@ -430,16 +456,28 @@ export class TransfusionComponent implements OnInit {
       });
   }
 
+  /** QA D1201: the unit being discarded; the shared reason dialog asks why. */
+  discardingUnit = signal<BloodUnitResponse | null>(null);
+  discardBusy = signal(false);
+
   discardUnit(unit: BloodUnitResponse): void {
-    const reason = window.prompt(this.translate.instant('TRANSFUSION.DISCARD_PROMPT'));
-    if (!reason || !reason.trim()) return;
-    this.transfusion.discardUnit(unit.id, reason.trim()).subscribe({
+    this.discardingUnit.set(unit);
+  }
+
+  confirmDiscardUnit(unit: BloodUnitResponse, reason: string): void {
+    if (this.discardBusy()) return;
+    this.discardBusy.set(true);
+    this.transfusion.discardUnit(unit.id, reason).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('TRANSFUSION.UNIT_DISCARDED'));
+        this.discardBusy.set(false);
+        this.discardingUnit.set(null);
         this.loadUnits();
       },
-      error: (err: unknown) =>
-        this.toast.error(refusalReason(err) ?? this.translate.instant('TRANSFUSION.DISCARD_ERROR')),
+      error: (err: unknown) => {
+        this.discardBusy.set(false);
+        this.toast.error(refusalReason(err) ?? this.translate.instant('TRANSFUSION.DISCARD_ERROR'));
+      },
     });
   }
 

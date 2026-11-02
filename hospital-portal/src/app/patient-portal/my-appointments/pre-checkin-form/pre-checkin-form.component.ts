@@ -1,5 +1,7 @@
+import { refusalReason } from '../../../shared/refusal-reason';
 import {
   Component,
+  ElementRef,
   EventEmitter,
   Input,
   OnChanges,
@@ -22,11 +24,28 @@ import {
 } from '../../../services/patient-portal.service';
 import { ServerTimePipe } from '../../../shared/pipes/server-time.pipe';
 import { ClockTimePipe } from '../../../shared/pipes/clock-time.pipe';
+import { DialogA11yDirective } from '../../../shared/a11y/dialog-a11y.directive';
+
+import { SubmitGuardDirective } from '../../../shared/forms/submit-guard.directive';
+import { refuseFields } from '../../../shared/forms/invalid-fields';
+import { isEmailAddress } from '../../../shared/forms/email-address';
+import { PhoneFieldDirective } from '../../../shared/forms/phone-field.directive';
+/** The e-mail field, marked when its address is refused (QA D1179 class). */
+const EMAIL_FIELD_ID = 'email';
 
 @Component({
   selector: 'app-pre-checkin-form',
   standalone: true,
-  imports: [ClockTimePipe, ServerTimePipe, CommonModule, FormsModule, TranslateModule],
+  imports: [
+    PhoneFieldDirective,
+    SubmitGuardDirective,
+    ClockTimePipe,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    DialogA11yDirective,
+  ],
   templateUrl: './pre-checkin-form.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './pre-checkin-form.component.scss',
@@ -38,6 +57,7 @@ export class PreCheckinFormComponent implements OnInit, OnChanges {
 
   private readonly portal = inject(PatientPortalService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   // ── State ──────────────────────────────────────────────────────────
   step = signal<'demographics' | 'questionnaires' | 'review'>('demographics');
@@ -123,6 +143,18 @@ export class PreCheckinFormComponent implements OnInit, OnChanges {
 
   submit(): void {
     if (!this.appointment || this.saving()) return;
+    // QA D1179 class: a malformed address is refused on its field before anything is sent.
+    const email = this.email.trim();
+    if (email !== '' && !isEmailAddress(email)) {
+      refuseFields(
+        this.host.nativeElement,
+        [EMAIL_FIELD_ID],
+        [EMAIL_FIELD_ID],
+        this.translate.instant('PRE_CHECKIN.EMAIL_INVALID'),
+      );
+      return;
+    }
+    refuseFields(this.host.nativeElement, [], [EMAIL_FIELD_ID], '');
     this.saving.set(true);
     this.errorMessage.set(null);
 
@@ -140,7 +172,7 @@ export class PreCheckinFormComponent implements OnInit, OnChanges {
     const dto: PreCheckInRequest = {
       appointmentId: this.appointment.id,
       phoneNumber: this.phoneNumber || undefined,
-      email: this.email || undefined,
+      email: email || undefined,
       addressLine1: this.addressLine1 || undefined,
       city: this.city || undefined,
       state: this.state || undefined,
@@ -163,7 +195,7 @@ export class PreCheckinFormComponent implements OnInit, OnChanges {
       },
       error: (err) => {
         this.saving.set(false);
-        this.errorMessage.set(err?.error?.message || this.translate.instant('PRE_CHECKIN.ERROR'));
+        this.errorMessage.set(refusalReason(err) ?? this.translate.instant('PRE_CHECKIN.ERROR'));
       },
     });
   }

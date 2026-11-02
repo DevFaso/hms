@@ -25,6 +25,7 @@ import { refusalReason } from '../../../shared/refusal-reason';
 import { ToastService } from '../../../core/toast.service';
 import { ServerTimePipe } from '../../../shared/pipes/server-time.pipe';
 
+import { SubmitGuardDirective } from '../../../shared/forms/submit-guard.directive';
 /**
  * Manual-trigger panel + last-N runs table.
  *
@@ -36,7 +37,7 @@ import { ServerTimePipe } from '../../../shared/pipes/server-time.pipe';
 @Component({
   selector: 'app-dhis2-export-panel',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule],
+  imports: [SubmitGuardDirective, ServerTimePipe, CommonModule, FormsModule, TranslateModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="dhis2-export" data-testid="dhis2-export-panel">
@@ -84,7 +85,8 @@ import { ServerTimePipe } from '../../../shared/pipes/server-time.pipe';
           type="submit"
           class="btn-primary"
           data-testid="dhis2-export-trigger"
-          [disabled]="triggering() || !canTrigger()"
+          [disabled]="triggering()"
+          [appSubmitGuard]="!canTrigger()"
         >
           {{ 'DHIS2.PANEL.TRIGGER' | translate }}
         </button>

@@ -25,6 +25,7 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.mockito.Mockito.lenient;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -59,6 +60,12 @@ class LabSpecimenServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        // Review of #975: the committed status read under the order lock is
+        // the entity's own (no concurrent write). The specimens here are built
+        // without an id and found under specimenId, so that is where it is read.
+        lenient().when(labSpecimenRepository.findStatusById(any()))
+            .thenAnswer(inv -> labSpecimenRepository.findById(specimenId)
+                .map(com.example.hms.model.LabSpecimen::getStatus).orElse(null));
         hospitalId  = UUID.randomUUID();
         labOrderId  = UUID.randomUUID();
         specimenId  = UUID.randomUUID();
@@ -410,5 +417,45 @@ class LabSpecimenServiceImplTest {
 
         assertThatThrownBy(() -> service.receiveSpecimen(specimenId, Locale.ENGLISH))
             .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    /**
+     * QA D1109: an order that already has a result, or is cancelled, takes no
+     * new specimen (the collection on a released order left a dangling tube
+     * with an accession number nobody would run).
+     */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = LabOrderStatus.class,
+        names = {"RESULTED", "VERIFIED", "COMPLETED", "CANCELLED"})
+    void d1109_anAnsweredOrCancelledOrderTakesNoNewSpecimen(LabOrderStatus status) {
+        labOrder.setStatus(status);
+        LabSpecimenRequestDTO request = LabSpecimenRequestDTO.builder()
+            .labOrderId(labOrderId)
+            .specimenType("BLOOD")
+            .build();
+        when(labOrderRepository.findById(labOrderId)).thenReturn(Optional.of(labOrder));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+
+        assertThatThrownBy(() -> service.createSpecimen(request, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("new specimen");
+        verify(labSpecimenRepository, never()).save(any());
+    }
+
+    /** QA D1109: a tube collected before its order was cancelled is not received. */
+    @Test
+    void d1109_aSpecimenOfACancelledOrderIsNotReceived() {
+        labOrder.setStatus(LabOrderStatus.CANCELLED);
+        LabSpecimen specimen = LabSpecimen.builder()
+            .labOrder(labOrder)
+            .status(LabSpecimenStatus.COLLECTED)
+            .build();
+        when(labSpecimenRepository.findById(specimenId)).thenReturn(Optional.of(specimen));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+
+        assertThatThrownBy(() -> service.receiveSpecimen(specimenId, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("cancelled");
+        verify(labSpecimenRepository, never()).save(any());
     }
 }

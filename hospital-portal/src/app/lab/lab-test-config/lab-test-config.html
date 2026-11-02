@@ -101,7 +101,15 @@
         <tbody>
           @for (def of definitions(); track def.id) {
             <tr>
-              <td class="code-cell">{{ def.testCode }}</td>
+              <td class="code-cell">
+                {{ def.testCode }}
+                @if ((def.versionNumber ?? 1) > 1) {
+                  <!-- QA D1120: the version, linked to the one it replaces -->
+                  <span class="cell-secondary" data-testid="def-version">{{
+                    'LAB_TEST_CONFIG.VERSION_LABEL' | translate: { version: def.versionNumber }
+                  }}</span>
+                }
+              </td>
               <td>{{ def.testName }}</td>
               <td>{{ def.category }}</td>
               <td>{{ def.unit }}</td>
@@ -130,8 +138,21 @@
                     data-testid="edit-def"
                     (click)="openEditDef(def)"
                     [title]="'LAB_TEST_CONFIG.EDIT_DEF' | translate"
+                    [attr.aria-label]="'LAB_TEST_CONFIG.EDIT_DEF' | translate"
                   >
                     <span class="material-symbols-outlined">edit</span>
+                  </button>
+                }
+                @if (canCreateVersion(def)) {
+                  <button
+                    class="btn-icon"
+                    data-testid="new-version-def"
+                    (click)="createVersion(def)"
+                    [disabled]="creatingVersionId() === def.id"
+                    [title]="'LAB_TEST_CONFIG.NEW_VERSION' | translate"
+                    [attr.aria-label]="'LAB_TEST_CONFIG.NEW_VERSION' | translate"
+                  >
+                    <span class="material-symbols-outlined" aria-hidden="true">history_edu</span>
                   </button>
                 }
                 @if (isEditableDraft(def)) {
@@ -139,6 +160,7 @@
                     class="btn-icon"
                     (click)="openRangeEditor(def)"
                     [title]="'LAB_TEST_CONFIG.EDIT_RANGES' | translate"
+                    [attr.aria-label]="'LAB_TEST_CONFIG.EDIT_RANGES' | translate"
                   >
                     <span class="material-symbols-outlined">tune</span>
                   </button>
@@ -146,6 +168,7 @@
                     class="btn-icon btn-icon-danger"
                     (click)="confirmDeleteDef(def)"
                     [title]="'LAB_TEST_CONFIG.DELETE_DEF' | translate"
+                    [attr.aria-label]="'LAB_TEST_CONFIG.DELETE_DEF' | translate"
                   >
                     <span class="material-symbols-outlined">delete</span>
                   </button>
@@ -159,13 +182,23 @@
 
     <!-- Pagination -->
     <div class="pagination">
-      <button class="btn-page" [disabled]="page() === 0" (click)="prevPage()">
+      <button
+        [attr.aria-label]="'COMMON.PREVIOUS' | translate"
+        class="btn-page"
+        [disabled]="page() === 0"
+        (click)="prevPage()"
+      >
         <span class="material-symbols-outlined">chevron_left</span>
       </button>
       <span class="page-info">
         {{ 'LAB_TEST_CONFIG.PAGE_INFO' | translate: { current: page() + 1, total: totalPages() } }}
       </span>
-      <button class="btn-page" [disabled]="page() + 1 >= totalPages()" (click)="nextPage()">
+      <button
+        [attr.aria-label]="'COMMON.NEXT' | translate"
+        class="btn-page"
+        [disabled]="page() + 1 >= totalPages()"
+        (click)="nextPage()"
+      >
         <span class="material-symbols-outlined">chevron_right</span>
       </button>
     </div>
@@ -176,23 +209,28 @@
     <div
       class="modal-backdrop"
       tabindex="-1"
-      role="dialog"
-      aria-modal="true"
-      [attr.aria-labelledby]="'rangeEditorTitle'"
       (click)="closeRangeEditor()"
       (keydown.escape)="closeRangeEditor()"
     >
       <div
         class="modal-content"
-        role="document"
+        role="dialog"
+        aria-modal="true"
+        [attr.aria-labelledby]="'rangeEditorTitle'"
+        appModalDialog
+        (escaped)="closeRangeEditor()"
+        (keydown.escape)="$event.stopPropagation()"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="closeRangeEditor()"
       >
         <div class="modal-header">
           <h2 id="rangeEditorTitle">
             {{ 'LAB_TEST_CONFIG.EDIT_RANGES_FOR' | translate: { name: def.testName } }}
           </h2>
-          <button class="btn-close" (click)="closeRangeEditor()">
+          <button
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+            class="btn-close"
+            (click)="closeRangeEditor()"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
@@ -287,6 +325,33 @@
                   (ngModelChange)="range.ageMax = $event"
                 />
               </div>
+              <div class="range-field">
+                <!-- Round 18: neonatal and infant bands are stated in days or months. -->
+                <label [for]="'ageUnit-' + i">{{ 'LAB_TEST_CONFIG.AGE_UNIT' | translate }}</label>
+                <select
+                  [id]="'ageUnit-' + i"
+                  [ngModel]="range.ageUnit || 'YEARS'"
+                  (ngModelChange)="range.ageUnit = $event"
+                >
+                  <option value="YEARS">{{ 'LAB_TEST_CONFIG.AGE_UNIT_YEARS' | translate }}</option>
+                  <option value="MONTHS">
+                    {{ 'LAB_TEST_CONFIG.AGE_UNIT_MONTHS' | translate }}
+                  </option>
+                  <option value="DAYS">{{ 'LAB_TEST_CONFIG.AGE_UNIT_DAYS' | translate }}</option>
+                </select>
+              </div>
+              <div class="range-field notes-field">
+                <label [for]="'source-' + i">{{
+                  'LAB_TEST_CONFIG.RANGE_SOURCE' | translate
+                }}</label>
+                <input
+                  type="text"
+                  maxlength="500"
+                  [id]="'source-' + i"
+                  [ngModel]="range.source"
+                  (ngModelChange)="range.source = $event"
+                />
+              </div>
               <div class="range-field notes-field">
                 <label [for]="'notes-' + i">{{ 'LAB_TEST_CONFIG.NOTES' | translate }}</label>
                 <input
@@ -296,7 +361,11 @@
                   (ngModelChange)="range.notes = $event"
                 />
               </div>
-              <button class="btn-remove-range" (click)="removeRange(i)">
+              <button
+                [attr.aria-label]="'COMMON.REMOVE' | translate"
+                class="btn-remove-range"
+                (click)="removeRange(i)"
+              >
                 <span class="material-symbols-outlined">delete</span>
               </button>
             </div>
@@ -334,19 +403,28 @@
     >
       <div
         class="modal-content modal-lg"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="lab-test-config-dialog-title-1"
+        appModalDialog
+        (escaped)="closeDefModal()"
+        (keydown.escape)="$event.stopPropagation()"
         tabindex="-1"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="closeDefModal()"
       >
         <div class="modal-header">
-          <h2>
+          <h2 id="lab-test-config-dialog-title-1">
             {{
               editingDefCrud()
                 ? ('LAB_TEST_CONFIG.EDIT_DEFINITION' | translate)
                 : ('LAB_TEST_CONFIG.CREATE_DEFINITION' | translate)
             }}
           </h2>
-          <button class="btn-close" (click)="closeDefModal()">
+          <button
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+            class="btn-close"
+            (click)="closeDefModal()"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
@@ -494,7 +572,9 @@
           <button
             class="btn-primary"
             (click)="submitDefForm()"
-            [disabled]="savingDef() || !defForm.testCode || !defForm.testName || !isLoincValid()"
+            [disabled]="savingDef()"
+            [appSubmitGuard]="!defForm.testCode || !defForm.testName || !isLoincValid()"
+            [submitGuardFields]="['defTestCode', 'defTestName']"
           >
             @if (savingDef()) {
               <span class="material-symbols-outlined spin">progress_activity</span>
@@ -516,13 +596,24 @@
     >
       <div
         class="modal-content modal-sm"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="lab-test-config-dialog-title-2"
+        appModalDialog
+        (escaped)="cancelDeleteDef()"
+        (keydown.escape)="$event.stopPropagation()"
         tabindex="-1"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="cancelDeleteDef()"
       >
         <div class="modal-header">
-          <h2>{{ 'LAB_TEST_CONFIG.CONFIRM_DELETE' | translate }}</h2>
-          <button class="btn-close" (click)="cancelDeleteDef()">
+          <h2 id="lab-test-config-dialog-title-2">
+            {{ 'LAB_TEST_CONFIG.CONFIRM_DELETE' | translate }}
+          </h2>
+          <button
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+            class="btn-close"
+            (click)="cancelDeleteDef()"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
@@ -563,13 +654,24 @@
     >
       <div
         class="modal-content modal-lg"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="lab-test-config-dialog-title-3"
+        appModalDialog
+        (escaped)="closeReflexRules()"
+        (keydown.escape)="$event.stopPropagation()"
         tabindex="-1"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="closeReflexRules()"
       >
         <div class="modal-header">
-          <h2>{{ 'LAB_TEST_CONFIG.REFLEX_RULES' | translate }}</h2>
-          <button class="btn-close" (click)="closeReflexRules()">
+          <h2 id="lab-test-config-dialog-title-3">
+            {{ 'LAB_TEST_CONFIG.REFLEX_RULES' | translate }}
+          </h2>
+          <button
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+            class="btn-close"
+            (click)="closeReflexRules()"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>

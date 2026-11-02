@@ -19,6 +19,8 @@ import {
 } from '../../shared/pro-instrument-form/pro-instrument-form.component';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+import { refusalReason } from '../../shared/refusal-reason';
 /**
  * A mother answers her own mental-health screening (EPDS) from home while a
  * postpartum plan is open for her (Tier 2 item 47).
@@ -33,6 +35,7 @@ import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
   selector: 'app-my-screenings',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
     ServerTimePipe,
     CommonModule,
     DatePipe,
@@ -56,6 +59,8 @@ export class MyScreeningsComponent implements OnInit {
    * patient when the request simply failed.
    */
   failed = signal(false);
+  /** QA D1212: the server's reason the read failed (a 4xx), when it gave one. */
+  failureReason = signal<string | null>(null);
   available = signal<ProSelfReportAvailable[]>([]);
   history = signal<ProSelfReportEntry[]>([]);
 
@@ -117,7 +122,8 @@ export class MyScreeningsComponent implements OnInit {
         this.history.set(report.history ?? []);
         this.loading.set(false);
       },
-      error: () => {
+      error: (err: unknown) => {
+        this.failureReason.set(refusalReason(err));
         this.failed.set(true);
         this.loading.set(false);
       },
@@ -170,8 +176,8 @@ export class MyScreeningsComponent implements OnInit {
           this.cancel();
           this.toast.success(this.translate.instant('PRO.MY.SUBMITTED'));
         },
-        error: () => {
-          this.toast.error(this.translate.instant('PRO.MY.SUBMIT_ERROR'));
+        error: (err: unknown) => {
+          this.toast.error(refusalReason(err) ?? this.translate.instant('PRO.MY.SUBMIT_ERROR'));
           this.submitting.set(false);
         },
       });

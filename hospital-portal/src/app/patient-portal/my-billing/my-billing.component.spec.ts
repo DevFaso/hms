@@ -1,6 +1,8 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
+import { HttpHeaders, HttpResponse } from '@angular/common/http';
 import { MyBillingComponent } from './my-billing.component';
 import { PatientPortalService, PortalInvoice } from '../../services/patient-portal.service';
 import { formatCfa } from '../../shared/i18n/app-locale';
@@ -52,6 +54,9 @@ describe('MyBillingComponent', () => {
     portal = jasmine.createSpyObj<PatientPortalService>('PatientPortalService', [
       'getMyInvoices',
       'payInvoice',
+      'getMyInvoiceDetail',
+      'getMyInvoicePdf',
+      'getMyReceiptPdf',
     ]);
     TestBed.configureTestingModule({
       imports: [MyBillingComponent, TranslateModule.forRoot()],
@@ -105,6 +110,47 @@ describe('MyBillingComponent', () => {
     ]);
     expect(component.totalBalance()).toBe(7900);
     expect(host().querySelectorAll('.pay-btn').length).toBe(1);
+  });
+
+  it('QA D1071: a cancelled invoice never wears the paid check', () => {
+    create([
+      invoice({ id: 'x', balance: 0, status: 'CANCELLED' }),
+      invoice({ id: 'y', balance: 0, paid: 100, status: 'PAID' }),
+    ]);
+    const icons = Array.from(host().querySelectorAll('.pli-icon'));
+    expect(icons[0].getAttribute('data-tone')).toBe('cancelled');
+    expect(icons[0].textContent?.trim()).not.toBe('check_circle');
+    expect(icons[1].getAttribute('data-tone')).toBe('paid');
+    expect(icons[1].textContent?.trim()).toBe('check_circle');
+    expect((icons[0] as HTMLElement).style.background).toBe('');
+  });
+
+  it('QA D1089: an empty amount is answered, not ignored', () => {
+    create([invoice({ balance: 50 })]);
+    openDialog();
+    component.payAmount = null as unknown as number;
+    // Round 19 (NOT_FIXED in round 18): the DOM is rendered with the empty
+    // amount BEFORE the click, as the patient sees it. "Payer" used to be
+    // disabled then, so the message below could never appear.
+    fixture.detectChanges();
+    const pay = host().querySelector('.pay-submit-btn') as HTMLButtonElement;
+    expect(pay.disabled).toBeFalse();
+    pay.click();
+    fixture.detectChanges();
+    expect(portal.payInvoice).not.toHaveBeenCalled();
+    expect(component.payError()).toBe('BILLING.PAYMENT_AMOUNT_REQUIRED');
+    expect(host().textContent).toContain('BILLING.PAYMENT_AMOUNT_REQUIRED');
+  });
+
+  it('QA D1089: a zero amount is answered the same way', () => {
+    create([invoice({ balance: 50 })]);
+    openDialog();
+    component.payAmount = 0;
+    fixture.detectChanges();
+    (host().querySelector('.pay-submit-btn') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    expect(portal.payInvoice).not.toHaveBeenCalled();
+    expect(component.payError()).toBe('BILLING.PAYMENT_AMOUNT_REQUIRED');
   });
 
   it('QA D254: a paid invoice shows its total, not 0', () => {
@@ -266,5 +312,164 @@ describe('MyBillingComponent', () => {
     (host().querySelector('.pay-dialog-close') as HTMLElement).click();
     fixture.detectChanges();
     expect(host().querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  describe('invoice detail (QA D982)', () => {
+    const detail = {
+      invoice: invoice({ pending: 500 }),
+      lines: [
+        {
+          id: 'l1',
+          itemDescription: 'Consultation',
+          quantity: 1,
+          unitPrice: 3000,
+          totalPrice: 3000,
+        },
+      ],
+      payments: [
+        { id: 'p1', amount: 1000, paymentMethod: 'CASH', status: 'CONFIRMED' },
+        { id: 'p2', amount: 500, paymentMethod: 'MOBILE_MONEY', status: 'PENDING' },
+      ],
+      adjustments: [{ id: 'a1', type: 'WAIVER', amount: 500, invoiceItemDescription: 'NFS' }],
+    };
+
+    it('shows a declared payment on the card itself', () => {
+      create([invoice({ pending: 500 })]);
+      expect(host().querySelector('[data-testid="pending-inv1"]')).not.toBeNull();
+    });
+
+    it('opens on the lines and the payments with their state', () => {
+      portal.getMyInvoiceDetail.and.returnValue(of(detail));
+      create([invoice({ pending: 500 })]);
+      (host().querySelector('[data-testid="detail-btn-inv1"]') as HTMLElement).click();
+      fixture.detectChanges();
+
+      expect(portal.getMyInvoiceDetail).toHaveBeenCalledWith('inv1');
+      const panel = host().querySelector('[data-testid="invoice-detail-inv1"]') as HTMLElement;
+      expect(panel.textContent).toContain('Consultation');
+      // QA D974: why the total is lower than the lines.
+      expect(panel.querySelector('[data-testid="portal-adjustments"]')?.textContent).toContain(
+        'NFS',
+      );
+      expect(
+        panel.querySelector('[data-testid="payment-p1"] [data-status="CONFIRMED"]'),
+      ).not.toBeNull();
+      expect(
+        panel.querySelector('[data-testid="payment-p2"] [data-status="PENDING"]'),
+      ).not.toBeNull();
+      // A receipt only for money actually received.
+      expect(panel.querySelector('[data-testid="receipt-p1"]')).not.toBeNull();
+      expect(panel.querySelector('[data-testid="receipt-p2"]')).toBeNull();
+      expect(
+        host().querySelector('[data-testid="detail-btn-inv1"]')?.getAttribute('aria-expanded'),
+      ).toBe('true');
+    });
+
+    it('downloads the invoice and a receipt under the server names', () => {
+      portal.getMyInvoiceDetail.and.returnValue(of(detail));
+      const pdf = (name: string) =>
+        of(
+          new HttpResponse({
+            body: new Blob(['%PDF']),
+            headers: new HttpHeaders({ 'Content-Disposition': `attachment; filename="${name}"` }),
+          }),
+        );
+      portal.getMyInvoicePdf.and.returnValue(pdf('invoice-001.pdf'));
+      portal.getMyReceiptPdf.and.returnValue(pdf('001-R1.pdf'));
+      const saved: string[] = [];
+      spyOn(URL, 'createObjectURL').and.returnValue('blob:x');
+      spyOn(URL, 'revokeObjectURL');
+      spyOn(HTMLAnchorElement.prototype, 'click').and.callFake(function (this: HTMLAnchorElement) {
+        saved.push(this.download);
+      });
+      create([invoice()]);
+      component.toggleDetail(component.invoices()[0]);
+      fixture.detectChanges();
+      (host().querySelector('[data-testid="invoice-pdf-inv1"]') as HTMLButtonElement).dispatchEvent(
+        new Event('click'),
+      );
+      (host().querySelector('[data-testid="receipt-p1"]') as HTMLButtonElement).dispatchEvent(
+        new Event('click'),
+      );
+      expect(saved).toEqual(['invoice-001.pdf', '001-R1.pdf']);
+    });
+
+    it('keeps the detail when a download fails', () => {
+      portal.getMyInvoiceDetail.and.returnValue(of(detail));
+      portal.getMyInvoicePdf.and.returnValue(throwError(() => new Error('down')));
+      create([invoice()]);
+      component.toggleDetail(component.invoices()[0]);
+      component.downloadInvoice(component.invoices()[0]);
+      fixture.detectChanges();
+      expect(host().querySelector('[data-testid="download-error"]')).not.toBeNull();
+      expect(host().querySelector('[data-testid="invoice-detail-inv1"]')?.textContent).toContain(
+        'Consultation',
+      );
+    });
+
+    it("QA D1212: a refused download shows the server's reason read from the blob body", async () => {
+      portal.getMyInvoiceDetail.and.returnValue(of(detail));
+      portal.getMyInvoicePdf.and.returnValue(
+        throwError(
+          () =>
+            new HttpErrorResponse({
+              status: 404,
+              error: new Blob([JSON.stringify({ message: "Le fichier n'est plus disponible." })], {
+                type: 'application/json',
+              }),
+            }),
+        ),
+      );
+      create([invoice()]);
+      component.toggleDetail(component.invoices()[0]);
+      component.downloadInvoice(component.invoices()[0]);
+      // Blob.text() resolves on its own schedule: wait for the reason, up to a second.
+      for (let i = 0; i < 50 && component.downloadFailureReason() === null; i++) {
+        await new Promise<void>((resolve) => setTimeout(resolve, 20));
+      }
+      fixture.detectChanges();
+      expect(host().querySelector('[data-testid="download-error"]')?.textContent).toContain(
+        "Le fichier n'est plus disponible.",
+      );
+    });
+
+    it("QA D1212: a refused invoice detail shows the server's reason", () => {
+      portal.getMyInvoiceDetail.and.returnValue(
+        throwError(() => ({ status: 403, error: { message: 'Facture d’un autre patient.' } })),
+      );
+      create([invoice()]);
+      component.toggleDetail(component.invoices()[0]);
+      fixture.detectChanges();
+      expect(
+        host().querySelector('[data-testid="invoice-detail-inv1"] [role="alert"]')?.textContent,
+      ).toContain('Facture d’un autre patient.');
+    });
+
+    it('says so when the invoice cannot be loaded', () => {
+      portal.getMyInvoiceDetail.and.returnValue(throwError(() => new Error('down')));
+      create([invoice()]);
+      component.toggleDetail(component.invoices()[0]);
+      fixture.detectChanges();
+      expect(
+        host().querySelector('[data-testid="invoice-detail-inv1"] [role="alert"]'),
+      ).not.toBeNull();
+    });
+  });
+
+  describe('payment reference label (QA D1007)', () => {
+    it('reads optional only for cash, required otherwise', () => {
+      create([invoice()]);
+      openDialog();
+      component.payMethod = 'MOBILE_MONEY';
+      fixture.detectChanges();
+      const label = () => host().querySelector('label[for="payRef"]')?.textContent ?? '';
+      const input = () => host().querySelector('#payRef') as HTMLInputElement;
+      expect(label()).toContain('*');
+      expect(input().required).toBeTrue();
+      component.payMethod = 'CASH';
+      fixture.detectChanges();
+      expect(label()).not.toContain('*');
+      expect(input().required).toBeFalse();
+    });
   });
 });

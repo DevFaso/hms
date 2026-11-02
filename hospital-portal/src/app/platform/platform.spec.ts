@@ -1,4 +1,4 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { HttpErrorResponse } from '@angular/common/http';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError, Observable, Subject } from 'rxjs';
@@ -19,6 +19,7 @@ import {
 } from '../services/organization.service';
 import { ToastService } from '../core/toast.service';
 import fr from '../../assets/i18n/fr.json';
+import { isSubmitBlocked } from '../shared/forms/submit-guard.testing';
 
 function org(
   id: string,
@@ -244,11 +245,11 @@ describe('PlatformComponent', () => {
       const submit = (): HTMLButtonElement =>
         fixture.nativeElement.querySelector('[data-test="provision-submit"]');
 
-      expect(submit().disabled).toBeTrue();
+      expect(isSubmitBlocked(submit())).toBeTrue();
 
       c.provisionOrgId.set('o1');
       fixture.detectChanges();
-      expect(submit().disabled).toBeFalse();
+      expect(isSubmitBlocked(submit())).toBeFalse();
     });
   });
 
@@ -291,10 +292,11 @@ describe('PlatformComponent', () => {
       platform.getCatalog.and.returnValue(of([catalogItem({ enabled: false })]));
       c.switchView('catalog');
       fixture.detectChanges();
-      const cardButton: HTMLButtonElement = fixture.nativeElement.querySelector(
-        '[data-test="catalog-provision"]',
-      );
-      expect(cardButton.disabled).toBeTrue();
+      // QA D1124: no dead button on the card; it says, in words, that the item is off.
+      expect(fixture.nativeElement.querySelector('[data-test="catalog-provision"]')).toBeNull();
+      expect(
+        fixture.nativeElement.querySelector('[data-test="catalog-provision-disabled"]'),
+      ).not.toBeNull();
 
       c.openCatalogDetail(catalogItem({ enabled: false }));
       fixture.detectChanges();
@@ -303,8 +305,7 @@ describe('PlatformComponent', () => {
       ).not.toBeNull();
       expect(fixture.nativeElement.querySelector('[data-test="provision-org"]')).toBeNull();
       expect(
-        (fixture.nativeElement.querySelector('[data-test="provision-submit"]') as HTMLButtonElement)
-          .disabled,
+        isSubmitBlocked(fixture.nativeElement.querySelector('[data-test="provision-submit"]')),
       ).toBeTrue();
     });
   });
@@ -511,6 +512,49 @@ describe('PlatformComponent', () => {
     });
   });
 
+  /* ── QA D1155 class (round 21): the drawer's edit form keeps Escape ── */
+
+  it('QA D1155: Escape in the service edit form leaves the edit (asking first over a change), never the drawer', fakeAsync(() => {
+    document.body.appendChild(fixture.nativeElement);
+    try {
+      c.openServiceDetail(orgService({ provider: 'OpenMRS' }));
+      fixture.detectChanges();
+      const host = fixture.nativeElement as HTMLElement;
+      const edit = Array.from(host.querySelectorAll<HTMLButtonElement>('.drawer-footer button'))[0];
+      edit.focus();
+      edit.click();
+      fixture.detectChanges();
+      tick();
+      const provider = host.querySelector<HTMLInputElement>('#editProvider')!;
+      expect(document.activeElement).toBe(provider);
+      const escape = () => {
+        provider.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        fixture.detectChanges();
+        tick();
+      };
+
+      // Untouched (the prefilled provider is not "typed"): the edit closes, the drawer stays.
+      escape();
+      expect(c.editingService()).toBeFalse();
+      expect(c.serviceDrawerOpen()).toBeTrue();
+
+      Array.from(host.querySelectorAll<HTMLButtonElement>('.drawer-footer button'))[0].click();
+      fixture.detectChanges();
+      tick();
+      const field = host.querySelector<HTMLInputElement>('#editProvider')!;
+      field.value = 'OpenMRS 3';
+      field.dispatchEvent(new Event('input'));
+      field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      fixture.detectChanges();
+      tick();
+      expect(c.editingService()).toBeTrue();
+      expect(c.serviceDrawerOpen()).toBeTrue();
+      expect(host.querySelector('[data-testid="inline-discard-ask"]')).not.toBeNull();
+    } finally {
+      (fixture.nativeElement as HTMLElement).remove();
+    }
+  }));
+
   /* ── D5: clearing fields ── */
 
   describe('saving an edited service (D5)', () => {
@@ -577,8 +621,10 @@ describe('PlatformComponent', () => {
   describe('validation errors (D11)', () => {
     it('shows each field error with the label of the field', () => {
       const instant = spyOn(TestBed.inject(TranslateService), 'instant').and.callFake(
-        (key: string | string[], params?: { errors?: string }) =>
-          params?.errors ? `INVALID ${params.errors}` : (key as string),
+        (key: string | string[], params?: { errors?: string }) => {
+          if (key === 'COMMON.COLON') return ' :';
+          return params?.errors ? `INVALID ${params.errors}` : (key as string);
+        },
       );
       const err = new HttpErrorResponse({
         status: 400,
@@ -594,7 +640,8 @@ describe('PlatformComponent', () => {
       const message = c.errorMessage(err, 'PLATFORM.TOAST.SERVICE_UPDATE_FAILED');
 
       expect(message).toBe(
-        'INVALID PLATFORM.PROVIDER: size must be between 0 and 120; PLATFORM.CONTACT_EMAIL: must be a well-formed email address',
+        // QA D1079: the colon comes from COMMON.COLON (French: a no-break space before it).
+        'INVALID PLATFORM.PROVIDER : size must be between 0 and 120; PLATFORM.CONTACT_EMAIL : must be a well-formed email address',
       );
       expect(instant).toHaveBeenCalledWith('PLATFORM.TOAST.VALIDATION_FAILED', jasmine.any(Object));
     });

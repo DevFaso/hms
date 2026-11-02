@@ -1,0 +1,576 @@
+package com.example.hms.service.pharmacy;
+
+import com.example.hms.enums.StockTransactionType;
+import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.ResourceNotFoundException;
+import com.example.hms.model.Patient;
+import com.example.hms.model.Prescription;
+import com.example.hms.model.Staff;
+import com.example.hms.model.User;
+import com.example.hms.model.medication.MedicationCatalogItem;
+import com.example.hms.model.pharmacy.Dispense;
+import com.example.hms.model.pharmacy.InventoryItem;
+import com.example.hms.model.pharmacy.Pharmacy;
+import com.example.hms.model.pharmacy.StockTransaction;
+import com.example.hms.payload.dto.pharmacy.ControlledRegisterDTO;
+import com.example.hms.payload.dto.pharmacy.ControlledRegisterDrugDTO;
+import com.example.hms.payload.dto.pharmacy.ControlledRegisterEntryDTO;
+import com.example.hms.repository.PrescriptionRepository;
+import com.example.hms.repository.pharmacy.DispenseRepository;
+import com.example.hms.repository.pharmacy.InventoryItemRepository;
+import com.example.hms.repository.pharmacy.PharmacyRepository;
+import com.example.hms.repository.pharmacy.StockTransactionRepository;
+import com.example.hms.utility.MessageUtil;
+import com.example.hms.utility.RoleValidator;
+import lombok.RequiredArgsConstructor;
+import org.springframework.context.i18n.LocaleContextHolder;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.FormatStyle;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+/**
+ * QA D967: the controlled-drug (stupéfiants) register. Only the general stock
+ * ledger existed - no medicine column, no patient or prescriber, no balance -
+ * so a morphine inspection had nothing to read.
+ *
+ * <p>A read view on existing data: every ledger movement (receipt, dispense,
+ * return, adjustment, transfer) of the pharmacy's items whose catalogue entry
+ * is controlled, per drug, oldest first, with the running balance the ledger
+ * gives (opening balance = every movement before the period), the patient and
+ * prescriber of a dispense (and of a return booked against one), who recorded
+ * it and the witness. Scoped to the caller's hospital like the ledger.
+ * Exported as CSV and PDF in the request's language.
+ */
+@Service
+@RequiredArgsConstructor
+public class ControlledDrugRegisterService {
+
+    /** The most movements one read returns; a longer period is asked to be split. */
+    static final int MAX_ROWS = 5000;
+    /** The longest period one read covers. */
+    static final long MAX_DAYS = 366;
+
+    private static final Pattern PRESCRIPTION_IN_REASON = Pattern.compile(
+            "for prescription ([0-9a-fA-F-]{36})");
+
+    private final PharmacyRepository pharmacyRepository;
+    private final InventoryItemRepository inventoryItemRepository;
+    private final StockTransactionRepository stockTransactionRepository;
+    private final DispenseRepository dispenseRepository;
+    private final PrescriptionRepository prescriptionRepository;
+    private final RoleValidator roleValidator;
+
+    @Transactional(readOnly = true)
+    public ControlledRegisterDTO register(UUID pharmacyId, UUID inventoryItemId, LocalDate from, LocalDate to) {
+        return buildRegister(pharmacyId, inventoryItemId, from, to);
+    }
+
+    /** The register itself; the exports call it directly, inside their own read-only transaction. */
+    private ControlledRegisterDTO buildRegister(UUID pharmacyId, UUID inventoryItemId, LocalDate from, LocalDate to) {
+        if (from == null || to == null || to.isBefore(from)) {
+            throw new BusinessException("pharmacy.register.periodInvalid");
+        }
+        // Both ends are included: a period of MAX_DAYS days at most (review of #975).
+        if (java.time.temporal.ChronoUnit.DAYS.between(from, to) + 1 > MAX_DAYS) {
+            throw new BusinessException("pharmacy.register.periodTooLong", String.valueOf(MAX_DAYS));
+        }
+        Pharmacy pharmacy = pharmacyInScope(pharmacyId);
+        List<InventoryItem> drugs = inventoryItemRepository.findAllWithCatalogItemByPharmacyId(pharmacy.getId())
+                .stream()
+                .filter(ControlledStockWitness::isControlled)
+                .filter(item -> inventoryItemId == null || inventoryItemId.equals(item.getId()))
+                .sorted(Comparator.comparing(ControlledDrugRegisterService::drugName,
+                        Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)))
+                .toList();
+        if (inventoryItemId != null && drugs.isEmpty()) {
+            // Another pharmacy's item, or one that is not controlled: same answer as a missing one.
+            throw new ResourceNotFoundException("inventoryItem.notFound", inventoryItemId);
+        }
+        if (drugs.isEmpty()) {
+            return new ControlledRegisterDTO(pharmacy.getId(), pharmacy.getName(), from, to, false, List.of());
+        }
+        List<UUID> itemIds = drugs.stream().map(InventoryItem::getId).toList();
+        LocalDateTime start = from.atStartOfDay();
+        LocalDateTime end = to.plusDays(1).atStartOfDay();
+
+        Map<UUID, BigDecimal> opening = openingBalances(itemIds, start);
+        List<StockTransaction> rows = stockTransactionRepository.findRegisterRows(itemIds, start, end,
+                PageRequest.of(0, MAX_ROWS + 1));
+        boolean truncated = rows.size() > MAX_ROWS;
+        if (truncated) {
+            rows = rows.subList(0, MAX_ROWS);
+        }
+        People people = people(rows, pharmacy.getHospital() != null ? pharmacy.getHospital().getId() : null);
+
+        Map<UUID, BigDecimal> balance = new HashMap<>(opening);
+        java.time.ZoneId hospitalZone = com.example.hms.utility.HospitalTime.zoneOf(pharmacy.getHospital());
+        Map<UUID, List<ControlledRegisterEntryDTO>> entries = entriesByItem(rows, people, balance, hospitalZone);
+        // Review of #975: the shelf count is today's; it is only comparable
+        // with a closing balance carried to today, and a truncated register
+        // has no closing balance at all (its last row is not the period's).
+        boolean coversToday = !to.isBefore(LocalDate.now(hospitalZone));
+        List<ControlledRegisterDrugDTO> out = new ArrayList<>();
+        for (InventoryItem item : drugs) {
+            BigDecimal open = opening.getOrDefault(item.getId(), BigDecimal.ZERO);
+            out.add(new ControlledRegisterDrugDTO(item.getId(), drugName(item), item.getUnit(), open,
+                    truncated ? null : balance.getOrDefault(item.getId(), open),
+                    coversToday && !truncated ? item.getQuantityOnHand() : null,
+                    entries.getOrDefault(item.getId(), List.of())));
+        }
+        return new ControlledRegisterDTO(pharmacy.getId(), pharmacy.getName(), from, to, truncated, out);
+    }
+
+    /** Each drug's balance before the period: every earlier movement, signed. */
+    private Map<UUID, BigDecimal> openingBalances(List<UUID> itemIds, LocalDateTime start) {
+        Map<UUID, BigDecimal> opening = new HashMap<>();
+        List<Object[]> sums = stockTransactionRepository.sumByItemAndTypeBefore(itemIds, start);
+        if (sums == null) {
+            return opening;
+        }
+        for (Object[] row : sums) {
+            if (row != null && row.length == 3 && row[0] instanceof UUID id
+                    && row[1] instanceof StockTransactionType type && row[2] instanceof BigDecimal total) {
+                opening.merge(id, signed(type, total), BigDecimal::add);
+            }
+        }
+        return opening;
+    }
+
+    /** The period's rows per drug, oldest first, each with the balance after it ({@code balance} is carried). */
+    private static Map<UUID, List<ControlledRegisterEntryDTO>> entriesByItem(List<StockTransaction> rows,
+            People people, Map<UUID, BigDecimal> balance, java.time.ZoneId hospitalZone) {
+        Map<UUID, List<ControlledRegisterEntryDTO>> entries = new LinkedHashMap<>();
+        for (StockTransaction tx : rows) {
+            UUID itemId = tx.getInventoryItem().getId();
+            BigDecimal moved = signed(tx.getTransactionType(), tx.getQuantity());
+            BigDecimal after = balance.getOrDefault(itemId, BigDecimal.ZERO).add(moved);
+            balance.put(itemId, after);
+            Prescription prescription = people.prescriptionOf(tx);
+            FillRef fill = fillRef(tx.getReason());
+            entries.computeIfAbsent(itemId, k -> new ArrayList<>()).add(new ControlledRegisterEntryDTO(
+                    tx.getId(),
+                    tx.getCreatedAt(),
+                    tx.getTransactionType() != null ? tx.getTransactionType().name() : null,
+                    moved,
+                    tx.getStockLot() != null ? tx.getStockLot().getLotNumber() : tx.getLotNumber(),
+                    after,
+                    prescription != null ? patientName(prescription.getPatient()) : null,
+                    prescription != null ? prescriberName(prescription.getStaff()) : null,
+                    userName(tx.getPerformedByUser()),
+                    userName(tx.getWitnessedByUser()),
+                    reasonText(LocaleContextHolder.getLocale(), tx.getReason(), hospitalZone),
+                    fill != null ? fill.lot() : null,
+                    fill != null ? fill.at() : null));
+        }
+        return entries;
+    }
+
+    /** The register as CSV (';' separated, UTF-8 with BOM so a spreadsheet reads the accents). */
+    @Transactional(readOnly = true)
+    public byte[] exportCsv(UUID pharmacyId, UUID inventoryItemId, LocalDate from, LocalDate to) {
+        ControlledRegisterDTO register = buildRegister(pharmacyId, inventoryItemId, from, to);
+        Locale locale = LocaleContextHolder.getLocale();
+        // QA D1084: the export prints the hospital wall clock, as the screen
+        // and the reason column do, never the server UTC.
+        java.time.ZoneId zone = com.example.hms.utility.HospitalTime.zoneOf(pharmacyInScope(pharmacyId).getHospital());
+        DateTimeFormatter when = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+        StringBuilder csv = new StringBuilder("\uFEFF");
+        csv.append(String.join(";", headers(locale))).append("\r\n");
+        for (ControlledRegisterDrugDTO drug : register.drugs()) {
+            csv.append(cells(drug.medicationName(), "", label(locale, "pharmacy.register.opening"), "", "",
+                    plain(drug.openingBalance()), "", "", "", "", "")).append("\r\n");
+            for (ControlledRegisterEntryDTO e : drug.entries()) {
+                csv.append(cells(drug.medicationName(),
+                        e.occurredAt() != null ? when.format(com.example.hms.utility.HospitalTime.at(e.occurredAt(), zone)) : "",
+                        movementLabel(locale, e.movementType()), plain(e.quantity()), e.lotNumber(),
+                        plain(e.balanceAfter()), e.patientName(), e.prescriberName(), e.recordedBy(),
+                        e.witnessedBy(), e.reason())).append("\r\n");
+            }
+        }
+        return csv.toString().getBytes(StandardCharsets.UTF_8);
+    }
+
+    /** The register as a landscape PDF, one table per drug, for inspection. */
+    @Transactional(readOnly = true)
+    public byte[] exportPdf(UUID pharmacyId, UUID inventoryItemId, LocalDate from, LocalDate to) {
+        ControlledRegisterDTO register = buildRegister(pharmacyId, inventoryItemId, from, to);
+        Locale locale = LocaleContextHolder.getLocale();
+        DateTimeFormatter day = DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(locale);
+        DateTimeFormatter when = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.SHORT).withLocale(locale);
+        // QA D1084: the hospital wall clock, not the server UTC.
+        java.time.ZoneId zone = com.example.hms.utility.HospitalTime.zoneOf(pharmacyInScope(pharmacyId).getHospital());
+        try (PharmacyPdfWriter pdf = new PharmacyPdfWriter(true)) {
+            pdf.paragraph(PharmacyPdfWriter.BOLD, 15f, label(locale, "pharmacy.register.title"));
+            pdf.paragraph(PharmacyPdfWriter.REGULAR, 10f, label(locale, "pharmacy.register.subtitle",
+                    Objects.toString(register.pharmacyName(), ""), day.format(register.from()),
+                    day.format(register.to())));
+            if (register.truncated()) {
+                pdf.paragraph(PharmacyPdfWriter.BOLD, 9f, label(locale, "pharmacy.register.truncated",
+                        String.valueOf(MAX_ROWS)));
+            }
+            if (register.drugs().isEmpty()) {
+                pdf.space(8f);
+                pdf.paragraph(PharmacyPdfWriter.REGULAR, 10f, label(locale, "pharmacy.register.noDrugs"));
+            }
+            float w = pdf.contentWidth();
+            float[] widths = {w * 0.10f, w * 0.10f, w * 0.06f, w * 0.09f, w * 0.07f, w * 0.13f, w * 0.12f,
+                w * 0.11f, w * 0.11f, w * 0.11f};
+            for (ControlledRegisterDrugDTO drug : register.drugs()) {
+                pdf.space(10f);
+                pdf.paragraph(PharmacyPdfWriter.BOLD, 11f, drug.medicationName()
+                        + (drug.unit() != null ? " (" + drug.unit() + ")" : ""));
+                pdf.paragraph(PharmacyPdfWriter.REGULAR, 9f, label(locale, "pharmacy.register.balances",
+                        plain(drug.openingBalance()), plain(drug.closingBalance()), plain(drug.quantityOnHand())));
+                List<String> head = headers(locale).subList(1, 11);
+                pdf.tableHeader(widths, head.toArray(new String[0]));
+                for (ControlledRegisterEntryDTO e : drug.entries()) {
+                    pdf.tableRow(new String[] {
+                        e.occurredAt() != null ? when.format(com.example.hms.utility.HospitalTime.at(e.occurredAt(), zone)) : "",
+                        movementLabel(locale, e.movementType()), plain(e.quantity()), nz(e.lotNumber()),
+                        plain(e.balanceAfter()), nz(e.patientName()), nz(e.prescriberName()),
+                        nz(e.recordedBy()), nz(e.witnessedBy()), nz(e.reason())});
+                }
+                if (drug.entries().isEmpty()) {
+                    pdf.paragraph(PharmacyPdfWriter.REGULAR, 9f, label(locale, "pharmacy.register.noMovement"));
+                }
+                pdf.endTable();
+            }
+            return pdf.finish();
+        } catch (IOException e) {
+            throw new UncheckedIOException("Controlled-drug register rendering failed", e);
+        }
+    }
+
+    private Pharmacy pharmacyInScope(UUID pharmacyId) {
+        Pharmacy pharmacy = pharmacyRepository.findById(pharmacyId)
+                .orElseThrow(() -> new ResourceNotFoundException("pharmacy.notFound", pharmacyId));
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        if (hospitalId != null && (pharmacy.getHospital() == null
+                || !hospitalId.equals(pharmacy.getHospital().getId()))) {
+            throw new ResourceNotFoundException("pharmacy.notFound", pharmacyId);
+        }
+        return pharmacy;
+    }
+
+    /** What came in is positive, what went out negative; an adjustment carries its own sign. */
+    static BigDecimal signed(StockTransactionType type, BigDecimal quantity) {
+        BigDecimal q = quantity == null ? BigDecimal.ZERO : quantity;
+        if (type == null) {
+            return BigDecimal.ZERO;
+        }
+        return switch (type) {
+            case RECEIPT, RETURN, ADJUSTMENT -> q;
+            case DISPENSE, TRANSFER -> q.negate();
+        };
+    }
+
+    /** The prescriptions behind the dispenses and returns of the period, loaded in two queries. */
+    private People people(List<StockTransaction> rows, UUID hospitalId) {
+        Set<UUID> prescriptionIds = new HashSet<>();
+        Set<UUID> dispenseIds = new HashSet<>();
+        for (StockTransaction tx : rows) {
+            UUID fromReason = systemPrescriptionIdOf(tx);
+            if (fromReason != null) {
+                prescriptionIds.add(fromReason);
+            } else if (tx.getTransactionType() == StockTransactionType.RETURN && tx.getReferenceId() != null) {
+                dispenseIds.add(tx.getReferenceId());
+            }
+        }
+        return new People(prescriptionsById(prescriptionIds, hospitalId), prescriptionsByDispense(dispenseIds, hospitalId));
+    }
+
+    /** The prescriptions named by id, those of {@code hospitalId} only. */
+    private Map<UUID, Prescription> prescriptionsById(Set<UUID> prescriptionIds, UUID hospitalId) {
+        Map<UUID, Prescription> byId = new HashMap<>();
+        if (prescriptionIds.isEmpty()) {
+            return byId;
+        }
+        for (Prescription p : prescriptionRepository.findAllById(prescriptionIds)) {
+            if (atHospital(p, hospitalId)) {
+                byId.put(p.getId(), p);
+            }
+        }
+        return byId;
+    }
+
+    /** The prescription behind each dispense, those of {@code hospitalId} only. */
+    private Map<UUID, Prescription> prescriptionsByDispense(Set<UUID> dispenseIds, UUID hospitalId) {
+        Map<UUID, Prescription> byDispense = new HashMap<>();
+        if (dispenseIds.isEmpty()) {
+            return byDispense;
+        }
+        for (Dispense d : dispenseRepository.findAllById(dispenseIds)) {
+            if (d.getPrescription() != null && atHospital(d.getPrescription(), hospitalId)) {
+                byDispense.put(d.getId(), d.getPrescription());
+            }
+        }
+        return byDispense;
+    }
+
+    /**
+     * Review of #975: the prescription a row names in its reason, read ONLY
+     * from a reason the system wrote ("Dispense for prescription <id>" on a
+     * DISPENSE row, and the cancellation reversals of a fill). ADJUSTMENT,
+     * TRANSFER and RETURN reasons are typed by a person, so an id typed there
+     * must never put a patient's name (another hospital's, even) on the
+     * register; a RETURN is linked through its validated dispense reference.
+     */
+    static UUID systemPrescriptionIdOf(StockTransaction tx) {
+        if (tx == null || tx.getTransactionType() == null) {
+            return null;
+        }
+        boolean systemWritten = tx.getTransactionType() == StockTransactionType.DISPENSE
+            || (tx.getTransactionType() == StockTransactionType.RETURN && tx.getReferenceId() == null
+                && tx.getReason() != null && tx.getReason().startsWith("Dispense cancelled"));
+        return systemWritten ? prescriptionIdIn(tx.getReason()) : null;
+    }
+
+    /** A prescription is shown only on its own hospital's register. */
+    private static boolean atHospital(Prescription p, UUID hospitalId) {
+        return hospitalId == null || (p.getHospital() != null && hospitalId.equals(p.getHospital().getId()));
+    }
+
+    /** Ledger rows name their prescription: "Dispense for prescription <id>" and its reversals. */
+    static UUID prescriptionIdIn(String reason) {
+        if (reason == null) {
+            return null;
+        }
+        Matcher m = PRESCRIPTION_IN_REASON.matcher(reason);
+        if (!m.find()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(m.group(1));
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
+    private record People(Map<UUID, Prescription> byId, Map<UUID, Prescription> byDispense) {
+        Prescription prescriptionOf(StockTransaction tx) {
+            UUID id = systemPrescriptionIdOf(tx);
+            if (id != null) {
+                return byId.get(id);
+            }
+            return tx.getReferenceId() != null ? byDispense.get(tx.getReferenceId()) : null;
+        }
+    }
+
+    private static List<String> headers(Locale locale) {
+        return List.of(label(locale, "pharmacy.register.col.drug"), label(locale, "pharmacy.register.col.date"),
+                label(locale, "pharmacy.register.col.movement"), label(locale, "pharmacy.register.col.quantity"),
+                label(locale, "pharmacy.register.col.lot"), label(locale, "pharmacy.register.col.balance"),
+                label(locale, "pharmacy.register.col.patient"), label(locale, "pharmacy.register.col.prescriber"),
+                label(locale, "pharmacy.register.col.recordedBy"), label(locale, "pharmacy.register.col.witness"),
+                label(locale, "pharmacy.register.col.reason"));
+    }
+
+    /** Adjustment codes the ledger stores (the form's and the API's spellings) and their label key. */
+    private static final String DAMAGE = "DAMAGE";
+    private static final String EXPIRY_WRITE_OFF = "EXPIRY_WRITE_OFF";
+    private static final Map<String, String> ADJUSTMENT_CODES = Map.of(
+            DAMAGE, DAMAGE, "DAMAGED", DAMAGE,
+            EXPIRY_WRITE_OFF, EXPIRY_WRITE_OFF, "EXPIRED", EXPIRY_WRITE_OFF, "EXPIRY", EXPIRY_WRITE_OFF,
+            "CYCLE_COUNT_VARIANCE", "CYCLE_COUNT_VARIANCE",
+            "CONTROLLED_DISCREPANCY", "CONTROLLED_DISCREPANCY");
+    private static final Pattern ADJUSTMENT_REASON = Pattern.compile("^([A-Z_]+)(?::\\s*(.*))?$", Pattern.DOTALL);
+    private static final String RECEIPT_PREFIX = "Stock receipt: lot ";
+    private static final String RETURN_PREFIX = "RETURN ref ";
+    private static final String TRANSFER_PREFIX = "TRANSFER to ";
+
+    /**
+     * QA D1000 in the register: the ledger stores its own reasons in English
+     * ("Dispense for prescription <id>", "RETURN ref X", "DAMAGE: ...");
+     * each known shape reads in the request's language, the typed words kept.
+     */
+    static String reasonText(Locale locale, String reason) {
+        return reasonText(locale, reason, java.time.ZoneId.systemDefault());
+    }
+
+    /**
+     * {@link #reasonText(Locale, String)} with the times a reason names (the
+     * minute a returned fill was given) on the hospital wall clock (QA D1084).
+     */
+    static String reasonText(Locale locale, String reason, java.time.ZoneId hospitalZone) {
+        if (reason == null || reason.isBlank()) {
+            return null;
+        }
+        String r = reason.trim();
+        if (r.startsWith("Dispense for prescription")) {
+            return label(locale, "pharmacy.register.reason.dispense");
+        }
+        if (r.startsWith("Dispense cancelled") || r.startsWith("Prepared fill cancelled")) {
+            return label(locale, "pharmacy.register.reason.cancelled");
+        }
+        if (r.startsWith(RECEIPT_PREFIX)) {
+            return label(locale, "pharmacy.register.reason.receipt", r.substring(RECEIPT_PREFIX.length()));
+        }
+        if (r.startsWith(RETURN_PREFIX)) {
+            return returnReason(locale, r.substring(RETURN_PREFIX.length()).trim(), hospitalZone);
+        }
+        if (r.startsWith(TRANSFER_PREFIX)) {
+            return label(locale, "pharmacy.register.reason.transfer", r.substring(TRANSFER_PREFIX.length()));
+        }
+        Matcher m = ADJUSTMENT_REASON.matcher(r);
+        if (m.matches() && ADJUSTMENT_CODES.containsKey(m.group(1))) {
+            String code = label(locale, "pharmacy.register.adjustment." + ADJUSTMENT_CODES.get(m.group(1)));
+            // QA D1051: the colon is the reader's ("Dommage : x", "Damage: x", "Daño: x").
+            return m.group(2) == null || m.group(2).isBlank() ? code
+                : label(locale, "pharmacy.register.labelValue", code, m.group(2).trim());
+        }
+        return r;
+    }
+
+    /**
+     * QA D1051: a return booked against a fill stores its lot and the minute
+     * the fill was given as data ("LOT-A-01b 2026-10-28T23:58"; rows written
+     * before: "lot LOT-A-01b 2026-10-28 23:58"). The words and the date are the
+     * reader's, never a raw ISO timestamp or the English "lot"; a reference the
+     * pharmacist typed is kept as typed.
+     */
+    static String returnReason(Locale locale, String ref) {
+        return returnReason(locale, ref, java.time.ZoneId.systemDefault());
+    }
+
+    /**
+     * QA D1084: the stored minute is the server time of the fill
+     * ({@code dispensedAt}, UTC on the hosts); it is printed on the hospital
+     * wall clock, as the row time is shown, never as stored.
+     */
+    static String returnReason(Locale locale, String ref, java.time.ZoneId hospitalZone) {
+        Matcher fill = RETURN_FILL_REF.matcher(ref);
+        if (!fill.matches()) {
+            return label(locale, "pharmacy.register.reason.return", ref);
+        }
+        java.time.LocalDateTime at = com.example.hms.utility.HospitalTime.at(
+            java.time.LocalDateTime.parse(fill.group(2) + "T" + fill.group(3)), hospitalZone);
+        String date = java.time.format.DateTimeFormatter
+            .ofLocalizedDateTime(java.time.format.FormatStyle.SHORT)
+            .withLocale(locale != null ? locale : Locale.FRENCH)
+            .format(at);
+        return fill.group(1) != null
+            ? label(locale, "pharmacy.register.reason.returnFill", fill.group(1), date)
+            : label(locale, "pharmacy.register.reason.returnFillDate", date);
+    }
+
+    /** The lot and the server-time minute of the fill a return was booked against, for the screen (QA D1084). */
+    record FillRef(String lot, java.time.LocalDateTime at) {
+    }
+
+    static FillRef fillRef(String reason) {
+        if (reason == null || !reason.trim().startsWith(RETURN_PREFIX)) {
+            return null;
+        }
+        Matcher fill = RETURN_FILL_REF.matcher(reason.trim().substring(RETURN_PREFIX.length()).trim());
+        if (!fill.matches()) {
+            return null;
+        }
+        return new FillRef(fill.group(1), java.time.LocalDateTime.parse(fill.group(2) + "T" + fill.group(3)));
+    }
+
+    private static final Pattern RETURN_FILL_REF = Pattern.compile(
+        "^(?i:lot\\s+)?(?:(\\S+)\\s+)?(\\d{4}-\\d{2}-\\d{2})[T ](\\d{2}:\\d{2})$");
+
+    private static String movementLabel(Locale locale, String type) {
+        return type == null ? "" : label(locale, "pharmacy.register.movement." + type);
+    }
+
+    private static String label(Locale locale, String key, Object... args) {
+        return MessageUtil.resolve(locale, key, args);
+    }
+
+    private static String cells(String... values) {
+        StringBuilder row = new StringBuilder();
+        for (int i = 0; i < values.length; i++) {
+            if (i > 0) {
+                row.append(';');
+            }
+            row.append(csvCell(values[i]));
+        }
+        return row.toString();
+    }
+
+    /** Quoted when needed; a leading formula character is neutralised (CSV injection). */
+    static String csvCell(String value) {
+        if (value == null || value.isEmpty()) {
+            return "";
+        }
+        String v = value;
+        char first = v.charAt(0);
+        boolean number = v.matches("-?\\d+(\\.\\d+)?");
+        // OWASP CSV injection: '=', '+', '@', '-' and also a leading tab or
+        // carriage return, which spreadsheet importers treat as triggers.
+        if (first == '=' || first == '+' || first == '@' || first == '\t' || first == '\r'
+                || (first == '-' && !number)) {
+            v = "'" + v;
+        }
+        if (v.contains(";") || v.contains("\"") || v.contains("\n") || v.contains("\r")) {
+            v = "\"" + v.replace("\"", "\"\"") + "\"";
+        }
+        return v;
+    }
+
+    private static String plain(BigDecimal value) {
+        return value == null ? "" : value.stripTrailingZeros().toPlainString();
+    }
+
+    private static String nz(String value) {
+        return value == null ? "" : value;
+    }
+
+    static String drugName(InventoryItem item) {
+        MedicationCatalogItem med = item.getMedicationCatalogItem();
+        if (med == null) {
+            return null;
+        }
+        String name = med.getNameFr() != null && !med.getNameFr().isBlank() ? med.getNameFr() : med.getGenericName();
+        String strength = "";
+        if (med.getStrength() != null) {
+            String unit = med.getStrengthUnit() == null ? "" : " " + med.getStrengthUnit();
+            strength = " " + med.getStrength() + unit;
+        }
+        return (Objects.toString(name, "") + strength).trim();
+    }
+
+    private static String patientName(Patient patient) {
+        if (patient == null) {
+            return null;
+        }
+        return patient.getFullName();
+    }
+
+    private static String prescriberName(Staff staff) {
+        return staff == null ? null : userName(staff.getUser());
+    }
+
+    private static String userName(User user) {
+        if (user == null) {
+            return null;
+        }
+        String full = (Objects.toString(user.getFirstName(), "").trim() + " "
+                + Objects.toString(user.getLastName(), "").trim()).trim();
+        return full.isEmpty() ? user.getUsername() : full;
+    }
+}

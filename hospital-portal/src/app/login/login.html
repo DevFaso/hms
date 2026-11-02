@@ -229,7 +229,13 @@
           </div>
         </div>
 
-        <button type="submit" class="btn-login btn-bootstrap" [disabled]="bootstrapLoading">
+        <button
+          appSubmitGuard
+          submitGuardRequired
+          type="submit"
+          class="btn-login btn-bootstrap"
+          [disabled]="bootstrapLoading"
+        >
           @if (bootstrapLoading) {
             <span class="spinner"></span>
             <span>{{ 'LOGIN.CREATING_ACCOUNT' | translate }}</span>
@@ -265,7 +271,8 @@
               }}</span>
               <span class="role-card-label">{{ role | roleLabel }}</span>
               @if (isRecommendedRole(role)) {
-                <span class="role-card-badge">{{ 'LOGIN.ROLE_RECOMMENDED' | translate }}</span>
+                {{ ' '
+                }}<span class="role-card-badge">{{ 'LOGIN.ROLE_RECOMMENDED' | translate }}</span>
               }
             </button>
           }
@@ -407,6 +414,14 @@
               (click)="openResendActivation()"
               >{{ 'LOGIN.RESEND_ACTIVATION' | translate }}</a
             >
+            <span class="link-separator">·</span>
+            <!-- QA D1123: a phone-only patient activates with the number and the SMS code. -->
+            <a
+              class="forgot-link"
+              data-testid="have-a-code-link"
+              routerLink="/onboarding/role-welcome"
+              >{{ 'LOGIN.HAVE_A_CODE' | translate }}</a
+            >
           </div>
         </div>
 
@@ -437,6 +452,7 @@
   >
     <dialog
       class="fp-card"
+      appModalDialog
       aria-labelledby="forgot-password-title"
       [open]="forgotPasswordMode"
       (click)="$event.stopPropagation()"
@@ -449,6 +465,7 @@
           class="fp-close"
           type="button"
           [title]="'COMMON.CLOSE' | translate"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
           (click)="closeForgotPassword()"
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
@@ -511,7 +528,13 @@
               />
             </div>
           </div>
-          <button type="submit" class="btn-login" [disabled]="forgotPasswordLoading">
+          <button
+            appSubmitGuard
+            submitGuardRequired
+            type="submit"
+            class="btn-login"
+            [disabled]="forgotPasswordLoading"
+          >
             @if (forgotPasswordLoading) {
               <span class="spinner"></span>
               <span>{{ 'LOGIN.SENDING' | translate }}</span>
@@ -538,6 +561,7 @@
   >
     <dialog
       class="fp-card"
+      appModalDialog
       aria-labelledby="forgot-username-title"
       [open]="forgotUsernameMode"
       (click)="$event.stopPropagation()"
@@ -550,6 +574,7 @@
           class="fp-close"
           type="button"
           [title]="'COMMON.CLOSE' | translate"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
           (click)="closeForgotUsername()"
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
@@ -608,6 +633,7 @@
   >
     <dialog
       class="fp-card"
+      appModalDialog
       aria-labelledby="resend-activation-title"
       data-testid="resend-activation-dialog"
       [open]="resendActivationMode"
@@ -621,6 +647,7 @@
           class="fp-close"
           type="button"
           [title]="'COMMON.CLOSE' | translate"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
           (click)="closeResendActivation()"
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
@@ -683,7 +710,13 @@
               />
             </div>
           </div>
-          <button type="submit" class="btn-login" [disabled]="resendActivationLoading">
+          <button
+            appSubmitGuard
+            submitGuardRequired
+            type="submit"
+            class="btn-login"
+            [disabled]="resendActivationLoading"
+          >
             @if (resendActivationLoading) {
               <span class="spinner"></span>
               <span>{{ 'LOGIN.SENDING' | translate }}</span>

@@ -1,3 +1,4 @@
+import { resetStoredLangForTests } from '../shared/i18n/app-locale';
 import { TestBed, ComponentFixture } from '@angular/core/testing';
 import { ActivatedRoute, Router, provideRouter } from '@angular/router';
 import { HttpErrorResponse, provideHttpClient, withXhr } from '@angular/common/http';
@@ -165,6 +166,24 @@ describe('PatientDetailComponent', () => {
     expect(component).toBeTruthy();
   });
 
+  it('QA D998: a chart that does not open here is explained on the page, not a toast and a bounce to the list', () => {
+    patientServiceSpy.getById.and.returnValue(
+      throwError(() => new HttpErrorResponse({ status: 404, statusText: 'Not Found' })),
+    );
+    const router = TestBed.inject(Router);
+    spyOn(router, 'navigate');
+
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    expect(component.unavailable()).toBeTrue();
+    expect(el.querySelector('[data-testid="chart-unavailable"]')?.textContent).toContain(
+      'REFERRALS.CHART_UNAVAILABLE',
+    );
+    expect(router.navigate).not.toHaveBeenCalled();
+    expect(toastSpy.error).not.toHaveBeenCalled();
+  });
+
   it('D61: the age reads in the active language, not a hard-coded "years"', () => {
     const translate = TestBed.inject(TranslateService);
     translate.setTranslation(
@@ -254,6 +273,26 @@ describe('PatientDetailComponent', () => {
     expect(
       fixture.nativeElement.querySelector('[data-testid="encounters-withheld"]'),
     ).not.toBeNull();
+  });
+
+  it('QA D927: the chart shows the nursing care notes to the roles that may read them', () => {
+    roleContextSpy.hasAnyActiveRole.and.callFake((roles: string[]) => roles.includes('ROLE_NURSE'));
+    fixture.detectChanges();
+    component.setTab('encounters');
+    fixture.detectChanges();
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="nursing-notes-panel"]'),
+    ).not.toBeNull();
+  });
+
+  it('QA D927: a radiologist (encounters yes, GET /nurse/notes no) gets no nursing notes panel', () => {
+    roleContextSpy.hasAnyActiveRole.and.callFake((roles: string[]) =>
+      roles.includes('ROLE_RADIOLOGIST'),
+    );
+    fixture.detectChanges();
+    component.setTab('encounters');
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-testid="nursing-notes-panel"]')).toBeNull();
   });
 
   it('QA D504: a complete vitals or encounters list shows no withheld note', () => {
@@ -466,6 +505,35 @@ describe('PatientDetailComponent', () => {
       const metrics = card.querySelectorAll('.vital-metric');
       expect(metrics.length).toBeGreaterThan(0);
     });
+
+    // QA D1166 (round 21): the chart showed SpO2 "97%" in French and Spanish.
+    for (const [lang, expected] of [
+      ['fr', '98 %'],
+      ['es', '98 %'],
+      ['en', '98%'],
+    ]) {
+      it(`shows SpO2 with the ${lang} percent spacing ("${expected}")`, () => {
+        const saved = localStorage.getItem('lang');
+        localStorage.setItem('lang', lang);
+        resetStoredLangForTests();
+        try {
+          vitalServiceSpy.getRecent.and.returnValue(
+            of({ items: [vitalWithMetrics], withheld: false }),
+          );
+          fixture.detectChanges();
+          component.setTab('vitals');
+          fixture.detectChanges();
+          const strongs = Array.from(
+            (fixture.nativeElement as HTMLElement).querySelectorAll('.vital-metric strong'),
+          ).map((s) => s.textContent!.replace(/\s+/g, ' ').trim());
+          expect(strongs).toContain(expected);
+        } finally {
+          if (saved === null) localStorage.removeItem('lang');
+          else localStorage.setItem('lang', saved);
+          resetStoredLangForTests();
+        }
+      });
+    }
 
     it('should show empty state when no vitals exist', () => {
       vitalServiceSpy.getRecent.and.returnValue(of({ items: [], withheld: false }));

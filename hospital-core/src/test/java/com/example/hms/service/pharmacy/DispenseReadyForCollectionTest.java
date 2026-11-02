@@ -84,6 +84,9 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class DispenseReadyForCollectionTest {
 
+    /** QA D1069: every cancel of a fill names why (the service refuses one without). */
+    private static final String CANCEL_REASON = "Erreur de délivrance : mauvais dosage";
+
     @Mock private DispenseRepository dispenseRepository;
     @Mock private PrescriptionRepository prescriptionRepository;
     @Mock private PatientRepository patientRepository;
@@ -104,9 +107,29 @@ class DispenseReadyForCollectionTest {
     @Mock private jakarta.persistence.EntityManager entityManager;
 
     @org.mockito.Spy
-    private ControlledSubstanceGuard controlledSubstanceGuard = new ControlledSubstanceGuard();
+    private ControlledSubstanceGuard controlledSubstanceGuard =
+        new ControlledSubstanceGuard(new PrescriptionControlledResolver(null) {
+            // QA D922: the guard reads the catalogue (the test's @Mock repository, assigned after this
+            // initialiser runs, so it is looked up at each call).
+            @Override
+            public boolean catalogControlled(UUID hospitalId, UUID catalogItemId, String medicationCode) {
+                return new PrescriptionControlledResolver(medicationCatalogItemRepository)
+                    .catalogControlled(hospitalId, catalogItemId, medicationCode);
+            }
+        });
 
     static final LocalDate TODAY = LocalDate.of(2026, 10, 7);
+
+    /** QA D922: the order's catalogue item is controlled at its hospital; the prescriber's tick is unset. */
+    void catalogueControlledWithoutTick() {
+        UUID morphineItem = UUID.randomUUID();
+        com.example.hms.model.medication.MedicationCatalogItem morphine =
+            new com.example.hms.model.medication.MedicationCatalogItem();
+        morphine.setControlled(true);
+        when(medicationCatalogItemRepository.findByIdAndHospital_Id(morphineItem, hospitalId)).thenReturn(Optional.of(morphine));
+        prescription.setMedicationCatalogItemId(morphineItem);
+        prescription.setControlledSubstance(false);
+    }
     static final java.time.Clock FIXED_CLOCK = java.time.Clock.fixed(
             TODAY.atTime(9, 0).toInstant(java.time.ZoneOffset.UTC), java.time.ZoneOffset.UTC);
 
@@ -134,6 +157,8 @@ class DispenseReadyForCollectionTest {
     @Mock private com.example.hms.service.StayOrderDiscontinuation stayOrderDiscontinuation;
 
 
+    /** QA D964: FEFO is followed unless a test says otherwise (null = no override recorded). */
+    @org.mockito.Mock private FefoLotPolicy fefoLotPolicy;
     @InjectMocks
     private DispenseServiceImpl service;
 
@@ -242,6 +267,8 @@ class DispenseReadyForCollectionTest {
                 .medicationName("Amoxicillin")
                 .quantityRequested(BigDecimal.TEN)
                 .quantityDispensed(BigDecimal.TEN)
+                // QA D1141: every fill carries its unit (the server refuses one without).
+                .unit("capsule")
                 .build();
     }
 
@@ -321,6 +348,29 @@ class DispenseReadyForCollectionTest {
     class MarkReady {
 
         @Test
+        @DisplayName("QA D964: a prepared fill that skips a shorter-dated lot with no reason is refused; nothing is set aside")
+        void aPreparationSkippingTheShorterDatedLotIsRefused() {
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            org.mockito.Mockito.lenient().when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any()))
+                    .thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            org.mockito.Mockito.lenient().when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+            DispenseRequestDTO dto = request();
+            dto.setStockLotId(stockLotId);
+            when(fefoLotPolicy.requireFefoOrReason(eq(stockLot), org.mockito.ArgumentMatchers.isNull()))
+                    .thenThrow(new BusinessException("pharmacy.fefo.reasonRequired", "R16-MOR-COURT", "1 déc. 2026"));
+
+            assertThatThrownBy(() -> service.markReadyForCollection(dto))
+                    .isInstanceOf(BusinessException.class)
+                    .extracting("messageKey").isEqualTo("pharmacy.fefo.reasonRequired");
+            verify(stockLotRepository, never()).decrementRemaining(any(), any(), any());
+            verify(dispenseRepository, never()).save(any());
+        }
+
+        @Test
         @DisplayName("AC-1: a PENDING row, not handed over, prepared and dispensed by the caller; stock moves, the order does not")
         void preparesAPendingFill() {
             stubReadyPath(true);
@@ -392,7 +442,45 @@ class DispenseReadyForCollectionTest {
             DispenseRequestDTO req = request();
             assertThatThrownBy(() -> service.markReadyForCollection(req))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("CONTROLLED_SUBSTANCE");
+                    .extracting("messageKey").isEqualTo("prescription.safeguard.CONTROLLED_SUBSTANCE.dispense");
+            assertNothingPrepared();
+        }
+
+        /**
+         * Round-18 merge (QA D922 at the dispense): the catalogue marks the drug
+         * controlled, the prescriber left the tick unset, and the order carries
+         * no two-factor proof. It is refused like a ticked one; before, it was
+         * prepared as an ordinary drug.
+         */
+        @Test
+        @DisplayName("QA D922: a catalogue-controlled order without 2FA is refused whatever the tick")
+        void catalogueControlledSubstanceIsRefused() {
+            catalogueControlledWithoutTick();
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+
+            DispenseRequestDTO req = request();
+            assertThatThrownBy(() -> service.markReadyForCollection(req))
+                    .isInstanceOf(BusinessException.class)
+                    .extracting("messageKey").isEqualTo("prescription.safeguard.CONTROLLED_SUBSTANCE.dispense");
+            assertNothingPrepared();
+        }
+
+        @Test
+        @DisplayName("QA D1141: a prepared fill with no unit, of an order with none, is refused; the shelf is left alone")
+        void aPreparedFillWithoutAUnitIsRefused() {
+            prescription.setQuantityUnit(null);
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any()))
+                    .thenReturn(Optional.of(prescription));
+            DispenseRequestDTO dto = request();
+            dto.setUnit(" ");
+            dto.setStockLotId(stockLotId);
+
+            assertThatThrownBy(() -> service.markReadyForCollection(dto))
+                    .isInstanceOf(BusinessException.class)
+                    .extracting("messageKey").isEqualTo("dispense.unit.required");
+            assertThat(stockLot.getRemainingQuantity()).isEqualByComparingTo("50");
             assertNothingPrepared();
         }
 
@@ -453,8 +541,13 @@ class DispenseReadyForCollectionTest {
 
             DispenseRequestDTO req = request();
             assertThatThrownBy(() -> service.markReadyForCollection(req))
-                    .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("CDS_CRITICAL");
+                    // QA D1102 class (round 19): the alerts come back as cards for the
+                    // screen's override field, in a sentence without the old
+                    // CDS_CRITICAL developer token (was hasMessageContaining("CDS_CRITICAL")).
+                    .isInstanceOf(com.example.hms.cdshooks.CdsCriticalBlockException.class)
+                    .hasMessageNotContaining("CDS_CRITICAL")
+                    .extracting("cards", org.assertj.core.api.InstanceOfAssertFactories.LIST)
+                    .hasSize(1);
             assertNothingPrepared();
         }
 
@@ -783,7 +876,19 @@ class DispenseReadyForCollectionTest {
 
             assertThatThrownBy(() -> service.handOver(dispenseId, null))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("CONTROLLED_SUBSTANCE");
+                    .extracting("messageKey").isEqualTo("prescription.safeguard.CONTROLLED_SUBSTANCE.dispense");
+            verify(dispenseRepository, never()).completePreparedFill(any(), any(), any(), any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("QA D922: a catalogue-controlled order without 2FA is not handed over whatever the tick")
+        void catalogueControlledAtHandOver() {
+            catalogueControlledWithoutTick();
+            stubLocked(preparedFill());
+
+            assertThatThrownBy(() -> service.handOver(dispenseId, null))
+                    .isInstanceOf(BusinessException.class)
+                    .extracting("messageKey").isEqualTo("prescription.safeguard.CONTROLLED_SUBSTANCE.dispense");
             verify(dispenseRepository, never()).completePreparedFill(any(), any(), any(), any(), any(), any());
         }
 
@@ -1061,7 +1166,7 @@ class DispenseReadyForCollectionTest {
             when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(prescription));
             when(dispenseRepository.findLockedById(dispenseId)).thenReturn(Optional.of(d));
 
-            assertThatThrownBy(() -> service.cancelDispense(dispenseId))
+            assertThatThrownBy(() -> service.cancelDispense(dispenseId, null, CANCEL_REASON))
                     .isInstanceOf(BusinessException.class)
                     .hasMessageContaining("Only completed or partial");
         }

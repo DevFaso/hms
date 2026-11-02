@@ -70,6 +70,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -192,7 +193,7 @@ class PatientPortalServiceImplPhase1Test {
             stubAuthNotResolvable();
             assertThatThrownBy(() -> service.resolvePatientId(auth))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("Unable to resolve user");
+                    .extracting("messageKey").isEqualTo("patient.refill.decision.userUnresolved");
         }
 
         @Test
@@ -390,13 +391,28 @@ class PatientPortalServiceImplPhase1Test {
         }
 
         @Test
+        @DisplayName("QA D926 review: saving one's own unchanged number is never refused, even when a child shares it")
+        void updateMyProfile_unchangedSharedPhoneIsKept() {
+            stubPatientResolution();
+            patient.setPhoneNumberPrimary("+22670202020");
+            PatientProfileUpdateDTO dto = PatientProfileUpdateDTO.builder()
+                    .phoneNumberPrimary("70202020").build();
+            org.mockito.Mockito.lenient().when(patientRepository.existsByPhoneNumberPrimaryAndIdNot(
+                    org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any())).thenReturn(true);
+            org.mockito.Mockito.lenient().when(patientRepository.save(org.mockito.ArgumentMatchers.any()))
+                    .thenAnswer(inv -> inv.getArgument(0));
+            org.assertj.core.api.Assertions.assertThatCode(() -> service.updateMyProfile(auth, dto))
+                    .doesNotThrowAnyException();
+        }
+
+        @Test
         @DisplayName("D113 — another patient's primary phone is refused")
         void updateMyProfile_phoneOfAnotherPatientRefused() {
             stubPatientResolution();
-            Patient other = new Patient();
-            other.setId(java.util.UUID.randomUUID());
-            when(patientRepository.findByPhoneNumberPrimary("+22670202020"))
-                    .thenReturn(java.util.Optional.of(other));
+            // Never single-result: two records may already share a number (QA D926/D942).
+            when(patientRepository.existsByPhoneNumberPrimaryAndIdNot(
+                    org.mockito.ArgumentMatchers.eq("+22670202020"), org.mockito.ArgumentMatchers.any()))
+                    .thenReturn(true);
             PatientProfileUpdateDTO dto = PatientProfileUpdateDTO.builder().phoneNumberPrimary("70202020").build();
             assertThatThrownBy(() -> service.updateMyProfile(auth, dto))
                     .isInstanceOf(com.example.hms.exception.BusinessException.class);
@@ -443,6 +459,48 @@ class PatientPortalServiceImplPhase1Test {
             assertThat(result.getImmunizations()).hasSize(1);
             assertThat(result.getAllergies()).containsExactly("Penicillin", "Aspirin");
             assertThat(result.getChronicConditions()).containsExactly("Hypertension", "Diabetes");
+        }
+
+        /**
+         * QA D1214 (round 23): "Pathologies actives" was empty for every
+         * patient - the summary never set activeDiagnoses. The doctor's
+         * ACTIVE problems (and V14-era ACTIVE diagnoses) are listed, once
+         * each; a resolved problem and an inactive legacy row are not.
+         */
+        @Test
+        @DisplayName("QA D1214: the doctor's active diagnoses reach the patient's summary")
+        void getHealthSummary_listsActiveDiagnoses() {
+            stubPatientResolution();
+            com.example.hms.repository.PatientProblemRepository problems =
+                mock(com.example.hms.repository.PatientProblemRepository.class);
+            com.example.hms.repository.PatientDiagnosisRepository diagnoses =
+                mock(com.example.hms.repository.PatientDiagnosisRepository.class);
+            org.springframework.test.util.ReflectionTestUtils.setField(service, "patientProblemRepository", problems);
+            org.springframework.test.util.ReflectionTestUtils.setField(service, "patientDiagnosisRepository", diagnoses);
+            com.example.hms.model.PatientProblem malaria = new com.example.hms.model.PatientProblem();
+            malaria.setProblemDisplay("Paludisme à Plasmodium falciparum, simple");
+            malaria.setProblemCode("B50.9");
+            com.example.hms.model.PatientProblem codeOnly = new com.example.hms.model.PatientProblem();
+            codeOnly.setProblemCode("I10");
+            when(problems.findByPatient_IdAndStatusOrderByCreatedAtDesc(patientId,
+                    com.example.hms.enums.ProblemStatus.ACTIVE)).thenReturn(List.of(malaria, codeOnly));
+            com.example.hms.model.PatientDiagnosis legacySame = new com.example.hms.model.PatientDiagnosis();
+            legacySame.setDescription("Paludisme à Plasmodium falciparum, simple");
+            legacySame.setStatus("ACTIVE");
+            com.example.hms.model.PatientDiagnosis legacyResolved = new com.example.hms.model.PatientDiagnosis();
+            legacyResolved.setDescription("Fracture ancienne");
+            legacyResolved.setStatus("RESOLVED");
+            when(diagnoses.findByPatient_IdOrderByDiagnosedAtDesc(patientId))
+                .thenReturn(List.of(legacySame, legacyResolved));
+            when(labResultService.getLabResultsForPatientPortal(any(), any(), anyInt())).thenReturn(List.of());
+            when(medicationService.getMedicationsForPatientPortal(any(), any(), anyInt())).thenReturn(List.of());
+            when(vitalSignService.getRecentVitalsForPatientPortal(any(), anyInt())).thenReturn(List.of());
+            when(immunizationService.getImmunizationsByPatientId(any())).thenReturn(List.of());
+
+            HealthSummaryDTO result = service.getHealthSummary(auth, Locale.FRENCH);
+
+            assertThat(result.getActiveDiagnoses())
+                .containsExactly("Paludisme à Plasmodium falciparum, simple", "I10");
         }
 
         @Test
@@ -876,7 +934,7 @@ class PatientPortalServiceImplPhase1Test {
                     .timestamp(LocalDateTime.now())
                     .build();
 
-            when(disclosureAccountingService.getEntries(patientId, null, null, pageable))
+            when(disclosureAccountingService.getEntriesAsPatientSees(patientId, null, null, pageable))
                     .thenReturn(new PageImpl<>(List.of(entry)));
 
             Page<AccessLogEntryDTO> result = service.getMyAccessLog(auth, pageable);

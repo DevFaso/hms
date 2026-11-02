@@ -252,6 +252,7 @@
 @if (showIssue()) {
   <div class="modal-backdrop" (click)="closeIssue()" aria-hidden="true"></div>
   <div
+    appModalDialog
     #issueDialog
     class="modal"
     role="dialog"
@@ -292,7 +293,8 @@
         type="button"
         class="btn-primary"
         data-testid="submit-issue"
-        [disabled]="!formKeyLabel().trim() || saving()"
+        [disabled]="saving()"
+        [appSubmitGuard]="!formKeyLabel().trim()"
         (click)="submitIssue()"
       >
         {{ 'WEBHOOKS.ISSUE_CONFIRM' | translate }}
@@ -305,6 +307,7 @@
 @if (showEndpointForm()) {
   <div class="modal-backdrop" (click)="closeEndpointForm()" aria-hidden="true"></div>
   <div
+    appModalDialog
     #endpointDialog
     class="modal"
     role="dialog"
@@ -366,7 +369,8 @@
         type="button"
         class="btn-primary"
         data-testid="submit-endpoint"
-        [disabled]="!endpointFormValid() || saving()"
+        [disabled]="saving()"
+        [appSubmitGuard]="!endpointFormValid()"
         (click)="submitEndpointForm()"
       >
         {{ (editingEndpoint() ? 'COMMON.SAVE' : 'WEBHOOKS.REGISTER_CONFIRM') | translate }}
@@ -379,6 +383,7 @@
 @if (revealed(); as r) {
   <div class="modal-backdrop" aria-hidden="true"></div>
   <div
+    appModalDialog
     #revealDialog
     class="modal"
     role="dialog"
@@ -407,6 +412,7 @@
 @if (confirming(); as c) {
   <div class="modal-backdrop" (click)="closeConfirm()" aria-hidden="true"></div>
   <div
+    appModalDialog
     #confirmDialog
     class="modal"
     role="dialog"

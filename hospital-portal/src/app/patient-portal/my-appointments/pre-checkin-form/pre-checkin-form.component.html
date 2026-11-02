@@ -1,13 +1,16 @@
 <div class="pre-checkin-overlay" (click)="close()" (keydown.escape)="close()" tabindex="-1">
   <div
     class="pre-checkin-panel"
+    appDialogA11y
     tabindex="-1"
+    aria-labelledby="precheckin-dialog-title-1"
+    (dialogClose)="close()"
     (click)="$event.stopPropagation()"
     (keydown)="$event.stopPropagation()"
   >
     <!-- Header -->
     <div class="panel-header">
-      <h3>{{ 'PRE_CHECKIN.TITLE' | translate }}</h3>
+      <h3 id="precheckin-dialog-title-1">{{ 'PRE_CHECKIN.TITLE' | translate }}</h3>
       <button
         class="close-btn"
         (click)="close()"
@@ -82,6 +85,7 @@
             <input
               id="phone"
               type="tel"
+              appPhoneField
               [(ngModel)]="phoneNumber"
               [placeholder]="'PRE_CHECKIN.PHONE_PLACEHOLDER' | translate"
             />
@@ -133,7 +137,7 @@
           <div class="form-grid-2">
             <div class="form-row">
               <label for="ecPhone">{{ 'PRE_CHECKIN.EC_PHONE' | translate }}</label>
-              <input id="ecPhone" type="tel" [(ngModel)]="emergencyContactPhone" />
+              <input id="ecPhone" type="tel" appPhoneField [(ngModel)]="emergencyContactPhone" />
             </div>
             <div class="form-row">
               <label for="ecRelation">{{ 'PRE_CHECKIN.EC_RELATIONSHIP' | translate }}</label>
@@ -297,30 +301,47 @@
             <h4>{{ 'PRE_CHECKIN.UPDATED_DEMOGRAPHICS' | translate }}</h4>
             @if (phoneNumber) {
               <p>
-                <strong>{{ 'PRE_CHECKIN.PHONE_LABEL' | translate }}:</strong> {{ phoneNumber }}
+                <strong
+                  >{{ 'PRE_CHECKIN.PHONE_LABEL' | translate
+                  }}{{ 'COMMON.COLON' | translate }}</strong
+                >
+                {{ phoneNumber }}
               </p>
             }
             @if (email) {
               <p>
-                <strong>{{ 'PRE_CHECKIN.EMAIL_LABEL' | translate }}:</strong> {{ email }}
+                <strong
+                  >{{ 'PRE_CHECKIN.EMAIL_LABEL' | translate
+                  }}{{ 'COMMON.COLON' | translate }}</strong
+                >
+                {{ email }}
               </p>
             }
             @if (addressLine1) {
               <p>
-                <strong>{{ 'PRE_CHECKIN.ADDRESS_LABEL' | translate }}:</strong> {{ addressLine1 }},
-                {{ city }} {{ state }} {{ zipCode }}
+                <strong
+                  >{{ 'PRE_CHECKIN.ADDRESS_LABEL' | translate
+                  }}{{ 'COMMON.COLON' | translate }}</strong
+                >
+                {{ addressLine1 }}, {{ city }} {{ state }} {{ zipCode }}
               </p>
             }
             @if (emergencyContactName) {
               <p>
-                <strong>{{ 'PRE_CHECKIN.EMERGENCY_CONTACT_LABEL' | translate }}:</strong>
+                <strong
+                  >{{ 'PRE_CHECKIN.EMERGENCY_CONTACT_LABEL' | translate
+                  }}{{ 'COMMON.COLON' | translate }}</strong
+                >
                 {{ emergencyContactName }} ({{ emergencyContactRelationship }}) —
                 {{ emergencyContactPhone }}
               </p>
             }
             @if (insuranceProvider) {
               <p>
-                <strong>{{ 'PRE_CHECKIN.INSURANCE_LABEL' | translate }}:</strong>
+                <strong
+                  >{{ 'PRE_CHECKIN.INSURANCE_LABEL' | translate
+                  }}{{ 'COMMON.COLON' | translate }}</strong
+                >
                 {{ insuranceProvider }} — {{ insurancePlan }}
               </p>
             }
@@ -339,6 +360,7 @@
         <div class="consent-row">
           <label>
             <input
+              id="preCheckinConsent"
               type="checkbox"
               [(ngModel)]="consentAcknowledged"
               [title]="'PRE_CHECKIN.CONSENT_TITLE' | translate"
@@ -351,7 +373,13 @@
           <button class="btn-secondary" (click)="goToStep('questionnaires')">
             {{ 'PRE_CHECKIN.BACK' | translate }}
           </button>
-          <button class="btn-primary" [disabled]="!canSubmit" (click)="submit()">
+          <button
+            class="btn-primary"
+            [disabled]="saving()"
+            [appSubmitGuard]="!consentAcknowledged && ('SUBMIT_GUARD.CONSENT' | translate)"
+            [submitGuardFields]="['preCheckinConsent']"
+            (click)="submit()"
+          >
             @if (saving()) {
               {{ 'PRE_CHECKIN.SUBMITTING' | translate }}
             } @else {

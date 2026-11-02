@@ -8,7 +8,7 @@
   </div>
   @if (canOrder) {
     <button class="btn-primary" (click)="openCreateOrder()">
-      <span class="material-symbols-outlined">add</span>
+      <span class="material-symbols-outlined" aria-hidden="true">add</span>
       {{ 'ULTRASOUND.NEW_ORDER' | translate }}
     </button>
   }
@@ -61,7 +61,7 @@
                 {{ o.scheduledDate ? (o.scheduledDate | serverTime | date: 'mediumDate') : '—' }}
                 {{ o.scheduledTime || '' }}
               </td>
-              <td>{{ o.priority || 'ROUTINE' }}</td>
+              <td>{{ o.priority || 'ROUTINE' | enumLabel: 'imagingOrderPriority' }}</td>
               <td>
                 <span class="{{ statusClass(o.status) }}">
                   {{ 'ULTRASOUND.STATUS_' + o.status | translate }}
@@ -69,26 +69,32 @@
               </td>
               <td class="actions-cell">
                 <button
+                  [attr.aria-label]="'COMMON.VIEW' | translate"
                   class="btn-secondary btn-sm"
                   [title]="'COMMON.VIEW' | translate"
                   (click)="openOrder(o)"
                 >
-                  <span class="material-symbols-outlined">visibility</span>
+                  <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
                 </button>
                 @if (canOrder && o.status !== 'CANCELLED') {
+                  <!-- QA D1081: rewriting an order is its author's. -->
+                  @if (isOrderAuthor(o)) {
+                    <button
+                      [attr.aria-label]="'COMMON.EDIT' | translate"
+                      class="btn-secondary btn-sm"
+                      [title]="'COMMON.EDIT' | translate"
+                      (click)="openEditOrder(o)"
+                    >
+                      <span class="material-symbols-outlined" aria-hidden="true">edit</span>
+                    </button>
+                  }
                   <button
-                    class="btn-secondary btn-sm"
-                    [title]="'COMMON.EDIT' | translate"
-                    (click)="openEditOrder(o)"
-                  >
-                    <span class="material-symbols-outlined">edit</span>
-                  </button>
-                  <button
+                    [attr.aria-label]="'ULTRASOUND.RECORD_REPORT' | translate"
                     class="btn-secondary btn-sm"
                     [title]="'ULTRASOUND.RECORD_REPORT' | translate"
                     (click)="openReport(o)"
                   >
-                    <span class="material-symbols-outlined">description</span>
+                    <span class="material-symbols-outlined" aria-hidden="true">description</span>
                   </button>
                 }
               </td>
@@ -139,22 +145,24 @@
               <td class="actions-cell">
                 @if (canReviewReport && !r.reportReviewedByProvider) {
                   <button
+                    [attr.aria-label]="'ULTRASOUND.MARK_REVIEWED' | translate"
                     class="btn-secondary btn-sm"
                     [disabled]="reportActionBusy()"
                     [title]="'ULTRASOUND.MARK_REVIEWED' | translate"
                     (click)="reviewReport(r)"
                   >
-                    <span class="material-symbols-outlined">task_alt</span>
+                    <span class="material-symbols-outlined" aria-hidden="true">task_alt</span>
                   </button>
                 }
                 @if (canOrder && !r.patientNotified) {
                   <button
+                    [attr.aria-label]="'ULTRASOUND.NOTIFY_PATIENT' | translate"
                     class="btn-secondary btn-sm"
                     [disabled]="reportActionBusy()"
                     [title]="'ULTRASOUND.NOTIFY_PATIENT' | translate"
                     (click)="notifyPatient(r)"
                   >
-                    <span class="material-symbols-outlined">notifications</span>
+                    <span class="material-symbols-outlined" aria-hidden="true">notifications</span>
                   </button>
                 }
               </td>
@@ -171,14 +179,16 @@
   <div class="modal-backdrop" tabindex="-1" (click)="closeOrder()" (keydown.escape)="closeOrder()">
     <div
       class="modal modal-lg"
+      aria-labelledby="ultrasound-tab-dialog-1-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeOrder(); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
-        <h2>
+        <h2 id="ultrasound-tab-dialog-1-title">
           {{ o.patientDisplayName || ('MATERNITY.PATIENT' | translate) }}
           <span class="{{ statusClass(o.status) }}">
             {{ 'ULTRASOUND.STATUS_' + o.status | translate }}
@@ -189,13 +199,14 @@
           (click)="closeOrder()"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
         <div class="view-section">
           <p>
-            {{ 'ULTRASOUND.TYPE_' + o.scanType | translate }} · {{ o.priority || 'ROUTINE' }}
+            {{ 'ULTRASOUND.TYPE_' + o.scanType | translate }} ·
+            {{ o.priority || 'ROUTINE' | enumLabel: 'imagingOrderPriority' }}
             @if (o.gestationalAgeAtOrder) {
               · {{ o.gestationalAgeAtOrder }} {{ 'MATERNITY.WEEKS' | translate }}
             }
@@ -209,9 +220,17 @@
               {{ o.highRiskNotes }}
             </p>
           }
+          <!-- QA D1068: the instructions typed with the order are read back. -->
+          @if (o.specialInstructions) {
+            <p class="saved-note" data-testid="ultrasound-special-instructions">
+              {{ 'ULTRASOUND.SPECIAL_INSTRUCTIONS' | translate }}{{ 'COMMON.COLON' | translate }}
+              {{ o.specialInstructions }}
+            </p>
+          }
           @if (o.cancellationReason) {
             <p class="muted">
-              {{ 'MATERNITY.CANCELLATION_REASON' | translate }}: {{ o.cancellationReason }}
+              {{ 'MATERNITY.CANCELLATION_REASON' | translate }}{{ 'COMMON.COLON' | translate }}
+              {{ o.cancellationReason }}
             </p>
           }
         </div>
@@ -247,28 +266,42 @@
             }
             @if (rep.followUpRequired) {
               <p class="muted">
-                {{ 'ULTRASOUND.FOLLOW_UP' | translate }}: {{ rep.followUpRecommendations || '—' }}
+                {{ 'ULTRASOUND.FOLLOW_UP' | translate }}{{ 'COMMON.COLON' | translate }}
+                {{ rep.followUpRecommendations || '—' }}
               </p>
             }
           </div>
         }
         @if (showCancelPrompt()) {
-          <div class="view-section action-form">
+          <!-- QA D1155: Escape here closes only the prompt, and asks before dropping a typed reason. -->
+          <div
+            class="view-section action-form"
+            appInlineSubForm
+            #cancelForm="inlineSubForm"
+            (dismissed)="closeCancelPrompt()"
+          >
             <h3>{{ 'ULTRASOUND.CANCEL_ORDER' | translate }}</h3>
             <div class="field">
-              <label for="us-cancel-reason">{{
-                'MATERNITY.CANCELLATION_REASON' | translate
-              }}</label>
-              <textarea id="us-cancel-reason" rows="2" [(ngModel)]="cancelReason"></textarea>
+              <label for="us-cancel-reason"
+                >{{ 'MATERNITY.CANCELLATION_REASON' | translate }} *</label
+              >
+              <textarea
+                id="us-cancel-reason"
+                rows="2"
+                required
+                aria-required="true"
+                [(ngModel)]="cancelReason"
+              ></textarea>
             </div>
             <div class="modal-actions">
-              <button class="btn-secondary" (click)="showCancelPrompt.set(false)">
+              <button class="btn-secondary" (click)="closeCancelPrompt()">
                 {{ 'COMMON.CANCEL' | translate }}
               </button>
               <button class="btn-danger" [disabled]="cancelBusy()" (click)="submitCancel()">
                 {{ 'COMMON.CONFIRM' | translate }}
               </button>
             </div>
+            <app-inline-discard-ask [form]="cancelForm" />
           </div>
         }
       </div>
@@ -289,12 +322,12 @@
             </button>
           }
         }
-        @if (canOrder && o.status !== 'CANCELLED' && !showCancelPrompt()) {
-          <button class="btn-danger" (click)="openCancelPrompt()">
+        @if (canCancelThisOrder(o) && !showCancelPrompt()) {
+          <button class="btn-danger" data-testid="us-cancel-order" (click)="openCancelPrompt()">
             {{ 'ULTRASOUND.CANCEL_ORDER' | translate }}
           </button>
         }
-        <button class="btn-secondary" (click)="closeOrder()">
+        <button class="btn-secondary" data-testid="us-order-close" (click)="closeOrder()">
           {{ 'COMMON.CLOSE' | translate }}
         </button>
       </div>
@@ -312,14 +345,16 @@
   >
     <div
       class="modal modal-lg"
+      aria-labelledby="ultrasound-tab-dialog-2-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeOrderModal(); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
-        <h2>
+        <h2 id="ultrasound-tab-dialog-2-title">
           {{ (editingOrderId() ? 'ULTRASOUND.EDIT_ORDER' : 'ULTRASOUND.NEW_ORDER') | translate }}
         </h2>
         <button
@@ -327,7 +362,7 @@
           (click)="closeOrderModal()"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
@@ -354,7 +389,7 @@
             <label for="us-priority">{{ 'ULTRASOUND.PRIORITY' | translate }}</label>
             <select id="us-priority" [(ngModel)]="orderForm.priority">
               @for (p of priorities; track p) {
-                <option [value]="p">{{ p }}</option>
+                <option [value]="p">{{ p | enumLabel: 'imagingOrderPriority' }}</option>
               }
             </select>
           </div>
@@ -426,7 +461,9 @@
         </button>
         <button
           class="btn-primary"
-          [disabled]="orderSaving() || !orderForm.patientId"
+          [disabled]="orderSaving()"
+          [appSubmitGuard]="!orderForm.patientId"
+          [submitGuardFields]="['us-patient']"
           (click)="submitOrder()"
         >
           {{ 'COMMON.SAVE' | translate }}
@@ -446,20 +483,24 @@
   >
     <div
       class="modal modal-lg"
+      aria-labelledby="ultrasound-tab-dialog-3-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeReportModal(); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
-        <h2>{{ 'ULTRASOUND.RECORD_REPORT' | translate }} — {{ order.patientDisplayName }}</h2>
+        <h2 id="ultrasound-tab-dialog-3-title">
+          {{ 'ULTRASOUND.RECORD_REPORT' | translate }} — {{ order.patientDisplayName }}
+        </h2>
         <button
           class="modal-close"
           (click)="closeReportModal()"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
@@ -487,6 +528,8 @@
           <div class="field">
             <label for="rep-category">{{ 'ULTRASOUND.FINDING' | translate }} *</label>
             <select id="rep-category" [(ngModel)]="reportForm.findingCategory">
+              <!-- QA D1150: never preselected; the clinician picks the finding. -->
+              <option value="" disabled>{{ 'ULTRASOUND.FINDING_CHOOSE' | translate }}</option>
               @for (c of findingCategories; track c) {
                 <option [value]="c">{{ 'ULTRASOUND.FINDING_' + c | translate }}</option>
               }

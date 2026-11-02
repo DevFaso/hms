@@ -133,7 +133,6 @@ describe('AppointmentDetailComponent', () => {
     mockAppointmentService.update.calls.reset();
     component.rescheduleDate = '2099-01-01';
     component.rescheduleStart = '09:00:00';
-    component.rescheduleEnd = '09:30:00';
 
     component.submitReschedule();
 
@@ -142,6 +141,8 @@ describe('AppointmentDetailComponent', () => {
     expect(req.status).toBe('SCHEDULED');
     expect(req.status).not.toBe('RESCHEDULED');
     expect(req.appointmentDate).toBe('2099-01-01');
+    // QA D1060: the desk does not choose the length; the slot rules do.
+    expect(req.endTime).toBeUndefined();
   });
 
   it('markAsScheduled sends the SCHEDULE action for legacy stranded rows', () => {
@@ -177,8 +178,8 @@ describe('AppointmentDetailComponent', () => {
     fixture.detectChanges();
     expect(component.canComplete).toBeFalse();
     expect(fixture.nativeElement.querySelector('.btn-complete')).toBeNull();
-    // No-show stays: a patient checked in and left is recorded from here or the flow board.
-    expect(fixture.nativeElement.querySelector('.btn-noshow')).not.toBeNull();
+    // QA D946: a patient who arrived is not "absent"; leaving unseen is closed from the flow board.
+    expect(fixture.nativeElement.querySelector('.btn-noshow')).toBeNull();
 
     for (const status of ['CONFIRMED', 'IN_PROGRESS'] as const) {
       component.appointment.set({ ...mockAppointment, status });
@@ -187,6 +188,24 @@ describe('AppointmentDetailComponent', () => {
       expect(fixture.nativeElement.querySelector('.btn-complete'))
         .withContext(status)
         .not.toBeNull();
+    }
+    component.appointment.set(mockAppointment);
+  });
+
+  it('QA D946: Absent is offered on a SCHEDULED or CONFIRMED appointment, never once the patient arrived', () => {
+    for (const status of ['SCHEDULED', 'CONFIRMED'] as const) {
+      component.appointment.set({ ...mockAppointment, status });
+      fixture.detectChanges();
+      expect(fixture.nativeElement.querySelector('[data-testid="mark-no-show"]'))
+        .withContext(status)
+        .not.toBeNull();
+    }
+    for (const status of ['CHECKED_IN', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'] as const) {
+      component.appointment.set({ ...mockAppointment, status });
+      fixture.detectChanges();
+      expect(fixture.nativeElement.querySelector('[data-testid="mark-no-show"]'))
+        .withContext(status)
+        .toBeNull();
     }
     component.appointment.set(mockAppointment);
   });
@@ -208,5 +227,112 @@ describe('AppointmentDetailComponent', () => {
 
   it('canReschedule should be true for CONFIRMED status', () => {
     expect(component.canReschedule).toBeTrue();
+  });
+  describe('QA D1126 / D1132: a cancel or a no-show asks for the reason (clicked, not called)', () => {
+    const click = (selector: string): void => {
+      const el = fixture.nativeElement.querySelector(selector) as HTMLElement | null;
+      expect(el).withContext(selector).not.toBeNull();
+      el!.click();
+      fixture.detectChanges();
+    };
+    const typeReason = async (text: string): Promise<void> => {
+      const area = fixture.nativeElement.querySelector(
+        '[data-testid="drop-reason"]',
+      ) as HTMLTextAreaElement;
+      area.value = text;
+      area.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      await fixture.whenStable();
+    };
+
+    beforeEach(() => {
+      component.appointment.set({ ...mockAppointment, status: 'CONFIRMED' });
+      fixture.detectChanges();
+      mockAppointmentService.updateStatus.calls.reset();
+    });
+
+    it('the cancel dialog refuses a blank reason on click and sends the typed one', async () => {
+      click('.page-header .btn-danger');
+      expect(fixture.nativeElement.querySelector('[data-testid="drop-reason"]')).not.toBeNull();
+
+      click('[data-testid="drop-confirm"]');
+      expect(mockAppointmentService.updateStatus).not.toHaveBeenCalled();
+      expect(
+        fixture.nativeElement.querySelector('[data-testid="drop-reason-error"]'),
+      ).not.toBeNull();
+      const confirm = fixture.nativeElement.querySelector(
+        '[data-testid="drop-confirm"]',
+      ) as HTMLButtonElement;
+      expect(confirm.disabled).withContext('never silently disabled (D1089)').toBeFalse();
+
+      await typeReason('  Patient called to cancel  ');
+      click('[data-testid="drop-confirm"]');
+      expect(mockAppointmentService.updateStatus).toHaveBeenCalledWith(
+        'appt-1',
+        'CANCEL',
+        'Patient called to cancel',
+      );
+    });
+
+    it('the no-show button opens the same dialog and sends NO_SHOW with its reason', async () => {
+      click('[data-testid="mark-no-show"]');
+      expect(mockAppointmentService.updateStatus).not.toHaveBeenCalled();
+
+      click('[data-testid="drop-confirm"]');
+      expect(mockAppointmentService.updateStatus).not.toHaveBeenCalled();
+
+      await typeReason('No answer on three calls');
+      click('[data-testid="drop-confirm"]');
+      expect(mockAppointmentService.updateStatus).toHaveBeenCalledWith(
+        'appt-1',
+        'NO_SHOW',
+        'No answer on three calls',
+      );
+    });
+
+    it('QA D1124: before the start time Absent and Complete stay clickable and say why they refuse', () => {
+      component.appointment.set({
+        ...mockAppointment,
+        status: 'CONFIRMED',
+        appointmentDate: '2099-01-01',
+      });
+      fixture.detectChanges();
+      for (const [selector, reason] of [
+        ['[data-testid="mark-no-show"]', 'APPOINTMENTS.CANNOT_NO_SHOW_BEFORE_START'],
+        ['.btn-complete', 'APPOINTMENTS.CANNOT_COMPLETE_BEFORE_START'],
+      ] as const) {
+        const button = fixture.nativeElement.querySelector(selector) as HTMLButtonElement;
+        expect(button.disabled).withContext(`${selector} never silently disabled`).toBeFalse();
+        click(selector);
+        expect(button.nextElementSibling?.textContent?.trim()).withContext(selector).toBe(reason);
+      }
+      expect(fixture.nativeElement.querySelector('[data-testid="drop-reason"]'))
+        .withContext('the no-show dialog does not open before the start time')
+        .toBeNull();
+      expect(mockAppointmentService.updateStatus).not.toHaveBeenCalled();
+    });
+
+    it('shows the kept reason on the appointment', () => {
+      component.appointment.set({
+        ...mockAppointment,
+        status: 'CANCELLED',
+        statusReason: 'Doctor away',
+      });
+      fixture.detectChanges();
+      const row = fixture.nativeElement.querySelector(
+        '[data-testid="status-reason"]',
+      ) as HTMLElement;
+      expect(row?.textContent).toContain('Doctor away');
+      // QA D1171: its label is not the visit's "Reason" a second time.
+      const labels = Array.from(row.parentElement!.querySelectorAll('.field-label')).map((l) =>
+        l.textContent?.trim(),
+      );
+      expect(row.querySelector('.field-label')?.textContent?.trim()).toBe(
+        'APPOINTMENTS.STATUS_REASON_CANCELLED',
+      );
+      expect(new Set(labels).size)
+        .withContext('no label repeats in the appointment card')
+        .toBe(labels.length);
+    });
   });
 });

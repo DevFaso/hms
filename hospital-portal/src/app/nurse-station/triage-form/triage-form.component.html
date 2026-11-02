@@ -6,12 +6,15 @@
 >
   <div
     class="triage-dialog"
+    appModalDialog
+    aria-labelledby="triage-dialog-title"
+    (escaped)="onEscape()"
     (click)="$event.stopPropagation()"
     (keydown)="$event.stopPropagation()"
     tabindex="-1"
   >
     <header class="triage-dialog__header">
-      <h3>{{ 'TRIAGE.TITLE' | translate }}</h3>
+      <h3 id="triage-dialog-title">{{ 'TRIAGE.TITLE' | translate }}</h3>
       <button
         class="btn-close"
         (click)="dismissed.emit()"
@@ -25,16 +28,25 @@
     @if (encounter) {
       <div class="triage-dialog__patient-info">
         <div class="info-row">
-          <span class="label">{{ 'TRIAGE.PATIENT' | translate }}:</span>
+          <span class="label"
+            >{{ 'TRIAGE.PATIENT' | translate }}{{ 'COMMON.COLON' | translate }}</span
+          >
           <span class="value">{{ encounter.patientFullName || encounter.patientName }}</span>
         </div>
-        <div class="info-row">
-          <span class="label">{{ 'TRIAGE.ENCOUNTER' | translate }}:</span>
-          <span class="value">{{ encounter.id | slice: 0 : 8 }}</span>
-        </div>
+        @if (encounter.code) {
+          <div class="info-row">
+            <span class="label"
+              >{{ 'TRIAGE.ENCOUNTER' | translate }}{{ 'COMMON.COLON' | translate }}</span
+            >
+            <span class="value">{{ encounter.code }}</span>
+          </div>
+        }
         @if (encounter.chiefComplaint) {
           <div class="info-row">
-            <span class="label">{{ 'TRIAGE.CHIEF_COMPLAINT_CURRENT' | translate }}:</span>
+            <span class="label"
+              >{{ 'TRIAGE.CHIEF_COMPLAINT_CURRENT' | translate
+              }}{{ 'COMMON.COLON' | translate }}</span
+            >
             <span class="value">{{ encounter.chiefComplaint }}</span>
           </div>
         }
@@ -55,6 +67,8 @@
             name="esiScore"
             required
           >
+            <!-- QA D1158: never preset; the nurse chooses the acuity. -->
+            <option [ngValue]="null" disabled>{{ 'TRIAGE.ESI_CHOOSE' | translate }}</option>
             @for (opt of esiOptions; track opt) {
               <option [ngValue]="opt.value">
                 {{ opt.label }}
@@ -206,6 +220,23 @@
             />
           </div>
 
+          <!-- QA D1031: the antenatal fundal height, charted with the vitals.
+               QA D1077: never offered for a patient recorded as male. -->
+          @if (showFundalHeight()) {
+            <div class="form-group" data-testid="triage-fundal-height">
+              <label for="fundalHeightCm">{{ 'TRIAGE.FUNDAL_HEIGHT' | translate }}</label>
+              <input
+                id="fundalHeightCm"
+                type="number"
+                min="1"
+                step="1"
+                [ngModel]="fundalHeightCm()"
+                (ngModelChange)="fundalHeightCm.set($event)"
+                name="fundalHeightCm"
+              />
+            </div>
+          }
+
           <!-- NEWS2 parameters (P3 #25b) -->
           <div class="form-group">
             <label for="consciousness">{{ 'TRIAGE.CONSCIOUSNESS' | translate }}</label>
@@ -287,7 +318,13 @@
         <button type="button" class="btn btn-secondary" (click)="dismissed.emit()">
           {{ 'COMMON.CANCEL' | translate }}
         </button>
-        <button type="submit" class="btn btn-primary" [disabled]="!canSubmit">
+        <button
+          type="submit"
+          class="btn btn-primary"
+          [disabled]="saving()"
+          [appSubmitGuard]="submitBlockReason()"
+          [submitGuardFields]="submitGuardFieldIds()"
+        >
           @if (saving()) {
             <span>{{ 'COMMON.SAVING' | translate }}...</span>
           }

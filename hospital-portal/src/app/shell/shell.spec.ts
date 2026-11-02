@@ -1,15 +1,18 @@
-import { TestBed } from '@angular/core/testing';
+import { EmpiStatusService } from '../reception/empi-status.service';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { signal } from '@angular/core';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { provideRouter, Route } from '@angular/router';
+import { provideRouter, Route, Router } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { of } from 'rxjs';
 
-import { ShellComponent } from './shell';
+import { MOBILE_SIDEBAR_QUERY, ShellComponent } from './shell';
 import { AuthService } from '../auth/auth.service';
 import { PermissionService } from '../core/permission.service';
 import { RoleContextService } from '../core/role-context.service';
 import { NotificationService } from '../services/notification.service';
+import { expectKeyboardModal } from '../testing/modal-dialog-keyboard';
 import { ImpersonationService } from '../services/impersonation.service';
 import { IdleService } from '../core/idle.service';
 import { EmergencyBroadcastService } from '../services/emergency-broadcast.service';
@@ -47,6 +50,10 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
     wildcardPermission: boolean;
     /** When set, hasPermission answers from this list instead of the wildcard. */
     permissions?: string[];
+    /** QA D987: whether the EMPI matcher is on (default on). */
+    empiEnabled?: boolean | null;
+    /** Review round 16: the status read failed. */
+    empiFailed?: boolean;
   }): { items: NavItem[]; component: ShellComponent } {
     const authStub = jasmine.createSpyObj<AuthService>('AuthService', [
       'getUserProfile',
@@ -104,6 +111,16 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
         { provide: NotificationService, useValue: notifStub },
         { provide: ImpersonationService, useValue: impersonationStub },
         { provide: IdleService, useValue: idleStub },
+        {
+          provide: EmpiStatusService,
+          useValue: {
+            enabled: signal<boolean | null>(
+              opts.empiEnabled === undefined ? true : opts.empiEnabled,
+            ),
+            failed: signal(opts.empiFailed ?? false),
+            load: () => of(true),
+          },
+        },
       ],
     });
 
@@ -298,6 +315,29 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
     expect(hospitalAdmin).toContain('/admin/integrations/dhis2');
     // ADT intake is SUPER_ADMIN only, on the route and on the controller.
     expect(hospitalAdmin).not.toContain('/admin/adt-intake-configs');
+  });
+
+  it('QA D987: hides the duplicate-patient panel while the matcher is switched off', () => {
+    const { items } = createComponent({
+      activeRole: 'ROLE_RECEPTIONIST',
+      roles: ['ROLE_RECEPTIONIST'],
+      wildcardPermission: false,
+      empiEnabled: false,
+    });
+
+    expect(items.map((i) => i.route)).not.toContain('/reception/empi-candidates');
+  });
+
+  it('review round 16: a failed status read still offers the panel (the guard decides)', () => {
+    const { items } = createComponent({
+      activeRole: 'ROLE_RECEPTIONIST',
+      roles: ['ROLE_RECEPTIONIST'],
+      wildcardPermission: false,
+      empiEnabled: null,
+      empiFailed: true,
+    });
+
+    expect(items.map((i) => i.route)).toContain('/reception/empi-candidates');
   });
 
   it('hides the duplicate-patient panel from roles outside its route guard', () => {
@@ -1183,6 +1223,146 @@ describe('ShellComponent — inbox surfaces live in the topbar', () => {
     TestBed.inject(RoleContextService).markSessionResolved();
     fixture.detectChanges();
     expect(broadcastSpy().connect).toHaveBeenCalledTimes(1);
+  });
+
+  // QA D1125 (D1004 class, round 20): the bell panel and the profile menu
+  // moved no focus, and their Escape was bound on an aria-hidden backdrop that
+  // never receives a key, so Escape left them open.
+  for (const [what, testid] of [
+    ['notification panel', 'shell-bell'],
+    ['profile menu', 'shell-profile-btn'],
+  ]) {
+    it(`the ${what} is a keyboard modal: focus in, Escape closes, focus back to its button`, () => {
+      const fixture = build(['ROLE_DOCTOR'], 'ROLE_DOCTOR');
+      document.body.appendChild(fixture.nativeElement);
+      fixture.detectChanges();
+      const opener = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>(
+        `[data-testid="${testid}"]`,
+      )!;
+      expectKeyboardModal(fixture, opener);
+      fixture.destroy();
+    });
+  }
+
+  // QA D1153 / D1125 / D1004 (round 21): at 375 px the drawer never took
+  // focus, Escape from the Menu button did nothing and Tab walked to the
+  // language select behind the backdrop.
+  describe('the phone drawer is a keyboard modal', () => {
+    function phoneShell(): { fixture: ComponentFixture<ShellComponent>; menu: HTMLElement } {
+      spyOn(globalThis, 'matchMedia').and.callFake(
+        (q: string) => ({ matches: q === MOBILE_SIDEBAR_QUERY }) as MediaQueryList,
+      );
+      const fixture = build(['ROLE_PATIENT'], 'ROLE_PATIENT');
+      document.body.appendChild(fixture.nativeElement);
+      attached.push(fixture.nativeElement);
+      fixture.detectChanges();
+      const host = fixture.nativeElement as HTMLElement;
+      // The test browser is wider than a phone, so the CSS hides the Menu button.
+      const menu = host.querySelector<HTMLElement>('.mobile-toggle')!;
+      menu.style.display = 'inline-flex';
+      return { fixture, menu };
+    }
+
+    function openFromMenu(
+      fixture: ComponentFixture<ShellComponent>,
+      menu: HTMLElement,
+    ): HTMLElement {
+      menu.focus();
+      menu.click();
+      fixture.detectChanges();
+      TestBed.tick();
+      const aside = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>(
+        'aside.sidebar',
+      )!;
+      expect(aside.getAttribute('role')).toBe('dialog');
+      expect(aside.getAttribute('aria-modal')).toBe('true');
+      expect((aside.getAttribute('aria-label') ?? '').trim()).not.toBe('');
+      expect(aside.contains(document.activeElement))
+        .withContext('focus moved into the drawer')
+        .toBeTrue();
+      return aside;
+    }
+
+    function press(target: EventTarget, key: string, shiftKey = false): void {
+      target.dispatchEvent(
+        new KeyboardEvent('keydown', { key, shiftKey, bubbles: true, cancelable: true }),
+      );
+    }
+
+    const attached: HTMLElement[] = [];
+    afterEach(() => attached.splice(0).forEach((el) => el.remove()));
+
+    it('focus moves in, Escape closes it and focus is back on Menu', () => {
+      const { fixture, menu } = phoneShell();
+      openFromMenu(fixture, menu);
+      const mainArea = (fixture.nativeElement as HTMLElement).querySelector('.main-area')!;
+      expect(mainArea.hasAttribute('inert')).withContext('the page behind is inert').toBeTrue();
+      press(document.activeElement!, 'Escape');
+      fixture.detectChanges();
+      TestBed.tick();
+      expect(fixture.componentInstance.sidebarCollapsed()).toBeTrue();
+      expect(document.activeElement).withContext('focus back on Menu').toBe(menu);
+      expect(mainArea.hasAttribute('inert')).toBeFalse();
+      fixture.destroy();
+    });
+
+    it('Escape pressed with focus outside the drawer (on Menu, or fallen to the page) still closes it', () => {
+      const { fixture, menu } = phoneShell();
+      openFromMenu(fixture, menu);
+      (document.activeElement as HTMLElement).blur();
+      press(document.body, 'Escape');
+      fixture.detectChanges();
+      TestBed.tick();
+      expect(fixture.componentInstance.sidebarCollapsed()).toBeTrue();
+      expect(document.activeElement).toBe(menu);
+      fixture.destroy();
+    });
+
+    it('Tab and Shift+Tab stay inside the drawer', () => {
+      const { fixture, menu } = phoneShell();
+      const aside = openFromMenu(fixture, menu);
+      const focusable = Array.from(
+        aside.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled])',
+        ),
+      ).filter((el) => el.getClientRects().length > 0);
+      const last = focusable[focusable.length - 1];
+      last.focus();
+      press(last, 'Tab');
+      expect(document.activeElement)
+        .withContext('Tab from the last control wraps')
+        .toBe(focusable[0]);
+      press(focusable[0], 'Tab', true);
+      expect(document.activeElement).withContext('Shift+Tab from the first wraps').toBe(last);
+      // Focus that left the drawer is brought back in by Tab.
+      (document.activeElement as HTMLElement).blur();
+      press(document.body, 'Tab');
+      expect(aside.contains(document.activeElement)).toBeTrue();
+      fixture.destroy();
+    });
+
+    it('a navigation from the open drawer closes it and puts focus on the new page, not on Menu', async () => {
+      const { fixture, menu } = phoneShell();
+      openFromMenu(fixture, menu);
+      await TestBed.inject(Router).navigateByUrl('/');
+      fixture.detectChanges();
+      TestBed.tick();
+      expect(fixture.componentInstance.sidebarCollapsed()).toBeTrue();
+      const main = (fixture.nativeElement as HTMLElement).querySelector('#main-content');
+      expect(document.activeElement).withContext('focus on <main>').toBe(main);
+      fixture.destroy();
+    });
+
+    it('on a wide screen the expanded sidebar is a landmark, not a modal', () => {
+      spyOn(globalThis, 'matchMedia').and.callFake(() => ({ matches: false }) as MediaQueryList);
+      const fixture = build(['ROLE_PATIENT'], 'ROLE_PATIENT');
+      fixture.detectChanges();
+      const host = fixture.nativeElement as HTMLElement;
+      expect(fixture.componentInstance.sidebarCollapsed()).toBeFalse();
+      expect(host.querySelector('aside.sidebar')!.hasAttribute('role')).toBeFalse();
+      expect(host.querySelector('aside.sidebar')!.hasAttribute('aria-modal')).toBeFalse();
+      expect(host.querySelector('.main-area')!.hasAttribute('inert')).toBeFalse();
+    });
   });
 
   it('a provider user whose settings are being asked again keeps the provider home, never the hospital nav', () => {

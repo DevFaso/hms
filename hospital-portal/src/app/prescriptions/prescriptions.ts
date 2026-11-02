@@ -1,27 +1,33 @@
+import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
+import { textMatches } from '../shared/person-search';
 import {
   Component,
   computed,
   DestroyRef,
+  ElementRef,
   inject,
   OnInit,
   signal,
   ChangeDetectionStrategy,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { HttpErrorResponse } from '@angular/common/http';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { forkJoin, of, Subject } from 'rxjs';
-import { catchError, debounceTime, distinctUntilChanged, map, switchMap } from 'rxjs/operators';
+import { catchError, debounceTime, map, switchMap } from 'rxjs/operators';
 import {
   PrescriptionService,
   PrescriptionResponse,
   PrescriptionRequest,
   CommunityPharmacyService,
   CommunityPharmacyOption,
+  SignPrescriptionBody,
 } from '../services/prescription.service';
 import {
   DispenseResponse,
+  MedicationCatalogItemResponse,
   PharmacyService,
   RoutingDecisionResponse,
 } from '../services/pharmacy.service';
@@ -48,7 +54,14 @@ import { actionRoles } from '../core/action-permissions';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { serverInstant } from '../shared/date-utils';
 import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
+import { canonicalRoute } from '../shared/pipes/medication-route.pipe';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { isStepUpRefusal } from '../services/step-up';
+import { MfaService } from '../auth/mfa.service';
+import { refuseFields } from '../shared/forms/invalid-fields';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { refusalReason } from '../shared/refusal-reason';
 /**
  * The prescriber's list tabs (gap G10).
  *
@@ -77,6 +90,9 @@ export type PrescriptionStatusTab = Exclude<PrescriptionTab, 'all'>;
  * `labelKey` is the field name on purpose — check-i18n-referenced-keys.mjs
  * reads it, so a typo fails the gate instead of rendering the raw key.
  */
+/** QA D1096: the dose review dialog's reason field. */
+const DOSE_REVIEW_REASON_ID = 'rx-dose-review-reason';
+
 /** CANCELLED and DISCONTINUED: the prescriber withdrew the order, which the server treats as final. */
 export function isWithdrawnStatus(status: string | null | undefined): boolean {
   return status === 'CANCELLED' || status === 'DISCONTINUED';
@@ -143,6 +159,9 @@ export const PRESCRIPTION_TABS: readonly { id: PrescriptionTab; labelKey: string
   selector: 'app-prescriptions',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
+    PersonNamePipe,
+    ModalDialogDirective,
     PatientSublinePipe,
     ServerTimePipe,
     CommonModule,
@@ -173,6 +192,7 @@ export class PrescriptionsComponent implements OnInit {
   private readonly translate = inject(TranslateService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly auth = inject(AuthService);
+  private readonly mfa = inject(MfaService);
 
   /**
    * QA D427: the actions the API admits for this caller, so nobody is offered
@@ -302,6 +322,12 @@ export class PrescriptionsComponent implements OnInit {
 
   /* ── Pharmacist verification (Tier 2 item 33) ── */
   showVerifyModal = signal(false);
+  /** QA D1096: the paediatric dose review dialog. */
+  readonly doseReviewTarget = signal<PrescriptionResponse | null>(null);
+  readonly doseReviewError = signal('');
+  readonly doseReviewSaving = signal(false);
+  doseReviewReason = '';
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   verifyTarget = signal<PrescriptionResponse | null>(null);
   verifyNote = '';
   verifying = signal(false);
@@ -313,6 +339,8 @@ export class PrescriptionsComponent implements OnInit {
    * advisory. Surfaces the override checkbox in the form.
    */
   cdsCriticalBlocked = signal(false);
+  /** Round 18 (QA D935): a hard stop among the cards: no override is offered, the dose must change. */
+  readonly cdsHardStop = computed(() => this.cdsAdvisories().some((c) => !!c.hardStop));
 
   ngOnInit(): void {
     // Cross-tenant: hydrate URL scope before the first list fetch so
@@ -323,6 +351,7 @@ export class PrescriptionsComponent implements OnInit {
     this.load();
     this.loadPrescribers();
     this.initPatientSearch();
+    this.initCatalogSearch();
     this.initPharmacyHistory();
 
     const params = this.route.snapshot.queryParamMap;
@@ -371,6 +400,8 @@ export class PrescriptionsComponent implements OnInit {
    * with a reason. Every other field is read-only; the server refuses them.
    */
   editingSigned = signal(false);
+  /** QA D1098 class: an order awaiting the pharmacist's clarification was signed. */
+  editingClarification = signal(false);
 
   /** QA D670: the prescriber of record shown on a signed order's withdrawal form. */
   editingPrescriberName = signal('');
@@ -453,11 +484,60 @@ export class PrescriptionsComponent implements OnInit {
     };
   }
 
+  /**
+   * QA D922/D935: the hospital's catalogue items matching the typed name. A
+   * pick sends its id, so the catalogue's controlled flag and paediatric
+   * ceiling apply to the order (the server resolves a typed name too).
+   */
+  readonly catalogOptions = signal<MedicationCatalogItemResponse[]>([]);
+  private readonly catalogSearch$ = new Subject<string>();
+
+  initCatalogSearch(): void {
+    this.catalogSearch$
+      .pipe(
+        debounceTime(250),
+        switchMap((q) =>
+          q.length < 2
+            ? of([] as MedicationCatalogItemResponse[])
+            : this.pharmacyService.searchMedications(q, 0, 15).pipe(
+                map((page) => page.content ?? []),
+                catchError(() => of([] as MedicationCatalogItemResponse[])),
+              ),
+        ),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((items) => this.catalogOptions.set(items));
+  }
+
+  /**
+   * The text a catalogue option puts in the medication field: name, strength
+   * and form, so a tablet and a syrup of the same name and strength (one of
+   * them perhaps controlled) read apart in the list.
+   */
+  catalogLabel(item: MedicationCatalogItemResponse): string {
+    const strength = [item.strength, item.strengthUnit].filter((v) => !!v).join(' ');
+    const form = item.form ? this.translate.instant(`PHARMACY.FORM_OPTION.${item.form}`) : '';
+    return [item.nameFr, strength, form].filter((v) => !!v).join(' ');
+  }
+
+  /** The picked catalogue item, when the field holds one option's text exactly. */
+  readonly pickedCatalogItem = signal<MedicationCatalogItemResponse | null>(null);
+
+  onMedicationNameChange(value: string): void {
+    this.form.medicationName = value;
+    // Review of #975: two options reading the same must not resolve to the
+    // first one's id; the server then resolves (or refuses) the typed name.
+    const matches = this.catalogOptions().filter((o) => this.catalogLabel(o) === value);
+    const picked = matches.length === 1 ? matches[0] : null;
+    this.pickedCatalogItem.set(picked);
+    this.form.medicationCatalogItemId = picked ? picked.id : null;
+    if (!picked) this.catalogSearch$.next((value ?? '').trim());
+  }
+
   initPatientSearch(): void {
     this.patientSearch$
       .pipe(
         debounceTime(220),
-        distinctUntilChanged(),
         switchMap((q) => {
           this.patientSearchLoading.set(true);
           // ── TENANT ISOLATION: scope patient search to the request's hospital ──
@@ -553,6 +633,7 @@ export class PrescriptionsComponent implements OnInit {
 
   openCreate(): void {
     this.form = this.emptyForm();
+    this.resetCatalogPick();
     // QA D123: a clinician prescribing opens the form with THEMSELVES as the
     // prescriber, instead of an empty choice in a list of colleagues.
     this.form.staffId = this.ownPrescriberStaffId();
@@ -560,6 +641,7 @@ export class PrescriptionsComponent implements OnInit {
     this.editingId.set(null);
     this.editingWithdrawn.set(false);
     this.editingSigned.set(false);
+    this.editingClarification.set(false);
     this.selectedPatient.set(null);
     this.patientQuery.set('');
     this.formError.set('');
@@ -570,6 +652,7 @@ export class PrescriptionsComponent implements OnInit {
     // QA D660: a withdrawn order is read-only, every field; the server
     // refuses any edit of it, so no form is opened on one.
     if (isWithdrawnStatus(p.status)) return;
+    this.resetCatalogPick();
     this.form = {
       patientId: p.patientId ?? '',
       staffId: p.staffId ?? '',
@@ -577,13 +660,15 @@ export class PrescriptionsComponent implements OnInit {
       medicationName: p.medicationName ?? '',
       dosage: p.dosage ?? '',
       frequency: p.frequency ?? '',
-      route: p.route ?? '',
+      // QA D950: a stored "ORAL" opens on the form's own PO option.
+      route: canonicalRoute(p.route) ?? p.route ?? '',
       duration: p.duration ?? '',
       quantity: p.quantity ?? null,
       quantityUnit: p.quantityUnit ?? '',
       notes: p.notes ?? '',
       status: (p.status as PrescriptionRequest['status']) ?? 'DRAFT',
       takeHome: !!p.takeHome,
+      medicationCatalogItemId: p.medicationCatalogItemId ?? null,
     };
     this.selectedPatient.set({
       id: p.patientId ?? '',
@@ -600,6 +685,7 @@ export class PrescriptionsComponent implements OnInit {
     this.editingWithdrawn.set(isWithdrawnStatus(p.status));
     const signed = p.status === 'SIGNED';
     this.editingSigned.set(signed);
+    this.editingClarification.set(p.status === 'PENDING_CLARIFICATION');
     this.editingPrescriberName.set(p.staffFullName ?? '');
     if (signed) {
       // No withdrawal is pre-selected: the prescriber chooses one, deliberately.
@@ -610,8 +696,23 @@ export class PrescriptionsComponent implements OnInit {
     this.showModal.set(true);
   }
 
+  /**
+   * QA D660 / D1098 class: the withdrawal reason is asked of a signed order,
+   * and of an order awaiting clarification (signed before the pharmacist's
+   * question) once Cancelled or Discontinued is chosen; the server refuses
+   * either withdrawal without it.
+   */
+  withdrawalReasonShown(): boolean {
+    return (
+      this.editingSigned() || (this.editingClarification() && isWithdrawnStatus(this.form.status))
+    );
+  }
+
   /** QA D660: what the Save button waits for on a signed prescription. */
   signedWithdrawalIncomplete(): boolean {
+    if (this.editingClarification()) {
+      return isWithdrawnStatus(this.form.status) && !this.form.withdrawalReason?.trim();
+    }
     return (
       this.editingSigned() &&
       (!isWithdrawnStatus(this.form.status) || !this.form.withdrawalReason?.trim())
@@ -622,6 +723,17 @@ export class PrescriptionsComponent implements OnInit {
     this.showModal.set(false);
     this.formError.set('');
     this.resetCdsState();
+    this.resetCatalogPick();
+  }
+
+  /**
+   * Review of #975: the previous form's catalogue pick (and its "controlled"
+   * hint) is not carried into the next order opened. The options stay: the
+   * search skips a repeated query, so clearing them would leave a re-typed
+   * name with nothing to pick.
+   */
+  private resetCatalogPick(): void {
+    this.pickedCatalogItem.set(null);
   }
 
   /**
@@ -759,8 +871,10 @@ export class PrescriptionsComponent implements OnInit {
         this.deleting.set(false);
         this.load();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('PRESCRIPTIONS.TOAST.DELETE_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PRESCRIPTIONS.TOAST.DELETE_FAILED'),
+        );
         this.deleting.set(false);
       },
     });
@@ -773,7 +887,10 @@ export class PrescriptionsComponent implements OnInit {
    * — so this is presentation only: it hides a button that would 403.
    */
   canSign(p: PrescriptionResponse): boolean {
-    if (!this.canSignRole() || this.isOtherPrescriber(p)) return false;
+    // QA D934: a nurse's or midwife's draft is signed by a doctor of the hospital.
+    if (!this.canSignRole() || (this.isOtherPrescriber(p) && !p.awaitingPhysicianSignature)) {
+      return false;
+    }
     return p.status === 'DRAFT' || p.status === 'PENDING_SIGNATURE';
   }
 
@@ -867,6 +984,83 @@ export class PrescriptionsComponent implements OnInit {
     );
   }
 
+  /* ── Paediatric dose review (round 19, QA D1096) ───────────────────── */
+
+  /** Pharmacists (the verify roles) and physicians may record the review. */
+  private static readonly DOSE_REVIEWER_ROLES = [
+    ...PrescriptionsComponent.VERIFIER_ROLES,
+    'ROLE_DOCTOR',
+  ];
+
+  /** The order waits for its paediatric dose review: the row says so to everyone. */
+  awaitsDoseReview(p: PrescriptionResponse): boolean {
+    return (
+      !!p.pediatricDoseReviewRequired && !p.pediatricDoseReviewedAt && !isWithdrawnStatus(p.status)
+    );
+  }
+
+  /**
+   * Offered to a pharmacist or a physician on an order awaiting its review,
+   * never to its own prescriber (the server refuses that too, with a reason).
+   */
+  canRecordDoseReview(p: PrescriptionResponse): boolean {
+    if (!this.awaitsDoseReview(p)) return false;
+    const own = this.ownPrescriberStaffId();
+    if (own && p.staffId === own) return false;
+    return this.roleContext.hasAnyActiveRole(PrescriptionsComponent.DOSE_REVIEWER_ROLES);
+  }
+
+  openDoseReview(p: PrescriptionResponse): void {
+    this.doseReviewTarget.set(p);
+    this.doseReviewReason = '';
+    this.doseReviewError.set('');
+  }
+
+  closeDoseReview(): void {
+    this.doseReviewTarget.set(null);
+    this.doseReviewReason = '';
+    this.doseReviewError.set('');
+  }
+
+  /**
+   * The submit button stays enabled: a missing reason is said in the dialog
+   * (QA D1089 class - a disabled button never shows its message), and every
+   * server refusal (own order, not a pharmacist or physician) is shown there.
+   */
+  submitDoseReview(): void {
+    const target = this.doseReviewTarget();
+    if (!target || this.doseReviewSaving()) return;
+    if (!this.doseReviewReason.trim()) {
+      // QA D1143: said once, under the reason box (the dialog-level alert is
+      // kept for the server's refusals), not twice.
+      this.doseReviewError.set('');
+      refuseFields(
+        this.host.nativeElement,
+        [DOSE_REVIEW_REASON_ID],
+        [DOSE_REVIEW_REASON_ID],
+        this.translate.instant('PRESCRIPTIONS.DOSE_REVIEW.REASON_REQUIRED'),
+      );
+      return;
+    }
+    refuseFields(this.host.nativeElement, [], [DOSE_REVIEW_REASON_ID], '');
+    this.doseReviewSaving.set(true);
+    this.prescriptionService.recordPediatricDoseReview(target.id, this.doseReviewReason).subscribe({
+      next: () => {
+        this.doseReviewSaving.set(false);
+        this.toast.success(this.translate.instant('PRESCRIPTIONS.DOSE_REVIEW.RECORDED'));
+        this.closeDoseReview();
+        this.load();
+      },
+      error: (err: unknown) => {
+        this.doseReviewSaving.set(false);
+        this.doseReviewError.set(
+          this.extractErrorMessage(err) ||
+            this.refusalText(err, 'PRESCRIPTIONS.DOSE_REVIEW.FAILED'),
+        );
+      },
+    });
+  }
+
   openVerifyModal(p: PrescriptionResponse): void {
     this.verifyTarget.set(p);
     this.verifyNote = '';
@@ -904,12 +1098,106 @@ export class PrescriptionsComponent implements OnInit {
     });
   }
 
+  /**
+   * Round 18: the order a controlled-drug signature is being re-authenticated
+   * for, and what the prescriber types: their TOTP code when an authenticator
+   * is enrolled, else their password. Cleared after every attempt that ends
+   * the dialog, so nothing is kept between signatures.
+   */
+  readonly signReauthTarget = signal<PrescriptionResponse | null>(null);
+  readonly signReauthUsesCode = signal(false);
+  readonly signReauthError = signal('');
+  signReauthSecret = '';
+  /** Round 18: the sign dialog asks for the re-authentication (a controlled drug, or a step-up refusal). */
+  readonly signNeedsSecret = signal(false);
+  /**
+   * QA D1183 (round 23, portal half): the critical allergy cards the server
+   * answered the signature with (a documented allergy covers the drug, or
+   * "Vérification des allergies impossible" for a drug name it cannot place
+   * while the patient has a drug-class allergy). Signing then needs the
+   * prescriber's reason, sent as `allergyOverrideReason`; without this the
+   * order could never be signed.
+   */
+  readonly signAllergyCards = signal<CdsCard[]>([]);
+  signAllergyReason = '';
+
   signPrescription(p: PrescriptionResponse): void {
+    if (p.controlledSubstance) {
+      this.openSignReauth(p);
+      return;
+    }
+    this.doSign(p);
+  }
+
+  openSignReauth(p: PrescriptionResponse): void {
+    this.actionError.set('');
+    this.signReauthSecret = '';
+    this.signReauthError.set('');
+    this.signReauthUsesCode.set(false);
+    this.signNeedsSecret.set(true);
+    this.signReauthTarget.set(p);
+    this.mfa.getStatus().subscribe({
+      next: (status) => this.signReauthUsesCode.set(!!status?.mfaEnabled),
+      error: () => this.signReauthUsesCode.set(false),
+    });
+  }
+
+  /** QA D1183: the sign dialog with the allergy cards and the reason (and the secret again for a controlled drug). */
+  private openSignAllergy(p: PrescriptionResponse, cards: CdsCard[]): void {
+    const needsSecret = this.signNeedsSecret() || !!p.controlledSubstance;
+    if (needsSecret && !this.signReauthTarget()) {
+      this.openSignReauth(p);
+    }
+    this.signReauthSecret = '';
+    this.signReauthError.set('');
+    this.signAllergyReason = '';
+    this.signAllergyCards.set(cards);
+    this.signNeedsSecret.set(needsSecret);
+    this.signReauthTarget.set(p);
+  }
+
+  closeSignReauth(): void {
+    this.signReauthSecret = '';
+    this.signReauthError.set('');
+    this.signAllergyReason = '';
+    this.signAllergyCards.set([]);
+    this.signNeedsSecret.set(false);
+    this.signReauthTarget.set(null);
+  }
+
+  /** What the sign dialog still lacks before it can send. */
+  signDialogIncomplete(): boolean {
+    return (
+      (this.signNeedsSecret() && !this.signReauthSecret.trim()) ||
+      (this.signAllergyCards().length > 0 && !this.signAllergyReason.trim())
+    );
+  }
+
+  submitSignReauth(): void {
+    const target = this.signReauthTarget();
+    if (!target || this.signDialogIncomplete() || this.signingId()) return;
+    const body: SignPrescriptionBody = {};
+    if (this.signNeedsSecret()) {
+      const secret = this.signReauthSecret;
+      if (this.signReauthUsesCode()) body.mfaCode = secret.trim();
+      else body.password = secret;
+    }
+    if (this.signAllergyCards().length > 0) {
+      body.allergyOverrideReason = this.signAllergyReason.trim();
+    }
+    this.doSign(target, body);
+  }
+
+  private doSign(p: PrescriptionResponse, body?: SignPrescriptionBody): void {
     this.actionError.set('');
     this.signingId.set(p.id);
-    this.prescriptionService.sign(p.id).subscribe({
+    const signed$ = body
+      ? this.prescriptionService.sign(p.id, body)
+      : this.prescriptionService.sign(p.id);
+    signed$.subscribe({
       next: (signed) => {
         this.toast.success(this.translate.instant('PRESCRIPTIONS.TOAST.SIGNED'));
+        this.closeSignReauth();
         // QA D793: the signature repeats the non-blocking advisories (a
         // beta-lactam cross-reactivity), already in the reader's language.
         for (const card of signed?.cdsAdvisories ?? []) {
@@ -926,10 +1214,39 @@ export class PrescriptionsComponent implements OnInit {
         // outstanding. Collapsing those into one generic string would leave a
         // prescriber with no idea what to do next.
         const msg = this.extractErrorMessage(err);
+        this.signingId.set(null);
+        // QA D1183 (round 23): the allergy stop at the signature answers with
+        // its critical cards; the dialog shows them and asks for the reason.
+        const cards = this.extractCdsCards(err);
+        if (cards.length > 0 && !body?.allergyOverrideReason) {
+          this.openSignAllergy(p, cards);
+          return;
+        }
+        // Round 18: a refused re-authentication (missing, wrong, locked) is
+        // shown in the sign dialog, which opens if the list did not know the
+        // drug was controlled; the secret typed is cleared either way.
+        if (err instanceof HttpErrorResponse && isStepUpRefusal(err)) {
+          this.signReauthSecret = '';
+          if (!this.signReauthTarget()) {
+            this.openSignReauth(p);
+          }
+          this.signNeedsSecret.set(true);
+          this.signReauthError.set(
+            msg || this.translate.instant('PRESCRIPTIONS.SIGN_REAUTH.FAILED'),
+          );
+          return;
+        }
         const text = msg || this.refusalText(err, 'PRESCRIPTIONS.TOAST.SIGN_FAILED');
+        this.closeSignReauth();
         this.actionError.set(text);
         this.toast.error(text);
-        this.signingId.set(null);
+        // QA D1142: a business refusal (400) can leave state behind on the
+        // order — one saved before the paediatric dose-review gate is now
+        // flagged as awaiting its review — so that row is read again and the
+        // reviewer's "Record the dose review" action appears on it.
+        if (err instanceof HttpErrorResponse && err.status === 400) {
+          this.refreshRow(p.id);
+        }
       },
     });
   }
@@ -964,6 +1281,22 @@ export class PrescriptionsComponent implements OnInit {
    * truncated.
    */
   private readonly pageRowCount = signal(0);
+
+  /** Re-reads one order and puts it back in place (the rest of the page is untouched). */
+  private refreshRow(id: string): void {
+    this.prescriptionService
+      .getById(id)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (fresh) => {
+          if (!fresh?.id) return;
+          this.prescriptions.update((rows) => rows.map((r) => (r.id === fresh.id ? fresh : r)));
+          this.applyFilter();
+        },
+        // The refusal is already shown; a failed re-read changes nothing.
+        error: () => undefined,
+      });
+  }
 
   load(): void {
     this.loading.set(true);
@@ -1109,9 +1442,9 @@ export class PrescriptionsComponent implements OnInit {
     if (term) {
       list = list.filter(
         (p) =>
-          (p.patientFullName ?? '').toLowerCase().includes(term) ||
+          textMatches(p.patientFullName, term) ||
           (p.medicationName ?? '').toLowerCase().includes(term) ||
-          (p.staffFullName ?? '').toLowerCase().includes(term),
+          textMatches(p.staffFullName, term),
       );
     }
     this.filtered.set(list);

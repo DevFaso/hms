@@ -1,3 +1,5 @@
+import { InlineDiscardAskComponent } from '../shared/a11y/inline-discard-ask.component';
+import { InlineSubFormDirective } from '../shared/a11y/inline-sub-form.directive';
 import { Subscription } from 'rxjs';
 import {
   Component,
@@ -30,6 +32,9 @@ import {
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { toServerDateTime, localDateString } from '../shared/date-utils';
 import { OrgTextPipe } from '../shared/pipes/org-text.pipe';
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { refusalReason } from '../shared/refusal-reason';
 
 /* ── View state types ── */
 
@@ -170,7 +175,18 @@ function linkKey(serviceId: string, hospitalId: string): string {
 @Component({
   selector: 'app-platform',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule, EnumLabelPipe, OrgTextPipe],
+  imports: [
+    InlineDiscardAskComponent,
+    InlineSubFormDirective,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+    OrgTextPipe,
+    SubmitGuardDirective,
+    ModalDialogDirective,
+  ],
   templateUrl: './platform.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './platform.scss',
@@ -362,8 +378,10 @@ export class PlatformComponent implements OnInit {
         this.toast.success(this.translate.instant('PLATFORM.TOAST.SNAPSHOT_EXPORTED'));
         this.saving.set(false);
       },
-      error: () => {
-        this.toast.error(this.translate.instant('PLATFORM.TOAST.SNAPSHOT_EXPORT_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PLATFORM.TOAST.SNAPSHOT_EXPORT_FAILED'),
+        );
         this.saving.set(false);
       },
     });
@@ -560,6 +578,8 @@ export class PlatformComponent implements OnInit {
   }
 
   changeServiceStatus(service: OrgServiceResponse, newStatus: PlatformServiceStatus): void {
+    // QA D1124: the current status is a pressed toggle, not a dead button; choosing it again changes nothing.
+    if (service.status === newStatus) return;
     this.saving.set(true);
     this.platformSvc
       .updateOrgService(service.organizationId, service.id, { status: newStatus })
@@ -922,11 +942,13 @@ export class PlatformComponent implements OnInit {
     const body = (err as { error?: ApiErrorBody | null } | null)?.error;
     const fieldErrors = body?.fieldErrors;
     if (fieldErrors && Object.keys(fieldErrors).length > 0) {
+      // QA D1079: the colon is the reader's ("Fournisseur : …" in French).
+      const colon = this.translate.instant('COMMON.COLON');
       const details = Object.entries(fieldErrors)
         .map(([field, message]) => {
           const labelKey = FIELD_LABEL_KEYS[field];
           const label = labelKey ? this.translate.instant(labelKey) : field;
-          return `${label}: ${message}`;
+          return `${label}${colon} ${message}`;
         })
         .join('; ');
       return this.translate.instant('PLATFORM.TOAST.VALIDATION_FAILED', { errors: details });

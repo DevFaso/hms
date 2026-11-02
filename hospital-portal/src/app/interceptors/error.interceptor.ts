@@ -28,6 +28,8 @@ import { ImpersonationService } from '../services/impersonation.service';
 import { DowntimeService } from '../services/downtime.service';
 import { STEP_UP_REQUEST, isStepUpRefusal } from '../services/step-up';
 import { BACKGROUND_REQUEST } from '../services/ws-transport';
+import { ToastService } from '../core/toast.service';
+import { CSRF_REPLAY, isCsrfRefusal } from './csrf.interceptor';
 
 const SILENT_403_PATTERNS = [
   /\/hospitals(\?|$|\/$)/,
@@ -79,6 +81,31 @@ const PAGE_HANDLED_403_ACTION_PATTERNS = [
   /\/prescriptions\/[^/?]+(\?|$)/,
   // QA D661: a refused referral action is reported by the page's toast.
   /\/referrals\/[^/?]+\/(acknowledge|schedule|start|complete|reject|cancel|submit)(\?|$)/,
+  // QA D965: the reorder-alert trigger reports its refusal in the inventory
+  // page's toast; the redirect replaced the stock screen. Listed by endpoint,
+  // not as a blanket /pharmacy/ (review of #975): a write whose page has no
+  // error handler must still reach the 403 page rather than fail silently.
+  /\/pharmacy\/inventory\/reorder-alerts(\/|\?|$)/,
+  // QA D995/D933: every encounter workflow action (triage, intake, notes,
+  // sign, co-sign, checkout, LWBS, status steps) and every discharge write is
+  // answered in the open form or a toast; a 403 page lost the typed form.
+  /\/encounters\/[^/?]+\/(triage|complete-triage|nursing-intake|notes|notes\/addendums|notes\/sign|notes\/cosign|checkout|close-unseen|start|complete-examination|ready-for-discharge|medical-certificate)(\?|$)/,
+  /\/discharge-summaries\/[^/?]+(\/finalize)?(\?|$)/,
+  /\/discharge-approvals\/[^/?]+\/(approve|reject|cancel)(\?|$)/,
+  // QA D930 class (round 16 siblings): an author check on an order or a draft
+  // read (imaging order cancel or signature, imaging report revise/sign/void,
+  // ultrasound order edit or cancel, OB/GYN referral cancel, transfusion
+  // request cancel) is answered in the page's toast with the server's reason.
+  /\/imaging\/orders\/[^/?]+\/(status|signature)(\?|$)/,
+  /\/imaging\/results\/[^/?]+(\/sign|\/status)?(\?|$)/,
+  /\/ultrasound\/orders\/[^/?]+(\/cancel)?(\?|$)/,
+  /\/referrals\/obgyn\/[^/?]+\/cancel(\?|$)/,
+  /\/transfusions\/requests\/[^/?]+\/cancel(\?|$)/,
+  // Product decision 2026-10-28 (QA D930 class): a procedure order is ended
+  // by the clinician who placed it (or a physician, for a nurse's or a
+  // midwife's order); the refusal of a cancel, or of CANCELLED sent through
+  // the update, is shown in the procedure page's toast.
+  /\/procedure-orders\/[^/?]+(\/cancel)?(\?|$)/,
 ];
 
 const SILENT_401_PATTERNS = [/\/chat\/mark-read\//];
@@ -141,6 +168,21 @@ const HOSPITAL_SCOPE_REFUSED = 'hospital_scope_refused';
  * The hospital a NO_LONGER_PERMITTED refusal names: the one refused, which is
  * not necessarily the selection (a stale link to B while A is selected).
  */
+/**
+ * QA D995 (round 17): a write refused by a business rule the server explains
+ * (`ClientSafeAccessDeniedException`: not the author, not the signing
+ * physician…) carries its reason in `message` and no `code`; the opaque
+ * role refusal carries `code: 'ACCESS_DENIED'`. The reason is the page's
+ * answer, never a redirect that replaces the form the user was typing in.
+ * The choke point for every write, so no page can be forgotten again (the
+ * treatment-plan form was, after the D995 list fixed the note's sign).
+ */
+export function clientSafeRefusal(error: HttpErrorResponse): string | null {
+  const body = error.error as { message?: unknown; code?: unknown } | null;
+  if (!body || typeof body !== 'object' || body.code !== undefined) return null;
+  return typeof body.message === 'string' && body.message.trim() ? body.message.trim() : null;
+}
+
 function refusedHospitalId(error: HttpErrorResponse): string | null {
   const body = error.error as { hospitalId?: unknown } | null;
   return body && typeof body === 'object' && typeof body.hospitalId === 'string'
@@ -323,6 +365,7 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
   const downtime = inject(DowntimeService);
   const sessionScope = inject(SessionScopeService);
   const roleContext = inject(RoleContextService);
+  const toast = inject(ToastService);
 
   return next(req).pipe(
     catchError((error: HttpErrorResponse) => {
@@ -392,6 +435,14 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
         // why their save failed.
         const body = error.error as { message?: string } | null;
         downtime.markReadOnly(body?.message ?? null);
+      } else if (isCsrfRefusal(error)) {
+        // QA D1145: a stale CSRF token is not a forbidden page. The CSRF
+        // interceptor (outside this one) fetches a fresh token and replays
+        // once; only the replay's refusal is reported, on the page.
+        const message = (error.error as { message?: unknown } | null)?.message;
+        if (req.context.get(CSRF_REPLAY) && typeof message === 'string' && message.trim()) {
+          toast.error(message.trim());
+        }
       } else if (error.status === 403 && mfaStepUpRefusal(error) !== null) {
         // A refused MFA step-up: rethrown to the page, no redirect.
       } else if (error.status === 403 && hospitalScopeRefusal(error) !== null) {
@@ -412,8 +463,22 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
         const isPageHandledAction =
           req.method !== 'GET' &&
           PAGE_HANDLED_403_ACTION_PATTERNS.some((pattern) => pattern.test(req.url));
+        // Not for a background write (silent) nor the auth endpoints, whose
+        // pages show their own refusal inline.
+        const businessRefusal =
+          !isPageHandledAction &&
+          !isSilent &&
+          !req.url.includes('/auth/') &&
+          req.method !== 'GET' &&
+          req.method !== 'HEAD'
+            ? clientSafeRefusal(error)
+            : null;
         if (isPageHandledAction) {
           // The page's error handler shows the refusal; no redirect.
+        } else if (businessRefusal !== null) {
+          // QA D995: the server's reason, on the page the user is on. A page
+          // that reports it too shows one toast (ToastService drops a duplicate).
+          toast.error(businessRefusal);
         } else if (isSilent) {
           reportSilent403(http, req);
         } else if (!isAuditCall) {

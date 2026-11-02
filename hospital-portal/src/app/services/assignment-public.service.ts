@@ -43,4 +43,16 @@ export class AssignmentPublicService {
       confirmationCode,
     });
   }
+
+  /**
+   * QA D1123 ("I have a code"): activation by the registered phone number and
+   * the one-time code from the SMS, for a holder with no e-mail link.
+   * No authentication required.
+   */
+  verifyByPhone(phone: string, confirmationCode: string): Observable<AssignmentPublicView> {
+    return this.http.post<AssignmentPublicView>('/assignments/public/activate-by-phone', {
+      phone,
+      confirmationCode,
+    });
+  }
 }

@@ -16,6 +16,8 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EmpiCandidateMatch, EmpiCandidateQuery, EmpiService } from '../../services/empi.service';
 import { ToastService } from '../../core/toast.service';
 import { RoleContextService } from '../../core/role-context.service';
+import { MeasurePipe } from '../../shared/pipes/measure.pipe';
+import { refusalReason } from '../../shared/refusal-reason';
 
 interface CandidateFormState {
   firstName: string;
@@ -52,7 +54,7 @@ const SEX_OPTIONS: string[] = ['F', 'M', 'X'];
 @Component({
   selector: 'app-empi-candidates-panel',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [MeasurePipe, CommonModule, FormsModule, TranslateModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="empi-panel" data-testid="empi-candidates-panel">
@@ -170,7 +172,7 @@ const SEX_OPTIONS: string[] = ['F', 'M', 'X'];
                       [class.empi-panel__score--medium]="match.score >= 0.7 && match.score < 0.85"
                       [class.empi-panel__score--low]="match.score < 0.7"
                     >
-                      {{ (match.score * 100 | number: '1.0-1') + '%' }}
+                      {{ match.score * 100 | measure: '%' }}
                     </span>
                   </td>
                   <td>
@@ -236,9 +238,9 @@ const SEX_OPTIONS: string[] = ['F', 'M', 'X'];
         @if (isAdmin && mergeSelection().length === 2) {
           <div class="empi-panel__merge-bar" data-testid="empi-merge-bar">
             <p>
-              {{ 'EMPI.MERGE_PRIMARY_LABEL' | translate }}:
+              {{ 'EMPI.MERGE_PRIMARY_LABEL' | translate }}{{ 'COMMON.COLON' | translate }}
               <strong>{{ mergeSelection()[0].displayName }}</strong>
-              · {{ 'EMPI.MERGE_SECONDARY_LABEL' | translate }}:
+              · {{ 'EMPI.MERGE_SECONDARY_LABEL' | translate }}{{ 'COMMON.COLON' | translate }}
               {{ mergeSelection()[1].displayName }}
             </p>
             <div class="actions">
@@ -512,8 +514,8 @@ export class EmpiCandidatesPanelComponent {
           matches.filter((match) => match.patientId !== secondary.patientId),
         );
       },
-      error: () => {
-        this.toast.error(this.translate.instant('EMPI.TOAST.MERGE_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('EMPI.TOAST.MERGE_FAILED'));
         this.merging.set(false);
         this.mergeArmed.set(false);
       },

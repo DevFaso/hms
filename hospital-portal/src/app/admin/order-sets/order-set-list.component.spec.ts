@@ -9,6 +9,7 @@ import { OrderSetService, OrderSetSummary } from '../../services/order-set.servi
 import { RoleContextService } from '../../core/role-context.service';
 import { ToastService } from '../../core/toast.service';
 import { AuthService } from '../../auth/auth.service';
+import { answerReasonDialog, reasonDialog } from '../../shared/reason-dialog/reason-dialog.testing';
 
 describe('OrderSetListComponent', () => {
   let fixture: ComponentFixture<OrderSetListComponent>;
@@ -113,5 +114,19 @@ describe('OrderSetListComponent', () => {
       ).not.toBeNull();
       done();
     }, DEBOUNCE_WAIT_MS);
+  });
+
+  // QA D1201 (round 22): the deactivation reason is asked in the shared dialog, not a prompt.
+  it('QA D1201: deactivating asks the reason in the page and sends it with the actor', () => {
+    fixture.detectChanges();
+    (fixture.componentInstance as unknown as { deactivate(o: OrderSetSummary): void }).deactivate(
+      sample,
+    );
+    expect(reasonDialog(fixture)).not.toBeNull();
+    answerReasonDialog(fixture, '');
+    expect(svc.deactivate).not.toHaveBeenCalled();
+    answerReasonDialog(fixture, 'Remplacé par la version 3');
+    expect(svc.deactivate).toHaveBeenCalledWith('os-1', 'Remplacé par la version 3', 'staff-1');
+    expect(reasonDialog(fixture)).toBeNull();
   });
 });

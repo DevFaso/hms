@@ -95,7 +95,10 @@ class NurseDashboardServiceImplTest {
         assertEquals(1, result.size());
         PatientResponseDTO dto = result.get(0);
 
-        assertEquals("Jane A. Doe", dto.getDisplayName());
+        // Changed in round 17 (QA D1036): the live name on the patient record
+        // wins over the registration's copy, which is taken once at
+        // registration and went stale when the name was corrected.
+        assertEquals("Jane Doe", dto.getDisplayName());
         assertEquals("B-12", dto.getRoom());
         assertEquals("B-12", dto.getBed());
         assertEquals("MRN-42", dto.getMrn());

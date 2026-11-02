@@ -92,13 +92,14 @@
                 }
                 @if (enc.diagnosisSummary) {
                   <div class="detail-item detail-item-wide">
-                    <span class="dl">{{ 'PORTAL.VISITS.DIAGNOSIS' | translate }}</span>
+                    <span class="dl">{{ 'PORTAL.VISITS.ASSESSMENT' | translate }}</span>
                     <span class="dv">{{ enc.diagnosisSummary }}</span>
                   </div>
                 }
                 <div class="detail-item">
                   <span class="dl">{{ 'PORTAL.VISITS.STATUS' | translate }}</span>
-                  <span class="dv portal-status-chip" [attr.data-status]="enc.status">{{
+                  {{ ' '
+                  }}<span class="dv portal-status-chip" [attr.data-status]="enc.status">{{
                     enc.status | enumLabel: 'encounterStatus'
                   }}</span>
                 </div>

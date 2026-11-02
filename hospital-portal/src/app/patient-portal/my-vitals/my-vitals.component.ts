@@ -125,6 +125,50 @@ export class MyVitalsComponent implements OnInit {
     return localizeDecimals(ranges[type?.toUpperCase()] || '');
   }
 
+  /**
+   * QA D980: a reading outside the normal range shown under it is flagged
+   * (142/90 read as normal). The same bounds as {@link getNormalRange}; a
+   * pressure is high when either number is above 120/80 and low when either
+   * is below 90/60.
+   */
+  rangeFlag(v: VitalSignSummary): 'HIGH' | 'LOW' | null {
+    const type = v.type?.toUpperCase();
+    // The range printed is in one unit; a reading in another is not compared.
+    const unit = (v.unit ?? '').trim().toLowerCase();
+    const expected: Record<string, string[]> = {
+      BLOOD_PRESSURE: ['mmhg', ''],
+      HEART_RATE: ['bpm', '/min', ''],
+      TEMPERATURE: ['°c', 'c', ''],
+      OXYGEN_SATURATION: ['%', ''],
+      RESPIRATORY_RATE: ['breaths/min', '/min', ''],
+      BMI: ['kg/m²', 'kg/m2', ''],
+    };
+    if (!expected[type]?.includes(unit)) return null;
+    const numbers = (v.value ?? '')
+      .split('/')
+      .map((part) => Number.parseFloat(part.replace(',', '.')))
+      .filter((n) => Number.isFinite(n));
+    if (type === 'BLOOD_PRESSURE') {
+      if (numbers.length !== 2) return null;
+      const [systolic, diastolic] = numbers;
+      if (systolic > 120 || diastolic > 80) return 'HIGH';
+      if (systolic < 90 || diastolic < 60) return 'LOW';
+      return null;
+    }
+    const bounds: Record<string, [number, number]> = {
+      HEART_RATE: [60, 100],
+      TEMPERATURE: [36.1, 37.2],
+      OXYGEN_SATURATION: [95, 100],
+      RESPIRATORY_RATE: [12, 20],
+      BMI: [18.5, 24.9],
+    };
+    const range = bounds[type];
+    if (!range || numbers.length !== 1) return null;
+    if (numbers[0] > range[1]) return 'HIGH';
+    if (numbers[0] < range[0]) return 'LOW';
+    return null;
+  }
+
   /** QA D344: a reading in the patient's notation ("37,9" in French). */
   displayValue(value: string): string {
     return localizeDecimals(value ?? '');

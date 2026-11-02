@@ -25,6 +25,34 @@ public interface BillingInvoiceService {
      * (or verifies a proxy grant); nothing else calls this.
      */
     Page<BillingInvoiceResponseDTO> getInvoicesForPortalPatient(UUID patientId, Pageable pageable, Locale locale);
+
+    /**
+     * QA D974: a discount, a waiver or a credit note on an issued invoice, with
+     * its mandatory reason; the total is lowered and the row audited.
+     */
+    BillingInvoiceResponseDTO addAdjustment(UUID invoiceId, com.example.hms.payload.dto.InvoiceAdjustmentRequestDTO request,
+                                            UUID staffId, Locale locale);
+
+    /** QA D974: the discounts, waivers and credit notes of an invoice in the caller's scope. */
+    List<com.example.hms.payload.dto.InvoiceAdjustmentResponseDTO> listAdjustments(UUID invoiceId);
+
+    /**
+     * QA D1105: reverses one discount, waiver or credit note with its
+     * mandatory reason: the amount goes back on the total and the status
+     * follows the money already received, which stays recorded (a folded
+     * check-in copay is never touched). Audited, ids only.
+     */
+    BillingInvoiceResponseDTO reverseAdjustment(UUID invoiceId, UUID adjustmentId, String reason, UUID staffId,
+                                                Locale locale);
+
+    /** QA D982: one of the patient's issued invoices with its lines and payments; another's answers 404. */
+    com.example.hms.payload.dto.portal.PortalInvoiceDetailDTO getPortalInvoiceDetail(UUID invoiceId, UUID patientId);
+
+    /** QA D982: the patient's own invoice as a PDF. */
+    InvoicePdfResponseDTO getPortalInvoicePdf(UUID invoiceId, UUID patientId, Locale locale);
+
+    /** QA D982: the receipt of one of the patient's confirmed payments. */
+    InvoicePdfResponseDTO getPortalReceiptPdf(UUID invoiceId, UUID paymentId, UUID patientId, Locale locale);
     Page<BillingInvoiceResponseDTO> getInvoicesByHospitalId(UUID hospitalId, Pageable pageable, Locale locale);
     List<BillingInvoiceResponseDTO> getOverdueInvoices(LocalDate referenceDate, Locale locale);
     BillingInvoiceResponseDTO updateInvoice(UUID id, BillingInvoiceRequestDTO dto, Locale locale);
@@ -80,6 +108,22 @@ public interface BillingInvoiceService {
      * check-in transaction.
      */
     void recordCheckInCopay(com.example.hms.model.Encounter encounter, java.math.BigDecimal amount, UUID recordedBy);
+
+    /**
+     * QA D975: the check-in copay paid by {@code method} (cash when null),
+     * with its reference (required for Mobile Money, insurance and bank transfer). Returns the
+     * confirmed payment row, so the desk can print its receipt; null when
+     * the amount is not positive.
+     */
+    com.example.hms.model.PaymentTransaction recordCheckInCopay(com.example.hms.model.Encounter encounter,
+        java.math.BigDecimal amount, com.example.hms.enums.PaymentMethod method, String reference, UUID recordedBy);
     /** QA D209: KPI totals over every invoice in the caller's scope. */
     com.example.hms.payload.dto.BillingSummaryDTO summarize(Locale locale);
+
+    /** QA D1059: the KPIs over the invoices dated in the range (either bound may be open). */
+    com.example.hms.payload.dto.BillingSummaryDTO summarize(java.time.LocalDate fromDate, java.time.LocalDate toDate,
+                                                            Locale locale);
+
+    /** QA D1059: the signed-in cashier's cash closing for {@code date} (today when null). */
+    com.example.hms.payload.dto.CashClosingDTO cashClosing(java.time.LocalDate date, Locale locale);
 }

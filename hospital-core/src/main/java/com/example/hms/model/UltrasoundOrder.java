@@ -86,6 +86,14 @@ public class UltrasoundOrder extends BaseEntity implements TenantScoped {
     @Column(name = "ordered_by", length = 200)
     private String orderedBy;
 
+    /**
+     * QA D930 class (V243): the user who placed the order. {@code orderedBy}
+     * is a display name and cannot decide who may change the order; null on
+     * rows written before V243 (no recorded author).
+     */
+    @Column(name = "ordered_by_user_id")
+    private UUID orderedByUserId;
+
     @Column(name = "gestational_age_at_order")
     private Integer gestationalAgeAtOrder; // weeks
 

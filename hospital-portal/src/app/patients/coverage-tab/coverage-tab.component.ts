@@ -1,3 +1,5 @@
+import { refusalReason } from '../../shared/refusal-reason';
+import { DialogFocusDirective } from '../../shared/a11y/dialog-focus.directive';
 import { ChangeDetectionStrategy, Component, Input, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -21,6 +23,8 @@ import { RoleContextService } from '../../core/role-context.service';
 import { ToastService } from '../../core/toast.service';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+import { PhoneFieldDirective } from '../../shared/forms/phone-field.directive';
 /**
  * Coverage tab on patient detail (Phase 3 task 17): insurance policies and
  * hospital registrations for one patient. Insurance roles are HOSPITAL_ADMIN/
@@ -32,7 +36,15 @@ import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
   selector: 'app-coverage-tab',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule],
+  imports: [
+    PhoneFieldDirective,
+    SubmitGuardDirective,
+    DialogFocusDirective,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+  ],
   templateUrl: './coverage-tab.component.html',
   styleUrl: './coverage-tab.component.scss',
 })
@@ -172,7 +184,7 @@ export class CoverageTabComponent implements OnInit {
       error: (err) => {
         this.guarantorSaving.set(false);
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('COVERAGE.GUARANTOR_SAVE_ERROR'),
+          refusalReason(err) ?? this.translate.instant('COVERAGE.GUARANTOR_SAVE_ERROR'),
         );
       },
     });
@@ -186,7 +198,7 @@ export class CoverageTabComponent implements OnInit {
       next: () => this.loadGuarantors(),
       error: (err) => {
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('COVERAGE.GUARANTOR_SAVE_ERROR'),
+          refusalReason(err) ?? this.translate.instant('COVERAGE.GUARANTOR_SAVE_ERROR'),
         );
       },
     });
@@ -221,7 +233,7 @@ export class CoverageTabComponent implements OnInit {
         error: (err) => {
           this.consentSaving.set(false);
           this.toast.error(
-            err?.error?.message ?? this.translate.instant('COVERAGE.CONSENT_SAVE_ERROR'),
+            refusalReason(err) ?? this.translate.instant('COVERAGE.CONSENT_SAVE_ERROR'),
           );
         },
       });
@@ -256,7 +268,7 @@ export class CoverageTabComponent implements OnInit {
       error: (err) => {
         this.revokeBusy.set(false);
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('COVERAGE.CONSENT_SAVE_ERROR'),
+          refusalReason(err) ?? this.translate.instant('COVERAGE.CONSENT_SAVE_ERROR'),
         );
       },
     });
@@ -329,8 +341,8 @@ export class CoverageTabComponent implements OnInit {
           this.closeLink();
           this.loadInsurances();
         },
-        error: () => {
-          this.toast.error(this.translate.instant('COVERAGE.LINK_ERROR'));
+        error: (err: unknown) => {
+          this.toast.error(refusalReason(err) ?? this.translate.instant('COVERAGE.LINK_ERROR'));
           this.linkSaving.set(false);
         },
       });
@@ -372,8 +384,8 @@ export class CoverageTabComponent implements OnInit {
         this.closeEdit();
         this.insurances.update((list) => list.map((i) => (i.id === updated.id ? updated : i)));
       },
-      error: () => {
-        this.toast.error(this.translate.instant('COVERAGE.UPDATE_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('COVERAGE.UPDATE_ERROR'));
         this.editSaving.set(false);
       },
     });
@@ -401,8 +413,8 @@ export class CoverageTabComponent implements OnInit {
         this.closeDelete();
         this.insurances.update((list) => list.filter((i) => i.id !== target.id));
       },
-      error: () => {
-        this.toast.error(this.translate.instant('COVERAGE.DELETE_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('COVERAGE.DELETE_ERROR'));
         this.deleteBusy.set(false);
       },
     });

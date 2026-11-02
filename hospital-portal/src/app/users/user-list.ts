@@ -1,3 +1,4 @@
+import { DialogFocusDirective } from '../shared/a11y/dialog-focus.directive';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
   Component,
@@ -30,6 +31,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { isStepUpRefusal, stepUpRefusalKey } from '../services/step-up';
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 
 const PATIENT_ROLE_CODES = new Set(['ROLE_PATIENT', 'PATIENT']);
 
@@ -105,7 +107,14 @@ const SPECIALIZATIONS = [
 @Component({
   selector: 'app-user-list',
   standalone: true,
-  imports: [FormsModule, TranslateModule, RoleLabelPipe, EnumLabelPipe],
+  imports: [
+    SubmitGuardDirective,
+    DialogFocusDirective,
+    FormsModule,
+    TranslateModule,
+    RoleLabelPipe,
+    EnumLabelPipe,
+  ],
   templateUrl: './user-list.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './user-list.scss',
@@ -132,6 +141,16 @@ export class UserListComponent implements OnInit, OnDestroy {
   /* Filter state */
   roleFilter = '';
   statusFilter = '';
+
+  /**
+   * QA D919: the deleted view and the restore are the super-admin's (the
+   * server answers anyone else an empty worklist, and 404 on a deleted
+   * account), so nobody else is offered the "Deleted" filter or told an
+   * account can be restored from it.
+   */
+  canSeeDeleted(): boolean {
+    return this.roleContext.isSuperAdmin();
+  }
   showFilters = signal(false);
 
   currentPage = signal(0);
@@ -233,15 +252,15 @@ export class UserListComponent implements OnInit, OnDestroy {
     // The Deleted view itself pages SERVER-side (onlyDeleted): filtering a
     // mixed 20-row page client-side could show "no matches" while the ghost
     // sat on a later page - the invisible-ghost bug wearing a new hat.
-    const deletedView = this.statusFilter === 'deleted';
+    const deletedView = this.statusFilter === 'deleted' && this.canSeeDeleted();
     const request$ = hasServerFilter
       ? this.userService.search(page, 20, {
           ...(this.roleFilter ? { role: this.roleFilter } : {}),
           ...(term ? { name: term } : {}),
-          includeDeleted: true,
+          includeDeleted: this.canSeeDeleted(),
           ...(deletedView ? { onlyDeleted: true } : {}),
         })
-      : this.userService.list(page, 20, true, deletedView);
+      : this.userService.list(page, 20, this.canSeeDeleted(), deletedView);
 
     request$.subscribe({
       next: (res) => {

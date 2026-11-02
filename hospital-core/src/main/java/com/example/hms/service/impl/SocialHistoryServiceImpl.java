@@ -43,6 +43,10 @@ public class SocialHistoryServiceImpl implements SocialHistoryService {
     private final StaffRepository staffRepository;
     private final SocialHistoryMapper socialHistoryMapper;
 
+    /** The fields of a version that are not answers: who, where, when, and the version flags. */
+    static final java.util.Set<String> SOCIAL_HISTORY_METADATA = java.util.Set.of(
+        "patientId", "hospitalId", "recordedByStaffId", "recordedDate", "versionNumber", "active");
+
     @Override
     public SocialHistoryResponseDTO createSocialHistory(SocialHistoryRequestDTO requestDTO) {
         log.info("Creating social history for patient: {}", requestDTO.getPatientId());
@@ -55,6 +59,10 @@ public class SocialHistoryServiceImpl implements SocialHistoryService {
         // QA r5 tenancy sweep: the row is written at the caller's acting hospital; the body's id is a claim.
         com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(hospital, "hospital.notFound", requestDTO.getHospitalId());
         patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
+        // QA D1148 (round 21): a new version says something; an empty one was
+        // stored and superseded the patient's real history.
+        com.example.hms.service.support.ClinicalContent.requireAnyAnswer(requestDTO, SOCIAL_HISTORY_METADATA,
+            "additionalNotes", "socialHistory.contentRequired");
 
         // QA D503 class: the recorder is the caller, not a colleague named in the body.
         Staff recordedBy = com.example.hms.security.CallerIdentity.resolveActor(staffRepository, requestDTO.getRecordedByStaffId(), hospital.getId());
@@ -139,6 +147,9 @@ public class SocialHistoryServiceImpl implements SocialHistoryService {
         PatientSocialHistory existingHistory = socialHistoryRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(SOCIAL_HISTORY_NOT_FOUND_KEY, id));
         com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(existingHistory.getHospital(), SOCIAL_HISTORY_NOT_FOUND_KEY, id);
+        // QA D1148: an edit leaves something in the version.
+        com.example.hms.service.support.ClinicalContent.requireAnyAnswer(requestDTO, SOCIAL_HISTORY_METADATA,
+            "additionalNotes", "socialHistory.contentRequired");
 
         // Update staff if changed
         if (requestDTO.getRecordedByStaffId() != null && 

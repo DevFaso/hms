@@ -18,19 +18,19 @@
         <div class="profile-stats">
           @if (summary()!.profile.dateOfBirth) {
             <span class="profile-stat"
-              >{{ 'PORTAL.RECORDS.DATE_OF_BIRTH' | translate }}:
+              >{{ 'PORTAL.RECORDS.DATE_OF_BIRTH' | translate }}{{ 'COMMON.COLON' | translate }}
               {{ summary()!.profile.dateOfBirth | serverTime | date: 'mediumDate' }}</span
             >
           }
           @if (summary()!.profile.bloodType) {
             <span class="profile-stat"
-              >{{ 'PORTAL.RECORDS.BLOOD_TYPE' | translate }}:
+              >{{ 'PORTAL.RECORDS.BLOOD_TYPE' | translate }}{{ 'COMMON.COLON' | translate }}
               {{ summary()!.profile.bloodType }}</span
             >
           }
           @if (summary()!.profile.gender) {
             <span class="profile-stat"
-              >{{ 'PORTAL.RECORDS.GENDER' | translate }}:
+              >{{ 'PORTAL.RECORDS.GENDER' | translate }}{{ 'COMMON.COLON' | translate }}
               {{ summary()!.profile.gender | enumLabel: 'gender' }}</span
             >
           }
@@ -42,7 +42,8 @@
             <ul>
               @for (r of hospitalRecords(); track r.hospitalId) {
                 <li class="profile-stat" [attr.data-testid]="'my-record-number-' + r.hospitalId">
-                  {{ r.hospitalName || ('PORTAL.RECORDS.UNKNOWN_HOSPITAL' | translate) }} :
+                  {{ r.hospitalName || ('PORTAL.RECORDS.UNKNOWN_HOSPITAL' | translate)
+                  }}{{ 'COMMON.COLON' | translate }}
                   <strong>{{ r.mrn }}</strong>
                 </li>
               }

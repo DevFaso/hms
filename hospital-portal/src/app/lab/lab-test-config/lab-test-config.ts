@@ -1,3 +1,5 @@
+import { EnumLabelService } from '../../core/enum-label.service';
+import { currentLocale } from '../../shared/i18n/app-locale';
 import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -15,10 +17,20 @@ import { ProfileService } from '../../services/profile.service';
 import { RoleContextService } from '../../core/role-context.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
+import { refusalReason } from '../../shared/refusal-reason';
 @Component({
   selector: 'app-lab-test-config',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [
+    SubmitGuardDirective,
+    ModalDialogDirective,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+  ],
   templateUrl: './lab-test-config.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './lab-test-config.scss',
@@ -27,6 +39,7 @@ export class LabTestConfigComponent implements OnInit {
   private readonly labService = inject(LabService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly enumLabels = inject(EnumLabelService);
   private readonly profileService = inject(ProfileService);
   private readonly roleContext = inject(RoleContextService);
 
@@ -194,6 +207,8 @@ export class LabTestConfigComponent implements OnInit {
         notes: null,
         criticalLow: null,
         criticalHigh: null,
+        ageUnit: 'YEARS',
+        source: null,
       },
     ]);
   }
@@ -227,14 +242,20 @@ export class LabTestConfigComponent implements OnInit {
   exportCsv(): void {
     this.labService.exportTestDefinitionsCsv().subscribe({
       next: (blob) => this.downloadBlob(blob, 'lab-test-definitions.csv'),
-      error: () => this.toast.error(this.translate.instant('LAB_TEST_CONFIG.EXPORT_ERROR')),
+      error: (err: unknown) =>
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('LAB_TEST_CONFIG.EXPORT_ERROR'),
+        ),
     });
   }
 
   exportPdf(): void {
     this.labService.exportTestDefinitionsPdf().subscribe({
       next: (blob) => this.downloadBlob(blob, 'lab-test-definitions.pdf'),
-      error: () => this.toast.error(this.translate.instant('LAB_TEST_CONFIG.EXPORT_ERROR')),
+      error: (err: unknown) =>
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('LAB_TEST_CONFIG.EXPORT_ERROR'),
+        ),
     });
   }
 
@@ -348,6 +369,35 @@ export class LabTestConfigComponent implements OnInit {
    * active one is retired through the approval workflow instead. Mirrors
    * LabTestDefinitionServiceImpl (RANGES_LOCKED and delete).
    */
+  /** QA D1120: only the live (ACTIVE) version gets a new version; a draft is edited directly. */
+  canCreateVersion(def: { approvalStatus?: string | null }): boolean {
+    return def.approvalStatus === 'ACTIVE';
+  }
+
+  readonly creatingVersionId = signal<string | null>(null);
+
+  /**
+   * QA D1120: copies the active definition into a linked DRAFT, which goes
+   * through the same four-eyes approval and replaces it on activation.
+   */
+  createVersion(def: LabTestDefinition): void {
+    if (this.creatingVersionId()) return;
+    this.creatingVersionId.set(def.id);
+    this.labService.createTestDefinitionVersion(def.id).subscribe({
+      next: () => {
+        this.creatingVersionId.set(null);
+        this.toast.success(this.translate.instant('LAB_TEST_CONFIG.VERSION_CREATED'));
+        this.loadDefinitions();
+      },
+      error: (err) => {
+        this.creatingVersionId.set(null);
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('LAB_TEST_CONFIG.VERSION_ERROR'),
+        );
+      },
+    });
+  }
+
   /** QA D650: a retired definition is read-only (the API answers 409 to an edit). */
   isRetired(def: { approvalStatus?: string | null }): boolean {
     return def.approvalStatus === 'RETIRED';
@@ -494,8 +544,10 @@ export class LabTestConfigComponent implements OnInit {
         this.cancelReflexEdit();
         this.loadReflexRules();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('LAB_TEST_CONFIG.REFLEX_SAVE_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('LAB_TEST_CONFIG.REFLEX_SAVE_ERROR'),
+        );
         this.reflexSaving.set(false);
       },
     });
@@ -512,15 +564,37 @@ export class LabTestConfigComponent implements OnInit {
       })
       .subscribe({
         next: () => this.loadReflexRules(),
-        error: () => this.toast.error(this.translate.instant('LAB_TEST_CONFIG.REFLEX_SAVE_ERROR')),
+        error: (err: unknown) =>
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('LAB_TEST_CONFIG.REFLEX_SAVE_ERROR'),
+          ),
       });
   }
 
   describeCondition(rule: LabReflexRule): string {
     try {
       const cond = JSON.parse(rule.condition ?? '{}');
-      if (cond.severityFlag) return `severity = ${cond.severityFlag}`;
-      if (cond.thresholdOperator) return `value ${cond.thresholdOperator} ${cond.thresholdValue}`;
+      // QA D963: the condition is read in the user's language, the flag through
+      // its enum label, never the wire token ("severity = ABNORMAL").
+      if (cond.severityFlag) {
+        return this.translate.instant('LAB_TEST_CONFIG.REFLEX_CONDITION_SEVERITY', {
+          flag: this.enumLabels.transform(cond.severityFlag, 'labSeverityFlag'),
+        });
+      }
+      if (cond.thresholdOperator) {
+        // Review of #975: a value that is not a number is shown as stored, never as "NaN".
+        const threshold = Number(cond.thresholdValue);
+        return this.translate.instant('LAB_TEST_CONFIG.REFLEX_CONDITION_THRESHOLD', {
+          operator: cond.thresholdOperator,
+          value:
+            cond.thresholdValue !== null &&
+            cond.thresholdValue !== undefined &&
+            cond.thresholdValue !== '' &&
+            Number.isFinite(threshold)
+              ? new Intl.NumberFormat(currentLocale()).format(threshold)
+              : String(cond.thresholdValue ?? ''),
+        });
+      }
     } catch {
       // fall through to raw condition
     }

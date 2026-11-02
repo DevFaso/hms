@@ -20,7 +20,10 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { toServerDateTime } from '../shared/date-utils';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { refusalReason } from '../shared/refusal-reason';
 /**
  * The mortality register (Tier 2 item 29) — the first and only caller of every
  * `/mortality` endpoint.
@@ -33,6 +36,8 @@ import { toServerDateTime } from '../shared/date-utils';
   selector: 'app-mortality',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
+    ModalDialogDirective,
     ServerTimePipe,
     CommonModule,
     FormsModule,
@@ -169,8 +174,8 @@ export class MortalityComponent implements OnInit {
           this.selected.set(result.deathRecord);
           this.loadRegister();
         },
-        error: () => {
-          this.toast.error(this.translate.instant('MORTALITY.RECORD_ERROR'));
+        error: (err: unknown) => {
+          this.toast.error(refusalReason(err) ?? this.translate.instant('MORTALITY.RECORD_ERROR'));
           this.recording.set(false);
         },
       });
@@ -218,8 +223,8 @@ export class MortalityComponent implements OnInit {
           this.selected.set(updated);
           this.loadRegister();
         },
-        error: () => {
-          this.toast.error(this.translate.instant('MORTALITY.AMEND_ERROR'));
+        error: (err: unknown) => {
+          this.toast.error(refusalReason(err) ?? this.translate.instant('MORTALITY.AMEND_ERROR'));
           this.amending.set(false);
         },
       });

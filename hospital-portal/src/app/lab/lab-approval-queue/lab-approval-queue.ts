@@ -1,3 +1,4 @@
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import {
   Component,
   computed,
@@ -24,6 +25,9 @@ import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { currentLocale, formatDecimal } from '../../shared/i18n/app-locale';
 import { serverInstant, localDateString } from '../../shared/date-utils';
 
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
+import { refusalReason } from '../../shared/refusal-reason';
 interface QcPoint {
   x: number;
   y: number;
@@ -59,7 +63,15 @@ interface QcChartGroup {
 @Component({
   selector: 'app-lab-approval-queue',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [
+    SubmitGuardDirective,
+    ModalDialogDirective,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+  ],
   templateUrl: './lab-approval-queue.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './lab-approval-queue.scss',
@@ -315,8 +327,10 @@ export class LabApprovalQueueComponent implements OnInit {
         this.closeStudyModal();
         this.savingStudy.set(false);
       },
-      error: () => {
-        this.toast.error(this.translate.instant('LAB_APPROVAL.TOAST.STUDY_SAVE_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('LAB_APPROVAL.TOAST.STUDY_SAVE_FAILED'),
+        );
         this.savingStudy.set(false);
       },
     });
@@ -328,8 +342,10 @@ export class LabApprovalQueueComponent implements OnInit {
         this.validationStudies.update((list) => list.filter((s) => s.id !== study.id));
         this.toast.success(this.translate.instant('LAB_APPROVAL.TOAST.STUDY_REMOVED'));
       },
-      error: () =>
-        this.toast.error(this.translate.instant('LAB_APPROVAL.TOAST.STUDY_REMOVE_FAILED')),
+      error: (err: unknown) =>
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('LAB_APPROVAL.TOAST.STUDY_REMOVE_FAILED'),
+        ),
     });
   }
 

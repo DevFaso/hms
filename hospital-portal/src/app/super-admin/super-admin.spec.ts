@@ -285,9 +285,36 @@ describe('SuperAdminComponent', () => {
 
     const rows = c.selectedActivityRows();
     expect(rows.length).toBe(1);
-    expect(rows[0].id).toBe('aaaa1111');
+    // QA D992 class: the full id identifies the row; the screen never shows a slice of it
+    // (was: rows[0].id === 'aaaa1111'). With no human code on the record the column is empty.
+    expect(rows[0].id).toBe('aaaa1111-2222-3333-4444-555555555555');
+    expect(rows[0].code).toBe('');
     expect(rows[0].summary).toContain('Amoxicillin');
     expect(rows[0].timestamp).toBe('2026-05-02T10:00:00Z');
+  });
+
+  it('shows the human code a record carries, never a slice of its id (QA D992)', () => {
+    dashboard.getSummary.and.returnValue(of(fakeSummary()));
+    platform.getSummary.and.returnValue(of(fakePlatformSummary()));
+    dashboard.getRecentActivity.and.returnValue(
+      of(
+        bundleWith({
+          labOrders: [
+            {
+              id: 'bbbb2222-2222-3333-4444-555555555555',
+              labOrderCode: 'LAB-000042',
+              patientFullName: 'Ada',
+              createdAt: '2026-05-02T10:00:00Z',
+            },
+          ] as SuperAdminRecentItem[],
+        }),
+      ),
+    );
+
+    const c = setup();
+    c.selectActivityTab('labOrders');
+
+    expect(c.selectedActivityRows()[0].code).toBe('LAB-000042');
   });
 
   it('reflects empty activity collections gracefully', () => {

@@ -310,6 +310,7 @@ public class LabOrderServiceImpl implements LabOrderService {
         if (hospital != null && requestedHospitalId != null && !hospital.getId().equals(requestedHospitalId)) {
             throw new BusinessException("lab.order.encounterHospitalMismatch");
         }
+        requireOrderableEncounter(encounter, patient, base);
 
         if (hospital == null && requestedHospitalId != null) {
             hospital = hospitalRepository.findClinicalById(requestedHospitalId)
@@ -384,6 +385,30 @@ public class LabOrderServiceImpl implements LabOrderService {
         applyStandingOrderMetadata(labOrder, request, base, labOrder.getOrderDatetime());
 
         return labOrder;
+    }
+
+    /**
+     * QA D1094: the visit a lab order is attached to. Any clinician of the
+     * visit's hospital who may order tests orders on it (the role check
+     * follows), as in a real hospital: the visit need not be theirs. It must
+     * be this patient's, and a NEW order (or one moved onto another visit) goes
+     * only on a visit still open - a closed visit takes a new visit. Each
+     * refusal is a translated 400; the entity's invariants are never the first
+     * to say no (they answered a colleague's visit with a 500).
+     */
+    static void requireOrderableEncounter(Encounter encounter, Patient patient, LabOrder base) {
+        if (encounter == null) {
+            return;
+        }
+        if (encounter.getPatient() == null || patient == null
+                || !java.util.Objects.equals(encounter.getPatient().getId(), patient.getId())) {
+            throw new BusinessException("lab.order.encounterPatientMismatch");
+        }
+        boolean sameVisitAsBefore = base != null && base.getEncounter() != null
+            && java.util.Objects.equals(base.getEncounter().getId(), encounter.getId());
+        if (!sameVisitAsBefore && encounter.getStatus() != null && encounter.getStatus().isClosed()) {
+            throw new BusinessException("lab.order.encounterClosed", encounter.getStatus().localizedLabel());
+        }
     }
 
     private static final java.util.Set<String> LAB_PRIORITIES = java.util.Set.of("ROUTINE", "URGENT", "STAT");
@@ -975,6 +1000,10 @@ public class LabOrderServiceImpl implements LabOrderService {
             .toList();
     }
 
+    /** QA D1098: a lab order's resulted states, in lifecycle order. */
+    private static final List<LabOrderStatus> RESULTED_STATES =
+        List.of(LabOrderStatus.RESULTED, LabOrderStatus.VERIFIED, LabOrderStatus.COMPLETED);
+
     /** QA D673: matches lab.lab_orders.cancellation_reason (V219). */
     private static final int MAX_CANCELLATION_REASON = 1000;
 
@@ -987,8 +1016,11 @@ public class LabOrderServiceImpl implements LabOrderService {
         ALLOWED_TRANSITIONS.put(LabOrderStatus.COLLECTED,   EnumSet.of(LabOrderStatus.RECEIVED,    LabOrderStatus.CANCELLED));
         ALLOWED_TRANSITIONS.put(LabOrderStatus.RECEIVED,    EnumSet.of(LabOrderStatus.IN_PROGRESS, LabOrderStatus.CANCELLED));
         ALLOWED_TRANSITIONS.put(LabOrderStatus.IN_PROGRESS, EnumSet.of(LabOrderStatus.RESULTED,    LabOrderStatus.CANCELLED));
-        ALLOWED_TRANSITIONS.put(LabOrderStatus.RESULTED,    EnumSet.of(LabOrderStatus.VERIFIED,    LabOrderStatus.CANCELLED));
-        ALLOWED_TRANSITIONS.put(LabOrderStatus.VERIFIED,    EnumSet.of(LabOrderStatus.COMPLETED,   LabOrderStatus.CANCELLED));
+        // QA D1098 (round 19, order class): a resulted order is not cancelled -
+        // a wrong result is voided as entered in error (voidLabOrder), which
+        // keeps the account of what was released.
+        ALLOWED_TRANSITIONS.put(LabOrderStatus.RESULTED,    EnumSet.of(LabOrderStatus.VERIFIED));
+        ALLOWED_TRANSITIONS.put(LabOrderStatus.VERIFIED,    EnumSet.of(LabOrderStatus.COMPLETED));
     }
 
     @Override
@@ -1044,6 +1076,8 @@ public class LabOrderServiceImpl implements LabOrderService {
         // (the ordering hospital or the performing laboratory); cancelling is
         // an ordering-side decision and stays with the ordering hospital.
         UUID authorityHospitalId = hospitalId != null ? hospitalId : orderingHospitalId;
+        // QA D1098: the shared order rule, so the refusal names the reason.
+        com.example.hms.service.support.CancelledOrders.requireResultStaysClosed(current, toStatus, RESULTED_STATES);
         validateStatusTransition(current, toStatus, authorityHospitalId, orderingHospitalId);
         if (toStatus == LabOrderStatus.CANCELLED) {
             // QA D673: a cancel states why, and the reason is kept on the order.

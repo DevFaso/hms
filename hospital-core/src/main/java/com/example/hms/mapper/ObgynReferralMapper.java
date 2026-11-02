@@ -44,6 +44,7 @@ public class ObgynReferralMapper {
 
         return ObgynReferralResponseDTO.builder()
             .id(referral.getId())
+            .authorUserId(referral.getMidwife() != null ? referral.getMidwife().getId() : null)
             .patient(mapPatient(referral.getPatient(), referral.getHospital()))
             .hospital(mapHospital(referral.getHospital()))
             .midwife(mapClinician(referral.getMidwife()))
@@ -170,6 +171,7 @@ public class ObgynReferralMapper {
             .id(patient.getId())
             .mrn(hospital != null ? patient.getMrnForHospital(hospital.getId()) : null)
             .firstName(patient.getFirstName())
+            .middleName(patient.getMiddleName())
             .lastName(patient.getLastName())
             .dateOfBirth(patient.getDateOfBirth())
             .build();

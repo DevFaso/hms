@@ -5,7 +5,10 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 
-import { PatientFormComponent } from './patient-form';
+import { MATCH_DESCRIPTION_KEYS, PatientFormComponent } from './patient-form';
+import en from '../../assets/i18n/en.json';
+import fr from '../../assets/i18n/fr.json';
+import es from '../../assets/i18n/es.json';
 import {
   PatientService,
   PatientResponse,
@@ -258,14 +261,140 @@ describe('PatientFormComponent', () => {
     component.onSubmit();
 
     expect(toastSpy.error).toHaveBeenCalledWith('Un patient ... est déjà enregistré.');
+    // QA D1061 / D1064: the re-query also carries the identity typed in the form.
     expect(patientSpy.registrationMatch).toHaveBeenCalledWith({
       email: undefined,
       phone: '+22670707070',
       hospitalId: 'h1',
+      firstName: 'Awa',
+      lastName: 'Ouedraogo',
+      dateOfBirth: '1992-05-04',
     });
     expect(component.registrationMatches.length).toBe(1);
     expect(component.matchDismissed).toBeFalse();
     expect(routerSpy.navigate).not.toHaveBeenCalled();
+  });
+
+  it('QA D1072: a client-side refusal marks every missing field and focuses the first', () => {
+    const fixture = TestBed.createComponent(PatientFormComponent);
+    const form = fixture.componentInstance;
+    form.ngOnInit();
+    document.body.appendChild(fixture.nativeElement);
+    try {
+      fixture.detectChanges();
+      Object.assign(form.form, { firstName: 'Abdoul', lastName: '', hospitalId: 'h1' });
+      form.onSubmit();
+      fixture.detectChanges();
+
+      const el = fixture.nativeElement as HTMLElement;
+      const last = el.querySelector<HTMLInputElement>('#lastName')!;
+      expect(last.getAttribute('aria-invalid')).toBe('true');
+      expect(last.getAttribute('aria-describedby')).toBe('lastName-server-error');
+      expect(el.querySelector('#lastName-server-error')?.textContent).toContain(
+        'COMMON.FIELD_REQUIRED',
+      );
+      for (const id of ['phonePrimary', 'dob', 'gender', 'country', 'city']) {
+        expect(el.querySelector(`#${id}`)?.getAttribute('aria-invalid'))
+          .withContext(id)
+          .toBe('true');
+      }
+      // The first refused field in reading order has the focus.
+      expect(document.activeElement).toBe(last);
+      expect(el.querySelector('#firstName')?.getAttribute('aria-invalid')).toBeNull();
+      expect(userSpy.adminRegister).not.toHaveBeenCalled();
+    } finally {
+      fixture.nativeElement.remove();
+    }
+  });
+
+  it('QA D1061: a child with no phone of their own is registered under the guardian phone', () => {
+    fillValidForm();
+    Object.assign(component.form, {
+      firstName: 'Abdoul Aziz',
+      lastName: 'Nikiéma',
+      dateOfBirth: '2021-08-19',
+      phoneNumberPrimary: '',
+      emergencyContactName: 'Boukari Nikiéma',
+      emergencyContactPhone: '+22676334455',
+    });
+    expect(component.phoneRequired).toBeFalse();
+    component.onSubmit();
+    expect(userSpy.adminRegister).toHaveBeenCalledWith(
+      jasmine.objectContaining({
+        phoneNumber: '+22676334455',
+        patient: jasmine.objectContaining({ phoneNumberPrimary: '+22676334455' }),
+      }),
+    );
+  });
+
+  it('QA D1061: a match that only shares the contact does not block the registration', () => {
+    fillValidForm();
+    component.form.dateOfBirth = '2021-08-19';
+    component.registrationMatches = [mockMatch({ sameIdentity: false, birthYear: 1985 })];
+    expect(component.identityMatches.length).toBe(0);
+    expect(component.sharedContactMatches.length).toBe(1);
+    component.onSubmit();
+    expect(userSpy.adminRegister).toHaveBeenCalled();
+  });
+
+  it('QA D1061 review: a phone match born the same year still asks (a spelling variant)', () => {
+    fillValidForm();
+    component.form.dateOfBirth = '1990-04-02';
+    component.registrationMatches = [mockMatch({ sameIdentity: false, birthYear: 1990 })];
+    component.onSubmit();
+    expect(userSpy.adminRegister).not.toHaveBeenCalled();
+    expect(toastSpy.error).toHaveBeenCalledWith('PATIENTS.MATCH_DECIDE');
+  });
+
+  it('QA D1061 review: a shared e-mail still asks (an e-mail is one person)', () => {
+    fillValidForm();
+    component.form.dateOfBirth = '2021-08-19';
+    component.registrationMatches = [
+      mockMatch({ sameIdentity: false, birthYear: 1985, matchedOn: 'EMAIL' }),
+    ];
+    component.onSubmit();
+    expect(userSpy.adminRegister).not.toHaveBeenCalled();
+  });
+
+  it('QA D1061 review: a refused submit leaves the blank phone blank (the guardian number goes into the request only)', () => {
+    fillValidForm();
+    Object.assign(component.form, {
+      phoneNumberPrimary: '',
+      emergencyContactPhone: '+22676334455',
+      city: '',
+    });
+    component.onSubmit();
+    expect(userSpy.adminRegister).not.toHaveBeenCalled();
+    expect(component.form.phoneNumberPrimary).toBe('');
+  });
+
+  it('QA D1064: the same name and date of birth is looked up even with no phone match', (done) => {
+    component.ngOnInit();
+    Object.assign(component.form, {
+      firstName: 'Rakiéta',
+      lastName: 'Ouédraogo',
+      dateOfBirth: '1993-05-14',
+      phoneNumberPrimary: '',
+    });
+    component.onNameOrDobChange();
+    setTimeout(() => {
+      expect(patientSpy.registrationMatch).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          firstName: 'Rakiéta',
+          lastName: 'Ouédraogo',
+          dateOfBirth: '1993-05-14',
+        }),
+      );
+      done();
+    }, 700);
+  });
+
+  it('QA D1064: an IDENTITY match still asks the desk to link or dismiss', () => {
+    fillValidForm();
+    component.registrationMatches = [mockMatch({ matchedOn: 'IDENTITY', sameIdentity: true })];
+    component.onSubmit();
+    expect(userSpy.adminRegister).not.toHaveBeenCalled();
+    expect(toastSpy.error).toHaveBeenCalledWith('PATIENTS.MATCH_DECIDE');
   });
 
   it('QA D725: any other refusal does not re-query the match', () => {
@@ -344,5 +473,67 @@ describe('PatientFormComponent', () => {
     component.onSubmit();
     expect(userSpy.adminRegister).toHaveBeenCalled();
     expect(routerSpy.navigate).toHaveBeenCalledWith(['/patients', 'p9']);
+  });
+
+  it('QA D986: the match sentence says where the matched records are', () => {
+    component.registrationMatches = [{ ...mockMatch(), alreadyRegisteredHere: true }];
+    expect(component.matchDescriptionKey()).toBe('PATIENTS.EXISTING_MATCH_DESC_HERE');
+    component.registrationMatches = [{ ...mockMatch(), alreadyRegisteredHere: false }];
+    expect(component.matchDescriptionKey()).toBe('PATIENTS.EXISTING_MATCH_DESC');
+    component.registrationMatches = [
+      { ...mockMatch(), alreadyRegisteredHere: true },
+      { ...mockMatch(), patientId: 'p9', alreadyRegisteredHere: false },
+    ];
+    expect(component.matchDescriptionKey()).toBe('PATIENTS.EXISTING_MATCH_DESC_MIXED');
+  });
+
+  it('QA D1118: a same-name-and-birth-date match is not described as a phone or e-mail match', () => {
+    component.registrationMatches = [mockMatch({ matchedOn: 'IDENTITY' })];
+    expect(component.matchDescriptionKey()).toBe('PATIENTS.EXISTING_MATCH_DESC_IDENTITY');
+    component.registrationMatches = [
+      mockMatch({ matchedOn: 'IDENTITY', alreadyRegisteredHere: true }),
+    ];
+    expect(component.matchDescriptionKey()).toBe('PATIENTS.EXISTING_MATCH_DESC_IDENTITY_HERE');
+    component.registrationMatches = [
+      mockMatch({ matchedOn: 'IDENTITY', alreadyRegisteredHere: true }),
+      mockMatch({ patientId: 'p9', matchedOn: 'IDENTITY' }),
+    ];
+    expect(component.matchDescriptionKey()).toBe('PATIENTS.EXISTING_MATCH_DESC_IDENTITY_MIXED');
+    component.registrationMatches = [
+      mockMatch({ matchedOn: 'IDENTITY' }),
+      mockMatch({ patientId: 'p9', matchedOn: 'EMAIL' }),
+    ];
+    expect(component.matchDescriptionKey()).toBe('PATIENTS.EXISTING_MATCH_DESC_BOTH');
+  });
+
+  it('QA D1118 guard: every basis and place has its sentence in each language, naming the right basis', () => {
+    const bundles: Record<string, Record<string, unknown>> = { en, fr, es };
+    const lookup = (b: Record<string, unknown>, key: string): string =>
+      key.split('.').reduce<unknown>((n, k) => (n as Record<string, unknown>)?.[k], b) as string;
+    const phoneWords: Record<string, RegExp> = { en: /phone/i, fr: /téléphone/i, es: /teléfono/i };
+    const birthWords: Record<string, RegExp> = {
+      en: /date of birth/i,
+      fr: /naissance/i,
+      es: /nacimiento/i,
+    };
+    for (const [basis, places] of Object.entries(MATCH_DESCRIPTION_KEYS)) {
+      for (const key of Object.values(places)) {
+        for (const [lang, bundle] of Object.entries(bundles)) {
+          const text = lookup(bundle, key);
+          expect(typeof text)
+            .withContext(`${lang}:${key}`)
+            .toBe('string');
+          if (basis === '_IDENTITY') {
+            expect(text).withContext(`${lang}:${key}`).not.toMatch(phoneWords[lang]);
+            expect(text).withContext(`${lang}:${key}`).toMatch(birthWords[lang]);
+          } else if (basis === '') {
+            expect(text).withContext(`${lang}:${key}`).toMatch(phoneWords[lang]);
+          } else {
+            expect(text).withContext(`${lang}:${key}`).toMatch(phoneWords[lang]);
+            expect(text).withContext(`${lang}:${key}`).toMatch(birthWords[lang]);
+          }
+        }
+      }
+    }
   });
 });

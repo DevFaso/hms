@@ -53,9 +53,10 @@ public interface AdmissionService {
     AdmissionResponseDTO assignBed(UUID admissionId, UUID bedId);
 
     /**
-     * Detach the admission's bed and make it available again
+     * Detach the admission's bed and make it available again. QA D1100: for a
+     * stated reason, audited with it.
      */
-    AdmissionResponseDTO unassignBed(UUID admissionId);
+    AdmissionResponseDTO unassignBed(UUID admissionId, String reason);
 
     /**
      * Get admissions by patient

@@ -26,7 +26,7 @@
       @for (p of payments(); track p) {
         <li class="payment-item">
           <div class="row-top">
-            <span class="date">{{ p.createdAt | serverTime | date: 'dd/MM/yyyy HH:mm' }}</span>
+            <span class="date">{{ p.createdAt | serverTime | date: 'short' }}</span>
             <span class="amount">{{ p.amount | cfa: p.currency }}</span>
           </div>
           <div class="row-meta">
@@ -63,7 +63,7 @@
         <li class="payment-item">
           <div class="row-top">
             <span class="date">{{
-              c.submittedAt || c.createdAt | serverTime | date: 'dd/MM/yyyy HH:mm'
+              c.submittedAt || c.createdAt | serverTime | date: 'short'
             }}</span>
             <span class="amount">{{ c.amount | cfa: c.currency }}</span>
           </div>

@@ -1,3 +1,6 @@
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { DatePipe } from '@angular/common';
+import { LabValuePipe } from '../shared/lab-value.pipe';
 import {
   Component,
   computed,
@@ -17,11 +20,34 @@ import {
 } from '../../services/lab-instrument.service';
 import { AuthService } from '../../auth/auth.service';
 import { ToastService } from '../../core/toast.service';
+import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
+import { labelledRefusalReason, refusalReason } from '../../shared/refusal-reason';
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+
+/**
+ * QA D1193 (round 22): a field the server refuses is named with its label, not
+ * shown as the bare constraint ("ne doit pas être vide").
+ */
+const SAVE_FIELD_LABELS: Readonly<Record<string, string>> = {
+  name: 'LAB_INVENTORY.NAME',
+  itemCode: 'LAB_INVENTORY.ITEM_CODE',
+  quantity: 'LAB_INVENTORY.QUANTITY',
+  reorderThreshold: 'LAB_INVENTORY.REORDER_THRESHOLD',
+};
 
 @Component({
   selector: 'app-lab-inventory',
   standalone: true,
-  imports: [RouterModule, FormsModule, TranslateModule],
+  imports: [
+    SubmitGuardDirective,
+    ModalDialogDirective,
+    DatePipe,
+    ServerTimePipe,
+    LabValuePipe,
+    RouterModule,
+    FormsModule,
+    TranslateModule,
+  ],
   templateUrl: './lab-inventory.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './lab-inventory.scss',
@@ -132,7 +158,10 @@ export class LabInventoryComponent implements OnInit {
       },
       error: (err) => {
         console.error('Save inventory item failed', err);
-        this.toast.error(this.translate.instant('LAB_INVENTORY.SAVE_ERROR'));
+        this.toast.error(
+          labelledRefusalReason(err, this.translate, SAVE_FIELD_LABELS) ??
+            this.translate.instant('LAB_INVENTORY.SAVE_ERROR'),
+        );
         this.saving.set(false);
       },
     });
@@ -148,7 +177,9 @@ export class LabInventoryComponent implements OnInit {
       },
       error: (err) => {
         console.error('Deactivate inventory item failed', err);
-        this.toast.error(this.translate.instant('LAB_INVENTORY.DEACTIVATE_ERROR'));
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('LAB_INVENTORY.DEACTIVATE_ERROR'),
+        );
       },
     });
   }

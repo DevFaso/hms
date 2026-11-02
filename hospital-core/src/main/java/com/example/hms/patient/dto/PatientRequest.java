@@ -40,7 +40,7 @@ public class PatientRequest {
     @Size(max = 40)
     private String phone;
 
-    @Email
+    @Email(message = "{validation.email.invalid}")
     @Size(max = 180)
     private String email;
 

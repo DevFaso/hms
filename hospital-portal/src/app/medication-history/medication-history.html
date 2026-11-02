@@ -33,6 +33,7 @@
         <input
           type="date"
           [(ngModel)]="endDate"
+          [attr.min]="startDate || null"
           [attr.aria-label]="'MED_TIMELINE.END_DATE' | translate"
         />
         <button type="button" class="btn-secondary btn-sm" (click)="load()">
@@ -203,7 +204,7 @@
                     · {{ e.frequency }}
                   }
                   @if (e.route) {
-                    · {{ e.route }}
+                    · {{ e.route | medicationRoute }}
                   }
                 </td>
                 <td>{{ e.source || '—' }}</td>
@@ -293,6 +294,7 @@
                         type="button"
                         class="btn-secondary btn-sm"
                         [title]="'COMMON.EDIT' | translate"
+                        [attr.aria-label]="'COMMON.EDIT' | translate"
                         (click)="openEditFill(f)"
                       >
                         <span class="material-symbols-outlined">edit</span>
@@ -319,14 +321,16 @@
   >
     <div
       class="modal modal-lg"
+      appModalDialog
+      aria-labelledby="medication-history-dialog-1-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeFillModal(); $event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>
+        <h2 id="medication-history-dialog-1-title">
           {{
             (editingFillId() ? 'MED_TIMELINE.EDIT_FILL' : 'MED_TIMELINE.RECORD_FILL') | translate
           }}
@@ -414,7 +418,7 @@
         <div class="form-row">
           <div class="field">
             <label for="fill-phone">{{ 'MED_TIMELINE.PHARMACY_PHONE' | translate }}</label>
-            <input id="fill-phone" type="text" [(ngModel)]="fillForm.pharmacyPhone" />
+            <input id="fill-phone" type="tel" appPhoneField [(ngModel)]="fillForm.pharmacyPhone" />
           </div>
           <div class="field">
             <label for="fill-facility">{{ 'MED_TIMELINE.FACILITY_CODE' | translate }}</label>
@@ -455,7 +459,9 @@
         <button
           type="button"
           class="btn-primary"
-          [disabled]="fillSaving() || !fillForm.medicationName || !fillForm.fillDate"
+          [disabled]="fillSaving()"
+          [appSubmitGuard]="!fillForm.medicationName || !fillForm.fillDate"
+          [submitGuardFields]="['fill-medication', 'fill-date']"
           (click)="submitFill()"
         >
           {{ 'COMMON.SAVE' | translate }}

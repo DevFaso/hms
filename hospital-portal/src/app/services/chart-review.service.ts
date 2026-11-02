@@ -29,6 +29,8 @@ export interface ChartReviewNote {
   encounterId?: string | null;
   encounterCode?: string | null;
   template?: string | null;
+  /** QA D1107: the title the author gave the note (a nursing note's). */
+  title?: string | null;
   authorName?: string | null;
   authorCredentials?: string | null;
   documentedAt?: string | null;
@@ -39,6 +41,8 @@ export interface ChartReviewNote {
   requiresCosign?: boolean;
   cosignedAt?: string | null;
   preview?: string | null;
+  /** QA D1076: a nurse's note (DAR / SOAPIE) or the visit's clinical note. */
+  source?: 'ENCOUNTER' | 'NURSING' | null;
 }
 
 export interface ChartReviewResult {
@@ -53,6 +57,8 @@ export interface ChartReviewResult {
   orderingStaffName?: string | null;
   acknowledged: boolean;
   released: boolean;
+  /** QA D1016: the result corrects a released value. */
+  corrected?: boolean;
 }
 
 export interface ChartReviewMedication {
@@ -106,6 +112,8 @@ export interface ChartReviewTimelineEvent {
   title?: string | null;
   summary?: string | null;
   status?: string | null;
+  /** QA D1016 (D931 class): a RESULT event whose value replaces a released one. */
+  corrected?: boolean;
 }
 
 export interface ChartReview {

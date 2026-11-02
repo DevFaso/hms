@@ -299,7 +299,7 @@ class PatientHospitalRegistrationServiceImplTest {
 
         assertThatThrownBy(() -> service.registerPatient(dto))
             .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("Patient");
+            .hasMessageContaining("registration.patient.required");
     }
 
     @Test
@@ -309,7 +309,7 @@ class PatientHospitalRegistrationServiceImplTest {
 
         assertThatThrownBy(() -> service.registerPatient(dto))
             .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("Hospital");
+            .hasMessageContaining("registration.hospital.required");
     }
 
     @Test
@@ -393,7 +393,7 @@ class PatientHospitalRegistrationServiceImplTest {
         return new RegistrationDeskRow(
             UUID.randomUUID(), "mrn-ABC1234",
             rowPatientId, rowPatientId == null ? null : "jdoe",
-            rowPatientId == null ? null : "John", rowPatientId == null ? null : "Doe",
+            rowPatientId == null ? null : "John", null, rowPatientId == null ? null : "Doe",
             null, null, null,
             hospitalId, "General Hospital", "GH", "1 Main St",
             LocalDate.now(), active,

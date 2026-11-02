@@ -270,7 +270,11 @@ class InstrumentOutboxServiceImplTest {
 
         assertThatThrownBy(() -> service.search("BANANA", 0, 25))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("BANANA");
+            // QA D1187: a key in the reader's language, the unknown value as its argument.
+            .satisfies(e -> {
+                assertThat(((BusinessException) e).getMessageKey()).isEqualTo("instrumentOutbox.status.unknown");
+                assertThat(((BusinessException) e).getArgs()).containsExactly("BANANA");
+            });
     }
 
     // ── getMessage ────────────────────────────────────────────────────────────
@@ -329,7 +333,7 @@ class InstrumentOutboxServiceImplTest {
 
         assertThatThrownBy(() -> service.retry(row.getId()))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("PENDING");
+            .hasMessageContaining("instrumentOutbox.retry.notInError");
 
         verify(outboxRepository, never()).save(any());
     }

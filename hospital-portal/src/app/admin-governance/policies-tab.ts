@@ -13,6 +13,8 @@ import {
 import { OrganizationService, OrganizationResponse } from '../services/organization.service';
 import { ToastService } from '../core/toast.service';
 import { OrgTextPipe } from '../shared/pipes/org-text.pipe';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { refusalReason } from '../shared/refusal-reason';
 
 /**
  * Org security policies + rules via the flat CRUD controllers
@@ -23,7 +25,7 @@ import { OrgTextPipe } from '../shared/pipes/org-text.pipe';
 @Component({
   selector: 'app-gov-policies-tab',
   standalone: true,
-  imports: [FormsModule, TranslateModule, OrgTextPipe],
+  imports: [ModalDialogDirective, FormsModule, TranslateModule, OrgTextPipe],
   templateUrl: './policies-tab.html',
   styleUrl: './admin-governance.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -183,7 +185,10 @@ export class PoliciesTabComponent implements OnInit {
         this.toast.success(this.translate.instant('ADMIN_GOV.POLICY_DELETED'));
         this.policies.update((list) => list.filter((p) => p.id !== policy.id));
       },
-      error: () => this.toast.error(this.translate.instant('ADMIN_GOV.POLICY_DELETE_ERROR')),
+      error: (err: unknown) =>
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('ADMIN_GOV.POLICY_DELETE_ERROR'),
+        ),
     });
   }
 
@@ -276,7 +281,8 @@ export class PoliciesTabComponent implements OnInit {
           ),
         );
       },
-      error: () => this.toast.error(this.translate.instant('ADMIN_GOV.SAVE_ERROR')),
+      error: (err: unknown) =>
+        this.toast.error(refusalReason(err) ?? this.translate.instant('ADMIN_GOV.SAVE_ERROR')),
     });
   }
 }

@@ -51,7 +51,8 @@
                 {{ dept.staffCount }}
               </span>
             }
-            <span class="status-badge" [class.active]="dept.active">
+            {{ ' '
+            }}<span class="status-badge" [class.active]="dept.active">
               {{ dept.active ? ('COMMON.ACTIVE' | translate) : ('COMMON.INACTIVE' | translate) }}
             </span>
             <div class="action-group">
@@ -59,6 +60,7 @@
                 <button
                   class="action-link"
                   [title]="'COMMON.EDIT' | translate"
+                  [attr.aria-label]="'COMMON.EDIT' | translate"
                   (click)="openEdit(dept)"
                 >
                   <span class="material-symbols-outlined">edit</span>
@@ -66,6 +68,7 @@
                 <button
                   class="action-link danger"
                   [title]="'COMMON.DELETE' | translate"
+                  [attr.aria-label]="'COMMON.DELETE' | translate"
                   (click)="confirmDelete(dept)"
                 >
                   <span class="material-symbols-outlined">delete</span>
@@ -104,14 +107,20 @@
         class="modal modal-lg"
         [open]="showModal()"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="closeModal()"
+        (keydown.escape)="closeModal(); $event.stopPropagation()"
         tabindex="-1"
+        appModalDialog
+        aria-labelledby="department-list-dialog-2-title"
       >
         <div class="modal-header">
-          <h2>
+          <h2 id="department-list-dialog-2-title">
             {{ editing() ? ('DEPARTMENTS.EDIT' | translate) : ('DEPARTMENTS.CREATE' | translate) }}
           </h2>
-          <button class="modal-close" (click)="closeModal()">
+          <button
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+            class="modal-close"
+            (click)="closeModal()"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
@@ -186,6 +195,7 @@
                 <input
                   id="dPhone"
                   type="tel"
+                  appPhoneField
                   [(ngModel)]="form.phoneNumber"
                   name="phoneNumber"
                   [placeholder]="'DEPARTMENTS.PLACEHOLDER.PHONE' | translate"
@@ -243,7 +253,13 @@
             <button type="button" class="btn-secondary" (click)="closeModal()">
               {{ 'COMMON.CANCEL' | translate }}
             </button>
-            <button type="submit" class="btn-primary" [disabled]="saving()">
+            <button
+              appSubmitGuard
+              submitGuardRequired
+              type="submit"
+              class="btn-primary"
+              [disabled]="saving()"
+            >
               {{
                 saving()
                   ? editing()
@@ -272,12 +288,18 @@
         class="modal"
         [open]="showDeleteConfirm()"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="cancelDelete()"
+        (keydown.escape)="cancelDelete(); $event.stopPropagation()"
         tabindex="-1"
+        appModalDialog
+        aria-labelledby="department-list-dialog-1-title"
       >
         <div class="modal-header">
-          <h2>{{ 'DEPARTMENTS.DELETE' | translate }}</h2>
-          <button class="modal-close" (click)="cancelDelete()">
+          <h2 id="department-list-dialog-1-title">{{ 'DEPARTMENTS.DELETE' | translate }}</h2>
+          <button
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+            class="modal-close"
+            (click)="cancelDelete()"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
@@ -285,7 +307,7 @@
           <p class="delete-warning">
             {{ 'DEPARTMENTS.DELETE_CONFIRM' | translate }}
             <strong>{{ deletingDept()?.name }}</strong
-            >? {{ 'COMMON.CANNOT_UNDO' | translate }}
+            >{{ 'COMMON.QUESTION_MARK' | translate }} {{ 'COMMON.CANNOT_UNDO' | translate }}
           </p>
         </div>
         <div class="modal-actions">

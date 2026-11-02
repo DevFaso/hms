@@ -14,6 +14,8 @@ import {
   ProfileService,
   UserProfile,
 } from '../services/profile.service';
+import { PatientPortalService, PatientProfileDTO } from '../services/patient-portal.service';
+import { isSubmitBlocked } from '../shared/forms/submit-guard.testing';
 
 const profile = (email: string, firstName = 'Awa'): UserProfile => ({
   id: 'u1',
@@ -42,6 +44,7 @@ describe('ProfileComponent — editing the profile', () => {
   let auth: jasmine.SpyObj<AuthService>;
   let ssoAuthenticated: WritableSignal<boolean>;
   let stored: LoginUserProfile;
+  let portal: jasmine.SpyObj<PatientPortalService>;
 
   beforeEach(async () => {
     profiles = jasmine.createSpyObj<ProfileService>('ProfileService', [
@@ -81,6 +84,14 @@ describe('ProfileComponent — editing the profile', () => {
     auth.getRoles.and.returnValue([]);
     auth.hasAnyRole.and.returnValue(false);
     ssoAuthenticated = signal(false);
+    portal = jasmine.createSpyObj<PatientPortalService>('PatientPortalService', [
+      'updateMyProfile',
+      'getMyProfile',
+    ]);
+    portal.updateMyProfile.and.returnValue(of({} as PatientProfileDTO));
+    portal.getMyProfile.and.returnValue(
+      of({ phoneNumberPrimary: '+22670111111' } as PatientProfileDTO),
+    );
 
     await TestBed.configureTestingModule({
       imports: [ProfileComponent, TranslateModule.forRoot()],
@@ -91,6 +102,7 @@ describe('ProfileComponent — editing the profile', () => {
         { provide: AuthService, useValue: auth },
         { provide: MfaService, useValue: {} },
         { provide: OidcAuthService, useValue: { authenticated: ssoAuthenticated } },
+        { provide: PatientPortalService, useValue: portal },
       ],
     }).compileComponents();
 
@@ -103,6 +115,23 @@ describe('ProfileComponent — editing the profile', () => {
 
   const byId = (id: string): HTMLInputElement | null =>
     fixture.nativeElement.querySelector(`#${id}`);
+
+  it('QA D1170: a blank first name is refused where it is typed, never "saved"', () => {
+    const first = byId('editFirstName')!;
+    first.value = '   ';
+    first.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    const save = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
+      '.edit-form button[type="submit"]',
+    )!;
+    save.click();
+    fixture.detectChanges();
+    expect(profiles.updateProfile).not.toHaveBeenCalled();
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(byId('editFirstName')?.getAttribute('aria-invalid')).toBe('true');
+    component.saveProfile();
+    expect(profiles.updateProfile).not.toHaveBeenCalled();
+  });
 
   it('QA D844: a patient sees no staff counters (roles, assignments, security %) in the header', () => {
     // PATIENT_B1 holds ROLE_PATIENT only.
@@ -120,6 +149,84 @@ describe('ProfileComponent — editing the profile', () => {
         .withContext(role)
         .not.toBeNull();
     }
+  });
+
+  describe('patient phone (QA D939)', () => {
+    function asPatient(): ProfileComponent {
+      auth.getRoles.and.returnValue(['ROLE_PATIENT']);
+      const f = TestBed.createComponent(ProfileComponent);
+      f.detectChanges();
+      return f.componentInstance;
+    }
+
+    it('sends the new phone of a patient to the patient record too', () => {
+      profiles.updateProfile.and.callFake(() =>
+        of({ ...profile('old@example.test'), phoneNumber: '+22676112233' }),
+      );
+      const patient = asPatient();
+      patient.updateField('phoneNumber', '+22676112233');
+      patient.saveProfile();
+      expect(portal.updateMyProfile).toHaveBeenCalledWith({ phoneNumberPrimary: '+22676112233' });
+    });
+
+    it('a refused record update is said, and the account gets its old phone back', () => {
+      profiles.updateProfile.and.callFake((_id, data) =>
+        of({ ...profile('old@example.test'), phoneNumber: data.phoneNumber ?? '' }),
+      );
+      portal.updateMyProfile.and.returnValue(
+        throwError(() => ({ status: 400, error: { message: 'taken' } })),
+      );
+      const patient = asPatient();
+      patient.updateField('phoneNumber', '+22676112233');
+      patient.saveProfile();
+      expect(toast.error).toHaveBeenCalledWith('taken');
+      expect(profiles.updateProfile).toHaveBeenCalledTimes(2);
+      expect(profiles.updateProfile.calls.mostRecent().args[1].phoneNumber).toBe('+22670000000');
+    });
+
+    it('an account with no phone before: the record takes it first, a refusal saves nothing', () => {
+      profiles.getUserProfile.and.returnValue(
+        of({ ...profile('old@example.test'), phoneNumber: '' }),
+      );
+      portal.updateMyProfile.and.returnValue(
+        throwError(() => ({ status: 400, error: { message: 'taken' } })),
+      );
+      const patient = asPatient();
+      patient.updateField('phoneNumber', '+22676112233');
+      patient.saveProfile();
+      expect(toast.error).toHaveBeenCalledWith('taken');
+      expect(profiles.updateProfile).not.toHaveBeenCalled();
+    });
+
+    it('an account with no phone before: a refused account save gives the record its phone back', () => {
+      profiles.getUserProfile.and.returnValue(
+        of({ ...profile('old@example.test'), phoneNumber: '' }),
+      );
+      profiles.updateProfile.and.returnValue(
+        throwError(() => ({ status: 400, error: { message: 'phone used' } })),
+      );
+      const patient = asPatient();
+      patient.updateField('phoneNumber', '+22676112233');
+      patient.saveProfile();
+      expect(toast.error).toHaveBeenCalledWith('phone used');
+      expect(portal.updateMyProfile.calls.allArgs()).toEqual([
+        [{ phoneNumberPrimary: '+22676112233' }],
+        [{ phoneNumberPrimary: '+22670111111' }],
+      ]);
+    });
+
+    it('a staff account phone stays the login contact only', () => {
+      component.updateField('phoneNumber', '+22676112233');
+      component.saveProfile();
+      expect(portal.updateMyProfile).not.toHaveBeenCalled();
+    });
+
+    it('a patient who changes only the name does not touch the record phone', () => {
+      const patient = asPatient();
+      patient.updateField('firstName', 'Rasmata');
+      patient.saveProfile();
+      expect(portal.updateMyProfile).not.toHaveBeenCalled();
+    });
   });
 
   it('saves names and phone through the profile PUT, sending the email back unchanged', () => {
@@ -311,7 +418,7 @@ describe('ProfileComponent — editing the profile', () => {
     const save = fixture.nativeElement.querySelector(
       'form.edit-form button[type="submit"]',
     ) as HTMLButtonElement;
-    expect(save.disabled).toBeTrue();
+    expect(isSubmitBlocked(save)).toBeTrue();
   });
 
   it('a refused profile PUT stops there: no email step is attempted', () => {

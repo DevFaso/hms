@@ -21,6 +21,7 @@ public class PharmacyClaimMapper {
             .id(entity.getId())
             .dispenseId(entity.getDispense() != null ? entity.getDispense().getId() : null)
             .patientId(entity.getPatient() != null ? entity.getPatient().getId() : null)
+            .patientName(entity.getPatient() != null ? entity.getPatient().getFullName() : null)
             .hospitalId(entity.getHospital() != null ? entity.getHospital().getId() : null)
             .coverageReference(entity.getCoverageReference())
             .claimStatus(entity.getClaimStatus() != null ? entity.getClaimStatus().name() : null)

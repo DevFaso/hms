@@ -17,9 +17,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -67,6 +65,14 @@ public class MedicationAllergyCdsService implements CdsHookService {
         this.text = text;
     }
 
+    /** QA D1183: the catalogue the drug is resolved against; absent in unit tests built by hand. */
+    private com.example.hms.repository.MedicationCatalogItemRepository catalogRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setCatalogRepository(com.example.hms.repository.MedicationCatalogItemRepository catalogRepository) {
+        this.catalogRepository = catalogRepository;
+    }
+
     private final PatientAllergyRepository allergyRepository;
     private final PatientRepository patientRepository;
     private final CdsRuleEngine ruleEngine;
@@ -102,7 +108,6 @@ public class MedicationAllergyCdsService implements CdsHookService {
         if (patientId == null) return CdsHookResponse.empty();
 
         List<PatientAllergy> allergies = allergyRepository.findByPatient_Id(patientId);
-        Set<String> allergyHaystack = collectAllergyTerms(allergies);
         // The patient lookup is only needed when DDI evaluation has work to do.
         // We defer it to the first MedicationRequest draft so requests with no
         // medication entries (allergy-only check) keep their lightweight path.
@@ -113,37 +118,25 @@ public class MedicationAllergyCdsService implements CdsHookService {
         for (Map<String, Object> draft : CdsHookContext.medicationDrafts(request)) {
             if (!"MedicationRequest".equals(draft.get("resourceType"))) continue;
 
-            String medText = MedicationDraftExtractor.extract(draft).name();
+            ProposedMedication proposed = MedicationDraftExtractor.extract(draft);
+            String medText = proposed.name();
             if (medText == null) {
                 medText = extractMedicationText(draft);
             }
             if (medText == null) continue;
 
-            // 1. Allergy card — same critical-match semantics as before.
-            CdsCard allergy = allergyHaystack.isEmpty() ? null : allergyCard(medText, allergyHaystack);
-            if (allergy == null) {
-                // QA D793 sibling: the class rule the prescribing check blocks
-                // on (a penicillin allergy covers amoxicillin), which a name
-                // match alone never saw.
-                final String med = medText;
-                allergy = com.example.hms.service.allergy.BetaLactamCrossReactivity
-                    .classMatchedAllergen(medText, allergies)
-                    .map(allergen -> buildAllergyCard(med, allergen))
-                    .orElse(null);
-            }
-            if (allergy != null) {
-                cards.add(allergy);
-            } else {
-                // 1b. QA D793: no direct match, but a beta-lactam that may
-                // cross-react with a documented beta-lactam allergy: a warning.
-                crossReactivityCard(medText, allergies).ifPresent(cards::add);
-            }
-
-            // 2. Drug-drug interaction cards — added in v1.0 row 3.
             if (!patientLookupAttempted) {
                 patient = patientRepository.findByIdUnscoped(patientId).orElse(null);
                 patientLookupAttempted = true;
             }
+            // 1. Allergy card: QA D1183 (round 23) - the same rule as the
+            // prescription's stop (name, INN class, cited brand, catalogue
+            // item's generic and ATC), and the safety net for a name that
+            // resolves to no active ingredient while a class allergy is on file.
+            UUID hospitalId = patient != null ? patient.getHospitalId() : null;
+            cards.addAll(allergyCards(medText, proposed.code(), hospitalId, allergies));
+
+            // 2. Drug-drug interaction cards — added in v1.0 row 3.
             if (patient != null) {
                 cards.addAll(evaluateDrugDrugInteractions(patient, draft));
             }
@@ -155,29 +148,88 @@ public class MedicationAllergyCdsService implements CdsHookService {
        Drug-allergy path — unchanged from the v0.x service.
        ===================================================================== */
 
-    private CdsCard allergyCard(String medText, Set<String> haystacks) {
-        String norm = medText.toLowerCase(Locale.ROOT);
-        return haystacks.stream()
-            .filter(norm::contains)
-            .findFirst()
-            .map(allergen -> buildAllergyCard(medText, allergen))
-            .orElse(null);
-    }
-
-    private Set<String> collectAllergyTerms(List<PatientAllergy> allergies) {
-        java.util.HashSet<String> out = new java.util.HashSet<>();
-        for (PatientAllergy a : allergies) {
-            if (!a.isActive()) continue;
-            addNormalised(out, a.getAllergenDisplay());
-            addNormalised(out, a.getAllergenCode());
+    /**
+     * QA D1183 (round 23): the allergy cards for one proposed medication, the
+     * rule the prescription's stop applies (shared through
+     * {@link com.example.hms.service.allergy.AllergyDrugIdentity}):
+     * <ol>
+     *   <li>a CRITICAL card when an active allergy covers the drug - by name,
+     *       allergy code, INN class, cited brand, or catalogue item's generic
+     *       name and ATC group;</li>
+     *   <li>else the CRITICAL safety-net card when the name resolves to no
+     *       active ingredient while a drug-class allergy is on file;</li>
+     *   <li>else the beta-lactam cross-reactivity WARNING (QA D793).</li>
+     * </ol>
+     * Also read by the medication-prescribe hook, so the prescriber sees the
+     * same cards while composing the order.
+     */
+    public List<CdsCard> allergyCards(String medText, String code, UUID hospitalId, List<PatientAllergy> allergies) {
+        if (medText == null || medText.isBlank() || allergies == null || allergies.isEmpty()) {
+            return List.of();
         }
-        return out;
+        com.example.hms.service.allergy.AllergyDrugIdentity identity =
+            com.example.hms.service.allergy.AllergyDrugIdentity.of(medText, catalogItemsFor(medText, code, hospitalId));
+        java.util.Optional<String> matched = identity.matchingAllergies(allergies).stream()
+            .map(com.example.hms.service.allergy.AllergyDrugIdentity::displayOf)
+            .findFirst()
+            .or(() -> allergyCodeIn(identity.text(), allergies));
+        if (matched.isPresent()) {
+            return List.of(buildAllergyCard(medText, matched.get().trim()));
+        }
+        java.util.Optional<PatientAllergy> unverifiable = identity.unverifiableClassAllergy(allergies);
+        if (unverifiable.isPresent()) {
+            return List.of(com.example.hms.service.allergy.UnverifiableAllergyCard.of(medText,
+                com.example.hms.service.allergy.AllergyDrugIdentity.displayOf(unverifiable.get())));
+        }
+        return crossReactivityCard(medText, allergies).map(List::of).orElse(List.of());
     }
 
-    private static void addNormalised(Set<String> sink, String value) {
-        if (value == null) return;
-        String trimmed = value.trim().toLowerCase(Locale.ROOT);
-        if (trimmed.length() >= 3) sink.add(trimmed);
+    /** {@link #allergyCards} for the patient's active allergies, recorded at any hospital. */
+    public List<CdsCard> allergyCardsForPatient(UUID patientId, UUID hospitalId, String medText, String code) {
+        if (patientId == null) {
+            return List.of();
+        }
+        return allergyCards(medText, code, hospitalId, allergyRepository.findByPatient_Id(patientId));
+    }
+
+    /** An active allergy recorded by code (3+ characters) that the drug's text carries. */
+    private static java.util.Optional<String> allergyCodeIn(String drugText, List<PatientAllergy> allergies) {
+        for (PatientAllergy a : allergies) {
+            if (a == null || !a.isActive() || a.getAllergenCode() == null) continue;
+            String code = com.example.hms.service.allergy.DrugClassAllergy.normalize(a.getAllergenCode());
+            if (code.length() >= 3 && drugText.contains(code)) {
+                return java.util.Optional.of(a.getAllergenCode());
+            }
+        }
+        return java.util.Optional.empty();
+    }
+
+    /**
+     * The catalogue items behind the proposed medication at the patient's
+     * hospital: the item its code names, else the items its name names (the
+     * dispense and prescription name rule) in this hospital's catalogue and the
+     * national list (V95). Empty without a catalogue.
+     */
+    private List<com.example.hms.model.medication.MedicationCatalogItem> catalogItemsFor(
+            String medText, String code, UUID hospitalId) {
+        if (catalogRepository == null || hospitalId == null) {
+            return List.of();
+        }
+        if (code != null && !code.isBlank()) {
+            java.util.Optional<com.example.hms.model.medication.MedicationCatalogItem> coded =
+                catalogRepository.findByHospitalIdAndCode(hospitalId, code.trim());
+            if (coded.isPresent()) {
+                return List.of(coded.get());
+            }
+        }
+        org.springframework.data.domain.Page<com.example.hms.model.medication.MedicationCatalogItem> page =
+            catalogRepository.findActivePage(hospitalId, org.springframework.data.domain.Pageable.unpaged());
+        if (page == null) {
+            return List.of();
+        }
+        return page.getContent().stream()
+            .filter(item -> com.example.hms.service.pharmacy.DispenseVerificationService.namesCatalogItem(medText, item))
+            .toList();
     }
 
     /**
@@ -226,7 +278,7 @@ public class MedicationAllergyCdsService implements CdsHookService {
             summary,
             detail,
             CdsCard.Indicator.CRITICAL,
-            new Source(SOURCE_LABEL, null, null),
+            new Source(text.get("cds.source.allergy", SOURCE_LABEL), null, null),
             null, null, null, java.util.UUID.randomUUID().toString()
         );
     }
@@ -241,7 +293,7 @@ public class MedicationAllergyCdsService implements CdsHookService {
                         + "Check what the reaction was before giving it. This is an advisory: the order is not blocked.",
                     medication, allergen),
                 CdsCard.Indicator.WARNING,
-                new Source(SOURCE_LABEL, null, null),
+                new Source(text.get("cds.source.allergy", SOURCE_LABEL), null, null),
                 null, null, null, java.util.UUID.randomUUID().toString()));
     }
 

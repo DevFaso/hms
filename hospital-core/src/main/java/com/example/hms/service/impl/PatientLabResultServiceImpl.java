@@ -147,7 +147,11 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
         // duplicate are not current, on the portal and the staff view alike.
         boolean clinicalReader = portalView || !includeUnreleasedValues;
         List<LabResult> results = fetchRows(patient, hospitalId, effectiveLimit, portalView);
-        List<LabResult> visible = currentFor(clinicalReader, resolvePairs(results, portalView, effectiveLimit));
+        // QA D1213 (round 23): filter first, then cut. resolvePairs used to cut
+        // at the limit BEFORE currentFor removed the superseded rows, so a
+        // page of 20 showed 17 and the two oldest released results (a
+        // critical K 6.8 among them) could never be reached.
+        List<LabResult> visible = limited(currentFor(clinicalReader, resolvePairs(results, portalView)), effectiveLimit);
         // Only worth reading again if there are rows we have not seen AND the
         // wider read would actually be wider — at the cap it would repeat the
         // identical query for nothing.
@@ -155,7 +159,7 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
             && results.size() >= effectiveLimit
             && effectiveLimit < MAX_LIMIT) {
             results = fetchRows(patient, hospitalId, MAX_LIMIT, portalView);
-            visible = currentFor(clinicalReader, resolvePairs(results, portalView, effectiveLimit));
+            visible = limited(currentFor(clinicalReader, resolvePairs(results, portalView)), effectiveLimit);
         }
 
         if (!portalView && hospitalId != null) {
@@ -183,6 +187,40 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
         Map<UUID, LocalDateTime> collectedAtByOrder = collectionTimesOf(visible);
         return visible.stream()
             .map(result -> toResponse(result, clinicalReader, collectedAtByOrder))
+            .toList();
+    }
+
+    private static List<LabResult> limited(List<LabResult> rows, int limit) {
+        return rows.size() <= limit ? rows : rows.subList(0, limit);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<PatientLabResultResponseDTO> getLabResultsForPatientPortal(UUID patientId, int offset, int limit) {
+        Patient patient = patientChartAccess.requireOwnRecord(patientId);
+        int pageSize = limit > 0 ? Math.min(limit, MAX_LIMIT) : DEFAULT_LIMIT;
+        int skip = Math.max(offset, 0);
+        int needed = (int) Math.min((long) skip + pageSize, Integer.MAX_VALUE / 2);
+        // Read a window of the patient's rows, filter it, and widen it until
+        // it holds offset + limit current rows or the patient has no more
+        // rows: the filter never cuts a page short, and offset skips CURRENT
+        // rows only.
+        int window = needed;
+        List<LabResult> visible;
+        while (true) {
+            List<LabResult> rows = fetchRows(patient, null, window, true);
+            visible = ClinicalLabResultView.current(resolvePairs(rows, true));
+            if (visible.size() >= needed || rows.size() < window || window >= Integer.MAX_VALUE / 2) {
+                break;
+            }
+            window = (int) Math.min((long) window * 2, Integer.MAX_VALUE / 2);
+        }
+        int from = Math.min(skip, visible.size());
+        int to = Math.min(from + pageSize, visible.size());
+        List<LabResult> slice = visible.subList(from, to);
+        Map<UUID, LocalDateTime> collectedAtByOrder = collectionTimesOf(slice);
+        return slice.stream()
+            .map(result -> toResponse(result, true, collectedAtByOrder))
             .toList();
     }
 
@@ -279,16 +317,16 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
      * view, never from the record. Order completion applies the same rule, from
      * the same class. The staff path resolves nothing: both rows are the record.
      */
-    private List<LabResult> resolvePairs(List<LabResult> results, boolean redactUnreleased, int limit) {
+    private List<LabResult> resolvePairs(List<LabResult> results, boolean redactUnreleased) {
         if (!redactUnreleased) {
-            return results.stream().limit(limit).toList();
+            return results;
         }
         List<LabResult> known = withSiblingsOfSupersedableRows(results);
         // Judge everything we know, not just the page: a winner that is itself
         // superseded must be recognisable as such before it is folded in.
         Map<UUID, LabResult> replacements = SupersededLabResults.replacements(known, known);
         if (replacements.isEmpty()) {
-            return results.stream().limit(limit).toList();
+            return results;
         }
 
         Set<UUID> present = new java.util.HashSet<>();
@@ -313,13 +351,21 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
                 && present.add(winner.getId()))
             .toList());
         survivors.sort(NEWEST_FIRST);
-        return survivors.stream().limit(limit).toList();
+        return survivors;
     }
 
-    /** The order the page is read in, applied again once a survivor is folded in. */
+    /**
+     * The order the page is read in (resultDate, then id, both descending),
+     * applied again once a survivor is folded in. QA D1213: the id tie-break
+     * is compared as the database compares a uuid (its text, byte by byte),
+     * so a re-sorted page keeps the order the query gave and two results at
+     * the same time never swap between pages.
+     */
     private static final java.util.Comparator<LabResult> NEWEST_FIRST =
         java.util.Comparator.comparing(LabResult::getResultDate,
-            java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder()));
+                java.util.Comparator.nullsLast(java.util.Comparator.<LocalDateTime>reverseOrder()))
+            .thenComparing(r -> r.getId() == null ? "" : r.getId().toString(),
+                java.util.Comparator.<String>reverseOrder());
 
     /**
      * D49: when each order's specimen was actually collected - the earliest
@@ -360,6 +406,9 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
             .testCode(testDefinition != null ? testDefinition.getTestCode() : null)
             .status(resolveStatus(result, mapped))
             .released(result.isReleased())
+            // QA D1016: a released correction is marked, so the patient does not
+            // read it as a second, unrelated result.
+            .corrected(result.isReleased() && com.example.hms.service.lab.LabResultCorrections.isCorrection(result))
             .collectedAt(labOrder != null ? collectedAtByOrder.get(labOrder.getId()) : null)
             .resultedAt(result.getResultDate())
             .orderedBy(resolveStaffName(labOrder != null ? labOrder.getOrderingStaff() : null))
@@ -424,8 +473,9 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
     }
 
     private String resolveUnit(LabResult result, LabTestDefinition definition) {
-        if (result.getResultUnit() != null && !result.getResultUnit().isBlank()) {
-            return result.getResultUnit();
+        String stated = com.example.hms.mapper.LabResultMapper.unitOf(result);
+        if (stated != null) {
+            return stated;
         }
         if (definition != null && definition.getUnit() != null && !definition.getUnit().isBlank()) {
             return definition.getUnit();

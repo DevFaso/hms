@@ -11,7 +11,10 @@
     <div class="header-actions">
       <div class="stat-pills">
         <span class="pill enabled">{{ enabledCount() }} {{ 'FLAGS.ENABLED' | translate }}</span>
-        <span class="pill disabled">{{ disabledCount() }} {{ 'FLAGS.DISABLED' | translate }}</span>
+        {{ ' '
+        }}<span class="pill disabled"
+          >{{ disabledCount() }} {{ 'FLAGS.DISABLED' | translate }}</span
+        >
       </div>
       <button class="btn-primary" (click)="openCreate()">
         <span class="material-icons">add</span> {{ 'FLAGS.NEW_FLAG' | translate }}
@@ -67,7 +70,8 @@
           </div>
           <div class="col-key">
             <span class="flag-name">{{ flag.key }}</span>
-            <span class="flag-badge" [class.on]="flag.enabled">
+            {{ ' '
+            }}<span class="flag-badge" [class.on]="flag.enabled">
               {{ flag.enabled ? ('FLAGS.ON' | translate) : ('FLAGS.OFF' | translate) }}
             </span>
           </div>
@@ -76,6 +80,7 @@
               class="btn-icon"
               (click)="toggleFlag(flag)"
               [title]="'FLAGS.TOGGLE' | translate"
+              [attr.aria-label]="'FLAGS.TOGGLE' | translate"
             >
               <span class="material-icons">{{ flag.enabled ? 'toggle_on' : 'toggle_off' }}</span>
             </button>
@@ -83,6 +88,7 @@
               class="btn-icon danger"
               (click)="removeOverride(flag)"
               [title]="'FLAGS.REMOVE_OVERRIDE' | translate"
+              [attr.aria-label]="'FLAGS.REMOVE_OVERRIDE' | translate"
             >
               <span class="material-icons">delete_outline</span>
             </button>
@@ -118,10 +124,17 @@
         (keydown.enter)="$event.stopPropagation()"
         tabindex="-1"
         role="dialog"
+        appModalDialog
+        aria-labelledby="feature-flags-dialog-1-title"
+        (escaped)="closeCreate()"
       >
         <div class="modal-header">
-          <h2>{{ 'FLAGS.CREATE_TITLE' | translate }}</h2>
-          <button class="btn-icon" (click)="closeCreate()">
+          <h2 id="feature-flags-dialog-1-title">{{ 'FLAGS.CREATE_TITLE' | translate }}</h2>
+          <button
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+            class="btn-icon"
+            (click)="closeCreate()"
+          >
             <span class="material-icons">close</span>
           </button>
         </div>
@@ -149,6 +162,8 @@
           <div class="form-group toggle-group">
             <span class="toggle-group-label">{{ 'FLAGS.INITIAL_STATE' | translate }}</span>
             <button
+              [attr.aria-label]="'FLAGS.ENABLED' | translate"
+              [attr.aria-pressed]="newFlagEnabled()"
               class="toggle-btn"
               [class.on]="newFlagEnabled()"
               (click)="newFlagEnabled.set(!newFlagEnabled())"

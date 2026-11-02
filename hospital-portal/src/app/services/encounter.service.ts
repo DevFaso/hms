@@ -110,6 +110,8 @@ export interface EncounterResponse {
   patientEmail: string;
   patientPhoneNumber: string;
   staffId: string;
+  /** QA D1085: the assigned clinician's user (null when unassigned); who may start the visit. */
+  staffUserId?: string | null;
   staffName: string;
   staffEmail: string;
   departmentId: string;
@@ -127,6 +129,8 @@ export interface EncounterResponse {
   encounterDate: string;
   notes: string;
   arrivalTimestamp: string | null;
+  /** When the visit was checked out (server local time); absent while it is open. */
+  checkoutTimestamp?: string | null;
   chiefComplaint: string;
   esiScore: number | null;
   roomAssignment: string;
@@ -164,6 +168,8 @@ export interface TriageSubmissionRequest {
   /** NEWS2 (P3 #25b): ACVPU consciousness assessment. */
   consciousnessLevel?: 'ALERT' | 'NEW_CONFUSION' | 'VOICE' | 'PAIN' | 'UNRESPONSIVE';
   painScale?: number;
+  /** QA D1031: the antenatal fundal height, in cm. */
+  fundalHeightCm?: number;
   chiefComplaint?: string;
   esiScore: number;
   fallRisk?: boolean;

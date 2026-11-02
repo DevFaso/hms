@@ -12,6 +12,8 @@
   role="dialog"
   aria-modal="true"
   [attr.aria-label]="'RECEPTION.REGISTER_WALKIN' | translate"
+  appDialogFocus
+  (dialogDismiss)="dismissed.emit()"
 >
   <div class="dialog-header">
     <span class="material-symbols-outlined header-icon">person_add</span>
@@ -33,6 +35,7 @@
       >
       <div class="search-wrapper">
         <input
+          data-escape-discards
           id="patientSearch"
           type="text"
           class="form-control"
@@ -54,7 +57,7 @@
               (click)="selectPatient(p)"
               (keydown.enter)="selectPatient(p)"
             >
-              <span class="result-name">{{ p.firstName }} {{ p.lastName }}</span>
+              <span class="result-name">{{ p | personName }}</span>
               @if (p | patientSubline; as sub) {
                 <span class="result-meta">{{ sub }}</span>
               }
@@ -65,12 +68,17 @@
       @if (selectedPatient()) {
         <div class="selected-badge">
           <span class="material-symbols-outlined">check_circle</span>
-          {{ selectedPatient()!.firstName }} {{ selectedPatient()!.lastName }}
+          {{ selectedPatient() | personName }}
           @if (selectedPatient() | patientSubline; as sub) {
             <span class="result-meta">{{ sub }}</span>
           }
-          <button class="clear-btn" (click)="selectedPatient.set(null); patientQuery.set('')">
-            <span class="material-symbols-outlined">close</span>
+          <button
+            type="button"
+            class="clear-btn"
+            (click)="selectedPatient.set(null); patientQuery.set('')"
+            [attr.aria-label]="'RECEPTION.CLEAR_PATIENT' | translate"
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
           </button>
         </div>
       }
@@ -83,6 +91,7 @@
       >
       <div class="search-wrapper">
         <input
+          data-escape-discards
           id="staffSearch"
           type="text"
           class="form-control"
@@ -116,8 +125,13 @@
           @if (selectedStaff()!.departmentName) {
             <span class="result-meta">— {{ selectedStaff()!.departmentName }}</span>
           }
-          <button class="clear-btn" (click)="selectedStaff.set(null); staffQuery.set('')">
-            <span class="material-symbols-outlined">close</span>
+          <button
+            type="button"
+            class="clear-btn"
+            (click)="selectedStaff.set(null); staffQuery.set('')"
+            [attr.aria-label]="'RECEPTION.CLEAR_PROVIDER' | translate"
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
           </button>
         </div>
       }
@@ -178,7 +192,11 @@
     </button>
     <button
       class="btn-primary"
-      [disabled]="!selectedPatient() || !selectedStaff() || saving()"
+      [disabled]="saving()"
+      [appSubmitGuard]="
+        (!selectedPatient() || !selectedStaff()) &&
+        ('SUBMIT_GUARD.PATIENT_AND_CLINICIAN' | translate)
+      "
       (click)="submit()"
     >
       @if (saving()) {

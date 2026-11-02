@@ -77,9 +77,17 @@ public class UltrasoundServiceImpl implements UltrasoundService {
         UltrasoundOrder entity = ultrasoundMapper.toOrderEntity(request, patient, hospital);
         entity.setStatus(UltrasoundOrderStatus.ORDERED);
 
-        // Set ordered by information
-        if (orderedByUserId != null) {
-            Staff orderedByStaff = staffRepository.findByUserIdAndHospitalId(orderedByUserId, hospital.getId()).orElse(null);
+        // Set ordered by information. QA D930 class: the id decides who may
+        // change or cancel the order; the name is for display. The session
+        // decides it: the controller's id parses the username as a UUID,
+        // which is null for every real account.
+        UUID authorId = com.example.hms.security.CallerIdentity.currentUserId();
+        if (authorId == null) {
+            authorId = orderedByUserId;
+        }
+        entity.setOrderedByUserId(authorId);
+        if (authorId != null) {
+            Staff orderedByStaff = staffRepository.findByUserIdAndHospitalId(authorId, hospital.getId()).orElse(null);
             if (orderedByStaff != null) {
                 String name = orderedByStaff.getName();
                 if (name == null && orderedByStaff.getUser() != null) {
@@ -96,14 +104,16 @@ public class UltrasoundServiceImpl implements UltrasoundService {
     @Override
     public UltrasoundOrderResponseDTO updateOrder(UUID orderId, UltrasoundOrderRequestDTO request) {
         UltrasoundOrder order = getOrderInScope(orderId);
+        requireOrderAuthor(order);
 
-        // Prevent modification of completed orders
-        if (order.getStatus() == UltrasoundOrderStatus.COMPLETED) {
-            throw new BusinessException("Cannot modify a completed ultrasound order");
+        // Prevent modification of completed orders (QA D1098: and reported ones)
+        if (order.getStatus() == UltrasoundOrderStatus.COMPLETED
+                || order.getStatus() == UltrasoundOrderStatus.REPORT_AVAILABLE) {
+            throw new BusinessException("ultrasound.order.completedNoEdit");
         }
 
         if (order.getStatus() == UltrasoundOrderStatus.CANCELLED) {
-            throw new BusinessException("Cannot modify a cancelled ultrasound order");
+            throw new BusinessException("ultrasound.order.cancelledNoEdit");
         }
 
         // Update hospital if changed
@@ -127,20 +137,47 @@ public class UltrasoundServiceImpl implements UltrasoundService {
     @Override
     public UltrasoundOrderResponseDTO cancelOrder(UUID orderId, String cancellationReason) {
         UltrasoundOrder order = getOrderInScope(orderId);
+        requireOrderAuthor(order);
 
         if (order.getStatus() == UltrasoundOrderStatus.CANCELLED) {
-            throw new BusinessException("Order is already cancelled");
+            throw new BusinessException("ultrasound.order.alreadyCancelled");
         }
 
-        if (order.getStatus() == UltrasoundOrderStatus.COMPLETED) {
-            throw new BusinessException("Cannot cancel a completed order");
+        // QA D1098 (round 19): an order whose report is available is resulted
+        // too - it was cancellable, leaving a report on a cancelled order.
+        if (order.getStatus() == UltrasoundOrderStatus.COMPLETED
+                || order.getStatus() == UltrasoundOrderStatus.REPORT_AVAILABLE) {
+            throw new BusinessException("ultrasound.order.completedNoCancel");
         }
+        // QA D1098: every cancel states why (the endpoint's reason was optional).
+        String reason = com.example.hms.service.support.CancelledOrders.requireCancelReason(cancellationReason);
 
         order.setStatus(UltrasoundOrderStatus.CANCELLED);
-        order.setCancellationReason(cancellationReason);
+        order.setCancellationReason(reason);
+        // QA D1047: a cancellation is stamped with when and by whom, like every order.
+        order.setCancelledAt(LocalDateTime.now(java.time.ZoneId.systemDefault()));
+        order.setCancelledBy(cancellerName(order));
 
         UltrasoundOrder saved = orderRepository.save(order);
         return ultrasoundMapper.toOrderResponseDTO(saved);
+    }
+
+    /**
+     * QA D930 class: an ultrasound order is changed or cancelled by the
+     * clinician who placed it, or a verified super-admin in global view. An
+     * order written before V243 has no recorded author and keeps the old rule
+     * (any doctor or midwife in scope). Anyone else gets 403; the order was
+     * resolved in the caller's scope first.
+     */
+    private void requireOrderAuthor(UltrasoundOrder order) {
+        UUID author = order.getOrderedByUserId();
+        if (author == null || com.example.hms.security.CallerIdentity.isGlobalSuperAdmin()) {
+            return;
+        }
+        if (!author.equals(com.example.hms.security.CallerIdentity.currentUserId())) {
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("ultrasound.order.authorOnly"));
+        }
     }
 
     @Override
@@ -258,17 +295,51 @@ public class UltrasoundServiceImpl implements UltrasoundService {
             .toList();
     }
 
+    /**
+     * QA D1150 (round 21): a report records findings. A blank report was saved
+     * with every value null and read "RAPPORT Normal", with "Notify the
+     * patient" offered: the finding category alone (preselected by the form)
+     * is not a finding. At least one measurement, observation or written
+     * finding must be present.
+     *
+     * <p>QA D1182 (round 22): the yes/no boxes (cardiac activity, movement,
+     * tone, nasal bone, anatomy survey complete, ...) are NOT findings: the
+     * report form pre-fills cardiac activity, movement and tone, so the edit
+     * of a blank report sent them as {@code true} and saved "RAPPORT Normal"
+     * with every value null. Create and edit go through here alike. A scan
+     * with no cardiac activity says so in the findings or the interpretation.
+     * {@code UltrasoundReportFindingsTest} sets every box at once and expects
+     * the refusal. The number of fetuses is not a finding either: the entity
+     * and the form default it to 1, so it cannot tell a default from a count.
+     */
+    static void requireReportFindings(UltrasoundReportRequestDTO request) {
+        com.example.hms.service.support.ClinicalContent.requireAny("findingsSummary",
+            "ultrasound.report.findingsRequired",
+            request.getGestationalAgeAtScan(), request.getGestationalAgeDays(), request.getNuchalTranslucencyMm(),
+            request.getCrownRumpLengthMm(), request.getEstimatedDueDate(),
+            request.getFetalPosition(), request.getBiparietalDiameterMm(), request.getHeadCircumferenceMm(),
+            request.getAbdominalCircumferenceMm(), request.getFemurLengthMm(), request.getEstimatedFetalWeightGrams(),
+            request.getPlacentalLocation(), request.getPlacentalGrade(), request.getAmnioticFluidIndex(),
+            request.getAmnioticFluidLevel(), request.getCervicalLengthMm(), request.getUmbilicalArteryDoppler(),
+            request.getUterineArteryDoppler(), request.getFetalHeartRate(), request.getAnatomyFindings(), request.getFindingsSummary(), request.getInterpretation(),
+            request.getAnomalyDescription());
+    }
+
     @Override
     public UltrasoundReportResponseDTO createOrUpdateReport(UUID orderId, UltrasoundReportRequestDTO request, UUID performedByUserId) {
         UltrasoundOrder order = getOrderInScope(orderId);
 
         if (order.getStatus() == UltrasoundOrderStatus.CANCELLED) {
-            throw new BusinessException("Cannot create report for a cancelled order");
+            throw new BusinessException("ultrasound.report.cancelledOrder");
         }
 
         String performerName = resolveStaffName(performedByUserId, order.getHospital().getId());
 
         UltrasoundReport report = reportRepository.findByUltrasoundOrderId(orderId).orElse(null);
+        if (report != null && Boolean.TRUE.equals(report.getReportReviewedByProvider())) {
+            throw new BusinessException("ultrasound.report.reviewedNoEdit");
+        }
+        requireReportFindings(request);
 
         if (report == null) {
             report = ultrasoundMapper.toReportEntity(request, order, order.getHospital());
@@ -276,9 +347,6 @@ public class UltrasoundServiceImpl implements UltrasoundService {
                 report.setScanPerformedBy(performerName);
             }
         } else {
-            if (Boolean.TRUE.equals(report.getReportReviewedByProvider())) {
-                throw new BusinessException("Cannot modify a reviewed report. Please create an addendum or new order.");
-            }
             ultrasoundMapper.updateReportFromRequest(report, request);
         }
 
@@ -296,9 +364,12 @@ public class UltrasoundServiceImpl implements UltrasoundService {
     @Override
     public UltrasoundReportResponseDTO markReportReviewed(UUID reportId, UUID reviewedByUserId) {
         UltrasoundReport report = getReportInScope(reportId);
+        // QA D1066 class: a cancelled scan order is not completed back to life by its report's review.
+        com.example.hms.service.support.CancelledOrders.requireNotCancelled(report.getUltrasoundOrder().getStatus(),
+            "ultrasound.order.cancelled.locked");
 
         if (report.getReportReviewedByProvider() != null && report.getReportReviewedByProvider()) {
-            throw new BusinessException("Report is already reviewed");
+            throw new BusinessException("ultrasound.report.alreadyReviewed");
         }
 
         UUID hospitalId = report.getUltrasoundOrder().getHospital().getId();
@@ -325,7 +396,7 @@ public class UltrasoundServiceImpl implements UltrasoundService {
         UltrasoundReport report = getReportInScope(reportId);
 
         if (report.getPatientNotifiedAt() != null) {
-            throw new BusinessException("Patient has already been notified");
+            throw new BusinessException("ultrasound.report.patientAlreadyNotified");
         }
 
         report.setPatientNotifiedAt(LocalDateTime.now());
@@ -530,25 +601,34 @@ public class UltrasoundServiceImpl implements UltrasoundService {
         switch (scanType) {
             case NUCHAL_TRANSLUCENCY:
                 if (gestationalAgeWeeks < 11 || gestationalAgeWeeks > 14) {
-                    throw new BusinessException(
-                        "Nuchal Translucency scan is typically performed between 11-14 weeks. Current: " + gestationalAgeWeeks + " weeks");
+                    throw new BusinessException("ultrasound.ga.NUCHAL_TRANSLUCENCY", gestationalAgeWeeks);
                 }
                 break;
             case ANATOMY_SCAN:
                 if (gestationalAgeWeeks < 18 || gestationalAgeWeeks > 22) {
-                    throw new BusinessException(
-                        "Anatomy scan is typically performed between 18-22 weeks. Current: " + gestationalAgeWeeks + " weeks");
+                    throw new BusinessException("ultrasound.ga.ANATOMY_SCAN", gestationalAgeWeeks);
                 }
                 break;
             case GROWTH_SCAN:
                 if (gestationalAgeWeeks < 24) {
-                    throw new BusinessException(
-                        "Growth scan is typically performed after 24 weeks. Current: " + gestationalAgeWeeks + " weeks");
+                    throw new BusinessException("ultrasound.ga.GROWTH_SCAN", gestationalAgeWeeks);
                 }
                 break;
             default:
                 break;
         }
+    }
+
+    /** QA D1047: the canceller's name at the order's hospital, else the session's username. */
+    private String cancellerName(UltrasoundOrder order) {
+        UUID caller = com.example.hms.security.CallerIdentity.currentUserId();
+        String name = order.getHospital() != null ? resolveStaffName(caller, order.getHospital().getId()) : null;
+        if (name != null) {
+            return name;
+        }
+        org.springframework.security.core.Authentication auth =
+            org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        return auth != null ? auth.getName() : null;
     }
 
     private String resolveStaffName(UUID userId, UUID hospitalId) {

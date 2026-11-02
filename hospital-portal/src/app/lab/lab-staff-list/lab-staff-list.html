@@ -11,7 +11,12 @@
       <span class="count-badge">{{
         'LAB_STAFF.STAFF_COUNT' | translate: { count: totalElements() }
       }}</span>
-      <button class="btn-refresh" (click)="loadLabStaff()" [disabled]="loading()">
+      <button
+        [attr.aria-label]="'COMMON.REFRESH' | translate"
+        class="btn-refresh"
+        (click)="loadLabStaff()"
+        [disabled]="loading()"
+      >
         <span class="material-symbols-outlined" [class.spin]="loading()">refresh</span>
       </button>
     </div>
@@ -72,8 +77,11 @@
               <td>{{ member.licenseNumber ?? '—' }}</td>
               <td>
                 @if (editingId() === member.id) {
+                  <!-- QA D1175 class: the select takes the keyboard from the pencil it replaced. -->
                   <select
                     class="role-select"
+                    appFocusOnRender
+                    [focusOnRenderReturn]="'.btn-edit'"
                     [attr.title]="'LAB_STAFF.SELECT_ROLE' | translate"
                     [ngModel]="editRoleCode()"
                     (ngModelChange)="editRoleCode.set($event)"
@@ -97,6 +105,7 @@
                       (click)="saveRole(member)"
                       [disabled]="saving()"
                       [title]="'LAB_STAFF.SAVE' | translate"
+                      [attr.aria-label]="'LAB_STAFF.SAVE' | translate"
                     >
                       <span class="material-symbols-outlined">check</span>
                     </button>
@@ -105,6 +114,7 @@
                       (click)="cancelEdit()"
                       [disabled]="saving()"
                       [title]="'LAB_STAFF.CANCEL' | translate"
+                      [attr.aria-label]="'LAB_STAFF.CANCEL' | translate"
                     >
                       <span class="material-symbols-outlined">close</span>
                     </button>
@@ -113,6 +123,7 @@
                       class="btn-icon btn-edit"
                       (click)="startEdit(member)"
                       [title]="'LAB_STAFF.CHANGE_ROLE' | translate"
+                      [attr.aria-label]="'LAB_STAFF.CHANGE_ROLE' | translate"
                     >
                       <span class="material-symbols-outlined">edit</span>
                     </button>

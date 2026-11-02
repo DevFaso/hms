@@ -41,22 +41,34 @@
               >
                 <span class="emar__queue-patient">{{ task.patientName }}</span>
                 <span class="emar__queue-med">{{ task.medication }}</span>
+                @if (task.controlledSubstance) {
+                  {{ ' '
+                  }}<span
+                    class="emar__queue-chip emar__queue-chip--controlled"
+                    [attr.data-testid]="'emar-controlled-chip-' + task.id"
+                    >{{ 'NURSE.CONTROLLED_SUBSTANCE' | translate }}</span
+                  >
+                }
                 <span class="emar__queue-meta">
-                  {{ task.dose }} · {{ task.route }} ·
-                  {{ task.dueTime | serverTime | date: 'HH:mm' }}
+                  {{ task.dose }} · {{ task.route | medicationRoute }} ·
+                  {{
+                    task.dueTime | serverTime | date: (isDueToday(task.dueTime) ? 'HH:mm' : 'short')
+                  }}
                 </span>
                 <!-- Marked in the queue, not only in the detail: a nurse
                      planning a round needs to see which doses they cannot give
                      before they walk to the bed. -->
                 @if (task.cdsAdvisories?.length) {
-                  <span
+                  {{ ' '
+                  }}<span
                     class="emar__queue-chip emar__queue-chip--advisory"
                     [attr.data-testid]="'emar-advisory-chip-' + task.id"
                     >{{ 'EMAR.ALLERGY_ADVISORY_CHIP' | translate }}</span
                   >
                 }
                 @if (task.requiresPharmacistVerification && !task.pharmacistVerified) {
-                  <span
+                  {{ ' '
+                  }}<span
                     class="emar__queue-chip emar__queue-chip--blocked"
                     [attr.data-testid]="'emar-pharm-chip-' + task.id"
                     >{{ 'EMAR.PHARMACIST_PENDING_CHIP' | translate }}</span
@@ -73,7 +85,7 @@
               <div>
                 <h2>{{ task.patientName }}</h2>
                 <p class="emar__detail-meta">
-                  {{ task.medication }} · {{ task.dose }} · {{ task.route }}
+                  {{ task.medication }} · {{ task.dose }} · {{ task.route | medicationRoute }}
                 </p>
               </div>
               <button type="button" class="emar__btn emar__btn--ghost" (click)="closeTask()">
@@ -112,9 +124,13 @@
             }
 
             <section class="emar__scan">
-              <h3>{{ 'EMAR.STEP_SCAN_PATIENT' | translate }}</h3>
+              <!-- QA D993: every scan field carries a visible label of its own. -->
+              <h3>
+                <label for="emar-patient-scan">{{ 'EMAR.STEP_SCAN_PATIENT' | translate }}</label>
+              </h3>
               <div class="emar__scan-row">
                 <input
+                  id="emar-patient-scan"
                   type="text"
                   class="emar__input"
                   data-testid="emar-patient-scan"
@@ -132,9 +148,12 @@
                 </button>
               </div>
 
-              <h3>{{ 'EMAR.STEP_SCAN_MEDICATION' | translate }}</h3>
+              <h3>
+                <label for="emar-med-scan">{{ 'EMAR.STEP_SCAN_MEDICATION' | translate }}</label>
+              </h3>
               <div class="emar__scan-row">
                 <input
+                  id="emar-med-scan"
                   type="text"
                   class="emar__input"
                   data-testid="emar-med-scan"
@@ -153,23 +172,36 @@
               </div>
 
               <h3>{{ 'EMAR.STEP_CONFIRM_DOSE' | translate }}</h3>
+              <!-- QA D1025: typed (or scanned) by the nurse, never prefilled; the
+                   prescribed dose and route are read beside them, in the reader's language. -->
+              <p class="emar__prescribed" data-testid="emar-prescribed">
+                {{ 'EMAR.PRESCRIBED' | translate }}{{ 'COMMON.COLON' | translate }}
+                {{ task.dose }} ·
+                {{ task.route | medicationRoute }}
+              </p>
               <div class="emar__scan-row">
-                <input
-                  type="text"
-                  class="emar__input"
-                  data-testid="emar-dose"
-                  [placeholder]="'NURSE.DOSE' | translate"
-                  [value]="doseScan()"
-                  (input)="onDoseInput($any($event.target).value)"
-                />
-                <input
-                  type="text"
-                  class="emar__input"
-                  data-testid="emar-route"
-                  [placeholder]="'NURSE.ROUTE' | translate"
-                  [value]="routeScan()"
-                  (input)="onRouteInput($any($event.target).value)"
-                />
+                <label class="emar__field" for="emar-dose">
+                  <span>{{ 'NURSE.DOSE' | translate }}</span>
+                  <input
+                    id="emar-dose"
+                    type="text"
+                    class="emar__input"
+                    data-testid="emar-dose"
+                    [value]="doseScan()"
+                    (input)="onDoseInput($any($event.target).value)"
+                  />
+                </label>
+                <label class="emar__field" for="emar-route">
+                  <span>{{ 'NURSE.ROUTE' | translate }}</span>
+                  <input
+                    id="emar-route"
+                    type="text"
+                    class="emar__input"
+                    data-testid="emar-route"
+                    [value]="routeScan()"
+                    (input)="onRouteInput($any($event.target).value)"
+                  />
+                </label>
               </div>
 
               @if (scannerActive(); as field) {
@@ -199,7 +231,8 @@
                 type="button"
                 class="emar__btn emar__btn--primary"
                 data-testid="emar-verify"
-                [disabled]="!canVerify() || verifyInFlight()"
+                [disabled]="verifyInFlight()"
+                [appSubmitGuard]="!canVerify() && ('SUBMIT_GUARD.VERIFY_FIELDS' | translate)"
                 (click)="verify()"
               >
                 @if (verifyInFlight()) {
@@ -242,12 +275,40 @@
               }
             </section>
 
+            <!-- QA D922 (decision 2026-10-28): a controlled drug is given with a
+                 second clinician of this hospital as witness. -->
+            @if (needsWitness()) {
+              <!-- A fresh picker per dose: the previous dose's witness is never shown. -->
+              @for (t of [task]; track t.id) {
+                <app-witness-picker
+                  inputId="emar-witness"
+                  (witnessChange)="witnessUserId.set($event)"
+                />
+              }
+            }
+
+            <!-- QA D1159: a held or refused dose says why (the station MAR already asks). -->
+            <label class="emar__override" for="emar-hold-reason">
+              <span>{{ 'EMAR.HOLD_REFUSE_REASON_LABEL' | translate }}</span>
+              <textarea
+                id="emar-hold-reason"
+                data-testid="emar-hold-reason"
+                class="emar__input emar__input--multiline"
+                rows="2"
+                maxlength="500"
+                [value]="holdRefuseReason()"
+                (input)="holdRefuseReason.set($any($event.target).value)"
+              ></textarea>
+            </label>
+
             <section class="emar__actions">
               <button
                 type="button"
                 class="emar__btn emar__btn--success"
                 data-testid="emar-administer-given"
-                [disabled]="!canAdminister() || administerInFlight()"
+                [disabled]="administerInFlight()"
+                [appSubmitGuard]="administerBlockReason()"
+                [submitGuardFields]="['emar-witness']"
                 [attr.title]="
                   blockedPendingPharmacist() ? ('EMAR.PHARMACIST_BLOCKED_TITLE' | translate) : null
                 "
@@ -260,20 +321,41 @@
                 class="emar__btn emar__btn--ghost"
                 data-testid="emar-administer-held"
                 [disabled]="administerInFlight()"
+                [appSubmitGuard]="holdRefuseReasonMissing()"
+                [submitGuardFields]="['emar-hold-reason']"
                 (click)="administer('HELD')"
               >
-                {{ 'NURSE.HOLD' | translate }}
+                {{ 'EMAR.ACTION_HOLD' | translate }}
               </button>
               <button
                 type="button"
                 class="emar__btn emar__btn--ghost"
                 data-testid="emar-administer-refused"
                 [disabled]="administerInFlight()"
+                [appSubmitGuard]="holdRefuseReasonMissing()"
+                [submitGuardFields]="['emar-hold-reason']"
                 (click)="administer('REFUSED')"
               >
-                {{ 'MED_HISTORY.STATUS_REFUSED' | translate }}
+                {{ 'EMAR.ACTION_REFUSED' | translate }}
               </button>
             </section>
+
+            <!-- QA D1210 (round 23): the server refused the dose as too soon after
+                 the last one. Its reason is shown, and the dose may be given early
+                 with the nurse's reason (kept on the MAR row). -->
+            @if (earlyDose(); as early) {
+              <app-reason-dialog
+                titleKey="EMAR.EARLY_DOSE.TITLE"
+                labelKey="EMAR.EARLY_DOSE.REASON_LABEL"
+                confirmKey="EMAR.EARLY_DOSE.CONFIRM"
+                dismissKey="COMMON.BACK"
+                [busy]="administerInFlight()"
+                (confirmed)="confirmEarlyDose($event)"
+                (cancelled)="earlyDose.set(null)"
+              >
+                <p class="form-error" role="alert" data-testid="early-dose-why">{{ early.why }}</p>
+              </app-reason-dialog>
+            }
           </article>
         } @else {
           <div class="emar__placeholder" data-testid="emar-placeholder">

@@ -11,6 +11,8 @@ import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { HttpClient } from '@angular/common/http';
 import { ToastService } from '../core/toast.service';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { refusalReason } from '../shared/refusal-reason';
 
 interface FeatureFlag {
   key: string;
@@ -31,7 +33,7 @@ interface FlagOverride {
 @Component({
   selector: 'app-feature-flags',
   standalone: true,
-  imports: [FormsModule, TranslateModule],
+  imports: [ModalDialogDirective, FormsModule, TranslateModule],
   templateUrl: './feature-flags.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './feature-flags.scss',
@@ -114,8 +116,10 @@ export class FeatureFlagsComponent implements OnInit {
             }),
           );
         },
-        error: () =>
-          this.toast.error(this.translate.instant('FLAGS.TOGGLE_FAILED', { key: flag.key })),
+        error: (err: unknown) =>
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('FLAGS.TOGGLE_FAILED', { key: flag.key }),
+          ),
       });
   }
 
@@ -135,9 +139,10 @@ export class FeatureFlagsComponent implements OnInit {
           this.loadFlags();
           this.toast.success(this.translate.instant('FLAGS.OVERRIDE_REMOVED', { key: flag.key }));
         },
-        error: () =>
+        error: (err: unknown) =>
           this.toast.error(
-            this.translate.instant('FLAGS.OVERRIDE_REMOVE_FAILED', { key: flag.key }),
+            refusalReason(err) ??
+              this.translate.instant('FLAGS.OVERRIDE_REMOVE_FAILED', { key: flag.key }),
           ),
       });
   }

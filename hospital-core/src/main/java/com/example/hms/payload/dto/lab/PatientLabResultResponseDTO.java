@@ -37,6 +37,11 @@ public class PatientLabResultResponseDTO {
      */
     private boolean released;
     /**
+     * QA D1016: this result corrects one the laboratory had already released
+     * (the patient may have read the old value). The portal marks it.
+     */
+    private boolean corrected;
+    /**
      * True when no configured reference range is in this result's unit, so
      * nothing graded it against the hospital's range. A NORMAL status on such
      * a row means only that no abnormal flag was recorded; a reader must not

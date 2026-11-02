@@ -6,8 +6,10 @@
       <span class="meta-badge">
         <strong>{{ totalPatients() }}</strong> {{ 'TRACKER.PATIENTS_COUNT' | translate }}
       </span>
-      <span class="meta-badge">
-        {{ 'TRACKER.AVG_WAIT' | translate }}: <strong>{{ averageWait() }}</strong>
+      {{ ' '
+      }}<span class="meta-badge">
+        {{ 'TRACKER.AVG_WAIT' | translate }}{{ 'COMMON.COLON' | translate }}
+        <strong>{{ averageWait() }}</strong>
         {{ 'TRACKER.MIN' | translate }}
       </span>
       @if (lastRefreshed()) {
@@ -55,19 +57,25 @@
                 <div class="card-body">
                   @if (item.assignedProvider) {
                     <span class="card-field">
-                      <span class="field-label">{{ 'TRACKER.PROVIDER' | translate }}:</span>
+                      <span class="field-label"
+                        >{{ 'TRACKER.PROVIDER' | translate }}{{ 'COMMON.COLON' | translate }}</span
+                      >
                       {{ item.assignedProvider }}
                     </span>
                   }
                   @if (item.roomAssignment) {
                     <span class="card-field">
-                      <span class="field-label">{{ 'TRACKER.ROOM' | translate }}:</span>
+                      <span class="field-label"
+                        >{{ 'TRACKER.ROOM' | translate }}{{ 'COMMON.COLON' | translate }}</span
+                      >
                       {{ item.roomAssignment }}
                     </span>
                   }
                   @if (item.departmentName) {
                     <span class="card-field">
-                      <span class="field-label">{{ 'TRACKER.DEPT' | translate }}:</span>
+                      <span class="field-label"
+                        >{{ 'TRACKER.DEPT' | translate }}{{ 'COMMON.COLON' | translate }}</span
+                      >
                       {{ item.departmentName }}
                     </span>
                   }
@@ -76,11 +84,15 @@
                   <span class="wait-badge" [class]="getWaitClass(item.currentWaitMinutes)">
                     {{ item.currentWaitMinutes }} {{ 'TRACKER.MIN' | translate }}
                   </span>
-                  <span class="acuity-badge">{{
+                  {{ ' '
+                  }}<span class="acuity-badge">{{
                     item.acuityLevel | enumLabel: 'trackerAcuity'
                   }}</span>
                   @if (item.preCheckedIn) {
-                    <span class="precheckin-badge" [title]="'TRACKER.PRE_CHECKIN_BADGE' | translate"
+                    {{ ' '
+                    }}<span
+                      class="precheckin-badge"
+                      [title]="'TRACKER.PRE_CHECKIN_BADGE' | translate"
                       >&#x2713; {{ 'TRACKER.PRE_CHECKIN_BADGE' | translate }}</span
                     >
                   }
@@ -101,7 +113,31 @@
                       {{ 'TRACKER.COMPLETE_TRIAGE' | translate }}
                     </button>
                   }
-                  @if (col.key === 'inProgress') {
+                  @if (canCloseUnseen && isNeverSeenVisit(item.currentStatus)) {
+                    <!-- QA D954: left without being seen, closed from the tracker; QA D1108:
+                         until the patient is seen (after triage too), the server's rule. -->
+                    <button
+                      class="btn-complete-triage"
+                      data-testid="tracker-lwbs"
+                      (click)="openCloseUnseen(item)"
+                    >
+                      {{ 'NURSE.LEFT_WITHOUT_BEING_SEEN' | translate }}
+                    </button>
+                  }
+                  @if (col.key === 'waitingForPhysician' && canStartItem(item)) {
+                    <!-- QA D1015: the clinician who owns the visit starts it here (a
+                         midwife her antenatal visit); the server refuses anyone else. -->
+                    <button
+                      class="btn-complete-exam"
+                      data-testid="tracker-start"
+                      (click)="startVisit(item)"
+                      [disabled]="startInProgress()"
+                    >
+                      {{ 'TRACKER.START_VISIT' | translate }}
+                    </button>
+                  }
+                  @if (col.key === 'inProgress' && canEndExamItem(item)) {
+                    <!-- QA D1099: the examining clinician ends the examination. -->
                     <button
                       class="btn-complete-exam"
                       (click)="completeExamination(item)"
@@ -124,7 +160,7 @@
                   @if (
                     col.key === 'readyForDischarge' ||
                     col.key === 'awaitingResults' ||
-                    (col.key === 'inProgress' && isClinician)
+                    (col.key === 'inProgress' && isClinician && canEndExamItem(item))
                   ) {
                     <button
                       class="btn-checkout"
@@ -152,6 +188,15 @@
       (dismissed)="onTriageDismissed()"
       (triageCompleted)="onTriageCompleted()"
     ></app-triage-form>
+  }
+  <!-- QA D954: close a visit nobody has seen (left without being seen, or cancelled). -->
+  @if (closeUnseenItem(); as target) {
+    <app-close-unseen-dialog
+      [encounterId]="target.encounterId"
+      [patientName]="target.patientName"
+      (dismissed)="closeUnseenItem.set(null)"
+      (closed)="onUnseenVisitClosed()"
+    />
   }
   <!-- Check-Out Dialog (MVP 6) -->
   @if (showCheckoutDialog()) {

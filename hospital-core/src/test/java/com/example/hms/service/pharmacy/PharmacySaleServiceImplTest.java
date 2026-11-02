@@ -39,6 +39,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -62,6 +63,9 @@ class PharmacySaleServiceImplTest {
     @Mock private PharmacySaleMapper mapper;
     @Mock private RoleValidator roleValidator;
 
+    /** QA D964: FEFO is followed unless a test says otherwise (null = no override recorded). */
+    @org.mockito.Mock private FefoLotPolicy fefoLotPolicy;
+    @Mock private com.example.hms.service.payment.PaymentReferenceRegistry referenceRegistry;
     @InjectMocks private PharmacySaleServiceImpl service;
 
     private final UUID hospitalId = UUID.randomUUID();
@@ -117,7 +121,23 @@ class PharmacySaleServiceImplTest {
 
         assertThatThrownBy(() -> service.createSale(dto))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("active hospital context");
+                .extracting("messageKey").isEqualTo("pharmacy.sale.hospitalMismatch");
+    }
+
+    @Test
+    @DisplayName("QA D1129: a mobile-money sale whose reference is already recorded is refused")
+    void d1129_aReusedReferenceIsRefused() {
+        PharmacySaleRequestDTO dto = request(List.of(line(BigDecimal.ONE, BigDecimal.TEN)));
+        dto.setPaymentMethod(PharmacyPaymentMethod.MOBILE_MONEY);
+        dto.setReferenceNumber("OM-R20-55123");
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        doThrow(new BusinessException("billing.payment.duplicateReference"))
+                .when(referenceRegistry).requireUnused(hospitalId, "OM-R20-55123");
+
+        assertThatThrownBy(() -> service.createSale(dto))
+                .isInstanceOf(BusinessException.class)
+                .extracting("messageKey").isEqualTo("billing.payment.duplicateReference");
+        verify(saleRepository, never()).save(any());
     }
 
     @Test
@@ -128,7 +148,7 @@ class PharmacySaleServiceImplTest {
 
         assertThatThrownBy(() -> service.createSale(dto))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("at least one line");
+                .extracting("messageKey").isEqualTo("pharmacy.sale.linesRequired");
     }
 
     @Test
@@ -210,7 +230,7 @@ class PharmacySaleServiceImplTest {
 
         assertThatThrownBy(() -> service.createSale(dto))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("does not belong to the selling pharmacy");
+                .extracting("messageKey").isEqualTo("pharmacy.sale.lotOtherPharmacy");
     }
 
     @Test
@@ -239,6 +259,121 @@ class PharmacySaleServiceImplTest {
     }
 
     @Test
+    @DisplayName("QA D964: a counter sale line from a later-dated lot with no reason is refused, nothing is saved")
+    void rejectsALineSkippingTheShorterDatedLot() {
+        UUID stockLotId = UUID.randomUUID();
+        InventoryItem invItem = InventoryItem.builder().pharmacy(pharmacy).build();
+        StockLot lot = StockLot.builder().inventoryItem(invItem).build();
+        lot.setId(stockLotId);
+        SaleLineRequestDTO l = line(BigDecimal.ONE, BigDecimal.TEN);
+        l.setStockLotId(stockLotId);
+        PharmacySaleRequestDTO dto = request(List.of(l));
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(userId);
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(pharmacyRepository.findByIdAndHospital_Id(pharmacyId, hospitalId)).thenReturn(Optional.of(pharmacy));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(catalogItemRepository.findById(itemId)).thenReturn(Optional.of(item));
+        when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(lot));
+        when(fefoLotPolicy.requireFefoOrReason(lot, null, java.util.Map.of(stockLotId, BigDecimal.ONE)))
+                .thenThrow(new BusinessException("pharmacy.fefo.reasonRequired", "LOT-COURT", "1 déc. 2026"));
+
+        assertThatThrownBy(() -> service.createSale(dto))
+                .isInstanceOf(BusinessException.class)
+                .extracting("messageKey").isEqualTo("pharmacy.fefo.reasonRequired");
+        verify(saleRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("review of #975: the lines of a sale together never take more than the lot holds")
+    void linesTakingMoreThanTheLotHoldsAreRefused() {
+        InventoryItem invItem = InventoryItem.builder().pharmacy(pharmacy).build();
+        StockLot lot = StockLot.builder().inventoryItem(invItem).lotNumber("R16-PCM-COURT")
+                .remainingQuantity(BigDecimal.TEN).build();
+        lot.setId(UUID.randomUUID());
+        SaleLineRequestDTO first = line(new BigDecimal("6"), BigDecimal.ONE);
+        first.setStockLotId(lot.getId());
+        SaleLineRequestDTO second = line(new BigDecimal("5"), BigDecimal.ONE);
+        second.setStockLotId(lot.getId());
+        PharmacySaleRequestDTO dto = request(List.of(first, second));
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(userId);
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(pharmacyRepository.findByIdAndHospital_Id(pharmacyId, hospitalId)).thenReturn(Optional.of(pharmacy));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(catalogItemRepository.findById(itemId)).thenReturn(Optional.of(item));
+        when(stockLotRepository.findById(lot.getId())).thenReturn(Optional.of(lot));
+
+        assertThatThrownBy(() -> service.createSale(dto))
+                .isInstanceOf(BusinessException.class)
+                .extracting("messageKey").isEqualTo("stock.lot.insufficient");
+        verify(saleRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("review of #975: each line is judged on what the other lines of the same sale take, in any order")
+    void aSaleSplitAcrossLotsTellsTheRuleWhatTheOtherLinesTake() {
+        InventoryItem invItem = InventoryItem.builder().pharmacy(pharmacy).build();
+        StockLot shortLot = StockLot.builder().inventoryItem(invItem).build();
+        shortLot.setId(UUID.randomUUID());
+        StockLot longLot = StockLot.builder().inventoryItem(invItem).build();
+        longLot.setId(UUID.randomUUID());
+        // Entered long lot first: the order of the lines does not matter.
+        SaleLineRequestDTO fromLong = line(new BigDecimal("5"), BigDecimal.ONE);
+        fromLong.setStockLotId(longLot.getId());
+        SaleLineRequestDTO fromShort = line(BigDecimal.TEN, BigDecimal.ONE);
+        fromShort.setStockLotId(shortLot.getId());
+        PharmacySaleRequestDTO dto = request(List.of(fromLong, fromShort));
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(userId);
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(pharmacyRepository.findByIdAndHospital_Id(pharmacyId, hospitalId)).thenReturn(Optional.of(pharmacy));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(catalogItemRepository.findById(itemId)).thenReturn(Optional.of(item));
+        when(stockLotRepository.findById(shortLot.getId())).thenReturn(Optional.of(shortLot));
+        when(stockLotRepository.findById(longLot.getId())).thenReturn(Optional.of(longLot));
+        when(saleRepository.save(any(PharmacySale.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.createSale(dto);
+
+        java.util.Map<UUID, BigDecimal> wholeSale =
+                java.util.Map.of(shortLot.getId(), BigDecimal.TEN, longLot.getId(), new BigDecimal("5"));
+        verify(fefoLotPolicy).requireFefoOrReason(longLot, null, wholeSale);
+        verify(fefoLotPolicy).requireFefoOrReason(shortLot, null, wholeSale);
+    }
+
+    @Test
+    @DisplayName("review of #975: a FEFO reason that overflows the line's 500-character notes is refused with the key, not a constraint violation")
+    void aFefoReasonThatOverflowsTheLineNotesIsRefused() {
+        UUID stockLotId = UUID.randomUUID();
+        InventoryItem invItem = InventoryItem.builder().pharmacy(pharmacy).build();
+        StockLot lot = StockLot.builder().inventoryItem(invItem).build();
+        lot.setId(stockLotId);
+        SaleLineRequestDTO l = line(BigDecimal.ONE, BigDecimal.TEN);
+        l.setStockLotId(stockLotId);
+        l.setNotes("n".repeat(400));
+        l.setFefoOverrideReason("r".repeat(150));
+        PharmacySaleRequestDTO dto = request(List.of(l));
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(userId);
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(pharmacyRepository.findByIdAndHospital_Id(pharmacyId, hospitalId)).thenReturn(Optional.of(pharmacy));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(catalogItemRepository.findById(itemId)).thenReturn(Optional.of(item));
+        when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(lot));
+        when(fefoLotPolicy.requireFefoOrReason(lot, "r".repeat(150), java.util.Map.of(stockLotId, BigDecimal.ONE))).thenReturn("r".repeat(150));
+
+        assertThatThrownBy(() -> service.createSale(dto))
+                .isInstanceOf(BusinessException.class)
+                .extracting("messageKey").isEqualTo("pharmacy.fefo.reasonTooLong");
+        verify(saleRepository, never()).save(any());
+    }
+
+    @Test
     @DisplayName("createSale: rejects negative quantity")
     void rejectsNegativeQuantity() {
         PharmacySaleRequestDTO dto = request(List.of(line(BigDecimal.ZERO, BigDecimal.TEN)));
@@ -250,7 +385,7 @@ class PharmacySaleServiceImplTest {
 
         assertThatThrownBy(() -> service.createSale(dto))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("quantity must be greater than zero");
+                .extracting("messageKey").isEqualTo("pharmacy.sale.lineQuantityPositive");
     }
 
     @Test

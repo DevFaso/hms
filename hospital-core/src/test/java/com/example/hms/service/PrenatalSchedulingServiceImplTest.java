@@ -223,11 +223,30 @@ class PrenatalSchedulingServiceImplTest {
             .appointmentDate(LocalDate.of(2024, 4, 22)).startTime(LocalTime.of(10, 0)).endTime(LocalTime.of(10, 30))
             .status(AppointmentStatus.SCHEDULED).reason("CPN").build();
         prenatal.setId(UUID.randomUUID());
+        // QA D1031: two antenatal contacts already held (and a GP visit, not one).
+        Appointment held1 = Appointment.builder()
+            .patient(patient).hospital(hospital)
+            .department(Department.builder().name("Maternité").hospital(hospital).build())
+            .appointmentDate(LocalDate.of(2023, 11, 20)).startTime(LocalTime.of(9, 0)).endTime(LocalTime.of(9, 45))
+            .status(AppointmentStatus.COMPLETED).reason("CPN").build();
+        held1.setId(UUID.randomUUID());
+        Appointment held2 = Appointment.builder()
+            .patient(patient).hospital(hospital)
+            .department(Department.builder().name("Maternité").hospital(hospital).build())
+            .appointmentDate(LocalDate.of(2024, 1, 15)).startTime(LocalTime.of(9, 0)).endTime(LocalTime.of(9, 30))
+            .status(AppointmentStatus.COMPLETED).reason("CPN").build();
+        held2.setId(UUID.randomUUID());
+        Appointment gpHeld = Appointment.builder()
+            .patient(patient).hospital(hospital)
+            .department(Department.builder().name("Médecine générale").hospital(hospital).build())
+            .appointmentDate(LocalDate.of(2024, 2, 5)).startTime(LocalTime.of(9, 0)).endTime(LocalTime.of(9, 30))
+            .status(AppointmentStatus.COMPLETED).reason("Consultation").build();
+        gpHeld.setId(UUID.randomUUID());
 
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(appointmentRepository.findByHospital_IdAndPatient_Id(hospitalId, patientId))
-            .thenReturn(List.of(gp, cancelled, prenatal));
+            .thenReturn(List.of(gp, cancelled, prenatal, held1, held2, gpHeld));
 
         PrenatalScheduleResponseDTO response = service.generateSchedule(PrenatalScheduleRequestDTO.builder()
             .patientId(patientId).hospitalId(hospitalId).lastMenstrualPeriodDate(lmp).build(), Locale.US, SCHEDULER_USERNAME);
@@ -235,6 +254,7 @@ class PrenatalSchedulingServiceImplTest {
         assertThat(response.getExistingAppointments())
             .extracting(com.example.hms.payload.dto.prenatal.PrenatalAppointmentSummaryDTO::getAppointmentId)
             .containsExactly(prenatal.getId());
+        assertThat(response.getCompletedContacts()).isEqualTo(2);
         assertThat(response.getRecommendations())
             .filteredOn(PrenatalVisitRecommendationDTO::isScheduled)
             .extracting(PrenatalVisitRecommendationDTO::getAppointmentId)
@@ -361,6 +381,76 @@ class PrenatalSchedulingServiceImplTest {
         AppointmentRequestDTO dto = captor.getValue();
         assertThat(dto.getStartTime()).isEqualTo(LocalTime.of(11, 0));
         assertThat(dto.getEndTime()).isEqualTo(LocalTime.of(11, 20));
+        // QA D977 class: a moved visit is booked at its new time (SCHEDULED), as the
+        // desk and portal reschedules land it; RESCHEDULED is a superseded booking.
+        assertThat(dto.getStatus()).isEqualTo(AppointmentStatus.SCHEDULED);
+        assertThat(dto.getNotes()).contains("Patient requested later morning slot");
+    }
+
+    @Test
+    void reviewRound14_aMovedTentativeVisitStaysTentative() {
+        assertThat(PrenatalSchedulingServiceImpl.rescheduledStatus(AppointmentStatus.PENDING))
+            .isEqualTo(AppointmentStatus.PENDING);
+        assertThat(PrenatalSchedulingServiceImpl.rescheduledStatus(AppointmentStatus.CONFIRMED))
+            .isEqualTo(AppointmentStatus.SCHEDULED);
+        assertThat(PrenatalSchedulingServiceImpl.rescheduledStatus(AppointmentStatus.NO_SHOW))
+            .isEqualTo(AppointmentStatus.RESCHEDULED);
+    }
+
+    @Test
+    void d977_reschedulePrenatalAppointmentDelegatesToAppointmentService_fromAMissedVisit() {
+        UUID appointmentId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        Staff staff = Staff.builder()
+            .hospital(hospital)
+            .build();
+        staff.setId(staffId);
+
+        Department department = Department.builder()
+            .name("OB")
+            .hospital(hospital)
+            .build();
+
+        Appointment appointment = Appointment.builder()
+            .patient(patient)
+            .staff(staff)
+            .hospital(hospital)
+            .department(department)
+            .appointmentDate(LocalDate.of(2024, 4, 2))
+            .startTime(LocalTime.of(9, 0))
+            .endTime(LocalTime.of(9, 30))
+            .status(AppointmentStatus.NO_SHOW)
+            .reason(PRENATAL_REASON)
+            .build();
+        appointment.setId(appointmentId);
+
+        when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+
+        AppointmentResponseDTO mockedResponse = AppointmentResponseDTO.builder().id(appointmentId).build();
+        when(appointmentService.updateAppointment(any(UUID.class), any(AppointmentRequestDTO.class), any(Locale.class), any(String.class)))
+            .thenReturn(mockedResponse);
+
+        PrenatalRescheduleRequestDTO request = PrenatalRescheduleRequestDTO.builder()
+            .appointmentId(appointmentId)
+            .newAppointmentDate(LocalDate.of(2024, 4, 10))
+            .newStartTime(LocalTime.of(11, 0))
+            .durationMinutes(20)
+            .newStaffId(staffId)
+            .notes("Patient requested later morning slot")
+            .build();
+
+    AppointmentResponseDTO response = service.reschedulePrenatalAppointment(request, Locale.US, SCHEDULER_USERNAME);
+        assertThat(response).isSameAs(mockedResponse);
+
+    ArgumentCaptor<AppointmentRequestDTO> captor = ArgumentCaptor.forClass(AppointmentRequestDTO.class);
+    verify(appointmentService).updateAppointment(eq(appointmentId), captor.capture(), any(Locale.class), any(String.class));
+
+        AppointmentRequestDTO dto = captor.getValue();
+        assertThat(dto.getStartTime()).isEqualTo(LocalTime.of(11, 0));
+        assertThat(dto.getEndTime()).isEqualTo(LocalTime.of(11, 20));
+        // QA D977 class: a moved visit is booked at its new time (SCHEDULED), as the
+        // desk and portal reschedules land it; RESCHEDULED is a superseded booking.
         assertThat(dto.getStatus()).isEqualTo(AppointmentStatus.RESCHEDULED);
         assertThat(dto.getNotes()).contains("Patient requested later morning slot");
     }

@@ -63,7 +63,9 @@ public class PharmacyRegistryController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyAuthority('ROLE_PHARMACIST','ROLE_STORE_MANAGER','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_BILLING_SPECIALIST','ROLE_SUPER_ADMIN')")
+    // QA D965: the inventory pages (inventory clerk) and the dispensing page
+    // (pharmacy verifier) load their pharmacy picker from here; both 403'd.
+    @PreAuthorize("hasAnyAuthority('ROLE_PHARMACIST','ROLE_STORE_MANAGER','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_BILLING_SPECIALIST','ROLE_INVENTORY_CLERK','ROLE_PHARMACY_VERIFIER','ROLE_SUPER_ADMIN')")
     @Operation(summary = "List active pharmacies",
         description = "Returns active pharmacies for the resolved hospital scope. "
             + "Super-admins in global view (no JWT scope, no hospitalId param) "
@@ -72,28 +74,37 @@ public class PharmacyRegistryController {
             @RequestParam(required = false) UUID hospitalId,
             Pageable pageable,
             Authentication auth) {
-        // Same super-admin global-view pattern as InBasketController (PR #292).
-        // resolveHospitalScope returns null for super-admins without an
-        // explicit hospitalId; the repository's optional JPQL filter then
-        // returns every active pharmacy across tenants. Non-super-admin
-        // clinicians without a scope still 400 — a missing hospital scope
-        // on a clinical token is a misconfiguration, not a feature.
-        UUID resolved = authUtils.resolveHospitalScope(auth, hospitalId, false);
+        return ResponseEntity.ok(pharmacyService.listByHospital(resolveRegistryScope(auth, hospitalId), pageable));
+    }
+
+    /**
+     * The hospital a registry read is scoped to. Same super-admin global-view
+     * pattern as InBasketController (PR #292): resolveHospitalScope returns
+     * null for a verified super-admin without an explicit hospitalId, and the
+     * repository's optional filter then returns every active pharmacy across
+     * tenants. Non-super-admin clinicians without a scope still 400 - a
+     * missing hospital scope on a clinical token is a misconfiguration, not a
+     * feature. One rule for list and search (review of #975: the search took a
+     * caller-supplied hospitalId as given).
+     */
+    private UUID resolveRegistryScope(Authentication auth, UUID requestedHospitalId) {
+        UUID resolved = authUtils.resolveHospitalScope(auth, requestedHospitalId, false);
         if (resolved == null && !authUtils.hasAuthority(auth, "ROLE_SUPER_ADMIN")) {
-            throw new BusinessException("Hospital context is required. "
-                + "Pass hospitalId or ensure your token has a hospital scope.");
+            throw new BusinessException("pharmacy.hospitalContext.required");
         }
-        return ResponseEntity.ok(pharmacyService.listByHospital(resolved, pageable));
+        return resolved;
     }
 
     @GetMapping("/search")
-    @PreAuthorize("hasAnyAuthority('ROLE_PHARMACIST','ROLE_STORE_MANAGER','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
+    // QA D965: the registry page's search box, offered to the super-admin the list admits.
+    @PreAuthorize("hasAnyAuthority('ROLE_PHARMACIST','ROLE_STORE_MANAGER','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Search pharmacies by name or city")
     public ResponseEntity<Page<PharmacyResponseDTO>> search(
-            @RequestParam UUID hospitalId,
+            @RequestParam(required = false) UUID hospitalId,
             @RequestParam String q,
-            Pageable pageable) {
-        return ResponseEntity.ok(pharmacyService.search(hospitalId, q, pageable));
+            Pageable pageable,
+            Authentication auth) {
+        return ResponseEntity.ok(pharmacyService.search(resolveRegistryScope(auth, hospitalId), q, pageable));
     }
 
     @PutMapping("/{id}")

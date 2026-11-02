@@ -24,7 +24,9 @@ import { ToastService } from '../core/toast.service';
 import { isStepUpRefusal, stepUpRefusalKey } from '../services/step-up';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { OrgTextPipe } from '../shared/pipes/org-text.pipe';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 type LifecycleAction = 'suspend' | 'restore' | 'archive' | 'schedule-purge' | 'cancel-purge';
 
 interface ActionConfig {
@@ -89,6 +91,8 @@ const ACTION_CONFIG: Record<LifecycleAction, ActionConfig> = {
   selector: 'app-organization-detail',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
+    ModalDialogDirective,
     ServerTimePipe,
     CommonModule,
     FormsModule,

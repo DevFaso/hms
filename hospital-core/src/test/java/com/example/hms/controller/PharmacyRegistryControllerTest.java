@@ -140,7 +140,8 @@ class PharmacyRegistryControllerTest {
         mockMvc.perform(get("/pharmacy-registry"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value(
-                        org.hamcrest.Matchers.containsString("Hospital context is required")));
+                        org.hamcrest.Matchers.anyOf(org.hamcrest.Matchers.is("pharmacy.hospitalContext.required"),
+                                org.hamcrest.Matchers.startsWith("Select a hospital"))));
     }
 
     /**
@@ -171,7 +172,26 @@ class PharmacyRegistryControllerTest {
     }
 
     @Test
+    void search_superAdminInGlobalView_searchesEveryTenant() throws Exception {
+        when(authUtils.hasAuthority(any(), eq("ROLE_SUPER_ADMIN"))).thenReturn(true);
+        when(pharmacyService.search(org.mockito.ArgumentMatchers.isNull(), eq("centrale"), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(sampleResponse())));
+
+        mockMvc.perform(get("/pharmacy-registry/search").param("q", "centrale"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].licenseNumber").value("PH-2024-001"));
+    }
+
+    @Test
+    void search_withNoActingHospital_isRefused() throws Exception {
+        mockMvc.perform(get("/pharmacy-registry/search").param("q", "centrale"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void search_returnsResults() throws Exception {
+        // Review of #975: the requested hospital goes through the caller's acting scope.
+        when(authUtils.resolveHospitalScope(any(), eq(hospitalId), eq(false))).thenReturn(hospitalId);
         when(pharmacyService.search(eq(hospitalId), eq("centrale"), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(sampleResponse())));
 

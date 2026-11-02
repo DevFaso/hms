@@ -1,3 +1,4 @@
+import { refusalReason } from '../shared/refusal-reason';
 import {
   Component,
   OnInit,
@@ -14,6 +15,7 @@ import { DrugInteractionEntry, DrugInteractionService } from '../services/drug-i
 import { InteractionSeverity } from '../services/medication-timeline.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 /**
  * Drug-interaction KB curation page (P2 #14).
@@ -27,7 +29,7 @@ import { RoleContextService } from '../core/role-context.service';
 @Component({
   selector: 'app-drug-interactions',
   standalone: true,
-  imports: [FormsModule, TranslateModule],
+  imports: [ModalDialogDirective, FormsModule, TranslateModule],
   templateUrl: './drug-interactions.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './drug-interactions.scss',
@@ -195,7 +197,7 @@ export class DrugInteractionsComponent implements OnInit {
         // "exists but was retired; reactivate it instead" is actionable —
         // surface the backend refusal verbatim.
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('DRUG_INTERACTIONS.SAVE_ERROR'),
+          refusalReason(err) ?? this.translate.instant('DRUG_INTERACTIONS.SAVE_ERROR'),
         );
         this.saving.set(false);
       },
@@ -225,7 +227,7 @@ export class DrugInteractionsComponent implements OnInit {
       },
       error: (err) => {
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('DRUG_INTERACTIONS.DEACTIVATE_ERROR'),
+          refusalReason(err) ?? this.translate.instant('DRUG_INTERACTIONS.DEACTIVATE_ERROR'),
         );
         this.deactivating.set(false);
       },
@@ -246,7 +248,7 @@ export class DrugInteractionsComponent implements OnInit {
       },
       error: (err) => {
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('DRUG_INTERACTIONS.REACTIVATE_ERROR'),
+          refusalReason(err) ?? this.translate.instant('DRUG_INTERACTIONS.REACTIVATE_ERROR'),
         );
         this.reactivatingId.set(null);
       },

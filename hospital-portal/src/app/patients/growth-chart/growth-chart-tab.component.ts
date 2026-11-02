@@ -15,6 +15,14 @@ import {
   VitalSignService,
 } from '../../services/vital-sign.service';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
+import { formatLabNumber } from '../../shared/i18n/app-locale';
+import {
+  DAYS_PER_MONTH,
+  DAYS_PER_YEAR,
+  completedMonths,
+  completedYearsAndMonths,
+} from '../../shared/completed-age';
 
 export type GrowthMetric = 'weight' | 'height' | 'headCircumference';
 
@@ -41,9 +49,6 @@ interface ChartModel {
   monthsMode: boolean;
 }
 
-const DAYS_PER_MONTH = 30.4375;
-const DAYS_PER_YEAR = 365.25;
-
 /**
  * The patient's own anthropometric trajectory (weight / height / head
  * circumference against age), seeded with the delivery-record birth weight
@@ -57,7 +62,7 @@ const DAYS_PER_YEAR = 365.25;
 @Component({
   selector: 'app-growth-chart-tab',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, TranslateModule],
+  imports: [ServerTimePipe, EnumLabelPipe, CommonModule, TranslateModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './growth-chart-tab.component.html',
   styleUrl: './growth-chart-tab.component.scss',
@@ -133,7 +138,8 @@ export class GrowthChartTabComponent implements OnInit {
       const value = yMin + ((yMax - yMin) * i) / 4;
       yTicks.push({
         y: this.yFor(value, yMin, yMax),
-        label: (Math.round(value * 10) / 10).toString(),
+        // QA D1115: "4,6" in French and Spanish, never the "4.6" toString() gave.
+        label: formatLabNumber(Math.round(value * 10) / 10),
       });
     }
 
@@ -208,22 +214,17 @@ export class GrowthChartTabComponent implements OnInit {
     }
     if (ageDays < 2 * DAYS_PER_YEAR) {
       return this.translate.instant('GROWTH.AGE_MONTHS', {
-        months: Math.round(ageDays / DAYS_PER_MONTH),
+        months: completedMonths(ageDays),
       });
     }
-    const years = Math.floor(ageDays / DAYS_PER_YEAR);
-    const months = Math.round((ageDays - years * DAYS_PER_YEAR) / DAYS_PER_MONTH);
+    // QA D1087: completed years and months (shared/completed-age), never rounded up.
+    const { years, months } = completedYearsAndMonths(ageDays);
     return this.translate.instant('GROWTH.AGE_YEARS_MONTHS', { years, months });
   }
 
+  /** QA D1115: "4,8 kg" in French and Spanish, at the precision it was recorded. */
   formatMeasure(value: number | null | undefined, unit: string): string {
-    return value === null || value === undefined ? '—' : `${value} ${unit}`;
-  }
-
-  sourceLabel(source: string | null): string {
-    return source === 'DELIVERY'
-      ? this.translate.instant('GROWTH.SOURCE_DELIVERY')
-      : (source ?? '—');
+    return value === null || value === undefined ? '—' : `${formatLabNumber(value)} ${unit}`;
   }
 
   private metricValue(p: GrowthPoint, metric: GrowthMetric): number | null {

@@ -11,17 +11,22 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { LabCorrectionBadgeComponent } from '../../lab/shared/lab-correction-badge.component';
 import { Subject, Subscription, takeUntil } from 'rxjs';
 
 import {
   ChartReview,
   ChartReviewEncounter,
   ChartReviewImaging,
+  ChartReviewNote,
   ChartReviewService,
 } from '../../services/chart-review.service';
 import { EnumLabelService } from '../../core/enum-label.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { MedicationRoutePipe } from '../../shared/pipes/medication-route.pipe';
+import { LabValuePipe } from '../../lab/shared/lab-value.pipe';
+import { CredentialsLabelPipe } from '../../shared/pipes/credentials-label.pipe';
 
 type LoadState = 'loading' | 'ready' | 'empty' | 'error';
 
@@ -51,7 +56,16 @@ const ABNORMAL_DANGER = new Set(['CRITICAL', 'ABNORMAL']);
 @Component({
   selector: 'app-chart-review',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, TranslateModule, EnumLabelPipe],
+  imports: [
+    LabCorrectionBadgeComponent,
+    ServerTimePipe,
+    CommonModule,
+    TranslateModule,
+    EnumLabelPipe,
+    MedicationRoutePipe,
+    LabValuePipe,
+    CredentialsLabelPipe,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './chart-review.component.html',
   styleUrl: './chart-review.component.scss',
@@ -89,6 +103,13 @@ export class ChartReviewComponent implements OnChanges, OnDestroy {
   protected readonly encountersById = computed(() => {
     const byId = new Map<string, ChartReviewEncounter>();
     for (const e of this.chart()?.encounters ?? []) byId.set(e.id, e);
+    return byId;
+  });
+
+  /** QA D1076: a note's timeline row reads its template by name, never "SOAP — …" from the wire. */
+  protected readonly notesById = computed(() => {
+    const byId = new Map<string, ChartReviewNote>();
+    for (const n of this.chart()?.notes ?? []) byId.set(n.id, n);
     return byId;
   });
 

@@ -64,7 +64,13 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
 
         // QA D503 class: the vaccinator is the caller, not a colleague named in the body.
-        Staff administeredBy = com.example.hms.security.CallerIdentity.resolveActor(staffRepository, requestDTO.getAdministeredByStaffId(), hospital.getId());
+        // QA D1003: a dose transcribed from a vaccination card or another
+        // facility's record was not given by the clinician who records it;
+        // it has no vaccinator here rather than a false one.
+        // The identity claim is checked either way (a colleague's id is refused);
+        // a transcribed dose then keeps no vaccinator here.
+        Staff actor = com.example.hms.security.CallerIdentity.resolveActor(staffRepository, requestDTO.getAdministeredByStaffId(), hospital.getId());
+        Staff administeredBy = isTranscribed(requestDTO.getSourceOfRecord()) ? null : actor;
 
         Encounter encounter = null;
         if (requestDTO.getEncounterId() != null) {
@@ -227,6 +233,17 @@ public class ImmunizationServiceImpl implements ImmunizationService {
                 .orElseThrow(() -> new ResourceNotFoundException(IMMUNIZATION_NOT_FOUND_KEY, id));
         com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(existingImmunization.getHospital(), IMMUNIZATION_NOT_FOUND_KEY, id);
 
+        // Review of #971: an edit that does not send a source keeps the stored
+        // one (and its vaccinator); only an explicit change to a transcribed
+        // source drops the vaccinator here.
+        if (requestDTO.getSourceOfRecord() == null || requestDTO.getSourceOfRecord().isBlank()) {
+            requestDTO.setSourceOfRecord(existingImmunization.getSourceOfRecord());
+        }
+        if (isTranscribed(requestDTO.getSourceOfRecord())) {
+            // QA D1003: corrected to a historical dose, it keeps no vaccinator here.
+            existingImmunization.setAdministeredBy(null);
+            requestDTO.setAdministeredByStaffId(null);
+        }
         // Update staff if changed
         if (requestDTO.getAdministeredByStaffId() != null && 
             (existingImmunization.getAdministeredBy() == null || 
@@ -252,6 +269,19 @@ public class ImmunizationServiceImpl implements ImmunizationService {
 
         log.info("Immunization updated successfully: {}", id);
         return immunizationMapper.toResponseDTO(updatedImmunization);
+    }
+
+    /**
+     * QA D1003: the sources the immunization form writes for a dose that was
+     * not given here (a vaccination card, another facility's record, the
+     * family's report). Only these drop the vaccinator; a missing or legacy
+     * free-text source keeps the previous behaviour (review of #971).
+     */
+    static final java.util.Set<String> TRANSCRIBED_SOURCES =
+        java.util.Set.of("VACCINATION_CARD", "EXTERNAL_RECORD", "PATIENT_REPORT");
+
+    static boolean isTranscribed(String source) {
+        return source != null && TRANSCRIBED_SOURCES.contains(source);
     }
 
     @Override

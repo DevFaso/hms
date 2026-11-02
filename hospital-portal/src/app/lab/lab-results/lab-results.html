@@ -130,10 +130,7 @@
               </td>
               <td>{{ r.labTestName || '—' }}</td>
               <td>
-                <strong>{{ r.resultValue || '—' }}</strong>
-                @if (r.resultUnit) {
-                  <span class="unit-text">{{ r.resultUnit }}</span>
-                }
+                <strong>{{ r.resultValue | labValue: r.resultUnit }}</strong>
               </td>
               <td>
                 @if (r.unitMismatch) {
@@ -160,15 +157,25 @@
                     'LAB_RESULTS.RELEASED' | translate
                   }}</span>
                   @if (r.supersededByResultId) {
-                    <span
+                    &ngsp;<span
                       class="status-badge status-superseded"
                       [title]="'LAB_RESULTS.SUPERSEDED_HINT' | translate"
                       [attr.data-testid]="'superseded-' + r.id"
                       >{{ 'LAB_RESULTS.SUPERSEDED' | translate }}</span
                     >
                   }
+                  @if (r.supersedesResultId) {
+                    <!-- QA D931: a released correction stays marked as one. -->
+                    <!-- QA D1167: a word space, or it reads "PubliéCorrigé" (Angular drops the line break). -->
+                    &ngsp;<span
+                      class="status-badge status-correction"
+                      [title]="'LAB_RESULTS.CORRECTED_HINT' | translate"
+                      [attr.data-testid]="'corrected-' + r.id"
+                      >{{ 'LAB_RESULTS.CORRECTED' | translate }}</span
+                    >
+                  }
                   @if (r.selfReleased) {
-                    <span
+                    &ngsp;<span
                       class="status-badge status-self-released"
                       [title]="'LAB_RESULTS.SELF_RELEASED_HINT' | translate"
                       data-testid="self-released-badge"
@@ -181,9 +188,12 @@
                       'LAB_RESULTS.CORRECTION' | translate
                     }}</span>
                   }
-                  <span class="status-badge status-pending">{{
-                    'LAB_RESULTS.PENDING_RELEASE' | translate
-                  }}</span>
+                  {{
+                    ' '
+                  }}<!-- QA D1222: the row's own singular key, not the filter chip's count label. --><span
+                    class="status-badge status-pending"
+                    >{{ 'LAB_RESULTS.ROW_PENDING_RELEASE' | translate }}</span
+                  >
                 }
               </td>
               <td>
@@ -191,6 +201,7 @@
                   <button
                     class="action-link view-link"
                     [title]="'LAB_RESULTS.VIEW_DETAILS' | translate"
+                    [attr.aria-label]="'LAB_RESULTS.VIEW_DETAILS' | translate"
                     (click)="viewResult(r)"
                   >
                     <span class="material-symbols-outlined">visibility</span>
@@ -199,6 +210,7 @@
                     <button
                       class="action-link edit-link"
                       [title]="'COMMON.EDIT' | translate"
+                      [attr.aria-label]="'COMMON.EDIT' | translate"
                       (click)="openEdit(r)"
                     >
                       <span class="material-symbols-outlined">edit</span>
@@ -209,6 +221,7 @@
                       class="action-link edit-link"
                       [attr.data-testid]="'correct-' + r.id"
                       [title]="'LAB_RESULTS.ENTER_CORRECTION' | translate"
+                      [attr.aria-label]="'LAB_RESULTS.ENTER_CORRECTION' | translate"
                       (click)="openCorrection(r)"
                     >
                       <span class="material-symbols-outlined">edit_note</span>
@@ -218,6 +231,7 @@
                     <button
                       class="action-link release-link"
                       [title]="'LAB_RESULTS.RELEASE' | translate"
+                      [attr.aria-label]="'LAB_RESULTS.RELEASE' | translate"
                       (click)="releaseResult(r)"
                     >
                       <span class="material-symbols-outlined">verified</span>
@@ -227,6 +241,7 @@
                     <button
                       class="action-link sign-link"
                       [title]="'LAB_RESULTS.SIGN' | translate"
+                      [attr.aria-label]="'LAB_RESULTS.SIGN' | translate"
                       (click)="openSign(r)"
                     >
                       <span class="material-symbols-outlined">draw</span>
@@ -245,6 +260,7 @@
                       class="action-link ack-link"
                       [attr.data-testid]="'read-back-' + r.id"
                       [title]="'LAB_RESULTS.READ_BACK' | translate"
+                      [attr.aria-label]="'LAB_RESULTS.READ_BACK' | translate"
                       (click)="openReadBack(r)"
                     >
                       <span class="material-symbols-outlined">record_voice_over</span>
@@ -253,6 +269,7 @@
                     <button
                       class="action-link ack-link"
                       [title]="'LAB_RESULTS.ACKNOWLEDGE' | translate"
+                      [attr.aria-label]="'LAB_RESULTS.ACKNOWLEDGE' | translate"
                       (click)="acknowledge(r)"
                     >
                       <span class="material-symbols-outlined">task_alt</span>
@@ -261,6 +278,7 @@
                   <button
                     class="action-link compare-link"
                     [title]="'LAB_RESULTS.COMPARE' | translate"
+                    [attr.aria-label]="'LAB_RESULTS.COMPARE' | translate"
                     (click)="openCompare(r)"
                   >
                     <span class="material-symbols-outlined">timeline</span>
@@ -269,6 +287,7 @@
                     <button
                       class="action-link delete-link"
                       [title]="'COMMON.DELETE' | translate"
+                      [attr.aria-label]="'COMMON.DELETE' | translate"
                       (click)="confirmDelete(r)"
                     >
                       <span class="material-symbols-outlined">delete</span>
@@ -304,14 +323,23 @@
   <!-- ═══ DETAIL PANEL ═══ -->
   @if (selectedResult(); as r) {
     <div class="detail-overlay" tabindex="-1" (keydown.escape)="closeDetail()">
-      <div class="detail-panel">
+      <div
+        class="detail-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="lab-results-dialog-title-1"
+        appModalDialog
+        (escaped)="closeDetail()"
+        (keydown.escape)="$event.stopPropagation()"
+      >
         <div class="panel-header">
-          <h2>
+          <h2 id="lab-results-dialog-title-1">
             {{ 'LAB_RESULTS.DETAIL_TITLE' | translate }} — {{ shortOrderCode(r.labOrderCode) }}
           </h2>
           <button
             class="close-btn"
             [title]="'COMMON.CLOSE_DETAIL_PANEL' | translate"
+            [attr.aria-label]="'COMMON.CLOSE_DETAIL_PANEL' | translate"
             (click)="closeDetail()"
           >
             <span class="material-symbols-outlined">close</span>
@@ -330,7 +358,7 @@
             <div class="detail-field">
               <span class="field-label">{{ 'LAB_RESULTS.VALUE' | translate }}</span>
               <span class="field-value"
-                >{{ r.resultValue }}
+                >{{ r.resultValue | labValue }}
                 {{ r.resultUnit || ('LAB_RESULTS.UNIT_UNKNOWN' | translate) }}</span
               >
             </div>
@@ -361,6 +389,12 @@
                 r.released ? ('COMMON.YES' | translate) : ('COMMON.NO' | translate)
               }}</span>
             </div>
+            @if (r.supersedesResultId) {
+              <div class="detail-field" data-testid="detail-corrected">
+                <span class="field-label">{{ 'LAB_RESULTS.CORRECTED' | translate }}</span>
+                <span class="field-value">{{ 'LAB_RESULTS.CORRECTED_HINT' | translate }}</span>
+              </div>
+            }
             @if (r.releasedAt) {
               <div class="detail-field">
                 <span class="field-label">{{ 'LAB_RESULTS.RELEASED_AT' | translate }}</span>
@@ -419,20 +453,37 @@
               <span class="field-label">{{ 'LAB_RESULTS.REFERENCE_RANGES' | translate }}</span>
               <div class="detail-list">
                 @for (rr of r.referenceRanges; track $index) {
-                  <div class="detail-list-item">
-                    <div class="range-main">{{ formatReferenceRange(rr) }}</div>
+                  <div
+                    class="detail-list-item"
+                    [class.range-applied]="isGradedRange(r, rr)"
+                    [attr.data-testid]="isGradedRange(r, rr) ? 'range-applied' : null"
+                  >
+                    <div class="range-main">
+                      {{ formatReferenceRange(rr) }}
+                      @if (isGradedRange(r, rr)) {
+                        <span class="range-applied-label">{{
+                          'LAB_RESULTS.RANGE_APPLIED' | translate
+                        }}</span>
+                      }
+                    </div>
                     <div class="range-meta">
                       <span
-                        >{{ 'LAB_RESULTS.GENDER' | translate }}:
+                        >{{ 'LAB_RESULTS.GENDER' | translate }}{{ 'COMMON.COLON' | translate }}
                         {{ rr.gender || 'ALL' | enumLabel: 'gender' }}</span
                       >
                       <span
-                        >{{ 'LAB_RESULTS.AGE_RANGE' | translate }}:
+                        >{{ 'LAB_RESULTS.AGE_RANGE' | translate }}{{ 'COMMON.COLON' | translate }}
                         {{ formatReferenceRangeAge(rr) }}</span
                       >
                     </div>
                     @if (rr.notes) {
                       <div class="range-notes">{{ rr.notes }}</div>
+                    }
+                    @if (rr.source) {
+                      <div class="range-notes">
+                        {{ 'LAB_RESULTS.RANGE_SOURCE' | translate }}{{ 'COMMON.COLON' | translate }}
+                        {{ rr.source }}
+                      </div>
                     }
                   </div>
                 }
@@ -462,7 +513,10 @@
                 @for (tp of sortedTrendHistory(r); track $index) {
                   <div class="trend-row">
                     <span>{{ tp.resultDate | serverTime | date: 'medium' }}</span>
-                    <span>{{ tp.resultValue }} {{ tp.resultUnit || '' }}</span>
+                    <span
+                      >{{ tp.resultValue | labValue: tp.resultUnit }}
+                      <app-lab-correction-badge [corrected]="tp.corrected"
+                    /></span>
                     <span>{{ formatTrendDelta(sortedTrendHistory(r), $index) }}</span>
                   </div>
                 }
@@ -501,12 +555,17 @@
   <div class="modal-backdrop" tabindex="-1" (click)="closeModal()" (keydown.escape)="closeModal()">
     <div
       class="modal modal-lg"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="lab-results-dialog-title-2"
+      appModalDialog
+      (escaped)="closeModal()"
+      (keydown.escape)="$event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="closeModal()"
     >
       <div class="modal-header">
-        <h2>
+        <h2 id="lab-results-dialog-title-2">
           {{
             editing()
               ? ('LAB_RESULTS.EDIT_RESULT' | translate)
@@ -515,7 +574,11 @@
                 : ('LAB_RESULTS.NEW_RESULT' | translate)
           }}
         </h2>
-        <button class="modal-close" (click)="closeModal()">
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="modal-close"
+          (click)="closeModal()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
@@ -525,7 +588,10 @@
             {{
               'LAB_RESULTS.CORRECTION_OF'
                 | translate
-                  : { test: c.labTestName || c.labTestCode || '—', value: c.resultValue || '—' }
+                  : {
+                      test: c.labTestName || c.labTestCode || '—',
+                      value: (c.resultValue | labValue: c.resultUnit),
+                    }
             }}
           </p>
         } @else if (!editing()) {
@@ -571,13 +637,23 @@
             />
           </div>
           <div class="field">
-            <label for="lr-resultUnit">{{ 'LAB_RESULTS.UNIT' | translate }}</label>
+            <label for="lr-resultUnit"
+              >{{ 'LAB_RESULTS.UNIT' | translate }}{{ selectedTestUnit() ? ' *' : '' }}</label
+            >
             <input
               id="lr-resultUnit"
               type="text"
               [(ngModel)]="form.resultUnit"
-              [placeholder]="'LAB_RESULTS.UNIT_PLACEHOLDER' | translate"
+              [placeholder]="selectedTestUnit() || ('LAB_RESULTS.UNIT_PLACEHOLDER' | translate)"
+              [required]="!!selectedTestUnit()"
+              aria-describedby="lr-resultUnit-hint"
             />
+            @if (selectedTestUnit(); as testUnit) {
+              <!-- QA D1095 / D1092: the unit the test's ranges grade; another unit may not be graded -->
+              <small id="lr-resultUnit-hint" class="field-hint">{{
+                'LAB_RESULTS.UNIT_FROM_TEST' | translate: { unit: testUnit }
+              }}</small>
+            }
           </div>
         </div>
         <div class="form-row">
@@ -608,9 +684,11 @@
         <button
           class="btn-primary"
           (click)="submitForm()"
-          [disabled]="
-            saving() || (!editing() && !form.labOrderId) || !form.resultValue || !form.resultDate
+          [disabled]="saving()"
+          [appSubmitGuard]="
+            (!editing() && !form.labOrderId) || !form.resultValue || !form.resultDate
           "
+          [submitGuardFields]="['lr-orderId', 'lr-resultValue', 'lr-resultDate']"
         >
           {{
             saving()
@@ -637,26 +715,52 @@
       class="modal"
       role="dialog"
       aria-modal="true"
-      [attr.aria-label]="'LAB_RESULTS.SELF_RELEASE_TITLE' | translate"
+      appModalDialog
+      (escaped)="cancelSelfRelease()"
+      (keydown.escape)="$event.stopPropagation()"
+      [attr.aria-label]="
+        (isSelfRelease(target)
+          ? 'LAB_RESULTS.SELF_RELEASE_TITLE'
+          : 'LAB_RESULTS.UNGRADED_RELEASE_TITLE'
+        ) | translate
+      "
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="cancelSelfRelease()"
       data-testid="self-release-modal"
     >
       <div class="modal-header">
-        <h2>{{ 'LAB_RESULTS.SELF_RELEASE_TITLE' | translate }}</h2>
-        <button class="modal-close" (click)="cancelSelfRelease()">
+        <h2>
+          {{
+            (isSelfRelease(target)
+              ? 'LAB_RESULTS.SELF_RELEASE_TITLE'
+              : 'LAB_RESULTS.UNGRADED_RELEASE_TITLE'
+            ) | translate
+          }}
+        </h2>
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="modal-close"
+          (click)="cancelSelfRelease()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
       <div class="modal-body">
-        <p>
-          {{
-            'LAB_RESULTS.SELF_RELEASE_BODY'
-              | translate
-                : { test: target.labTestName || '—', patient: target.patientFullName || '—' }
-          }}
-        </p>
+        @if (isSelfRelease(target)) {
+          <p>
+            {{
+              'LAB_RESULTS.SELF_RELEASE_BODY'
+                | translate
+                  : { test: target.labTestName || '—', patient: target.patientFullName || '—' }
+            }}
+          </p>
+        }
+        @if (target.unitMismatch) {
+          <!-- QA D1092: no range can grade this value; releasing it is a reviewed decision -->
+          <p role="note" data-testid="release-ungraded-note">
+            {{ 'LAB_RELEASE.UNGRADED_NOTE' | translate: { unit: target.resultUnit || '—' } }}
+          </p>
+        }
       </div>
       <div class="modal-actions">
         <button class="btn-secondary" (click)="cancelSelfRelease()">
@@ -667,7 +771,12 @@
           (click)="confirmSelfRelease()"
           data-testid="self-release-confirm"
         >
-          {{ 'LAB_RESULTS.SELF_RELEASE_CONFIRM' | translate }}
+          {{
+            (isSelfRelease(target)
+              ? 'LAB_RESULTS.SELF_RELEASE_CONFIRM'
+              : 'LAB_RESULTS.UNGRADED_RELEASE_CONFIRM'
+            ) | translate
+          }}
         </button>
       </div>
     </div>
@@ -684,13 +793,22 @@
   >
     <div
       class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="lab-results-dialog-title-3"
+      appModalDialog
+      (escaped)="cancelDelete()"
+      (keydown.escape)="$event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="cancelDelete()"
     >
       <div class="modal-header">
-        <h2>{{ 'LAB_RESULTS.DELETE_TITLE' | translate }}</h2>
-        <button class="modal-close" (click)="cancelDelete()">
+        <h2 id="lab-results-dialog-title-3">{{ 'LAB_RESULTS.DELETE_TITLE' | translate }}</h2>
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="modal-close"
+          (click)="cancelDelete()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
@@ -723,16 +841,25 @@
   <div class="modal-backdrop" tabindex="-1" (click)="closeSign()" (keydown.escape)="closeSign()">
     <div
       class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="lab-results-dialog-title-4"
+      appModalDialog
+      (escaped)="closeSign()"
+      (keydown.escape)="$event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>
+        <h2 id="lab-results-dialog-title-4">
           {{ 'LAB_RESULTS.SIGN_TITLE' | translate }} —
           {{ shortOrderCode(signTarget()?.labOrderCode) }}
         </h2>
-        <button class="modal-close" (click)="closeSign()">
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="modal-close"
+          (click)="closeSign()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
@@ -773,13 +900,24 @@
   >
     <div
       class="modal modal-lg"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="lab-results-dialog-title-5"
+      appModalDialog
+      (escaped)="closeCompare()"
+      (keydown.escape)="$event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ 'LAB_RESULTS.COMPARE_TITLE' | translate }} — {{ cmp.testName }}</h2>
-        <button class="modal-close" (click)="closeCompare()">
+        <h2 id="lab-results-dialog-title-5">
+          {{ 'LAB_RESULTS.COMPARE_TITLE' | translate }} — {{ cmp.testName }}
+        </h2>
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="modal-close"
+          (click)="closeCompare()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
@@ -789,7 +927,10 @@
           <div class="compare-card">
             <h4>{{ 'LAB_RESULTS.CURRENT_RESULT' | translate }}</h4>
             @if (cmp.currentResult; as cur) {
-              <p class="compare-value">{{ cur.resultValue }} {{ cur.resultUnit }}</p>
+              <p class="compare-value">
+                {{ cur.resultValue | labValue: cur.resultUnit }}
+                <app-lab-correction-badge [corrected]="cur.corrected" />
+              </p>
               <p class="compare-date">{{ cur.resultDate | serverTime | date: 'medium' }}</p>
             } @else {
               <p>—</p>
@@ -798,7 +939,10 @@
           <div class="compare-card">
             <h4>{{ 'LAB_RESULTS.PREVIOUS_RESULT' | translate }}</h4>
             @if (cmp.previousResult; as prev) {
-              <p class="compare-value">{{ prev.resultValue }} {{ prev.resultUnit }}</p>
+              <p class="compare-value">
+                {{ prev.resultValue | labValue: prev.resultUnit }}
+                <app-lab-correction-badge [corrected]="prev.corrected" />
+              </p>
               <p class="compare-date">{{ prev.resultDate | serverTime | date: 'medium' }}</p>
             } @else {
               <p>{{ 'LAB_RESULTS.BASELINE' | translate }}</p>
@@ -812,7 +956,7 @@
               <p>
                 <strong>{{ meta.absoluteChange ?? '—' }}</strong>
                 @if (meta.percentageChange !== null) {
-                  ({{ meta.percentageChange | number: '1.0-1' }}%)
+                  ({{ meta.percentageChange | measure: '%' }})
                 }
                 @if (meta.daysBetween !== null) {
                   — {{ meta.daysBetween }} {{ 'LAB_RESULTS.DAYS_BETWEEN' | translate }}
@@ -844,7 +988,11 @@
                 @for (pt of cmp.trendHistory; track pt.labResultId) {
                   <tr>
                     <td>{{ pt.resultDate | serverTime | date: 'medium' }}</td>
-                    <td>{{ pt.resultValue }} {{ pt.resultUnit }}</td>
+                    <td>
+                      {{ pt.resultValue | labValue: pt.resultUnit }}
+                      <!-- QA D1016/D931 (round 18): a corrected point says so in the trend too -->
+                      <app-lab-correction-badge [corrected]="pt.corrected" />
+                    </td>
                     <td>
                       {{ pt.severityFlag ? (pt.severityFlag | enumLabel: 'labSeverityFlag') : '—' }}
                     </td>
@@ -876,12 +1024,15 @@
       class="modal"
       role="dialog"
       aria-modal="true"
+      aria-labelledby="lab-results-dialog-title-6"
+      appModalDialog
+      (escaped)="closeReadBack()"
+      (keydown.escape)="$event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ 'LAB_RESULTS.READ_BACK' | translate }}</h2>
+        <h2 id="lab-results-dialog-title-6">{{ 'LAB_RESULTS.READ_BACK' | translate }}</h2>
         <button
           type="button"
           class="modal-close"
@@ -922,7 +1073,9 @@
           type="button"
           class="btn-primary"
           data-testid="read-back-submit"
-          [disabled]="!readBackValue().trim() || readBackSubmitting()"
+          [disabled]="readBackSubmitting()"
+          [appSubmitGuard]="!readBackValue().trim()"
+          [submitGuardFields]="['readBackValue']"
           (click)="submitReadBack()"
         >
           {{ 'LAB_RESULTS.READ_BACK_CONFIRM' | translate }}

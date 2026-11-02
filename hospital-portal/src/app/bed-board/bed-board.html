@@ -68,7 +68,8 @@
                 }}</span>
               }
               @if (t.isolationOverride) {
-                <span class="chip chip-mismatch">{{ 'BED_BOARD.OVERRIDE' | translate }}</span>
+                {{ ' '
+                }}<span class="chip chip-mismatch">{{ 'BED_BOARD.OVERRIDE' | translate }}</span>
               }
             </div>
             <div class="transfer-route">
@@ -105,7 +106,7 @@
         <span class="census-label">{{ 'BED_BOARD.AVAILABLE' | translate }}</span>
       </div>
       <div class="census-tile">
-        <span class="census-value">{{ b.census.occupancyRate }}%</span>
+        <span class="census-value">{{ b.census.occupancyRate | measure: '%' }}</span>
         <span class="census-label">{{ 'BED_BOARD.OCCUPANCY' | translate }}</span>
       </div>
       <div class="census-tile">
@@ -170,7 +171,8 @@
               <span class="ward-code">{{ ward.wardCode }}</span>
               <span class="ward-type">{{ ward.wardType | enumLabel: 'wardType' }}</span>
               @if (ward.isolationCapable) {
-                <span class="chip chip-capable">{{
+                {{ ' '
+                }}<span class="chip chip-capable">{{
                   'BED_BOARD.ISOLATION_CAPABLE' | translate
                 }}</span>
               }
@@ -182,7 +184,7 @@
                     : {
                         occupied: ward.occupiedBeds,
                         total: ward.totalBeds,
-                        rate: ward.occupancyRate,
+                        rate: (ward.occupancyRate | number: '1.0-1'),
                       }
               }}
             </span>
@@ -240,7 +242,8 @@
                               }}</span>
                             }
                             @if (o.isolationMismatch) {
-                              <span class="chip chip-mismatch">{{
+                              {{ ' '
+                              }}<span class="chip chip-mismatch">{{
                                 'BED_BOARD.WRONG_WARD' | translate
                               }}</span>
                             }
@@ -286,8 +289,8 @@
   ></div>
   <div
     class="modal"
-    role="dialog"
-    aria-modal="true"
+    appModalDialog
+    (escaped)="closePrecautions()"
     [attr.aria-label]="'BED_BOARD.PRECAUTIONS' | translate"
   >
     <header class="modal-header">
@@ -296,7 +299,12 @@
           'BED_BOARD.PRECAUTIONS_FOR' | translate: { name: precautionTarget()?.patientName ?? '' }
         }}
       </h2>
-      <button class="btn-close" (click)="closePrecautions()" [title]="'COMMON.CLOSE' | translate">
+      <button
+        class="btn-close"
+        (click)="closePrecautions()"
+        [title]="'COMMON.CLOSE' | translate"
+        [attr.aria-label]="'COMMON.CLOSE' | translate"
+      >
         <span class="material-symbols-outlined">close</span>
       </button>
     </header>
@@ -311,7 +319,8 @@
               }}</span>
               <span class="precaution-reason">{{ p.reason }}</span>
               @if (p.requiresIsolationWard) {
-                <span class="chip chip-mismatch">{{
+                {{ ' '
+                }}<span class="chip chip-mismatch">{{
                   'BED_BOARD.NEEDS_ISOLATION_WARD' | translate
                 }}</span>
               }
@@ -376,7 +385,9 @@
       <button
         class="btn-primary"
         (click)="submitPrecaution()"
-        [disabled]="savingPrecaution() || !precautionForm.reason.trim()"
+        [disabled]="savingPrecaution()"
+        [appSubmitGuard]="!precautionForm.reason.trim()"
+        [submitGuardFields]="['precaution-reason']"
       >
         {{ 'BED_BOARD.START_PRECAUTION' | translate }}
       </button>
@@ -394,15 +405,20 @@
   ></div>
   <div
     class="modal"
-    role="dialog"
-    aria-modal="true"
+    appModalDialog
+    (escaped)="closeTransfer()"
     [attr.aria-label]="'BED_BOARD.TRANSFER' | translate"
   >
     <header class="modal-header">
       <h2>
         {{ 'BED_BOARD.TRANSFER_FOR' | translate: { name: transferTarget()?.patientName ?? '' } }}
       </h2>
-      <button class="btn-close" (click)="closeTransfer()" [title]="'COMMON.CLOSE' | translate">
+      <button
+        class="btn-close"
+        (click)="closeTransfer()"
+        [title]="'COMMON.CLOSE' | translate"
+        [attr.aria-label]="'COMMON.CLOSE' | translate"
+      >
         <span class="material-symbols-outlined">close</span>
       </button>
     </header>
@@ -430,7 +446,12 @@
         <div class="override-block">
           <p class="hint warn">{{ 'BED_BOARD.OVERRIDE_WARNING' | translate }}</p>
           <label class="check">
-            <input type="checkbox" [(ngModel)]="transferForm.isolationOverride" name="override" />
+            <input
+              id="override-confirm"
+              type="checkbox"
+              [(ngModel)]="transferForm.isolationOverride"
+              name="override"
+            />
             {{ 'BED_BOARD.OVERRIDE_CONFIRM' | translate }}
           </label>
           @if (transferForm.isolationOverride) {
@@ -469,10 +490,42 @@
       <button
         class="btn-primary"
         (click)="submitTransfer()"
-        [disabled]="savingTransfer() || !transferSubmittable"
+        [disabled]="savingTransfer()"
+        [appSubmitGuard]="!transferSubmittable"
+        [submitGuardFields]="[
+          'transfer-destination',
+          'transfer-reason',
+          'override-confirm',
+          'override-reason',
+        ]"
       >
         {{ 'BED_BOARD.ORDER_TRANSFER' | translate }}
       </button>
     </footer>
   </div>
+}
+
+<!-- QA D1201 (round 22): the reason is asked in the shared dialog, never a browser prompt
+     (a blank answer to the prompt silently did nothing).
+     QA D1209 (round 23): the lift reason opens OVER the still-open Précautions dialog;
+     shared/a11y/overlay-stack.ts paints it on top (bed-board.nested-dialog.spec.ts clicks it).
+     QA D1219: the transfer-cancel confirm reads "Annuler le transfert", next to "Retour". -->
+@if (discontinuing(); as p) {
+  <app-reason-dialog
+    titleKey="BED_BOARD.DISCONTINUE_PROMPT"
+    confirmKey="BED_BOARD.DISCONTINUE"
+    [busy]="discontinueBusy()"
+    (confirmed)="confirmDiscontinue(p, $event)"
+    (cancelled)="discontinuing.set(null)"
+  />
+}
+@if (cancellingTransfer(); as order) {
+  <app-reason-dialog
+    titleKey="BED_BOARD.TRANSFER_CANCEL_PROMPT"
+    confirmKey="BED_BOARD.TRANSFER_CANCEL_CONFIRM"
+    dismissKey="COMMON.BACK"
+    [busy]="cancelTransferBusy()"
+    (confirmed)="confirmCancelTransfer(order, $event)"
+    (cancelled)="cancellingTransfer.set(null)"
+  />
 }

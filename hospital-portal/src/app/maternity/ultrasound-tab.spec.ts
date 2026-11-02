@@ -1,10 +1,11 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { expectKeyboardModal } from '../testing/modal-dialog-keyboard';
+import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 
-import { UltrasoundTabComponent } from './ultrasound-tab';
+import { UltrasoundTabComponent, hasUltrasoundFinding } from './ultrasound-tab';
 import { UltrasoundOrderResponse, UltrasoundService } from '../services/ultrasound.service';
 import { AuthService } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
@@ -55,6 +56,8 @@ describe('UltrasoundTabComponent', () => {
       'highRiskOrders',
       'followUpRequired',
       'anomalies',
+      'cancelOrder',
+      'submitReport',
     ]);
     service.pendingOrders.and.returnValue(of([]));
     service.anomalies.and.returnValue(of([]));
@@ -87,7 +90,201 @@ describe('UltrasoundTabComponent', () => {
         NO_REPORTS: 'Aucun compte rendu',
         LOAD_ERROR: 'Chargement impossible',
       },
+      PORTAL: {
+        ENUM: {
+          IMAGING_ORDER_PRIORITY: {
+            ROUTINE: 'Routine',
+            URGENT: 'Urgente',
+            STAT: 'Immédiat (STAT)',
+          },
+        },
+      },
     });
+  });
+
+  it('QA D1117: the priority reads in French in the list, the view and the order form', () => {
+    create(['ROLE_MIDWIFE'], [order({ priority: 'STAT' })]);
+    expect(texts('tbody td')).toContain('Immédiat (STAT)');
+    expect(host().textContent).not.toContain('STAT ');
+
+    fixture.componentInstance.openOrder(order({ priority: 'URGENT' }));
+    fixture.detectChanges();
+    expect(host().textContent).toContain('Urgente');
+
+    fixture.componentInstance.openCreateOrder();
+    fixture.detectChanges();
+    const options = Array.from(host().querySelectorAll('#us-priority option')).map((o) =>
+      o.textContent?.trim(),
+    );
+    expect(options).toEqual(['Routine', 'Urgente', 'Immédiat (STAT)']);
+  });
+
+  it('QA D1144: the cancel prompt takes the keyboard, and gives it back to "Cancel the order"', fakeAsync(() => {
+    create(['ROLE_MIDWIFE']);
+    const cmp = fixture.componentInstance;
+    spyOn(cmp, 'canCancelThisOrder').and.returnValue(true);
+    document.body.appendChild(host());
+    try {
+      cmp.openOrder(order());
+      fixture.detectChanges();
+      host().querySelector<HTMLButtonElement>('[data-testid="us-cancel-order"]')!.click();
+      fixture.detectChanges();
+      tick();
+      expect(document.activeElement?.id).toBe('us-cancel-reason');
+
+      cmp.closeCancelPrompt();
+      fixture.detectChanges();
+      tick();
+      expect(document.activeElement).toBe(host().querySelector('[data-testid="us-cancel-order"]'));
+
+      // Once cancelled there is no "Cancel" to return to: the dialog's Close takes the keyboard.
+      service.cancelOrder.and.returnValue(of(order({ status: 'CANCELLED' })));
+      cmp.openCancelPrompt();
+      fixture.detectChanges();
+      tick();
+      cmp.cancelReason = 'Doublon';
+      cmp.submitCancel();
+      fixture.detectChanges();
+      tick();
+      expect(document.activeElement).toBe(host().querySelector('[data-testid="us-order-close"]'));
+    } finally {
+      host().remove();
+    }
+  }));
+
+  it('QA D1155: Escape in the cancel prompt closes only the prompt, and asks before dropping a typed reason', fakeAsync(() => {
+    create(['ROLE_MIDWIFE']);
+    const cmp = fixture.componentInstance;
+    spyOn(cmp, 'canCancelThisOrder').and.returnValue(true);
+    document.body.appendChild(host());
+    const escape = (target: Element) => {
+      target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      fixture.detectChanges();
+      tick();
+    };
+    const reason = () => host().querySelector<HTMLTextAreaElement>('#us-cancel-reason');
+    try {
+      cmp.openOrder(order());
+      fixture.detectChanges();
+      host().querySelector<HTMLButtonElement>('[data-testid="us-cancel-order"]')!.click();
+      fixture.detectChanges();
+      tick();
+      expect(document.activeElement).toBe(reason());
+
+      reason()!.value = 'Doublon';
+      reason()!.dispatchEvent(new Event('input'));
+      escape(reason()!);
+      // The view dialog is still open, the text is still there, and the prompt asks.
+      expect(cmp.viewedOrder()).not.toBeNull();
+      expect(reason()!.value).toBe('Doublon');
+      expect(host().querySelector('[data-testid="inline-discard-ask"]')).not.toBeNull();
+      expect(document.activeElement).toBe(host().querySelector('[data-testid="inline-keep"]'));
+
+      // Escape on the question goes back to the text.
+      escape(document.activeElement!);
+      expect(host().querySelector('[data-testid="inline-discard-ask"]')).toBeNull();
+      expect(document.activeElement).toBe(reason());
+
+      // Discarding closes only the prompt; the keyboard goes back to "Cancel the order".
+      escape(reason()!);
+      host().querySelector<HTMLButtonElement>('[data-testid="inline-discard"]')!.click();
+      fixture.detectChanges();
+      tick();
+      expect(cmp.showCancelPrompt()).toBeFalse();
+      expect(cmp.viewedOrder()).not.toBeNull();
+      expect(document.activeElement).toBe(host().querySelector('[data-testid="us-cancel-order"]'));
+
+      // An empty prompt closes on Escape at once, still leaving the dialog open.
+      host().querySelector<HTMLButtonElement>('[data-testid="us-cancel-order"]')!.click();
+      fixture.detectChanges();
+      tick();
+      escape(reason()!);
+      expect(cmp.showCancelPrompt()).toBeFalse();
+      expect(cmp.viewedOrder()).not.toBeNull();
+      expect(document.activeElement).toBe(host().querySelector('[data-testid="us-cancel-order"]'));
+    } finally {
+      host().remove();
+    }
+  }));
+
+  it('QA D1150: the finding is never preselected and a report with no finding is refused, field by field', () => {
+    create(['ROLE_MIDWIFE']);
+    const cmp = fixture.componentInstance;
+    cmp.openReport(order());
+    fixture.detectChanges();
+    expect(cmp.reportForm.findingCategory).toBe('');
+    const save = () => {
+      const buttons = Array.from(
+        host().querySelectorAll<HTMLButtonElement>('.modal-actions .btn-primary'),
+      );
+      buttons[buttons.length - 1].click();
+      fixture.detectChanges();
+    };
+    save();
+    expect(service.submitReport).not.toHaveBeenCalled();
+    expect(host().querySelector('#rep-category')?.getAttribute('aria-invalid')).toBe('true');
+
+    // A finding category alone is not a report: nothing was measured or written.
+    cmp.reportForm.findingCategory = 'NORMAL';
+    save();
+    expect(service.submitReport).not.toHaveBeenCalled();
+    expect(host().querySelector('#rep-category')?.getAttribute('aria-invalid')).toBeNull();
+    expect(host().querySelector('#rep-summary')?.getAttribute('aria-invalid')).toBe('true');
+
+    service.submitReport.and.returnValue(of({}) as never);
+    cmp.reportForm.fetalHeartRate = 142;
+    save();
+    expect(service.submitReport).toHaveBeenCalledWith(
+      'us-1',
+      jasmine.objectContaining({ findingCategory: 'NORMAL', fetalHeartRate: 142 }),
+    );
+  });
+
+  // QA D1182 (round 22): editing a blank stored report re-sent the server's
+  // defaults (cardiac activity yes, one fetus) and saved a blank "Normal".
+  it('QA D1182: editing a blank stored report is refused, and the unshown default flags are never sent', () => {
+    create(['ROLE_MIDWIFE']);
+    const cmp = fixture.componentInstance;
+    const stored = {
+      id: 'rep-1',
+      ultrasoundOrderId: 'us-1',
+      scanDate: '2026-11-01',
+      findingCategory: 'NORMAL',
+      numberOfFetuses: 1,
+      fetalCardiacActivity: true,
+      fetalMovementObserved: true,
+      fetalToneNormal: true,
+    };
+    cmp.openReport({ ...order(), report: stored } as never);
+    fixture.detectChanges();
+    const save = () => {
+      const buttons = Array.from(
+        host().querySelectorAll<HTMLButtonElement>('.modal-actions .btn-primary'),
+      );
+      buttons[buttons.length - 1].click();
+      fixture.detectChanges();
+    };
+    save();
+    expect(service.submitReport).not.toHaveBeenCalled();
+    expect(host().querySelector('#rep-summary')?.getAttribute('aria-invalid')).toBe('true');
+
+    service.submitReport.and.returnValue(of({}) as never);
+    cmp.reportForm.findingsSummary = 'Grossesse évolutive, activité cardiaque visible';
+    save();
+    const sent = service.submitReport.calls.mostRecent().args[1] as unknown as Record<
+      string,
+      unknown
+    >;
+    expect(sent['findingsSummary']).toContain('activité cardiaque');
+    expect('fetalCardiacActivity' in sent).toBeFalse();
+    expect('fetalMovementObserved' in sent).toBeFalse();
+    expect('fetalToneNormal' in sent).toBeFalse();
+  });
+
+  it('QA D1182: twins are a finding; one fetus alone is not', () => {
+    expect(hasUltrasoundFinding({ numberOfFetuses: 1 })).toBeFalse();
+    expect(hasUltrasoundFinding({ numberOfFetuses: 2 })).toBeTrue();
+    expect(hasUltrasoundFinding({ fetalCardiacActivity: true } as never)).toBeFalse();
   });
 
   it('lists the hospital’s orders with a translated scan type and status', () => {
@@ -144,5 +341,23 @@ describe('UltrasoundTabComponent', () => {
     fixture.detectChanges();
     expect(toast.error).toHaveBeenCalledWith('Chargement impossible');
     expect(host().querySelector('.loading-state')).toBeNull();
+  });
+
+  describe('keyboard modals (QA D1004)', () => {
+    afterEach(() => (fixture.nativeElement as HTMLElement).remove());
+
+    it('"Nouvelle demande d’échographie": focus moves in, Escape closes, focus returns', () => {
+      create(['ROLE_MIDWIFE']);
+      document.body.appendChild(fixture.nativeElement);
+      const opener = host().querySelector<HTMLElement>('.btn-primary')!;
+      expectKeyboardModal(fixture, opener);
+    });
+
+    it('the view-échographie dialog: focus moves in, Escape closes, focus returns', () => {
+      create(['ROLE_DOCTOR']);
+      document.body.appendChild(fixture.nativeElement);
+      const opener = host().querySelector<HTMLElement>('.actions-cell button')!;
+      expectKeyboardModal(fixture, opener);
+    });
   });
 });

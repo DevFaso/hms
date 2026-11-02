@@ -37,6 +37,7 @@
             <input
               id="profile-phone"
               type="tel"
+              appPhoneField
               required
               maxlength="30"
               autocomplete="off"
@@ -76,7 +77,8 @@
             type="button"
             class="btn-primary"
             data-test="save"
-            [disabled]="!canSave()"
+            [disabled]="saving() || loading()"
+            [appSubmitGuard]="!canSave()"
             (click)="save()"
           >
             @if (saving()) {

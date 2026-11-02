@@ -84,6 +84,9 @@ public class HighRiskPregnancyCarePlanServiceImpl implements HighRiskPregnancyCa
     @Override
     public HighRiskPregnancyCarePlanResponseDTO createPlan(HighRiskPregnancyCarePlanRequestDTO request, String username) {
         Objects.requireNonNull(request, "High-risk pregnancy care plan request is required");
+        // QA D1148 class (round 21): a care plan plans something.
+        com.example.hms.service.support.ClinicalContent.requireAnyAnswer(request, java.util.Set.of("patientId", "hospitalId", "active"),
+            "riskProfile", "highRiskPlan.contentRequired");
         User user = getUserOrThrow(username);
         assertProviderAccess(user);
 
@@ -116,6 +119,12 @@ public class HighRiskPregnancyCarePlanServiceImpl implements HighRiskPregnancyCa
 
         HighRiskPregnancyCarePlan plan = findPlanInActingHospital(planId);
         ensurePatientBelongsToHospital(plan.getPatient(), plan.getHospital().getId());
+        // QA D1182 class (round 22), after the scope check (a plan elsewhere is
+        // not found, whatever the body): the edit of a recorded plan carries
+        // something to change (a null keeps the stored value; the active flag
+        // counts here, so a plan can still be closed by itself).
+        com.example.hms.service.support.ClinicalContent.requireAnyAnswer(request, java.util.Set.of("patientId", "hospitalId"),
+            "riskProfile", "highRiskPlan.contentRequired");
 
         mapper.updateEntityFromRequest(plan, request, false);
         plan.setMonitoringMilestones(mapper.ensureMilestonesContainTypes(plan.getMonitoringMilestones(),

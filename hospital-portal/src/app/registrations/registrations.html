@@ -157,6 +157,7 @@
                     type="button"
                     class="btn-secondary btn-sm"
                     [title]="'COMMON.EDIT' | translate"
+                    [attr.aria-label]="'COMMON.EDIT' | translate"
                     (click)="openEdit(r)"
                   >
                     <span class="material-symbols-outlined">edit</span>
@@ -166,6 +167,7 @@
                       type="button"
                       class="btn-secondary btn-sm"
                       [title]="'REGISTRATIONS.DEACTIVATE' | translate"
+                      [attr.aria-label]="'REGISTRATIONS.DEACTIVATE' | translate"
                       (click)="deactivate(r)"
                     >
                       <span class="material-symbols-outlined">person_off</span>
@@ -175,6 +177,7 @@
                     type="button"
                     class="btn-secondary btn-sm danger"
                     [title]="'COMMON.DELETE' | translate"
+                    [attr.aria-label]="'COMMON.DELETE' | translate"
                     (click)="confirmDelete(r)"
                   >
                     <span class="material-symbols-outlined">delete_forever</span>
@@ -198,15 +201,17 @@
     (keydown.escape)="closeFormModal()"
   >
     <div
+      appModalDialog
+      aria-labelledby="registrations-dialog-1-title"
       class="modal"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeFormModal(); $event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>
+        <h2 id="registrations-dialog-1-title">
           {{ (editingRegistration() ? 'REGISTRATIONS.EDIT' : 'REGISTRATIONS.NEW') | translate }}
         </h2>
         <button
@@ -280,7 +285,9 @@
         <button
           type="button"
           class="btn-primary"
-          [disabled]="formSaving() || (!editingRegistration() && !form.patientId)"
+          [disabled]="formSaving()"
+          [appSubmitGuard]="!editingRegistration() && !form.patientId"
+          [submitGuardFields]="['reg-patient']"
           (click)="submitForm()"
         >
           {{ 'COMMON.SAVE' | translate }}
@@ -299,15 +306,17 @@
     (keydown.escape)="closeDelete()"
   >
     <div
+      appModalDialog
+      aria-labelledby="registrations-dialog-2-title"
       class="modal"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeDelete(); $event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ 'REGISTRATIONS.DELETE_TITLE' | translate }}</h2>
+        <h2 id="registrations-dialog-2-title">{{ 'REGISTRATIONS.DELETE_TITLE' | translate }}</h2>
         <button
           type="button"
           class="modal-close"
@@ -331,7 +340,7 @@
               target.patientUsername ||
               ('REGISTRATIONS.UNKNOWN_PATIENT' | translate)
           }}</strong>
-          ({{ target.mri }})?
+          ({{ target.mri }}){{ 'COMMON.QUESTION_MARK' | translate }}
         </p>
         <p class="muted">{{ 'REGISTRATIONS.DELETE_WARNING' | translate }}</p>
       </div>

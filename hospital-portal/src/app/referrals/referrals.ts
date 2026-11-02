@@ -1,5 +1,10 @@
+import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
+import { CANCEL_REASON_REQUIRED_KEY, isOrderCancellable } from '../shared/order-lifecycle';
+import { refuseFields } from '../shared/forms/invalid-fields';
+import { textMatches } from '../shared/person-search';
 import {
   Component,
+  ElementRef,
   computed,
   inject,
   OnInit,
@@ -8,9 +13,9 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { Subject } from 'rxjs';
-import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
+import { debounceTime, switchMap } from 'rxjs/operators';
 import {
   ReferralService,
   ReferralResponse,
@@ -35,11 +40,16 @@ import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { missingRequiredMessage } from '../shared/required-fields';
 import { labelledRefusalReason } from '../shared/refusal-reason';
 import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 @Component({
   selector: 'app-referrals',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
+    PersonNamePipe,
+    ModalDialogDirective,
     PatientSublinePipe,
     ServerTimePipe,
     CommonModule,
@@ -62,6 +72,34 @@ export class ReferralsComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly scopeUrl = inject(HospitalScopeUrlService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  /** QA D1098: why the referral is cancelled (required, kept on the referral). */
+  readonly cancelReason = signal('');
+  private readonly router = inject(Router);
+
+  /**
+   * QA D998: whether the referral's patient chart opens here. A referral
+   * accepted at another hospital does not by itself open the chart there
+   * (cross-hospital reads are behind a flag), and opening /patients/<id>
+   * used to bounce silently back to the list. The chart is checked first and
+   * the reason is shown in the referral instead.
+   */
+  readonly chartCheck = signal<'idle' | 'checking' | 'unavailable'>('idle');
+  /** The chart-access check is in flight (the only reason "Open chart" is disabled). */
+  readonly chartChecking = computed(() => this.chartCheck() === 'checking');
+
+  openPatientChart(ref: ReferralResponse): void {
+    if (!ref.patientId) return;
+    this.chartCheck.set('checking');
+    const hospitalId = this.roleContext.effectiveHospitalIdForRequest() ?? undefined;
+    this.patientService.getById(ref.patientId, hospitalId).subscribe({
+      next: () => {
+        this.chartCheck.set('idle');
+        this.router.navigate(['/patients', ref.patientId]);
+      },
+      error: () => this.chartCheck.set('unavailable'),
+    });
+  }
 
   /** Cross-tenant signals — drive the chip + Hospital column toggle. */
   protected readonly isSuperAdmin = this.roleContext.isSuperAdmin;
@@ -105,7 +143,11 @@ export class ReferralsComponent implements OnInit {
   isReceivingSide(r: ReferralResponse): boolean {
     const active = this.roleContext.effectiveHospitalIdForRequest();
     const target = r.receivingHospitalId || r.hospitalId;
-    return !!active && !!target && active === target;
+    // QA D955: an internal referral's two sides are one hospital; the
+    // receiving steps still belong to someone other than the referrer.
+    const staffId = this.auth.getUserProfile()?.staffId;
+    const isReferrer = !!staffId && r.referringProviderId === staffId;
+    return !!active && !!target && active === target && !isReferrer;
   }
 
   /** QA D412/D427: a draft is sent by the clinician who wrote it, and only by them. */
@@ -351,7 +393,6 @@ export class ReferralsComponent implements OnInit {
     this.patientSearch$
       .pipe(
         debounceTime(220),
-        distinctUntilChanged(),
         switchMap((q) => {
           this.patientSearchLoading.set(true);
           return this.patientService.list(this.patientSearchHospitalId(), q);
@@ -480,7 +521,7 @@ export class ReferralsComponent implements OnInit {
     const staffId = this.auth.getUserProfile()?.staffId;
     return (
       this.canAct().cancel &&
-      !['COMPLETED', 'CANCELLED', 'REJECTED', 'EXPIRED'].includes(r.status) &&
+      isOrderCancellable(r.status) &&
       !!staffId &&
       r.referringProviderId === staffId
     );
@@ -506,6 +547,7 @@ export class ReferralsComponent implements OnInit {
 
   confirmCancel(r: ReferralResponse): void {
     this.cancelError.set('');
+    this.cancelReason.set('');
     this.deletingRef.set(r);
     this.showDeleteConfirm.set(true);
   }
@@ -514,8 +556,20 @@ export class ReferralsComponent implements OnInit {
     this.deletingRef.set(null);
   }
   executeCancel(): void {
+    const reason = this.cancelReason().trim();
+    if (!reason) {
+      // QA D1098: every cancel states why (the server refuses a blank reason too).
+      const message = this.translate.instant(CANCEL_REASON_REQUIRED_KEY);
+      refuseFields(
+        this.host.nativeElement,
+        ['referral-cancel-reason'],
+        ['referral-cancel-reason'],
+        message,
+      );
+      return;
+    }
     this.deleting.set(true);
-    this.referralService.cancel(this.deletingRef()!.id, 'Cancelled by admin').subscribe({
+    this.referralService.cancel(this.deletingRef()!.id, reason).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('REFERRALS.CANCEL_SUCCESS'));
         this.cancelDeleteAction();
@@ -729,15 +783,16 @@ export class ReferralsComponent implements OnInit {
     if (term) {
       list = list.filter(
         (r) =>
-          (r.patientName ?? '').toLowerCase().includes(term) ||
+          textMatches(r.patientName, term) ||
           (r.targetSpecialty ?? '').toLowerCase().includes(term) ||
-          (r.receivingProviderName ?? '').toLowerCase().includes(term),
+          textMatches(r.receivingProviderName, term),
       );
     }
     this.filtered.set(list);
   }
 
   viewDetail(r: ReferralResponse): void {
+    this.chartCheck.set('idle');
     this.selectedReferral.set(r);
   }
   closeDetail(): void {

@@ -185,6 +185,33 @@ class ConsultationServiceImplTest {
         assertThat(service.acknowledgeConsultation(consultationId, staffId).getStatus()).isEqualTo(ConsultationStatus.ACKNOWLEDGED);
     }
 
+    @Test void qaD955_aConsultCannotBeCreatedWithItsRequesterAsConsultant() {
+        ConsultationRequestDTO r = new ConsultationRequestDTO();
+        r.setPatientId(patientId); r.setHospitalId(hospitalId);
+        r.setSpecialtyRequested("Cardiology"); r.setUrgency(ConsultationUrgency.ROUTINE);
+        r.setPreferredConsultantId(staffId);
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        org.mockito.Mockito.lenient().when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
+        org.mockito.Mockito.lenient().when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        org.mockito.Mockito.lenient().when(roleValidator.isDoctor(staff.getUser().getId(), hospitalId)).thenReturn(true);
+        assertThatThrownBy(() -> service.createConsultation(r, staffId)).isInstanceOf(BusinessException.class);
+        verify(consultationRepository, never()).save(any());
+    }
+
+    // QA D955 class: the requester is never the consultant of her own consult.
+    @Test void qaD955_theRequesterCannotBeTheConsultant() {
+        Consultation requested = buildConsultation(ConsultationStatus.REQUESTED);
+        requested.setRequestingProvider(staff);
+        when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(requested));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        org.mockito.Mockito.lenient().when(roleValidator.isDoctor(staff.getUser().getId(), hospitalId)).thenReturn(true);
+        org.mockito.Mockito.lenient().when(scopeResolver.isVerifiedSuperAdmin()).thenReturn(true);
+        assertThatThrownBy(() -> service.acknowledgeConsultation(consultationId, staffId))
+            .isInstanceOf(BusinessException.class);
+        verify(consultationRepository, never()).save(any());
+    }
+
     @Test void acknowledgeConsultation_alreadyAcknowledged() {
         when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(buildConsultation(ConsultationStatus.ACKNOWLEDGED)));
         assertThatThrownBy(() -> service.acknowledgeConsultation(consultationId, staffId)).isInstanceOf(BusinessException.class);
@@ -223,6 +250,18 @@ class ConsultationServiceImplTest {
         ConsultationResponseDTO r = service.cancelConsultation(consultationId, "No longer needed");
         assertThat(r.getStatus()).isEqualTo(ConsultationStatus.CANCELLED);
         assertThat(r.getCancellationReason()).isEqualTo("No longer needed");
+    }
+
+    /** QA D1098: the service states why too, whatever the caller (the DTO checks only the HTTP edge). */
+    @Test void cancelConsultation_refusesABlankReason_D1098() {
+        Consultation requested = buildConsultation(ConsultationStatus.REQUESTED);
+        requested.setRequestingProvider(staff);
+        when(roleValidator.getCurrentUserId()).thenReturn(staff.getUser().getId());
+        when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(requested));
+        assertThatThrownBy(() -> service.cancelConsultation(consultationId, ""))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("order.lifecycle.cancelReasonRequired");
+        assertThat(requested.getStatus()).isEqualTo(ConsultationStatus.REQUESTED);
     }
 
     @Test void cancelConsultation_alreadyCompleted() {

@@ -30,7 +30,8 @@
       <button
         class="btn btn-primary"
         (click)="checkStock()"
-        [disabled]="checking() || !prescriptionId.trim()"
+        [disabled]="checking()"
+        [appSubmitGuard]="!prescriptionId.trim() && ('SUBMIT_GUARD.PRESCRIPTION' | translate)"
         data-testid="routing-recheck"
       >
         @if (checking()) {
@@ -120,24 +121,33 @@
       <h2>{{ 'PHARMACY.STOCK_RESULT' | translate }}</h2>
       <div class="stock-summary">
         <div class="stock-info">
-          <span class="label">{{ 'PHARMACY.MEDICATION' | translate }}:</span>
+          <span class="label"
+            >{{ 'PHARMACY.MEDICATION' | translate }}{{ 'COMMON.COLON' | translate }}</span
+          >
           <span class="value">{{ stockResult()!.medicationName }}</span>
         </div>
         <div class="stock-info">
-          <span class="label">{{ 'PHARMACY.PHARMACY_NAME' | translate }}:</span>
+          <span class="label"
+            >{{ 'PHARMACY.PHARMACY_NAME' | translate }}{{ 'COMMON.COLON' | translate }}</span
+          >
           <span class="value">{{
             stockResult()!.pharmacyName ?? ('PHARMACY.ALL_DISPENSARIES' | translate)
           }}</span>
         </div>
         <div class="stock-info">
-          <span class="label">{{ 'PHARMACY.QTY_ON_HAND_COLUMN' | translate }}:</span>
+          <span class="label"
+            >{{ 'PHARMACY.QTY_ON_HAND_COLUMN' | translate }}{{ 'COMMON.COLON' | translate }}</span
+          >
           <span class="value" [class.text-danger]="!stockResult()!.sufficient">
             {{ stockResult()!.quantityOnHand | number: '1.0-2' }}
           </span>
         </div>
         <div class="stock-info">
-          <span class="label">{{ 'PHARMACY.STATUS' | translate }}:</span>
-          <span
+          <span class="label"
+            >{{ 'PHARMACY.STATUS' | translate }}{{ 'COMMON.COLON' | translate }}</span
+          >
+          {{ ' '
+          }}<span
             class="badge"
             data-testid="stock-status"
             [class.badge-success]="stockStatus() === 'IN_STOCK'"
@@ -169,15 +179,30 @@
           </span>
         </div>
       </div>
-      <!-- Routing options (only when out of stock) -->
-      @if (!stockResult()!.sufficient) {
+      <!-- QA D966: an order printed for the patient offers its copy, not the
+           routing buttons that would now be refused -->
+      @if (isPrinted()) {
+        <div class="routing-options" data-testid="printed-copy-panel">
+          <p>{{ 'PHARMACY.PRINTED_COPY_HINT' | translate }}</p>
+          <button class="btn btn-secondary" (click)="reprintCopy()" data-testid="reprint-copy">
+            {{ 'PHARMACY.REPRINT_COPY' | translate }}
+          </button>
+        </div>
+      } @else if (stockResult()!.routable === false) {
+        <p class="muted" data-testid="not-routable">
+          {{ 'PHARMACY.NOT_ROUTABLE_HINT' | translate }}
+        </p>
+      }
+      <!-- Routing options (only when out of stock and the order can still be routed) -->
+      @if (!stockResult()!.sufficient && stockResult()!.routable !== false) {
         <div class="routing-options">
           <h3>{{ 'PHARMACY.ROUTING_OPTIONS' | translate }}</h3>
           <div class="option-buttons">
             <button
               class="btn btn-warning"
               (click)="openBackOrderForm()"
-              [disabled]="saving() || !scopeReady()"
+              [disabled]="saving()"
+              [appSubmitGuard]="routeBlockReason()"
               data-testid="open-back-order"
             >
               {{ 'PHARMACY.BACK_ORDER' | translate }}
@@ -185,7 +210,8 @@
             <button
               class="btn btn-secondary"
               (click)="printForPatient()"
-              [disabled]="saving() || !scopeReady()"
+              [disabled]="saving()"
+              [appSubmitGuard]="routeBlockReason()"
               data-testid="print-for-patient"
             >
               {{ 'PHARMACY.PRINT_FOR_PATIENT' | translate }}
@@ -228,7 +254,12 @@
                         <button
                           class="btn btn-sm btn-primary"
                           (click)="openPartnerForm(partner)"
-                          [disabled]="saving() || !partner.hasOnFormulary || !scopeReady()"
+                          [disabled]="saving()"
+                          [appSubmitGuard]="
+                            !partner.hasOnFormulary
+                              ? ('SUBMIT_GUARD.NOT_ON_FORMULARY' | translate)
+                              : routeBlockReason()
+                          "
                           [attr.data-testid]="'route-here-' + partner.pharmacyId"
                         >
                           {{ 'PHARMACY.ROUTE_HERE' | translate }}
@@ -255,7 +286,9 @@
     <div class="form-card form-card-accent slide-in">
       <h2>{{ 'PHARMACY.ROUTE_TO_PARTNER' | translate }}</h2>
       <div class="partner-detail">
-        <span class="label">{{ 'PHARMACY.PARTNER' | translate }}:</span>
+        <span class="label"
+          >{{ 'PHARMACY.PARTNER' | translate }}{{ 'COMMON.COLON' | translate }}</span
+        >
         <span class="value">{{ selectedPartner()?.pharmacyName }}</span>
       </div>
       <div class="form-group">
@@ -275,7 +308,8 @@
         <button
           class="btn btn-primary"
           (click)="submitRouteToPartner()"
-          [disabled]="saving() || !scopeReady()"
+          [disabled]="saving()"
+          [appSubmitGuard]="!scopeReady() && ('SUBMIT_GUARD.SCOPE' | translate)"
         >
           @if (saving()) {
             <span class="spinner"></span>
@@ -308,7 +342,8 @@
         <button
           class="btn btn-warning"
           (click)="submitBackOrder()"
-          [disabled]="saving() || !scopeReady()"
+          [disabled]="saving()"
+          [appSubmitGuard]="!scopeReady() && ('SUBMIT_GUARD.SCOPE' | translate)"
         >
           @if (saving()) {
             <span class="spinner"></span>
@@ -370,7 +405,16 @@
                   {{ d.routingType | enumLabel: 'routingType' }}
                 </span>
               </td>
-              <td>{{ d.targetPharmacyName || '—' }}</td>
+              <td>
+                {{ d.targetPharmacyName || '—' }}
+                <!-- QA D1001: how much this decision routed, printed or back-ordered
+                     (the remainder at the time, never the full prescribed amount). -->
+                @if (d.remainingQuantity !== null && d.remainingQuantity !== undefined) {
+                  <span class="cell-sub" [attr.data-testid]="'routing-qty-' + d.id">{{
+                    'PHARMACY.ROUTED_QUANTITY' | translate: { qty: d.remainingQuantity }
+                  }}</span>
+                }
+              </td>
               <td>
                 <span class="badge" [ngClass]="statusBadgeClass(d.status)">
                   {{ d.status | enumLabel: 'status' }}
@@ -402,14 +446,16 @@
                   <button
                     class="btn btn-sm btn-success"
                     (click)="respondToPartner(d.id, true)"
-                    [disabled]="saving() || !scopeReady()"
+                    [disabled]="saving()"
+                    [appSubmitGuard]="!scopeReady() && ('SUBMIT_GUARD.SCOPE' | translate)"
                   >
                     {{ 'PHARMACY.ACCEPT' | translate }}
                   </button>
                   <button
                     class="btn btn-sm btn-danger"
                     (click)="respondToPartner(d.id, false)"
-                    [disabled]="saving() || !scopeReady()"
+                    [disabled]="saving()"
+                    [appSubmitGuard]="!scopeReady() && ('SUBMIT_GUARD.SCOPE' | translate)"
                   >
                     {{ 'PHARMACY.REJECT' | translate }}
                   </button>
@@ -418,7 +464,8 @@
                   <button
                     class="btn btn-sm btn-success"
                     (click)="confirmPartnerDispense(d.id)"
-                    [disabled]="saving() || !scopeReady()"
+                    [disabled]="saving()"
+                    [appSubmitGuard]="!scopeReady() && ('SUBMIT_GUARD.SCOPE' | translate)"
                   >
                     {{ 'PHARMACY.CONFIRM_DISPENSE' | translate }}
                   </button>

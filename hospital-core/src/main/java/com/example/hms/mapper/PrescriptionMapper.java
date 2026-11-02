@@ -42,6 +42,18 @@ public class PrescriptionMapper {
     }
 
     /**
+     * QA D934: whether an unsigned order's prescriber holds a signature of her
+     * own (doctor, physician, surgeon) at the order's hospital. Optional for
+     * the same reason as the catalog repository.
+     */
+    private com.example.hms.utility.RoleValidator roleValidator;
+
+    @Autowired(required = false)
+    public void setRoleValidator(com.example.hms.utility.RoleValidator roleValidator) {
+        this.roleValidator = roleValidator;
+    }
+
+    /**
      * Statuses the pharmacy writes (gap G7). While the row is in one of these
      * the status IS the latest pharmacy event; DRAFT, SIGNED, CANCELLED and
      * the like are the prescriber's, and report no pharmacy event.
@@ -97,6 +109,7 @@ public class PrescriptionMapper {
 
             .medicationName(p.getMedicationName())
             .medicationDisplayName(p.getMedicationDisplayName())
+            .medicationCatalogItemId(p.getMedicationCatalogItemId())
 
             .dosage(p.getDosage())
             .frequency(p.getFrequency())
@@ -115,6 +128,7 @@ public class PrescriptionMapper {
             .status(p.getStatus() != null ? p.getStatus().name() : null)
             .controlledSubstance(controlled)
             .requiresCosign(p.isRequiresCosign())
+            .awaitingPhysicianSignature(awaitsPhysicianSignature(p, staff, resolveHospitalId(hospital, enc)))
             .takeHome(p.isTakeHome())
             .twoFactorVerifiedAt(p.getTwoFactorVerifiedAt())
             .cosignedAt(p.getCosignedAt())
@@ -150,6 +164,15 @@ public class PrescriptionMapper {
             .clarificationResponse(p.getClarificationResponse())
             .clarificationResolvedAt(p.getClarificationResolvedAt())
             .withdrawalReason(p.getWithdrawalReason())
+            // QA D1101: the override reason the prescriber gave, for the
+            // pharmacist, the co-signer and the chart.
+            .overrideReason(p.getOverrideReason())
+            .allergyOverride(p.getOverrideReason() == null ? null : p.isAllergiesReviewed())
+            // QA D1096: the paediatric dose review, required and recorded.
+            .pediatricDoseReviewRequired(p.isPediatricDoseReviewRequired())
+            .pediatricDoseReviewedAt(p.getPediatricDoseReviewedAt())
+            .pediatricDoseReviewedByName(displayName(p.getPediatricDoseReviewedBy()))
+            .pediatricDoseReviewReason(p.getPediatricDoseReviewReason())
 
             .createdAt(p.getCreatedAt())
             .updatedAt(p.getUpdatedAt())
@@ -232,15 +255,23 @@ public class PrescriptionMapper {
             target.setHospital(staff.getHospital());
         }
 
+        // QA D1147: an edit that names another drug must not keep the old
+        // drug's code either: a code left behind keys the catalogue, the CDS
+        // rules and the pharmacy on a drug the order no longer is.
+        boolean drugChanged = !sameDrugName(target.getMedicationName(), dto.getMedicationName());
         target.setMedicationName(dto.getMedicationName());
         if (dto.getMedicationCode() != null) {
             target.setMedicationCode(dto.getMedicationCode());
+        } else if (drugChanged) {
+            target.setMedicationCode(null);
         }
         // D654: an edit names its catalog pick again, or falls back to the code.
         target.setMedicationCatalogItemId(dto.getMedicationCatalogItemId());
-        if (!notBlank(target.getMedicationDisplayName())) {
-            target.setMedicationDisplayName(dto.getMedicationName());
-        }
+        // QA D1147: the display name is a copy of the drug's name, rewritten on
+        // every edit. It was written only while blank, so the list, the
+        // pharmacist's view and the record PDF kept naming the first drug of an
+        // order edited to Morphine.
+        target.setMedicationDisplayName(dto.getMedicationName());
 
         target.setDosage(dto.getDosage());
         target.setFrequency(dto.getFrequency());
@@ -285,6 +316,14 @@ public class PrescriptionMapper {
         return s != null && !s.isBlank();
     }
 
+    /** The same drug name, ignoring case and surrounding blanks. */
+    private static boolean sameDrugName(String a, String b) {
+        if (a == null || b == null) {
+            return a == null && b == null;
+        }
+        return a.trim().equalsIgnoreCase(b.trim());
+    }
+
     private String resolveStaffFullName(Staff staff) {
         if (staff != null && notBlank(staff.getName())) {
             return staff.getName();
@@ -300,7 +339,8 @@ public class PrescriptionMapper {
 
     private String resolvePatientFullName(Patient patient) {
         if (patient == null) return "";
-        return buildFullName(patient.getFirstName(), patient.getLastName());
+        String fullName = patient.getFullName();
+        return fullName != null ? fullName : "";
     }
 
     /**
@@ -337,6 +377,24 @@ public class PrescriptionMapper {
         return catalogRepository.findByHospitalIdAndCode(hospitalId, medicationCode.trim())
             .map(MedicationCatalogItem::isControlled)
             .orElse(false);
+    }
+
+    /**
+     * QA D934: an unsigned order drafted by a nurse or a midwife of the
+     * order's hospital ({@code RoleValidator.draftsForPhysicianSignature}),
+     * the same rule {@code PrescriptionServiceImpl} applies when a doctor
+     * signs it.
+     */
+    private boolean awaitsPhysicianSignature(Prescription p, Staff staff, java.util.UUID hospitalId) {
+        if (roleValidator == null || hospitalId == null || p.getSignatureValue() != null
+                || (p.getStatus() != PrescriptionStatus.DRAFT && p.getStatus() != PrescriptionStatus.PENDING_SIGNATURE)) {
+            return false;
+        }
+        java.util.UUID userId = staff != null && staff.getUser() != null ? staff.getUser().getId() : null;
+        if (userId == null) {
+            return false;
+        }
+        return roleValidator.draftsForPhysicianSignature(userId, hospitalId);
     }
 
     private java.util.UUID resolveHospitalId(Hospital hospital, Encounter enc) {

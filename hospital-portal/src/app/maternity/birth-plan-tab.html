@@ -29,7 +29,7 @@
   </div>
   @if (canEdit) {
     <button class="btn-primary" (click)="openCreatePlan()">
-      <span class="material-symbols-outlined">add</span>
+      <span class="material-symbols-outlined" aria-hidden="true">add</span>
       {{ 'BIRTH_PLAN.NEW' | translate }}
     </button>
   }
@@ -89,37 +89,41 @@
             </td>
             <td class="actions-cell">
               <button
+                [attr.aria-label]="'COMMON.VIEW' | translate"
                 class="btn-secondary btn-sm"
                 [title]="'COMMON.VIEW' | translate"
                 (click)="openPlan(p)"
               >
-                <span class="material-symbols-outlined">visibility</span>
+                <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
               </button>
               @if (canEdit) {
                 <button
+                  [attr.aria-label]="'COMMON.EDIT' | translate"
                   class="btn-secondary btn-sm"
                   [title]="'COMMON.EDIT' | translate"
                   (click)="openEditPlan(p)"
                 >
-                  <span class="material-symbols-outlined">edit</span>
+                  <span class="material-symbols-outlined" aria-hidden="true">edit</span>
                 </button>
               }
               @if (canReview && !p.providerReviewed) {
                 <button
+                  [attr.aria-label]="'BIRTH_PLAN.REVIEW' | translate"
                   class="btn-secondary btn-sm"
                   [title]="'BIRTH_PLAN.REVIEW' | translate"
                   (click)="openReview(p)"
                 >
-                  <span class="material-symbols-outlined">approval</span>
+                  <span class="material-symbols-outlined" aria-hidden="true">approval</span>
                 </button>
               }
               @if (canDelete) {
                 <button
+                  [attr.aria-label]="'COMMON.DELETE' | translate"
                   class="btn-secondary btn-sm"
                   [title]="'COMMON.DELETE' | translate"
                   (click)="confirmDelete(p)"
                 >
-                  <span class="material-symbols-outlined">delete</span>
+                  <span class="material-symbols-outlined" aria-hidden="true">delete</span>
                 </button>
               }
             </td>
@@ -131,12 +135,13 @@
   @if (totalPages() > 1) {
     <div class="pager">
       <button
+        [attr.aria-label]="'COMMON.PREVIOUS' | translate"
         class="btn-secondary btn-sm"
         [disabled]="page() === 0"
         (click)="prev()"
         [title]="'COMMON.PREVIOUS' | translate"
       >
-        <span class="material-symbols-outlined">chevron_left</span>
+        <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
       </button>
       <span class="muted">{{ page() + 1 }} / {{ totalPages() }}</span>
       <button
@@ -144,8 +149,9 @@
         [disabled]="page() + 1 >= totalPages()"
         (click)="next()"
         [title]="'COMMON.NEXT' | translate"
+        [attr.aria-label]="'COMMON.NEXT' | translate"
       >
-        <span class="material-symbols-outlined">chevron_right</span>
+        <span class="material-symbols-outlined" aria-hidden="true">chevron_right</span>
       </button>
     </div>
   }
@@ -156,34 +162,39 @@
   <div class="modal-backdrop" tabindex="-1" (click)="closePlan()" (keydown.escape)="closePlan()">
     <div
       class="modal modal-lg"
+      aria-labelledby="birth-plan-tab-dialog-1-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closePlan(); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
-        <h2>{{ p.introduction?.patientName }} — {{ 'BIRTH_PLAN.TITLE' | translate }}</h2>
+        <h2 id="birth-plan-tab-dialog-1-title">
+          {{ p.introduction?.patientName }} — {{ 'BIRTH_PLAN.TITLE' | translate }}
+        </h2>
         <button
           class="modal-close"
           (click)="closePlan()"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
         <div class="view-section">
           <h3>{{ 'BIRTH_PLAN.SECTION_INTRO' | translate }}</h3>
           <p>
-            {{ 'MATERNITY.EDD' | translate }}:
+            {{ 'MATERNITY.EDD' | translate }}{{ 'COMMON.COLON' | translate }}
             {{
               p.introduction?.expectedDueDate
                 ? (p.introduction.expectedDueDate | serverTime | date: 'mediumDate')
                 : '—'
             }}
-            · {{ 'BIRTH_PLAN.PLACE' | translate }}: {{ p.introduction?.placeOfBirth || '—' }} ·
-            {{ 'BIRTH_PLAN.PROVIDER' | translate }}: {{ p.introduction?.healthcareProvider || '—' }}
+            · {{ 'BIRTH_PLAN.PLACE' | translate }}{{ 'COMMON.COLON' | translate }}
+            {{ p.introduction?.placeOfBirth || '—' }} · {{ 'BIRTH_PLAN.PROVIDER' | translate
+            }}{{ 'COMMON.COLON' | translate }} {{ p.introduction?.healthcareProvider || '—' }}
           </p>
           @if (p.introduction?.medicalConditions) {
             <p class="muted">{{ p.introduction.medicalConditions }}</p>
@@ -194,7 +205,7 @@
           <p>
             {{ p.deliveryPreferences?.preferredDeliveryMethod || '—' }}
             @if (p.deliveryPreferences?.backupDeliveryMethod) {
-              ({{ 'BIRTH_PLAN.BACKUP' | translate }}:
+              ({{ 'BIRTH_PLAN.BACKUP' | translate }}{{ 'COMMON.COLON' | translate }}
               {{ p.deliveryPreferences.backupDeliveryMethod }})
             }
           </p>
@@ -216,7 +227,7 @@
           <h3>{{ 'BIRTH_PLAN.SECTION_ENVIRONMENT' | translate }}</h3>
           @if (p.deliveryRoomEnvironment?.supportPersons?.length) {
             <p>
-              {{ 'BIRTH_PLAN.SUPPORT_PERSONS' | translate }}:
+              {{ 'BIRTH_PLAN.SUPPORT_PERSONS' | translate }}{{ 'COMMON.COLON' | translate }}
               {{ p.deliveryRoomEnvironment.supportPersons.join(', ') }}
             </p>
           }
@@ -227,7 +238,7 @@
         <div class="view-section">
           <h3>{{ 'BIRTH_PLAN.SECTION_POSTPARTUM' | translate }}</h3>
           <p>
-            {{ 'BIRTH_PLAN.FEEDING' | translate }}:
+            {{ 'BIRTH_PLAN.FEEDING' | translate }}{{ 'COMMON.COLON' | translate }}
             {{ p.postpartumPreferences?.feedingMethod || '—' }}
             @if (p.postpartumPreferences?.skinToSkinContact) {
               · {{ 'BIRTH_PLAN.SKIN_TO_SKIN' | translate }}
@@ -287,20 +298,24 @@
   >
     <div
       class="modal modal-lg"
+      aria-labelledby="birth-plan-tab-dialog-2-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closePlanModal(); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
-        <h2>{{ (editingPlanId() ? 'BIRTH_PLAN.EDIT' : 'BIRTH_PLAN.NEW') | translate }}</h2>
+        <h2 id="birth-plan-tab-dialog-2-title">
+          {{ (editingPlanId() ? 'BIRTH_PLAN.EDIT' : 'BIRTH_PLAN.NEW') | translate }}
+        </h2>
         <button
           class="modal-close"
           (click)="closePlanModal()"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
@@ -442,7 +457,11 @@
         </div>
         <div class="field checkbox-field">
           <label>
-            <input type="checkbox" [(ngModel)]="planForm.flexibilityAcknowledgment" />
+            <input
+              id="bp-flexibility"
+              type="checkbox"
+              [(ngModel)]="planForm.flexibilityAcknowledgment"
+            />
             {{ 'BIRTH_PLAN.FLEXIBILITY' | translate }} *
           </label>
           <label>
@@ -457,7 +476,9 @@
         </button>
         <button
           class="btn-primary"
-          [disabled]="planSaving() || !planForm.patientId || !planForm.flexibilityAcknowledgment"
+          [disabled]="planSaving()"
+          [appSubmitGuard]="!planForm.patientId || !planForm.flexibilityAcknowledgment"
+          [submitGuardFields]="['bp-patient', 'bp-flexibility']"
           (click)="submitPlan()"
         >
           {{ 'COMMON.SAVE' | translate }}
@@ -477,20 +498,22 @@
   >
     <div
       class="modal"
+      aria-labelledby="birth-plan-tab-dialog-3-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeReview(); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
-        <h2>{{ 'BIRTH_PLAN.REVIEW_TITLE' | translate }}</h2>
+        <h2 id="birth-plan-tab-dialog-3-title">{{ 'BIRTH_PLAN.REVIEW_TITLE' | translate }}</h2>
         <button
           class="modal-close"
           (click)="closeReview()"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
@@ -510,7 +533,9 @@
         </button>
         <button
           class="btn-primary"
-          [disabled]="reviewBusy() || !reviewSignature.trim()"
+          [disabled]="reviewBusy()"
+          [appSubmitGuard]="!reviewSignature.trim()"
+          [submitGuardFields]="['bp-signature']"
           (click)="submitReview()"
         >
           {{ 'COMMON.CONFIRM' | translate }}
@@ -530,24 +555,31 @@
   >
     <div
       class="modal"
+      aria-labelledby="birth-plan-tab-dialog-4-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeDelete(); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
-        <h2>{{ 'BIRTH_PLAN.DELETE_TITLE' | translate }}</h2>
+        <h2 id="birth-plan-tab-dialog-4-title">{{ 'BIRTH_PLAN.DELETE_TITLE' | translate }}</h2>
         <button
           class="modal-close"
           (click)="closeDelete()"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
-        <p>{{ 'BIRTH_PLAN.DELETE_CONFIRM' | translate }} {{ plan.introduction?.patientName }}?</p>
+        <!-- D1138 class: the whole question is translated, so French spaces its "?". -->
+        <p>
+          {{
+            'BIRTH_PLAN.DELETE_CONFIRM' | translate: { name: plan.introduction?.patientName || '—' }
+          }}
+        </p>
       </div>
       <div class="modal-actions">
         <button class="btn-secondary" (click)="closeDelete()">

@@ -32,6 +32,8 @@ public class EncounterResponseDTO {
     private String patientPhoneNumber;
 
     private UUID staffId;
+    /** QA D1085: the assigned clinician's user id, for the per-visit "Démarrer" rule. */
+    private UUID staffUserId;
     private String staffName;
     private String staffEmail;
     private String staffPhoneNumber;

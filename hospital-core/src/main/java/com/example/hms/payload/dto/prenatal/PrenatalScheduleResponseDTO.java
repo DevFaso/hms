@@ -19,6 +19,8 @@ public class PrenatalScheduleResponseDTO {
     private UUID staffId;
     private LocalDate estimatedDueDate;
     private int currentGestationalWeek;
+    /** QA D1031: antenatal contacts already held in this pregnancy (completed visits since the LMP). */
+    private int completedContacts;
     private boolean highRisk;
     private List<PrenatalVisitRecommendationDTO> recommendations;
     private List<PrenatalAppointmentSummaryDTO> existingAppointments;

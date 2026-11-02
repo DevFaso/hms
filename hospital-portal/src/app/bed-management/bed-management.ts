@@ -22,6 +22,8 @@ import { ToastService } from '../core/toast.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { DepartmentLookupService, DepartmentOption } from '../services/department-lookup.service';
 import { RoleContextService } from '../core/role-context.service';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { refusalReason } from '../shared/refusal-reason';
 
 /**
  * Ward & bed administration (P0 #4). First writer for the V25 ward/bed
@@ -30,7 +32,7 @@ import { RoleContextService } from '../core/role-context.service';
 @Component({
   selector: 'app-bed-management',
   standalone: true,
-  imports: [FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [ModalDialogDirective, FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './bed-management.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './bed-management.scss',
@@ -198,8 +200,8 @@ export class BedManagementComponent implements OnInit {
         this.closeWardModal();
         this.refreshAll();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('BEDS.TOAST.SAVE_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('BEDS.TOAST.SAVE_FAILED'));
         this.saving.set(false);
       },
     });
@@ -216,7 +218,10 @@ export class BedManagementComponent implements OnInit {
         this.loadWards();
       },
       // Backend rejects deleting a ward that still has beds — surface that.
-      error: () => this.toast.error(this.translate.instant('BEDS.TOAST.WARD_DELETE_FAILED')),
+      error: (err: unknown) =>
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('BEDS.TOAST.WARD_DELETE_FAILED'),
+        ),
     });
   }
 
@@ -265,8 +270,8 @@ export class BedManagementComponent implements OnInit {
         this.closeBedModal();
         this.refreshAll();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('BEDS.TOAST.SAVE_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('BEDS.TOAST.SAVE_FAILED'));
         this.saving.set(false);
       },
     });
@@ -279,8 +284,8 @@ export class BedManagementComponent implements OnInit {
         this.toast.success(this.translate.instant('BEDS.TOAST.STATUS_UPDATED'));
         this.refreshAll();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('BEDS.TOAST.SAVE_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('BEDS.TOAST.SAVE_FAILED'));
         this.refreshAll(); // revert the select to the server state
       },
     });
@@ -292,7 +297,10 @@ export class BedManagementComponent implements OnInit {
         this.toast.success(this.translate.instant('BEDS.TOAST.BED_DELETED'));
         this.refreshAll();
       },
-      error: () => this.toast.error(this.translate.instant('BEDS.TOAST.BED_DELETE_FAILED')),
+      error: (err: unknown) =>
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('BEDS.TOAST.BED_DELETE_FAILED'),
+        ),
     });
   }
 

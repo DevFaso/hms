@@ -183,6 +183,7 @@ class ImagingReportServiceImplTest {
         imagingReportService.createReport(ImagingReportUpsertRequestDTO.builder()
             .imagingOrderId(orderId)
             .reportNumber("IR-100")
+            .findings("Pas de lésion") // QA D1150: a report says what the study showed
             .modality(ImagingModality.MRI)
             .reportStatus(ImagingReportStatus.ADDENDUM)
             .build());
@@ -265,10 +266,51 @@ class ImagingReportServiceImplTest {
         LocalDateTime flaggedAt = LocalDateTime.now().minusHours(2);
         report.setCriticalResultFlaggedAt(flaggedAt);
 
+        // QA D1182 (round 22, changed request): an edit carries the read; the
+        // flag alone would blank every finding and is now refused.
         imagingReportService.updateReport(reportId,
-            ImagingReportUpsertRequestDTO.builder().criticalFinding(Boolean.FALSE).build());
+            ImagingReportUpsertRequestDTO.builder().impression("Normal study.").criticalFinding(Boolean.FALSE).build());
 
         assertThat(report.getCriticalResultFlaggedAt()).isEqualTo(flaggedAt);
+    }
+
+    /** QA D1182 class (round 22): the edit of a read is held to the same findings rule as its create. */
+    @Test
+    void anEditThatBlanksTheReadIsRefusedAndNothingIsSaved_D1182() {
+        ImagingReport report = persistedReport();
+        report.setImpression("Normal study.");
+
+        assertThatThrownBy(() -> imagingReportService.updateReport(reportId,
+            ImagingReportUpsertRequestDTO.builder().contrastAdministered(Boolean.TRUE).build()))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("imaging.report.findingsRequired");
+        verify(imagingReportRepository, never()).save(any(ImagingReport.class));
+
+        imagingReportService.updateReport(reportId, ImagingReportUpsertRequestDTO.builder().findings("Small effusion").build());
+        verify(imagingReportRepository).save(report);
+    }
+
+    /** QA D1098 (round 19): reports were written and signed FINAL on cancelled orders. */
+    @Test
+    void noReportIsWrittenRevisedOrSignedOnACancelledOrder_D1098() {
+        imagingOrder.setStatus(ImagingOrderStatus.CANCELLED);
+        ImagingReport report = persistedReport();
+        report.setImpression("Normal study.");
+
+        ImagingReportUpsertRequestDTO create = ImagingReportUpsertRequestDTO.builder()
+            .imagingOrderId(orderId).findings("x").build();
+        ImagingReportUpsertRequestDTO revise = ImagingReportUpsertRequestDTO.builder().findings("revised").build();
+        assertThatThrownBy(() -> imagingReportService.createReport(create))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("imaging.order.cancelled.locked");
+        assertThatThrownBy(() -> imagingReportService.updateReport(reportId, revise))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("imaging.order.cancelled.locked");
+        assertThatThrownBy(() -> imagingReportService.signReport(reportId))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("imaging.order.cancelled.locked");
+        assertThat(report.getSignedAt()).isNull();
+        assertThat(imagingOrder.getStatus()).isEqualTo(ImagingOrderStatus.CANCELLED);
     }
 
     // ── Signing ──────────────────────────────────────────────────────────
@@ -328,8 +370,12 @@ class ImagingReportServiceImplTest {
         report.setImpression("Study aborted, patient could not tolerate.");
         imagingOrder.setStatus(ImagingOrderStatus.CANCELLED);
 
-        imagingReportService.signReport(reportId);
+        // QA D1098 (round 19): the signature itself is now refused on a cancelled
+        // order (it used to be accepted, the order merely staying cancelled).
+        assertThatThrownBy(() -> imagingReportService.signReport(reportId))
+            .isInstanceOf(BusinessException.class);
 
+        assertThat(report.getSignedAt()).isNull();
         assertThat(imagingOrder.getStatus()).isEqualTo(ImagingOrderStatus.CANCELLED);
         verify(imagingOrderRepository, never()).save(any(ImagingOrder.class));
     }
@@ -459,5 +505,63 @@ class ImagingReportServiceImplTest {
 
         assertThat(imagingReportService.getReportsByHospitalAndStatus(anyHospitalId, ImagingReportStatus.FINAL))
             .isEmpty();
+    }
+
+    // ═══════════════ QA D930 class (round 16 siblings): the report's author ═══════════════
+
+    private ImagingReport reportReadBy(UUID interpreterUserId, UUID filedBy) {
+        ImagingReport report = persistedReport();
+        report.setImpression("No acute finding");
+        if (interpreterUserId != null) {
+            User user = new User();
+            user.setId(interpreterUserId);
+            Staff interpreter = new Staff();
+            interpreter.setId(UUID.randomUUID());
+            interpreter.setHospital(hospital);
+            interpreter.setUser(user);
+            report.setInterpretingProvider(interpreter);
+        }
+        report.setCreatedBy(filedBy);
+        return report;
+    }
+
+    @Test
+    void d930_aColleagueCannotReviseSignOrVoidAnotherCliniciansDraftRead() {
+        ImagingReport report = reportReadBy(UUID.randomUUID(), UUID.randomUUID());
+        ImagingReportStatusUpdateRequestDTO voidIt = new ImagingReportStatusUpdateRequestDTO();
+        voidIt.setStatus(ImagingReportStatus.CANCELLED);
+        voidIt.setStatusReason("Wrong patient");
+
+        assertThatThrownBy(() -> imagingReportService.updateReport(reportId, new ImagingReportUpsertRequestDTO()))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThatThrownBy(() -> imagingReportService.signReport(reportId))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThatThrownBy(() -> imagingReportService.updateReportStatus(reportId, voidIt))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThat(report.getSignedBy()).isNull();
+        assertThat(report.getReportStatus()).isEqualTo(ImagingReportStatus.PRELIMINARY);
+        verify(imagingReportRepository, never()).save(any(ImagingReport.class));
+    }
+
+    @Test
+    void d930_theInterpretingProviderSignsHerRead() {
+        ImagingReport report = reportReadBy(callerUserId, UUID.randomUUID());
+
+        imagingReportService.signReport(reportId);
+
+        assertThat(report.getReportStatus()).isEqualTo(ImagingReportStatus.FINAL);
+        assertThat(report.getSignedBy()).isSameAs(caller);
+    }
+
+    /** Declared supervision path: the clinician who filed the draft may still revise it after naming the reader. */
+    @Test
+    void d930_theClinicianWhoFiledTheDraftRevisesIt() {
+        ImagingReport report = reportReadBy(UUID.randomUUID(), callerUserId);
+        ImagingReportUpsertRequestDTO edit = new ImagingReportUpsertRequestDTO();
+        edit.setImpression("Small effusion");
+
+        imagingReportService.updateReport(reportId, edit);
+
+        verify(imagingReportRepository).save(report);
     }
 }

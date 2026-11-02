@@ -172,7 +172,7 @@ class ProgramEnrollmentServiceTest {
 
         assertThatThrownBy(() -> service.enroll(patientId, request))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("already enrolled");
+            .hasMessageContaining("program.enrollment.alreadyActive");
         verify(enrollmentRepository, never()).save(any());
     }
 
@@ -263,7 +263,7 @@ class ProgramEnrollmentServiceTest {
 
         assertThatThrownBy(() -> service.updateStatus(patientId, enrollmentId, request))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("reason");
+            .hasMessageContaining("program.enrollment.closeReasonRequired");
         verify(enrollmentRepository, never()).save(any());
     }
 
@@ -306,7 +306,7 @@ class ProgramEnrollmentServiceTest {
 
         assertThatThrownBy(() -> service.updateStatus(patientId, enrollmentId, withReason))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("no reason");
+            .hasMessageContaining("program.enrollment.reopenNoReason");
 
         when(enrollmentRepository.findByPatientIdAndHospitalIdAndProgramAndStatus(
             patientId, hospitalId, CareProgram.HIV, ProgramEnrollmentStatus.ACTIVE))
@@ -336,7 +336,7 @@ class ProgramEnrollmentServiceTest {
 
         assertThatThrownBy(() -> service.updateStatus(patientId, enrollmentId, request))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("already has an active");
+            .hasMessageContaining("program.enrollment.otherActive");
     }
 
     @Test
@@ -385,7 +385,7 @@ class ProgramEnrollmentServiceTest {
 
         assertThatThrownBy(() -> service.recordVisit(patientId, enrollmentId, request))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("active");
+            .hasMessageContaining("program.enrollment.visitNotActive");
     }
 
     @Test
@@ -400,7 +400,7 @@ class ProgramEnrollmentServiceTest {
 
         assertThatThrownBy(() -> service.recordVisit(patientId, enrollmentId, request))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("predate");
+            .hasMessageContaining("program.enrollment.visitBeforeEnrolment");
     }
 
     @Test
@@ -418,7 +418,7 @@ class ProgramEnrollmentServiceTest {
 
         assertThatThrownBy(() -> service.recordVisit(patientId, enrollmentId, request))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("last recorded");
+            .hasMessageContaining("program.enrollment.visitBeforeLast");
         verify(enrollmentRepository, never()).save(any());
     }
 

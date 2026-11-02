@@ -1180,6 +1180,19 @@ class TransfusionServiceImplTest {
     }
 
     @Test
+    void aDiscardedUnitIsNotDiscardedAgainAndKeepsItsReason_D1186() {
+        BloodUnit gone = unit(AboGroup.O, RhFactor.NEGATIVE, BloodProductType.PLATELETS,
+            BloodUnitStatus.DISCARDED);
+        gone.setDiscardReason("Cold chain breach");
+        UUID goneId = gone.getId();
+
+        assertThatThrownBy(() -> service.discardUnit(goneId, "Second reason"))
+            .isInstanceOf(BusinessException.class)
+            .extracting("messageKey").isEqualTo("transfusion.unit.alreadyDiscarded");
+        assertThat(gone.getDiscardReason()).isEqualTo("Cold chain breach");
+    }
+
+    @Test
     void aRequestMayBeTiedToAnEncounterAtTheSameHospital() {
         when(bloodGroupRepository.findByPatient_IdAndHospital_IdAndSupersededFalse(patientId, hospitalId))
             .thenReturn(Optional.of(group(AboGroup.A, RhFactor.POSITIVE, AntibodyScreenResult.NEGATIVE)));
@@ -1603,5 +1616,60 @@ class TransfusionServiceImplTest {
 
         assertThatThrownBy(() -> service.recordCrossmatch(requestId, verdict))
             .isInstanceOf(BusinessException.class);
+    }
+
+    // ── QA D930 class (round 16 siblings): the requester cancels ────────
+
+    private static Staff requester(UUID userId) {
+        com.example.hms.model.User user = new com.example.hms.model.User();
+        user.setId(userId);
+        Staff staff = new Staff();
+        staff.setId(UUID.randomUUID());
+        staff.setUser(user);
+        return staff;
+    }
+
+    private static void signInAs(UUID userId) {
+        com.example.hms.model.User user = new com.example.hms.model.User();
+        user.setId(userId);
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(user, null, List.of()));
+    }
+
+    @Test
+    void d930_aColleagueCannotCancelAnotherCliniciansRequest() {
+        TransfusionRequest req = request(group(AboGroup.O, RhFactor.NEGATIVE, AntibodyScreenResult.NEGATIVE),
+            TransfusionUrgency.ROUTINE);
+        req.setRequestedBy(requester(UUID.randomUUID()));
+        UUID requestId = req.getId();
+        signInAs(UUID.randomUUID());
+        try {
+            // Review of #976: the refusal states the requester-only rule (its
+            // own key), not the generic identity.notCaller message.
+            assertThatThrownBy(() -> service.cancelRequest(requestId, "Not mine"))
+                .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class)
+                .extracting(Throwable::getMessage)
+                .isIn("transfusion.request.cancel.requesterOnly",
+                    "Only the clinician who requested this transfusion can cancel it.");
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+        assertThat(req.getStatus()).isEqualTo(TransfusionRequestStatus.REQUESTED);
+        verify(requestRepository, never()).save(any());
+    }
+
+    @Test
+    void d930_theRequesterCancelsHerRequest() {
+        TransfusionRequest req = request(group(AboGroup.O, RhFactor.NEGATIVE, AntibodyScreenResult.NEGATIVE),
+            TransfusionUrgency.ROUTINE);
+        UUID me = UUID.randomUUID();
+        req.setRequestedBy(requester(me));
+        signInAs(me);
+        try {
+            service.cancelRequest(req.getId(), "Patient stabilised");
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+        assertThat(req.getStatus()).isEqualTo(TransfusionRequestStatus.CANCELLED);
     }
 }

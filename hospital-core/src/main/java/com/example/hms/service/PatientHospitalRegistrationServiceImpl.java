@@ -98,7 +98,7 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
             && (isBlank(patient.getEmergencyContactName())
                 || isBlank(patient.getEmergencyContactPhone())
                 || isBlank(patient.getEmergencyContactRelationship()))) {
-            throw new IllegalArgumentException("Minor patients must have a guardian's contact information.");
+            throw new IllegalArgumentException("registration.minor.guardianRequired");
         }
 
         // Generate mrn server-side (immutable) - QA D763: the same hospital
@@ -342,8 +342,8 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
     private void validateRequest(PatientHospitalRegistrationRequestDTO dto) {
         boolean hasUserRef = !isBlank(dto.getPatientUsername()) || dto.getPatientId() != null;
         boolean hasHospitalRef = !isBlank(dto.getHospitalName()) || dto.getHospitalId() != null;
-        if (!hasUserRef) throw new IllegalArgumentException("Patient username or patientId is required.");
-        if (!hasHospitalRef) throw new IllegalArgumentException("Hospital name or hospitalId is required.");
+        if (!hasUserRef) throw new IllegalArgumentException("registration.patient.required");
+        if (!hasHospitalRef) throw new IllegalArgumentException("registration.hospital.required");
     }
 
     private boolean isBlank(String s) {

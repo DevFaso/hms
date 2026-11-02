@@ -87,6 +87,8 @@ public class ChartReviewDTO {
         private UUID encounterId;
         private String encounterCode;
         private String template;
+        /** QA D1107: the title the author gave the note (a nursing note's), when there is one. */
+        private String title;
         private String authorName;
         private String authorCredentials;
         private LocalDateTime documentedAt;
@@ -98,6 +100,8 @@ public class ChartReviewDTO {
         private LocalDateTime cosignedAt;
         /** Short preview (first ~280 chars) of the most-relevant body field. */
         private String preview;
+        /** QA D1076: {@code ENCOUNTER} (the visit's clinical note) or {@code NURSING} (a ward nursing note). */
+        private String source;
     }
 
     @Getter
@@ -122,6 +126,8 @@ public class ChartReviewDTO {
         private String orderingStaffName;
         private boolean acknowledged;
         private boolean released;
+        /** QA D1016: the result corrects a released value the reader may already have acted on. */
+        private boolean corrected;
     }
 
     @Getter
@@ -208,5 +214,7 @@ public class ChartReviewDTO {
         private String title;
         private String summary;
         private String status;
+        /** QA D1016/D931 (round 18): a RESULT event whose value replaces a released one. */
+        private boolean corrected;
     }
 }

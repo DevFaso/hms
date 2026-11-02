@@ -1,9 +1,13 @@
+import { refusalReason } from '../shared/refusal-reason';
+import { FocusOnRenderDirective } from '../shared/a11y/focus-on-render.directive';
 import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
+import { actionRoles } from '../core/action-permissions';
 import {
   PharmacyService,
   PharmacyResponse,
@@ -14,12 +18,26 @@ import {
 } from '../services/pharmacy.service';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { CfaPipe } from '../shared/pipes/cfa.pipe';
+import { InlineSubFormDirective } from '../shared/a11y/inline-sub-form.directive';
+import { InlineDiscardAskComponent } from '../shared/a11y/inline-discard-ask.component';
 import { serverDateOrInstant } from '../shared/date-utils';
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 
 @Component({
   selector: 'app-inventory-dashboard',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule, CfaPipe],
+  imports: [
+    SubmitGuardDirective,
+    FocusOnRenderDirective,
+    InlineSubFormDirective,
+    InlineDiscardAskComponent,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    CfaPipe,
+    ModalDialogDirective,
+  ],
   templateUrl: './inventory-dashboard.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './inventory-dashboard.scss',
@@ -31,6 +49,15 @@ export class InventoryDashboardComponent implements OnInit {
   private readonly translate = inject(TranslateService);
 
   activeTab = signal<'stock' | 'alerts' | 'expiry'>('stock');
+
+  /**
+   * QA D965: "Trigger alerts" only for the roles the endpoint admits (store
+   * manager, hospital admin, super-admin); the pharmacist and the inventory
+   * clerk were offered it and got a 403 and the 403 page.
+   */
+  canTriggerAlerts(): boolean {
+    return this.roleContext.hasAnyActiveRoleExactly(actionRoles('inventoryReorderTrigger'));
+  }
 
   // Pharmacy selection
   pharmacies = signal<PharmacyResponse[]>([]);
@@ -147,7 +174,10 @@ export class InventoryDashboardComponent implements OnInit {
   triggerReorderAlerts(): void {
     this.svc.triggerReorderAlerts().subscribe({
       next: () => this.toast.success(this.translate.instant('PHARMACY.ALERTS_TRIGGERED')),
-      error: () => this.toast.error(this.translate.instant('PHARMACY.ALERTS_TRIGGER_FAILED')),
+      error: (err: unknown) =>
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PHARMACY.ALERTS_TRIGGER_FAILED'),
+        ),
     });
   }
 
@@ -198,7 +228,7 @@ export class InventoryDashboardComponent implements OnInit {
       },
       error: (err) => {
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('PHARMACY.ITEM_CREATE_FAILED'),
+          refusalReason(err) ?? this.translate.instant('PHARMACY.ITEM_CREATE_FAILED'),
         );
         this.saving.set(false);
       },
@@ -237,7 +267,7 @@ export class InventoryDashboardComponent implements OnInit {
         },
         error: (err) => {
           this.toast.error(
-            err?.error?.message ?? this.translate.instant('PHARMACY.PRICE_SAVE_FAILED'),
+            refusalReason(err) ?? this.translate.instant('PHARMACY.PRICE_SAVE_FAILED'),
           );
         },
       });

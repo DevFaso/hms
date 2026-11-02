@@ -50,6 +50,11 @@ import java.util.UUID;
 @Transactional
 public class PharmacySaleServiceImpl implements PharmacySaleService {
 
+    /** SaleLine.notes column length; the line's own note and a FEFO reason share it. */
+    static final int LINE_NOTES_MAX = 500;
+    /** The marker of a FEFO override in a line's notes, as on a fill. */
+    static final String FEFO_NOTE_PREFIX = "FEFO: ";
+
     private final PharmacySaleRepository saleRepository;
     private final PharmacyRepository pharmacyRepository;
     private final HospitalRepository hospitalRepository;
@@ -59,15 +64,24 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
     private final StockLotRepository stockLotRepository;
     private final PharmacySaleMapper mapper;
     private final RoleValidator roleValidator;
+    /** QA D964: a counter sale from a lot follows first expired, first out too. */
+    private final FefoLotPolicy fefoLotPolicy;
+    /** QA D1129: a non-cash sale's reference is recorded once across every till. */
+    private final com.example.hms.service.payment.PaymentReferenceRegistry referenceRegistry;
 
     @Override
     public PharmacySaleResponseDTO createSale(PharmacySaleRequestDTO dto) {
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         if (!activeHospitalId.equals(dto.getHospitalId())) {
-            throw new BusinessException("Sale hospital does not match the active hospital context");
+            throw new BusinessException("pharmacy.sale.hospitalMismatch");
         }
         if (dto.getLines() == null || dto.getLines().isEmpty()) {
-            throw new BusinessException("Sale must include at least one line item");
+            throw new BusinessException("pharmacy.sale.linesRequired");
+        }
+        // QA D1129: the same mobile-money transaction is not counted at two tills
+        // (an insurance authorisation can cover several sales, so it is not checked).
+        if (dto.getPaymentMethod() == com.example.hms.enums.PharmacyPaymentMethod.MOBILE_MONEY) {
+            referenceRegistry.requireUnused(activeHospitalId, dto.getReferenceNumber());
         }
 
         Hospital hospital = hospitalRepository.findById(dto.getHospitalId())
@@ -99,8 +113,12 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
                 .build();
 
         BigDecimal runningTotal = BigDecimal.ZERO;
+        // What the sale's lines take off each lot (nothing moves until the
+        // sale is saved), so FEFO judges each line on what the others leave,
+        // whatever order the lines were entered in (review of #975).
+        java.util.Map<java.util.UUID, BigDecimal> takenByLot = quantityTakenByLot(dto.getLines());
         for (SaleLineRequestDTO lineDto : dto.getLines()) {
-            SaleLine line = buildLine(lineDto, pharmacy);
+            SaleLine line = buildLine(lineDto, pharmacy, takenByLot);
             sale.addLine(line);
             runningTotal = runningTotal.add(line.getLineTotal());
         }
@@ -112,31 +130,41 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
         return mapper.toResponseDTO(saved);
     }
 
-    private SaleLine buildLine(SaleLineRequestDTO lineDto, Pharmacy pharmacy) {
+    /** The quantity each lot gives up across all the lines of a sale (positive quantities only). */
+    private static java.util.Map<java.util.UUID, BigDecimal> quantityTakenByLot(java.util.List<SaleLineRequestDTO> lines) {
+        java.util.Map<java.util.UUID, BigDecimal> taken = new java.util.HashMap<>();
+        for (SaleLineRequestDTO line : lines) {
+            if (line.getStockLotId() != null && line.getQuantity() != null && line.getQuantity().signum() > 0) {
+                taken.merge(line.getStockLotId(), line.getQuantity(), BigDecimal::add);
+            }
+        }
+        return java.util.Map.copyOf(taken);
+    }
+
+    private SaleLine buildLine(SaleLineRequestDTO lineDto, Pharmacy pharmacy,
+                               java.util.Map<java.util.UUID, BigDecimal> takenByLot) {
         if (lineDto.getQuantity() == null || lineDto.getQuantity().signum() <= 0) {
-            throw new BusinessException("Sale line quantity must be greater than zero");
+            throw new BusinessException("pharmacy.sale.lineQuantityPositive");
         }
         if (lineDto.getUnitPrice() == null || lineDto.getUnitPrice().signum() < 0) {
-            throw new BusinessException("Sale line unit price cannot be negative");
+            throw new BusinessException("pharmacy.sale.linePriceNegative");
         }
 
         MedicationCatalogItem item = catalogItemRepository.findById(lineDto.getMedicationCatalogItemId())
                 .orElseThrow(() -> new ResourceNotFoundException("medication.catalog.notfound"));
 
-        StockLot lot = null;
-        if (lineDto.getStockLotId() != null) {
-            lot = stockLotRepository.findById(lineDto.getStockLotId())
-                    .orElseThrow(() -> new ResourceNotFoundException("stocklot.notfound"));
-            // Lot must belong to the selling pharmacy — prevents cross-pharmacy traceability bugs.
-            if (lot.getInventoryItem() == null
-                    || lot.getInventoryItem().getPharmacy() == null
-                    || !pharmacy.getId().equals(lot.getInventoryItem().getPharmacy().getId())) {
-                throw new BusinessException("Stock lot does not belong to the selling pharmacy");
+        StockLot lot = lineDto.getStockLotId() == null ? null : sellingLot(lineDto, pharmacy);
+        if (lot != null) {
+            // Review of #975: the sale's lines together never take more than
+            // the lot holds - an oversold lot would also hand later lines a
+            // FEFO credit for stock that is not there.
+            BigDecimal taken = takenByLot.getOrDefault(lot.getId(), lineDto.getQuantity());
+            if (lot.getRemainingQuantity() != null && taken.compareTo(lot.getRemainingQuantity()) > 0) {
+                throw new BusinessException("stock.lot.insufficient", lot.getLotNumber(),
+                        com.example.hms.utility.DisplayNumbers.quantity(taken));
             }
-            // QA D779: a counter sale from a lot is the same movement as a
-            // fill: half a tablet of a counted item is refused here too.
-            WholeUnitQuantity.require(lot.getInventoryItem(), lineDto.getQuantity());
         }
+        String lineNotes = lot == null ? lineDto.getNotes() : notesWithFefoReason(lineDto, lot, takenByLot);
 
         BigDecimal lineTotal = lineDto.getQuantity()
                 .multiply(lineDto.getUnitPrice())
@@ -148,8 +176,49 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
                 .quantity(lineDto.getQuantity())
                 .unitPrice(lineDto.getUnitPrice())
                 .lineTotal(lineTotal)
-                .notes(lineDto.getNotes())
+                .notes(lineNotes)
                 .build();
+    }
+
+    /** The lot a line is sold from: of the selling pharmacy, and a whole number of a counted item. */
+    private StockLot sellingLot(SaleLineRequestDTO lineDto, Pharmacy pharmacy) {
+        StockLot lot = stockLotRepository.findById(lineDto.getStockLotId())
+                .orElseThrow(() -> new ResourceNotFoundException("stocklot.notfound"));
+        // Lot must belong to the selling pharmacy — prevents cross-pharmacy traceability bugs.
+        if (lot.getInventoryItem() == null
+                || lot.getInventoryItem().getPharmacy() == null
+                || !pharmacy.getId().equals(lot.getInventoryItem().getPharmacy().getId())) {
+            throw new BusinessException("pharmacy.sale.lotOtherPharmacy");
+        }
+        // QA D779: a counter sale from a lot is the same movement as a
+        // fill: half a tablet of a counted item is refused here too.
+        WholeUnitQuantity.require(lot.getInventoryItem(), lineDto.getQuantity());
+        return lot;
+    }
+
+    /**
+     * QA D964: a later-dated lot while a shorter-dated one could serve the
+     * line needs a reason, kept in the line's notes after the line's own note.
+     */
+    private String notesWithFefoReason(SaleLineRequestDTO lineDto, StockLot lot,
+                                       java.util.Map<java.util.UUID, BigDecimal> takenByLot) {
+        String lineNotes = lineDto.getNotes();
+        String fefoReason = fefoLotPolicy.requireFefoOrReason(lot,
+                lineDto.getFefoOverrideReason(), takenByLot);
+        if (fefoReason == null) {
+            return lineNotes;
+        }
+        String existing = lineNotes == null || lineNotes.isBlank() ? null : lineNotes.trim();
+        String prefix = existing == null ? "" : existing + "\n";
+        String combined = prefix + FEFO_NOTE_PREFIX + fefoReason;
+        // Review of #975: SaleLine.notes is 500 characters; refused up
+        // front with what still fits, as the dispense path does, instead
+        // of a constraint violation at flush.
+        if (combined.length() > LINE_NOTES_MAX) {
+            throw new BusinessException("pharmacy.fefo.reasonTooLong",
+                    String.valueOf(Math.max(0, LINE_NOTES_MAX - prefix.length() - FEFO_NOTE_PREFIX.length())));
+        }
+        return combined;
     }
 
     @Override
@@ -170,7 +239,7 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
     public Page<PharmacySaleResponseDTO> listByHospital(UUID hospitalId, Pageable pageable) {
         UUID active = roleValidator.requireActiveHospitalId();
         if (!active.equals(hospitalId)) {
-            throw new BusinessException("Hospital ID does not match the active hospital context");
+            throw new BusinessException("pharmacy.sale.hospitalMismatch");
         }
         return saleRepository.findByHospital_Id(active, pageable).map(mapper::toResponseDTO);
     }
@@ -194,7 +263,7 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
     private User resolveCurrentUser() {
         UUID userId = roleValidator.getCurrentUserId();
         if (userId == null) {
-            throw new BusinessException("Unable to determine current user");
+            throw new BusinessException("pharmacy.currentUserUnknown");
         }
         return userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("user.current.notfound"));

@@ -104,7 +104,35 @@ class MedicationAllergyCdsServiceTest {
         assertThat(card.indicator()).isEqualTo(CdsCard.Indicator.CRITICAL);
         assertThat(card.summary())
             .contains("Penicillin V 500 mg PO BID")
-            .contains("penicillin");
+            // QA D1183: the allergy as recorded ("Penicillin"), not its lower-cased search form.
+            .containsIgnoringCase("penicillin");
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest(name = "{1} against {0}")
+    @org.junit.jupiter.params.provider.CsvSource({
+        "Sulfamides, Bactrim forte",
+        "Sulfamides, Septra",
+        "Pénicilline, Augmentin 1 g",
+        "Amoxicilline, Augmentin 1 g",
+    })
+    @DisplayName("QA D1183: a brand typed in the order is read with its generic names")
+    void aBrandNameRaisesTheAllergyCard_D1183(String allergen, String medication) {
+        UUID patientId = UUID.randomUUID();
+        Patient patient = patient(patientId, UUID.randomUUID());
+        PatientAllergy a = new PatientAllergy();
+        a.setPatient(patient);
+        a.setAllergenDisplay(allergen);
+        a.setActive(true);
+        when(allergyRepo.findByPatient_Id(patientId)).thenReturn(List.of(a));
+        when(patientRepo.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        CdsRuleContext context = mock(CdsRuleContext.class);
+        when(ruleEngine.buildContext(any(), any(), any(), any(), any())).thenReturn(context);
+        when(ddiRule.evaluate(any())).thenReturn(List.of());
+
+        CdsHookResponse response = service.evaluate(signRequest(patientId, medication));
+
+        assertThat(response.cards()).hasSize(1);
+        assertThat(response.cards().get(0).indicator()).isEqualTo(CdsCard.Indicator.CRITICAL);
     }
 
     @Test
@@ -326,7 +354,62 @@ class MedicationAllergyCdsServiceTest {
     @Test
     @DisplayName("QA D793 path re-verified: a drug no beta-lactam allergy concerns gets no allergy card")
     void unrelatedDrugGetsNoAllergyCard() {
+        // QA D1183 (round 23): the catalogue knows paracetamol, so the check
+        // judges it and has nothing to say; a name nobody recorded would reach
+        // the safety net instead (below).
+        catalogueKnows("Paracetamol", null);
         assertThat(signFor("Penicillin", "Paracetamol 1 g").cards()).isEmpty();
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest(name = "order-sign {1} free-text against {0}: CRITICAL")
+    @org.junit.jupiter.params.provider.CsvSource({
+        "Sulfamides, Septrin", "Sulfamides, Septrin forte", "Sulfamides, Fansidar", "Sulfamides, Eusaprim",
+        "Sulfamides, Bactrim", "P\u00e9nicilline, Totapen", "P\u00e9nicilline, Orb\u00e9nine",
+        "P\u00e9nicilline, Ospen", "P\u00e9nicilline, Augmentin",
+    })
+    void qaD1183EveryBrandIsCriticalAtOrderSign(String allergen, String medText) {
+        assertThat(signFor(allergen, medText).cards()).singleElement().satisfies(card -> {
+            assertThat(card.indicator()).isEqualTo(CdsCard.Indicator.CRITICAL);
+            assertThat(card.summary()).doesNotContain("prescription.allergy.unverifiable");
+        });
+    }
+
+    @Test
+    @DisplayName("QA D1183: a catalogue brand the map does not know is placed by its generic name")
+    void qaD1183ACatalogueBrandIsReadThroughItsGeneric() {
+        catalogueKnows("Ampicilline", "Pentrexyl");
+        assertThat(signFor("P\u00e9nicilline", "Pentrexyl 500 mg").cards()).singleElement()
+            .satisfies(card -> assertThat(card.indicator()).isEqualTo(CdsCard.Indicator.CRITICAL));
+    }
+
+    @Test
+    @DisplayName("QA D1183 safety net: an unrecognised name with a class allergy is CRITICAL, never silent")
+    void qaD1183UnknownNameWithAClassAllergyIsCritical() {
+        CdsHookResponse response = signFor("Sulfamides", "Zorbalix 500 mg");
+        assertThat(response.cards()).singleElement().satisfies(card -> {
+            assertThat(card.indicator()).isEqualTo(CdsCard.Indicator.CRITICAL);
+            assertThat(card.summary()).contains("Zorbalix").contains("Sulfamides");
+        });
+    }
+
+    @Test
+    @DisplayName("QA D1183 safety net: no class allergy, no card")
+    void qaD1183UnknownNameWithoutAClassAllergyIsQuiet() {
+        assertThat(signFor("Aspirine", "Zorbalix 500 mg").cards()).isEmpty();
+    }
+
+    /** An active catalogue item at the patient's hospital or on the national list. */
+    private void catalogueKnows(String generic, String brandName) {
+        com.example.hms.repository.MedicationCatalogItemRepository catalog =
+            mock(com.example.hms.repository.MedicationCatalogItemRepository.class);
+        com.example.hms.model.medication.MedicationCatalogItem item =
+            new com.example.hms.model.medication.MedicationCatalogItem();
+        item.setNameFr(brandName != null ? brandName : generic);
+        item.setGenericName(generic);
+        item.setBrandName(brandName);
+        when(catalog.findActivePage(any(), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(item)));
+        service.setCatalogRepository(catalog);
     }
 
     private static Patient patient(UUID id, UUID hospitalId) {

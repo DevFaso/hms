@@ -1,3 +1,4 @@
+import { PersonNamePipe } from '../../shared/pipes/person-name.pipe';
 import {
   Component,
   EventEmitter,
@@ -12,7 +13,7 @@ import {
 
 import { TranslateModule } from '@ngx-translate/core';
 import { forkJoin, of, Subject, Subscription } from 'rxjs';
-import { catchError, debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
+import { catchError, debounceTime, switchMap } from 'rxjs/operators';
 import { PatientService, PatientResponse } from '../../services/patient.service';
 import { patientSubline } from './patient-subline';
 
@@ -25,7 +26,7 @@ import { patientSubline } from './patient-subline';
 @Component({
   selector: 'app-patient-picker',
   standalone: true,
-  imports: [TranslateModule],
+  imports: [PersonNamePipe, TranslateModule],
   templateUrl: './patient-picker.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './patient-picker.component.scss',
@@ -65,7 +66,6 @@ export class PatientPickerComponent implements OnInit, OnDestroy {
     this.searchSub = this.search$
       .pipe(
         debounceTime(220),
-        distinctUntilChanged(),
         // catchError INSIDE switchMap: a failed lookup must not kill the stream.
         // Two sources merged: /patients/search matches names within the hospital
         // scope, /patients/lookup matches exact identifiers (phone/email/MRN)

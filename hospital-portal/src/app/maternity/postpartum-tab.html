@@ -44,7 +44,7 @@
             {{ 'POSTPARTUM.MINUTES' | translate }}
           }
           @if (s.nextDueAt) {
-            · {{ 'POSTPARTUM.NEXT_DUE' | translate }}:
+            · {{ 'POSTPARTUM.NEXT_DUE' | translate }}{{ 'COMMON.COLON' | translate }}
             {{ s.nextDueAt | serverTime | date: 'short' }}
           }
           @if (s.overdue) {
@@ -52,7 +52,8 @@
           }
         </p>
         <p class="muted">
-          {{ 'POSTPARTUM.IMMEDIATE_PROGRESS' | translate }}: {{ s.immediateChecksCompleted }} /
+          {{ 'POSTPARTUM.IMMEDIATE_PROGRESS' | translate }}{{ 'COMMON.COLON' | translate }}
+          {{ s.immediateChecksCompleted }} /
           {{ s.immediateCheckTarget }}
         </p>
       </div>
@@ -71,7 +72,7 @@
           [disabled]="!screeningAvailable()"
           [title]="screeningAvailable() ? '' : ('PRO.NOT_LOADED' | translate)"
         >
-          <span class="material-symbols-outlined">psychology</span>
+          <span class="material-symbols-outlined" aria-hidden="true">psychology</span>
           {{ 'PRO.ADMINISTER' | translate }}
         </button>
       </div>
@@ -89,18 +90,24 @@
         }
         @if (sc.lastAdministeredAt) {
           <p>
-            {{ 'PRO.LAST_SCREEN' | translate }}:
+            {{ 'PRO.LAST_SCREEN' | translate }}{{ 'COMMON.COLON' | translate }}
             {{ sc.lastAdministeredAt | serverTime | date: 'short' }} ·
             <strong>{{ sc.lastTotalScore }} / {{ sc.maxScore }}</strong>
             @if (sc.lastCriticalItemPositive) {
-              <span class="risk-badge risk-high">{{ 'PRO.CRITICAL_ITEM' | translate }}</span>
+              {{ ' '
+              }}<span class="risk-badge risk-high">{{ 'PRO.CRITICAL_ITEM' | translate }}</span>
             } @else if (sc.lastScreenPositive) {
-              <span class="risk-badge risk-moderate">{{ 'PRO.SCREEN_POSITIVE' | translate }}</span>
+              {{ ' '
+              }}<span class="risk-badge risk-moderate">{{
+                'PRO.SCREEN_POSITIVE' | translate
+              }}</span>
             } @else {
-              <span class="risk-badge risk-low">{{ 'PRO.SCREEN_NEGATIVE' | translate }}</span>
+              {{ ' '
+              }}<span class="risk-badge risk-low">{{ 'PRO.SCREEN_NEGATIVE' | translate }}</span>
             }
             @if (sc.escalationOpen) {
-              <span class="risk-badge risk-high">{{ 'PRO.ESCALATION_OPEN' | translate }}</span>
+              {{ ' '
+              }}<span class="risk-badge risk-high">{{ 'PRO.ESCALATION_OPEN' | translate }}</span>
             }
           </p>
         }
@@ -151,11 +158,13 @@
                       }}</span>
                     }
                     @if (r.screenPositive) {
-                      <span class="risk-badge risk-moderate">
+                      {{ ' '
+                      }}<span class="risk-badge risk-moderate">
                         {{ 'PRO.SCREEN_POSITIVE' | translate }}
                       </span>
                     } @else {
-                      <span class="risk-badge risk-low">{{
+                      {{ ' '
+                      }}<span class="risk-badge risk-low">{{
                         'PRO.SCREEN_NEGATIVE' | translate
                       }}</span>
                     }
@@ -197,7 +206,7 @@
     <div class="filter-bar">
       <h3 class="section-heading">{{ 'POSTPARTUM.OBSERVATIONS' | translate }}</h3>
       <button class="btn-primary" (click)="openObservation()">
-        <span class="material-symbols-outlined">add</span>
+        <span class="material-symbols-outlined" aria-hidden="true">add</span>
         {{ 'POSTPARTUM.NEW_OBSERVATION' | translate }}
       </button>
     </div>
@@ -231,6 +240,7 @@
               <th scope="col">{{ 'POSTPARTUM.LOCHIA' | translate }}</th>
               <th scope="col">{{ 'POSTPARTUM.MOOD' | translate }}</th>
               <th scope="col">{{ 'POSTPARTUM.ALERTS' | translate }}</th>
+              <th scope="col">{{ 'MATERNITY.CLINICAL_NOTES' | translate }}</th>
             </tr>
           </thead>
           <tbody>
@@ -259,6 +269,18 @@
                     </span>
                   }
                 </td>
+                <!-- QA D1068: the uterotonic given and the clinical notes typed with the observation. -->
+                <td class="saved-note" data-testid="postpartum-observation-notes">
+                  @if (o.uterotonicGiven) {
+                    <div>{{ 'POSTPARTUM.UTEROTONIC' | translate }}</div>
+                  }
+                  @if (o.psychosocialNotes) {
+                    <div>{{ o.psychosocialNotes }}</div>
+                  }
+                  @if (!o.uterotonicGiven && !o.psychosocialNotes) {
+                    —
+                  }
+                </td>
               </tr>
             }
           </tbody>
@@ -271,7 +293,7 @@
     <div class="filter-bar">
       <h3 class="section-heading">{{ 'POSTPARTUM.ASSESSMENTS' | translate }}</h3>
       <button class="btn-primary" (click)="openAssessment()">
-        <span class="material-symbols-outlined">add</span>
+        <span class="material-symbols-outlined" aria-hidden="true">add</span>
         {{ 'POSTPARTUM.NEW_ASSESSMENT' | translate }}
       </button>
     </div>
@@ -304,6 +326,7 @@
               <th scope="col">{{ 'POSTPARTUM.VITALS' | translate }}</th>
               <th scope="col">{{ 'POSTPARTUM.ESCALATION' | translate }}</th>
               <th scope="col">{{ 'POSTPARTUM.ALERTS' | translate }}</th>
+              <th scope="col">{{ 'POSTPARTUM.EXAM_NOTES' | translate }}</th>
             </tr>
           </thead>
           <tbody>
@@ -341,6 +364,27 @@
                     </span>
                   }
                 </td>
+                <!-- QA D1068: appearance, exam and follow-up notes, as typed. -->
+                <td class="saved-note" data-testid="newborn-assessment-notes">
+                  @if (a.examGeneralAppearance) {
+                    <div>
+                      {{ 'POSTPARTUM.GENERAL_APPEARANCE' | translate
+                      }}{{ 'COMMON.COLON' | translate }} {{ a.examGeneralAppearance }}
+                    </div>
+                  }
+                  @if (a.examNotes) {
+                    <div>{{ a.examNotes }}</div>
+                  }
+                  @if (a.followUpNotes) {
+                    <div>
+                      {{ 'POSTPARTUM.FOLLOW_UP_NOTES' | translate }}{{ 'COMMON.COLON' | translate }}
+                      {{ a.followUpNotes }}
+                    </div>
+                  }
+                  @if (!a.examGeneralAppearance && !a.examNotes && !a.followUpNotes) {
+                    —
+                  }
+                </td>
               </tr>
             }
           </tbody>
@@ -360,20 +404,22 @@
   >
     <div
       class="modal modal-lg"
+      aria-labelledby="postpartum-tab-dialog-1-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeObservation(); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
-        <h2>{{ 'POSTPARTUM.NEW_OBSERVATION' | translate }}</h2>
+        <h2 id="postpartum-tab-dialog-1-title">{{ 'POSTPARTUM.NEW_OBSERVATION' | translate }}</h2>
         <button
           class="modal-close"
           (click)="closeObservation()"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
@@ -580,20 +626,22 @@
   >
     <div
       class="modal modal-lg"
+      aria-labelledby="postpartum-tab-dialog-2-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeAssessment(); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
-        <h2>{{ 'POSTPARTUM.NEW_ASSESSMENT' | translate }}</h2>
+        <h2 id="postpartum-tab-dialog-2-title">{{ 'POSTPARTUM.NEW_ASSESSMENT' | translate }}</h2>
         <button
           class="modal-close"
           (click)="closeAssessment()"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
@@ -768,6 +816,7 @@
       (click)="$event.stopPropagation()"
       (keydown.escape)="closeScreening(); $event.stopPropagation()"
       (keydown.tab)="trapTab($any($event), screeningDialog)"
+      appModalDialog
     >
       <div class="modal-header">
         <h2 id="pro-screening-title">{{ screeningInstrument()?.name || screeningCode() }}</h2>
@@ -777,7 +826,7 @@
           (click)="closeScreening()"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
@@ -862,6 +911,7 @@
       (click)="$event.stopPropagation()"
       (keydown.escape)="closeAcknowledge(); $event.stopPropagation()"
       (keydown.tab)="trapTab($any($event), ackDialog)"
+      appModalDialog
     >
       <div class="modal-header">
         <h2 id="pro-ack-title">{{ 'PRO.ACKNOWLEDGE_TITLE' | translate }}</h2>
@@ -871,7 +921,7 @@
           (click)="closeAcknowledge()"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">

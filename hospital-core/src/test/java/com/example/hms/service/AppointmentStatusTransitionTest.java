@@ -37,6 +37,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -64,6 +65,10 @@ class AppointmentStatusTransitionTest {
     @Mock private com.example.hms.service.i18n.PatientLocaleResolver patientLocaleResolver;
     @Mock private com.example.hms.repository.EncounterRepository encounterRepository;
 
+    /** QA D1060: the slot rules, stubbed to their 30-minute fallback (SlotPolicyStubs). */
+    @org.mockito.Mock
+    private com.example.hms.service.scheduling.AppointmentSlotPolicy slotPolicy;
+
     @InjectMocks
     private AppointmentServiceImpl appointmentService;
 
@@ -74,6 +79,7 @@ class AppointmentStatusTransitionTest {
 
     @BeforeEach
     void setUp() {
+        com.example.hms.testsupport.SlotPolicyStubs.defaultLength(slotPolicy);
         ReflectionTestUtils.setField(appointmentService, "frontendBaseUrl", "http://localhost");
 
         UUID hospitalId = UUID.randomUUID();
@@ -275,9 +281,12 @@ class AppointmentStatusTransitionTest {
         when(appointmentRepository.save(any())).thenReturn(appointment);
         when(appointmentMapper.toAppointmentResponseDTO(appointment)).thenReturn(dto);
 
-        appointmentService.confirmOrCancelAppointment(appointmentId, "cancel", null, "doctor_b");
+        // QA D1126: a cancel carries its reason (the call used to send none).
+        appointmentService.confirmOrCancelAppointment(appointmentId, "cancel", "  Patient called to cancel ",
+            null, "doctor_b");
 
         verify(appointmentRepository).save(appointment);
+        org.assertj.core.api.Assertions.assertThat(appointment.getStatusReason()).isEqualTo("Patient called to cancel");
         // The appointment owns its slot (P3 #22): cancelling frees the time.
         verify(slotInventoryService).releaseForAppointment(appointmentId);
         // The fulfilment-critical link to item 45's outbox: the cancel is
@@ -426,17 +435,92 @@ class AppointmentStatusTransitionTest {
         org.assertj.core.api.Assertions.assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.COMPLETED);
     }
 
-    @Test
-    void checkedInAppointmentCanBeMarkedNoShow() {
-        // The patient checked in and then left before being seen. Rare, but
-        // the front desk has to be able to record it.
+    /**
+     * QA D1126 (round 20), changed assertion: this test used to prove a
+     * CHECKED_IN appointment could be marked NO_SHOW ("checked in and then
+     * left before being seen"). That patient now leaves through the reception
+     * queue's close-without-a-consultation (LEFT_WITHOUT_BEING_SEEN, round 13),
+     * which needs a reason and refuses while a paid copay stands. Cancelling
+     * or no-showing the appointment alone dropped the patient from triage with
+     * the visit open and the copay PAID.
+     */
+    @org.junit.jupiter.params.ParameterizedTest(name = "{0}")
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"no_show", "cancel"})
+    void qaD1126_aCheckedInAppointmentIsClosedFromTheQueueNotCancelledHere(String action) {
         givenAppointment(AppointmentStatus.CHECKED_IN, LocalDate.now().minusDays(1));
+
+        assertThatThrownBy(() ->
+            appointmentService.confirmOrCancelAppointment(appointmentId, action, "Left the waiting room", null,
+                "doctor_b"))
+            .isInstanceOf(BusinessException.class)
+            .satisfies(ex -> org.assertj.core.api.Assertions.assertThat(((BusinessException) ex).getMessageKey())
+                .isEqualTo("appointment.status.checkedInCloseFromQueue"));
+
+        verify(appointmentRepository, never()).save(any());
+        org.assertj.core.api.Assertions.assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.CHECKED_IN);
+    }
+
+    /** QA D1126 / D1132: no cancel and no no-show without a reason on the status action. */
+    @org.junit.jupiter.params.ParameterizedTest(name = "{0} / [{1}]")
+    @org.junit.jupiter.params.provider.CsvSource(value = {"cancel,NULL", "cancel,'   '", "no_show,NULL", "no_show,''"},
+        nullValues = "NULL")
+    void qaD1126_aCancelOrNoShowWithoutAReasonIsRefused(String action, String reason) {
+        givenAppointment(AppointmentStatus.CONFIRMED, LocalDate.now().minusDays(1));
+
+        assertThatThrownBy(() ->
+            appointmentService.confirmOrCancelAppointment(appointmentId, action, reason, null, "doctor_b"))
+            .isInstanceOf(BusinessException.class)
+            .satisfies(ex -> org.assertj.core.api.Assertions.assertThat(((BusinessException) ex).getMessageKey())
+                .isEqualTo("appointment.status.reasonRequired"));
+
+        verify(appointmentRepository, never()).save(any());
+        org.assertj.core.api.Assertions.assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.CONFIRMED);
+    }
+
+    @Test
+    void qaD1126_anOverLongReasonIsRefused() {
+        givenAppointment(AppointmentStatus.CONFIRMED, LocalDate.now().minusDays(1));
+        String overLong = "x".repeat(501);
+
+        assertThatThrownBy(() ->
+            appointmentService.confirmOrCancelAppointment(appointmentId, "cancel", overLong, null, "doctor_b"))
+            .isInstanceOf(BusinessException.class)
+            .satisfies(ex -> org.assertj.core.api.Assertions.assertThat(((BusinessException) ex).getMessageKey())
+                .isEqualTo("appointment.status.reasonTooLong"));
+        verify(appointmentRepository, never()).save(any());
+    }
+
+    @Test
+    void qaD1126_aNoShowKeepsItsReason() {
+        givenAppointment(AppointmentStatus.CONFIRMED, LocalDate.now().minusDays(1));
         stubSaveAndMap();
 
-        appointmentService.confirmOrCancelAppointment(appointmentId, "no_show", null, "doctor_b");
+        appointmentService.confirmOrCancelAppointment(appointmentId, "no_show", "No answer on three calls", null,
+            "doctor_b");
 
-        org.assertj.core.api.Assertions.assertThat(appointment.getStatus())
-            .isEqualTo(AppointmentStatus.NO_SHOW);
+        org.assertj.core.api.Assertions.assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.NO_SHOW);
+        org.assertj.core.api.Assertions.assertThat(appointment.getStatusReason()).isEqualTo("No answer on three calls");
+    }
+
+    /** QA D1126: the edit form (PUT /appointments/{id}) is held to the same reason and the same checked-in rule. */
+    @org.junit.jupiter.params.ParameterizedTest(name = "{0} -> {1}")
+    @org.junit.jupiter.params.provider.CsvSource({
+        "CONFIRMED,CANCELLED,appointment.status.reasonRequired",
+        "CONFIRMED,NO_SHOW,appointment.status.reasonRequired",
+        "CHECKED_IN,CANCELLED,appointment.status.checkedInCloseFromQueue",
+        "CHECKED_IN,NO_SHOW,appointment.status.checkedInCloseFromQueue"})
+    void qaD1126_theEditFormDropsAVisitOnlyWithAReason(AppointmentStatus from, AppointmentStatus to, String key) {
+        givenAppointment(from, LocalDate.now().minusDays(1));
+        com.example.hms.payload.dto.AppointmentRequestDTO edit = editOf(to);
+
+        assertThatThrownBy(() ->
+            appointmentService.updateAppointment(appointmentId, edit, java.util.Locale.ENGLISH, "doctor_b"))
+            .isInstanceOf(BusinessException.class)
+            .satisfies(ex -> org.assertj.core.api.Assertions.assertThat(((BusinessException) ex).getMessageKey())
+                .isEqualTo(key));
+        verify(appointmentRepository, never()).save(any());
+        verify(appointmentRepository, never()).saveAndFlush(any());
+        org.assertj.core.api.Assertions.assertThat(appointment.getStatus()).isEqualTo(from);
     }
 
     @Test
@@ -575,6 +659,217 @@ class AppointmentStatusTransitionTest {
             .satisfies(ex -> refusedAsTransition(ex, AppointmentStatus.COMPLETED, AppointmentStatus.CONFIRMED));
 
         verify(appointmentRepository, never()).save(any());
+    }
+
+    // ── Review round 8 (QA D937/D946): freed slots and the PUT path ──
+
+    private Appointment rebookedAtTheSameTime() {
+        Appointment other = new Appointment();
+        other.setId(UUID.randomUUID());
+        other.setStaff(appointment.getStaff());
+        other.setAppointmentDate(appointment.getAppointmentDate());
+        other.setStartTime(LocalTime.of(9, 0));
+        other.setEndTime(LocalTime.of(10, 0));
+        other.setStatus(AppointmentStatus.SCHEDULED);
+        return other;
+    }
+
+    @Test
+    void round8_aMissedVisitWhoseTimeWasRebookedCannotBeParkedBackInIt() {
+        // A no-show frees its slot (D937); B is booked there; parking A in
+        // RESCHEDULED (a slot-holding status) would double-book the clinician.
+        givenAppointment(AppointmentStatus.NO_SHOW, LocalDate.now().minusDays(1));
+        when(appointmentRepository.findByStaff_IdAndAppointmentDate(
+                appointment.getStaff().getId(), appointment.getAppointmentDate()))
+            .thenReturn(java.util.List.of(appointment, rebookedAtTheSameTime()));
+
+        assertThatThrownBy(() ->
+            appointmentService.confirmOrCancelAppointment(appointmentId, "reschedule", null, "doctor_b"))
+            .isInstanceOf(BusinessException.class)
+            .satisfies(ex -> org.assertj.core.api.Assertions.assertThat(((BusinessException) ex).getMessageKey())
+                .isEqualTo("appointment.status.slotRebooked"));
+
+        verify(appointmentRepository, never()).save(any());
+        org.assertj.core.api.Assertions.assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.NO_SHOW);
+    }
+
+    @Test
+    void round8_aMissedVisitWhoseTimeIsStillFreeCanBeParked() {
+        givenAppointment(AppointmentStatus.NO_SHOW, LocalDate.now().minusDays(1));
+        when(appointmentRepository.findByStaff_IdAndAppointmentDate(
+                appointment.getStaff().getId(), appointment.getAppointmentDate()))
+            .thenReturn(java.util.List.of(appointment));
+        stubSaveAndMap();
+
+        appointmentService.confirmOrCancelAppointment(appointmentId, "reschedule", null, "doctor_b");
+
+        org.assertj.core.api.Assertions.assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.RESCHEDULED);
+    }
+
+    private com.example.hms.payload.dto.AppointmentRequestDTO editOf(AppointmentStatus status) {
+        Patient patient = appointment.getPatient();
+        Staff staff = appointment.getStaff();
+        when(patientRepository.findById(patient.getId())).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staff.getId())).thenReturn(Optional.of(staff));
+        when(hospitalRepository.findClinicalById(hospital.getId())).thenReturn(Optional.of(hospital));
+        when(assignmentRepository.findActiveStaffAssignment(any(), any()))
+            .thenReturn(Optional.of(appointment.getAssignment()));
+        when(staffAvailabilityService.isStaffAvailable(any(), any())).thenReturn(true);
+        com.example.hms.payload.dto.AppointmentRequestDTO edit = new com.example.hms.payload.dto.AppointmentRequestDTO();
+        edit.setPatientId(patient.getId());
+        edit.setStaffId(staff.getId());
+        edit.setHospitalId(hospital.getId());
+        edit.setAppointmentDate(appointment.getAppointmentDate());
+        edit.setStartTime(appointment.getStartTime());
+        edit.setEndTime(appointment.getEndTime());
+        edit.setStatus(status);
+        return edit;
+    }
+
+    @Test
+    void round8_thePutCannotMarkAVisitThatHasNotStartedANoShow() {
+        // SCHEDULED -> NO_SHOW is in the map (D946); the PUT used to skip the
+        // temporal guard the status action applies.
+        givenAppointment(AppointmentStatus.SCHEDULED, LocalDate.now().plusDays(7));
+        com.example.hms.payload.dto.AppointmentRequestDTO edit = editOf(AppointmentStatus.NO_SHOW);
+
+        assertThatThrownBy(() ->
+            appointmentService.updateAppointment(appointmentId, edit, java.util.Locale.ENGLISH, "doctor_b"))
+            .isInstanceOf(BusinessException.class)
+            .satisfies(ex -> org.assertj.core.api.Assertions.assertThat(((BusinessException) ex).getMessageKey())
+                .isEqualTo("appointment.status.notStartedYet"));
+
+        verify(appointmentRepository, never()).saveAndFlush(any());
+        org.assertj.core.api.Assertions.assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.SCHEDULED);
+    }
+
+    @Test
+    void round8_aPutThatCancelsReleasesTheInventorySlotLikeTheStatusAction() {
+        givenAppointment(AppointmentStatus.SCHEDULED, LocalDate.now().plusDays(7));
+        com.example.hms.payload.dto.AppointmentRequestDTO edit = editOf(AppointmentStatus.CANCELLED);
+        edit.setStatusReason("Patient called to cancel"); // QA D1126: a PUT that cancels carries its reason
+        ReflectionTestUtils.setField(appointmentService, "entityManager",
+            mock(jakarta.persistence.EntityManager.class));
+        org.mockito.Mockito.doAnswer(inv -> {
+            appointment.setStatus(AppointmentStatus.CANCELLED);
+            return null;
+        }).when(appointmentMapper).updateAppointmentFromDto(any(), any(), any(), any(), any());
+        when(appointmentRepository.saveAndFlush(any())).thenReturn(appointment);
+
+        appointmentService.updateAppointment(appointmentId, edit, java.util.Locale.ENGLISH, "doctor_b");
+
+        verify(slotInventoryService).releaseForAppointment(appointmentId);
+    }
+
+    @Test
+    void round8_aPutThatOnlyEditsTheNotesKeepsTheInventorySlot() {
+        givenAppointment(AppointmentStatus.SCHEDULED, LocalDate.now().plusDays(7));
+        com.example.hms.payload.dto.AppointmentRequestDTO edit = editOf(null);
+        ReflectionTestUtils.setField(appointmentService, "entityManager",
+            mock(jakarta.persistence.EntityManager.class));
+        when(appointmentRepository.saveAndFlush(any())).thenReturn(appointment);
+
+        appointmentService.updateAppointment(appointmentId, edit, java.util.Locale.ENGLISH, "doctor_b");
+
+        verify(slotInventoryService, never()).releaseForAppointment(any());
+    }
+
+    @Test
+    void round9_aMissedVisitWhoseTimeWasRebookedCanStillBeEdited() {
+        // The no-show freed 09:00 and B was booked there. A note on A (status
+        // unchanged, NO_SHOW) is not a conflict: A does not hold the slot.
+        givenAppointment(AppointmentStatus.NO_SHOW, LocalDate.now().minusDays(1));
+        com.example.hms.payload.dto.AppointmentRequestDTO edit = editOf(null);
+        org.mockito.Mockito.lenient().when(appointmentRepository.findByStaff_IdAndAppointmentDate(
+                appointment.getStaff().getId(), appointment.getAppointmentDate()))
+            .thenReturn(java.util.List.of(appointment, rebookedAtTheSameTime()));
+        ReflectionTestUtils.setField(appointmentService, "entityManager",
+            mock(jakarta.persistence.EntityManager.class));
+        when(appointmentRepository.saveAndFlush(any())).thenReturn(appointment);
+
+        appointmentService.updateAppointment(appointmentId, edit, java.util.Locale.ENGLISH, "doctor_b");
+
+        verify(appointmentRepository).saveAndFlush(appointment);
+    }
+
+    @Test
+    void round9_anEditThatKeepsTheVisitLiveStillRefusesARebookedTime() {
+        givenAppointment(AppointmentStatus.SCHEDULED, LocalDate.now().plusDays(7));
+        com.example.hms.payload.dto.AppointmentRequestDTO edit = editOf(null);
+        when(appointmentRepository.findByStaff_IdAndAppointmentDate(
+                appointment.getStaff().getId(), appointment.getAppointmentDate()))
+            .thenReturn(java.util.List.of(appointment, rebookedAtTheSameTime()));
+        org.mockito.Mockito.lenient().when(messageSource.getMessage(any(), any(), any(java.util.Locale.class)))
+            .thenReturn("busy");
+
+        assertThatThrownBy(() ->
+            appointmentService.updateAppointment(appointmentId, edit, java.util.Locale.ENGLISH, "doctor_b"))
+            .isInstanceOf(BusinessException.class);
+        verify(appointmentRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void round15_onePutCannotMoveAFutureVisitIntoThePastAndMarkItANoShow() {
+        givenAppointment(AppointmentStatus.SCHEDULED, LocalDate.now().plusDays(1));
+        com.example.hms.payload.dto.AppointmentRequestDTO edit = editOf(AppointmentStatus.NO_SHOW);
+        edit.setAppointmentDate(LocalDate.now().minusDays(1));
+
+        assertThatThrownBy(() ->
+            appointmentService.updateAppointment(appointmentId, edit, java.util.Locale.ENGLISH, "doctor_b"))
+            .isInstanceOf(BusinessException.class)
+            .satisfies(ex -> org.assertj.core.api.Assertions.assertThat(((BusinessException) ex).getMessageKey())
+                .isEqualTo("appointment.status.notStartedYet"));
+        verify(appointmentRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void round15_aFailedVisitReopensTheRecallItAnswered() {
+        com.example.hms.service.scheduling.PatientRecallService recalls =
+            mock(com.example.hms.service.scheduling.PatientRecallService.class);
+        appointmentService.setRecallService(recalls);
+        givenAppointment(AppointmentStatus.IN_PROGRESS, LocalDate.now().minusDays(1));
+        stubSaveAndMap();
+
+        appointmentService.confirmOrCancelAppointment(appointmentId, "fail", null, "doctor_b");
+
+        verify(recalls).reopenRecallsOf(appointmentId);
+        verify(recalls, never()).completeRecallsOf(any());
+    }
+
+    @Test
+    void round15_aNoteOnACompletedVisitDoesNotReCloseItsRecall() {
+        com.example.hms.service.scheduling.PatientRecallService recalls =
+            mock(com.example.hms.service.scheduling.PatientRecallService.class);
+        appointmentService.setRecallService(recalls);
+        givenAppointment(AppointmentStatus.COMPLETED, LocalDate.now().minusDays(1));
+        com.example.hms.payload.dto.AppointmentRequestDTO edit = editOf(null);
+        ReflectionTestUtils.setField(appointmentService, "entityManager", mock(jakarta.persistence.EntityManager.class));
+        when(appointmentRepository.saveAndFlush(any())).thenReturn(appointment);
+
+        appointmentService.updateAppointment(appointmentId, edit, java.util.Locale.ENGLISH, "doctor_b");
+
+        org.mockito.Mockito.verifyNoInteractions(recalls);
+    }
+
+    @Test
+    void round15_theStartIsJudgedOnTheHospitalsClock() {
+        // A hospital 14 hours ahead of UTC: its visit started an hour ago on
+        // its own clock, which on any server clock behind it is still "later".
+        com.example.hms.model.Organization organization = new com.example.hms.model.Organization();
+        organization.setDefaultTimezone("Pacific/Kiritimati");
+        hospital.setOrganization(organization);
+        java.time.LocalDateTime startedThere =
+            java.time.LocalDateTime.now(java.time.ZoneId.of("Pacific/Kiritimati")).minusHours(1);
+        appointment.setStatus(AppointmentStatus.CONFIRMED);
+        appointment.setAppointmentDate(startedThere.toLocalDate());
+        appointment.setStartTime(startedThere.toLocalTime());
+        appointment.setEndTime(startedThere.toLocalTime().plusMinutes(1));
+        stubSaveAndMap();
+
+        // QA D1126: a no-show carries its reason.
+        appointmentService.confirmOrCancelAppointment(appointmentId, "no_show", "Did not come", null, "doctor_b");
+
+        org.assertj.core.api.Assertions.assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.NO_SHOW);
     }
 
     private static void refusedAsTransition(Throwable ex, AppointmentStatus from, AppointmentStatus to) {

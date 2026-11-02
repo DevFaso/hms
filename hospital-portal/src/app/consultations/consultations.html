@@ -193,7 +193,8 @@
                   c.status | enumLabel: 'consultationStatus'
                 }}</span>
                 @if (isOverdue(c)) {
-                  <span class="overdue-badge">{{ 'CONSULTATIONS.OVERDUE' | translate }}</span>
+                  {{ ' '
+                  }}<span class="overdue-badge">{{ 'CONSULTATIONS.OVERDUE' | translate }}</span>
                 }
               </td>
               <td>
@@ -202,6 +203,7 @@
                     class="action-link"
                     (click)="viewDetail(c)"
                     [title]="'CONSULTATIONS.VIEW_DETAILS' | translate"
+                    [attr.aria-label]="'CONSULTATIONS.VIEW_DETAILS' | translate"
                   >
                     <span class="material-symbols-outlined">visibility</span>
                   </button>
@@ -210,6 +212,7 @@
                       class="action-link assign"
                       (click)="openAssign(c, false)"
                       [title]="'CONSULTATIONS.ASSIGN_CONSULTANT' | translate"
+                      [attr.aria-label]="'CONSULTATIONS.ASSIGN_CONSULTANT' | translate"
                     >
                       <span class="material-symbols-outlined">person_add</span>
                     </button>
@@ -221,6 +224,7 @@
                       class="action-link assign reassign-btn"
                       (click)="openAssign(c, true)"
                       [title]="'CONSULTATIONS.REASSIGN_CONSULTANT' | translate"
+                      [attr.aria-label]="'CONSULTATIONS.REASSIGN_CONSULTANT' | translate"
                     >
                       <span class="material-symbols-outlined">person_search</span>
                     </button>
@@ -230,6 +234,7 @@
                       class="action-link"
                       (click)="acknowledgeConsultation(c)"
                       [title]="'CONSULTATIONS.ACKNOWLEDGE' | translate"
+                      [attr.aria-label]="'CONSULTATIONS.ACKNOWLEDGE' | translate"
                     >
                       <span class="material-symbols-outlined">check_circle</span>
                     </button>
@@ -239,6 +244,7 @@
                       class="action-link"
                       (click)="openSchedule(c)"
                       [title]="'CONSULTATIONS.SCHEDULE' | translate"
+                      [attr.aria-label]="'CONSULTATIONS.SCHEDULE' | translate"
                     >
                       <span class="material-symbols-outlined">event</span>
                     </button>
@@ -248,6 +254,7 @@
                       class="action-link"
                       (click)="startConsultation(c)"
                       [title]="'CONSULTATIONS.START' | translate"
+                      [attr.aria-label]="'CONSULTATIONS.START' | translate"
                     >
                       <span class="material-symbols-outlined">play_arrow</span>
                     </button>
@@ -257,6 +264,7 @@
                       class="action-link complete"
                       (click)="openComplete(c)"
                       [title]="'CONSULTATIONS.COMPLETE' | translate"
+                      [attr.aria-label]="'CONSULTATIONS.COMPLETE' | translate"
                     >
                       <span class="material-symbols-outlined">task_alt</span>
                     </button>
@@ -268,15 +276,17 @@
                       class="action-link decline"
                       (click)="openDecline(c)"
                       [title]="'CONSULTATIONS.DECLINE' | translate"
+                      [attr.aria-label]="'CONSULTATIONS.DECLINE' | translate"
                     >
                       <span class="material-symbols-outlined">thumb_down</span>
                     </button>
                   }
-                  @if (!['COMPLETED', 'CANCELLED', 'DECLINED'].includes(c.status)) {
+                  @if (canCancelConsultation(c)) {
                     <button
                       class="action-link delete"
                       (click)="confirmCancel(c)"
                       [title]="'CONSULTATIONS.CANCEL' | translate"
+                      [attr.aria-label]="'CONSULTATIONS.CANCEL' | translate"
                     >
                       <span class="material-symbols-outlined">cancel</span>
                     </button>
@@ -291,10 +301,20 @@
   }
   @if (selectedConsult(); as con) {
     <div class="detail-overlay" tabindex="-1" (keydown.escape)="closeDetail()">
-      <div class="detail-panel">
+      <div
+        appModalDialog
+        aria-labelledby="consultations-panel-1-title"
+        (escaped)="closeDetail()"
+        class="detail-panel"
+      >
         <div class="detail-header">
-          <h2>{{ 'CONSULTATIONS.DETAILS' | translate }}</h2>
-          <button class="btn-close" (click)="closeDetail()" [title]="'COMMON.CLOSE' | translate">
+          <h2 id="consultations-panel-1-title">{{ 'CONSULTATIONS.DETAILS' | translate }}</h2>
+          <button
+            class="btn-close"
+            (click)="closeDetail()"
+            [title]="'COMMON.CLOSE' | translate"
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
@@ -484,9 +504,14 @@
       (click)="closeModal()"
       (keydown.escape)="closeModal()"
     ></div>
-    <div class="modal modal-lg">
+    <div
+      class="modal modal-lg"
+      appModalDialog
+      aria-labelledby="consultations-dialog-6-title"
+      (escaped)="closeModal()"
+    >
       <div class="modal-header">
-        <h2>{{ 'CONSULTATIONS.NEW' | translate }}</h2>
+        <h2 id="consultations-dialog-6-title">{{ 'CONSULTATIONS.NEW' | translate }}</h2>
         <button class="modal-close" (click)="closeModal()" [title]="'COMMON.CLOSE' | translate">
           &times;
         </button>
@@ -498,12 +523,11 @@
             @if (selectedPatient()) {
               <div class="picker-chip">
                 <span class="chip-avatar">{{ patientInitials(selectedPatient()!) }}</span>
-                <span class="chip-info">
-                  <span class="chip-name"
-                    >{{ selectedPatient()!.firstName }} {{ selectedPatient()!.lastName }}</span
-                  >
+                {{ ' '
+                }}<span class="chip-info">
+                  <span class="chip-name">{{ selectedPatient() | personName }}</span>
                   @if (selectedPatient() | patientSubline; as sub) {
-                    <span class="chip-sub">{{ sub }}</span>
+                    {{ ' ' }}<span class="chip-sub">{{ sub }}</span>
                   }
                 </span>
                 <button
@@ -519,6 +543,7 @@
               <div class="patient-picker-wrap">
                 <span class="picker-search-icon material-icons">person_search</span>
                 <input
+                  data-escape-discards
                   id="con-patientSearch"
                   type="text"
                   class="picker-input"
@@ -540,7 +565,7 @@
                       <li class="picker-option" (mousedown)="selectPatient(p)">
                         <span class="opt-avatar">{{ patientInitials(p) }}</span>
                         <span class="opt-info">
-                          <span class="opt-name">{{ p.firstName }} {{ p.lastName }}</span>
+                          <span class="opt-name">{{ p | personName }}</span>
                           @if (p | patientSubline; as sub) {
                             <span class="opt-meta">{{ sub }}</span>
                           }
@@ -684,9 +709,14 @@
       (click)="closeAssignModal()"
       (keydown.escape)="closeAssignModal()"
     ></div>
-    <div class="modal">
+    <div
+      class="modal"
+      appModalDialog
+      aria-labelledby="consultations-dialog-5-title"
+      (escaped)="closeAssignModal()"
+    >
       <div class="modal-header">
-        <h2>
+        <h2 id="consultations-dialog-5-title">
           {{
             isReassign()
               ? ('CONSULTATIONS.REASSIGN_CONSULTANT' | translate)
@@ -716,6 +746,7 @@
           <label for="assign-consultant">{{ 'CONSULTATIONS.CONSULTANT' | translate }} *</label>
           <div class="field" style="margin-bottom: 0.5rem">
             <input
+              data-escape-discards
               type="text"
               id="assign-specialty-filter"
               [value]="assignSpecialtyFilter()"
@@ -790,9 +821,14 @@
       (click)="closeScheduleModal()"
       (keydown.escape)="closeScheduleModal()"
     ></div>
-    <div class="modal">
+    <div
+      class="modal"
+      appModalDialog
+      aria-labelledby="consultations-dialog-4-title"
+      (escaped)="closeScheduleModal()"
+    >
       <div class="modal-header">
-        <h2>{{ 'CONSULTATIONS.SCHEDULE' | translate }}</h2>
+        <h2 id="consultations-dialog-4-title">{{ 'CONSULTATIONS.SCHEDULE' | translate }}</h2>
         <button
           class="modal-close"
           (click)="closeScheduleModal()"
@@ -849,9 +885,14 @@
       (click)="closeCompleteModal()"
       (keydown.escape)="closeCompleteModal()"
     ></div>
-    <div class="modal">
+    <div
+      class="modal"
+      appModalDialog
+      aria-labelledby="consultations-dialog-3-title"
+      (escaped)="closeCompleteModal()"
+    >
       <div class="modal-header">
-        <h2>{{ 'CONSULTATIONS.COMPLETE' | translate }}</h2>
+        <h2 id="consultations-dialog-3-title">{{ 'CONSULTATIONS.COMPLETE' | translate }}</h2>
         <button
           class="modal-close"
           (click)="closeCompleteModal()"
@@ -936,9 +977,14 @@
       (click)="closeDeclineModal()"
       (keydown.escape)="closeDeclineModal()"
     ></div>
-    <div class="modal">
+    <div
+      class="modal"
+      appModalDialog
+      aria-labelledby="consultations-dialog-2-title"
+      (escaped)="closeDeclineModal()"
+    >
       <div class="modal-header">
-        <h2>{{ 'CONSULTATIONS.DECLINE' | translate }}</h2>
+        <h2 id="consultations-dialog-2-title">{{ 'CONSULTATIONS.DECLINE' | translate }}</h2>
         <button
           class="modal-close"
           (click)="closeDeclineModal()"
@@ -995,9 +1041,14 @@
       (click)="cancelDeleteAction()"
       (keydown.escape)="cancelDeleteAction()"
     ></div>
-    <div class="modal">
+    <div
+      class="modal"
+      appModalDialog
+      aria-labelledby="consultations-dialog-1-title"
+      (escaped)="cancelDeleteAction()"
+    >
       <div class="modal-header">
-        <h2>{{ 'CONSULTATIONS.CANCEL' | translate }}</h2>
+        <h2 id="consultations-dialog-1-title">{{ 'CONSULTATIONS.CANCEL' | translate }}</h2>
         <button
           class="modal-close"
           (click)="cancelDeleteAction()"

@@ -1,3 +1,9 @@
+import { ReasonDialogComponent } from '../../shared/reason-dialog/reason-dialog.component';
+import { focusWhenRendered } from '../../shared/a11y/focus-when-rendered';
+import { refusalReason } from '../../shared/refusal-reason';
+import { refuseFields } from '../../shared/forms/invalid-fields';
+import { PersonNamePipe, personName } from '../../shared/pipes/person-name.pipe';
+import { DialogFocusDirective } from '../../shared/a11y/dialog-focus.directive';
 import {
   Component,
   inject,
@@ -7,6 +13,7 @@ import {
   Output,
   EventEmitter,
   ChangeDetectionStrategy,
+  ElementRef,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -25,17 +32,32 @@ import { ReferralService, DepartmentMinimal } from '../../services/referral.serv
 import { StaffService, isClinicalProvider, StaffResponse } from '../../services/staff.service';
 import { RoleContextService } from '../../core/role-context.service';
 import { ToastService } from '../../core/toast.service';
-import { debounceTime, distinctUntilChanged, Subject, switchMap, catchError, of } from 'rxjs';
+import { debounceTime, Subject, switchMap, catchError, of } from 'rxjs';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
-import { serverInstant } from '../../shared/date-utils';
+import { localDateString, serverInstant } from '../../shared/date-utils';
+import { endsBeforeStart, isBeforeToday } from '../../shared/forms/date-rules';
 import { PatientSublinePipe } from '../../shared/patient-picker/patient-subline';
 
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 type WaitlistStatus = 'ALL' | 'WAITING' | 'OFFERED' | 'CLOSED';
+
+/** Every field the add form may refuse, so a corrected one loses its mark. */
+const WAITLIST_FIELDS = ['wl-patient', 'wl-dept', 'wl-to'];
 
 @Component({
   selector: 'app-waitlist-panel',
   standalone: true,
-  imports: [PatientSublinePipe, ServerTimePipe, CommonModule, FormsModule, TranslateModule],
+  imports: [
+    ReasonDialogComponent,
+    SubmitGuardDirective,
+    PersonNamePipe,
+    DialogFocusDirective,
+    PatientSublinePipe,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+  ],
   templateUrl: './waitlist-panel.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './waitlist-panel.component.scss',
@@ -51,6 +73,7 @@ export class WaitlistPanelComponent implements OnInit {
   private readonly roleCtx = inject(RoleContextService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   /* ── List state ─────────── */
   entries = signal<WaitlistEntryResponse[]>([]);
@@ -82,6 +105,17 @@ export class WaitlistPanelComponent implements OnInit {
   selectedDeptId = signal('');
   dateFrom = signal('');
   dateTo = signal('');
+  /**
+   * QA D1215 (round 23, portal half): the server refuses a window that ends
+   * before today (`waitlist.dateRange.past`); the picker never offers one.
+   */
+  readonly today = signal(localDateString());
+
+  /** The earliest end the picker offers: the start, and never before today. */
+  dateToMin(): string {
+    const from = this.dateFrom();
+    return from && from > this.today() ? from : this.today();
+  }
   priority = signal<'ROUTINE' | 'URGENT' | 'STAT'>('ROUTINE');
   reason = signal('');
   readonly priorities = ['ROUTINE', 'URGENT', 'STAT'] as const;
@@ -113,7 +147,6 @@ export class WaitlistPanelComponent implements OnInit {
     this.patientSearch$
       .pipe(
         debounceTime(300),
-        distinctUntilChanged(),
         switchMap((q) => {
           if (!q || q.length < 2) return of([]);
           return this.patientService.list(hospitalId, q).pipe(catchError(() => of([])));
@@ -146,7 +179,7 @@ export class WaitlistPanelComponent implements OnInit {
 
   selectPatient(p: PatientResponse): void {
     this.selectedPatient.set(p);
-    this.patientQuery.set(p.firstName + ' ' + p.lastName);
+    this.patientQuery.set(personName(p));
     this.patientResults.set([]);
   }
 
@@ -158,6 +191,7 @@ export class WaitlistPanelComponent implements OnInit {
     this.staffQuery.set('');
     this.dateFrom.set('');
     this.dateTo.set('');
+    this.today.set(localDateString());
     this.priority.set('ROUTINE');
     this.reason.set('');
     this.showAddForm.set(true);
@@ -165,7 +199,34 @@ export class WaitlistPanelComponent implements OnInit {
 
   submitAdd(): void {
     if (!this.selectedPatient() || !this.selectedDeptId()) {
+      // QA D1072: the missing field is marked and focused.
+      refuseFields(
+        this.host.nativeElement,
+        [
+          !this.selectedPatient() ? 'wl-patient' : null,
+          !this.selectedDeptId() ? 'wl-dept' : null,
+        ].filter((id): id is string => id !== null),
+        WAITLIST_FIELDS,
+        this.translate.instant('COMMON.FIELD_REQUIRED'),
+      );
       this.toast.error(this.translate.instant('RECEPTION.PATIENT_DEPT_REQUIRED'));
+      return;
+    }
+    // QA D1215 (round 23): a window that ends before it starts can never be
+    // offered a slot. The picker bounds each end by the other; a typed date
+    // that slips past them is refused here, on the field, with the reason.
+    if (endsBeforeStart(this.dateFrom(), this.dateTo())) {
+      const message = this.translate.instant('DATE_RULES.END_BEFORE_START');
+      refuseFields(this.host.nativeElement, ['wl-to'], WAITLIST_FIELDS, message);
+      this.toast.error(message);
+      return;
+    }
+    // QA D1215 (round 23): a window that is already over can never be offered a slot.
+    this.today.set(localDateString());
+    if (isBeforeToday(this.dateTo(), this.today())) {
+      const message = this.translate.instant('DATE_RULES.NOT_IN_PAST');
+      refuseFields(this.host.nativeElement, ['wl-to'], WAITLIST_FIELDS, message);
+      this.toast.error(message);
       return;
     }
     const req: WaitlistEntryRequest = {
@@ -187,7 +248,7 @@ export class WaitlistPanelComponent implements OnInit {
       },
       error: (err) => {
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('RECEPTION.ADD_WAITLIST_FAILED'),
+          refusalReason(err) ?? this.translate.instant('RECEPTION.ADD_WAITLIST_FAILED'),
         );
         this.saving.set(false);
       },
@@ -236,7 +297,7 @@ export class WaitlistPanelComponent implements OnInit {
         this.loadEntries();
       },
       error: (err) => {
-        this.toast.error(err?.error?.message ?? this.translate.instant('RECEPTION.OFFER_FAILED'));
+        this.toast.error(refusalReason(err) ?? this.translate.instant('RECEPTION.OFFER_FAILED'));
         this.offering.set(false);
       },
     });
@@ -253,7 +314,7 @@ export class WaitlistPanelComponent implements OnInit {
       },
       error: (err) => {
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('RECEPTION.ACCEPT_OFFER_FAILED'),
+          refusalReason(err) ?? this.translate.instant('RECEPTION.ACCEPT_OFFER_FAILED'),
         );
         this.actingOnEntryId.set(null);
       },
@@ -271,7 +332,7 @@ export class WaitlistPanelComponent implements OnInit {
       },
       error: (err) => {
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('RECEPTION.DECLINE_OFFER_FAILED'),
+          refusalReason(err) ?? this.translate.instant('RECEPTION.DECLINE_OFFER_FAILED'),
         );
         this.actingOnEntryId.set(null);
       },
@@ -282,13 +343,30 @@ export class WaitlistPanelComponent implements OnInit {
     return !!entry.offerExpiresAt && serverInstant(entry.offerExpiresAt).getTime() < Date.now();
   }
 
-  closeEntry(id: string): void {
-    this.receptionService.closeWaitlistEntry(id).subscribe({
+  /** QA D1157: "Fermer" asks why before anything is sent. */
+  readonly closing = signal<WaitlistEntryResponse | null>(null);
+  readonly closeBusy = signal(false);
+
+  askCloseEntry(entry: WaitlistEntryResponse): void {
+    this.closing.set(entry);
+  }
+
+  closeEntry(id: string, reason: string): void {
+    if (this.closeBusy()) return;
+    this.closeBusy.set(true);
+    this.receptionService.closeWaitlistEntry(id, reason).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('RECEPTION.ENTRY_CLOSED'));
+        this.closeBusy.set(false);
+        this.closing.set(null);
+        // The row leaves the list: the keyboard lands on the list's filter, not the page body.
+        focusWhenRendered(this.host.nativeElement, '.filter-btn.active');
         this.loadEntries();
       },
-      error: () => this.toast.error(this.translate.instant('RECEPTION.CLOSE_FAILED')),
+      error: (err: unknown) => {
+        this.closeBusy.set(false);
+        this.toast.error(refusalReason(err) ?? this.translate.instant('RECEPTION.CLOSE_FAILED'));
+      },
     });
   }
 

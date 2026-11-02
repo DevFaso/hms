@@ -12,11 +12,14 @@ import { ToastService } from '../../core/toast.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { localDateString, toServerDateTime } from '../../shared/date-utils';
+import { ConfirmDialogComponent } from '../../shared/confirm-dialog/confirm-dialog.component';
+import { refusalReason } from '../../shared/refusal-reason';
 
 @Component({
   selector: 'app-my-family-access',
   standalone: true,
   imports: [
+    ConfirmDialogComponent,
     ServerTimePipe,
     CommonModule,
     DatePipe,
@@ -69,8 +72,8 @@ export class MyFamilyAccessComponent implements OnInit {
         this.proxies.set(list);
         this.loading.set(false);
       },
-      error: () => {
-        this.toast.error(this.translate.instant('PORTAL.FAMILY.LOAD_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('PORTAL.FAMILY.LOAD_FAILED'));
         this.loading.set(false);
       },
     });
@@ -85,8 +88,10 @@ export class MyFamilyAccessComponent implements OnInit {
           this.proxyAccess.set(list);
           this.loadingReceived.set(false);
         },
-        error: () => {
-          this.toast.error(this.translate.instant('PORTAL.FAMILY.LOAD_ACCESS_FAILED'));
+        error: (err: unknown) => {
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('PORTAL.FAMILY.LOAD_ACCESS_FAILED'),
+          );
           this.loadingReceived.set(false);
         },
       });
@@ -139,13 +144,30 @@ export class MyFamilyAccessComponent implements OnInit {
     );
   }
 
+  /** QA D1197: the access being revoked, awaiting the confirmation. */
+  revoking = signal<ProxyResponse | null>(null);
+  revokeBusy = signal(false);
+
+  askRevoke(proxy: ProxyResponse): void {
+    this.revoking.set(proxy);
+  }
+
   revokeAccess(proxyId: string): void {
+    if (this.revokeBusy()) return;
+    this.revokeBusy.set(true);
     this.portalService.revokeProxy(proxyId).subscribe({
       next: () => {
+        this.revokeBusy.set(false);
+        this.revoking.set(null);
         this.proxies.update((list) => list.filter((p) => p.id !== proxyId));
         this.toast.success(this.translate.instant('PORTAL.FAMILY.ACCESS_REVOKED'));
       },
-      error: () => this.toast.error(this.translate.instant('PORTAL.FAMILY.REVOKE_FAILED')),
+      error: (err: unknown) => {
+        this.revokeBusy.set(false);
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PORTAL.FAMILY.REVOKE_FAILED'),
+        );
+      },
     });
   }
 }

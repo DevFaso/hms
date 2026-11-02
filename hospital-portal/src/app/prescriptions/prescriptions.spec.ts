@@ -1,7 +1,8 @@
 import { EncounterResponse, EncounterService } from '../services/encounter.service';
 import { AuthService, LoginUserProfile } from '../auth/auth.service';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideHttpClient, withXhr } from '@angular/common/http';
+import { HttpErrorResponse, provideHttpClient, withXhr } from '@angular/common/http';
+import { MfaService } from '../auth/mfa.service';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -37,6 +38,7 @@ import { PatientResponse, PatientService } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
+import { isSubmitBlocked } from '../shared/forms/submit-guard.testing';
 
 /**
  * Regression guard for the "Send prescription by SMS" dialog.
@@ -323,6 +325,7 @@ describe('PrescriptionsComponent — signing', () => {
       'cosign',
       'update',
       'create',
+      'getById',
     ]);
     prescriptionService.list.and.returnValue(of([]));
     prescriptionService.sign.and.returnValue(of(rx('rx-1', 'SIGNED')));
@@ -385,6 +388,92 @@ describe('PrescriptionsComponent — signing', () => {
     fixture = TestBed.createComponent(PrescriptionsComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
+  });
+
+  it('QA D934: a doctor is offered Sign on a nurse or midwife draft, not on a colleague doctor draft', () => {
+    spyOn(component, 'ownPrescriberStaffId').and.returnValue('me');
+    const colleague = {
+      ...rx('c1', 'PENDING_SIGNATURE'),
+      staffId: 'other',
+    } as PrescriptionResponse;
+    const midwifeDraft = {
+      ...rx('c2', 'PENDING_SIGNATURE'),
+      staffId: 'midwife',
+      awaitingPhysicianSignature: true,
+    } as PrescriptionResponse;
+    expect(component.canSign(colleague)).toBeFalse();
+    expect(component.canSign(midwifeDraft)).toBeTrue();
+    expect(
+      component.canSign({ ...midwifeDraft, status: 'SIGNED' } as PrescriptionResponse),
+    ).toBeFalse();
+  });
+
+  it('QA D922: picking a catalogue item sends its id; typing over it clears the id', () => {
+    component.openCreate();
+    const morphine = {
+      id: 'cat-1',
+      nameFr: 'Morphine',
+      genericName: 'morphine',
+      strength: '10',
+      strengthUnit: 'mg/ml',
+      controlled: true,
+    } as never;
+    component.catalogOptions.set([morphine]);
+    component.onMedicationNameChange('Morphine 10 mg/ml');
+    expect(component.form.medicationCatalogItemId).toBe('cat-1');
+    expect(component.pickedCatalogItem()?.controlled).toBeTrue();
+    component.onMedicationNameChange('Morphine 10 mg/ml retard');
+    expect(component.form.medicationCatalogItemId).toBeNull();
+  });
+
+  it('review of #975: a catalogue pick (and its controlled hint) does not carry into the next order', () => {
+    component.openCreate();
+    const morphine = {
+      id: 'cat-1',
+      nameFr: 'Morphine',
+      strength: '10',
+      strengthUnit: 'mg/ml',
+      controlled: true,
+    } as never;
+    component.catalogOptions.set([morphine]);
+    component.onMedicationNameChange('Morphine 10 mg/ml');
+    expect(component.pickedCatalogItem()?.controlled).toBeTrue();
+
+    component.closeModal();
+    expect(component.pickedCatalogItem()).toBeNull();
+
+    component.onMedicationNameChange('Morphine 10 mg/ml');
+    component.openCreate();
+    expect(component.pickedCatalogItem()).toBeNull();
+    expect(component.form.medicationCatalogItemId).toBeFalsy();
+  });
+
+  it('QA D922: two catalogue items reading the same send no id, and a form tells them apart', () => {
+    component.openCreate();
+    const tablet = { id: 'cat-t', nameFr: 'Codéine', strength: '30', strengthUnit: 'mg' } as never;
+    const syrup = { id: 'cat-s', nameFr: 'Codéine', strength: '30', strengthUnit: 'mg' } as never;
+    component.catalogOptions.set([tablet, syrup]);
+    component.onMedicationNameChange('Codéine 30 mg');
+    expect(component.form.medicationCatalogItemId).toBeNull();
+    expect(component.pickedCatalogItem()).toBeNull();
+
+    const tabletWithForm = { ...(tablet as object), form: 'TABLET' } as never;
+    component.catalogOptions.set([tabletWithForm, syrup]);
+    expect(component.catalogLabel(tabletWithForm)).not.toBe(component.catalogLabel(syrup));
+    component.onMedicationNameChange(component.catalogLabel(tabletWithForm));
+    expect(component.form.medicationCatalogItemId).toBe('cat-t');
+  });
+
+  it('QA D922: the catalogue id of an order being edited is kept', () => {
+    component.openEdit({
+      ...rx('e1', 'DRAFT'),
+      medicationName: 'Morphine',
+      medicationCatalogItemId: 'cat-1',
+      route: 'INTRAVENOUS',
+    } as PrescriptionResponse);
+    expect(component.form.medicationCatalogItemId).toBe('cat-1');
+    // QA D950: a stored English word opens on the form's own option.
+    expect(component.form.route).toBe('IV');
   });
 
   it('QA D706: a new prescription without a quantity to dispense is not sent', () => {
@@ -510,13 +599,13 @@ describe('PrescriptionsComponent — signing', () => {
     expect(el.querySelector('[data-testid="rx-withdrawal-reason"]')).not.toBeNull();
 
     const save = el.querySelector('.modal-actions .btn-primary') as HTMLButtonElement;
-    expect(save.disabled).withContext('nothing chosen yet').toBeTrue();
+    expect(isSubmitBlocked(save)).withContext('nothing chosen yet').toBeTrue();
     component.form.status = 'CANCELLED';
     fixture.detectChanges();
-    expect(save.disabled).withContext('no reason yet').toBeTrue();
+    expect(isSubmitBlocked(save)).withContext('no reason yet').toBeTrue();
     component.form.withdrawalReason = 'Wrong patient';
     fixture.detectChanges();
-    expect(save.disabled).toBeFalse();
+    expect(isSubmitBlocked(save)).toBeFalse();
 
     component.closeModal();
     component.openEdit(rx('d', 'DRAFT'));
@@ -525,6 +614,29 @@ describe('PrescriptionsComponent — signing', () => {
     fixture.detectChanges();
     expect(el.querySelector('[data-testid="rx-signed-hint"]')).toBeNull();
     expect((el.querySelector('#rx-dosage') as HTMLInputElement).readOnly).toBeFalse();
+  });
+
+  it('QA D1098 class: withdrawing an order awaiting clarification asks for the reason the server requires', async () => {
+    component.openEdit({
+      ...rx('c1a2', 'PENDING_CLARIFICATION'),
+      medicationName: 'amoxicilline',
+    } as PrescriptionResponse);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const el: HTMLElement = fixture.nativeElement;
+    expect(el.querySelector('[data-testid="rx-withdrawal-reason"]'))
+      .withContext('no withdrawal chosen: no reason asked')
+      .toBeNull();
+    const save = el.querySelector('.modal-actions .btn-primary') as HTMLButtonElement;
+    component.form.status = 'CANCELLED';
+    fixture.detectChanges();
+    expect(el.querySelector('[data-testid="rx-withdrawal-reason"]')).not.toBeNull();
+    expect(isSubmitBlocked(save)).withContext('no reason yet').toBeTrue();
+    component.form.withdrawalReason = 'Contre-indiqué';
+    fixture.detectChanges();
+    expect(isSubmitBlocked(save)).toBeFalse();
   });
 
   it('does not offer SIGNED in the editable status list', () => {
@@ -702,6 +814,232 @@ describe('PrescriptionsComponent — signing', () => {
     expect(toast.error).toHaveBeenCalledWith('t:PRESCRIPTIONS.TOAST.ACTION_FORBIDDEN');
   });
 
+  describe('controlled-drug signature re-authentication (round 18)', () => {
+    let mfa: MfaService;
+
+    beforeEach(() => {
+      mfa = TestBed.inject(MfaService);
+    });
+
+    it('a controlled order opens the re-authentication dialog instead of signing', () => {
+      spyOn(mfa, 'getStatus').and.returnValue(of({ mfaEnabled: false }));
+      component.signPrescription({ ...rx('rx-1', 'DRAFT'), controlledSubstance: true });
+
+      expect(prescriptionService.sign).not.toHaveBeenCalled();
+      expect(component.signReauthTarget()?.id).toBe('rx-1');
+      expect(component.signReauthUsesCode()).toBeFalse();
+    });
+
+    it('sends the password, once, and clears it after a signature', () => {
+      spyOn(mfa, 'getStatus').and.returnValue(of({ mfaEnabled: false }));
+      component.signPrescription({ ...rx('rx-1', 'DRAFT'), controlledSubstance: true });
+      component.signReauthSecret = 's3cret';
+
+      component.submitSignReauth();
+
+      expect(prescriptionService.sign).toHaveBeenCalledWith('rx-1', { password: 's3cret' });
+      expect(component.signReauthTarget()).toBeNull();
+      expect(component.signReauthSecret).toBe('');
+    });
+
+    it('sends the authenticator code when one is enrolled', () => {
+      spyOn(mfa, 'getStatus').and.returnValue(of({ mfaEnabled: true }));
+      component.signPrescription({ ...rx('rx-1', 'DRAFT'), controlledSubstance: true });
+      component.signReauthSecret = ' 123456 ';
+
+      component.submitSignReauth();
+
+      expect(prescriptionService.sign).toHaveBeenCalledWith('rx-1', { mfaCode: '123456' });
+    });
+
+    it('a refused re-authentication stays in the dialog with the reason and an empty field', () => {
+      spyOn(mfa, 'getStatus').and.returnValue(of({ mfaEnabled: false }));
+      prescriptionService.sign.and.returnValue(
+        throwError(
+          () =>
+            new HttpErrorResponse({
+              status: 403,
+              error: { message: 'Code incorrect', code: 'mfa.stepup.invalid' },
+            }),
+        ),
+      );
+      component.signPrescription({ ...rx('rx-1', 'DRAFT'), controlledSubstance: true });
+      component.signReauthSecret = 'wrong';
+
+      component.submitSignReauth();
+
+      expect(component.signReauthTarget()?.id).toBe('rx-1');
+      expect(component.signReauthError()).toBe('Code incorrect');
+      expect(component.signReauthSecret).toBe('');
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+
+    it('a catalogue-controlled order the list did not flag opens the dialog on the step-up refusal', () => {
+      spyOn(mfa, 'getStatus').and.returnValue(of({ mfaEnabled: false }));
+      prescriptionService.sign.and.returnValue(
+        throwError(
+          () =>
+            new HttpErrorResponse({
+              status: 403,
+              error: { message: 'Saisissez votre mot de passe', code: 'mfa.stepup.required' },
+            }),
+        ),
+      );
+
+      component.signPrescription(rx('rx-1', 'DRAFT'));
+
+      expect(component.signReauthTarget()?.id).toBe('rx-1');
+      expect(component.signReauthError()).toBe('Saisissez votre mot de passe');
+    });
+  });
+
+  // QA D1183 (round 23, portal half): POST /prescriptions/{id}/sign now runs
+  // the allergy stop (a documented allergy, or the CRITICAL "Vérification des
+  // allergies impossible" for a free-text drug the server cannot place while
+  // the patient has a drug-class allergy) and refuses without an
+  // acknowledgement. The sign button showed the refusal as a toast and the
+  // order could never be signed: the request had no way to carry the reason.
+  describe('QA D1183: the allergy stop at the signature', () => {
+    const unverifiable = {
+      summary: 'Vérification des allergies impossible',
+      detail:
+        "Le nom « Septrine » n'a pas pu être rapproché d'une substance active ; le patient est allergique aux sulfamides.",
+      indicator: 'critical',
+      source: { label: 'HMS' },
+    };
+    const refusal = () =>
+      throwError(
+        () =>
+          new HttpErrorResponse({
+            status: 400,
+            error: {
+              error: 'CDS Critical Advisory',
+              message: 'Vérification des allergies impossible',
+              cdsAdvisories: [unverifiable],
+            },
+          }),
+      );
+    const dialog = () =>
+      (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>(
+        '[data-testid="rx-sign-reauth"]',
+      );
+    const type = (el: HTMLInputElement | HTMLTextAreaElement, value: string) => {
+      el.value = value;
+      el.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+    };
+
+    it('shows the card with its detail, refuses a blank reason, and signs with allergyOverrideReason', async () => {
+      prescriptionService.sign.and.returnValues(refusal(), of(rx('rx-1', 'SIGNED')));
+      component.signPrescription(rx('rx-1', 'DRAFT'));
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      const box = dialog()!;
+      expect(box).withContext('the sign dialog opens on the refusal').not.toBeNull();
+      const cards = box.querySelector('[data-testid="rx-sign-allergy-cards"]')!;
+      expect(cards.textContent).toContain('Vérification des allergies impossible');
+      expect(cards.textContent).toContain('Septrine');
+      expect(box.querySelector('#rx-sign-reauth-secret'))
+        .withContext('not a controlled drug: no password')
+        .toBeNull();
+      expect(toast.error).not.toHaveBeenCalled();
+
+      const submit = box.querySelector<HTMLButtonElement>('[data-testid="rx-sign-submit"]')!;
+      submit.click();
+      fixture.detectChanges();
+      expect(prescriptionService.sign).toHaveBeenCalledTimes(1);
+
+      type(
+        box.querySelector<HTMLTextAreaElement>('#rx-sign-allergy-reason')!,
+        'Tolérance documentée, avis allergologue',
+      );
+      submit.click();
+      fixture.detectChanges();
+      expect(prescriptionService.sign.calls.mostRecent().args).toEqual([
+        'rx-1',
+        { allergyOverrideReason: 'Tolérance documentée, avis allergologue' },
+      ]);
+      expect(component.signReauthTarget()).toBeNull();
+      expect(toast.success).toHaveBeenCalled();
+    });
+
+    it('a controlled drug asks for the reason and the re-authentication again, sent together', () => {
+      const mfa = TestBed.inject(MfaService);
+      spyOn(mfa, 'getStatus').and.returnValue(of({ mfaEnabled: false }));
+      prescriptionService.sign.and.returnValues(refusal(), of(rx('rx-1', 'SIGNED')));
+      component.signPrescription({ ...rx('rx-1', 'DRAFT'), controlledSubstance: true });
+      component.signReauthSecret = 's3cret';
+      component.submitSignReauth();
+      fixture.detectChanges();
+
+      expect(component.signAllergyCards().length).toBe(1);
+      expect(component.signReauthSecret).withContext('the secret is never kept').toBe('');
+      expect(component.signDialogIncomplete()).toBeTrue();
+      component.signReauthSecret = 's3cret';
+      component.signAllergyReason = 'Bénéfice supérieur au risque';
+      component.submitSignReauth();
+      expect(prescriptionService.sign.calls.mostRecent().args).toEqual([
+        'rx-1',
+        { password: 's3cret', allergyOverrideReason: 'Bénéfice supérieur au risque' },
+      ]);
+    });
+
+    it('a second refusal after the reason was given is shown, not looped', () => {
+      prescriptionService.sign.and.returnValues(refusal(), refusal());
+      // QA D1142: a 400 re-reads the row.
+      prescriptionService.getById.and.returnValue(of(rx('rx-1', 'DRAFT')));
+      component.signPrescription(rx('rx-1', 'DRAFT'));
+      component.signAllergyReason = 'Motif';
+      component.submitSignReauth();
+      expect(component.signReauthTarget()).toBeNull();
+      expect(toast.error).toHaveBeenCalledWith('Vérification des allergies impossible');
+    });
+  });
+
+  // QA D1183: create and edit reach the safety net for a free-text name too;
+  // its card is shown with its detail and the existing override is sent.
+  it('QA D1183: the unverifiable card at creation is shown with its detail; the override reason is sent', () => {
+    const card = {
+      summary: 'Vérification des allergies impossible',
+      detail: "« Septrine » n'a pas pu être rapproché d'une substance active.",
+      indicator: 'critical',
+      source: { label: 'HMS' },
+    };
+    // A copy of each body as sent: closing the modal resets the same form object afterwards.
+    const sent: Record<string, unknown>[] = [];
+    prescriptionService.create.and.callFake((req) => {
+      sent.push({ ...req });
+      return sent.length === 1
+        ? throwError(
+            () =>
+              new HttpErrorResponse({
+                status: 400,
+                error: { message: card.summary, cdsAdvisories: [card] },
+              }),
+          )
+        : of(rx('rx-9', 'DRAFT'));
+    });
+    component.openCreate();
+    component.form = { ...component.form, medicationName: 'Septrine', quantity: 10 } as never;
+    component.submitForm();
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[data-testid="cds-advisories"]')?.textContent).toContain('Septrine');
+    expect(component.cdsCriticalBlocked()).toBeTrue();
+    component.form.forceOverride = true;
+    component.form.overrideReason = 'Cotrimoxazole déjà toléré';
+    component.submitForm();
+    expect(sent.length).toBe(2);
+    expect(sent[1]).toEqual(
+      jasmine.objectContaining({
+        forceOverride: true,
+        overrideReason: 'Cotrimoxazole déjà toléré',
+      }),
+    );
+  });
+
   it('a non-403 failure without a body falls back to the generic sign failure', () => {
     const translate = TestBed.inject(TranslateService);
     spyOn(translate, 'instant').and.callFake(((key: string) => `t:${key}`) as never);
@@ -712,6 +1050,37 @@ describe('PrescriptionsComponent — signing', () => {
     component.signPrescription(rx('rx-1', 'DRAFT'));
 
     expect(toast.error).toHaveBeenCalledWith('t:PRESCRIPTIONS.TOAST.SIGN_FAILED');
+  });
+
+  it('QA D1142: a refused signature re-reads the order, so an infant order newly awaiting its dose review offers the review', () => {
+    const legacy = { ...rx('rx-infant', 'DRAFT'), pediatricDoseReviewRequired: false };
+    component.prescriptions.set([legacy as PrescriptionResponse]);
+    prescriptionService.sign.and.returnValue(
+      throwError(
+        () =>
+          new HttpErrorResponse({
+            status: 400,
+            error: { message: 'Enregistrez la revue de dose avant de signer.' },
+          }),
+      ),
+    );
+    prescriptionService.getById.and.returnValue(
+      of({ ...legacy, pediatricDoseReviewRequired: true } as PrescriptionResponse),
+    );
+
+    component.signPrescription(legacy as PrescriptionResponse);
+
+    expect(prescriptionService.getById).toHaveBeenCalledWith('rx-infant');
+    const row = component.prescriptions().find((r) => r.id === 'rx-infant')!;
+    expect(component.awaitsDoseReview(row)).toBeTrue();
+  });
+
+  it('QA D1142: a refusal that is not a business rule (403) leaves the list as it was', () => {
+    prescriptionService.sign.and.returnValue(
+      throwError(() => new HttpErrorResponse({ status: 403, error: { message: 'Accès refusé' } })),
+    );
+    component.signPrescription(rx('rx-2', 'DRAFT'));
+    expect(prescriptionService.getById).not.toHaveBeenCalled();
   });
 });
 
@@ -747,9 +1116,11 @@ describe('PrescriptionsComponent — pharmacist verification', () => {
     prescriptionService = jasmine.createSpyObj<PrescriptionService>('PrescriptionService', [
       'list',
       'pharmacistVerify',
+      'recordPediatricDoseReview',
     ]);
     prescriptionService.list.and.returnValue(of([]));
     prescriptionService.pharmacistVerify.and.returnValue(of(verifiable()));
+    prescriptionService.recordPediatricDoseReview.and.returnValue(of(verifiable()));
 
     const staffService = jasmine.createSpyObj<StaffService>('StaffService', ['list']);
     staffService.list.and.returnValue(of([]));
@@ -943,6 +1314,113 @@ describe('PrescriptionsComponent — pharmacist verification', () => {
     // pharmacist may want to keep while they resolve the refusal.
     expect(component.showVerifyModal()).toBeTrue();
     expect(component.verifying()).toBeFalse();
+  });
+
+  /* ── QA D1096: the paediatric dose review ─────────────────────────── */
+
+  function awaitingReview(id = 'rx-neo'): PrescriptionResponse {
+    return rx(id, 'PENDING_SIGNATURE', {
+      pediatricDoseReviewRequired: true,
+      staffId: 'staff-prescriber',
+    });
+  }
+
+  it('QA D1096: a pharmacist and a physician are offered the dose review; a nurse is not', () => {
+    expect(component.canRecordDoseReview(awaitingReview())).toBeTrue();
+    activeRoles = ['ROLE_DOCTOR'];
+    expect(component.canRecordDoseReview(awaitingReview())).toBeTrue();
+    activeRoles = ['ROLE_NURSE'];
+    expect(component.canRecordDoseReview(awaitingReview())).toBeFalse();
+    activeRoles = ['ROLE_PHARMACIST'];
+    expect(
+      component.canRecordDoseReview(
+        rx('done', 'PENDING_SIGNATURE', {
+          pediatricDoseReviewRequired: true,
+          pediatricDoseReviewedAt: '2026-10-31T10:00:00',
+        }),
+      ),
+    ).toBeFalse();
+    expect(
+      component.canRecordDoseReview(rx('gone', 'CANCELLED', { pediatricDoseReviewRequired: true })),
+    ).toBeFalse();
+  });
+
+  it('QA D1096: the row says the review is due and offers the action', () => {
+    component.filtered.set([awaitingReview('rx-neo'), rx('rx-plain', 'PENDING_SIGNATURE')]);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[data-testid="rx-dose-review-due-rx-neo"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="rx-dose-review-rx-neo"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="rx-dose-review-rx-plain"]')).toBeNull();
+  });
+
+  it('QA D1096: a missing reason is said in the dialog, the button stays usable, nothing is sent', () => {
+    component.openDoseReview(awaitingReview());
+    fixture.detectChanges();
+    const submit = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="rx-dose-review-submit"]',
+    ) as HTMLButtonElement;
+    expect(submit.disabled).toBeFalse();
+    submit.click();
+    fixture.detectChanges();
+    expect(prescriptionService.recordPediatricDoseReview).not.toHaveBeenCalled();
+    // QA D1143: the message is said once, under the reason box (it was also
+    // repeated in the dialog-level alert).
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('#rx-dose-review-reason-invalid-msg')).not.toBeNull();
+    expect(host.querySelector('[data-testid="rx-dose-review-error"]')).toBeNull();
+    const dialog = host.querySelector('[data-testid="rx-dose-review-modal"]') as HTMLElement;
+    expect(dialog.querySelectorAll('[role="alert"]').length).toBe(1);
+    // ... and the label sits above its box (the field is stacked, not inline).
+    const label = host.querySelector('label[for="rx-dose-review-reason"]');
+    expect(label?.parentElement?.classList).toContain('form-field--stacked');
+  });
+
+  it('QA D1096: the review is sent with its reason; a refusal stays in the dialog', () => {
+    component.openDoseReview(awaitingReview());
+    component.doseReviewReason = 'Neonatal dose checked: 10 mg/kg q6h';
+    component.submitDoseReview();
+    expect(prescriptionService.recordPediatricDoseReview).toHaveBeenCalledWith(
+      'rx-neo',
+      'Neonatal dose checked: 10 mg/kg q6h',
+    );
+    expect(component.doseReviewTarget()).toBeNull();
+
+    const message =
+      'The prescriber cannot review their own order: ask a pharmacist or another physician.';
+    prescriptionService.recordPediatricDoseReview.and.returnValue(
+      throwError(() => ({ error: { message } }) as unknown),
+    );
+    component.openDoseReview(awaitingReview());
+    component.doseReviewReason = 'ok';
+    component.submitDoseReview();
+    expect(component.doseReviewError()).toBe(message);
+    expect(component.doseReviewTarget()).not.toBeNull();
+  });
+
+  /* ── QA D1101: the override reason is shown again ─────────────────── */
+
+  it('QA D1101: the detail and the verification dialog show why the alert was passed', () => {
+    const overridden = rx('rx-over', 'SIGNED', {
+      requiresPharmacistVerification: true,
+      overrideReason: 'Severe malaria, dose confirmed with the paediatrician',
+      allergyOverride: false,
+    });
+    component.selectedPrescription.set(overridden);
+    fixture.detectChanges();
+    const detail = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="rx-override-reason"]',
+    ) as HTMLElement;
+    expect(detail.textContent).toContain('Severe malaria, dose confirmed with the paediatrician');
+    expect(detail.textContent).toContain('PRESCRIPTIONS.OVERRIDE.CDS_REASON');
+
+    component.selectedPrescription.set(null);
+    component.openVerifyModal(overridden);
+    fixture.detectChanges();
+    const inDialog = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="rx-verify-override-reason"]',
+    ) as HTMLElement;
+    expect(inDialog.textContent).toContain('Severe malaria');
   });
 
   it('renders the verification state in the detail panel, pending included', () => {

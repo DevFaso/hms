@@ -1,9 +1,10 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { PrintLabelService } from '../services/print-label.service';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Router } from '@angular/router';
-import { DispensingComponent } from './dispensing';
+import { DispensingComponent, sameDispenseUnit } from './dispensing';
 import { PharmacyService } from '../services/pharmacy.service';
 import { AuthService } from '../auth/auth.service';
 import { ToastService } from '../core/toast.service';
@@ -231,6 +232,40 @@ describe('DispensingComponent', () => {
     expect(component.form.medicationName).toBe('Amoxicillin');
   });
 
+  it('QA D1141: the dispense form starts with the unit the order was written in', () => {
+    component.selectPrescription({
+      ...mockWorkQueue.data.content[0],
+      quantityUnit: 'comprimé',
+    } as any);
+    expect(component.form.unit).toBe('comprimé');
+  });
+
+  it('QA D1124 / D1141: "Dispenser" stays clickable and says why it refuses (no unit, no attestation)', () => {
+    component.selectPrescription({ ...mockWorkQueue.data.content[0], quantityUnit: '' } as any);
+    component.form.quantityDispensed = 30;
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    const submit = el.querySelector<HTMLButtonElement>('[data-testid="dispense-submit"]')!;
+    expect(submit.disabled).toBeFalse();
+
+    submit.click();
+    fixture.detectChanges();
+    expect(pharmacySvc.createDispense).not.toHaveBeenCalled();
+    expect(el.querySelector('[data-testid="submit-guard-reason"]')?.textContent).toBe(
+      'SUBMIT_GUARD.UNIT',
+    );
+    expect(el.querySelector('#unit')!.getAttribute('aria-invalid')).toBe('true');
+
+    component.form.unit = 'comprimé';
+    fixture.detectChanges();
+    submit.click();
+    fixture.detectChanges();
+    expect(pharmacySvc.createDispense).not.toHaveBeenCalled();
+    expect(el.querySelector('[data-testid="submit-guard-reason"]')?.textContent).toBe(
+      'SUBMIT_GUARD.ATTESTATION',
+    );
+  });
+
   it('should close form', () => {
     component.showForm.set(true);
     component.closeForm();
@@ -283,7 +318,7 @@ describe('DispensingComponent', () => {
 
   it('should show error on dispense failure', () => {
     pharmacySvc.createDispense.and.returnValue(
-      throwError(() => ({ error: { message: 'Insufficient stock' } })),
+      throwError(() => ({ status: 409, error: { message: 'Insufficient stock' } })),
     );
 
     component.form = {
@@ -300,15 +335,89 @@ describe('DispensingComponent', () => {
     expect(toastSvc.error).toHaveBeenCalledWith('Insufficient stock');
   });
 
+  it('QA D1102 class: a serious interaction refusal opens the override field and the reason is sent', () => {
+    const message = 'A serious interaction alert stops this dispense: [major] A ↔ B: bleeding.';
+    pharmacySvc.createDispense.and.returnValue(
+      throwError(() => ({
+        status: 422,
+        error: {
+          message,
+          cdsAdvisories: [{ summary: '[major] A ↔ B: bleeding', indicator: 'critical' }],
+        },
+      })),
+    );
+    const form = {
+      prescriptionId: 'rx-1',
+      patientId: 'pat-1',
+      pharmacyId: 'ph-1',
+      dispensedBy: 'user-1',
+      medicationName: 'Amoxicillin',
+      quantityRequested: 30,
+      quantityDispensed: 30,
+    };
+    component.form = { ...form };
+    component.showForm.set(true);
+    component.submitDispense();
+    fixture.detectChanges();
+
+    expect(toastSvc.error).toHaveBeenCalledWith(message);
+    expect(component.cdsAlerts()).toEqual(['[major] A ↔ B: bleeding']);
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="cds-override-reason"]'),
+    ).not.toBeNull();
+
+    pharmacySvc.createDispense.and.returnValue(of({ data: { id: 'd-new' } } as any));
+    component.form.cdsOverrideReason = '  Benefit outweighs the risk, INR monitored  ';
+    component.submitDispense();
+    expect(pharmacySvc.createDispense.calls.mostRecent().args[0].cdsOverrideReason).toBe(
+      'Benefit outweighs the risk, INR monitored',
+    );
+  });
+
   it('should cancel dispense', () => {
-    spyOn(window, 'confirm').and.returnValue(true);
+    // QA D1069 (declared change): the cancel is no longer a bare confirm(); it
+    // opens the panel that asks why, and sends the reason.
+    const confirmSpy = spyOn(window, 'confirm').and.returnValue(true);
     const mockResponse = { data: { id: 'd-1', status: 'CANCELLED' } };
     pharmacySvc.cancelDispense.and.returnValue(of(mockResponse as any));
 
     component.cancelDispense('d-1');
+    expect(confirmSpy).not.toHaveBeenCalled();
+    expect(pharmacySvc.cancelDispense).not.toHaveBeenCalled();
+    component.dispenseCancelReason = '  Erreur de patient  ';
+    component.confirmWitnessedCancel();
 
-    expect(pharmacySvc.cancelDispense).toHaveBeenCalledWith('d-1', undefined);
+    expect(pharmacySvc.cancelDispense).toHaveBeenCalledWith('d-1', 'Erreur de patient', undefined);
     expect(toastSvc.success).toHaveBeenCalledWith('PHARMACY.DISPENSE_CANCELLED');
+  });
+
+  it('QA D1069: a cancel with no reason is refused where the reason is typed, never sent', () => {
+    pharmacySvc.cancelDispense.and.returnValue(of({ data: { id: 'd-1' } } as any));
+    component.recentDispenses.set([
+      { id: 'd-1', medicationName: 'Amoxicillin', status: 'COMPLETED' } as any,
+    ]);
+    fixture.detectChanges();
+
+    component.cancelDispense('d-1');
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    const reason = el.querySelector<HTMLTextAreaElement>(
+      '[data-testid="cancel-witness"] #dispenseCancelReason',
+    );
+    expect(reason).not.toBeNull();
+    // An ordinary fill asks for no witness.
+    expect(el.querySelector('#cancelWitness')).toBeNull();
+    const confirmButton = Array.from(
+      el.querySelectorAll<HTMLButtonElement>('[data-testid="cancel-witness"] button'),
+    ).find((b) => b.textContent?.includes('COMMON.CONFIRM'))!;
+    expect(confirmButton.disabled).toBeFalse();
+
+    confirmButton.click();
+    fixture.detectChanges();
+
+    expect(pharmacySvc.cancelDispense).not.toHaveBeenCalled();
+    expect(toastSvc.error).toHaveBeenCalledWith('PHARMACY.CANCEL_REASON_REQUIRED');
+    expect(reason!.getAttribute('aria-invalid')).toBe('true');
   });
 
   // ── QA D654: a controlled substance moves only in front of a witness ──
@@ -331,10 +440,14 @@ describe('DispensingComponent', () => {
     component.selectPrescription(mockWorkQueue.data.content[0]);
     fixture.detectChanges();
     const el: HTMLElement = fixture.nativeElement;
-    expect(el.querySelector('#dispWitness')).toBeNull();
+    // QA D964: the shortest-dated lot is pre-selected, so the witness picker
+    // of a controlled lot shows as soon as the form opens.
+    expect(component.form.stockLotId).toBeTruthy();
 
     component.form.stockLotId = 'lot-fresh';
     component.onLotChange();
+    // QA D964: a later lot needs its reason; the dispense now refuses without one (round 19).
+    component.form.fefoOverrideReason = 'Lot entamé à finir';
     fixture.detectChanges();
     const picker = el.querySelector<HTMLSelectElement>('#dispWitness');
     expect(picker).not.toBeNull();
@@ -349,12 +462,33 @@ describe('DispensingComponent', () => {
     expect(pharmacySvc.createDispense.calls.mostRecent().args[0].witnessedBy).toBe('user-2');
   });
 
+  it('QA D1089 class: a later lot with no FEFO reason is refused under the reason, not by a dead button', () => {
+    component.selectPrescription(mockWorkQueue.data.content[0] as any);
+    component.form.quantityDispensed = 30;
+    component.form.stockLotId = 'lot-fresh';
+    component.onLotChange();
+    component.verifyAttested.set(true);
+    fixture.detectChanges();
+    expect(component.fefoReasonMissing()).toBeTrue();
+    const el: HTMLElement = fixture.nativeElement;
+    const submit = el.querySelector<HTMLButtonElement>('.form-actions button[type="submit"]')!;
+    expect(submit.disabled).toBeFalse();
+
+    component.submitDispense();
+    fixture.detectChanges();
+
+    expect(pharmacySvc.createDispense).not.toHaveBeenCalled();
+    expect(el.querySelector('#fefoReason')!.getAttribute('aria-invalid')).toBe('true');
+  });
+
   it('QA D654: an ordinary lot sends no witness', () => {
     pharmacySvc.createDispense.and.returnValue(of({ data: { id: 'd-new' } } as any));
     component.selectPrescription(mockWorkQueue.data.content[0]);
     component.form.stockLotId = 'lot-fresh';
     component.form.witnessedBy = 'user-2';
     component.onLotChange();
+    // QA D964: a later lot needs its reason; the dispense now refuses without one (round 19).
+    component.form.fefoOverrideReason = 'Lot entamé à finir';
     fixture.detectChanges();
 
     expect(fixture.nativeElement.querySelector('#dispWitness')).toBeNull();
@@ -384,6 +518,7 @@ describe('DispensingComponent', () => {
     expect(pharmacySvc.cancelDispense).not.toHaveBeenCalled();
     expect(el.querySelector('[data-testid="cancel-witness"] #cancelWitness')).not.toBeNull();
 
+    component.dispenseCancelReason = 'Mauvais lot';
     component.confirmWitnessedCancel();
     expect(pharmacySvc.cancelDispense).not.toHaveBeenCalled();
     expect(toastSvc.error).toHaveBeenCalledWith('PHARMACY.WITNESS_REQUIRED');
@@ -391,7 +526,7 @@ describe('DispensingComponent', () => {
     component.cancelWitnessId = 'user-2';
     component.confirmWitnessedCancel();
     fixture.detectChanges();
-    expect(pharmacySvc.cancelDispense).toHaveBeenCalledWith('d-1', 'user-2');
+    expect(pharmacySvc.cancelDispense).toHaveBeenCalledWith('d-1', 'Mauvais lot', 'user-2');
     expect(el.querySelector('[data-testid="cancel-witness"]')).toBeNull();
   });
 
@@ -466,6 +601,8 @@ describe('DispensingComponent', () => {
     component.form.quantityDispensed = 30;
     component.form.stockLotId = 'lot-fresh';
     component.onLotChange();
+    // QA D964: a later lot needs its reason; the dispense now refuses without one (round 19).
+    component.form.fefoOverrideReason = 'Lot entamé à finir';
     component.form.patientScanValue = 'pat-1';
     component.form.productScanValue = 'LOT-4f2a91c07b3e';
 
@@ -624,7 +761,10 @@ describe('DispensingComponent', () => {
 
   it('shows the server refusal when a hand-over fails', () => {
     pharmacySvc.handOver.and.returnValue(
-      throwError(() => ({ error: { message: 'This prescription can no longer be handed over.' } })),
+      throwError(() => ({
+        status: 400,
+        error: { message: 'This prescription can no longer be handed over.' },
+      })),
     );
     component.openHandOver(preparedRow as any);
 
@@ -713,6 +853,25 @@ describe('DispensingComponent', () => {
     );
     component.onPharmacyChange();
     expect(component.recentDispenses().map((d) => d.id)).toEqual(['d-pending', 'd-old']);
+  });
+
+  it('QA D1128: each recent fill names its patient, so a wrong fill made today is found and cancelled', () => {
+    component.recentDispenses.set([
+      {
+        id: 'd-today',
+        patientName: 'Awa Kaboré',
+        medicationName: 'Amoxicilline',
+        quantityDispensed: 10,
+        unit: 'gélule',
+        status: 'COMPLETED',
+        dispensedAt: '2026-10-31T16:22:00',
+      },
+    ] as any);
+    fixture.detectChanges();
+    const cell = fixture.debugElement.query(By.css('[data-testid="recent-dispense-patient"]'));
+    expect(cell.nativeElement.textContent.trim()).toBe('Awa Kaboré');
+    const row = cell.parent!;
+    expect(row.query(By.css('.btn-action.danger'))).not.toBeNull();
   });
 });
 
@@ -1166,6 +1325,7 @@ describe('DispensingComponent — work-queue claim (G13)', () => {
       'claimQueueRow',
       'takeOverQueueRow',
       'releaseQueueRow',
+      'getStockLotLabel',
     ]);
     pharmacySvc.getDispenseSettings.and.returnValue(
       of({
@@ -1631,6 +1791,167 @@ describe('DispensingComponent — work-queue claim (G13)', () => {
 
     expect(component.form.quantityRequested).toBe(30);
     expect(component.form.quantityDispensed).toBe(30);
+  });
+
+  it('QA D1001: a partly filled order starts at what remains, and the queue says so', async () => {
+    await render({ remainingQuantity: 10 });
+    pharmacySvc.claimQueueRow.and.returnValue(
+      of({ data: { ...myClaim, renewed: false } }) as never,
+    );
+    expect(exists('rx-remaining-rx-1')).toBeTrue();
+    click('rx-dispense-rx-1');
+
+    expect(component.form.quantityRequested).toBe(10);
+    expect(component.form.quantityDispensed).toBe(10);
+  });
+
+  it('QA D966: the lot label is fetched with the session and opened for printing', async () => {
+    await render();
+    const printSvc = TestBed.inject(PrintLabelService);
+    const open = spyOn(printSvc, 'openForPrint');
+    const windowOpen = spyOn(window, 'open');
+    const blob = new Blob(['%PDF-1.4'], { type: 'application/pdf' });
+    pharmacySvc.getStockLotLabel.and.returnValue(of(blob) as never);
+    component.form.stockLotId = 'lot-9';
+
+    component.printLotLabel();
+
+    expect(pharmacySvc.getStockLotLabel).toHaveBeenCalledWith('lot-9');
+    expect(open).toHaveBeenCalledWith(blob);
+    expect(windowOpen).not.toHaveBeenCalledWith(
+      '/pharmacy/stock-lots/lot-9/label.pdf',
+      jasmine.anything(),
+      jasmine.anything(),
+    );
+  });
+
+  describe('QA D964: first expired, first out', () => {
+    const lot = (id: string, expiryDate: string, remainingQuantity: number) => ({
+      id,
+      inventoryItemId: 'inv-1',
+      lotNumber: id.toUpperCase(),
+      expiryDate,
+      initialQuantity: 200,
+      remainingQuantity,
+      createdAt: '',
+      updatedAt: '',
+    });
+
+    async function openWithLots(): Promise<void> {
+      await render();
+      pharmacySvc.listDispensableLots.and.returnValue(
+        of({
+          data: [lot('long', '2099-06-30', 200), lot('court', '2098-01-31', 100)],
+        }) as never,
+      );
+      pharmacySvc.claimQueueRow.and.returnValue(
+        of({ data: { ...myClaim, renewed: false } }) as never,
+      );
+      click('rx-dispense-rx-1');
+      fixture.detectChanges();
+    }
+
+    it('QA D1163: a "flacon" order is not offered tablet lots, and says why', async () => {
+      await openWithLots();
+      component.orderUnit.set('flacon');
+      component.stockLots.set([
+        { ...lot('cp', '2098-01-31', 100), unit: 'comprimé' },
+        { ...lot('fl', '2099-01-31', 10), unit: 'Flacons' },
+      ]);
+      fixture.detectChanges();
+      const options = Array.from(
+        (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLOptionElement>(
+          '#stockLot option',
+        ),
+      ).map((o) => o.value);
+      expect(options).toEqual(['', 'fl']);
+      expect(exists('other-form-lots')).toBeTrue();
+      // A lot whose unit the server does not send is still offered (the server checks).
+      expect(sameDispenseUnit(undefined, 'flacon')).toBeTrue();
+      expect(sameDispenseUnit('Comprimés', 'comprimé')).toBeTrue();
+      expect(sameDispenseUnit('comprimé', 'flacon')).toBeFalse();
+    });
+
+    it('pre-selects the shortest-dated lot that covers the fill', async () => {
+      await openWithLots();
+
+      expect(component.form.stockLotId).toBe('court');
+      expect(component.earlierLot()).toBeUndefined();
+      expect(exists('fefo-warning')).toBeFalse();
+    });
+
+    it('a later-dated lot needs a reason, which is sent with the fill', async () => {
+      await openWithLots();
+      component.form.stockLotId = 'long';
+      component.onLotChange();
+      component.verifyAttested.set(true);
+      fixture.detectChanges();
+
+      expect(exists('fefo-warning')).toBeTrue();
+      expect(component.fefoReasonMissing()).toBeTrue();
+
+      pharmacySvc.createDispense.and.returnValue(of({ data: {} }) as never);
+      component.form.fefoOverrideReason = '  lot court réservé aux urgences ';
+      expect(component.fefoReasonMissing()).toBeFalse();
+      component.submitDispense();
+
+      const body = pharmacySvc.createDispense.calls.mostRecent().args[0];
+      expect(body.stockLotId).toBe('long');
+      expect(body.fefoOverrideReason).toBe('lot court réservé aux urgences');
+    });
+
+    /**
+     * QA D1029: 130 tablets with 100 left in the shorter lot. Round 16
+     * pre-selected the later lot ("the one that covers the fill") and the whole
+     * quantity left it with no reason. The shorter lot is now chosen, emptied
+     * first, and the rest comes from the next lot: one fill per lot, in order.
+     */
+    it('QA D1029: a quantity above the shorter lot empties it first, then takes the rest from the next', async () => {
+      await openWithLots();
+      component.form.quantityDispensed = 130;
+      component.form.quantityRequested = 130;
+      fixture.detectChanges();
+
+      expect(component.form.stockLotId).toBe('court');
+      expect(component.earlierLot()).toBeUndefined();
+      expect(component.fefoSplit().map((p) => [p.lot.id, p.quantity])).toEqual([
+        ['court', 100],
+        ['long', 30],
+      ]);
+      expect(exists('fefo-split')).toBeTrue();
+
+      pharmacySvc.createDispense.and.returnValue(of({ data: {} }) as never);
+      component.verifyAttested.set(true);
+      component.submitDispense();
+      // The parts are sent one after the other, each once the previous one is recorded.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      const bodies = pharmacySvc.createDispense.calls.allArgs().map((a) => a[0]);
+      expect(bodies.map((b) => [b.stockLotId, b.quantityDispensed])).toEqual([
+        ['court', 100],
+        ['long', 30],
+      ]);
+      expect(bodies.every((b) => b.fefoOverrideReason === undefined)).toBeTrue();
+    });
+
+    it('QA D1029 (review of #978): an order that states no quantity is not split', async () => {
+      await openWithLots();
+      component.selectedPrescription = { ...component.selectedPrescription!, quantity: undefined };
+      component.form.quantityDispensed = 130;
+      expect(component.fefoSplit()).toEqual([]);
+    });
+
+    it('QA D1029: taking the later lot for a quantity the shorter one cannot cover still needs a reason', async () => {
+      await openWithLots();
+      component.form.quantityDispensed = 130;
+      component.form.stockLotId = 'long';
+      component.onLotChange();
+      fixture.detectChanges();
+
+      expect(component.earlierLot()?.id).toBe('court');
+      expect(component.fefoReasonMissing()).toBeTrue();
+      expect(component.fefoSplit()).toEqual([]);
+    });
   });
 
   it('Dispense on a colleague’s row then Cancel keeps the open form and its claim', async () => {

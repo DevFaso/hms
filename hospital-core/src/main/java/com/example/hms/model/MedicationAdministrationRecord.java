@@ -50,7 +50,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Builder
 @EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
-@ToString(exclude = {"prescription", "patient", "hospital", "administeredByStaff"})
+@ToString(exclude = {"prescription", "patient", "hospital", "administeredByStaff", "witnessUser"})
 public class MedicationAdministrationRecord extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -161,4 +161,14 @@ public class MedicationAdministrationRecord extends BaseEntity {
     @Size(max = 1024)
     @Column(name = "override_reason", length = 1024)
     private String overrideReason;
+
+    /**
+     * QA D922 (decision 2026-10-28): the second clinician of the same
+     * hospital who witnessed a controlled drug being given (V245). Null for
+     * any other dose.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "witness_user_id",
+        foreignKey = @ForeignKey(name = "fk_mar_witness"))
+    private User witnessUser;
 }

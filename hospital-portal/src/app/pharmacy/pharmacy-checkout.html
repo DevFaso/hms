@@ -33,9 +33,11 @@
         >
           <option value="">{{ 'PHARMACY_CHECKOUT.DISPENSE_PICK_PLACEHOLDER' | translate }}</option>
           @for (d of dispenses(); track d.id) {
+            <!-- QA D1058: the patient first, so four Paracétamol rows are told apart -->
             <option [value]="d.id">
+              {{ d.patientName || ('PHARMACY_CHECKOUT.RECEIPT_NO_PATIENT' | translate) }} ·
               {{ d.medicationName }} · {{ d.quantityDispensed }} {{ d.unit }} ·
-              {{ d.dispensedAt | serverTime | date: 'dd/MM/yyyy HH:mm' }}
+              {{ d.dispensedAt | serverTime | date: 'short' }}
             </option>
           }
         </select>
@@ -102,7 +104,10 @@
       </div>
       @if (paymentMethod !== 'CASH') {
         <div class="form-row">
-          <label for="ref">{{ 'PHARMACY_CHECKOUT.REFERENCE' | translate }}</label>
+          <label for="ref"
+            >{{ 'PHARMACY_CHECKOUT.REFERENCE' | translate
+            }}{{ paymentMethod === 'MOBILE_MONEY' ? ' *' : '' }}</label
+          >
           <input
             id="ref"
             type="text"
@@ -123,35 +128,39 @@
     </section>
   }
 
-  <!-- ========= Printable French receipt (T-44) ========= -->
+  <!-- ========= Printable receipt (T-44), in the reader's language (D1079 class) ========= -->
   @if (receipt(); as r) {
     <section class="receipt">
       <header class="receipt-header">
-        <h1>Reçu de pharmacie</h1>
+        <h1>{{ 'PHARMACY_CHECKOUT.RECEIPT.TITLE' | translate }}</h1>
         <p class="receipt-meta">
-          Nº {{ receiptNumber(r.id) }}<br />
-          Émis le : {{ r.createdAt | serverTime | date: 'dd/MM/yyyy HH:mm' }}
+          <!-- QA D1032: the server's receipt number (CODE-PH-YYYY-000001), never a slice of the id -->
+          {{ 'PHARMACY_CHECKOUT.RECEIPT.NUMBER' | translate }} {{ r.receiptNumber || '—' }}<br />
+          {{
+            'PHARMACY_CHECKOUT.RECEIPT.ISSUED_AT'
+              | translate: { date: (r.createdAt | serverTime | date: 'short') }
+          }}
         </p>
       </header>
       <div class="receipt-body">
         <dl>
-          <dt>Médicament</dt>
+          <dt>{{ 'PHARMACY_CHECKOUT.MEDICATION' | translate }}</dt>
           <dd>{{ dispense()?.medicationName }}</dd>
-          <dt>Patient</dt>
+          <dt>{{ 'PHARMACY_CHECKOUT.PATIENT' | translate }}</dt>
           <dd>
             {{ dispense()?.patientName || ('PHARMACY_CHECKOUT.RECEIPT_NO_PATIENT' | translate) }}
           </dd>
-          <dt>Mode de paiement</dt>
+          <dt>{{ 'PHARMACY_CHECKOUT.PAYMENT_METHOD' | translate }}</dt>
           <dd>{{ methodLabel(r.paymentMethod) }}</dd>
           @if (r.referenceNumber) {
-            <dt>Référence</dt>
+            <dt>{{ 'PHARMACY_CHECKOUT.REFERENCE' | translate }}</dt>
           }
           @if (r.referenceNumber) {
             <dd>{{ r.referenceNumber }}</dd>
           }
         </dl>
         <div class="total-row">
-          <span>Total payé</span>
+          <span>{{ 'PHARMACY_CHECKOUT.RECEIPT.TOTAL_PAID' | translate }}</span>
           <span class="amount">{{ r.amount | cfa: r.currency }}</span>
         </div>
         @if (r.notes) {
@@ -159,8 +168,10 @@
         }
       </div>
       <footer class="receipt-footer">
-        <p>Merci de votre confiance. Conservez ce reçu pour vos dossiers médicaux.</p>
-        <p class="signature">Signature du pharmacien : ____________________</p>
+        <p>{{ 'PHARMACY_CHECKOUT.RECEIPT.THANKS' | translate }}</p>
+        <p class="signature">
+          {{ 'PHARMACY_CHECKOUT.RECEIPT.SIGNATURE' | translate }} ____________________
+        </p>
       </footer>
       <div class="actions no-print">
         <button type="button" class="btn-primary" (click)="printReceipt()">

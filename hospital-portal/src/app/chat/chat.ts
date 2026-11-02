@@ -1,3 +1,4 @@
+import { textMatches } from '../shared/person-search';
 import {
   Component,
   inject,
@@ -19,6 +20,7 @@ import {
 import { ChatRecipient, UserService } from '../services/user.service';
 import { MessageableClinician, PatientPortalService } from '../services/patient-portal.service';
 import { AuthService } from '../auth/auth.service';
+import { ActivatedRoute } from '@angular/router';
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -28,6 +30,7 @@ import { currentLocale } from '../shared/i18n/app-locale';
 import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
 import { serverInstant } from '../shared/date-utils';
 import { refusalReason } from '../shared/refusal-reason';
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 /** Maps each role to the set of roles it is allowed to message. */
 const ALLOWED_MESSAGE_TARGETS: Record<string, Set<string>> = {
   ROLE_SUPER_ADMIN: new Set([
@@ -154,7 +157,7 @@ function clinicianTarget(c: MessageableClinician): ChatTarget {
 @Component({
   selector: 'app-chat',
   standalone: true,
-  imports: [FormsModule, TranslateModule, RoleLabelPipe],
+  imports: [SubmitGuardDirective, FormsModule, TranslateModule, RoleLabelPipe],
   templateUrl: './chat.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './chat.scss',
@@ -167,6 +170,8 @@ export class ChatComponent implements OnInit, OnDestroy {
   private readonly roleContext = inject(RoleContextService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  /** QA D983: a chat notification opens here with ?open=unread. */
+  private readonly route = inject(ActivatedRoute, { optional: true });
 
   conversations = signal<ChatConversation[]>([]);
   messages = signal<ChatMessage[]>([]);
@@ -249,7 +254,7 @@ export class ChatComponent implements OnInit, OnDestroy {
     if (!term) return all;
     return all.filter(
       (c) =>
-        c.conversationUserName.toLowerCase().includes(term) ||
+        textMatches(c.conversationUserName, term) ||
         c.lastMessageContent?.toLowerCase().includes(term),
     );
   });
@@ -272,6 +277,7 @@ export class ChatComponent implements OnInit, OnDestroy {
       next: (list) => {
         this.conversations.set(list ?? []);
         this.loading.set(false);
+        this.openFromNotification(list ?? []);
       },
       error: (err) => {
         this.loading.set(false);
@@ -283,6 +289,22 @@ export class ChatComponent implements OnInit, OnDestroy {
         }
       },
     });
+  }
+
+  /**
+   * QA D983: arriving from a "new message" notification opens the
+   * conversation that has the unread message (the most recent one first),
+   * instead of the bare list.
+   */
+  private openFromNotification(list: ChatConversation[]): void {
+    if (
+      this.route?.snapshot?.queryParamMap?.get('open') !== 'unread' ||
+      this.activeConversation()
+    ) {
+      return;
+    }
+    const unread = list.find((c) => (c.unreadCount ?? 0) > 0);
+    if (unread) this.selectConversation(unread);
   }
 
   selectConversation(conv: ChatConversation): void {

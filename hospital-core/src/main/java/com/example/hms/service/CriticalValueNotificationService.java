@@ -525,7 +525,6 @@ public class CriticalValueNotificationService {
      * locale anyway — so the body is rendered in the staff locale.
      */
     private NotificationText buildText(LabResult result, boolean escalation) {
-        java.util.Locale locale = NotificationLocales.STAFF;
         LabOrder order = result.getLabOrder();
         // QA D665: keyed so the reader's language is used; QA D648: an order
         // whose definition was deleted names a deleted test.
@@ -540,32 +539,48 @@ public class CriticalValueNotificationService {
         Object patientName = order != null && order.getPatient() != null
             ? order.getPatient().getFullName()
             : NotificationLocalizer.key("patient.fallback.generic");
-        String value = localizedValue(result.getResultValue(), locale)
-            + (result.getResultUnit() != null ? " " + result.getResultUnit() : "");
+        // QA D1095: the value is never sent without its unit (the definition's when none was typed).
+        // QA D1207 (round 22): formatted in each reader's locale when read, not in the staff locale here.
+        Object value = valueArg(result);
+        // QA D931: a critical CORRECTION says so, and names the value it
+        // replaces; the clinician may have acted on that one.
+        if (!escalation && result.getSupersedesResultId() != null) {
+            Object replaced = labResultRepository.findById(result.getSupersedesResultId())
+                .map(CriticalValueNotificationService::valueArg)
+                .orElse(null);
+            if (replaced != null) {
+                return NotificationText.of("lab.critical.correction.notification",
+                    testName, value, patientName, replaced);
+            }
+        }
         return NotificationText.of(
             escalation ? "lab.critical.escalation" : "lab.critical.notification",
             testName, value, patientName);
     }
 
     /**
-     * QA D349: a numeric result in the reader's notation ("5,0" in French),
-     * keeping the scale the laboratory reported. Anything that is not a plain
-     * number ("Positif", "&lt;0.5") is shown as entered.
+     * QA D1207 (round 22): a result's value and unit as a notification
+     * argument, formatted in the reader's locale when the notification is
+     * read (and in the staff locale for an SMS, which is rendered once).
      */
-    static String localizedValue(String raw, java.util.Locale locale) {
-        if (raw == null) {
-            return "";
-        }
-        try {
-            java.math.BigDecimal number = new java.math.BigDecimal(raw.trim());
-            java.text.NumberFormat format = java.text.NumberFormat.getNumberInstance(locale);
-            int scale = Math.max(number.scale(), 0);
-            format.setGroupingUsed(false);
-            format.setMinimumFractionDigits(scale);
-            format.setMaximumFractionDigits(scale);
-            return format.format(number);
-        } catch (NumberFormatException notANumber) {
-            return raw;
-        }
+    public static Object valueArg(LabResult result) {
+        return com.example.hms.service.i18n.NotificationLocalizer.labValue(result.getResultValue(),
+            com.example.hms.mapper.LabResultMapper.unitOf(result));
+    }
+
+    /** QA D1095: the value, a space and its unit; the value alone for a test with no unit (no double space). */
+    public static String withUnit(String value, LabResult result) {
+        String unit = com.example.hms.mapper.LabResultMapper.unitOf(result);
+        return unit != null ? value + " " + unit : value;
+    }
+
+    /**
+     * QA D349: a numeric result in the reader's notation ("5,0" in French),
+     * keeping the scale the laboratory reported; a comparator is kept
+     * ("&lt;0.5" reads "&lt;0,5", round 19). Words ("Positif") are shown as entered.
+     */
+    public static String localizedValue(String raw, java.util.Locale locale) {
+        // D1002 class: one server number formatter (utility/DisplayNumbers).
+        return com.example.hms.utility.DisplayNumbers.labValue(raw, locale);
     }
 }

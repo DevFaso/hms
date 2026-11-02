@@ -44,6 +44,7 @@ public record RegistrationDeskRow(
     UUID patientId,
     String patientUsername,
     String patientFirstName,
+    String patientMiddleName,
     String patientLastName,
     String patientEmail,
     String patientPhone,

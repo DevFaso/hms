@@ -4,6 +4,7 @@ import { PreCheckinFormComponent } from './pre-checkin-form.component';
 import {
   PatientPortalService,
   PortalAppointment,
+  PreCheckInResponse,
   QuestionnaireDTO,
 } from '../../../services/patient-portal.service';
 import { TranslateModule } from '@ngx-translate/core';
@@ -142,7 +143,7 @@ describe('PreCheckinFormComponent', () => {
 
   it('should show error on submit failure', () => {
     portalSpy.submitPreCheckIn.and.returnValue(
-      throwError(() => ({ error: { message: 'Too early' } })),
+      throwError(() => ({ status: 400, error: { message: 'Too early' } })),
     );
 
     component.consentAcknowledged = true;
@@ -150,6 +151,27 @@ describe('PreCheckinFormComponent', () => {
 
     expect(component.saving()).toBeFalse();
     expect(component.errorMessage()).toBe('Too early');
+  });
+
+  // QA D1179 class (round 21): a malformed address is refused on its field, never sent.
+  it('refuses a malformed e-mail on its field and sends nothing; an empty one is allowed', () => {
+    fixture.detectChanges();
+    component.consentAcknowledged = true;
+    component.email = 'pas-un-email';
+    component.submit();
+    expect(portalSpy.submitPreCheckIn).not.toHaveBeenCalled();
+    expect(component.saving()).toBeFalse();
+    const field = (fixture.nativeElement as HTMLElement).querySelector('#email');
+    expect(field?.getAttribute('aria-invalid')).toBe('true');
+
+    portalSpy.submitPreCheckIn.and.returnValue(
+      of({ appointmentId: 'appt-1', preCheckedIn: true } as PreCheckInResponse),
+    );
+    component.email = '  ';
+    component.submit();
+    expect(portalSpy.submitPreCheckIn).toHaveBeenCalledTimes(1);
+    expect(portalSpy.submitPreCheckIn.calls.mostRecent().args[1].email).toBeUndefined();
+    expect(field?.hasAttribute('aria-invalid')).toBeFalse();
   });
 
   it('should not submit when already saving', () => {

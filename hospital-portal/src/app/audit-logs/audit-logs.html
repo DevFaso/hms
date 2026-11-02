@@ -47,6 +47,7 @@
       />
       <input
         type="datetime-local"
+        [attr.min]="fromDate || null"
         [(ngModel)]="toDate"
         class="filter-input"
         [attr.aria-label]="'AUDIT.DATE_TO' | translate"

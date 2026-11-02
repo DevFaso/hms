@@ -11,6 +11,9 @@ import { ToastService } from '../../core/toast.service';
 import { currentLocale } from '../../shared/i18n/app-locale';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+import { blobRefusalReason } from '../../shared/blob-refusal';
+import { refusalReason } from '../../shared/refusal-reason';
 /**
  * The largest file the upload endpoint accepts: spring.servlet.multipart
  * max-file-size is 10MB (the backend is being aligned on this one number).
@@ -34,7 +37,14 @@ const DOCUMENT_TYPES: { value: PatientDocumentType; labelKey: string }[] = [
 @Component({
   selector: 'app-my-documents',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, DatePipe, FormsModule, TranslateModule],
+  imports: [
+    SubmitGuardDirective,
+    ServerTimePipe,
+    CommonModule,
+    DatePipe,
+    FormsModule,
+    TranslateModule,
+  ],
   templateUrl: './my-documents.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./my-documents.component.scss', '../patient-portal-pages.scss'],
@@ -48,6 +58,9 @@ export class MyDocumentsComponent implements OnInit {
 
   /** The translation key of a document type; the raw enum is never shown (QA D344/D434). */
   typeLabelKey(type: PatientDocumentType): string {
+    // QA D961: a certificate the doctor issued is listed with its own label
+    // (it is not an upload choice, so it is not in DOCUMENT_TYPES).
+    if (type === 'MEDICAL_CERTIFICATE') return 'PORTAL.DOCUMENTS.TYPE_MEDICAL_CERTIFICATE';
     return DOCUMENT_TYPES.find((t) => t.value === type)?.labelKey ?? 'PORTAL.DOCUMENTS.TYPE_OTHER';
   }
 
@@ -79,8 +92,10 @@ export class MyDocumentsComponent implements OnInit {
         this.totalElements.set(result.totalElements);
         this.loading.set(false);
       },
-      error: () => {
-        this.toast.error(this.translate.instant('PORTAL.DOCUMENTS.LOAD_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PORTAL.DOCUMENTS.LOAD_FAILED'),
+        );
         this.loading.set(false);
       },
     });
@@ -131,9 +146,11 @@ export class MyDocumentsComponent implements OnInit {
           this.uploading.set(false);
           this.toast.success(this.translate.instant('PORTAL.DOCUMENTS.UPLOAD_SUCCESS'));
         },
-        error: () => {
+        error: (err: unknown) => {
           this.uploading.set(false);
-          this.toast.error(this.translate.instant('PORTAL.DOCUMENTS.UPLOAD_FAILED'));
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('PORTAL.DOCUMENTS.UPLOAD_FAILED'),
+          );
         },
       });
   }
@@ -158,9 +175,12 @@ export class MyDocumentsComponent implements OnInit {
         anchor.click();
         URL.revokeObjectURL(url);
       },
-      error: () => {
+      error: (err: unknown) => {
         this.downloading.set(null);
-        this.toast.error(this.translate.instant('PORTAL.DOCUMENTS.DOWNLOAD_FAILED'));
+        // QA D1184: a file the disk no longer holds says so, in the reader's language.
+        void blobRefusalReason(err).then((reason) =>
+          this.toast.error(reason ?? this.translate.instant('PORTAL.DOCUMENTS.DOWNLOAD_FAILED')),
+        );
       },
     });
   }
@@ -175,9 +195,11 @@ export class MyDocumentsComponent implements OnInit {
         this.deleting.set(null);
         this.toast.success(this.translate.instant('PORTAL.DOCUMENTS.DELETE_SUCCESS'));
       },
-      error: () => {
+      error: (err: unknown) => {
         this.deleting.set(null);
-        this.toast.error(this.translate.instant('PORTAL.DOCUMENTS.DELETE_FAILED'));
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PORTAL.DOCUMENTS.DELETE_FAILED'),
+        );
       },
     });
   }

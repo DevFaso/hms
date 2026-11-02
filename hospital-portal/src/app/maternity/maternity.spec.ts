@@ -1,3 +1,5 @@
+import { fakeAsync, tick } from '@angular/core/testing';
+import { expectKeyboardModal } from '../testing/modal-dialog-keyboard';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
@@ -14,6 +16,7 @@ import { AuthService } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextStub, roleContextStub } from '../testing/role-context.stub';
+import { isSubmitBlocked } from '../shared/forms/submit-guard.testing';
 
 /**
  * The maternity page's tab strip: which tabs a role sees, where it lands and
@@ -130,6 +133,32 @@ describe('MaternityComponent — tabs', () => {
     expect(activeTab()).toBe('Échographies');
     expect(host().querySelector('app-ultrasound-tab')).not.toBeNull();
   });
+
+  describe('keyboard modals (QA D1004)', () => {
+    afterEach(() => (fixture.nativeElement as HTMLElement).remove());
+
+    it('"Nouvel historique": focus moves in, Escape closes, focus returns', () => {
+      create(['ROLE_MIDWIFE']);
+      document.body.appendChild(fixture.nativeElement);
+      const opener = host().querySelector<HTMLElement>('.page-actions .btn-primary')!;
+      expectKeyboardModal(fixture, opener);
+    });
+
+    it('"Nouvelle orientation OB/GYN": focus moves in, Escape closes, focus returns', () => {
+      referrals.summary.and.returnValue(of(null) as never);
+      referrals.byHospital.and.returnValue(
+        of({ content: [], totalElements: 0, totalPages: 0, number: 0, size: 20 }) as never,
+      );
+      create(['ROLE_MIDWIFE']);
+      document.body.appendChild(fixture.nativeElement);
+      tabButtons()
+        .find((b) => b.textContent?.trim() === 'Références')!
+        .click();
+      fixture.detectChanges();
+      const opener = host().querySelector<HTMLElement>('.page-actions .btn-primary')!;
+      expectKeyboardModal(fixture, opener);
+    });
+  });
 });
 
 /**
@@ -217,7 +246,7 @@ describe('MaternityComponent — new history for a patient who already has one (
     expect(maternity.currentForPatient).toHaveBeenCalledWith('p-fatimata');
     expect(notice()?.textContent).toContain('Cette patiente a déjà un historique maternel');
     expect(notice()?.textContent).toContain("Ouvrir et mettre à jour l'historique");
-    expect(saveButton().disabled).toBeTrue();
+    expect(isSubmitBlocked(saveButton())).toBeTrue();
 
     (notice()!.querySelector('button') as HTMLButtonElement).click();
     fixture.detectChanges();
@@ -225,6 +254,21 @@ describe('MaternityComponent — new history for a patient who already has one (
     expect(fixture.componentInstance.editingHistoryId()).toBe('mh-1');
     expect(fixture.componentInstance.historyForm.obstetricHistory?.gravida).toBe(2);
     expect(notice()).toBeNull();
+  });
+
+  it('QA D1005: the due date follows the LMP and the gestational age is shown', () => {
+    const page = fixture.componentInstance;
+    // Through the field, as the midwife types it (the page is OnPush).
+    const lmp = host().querySelector('#history-lmp') as HTMLInputElement;
+    lmp.value = '2026-05-20';
+    lmp.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    expect(page.historyForm.menstrualHistory?.estimatedDueDate).toBe('2027-02-24');
+    expect(host().querySelector('[data-testid="history-ga"]')).not.toBeNull();
+    // A due date the midwife typed herself is kept when the LMP changes.
+    page.historyForm.menstrualHistory!.estimatedDueDate = '2027-03-01';
+    page.onLmpChange('2026-05-21');
+    expect(page.historyForm.menstrualHistory?.estimatedDueDate).toBe('2027-03-01');
   });
 
   it('a patient with no history (404) keeps the create open', () => {
@@ -236,7 +280,35 @@ describe('MaternityComponent — new history for a patient who already has one (
     fixture.detectChanges();
 
     expect(notice()).toBeNull();
-    expect(saveButton().disabled).toBeFalse();
+    expect(isSubmitBlocked(saveButton())).toBeFalse();
+  });
+
+  it('QA D1082: a patient with no history (204, a null body) keeps the create open', () => {
+    maternity.currentForPatient.and.returnValue(of(null));
+
+    fixture.componentInstance.onHistoryPatientPicked({ id: 'p-new' } as never);
+    fixture.detectChanges();
+
+    expect(notice()).toBeNull();
+    expect(isSubmitBlocked(saveButton())).toBeFalse();
+  });
+
+  it('QA D1067: the history list shows a delivered woman as delivered, never a running term', () => {
+    const page = fixture.componentInstance;
+    const lmp = new Date();
+    lmp.setDate(lmp.getDate() - 39 * 7 - 1);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const base = {
+      ...existing,
+      menstrualHistory: {
+        lastMenstrualPeriod: `${lmp.getFullYear()}-${pad(lmp.getMonth() + 1)}-${pad(lmp.getDate())}`,
+      },
+    };
+    expect(page.gestationalAgeOf(base)).not.toBeNull();
+    const delivered = { ...base, deliveredAt: '2026-10-30T17:12:00' };
+    expect(page.gestationalAgeOf(delivered)).toBeNull();
+    expect(page.deliveredAtOf(delivered)).toBe('2026-10-30T17:12:00');
+    expect(page.deliveredAtOf(base)).toBeNull();
   });
 
   it('a 409 on save shows the French reason, never the English server text, and the offer', () => {
@@ -274,7 +346,7 @@ describe('MaternityComponent — new history for a patient who already has one (
     expect(notice()).toBeNull();
     expect(heldElsewhere()?.textContent).toContain('détenu par un autre établissement');
     expect(heldElsewhere()?.querySelector('button')).toBeNull();
-    expect(saveButton().disabled).toBeTrue();
+    expect(isSubmitBlocked(saveButton())).toBeTrue();
 
     fixture.componentInstance.submitHistory();
     expect(maternity.create).not.toHaveBeenCalled();
@@ -295,7 +367,7 @@ describe('MaternityComponent — new history for a patient who already has one (
     );
     fixture.componentInstance.onHistoryPatientPicked({ id: 'p-fatimata' } as never);
     fixture.detectChanges();
-    expect(saveButton().disabled).toBeFalse();
+    expect(isSubmitBlocked(saveButton())).toBeFalse();
 
     fixture.componentInstance.submitHistory();
     fixture.detectChanges();
@@ -306,7 +378,7 @@ describe('MaternityComponent — new history for a patient who already has one (
     expect(toast.error).not.toHaveBeenCalledWith(jasmine.stringContaining('Ouvrez-le'));
     expect(notice()).toBeNull();
     expect(heldElsewhere()).not.toBeNull();
-    expect(saveButton().disabled).toBeTrue();
+    expect(isSubmitBlocked(saveButton())).toBeTrue();
 
     fixture.componentInstance.submitHistory();
     expect(maternity.create).toHaveBeenCalledTimes(1);
@@ -328,7 +400,7 @@ describe('MaternityComponent — new history for a patient who already has one (
     );
     expect(notice()).toBeNull();
     expect(heldElsewhere()).not.toBeNull();
-    expect(saveButton().disabled).toBeTrue();
+    expect(isSubmitBlocked(saveButton())).toBeTrue();
   });
 });
 
@@ -368,4 +440,104 @@ describe('historyFormProblem (QA D809, D821)', () => {
     expect(historyFormProblem(form({ obstetricHistory: { para: 2 } }), now)).toBeNull();
     expect(historyFormProblem(form({ recordedDate: '2026-10-25T12:05' }), now)).toBeNull();
   });
+});
+
+/**
+ * QA D1155 (round 21): Escape in a referral's inline action form (cancel,
+ * acknowledge, complete) closed the whole referral dialog and dropped the
+ * typed text.
+ */
+describe('MaternityComponent — referral action forms keep Escape (QA D1155)', () => {
+  let fixture: ComponentFixture<MaternityComponent>;
+  const host = (): HTMLElement => fixture.nativeElement as HTMLElement;
+  const text = () => host().querySelector<HTMLTextAreaElement>('#referral-action-text');
+  const escape = (target: Element) => {
+    target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    fixture.detectChanges();
+    tick();
+  };
+
+  beforeEach(() => {
+    const emptyPage = of({ content: [], totalElements: 0, totalPages: 0, number: 0, size: 20 });
+    const maternity = jasmine.createSpyObj<MaternityService>('MaternityService', ['highRisk']);
+    maternity.highRisk.and.returnValue(emptyPage);
+    const referrals = jasmine.createSpyObj<ObgynReferralService>('ObgynReferralService', [
+      'summary',
+      'byHospital',
+      'assignedTo',
+      'messages',
+    ]);
+    referrals.messages.and.returnValue(of([]));
+    referrals.summary.and.returnValue(of(null) as never);
+    referrals.assignedTo.and.returnValue(of(emptyPage) as never);
+    const patients = jasmine.createSpyObj<PatientService>('PatientService', ['list']);
+    patients.list.and.returnValue(of([]));
+    const auth = jasmine.createSpyObj<AuthService>('AuthService', [
+      'getHospitalId',
+      'getUserProfile',
+    ]);
+    TestBed.configureTestingModule({
+      imports: [MaternityComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        { provide: MaternityService, useValue: maternity },
+        { provide: ObgynReferralService, useValue: referrals },
+        { provide: PatientService, useValue: patients },
+        { provide: AuthService, useValue: auth },
+        { provide: ToastService, useValue: jasmine.createSpyObj('ToastService', ['error']) },
+        {
+          provide: RoleContextService,
+          useValue: roleContextStub({
+            superAdmin: false,
+            hospitalId: 'h-1',
+            roles: ['ROLE_DOCTOR'],
+          }),
+        },
+      ],
+    });
+    fixture = TestBed.createComponent(MaternityComponent);
+    fixture.detectChanges();
+    document.body.appendChild(host());
+  });
+
+  afterEach(() => host().remove());
+
+  it('"Accuser réception": Escape closes only the form, asks over typed text, and gives the keyboard back', fakeAsync(() => {
+    const cmp = fixture.componentInstance;
+    cmp.openReferral({ id: 'r-1', status: 'SUBMITTED', patientId: 'p-1' } as never);
+    fixture.detectChanges();
+    const opener = Array.from(
+      host().querySelectorAll<HTMLButtonElement>('.modal-actions button'),
+    ).find((b) => b.textContent?.includes('MATERNITY.ACKNOWLEDGE'))!;
+    opener.focus();
+    opener.click();
+    fixture.detectChanges();
+    tick();
+    expect(document.activeElement).toBe(text());
+
+    text()!.value = 'Vue en consultation';
+    text()!.dispatchEvent(new Event('input'));
+    escape(text()!);
+    expect(cmp.viewedReferral()).not.toBeNull();
+    expect(cmp.referralAction()).toBe('acknowledge');
+    expect(text()!.value).toBe('Vue en consultation');
+    expect(document.activeElement).toBe(host().querySelector('[data-testid="inline-keep"]'));
+
+    host().querySelector<HTMLButtonElement>('[data-testid="inline-discard"]')!.click();
+    fixture.detectChanges();
+    tick();
+    expect(cmp.referralAction()).toBeNull();
+    expect(cmp.viewedReferral()).not.toBeNull();
+    expect(document.activeElement).toBe(opener);
+
+    // An untouched form closes on the first Escape, the dialog stays.
+    opener.click();
+    fixture.detectChanges();
+    tick();
+    escape(text()!);
+    expect(cmp.referralAction()).toBeNull();
+    expect(cmp.viewedReferral()).not.toBeNull();
+    expect(document.activeElement).toBe(opener);
+  }));
 });

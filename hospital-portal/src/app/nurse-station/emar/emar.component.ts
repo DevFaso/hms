@@ -19,6 +19,7 @@ import { Subject, Subscription, takeUntil } from 'rxjs';
 import {
   FiveRightsCheck,
   MarVerificationRequest,
+  MedicationAdministrationRequest,
   MarVerificationResponse,
   NurseMedicationTask,
   NurseTaskService,
@@ -26,7 +27,13 @@ import {
 import { ToastService } from '../../core/toast.service';
 import { CdsCardListComponent } from '../../shared/cds-card/cds-card.component';
 import { CdsCard } from '../../shared/cds-card/cds-card.model';
+import { MedicationRoutePipe } from '../../shared/pipes/medication-route.pipe';
+import { isServerTimeToday } from '../../shared/date-utils';
+import { WitnessPickerComponent } from '../witness-picker/witness-picker.component';
 
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+import { ReasonDialogComponent } from '../../shared/reason-dialog/reason-dialog.component';
+import { earlyDoseRefusal } from '../early-dose';
 type LoadState = 'loading' | 'ready' | 'empty' | 'error';
 type ScanField = 'patient' | 'medication';
 
@@ -62,7 +69,17 @@ const FIVE_RIGHTS_LABEL_KEYS: Record<FiveRightsCheck, string> = {
 @Component({
   selector: 'app-emar',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, ServerTimePipe, CdsCardListComponent],
+  imports: [
+    SubmitGuardDirective,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    ServerTimePipe,
+    CdsCardListComponent,
+    MedicationRoutePipe,
+    WitnessPickerComponent,
+    ReasonDialogComponent,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './emar.component.html',
   styleUrl: './emar.component.scss',
@@ -77,6 +94,8 @@ export class EmarComponent implements OnInit, OnDestroy {
   protected readonly doseScan = signal('');
   protected readonly routeScan = signal('');
   protected readonly overrideReason = signal('');
+  /** QA D922: the second clinician who witnesses a controlled dose. */
+  protected readonly witnessUserId = signal<string | null>(null);
 
   protected readonly verification = signal<MarVerificationResponse | null>(null);
   protected readonly verifyInFlight = signal(false);
@@ -130,13 +149,36 @@ export class EmarComponent implements OnInit, OnDestroy {
     return !!t && !!t.requiresPharmacistVerification && !t.pharmacistVerified;
   });
 
+  /** QA D922: a controlled drug is given only with a witness. */
+  protected readonly needsWitness = computed(() => !!this.activeTask()?.controlledSubstance);
+
   protected readonly canAdminister = computed(() => {
     if (this.blockedPendingPharmacist()) return false;
+    if (this.needsWitness() && !this.witnessUserId()) return false;
     const v = this.verification();
     if (!v) return false;
     if (v.allPassed) return true;
     return this.overrideReason().trim().length > 0;
   });
+
+  /**
+   * QA D1124: why "Record given" refuses, shown next to it; null when the
+   * dose may be recorded. The button is never silently disabled.
+   */
+  protected administerBlockReason(): string | null {
+    if (this.blockedPendingPharmacist()) {
+      return this.translate.instant('EMAR.PHARMACIST_BLOCKED_TITLE');
+    }
+    if (this.needsWitness() && !this.witnessUserId()) {
+      return this.translate.instant('SUBMIT_GUARD.WITNESS');
+    }
+    const v = this.verification();
+    if (!v) return this.translate.instant('SUBMIT_GUARD.VERIFY_FIRST');
+    if (!v.allPassed && this.overrideReason().trim().length === 0) {
+      return this.translate.instant('SUBMIT_GUARD.OVERRIDE_REASON');
+    }
+    return null;
+  }
 
   @ViewChild('scannerVideo') protected scannerVideo?: ElementRef<HTMLVideoElement>;
 
@@ -159,6 +201,11 @@ export class EmarComponent implements OnInit, OnDestroy {
     this.destroyed$.complete();
   }
 
+  /** QA D949: an overdue dose from another day shows its date, not the time alone. */
+  protected isDueToday(dueTime: string | null | undefined): boolean {
+    return isServerTimeToday(dueTime);
+  }
+
   protected loadTasks(): void {
     this.state.set('loading');
     this.loadSub?.unsubscribe();
@@ -175,12 +222,18 @@ export class EmarComponent implements OnInit, OnDestroy {
   }
 
   protected selectTask(task: NurseMedicationTask): void {
+    this.earlyDose.set(null);
     this.activeTask.set(task);
     this.patientScan.set('');
     this.medicationScan.set('');
-    this.doseScan.set(task.dose ?? '');
-    this.routeScan.set(task.route ?? '');
+    // QA D1025: the nurse confirms the dose and the route she is about to
+    // give; a prefilled prescribed value made "Bonne dose" and "Bonne voie"
+    // pass without anyone checking. The prescription is shown beside them.
+    this.doseScan.set('');
+    this.routeScan.set('');
     this.overrideReason.set('');
+    this.holdRefuseReason.set('');
+    this.witnessUserId.set(null);
     this.verification.set(null);
     this.scannerError.set(null);
     this.stopScanner();
@@ -188,6 +241,7 @@ export class EmarComponent implements OnInit, OnDestroy {
 
   protected closeTask(): void {
     this.activeTask.set(null);
+    this.earlyDose.set(null);
     this.verification.set(null);
     this.stopScanner();
   }
@@ -281,23 +335,61 @@ export class EmarComponent implements OnInit, OnDestroy {
       });
   }
 
+  /** QA D1159: why the dose is held or refused; required for those two outcomes. */
+  protected readonly holdRefuseReason = signal('');
+
+  protected holdRefuseReasonMissing(): boolean {
+    return this.holdRefuseReason().trim() === '';
+  }
+
   protected administer(status: 'GIVEN' | 'HELD' | 'REFUSED'): void {
     const task = this.activeTask();
     if (!task) return;
     if (status === 'GIVEN' && !this.canAdminister()) return;
+    // QA D1159: never a HELD/REFUSED record without its reason (the buttons' guard says so first).
+    const holdReason = this.holdRefuseReason().trim();
+    if (status !== 'GIVEN' && !holdReason) return;
 
-    this.administerInFlight.set(true);
-    const payload: { status: string; note?: string; overrideReason?: string } = { status };
+    const payload: MedicationAdministrationRequest = { status };
     if (this.needsOverride() && status === 'GIVEN') {
       payload.overrideReason = this.overrideReason().trim();
     }
+    if (status !== 'GIVEN') payload.note = holdReason;
+    const witness = this.witnessUserId();
+    if (status === 'GIVEN' && this.needsWitness() && witness) {
+      payload.witnessUserId = witness;
+    }
+    this.sendAdministration(task.id, payload);
+  }
 
+  /**
+   * QA D1210 (round 23): the dose the server refused as too soon after the
+   * last one, with the server's reason (last dose, earliest next time). The
+   * nurse may give it early with a reason, or go back.
+   */
+  protected readonly earlyDose = signal<{
+    taskId: string;
+    payload: MedicationAdministrationRequest;
+    why: string;
+  } | null>(null);
+
+  /** QA D1210: the same dose again, with the nurse's reason for giving it early. */
+  protected confirmEarlyDose(reason: string): void {
+    const early = this.earlyDose();
+    if (!early || this.administerInFlight()) return;
+    this.sendAdministration(early.taskId, { ...early.payload, earlyDoseReason: reason });
+  }
+
+  private sendAdministration(taskId: string, payload: MedicationAdministrationRequest): void {
+    const status = payload.status;
+    this.administerInFlight.set(true);
     this.nurseTaskService
-      .administerMedication(task.id, payload)
+      .administerMedication(taskId, payload)
       .pipe(takeUntil(this.destroyed$))
       .subscribe({
         next: () => {
           this.administerInFlight.set(false);
+          this.earlyDose.set(null);
           this.toast.success(
             this.translate.instant('EMAR.TOAST.RECORDED', {
               status: this.translate.instant(`EMAR.ADMIN_STATUS.${status}`),
@@ -308,6 +400,14 @@ export class EmarComponent implements OnInit, OnDestroy {
         },
         error: (err: HttpErrorResponse) => {
           this.administerInFlight.set(false);
+          // QA D1210: too soon after the last dose. Say why and ask for the
+          // reason to give it early, instead of a dead-end toast.
+          const tooSoon = earlyDoseRefusal(err);
+          if (tooSoon && !payload.earlyDoseReason) {
+            this.earlyDose.set({ taskId, payload, why: tooSoon });
+            return;
+          }
+          this.earlyDose.set(null);
           // QA D233: a five-rights refusal carries its reason; show it.
           this.toast.error(
             this.serverReason(err) ?? this.translate.instant('EMAR.TOAST.ADMINISTER_FAILED'),

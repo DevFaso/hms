@@ -28,6 +28,26 @@ class JsonAccessDeniedHandlerTest {
     }
 
     @Test
+    void aCsrfRefusalHasItsOwnCodeSoThePortalRetriesInsteadOfShowingForbidden_D1145() throws Exception {
+        // QA D1145: POST /billing-invoices/search answered 403 ACCESS_DENIED and
+        // the portal showed "Acceso denegado" to a billing user who may search.
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/billing-invoices/search");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        new JsonAccessDeniedHandler().handle(request, response,
+            new org.springframework.security.web.csrf.InvalidCsrfTokenException(
+                new org.springframework.security.web.csrf.DefaultCsrfToken("X-XSRF-TOKEN", "_csrf", "expected"),
+                "stale"));
+
+        assertThat(response.getStatus()).isEqualTo(403);
+        assertThat(response.getContentAsString())
+            .contains("\"code\":\"CSRF_TOKEN_INVALID\"")
+            .doesNotContain("ACCESS_DENIED")
+            .doesNotContain("expected")
+            .doesNotContain("stale");
+    }
+
+    @Test
     void escapesJson() {
         assertThat(JsonAccessDeniedHandler.jsonEscape("a\"b\\c\n")).isEqualTo("a\\\"b\\\\c\\n");
     }

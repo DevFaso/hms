@@ -72,6 +72,8 @@ class AssignmentInvitationClosedHospitalGuardTest {
         Map.entry("confirmAssignment", "registrarConfirmIsRefused"),
         Map.entry("getAssignmentPublicView", "publicViewHasNoLink"),
         Map.entry("verifyAssignmentByCode", "activationIsRefused"),
+        // QA D1123: "I have a code" activates through verifyAssignmentByCode.
+        Map.entry("verifyAssignmentByPhone", "activationByPhoneIsRefused"),
         Map.entry("reissuePendingInvitationsForRestoredUser", "restoredAccountSkipsTheClosedInvitation"),
         Map.entry("sendNotifications", "afterCommitSendIsSkipped"),
         Map.entry("resendPendingActivationCode", "publicResendNeitherRotatesNorSends"),

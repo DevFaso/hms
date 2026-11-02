@@ -227,7 +227,22 @@ public class DispenseVerificationService {
         // name when it is the whole first part of the prescribed text,
         // ending on a word boundary ("paracetamol 500 mg" matches, a longer
         // word that merely starts with the name does not).
-        String folded = fold(prescribedName);
+        return namesCatalogItem(prescribedName, item);
+    }
+
+    /**
+     * QA D138 / D922: whether free text names this catalogue item, the way
+     * people write it ("Paracétamol 500 mg comprimé" names "paracetamol").
+     * Accent- and case-insensitive; the catalogue name must be the whole first
+     * part of the text, ending on a word boundary. The one name rule shared by
+     * the dispense DRUG check and the prescription's catalogue resolution.
+     */
+    public static boolean namesCatalogItem(String prescribedName, MedicationCatalogItem item) {
+        String normalized = normalize(prescribedName);
+        if (normalized.isEmpty() || item == null) {
+            return false;
+        }
+        String folded = fold(normalized);
         return namesDrug(folded, item.getGenericName())
             || namesDrug(folded, item.getBrandName())
             || namesDrug(folded, item.getNameFr());
@@ -260,18 +275,26 @@ public class DispenseVerificationService {
         return inventoryItem == null ? null : inventoryItem.getMedicationCatalogItem();
     }
 
-    /** Human-readable name of a catalogue item, for the refusal message. */
-    private String describe(MedicationCatalogItem item) {
-        String name = firstNonBlank(
-            item.getGenericName(), item.getBrandName(), item.getNameFr());
-        return name == null ? "an unnamed product" : name;
+    /**
+     * Human-readable name of a catalogue item, for the refusal message.
+     * QA D1221 (round 23): in the reader's language. The catalogue keeps a
+     * French name and a generic (INN) name: a French reader is shown the
+     * French name ("Amoxicilline"), any other reader the generic; no name at
+     * all is said in the reader's language, never in English.
+     */
+    public static String describe(MedicationCatalogItem item) {
+        boolean french = "fr".equals(org.springframework.context.i18n.LocaleContextHolder.getLocale().getLanguage());
+        String name = french
+            ? firstNonBlank(item.getNameFr(), item.getGenericName(), item.getBrandName())
+            : firstNonBlank(item.getGenericName(), item.getNameFr(), item.getBrandName());
+        return name == null ? com.example.hms.utility.MessageUtil.resolve("pharmacy.check.unnamedProduct") : name;
     }
 
-    /** Human-readable name of what was prescribed, for the refusal message. */
+    /** Human-readable name of what was prescribed, for the refusal message (the reader's words when none). */
     private String describePrescribed(Prescription rx) {
         String name = firstNonBlank(
             rx.getMedicationDisplayName(), rx.getMedicationName(), rx.getMedicationCode());
-        return name == null ? "prescribed medication" : name;
+        return name == null ? com.example.hms.utility.MessageUtil.resolve("pharmacy.check.prescribedMedication") : name;
     }
 
     private static String firstNonBlank(String... candidates) {

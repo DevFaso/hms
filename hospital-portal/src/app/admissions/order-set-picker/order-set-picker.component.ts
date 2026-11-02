@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  computed,
   EventEmitter,
   OnChanges,
   OnDestroy,
@@ -13,14 +14,7 @@ import {
 
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
-import {
-  Subject,
-  Subscription,
-  debounceTime,
-  distinctUntilChanged,
-  switchMap,
-  takeUntil,
-} from 'rxjs';
+import { Subject, Subscription, debounceTime, switchMap, takeUntil } from 'rxjs';
 
 import {
   AppliedOrderSetSummary,
@@ -132,7 +126,7 @@ type State = 'idle' | 'searching' | 'ready' | 'applying' | 'applied' | 'error';
             type="button"
             class="btn-primary"
             data-testid="order-set-picker-apply"
-            [disabled]="state() === 'applying'"
+            [disabled]="applying()"
             (click)="apply(sel)"
           >
             {{ 'ORDER_SETS.APPLY' | translate }}
@@ -215,6 +209,8 @@ export class OrderSetPickerComponent implements OnChanges, OnDestroy {
   @Output() readonly applied = new EventEmitter<AppliedOrderSetSummary>();
 
   protected readonly state = signal<State>('idle');
+  /** A request to apply the order set is in flight (the only reason "Apply" is disabled). */
+  protected readonly applying = computed(() => this.state() === 'applying');
   protected readonly results = signal<OrderSetSummary[]>([]);
   protected readonly selected = signal<OrderSetSummary | null>(null);
   protected readonly searchTerm = signal<string>('');
@@ -229,7 +225,6 @@ export class OrderSetPickerComponent implements OnChanges, OnDestroy {
     this.searchSubject
       .pipe(
         debounceTime(250),
-        distinctUntilChanged(),
         takeUntil(this.destroyed$),
         // Guard: when the host component renders before its hospitalId
         // input binding has propagated, an immediate request would hit

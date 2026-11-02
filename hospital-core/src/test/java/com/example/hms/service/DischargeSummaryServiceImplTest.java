@@ -63,6 +63,7 @@ class DischargeSummaryServiceImplTest {
     @Mock private PrescriptionRepository prescriptionRepository;
     @Mock private com.example.hms.utility.RoleValidator roleValidator;
     @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
+    @Mock private com.example.hms.repository.EncounterNoteRepository encounterNoteRepository;
     @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
     /** Real registry so the portal-fetch tests can assert counter values. */
     @Spy private MeterRegistry meterRegistry = new SimpleMeterRegistry();
@@ -144,6 +145,131 @@ class DischargeSummaryServiceImplTest {
         assertThat(result.getId()).isEqualTo(summaryId);
     }
 
+    private void createPathStubs() {
+        when(dischargeSummaryRepository.existsByEncounter_Id(encounterId)).thenReturn(false);
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        org.mockito.Mockito.lenient().when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        org.mockito.Mockito.lenient().when(assignmentRepository.findById(assignmentId)).thenReturn(Optional.of(assignment));
+    }
+
+    /** QA D1070: a visit still waiting for its physician has no summary to write yet. */
+    @Test void d1070_aVisitNobodyHasSeenGetsNoSummary() {
+        for (com.example.hms.enums.EncounterStatus unseen : List.of(com.example.hms.enums.EncounterStatus.ARRIVED,
+                com.example.hms.enums.EncounterStatus.TRIAGE, com.example.hms.enums.EncounterStatus.WAITING_FOR_PHYSICIAN,
+                com.example.hms.enums.EncounterStatus.LEFT_WITHOUT_BEING_SEEN)) {
+            encounter.setStatus(unseen);
+            createPathStubs();
+            DischargeSummaryRequestDTO req = buildRequest();
+            assertThatThrownBy(() -> service.createDischargeSummary(req, Locale.ENGLISH))
+                .as(unseen.name())
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("dischargeSummary.encounter.notSeen");
+        }
+        verify(dischargeSummaryRepository, never()).save(any());
+    }
+
+    /** QA D1070: another physician does not sign the after-visit summary of a visit assigned to a colleague. */
+    @Test void d1070_anotherPhysicianCannotSignTheVisitsSummary() {
+        encounter.setStatus(com.example.hms.enums.EncounterStatus.IN_PROGRESS);
+        encounter.setEncounterType(com.example.hms.enums.EncounterType.OUTPATIENT);
+        Staff assigned = new Staff();
+        assigned.setId(UUID.randomUUID());
+        com.example.hms.model.User assignedUser = new com.example.hms.model.User();
+        assignedUser.setId(UUID.randomUUID());
+        assigned.setUser(assignedUser);
+        encounter.setStaff(assigned);
+        when(roleValidator.isDoctor(assignedUser.getId(), hospitalId)).thenReturn(true);
+        createPathStubs();
+
+        DischargeSummaryRequestDTO req = buildRequest();
+        assertThatThrownBy(() -> service.createDischargeSummary(req, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .hasMessage("dischargeSummary.encounter.notTreatingClinician");
+        verify(dischargeSummaryRepository, never()).save(any());
+    }
+
+    /** Review round 1: a physician with two staff records at the hospital is still the visit's physician. */
+    @Test void d1070_theSamePhysicianUnderAnotherStaffRecordSignsHerVisit() {
+        encounter.setStatus(com.example.hms.enums.EncounterStatus.IN_PROGRESS);
+        Staff sameDoctorOtherDept = new Staff();
+        sameDoctorOtherDept.setId(UUID.randomUUID());
+        sameDoctorOtherDept.setUser(staff.getUser());
+        encounter.setStaff(sameDoctorOtherDept);
+        createPathStubs();
+        when(dischargeSummaryRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(dischargeSummaryMapper.toResponseDTO(any())).thenReturn(responseDTO);
+
+        assertThat(service.createDischargeSummary(buildRequest(), Locale.ENGLISH)).isSameAs(responseDTO);
+    }
+
+    /** Review round 1: the emergency department hands over at shift change; the receiving doctor discharges. */
+    @Test void d1070_anEmergencyVisitIsDischargedByTheReceivingDoctor() {
+        encounter.setStatus(com.example.hms.enums.EncounterStatus.IN_PROGRESS);
+        encounter.setEncounterType(com.example.hms.enums.EncounterType.EMERGENCY);
+        Staff offShift = new Staff();
+        offShift.setId(UUID.randomUUID());
+        com.example.hms.model.User offShiftUser = new com.example.hms.model.User();
+        offShiftUser.setId(UUID.randomUUID());
+        offShift.setUser(offShiftUser);
+        encounter.setStaff(offShift);
+        createPathStubs();
+        when(dischargeSummaryRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(dischargeSummaryMapper.toResponseDTO(any())).thenReturn(responseDTO);
+
+        assertThat(service.createDischargeSummary(buildRequest(), Locale.ENGLISH)).isSameAs(responseDTO);
+    }
+
+    /** QA D930 stays true: a walk-in opened by a nurse is summed up by the doctor who saw the patient. */
+    @Test void d1070_aVisitOpenedByANurseIsSummedUpByTheDoctor() {
+        encounter.setStatus(com.example.hms.enums.EncounterStatus.IN_PROGRESS);
+        Staff nurse = new Staff();
+        nurse.setId(UUID.randomUUID());
+        com.example.hms.model.User nurseUser = new com.example.hms.model.User();
+        nurseUser.setId(UUID.randomUUID());
+        nurse.setUser(nurseUser);
+        encounter.setStaff(nurse);
+        createPathStubs();
+        when(dischargeSummaryRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(dischargeSummaryMapper.toResponseDTO(any())).thenReturn(responseDTO);
+
+        assertThat(service.createDischargeSummary(buildRequest(), Locale.ENGLISH)).isSameAs(responseDTO);
+    }
+
+    /** QA D1070: an inpatient stay is discharged by the ward's physicians, not only the one it names. */
+    @Test void d1070_aStayIsDischargedByTheWardsPhysicians() {
+        encounter.setStatus(com.example.hms.enums.EncounterStatus.IN_PROGRESS);
+        encounter.setEncounterType(com.example.hms.enums.EncounterType.INPATIENT);
+        Staff admitting = new Staff();
+        admitting.setId(UUID.randomUUID());
+        encounter.setStaff(admitting);
+        createPathStubs();
+        when(dischargeSummaryRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(dischargeSummaryMapper.toResponseDTO(any())).thenReturn(responseDTO);
+
+        assertThat(service.createDischargeSummary(buildRequest(), Locale.ENGLISH)).isSameAs(responseDTO);
+    }
+
+    /** QA D1070: the portal publishes a summary once its visit is completed, never a draft of an open visit. */
+    @Test void d1070_thePortalShowsOnlyACompletedVisitsSummary() {
+        Encounter open = new Encounter();
+        open.setStatus(com.example.hms.enums.EncounterStatus.WAITING_FOR_PHYSICIAN);
+        Encounter done = new Encounter();
+        done.setStatus(com.example.hms.enums.EncounterStatus.COMPLETED);
+        DischargeSummary draft = DischargeSummary.builder().encounter(open).isFinalized(false).build();
+        DischargeSummary finalisedEarly = DischargeSummary.builder().encounter(open).isFinalized(true).build();
+        DischargeSummary published = DischargeSummary.builder().encounter(done).isFinalized(false).build();
+        DischargeSummary noVisitFinal = DischargeSummary.builder().isFinalized(true).build();
+        DischargeSummary noVisitDraft = DischargeSummary.builder().isFinalized(false).build();
+
+        assertThat(DischargeSummaryServiceImpl.publishedToPatient(draft)).isFalse();
+        assertThat(DischargeSummaryServiceImpl.publishedToPatient(finalisedEarly)).isFalse();
+        assertThat(DischargeSummaryServiceImpl.publishedToPatient(published)).isTrue();
+        assertThat(DischargeSummaryServiceImpl.publishedToPatient(noVisitFinal)).isTrue();
+        assertThat(DischargeSummaryServiceImpl.publishedToPatient(noVisitDraft)).isFalse();
+    }
+
     @Test void createDischargeSummary_alreadyExists_throws() {
         DischargeSummaryRequestDTO req = buildRequest();
         when(dischargeSummaryRepository.existsByEncounter_Id(encounterId)).thenReturn(true);
@@ -205,7 +331,10 @@ class DischargeSummaryServiceImplTest {
         actAs(doctorTwo);
         when(dischargeSummaryRepository.findById(summaryId)).thenReturn(Optional.of(summary));
         assertThatThrownBy(() -> service.finalizeDischargeSummary(summaryId, "Doctor A", staffId, Locale.ENGLISH))
-            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class)
+            // QA D1112: the authorship rule, not "act in your own name" (identity.notCaller).
+            .satisfies(e -> org.assertj.core.api.Assertions.assertThat(e.getMessage())
+                .containsAnyOf("dischargeSummary.finalize.authorOnly", "can finalize it", "peut le finaliser"));
         assertThat(summary.getIsFinalized()).isFalse();
         verify(dischargeSummaryRepository, never()).save(any());
     }
@@ -300,6 +429,163 @@ class DischargeSummaryServiceImplTest {
         when(dischargeSummaryRepository.findById(summaryId)).thenReturn(Optional.of(summary));
         assertThatThrownBy(() -> service.deleteDischargeSummary(summaryId, staffId))
             .isInstanceOf(BusinessException.class);
+    }
+
+    @Test void qaD930_anotherDoctorCannotDeleteTheAuthorsDraft() {
+        com.example.hms.model.User doctorTwo = new com.example.hms.model.User();
+        doctorTwo.setId(UUID.randomUUID());
+        actAs(doctorTwo);
+        when(dischargeSummaryRepository.findById(summaryId)).thenReturn(Optional.of(summary));
+        UUID doctorTwoStaffId = UUID.randomUUID();
+        assertThatThrownBy(() -> service.deleteDischargeSummary(summaryId, doctorTwoStaffId))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class)
+            // QA D1112: the authorship rule, not "act in your own name" (identity.notCaller).
+            .satisfies(e -> org.assertj.core.api.Assertions.assertThat(e.getMessage())
+                .containsAnyOf("dischargeSummary.authorOnly", "Only the doctor who wrote this summary", "Seul le médecin qui a rédigé ce résumé"));
+        verify(dischargeSummaryRepository, never()).delete(any(DischargeSummary.class));
+    }
+
+    @Test void qaD930_aSummaryWithNoDischargingProviderIsTheTreatingDoctors() {
+        // Review of #971: a backfilled summary with no discharging provider is
+        // edited by the doctor who wrote the visit's note.
+        summary.setDischargingProvider(null);
+        com.example.hms.model.User doctor = new com.example.hms.model.User();
+        doctor.setId(UUID.randomUUID());
+        actAs(doctor);
+        when(roleValidator.getCurrentUserId()).thenReturn(doctor.getId());
+        org.mockito.Mockito.lenient().when(roleValidator.isDoctor(doctor.getId(), hospitalId)).thenReturn(true);
+        when(encounterNoteRepository.existsByEncounter_IdAndAuthor_Id(encounterId, doctor.getId())).thenReturn(true);
+        when(dischargeSummaryRepository.findById(summaryId)).thenReturn(Optional.of(summary));
+        service.deleteDischargeSummary(summaryId, null);
+        verify(dischargeSummaryRepository).delete(summary);
+    }
+
+    @Test void qaD930_aConsultantsNoteDoesNotOpenAColleaguesDraft() {
+        // Review of #971: the treating-clinician fallback never overrides a named provider.
+        com.example.hms.model.User consultant = new com.example.hms.model.User();
+        consultant.setId(UUID.randomUUID());
+        // The draft's provider is a doctor.
+        org.mockito.Mockito.lenient().when(roleValidator.isDoctor(staff.getUser().getId(), hospitalId)).thenReturn(true);
+        actAs(consultant);
+        org.mockito.Mockito.lenient().when(encounterNoteRepository.existsByEncounter_IdAndAuthor_Id(encounterId, consultant.getId()))
+            .thenReturn(true);
+        when(dischargeSummaryRepository.findById(summaryId)).thenReturn(Optional.of(summary));
+        assertThatThrownBy(() -> service.deleteDischargeSummary(summaryId, null))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        verify(dischargeSummaryRepository, never()).delete(any(DischargeSummary.class));
+    }
+
+    @Test void qaD930_aDraftHeldByTheNurseWhoOpenedTheVisitIsTheTreatingDoctors() {
+        // Review of #971: a nurse-held draft is not stuck; the doctor who wrote the note finishes it.
+        com.example.hms.model.User doctor = new com.example.hms.model.User();
+        doctor.setId(UUID.randomUUID());
+        actAs(doctor);
+        when(roleValidator.getCurrentUserId()).thenReturn(doctor.getId());
+        org.mockito.Mockito.lenient().when(roleValidator.isDoctor(doctor.getId(), hospitalId)).thenReturn(true);
+        when(encounterNoteRepository.existsByEncounter_IdAndAuthor_Id(encounterId, doctor.getId())).thenReturn(true);
+        when(dischargeSummaryRepository.findById(summaryId)).thenReturn(Optional.of(summary));
+        service.deleteDischargeSummary(summaryId, null);
+        verify(dischargeSummaryRepository).delete(summary);
+    }
+
+    @Test void qaD930_theTreatingDoctorWhoEditsANurseHeldDraftBecomesItsProviderAndCanFinalizeIt() {
+        // Review of #971: editing a nurse-held draft hands it to the doctor, so
+        // the finalize rule (discharging provider only) lets her sign it.
+        com.example.hms.model.User doctor = new com.example.hms.model.User();
+        doctor.setId(UUID.randomUUID());
+        Staff doctorStaff = new Staff();
+        doctorStaff.setId(UUID.randomUUID());
+        doctorStaff.setUser(doctor);
+        com.example.hms.model.UserRoleHospitalAssignment doctorAssignment = new com.example.hms.model.UserRoleHospitalAssignment();
+        doctorAssignment.setId(UUID.randomUUID());
+        doctorStaff.setAssignment(doctorAssignment);
+        actAs(doctor);
+        when(roleValidator.getCurrentUserId()).thenReturn(doctor.getId());
+        org.mockito.Mockito.lenient().when(roleValidator.isDoctor(doctor.getId(), hospitalId)).thenReturn(true);
+        when(encounterNoteRepository.existsByEncounter_IdAndAuthor_Id(encounterId, doctor.getId())).thenReturn(true);
+        when(staffRepository.findByUserIdAndHospitalId(doctor.getId(), hospitalId)).thenReturn(Optional.of(doctorStaff));
+        when(dischargeSummaryRepository.findById(summaryId)).thenReturn(Optional.of(summary));
+        when(dischargeSummaryRepository.save(any(DischargeSummary.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.updateDischargeSummary(summaryId, buildRequest(), Locale.ENGLISH);
+
+        assertThat(summary.getDischargingProvider()).isEqualTo(doctorStaff);
+        // Her doctor assignment, never another one she holds at the hospital.
+        assertThat(summary.getAssignment()).isSameAs(doctorAssignment);
+    }
+
+    @Test void qaD930_aHandOverNeverFilesTheSummaryUnderAnotherAssignmentSheHolds() {
+        // Review of #971: with no assignment on her doctor staff record, the
+        // summary keeps its own; any active assignment she holds could be a nurse one.
+        com.example.hms.model.User doctor = new com.example.hms.model.User();
+        doctor.setId(UUID.randomUUID());
+        Staff doctorStaff = new Staff();
+        doctorStaff.setId(UUID.randomUUID());
+        doctorStaff.setUser(doctor);
+        com.example.hms.model.UserRoleHospitalAssignment nurseAssignment = new com.example.hms.model.UserRoleHospitalAssignment();
+        nurseAssignment.setId(UUID.randomUUID());
+        org.mockito.Mockito.lenient().when(assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(doctor.getId(), hospitalId))
+            .thenReturn(Optional.of(nurseAssignment));
+        com.example.hms.model.UserRoleHospitalAssignment before = summary.getAssignment();
+        actAs(doctor);
+        when(roleValidator.getCurrentUserId()).thenReturn(doctor.getId());
+        org.mockito.Mockito.lenient().when(roleValidator.isDoctor(doctor.getId(), hospitalId)).thenReturn(true);
+        when(encounterNoteRepository.existsByEncounter_IdAndAuthor_Id(encounterId, doctor.getId())).thenReturn(true);
+        when(staffRepository.findByUserIdAndHospitalId(doctor.getId(), hospitalId)).thenReturn(Optional.of(doctorStaff));
+        when(dischargeSummaryRepository.findById(summaryId)).thenReturn(Optional.of(summary));
+        when(dischargeSummaryRepository.save(any(DischargeSummary.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.updateDischargeSummary(summaryId, buildRequest(), Locale.ENGLISH);
+
+        assertThat(summary.getDischargingProvider()).isEqualTo(doctorStaff);
+        assertThat(summary.getAssignment()).isSameAs(before).isNotSameAs(nurseAssignment);
+    }
+
+    @Test void qaD930_aNurseWhoWroteANoteCannotDeleteAColleaguesNurseHeldDraft() {
+        // Review of #971: the treating-clinician fallback is for physicians only.
+        com.example.hms.model.User nurseB = new com.example.hms.model.User();
+        nurseB.setId(UUID.randomUUID());
+        actAs(nurseB);
+        when(roleValidator.getCurrentUserId()).thenReturn(nurseB.getId());
+        org.mockito.Mockito.lenient().when(encounterNoteRepository.existsByEncounter_IdAndAuthor_Id(encounterId, nurseB.getId()))
+            .thenReturn(true);
+        when(dischargeSummaryRepository.findById(summaryId)).thenReturn(Optional.of(summary));
+        assertThatThrownBy(() -> service.deleteDischargeSummary(summaryId, null))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        verify(dischargeSummaryRepository, never()).delete(any(DischargeSummary.class));
+    }
+
+    @Test void qaD930_theRowSaysWhetherTheCallerMayEditIt() {
+        // Review of #971: the portal shows the buttons the server accepts.
+        DischargeSummaryResponseDTO own = DischargeSummaryResponseDTO.builder().id(summaryId).build();
+        when(dischargeSummaryRepository.findById(summaryId)).thenReturn(Optional.of(summary));
+        when(dischargeSummaryMapper.toResponseDTO(summary)).thenReturn(own);
+        assertThat(service.getDischargeSummaryById(summaryId, Locale.ENGLISH).getEditableByCaller()).isTrue();
+
+        com.example.hms.model.User doctorTwo = new com.example.hms.model.User();
+        doctorTwo.setId(UUID.randomUUID());
+        actAs(doctorTwo);
+        org.mockito.Mockito.lenient().when(roleValidator.getCurrentUserId()).thenReturn(doctorTwo.getId());
+        org.mockito.Mockito.lenient().when(roleValidator.isDoctor(staff.getUser().getId(), hospitalId)).thenReturn(true);
+        DischargeSummaryResponseDTO theirs = DischargeSummaryResponseDTO.builder().id(summaryId).build();
+        when(dischargeSummaryMapper.toResponseDTO(summary)).thenReturn(theirs);
+        assertThat(service.getDischargeSummaryById(summaryId, Locale.ENGLISH).getEditableByCaller()).isFalse();
+    }
+
+    @Test void qaD930_anotherDoctorCannotRewriteTheAuthorsDraft() {
+        com.example.hms.model.User doctorTwo = new com.example.hms.model.User();
+        doctorTwo.setId(UUID.randomUUID());
+        actAs(doctorTwo);
+        DischargeSummaryRequestDTO req = buildRequest();
+        req.setDischargeDiagnosis("Rewritten by another doctor");
+        when(dischargeSummaryRepository.findById(summaryId)).thenReturn(Optional.of(summary));
+        assertThatThrownBy(() -> service.updateDischargeSummary(summaryId, req, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class)
+            // QA D1112: the authorship rule, not "act in your own name" (identity.notCaller).
+            .satisfies(e -> org.assertj.core.api.Assertions.assertThat(e.getMessage())
+                .containsAnyOf("dischargeSummary.authorOnly", "Only the doctor who wrote this summary", "Seul le médecin qui a rédigé ce résumé"));
+        assertThat(summary.getDischargeDiagnosis()).isNotEqualTo("Rewritten by another doctor");
+        verify(dischargeSummaryRepository, never()).save(any());
     }
 
     // ── enforceHospitalScope: cross-hospital → 404 ────────────────────
@@ -410,11 +696,35 @@ class DischargeSummaryServiceImplTest {
     @DisplayName("Portal-patient AVS retrieval — observability + backfill")
     class PortalPatientAvs {
 
+        /** QA D1070: the portal publishes a completed visit's summary, so the shared visit is completed here. */
+        @org.junit.jupiter.api.BeforeEach
+        void theVisitIsCompleted() {
+            encounter.setStatus(com.example.hms.enums.EncounterStatus.COMPLETED);
+        }
+
         private double counterCount(String name, String outcome) {
             io.micrometer.core.instrument.Counter c = meterRegistry.find(name)
                     .tag(DischargeSummaryServiceImpl.TAG_OUTCOME, outcome)
                     .counter();
             return c == null ? 0.0d : c.count();
+        }
+
+        /** QA D1070: Salif's visit still waiting for the physician: its draft summary is not his yet. */
+        @Test
+        void d1070_theOpenVisitsDraftIsNotOnThePortal() {
+            Encounter waiting = new Encounter();
+            waiting.setId(UUID.randomUUID());
+            waiting.setStatus(com.example.hms.enums.EncounterStatus.WAITING_FOR_PHYSICIAN);
+            DischargeSummary early = DischargeSummary.builder().patient(patient).encounter(waiting)
+                .hospital(hospital).isFinalized(false).hospitalCourse("seen").dischargeDate(LocalDate.now()).build();
+            org.mockito.Mockito.lenient().when(encounterRepository.findCompletedWithoutDischargeSummary(patientId))
+                .thenReturn(List.of());
+            when(dischargeSummaryRepository.findByPatient_IdOrderByDischargeDateDesc(patientId))
+                .thenReturn(List.of(early, summary));
+            org.mockito.Mockito.lenient().when(dischargeSummaryMapper.toResponseDTO(summary)).thenReturn(responseDTO);
+
+            assertThat(service.getDischargeSummariesForPortalPatient(patientId)).containsExactly(responseDTO);
+            verify(dischargeSummaryMapper, never()).toResponseDTO(early);
         }
 
         @Test

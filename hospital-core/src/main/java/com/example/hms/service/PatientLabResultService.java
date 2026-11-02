@@ -28,4 +28,13 @@ public interface PatientLabResultService {
      * notes or performer until the lab releases the result.
      */
     List<PatientLabResultResponseDTO> getLabResultsForPatientPortal(UUID patientId, UUID hospitalId, int limit);
+
+    /**
+     * QA D1213 (round 23): the patient's own current results from
+     * {@code offset}, at most {@code limit}: superseded and corrected-away
+     * rows are removed BEFORE the offset is skipped, newest first with a
+     * stable tie-break. Same redaction as the method above. No total: a
+     * caller asks for limit + 1 to know whether there is more.
+     */
+    List<PatientLabResultResponseDTO> getLabResultsForPatientPortal(UUID patientId, int offset, int limit);
 }

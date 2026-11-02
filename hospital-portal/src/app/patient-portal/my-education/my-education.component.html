@@ -73,7 +73,8 @@
                 <span class="material-symbols-outlined edu-type-icon">
                   {{ item.resourceType === 'VIDEO' ? 'play_circle' : 'article' }}
                 </span>
-                <span class="portal-status-chip" [attr.data-status]="item.comprehensionStatus">
+                {{ ' '
+                }}<span class="portal-status-chip" [attr.data-status]="item.comprehensionStatus">
                   {{ item.comprehensionStatus | enumLabel: 'status' }}
                 </span>
               </div>
@@ -203,12 +204,15 @@
     >
       <div
         class="booking-form-card edu-reader-card"
+        appDialogA11y
         tabindex="-1"
+        aria-labelledby="edu-dialog-title-1"
+        (dialogClose)="closeReader()"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="closeReader()"
+        (keydown.escape)="$event.stopPropagation()"
       >
         <div class="booking-header">
-          <h2>{{ item.title }}</h2>
+          <h2 id="edu-dialog-title-1">{{ item.title }}</h2>
           <button
             class="booking-close"
             (click)="closeReader()"
@@ -300,7 +304,7 @@
   }
 
   <!-- Ask-a-question overlay -->
-  @if (askOpen) {
+  @if (askOpen()) {
     <div
       class="booking-overlay"
       data-testid="edu-ask-overlay"
@@ -310,12 +314,15 @@
     >
       <div
         class="booking-form-card"
+        appDialogA11y
         tabindex="-1"
+        aria-labelledby="edu-dialog-title-2"
+        (dialogClose)="closeAsk()"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="closeAsk()"
+        (keydown.escape)="$event.stopPropagation()"
       >
         <div class="booking-header">
-          <h2>{{ 'PORTAL.EDUCATION.ASK_QUESTION' | translate }}</h2>
+          <h2 id="edu-dialog-title-2">{{ 'PORTAL.EDUCATION.ASK_QUESTION' | translate }}</h2>
           <button
             class="booking-close"
             (click)="closeAsk()"

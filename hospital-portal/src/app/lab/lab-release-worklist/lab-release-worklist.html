@@ -94,6 +94,15 @@
               </td>
               <td>
                 <span class="test-name">{{ row.labTestName }}</span>
+                @if (isUrgentPriority(row)) {
+                  {{ ' '
+                  }}<span
+                    class="priority-badge"
+                    [class.priority-stat]="row.orderPriority === 'STAT'"
+                    [attr.data-testid]="'release-priority-' + row.id"
+                    >{{ row.orderPriority | enumLabel: 'labOrderPriority' }}</span
+                  >
+                }
                 @if (row.labOrderCode) {
                   <span class="order-code mono" [title]="row.labOrderCode">{{
                     shortOrderCode(row.labOrderCode)
@@ -101,10 +110,9 @@
                 }
               </td>
               <td class="numeric">
-                {{ row.resultValue }}
-                @if (row.resultUnit) {
-                  <span class="unit">{{ row.resultUnit }}</span>
-                }
+                {{ row.resultValue | labValue: row.resultUnit }}
+                <!-- QA D1016: a correction says it replaces a validated value -->
+                <app-lab-correction-badge [corrected]="!!row.supersedesResultId" />
               </td>
               <td>
                 <span [class]="severityClass(row)">
@@ -211,9 +219,11 @@
         class="form-card"
         role="dialog"
         aria-modal="true"
+        appModalDialog
+        (escaped)="cancelRelease()"
+        (keydown.escape)="$event.stopPropagation()"
         [attr.aria-label]="'LAB_RELEASE.CONFIRM_TITLE' | translate"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="$event.stopPropagation()"
         tabindex="-1"
       >
         <h2>{{ 'LAB_RELEASE.CONFIRM_TITLE' | translate }}</h2>
@@ -223,12 +233,24 @@
               | translate
                 : {
                     test: target.labTestName,
-                    value: target.resultValue + (target.resultUnit ? ' ' + target.resultUnit : ''),
+                    value: (target.resultValue | labValue: target.resultUnit),
                     patient: target.patientFullName,
                   }
           }}
         </p>
+        @if (target.supersedesResultId) {
+          <!-- QA D1016: validating a correction replaces a value already validated -->
+          <p class="self-release-note" role="note" data-testid="release-correction-note">
+            {{ 'LAB_RELEASE.CONFIRM_CORRECTION' | translate }}
+          </p>
+        }
         <p class="confirm-note">{{ 'LAB_RELEASE.CONFIRM_NOTE' | translate }}</p>
+        @if (target.unitMismatch) {
+          <!-- QA D1092: no range can grade this value; releasing it is a reviewed decision -->
+          <p class="self-release-note" role="note" data-testid="release-ungraded-note">
+            {{ 'LAB_RELEASE.UNGRADED_NOTE' | translate: { unit: target.resultUnit || '—' } }}
+          </p>
+        }
         @if (isSelfRelease(target)) {
           <p class="self-release-note" role="note" data-testid="self-release-note">
             {{ 'LAB_RELEASE.SELF_RELEASE_NOTE' | translate }}

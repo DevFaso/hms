@@ -55,7 +55,7 @@ public interface PatientHospitalRegistrationRepository extends JpaRepository<Pat
     @Query("""
            SELECT new com.example.hms.payload.dto.RegistrationDeskRow(
                r.id, r.mrn,
-               p.id, u.username, p.firstName, p.lastName,
+               p.id, u.username, p.firstName, p.middleName, p.lastName,
                p.email, p.phoneNumberPrimary, p.gender,
                h.id, h.name, h.code, h.address,
                r.registrationDate, r.active,
@@ -124,6 +124,8 @@ public interface PatientHospitalRegistrationRepository extends JpaRepository<Pat
              OR LOWER(COALESCE(p.user.username, '')) = LOWER(:identifier)
              OR LOWER(COALESCE(r.patientFullName, '')) = LOWER(:identifier)
              OR LOWER(CONCAT(COALESCE(p.firstName, ''), ' ', COALESCE(p.lastName, ''))) = LOWER(:identifier)
+             OR (p.middleName IS NOT NULL AND LOWER(CONCAT(COALESCE(p.firstName, ''), ' ', p.middleName, ' ',
+                 COALESCE(p.lastName, ''))) = LOWER(:identifier))
           )
     """)
     List<PatientHospitalRegistration> findActiveByHospitalIdAndIdentifier(@Param("hospitalId") UUID hospitalId,
@@ -141,7 +143,10 @@ public interface PatientHospitalRegistrationRepository extends JpaRepository<Pat
     @Query("""
         SELECT new com.example.hms.payload.dto.PatientMultiHospitalSummaryDTO(
             p.id,
-            CONCAT(TRIM(COALESCE(p.firstName, '')), ' ', TRIM(COALESCE(p.lastName, ''))),
+            CONCAT(TRIM(COALESCE(p.firstName, '')),
+                   CASE WHEN p.middleName IS NULL OR TRIM(p.middleName) = '' THEN ''
+                        ELSE CONCAT(' ', TRIM(p.middleName)) END,
+                   ' ', TRIM(COALESCE(p.lastName, ''))),
             h.id,
             h.name
         )

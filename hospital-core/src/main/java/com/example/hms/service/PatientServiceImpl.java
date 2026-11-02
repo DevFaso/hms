@@ -87,7 +87,11 @@ import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UltrasoundOrderRepository;
 import com.example.hms.repository.UltrasoundReportRepository;
 import com.example.hms.repository.UserRepository;
+import com.example.hms.security.SecurityUtils;
 import com.example.hms.utility.DiagnosisCodeValidator;
+import com.example.hms.utility.MessageUtil;
+import com.example.hms.utility.PatientMatchKeys;
+import com.example.hms.utility.PhoneNumbers;
 import com.example.hms.utility.RoleValidator;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
@@ -107,6 +111,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -128,6 +133,12 @@ import com.example.hms.service.recordaccess.BreakGlassGate;
 @RequiredArgsConstructor
 @Slf4j
 public class PatientServiceImpl implements PatientService {
+
+    private static final String FIELD_PHONE_PRIMARY = "phoneNumberPrimary";
+    private static final String FIELD_PHONE_SECONDARY = "phoneNumberSecondary";
+    private static final String FIELD_EMERGENCY_PHONE = "emergencyContactPhone";
+    /** QA D1079: "label: value" in the reader's typography (a space before the colon in French). */
+    static final String LAB_SUMMARY_LABEL_VALUE_KEY = "timeline.labResult.labelValue";
     private static final String USER_NOT_FOUND_KEY = "user.notFound";
     private static final String HOSPITAL_NOT_FOUND_KEY = "hospital.notFound";
 
@@ -217,6 +228,9 @@ public class PatientServiceImpl implements PatientService {
     private final LabResultMapper labResultMapper;
     private final PatientProblemRepository patientProblemRepository;
     private final PatientProblemHistoryRepository patientProblemHistoryRepository;
+    /** The history rows that set a problem's status (QA D1186 class, round 22). */
+    private static final java.util.Set<ProblemChangeType> STATUS_CHANGE_TYPES = java.util.EnumSet.of(
+        ProblemChangeType.CREATED, ProblemChangeType.STATUS_CHANGED, ProblemChangeType.DELETED);
     private final PatientProblemMapper patientProblemMapper;
     private final PatientSurgicalHistoryRepository patientSurgicalHistoryRepository;
     private final PatientSurgicalHistoryMapper patientSurgicalHistoryMapper;
@@ -224,6 +238,8 @@ public class PatientServiceImpl implements PatientService {
     private final AdvanceDirectiveMapper advanceDirectiveMapper;
     private final UltrasoundOrderRepository ultrasoundOrderRepository;
     private final UltrasoundReportRepository ultrasoundReportRepository;
+    /** QA D959: diagnoses, pending orders, signed notes and referrals on the chronology. */
+    private final com.example.hms.service.timeline.VisitTimelineRows visitTimelineRows;
     private final UltrasoundMapper ultrasoundMapper;
     private final NursingNoteRepository nursingNoteRepository;
     private final CrossHospitalReachRecorder reachRecorder;
@@ -332,7 +348,9 @@ public class PatientServiceImpl implements PatientService {
         // QA D819: a staff account, or one that already logs in to another
         // record, is refused (409) instead of becoming this patient's login.
         accountLinkGuard.requireLinkable(user, null);
-        Patient patient = patientRepository.save(patientMapper.toPatient(dto, user));
+        Patient mapped = patientMapper.toPatient(dto, user);
+        normalizePhones(mapped, hospital);
+        Patient patient = patientRepository.save(mapped);
 
         // The record's active flag is its administrative soft-delete, not the
         // portal account's state: a patient whose account still waits for
@@ -408,8 +426,14 @@ public class PatientServiceImpl implements PatientService {
 
         PatientAddressHistoryRecorder.AddressSnapshot before = addressHistoryRecorder.snapshot(patient);
         patientMapper.updatePatientFromDto(dto, patient, user);
+        UUID phoneHospitalId = dto.getHospitalId() != null ? dto.getHospitalId() : patient.getHospitalId();
+        normalizePhones(patient, phoneHospitalId == null ? null
+            : hospitalRepository.findById(phoneHospitalId).orElse(null));
         addressHistoryRecorder.recordIfMoved(patient, before);
         Patient updatedPatient = patientRepository.save(patient);
+        // QA D926: the full replace is audited like the PATCH (the controller
+        // opts out of the generic write audit on the strength of this row).
+        auditPatientUpdate(updatedPatient, phoneHospitalId, "Patient demographics replaced");
 
         return buildPatientDto(updatedPatient, dto.getHospitalId());
     }
@@ -427,14 +451,76 @@ public class PatientServiceImpl implements PatientService {
             ensurePatientRegistered(id, hospitalId);
         }
 
-        boolean updated = false;
         PatientAddressHistoryRecorder.AddressSnapshot before = addressHistoryRecorder.snapshot(patient);
+        String country = countryFor(hospitalId != null ? hospitalId : patient.getHospitalId());
+        Map<String, Object> stored = demographicsOf(patient);
 
-        updated |= applyNullable(request.getPhoneNumberPrimary(), patient::setPhoneNumberPrimary);
-        updated |= applyNullable(request.getEthnicity(), patient::setEthnicity);
-        updated |= applyNullable(request.getPhoneNumberSecondary(), patient::setPhoneNumberSecondary);
-        updated |= applyNullable(request.getEmail(), patient::setEmail);
+        patchIdentity(patient, request);
+        patchContacts(patient, request, country);
+        patchAddress(patient, request, before);
+        patchCareFields(patient, request, country);
 
+        // Every change is named in the audit (the controller opts out of the
+        // generic write audit on the strength of this row), and only a change:
+        // a field sent with the value it already had is not one (a client that
+        // resends the whole profile changed nothing).
+        Map<String, Object> now = demographicsOf(patient);
+        List<String> changedFields = stored.keySet().stream()
+            .filter(field -> !Objects.equals(stored.get(field), now.get(field)))
+            .toList();
+        if (!changedFields.isEmpty()) {
+            patientRepository.save(patient);
+            auditPatientUpdate(patient, hospitalId != null ? hospitalId : patient.getHospitalId(),
+                "Patient demographics updated: " + String.join(", ", changedFields));
+        }
+
+        // The caller's hospital's view (its MRN, its sharing opt-out), not the
+        // patient's first hospital: the chart merges this answer.
+        return buildPatientDto(patient, hospitalId != null ? hospitalId : patient.getHospitalId());
+    }
+
+    /** QA D926: the identity the desk corrects. A required field sent blank is refused rather than cleared. */
+    private void patchIdentity(Patient patient, PatientProfileUpdateRequestDTO request) {
+        applyRequired(request.getFirstName(), patient::setFirstName, "patient.r16.firstNameRequired");
+        applyRequired(request.getLastName(), patient::setLastName, "patient.r16.lastNameRequired");
+        applyNullable(request.getMiddleName(), patient::setMiddleName);
+        if (request.getDateOfBirth() != null) {
+            patient.setDateOfBirth(request.getDateOfBirth());
+        }
+        applyRequired(request.getGender(), patient::setGender, "patient.r16.genderRequired");
+        applyNullable(request.getEthnicity(), patient::setEthnicity);
+        // QA D1036: the blood group is corrected here too (the entity upper-cases it).
+        applyNullable(request.getBloodType(), patient::setBloodType);
+    }
+
+    /** Phones (stored by the facility rule, QA D942) and the e-mail (unique to one record, D113). */
+    private void patchContacts(Patient patient, PatientProfileUpdateRequestDTO request, String country) {
+        if (request.getPhoneNumberPrimary() != null) {
+            String phone = normalizePhone(request.getPhoneNumberPrimary(), country, FIELD_PHONE_PRIMARY);
+            if (phone == null) {
+                throw new BusinessException("patient.r16.phoneRequired");
+            }
+            // A number is not unique to one record: a child is registered with
+            // the mother's phone (the database has no unique constraint on it).
+            patient.setPhoneNumberPrimary(phone);
+        }
+        if (request.getPhoneNumberSecondary() != null) {
+            patient.setPhoneNumberSecondary(normalizePhone(request.getPhoneNumberSecondary(), country, FIELD_PHONE_SECONDARY));
+        }
+        if (request.getEmail() != null) {
+            String email = trimToNull(request.getEmail());
+            // Only a new address is checked: resending one's own is never a conflict.
+            if (email != null && !email.equals(patient.getEmail())
+                    && patientRepository.existsEmailOnOtherPatient(email, patient.getId())) {
+                throw new ConflictException(MessageUtil.resolve("patient.r16.emailTaken"));
+            }
+            patient.setEmail(email);
+        }
+    }
+
+    /** The address parts; any one sent rebuilds the mailing address and records a move. */
+    private void patchAddress(Patient patient, PatientProfileUpdateRequestDTO request,
+                              PatientAddressHistoryRecorder.AddressSnapshot before) {
         boolean addressTouched = false;
         addressTouched |= applyNullable(request.getAddressLine1(), patient::setAddressLine1);
         addressTouched |= applyNullable(request.getAddressLine2(), patient::setAddressLine2);
@@ -442,35 +528,171 @@ public class PatientServiceImpl implements PatientService {
         addressTouched |= applyNullable(request.getState(), patient::setState);
         addressTouched |= applyNullable(request.getPostalCode(), patient::setZipCode);
         addressTouched |= applyNullable(request.getCountry(), patient::setCountry);
-
         if (addressTouched) {
-            updated = true;
-            patient.setAddress(buildMailingAddress(
-                patient.getAddressLine1(),
-                patient.getAddressLine2(),
-                patient.getCity(),
-                patient.getState(),
-                patient.getZipCode(),
-                patient.getCountry()
-            ));
+            // QA D1074: "Adresse" is the street address. The city, region,
+            // postal code and country keep their own fields; they were joined
+            // into it with pipes, so the screen showed them twice.
+            String street = com.example.hms.utility.PatientAddressText.streetLine(
+                patient.getAddressLine1(), patient.getAddressLine2());
+            patient.setAddress(street != null ? street
+                : com.example.hms.utility.PatientAddressText.display(patient.getAddress(), null, null));
             addressHistoryRecorder.recordIfMoved(patient, before);
         }
+    }
 
-        updated |= applyNullable(request.getEmergencyContactName(), patient::setEmergencyContactName);
-        updated |= applyNullable(request.getEmergencyContactPhone(), patient::setEmergencyContactPhone);
-        updated |= applyNullable(request.getPreferredPharmacy(), patient::setPreferredPharmacy);
-        updated |= applyNullable(request.getCareTeamNotes(), patient::setCareTeamNotes);
-
+    /** The guardian, the pharmacy, the care-team notes and the chronic conditions. */
+    private void patchCareFields(Patient patient, PatientProfileUpdateRequestDTO request, String country) {
+        applyNullable(request.getEmergencyContactName(), patient::setEmergencyContactName);
+        if (request.getEmergencyContactPhone() != null) {
+            patient.setEmergencyContactPhone(normalizePhone(request.getEmergencyContactPhone(), country, FIELD_EMERGENCY_PHONE));
+        }
+        applyNullable(request.getEmergencyContactRelationship(), patient::setEmergencyContactRelationship);
+        applyNullable(request.getPreferredPharmacy(), patient::setPreferredPharmacy);
+        applyNullable(request.getCareTeamNotes(), patient::setCareTeamNotes);
         if (request.getChronicConditions() != null) {
             patient.setChronicConditions(joinChronicConditions(request.getChronicConditions()));
-            updated = true;
         }
+    }
 
-        if (updated) {
-            patientRepository.save(patient);
+    /**
+     * The demographics a PATCH may change, keyed by the field name its audit
+     * uses ("address" is the whole mailing address). Compared before and after
+     * the PATCH so the audit names real changes only.
+     */
+    private static Map<String, Object> demographicsOf(Patient p) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("firstName", p.getFirstName());
+        m.put("lastName", p.getLastName());
+        m.put("middleName", p.getMiddleName());
+        m.put("dateOfBirth", p.getDateOfBirth());
+        m.put("gender", p.getGender());
+        m.put(FIELD_PHONE_PRIMARY, p.getPhoneNumberPrimary());
+        m.put(FIELD_PHONE_SECONDARY, p.getPhoneNumberSecondary());
+        m.put("email", p.getEmail());
+        m.put("ethnicity", p.getEthnicity());
+        m.put("address", Arrays.asList(p.getAddressLine1(), p.getAddressLine2(), p.getCity(), p.getState(),
+            p.getZipCode(), p.getCountry(), p.getAddress()));
+        m.put("emergencyContactName", p.getEmergencyContactName());
+        m.put(FIELD_EMERGENCY_PHONE, p.getEmergencyContactPhone());
+        m.put("emergencyContactRelationship", p.getEmergencyContactRelationship());
+        m.put("preferredPharmacy", p.getPreferredPharmacy());
+        m.put("careTeamNotes", p.getCareTeamNotes());
+        m.put("chronicConditions", p.getChronicConditions());
+        return m;
+    }
+
+    /** Sets a required text field when one was sent; a blank one is refused (QA D926). */
+    private boolean applyRequired(String value, Consumer<String> setter, String blankKey) {
+        if (value == null) {
+            return false;
         }
+        String trimmed = trimToNull(value);
+        if (trimmed == null) {
+            throw new BusinessException(blankKey);
+        }
+        setter.accept(trimmed);
+        return true;
+    }
 
-        return buildPatientDto(patient, patient.getHospitalId());
+    /**
+     * QA D942: a number as it is stored, by the facility rule
+     * (PhoneNumbers.normalizeFacilityPhone): E.164 for a country PhoneNumbers
+     * knows, or written with an international prefix ("70 00 10 02" at a
+     * Burkina hospital becomes "+22670001002"); a national number for a
+     * country it does not know keeps its digits (never a guessed +226).
+     * {@code null} for a blank value.
+     *
+     * <p>QA D1211 (round 23): a value that is not a phone number at all
+     * ("12ab", "appeler le voisin") is refused on its field with the shared
+     * phone message ({@code @PhoneNumber}), instead of being kept as typed. A
+     * valid national number for a country the facility rule cannot place is
+     * still kept as its digits ({@link com.example.hms.validation.PhoneNumberValidator}).
+     */
+    private static String normalizePhone(String raw, String country, String field) {
+        String trimmed = trimToNull(raw);
+        if (trimmed == null) {
+            return null;
+        }
+        String normalized = PhoneNumbers.normalizeFacilityPhone(trimmed, country);
+        if (normalized != null) {
+            return normalized;
+        }
+        if (!com.example.hms.validation.PhoneNumberValidator.isPhoneNumber(trimmed)) {
+            throw new com.example.hms.exception.FieldBusinessException(field,
+                com.example.hms.validation.PhoneNumber.MESSAGE_KEY);
+        }
+        return trimmed;
+    }
+
+    /** The calling code a national number typed at this hospital takes (Burkina Faso when unknown). */
+    private String callingCodeAt(UUID hospitalId) {
+        return PhoneNumbers.callingCodeForCountry(countryFor(hospitalId));
+    }
+
+    /** The organisation a hospital belongs to, or null. */
+    private UUID organizationOf(UUID hospitalId) {
+        if (hospitalId == null) {
+            return null;
+        }
+        return hospitalRepository.findById(hospitalId)
+            .map(h -> h.getOrganization() != null ? h.getOrganization().getId() : null)
+            .orElse(null);
+    }
+
+    /** The country of a hospital, or null when unknown (Burkina Faso is then assumed). */
+    private String countryFor(UUID hospitalId) {
+        return hospitalId == null ? null
+            : hospitalRepository.findById(hospitalId).map(Hospital::getCountry).orElse(null);
+    }
+
+    /** Stores every number of a new or edited record in its canonical form (QA D942). */
+    private static void normalizePhones(Patient patient, Hospital hospital) {
+        String country = hospital == null ? null : hospital.getCountry();
+        patient.setPhoneNumberPrimary(normalizePhone(patient.getPhoneNumberPrimary(), country, FIELD_PHONE_PRIMARY));
+        patient.setPhoneNumberSecondary(normalizePhone(patient.getPhoneNumberSecondary(), country, FIELD_PHONE_SECONDARY));
+        patient.setEmergencyContactPhone(
+            normalizePhone(patient.getEmergencyContactPhone(), country, FIELD_EMERGENCY_PHONE));
+    }
+
+    /**
+     * QA D926: a demographics correction is audited like every other patient
+     * write. The description names the fields changed, never their values.
+     */
+    private void auditPatientUpdate(Patient patient, UUID hospitalId, String description) {
+        // After the commit: a write that fails at commit (a unique number,
+        // an e-mail) must not leave a SUCCESS row for a change that never
+        // happened. The audit runs in its own transaction.
+        // Best-effort, like every audit here: resolving the actor must never
+        // fail the write it records.
+        try {
+            final UUID actorId = roleValidator.getCurrentUserId();
+            final String actorName = SecurityUtils.getCurrentUsername();
+            com.example.hms.utility.TransactionCallbacks.afterCommit(() -> emitPatientUpdate(patient, hospitalId,
+                description, actorId, actorName));
+        } catch (RuntimeException ex) {
+            log.warn("Failed to schedule demographics audit for patient {}: {}", patient.getId(), ex.getMessage());
+        }
+    }
+
+    private void emitPatientUpdate(Patient patient, UUID hospitalId, String description, UUID actorId,
+                                   String actorName) {
+        try {
+            auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                .eventType(AuditEventType.PATIENT_UPDATE)
+                .status(AuditStatus.SUCCESS)
+                .entityType(AUDIT_ENTITY_PATIENT)
+                .resourceId(patient.getId().toString())
+                .patientId(patient.getId())
+                // The hospital the edit was made at anchors the row in that
+                // hospital's audit log, as the generic write audit did (review round 12).
+                .hospitalId(hospitalId)
+                .userId(actorId)
+                .userName(actorName)
+                .eventDescription(description)
+                .build());
+        } catch (RuntimeException ex) {
+            log.warn("Failed to emit demographics audit for patient {}: {}", patient.getId(), ex.getMessage());
+        }
     }
 
     @Override
@@ -510,9 +732,10 @@ public class PatientServiceImpl implements PatientService {
     public List<PatientResponseDTO> searchPatients(PatientSearchCriteria criteria, int page, int size, Locale locale) {
         Pageable pageable = PageRequest.of(page, size);
         String mrn = trimToNull(criteria.getMrn());
-        String namePattern = buildLowercaseContainsPattern(criteria.getName());
+        // QA D942/D943: accents and phone formatting are folded on both sides.
+        String namePattern = PatientMatchKeys.nameContainsPattern(criteria.getName());
         String dob = trimToNull(criteria.getDateOfBirth());
-        String phonePattern = buildPhoneSearchPattern(criteria.getPhone());
+        String phonePattern = PatientMatchKeys.phoneContainsPattern(criteria.getPhone());
         String emailPattern = buildLowercaseContainsPattern(criteria.getEmail());
         UUID hospitalId = criteria.getHospitalId();
         Boolean activeFilter;
@@ -623,7 +846,13 @@ public class PatientServiceImpl implements PatientService {
         // typed fields thrown away: QA D725), is a 409. A second hospital links
         // the existing record through POST /registrations.
         accountLinkGuard.requireLinkable(user, null);
-        Patient patient = patientRepository.save(patientMapper.toPatient(dto, user));
+        Patient mapped = patientMapper.toPatient(dto, user);
+        // The SMS challenge was normalised from the number as typed; compare
+        // it with that, not with the hospital's E.164 form stored below, which
+        // differs outside Burkina Faso (trunk zero dropped; review round 16).
+        String typedPrimaryPhone = mapped.getPhoneNumberPrimary();
+        normalizePhones(mapped, hospital);
+        Patient patient = patientRepository.save(mapped);
 
         // Phone-first: stamp the patient when the desk confirmed an SMS OTP for
         // this exact number. Single-use server-side check — a forged/mismatched
@@ -631,7 +860,7 @@ public class PatientServiceImpl implements PatientService {
         if (dto.getPhoneVerificationId() != null
             && patient.getPhoneVerifiedAt() == null
             && phoneVerificationService.consumeVerifiedChallenge(
-                dto.getPhoneVerificationId(), patient.getPhoneNumberPrimary())) {
+                dto.getPhoneVerificationId(), typedPrimaryPhone)) {
             patient.setPhoneVerifiedAt(LocalDateTime.now());
             patientRepository.save(patient);
         }
@@ -709,22 +938,24 @@ public class PatientServiceImpl implements PatientService {
         } else if (normUsername != null && !normUsername.isBlank()) {
             results = patientRepository.findByUserUsername(normUsername).map(List::of).orElse(List.of());
         } else if (normPhone != null && !normPhone.isBlank()) {
-            results = patientRepository.findByPhoneNumberPrimary(normPhone)
-                .map(List::of)
-                .or(() -> patientRepository.findByPhoneNumberSecondary(normPhone).map(List::of))
-                .orElse(List.of());
+            results = findByPhone(normPhone, callingCodeAt(hospitalId));
         } else if (normMrn != null && !normMrn.isBlank()) {
             results = patientRepository.findByMrn(normMrn);
         } else if (normIdentifier != null && !normIdentifier.isBlank()) {
-            Optional<Patient> phoneHit = patientRepository.findByPhoneNumberPrimary(normIdentifier)
-                .or(() -> patientRepository.findByPhoneNumberSecondary(normIdentifier));
-            if (phoneHit.isPresent()) {
-                results = List.of(phoneHit.get());
+            // QA D942: only an identifier written like a phone number is
+            // looked up as one; an e-mail or an MRN with digits never is.
+            List<Patient> phoneHits = PatientMatchKeys.looksLikePhone(normIdentifier)
+                ? findByPhone(normIdentifier, callingCodeAt(hospitalId)) : List.of();
+            if (!phoneHits.isEmpty()) {
+                results = phoneHits;
             } else {
                 // Exact email match — see the email branch above for why no substring.
-                Optional<Patient> emailResult = patientRepository.findAllByEmailIgnoreCase(normIdentifier).stream().findFirst();
-                if (emailResult.isPresent()) {
-                    results = List.of(emailResult.get());
+                // Every holder, as the email branch: relatives share an address, and the
+                // first one may be registered only at another hospital, which the scope
+                // filter below drops, hiding this hospital's patient (residual #13 class).
+                List<Patient> emailHits = patientRepository.findAllByEmailIgnoreCase(normIdentifier);
+                if (!emailHits.isEmpty()) {
+                    results = emailHits;
                 } else {
                     results = patientRepository.findByUserUsername(normIdentifier).map(List::of).orElse(List.of());
                 }
@@ -759,22 +990,91 @@ public class PatientServiceImpl implements PatientService {
     @Override
     @Transactional(readOnly = true)
     public List<RegistrationMatchDTO> findRegistrationMatches(String email, String phone, UUID hospitalId) {
+        return registrationMatches(email, phone, null, null, null, hospitalId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<RegistrationMatchDTO> findRegistrationMatches(String email, String phone, String firstName,
+                                                              String lastName, java.time.LocalDate dateOfBirth,
+                                                              UUID hospitalId) {
+        return registrationMatches(email, phone, firstName, lastName, dateOfBirth, hospitalId);
+    }
+
+    /** Both registration-match entry points, inside the caller's read-only transaction. */
+    private List<RegistrationMatchDTO> registrationMatches(String email, String phone, String firstName,
+                                                           String lastName, java.time.LocalDate dateOfBirth,
+                                                           UUID hospitalId) {
         final String normEmail = email != null ? email.trim().toLowerCase(Locale.ROOT) : null;
         final String normPhone = phone != null ? phone.trim() : null;
 
         // LinkedHashMap keeps phone hits (the primary identifier in practice) ahead of email hits.
         Map<UUID, RegistrationMatchDTO> matches = new LinkedHashMap<>();
+        Map<UUID, Patient> matched = new LinkedHashMap<>();
         if (normPhone != null && !normPhone.isBlank()) {
-            Stream.concat(
-                    patientRepository.findAllByPhoneNumberPrimary(normPhone).stream(),
-                    patientRepository.findAllByPhoneNumberSecondary(normPhone).stream())
-                .forEach(p -> matches.putIfAbsent(p.getId(), toRegistrationMatch(p, hospitalId, "PHONE")));
+            findByPhone(normPhone, callingCodeAt(hospitalId)).forEach(p -> {
+                matched.putIfAbsent(p.getId(), p);
+                matches.putIfAbsent(p.getId(), toRegistrationMatch(p, hospitalId, "PHONE"));
+            });
         }
         if (normEmail != null && !normEmail.isBlank()) {
-            patientRepository.findAllByEmailIgnoreCase(normEmail)
-                .forEach(p -> matches.putIfAbsent(p.getId(), toRegistrationMatch(p, hospitalId, "EMAIL")));
+            patientRepository.findAllByEmailIgnoreCase(normEmail).forEach(p -> {
+                matched.putIfAbsent(p.getId(), p);
+                matches.putIfAbsent(p.getId(), toRegistrationMatch(p, hospitalId, "EMAIL"));
+            });
+        }
+        boolean identityGiven = PatientMatchKeys.foldName(firstName) != null
+            && PatientMatchKeys.foldName(lastName) != null && dateOfBirth != null;
+        if (!identityGiven) {
+            return List.copyOf(matches.values());
+        }
+        // QA D1061: a phone or e-mail match says whether it is the same person.
+        matched.forEach((id, p) -> matches.get(id).setSameIdentity(
+            PatientMatchKeys.sameIdentity(p, firstName, lastName, dateOfBirth)));
+        // QA D1064: the same name and date of birth at another hospital of the
+        // organisation is proposed even with another phone, so a second
+        // identity is not created in the same organisation. Kept inside the
+        // organisation: a name and a date of birth are not a key across tenants.
+        UUID organizationId = organizationOf(hospitalId);
+        if (organizationId != null) {
+            patientRepository.findByDateOfBirthInOrganization(dateOfBirth, organizationId).stream()
+                .filter(p -> PatientMatchKeys.sameIdentity(p, firstName, lastName, dateOfBirth))
+                .forEach(p -> matches.computeIfAbsent(p.getId(), id -> {
+                    RegistrationMatchDTO match = toRegistrationMatch(p, hospitalId, "IDENTITY");
+                    match.setSameIdentity(true);
+                    return match;
+                }));
         }
         return List.copyOf(matches.values());
+    }
+
+    /**
+     * QA D942: the patients a typed number names, however either side was
+     * written ("+22670001002", "70 00 10 02", "70001002"). A number with all
+     * eight national digits matches on them; anything shorter is not specific
+     * enough to name a subscriber and only matches a number stored exactly so.
+     */
+    private List<Patient> findByPhone(String typed, String callingCode) {
+        String key = PatientMatchKeys.phoneKey(typed);
+        if (PatientMatchKeys.isSubscriberKey(key)) {
+            // The eight digits narrow the candidates; the full number decides.
+            return patientRepository.findAllByPhoneSubscriber("%" + key,
+                    PageRequest.of(0, PatientRepository.PHONE_SUBSCRIBER_CAP)).stream()
+                .filter(p -> PatientMatchKeys.samePhone(p.getPhoneNumberPrimary(), typed, callingCode)
+                    || PatientMatchKeys.samePhone(p.getPhoneNumberSecondary(), typed, callingCode))
+                .toList();
+        }
+        String exact = typed == null ? null : typed.trim();
+        if (exact == null || exact.isEmpty()) {
+            return List.of();
+        }
+        // Every holder, as the subscriber branch returns: a number may be
+        // shared, and the match used to list them all (review round 10).
+        Map<UUID, Patient> holders = new LinkedHashMap<>();
+        Stream.concat(patientRepository.findAllByPhoneNumberPrimary(exact).stream(),
+                patientRepository.findAllByPhoneNumberSecondary(exact).stream())
+            .forEach(p -> holders.putIfAbsent(p.getId(), p));
+        return List.copyOf(holders.values());
     }
 
     private RegistrationMatchDTO toRegistrationMatch(Patient patient, UUID hospitalId, String matchedOn) {
@@ -894,6 +1194,8 @@ public class PatientServiceImpl implements PatientService {
         aggregatedEntries.addAll(collectAllergyEntries(patientId, hospitalId, categoryFilters));
         aggregatedEntries.addAll(collectImagingEntries(patientId, readableHospitalIds, hospitalId, categoryFilters, unlocked));
         aggregatedEntries.addAll(collectProcedureEntries(patientId, readableHospitalIds, hospitalId, categoryFilters));
+        // QA D959: the rest of the visit (acting hospital's rows; see VisitTimelineRows).
+        aggregatedEntries.addAll(visitTimelineRows.collect(patientId, hospitalId, categoryFilters));
 
         recordCrossHospitalDisclosure(patientId, hospitalId, requesterUserId, assignment, aggregatedEntries,
             performedHereLabEntryIds);
@@ -1428,6 +1730,19 @@ public class PatientServiceImpl implements PatientService {
         }
 
         PatientProblem problem = loadPatientProblem(patientId, hospitalId, diagnosisId);
+        // QA D1186 class (round 22): a removed diagnosis stays removed; a second
+        // removal overwrote the recorded reason and wrote another DELETED row.
+        // INACTIVE alone is not "removed": it is also a status the chart sets,
+        // so the removal history decides (review round 1): removed means the
+        // latest STATUS change is the removal - a diagnosis set active again
+        // after a removal and later marked INACTIVE can be removed (review
+        // round 2), and a note edit after a removal does not reopen it (round 3).
+        if (problem.getStatus() == ProblemStatus.INACTIVE
+                && patientProblemHistoryRepository.findFirstByProblem_IdAndChangeTypeInOrderByChangedAtDesc(
+                        problem.getId(), STATUS_CHANGE_TYPES)
+                    .map(h -> h.getChangeType() == ProblemChangeType.DELETED).orElse(false)) {
+            throw new BusinessException("patient.r22.diagnosisAlreadyRemoved");
+        }
         Staff staff = resolveStaffContext(requesterUserId, problem.getHospital().getId());
         String beforeSnapshot = serializeProblemSnapshot(problem);
 
@@ -1907,7 +2222,11 @@ public class PatientServiceImpl implements PatientService {
                     .entryId(encounter.getId() != null ? encounter.getId().toString() : null)
                     .category(CATEGORY_ENCOUNTER)
                     .occurredAt(encounter.getEncounterDate())
-                    .summary(formatEncounterSummary(encounter))
+                    // QA D1027: a visit that never happened says so.
+                    .summary(com.example.hms.enums.EncounterStatus.ENDED_UNSEEN.contains(encounter.getStatus())
+                        ? com.example.hms.service.timeline.TimelineStatus.withStatus(
+                            formatEncounterSummary(encounter), encounter.getStatus())
+                        : formatEncounterSummary(encounter))
                     .sensitive(isSensitiveEncounter(encounter))
                     .metadata(stampProvenance(metadata, encounter.getHospital(), actingHospitalId))
                     .build();
@@ -1942,7 +2261,9 @@ public class PatientServiceImpl implements PatientService {
                     .entryId(prescription.getId() != null ? prescription.getId().toString() : null)
                     .category(CATEGORY_PRESCRIPTION)
                     .occurredAt(coalesce(prescription.getUpdatedAt(), prescription.getCreatedAt()))
-                    .summary(formatPrescriptionSummary(prescription))
+                    // QA D1027: a cancelled order (morphine included) never reads as an active one.
+                    .summary(com.example.hms.service.timeline.TimelineStatus.withStatus(
+                        formatPrescriptionSummary(prescription), prescription.getStatus()))
                     .sensitive(isSensitiveMedication(prescription))
                     .metadata(stampProvenance(metadata, prescription.getHospital(), actingHospitalId))
                     .build();
@@ -1977,7 +2298,7 @@ public class PatientServiceImpl implements PatientService {
         return admitted.stream()
             .map(result -> {
                 Map<String, Object> metadata = new HashMap<>();
-                putIfNotNull(metadata, "unit", result.getResultUnit());
+                putIfNotNull(metadata, "unit", com.example.hms.mapper.LabResultMapper.unitOf(result));
                 putIfNotNull(metadata, "acknowledged", result.isAcknowledged());
                 putIfNotNull(metadata, "released", result.isReleased());
                 // E8 #50: the ordering clinician, NOT releasedByDisplay. The
@@ -2089,7 +2410,9 @@ public class PatientServiceImpl implements PatientService {
                     .entryId(order.getId() != null ? order.getId().toString() : null)
                     .category(CATEGORY_IMAGING)
                     .occurredAt(order.getOrderedDate())
-                    .summary(formatImagingOrderSummary(order))
+                    // QA D1027 class: a cancelled ultrasound order reads as cancelled.
+                    .summary(com.example.hms.service.timeline.TimelineStatus.withStatus(
+                        formatImagingOrderSummary(order), order.getStatus()))
                     .sensitive(isSensitiveUltrasoundOrder(order))
                     .metadata(stampProvenance(metadata, order.getHospital(), hospitalId))
                     .build();
@@ -2529,7 +2852,10 @@ public class PatientServiceImpl implements PatientService {
     }
 
     private String formatEncounterSummary(Encounter encounter) {
-        String type = encounter.getEncounterType() != null ? encounter.getEncounterType().name() : "Encounter";
+        // QA D996: the visit type in the reader's language ("Hospitalisation"), not "INPATIENT".
+        String type = encounter.getEncounterType() != null
+            ? com.example.hms.service.timeline.VisitTimelineRows.label(encounter.getEncounterType())
+            : com.example.hms.utility.MessageUtil.resolveOrRaw("timeline.category.ENCOUNTER");
         StringBuilder summary = new StringBuilder(type);
         if (encounter.getDepartment() != null && encounter.getDepartment().getName() != null) {
             summary.append(" · ").append(encounter.getDepartment().getName());
@@ -2543,7 +2869,8 @@ public class PatientServiceImpl implements PatientService {
     private String formatPrescriptionSummary(Prescription prescription) {
         String medication = Optional.ofNullable(prescription.getMedicationDisplayName())
             .orElse(prescription.getMedicationName());
-        StringBuilder summary = new StringBuilder(medication != null ? medication : "Prescription");
+        StringBuilder summary = new StringBuilder(medication != null ? medication
+            : com.example.hms.utility.MessageUtil.resolveOrRaw("timeline.category.PRESCRIPTION"));
         if (prescription.getDosage() != null) {
             summary.append(" · ").append(prescription.getDosage());
         }
@@ -2554,36 +2881,57 @@ public class PatientServiceImpl implements PatientService {
     }
 
     private String formatLabResultSummary(LabResult result) {
-        String testName = Optional.ofNullable(result.getLabOrder())
-            .map(LabOrder::getClinicalIndication)
-            .filter(s -> s != null && !s.isBlank())
-            .orElse("Lab Result");
-        StringBuilder summary = new StringBuilder(testName);
+        // QA D958: the test's name ("Glycémie à jeun"), never the clinical
+        // indication ("Fièvre 39,2 °C … suspicion de paludisme").
+        com.example.hms.model.LabTestDefinition test = Optional.ofNullable(result.getLabOrder())
+            .map(LabOrder::getLabTestDefinition)
+            .orElse(null);
+        String testName = test == null ? null
+            : Optional.ofNullable(test.getName()).filter(s -> !s.isBlank()).orElse(test.getTestCode());
+        String label = testName != null && !testName.isBlank() ? testName
+            : com.example.hms.utility.MessageUtil.resolveOrRaw("timeline.category.LAB_RESULT");
         // QA D740: an unreleased value stays in the laboratory.
+        // QA D1079: the label and its value are joined by the reader's
+        // typography ("Glycémie à jeun : 5,6 g/L" in French), not a glued colon.
         if (!ClinicalLabResultView.showsValue(result)) {
-            return summary.append(": ")
-                .append(com.example.hms.utility.MessageUtil.resolveOrRaw("lab.result.pendingRelease"))
-                .toString();
+            return labelValue(label, com.example.hms.utility.MessageUtil.resolveOrRaw("lab.result.pendingRelease"));
         }
-        summary.append(": ").append(result.getResultValue());
-        if (result.getResultUnit() != null && !result.getResultUnit().isBlank()) {
-            summary.append(" ").append(result.getResultUnit());
+        // QA D1106: the value in the reader's notation ("0,92" in French).
+        StringBuilder summary = new StringBuilder(
+            labelValue(label, com.example.hms.utility.DisplayNumbers.labValue(result.getResultValue())));
+        // QA D1016: the timeline says the value corrects a released one.
+        if (com.example.hms.service.lab.LabResultCorrections.isCorrection(result)) {
+            summary.append(" (").append(com.example.hms.utility.MessageUtil.resolveOrRaw("lab.result.correctedLabel")).append(")");
+        }
+        // QA D958 / D1095: the unit of the result, else the test's own unit.
+        String unit = com.example.hms.mapper.LabResultMapper.unitOf(result);
+        if (unit != null) {
+            summary.append(" ").append(unit);
         }
         return summary.toString();
     }
 
+    /** QA D1079: "label: value" from the bundle (FR "label : value"); plain "label: value" with no bundle. */
+    static String labelValue(String label, String value) {
+        String joined = com.example.hms.utility.MessageUtil.resolveOrRaw(LAB_SUMMARY_LABEL_VALUE_KEY, label, value);
+        return LAB_SUMMARY_LABEL_VALUE_KEY.equals(joined) ? label + ": " + value : joined;
+    }
+
     private String formatAllergySummary(PatientAllergy allergy) {
-        String allergen = Optional.ofNullable(allergy.getAllergenDisplay()).orElse("Allergy");
+        String allergen = Optional.ofNullable(allergy.getAllergenDisplay())
+            .orElseGet(() -> com.example.hms.utility.MessageUtil.resolveOrRaw("timeline.category.ALLERGY"));
         // QA D333: the severity in the reader's language, not the enum constant.
-        String severity = com.example.hms.utility.MessageUtil.resolveOrRaw("cds.enum."
+        // QA D1134: "gravité : légère", agreeing with its feminine noun (was a bare masculine "léger").
+        String severity = com.example.hms.utility.MessageUtil.resolveOrRaw("cds.severity."
             + (allergy.getSeverity() != null ? allergy.getSeverity().name() : LOG_UNKNOWN));
-        return allergen + " (" + severity + ")";
+        return allergen + " (" + com.example.hms.utility.MessageUtil.resolveOrRaw("cds.patientView.severity", severity)
+            + ")";
     }
 
     private String formatImagingOrderSummary(UltrasoundOrder order) {
         String modality = Optional.ofNullable(order.getScanType())
-            .map(Enum::name)
-            .orElse("Imaging Order");
+            .map(com.example.hms.service.timeline.VisitTimelineRows::label)
+            .orElseGet(() -> com.example.hms.utility.MessageUtil.resolveOrRaw("timeline.category.IMAGING"));
         StringBuilder summary = new StringBuilder(modality);
         if (order.getClinicalIndication() != null && !order.getClinicalIndication().isBlank()) {
             summary.append(" · ").append(truncate(order.getClinicalIndication()));
@@ -2594,8 +2942,8 @@ public class PatientServiceImpl implements PatientService {
     private String formatImagingReportSummary(UltrasoundReport report) {
         String scan = Optional.ofNullable(report.getUltrasoundOrder())
             .map(UltrasoundOrder::getScanType)
-            .map(Enum::name)
-            .orElse("Imaging Report");
+            .map(com.example.hms.service.timeline.VisitTimelineRows::label)
+            .orElseGet(() -> com.example.hms.utility.MessageUtil.resolveOrRaw("timeline.category.IMAGING"));
         StringBuilder summary = new StringBuilder(scan);
         if (report.getFindingsSummary() != null && !report.getFindingsSummary().isBlank()) {
             summary.append(" — ").append(truncate(report.getFindingsSummary()));
@@ -2656,10 +3004,8 @@ public class PatientServiceImpl implements PatientService {
         if (patient == null) {
             return null;
         }
-        String first = patient.getFirstName() != null ? patient.getFirstName().trim() : "";
-        String last = patient.getLastName() != null ? patient.getLastName().trim() : "";
-        String full = (first + " " + last).trim();
-        return full.isEmpty() ? patient.getEmail() : full;
+        String full = patient.getFullName();
+        return full == null ? patient.getEmail() : full;
     }
 
     private String normalizeAccessReason(String reason) {
@@ -2780,13 +3126,6 @@ public class PatientServiceImpl implements PatientService {
         return "%" + escaped + "%";
     }
 
-    private static String buildPhoneSearchPattern(String input) {
-        String normalized = trimToNull(input);
-        if (normalized == null) {
-            return null;
-        }
-        return "%" + escapeLike(normalized) + "%";
-    }
 
     private static String escapeLike(String value) {
         return value
@@ -2866,33 +3205,6 @@ public class PatientServiceImpl implements PatientService {
                 .replacedAt(h.getCreatedAt())
                 .build())
             .toList();
-    }
-
-    private String buildMailingAddress(String line1, String line2, String city, String state, String postalCode, String country) {
-        List<String> segments = new ArrayList<>();
-        if (line1 != null && !line1.isBlank()) {
-            segments.add(line1.trim());
-        }
-        if (line2 != null && !line2.isBlank()) {
-            segments.add(line2.trim());
-        }
-        String cityState = Stream.of(city, state)
-            .filter(value -> value != null && !value.isBlank())
-            .map(String::trim)
-            .collect(Collectors.joining(", "));
-        if (!cityState.isBlank()) {
-            segments.add(cityState);
-        }
-        if (postalCode != null && !postalCode.isBlank()) {
-            segments.add(postalCode.trim());
-        }
-        if (country != null && !country.isBlank()) {
-            segments.add(country.trim());
-        }
-        if (segments.isEmpty()) {
-            return null;
-        }
-        return String.join(" | ", segments);
     }
 
     private String joinChronicConditions(List<String> values) {

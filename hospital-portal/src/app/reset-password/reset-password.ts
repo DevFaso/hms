@@ -4,11 +4,12 @@ import { Component, inject, OnInit, PLATFORM_ID, ChangeDetectionStrategy } from 
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 
 @Component({
   selector: 'app-reset-password',
   standalone: true,
-  imports: [FormsModule, RouterModule, TranslateModule],
+  imports: [SubmitGuardDirective, FormsModule, RouterModule, TranslateModule],
   templateUrl: './reset-password.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./reset-password.scss'],

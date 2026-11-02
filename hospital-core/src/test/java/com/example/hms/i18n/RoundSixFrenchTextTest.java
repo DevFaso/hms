@@ -6,7 +6,6 @@ import com.example.hms.enums.DispenseCheck;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.BusinessRuleException;
 import com.example.hms.exception.ConflictException;
-import com.example.hms.model.Patient;
 import com.example.hms.model.PatientAllergy;
 import com.example.hms.model.User;
 import com.example.hms.model.pharmacy.StockLot;
@@ -36,7 +35,6 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.UUID;
 import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -112,22 +110,31 @@ class RoundSixFrenchTextTest {
 
     @Test
     void d333_theAllergyAlertNamesTheSeverityInFrench() {
-        PrescriptionServiceImpl service = Mockito.mock(PrescriptionServiceImpl.class, Mockito.CALLS_REAL_METHODS);
-        Patient patient = new Patient();
-        patient.setId(UUID.randomUUID());
         PatientAllergy unknown = new PatientAllergy();
         unknown.setAllergenDisplay("Pénicilline");
-        Throwable alert = catchThrowable(() -> ReflectionTestUtils.invokeMethod(service, "handleAllergyConflict",
-            patient, unknown, "Amoxicilline", Boolean.FALSE, ""));
+        // QA D1183 (round 23, changed call): the allergy stop now builds its card in
+        // the allergy-conflict card helper, and the card summary is the refusal's message.
+        Throwable alert = new CdsCriticalBlockException(cardSummary(unknown), java.util.List.of());
         assertThat(alert).isInstanceOf(CdsCriticalBlockException.class);
-        assertThat(alert.getMessage()).contains("(gravité : inconnu)").doesNotContain("UNKNOWN");
+        // QA D1134 (changed assertion): "gravité" is feminine, so "inconnue" (was pinned as "inconnu").
+        assertThat(alert.getMessage()).contains("(gravité : inconnue)").doesNotContain("UNKNOWN");
 
         PatientAllergy severe = new PatientAllergy();
         severe.setAllergenDisplay("Pénicilline");
         severe.setSeverity(AllergySeverity.SEVERE);
-        Throwable severeAlert = catchThrowable(() -> ReflectionTestUtils.invokeMethod(service, "handleAllergyConflict",
-            patient, severe, "Amoxicilline", Boolean.FALSE, ""));
-        assertThat(severeAlert.getMessage()).contains("(gravité : sévère)").doesNotContain("SEVERE");
+        String severeAlert = cardSummary(severe);
+        assertThat(severeAlert).contains("(gravité : sévère)").doesNotContain("SEVERE");
+
+        PatientAllergy mild = new PatientAllergy();
+        mild.setAllergenDisplay("Pénicilline");
+        mild.setSeverity(AllergySeverity.MILD);
+        assertThat(cardSummary(mild)).contains("(gravité : légère)");
+    }
+
+    private static String cardSummary(PatientAllergy allergy) {
+        com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard card = ReflectionTestUtils.invokeMethod(
+            PrescriptionServiceImpl.class, "allergyConflictCard", allergy, "Amoxicilline");
+        return card.summary();
     }
 
     @Test
@@ -138,6 +145,9 @@ class RoundSixFrenchTextTest {
             "localizedValue", "12", Locale.FRENCH)).isEqualTo("12");
         assertThat(ReflectionTestUtils.<String>invokeMethod(CriticalValueNotificationService.class,
             "localizedValue", "Positif", Locale.FRENCH)).isEqualTo("Positif");
+        // Round 19 (D1106): one server formatter, so a comparator keeps the reader's comma too.
+        assertThat(ReflectionTestUtils.<String>invokeMethod(CriticalValueNotificationService.class,
+            "localizedValue", "<0.5", Locale.FRENCH)).isEqualTo("<0,5");
         assertThat(MessageUtil.resolve("lab.critical.escalation", "Glycémie", "5,0 mmol/L", "A. B."))
             .endsWith("Vérifiez et acquittez dans e-Keneya.")
             .doesNotContain("HMS");

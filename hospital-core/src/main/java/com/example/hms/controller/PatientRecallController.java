@@ -77,8 +77,13 @@ public class PatientRecallController {
 
     @PostMapping("/{id}/cancel")
     @Operation(summary = "Cancel a recall created in error or no longer wanted")
-    public ResponseEntity<RecallResponseDTO> cancel(@PathVariable UUID id) {
-        return ResponseEntity.ok(recallService.cancelRecall(id, resolveHospitalId()));
+    public ResponseEntity<RecallResponseDTO> cancel(
+            @PathVariable UUID id,
+            // QA D1157: the reason is required by the service; an empty body is refused like a blank one.
+            @jakarta.validation.Valid @org.springframework.web.bind.annotation.RequestBody(required = false)
+            com.example.hms.payload.dto.scheduling.CloseReasonRequestDTO body) {
+        return ResponseEntity.ok(recallService.cancelRecall(id, resolveHospitalId(),
+            body == null ? null : body.getReason()));
     }
 
     @PostMapping("/{id}/link-appointment")

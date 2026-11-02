@@ -110,6 +110,7 @@
                   type="button"
                   class="btn-secondary btn-sm"
                   [title]="'COMMON.VIEW' | translate"
+                  [attr.aria-label]="'COMMON.VIEW' | translate"
                   (click)="openOrder(o)"
                 >
                   <span class="material-symbols-outlined">visibility</span>
@@ -127,15 +128,17 @@
 @if (viewedOrder(); as o) {
   <div class="modal-backdrop" tabindex="-1" (click)="closeOrder()" (keydown.escape)="closeOrder()">
     <div
+      appModalDialog
+      aria-labelledby="procedure-orders-dialog-1-title"
       class="modal modal-lg"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeOrder(); $event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>
+        <h2 id="procedure-orders-dialog-1-title">
           {{ o.procedureName }}
           <span class="{{ statusClass(o.status) }}">
             {{ o.status | enumLabel: 'procedureOrderStatus' }}
@@ -163,20 +166,21 @@
             </span>
           </p>
           <p class="muted">
-            {{ 'PROCEDURES.ORDERED_BY' | translate }}: {{ o.orderingProviderName || '—' }}
+            {{ 'PROCEDURES.ORDERED_BY' | translate }}{{ 'COMMON.COLON' | translate }}
+            {{ o.orderingProviderName || '—' }}
             @if (o.orderedAt) {
               — {{ o.orderedAt | serverTime | date: 'medium' }}
             }
           </p>
           @if (o.scheduledDatetime) {
             <p>
-              {{ 'PROCEDURES.SCHEDULED_FOR' | translate }}:
+              {{ 'PROCEDURES.SCHEDULED_FOR' | translate }}{{ 'COMMON.COLON' | translate }}
               {{ o.scheduledDatetime | serverTime | date: 'medium' }}
             </p>
           }
           @if (o.laterality) {
             <p class="muted">
-              {{ 'PROCEDURES.LATERALITY' | translate }}:
+              {{ 'PROCEDURES.LATERALITY' | translate }}{{ 'COMMON.COLON' | translate }}
               {{ 'PROCEDURES.LATERALITY_' + o.laterality | translate }}
               @if (o.siteMarked) {
                 · {{ 'PROCEDURES.SITE_MARKED' | translate }}
@@ -208,20 +212,25 @@
               @if (o.requiresAnesthesia) {
                 <span class="flag-badge">
                   {{ 'PROCEDURES.ANESTHESIA' | translate
-                  }}{{ o.anesthesiaType ? ': ' + o.anesthesiaType : '' }}
+                  }}{{
+                    o.anesthesiaType ? ('COMMON.COLON' | translate) + ' ' + o.anesthesiaType : ''
+                  }}
                 </span>
               }
               @if (o.requiresSedation) {
-                <span class="flag-badge">
+                {{ ' '
+                }}<span class="flag-badge">
                   {{ 'PROCEDURES.SEDATION' | translate
-                  }}{{ o.sedationType ? ': ' + o.sedationType : '' }}
+                  }}{{ o.sedationType ? ('COMMON.COLON' | translate) + ' ' + o.sedationType : '' }}
                 </span>
               }
               @if (o.bloodProductsRequired) {
-                <span class="flag-badge">{{ 'PROCEDURES.BLOOD_PRODUCTS' | translate }}</span>
+                {{ ' '
+                }}<span class="flag-badge">{{ 'PROCEDURES.BLOOD_PRODUCTS' | translate }}</span>
               }
               @if (o.imagingGuidanceRequired) {
-                <span class="flag-badge">{{ 'PROCEDURES.IMAGING_GUIDANCE' | translate }}</span>
+                {{ ' '
+                }}<span class="flag-badge">{{ 'PROCEDURES.IMAGING_GUIDANCE' | translate }}</span>
               }
             </p>
             @if (o.specialEquipmentNeeded) {
@@ -256,7 +265,14 @@
         }
 
         @if (detailAction() === 'schedule') {
-          <div class="view-section action-form">
+          <!-- QA D1155 sibling: Escape here closes only this step, and asks before dropping typed text. -->
+          <div
+            class="view-section action-form"
+            appInlineSubForm
+            #scheduleForm="inlineSubForm"
+            inlineSubFormReturn="[data-proc-action='schedule']"
+            (dismissed)="cancelAction()"
+          >
             <h3>{{ 'PROCEDURES.SCHEDULE_TITLE' | translate }}</h3>
             <div class="field">
               <label for="proc-schedule">{{ 'PROCEDURES.SCHEDULED_FOR' | translate }} *</label>
@@ -269,16 +285,26 @@
               <button
                 type="button"
                 class="btn-primary"
-                [disabled]="actionBusy() || !scheduleDatetime"
+                [disabled]="actionBusy()"
+                [appSubmitGuard]="!scheduleDatetime"
+                [submitGuardFields]="['proc-schedule']"
                 (click)="submitSchedule()"
               >
                 {{ 'COMMON.CONFIRM' | translate }}
               </button>
             </div>
+            <app-inline-discard-ask [form]="scheduleForm" />
           </div>
         }
         @if (detailAction() === 'consent') {
-          <div class="view-section action-form">
+          <!-- QA D1155 sibling: Escape here closes only this step, and asks before dropping typed text. -->
+          <div
+            class="view-section action-form"
+            appInlineSubForm
+            #consentForm="inlineSubForm"
+            inlineSubFormReturn="[data-proc-action='consent']"
+            (dismissed)="cancelAction()"
+          >
             <h3>{{ 'PROCEDURES.RECORD_CONSENT' | translate }}</h3>
             <div class="form-row">
               <div class="field">
@@ -297,16 +323,26 @@
               <button
                 type="button"
                 class="btn-primary"
-                [disabled]="actionBusy() || !consentBy.trim()"
+                [disabled]="actionBusy()"
+                [appSubmitGuard]="!consentBy.trim()"
+                [submitGuardFields]="['proc-consent-by']"
                 (click)="submitConsent()"
               >
                 {{ 'COMMON.CONFIRM' | translate }}
               </button>
             </div>
+            <app-inline-discard-ask [form]="consentForm" />
           </div>
         }
         @if (detailAction() === 'cancel') {
-          <div class="view-section action-form">
+          <!-- QA D1155 sibling: Escape here closes only this step, and asks before dropping typed text. -->
+          <div
+            class="view-section action-form"
+            appInlineSubForm
+            #cancelForm="inlineSubForm"
+            inlineSubFormReturn="[data-proc-action='cancel']"
+            (dismissed)="cancelAction()"
+          >
             <h3>{{ 'PROCEDURES.CANCEL_TITLE' | translate }}</h3>
             <div class="field">
               <label for="proc-cancel-reason">
@@ -321,24 +357,37 @@
               <button
                 type="button"
                 class="btn-danger"
-                [disabled]="actionBusy() || !cancelReason.trim()"
+                [disabled]="actionBusy()"
+                [appSubmitGuard]="!cancelReason.trim()"
+                [submitGuardFields]="['proc-cancel-reason']"
                 (click)="submitCancel()"
               >
                 {{ 'COMMON.CONFIRM' | translate }}
               </button>
             </div>
+            <app-inline-discard-ask [form]="cancelForm" />
           </div>
         }
       </div>
       <div class="modal-actions">
         @if (canManage && !isTerminal(o) && !detailAction()) {
-          <button type="button" class="btn-primary" (click)="openAction('schedule')">
+          <button
+            type="button"
+            class="btn-primary"
+            data-proc-action="schedule"
+            (click)="openAction('schedule')"
+          >
             {{
               (o.scheduledDatetime ? 'PROCEDURES.RESCHEDULE' : 'PROCEDURES.SCHEDULE') | translate
             }}
           </button>
           @if (needsConsent(o)) {
-            <button type="button" class="btn-primary" (click)="openAction('consent')">
+            <button
+              type="button"
+              class="btn-primary"
+              data-proc-action="consent"
+              (click)="openAction('consent')"
+            >
               {{ 'PROCEDURES.RECORD_CONSENT' | translate }}
             </button>
           }
@@ -383,8 +432,13 @@
             </button>
           }
         }
-        @if (canCancel && !isTerminal(o) && !detailAction()) {
-          <button type="button" class="btn-danger" (click)="openAction('cancel')">
+        @if (canCancelOrder(o) && !isTerminal(o) && !detailAction()) {
+          <button
+            type="button"
+            class="btn-danger"
+            data-proc-action="cancel"
+            (click)="openAction('cancel')"
+          >
             {{ 'PROCEDURES.CANCEL_ORDER' | translate }}
           </button>
         }
@@ -405,15 +459,17 @@
     (keydown.escape)="closeOrderModal()"
   >
     <div
+      appModalDialog
+      aria-labelledby="procedure-orders-dialog-2-title"
       class="modal modal-lg"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeOrderModal(); $event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ 'PROCEDURES.NEW_ORDER' | translate }}</h2>
+        <h2 id="procedure-orders-dialog-2-title">{{ 'PROCEDURES.NEW_ORDER' | translate }}</h2>
         <button
           type="button"
           class="modal-close"
@@ -541,12 +597,11 @@
         <button
           type="button"
           class="btn-primary"
-          [disabled]="
-            orderSaving() ||
-            !orderForm.patientId ||
-            !orderForm.procedureName ||
-            !orderForm.indication
+          [disabled]="orderSaving()"
+          [appSubmitGuard]="
+            !orderForm.patientId || !orderForm.procedureName || !orderForm.indication
           "
+          [submitGuardFields]="['proc-patient', 'proc-name', 'proc-indication']"
           (click)="submitOrder()"
         >
           {{ 'PROCEDURES.SUBMIT' | translate }}

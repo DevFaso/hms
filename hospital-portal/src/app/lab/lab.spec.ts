@@ -1,7 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { provideRouter } from '@angular/router';
+import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 
@@ -26,6 +26,7 @@ import { RoleContextService } from '../core/role-context.service';
 import { AuthService } from '../auth/auth.service';
 import { PrintLabelService } from '../services/print-label.service';
 import { RoleContextStub, roleContextStub } from '../testing/role-context.stub';
+import { isSubmitBlocked } from '../shared/forms/submit-guard.testing';
 
 /**
  * Audit gap B1 on the order form and the worklist: a provider can send an
@@ -75,7 +76,14 @@ describe('LabComponent — performing laboratory', () => {
     };
   }
 
-  async function setup(roles: string[], orders: LabOrderResponse[], hospitalId = HOSPITAL_A) {
+  let patientService: jasmine.SpyObj<PatientService>;
+
+  async function setup(
+    roles: string[],
+    orders: LabOrderResponse[],
+    hospitalId = HOSPITAL_A,
+    query: Record<string, string> = {},
+  ) {
     scope = roleContextStub({ superAdmin: false, hospitalId, roles });
 
     labService = jasmine.createSpyObj<LabService>('LabService', [
@@ -89,9 +97,11 @@ describe('LabComponent — performing laboratory', () => {
       'listSpecimens',
       'createSpecimen',
       'receiveSpecimen',
+      'rejectSpecimen',
       'submitApprovalAction',
     ]);
     labService.listOrders.and.returnValue(of(orders));
+    labService.listSpecimens.and.returnValue(of([]));
     labService.listTestDefinitions.and.returnValue(of([]));
     labService.listPerformingLabs.and.returnValue(of(labs));
     labService.createOrder.and.returnValue(of(orders[0] ?? order({})));
@@ -104,8 +114,11 @@ describe('LabComponent — performing laboratory', () => {
     hospitalService.getMyHospitalAsResponse.and.returnValue(
       of({ id: hospitalId, name: 'Ordering Hospital A' } as unknown as HospitalResponse),
     );
-    const patientService = jasmine.createSpyObj<PatientService>('PatientService', ['list']);
+    patientService = jasmine.createSpyObj<PatientService>('PatientService', ['list', 'getById']);
     patientService.list.and.returnValue(of([]));
+    patientService.getById.and.returnValue(
+      of({ id: query['patientId'] ?? 'none', firstName: 'Awa', lastName: 'O' } as PatientResponse),
+    );
     const profileService = jasmine.createSpyObj<ProfileService>('ProfileService', [
       'getAssignments',
     ]);
@@ -134,6 +147,10 @@ describe('LabComponent — performing laboratory', () => {
         { provide: PrintLabelService, useValue: printService },
         { provide: AuthService, useValue: auth },
         { provide: RoleContextService, useValue: scope },
+        {
+          provide: ActivatedRoute,
+          useValue: { snapshot: { queryParamMap: convertToParamMap(query) } },
+        },
       ],
     }).compileComponents();
 
@@ -141,6 +158,18 @@ describe('LabComponent — performing laboratory', () => {
     component = fixture.componentInstance;
     fixture.detectChanges();
   }
+
+  it('QA D956: /lab?new=1&patientId=… opens the order form on that patient', async () => {
+    await setup(['ROLE_DOCTOR'], [], HOSPITAL_A, { new: '1', patientId: 'pat-awa' });
+    expect(component.showModal()).toBeTrue();
+    expect(patientService.getById).toHaveBeenCalledWith('pat-awa', jasmine.anything());
+    expect(component.form.patientId).toBe('pat-awa');
+  });
+
+  it('QA D956: a plain /lab opens no form', async () => {
+    await setup(['ROLE_DOCTOR'], []);
+    expect(component.showModal()).toBeFalse();
+  });
 
   it('does not offer a midwife the order form the server refuses her (D106)', async () => {
     await setup(['ROLE_MIDWIFE'], []);
@@ -255,6 +284,146 @@ describe('LabComponent — performing laboratory', () => {
     expect(component.canReceive(collected)).toBeTrue();
     expect(receiveLabel()).toBeDefined();
     expect(host.querySelector('#specimen-type')).not.toBeNull();
+  });
+
+  it('QA D1109: an answered or cancelled order offers no Collect, and says why', async () => {
+    await setup(['ROLE_LAB_SCIENTIST'], []);
+    labService.listSpecimens.and.returnValue(of([]));
+    const host = fixture.nativeElement as HTMLElement;
+
+    for (const status of ['RESULTED', 'VERIFIED', 'COMPLETED', 'CANCELLED']) {
+      component.openSpecimens(order({ id: 'o-' + status, status }));
+      fixture.detectChanges();
+      expect(component.specimensOrderAcceptsSpecimens()).withContext(status).toBeFalse();
+      expect(host.querySelector('#specimen-type'))
+        .withContext(status + ': no collect form')
+        .toBeNull();
+      expect(host.querySelector('[data-testid="specimen-order-closed"]'))
+        .withContext(status + ': the reason is shown')
+        .not.toBeNull();
+      component.closeSpecimens();
+    }
+
+    for (const status of ['ORDERED', 'PENDING', 'COLLECTED', 'RECEIVED', 'IN_PROGRESS']) {
+      component.openSpecimens(order({ id: 'o-' + status, status }));
+      fixture.detectChanges();
+      expect(component.specimensOrderAcceptsSpecimens()).withContext(status).toBeTrue();
+      expect(host.querySelector('#specimen-type')).withContext(status).not.toBeNull();
+      component.closeSpecimens();
+    }
+  });
+
+  describe('QA D963: priority and channel are labelled, and STAT stands out', () => {
+    it('offers exactly the priorities the server accepts, labelled, never the raw code', async () => {
+      await setup(['ROLE_DOCTOR'], []);
+      component.openCreate();
+      fixture.detectChanges();
+      const options = Array.from(
+        (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLOptionElement>(
+          '#lab-priority option',
+        ),
+      ).filter((o) => o.value);
+      expect(options.map((o) => o.value)).toEqual(['ROUTINE', 'URGENT', 'STAT']);
+      // Labelled through the labOrderPriority domain (the English fallback
+      // here, with no locale loaded), never the wire code; ASAP is gone.
+      expect(options.find((o) => o.value === 'ROUTINE')?.textContent?.trim()).not.toBe('ROUTINE');
+      expect(options.find((o) => o.value === 'URGENT')?.textContent?.trim()).not.toBe('URGENT');
+      const channels = Array.from(
+        (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLOptionElement>(
+          '#lab-orderChannel option',
+        ),
+      );
+      expect(channels.find((c) => c.value === 'PORTAL')?.textContent?.trim()).not.toBe('PORTAL');
+    });
+
+    it('badges a STAT order on the worklist and in the detail, and reads the channel', async () => {
+      const stat = order({ id: 'o-stat', priority: 'STAT' });
+      const routine = order({ id: 'o-routine', priority: 'ROUTINE' });
+      await setup(['ROLE_LAB_TECHNICIAN'], [stat, routine]);
+      const host = fixture.nativeElement as HTMLElement;
+      expect(host.querySelector('[data-testid="lab-priority-o-stat"]')).not.toBeNull();
+      expect(host.querySelector('[data-testid="lab-priority-o-routine"]')).toBeNull();
+
+      component.viewOrder(stat);
+      fixture.detectChanges();
+      const priority = host.querySelector('[data-testid="detail-priority"] .field-value');
+      expect(priority?.classList.contains('priority-stat')).toBeTrue();
+      expect(host.querySelector('.detail-panel')?.textContent).not.toContain('PORTAL');
+    });
+  });
+
+  describe('QA D962: reject a specimen', () => {
+    const received = {
+      id: 'sp-9',
+      labOrderId: 'o-1',
+      accessionNumber: 'ACC-9',
+      barcodeValue: 'LAB-ACC-9',
+      specimenType: 'BLOOD',
+      collectedAt: null,
+      receivedAt: null,
+      currentLocation: null,
+      status: 'RECEIVED',
+      notes: null,
+    } as LabSpecimen;
+
+    it('the bench rejects a received specimen with a reason; the list reloads', async () => {
+      await setup(['ROLE_LAB_TECHNICIAN'], [order({ status: 'RECEIVED' })]);
+      labService.listSpecimens.and.returnValue(of([received]));
+      labService.rejectSpecimen.and.returnValue(
+        of({ ...received, status: 'REJECTED', rejectionReason: 'Hémolysé' }),
+      );
+      component.openSpecimens(order({ status: 'RECEIVED' }));
+      fixture.detectChanges();
+      const host = fixture.nativeElement as HTMLElement;
+
+      host.querySelector<HTMLButtonElement>('[data-testid="reject-specimen-sp-9"]')!.click();
+      fixture.detectChanges();
+      const confirm = host.querySelector<HTMLButtonElement>('[data-testid="lab-reject-confirm"]')!;
+      expect(isSubmitBlocked(confirm)).withContext('a reason is mandatory').toBeTrue();
+      const reason = host.querySelector<HTMLTextAreaElement>('[data-testid="lab-reject-reason"]')!;
+      reason.value = '  Hémolysé ';
+      reason.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      confirm.click();
+
+      expect(labService.rejectSpecimen).toHaveBeenCalledWith('sp-9', 'Hémolysé');
+      expect(labService.listOrders.calls.count()).toBeGreaterThan(1);
+      expect(component.rejectingSpecimen()).toBeNull();
+    });
+
+    it('is not offered on an analysed or already rejected specimen, nor to the ordering doctor', async () => {
+      await setup(['ROLE_LAB_TECHNICIAN'], []);
+      component.openSpecimens(order({ status: 'RECEIVED' }));
+      expect(component.canReject(received)).toBeTrue();
+      expect(component.canReject({ ...received, status: 'PROCESSING' })).toBeFalse();
+      expect(component.canReject({ ...received, status: 'REJECTED' })).toBeFalse();
+      // Review of #975: once the order has a result the server refuses the rejection.
+      for (const status of ['RESULTED', 'VERIFIED', 'COMPLETED', 'ENTERED_IN_ERROR', 'CANCELLED']) {
+        component.openSpecimens(order({ status }));
+        expect(component.canReject(received)).withContext(status).toBeFalse();
+      }
+      TestBed.resetTestingModule();
+      await setup(['ROLE_DOCTOR'], []);
+      component.openSpecimens(order({ status: 'RECEIVED' }));
+      expect(component.canReject(received)).toBeFalse();
+    });
+
+    it('the order detail shows the doctor why a specimen was rejected', async () => {
+      const o = order({ status: 'ORDERED' });
+      await setup(['ROLE_DOCTOR'], [o]);
+      labService.listSpecimens.and.returnValue(
+        of([{ ...received, status: 'REJECTED', rejectionReason: 'Tube inadapté' } as LabSpecimen]),
+      );
+
+      component.viewOrder(o);
+      fixture.detectChanges();
+
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector(
+          '[data-testid="lab-order-rejected-sp-9"]',
+        )?.textContent,
+      ).toContain('Tube inadapté');
+    });
   });
 
   it('QA D227: the specimens modal names the order by its short code, not the raw UUID', async () => {
@@ -445,7 +614,7 @@ describe('LabComponent — performing laboratory', () => {
       const confirm = fixture.nativeElement.querySelector(
         '[data-testid="lab-void-confirm"]',
       ) as HTMLButtonElement;
-      expect(confirm.disabled).withContext('no reason yet').toBeTrue();
+      expect(isSubmitBlocked(confirm)).withContext('no reason yet').toBeTrue();
 
       const reason = fixture.nativeElement.querySelector(
         '[data-testid="lab-void-reason"]',
@@ -453,12 +622,12 @@ describe('LabComponent — performing laboratory', () => {
       reason.value = '   ';
       reason.dispatchEvent(new Event('input'));
       fixture.detectChanges();
-      expect(confirm.disabled).withContext('spaces are no reason').toBeTrue();
+      expect(isSubmitBlocked(confirm)).withContext('spaces are no reason').toBeTrue();
 
       reason.value = '  Wrong patient  ';
       reason.dispatchEvent(new Event('input'));
       fixture.detectChanges();
-      expect(confirm.disabled).toBeFalse();
+      expect(isSubmitBlocked(confirm)).toBeFalse();
       labService.listOrders.calls.reset();
       confirm.click();
       fixture.detectChanges();

@@ -87,7 +87,7 @@ public class StaffController {
     @GetMapping("/search/by-email")
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN')")
     public ResponseEntity<List<StaffResponseDTO>> getByUserEmail(
-        @RequestParam @Email String email,
+        @RequestParam @Email(message = "{validation.email.invalid}") String email,
         @RequestHeader(name = "Accept-Language", required = false) String lang) {
         Locale locale = parseLocale(lang);
         return ResponseEntity.ok(staffService.getStaffByUserEmail(email, locale));

@@ -22,9 +22,15 @@ public record NotificationText(String key, Object[] args) {
         Object[] resolved = new Object[args == null ? 0 : args.length];
         for (int i = 0; i < resolved.length; i++) {
             Object arg = args[i];
-            resolved[i] = arg instanceof Map<?, ?> map && map.get("key") instanceof String k
-                ? messageSource.getMessage(k, null, k, locale)
-                : arg;
+            String labValue = NotificationLocalizer.renderLabValue(arg, locale);
+            if (labValue != null) {
+                // QA D1207: a laboratory value in the locale this text is rendered in.
+                resolved[i] = labValue;
+            } else {
+                resolved[i] = arg instanceof Map<?, ?> map && map.get("key") instanceof String k
+                    ? messageSource.getMessage(k, null, k, locale)
+                    : arg;
+            }
         }
         return messageSource.getMessage(key, resolved, locale);
     }

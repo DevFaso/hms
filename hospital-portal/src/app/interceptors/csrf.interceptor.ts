@@ -26,7 +26,10 @@
 
 import {
   HttpClient,
+  HttpContext,
+  HttpContextToken,
   HttpErrorResponse,
+  HttpEvent,
   HttpInterceptorFn,
   HttpRequest,
 } from '@angular/common/http';
@@ -89,6 +92,25 @@ function isCrossOrigin(url: string): boolean {
   }
 }
 
+/**
+ * QA D1145: marks the one replay this interceptor makes after a CSRF refusal.
+ * The error interceptor runs INSIDE this one, so it saw the first refusal
+ * before the replay existed and sent the page to /error/403 — a billing user
+ * who may search invoices read "Acceso denegado" while the replay succeeded
+ * behind it. It now stays silent on a first CSRF refusal and reports only the
+ * replay's.
+ */
+export const CSRF_REPLAY = new HttpContextToken<boolean>(() => false);
+
+/** The server's answer to a missing or stale CSRF token (JsonAccessDeniedHandler). */
+export function isCsrfRefusal(err: unknown): boolean {
+  return (
+    err instanceof HttpErrorResponse &&
+    err.status === 403 &&
+    (err.error as { code?: string } | null)?.code === 'CSRF_TOKEN_INVALID'
+  );
+}
+
 export const csrfInterceptor: HttpInterceptorFn = (req: HttpRequest<unknown>, next) => {
   // Only inject the CSRF header for state-mutating methods.
   if (!MUTATING_METHODS.has(req.method)) {
@@ -108,7 +130,7 @@ export const csrfInterceptor: HttpInterceptorFn = (req: HttpRequest<unknown>, ne
   const http = inject(HttpClient);
   const token = getCookieValue('XSRF-TOKEN');
   if (token) {
-    return sendWithRetry(req, next, token);
+    return sendWithRetry(req, next, token, http);
   }
 
   // Cookie is absent (fresh session, hard reload, cookie cleared).
@@ -116,14 +138,14 @@ export const csrfInterceptor: HttpInterceptorFn = (req: HttpRequest<unknown>, ne
   // then replay the original mutating request with the fresh token.
   return bootstrapOnce(http).pipe(
     switchMap(() => {
-      const freshToken = getCookieValue('XSRF-TOKEN');
-      if (freshToken) {
-        return sendWithRetry(req, next, freshToken);
-      }
-      // Bootstrap didn't set the cookie (network error, misconfigured backend).
-      // Send the request without the CSRF header — the server will reject it
-      // with 403 which the error interceptor will surface to the user.
-      return next(req);
+      // QA D1145 (round 22): this path used to call `next(req)` directly when
+      // the cookie was still missing after the bootstrap — no token and no
+      // replay. After a language switch a sibling request can drop the stale
+      // cookie between the bootstrap response and this read, so the billing
+      // search went out bare, got 403 and was never retried. Every path goes
+      // through sendWithRetry now: with the token when there is one, and the
+      // same replay (fresh cookie, at most MAX_CSRF_REPLAYS) when there is not.
+      return sendWithRetry(req, next, getCookieValue('XSRF-TOKEN'), http);
     }),
   );
 };
@@ -151,27 +173,74 @@ function bootstrapOnce(http: HttpClient): Observable<void> {
 }
 
 /**
+ * QA D1145 (round 21): how many times a request refused for its CSRF token is
+ * replayed. One was not enough after a language switch (a full reload fires
+ * several writes at once): a sibling request sent while the stale cookie was
+ * being dropped is refused WITHOUT a cookie, and that refusal's own Set-Cookie
+ * lands after the fresh bootstrap token, so the single replay carried a token
+ * the cookie no longer matched, and the billing search came back empty.
+ */
+export const MAX_CSRF_REPLAYS = 2;
+
+/** Which replay this request is (0 = the original send). */
+const CSRF_ATTEMPT = new HttpContextToken<number>(() => 0);
+
+/**
  * Sends with the token; on a 403, when the cookie has changed since the token
- * was read (another response rotated it), replays once with the current one.
- * A 403 with an unchanged cookie is a real refusal and is passed on.
+ * was read (another response rotated it), replays with the current one.
+ * QA D1145: when the server says the token itself is refused
+ * (CSRF_TOKEN_INVALID) and the cookie has not changed, the cookie is stale:
+ * it is dropped, a fresh one is fetched, and the request is replayed. At most
+ * MAX_CSRF_REPLAYS replays; only the last is marked CSRF_REPLAY, so the error
+ * interceptor reports the refusal once, when nothing is left to try. Any
+ * other 403 is a real refusal and is passed on.
  */
 function sendWithRetry(
   req: HttpRequest<unknown>,
   next: Parameters<HttpInterceptorFn>[1],
-  token: string,
-) {
-  return next(req.clone({ setHeaders: { 'X-XSRF-TOKEN': token } })).pipe(
+  token: string | null,
+  http: HttpClient,
+): Observable<HttpEvent<unknown>> {
+  const attempt = req.context.get(CSRF_ATTEMPT);
+  const replay = (fresh: string) => {
+    const nextAttempt = attempt + 1;
+    // A copy: the request already sent (and seen by the error interceptor) keeps its own context.
+    const context = new HttpContext();
+    for (const key of req.context.keys()) context.set(key, req.context.get(key));
+    context.set(CSRF_ATTEMPT, nextAttempt).set(CSRF_REPLAY, nextAttempt === MAX_CSRF_REPLAYS);
+    return sendWithRetry(req.clone({ context }), next, fresh, http);
+  };
+  // No token (the bootstrap set none): sent bare, and a CSRF refusal is replayed below.
+  const sent = token === null ? req : req.clone({ setHeaders: { 'X-XSRF-TOKEN': token } });
+  return next(sent).pipe(
     catchError((err: unknown) => {
       if (!(err instanceof HttpErrorResponse) || err.status !== 403) {
         return throwError(() => err);
       }
+      if (attempt >= MAX_CSRF_REPLAYS) return throwError(() => err);
       const current = getCookieValue('XSRF-TOKEN');
       if (current && current !== token) {
-        return next(req.clone({ setHeaders: { 'X-XSRF-TOKEN': current } }));
+        return replay(current);
+      }
+      if (isCsrfRefusal(err)) {
+        // A request sent bare has no stale cookie to drop: it only needs one.
+        if (token !== null) expireCsrfCookie();
+        return bootstrapOnce(http).pipe(
+          switchMap(() => {
+            const fresh = getCookieValue('XSRF-TOKEN');
+            return fresh ? replay(fresh) : throwError(() => err);
+          }),
+        );
       }
       return throwError(() => err);
     }),
   );
+}
+
+/** Drop the stale XSRF-TOKEN cookie so the bootstrap GET is issued a new one. */
+function expireCsrfCookie(): void {
+  if (typeof document === 'undefined') return;
+  document.cookie = 'XSRF-TOKEN=; Max-Age=0; path=/';
 }
 
 /** Test seam: forget a shared bootstrap between specs. */

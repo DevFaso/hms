@@ -4,7 +4,12 @@
       <span class="material-symbols-outlined">calendar_month</span>
       {{ 'PORTAL.APPOINTMENTS.TITLE' | translate }}
     </h1>
-    <button class="booking-btn" (click)="openBookingForm()" [disabled]="showBookingForm()">
+    <!--
+      QA D1146 (regression of the D1124 fix): the opener stays rendered while the
+      booking form is open, so focus comes back to it on close; a second open is
+      refused in openBookingForm() (re-opening would wipe the form, QA D1124).
+    -->
+    <button class="booking-btn" data-testid="booking-open" (click)="openBookingForm()">
       <span class="material-symbols-outlined">add_circle</span>
       {{ 'PORTAL.APPOINTMENTS.BOOKING.TITLE' | translate }}
     </button>
@@ -20,13 +25,16 @@
     >
       <div
         class="booking-form-card"
+        appDialogA11y
         tabindex="-1"
+        aria-labelledby="appt-dialog-title-1"
+        (dialogClose)="closeBookingForm()"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="closeBookingForm()"
+        (keydown.escape)="$event.stopPropagation()"
       >
         <div class="booking-header">
-          <h2>
-            <span class="material-symbols-outlined">event_available</span>
+          <h2 id="appt-dialog-title-1">
+            <span class="material-symbols-outlined" aria-hidden="true">event_available</span>
             {{ 'PORTAL.APPOINTMENTS.BOOKING.FORM_TITLE' | translate }}
           </h2>
           <button
@@ -42,6 +50,12 @@
           <div class="booking-success">
             <span class="material-symbols-outlined">check_circle</span>
             <p>{{ 'PORTAL.APPOINTMENTS.BOOKING.SUCCESS' | translate }}</p>
+            @if (bookedAppointment(); as booked) {
+              <p data-testid="booking-booked-time">
+                {{ booked.date | serverTime | date: 'fullDate' }} · {{ booked.startTime | clockTime
+                }}{{ booked.endTime ? ' – ' + (booked.endTime | clockTime) : '' }}
+              </p>
+            }
           </div>
         } @else {
           <div class="booking-body">
@@ -98,6 +112,7 @@
               <select
                 id="provider"
                 [(ngModel)]="selectedProviderId"
+                (ngModelChange)="loadSlots()"
                 [disabled]="!selectedDepartmentId"
               >
                 <option value="">
@@ -120,16 +135,42 @@
                   >{{ 'PORTAL.APPOINTMENTS.DATE' | translate }}
                   <span class="required">*</span></label
                 >
-                <input type="date" id="apptDate" [(ngModel)]="selectedDate" [min]="todayDate" />
+                <input
+                  type="date"
+                  id="apptDate"
+                  [(ngModel)]="selectedDate"
+                  (ngModelChange)="loadSlots()"
+                  [min]="todayDate"
+                />
               </div>
               <div class="booking-field">
                 <label for="apptTime"
                   >{{ 'PORTAL.APPOINTMENTS.TIME' | translate }}
                   <span class="required">*</span></label
                 >
-                <input type="time" id="apptTime" [(ngModel)]="selectedTime" />
+                <!-- QA D1093: a published, free slot is picked, never a typed time. -->
+                <select id="apptTime" [(ngModel)]="selectedTime" data-testid="booking-slot">
+                  <option value="">{{ 'PORTAL.APPOINTMENTS.CHOOSE_SLOT' | translate }}</option>
+                  @for (s of openSlots(); track s.slotId) {
+                    <option [value]="s.startTime">
+                      {{ s.startTime | clockTime }} – {{ s.endTime | clockTime }}
+                      @if (selectedProviderId && s.staffName) {
+                        · {{ s.staffName }}
+                      }
+                    </option>
+                  }
+                </select>
               </div>
             </div>
+            @if (slotsLoaded() && openSlots().length === 0) {
+              <p class="booking-hint" role="status" data-testid="booking-no-slots">
+                {{ 'PORTAL.APPOINTMENTS.NO_SLOTS' | translate }}
+              </p>
+            }
+            <!-- QA D1060: the clinic's slot length sets how long a visit lasts. -->
+            <p class="booking-hint" data-testid="booking-duration-note">
+              {{ 'PORTAL.APPOINTMENTS.DURATION_NOTE' | translate }}
+            </p>
 
             <div class="booking-field">
               <label for="reason">{{ 'PORTAL.APPOINTMENTS.BOOKING.REASON' | translate }}</label>
@@ -262,7 +303,8 @@
                 }
                 <div class="appt-detail-item">
                   <span class="adl">{{ 'PORTAL.APPOINTMENTS.STATUS' | translate }}</span>
-                  <span class="adv portal-status-chip" [attr.data-status]="appt.status">{{
+                  {{ ' '
+                  }}<span class="adv portal-status-chip" [attr.data-status]="appt.status">{{
                     appt.status | enumLabel: 'appointmentStatus'
                   }}</span>
                 </div>
@@ -273,13 +315,23 @@
                     (appt.status === 'SCHEDULED' || appt.status === 'CONFIRMED') &&
                     !appt.preCheckedIn
                   ) {
-                    <button
-                      class="precheckin-btn"
-                      (click)="openPreCheckIn(appt); $event.stopPropagation()"
-                    >
-                      <span class="material-symbols-outlined">fact_check</span>
-                      {{ 'PORTAL.APPOINTMENTS.BOOKING.PRECHECKIN_BTN' | translate }}
-                    </button>
+                    @if (preCheckInOpen(appt)) {
+                      <button
+                        class="precheckin-btn"
+                        data-testid="precheckin-open"
+                        (click)="openPreCheckIn(appt); $event.stopPropagation()"
+                      >
+                        <span class="material-symbols-outlined" aria-hidden="true">fact_check</span>
+                        {{ 'PORTAL.APPOINTMENTS.BOOKING.PRECHECKIN_BTN' | translate }}
+                      </button>
+                    } @else if (preCheckInOpensOn(appt); as opensOn) {
+                      <span class="precheckin-later" data-testid="precheckin-later">
+                        {{
+                          'PORTAL.APPOINTMENTS.BOOKING.PRECHECKIN_OPENS_ON'
+                            | translate: { date: preCheckInOpensOnLabel(opensOn) }
+                        }}
+                      </span>
+                    }
                   }
                   @if (appt.preCheckedIn) {
                     <span class="precheckin-done">
@@ -384,7 +436,8 @@
                 }
                 <div class="appt-detail-item">
                   <span class="adl">{{ 'PORTAL.APPOINTMENTS.STATUS' | translate }}</span>
-                  <span class="adv portal-status-chip" [attr.data-status]="appt.status">{{
+                  {{ ' '
+                  }}<span class="adv portal-status-chip" [attr.data-status]="appt.status">{{
                     appt.status | enumLabel: 'appointmentStatus'
                   }}</span>
                 </div>
@@ -407,13 +460,16 @@
     >
       <div
         class="booking-form-card"
+        appDialogA11y
         tabindex="-1"
+        aria-labelledby="appt-dialog-title-2"
+        (dialogClose)="closeCancel()"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="closeCancel()"
+        (keydown.escape)="$event.stopPropagation()"
       >
         <div class="booking-header">
-          <h2>
-            <span class="material-symbols-outlined">event_busy</span>
+          <h2 id="appt-dialog-title-2">
+            <span class="material-symbols-outlined" aria-hidden="true">event_busy</span>
             {{ 'PORTAL.APPOINTMENTS.CANCEL.TITLE' | translate }}
           </h2>
           <button
@@ -487,13 +543,16 @@
     >
       <div
         class="booking-form-card"
+        appDialogA11y
         tabindex="-1"
+        aria-labelledby="appt-dialog-title-3"
+        (dialogClose)="closeReschedule()"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="closeReschedule()"
+        (keydown.escape)="$event.stopPropagation()"
       >
         <div class="booking-header">
-          <h2>
-            <span class="material-symbols-outlined">edit_calendar</span>
+          <h2 id="appt-dialog-title-3">
+            <span class="material-symbols-outlined" aria-hidden="true">edit_calendar</span>
             {{ 'PORTAL.APPOINTMENTS.RESCHEDULE.TITLE' | translate }}
           </h2>
           <button
@@ -525,23 +584,43 @@
                 >{{ 'PORTAL.APPOINTMENTS.RESCHEDULE.NEW_DATE' | translate }}
                 <span class="required">*</span></label
               >
-              <input type="date" id="reschedDate" [(ngModel)]="rescheduleDate" [min]="todayDate" />
+              <input
+                type="date"
+                id="reschedDate"
+                [(ngModel)]="rescheduleDate"
+                (ngModelChange)="onRescheduleDateChange()"
+                [min]="todayDate"
+              />
             </div>
             <div class="booking-field">
               <label for="reschedStart"
                 >{{ 'PORTAL.APPOINTMENTS.RESCHEDULE.NEW_START' | translate }}
                 <span class="required">*</span></label
               >
-              <input type="time" id="reschedStart" [(ngModel)]="rescheduleStartTime" />
-            </div>
-            <div class="booking-field">
-              <label for="reschedEnd"
-                >{{ 'PORTAL.APPOINTMENTS.RESCHEDULE.NEW_END' | translate }}
-                <span class="required">*</span></label
+              <!-- QA D1093: the visit moves to a published, free slot of its clinician. -->
+              <select
+                id="reschedStart"
+                [(ngModel)]="rescheduleStartTime"
+                data-testid="reschedule-slot"
               >
-              <input type="time" id="reschedEnd" [(ngModel)]="rescheduleEndTime" />
+                <option value="">{{ 'PORTAL.APPOINTMENTS.CHOOSE_SLOT' | translate }}</option>
+                @for (s of rescheduleSlots(); track s.slotId) {
+                  <option [value]="s.startTime">
+                    {{ s.startTime | clockTime }} – {{ s.endTime | clockTime }}
+                  </option>
+                }
+              </select>
             </div>
           </div>
+          @if (rescheduleSlotsLoaded() && rescheduleSlots().length === 0) {
+            <p class="booking-hint" role="status" data-testid="reschedule-no-slots">
+              {{ 'PORTAL.APPOINTMENTS.NO_SLOTS' | translate }}
+            </p>
+          }
+          <!-- QA D1060: the clinic's slot length sets how long a visit lasts. -->
+          <p class="booking-hint" data-testid="reschedule-duration-note">
+            {{ 'PORTAL.APPOINTMENTS.DURATION_NOTE' | translate }}
+          </p>
 
           <div class="booking-field">
             <label for="reschedReason">{{

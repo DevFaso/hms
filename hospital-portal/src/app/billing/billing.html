@@ -5,6 +5,19 @@
       <p class="page-subtitle">{{ 'BILLING.SUBTITLE' | translate }}</p>
     </div>
     <div class="page-actions">
+      <!-- QA D1059: the cashier's daily cash closing -->
+      @if (canRecordPayment) {
+        <button
+          type="button"
+          class="btn-secondary"
+          data-testid="cash-closing-toggle"
+          [attr.aria-expanded]="showCashClosing()"
+          (click)="showCashClosing.set(!showCashClosing())"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">point_of_sale</span>
+          {{ 'BILLING.CASH_CLOSING.OPEN' | translate }}
+        </button>
+      }
       @if (canCreate) {
         <button class="btn-primary" (click)="openCreate()">
           <span class="material-symbols-outlined">add</span> {{ 'BILLING.NEW_INVOICE' | translate }}
@@ -13,46 +26,52 @@
     </div>
   </div>
 
+  @if (showCashClosing()) {
+    <app-cash-closing />
+  }
+
   <div class="summary-cards">
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon total">receipt_long</span>
       <div class="card-info">
-        <span class="card-value">{{ stats().total }}</span
+        <span class="card-value">{{ statsUnknown() ? '—' : stats().total }}</span
         ><span class="card-label">{{ 'BILLING.TOTAL_INVOICES' | translate }}</span>
       </div>
     </div>
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon paid">check_circle</span>
       <div class="card-info">
-        <span class="card-value">{{ stats().paid }}</span
+        <span class="card-value">{{ statsUnknown() ? '—' : stats().paid }}</span
         ><span class="card-label">{{ 'BILLING.PAID' | translate }}</span>
       </div>
     </div>
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon pending">schedule</span>
       <div class="card-info">
-        <span class="card-value">{{ stats().outstanding }}</span
+        <span class="card-value">{{ statsUnknown() ? '—' : stats().outstanding }}</span
         ><span class="card-label">{{ 'BILLING.OUTSTANDING_COUNT' | translate }}</span>
       </div>
     </div>
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon overdue">warning</span>
       <div class="card-info">
-        <span class="card-value">{{ stats().overdue }}</span
+        <span class="card-value">{{ statsUnknown() ? '—' : stats().overdue }}</span
         ><span class="card-label">{{ 'BILLING.OVERDUE' | translate }}</span>
       </div>
     </div>
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon revenue">payments</span>
       <div class="card-info">
-        <span class="card-value">{{ formatCurrency(stats().totalRevenue) }}</span
+        <span class="card-value">{{
+          statsUnknown() ? '—' : formatCurrency(stats().totalRevenue)
+        }}</span
         ><span class="card-label">{{ 'BILLING.REVENUE' | translate }}</span>
       </div>
     </div>
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon outstanding">account_balance</span>
       <div class="card-info">
-        <span class="card-value">{{ formatCurrency(stats().balance) }}</span
+        <span class="card-value">{{ statsUnknown() ? '—' : formatCurrency(stats().balance) }}</span
         ><span class="card-label">{{ 'BILLING.OUTSTANDING' | translate }}</span>
       </div>
     </div>
@@ -65,7 +84,7 @@
       (click)="setTab('all')"
       [title]="'BILLING.TAB_ALL_TITLE' | translate"
     >
-      {{ 'COMMON.ALL' | translate }} ({{ stats().total }})
+      {{ 'COMMON.ALL' | translate }} ({{ statsUnknown() ? '—' : stats().total }})
     </button>
     <button
       class="tab"
@@ -73,7 +92,9 @@
       (click)="setTab('outstanding')"
       [title]="'BILLING.OUTSTANDING_COUNT' | translate"
     >
-      {{ 'BILLING.OUTSTANDING_COUNT' | translate }} ({{ stats().outstanding }})
+      {{ 'BILLING.OUTSTANDING_COUNT' | translate }} ({{
+        statsUnknown() ? '—' : stats().outstanding
+      }})
     </button>
     <button
       class="tab"
@@ -81,7 +102,7 @@
       (click)="setTab('paid')"
       [title]="'BILLING.TAB_PAID_TITLE' | translate"
     >
-      {{ 'BILLING.PAID' | translate }} ({{ stats().paid }})
+      {{ 'BILLING.PAID' | translate }} ({{ statsUnknown() ? '—' : stats().paid }})
     </button>
     <button
       class="tab"
@@ -89,7 +110,7 @@
       (click)="setTab('overdue')"
       [title]="'BILLING.TAB_OVERDUE_TITLE' | translate"
     >
-      {{ 'BILLING.OVERDUE' | translate }} ({{ stats().overdue }})
+      {{ 'BILLING.OVERDUE' | translate }} ({{ statsUnknown() ? '—' : stats().overdue }})
     </button>
   </div>
 
@@ -128,7 +149,12 @@
       </label>
       <label class="date-filter">
         <span>{{ 'BILLING.TO_DATE' | translate }}</span>
-        <input type="date" [ngModel]="filterToDate()" (ngModelChange)="filterToDate.set($event)" />
+        <input
+          type="date"
+          [attr.min]="filterFromDate() || null"
+          [ngModel]="filterToDate()"
+          (ngModelChange)="filterToDate.set($event)"
+        />
       </label>
       <button type="button" class="btn-secondary" (click)="applyServerFilters()">
         {{ 'COMMON.APPLY' | translate }}
@@ -146,7 +172,18 @@
     </div>
   }
 
-  @if (!loading() && filtered().length > 0) {
+  @if (!loading() && loadFailed()) {
+    <!-- QA D1145: a failed read says so, with a retry; never an empty ledger. -->
+    <div class="empty-state load-failed" role="alert" data-testid="billing-load-failed">
+      <span class="material-symbols-outlined empty-icon" aria-hidden="true">error</span>
+      <h3>{{ 'BILLING.LOAD_FAILED' | translate }}</h3>
+      <button type="button" class="btn-secondary" (click)="loadInvoices(page())">
+        {{ 'COMMON.RETRY' | translate }}
+      </button>
+    </div>
+  }
+
+  @if (!loading() && !loadFailed() && filtered().length > 0) {
     <div class="data-table">
       <table>
         <thead>
@@ -199,23 +236,26 @@
                     class="action-link view-link"
                     [title]="'BILLING.VIEW_DETAILS_TITLE' | translate"
                     (click)="viewInvoice(inv)"
+                    [attr.aria-label]="'BILLING.VIEW_DETAILS_TITLE' | translate"
                   >
-                    <span class="material-symbols-outlined">visibility</span>
+                    <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
                   </button>
                   <button
                     class="action-link"
                     [title]="'BILLING.DOWNLOAD_PDF' | translate"
-                    (click)="downloadPdf(inv.id)"
+                    (click)="downloadPdf(inv)"
+                    [attr.aria-label]="'BILLING.DOWNLOAD_PDF' | translate"
                   >
-                    <span class="material-symbols-outlined">picture_as_pdf</span>
+                    <span class="material-symbols-outlined" aria-hidden="true">picture_as_pdf</span>
                   </button>
                   @if (canPayInvoice(inv)) {
                     <button
                       class="action-link pay-link"
                       [title]="'BILLING.RECORD_PAYMENT' | translate"
                       (click)="openPayment(inv)"
+                      [attr.aria-label]="'BILLING.RECORD_PAYMENT' | translate"
                     >
-                      <span class="material-symbols-outlined">payments</span>
+                      <span class="material-symbols-outlined" aria-hidden="true">payments</span>
                     </button>
                   }
                   @if (canEmail && inv.status !== 'DRAFT' && inv.status !== 'CANCELLED') {
@@ -223,8 +263,9 @@
                       class="action-link"
                       [title]="'BILLING.EMAIL_INVOICE' | translate"
                       (click)="openEmail(inv)"
+                      [attr.aria-label]="'BILLING.EMAIL_INVOICE' | translate"
                     >
-                      <span class="material-symbols-outlined">email</span>
+                      <span class="material-symbols-outlined" aria-hidden="true">email</span>
                     </button>
                   }
                   @if (canEdit) {
@@ -232,8 +273,9 @@
                       class="action-link edit-link"
                       [title]="'COMMON.EDIT' | translate"
                       (click)="openEdit(inv)"
+                      [attr.aria-label]="'COMMON.EDIT' | translate"
                     >
-                      <span class="material-symbols-outlined">edit</span>
+                      <span class="material-symbols-outlined" aria-hidden="true">edit</span>
                     </button>
                   }
                   @if (canDelete && inv.status === 'DRAFT') {
@@ -241,8 +283,9 @@
                       class="action-link delete-link"
                       [title]="'COMMON.DELETE' | translate"
                       (click)="confirmDelete(inv)"
+                      [attr.aria-label]="'COMMON.DELETE' | translate"
                     >
-                      <span class="material-symbols-outlined">delete</span>
+                      <span class="material-symbols-outlined" aria-hidden="true">delete</span>
                     </button>
                   }
                 </div>
@@ -277,7 +320,7 @@
     }
   }
 
-  @if (!loading() && filtered().length === 0) {
+  @if (!loading() && !loadFailed() && filtered().length === 0) {
     <div class="empty-state">
       <span class="material-symbols-outlined empty-icon">receipt_long</span>
       <h3>{{ 'BILLING.NO_INVOICES' | translate }}</h3>
@@ -287,15 +330,24 @@
 
   @if (selectedInvoice(); as inv) {
     <div class="detail-overlay" tabindex="-1" (keydown.escape)="closeDetail()">
-      <div class="detail-panel">
+      <div
+        class="detail-panel"
+        appDialogA11y
+        tabindex="-1"
+        aria-labelledby="bill-detail-title"
+        (dialogClose)="closeDetail()"
+      >
         <div class="panel-header">
-          <h2>{{ 'BILLING.INVOICE' | translate }} {{ inv.invoiceNumber }}</h2>
+          <h2 id="bill-detail-title">
+            {{ 'BILLING.INVOICE' | translate }} {{ inv.invoiceNumber }}
+          </h2>
           <button
             class="close-btn"
             [title]="'COMMON.CLOSE_DETAIL_PANEL' | translate"
             (click)="closeDetail()"
+            [attr.aria-label]="'COMMON.CLOSE_DETAIL_PANEL' | translate"
           >
-            <span class="material-symbols-outlined">close</span>
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
           </button>
         </div>
         <div class="panel-body">
@@ -328,7 +380,8 @@
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span
-              ><span class="status-badge" [class]="getStatusClass(inv.status)">{{
+              >{{ ' '
+              }}<span class="status-badge" [class]="getStatusClass(inv.status)">{{
                 (inv.status | enumLabel: 'invoiceStatus') || '—'
               }}</span>
               @if (inv.creditedToInvoiceNumber) {
@@ -360,6 +413,20 @@
               <p>{{ inv.notes }}</p>
             </div>
           }
+          <!-- QA D1069: a cancelled invoice says why, when it was recorded -->
+          @if (inv.status === 'CANCELLED' && inv.cancelReason) {
+            <div class="notes-section" data-testid="cancel-reason">
+              <span class="field-label">{{ 'BILLING.CANCEL_REASON' | translate }}</span>
+              <p>
+                {{ inv.cancelReason }}
+                @if (inv.cancelledAt) {
+                  <span class="cell-secondary">
+                    · {{ inv.cancelledAt | serverTime | date: 'short' }}</span
+                  >
+                }
+              </p>
+            </div>
+          }
 
           <div class="lines-section">
             <h3>{{ 'BILLING.LINES' | translate }}</h3>
@@ -384,33 +451,120 @@
                 </thead>
                 <tbody>
                   @for (it of items(); track it.id) {
-                    <tr>
-                      <td>
-                        {{ it.itemDescription }}
-                        <div class="cell-secondary">
-                          {{ it.itemCategory | enumLabel: 'invoiceItemCategory' }}
-                        </div>
-                      </td>
-                      <td>{{ it.quantity }}</td>
-                      <td class="amount">{{ formatCurrency(it.unitPrice) }}</td>
-                      <td class="amount">{{ formatCurrency(it.totalPrice) }}</td>
-                      @if (canDelete || canEditLines(inv)) {
+                    @if (editingLineId() === it.id) {
+                      <!-- QA D1088: the line is priced in place; it keeps its id, owner and service.
+                           QA D1195 / D1155 (round 22): the editing row is an inline sub-form:
+                           Escape closes only it, asks first over a changed value, and the
+                           keyboard goes back to the line's pencil. -->
+                      <tr
+                        appInlineSubForm
+                        #lineForm="inlineSubForm"
+                        (dismissed)="cancelEditLine()"
+                        [inlineSubFormReturn]="'[data-testid=&quot;line-edit-' + it.id + '&quot;]'"
+                        [attr.data-testid]="'line-editor-' + it.id"
+                      >
                         <td>
-                          @if (canEditLines(inv)) {
-                            <button
-                              type="button"
-                              class="btn-secondary btn-sm"
-                              [disabled]="itemSaving()"
-                              [title]="'BILLING.REMOVE_LINE' | translate"
-                              [attr.aria-label]="'BILLING.REMOVE_LINE' | translate"
-                              (click)="removeItem(it)"
-                            >
-                              <span class="material-symbols-outlined">delete</span>
-                            </button>
-                          }
+                          {{ it.itemDescription }}
+                          <div class="cell-secondary">
+                            {{ it.itemCategory | enumLabel: 'invoiceItemCategory' }}
+                          </div>
                         </td>
-                      }
-                    </tr>
+                        <td>
+                          <input
+                            type="number"
+                            min="1"
+                            step="1"
+                            id="line-edit-qty"
+                            class="line-edit-input"
+                            [attr.aria-label]="'BILLING.LINE_QUANTITY' | translate"
+                            [attr.data-testid]="'line-qty-' + it.id"
+                            [ngModel]="editLineQuantity()"
+                            (ngModelChange)="editLineQuantity.set($event)"
+                          />
+                        </td>
+                        <td class="amount">
+                          <input
+                            type="number"
+                            min="1"
+                            step="1"
+                            id="line-edit-price"
+                            class="line-edit-input"
+                            [attr.aria-label]="'BILLING.LINE_UNIT_PRICE' | translate"
+                            [attr.data-testid]="'line-price-' + it.id"
+                            [ngModel]="editLineUnitPrice()"
+                            (ngModelChange)="editLineUnitPrice.set($event)"
+                            (keydown.enter)="saveLine(it)"
+                          />
+                        </td>
+                        <td class="amount">
+                          {{
+                            formatCurrency((editLineQuantity() ?? 0) * (editLineUnitPrice() ?? 0))
+                          }}
+                        </td>
+                        <td class="line-actions">
+                          <button
+                            type="button"
+                            class="btn-primary btn-sm"
+                            [disabled]="itemSaving()"
+                            [attr.data-testid]="'line-save-' + it.id"
+                            (click)="saveLine(it)"
+                          >
+                            {{ 'COMMON.SAVE' | translate }}
+                          </button>
+                          <button
+                            type="button"
+                            class="btn-secondary btn-sm"
+                            (click)="cancelEditLine()"
+                          >
+                            {{ 'COMMON.CANCEL' | translate }}
+                          </button>
+                          <app-inline-discard-ask [form]="lineForm" />
+                        </td>
+                      </tr>
+                    } @else {
+                      <tr>
+                        <td>
+                          {{ it.itemDescription }}
+                          <div class="cell-secondary">
+                            {{ it.itemCategory | enumLabel: 'invoiceItemCategory' }}
+                          </div>
+                        </td>
+                        <td>{{ it.quantity }}</td>
+                        <td class="amount" [class.unpriced]="!(it.unitPrice > 0)">
+                          {{ formatCurrency(it.unitPrice) }}
+                        </td>
+                        <td class="amount">{{ formatCurrency(it.totalPrice) }}</td>
+                        @if (canDelete || canEditLines(inv)) {
+                          <td class="line-actions">
+                            @if (canEditLines(inv)) {
+                              <button
+                                type="button"
+                                class="btn-secondary btn-sm"
+                                [disabled]="itemSaving()"
+                                [title]="'BILLING.EDIT_LINE' | translate"
+                                [attr.aria-label]="'BILLING.EDIT_LINE' | translate"
+                                [attr.data-testid]="'line-edit-' + it.id"
+                                (click)="startEditLine(it)"
+                              >
+                                <span class="material-symbols-outlined" aria-hidden="true"
+                                  >edit</span
+                                >
+                              </button>
+                              <button
+                                type="button"
+                                class="btn-secondary btn-sm"
+                                [disabled]="itemSaving()"
+                                [title]="'BILLING.REMOVE_LINE' | translate"
+                                [attr.aria-label]="'BILLING.REMOVE_LINE' | translate"
+                                (click)="removeItem(it)"
+                              >
+                                <span class="material-symbols-outlined">delete</span>
+                              </button>
+                            }
+                          </td>
+                        }
+                      </tr>
+                    }
                   }
                 </tbody>
               </table>
@@ -465,10 +619,125 @@
                 <button
                   type="button"
                   class="btn-primary"
-                  [disabled]="!canAddItem()"
+                  [disabled]="itemSaving()"
                   (click)="addItem()"
                 >
                   {{ 'BILLING.ADD_LINE' | translate }}
+                </button>
+              </div>
+            }
+          </div>
+
+          <!-- QA D974: discounts, waivers and credit notes, each with its reason. -->
+          <div class="lines-section adjustments-section" data-testid="adjustments">
+            <h3>{{ 'BILLING.ADJUSTMENTS' | translate }}</h3>
+            @if (adjustments().length === 0) {
+              <p class="field-hint">{{ 'BILLING.NO_ADJUSTMENTS' | translate }}</p>
+            } @else {
+              <ul class="adjustment-list">
+                @for (a of adjustments(); track a.id) {
+                  <li [attr.data-testid]="'adjustment-' + a.id" [class.reversed]="!!a.reversedAt">
+                    <strong>{{ 'BILLING.ADJUSTMENT_TYPES.' + a.type | translate }}</strong>
+                    — {{ formatCurrency(a.amount) }}
+                    @if (a.invoiceItemDescription) {
+                      ({{ a.invoiceItemDescription }})
+                    }
+                    <span class="field-hint">{{ a.reason }}</span>
+                    @if (a.reversedAt) {
+                      <!-- QA D1105: a reversed adjustment stays on the ledger, with why. -->
+                      {{ ' '
+                      }}<span
+                        class="badge badge-muted"
+                        [attr.data-testid]="'adjustment-reversed-' + a.id"
+                      >
+                        {{ 'BILLING.ADJUSTMENT_REVERSED_BADGE' | translate }}
+                        {{ a.reversedAt | serverTime | date: 'short' }}
+                      </span>
+                      @if (a.reversalReason) {
+                        <span class="field-hint">{{ a.reversalReason }}</span>
+                      }
+                    } @else if (canReverseAdjustment(inv, a)) {
+                      <button
+                        type="button"
+                        class="btn-link btn-sm"
+                        [attr.data-testid]="'adjustment-reverse-' + a.id"
+                        (click)="openAdjustmentReversal(a)"
+                      >
+                        {{ 'BILLING.ADJUSTMENT_REVERSE' | translate }}
+                      </button>
+                    }
+                  </li>
+                }
+              </ul>
+            }
+            @if (canAdjustInvoice(inv)) {
+              <div class="adjustment-form">
+                <div class="field">
+                  <label for="adj-type">{{ 'BILLING.ADJUSTMENT_TYPE' | translate }}</label>
+                  <select
+                    id="adj-type"
+                    [ngModel]="adjustmentType()"
+                    (ngModelChange)="adjustmentType.set($event)"
+                  >
+                    @for (t of adjustmentTypes; track t) {
+                      <option [value]="t">{{ 'BILLING.ADJUSTMENT_TYPES.' + t | translate }}</option>
+                    }
+                  </select>
+                </div>
+                @if (adjustmentType() === 'CREDIT_NOTE') {
+                  <div class="field">
+                    <label for="adj-line">{{ 'BILLING.ADJUSTMENT_LINE' | translate }} *</label>
+                    <select
+                      id="adj-line"
+                      required
+                      [ngModel]="adjustmentLineId()"
+                      (ngModelChange)="adjustmentLineId.set($event)"
+                    >
+                      <option value="">—</option>
+                      @for (it of items(); track it.id) {
+                        <option [value]="it.id">
+                          {{ it.itemDescription }} — {{ formatCurrency(it.totalPrice) }}
+                        </option>
+                      }
+                    </select>
+                  </div>
+                }
+                <div class="field">
+                  <label for="adj-amount"
+                    >{{ 'BILLING.ADJUSTMENT_AMOUNT' | translate
+                    }}{{ adjustmentType() === 'CREDIT_NOTE' ? '' : ' *' }}</label
+                  >
+                  <input
+                    id="adj-amount"
+                    type="number"
+                    min="1"
+                    step="1"
+                    [ngModel]="adjustmentAmount()"
+                    (ngModelChange)="adjustmentAmount.set($event)"
+                  />
+                  @if (adjustmentType() === 'CREDIT_NOTE') {
+                    <p class="field-hint">{{ 'BILLING.ADJUSTMENT_AMOUNT_HINT' | translate }}</p>
+                  }
+                </div>
+                <div class="field">
+                  <label for="adj-reason">{{ 'BILLING.ADJUSTMENT_REASON' | translate }} *</label>
+                  <textarea
+                    id="adj-reason"
+                    rows="2"
+                    maxlength="500"
+                    required
+                    [ngModel]="adjustmentReason()"
+                    (ngModelChange)="adjustmentReason.set($event)"
+                  ></textarea>
+                </div>
+                <button
+                  type="button"
+                  class="btn-secondary"
+                  data-testid="adjustment-submit"
+                  [disabled]="adjustmentSaving()"
+                  (click)="submitAdjustment()"
+                >
+                  {{ 'BILLING.ADJUSTMENT_SUBMIT' | translate }}
                 </button>
               </div>
             }
@@ -565,18 +834,25 @@
   <div class="modal-backdrop" tabindex="-1" (click)="closeModal()" (keydown.escape)="closeModal()">
     <div
       class="modal modal-lg"
+      appDialogA11y
       tabindex="-1"
+      aria-labelledby="bill-form-title"
+      (dialogClose)="closeModal()"
       (click)="$event.stopPropagation()"
       (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>
+        <h2 id="bill-form-title">
           {{
             editing() ? ('BILLING.EDIT_INVOICE' | translate) : ('BILLING.NEW_INVOICE' | translate)
           }}
         </h2>
-        <button class="modal-close" (click)="closeModal()">
-          <span class="material-symbols-outlined">close</span>
+        <button
+          class="modal-close"
+          (click)="closeModal()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
@@ -585,7 +861,7 @@
             <label for="bill-patient">{{ 'APPOINTMENTS.PATIENT' | translate }} *</label>
             @if (patientLocked()) {
               <p id="bill-patient" class="field-value" data-testid="bill-patient-locked">
-                {{ formPatient()?.firstName }} {{ formPatient()?.lastName }}
+                {{ formPatient() | personName }}
               </p>
               <p class="field-hint">{{ 'BILLING.PATIENT_LOCKED_ISSUED' | translate }}</p>
             } @else {
@@ -616,6 +892,24 @@
             }
           </div>
         </div>
+        <!-- QA D1069 / D1217: cancelling any invoice, a draft too, asks why; the reason is kept with it -->
+        @if (cancelling()) {
+          <div class="form-row">
+            <div class="field">
+              <label for="bill-cancel-reason">{{ 'BILLING.CANCEL_REASON' | translate }} *</label>
+              <textarea
+                id="bill-cancel-reason"
+                data-testid="cancel-reason-input"
+                [(ngModel)]="form.cancelReason"
+                maxlength="500"
+                rows="2"
+                required
+                [attr.aria-invalid]="!form.cancelReason?.trim()"
+                [placeholder]="'INVOICE_CANCEL.REASON_PLACEHOLDER' | translate"
+              ></textarea>
+            </div>
+          </div>
+        }
         <div class="form-row">
           <div class="field">
             <label for="bill-invoiceDate">{{ 'BILLING.INVOICE_DATE' | translate }} *</label>
@@ -669,12 +963,50 @@
             [placeholder]="'BILLING.ENCOUNTER_REFERENCE_PLACEHOLDER' | translate"
           />
           <p class="field-hint">{{ 'BILLING.ENCOUNTER_REFERENCE_HINT' | translate }}</p>
+          @if (!editing() && openCopays().length > 0) {
+            <div class="copay-notice" role="status" data-testid="open-copays">
+              <p>{{ 'BILLING.OPEN_COPAYS_INTRO' | translate }}</p>
+              <ul>
+                @for (c of openCopays(); track c.id) {
+                  <li>
+                    {{
+                      'BILLING.OPEN_COPAY_LINE'
+                        | translate
+                          : {
+                              amount: formatCurrency(c.amountPaid),
+                              visit: c.encounterCode,
+                              invoice: c.invoiceNumber,
+                            }
+                    }}
+                    @if (form.encounterReference === c.encounterCode) {
+                      <span class="copay-linked">{{
+                        'BILLING.OPEN_COPAY_LINKED' | translate
+                      }}</span>
+                    } @else {
+                      <button
+                        type="button"
+                        class="btn-secondary btn-sm"
+                        [attr.data-testid]="'link-copay-' + c.encounterCode"
+                        (click)="linkCopayVisit(c)"
+                      >
+                        {{ 'BILLING.OPEN_COPAY_LINK' | translate }}
+                      </button>
+                    }
+                  </li>
+                }
+              </ul>
+            </div>
+          }
         </div>
         <div class="field">
           <label for="bill-notes">{{ 'BILLING.NOTES' | translate }}</label>
+          <!-- QA D1057: an issued invoice's notes are locked like its dates and
+               total (the server refuses a change: QA D656); a cancellation
+               reason is not typed here. -->
           <textarea
             id="bill-notes"
             [(ngModel)]="form.notes"
+            [disabled]="issuedContentLocked()"
             rows="3"
             [placeholder]="'BILLING.NOTES_PLACEHOLDER' | translate"
           ></textarea>
@@ -687,7 +1019,9 @@
         <button
           class="btn-primary"
           (click)="submitForm()"
-          [disabled]="saving() || !form.patientId || !form.invoiceDate || !form.dueDate"
+          [disabled]="saving()"
+          [appSubmitGuard]="!form.patientId || !form.invoiceDate || !form.dueDate"
+          [submitGuardFields]="['bill-patient', 'bill-invoiceDate', 'bill-dueDate']"
         >
           {{
             saving()
@@ -712,14 +1046,21 @@
   >
     <div
       class="modal"
+      appDialogA11y
       tabindex="-1"
+      aria-labelledby="bill-delete-title"
+      (dialogClose)="cancelDelete()"
       (click)="$event.stopPropagation()"
       (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ 'BILLING.DELETE_INVOICE' | translate }}</h2>
-        <button class="modal-close" (click)="cancelDelete()">
-          <span class="material-symbols-outlined">close</span>
+        <h2 id="bill-delete-title">{{ 'BILLING.DELETE_INVOICE' | translate }}</h2>
+        <button
+          class="modal-close"
+          (click)="cancelDelete()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
@@ -744,16 +1085,23 @@
   <div class="modal-backdrop" tabindex="-1" (click)="closeEmail()" (keydown.escape)="closeEmail()">
     <div
       class="modal"
-      role="dialog"
-      aria-modal="true"
+      appDialogA11y
       tabindex="-1"
+      aria-labelledby="bill-email-title"
+      (dialogClose)="closeEmail()"
       (click)="$event.stopPropagation()"
       (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ 'BILLING.EMAIL_TITLE' | translate: { invoice: inv.invoiceNumber } }}</h2>
-        <button class="modal-close" (click)="closeEmail()">
-          <span class="material-symbols-outlined">close</span>
+        <h2 id="bill-email-title">
+          {{ 'BILLING.EMAIL_TITLE' | translate: { invoice: inv.invoiceNumber } }}
+        </h2>
+        <button
+          class="modal-close"
+          (click)="closeEmail()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
@@ -762,6 +1110,8 @@
           <input
             id="email-to"
             type="text"
+            inputmode="email"
+            autocomplete="email"
             [ngModel]="emailTo()"
             (ngModelChange)="emailTo.set($event)"
             [placeholder]="'BILLING.EMAIL_TO_HINT' | translate"
@@ -772,6 +1122,8 @@
           <input
             id="email-cc"
             type="text"
+            inputmode="email"
+            autocomplete="email"
             [ngModel]="emailCc()"
             (ngModelChange)="emailCc.set($event)"
           />
@@ -817,21 +1169,28 @@
   >
     <div
       class="modal"
-      role="dialog"
-      aria-modal="true"
+      appDialogA11y
       tabindex="-1"
+      aria-labelledby="bill-payment-title"
+      (dialogClose)="closePayment()"
       (click)="$event.stopPropagation()"
       (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ 'BILLING.PAYMENT_TITLE' | translate: { invoice: inv.invoiceNumber } }}</h2>
-        <button class="modal-close" (click)="closePayment()">
-          <span class="material-symbols-outlined">close</span>
+        <h2 id="bill-payment-title">
+          {{ 'BILLING.PAYMENT_TITLE' | translate: { invoice: inv.invoiceNumber } }}
+        </h2>
+        <button
+          class="modal-close"
+          (click)="closePayment()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
         <p class="payment-balance">
-          {{ 'BILLING.BALANCE_DUE' | translate }}:
+          {{ 'BILLING.BALANCE_DUE' | translate }}{{ 'COMMON.COLON' | translate }}
           <strong>{{ formatCurrency(inv.balanceDue) }}</strong>
         </p>
         @if (paymentPending() > 0) {
@@ -867,10 +1226,16 @@
           </select>
         </div>
         <div class="field">
-          <label for="payment-reference">{{ 'BILLING.PAYMENT_REFERENCE' | translate }}</label>
+          <!-- QA D1007: the methods the server refuses without a reference say so. -->
+          <label for="payment-reference"
+            >{{ 'BILLING.PAYMENT_REFERENCE' | translate
+            }}{{ paymentReferenceRequired() ? ' *' : '' }}</label
+          >
           <input
             id="payment-reference"
             type="text"
+            [required]="paymentReferenceRequired()"
+            [attr.aria-required]="paymentReferenceRequired()"
             maxlength="120"
             [ngModel]="paymentReference()"
             (ngModelChange)="paymentReference.set($event)"
@@ -893,6 +1258,69 @@
   </div>
 }
 
+<!-- ═══ REVERSE AN ADJUSTMENT (QA D1105) ═══ -->
+@if (reversingAdjustment(); as a) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeAdjustmentReversal()"
+    (keydown.escape)="closeAdjustmentReversal()"
+  >
+    <div
+      class="modal"
+      appDialogA11y
+      tabindex="-1"
+      aria-labelledby="bill-adj-reversal-title"
+      (dialogClose)="closeAdjustmentReversal()"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2 id="bill-adj-reversal-title">
+          {{ 'BILLING.ADJUSTMENT_REVERSE' | translate }} —
+          {{ 'BILLING.ADJUSTMENT_TYPES.' + a.type | translate }}
+          {{ formatCurrency(a.amount) }}
+        </h2>
+        <button
+          class="modal-close"
+          (click)="closeAdjustmentReversal()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label for="adj-reversal-reason"
+            >{{ 'BILLING.ADJUSTMENT_REVERSAL_REASON' | translate }} *</label
+          >
+          <textarea
+            id="adj-reversal-reason"
+            rows="3"
+            maxlength="500"
+            [ngModel]="adjustmentReversalReason()"
+            (ngModelChange)="adjustmentReversalReason.set($event)"
+          ></textarea>
+        </div>
+        <p class="muted-note">{{ 'BILLING.ADJUSTMENT_REVERSAL_NOTE' | translate }}</p>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="closeAdjustmentReversal()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          class="btn-primary"
+          data-testid="adjustment-reversal-confirm"
+          (click)="submitAdjustmentReversal()"
+          [disabled]="adjustmentReversalSaving()"
+        >
+          {{ 'COMMON.CONFIRM' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
 <!-- ═══ REVERSE / REJECT PAYMENT MODAL (QA D140, D142) ═══ -->
 @if (reversingPayment(); as p) {
   <div
@@ -903,22 +1331,27 @@
   >
     <div
       class="modal"
-      role="dialog"
-      aria-modal="true"
+      appDialogA11y
       tabindex="-1"
+      aria-labelledby="bill-reversal-title"
+      (dialogClose)="closeReversal()"
       (click)="$event.stopPropagation()"
       (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>
+        <h2 id="bill-reversal-title">
           {{
             (reversalMode() === 'reverse' ? 'BILLING.REVERSE_PAYMENT' : 'BILLING.REJECT_PAYMENT')
               | translate
           }}
           — {{ formatCurrency(p.amount) }}
         </h2>
-        <button class="modal-close" (click)="closeReversal()">
-          <span class="material-symbols-outlined">close</span>
+        <button
+          class="modal-close"
+          (click)="closeReversal()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
@@ -940,11 +1373,7 @@
         <button class="btn-secondary" (click)="closeReversal()">
           {{ 'COMMON.CANCEL' | translate }}
         </button>
-        <button
-          class="btn-primary"
-          (click)="submitReversal()"
-          [disabled]="paymentActionBusy() || !reversalReason().trim()"
-        >
+        <button class="btn-primary" (click)="submitReversal()" [disabled]="paymentActionBusy()">
           {{ 'COMMON.CONFIRM' | translate }}
         </button>
       </div>

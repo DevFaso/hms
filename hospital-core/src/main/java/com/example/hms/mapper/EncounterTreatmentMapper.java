@@ -56,7 +56,7 @@ public class EncounterTreatmentMapper {
 
     private String resolvePatientFullName(Encounter enc) {
         if (enc == null || enc.getPatient() == null) return null;
-        return joinName(enc.getPatient().getFirstName(), enc.getPatient().getLastName());
+        return enc.getPatient().getFullName();
     }
 
     private String resolvePatientPhone(Encounter enc) {

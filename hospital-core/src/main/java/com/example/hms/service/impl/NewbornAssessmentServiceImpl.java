@@ -85,6 +85,23 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
     private final CrossHospitalReachRecorder reachRecorder;
     private final MessageSource messageSource;
 
+    /**
+     * QA D1151 (round 21): a newborn assessment records something; a blank
+     * one was saved with no Apgar and no vitals. At least an Apgar score, a
+     * vital sign or an examination finding is required.
+     */
+    static void requireAssessmentFindings(NewbornAssessmentRequestDTO request) {
+        com.example.hms.service.support.ClinicalContent.requireAny("apgarOneMinute",
+            "maternity.newborn.findingsRequired",
+            request.getApgarOneMinute(), request.getApgarFiveMinute(), request.getApgarTenMinute(),
+            request.getApgarNotes(), request.getTemperatureCelsius(), request.getHeartRateBpm(),
+            request.getRespirationsPerMin(), request.getSystolicBpMmHg(), request.getDiastolicBpMmHg(),
+            request.getOxygenSaturationPercent(), request.getGlucoseMgDl(), request.getExamGeneralAppearance(),
+            request.getExamHeadNeck(), request.getExamChestLungs(), request.getExamCardiac(),
+            request.getExamAbdomen(), request.getExamGenitourinary(), request.getExamSkin(),
+            request.getExamNeurological(), request.getExamMusculoskeletal(), request.getExamNotes());
+    }
+
     @Override
     public NewbornAssessmentResponseDTO recordAssessment(UUID patientId,
                                                          NewbornAssessmentRequestDTO request,
@@ -93,6 +110,7 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
         if (request == null) {
             throw new BusinessException("maternity.newborn.payloadRequired");
         }
+        requireAssessmentFindings(request);
         Patient patient = patientRepository.findById(patientId)
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
         boolean recordedOnNewbornChart = isNeonate(patient);
@@ -411,7 +429,7 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
         // QA D605: the team is told even when the documenter is unknown.
         boolean notifyDocumenter = documentedBy != null && documentedBy.getUsername() != null;
         String fullName = assessment.getPatient() != null
-            ? (assessment.getPatient().getFirstName() + " " + assessment.getPatient().getLastName()).trim()
+            ? java.util.Objects.toString(assessment.getPatient().getFullName(), "")
             : "";
         assessment.getAlerts().stream()
             .filter(alert -> alert.getSeverity() == NewbornAlertSeverity.URGENT)
@@ -429,7 +447,7 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
             notificationService.createNotification("newborn.alert.notification",
                 new Object[]{typeKey, patientArg,
                     com.example.hms.service.maternity.ObstetricAlertEscalationWorker.alertMessageArg(
-                        messageKey, null, alert.getMessage())}, documentedBy.getUsername(), null);
+                        messageKey, null, alert.getMessage())}, documentedBy.getUsername(), "MATERNITY_ALERT");
         } catch (RuntimeException ex) {
             log.warn("Failed to create newborn alert notification: {}", ex.getMessage());
         }

@@ -56,8 +56,9 @@ describe('PatientPhotoComponent', () => {
     component.canEdit = false;
     fixture.detectChanges();
 
-    const button = fixture.nativeElement.querySelector('[data-testid="patient-photo-avatar"]');
-    expect(button.disabled).toBeTrue();
+    // QA D1124: no dead button — the avatar is a plain picture for this user.
+    const avatar = fixture.nativeElement.querySelector('[data-testid="patient-photo-avatar"]');
+    expect(avatar.tagName).toBe('DIV');
     component.openModal();
     expect(component.showModal()).toBeFalse();
   });

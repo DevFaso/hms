@@ -148,6 +148,8 @@ public class TransfusionMapper {
         UUID hospitalId = request.getHospital() != null ? request.getHospital().getId() : null;
         return TransfusionRequestResponseDTO.builder()
             .id(request.getId())
+            .authorUserId(request.getRequestedBy() != null && request.getRequestedBy().getUser() != null
+                ? request.getRequestedBy().getUser().getId() : null)
             .patientId(patient != null ? patient.getId() : null)
             .patientName(patientName(patient))
             .patientMrn(patient != null && hospitalId != null

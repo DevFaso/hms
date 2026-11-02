@@ -29,7 +29,19 @@ public interface DispenseRepository extends JpaRepository<Dispense, UUID> {
     Optional<Dispense> findLockedById(@Param("id") UUID id);
 
 
-    Page<Dispense> findByPrescriptionId(UUID prescriptionId, Pageable pageable);
+    /**
+     * QA D1128: every dispense list is newest first. These pages had no
+     * order, so "Délivrances récentes" showed ten arbitrary (in practice the
+     * oldest) fills and today's could not be cancelled from the screen. A
+     * prepared fill (PENDING) has no dispensedAt yet and sorts by when it was
+     * prepared, as the screen already sorted its page. A sort the client
+     * sends is applied after this one.
+     */
+    String NEWEST_FIRST = " ORDER BY COALESCE(d.dispensedAt, d.createdAt) DESC, d.id DESC";
+
+    @Query(value = "SELECT d FROM Dispense d WHERE d.prescription.id = :prescriptionId" + NEWEST_FIRST,
+        countQuery = "SELECT COUNT(d) FROM Dispense d WHERE d.prescription.id = :prescriptionId")
+    Page<Dispense> findByPrescriptionId(@Param("prescriptionId") UUID prescriptionId, Pageable pageable);
 
     /**
      * Roadmap row 4 / T-68 — lookup used by DispenseServiceImpl.createDispense
@@ -40,17 +52,35 @@ public interface DispenseRepository extends JpaRepository<Dispense, UUID> {
      */
     Optional<Dispense> findByIdempotencyKey(String idempotencyKey);
 
-    Page<Dispense> findByPatientId(UUID patientId, Pageable pageable);
+    /** QA D1128: newest first (see {@link #NEWEST_FIRST}). */
+    @Query(value = "SELECT d FROM Dispense d WHERE d.patient.id = :patientId" + NEWEST_FIRST,
+        countQuery = "SELECT COUNT(d) FROM Dispense d WHERE d.patient.id = :patientId")
+    Page<Dispense> findByPatientId(@Param("patientId") UUID patientId, Pageable pageable);
 
     /** Live dispenses of a page of prescriptions, newest first — the work queue's last-action lookup. */
     List<Dispense> findByPrescription_IdInAndStatusNotOrderByDispensedAtDesc(
             List<UUID> prescriptionIds, DispenseStatus excludedStatus);
 
-    Page<Dispense> findByPharmacyId(UUID pharmacyId, Pageable pageable);
+    /** QA D1058: each row names its patient and pharmacy, loaded with the page rather than one by one. */
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"patient", "pharmacy"})
+    @Query(value = "SELECT d FROM Dispense d WHERE d.pharmacy.id = :pharmacyId" + NEWEST_FIRST,
+        countQuery = "SELECT COUNT(d) FROM Dispense d WHERE d.pharmacy.id = :pharmacyId")
+    Page<Dispense> findByPharmacyId(@Param("pharmacyId") UUID pharmacyId, Pageable pageable);
+
+    /**
+     * QA D932: the newest fills of an item that is not kept in lots - from
+     * that pharmacy, of that catalogue item, with no lot - in the given states.
+     */
+    List<Dispense> findTop50ByPharmacy_IdAndMedicationCatalogItem_IdAndStockLotIsNullAndStatusInOrderByCreatedAtDesc(
+            UUID pharmacyId, UUID medicationCatalogItemId, Collection<DispenseStatus> statuses);
 
     /** QA D653: the fills taken from one lot in the given states, newest first. */
     List<Dispense> findByStockLot_IdAndStatusInOrderByCreatedAtDesc(UUID stockLotId,
                                                                     Collection<DispenseStatus> statuses);
+
+    /** Review of #975: the return form lists at most 50 fills of a lot; the query stops there too. */
+    List<Dispense> findTop50ByStockLot_IdAndStatusInOrderByCreatedAtDesc(UUID stockLotId,
+            java.util.Collection<com.example.hms.enums.DispenseStatus> statuses);
 
     /**
      * T-39: dispenses completed within a time window — used by the refill reminder scheduler
@@ -97,6 +127,18 @@ public interface DispenseRepository extends JpaRepository<Dispense, UUID> {
     default BigDecimal sumQuantityCommittedForPrescription(UUID prescriptionId) {
         return sumQuantityDispensedForPrescription(prescriptionId, List.of(DispenseStatus.CANCELLED));
     }
+
+    /**
+     * QA D1001: {@link #sumQuantityCommittedForPrescription} for a whole work
+     * queue page in one query, as {@code [prescriptionId, committed]} rows; a
+     * prescription with no fill has no row.
+     */
+    @Query("SELECT d.prescription.id, COALESCE(SUM(d.quantityDispensed), 0) FROM Dispense d "
+         + "WHERE d.prescription.id IN :prescriptionIds "
+         + "AND d.status <> com.example.hms.enums.DispenseStatus.CANCELLED "
+         + "GROUP BY d.prescription.id")
+    List<Object[]> sumQuantityCommittedByPrescriptionIds(
+            @Param("prescriptionIds") Collection<UUID> prescriptionIds);
 
     /* ── Ready for collection (G15) ─────────────────────────────────────── */
 

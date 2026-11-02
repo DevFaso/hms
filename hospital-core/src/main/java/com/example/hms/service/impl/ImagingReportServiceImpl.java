@@ -110,6 +110,9 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         }
 
         ImagingOrder imagingOrder = loadOrderScoped(request.getImagingOrderId());
+        // QA D1098 (round 19): reports were written and signed FINAL on
+        // cancelled orders. A cancelled order takes no result: place a new one.
+        requireOrderNotCancelled(imagingOrder);
         Hospital hospital = imagingOrder.getHospital();
         if (hospital == null) {
             throw new BusinessException("Imaging order has no hospital context; a report cannot be filed against it.");
@@ -125,6 +128,7 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         imagingReportMapper.updateReportFromRequest(report, request);
         applyAuthoredStatus(report, request, imagingOrder, true);
         applyCriticalFlag(report, request);
+        requireReportFindings(report);
 
         enforceUniqueReportNumber(report.getReportNumber(), hospital.getId(), null);
         assignVersioningForCreate(report, imagingOrder.getId());
@@ -142,6 +146,18 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         return imagingReportMapper.toResponseDTO(saved);
     }
 
+    /**
+     * QA D1150 / D1182 class (rounds 21 and 22): a report says what the study
+     * showed - a technique, findings, an impression, recommendations, a
+     * measurement or an attachment. Checked on the report as it will be saved,
+     * after the request is applied, on create AND on edit.
+     */
+    static void requireReportFindings(ImagingReport report) {
+        com.example.hms.service.support.ClinicalContent.requireAny("findings", "imaging.report.findingsRequired",
+            report.getTechnique(), report.getFindings(), report.getImpression(), report.getRecommendations(),
+            report.getMeasurements(), report.getAttachments());
+    }
+
     @Override
     public ImagingReportResponseDTO updateReport(UUID reportId, ImagingReportUpsertRequestDTO request) {
         if (request == null) {
@@ -149,6 +165,8 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         }
 
         ImagingReport report = loadReportScoped(reportId);
+        // QA D930 class: a draft read is its author's to revise.
+        requireReportAuthor(report);
 
         // Signing closes the report. Revisions are new versions, which is what
         // report_version / is_latest_version have modelled since V1 — editing
@@ -164,6 +182,7 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         if (imagingOrder == null) {
             throw new BusinessException("Imaging report must remain associated with an imaging order.");
         }
+        requireOrderNotCancelled(imagingOrder);
         if (request.getImagingOrderId() != null
             && !Objects.equals(imagingOrder.getId(), request.getImagingOrderId())) {
             // Re-pointing a report at a different order would move it between
@@ -178,6 +197,9 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         imagingReportMapper.updateReportFromRequest(report, request);
         applyAuthoredStatus(report, request, imagingOrder, false);
         applyCriticalFlag(report, request);
+        // QA D1182 class (round 22): the edit replaces the text of the read, so
+        // an edit with nothing in it saved a blank report the create refuses.
+        requireReportFindings(report);
 
         enforceUniqueReportNumber(report.getReportNumber(), hospital != null ? hospital.getId() : null, report.getId());
         report.setUpdatedBy(roleValidator.getCurrentUserId());
@@ -195,6 +217,9 @@ public class ImagingReportServiceImpl implements ImagingReportService {
     @Override
     public ImagingReportResponseDTO signReport(UUID reportId) {
         ImagingReport report = loadReportScoped(reportId);
+        // QA D930 class: a colleague does not sign another clinician's read.
+        requireReportAuthor(report);
+        requireOrderNotCancelled(report.getImagingOrder());
 
         if (report.isSigned()) {
             throw new BusinessException(
@@ -290,6 +315,8 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         }
 
         ImagingReport report = loadReportScoped(reportId);
+        // QA D930 class: cancelling or voiding a draft read is its author's call.
+        requireReportAuthor(report);
         if (report.isSigned()) {
             throw new BusinessException(
                 "A signed report cannot be voided. Supersede it with a corrected report against the "
@@ -531,6 +558,14 @@ public class ImagingReportServiceImpl implements ImagingReportService {
             .anyMatch(ImagingReport::isSigned);
     }
 
+    /** QA D1098: no report is written, revised or signed on a cancelled order. */
+    private static void requireOrderNotCancelled(ImagingOrder order) {
+        if (order != null) {
+            com.example.hms.service.support.CancelledOrders.requireNotCancelled(order.getStatus(),
+                "imaging.order.cancelled.locked");
+        }
+    }
+
     private void promoteOrderToResultsAvailable(ImagingOrder order) {
         if (order == null) {
             return;
@@ -593,6 +628,33 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         } else if (report.getInterpretingProvider() == null) {
             report.setInterpretingProvider(currentStaff(hospital));
         }
+    }
+
+    /**
+     * QA D930 class: who may revise, sign, cancel or void a report. Its
+     * interpreting provider, or the clinician who filed it ({@code createdBy}):
+     * a resident who files a draft and names the attending as interpreting
+     * provider hands the attending the signature, which is the supervision
+     * path. A verified super-admin in global view keeps the old reach. A
+     * report with neither recorded keeps the old rule (any clinician in
+     * scope). Anyone else gets 403; the report was resolved in scope first.
+     */
+    private void requireReportAuthor(ImagingReport report) {
+        Staff interpreter = report.getInterpretingProvider();
+        UUID interpreterUserId = interpreter != null && interpreter.getUser() != null
+            ? interpreter.getUser().getId()
+            : null;
+        UUID filedBy = report.getCreatedBy();
+        if ((interpreterUserId == null && filedBy == null)
+                || com.example.hms.security.CallerIdentity.isGlobalSuperAdmin()) {
+            return;
+        }
+        UUID caller = roleValidator.getCurrentUserId();
+        if (caller != null && (caller.equals(interpreterUserId) || caller.equals(filedBy))) {
+            return;
+        }
+        throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+            com.example.hms.utility.MessageUtil.resolveOrRaw("imaging.report.authorOnly"));
     }
 
     /** The authenticated caller's staff profile AT THIS HOSPITAL, or null. */

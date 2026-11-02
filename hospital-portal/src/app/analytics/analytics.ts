@@ -18,6 +18,7 @@ import {
 import { KpiCardsComponent } from './kpi-cards/kpi-cards.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { serverDateOrInstant } from '../shared/date-utils';
+import { MeasurePipe } from '../shared/pipes/measure.pipe';
 
 interface StatCard {
   /** i18n key, not text: the cards are rendered with | translate. */
@@ -31,7 +32,7 @@ interface StatCard {
 @Component({
   selector: 'app-analytics',
   standalone: true,
-  imports: [CommonModule, TranslateModule, KpiCardsComponent, EnumLabelPipe],
+  imports: [MeasurePipe, CommonModule, TranslateModule, KpiCardsComponent, EnumLabelPipe],
   templateUrl: './analytics.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './analytics.scss',

@@ -160,6 +160,7 @@
                       type="button"
                       class="btn-secondary btn-sm"
                       [title]="'COMMON.EDIT' | translate"
+                      [attr.aria-label]="'COMMON.EDIT' | translate"
                       (click)="openEditResource(r)"
                     >
                       <span class="material-symbols-outlined">edit</span>
@@ -170,6 +171,7 @@
                       type="button"
                       class="btn-secondary btn-sm danger"
                       [title]="'COMMON.DELETE' | translate"
+                      [attr.aria-label]="'COMMON.DELETE' | translate"
                       (click)="confirmDelete(r)"
                     >
                       <span class="material-symbols-outlined">delete</span>
@@ -250,7 +252,7 @@
                     <div class="progress-track">
                       <div class="progress-fill" [style.width.%]="p.progressPercentage"></div>
                     </div>
-                    <span class="muted">{{ p.progressPercentage }}%</span>
+                    <span class="muted">{{ p.progressPercentage | measure: '%' }}</span>
                   } @else {
                     <span class="muted">—</span>
                   }
@@ -264,6 +266,7 @@
                     type="button"
                     class="btn-secondary btn-sm"
                     [title]="'EDUCATION.UPDATE_PROGRESS' | translate"
+                    [attr.aria-label]="'EDUCATION.UPDATE_PROGRESS' | translate"
                     (click)="openProgressUpdate(p)"
                   >
                     <span class="material-symbols-outlined">edit_note</span>
@@ -288,14 +291,16 @@
   >
     <div
       class="modal modal-lg"
+      appModalDialog
+      aria-labelledby="patient-education-dialog-3-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeResourceModal(); $event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>
+        <h2 id="patient-education-dialog-3-title">
           {{
             (editingResourceId() ? 'EDUCATION.EDIT_RESOURCE' : 'EDUCATION.NEW_RESOURCE') | translate
           }}
@@ -398,7 +403,9 @@
         <button
           type="button"
           class="btn-primary"
-          [disabled]="resourceSaving() || !resourceForm.title"
+          [disabled]="resourceSaving()"
+          [appSubmitGuard]="!resourceForm.title"
+          [submitGuardFields]="['edu-title']"
           (click)="submitResource()"
         >
           {{ 'COMMON.SAVE' | translate }}
@@ -418,14 +425,16 @@
   >
     <div
       class="modal"
+      appModalDialog
+      aria-labelledby="patient-education-dialog-2-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeAssign(); $event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ 'EDUCATION.ASSIGN_TITLE' | translate }}</h2>
+        <h2 id="patient-education-dialog-2-title">{{ 'EDUCATION.ASSIGN_TITLE' | translate }}</h2>
         <button
           type="button"
           class="modal-close"
@@ -453,7 +462,9 @@
         <button
           type="button"
           class="btn-primary"
-          [disabled]="assignBusy() || !assignResourceId"
+          [disabled]="assignBusy()"
+          [appSubmitGuard]="!assignResourceId"
+          [submitGuardFields]="['edu-assign-resource']"
           (click)="submitAssign()"
         >
           {{ 'EDUCATION.ASSIGN' | translate }}
@@ -473,14 +484,16 @@
   >
     <div
       class="modal"
+      appModalDialog
+      aria-labelledby="patient-education-dialog-1-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeProgressModal(); $event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ 'EDUCATION.UPDATE_PROGRESS' | translate }}</h2>
+        <h2 id="patient-education-dialog-1-title">{{ 'EDUCATION.UPDATE_PROGRESS' | translate }}</h2>
         <button
           type="button"
           class="modal-close"

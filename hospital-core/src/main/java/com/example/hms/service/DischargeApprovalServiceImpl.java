@@ -35,13 +35,13 @@ import java.util.UUID;
 @Slf4j
 public class DischargeApprovalServiceImpl implements DischargeApprovalService {
     private static final String ROLE_ASSIGNMENT_NOT_FOUND_KEY = "roleAssignment.notFound";
+    /** QA D1112: the requesting nurse withdraws her own discharge request. */
+    private static final String CANCEL_REQUESTER_ONLY = "dischargeApproval.cancel.requesterOnly";
 
 
     private static final EnumSet<DischargeStatus> ACTIVE_STATUSES = EnumSet.of(DischargeStatus.PENDING, DischargeStatus.APPROVED);
 
-    private static final java.util.Set<AdmissionStatus> OPEN_ADMISSION_STATUSES = java.util.EnumSet.of(
-        AdmissionStatus.PENDING, AdmissionStatus.ACTIVE, AdmissionStatus.ON_LEAVE,
-        AdmissionStatus.AWAITING_DISCHARGE);
+    private static final java.util.Set<AdmissionStatus> OPEN_ADMISSION_STATUSES = AdmissionStatus.OPEN;
 
     private final DischargeApprovalRepository dischargeApprovalRepository;
     private final PatientHospitalRegistrationRepository registrationRepository;
@@ -57,7 +57,7 @@ public class DischargeApprovalServiceImpl implements DischargeApprovalService {
     @Transactional
     public DischargeApprovalResponseDTO requestDischarge(DischargeApprovalRequestDTO request) {
         if (request == null) {
-            throw new BusinessException("Request payload is required for discharge approval");
+            throw new BusinessException("dischargeApproval.payloadRequired");
         }
 
         PatientHospitalRegistration registration = registrationRepository.findById(request.getRegistrationId())
@@ -65,12 +65,18 @@ public class DischargeApprovalServiceImpl implements DischargeApprovalService {
         // QA r5 tenancy sweep: only the registration's own hospital requests its discharge.
         com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(registration.getHospital(), "registration.notFound", request.getRegistrationId());
         if (!registration.isActive()) {
-            throw new BusinessException("Registration is inactive and cannot be discharged");
+            throw new BusinessException("dischargeApproval.registrationInactive");
         }
         if (registration.getStayStatus() == PatientStayStatus.DISCHARGED) {
-            throw new BusinessException("Discharge already completed for this registration");
+            throw new BusinessException("dischargeApproval.alreadyDischarged");
         }
         ensureNoActiveRequest(registration.getId());
+        // QA D1065: a discharge ends a hospital stay. A walk-in who left without
+        // being seen, or any patient merely registered here, has none to end.
+        if (admissionRepository.findByPatient_IdAndHospital_IdAndStatusIn(registration.getPatient().getId(),
+                registration.getHospital().getId(), OPEN_ADMISSION_STATUSES).isEmpty()) {
+            throw new BusinessException("discharge.request.notAdmitted");
+        }
 
         Staff nurse = staffRepository.findByIdAndActiveTrue(request.getNurseStaffId())
             .orElseThrow(() -> new ResourceNotFoundException("staff.nurse.notFoundOrInactive", request.getNurseStaffId()));
@@ -165,6 +171,9 @@ public class DischargeApprovalServiceImpl implements DischargeApprovalService {
     public DischargeApprovalResponseDTO reject(UUID approvalId, DischargeApprovalDecisionDTO decision) {
         DischargeApproval approval = getApprovalOrThrow(approvalId);
         ensurePending(approval);
+        // QA D1160 class (round 21): a refused discharge says why, on the server.
+        String rejectionReason = com.example.hms.service.support.CancelledOrders.requireCancelReason(
+            decision.getRejectionReason());
 
         Staff doctor = staffRepository.findByIdAndActiveTrue(decision.getDoctorStaffId())
             .orElseThrow(() -> new ResourceNotFoundException("staff.doctor.notFoundOrInactive", decision.getDoctorStaffId()));
@@ -178,7 +187,7 @@ public class DischargeApprovalServiceImpl implements DischargeApprovalService {
         approval.setDoctor(doctor);
         approval.setDoctorAssignment(doctorAssignment);
         approval.setDoctorNote(trim(decision.getDoctorNote()));
-        approval.setRejectionReason(trim(decision.getRejectionReason()));
+        approval.setRejectionReason(rejectionReason);
         approval.setStatus(DischargeStatus.REJECTED);
         approval.setApprovedAt(null);
         approval.setResolvedAt(LocalDateTime.now());
@@ -197,20 +206,26 @@ public class DischargeApprovalServiceImpl implements DischargeApprovalService {
     public DischargeApprovalResponseDTO cancel(UUID approvalId, UUID cancelledByStaffId, String reason) {
         DischargeApproval approval = getApprovalOrThrow(approvalId);
         ensurePending(approval);
+        // QA D1160 (round 21): a withdrawn discharge request says why; a blank
+        // reason was accepted (200) and nothing recorded the decision.
+        String cancelReason = com.example.hms.service.support.CancelledOrders.requireCancelReason(reason);
 
         if (approval.getNurse() == null) {
-            throw new BusinessException("Cannot cancel discharge request: no nurse associated with this approval");
+            throw new BusinessException("dischargeApproval.cancel.noRequester");
         }
+        // QA D1112: the refusal names the rule (the requesting nurse withdraws
+        // her own request), in the reader's language.
         if (cancelledByStaffId != null && !Objects.equals(approval.getNurse().getId(), cancelledByStaffId)) {
-            throw new BusinessException("Only the requesting nurse can cancel a discharge request");
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw(CANCEL_REQUESTER_ONLY));
         }
         // QA D503 class: the staffId on the request is a claim; the caller
         // must be the requesting nurse herself.
-        requireCallerUnlessSuperAdmin(approval.getNurse());
+        com.example.hms.security.CallerIdentity.requireAuthorUnlessSuperAdmin(approval.getNurse(), CANCEL_REQUESTER_ONLY);
 
         approval.setStatus(DischargeStatus.CANCELLED);
         approval.setResolvedAt(LocalDateTime.now());
-        approval.setRejectionReason(trim(reason));
+        approval.setRejectionReason(cancelReason);
         approval.setDoctor(null);
         approval.setDoctorAssignment(null);
         approval.setDoctorNote(null);
@@ -257,13 +272,13 @@ public class DischargeApprovalServiceImpl implements DischargeApprovalService {
         Set<DischargeStatus> pendingStatuses = EnumSet.of(DischargeStatus.PENDING);
         boolean hasActive = !dischargeApprovalRepository.findByRegistration_IdAndStatusIn(registrationId, pendingStatuses).isEmpty();
         if (hasActive) {
-            throw new BusinessException("A pending discharge approval already exists for this registration");
+            throw new BusinessException("dischargeApproval.alreadyPending");
         }
     }
 
     private void ensurePending(DischargeApproval approval) {
         if (approval.getStatus() != DischargeStatus.PENDING) {
-            throw new BusinessException("Only pending discharge approvals can be processed");
+            throw new BusinessException("dischargeApproval.notPending");
         }
     }
 
@@ -277,22 +292,22 @@ public class DischargeApprovalServiceImpl implements DischargeApprovalService {
 
     private void validateStaffHospitalMatch(Staff staff, PatientHospitalRegistration registration) {
         if (staff.getHospital() == null || registration.getHospital() == null) {
-            throw new BusinessException("Staff or registration is missing hospital context");
+            throw new BusinessException("dischargeApproval.noHospitalContext");
         }
         if (!Objects.equals(staff.getHospital().getId(), registration.getHospital().getId())) {
-            throw new BusinessException("Staff and registration belong to different hospitals");
+            throw new BusinessException("dischargeApproval.hospitalMismatch");
         }
     }
 
     private void validateAssignment(UserRoleHospitalAssignment assignment, Staff staff, UUID hospitalId) {
         if (assignment.getHospital() == null || !Objects.equals(assignment.getHospital().getId(), hospitalId)) {
-            throw new BusinessException("Assignment is not linked to the target hospital");
+            throw new BusinessException("dischargeApproval.assignmentHospitalMismatch");
         }
         if (assignment.getRole() == null || assignment.getRole().getCode() == null) {
-            throw new BusinessException("Assignment is missing an associated role");
+            throw new BusinessException("dischargeApproval.assignmentNoRole");
         }
         if (staff.getAssignment() == null || !Objects.equals(staff.getAssignment().getId(), assignment.getId())) {
-            throw new BusinessException("Staff is not linked to the provided assignment");
+            throw new BusinessException("dischargeApproval.staffAssignmentMismatch");
         }
     }
 

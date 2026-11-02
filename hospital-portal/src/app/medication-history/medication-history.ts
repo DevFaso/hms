@@ -26,7 +26,12 @@ import { ToastService } from '../core/toast.service';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { MedicationRoutePipe } from '../shared/pipes/medication-route.pipe';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { refusalReason } from '../shared/refusal-reason';
+import { PhoneFieldDirective } from '../shared/forms/phone-field.directive';
 /**
  * Medication-history workspace (Phase 3 task 15): the /medication-history
  * timeline (prescriptions + external pharmacy fills with overlap/interaction
@@ -38,6 +43,10 @@ import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    PhoneFieldDirective,
+    SubmitGuardDirective,
+    ModalDialogDirective,
+    MedicationRoutePipe,
     ServerTimePipe,
     CommonModule,
     FormsModule,
@@ -251,8 +260,10 @@ export class MedicationHistoryComponent implements OnInit {
         );
         this.reloadTimelineOnly();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('MED_TIMELINE.FILL_SAVE_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('MED_TIMELINE.FILL_SAVE_ERROR'),
+        );
         this.fillSaving.set(false);
       },
     });

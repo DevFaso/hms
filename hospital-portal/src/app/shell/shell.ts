@@ -1,3 +1,4 @@
+import { EMPI_MATCHER_ROLES, EmpiStatusService } from '../reception/empi-status.service';
 import {
   Component,
   computed,
@@ -11,6 +12,8 @@ import {
   ViewChild,
   AfterViewInit,
   ChangeDetectionStrategy,
+  Injector,
+  afterNextRender,
 } from '@angular/core';
 import { NavigationEnd, RouterOutlet, RouterLink, RouterLinkActive, Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
@@ -43,6 +46,8 @@ import {
 } from './nav-groups';
 import { ProviderContextService } from '../core/provider-context.service';
 import { SkipLinkComponent } from '../shared/a11y/skip-link.component';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { DrawerDialogDirective } from '../shared/a11y/drawer-dialog.directive';
 import { BrandMarkComponent } from '../shared/brand-mark/brand-mark.component';
 import { HospitalScopeGateService } from '../core/hospital-scope-gate.service';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
@@ -87,6 +92,8 @@ function isMobileViewport(): boolean {
     SkipLinkComponent,
     BrandMarkComponent,
     RoleLabelPipe,
+    ModalDialogDirective,
+    DrawerDialogDirective,
   ],
   templateUrl: './shell.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -120,7 +127,9 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   private readonly downtime = inject(DowntimeService);
   /** Whether this session acts at a provider facility (provider plan AC-12). */
   private readonly providerContext = inject(ProviderContextService);
+  private readonly empiStatus = inject(EmpiStatusService);
   readonly translate = inject(TranslateService);
+  private readonly injector = inject(Injector);
   private notifSub?: Subscription;
   private readCountSub?: Subscription;
 
@@ -133,6 +142,18 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
    * "did nothing" (QA D116).
    */
   sidebarCollapsed = signal(isMobileViewport());
+  /** Whether the viewport is a phone's (the sidebar is then a drawer over the page). */
+  private readonly phoneViewport = signal(isMobileViewport());
+  /**
+   * QA D1153 / D1125 (round 21): the drawer open on a phone is a modal over the
+   * page (appDrawerDialog: focus in, Tab kept inside, Escape from anywhere,
+   * focus back to Menu); the page behind it is inert. On a wide screen the
+   * expanded sidebar is a landmark beside the page, never a modal.
+   */
+  readonly phoneDrawerOpen = computed(() => this.phoneViewport() && !this.sidebarCollapsed());
+  private readonly phoneQuery = globalThis.matchMedia?.(MOBILE_SIDEBAR_QUERY);
+  private readonly onPhoneQueryChange = (event: MediaQueryListEvent): void =>
+    this.phoneViewport.set(event.matches);
   profileMenuOpen = signal(false);
   notifPanelOpen = signal(false);
   unreadCount = signal(0);
@@ -1065,6 +1086,19 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           route: '/pharmacy/stock-adjustment',
         },
         {
+          // QA D967: mirrors the /pharmacy/controlled-register RoleGuard.
+          icon: 'local_police',
+          label: 'Controlled-Drug Register',
+          translationKey: 'NAV.CONTROLLED_REGISTER',
+          route: '/pharmacy/controlled-register',
+          roles: [
+            'ROLE_PHARMACIST',
+            'ROLE_STORE_MANAGER',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        {
           icon: 'medication',
           label: 'Dispensing',
           translationKey: 'NAV.DISPENSING',
@@ -1393,14 +1427,10 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     // doctors could not reach the panel at all, the second reachability
     // defect on this same surface. Roles mirror the RoleGuard on
     // 'reception/empi-candidates'.
+    // QA D987: and only while the matcher is switched on; it answers 404 off.
     if (
-      this.hasAnyRole([
-        'ROLE_RECEPTIONIST',
-        'ROLE_NURSE',
-        'ROLE_DOCTOR',
-        'ROLE_HOSPITAL_ADMIN',
-        'ROLE_SUPER_ADMIN',
-      ])
+      (this.empiStatus.enabled() === true || this.empiStatus.failed()) &&
+      this.hasAnyRole([...EMPI_MATCHER_ROLES])
     ) {
       items.push({
         icon: 'join_inner',
@@ -1649,8 +1679,12 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   ngOnInit(): void {
+    // A test double of matchMedia may carry no listener API.
+    this.phoneQuery?.addEventListener?.('change', this.onPhoneQueryChange);
     this.userProfile.set(this.auth.getUserProfile());
     this.permissions.loadFromBackend();
+    // QA D987: the duplicate-patient entry depends on the matcher being on.
+    this.empiStatus.load();
 
     this.loadNotifications();
     this.loadUnreadMessages();
@@ -1695,15 +1729,25 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         // A successful navigation proves the chunk graph is healthy — re-arm
         // the one-shot stale-chunk reload guard (see app.config.ts).
         sessionStorage.removeItem('hms-chunk-reload');
+        const focusMain = () => this.mainContent?.nativeElement.focus({ preventScroll: true });
+        // QA D1153: the open phone drawer keeps the page inert until this
+        // render; <main> takes focus once it is reachable again (the drawer
+        // then leaves focus where it is instead of sending it back to Menu).
+        if (this.phoneDrawerOpen()) {
+          this.sidebarCollapsed.set(true);
+          afterNextRender(focusMain, { injector: this.injector });
+          return;
+        }
         if (isMobileViewport()) this.sidebarCollapsed.set(true);
         // queueMicrotask defers until after the new component has
         // rendered into the outlet so focus actually lands on the
         // freshly painted <main>, not the previous one.
-        queueMicrotask(() => this.mainContent?.nativeElement.focus({ preventScroll: true }));
+        queueMicrotask(focusMain);
       });
   }
 
   ngOnDestroy(): void {
+    this.phoneQuery?.removeEventListener?.('change', this.onPhoneQueryChange);
     this.notifSub?.unsubscribe();
     this.readCountSub?.unsubscribe();
     this.routerSub?.unsubscribe();
@@ -1876,6 +1920,17 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
   /** The mobile drawer's backdrop: a tap outside the drawer closes it. */
   closeSidebar(): void {
+    this.sidebarCollapsed.set(true);
+  }
+
+  /**
+   * QA D1125: Escape inside the phone drawer closes it and gives focus back to
+   * the menu button (the drawer is hidden, so focus would fall to the page).
+   * On a wide screen the expanded sidebar is not an overlay: Escape leaves it.
+   */
+  closeSidebarFromKeyboard(): void {
+    if (this.sidebarCollapsed() || !isMobileViewport()) return;
+    // appDrawerDialog gives focus back to the Menu button that opened the drawer.
     this.sidebarCollapsed.set(true);
   }
 

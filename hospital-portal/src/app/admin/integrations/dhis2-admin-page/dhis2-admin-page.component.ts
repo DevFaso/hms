@@ -19,6 +19,7 @@ import { Dhis2MappingEditorComponent } from '../dhis2-mapping-editor/dhis2-mappi
 import { ServerTimePipe } from '../../../shared/pipes/server-time.pipe';
 import { refusalReason } from '../../../shared/refusal-reason';
 
+import { SubmitGuardDirective } from '../../../shared/forms/submit-guard.directive';
 type Tab = 'config' | 'mappings' | 'exports';
 
 /**
@@ -33,6 +34,7 @@ type Tab = 'config' | 'mappings' | 'exports';
   selector: 'app-dhis2-admin-page',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
     ServerTimePipe,
     CommonModule,
     FormsModule,
@@ -171,17 +173,18 @@ type Tab = 'config' | 'mappings' | 'exports';
             type="submit"
             class="btn-primary"
             data-testid="dhis2-config-save"
-            [disabled]="!canSaveConfig() || saving()"
+            [disabled]="saving()"
+            [appSubmitGuard]="!canSaveConfig()"
           >
             {{ 'COMMON.SAVE' | translate }}
           </button>
 
           @if (loadedConfig(); as cfg) {
             <p class="dhis2-admin__last-export" data-testid="dhis2-config-last-export">
-              {{ 'DHIS2.CONFIG.LAST_EXPORT' | translate }}:
+              {{ 'DHIS2.CONFIG.LAST_EXPORT' | translate }}{{ 'COMMON.COLON' | translate }}
               {{ cfg.lastExportAt ? (cfg.lastExportAt | serverTime | date: 'short') : '—' }}
               ·
-              {{ 'DHIS2.CONFIG.SECRET_CONFIGURED' | translate }}:
+              {{ 'DHIS2.CONFIG.SECRET_CONFIGURED' | translate }}{{ 'COMMON.COLON' | translate }}
               {{ cfg.authSecretConfigured ? '✓' : '✗' }}
             </p>
           }

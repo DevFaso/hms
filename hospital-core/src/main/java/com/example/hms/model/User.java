@@ -60,7 +60,12 @@ public class User extends BaseEntity {
     @Column(length = 100)
     private String lastName;
 
-    @Column(name = "phone_number", length = 20, nullable = false, unique = true)
+    /**
+     * The login phone. QA D1061 (V249): null for a dependant registered under
+     * a guardian's number, which stays the contact on the patient record; the
+     * unique index ignores NULLs.
+     */
+    @Column(name = "phone_number", length = 20, unique = true)
     private String phoneNumber;
 
     @Column(name = "profile_image_url", length = 500)

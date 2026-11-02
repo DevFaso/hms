@@ -52,7 +52,7 @@ public class LabResultMapper {
 
         OrderContext context = extractOrderContext(result.getLabOrder());
         List<LabResultReferenceRangeDTO> referenceRanges = toReferenceRangeDtos(context.referenceRanges());
-        Grading grading = gradingOf(result.getResultUnit(), context.testUnit(), context.referenceRanges());
+        Grading grading = gradingOf(result.getResultUnit(), context.testUnit(), context.referenceRanges(), demographicsOf(result));
         String severityFlag = effectiveSeverityFlag(result, grading.range(), context.expectedResult());
 
         return LabResultResponseDTO.builder()
@@ -60,6 +60,7 @@ public class LabResultMapper {
             .labOrderId(result.getLabOrder() != null && result.getLabOrder().getId() != null
                 ? result.getLabOrder().getId().toString() : null)
             .labOrderCode(context.labOrderCode())
+            .orderPriority(result.getLabOrder() != null ? result.getLabOrder().getPriority() : null)
             .labTestCode(context.labTestCode())
             .patientId(result.getLabOrder() != null && result.getLabOrder().getPatient() != null
                 && result.getLabOrder().getPatient().getId() != null
@@ -76,10 +77,13 @@ public class LabResultMapper {
                 : com.example.hms.utility.MessageUtil.resolveOrRaw(LabOrderMapper.DELETED_TEST_LABEL))
             .labTestDefinitionMissing(definitionMissing(result.getLabOrder()))
             .resultValue(result.getResultValue())
-            .resultUnit(result.getResultUnit())
+            // QA D1095: the unit the value is in, the definition's when none was typed
+            // (read from the context, so an unloaded order is not fetched here).
+            .resultUnit(rawUnitOf(result.getResultUnit(), context.testUnit()))
             .resultDate(result.getResultDate())
             .notes(result.getNotes())
             .referenceRanges(referenceRanges)
+            .gradedReferenceRange(grading.range() != null ? toReferenceRangeDto(grading.range()) : null)
             .expectedResult(context.expectedResult())
             .severityFlag(severityFlag)
             .unitMismatch(grading.unitMismatch())
@@ -132,7 +136,7 @@ public class LabResultMapper {
         }
 
         OrderContext context = extractOrderContext(result.getLabOrder());
-        Grading grading = gradingOf(result.getResultUnit(), context.testUnit(), context.referenceRanges());
+        Grading grading = gradingOf(result.getResultUnit(), context.testUnit(), context.referenceRanges(), demographicsOf(result));
         String severityFlag = effectiveSeverityFlag(result, grading.range(), context.expectedResult());
 
         return LabResultTrendPointDTO.builder()
@@ -140,8 +144,9 @@ public class LabResultMapper {
             .labOrderCode(context.labOrderCode())
             .resultDate(result.getResultDate())
             .resultValue(result.getResultValue())
-            .resultUnit(result.getResultUnit())
+            .resultUnit(rawUnitOf(result.getResultUnit(), context.testUnit()))
             .severityFlag(severityFlag)
+            .corrected(com.example.hms.service.lab.LabResultCorrections.isCorrection(result))
             .build();
     }
 
@@ -169,7 +174,7 @@ public class LabResultMapper {
             return FLAG_UNSPECIFIED;
         }
         OrderContext context = extractOrderContext(result.getLabOrder());
-        LabTestReferenceRange graded = gradingOf(result.getResultUnit(), context.testUnit(), context.referenceRanges()).range();
+        LabTestReferenceRange graded = gradingOf(result.getResultUnit(), context.testUnit(), context.referenceRanges(), demographicsOf(result)).range();
         return effectiveSeverityFlag(result, graded, context.expectedResult());
     }
 
@@ -274,7 +279,9 @@ public class LabResultMapper {
      * <p>One selection, {@link #gradingOf}, serves the grading, the critical
      * alerting that reads it, the release gate and this, so they cannot drift.
      *
-     * <p><b>A range in another unit is never used.</b> A range with no unit
+     * <p><b>A range in another unit is used only when the value converts to
+     * it</b> (QA D1092, {@link LabUnitConversion}: mass to mass, molar to molar),
+     * and it is then returned restated in the value's own unit. A range with no unit
      * of its own is stated in the test definition's unit. When no range is in
      * the result's unit and none has a unit at all (neither its own nor the
      * test's), the result is NOT graded: no range is returned here, the
@@ -289,7 +296,7 @@ public class LabResultMapper {
             return null;
         }
         OrderContext context = extractOrderContext(result.getLabOrder());
-        LabTestReferenceRange graded = gradingOf(result.getResultUnit(), context.testUnit(), context.referenceRanges()).range();
+        LabTestReferenceRange graded = gradingOf(result.getResultUnit(), context.testUnit(), context.referenceRanges(), demographicsOf(result)).range();
         return graded != null ? toReferenceRangeDto(graded) : null;
     }
 
@@ -309,7 +316,7 @@ public class LabResultMapper {
             return false;
         }
         OrderContext context = extractOrderContext(result.getLabOrder());
-        return gradingOf(result.getResultUnit(), context.testUnit(), context.referenceRanges()).unitMismatch();
+        return gradingOf(result.getResultUnit(), context.testUnit(), context.referenceRanges(), demographicsOf(result)).unitMismatch();
     }
 
     /**
@@ -329,9 +336,12 @@ public class LabResultMapper {
      * leaves a range's unit empty means the test's unit, and a glucose range
      * of 70-110 on a mg/dL test must not grade 5.4 mmol/L. A result that
      * states no unit is likewise in the test's unit. Units compare trimmed and
-     * case-insensitively; nothing is converted.
+     * case-insensitively.
      * <ol>
      *   <li>the first range whose effective unit is the result's effective unit;</li>
+     *   <li>else (QA D1092) the first range whose effective unit converts to the
+     *       result's without knowing the analyte (mg/dL and g/L, mmol/L and
+     *       µmol/L), restated in the result's unit;</li>
      *   <li>else the first range with no effective unit at all (neither the
      *       range nor the test states one: bare limits);</li>
      *   <li>else, when neither the result nor the test states a unit, the
@@ -340,16 +350,28 @@ public class LabResultMapper {
      * </ol>
      */
     private static Grading gradingOf(String resultUnit, String testUnit,
-                                     List<LabTestReferenceRange> referenceRanges) {
-        if (referenceRanges == null || referenceRanges.isEmpty()) {
+                                     List<LabTestReferenceRange> configuredRanges,
+                                     LabRangeApplicability.Demographics patient) {
+        if (configuredRanges == null || configuredRanges.isEmpty()) {
             return NOT_GRADED;
         }
+        // Round 18: the ranges that apply to this patient's sex and age, best
+        // first (LabRangeApplicability); the unit rule below then reads them in
+        // that order instead of the configured one.
+        List<LabTestReferenceRange> referenceRanges = LabRangeApplicability.candidates(configuredRanges, patient);
         // A result that states no unit is in the test's unit, like a range.
         String result = normalisedUnit(resultUnit);
         if (result == null) {
             result = normalisedUnit(testUnit);
         }
         LabTestReferenceRange chosen = result != null ? firstInUnit(referenceRanges, result, testUnit) : null;
+        if (chosen == null && result != null) {
+            // QA D1092: a range in a unit the value converts to without
+            // knowing the analyte (g/L for a value in mg/dL), restated in the
+            // value's own unit, so 510 mg/dL is graded on 0.45-5.0 g/L's
+            // critical limits as 45-500 mg/dL.
+            chosen = firstConvertible(referenceRanges, rawUnitOf(resultUnit, testUnit), testUnit);
+        }
         if (chosen == null) {
             chosen = firstWithoutUnit(referenceRanges, testUnit);
         }
@@ -369,6 +391,77 @@ public class LabResultMapper {
             .filter(range -> range != null && unit.equals(effectiveUnit(range, testUnit)))
             .findFirst()
             .orElse(null);
+    }
+
+    /**
+     * Step 1b (QA D1092): the first range whose effective unit converts to the
+     * result's ({@link LabUnitConversion}: mass to mass, molar to molar, by a
+     * power of ten), as a copy restated in the result's unit. The copy keeps
+     * every other field of the range (sex, age band, source).
+     */
+    private static LabTestReferenceRange firstConvertible(List<LabTestReferenceRange> ranges, String resultUnit,
+                                                          String testUnit) {
+        if (resultUnit == null) {
+            return null;
+        }
+        for (LabTestReferenceRange range : ranges) {
+            if (range == null) {
+                continue;
+            }
+            String rangeUnit = rawUnitOf(range.getUnit(), testUnit);
+            java.util.Optional<java.math.BigDecimal> factor = LabUnitConversion.factor(rangeUnit, resultUnit);
+            if (factor.isPresent()) {
+                java.math.BigDecimal f = factor.get();
+                return range.toBuilder()
+                    .minValue(LabUnitConversion.scale(range.getMinValue(), f))
+                    .maxValue(LabUnitConversion.scale(range.getMaxValue(), f))
+                    .criticalLow(LabUnitConversion.scale(range.getCriticalLow(), f))
+                    .criticalHigh(LabUnitConversion.scale(range.getCriticalHigh(), f))
+                    .unit(resultUnit)
+                    .build();
+            }
+        }
+        return null;
+    }
+
+    /**
+     * QA D1095: the unit a result is in - the one it states, else its test
+     * definition's (the grading already reads a unit-less result in the test's
+     * unit). Every surface that prints a lab value prints this beside it, so a
+     * bare "2,4" on a test with ranges in g/L and mmol/L never appears.
+     * Null when neither states one (a ratio such as the INR has no unit).
+     */
+    public static String unitOf(LabResult result) {
+        if (result == null) {
+            return null;
+        }
+        if (result.getResultUnit() != null && !result.getResultUnit().isBlank()) {
+            return result.getResultUnit().trim();
+        }
+        LabOrder order = result.getLabOrder();
+        try {
+            return unitOrTestUnit(null, order != null ? order.getLabTestDefinition() : null);
+        } catch (org.hibernate.LazyInitializationException ex) {
+            // Read after the session closed: the definition cannot be reached.
+            return null;
+        }
+    }
+
+    /**
+     * QA D1095: the unit to store on a hand-entered result - the one typed, else
+     * the test definition's. Units come from the test definition; a technician
+     * who leaves the field blank meant it, never "no unit".
+     */
+    public static String unitOrTestUnit(String typed, LabTestDefinition definition) {
+        return rawUnitOf(typed, definition != null ? definition.getUnit() : null);
+    }
+
+    /** The unit as typed (trimmed), or the fallback's when blank; null when neither states one. */
+    private static String rawUnitOf(String unit, String fallback) {
+        if (unit != null && !unit.isBlank()) {
+            return unit.trim();
+        }
+        return fallback == null || fallback.isBlank() ? null : fallback.trim();
     }
 
     /** Step 2: the first range with no effective unit at all (bare limits). */
@@ -417,6 +510,35 @@ public class LabResultMapper {
                 .notes(dto.getNotes())
                 .assignment(assignment)
                 .build();
+    }
+
+    /**
+     * Round 18: the patient's sex and date of birth, and the result date, that
+     * choose the applicable reference range; {@code null} when the order or
+     * its patient cannot be read (the configured order is then kept). A lazy
+     * patient is loaded here when a session is open: the critical-value alert
+     * reads this grading, and a child must not be graded on the adult range
+     * because a list query did not fetch the patient.
+     */
+    private static LabRangeApplicability.Demographics demographicsOf(LabResult result) {
+        LabOrder order = result == null ? null : result.getLabOrder();
+        if (order == null || !Hibernate.isInitialized(order)) {
+            return null;
+        }
+        Patient patient = order.getPatient();
+        if (patient == null) {
+            return null;
+        }
+        if (!Hibernate.isInitialized(patient)) {
+            try {
+                Hibernate.initialize(patient);
+            } catch (RuntimeException detached) {
+                return null;
+            }
+        }
+        java.time.LocalDate onDate = result.getResultDate() != null
+            ? result.getResultDate().toLocalDate() : java.time.LocalDate.now(java.time.ZoneId.systemDefault());
+        return LabRangeApplicability.Demographics.of(patient.getGender(), patient.getDateOfBirth(), onDate);
     }
 
     /**
@@ -575,7 +697,12 @@ public class LabResultMapper {
             .toList();
     }
 
-    private static LabResultReferenceRangeDTO toReferenceRangeDto(LabTestReferenceRange range) {
+    /**
+     * The one copy of a stored range into a result payload (round 18): the
+     * lab-result service's own copy went through here too, so a field added
+     * to the range cannot reach one payload and not the other.
+     */
+    public static LabResultReferenceRangeDTO toReferenceRangeDto(LabTestReferenceRange range) {
         return LabResultReferenceRangeDTO.builder()
             .minValue(range.getMinValue())
             .maxValue(range.getMaxValue())
@@ -586,6 +713,8 @@ public class LabResultMapper {
             .notes(range.getNotes())
             .criticalLow(range.getCriticalLow())
             .criticalHigh(range.getCriticalHigh())
+            .ageUnit(range.getAgeUnit())
+            .source(range.getSource())
             .build();
     }
 

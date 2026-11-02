@@ -28,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
 import com.example.hms.service.recordaccess.RecordAccessPolicy;
@@ -231,6 +232,18 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
             .toList();
     }
 
+    /**
+     * QA D857: a reschedule to a past date was accepted (01/01/2020 made the
+     * order "Planifié" and offered "Débuter la procédure"). Checked before
+     * anything is applied, so a refused request changes nothing.
+     */
+    private void requireRescheduleNotInPast(ProcedureOrderUpdateDTO updateDTO, ProcedureOrder procedureOrder) {
+        if (updateDTO.getScheduledDatetime() != null
+                && !updateDTO.getScheduledDatetime().equals(procedureOrder.getScheduledDatetime())) {
+            requireNotInPast(updateDTO.getScheduledDatetime());
+        }
+    }
+
     @Override
     public ProcedureOrderResponseDTO updateProcedureOrder(UUID orderId, ProcedureOrderUpdateDTO updateDTO) {
         ProcedureOrder procedureOrder = getProcedureOrderEntity(orderId);
@@ -243,18 +256,36 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
             throw new BusinessException("procedureOrder.cancelled.locked");
         }
 
-        // QA D857: a reschedule to a past date was accepted (01/01/2020 made
-        // the order "Planifié" and offered "Débuter la procédure"). Checked
-        // before anything is applied, so a refused request changes nothing.
-        if (updateDTO.getScheduledDatetime() != null
-                && !updateDTO.getScheduledDatetime().equals(procedureOrder.getScheduledDatetime())) {
-            requireNotInPast(updateDTO.getScheduledDatetime());
+        // Product decision 2026-10-28 (QA D930 class): recording the order's
+        // execution - planning, pre-op steps, start, completion, postponement,
+        // consent capture, site marking - stays with the care team (nurses,
+        // the procedure and theatre staff), so care is never blocked. Ending
+        // the order is the ordering clinician's decision: a CANCELLED sent
+        // here passes the same author check as POST /cancel, before anything
+        // is applied. A cancelled order is locked above for everyone, so
+        // there is no way back out of CANCELLED to gate.
+        boolean cancelling = updateDTO.getStatus() == ProcedureOrderStatus.CANCELLED;
+        // QA D1098 (round 19): every cancel states why, on this path as on POST /cancel.
+        if (cancelling) {
+            requireCancelAuthor(procedureOrder);
         }
+        String cancellationReason = cancelling
+            ? com.example.hms.service.support.CancelledOrders.requireCancelReason(updateDTO.getCancellationReason())
+            : null;
+
+        requireRescheduleNotInPast(updateDTO, procedureOrder);
 
         if (updateDTO.getStatus() != null) {
             procedureOrder.setStatus(updateDTO.getStatus());
             if (updateDTO.getStatus() == ProcedureOrderStatus.COMPLETED) {
-                procedureOrder.setCompletedAt(LocalDateTime.now());
+                procedureOrder.setCompletedAt(LocalDateTime.now(java.time.ZoneId.systemDefault()));
+            }
+            // The stamp belongs to the transition (the order was not cancelled,
+            // checked above), as POST /cancel writes it; this path used to set
+            // CANCELLED with no time and no reason.
+            if (cancelling) {
+                procedureOrder.setCancelledAt(LocalDateTime.now(java.time.ZoneId.systemDefault()));
+                procedureOrder.setCancellationReason(cancellationReason);
             }
         }
 
@@ -280,6 +311,7 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
     @Override
     public ProcedureOrderResponseDTO cancelProcedureOrder(UUID orderId, String cancellationReason) {
         ProcedureOrder procedureOrder = getProcedureOrderEntity(orderId);
+        requireCancelAuthor(procedureOrder);
 
         if (procedureOrder.getStatus() == ProcedureOrderStatus.COMPLETED) {
             throw new BusinessException("procedureOrder.completed.cancel");
@@ -288,10 +320,12 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
         if (procedureOrder.getStatus() == ProcedureOrderStatus.CANCELLED) {
             throw new BusinessException("procedureOrder.alreadyCancelled");
         }
+        // QA D1098: a blank reason passed the required request parameter.
+        String reason = com.example.hms.service.support.CancelledOrders.requireCancelReason(cancellationReason);
 
         procedureOrder.setStatus(ProcedureOrderStatus.CANCELLED);
         procedureOrder.setCancelledAt(LocalDateTime.now());
-        procedureOrder.setCancellationReason(cancellationReason);
+        procedureOrder.setCancellationReason(reason);
 
         ProcedureOrder saved = procedureOrderRepository.save(procedureOrder);
         log.info("Procedure order {} cancelled: {}", orderId, cancellationReason);
@@ -348,8 +382,56 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
             || activeHospitalId.equals(order.getHospital().getId());
     }
 
+    /**
+     * Product decision 2026-10-28 (QA D930 class): who may end a procedure
+     * order. The clinician who ordered it; a physician (doctor, physician,
+     * surgeon) of the order's hospital when the order was placed by a nurse or
+     * midwife who drafts for a physician's signature there (the prescription
+     * and imaging co-sign rule, QA D934); a verified super-admin in global
+     * view. An order whose ordering staff record carries no user keeps the old
+     * rule, anyone in scope, as imaging does for an order with no recorded
+     * provider. Anyone else gets a translated 403; the order was resolved in
+     * the caller's scope first, so the refusal discloses nothing.
+     */
+    private void requireCancelAuthor(ProcedureOrder order) {
+        Staff orderer = order.getOrderingProvider();
+        if (orderer == null || orderer.getUser() == null || orderer.getUser().getId() == null
+                || com.example.hms.security.CallerIdentity.isGlobalSuperAdmin()
+                || com.example.hms.security.CallerIdentity.isCaller(orderer)) {
+            return;
+        }
+        UUID caller = com.example.hms.security.CallerIdentity.currentUserId();
+        UUID hospitalId = com.example.hms.security.CallerIdentity.hospitalIdOf(order.getHospital());
+        if (caller != null && hospitalId != null
+                && roleValidator.draftsForPhysicianSignature(orderer.getUser().getId(), hospitalId)
+                && roleValidator.isSigningPhysician(caller, hospitalId)) {
+            return;
+        }
+        throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+            com.example.hms.utility.MessageUtil.resolveOrRaw("procedureOrder.cancelForbidden"));
+    }
+
     private static ResourceNotFoundException procedureOrderNotFound(UUID orderId) {
         return new ResourceNotFoundException("procedureOrder.notFound", orderId);
+    }
+
+    private static UUID orderingUserId(ProcedureOrder order) {
+        Staff orderer = order.getOrderingProvider();
+        return orderer != null && orderer.getUser() != null ? orderer.getUser().getId() : null;
+    }
+
+    /**
+     * QA D1081: the same question requireCancelAuthor asks, for the list's
+     * per-row Annuler; unknown (null in the response) without an author or a
+     * hospital.
+     */
+    private Optional<Boolean> authorIsPhysician(ProcedureOrder order) {
+        UUID author = orderingUserId(order);
+        UUID hospitalId = com.example.hms.security.CallerIdentity.hospitalIdOf(order.getHospital());
+        if (author == null || hospitalId == null) {
+            return Optional.empty();
+        }
+        return Optional.of(!roleValidator.draftsForPhysicianSignature(author, hospitalId));
     }
 
     private ProcedureOrderResponseDTO toResponseDTO(ProcedureOrder order) {
@@ -361,6 +443,8 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
         
         return ProcedureOrderResponseDTO.builder()
             .id(order.getId())
+            .authorUserId(orderingUserId(order))
+            .authorIsPhysician(authorIsPhysician(order).orElse(null))
             .patientId(order.getPatient() != null ? order.getPatient().getId() : null)
             .patientName(order.getPatient() != null ? order.getPatient().getFullName() : null)
             .patientMrn(patientMrn)

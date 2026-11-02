@@ -74,7 +74,7 @@ public class PhoneVerificationServiceImpl implements PhoneVerificationService {
         // victim's phone. Cooldown per number + hourly cap per staff account. ──
         if (challengeRepository.countByRequestedByUserIdAndCreatedAtAfter(
                 requestedByUserId, LocalDateTime.now(clock).minusHours(1)) >= MAX_SENDS_PER_USER_PER_HOUR) {
-            throw new BusinessException("Verification-code limit reached — try again later.");
+            throw new BusinessException("phoneVerification.limitReached");
         }
         List<PhoneOtpChallenge> active = challengeRepository
             .findByPhoneNumberAndPurposeAndConsumedFalse(phone, PhoneOtpPurpose.REGISTRATION_PHONE_VERIFICATION);
@@ -82,7 +82,7 @@ public class PhoneVerificationServiceImpl implements PhoneVerificationService {
             .anyMatch(c -> c.getCreatedAt() != null
                 && c.getCreatedAt().isAfter(LocalDateTime.now(clock).minusSeconds(RESEND_COOLDOWN_SECONDS)));
         if (withinCooldown) {
-            throw new BusinessException("A code was just sent to this number — wait a moment before resending.");
+            throw new BusinessException("phoneVerification.cooldown");
         }
 
         // Invalidate any still-active challenge for the same number —
@@ -94,7 +94,7 @@ public class PhoneVerificationServiceImpl implements PhoneVerificationService {
 
         IkoddiGateway.OtpDispatch sent = ikoddiGateway.sendOtp(phone, IkoddiGateway.OtpChannel.SMS);
         if (!sent.accepted()) {
-            throw new BusinessException("SMS provider did not accept the verification request.");
+            throw new BusinessException("phoneVerification.providerRefused");
         }
 
         PhoneOtpChallenge challenge = PhoneOtpChallenge.builder()
@@ -125,15 +125,15 @@ public class PhoneVerificationServiceImpl implements PhoneVerificationService {
             .orElseThrow(() -> new ResourceNotFoundException("phoneVerification.challenge.notFound", challengeId));
 
         if (challenge.isConsumed()) {
-            throw new BusinessException("This verification code was already used — request a new one.");
+            throw new BusinessException("phoneVerification.code.used");
         }
         if (challenge.getExpiresAt().isBefore(LocalDateTime.now(clock))) {
-            throw new BusinessException("The verification code expired — request a new one.");
+            throw new BusinessException("phoneVerification.code.expired");
         }
         if (challenge.getAttempts() >= MAX_ATTEMPTS) {
             challenge.setConsumed(true);
             challengeRepository.save(challenge);
-            throw new BusinessException("Too many attempts — request a new verification code.");
+            throw new BusinessException("phoneVerification.code.tooManyAttempts");
         }
 
         IkoddiGateway.OtpVerification verification =
@@ -141,7 +141,7 @@ public class PhoneVerificationServiceImpl implements PhoneVerificationService {
         if (!verification.matched()) {
             challenge.setAttempts(challenge.getAttempts() + 1);
             challengeRepository.save(challenge);
-            throw new BusinessException("Invalid verification code.");
+            throw new BusinessException("phoneVerification.code.invalid");
         }
 
         challenge.setConsumed(true);
@@ -195,7 +195,7 @@ public class PhoneVerificationServiceImpl implements PhoneVerificationService {
      */
     String normalizePhone(String rawPhone) {
         if (rawPhone == null) {
-            throw new BusinessException("Phone number is required.");
+            throw new BusinessException("phoneVerification.phone.required");
         }
         String trimmed = rawPhone.trim();
         boolean hasPlus = trimmed.startsWith("+");
@@ -205,7 +205,7 @@ public class PhoneVerificationServiceImpl implements PhoneVerificationService {
             hasPlus = true;
         }
         if (digits.length() < MIN_DIGITS) {
-            throw new BusinessException("Phone number is too short to verify.");
+            throw new BusinessException("phoneVerification.phone.tooShort");
         }
         if (hasPlus || digits.length() > 10) {
             return "+" + digits;

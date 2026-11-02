@@ -211,7 +211,10 @@ public class ObgynReferralServiceImpl implements ObgynReferralService {
         String username
     ) {
         ObgynReferral referral = findReferral(referralId);
-        referral.cancel(request.getReason());
+        requireReferringMidwife(referral);
+        // QA D1098: the DTO's @NotBlank holds at the edge; any other caller states why too.
+        referral.cancel(com.example.hms.service.support.CancelledOrders.requireCancelReason(
+            request == null ? null : request.getReason()));
         referral.setUpdatedBy(username);
 
         log.info("Referral {} cancelled by {}", referralId, username);
@@ -297,6 +300,24 @@ public class ObgynReferralServiceImpl implements ObgynReferralService {
         return referral;
     }
 
+    /**
+     * QA D930 class: a referral is cancelled by the midwife who wrote it (or a
+     * verified super-admin in global view), never by any colleague at the
+     * hospital. The referral was resolved in the caller's hospital first, so
+     * the refusal discloses nothing.
+     */
+    private void requireReferringMidwife(ObgynReferral referral) {
+        if (com.example.hms.security.CallerIdentity.isGlobalSuperAdmin()) {
+            return;
+        }
+        java.util.UUID caller = com.example.hms.security.CallerIdentity.currentUserId();
+        User midwife = referral.getMidwife();
+        if (caller == null || midwife == null || !caller.equals(midwife.getId())) {
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("generalReferral.cancel.referrerOnly"));
+        }
+    }
+
     private User resolveUserByUsername(String username) {
         return userRepository.findByUsername(username)
             .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_WITH_USERNAME, username));
@@ -348,6 +369,7 @@ public class ObgynReferralServiceImpl implements ObgynReferralService {
         snapshot.put("id", patient.getId());
         snapshot.put("mrn", hospital != null ? patient.getMrnForHospital(hospital.getId()) : null);
         snapshot.put("firstName", patient.getFirstName());
+        snapshot.put("middleName", patient.getMiddleName());
         snapshot.put("lastName", patient.getLastName());
         snapshot.put("dateOfBirth", patient.getDateOfBirth());
         snapshot.put("phone", patient.getPhoneNumberPrimary());

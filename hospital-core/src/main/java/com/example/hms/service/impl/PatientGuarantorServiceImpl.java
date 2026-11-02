@@ -40,14 +40,14 @@ public class PatientGuarantorServiceImpl implements PatientGuarantorService {
     @Override
     public GuarantorResponseDTO add(UUID patientId, UUID hospitalId, GuarantorRequestDTO request) {
         if (hospitalId == null) {
-            throw new BusinessException("An active hospital is required to add a guarantor.");
+            throw new BusinessException("guarantor.hospital.required");
         }
         Patient patient = patientRepository.findById(patientId)
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
         Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
         if (!patient.isRegisteredInHospital(hospitalId)) {
-            throw new BusinessException("Patient is not registered at this hospital.");
+            throw new BusinessException("guarantor.patient.notRegistered");
         }
 
         boolean primary = Boolean.TRUE.equals(request.getPrimary());
@@ -102,7 +102,7 @@ public class PatientGuarantorServiceImpl implements PatientGuarantorService {
     public GuarantorResponseDTO deactivate(UUID patientId, UUID guarantorId, UUID hospitalId) {
         PatientGuarantor guarantor = loadScoped(patientId, guarantorId, hospitalId);
         if (!guarantor.isActive()) {
-            throw new BusinessException("This guarantor is already inactive.");
+            throw new BusinessException("guarantor.alreadyInactive");
         }
         guarantor.setActive(false);
         guarantor.setPrimary(false);
@@ -113,7 +113,7 @@ public class PatientGuarantorServiceImpl implements PatientGuarantorService {
     public GuarantorResponseDTO reactivate(UUID patientId, UUID guarantorId, UUID hospitalId) {
         PatientGuarantor guarantor = loadScoped(patientId, guarantorId, hospitalId);
         if (guarantor.isActive()) {
-            throw new BusinessException("This guarantor is already active.");
+            throw new BusinessException("guarantor.alreadyActive");
         }
         guarantor.setActive(true);
         return toDto(guarantorRepository.save(guarantor));

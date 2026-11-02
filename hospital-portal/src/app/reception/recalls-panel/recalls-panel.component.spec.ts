@@ -1,4 +1,4 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { RecallsPanelComponent } from './recalls-panel.component';
 import { SUBLINE_AWA, SUBLINE_FATIMATA } from '../../testing/patient-subline.fixtures';
 import { TranslateModule } from '@ngx-translate/core';
@@ -10,6 +10,11 @@ import { ReferralService } from '../../services/referral.service';
 import { RoleContextService } from '../../core/role-context.service';
 import { ToastService } from '../../core/toast.service';
 import { of, throwError } from 'rxjs';
+import { provideRouter } from '@angular/router';
+import { localDateString } from '../../shared/date-utils';
+
+/** A due date the form accepts: a past one is refused since QA D1215. */
+const FUTURE_DUE = localDateString(new Date(Date.now() + 30 * 86_400_000));
 
 function recall(overrides: Partial<RecallResponse> = {}): RecallResponse {
   return {
@@ -74,6 +79,7 @@ describe('RecallsPanelComponent', () => {
       providers: [
         provideHttpClient(withXhr()),
         provideHttpClientTesting(),
+        provideRouter([]),
         { provide: ReceptionService, useValue: mockReceptionService },
         { provide: PatientService, useValue: mockPatientService },
         { provide: ReferralService, useValue: mockReferralService },
@@ -125,7 +131,7 @@ describe('RecallsPanelComponent', () => {
   it('creates a manual recall', () => {
     component.openAddForm();
     component.selectPatient({ id: 'p1', firstName: 'Awa', lastName: 'Traore' } as any);
-    component.dueDate.set('2026-10-01');
+    component.dueDate.set(FUTURE_DUE);
     component.reason.set('Repeat HbA1c');
 
     component.submitAdd();
@@ -134,7 +140,7 @@ describe('RecallsPanelComponent', () => {
       patientId: 'p1',
       departmentId: null,
       recallType: 'FOLLOW_UP',
-      dueDate: '2026-10-01',
+      dueDate: FUTURE_DUE,
       reason: 'Repeat HbA1c',
       notes: null,
     });
@@ -144,11 +150,14 @@ describe('RecallsPanelComponent', () => {
 
   it('surfaces the backend refusal verbatim when creation fails', () => {
     mockReceptionService.createRecall.and.returnValue(
-      throwError(() => ({ error: { message: 'The patient is not registered at this hospital.' } })),
+      throwError(() => ({
+        status: 400,
+        error: { message: 'The patient is not registered at this hospital.' },
+      })),
     );
     component.openAddForm();
     component.selectPatient({ id: 'p1', firstName: 'Awa', lastName: 'Traore' } as any);
-    component.dueDate.set('2026-10-01');
+    component.dueDate.set(FUTURE_DUE);
     component.reason.set('Repeat HbA1c');
 
     component.submitAdd();
@@ -163,9 +172,87 @@ describe('RecallsPanelComponent', () => {
     component.closeRecall(recall());
     expect(mockReceptionService.closeRecall).toHaveBeenCalledWith('r1');
 
-    component.cancelRecall(recall({ id: 'r2' }));
-    expect(mockReceptionService.cancelRecall).toHaveBeenCalledWith('r2');
+    // QA D1157: a cancel carries the reason the dialog asked for.
+    component.cancelRecall(recall({ id: 'r2' }), 'Patient décédé');
+    expect(mockReceptionService.cancelRecall).toHaveBeenCalledWith('r2', 'Patient décédé');
   });
+
+  it('QA D1157: "Annuler" asks for a reason in a dialog; Escape keeps the recall and gives the keyboard back', fakeAsync(() => {
+    mockReceptionService.getRecalls.and.returnValue(of([recall({ id: 'r2', status: 'PENDING' })]));
+    component.loadRecalls();
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    document.body.appendChild(host);
+    try {
+      const opener = Array.from(
+        host.querySelectorAll<HTMLButtonElement>('.actions-cell .btn-ghost, td button.btn-ghost'),
+      ).find((b) => b.textContent?.includes('COMMON.CANCEL'))!;
+      opener.focus();
+      opener.click();
+      fixture.detectChanges();
+      tick();
+      expect(mockReceptionService.cancelRecall).not.toHaveBeenCalled();
+      const dialog = host.querySelector<HTMLElement>('[data-testid="reason-dialog"]')!;
+      expect(dialog.getAttribute('role')).toBe('dialog');
+      expect(dialog.contains(document.activeElement)).toBeTrue();
+
+      // No reason, no cancel.
+      host.querySelector<HTMLButtonElement>('[data-testid="reason-dialog-confirm"]')!.click();
+      fixture.detectChanges();
+      expect(mockReceptionService.cancelRecall).not.toHaveBeenCalled();
+
+      document.activeElement!.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+      );
+      fixture.detectChanges();
+      tick();
+      expect(host.querySelector('[data-testid="reason-dialog"]')).toBeNull();
+      expect(document.activeElement).toBe(opener);
+
+      opener.click();
+      fixture.detectChanges();
+      tick();
+      const reason = host.querySelector<HTMLTextAreaElement>(
+        '[data-testid="reason-dialog-reason"]',
+      )!;
+      reason.value = 'Rendez-vous pris ailleurs';
+      reason.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      host.querySelector<HTMLButtonElement>('[data-testid="reason-dialog-confirm"]')!.click();
+      fixture.detectChanges();
+      tick();
+      expect(mockReceptionService.cancelRecall).toHaveBeenCalledWith(
+        'r2',
+        'Rendez-vous pris ailleurs',
+      );
+      expect(host.querySelector('[data-testid="reason-dialog"]')).toBeNull();
+    } finally {
+      host.remove();
+    }
+  }));
+
+  it('QA D1199: "Fermer" leaves the keyboard on the list filter, never the page body', fakeAsync(() => {
+    mockReceptionService.getRecalls.and.returnValue(of([recall({ id: 'r1', status: 'PENDING' })]));
+    component.loadRecalls();
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    document.body.appendChild(host);
+    try {
+      const close = Array.from(host.querySelectorAll<HTMLButtonElement>('td button')).find((b) =>
+        b.textContent?.includes('COMMON.CLOSE'),
+      )!;
+      close.focus();
+      mockReceptionService.getRecalls.and.returnValue(of([]));
+      close.click();
+      fixture.detectChanges();
+      tick();
+      expect(mockReceptionService.closeRecall).toHaveBeenCalledWith('r1');
+      expect(document.activeElement).not.toBe(document.body);
+      expect(document.activeElement).toBe(host.querySelector('.filter-btn.active'));
+    } finally {
+      host.remove();
+    }
+  }));
 
   it('guards against double submission while a call is in flight', () => {
     component.actingOnId.set('other');
@@ -177,5 +264,35 @@ describe('RecallsPanelComponent', () => {
     expect(component.isOverdue(recall({ dueDate: '2000-01-01' }))).toBe(true);
     expect(component.isOverdue(recall({ dueDate: '2999-01-01' }))).toBe(false);
     expect(component.isOverdue(recall({ dueDate: '2000-01-01', status: 'CLOSED' }))).toBe(false);
+  });
+
+  /**
+   * QA D1215 (round 23): a recall due 01/01/2020 was created (201, "Rappel
+   * créé") and sat at the top of the list as overdue. The picker starts at
+   * today, and a typed past date is refused on the field with the reason.
+   */
+  it('QA D1215: the due-date picker starts today and a past due date is refused on the field', () => {
+    component.openAddForm();
+    fixture.detectChanges();
+    const host: HTMLElement = fixture.nativeElement;
+    const due = host.querySelector<HTMLInputElement>('#rc-due')!;
+    expect(due.getAttribute('min')).toBe(localDateString());
+
+    component.selectPatient({ id: 'p1', firstName: 'Awa', lastName: 'Traore' } as any);
+    component.dueDate.set('2020-01-01');
+    component.reason.set('Repeat HbA1c');
+    component.submitAdd();
+    fixture.detectChanges();
+
+    expect(mockReceptionService.createRecall).not.toHaveBeenCalled();
+    expect(mockToastService.error).toHaveBeenCalledWith('DATE_RULES.NOT_IN_PAST');
+    expect(due.getAttribute('aria-invalid')).toBe('true');
+    expect(host.querySelector('#rc-due-invalid-msg')?.textContent).toBe('DATE_RULES.NOT_IN_PAST');
+    expect(document.activeElement).toBe(due);
+
+    // Today is a valid due date.
+    component.dueDate.set(localDateString());
+    component.submitAdd();
+    expect(mockReceptionService.createRecall).toHaveBeenCalledTimes(1);
   });
 });

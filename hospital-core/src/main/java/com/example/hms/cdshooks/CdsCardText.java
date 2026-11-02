@@ -1,5 +1,6 @@
 package com.example.hms.cdshooks;
 
+import com.example.hms.repository.HospitalRepository;
 import org.springframework.context.MessageSource;
 import org.springframework.context.i18n.LocaleContextHolder;
 import org.jspecify.annotations.Nullable;
@@ -7,6 +8,12 @@ import org.springframework.stereotype.Component;
 
 import java.text.MessageFormat;
 import java.util.Locale;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.UUID;
+import java.time.format.DateTimeFormatter;
+import java.time.format.FormatStyle;
 
 /**
  * The words on a CDS card, in the caller's language (D61).
@@ -34,6 +41,60 @@ public class CdsCardText {
         this.messageSource = messageSource;
     }
 
+    /** "31/10/2026 20:54": a card's date and time, on the hospital's wall clock. */
+    private static final DateTimeFormatter DATE_TIME = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+
+    /**
+     * QA D1114 (round 19): the hospital a card's times are read in. Optional
+     * so a rule built with {@code new} in a unit test keeps the server zone.
+     */
+    @Nullable
+    private HospitalRepository hospitals;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setHospitals(@Nullable HospitalRepository hospitals) {
+        this.hospitals = hospitals;
+    }
+
+    /**
+     * QA D1114 (round 19, the D1084 class): the zone a card's times are
+     * written in - the hospital's (its organisation's zone, read as a value
+     * so it works without a session, QA D1121), else the server's when the
+     * hospital is unknown (a super-admin in global view, a rule outside Spring).
+     */
+    public ZoneId zoneOf(@Nullable UUID hospitalId) {
+        if (hospitalId == null || hospitals == null) {
+            return ZoneId.systemDefault();
+        }
+        // QA D1121 (round 20): read the zone id as a value. Loading the
+        // Hospital and walking to its LAZY organisation threw outside a
+        // session (the CDS hooks run without one), and the rule engine
+        // dropped every time-stamped card.
+        return com.example.hms.utility.HospitalCalendar.zoneOf(
+            hospitals.findTimezoneIdById(hospitalId).orElse(null), java.time.Clock.systemDefaultZone());
+    }
+
+    /**
+     * QA D1114 (round 19): a server time (stored in the server's zone, UTC on
+     * the hosts) on the hospital's wall clock, so the BPA card says 20:54 when
+     * the vitals tab does, not 00:54. Every card time goes through here
+     * ({@code ServerComposedTimeGuardTest}).
+     */
+    public String dateTime(@Nullable LocalDateTime serverTime, ZoneId zone) {
+        if (serverTime == null) {
+            return "—";
+        }
+        return com.example.hms.utility.HospitalTime.at(serverTime, zone).format(DATE_TIME);
+    }
+
+    /** The hospital's calendar day of a server time, in the reader's language (QA D1114, D1049). */
+    public String date(@Nullable LocalDateTime serverTime, ZoneId zone) {
+        if (serverTime == null) {
+            return "—";
+        }
+        return date(com.example.hms.utility.HospitalTime.at(serverTime, zone).toLocalDate());
+    }
+
     /** The sentence for {@code key} in the request locale, else {@code english} formatted with {@code args}. */
     public String get(String key, String english, Object... args) {
         String pattern = english.replace("'", "''");
@@ -41,6 +102,63 @@ public class CdsCardText {
             return new MessageFormat(pattern, Locale.ENGLISH).format(args);
         }
         return messageSource.getMessage(key, args, pattern, LocaleContextHolder.getLocale());
+    }
+
+    /**
+     * QA D1049 (round 18): a date on a card in the reader's language
+     * ("30 oct. 2026"), never the ISO "2026-10-30" a {@code toString()} gives.
+     * Every card date goes through here; {@code CdsCardLocaleFormatGuardTest}
+     * fails on a date or decimal formatted any other way in a CDS/BPA class.
+     */
+    public String date(@Nullable LocalDate value) {
+        if (value == null) {
+            return "—";
+        }
+        return value.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(locale()));
+    }
+
+    /**
+     * QA D1078 / D1002 class (round 18): a measured value on a card with the
+     * reader's decimal separator ("38,9" in French and Spanish), never the
+     * {@code Locale.ROOT} point. No grouping, so a dose is never regrouped.
+     */
+    public String decimal(@Nullable Number value, int fractionDigits) {
+        if (value == null) {
+            return "—";
+        }
+        return com.example.hms.utility.DisplayNumbers.decimal(value, fractionDigits, locale());
+    }
+
+    /**
+     * QA D1133 (round 20): a computed quantity on a card (a daily dose, a
+     * dose per take, a weight) with at most {@code maxFractionDigits}
+     * decimals and no trailing zeros: "8000 mg", "4 cp", "14 kg", "12,5
+     * mg/kg", never the padded "8000,00 mg". The reader's separator, no
+     * grouping ({@code DisplayNumbers.measure}).
+     */
+    public String measure(@Nullable Number value, int maxFractionDigits) {
+        if (value == null) {
+            return "—";
+        }
+        return com.example.hms.utility.DisplayNumbers.measure(value, maxFractionDigits, locale());
+    }
+
+    /** The language the card is written in: the request's, or English outside Spring. */
+    private Locale locale() {
+        return messageSource == null ? Locale.ENGLISH : LocaleContextHolder.getLocale();
+    }
+
+    /**
+     * QA D1134 (round 20): a severity in words where it qualifies a feminine
+     * noun (the allergy's "gravité", an "interaction"), so it agrees in French
+     * and Spanish: {@code cds.severity.<NAME>} ("inconnue", "majeure"), else
+     * {@link #enumWord}. The masculine {@code cds.enum.*} read "gravité : inconnu".
+     */
+    public String severityWord(@Nullable Enum<?> value) {
+        if (value == null) {
+            return "";
+        }
+        return get("cds.severity." + value.name(), enumWord(value));
     }
 
     /** A severity / status enum in words: {@code cds.enum.<NAME>}, else its lower-case name. */

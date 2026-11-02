@@ -7,13 +7,13 @@
     <div class="page-actions">
       @if (activeTab() === 'approvals' && canRequest) {
         <button class="btn-primary" (click)="openRequest()">
-          <span class="material-symbols-outlined">add</span>
+          <span class="material-symbols-outlined" aria-hidden="true">add</span>
           {{ 'DISCHARGE.REQUEST_DISCHARGE' | translate }}
         </button>
       }
       @if (activeTab() === 'summaries' && canEditSummaries) {
         <button class="btn-primary" (click)="openCreateSummary()">
-          <span class="material-symbols-outlined">add</span>
+          <span class="material-symbols-outlined" aria-hidden="true">add</span>
           {{ 'DISCHARGE.NEW_SUMMARY' | translate }}
         </button>
       }
@@ -112,7 +112,7 @@
                       {{ 'DISCHARGE.REJECT' | translate }}
                     </button>
                   }
-                  @if (a.status === 'PENDING' && canRequest) {
+                  @if (canCancelApproval(a)) {
                     <button
                       class="btn-secondary btn-sm"
                       (click)="openCancel(a)"
@@ -174,6 +174,7 @@
           <input
             type="date"
             [(ngModel)]="rangeEnd"
+            [attr.min]="rangeStart || null"
             [attr.aria-label]="'DISCHARGE.END_DATE' | translate"
           />
           <button class="btn-secondary btn-sm" (click)="loadSummaries()">
@@ -229,7 +230,7 @@
                   >
                     {{ 'COMMON.VIEW' | translate }}
                   </button>
-                  @if (!s.isFinalized && canEditSummaries) {
+                  @if (!s.isFinalized && canWriteSummary(s)) {
                     <button
                       class="btn-secondary btn-sm"
                       (click)="openEditSummary(s)"
@@ -237,13 +238,15 @@
                     >
                       {{ 'COMMON.EDIT' | translate }}
                     </button>
-                    <button
-                      class="btn-primary btn-sm"
-                      (click)="openFinalize(s)"
-                      [title]="'DISCHARGE.FINALIZE' | translate"
-                    >
-                      {{ 'DISCHARGE.FINALIZE' | translate }}
-                    </button>
+                    @if (canFinalizeSummary(s)) {
+                      <button
+                        class="btn-primary btn-sm"
+                        (click)="openFinalize(s)"
+                        [title]="'DISCHARGE.FINALIZE' | translate"
+                      >
+                        {{ 'DISCHARGE.FINALIZE' | translate }}
+                      </button>
+                    }
                     <button
                       class="btn-danger btn-sm"
                       (click)="openDelete(s)"
@@ -272,14 +275,16 @@
   >
     <div
       class="modal"
+      aria-labelledby="discharge-dialog-1-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeDecision(); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
-        <h2>
+        <h2 id="discharge-dialog-1-title">
           {{
             (decisionMode() === 'approve' ? 'DISCHARGE.APPROVE_TITLE' : 'DISCHARGE.REJECT_TITLE')
               | translate
@@ -290,7 +295,7 @@
           (click)="closeDecision()"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
@@ -354,20 +359,22 @@
   >
     <div
       class="modal"
+      aria-labelledby="discharge-dialog-2-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeCancel(); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
-        <h2>{{ 'DISCHARGE.CANCEL_TITLE' | translate }}</h2>
+        <h2 id="discharge-dialog-2-title">{{ 'DISCHARGE.CANCEL_TITLE' | translate }}</h2>
         <button
           class="modal-close"
           (click)="closeCancel()"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
@@ -375,15 +382,29 @@
           <strong>{{ cancelTarget()?.patientName }}</strong>
         </p>
         <div class="field">
-          <label for="cancel-reason">{{ 'DISCHARGE.CANCEL_REASON' | translate }}</label>
-          <textarea id="cancel-reason" rows="3" [(ngModel)]="cancelReason"></textarea>
+          <!-- QA D1160: a discharge request is cancelled with its reason. -->
+          <label for="cancel-reason">{{ 'DISCHARGE.CANCEL_REASON' | translate }} *</label>
+          <textarea
+            id="cancel-reason"
+            rows="3"
+            required
+            aria-required="true"
+            [(ngModel)]="cancelReason"
+          ></textarea>
         </div>
       </div>
       <div class="modal-actions">
         <button class="btn-secondary" (click)="closeCancel()">
           {{ 'COMMON.BACK' | translate }}
         </button>
-        <button class="btn-danger" [disabled]="cancelSubmitting()" (click)="submitCancel()">
+        <button
+          class="btn-danger"
+          data-testid="discharge-cancel-confirm"
+          [disabled]="cancelSubmitting()"
+          [appSubmitGuard]="!cancelReason.trim()"
+          [submitGuardFields]="['cancel-reason']"
+          (click)="submitCancel()"
+        >
           {{ 'DISCHARGE.CONFIRM_CANCEL' | translate }}
         </button>
       </div>
@@ -401,20 +422,22 @@
   >
     <div
       class="modal"
+      aria-labelledby="discharge-dialog-3-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeRequest(); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
-        <h2>{{ 'DISCHARGE.REQUEST_TITLE' | translate }}</h2>
+        <h2 id="discharge-dialog-3-title">{{ 'DISCHARGE.REQUEST_TITLE' | translate }}</h2>
         <button
           class="modal-close"
           (click)="closeRequest()"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
@@ -424,8 +447,14 @@
             inputId="request-patient"
             [hospitalId]="pickerHospitalId"
             [selected]="selectedPatient()"
-            (selectedChange)="onPatientPicked($event)"
+            (selectedChange)="onRequestPatientPicked($event)"
           />
+          <!-- QA D1065: only a patient with an open stay here can be discharged. -->
+          @if (requestStay() === 'not-admitted') {
+            <p class="field-error" role="alert" data-testid="request-not-admitted">
+              {{ 'DISCHARGE.NOT_ADMITTED' | translate }}
+            </p>
+          }
         </div>
         <div class="field">
           <label for="request-summary">{{ 'DISCHARGE.NURSE_SUMMARY' | translate }}</label>
@@ -438,7 +467,9 @@
         </button>
         <button
           class="btn-primary"
-          [disabled]="!selectedPatient() || requestSubmitting()"
+          [disabled]="requestSubmitting()"
+          [appSubmitGuard]="requestBlockReason()"
+          [submitGuardFields]="['request-patient']"
           (click)="submitRequest()"
         >
           {{ 'DISCHARGE.SUBMIT_REQUEST' | translate }}
@@ -458,14 +489,16 @@
   >
     <div
       class="modal modal-lg"
+      aria-labelledby="discharge-dialog-4-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeSummaryModal(); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
-        <h2>
+        <h2 id="discharge-dialog-4-title">
           {{
             (editingSummaryId() ? 'DISCHARGE.EDIT_SUMMARY' : 'DISCHARGE.NEW_SUMMARY') | translate
           }}
@@ -475,7 +508,7 @@
           (click)="closeSummaryModal()"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
@@ -585,7 +618,7 @@
         <div class="section-heading">
           {{ 'DISCHARGE.MEDICATIONS' | translate }}
           <button type="button" class="btn-add-row" (click)="addMedication()">
-            <span class="material-symbols-outlined">add</span>
+            <span class="material-symbols-outlined" aria-hidden="true">add</span>
             {{ 'DISCHARGE.ADD_MEDICATION' | translate }}
           </button>
         </div>
@@ -625,7 +658,7 @@
                 (click)="removeMedication($index)"
                 [attr.aria-label]="'COMMON.DELETE' | translate"
               >
-                <span class="material-symbols-outlined">delete</span>
+                <span class="material-symbols-outlined" aria-hidden="true">delete</span>
               </button>
             </div>
           }
@@ -634,7 +667,7 @@
         <div class="section-heading">
           {{ 'DISCHARGE.PENDING_TESTS' | translate }}
           <button type="button" class="btn-add-row" (click)="addPendingTest()">
-            <span class="material-symbols-outlined">add</span>
+            <span class="material-symbols-outlined" aria-hidden="true">add</span>
             {{ 'DISCHARGE.ADD_PENDING_TEST' | translate }}
           </button>
         </div>
@@ -672,7 +705,7 @@
                 (click)="removePendingTest($index)"
                 [attr.aria-label]="'COMMON.DELETE' | translate"
               >
-                <span class="material-symbols-outlined">delete</span>
+                <span class="material-symbols-outlined" aria-hidden="true">delete</span>
               </button>
             </div>
           }
@@ -681,7 +714,7 @@
         <div class="section-heading">
           {{ 'DISCHARGE.FOLLOW_UPS' | translate }}
           <button type="button" class="btn-add-row" (click)="addFollowUp()">
-            <span class="material-symbols-outlined">add</span>
+            <span class="material-symbols-outlined" aria-hidden="true">add</span>
             {{ 'DISCHARGE.ADD_FOLLOW_UP' | translate }}
           </button>
         </div>
@@ -714,7 +747,7 @@
                 (click)="removeFollowUp($index)"
                 [attr.aria-label]="'COMMON.DELETE' | translate"
               >
-                <span class="material-symbols-outlined">delete</span>
+                <span class="material-symbols-outlined" aria-hidden="true">delete</span>
               </button>
             </div>
           }
@@ -746,20 +779,24 @@
   <div class="modal-backdrop" tabindex="-1" (click)="closeView()" (keydown.escape)="closeView()">
     <div
       class="modal modal-lg"
+      aria-labelledby="discharge-dialog-5-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeView(); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
-        <h2>{{ 'DISCHARGE.SUMMARY_FOR' | translate }} {{ s.patientName }}</h2>
+        <h2 id="discharge-dialog-5-title">
+          {{ 'DISCHARGE.SUMMARY_FOR' | translate }} {{ s.patientName }}
+        </h2>
         <button
           class="modal-close"
           (click)="closeView()"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
@@ -816,7 +853,7 @@
             <ul>
               @for (t of s.pendingTestResults; track $index) {
                 <li>
-                  {{ t.testType }}: {{ t.testName }}
+                  {{ t.testType }}{{ 'COMMON.COLON' | translate }} {{ t.testName }}
                   @if (t.expectedResultDate) {
                     ({{ t.expectedResultDate | serverTime | date: 'mediumDate' }})
                   }
@@ -866,20 +903,22 @@
   >
     <div
       class="modal"
+      aria-labelledby="discharge-dialog-6-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeFinalize(); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
-        <h2>{{ 'DISCHARGE.FINALIZE_TITLE' | translate }}</h2>
+        <h2 id="discharge-dialog-6-title">{{ 'DISCHARGE.FINALIZE_TITLE' | translate }}</h2>
         <button
           class="modal-close"
           (click)="closeFinalize()"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
@@ -916,20 +955,22 @@
   >
     <div
       class="modal"
+      aria-labelledby="discharge-dialog-7-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeDelete(); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
-        <h2>{{ 'DISCHARGE.DELETE_TITLE' | translate }}</h2>
+        <h2 id="discharge-dialog-7-title">{{ 'DISCHARGE.DELETE_TITLE' | translate }}</h2>
         <button
           class="modal-close"
           (click)="closeDelete()"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">

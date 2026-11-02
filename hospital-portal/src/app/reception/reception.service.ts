@@ -197,6 +197,9 @@ export interface CheckInRequest {
   patientId?: string | null;
   chiefComplaint?: string | null;
   copayAmount?: number | null;
+  /** QA D975: how the copay was paid (cash when absent) and its reference. */
+  copayMethod?: string | null;
+  copayReference?: string | null;
   identityConfirmed?: boolean;
   insuranceVerified?: boolean;
   notes?: string | null;
@@ -218,6 +221,9 @@ export interface CheckInResponse {
   arrivalTimestamp: string;
   chiefComplaint: string | null;
   message: string;
+  /** QA D975: the copay's invoice and payment, for its receipt. */
+  copayInvoiceId?: string | null;
+  copayPaymentId?: string | null;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -268,8 +274,17 @@ export class ReceptionService {
     return this.http.get<FlowBoard>(`${this.base}/flow-board`, { params });
   }
 
-  recordPayment(invoiceId: string, amount: number, method = 'CASH'): Observable<unknown> {
-    return this.http.post(`/billing-invoices/${invoiceId}/payments`, { amount, method });
+  recordPayment(
+    invoiceId: string,
+    amount: number,
+    method = 'CASH',
+    reference?: string,
+  ): Observable<unknown> {
+    return this.http.post(`/billing-invoices/${invoiceId}/payments`, {
+      amount,
+      method,
+      ...(reference ? { reference } : {}),
+    });
   }
 
   // ── MVP 11: Duplicate candidate detection ──────────────────────────────────
@@ -329,8 +344,10 @@ export class ReceptionService {
     return this.http.post<WaitlistEntryResponse>(`${this.base}/waitlist/${id}/decline-offer`, {});
   }
 
-  closeWaitlistEntry(id: string): Observable<void> {
-    return this.http.post<void>(`${this.base}/waitlist/${id}/close`, {});
+  /** QA D1157: a waitlist entry is closed with the reason it was closed for. */
+  closeWaitlistEntry(id: string, reason: string): Observable<void> {
+    // In the body only: free text in a query string lands in proxy and access logs.
+    return this.http.post<void>(`${this.base}/waitlist/${id}/close`, { reason });
   }
 
   // ── P3 #22: Patient recalls ────────────────────────────────────────────────
@@ -350,8 +367,9 @@ export class ReceptionService {
     return this.http.post<RecallResponse>(`/recalls/${id}/close`, {});
   }
 
-  cancelRecall(id: string): Observable<RecallResponse> {
-    return this.http.post<RecallResponse>(`/recalls/${id}/cancel`, {});
+  /** QA D1157: a recall is cancelled with the reason it was cancelled for. */
+  cancelRecall(id: string, reason: string): Observable<RecallResponse> {
+    return this.http.post<RecallResponse>(`/recalls/${id}/cancel`, { reason });
   }
 
   linkRecallAppointment(id: string, appointmentId: string): Observable<RecallResponse> {

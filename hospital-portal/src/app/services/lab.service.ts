@@ -18,6 +18,8 @@ export interface LabOrderResponse {
   labTestCode: string;
   /** QA D645/D648: the test definition was deleted; labTestName is the "deleted test" label. */
   labTestDefinitionMissing?: boolean;
+  /** QA D1095: the test definition's unit, prefilled when a result is entered. */
+  labTestUnit?: string | null;
   orderDatetime: string;
   status: string;
   clinicalIndication: string;
@@ -25,6 +27,8 @@ export interface LabOrderResponse {
   notes: string;
   primaryDiagnosisCode: string;
   additionalDiagnosisCodes: string[];
+  /** QA D963: ROUTINE, URGENT or STAT (LabOrderResponseDTO.priority). */
+  priority?: string | null;
   orderChannel: string;
   /**
    * Why the order was cancelled, or (QA D820) why it was voided as entered in
@@ -39,6 +43,8 @@ export interface LabResultResponse {
   id: string;
   labOrderId: string | null;
   labOrderCode: string;
+  /** QA D963: the order's priority, so the release queue flags STAT and URGENT. */
+  orderPriority?: string | null;
   patientId: string | null;
   patientFullName: string;
   /** QA D527: no longer sent (always null); kept so older payloads still type. */
@@ -57,6 +63,8 @@ export interface LabResultResponse {
   resultDate: string;
   notes: string;
   referenceRanges: LabResultReferenceRange[];
+  /** Round 18: the range this result was graded against (the patient's sex and age band). */
+  gradedReferenceRange?: LabResultReferenceRange | null;
   /** QA D834: the expected answer of a qualitative test, shown where it has no range. */
   expectedResult?: string | null;
   trendHistory?: LabResultTrendPoint[];
@@ -114,12 +122,20 @@ export interface LabResultReferenceRange {
   ageMax: number | null;
   gender: string | null;
   notes: string | null;
+  criticalLow?: number | null;
+  criticalHigh?: number | null;
+  /** Round 18: unit of ageMin/ageMax; YEARS when absent. */
+  ageUnit?: 'YEARS' | 'MONTHS' | 'DAYS' | null;
+  /** Round 18: where the limits come from. */
+  source?: string | null;
 }
 
 export interface LabResultTrendPoint {
   resultDate: string;
   resultValue: string;
   resultUnit: string;
+  /** QA D1016/D931 (round 18): the value replaces a released one. */
+  corrected?: boolean;
 }
 
 export interface LabTestDefinition {
@@ -147,6 +163,10 @@ export interface LabTestDefinition {
   reviewerMayApprove?: boolean | null;
   reviewedAt: string | null;
   rejectionReason: string | null;
+  /** QA D1120: the ACTIVE definition this version replaces on activation (null for a first version). */
+  supersedesDefinitionId?: string | null;
+  /** QA D1120: 1 for a first definition. */
+  versionNumber?: number | null;
   unit: string | null;
   loincCode: string | null;
   loincDisplay: string | null;
@@ -168,6 +188,10 @@ export interface LabTestReferenceRange {
   /** D107: panic limits; a value beyond them grades CRITICAL. */
   criticalLow?: number | null;
   criticalHigh?: number | null;
+  /** Round 18: unit of ageMin/ageMax (inclusive bounds); YEARS when absent. */
+  ageUnit?: 'YEARS' | 'MONTHS' | 'DAYS' | null;
+  /** Round 18: where the limits come from, shown to the approving lab director. */
+  source?: string | null;
 }
 
 export interface LabTestDefinitionApprovalRequest {
@@ -329,6 +353,9 @@ export interface LabSpecimen {
   currentLocation: string | null;
   status: LabSpecimenStatus;
   notes: string | null;
+  /** QA D962: why the laboratory rejected it (status REJECTED). */
+  rejectionReason?: string | null;
+  rejectedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -350,6 +377,8 @@ export interface LabResultComparisonPoint {
   resultValue: string;
   resultUnit: string;
   severityFlag: string | null;
+  /** QA D1016/D931 (round 18): the value replaces a released one. */
+  corrected?: boolean;
 }
 
 export interface LabResultComparison {
@@ -547,9 +576,20 @@ export class LabService {
    * releases it without a second reviewer. Without it the API answers 409 for
    * a self-release.
    */
-  releaseResult(id: string, selfRelease = false): Observable<LabResultResponse> {
-    const params = selfRelease ? new HttpParams().set('selfRelease', 'true') : undefined;
-    return this.http.post<LabResultResponse>(`/lab-results/${id}/release`, {}, { params });
+  releaseResult(
+    id: string,
+    selfRelease = false,
+    ungradedConfirmed = false,
+  ): Observable<LabResultResponse> {
+    let params = new HttpParams();
+    if (selfRelease) params = params.set('selfRelease', 'true');
+    // QA D1092: the releaser confirms they reviewed a value no range could grade.
+    if (ungradedConfirmed) params = params.set('ungradedConfirmed', 'true');
+    return this.http.post<LabResultResponse>(
+      `/lab-results/${id}/release`,
+      {},
+      params.keys().length ? { params } : {},
+    );
   }
 
   // ── Lab Test Definition CRUD ─────────────────────────────────────────
@@ -563,6 +603,16 @@ export class LabService {
   updateTestDefinition(id: string, req: LabTestDefinitionRequest): Observable<LabTestDefinition> {
     return this.http
       .put<ApiWrapper<LabTestDefinition>>(`/lab-test-definitions/${id}`, req)
+      .pipe(map((res) => res.data));
+  }
+
+  /**
+   * QA D1120: a new DRAFT version of an ACTIVE definition, linked to it. It is
+   * approved like any definition and replaces the active one on activation.
+   */
+  createTestDefinitionVersion(id: string): Observable<LabTestDefinition> {
+    return this.http
+      .post<ApiWrapper<LabTestDefinition>>(`/lab-test-definitions/${id}/new-version`, {})
       .pipe(map((res) => res.data));
   }
 
@@ -670,6 +720,13 @@ export class LabService {
   receiveSpecimen(specimenId: string): Observable<LabSpecimen> {
     return this.http
       .post<ApiWrapper<LabSpecimen>>(`/lab-specimens/${specimenId}/receive`, null)
+      .pipe(map((res) => res.data));
+  }
+
+  /** QA D962: reject a specimen with a reason; the order goes back to awaiting collection. */
+  rejectSpecimen(specimenId: string, reason: string): Observable<LabSpecimen> {
+    return this.http
+      .post<ApiWrapper<LabSpecimen>>(`/lab-specimens/${specimenId}/reject`, { reason })
       .pipe(map((res) => res.data));
   }
 

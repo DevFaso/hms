@@ -26,7 +26,13 @@
     @for (policy of policies(); track policy.id) {
       <div class="policy-card">
         <div class="policy-head">
-          <button type="button" class="expand-btn" (click)="toggleExpand(policy.id)">
+          <button
+            [attr.aria-label]="'COMMON.SHOW_DETAILS' | translate"
+            [attr.aria-expanded]="expanded().has(policy.id)"
+            type="button"
+            class="expand-btn"
+            (click)="toggleExpand(policy.id)"
+          >
             <span class="material-symbols-outlined">
               {{ expanded().has(policy.id) ? 'expand_less' : 'expand_more' }}
             </span>
@@ -34,10 +40,12 @@
           <div class="policy-title">
             <span class="cell-main">{{ policy.name }}</span>
             <code>{{ policy.code }}</code>
-            <span class="badge badge-info">{{
+            {{ ' '
+            }}<span class="badge badge-info">{{
               'ADMIN_GOV.PT_' + policy.policyType | translate
             }}</span>
-            <span
+            {{ ' '
+            }}<span
               class="badge"
               [class.badge-success]="policy.active"
               [class.badge-danger]="!policy.active"
@@ -45,7 +53,7 @@
               {{ (policy.active ? 'COMMON.ACTIVE' : 'COMMON.INACTIVE') | translate }}
             </span>
             @if (policy.enforceStrict) {
-              <span class="badge badge-danger">{{ 'ADMIN_GOV.STRICT' | translate }}</span>
+              {{ ' ' }}<span class="badge badge-danger">{{ 'ADMIN_GOV.STRICT' | translate }}</span>
             }
           </div>
           <div class="policy-org">
@@ -57,6 +65,7 @@
               class="icon-btn"
               (click)="openCreateRule(policy)"
               [title]="'ADMIN_GOV.NEW_RULE' | translate"
+              [attr.aria-label]="'ADMIN_GOV.NEW_RULE' | translate"
             >
               <span class="material-symbols-outlined">add_moderator</span>
             </button>
@@ -65,6 +74,7 @@
               class="icon-btn"
               (click)="openEditPolicy(policy)"
               [title]="'COMMON.EDIT' | translate"
+              [attr.aria-label]="'COMMON.EDIT' | translate"
             >
               <span class="material-symbols-outlined">edit</span>
             </button>
@@ -73,6 +83,7 @@
               class="icon-btn danger"
               (click)="deletePolicy(policy)"
               [title]="'COMMON.DELETE' | translate"
+              [attr.aria-label]="'COMMON.DELETE' | translate"
             >
               <span class="material-symbols-outlined">delete</span>
             </button>
@@ -124,6 +135,7 @@
                           class="icon-btn"
                           (click)="openEditRule(policy, rule)"
                           [title]="'COMMON.EDIT' | translate"
+                          [attr.aria-label]="'COMMON.EDIT' | translate"
                         >
                           <span class="material-symbols-outlined">edit</span>
                         </button>
@@ -132,6 +144,7 @@
                           class="icon-btn danger"
                           (click)="deleteRule(policy, rule)"
                           [title]="'COMMON.DELETE' | translate"
+                          [attr.aria-label]="'COMMON.DELETE' | translate"
                         >
                           <span class="material-symbols-outlined">delete</span>
                         </button>
@@ -161,9 +174,11 @@
         aria-modal="true"
         tabindex="-1"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="$event.stopPropagation()"
+        (keydown.escape)="closePolicyModal(); $event.stopPropagation()"
+        appModalDialog
+        aria-labelledby="policies-tab-dialog-2-title"
       >
-        <h2>
+        <h2 id="policies-tab-dialog-2-title">
           {{ (editingPolicy() ? 'ADMIN_GOV.EDIT_POLICY' : 'ADMIN_GOV.NEW_POLICY') | translate }}
         </h2>
         <div class="form-row">
@@ -257,9 +272,11 @@
         aria-modal="true"
         tabindex="-1"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="$event.stopPropagation()"
+        (keydown.escape)="closeRuleModal(); $event.stopPropagation()"
+        appModalDialog
+        aria-labelledby="policies-tab-dialog-1-title"
       >
-        <h2>
+        <h2 id="policies-tab-dialog-1-title">
           {{ (editingRule() ? 'ADMIN_GOV.EDIT_RULE' : 'ADMIN_GOV.NEW_RULE') | translate }}
           — {{ rulePolicy()?.name }}
         </h2>

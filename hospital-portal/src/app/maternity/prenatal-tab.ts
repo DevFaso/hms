@@ -1,3 +1,4 @@
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -29,10 +30,13 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { ClockTimePipe } from '../shared/pipes/clock-time.pipe';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 @Component({
   selector: 'app-prenatal-tab',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
+    ModalDialogDirective,
     ClockTimePipe,
     ServerTimePipe,
     CommonModule,
@@ -149,6 +153,10 @@ export class PrenatalTabComponent implements OnInit {
     };
     const time = r.suggestedStartTime?.substring(0, 5);
     if (time && /^\d{2}:\d{2}$/.test(time)) params['time'] = time;
+    // QA D1055: the recommended length and the provider the calendar was planned with.
+    if (r.durationMinutes > 0) params['duration'] = String(r.durationMinutes);
+    const staffId = this.schedule()?.staffId;
+    if (staffId) params['staffId'] = staffId;
     return params;
   }
 

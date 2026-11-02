@@ -1,4 +1,18 @@
-import { ChangeDetectionStrategy, Component, inject, OnInit, signal } from '@angular/core';
+import { InlineDiscardAskComponent } from '../shared/a11y/inline-discard-ask.component';
+import { InlineSubFormDirective } from '../shared/a11y/inline-sub-form.directive';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  inject,
+  OnInit,
+  signal,
+} from '@angular/core';
+import { CANCEL_REASON_REQUIRED_KEY, isOrderCancellable } from '../shared/order-lifecycle';
+import { blankFields, refuseFields } from '../shared/forms/invalid-fields';
+import { hasClinicalContent } from '../shared/forms/clinical-content';
+import { focusWhenRendered } from '../shared/a11y/focus-when-rendered';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -20,27 +34,104 @@ import { ToastService } from '../core/toast.service';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { localDateString } from '../shared/date-utils';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { refusalReason } from '../shared/refusal-reason';
+import { AuthorshipService } from '../shared/authorship.service';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 type UltrasoundWorklist = 'all' | 'pending' | 'high-risk' | 'follow-up' | 'anomalies';
+
+/** The report form: the finding stays empty until the clinician picks one (QA D1150). */
+export type UltrasoundReportForm = Omit<UltrasoundReportRequest, 'findingCategory'> & {
+  findingCategory: UltrasoundReportRequest['findingCategory'] | '';
+};
+
+/** The fields the report form may refuse. */
+const REPORT_FIELD_IDS = ['rep-date', 'rep-category', 'rep-summary'];
+
+/** The measured or written findings of a report: at least one is required (QA D1150). */
+const FINDING_FIELDS: readonly (keyof UltrasoundReportRequest)[] = [
+  'fetalHeartRate',
+  'gestationalAgeAtScan',
+  'gestationalAgeDays',
+  'numberOfFetuses',
+  'estimatedFetalWeightGrams',
+  'biparietalDiameterMm',
+  'headCircumferenceMm',
+  'abdominalCircumferenceMm',
+  'femurLengthMm',
+  'nuchalTranslucencyMm',
+  'crownRumpLengthMm',
+  'findingsSummary',
+  'interpretation',
+  'anomalyDescription',
+  'anatomyFindings',
+];
+
+/**
+ * QA D1182 (round 22): values the stored report carries by DEFAULT, never
+ * entered by anyone — the server saves cardiac activity, movement and tone as
+ * "yes" and one fetus on every report. Echoed back by the edit form, they
+ * passed the "at least one finding" check and a blank report was saved as
+ * "Normal". The form has no control for the three flags, so it never sends
+ * them; one fetus is not a finding on its own (twins are).
+ */
+export const UNSHOWN_DEFAULT_FLAGS = [
+  'fetalCardiacActivity',
+  'fetalMovementObserved',
+  'fetalToneNormal',
+] as const;
+
+/** Whether the report records at least one finding (QA D1150, D1182). */
+export function hasUltrasoundFinding(
+  form: UltrasoundReportForm | Partial<UltrasoundReportRequest>,
+): boolean {
+  const fields = FINDING_FIELDS.filter((f) => f !== 'numberOfFetuses');
+  const fetuses = form.numberOfFetuses;
+  return hasClinicalContent(form, fields) || (typeof fetuses === 'number' && fetuses > 1);
+}
 
 @Component({
   selector: 'app-ultrasound-tab',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule, PatientPickerComponent],
+  imports: [
+    InlineDiscardAskComponent,
+    InlineSubFormDirective,
+    SubmitGuardDirective,
+    ModalDialogDirective,
+    ServerTimePipe,
+    EnumLabelPipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    PatientPickerComponent,
+  ],
   templateUrl: './ultrasound-tab.html',
   styleUrl: './maternity.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class UltrasoundTabComponent implements OnInit {
   private readonly ultrasoundService = inject(UltrasoundService);
+  private readonly authorship = inject(AuthorshipService);
   private readonly auth = inject(AuthService);
   private readonly roleContext = inject(RoleContextService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   private hospitalId: string | null = null;
 
   /** Order + report writes = DOCTOR/MIDWIFE/SUPER_ADMIN (effective backend roles). */
+  /** QA D1081: an ultrasound order is rewritten or cancelled by its author only. */
+  isOrderAuthor(o: UltrasoundOrderResponse): boolean {
+    return this.authorship.isAuthor(o);
+  }
+
+  /** QA D1098: the author cancels an order that has no report yet, on the shared rule. */
+  canCancelThisOrder(o: UltrasoundOrderResponse): boolean {
+    return this.canOrder && isOrderCancellable(o.status) && this.isOrderAuthor(o);
+  }
+
   readonly canOrder = this.roleContext.hasAnyActiveRole([
     'ROLE_DOCTOR',
     'ROLE_MIDWIFE',
@@ -104,7 +195,7 @@ export class UltrasoundTabComponent implements OnInit {
   showReportModal = signal(false);
   reportTargetOrder = signal<UltrasoundOrderResponse | null>(null);
   reportSaving = signal(false);
-  reportForm: UltrasoundReportRequest = this.emptyReportForm();
+  reportForm: UltrasoundReportForm = this.emptyReportForm();
   templateLoading = signal(false);
   reportActionBusy = signal(false);
 
@@ -246,7 +337,16 @@ export class UltrasoundTabComponent implements OnInit {
 
   submitOrder(): void {
     if (!this.hospitalId || !this.orderForm.patientId) {
-      this.toast.error(this.translate.instant('ULTRASOUND.ORDER_REQUIRED_FIELDS'));
+      // QA D1156 class: the missing patient is marked where it is asked for.
+      refuseFields(
+        this.host.nativeElement,
+        this.orderForm.patientId ? [] : ['us-patient'],
+        ['us-patient'],
+        this.translate.instant('ULTRASOUND.ORDER_REQUIRED_FIELDS'),
+      );
+      if (this.orderForm.patientId) {
+        this.toast.error(this.translate.instant('ULTRASOUND.ORDER_REQUIRED_FIELDS'));
+      }
       return;
     }
     this.orderForm.hospitalId = this.hospitalId;
@@ -266,8 +366,10 @@ export class UltrasoundTabComponent implements OnInit {
         this.closeOrderModal();
         this.load();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('ULTRASOUND.ORDER_SAVE_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('ULTRASOUND.ORDER_SAVE_ERROR'),
+        );
         this.orderSaving.set(false);
       },
     });
@@ -287,18 +389,36 @@ export class UltrasoundTabComponent implements OnInit {
   openCancelPrompt(): void {
     this.cancelReason = '';
     this.showCancelPrompt.set(true);
+    // QA D1144: the button that opened the prompt is gone; the keyboard goes to the reason.
+    focusWhenRendered(this.host.nativeElement, '#us-cancel-reason');
+  }
+
+  /** Closes the cancel prompt and gives the keyboard back to "Cancel the order". */
+  closeCancelPrompt(): void {
+    this.showCancelPrompt.set(false);
+    focusWhenRendered(this.host.nativeElement, '[data-testid="us-cancel-order"]');
   }
 
   submitCancel(): void {
     const order = this.viewedOrder();
     if (!order) return;
+    const reason = this.cancelReason.trim();
+    if (!reason) {
+      // QA D1098: every cancel states why (the server refuses a blank reason too).
+      const message = this.translate.instant(CANCEL_REASON_REQUIRED_KEY);
+      refuseFields(this.host.nativeElement, ['us-cancel-reason'], ['us-cancel-reason'], message);
+      return;
+    }
     this.cancelBusy.set(true);
-    this.ultrasoundService.cancelOrder(order.id, this.cancelReason.trim() || undefined).subscribe({
+    this.ultrasoundService.cancelOrder(order.id, reason).subscribe({
       next: (updated) => {
         this.toast.success(this.translate.instant('ULTRASOUND.ORDER_CANCELLED'));
         this.cancelBusy.set(false);
         this.showCancelPrompt.set(false);
         this.viewedOrder.set(updated);
+        // QA D1144: a cancelled order offers no "Cancel" button to return to;
+        // the keyboard lands on the dialog's Close, never on the page body.
+        focusWhenRendered(this.host.nativeElement, '[data-testid="us-order-close"]');
         // Patch in place; a cancelled order leaves the pending worklist.
         this.orders.update((list) =>
           this.worklist() === 'pending'
@@ -306,8 +426,9 @@ export class UltrasoundTabComponent implements OnInit {
             : list.map((o) => (o.id === updated.id ? updated : o)),
         );
       },
-      error: () => {
-        this.toast.error(this.translate.instant('ULTRASOUND.CANCEL_ERROR'));
+      error: (err: unknown) => {
+        // QA D930 class: the server says only the ordering clinician may cancel.
+        this.toast.error(refusalReason(err) ?? this.translate.instant('ULTRASOUND.CANCEL_ERROR'));
         this.cancelBusy.set(false);
       },
     });
@@ -315,10 +436,15 @@ export class UltrasoundTabComponent implements OnInit {
 
   /* ── Report ── */
 
-  emptyReportForm(): UltrasoundReportRequest {
+  /**
+   * QA D1150: the finding is never preselected. A blank report saved with the
+   * seeded "NORMAL" read back as "Rapport Normal" with "Notify the patient"
+   * offered; the clinician now picks the finding.
+   */
+  emptyReportForm(): UltrasoundReportForm {
     return {
       scanDate: localDateString(),
-      findingCategory: 'NORMAL',
+      findingCategory: '',
       reportFinalized: false,
     };
   }
@@ -344,7 +470,7 @@ export class UltrasoundTabComponent implements OnInit {
       this.reportForm = {
         ...fields,
         scanDate: existing.scanDate ?? localDateString(),
-        findingCategory: existing.findingCategory ?? 'NORMAL',
+        findingCategory: existing.findingCategory ?? '',
         reportFinalized: false,
         providerReviewNotes: providerReviewNotes ?? undefined,
       };
@@ -364,9 +490,9 @@ export class UltrasoundTabComponent implements OnInit {
   }
 
   /** Form values as seeded by openReport — used to distinguish defaults. */
-  private reportSeed: UltrasoundReportRequest = this.emptyReportForm();
+  private reportSeed: UltrasoundReportForm = this.emptyReportForm();
   /** Form values after the last template application (or the seed). */
-  private reportBaseline: UltrasoundReportRequest = this.emptyReportForm();
+  private reportBaseline: UltrasoundReportForm = this.emptyReportForm();
 
   applyTemplate(kind: 'nuchal-translucency' | 'anatomy-scan'): void {
     this.templateLoading.set(true);
@@ -387,7 +513,7 @@ export class UltrasoundTabComponent implements OnInit {
           ...this.reportSeed,
           ...this.stripEmpty(template as UltrasoundReportRequest),
           ...userChanged,
-        } as UltrasoundReportRequest;
+        } as UltrasoundReportForm;
         this.reportBaseline = { ...this.reportForm };
         this.templateLoading.set(false);
       },
@@ -408,20 +534,50 @@ export class UltrasoundTabComponent implements OnInit {
 
   submitReport(): void {
     const order = this.reportTargetOrder();
-    if (!order || !this.reportForm.scanDate || !this.reportForm.findingCategory) {
-      this.toast.error(this.translate.instant('ULTRASOUND.REPORT_REQUIRED_FIELDS'));
+    if (!order) return;
+    const form = this.reportForm;
+    // QA D1150: the date and the finding are named where they are missing, and
+    // a report with no finding at all (no measurement, summary or
+    // interpretation) is refused — it must never read as "Normal".
+    const missing = blankFields(
+      { 'rep-date': form.scanDate, 'rep-category': form.findingCategory },
+      ['rep-date', 'rep-category'],
+    );
+    if (missing.length > 0) {
+      refuseFields(
+        this.host.nativeElement,
+        missing,
+        REPORT_FIELD_IDS,
+        this.translate.instant('ULTRASOUND.REPORT_REQUIRED_FIELDS'),
+      );
       return;
     }
+    if (!hasUltrasoundFinding(form)) {
+      refuseFields(
+        this.host.nativeElement,
+        ['rep-summary'],
+        REPORT_FIELD_IDS,
+        this.translate.instant('ULTRASOUND.REPORT_NO_FINDINGS'),
+      );
+      return;
+    }
+    refuseFields(this.host.nativeElement, [], REPORT_FIELD_IDS, '');
+    // QA D1182: the flags the form shows no control for are never sent (the
+    // stored "yes" defaults counted as findings on the server).
+    const request = { ...form } as Partial<UltrasoundReportRequest>;
+    for (const flag of UNSHOWN_DEFAULT_FLAGS) delete request[flag];
     this.reportSaving.set(true);
-    this.ultrasoundService.submitReport(order.id, this.reportForm).subscribe({
+    this.ultrasoundService.submitReport(order.id, request as UltrasoundReportRequest).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('ULTRASOUND.REPORT_SAVED'));
         this.reportSaving.set(false);
         this.closeReportModal();
         this.load();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('ULTRASOUND.REPORT_SAVE_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('ULTRASOUND.REPORT_SAVE_ERROR'),
+        );
         this.reportSaving.set(false);
       },
     });
@@ -436,8 +592,10 @@ export class UltrasoundTabComponent implements OnInit {
         this.load();
         this.closeOrder();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('ULTRASOUND.REPORT_ACTION_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('ULTRASOUND.REPORT_ACTION_ERROR'),
+        );
         this.reportActionBusy.set(false);
       },
     });
@@ -452,8 +610,10 @@ export class UltrasoundTabComponent implements OnInit {
         this.load();
         this.closeOrder();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('ULTRASOUND.REPORT_ACTION_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('ULTRASOUND.REPORT_ACTION_ERROR'),
+        );
         this.reportActionBusy.set(false);
       },
     });

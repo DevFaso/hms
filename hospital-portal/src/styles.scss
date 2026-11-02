@@ -220,3 +220,48 @@ button {
     margin: 1.5cm;
   }
 }
+
+/* QA D1072: the message shared/forms/invalid-fields.ts shows under a field a
+   client-side check refused (inserted at run time, so it lives here, outside
+   any component's encapsulated styles). */
+.invalid-field-msg {
+  display: block;
+  margin-top: 4px;
+  color: #b42318;
+  font-size: 0.8rem;
+}
+
+/* QA D1124: the reason a guarded submit refused, on its own line in a button row. */
+.submit-guard-msg {
+  flex-basis: 100%;
+  margin-bottom: 0;
+}
+
+/* QA D1131 / D1190 / D1195 / D1208 (round 22): the question a dialog asks when
+   Escape is pressed over typed text (escape-keeps-typed-text.ts builds it at
+   run time, so its style lives here). */
+.dialog-discard {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.75rem 0 0;
+  padding: 0.75rem;
+  border: 1px solid #f0b37e;
+  border-radius: 6px;
+  background: #fff7ed;
+}
+
+.dialog-discard p {
+  margin: 0;
+  flex-basis: 100%;
+  color: #7a2e0e;
+  font-weight: 600;
+}
+
+/* QA D1203 (round 22): a fieldset's default min-width is its content's
+   min-content, so a row of inputs inside one widened the dialog past the
+   screen. Every fieldset of the portal shrinks with its container. */
+fieldset {
+  min-width: 0;
+}

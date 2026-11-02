@@ -77,6 +77,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -121,6 +122,8 @@ class ReceptionServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        // QA D936: check-in reads the appointment under a row lock; the lock answers what the plain read would.
+        lenient().when(appointmentRepo.lockById(any())).thenAnswer(inv -> appointmentRepo.findById(inv.getArgument(0)));
         patient = new Patient();
         patient.setId(patientId);
         patient.setFirstName("John");
@@ -345,6 +348,64 @@ class ReceptionServiceImplTest {
         }
 
         @Test
+        @DisplayName("QA D1021: an open walk-in and an open booked visit from before midnight stay on today's queue")
+        void openVisitsFromAnEarlierDayStayOnTodaysQueue_D1021() {
+            Encounter lateWalkIn = makeWalkInEncounter(EncounterStatus.ARRIVED);
+            when(lateWalkIn.getEncounterDate()).thenReturn(today.minusDays(1).atTime(23, 57));
+            Appointment lateAppt = makeAppointment(AppointmentStatus.SCHEDULED);
+            Encounter lateCheckIn = makeEncounter(EncounterStatus.ARRIVED, lateAppt);
+            when(appointmentRepo.findByHospital_IdAndAppointmentDate(hospitalId, today)).thenReturn(List.of());
+            when(encounterRepo.findOpenStartedBefore(eq(hospitalId), eq(today.atStartOfDay()), any()))
+                    .thenReturn(List.of(lateWalkIn, lateCheckIn));
+            when(encounterRepo.findByAppointmentIdIn(any())).thenReturn(List.of(lateCheckIn));
+            when(encounterRepo.findWalkInsForHospitalAndPeriod(eq(hospitalId), any(), any()))
+                    .thenReturn(Collections.emptyList());
+            stubEmptyInsuranceAndInvoices();
+
+            List<ReceptionQueueItemDTO> queue = service.getQueue(today, hospitalId, "ALL", null, null);
+
+            assertThat(queue).extracting(ReceptionQueueItemDTO::getEncounterId)
+                    .containsExactlyInAnyOrder(lateWalkIn.getId(), lateCheckIn.getId());
+            assertThat(service.getDashboardSummary(today, hospitalId).getArrivedCount()).isEqualTo(2);
+        }
+
+        @Test
+        @DisplayName("QA D1021: a past day shows only what happened on it (no carry-over query)")
+        void aPastDayCarriesNothingOver_D1021() {
+            LocalDate yesterday = today.minusDays(1);
+            when(appointmentRepo.findByHospital_IdAndAppointmentDate(hospitalId, yesterday)).thenReturn(List.of());
+            when(encounterRepo.findWalkInsForHospitalAndPeriod(eq(hospitalId), any(), any()))
+                    .thenReturn(Collections.emptyList());
+
+            assertThat(service.getQueue(yesterday, hospitalId, "ALL", null, null)).isEmpty();
+            verify(encounterRepo, never()).findOpenStartedBefore(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("QA D1021: 'today' for the carry-over is the hospital's calendar day, not the server's")
+        void theCarryOverDayIsTheHospitalsToday_D1021() {
+            // Kiritimati (UTC+14) and Pago Pago (UTC-11) are 25 hours apart:
+            // their calendar days always differ, whatever the server's zone.
+            com.example.hms.model.Organization org = mock(com.example.hms.model.Organization.class);
+            when(org.getDefaultTimezone()).thenReturn("Pacific/Kiritimati");
+            Hospital zoned = mock(Hospital.class);
+            when(zoned.getOrganization()).thenReturn(org);
+            when(hospitalRepo.findById(hospitalId)).thenReturn(Optional.of(zoned));
+            LocalDate hospitalToday = LocalDate.now(java.time.ZoneId.of("Pacific/Kiritimati"));
+            LocalDate otherDay = LocalDate.now(java.time.ZoneId.of("Pacific/Pago_Pago"));
+            when(appointmentRepo.findByHospital_IdAndAppointmentDate(eq(hospitalId), any())).thenReturn(List.of());
+            when(encounterRepo.findWalkInsForHospitalAndPeriod(eq(hospitalId), any(), any()))
+                    .thenReturn(Collections.emptyList());
+            when(encounterRepo.findOpenStartedBefore(any(), any(), any())).thenReturn(List.of());
+
+            service.getQueue(otherDay, hospitalId, "ALL", null, null);
+            verify(encounterRepo, never()).findOpenStartedBefore(any(), any(), any());
+
+            service.getQueue(hospitalToday, hospitalId, "ALL", null, null);
+            verify(encounterRepo).findOpenStartedBefore(eq(hospitalId), eq(hospitalToday.atStartOfDay()), any());
+        }
+
+        @Test
         @DisplayName("returns queue items for all appointments")
         void returnsQueueItems() {
             Appointment appt = makeAppointment(AppointmentStatus.SCHEDULED);
@@ -417,7 +478,24 @@ class ReceptionServiceImplTest {
             List<ReceptionQueueItemDTO> result = service.getQueue(today, hospitalId, null, null, null);
 
             assertThat(result).hasSize(1);
-            assertThat(result.get(0).getAppointmentReason()).isEqualTo("Walk-in");
+            // QA D944: no English "Walk-in" placeholder; the queue renders its own.
+            assertThat(result.get(0).getAppointmentReason()).isNull();
+        }
+
+        @Test
+        @DisplayName("QA D944: a walk-in's reason is its chief complaint, else the notes the desk typed")
+        void walkInReasonIsTheComplaintTyped() {
+            Encounter withComplaint = new Encounter();
+            withComplaint.setChiefComplaint("Fièvre depuis 2 jours, toux");
+            withComplaint.setNotes("autre");
+            assertThat(ReceptionServiceImpl.walkInReason(withComplaint)).isEqualTo("Fièvre depuis 2 jours, toux");
+
+            // The clinician's notes are never the desk's reason (review round 6).
+            Encounter clinicalNotesOnly = new Encounter();
+            clinicalNotesOnly.setNotes("VIH+, discuter observance ARV");
+            assertThat(ReceptionServiceImpl.walkInReason(clinicalNotesOnly)).isNull();
+
+            assertThat(ReceptionServiceImpl.walkInReason(new Encounter())).isNull();
         }
 
         @org.junit.jupiter.params.ParameterizedTest(name = "{0}")
@@ -850,6 +928,127 @@ class ReceptionServiceImplTest {
 
             assertThat(result).isEmpty();
         }
+
+        private Patient registered(String first, String last, LocalDate dob, String phone, boolean here) {
+            Patient p = new Patient();
+            p.setId(UUID.randomUUID());
+            p.setFirstName(first);
+            p.setLastName(last);
+            p.setDateOfBirth(dob);
+            p.setPhoneNumberPrimary(phone);
+            p.setActive(true);
+            com.example.hms.model.PatientHospitalRegistration r = new com.example.hms.model.PatientHospitalRegistration();
+            com.example.hms.model.Hospital h = new com.example.hms.model.Hospital();
+            h.setId(here ? hospitalId : UUID.randomUUID());
+            r.setHospital(h);
+            r.setActive(true);
+            r.setMrn("CHW1444");
+            p.setHospitalRegistrations(new java.util.HashSet<>(Set.of(r)));
+            return p;
+        }
+
+        @Test
+        @DisplayName("QA D924: the phone does not filter; name and DOB find the record whatever phone is typed")
+        void aDifferentPhoneStillFindsTheRecord() {
+            Patient fatimata = registered("Fatimata", "Zongo", LocalDate.of(1991, 7, 22), "+22670161000", true);
+            when(patientRepo.searchPatientsExtended(any(), eq("%zongo fatimata%"), isNull(), isNull(), any(),
+                    eq(hospitalId), eq(true), any()))
+                    .thenReturn(new PageImpl<>(List.of(fatimata)));
+            // Round 8: the same-name-and-DOB source finds her too (counted once).
+            when(patientRepo.searchPatientsExtended(any(), eq("%zongo fatimata%"), eq("1991-07-22"), isNull(), any(),
+                    eq(hospitalId), eq(true), any()))
+                    .thenReturn(new PageImpl<>(List.of(fatimata)));
+            when(patientRepo.findAllByPhoneSubscriberAtHospital(eq("%70161099"), any(), any())).thenReturn(List.of());
+
+            List<DuplicateCandidateDTO> result = service.getDuplicateCandidates(
+                    "Zongo Fatimata", "1991-07-22", "+22670161099", hospitalId);
+
+            assertThat(result).singleElement().satisfies(c -> {
+                assertThat(c.getPatientId()).isEqualTo(fatimata.getId());
+                assertThat(c.getConfidenceScore()).isEqualTo(80);
+                assertThat(c.getMrn()).isEqualTo("CHW1444");
+            });
+        }
+
+        @Test
+        @DisplayName("QA D924/D942: the same subscriber, however written, scores; a shared number alone is not a duplicate")
+        void theSameSubscriberScores() {
+            Patient same = registered("Aïcha", "Kaboré", LocalDate.of(1991, 7, 22), "70 16 10 99", true);
+            Patient sharedPhoneOnly = registered("Issa", "Kaboré", LocalDate.of(2015, 1, 1), "70161099", true);
+            // A patient registered elsewhere is excluded by the hospital-scoped query itself.
+            when(patientRepo.searchPatientsExtended(any(), any(), any(), any(), any(), eq(hospitalId), eq(true), any()))
+                    .thenReturn(new PageImpl<>(List.of()));
+            when(patientRepo.findAllByPhoneSubscriberAtHospital(eq("%70161099"), eq(hospitalId), any()))
+                    .thenReturn(List.of(same, sharedPhoneOnly));
+
+            List<DuplicateCandidateDTO> result = service.getDuplicateCandidates(
+                    "Aicha Kabore", "1991-07-22", "+22670161099", hospitalId);
+
+            assertThat(result).singleElement().satisfies(c -> {
+                assertThat(c.getPatientId()).isEqualTo(same.getId());
+                assertThat(c.getConfidenceScore()).isEqualTo(100);
+            });
+        }
+
+        @Test
+        @DisplayName("review: a transposed date of birth does not hide a same-name record (the name is its own source)")
+        void aTransposedDobStillFindsTheName() {
+            Patient aicha = registered("Aïcha", "Kaboré", LocalDate.of(2019, 3, 4), "76000001", true);
+            when(patientRepo.searchPatientsExtended(any(), eq("%aicha kabore%"), isNull(), isNull(), any(),
+                    eq(hospitalId), eq(true), any()))
+                    .thenReturn(new PageImpl<>(List.of(aicha)));
+            // The transposed date matches no one.
+            when(patientRepo.searchPatientsExtended(any(), eq("%aicha kabore%"), eq("2019-04-03"), isNull(), any(),
+                    eq(hospitalId), eq(true), any()))
+                    .thenReturn(new PageImpl<>(List.of()));
+
+            List<DuplicateCandidateDTO> result = service.getDuplicateCandidates(
+                    "Aicha Kabore", "2019-04-03", "76999999", hospitalId);
+
+            assertThat(result).singleElement().satisfies(c -> {
+                assertThat(c.getPatientId()).isEqualTo(aicha.getId());
+                assertThat(c.getConfidenceScore()).isEqualTo(50);
+            });
+        }
+
+        @Test
+        @DisplayName("review round 8: a common name does not push the same-name-and-DOB record out of the capped page")
+        void aCommonNameDoesNotHideTheSameBirthDate() {
+            Patient target = registered("Adama", "Ouedraogo", LocalDate.of(1990, 5, 1), "70000001", true);
+            List<Patient> namesakes = new java.util.ArrayList<>();
+            for (int i = 0; i < 20; i++) {
+                namesakes.add(registered("Adama", "Ouedraogo", LocalDate.of(1980, 1, 1).plusDays(i), "7100000" + (i % 10), true));
+            }
+            // The name-only page is full of namesakes born on other days.
+            when(patientRepo.searchPatientsExtended(any(), eq("%ouedraogo adama%"), isNull(), isNull(), any(),
+                    eq(hospitalId), eq(true), any()))
+                    .thenReturn(new PageImpl<>(namesakes));
+            when(patientRepo.searchPatientsExtended(any(), eq("%ouedraogo adama%"), eq("1990-05-01"), isNull(), any(),
+                    eq(hospitalId), eq(true), any()))
+                    .thenReturn(new PageImpl<>(List.of(target)));
+
+            List<DuplicateCandidateDTO> result = service.getDuplicateCandidates(
+                    "Ouedraogo Adama", "1990-05-01", "76999999", hospitalId);
+
+            assertThat(result).first().satisfies(c -> {
+                assertThat(c.getPatientId()).isEqualTo(target.getId());
+                assertThat(c.getConfidenceScore()).isEqualTo(80);
+            });
+        }
+
+        @Test
+        @DisplayName("review: no hospital, no scope: the duplicate check asks nothing")
+        void noHospitalNoCheck() {
+            assertThat(service.getDuplicateCandidates("Aicha", "1991-07-22", "+22670161099", null)).isEmpty();
+            verify(patientRepo, never()).findAllByPhoneSubscriberAtHospital(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("no name, no DOB and a short phone ask nothing")
+        void nothingToAsk() {
+            assertThat(service.getDuplicateCandidates(null, " ", "12", hospitalId)).isEmpty();
+            verify(patientRepo, never()).findAllByPhoneSubscriberAtHospital(any(), any(), any());
+        }
     }
 
     // ── addToWaitlist ────────────────────────────────────────────────────────
@@ -1206,10 +1405,104 @@ class ReceptionServiceImplTest {
             when(waitlistRepo.findByIdAndHospital_Id(waitlistId, hospitalId))
                     .thenReturn(Optional.of(entry));
 
-            service.closeWaitlistEntry(waitlistId, hospitalId);
+            service.closeWaitlistEntry(waitlistId, hospitalId, "  Patient seen elsewhere ");
 
+            verify(entry).setCloseReason("Patient seen elsewhere");
             verify(entry).setStatus("CLOSED");
             verify(waitlistRepo).save(entry);
+        }
+
+        @Test
+        @DisplayName("QA D1157: a close without a reason is refused and nothing is written")
+        void aCloseWithoutAReasonIsRefused_D1157() {
+            UUID waitlistId = UUID.randomUUID();
+            AppointmentWaitlist entry = mock(AppointmentWaitlist.class);
+            when(waitlistRepo.findByIdAndHospital_Id(waitlistId, hospitalId))
+                    .thenReturn(Optional.of(entry));
+
+            for (String blank : new String[] {null, "", "   "}) {
+                assertThatThrownBy(() -> service.closeWaitlistEntry(waitlistId, hospitalId, blank))
+                        .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                        .extracting("messageKey").isEqualTo("order.lifecycle.cancelReasonRequired");
+            }
+            verify(entry, never()).setStatus(org.mockito.ArgumentMatchers.anyString());
+            verify(waitlistRepo, never()).save(entry);
+        }
+
+        @Test
+        @DisplayName("QA D1186: a closed entry is not closed again and its reason is kept")
+        void aClosedEntryIsNotClosedAgain_D1186() {
+            UUID waitlistId = UUID.randomUUID();
+            AppointmentWaitlist entry = AppointmentWaitlist.builder()
+                    .status("CLOSED").closeReason("Premier motif").build();
+            when(waitlistRepo.findByIdAndHospital_Id(waitlistId, hospitalId))
+                    .thenReturn(Optional.of(entry));
+
+            assertThatThrownBy(() -> service.closeWaitlistEntry(waitlistId, hospitalId, "Second motif"))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                    .extracting("messageKey").isEqualTo("waitlist.close.alreadyClosed");
+            assertThat(entry.getCloseReason()).isEqualTo("Premier motif");
+            verify(waitlistRepo, never()).save(entry);
+        }
+
+        @Test
+        @DisplayName("QA D1185: closing an OFFERED entry frees the held slot and withdraws the offer")
+        void closingAnOfferedEntryReleasesTheSlot_D1185() {
+            UUID waitlistId = UUID.randomUUID();
+            AppointmentSlot slot = offerSlot(LocalDateTime.now().plusDays(1));
+            slot.setStatus(SlotStatus.HELD);
+            slot.setHeldUntil(LocalDateTime.now().plusHours(48));
+            AppointmentWaitlist entry = AppointmentWaitlist.builder()
+                    .status("OFFERED").offeredSlot(slot).offerExpiresAt(LocalDateTime.now().plusHours(48)).build();
+            when(waitlistRepo.findByIdAndHospital_Id(waitlistId, hospitalId))
+                    .thenReturn(Optional.of(entry));
+
+            service.closeWaitlistEntry(waitlistId, hospitalId, "Patient a trouvé un autre créneau");
+
+            assertThat(slot.getStatus()).isEqualTo(SlotStatus.OPEN);
+            assertThat(slot.getHeldUntil()).isNull();
+            verify(slotRepo).save(slot);
+            assertThat(entry.getOfferedSlot()).isNull();
+            assertThat(entry.getOfferExpiresAt()).isNull();
+            assertThat(entry.getStatus()).isEqualTo("CLOSED");
+            assertThat(entry.getCloseReason()).isEqualTo("Patient a trouvé un autre créneau");
+        }
+
+        @Test
+        @DisplayName("QA D1185: a slot re-held by someone else after the offer lapsed is not freed by the close")
+        void aHoldThatIsNotThisOffersIsLeftAlone_D1185() {
+            UUID waitlistId = UUID.randomUUID();
+            LocalDateTime lapsed = LocalDateTime.now().minusHours(1);
+            AppointmentSlot slot = offerSlot(LocalDateTime.now().plusDays(1));
+            slot.setStatus(SlotStatus.HELD);
+            slot.setHeldUntil(LocalDateTime.now().plusHours(47));
+            AppointmentWaitlist entry = AppointmentWaitlist.builder()
+                    .status("OFFERED").offeredSlot(slot).offerExpiresAt(lapsed).build();
+            when(waitlistRepo.findByIdAndHospital_Id(waitlistId, hospitalId))
+                    .thenReturn(Optional.of(entry));
+
+            service.closeWaitlistEntry(waitlistId, hospitalId, "Plus besoin");
+
+            assertThat(slot.getStatus()).isEqualTo(SlotStatus.HELD);
+            verify(slotRepo, never()).save(slot);
+            assertThat(entry.getOfferedSlot()).isNull();
+            assertThat(entry.getStatus()).isEqualTo("CLOSED");
+        }
+
+        @Test
+        @DisplayName("QA D1185: a refused close of an OFFERED entry leaves the slot held")
+        void aRefusedCloseLeavesTheOfferAlone_D1185() {
+            UUID waitlistId = UUID.randomUUID();
+            AppointmentSlot slot = offerSlot(LocalDateTime.now().plusDays(1));
+            slot.setStatus(SlotStatus.HELD);
+            AppointmentWaitlist entry = AppointmentWaitlist.builder().status("OFFERED").offeredSlot(slot).build();
+            when(waitlistRepo.findByIdAndHospital_Id(waitlistId, hospitalId))
+                    .thenReturn(Optional.of(entry));
+
+            assertThatThrownBy(() -> service.closeWaitlistEntry(waitlistId, hospitalId, " "))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class);
+            assertThat(slot.getStatus()).isEqualTo(SlotStatus.HELD);
+            verify(slotRepo, never()).save(slot);
         }
 
         @Test
@@ -1218,7 +1511,7 @@ class ReceptionServiceImplTest {
             UUID waitlistId = UUID.randomUUID();
             when(waitlistRepo.findByIdAndHospital_Id(waitlistId, hospitalId)).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> service.closeWaitlistEntry(waitlistId, hospitalId))
+            assertThatThrownBy(() -> service.closeWaitlistEntry(waitlistId, hospitalId, "reason"))
                     .isInstanceOf(ResourceNotFoundException.class);
         }
     }
@@ -1481,8 +1774,33 @@ class ReceptionServiceImplTest {
 
             org.mockito.ArgumentCaptor<Encounter> encounter = org.mockito.ArgumentCaptor.forClass(Encounter.class);
             verify(billingInvoiceService).recordCheckInCopay(encounter.capture(),
-                eq(new java.math.BigDecimal("2000")), any());
+                eq(new java.math.BigDecimal("2000")), any(), any(), any());
             assertThat(encounter.getValue().getId()).isEqualTo(response.getEncounterId());
+        }
+
+        @Test
+        @DisplayName("QA D975: the copay is recorded in the method and with the reference the desk chose, and the receipt ids come back")
+        void copayKeepsItsMethodAndReference_D975() {
+            Appointment appointment = scheduledAppointment();
+            CheckInRequestDTO request = CheckInRequestDTO.builder()
+                    .appointmentId(appointment.getId())
+                    .copayAmount(new java.math.BigDecimal("1500"))
+                    .copayMethod(com.example.hms.enums.PaymentMethod.MOBILE_MONEY)
+                    .copayReference("OM-778812")
+                    .identityConfirmed(true)
+                    .build();
+            com.example.hms.model.BillingInvoice invoice = new com.example.hms.model.BillingInvoice();
+            invoice.setId(UUID.randomUUID());
+            com.example.hms.model.PaymentTransaction row = new com.example.hms.model.PaymentTransaction();
+            row.setId(UUID.randomUUID());
+            row.setInvoice(invoice);
+            when(billingInvoiceService.recordCheckInCopay(any(), any(),
+                eq(com.example.hms.enums.PaymentMethod.MOBILE_MONEY), eq("OM-778812"), any())).thenReturn(row);
+
+            CheckInResponseDTO response = service.checkInPatient(request, hospitalId, "receptionist1");
+
+            assertThat(response.getCopayPaymentId()).isEqualTo(row.getId());
+            assertThat(response.getCopayInvoiceId()).isEqualTo(invoice.getId());
         }
 
         @Test
@@ -1513,7 +1831,7 @@ class ReceptionServiceImplTest {
 
             service.checkInPatient(request, hospitalId, "receptionist1");
 
-            verify(billingInvoiceService, never()).recordCheckInCopay(any(), any(), any());
+            verify(billingInvoiceService, never()).recordCheckInCopay(any(), any(), any(), any(), any());
         }
 
         @Test
@@ -1586,8 +1904,10 @@ class ReceptionServiceImplTest {
             verify(appointmentRepo).save(any(Appointment.class));
             verify(encounterRepo).save(any(Encounter.class));
             verify(auditEventLogService).logEvent(any());
+            // QA D936: the appointment is read under a row lock.
+            verify(appointmentRepo).lockById(appointmentId);
             // No consent fields on the request — nothing recorded (P3 #21).
-            verify(treatmentConsentService, org.mockito.Mockito.never())
+            verify(treatmentConsentService, never())
                 .record(any(), any(), any(), any(), any());
         }
 

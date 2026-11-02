@@ -15,7 +15,10 @@ import { AuthService } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { refusalReason } from '../shared/refusal-reason';
 type ActiveFilter = 'all' | 'active' | 'inactive';
 
 /**
@@ -28,7 +31,13 @@ type ActiveFilter = 'all' | 'active' | 'inactive';
   selector: 'app-registrations',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, TranslateModule, PatientPickerComponent],
+  imports: [
+    SubmitGuardDirective,
+    FormsModule,
+    TranslateModule,
+    PatientPickerComponent,
+    ModalDialogDirective,
+  ],
   templateUrl: './registrations.html',
   styleUrl: './registrations.scss',
 })
@@ -241,7 +250,10 @@ export class RegistrationsComponent implements OnInit {
           this.toast.success(this.translate.instant('REGISTRATIONS.DEACTIVATED'));
           this.registrations.update((list) => list.map((r) => (r.id === saved.id ? saved : r)));
         },
-        error: () => this.toast.error(this.translate.instant('REGISTRATIONS.SAVE_ERROR')),
+        error: (err: unknown) =>
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('REGISTRATIONS.SAVE_ERROR'),
+          ),
       });
   }
 
@@ -264,8 +276,10 @@ export class RegistrationsComponent implements OnInit {
         this.closeDelete();
         this.registrations.update((list) => list.filter((r) => r.id !== target.id));
       },
-      error: () => {
-        this.toast.error(this.translate.instant('REGISTRATIONS.DELETE_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('REGISTRATIONS.DELETE_ERROR'),
+        );
         this.deleteBusy.set(false);
       },
     });

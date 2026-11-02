@@ -54,6 +54,13 @@ public interface NurseTaskService {
 
     List<NurseAnnouncementDTO> getAnnouncements(UUID hospitalId, int limit);
 
+    /**
+     * QA D922: the clinicians of {@code hospitalId}, other than {@code selfUserId},
+     * who may witness a controlled dose (active nurse, midwife or doctor).
+     */
+    java.util.List<com.example.hms.payload.dto.pharmacy.StockWitnessCandidateDTO> listAdministrationWitnessCandidates(
+        UUID selfUserId, UUID hospitalId);
+
     NurseMedicationTaskResponseDTO recordMedicationAdministration(
         UUID medicationTaskId,
         UUID nurseUserId,

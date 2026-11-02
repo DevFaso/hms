@@ -80,6 +80,7 @@ public class LaborServiceImpl implements LaborService {
     /* ── Clinical thresholds ─────────────────────────────────────────── */
 
     static final int FHR_BRADYCARDIA_BPM = 110;
+    private static final String FETAL_HEART_RATE_FIELD = "fetalHeartRateBpm";
     static final int FHR_TACHYCARDIA_BPM = 160;
     static final int ACTIVE_PHASE_DILATION_CM = 4;
     static final double ACTION_LINE_LAG_HOURS = 4.0;
@@ -422,6 +423,14 @@ public class LaborServiceImpl implements LaborService {
                 && request.getObservationTime().isBefore(episode.getLaborOnsetAt())) {
             throw new BusinessException("maternity.partograph.beforeOnset");
         }
+        // QA D1151 class (round 21): a partograph entry charts an observation.
+        com.example.hms.service.support.ClinicalContent.requireAny(FETAL_HEART_RATE_FIELD, "maternity.partograph.findingsRequired",
+            request.getFetalHeartRateBpm(), request.getLiquorColour(), request.getMouldingDegree(),
+            request.getCervicalDilationCm(), request.getDescentFifths(), request.getContractionsPerTenMinutes(),
+            request.getContractionDurationSeconds(), request.getOxytocinDropsPerMinute(), request.getDrugsGiven(),
+            request.getIvFluids(), request.getPulseBpm(), request.getSystolicBpMmHg(), request.getDiastolicBpMmHg(),
+            request.getTemperatureCelsius(), request.getUrineOutputMl(), request.getUrineProtein(),
+            request.getUrineAcetone(), request.getNotes());
 
         Staff recordedBy = resolveStaff(request.getRecordedByStaffId(), episode.getHospital());
         if (recordedBy != null) {
@@ -622,12 +631,12 @@ public class LaborServiceImpl implements LaborService {
             entry.addAlert(LaborAlertType.FETAL_HEART_RATE, LaborAlertSeverity.URGENT,
                 "labor-fetal-bradycardia",
                 alertText("labor-fetal-bradycardia", fhr, FHR_BRADYCARDIA_BPM),
-                "fetalHeartRateBpm", new Object[]{fhr, FHR_BRADYCARDIA_BPM});
+                FETAL_HEART_RATE_FIELD, new Object[]{fhr, FHR_BRADYCARDIA_BPM});
         } else if (fhr != null && fhr > FHR_TACHYCARDIA_BPM) {
             entry.addAlert(LaborAlertType.FETAL_HEART_RATE, LaborAlertSeverity.URGENT,
                 "labor-fetal-tachycardia",
                 alertText("labor-fetal-tachycardia", fhr, FHR_TACHYCARDIA_BPM),
-                "fetalHeartRateBpm", new Object[]{fhr, FHR_TACHYCARDIA_BPM});
+                FETAL_HEART_RATE_FIELD, new Object[]{fhr, FHR_TACHYCARDIA_BPM});
         }
         if (entry.getLiquorColour() == LiquorColour.MECONIUM_STAINED
             || entry.getLiquorColour() == LiquorColour.BLOOD_STAINED) {
@@ -950,7 +959,7 @@ public class LaborServiceImpl implements LaborService {
             notificationService.createNotification("labor.alert.notification",
                 new Object[]{typeKey, patientArg,
                     com.example.hms.service.maternity.ObstetricAlertEscalationWorker.alertMessageArg(
-                        messageKey, messageArgs, alert.getMessage())}, documentedBy.getUsername(), null);
+                        messageKey, messageArgs, alert.getMessage())}, documentedBy.getUsername(), "MATERNITY_ALERT");
         } catch (RuntimeException ex) {
             log.warn("Failed to create labor alert notification: {}", ex.getMessage());
         }

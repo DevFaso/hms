@@ -396,7 +396,19 @@ public class GlobalExceptionHandler {
         body.put(FIELD_TIMESTAMP, LocalDateTime.now());
         body.put(FIELD_STATUS, HttpStatus.BAD_REQUEST.value());
         body.put(FIELD_ERROR, "Validation Failed");
-        body.put(FIELD_MESSAGE, localized("error.validation.request", "Validation errors in request"));
+        // QA D1037 / D984: the message says what to fix. It was the generic
+        // "the request parameters are not valid" whatever the field, and every
+        // page that shows err.error.message (130 of them) showed only that.
+        // The field reasons (already in the request's language) are the
+        // message now; the generic sentence stays the fallback.
+        String reasons = fieldErrors.values().stream()
+                .filter(message -> message != null && !message.isBlank())
+                .map(String::trim)
+                .distinct()
+                .collect(Collectors.joining(" "));
+        body.put(FIELD_MESSAGE, reasons.isEmpty()
+                ? localized("error.validation.request", "Validation errors in request")
+                : reasons);
         body.put(FIELD_ERRORS, fieldErrors);
         body.put(FIELD_PATH, request.getDescription(false).replace("uri=", ""));
 
@@ -728,7 +740,9 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Object> handleAccessDenied(AccessDeniedException ex, WebRequest req) {
         log.warn("Access denied: {}", ex.getMessage());
         if (ex instanceof ClientSafeAccessDeniedException && ex.getMessage() != null) {
-            return buildErrorResponse(HttpStatus.FORBIDDEN, ex.getMessage(), req);
+            // QA D1187 (round 22): a thrower may hand a bundle KEY; it is resolved
+            // in the request locale here, and a resolved sentence passes unchanged.
+            return buildErrorResponse(HttpStatus.FORBIDDEN, passThrough(ex.getMessage()), req);
         }
         // The opaque default is localized now (D174), so clients that hid it by
         // comparing the English literal key on this code instead.

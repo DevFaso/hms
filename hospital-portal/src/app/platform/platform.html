@@ -307,6 +307,7 @@
                       <button
                         class="icon-btn icon-btn-success"
                         [title]="'PLATFORM.ACTIVATE' | translate"
+                        [attr.aria-label]="'PLATFORM.ACTIVATE' | translate"
                         (click)="changeServiceStatus(svc, 'ACTIVE')"
                       >
                         <span class="material-icons">check_circle</span>
@@ -316,6 +317,7 @@
                       <button
                         class="icon-btn icon-btn-warning"
                         [title]="'PLATFORM.DEACTIVATE' | translate"
+                        [attr.aria-label]="'PLATFORM.DEACTIVATE' | translate"
                         (click)="changeServiceStatus(svc, 'INACTIVE')"
                       >
                         <span class="material-icons">pause_circle</span>
@@ -324,6 +326,7 @@
                     <button
                       class="icon-btn"
                       [title]="'PLATFORM.VIEW_DETAILS' | translate"
+                      [attr.aria-label]="'PLATFORM.VIEW_DETAILS' | translate"
                       (click)="openServiceDetail(svc)"
                     >
                       <span class="material-icons">open_in_new</span>
@@ -412,16 +415,22 @@
             </div>
 
             <div class="catalog-actions">
-              <button
-                class="btn btn-sm btn-primary"
-                data-test="catalog-provision"
-                (click)="openCatalogDetail(item)"
-                [disabled]="!item.enabled"
-                [title]="item.enabled ? '' : ('PLATFORM.PROVISION_DISABLED_HINT' | translate)"
-              >
-                <span class="material-icons">add_circle</span>
-                {{ 'PLATFORM.PROVISION' | translate }}
-              </button>
+              <!-- QA D1124: a catalogue item that is switched off says so in words,
+                   instead of a dead "Provision" button with a hover-only title. -->
+              @if (item.enabled) {
+                <button
+                  class="btn btn-sm btn-primary"
+                  data-test="catalog-provision"
+                  (click)="openCatalogDetail(item)"
+                >
+                  <span class="material-icons">add_circle</span>
+                  {{ 'PLATFORM.PROVISION' | translate }}
+                </button>
+              } @else {
+                <small class="catalog-disabled-hint" data-test="catalog-provision-disabled">{{
+                  'PLATFORM.PROVISION_DISABLED_HINT' | translate
+                }}</small>
+              }
               @if (docsUrl(item)) {
                 <button class="btn btn-sm btn-outline" (click)="openDocs(item)">
                   <span class="material-icons">description</span> {{ 'PLATFORM.DOCS' | translate }}
@@ -556,19 +565,31 @@
        ═══════════════════════════════════════════ -->
   @if (serviceDrawerOpen()) {
     <div
+      [attr.aria-label]="'COMMON.CLOSE' | translate"
       class="drawer-backdrop"
       role="button"
       tabindex="0"
       (click)="closeServiceDrawer()"
       (keydown.enter)="closeServiceDrawer()"
     ></div>
-    <aside class="drawer">
+    <aside
+      class="drawer"
+      appModalDialog
+      aria-labelledby="platform-service-drawer-title"
+      (escaped)="closeServiceDrawer()"
+    >
       <div class="drawer-header">
-        <h2>
-          <span class="material-icons">{{ serviceTypeIcon(selectedService()!.serviceType) }}</span>
+        <h2 id="platform-service-drawer-title">
+          <span class="material-icons" aria-hidden="true">{{
+            serviceTypeIcon(selectedService()!.serviceType)
+          }}</span>
           {{ serviceTypeLabel(selectedService()!.serviceType) }}
         </h2>
-        <button class="icon-btn" (click)="closeServiceDrawer()">
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="icon-btn"
+          (click)="closeServiceDrawer()"
+        >
           <span class="material-icons">close</span>
         </button>
       </div>
@@ -585,7 +606,8 @@
               </div>
               <div class="detail-item">
                 <span class="detail-label">{{ 'COMMON.STATUS' | translate }}</span>
-                <span
+                {{ ' '
+                }}<span
                   class="status-pill"
                   [ngClass]="serviceStatusClass(selectedService()!.status)"
                   >{{ selectedService()!.status | enumLabel: 'platformServiceStatus' }}</span
@@ -675,7 +697,8 @@
                   class="btn btn-sm"
                   [class.btn-primary]="st === selectedService()!.status"
                   [class.btn-outline]="st !== selectedService()!.status"
-                  [disabled]="st === selectedService()!.status || saving()"
+                  [attr.aria-pressed]="st === selectedService()!.status"
+                  [disabled]="saving()"
                   (click)="changeServiceStatus(selectedService()!, st)"
                 >
                   {{ st | enumLabel: 'platformServiceStatus' }}
@@ -772,8 +795,15 @@
             </button>
           </div>
         } @else {
-          <!-- Edit form -->
-          <form class="edit-form" (ngSubmit)="saveService()">
+          <!-- Edit form. QA D1155 class: Escape here leaves the edit (asking first
+               when a field was changed), never the whole drawer. -->
+          <form
+            class="edit-form"
+            appInlineSubForm
+            #serviceEditForm="inlineSubForm"
+            (dismissed)="cancelEditService()"
+            (ngSubmit)="saveService()"
+          >
             <p class="muted-text form-hint">{{ 'PLATFORM.CLEAR_FIELD_HINT' | translate }}</p>
             <div class="form-group">
               <label for="editProvider">{{ 'PLATFORM.PROVIDER' | translate }}</label>
@@ -918,6 +948,7 @@
                 }
               </button>
             </div>
+            <app-inline-discard-ask [form]="serviceEditForm" />
           </form>
         }
       </div>
@@ -929,19 +960,29 @@
        ═══════════════════════════════════════════ -->
   @if (registerDrawerOpen()) {
     <div
+      [attr.aria-label]="'COMMON.CLOSE' | translate"
       class="drawer-backdrop"
       role="button"
       tabindex="0"
       (click)="closeRegisterDrawer()"
       (keydown.enter)="closeRegisterDrawer()"
     ></div>
-    <aside class="drawer">
+    <aside
+      class="drawer"
+      appModalDialog
+      aria-labelledby="platform-register-drawer-title"
+      (escaped)="closeRegisterDrawer()"
+    >
       <div class="drawer-header">
-        <h2>
-          <span class="material-icons">add_circle</span>
+        <h2 id="platform-register-drawer-title">
+          <span class="material-icons" aria-hidden="true">add_circle</span>
           {{ 'PLATFORM.REGISTER_NEW_SERVICE' | translate }}
         </h2>
-        <button class="icon-btn" (click)="closeRegisterDrawer()">
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="icon-btn"
+          (click)="closeRegisterDrawer()"
+        >
           <span class="material-icons">close</span>
         </button>
       </div>
@@ -1084,7 +1125,13 @@
             <button type="button" class="btn btn-outline" (click)="closeRegisterDrawer()">
               {{ 'COMMON.CANCEL' | translate }}
             </button>
-            <button type="submit" class="btn btn-primary" [disabled]="saving()">
+            <button
+              appSubmitGuard
+              submitGuardRequired
+              type="submit"
+              class="btn btn-primary"
+              [disabled]="saving()"
+            >
               @if (saving()) {
                 <div class="spinner spinner-xs"></div>
                 {{ 'PLATFORM.REGISTERING' | translate }}
@@ -1104,19 +1151,31 @@
        ═══════════════════════════════════════════ -->
   @if (catalogDetailOpen() && selectedCatalogItem(); as item) {
     <div
+      [attr.aria-label]="'COMMON.CLOSE' | translate"
       class="drawer-backdrop"
       role="button"
       tabindex="0"
       (click)="closeCatalogDetail()"
       (keydown.enter)="closeCatalogDetail()"
     ></div>
-    <aside class="drawer">
+    <aside
+      class="drawer"
+      appModalDialog
+      aria-labelledby="platform-catalog-drawer-title"
+      (escaped)="closeCatalogDetail()"
+    >
       <div class="drawer-header">
-        <h2>
-          <span class="material-icons">{{ serviceTypeIcon(item.serviceType) }}</span>
+        <h2 id="platform-catalog-drawer-title">
+          <span class="material-icons" aria-hidden="true">{{
+            serviceTypeIcon(item.serviceType)
+          }}</span>
           {{ item.displayName }}
         </h2>
-        <button class="icon-btn" (click)="closeCatalogDetail()">
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="icon-btn"
+          (click)="closeCatalogDetail()"
+        >
           <span class="material-icons">close</span>
         </button>
       </div>
@@ -1276,7 +1335,9 @@
             class="btn btn-primary"
             data-test="provision-submit"
             (click)="provisionCatalogItem(item)"
-            [disabled]="saving() || !item.enabled || !provisionOrgId()"
+            [disabled]="saving()"
+            [appSubmitGuard]="!item.enabled || !provisionOrgId()"
+            [submitGuardFields]="['provisionOrg']"
           >
             <span class="material-icons">add_circle</span>
             @if (provisionOrgId()) {
@@ -1302,19 +1363,29 @@
        ═══════════════════════════════════════════ -->
   @if (releaseFormOpen()) {
     <div
+      [attr.aria-label]="'COMMON.CLOSE' | translate"
       class="drawer-backdrop"
       role="button"
       tabindex="0"
       (click)="closeReleaseForm()"
       (keydown.enter)="closeReleaseForm()"
     ></div>
-    <aside class="drawer">
+    <aside
+      class="drawer"
+      appModalDialog
+      aria-labelledby="platform-release-drawer-title"
+      (escaped)="closeReleaseForm()"
+    >
       <div class="drawer-header">
-        <h2>
-          <span class="material-icons">event</span>
+        <h2 id="platform-release-drawer-title">
+          <span class="material-icons" aria-hidden="true">event</span>
           {{ 'PLATFORM.SCHEDULE_RELEASE_WINDOW' | translate }}
         </h2>
-        <button class="icon-btn" (click)="closeReleaseForm()">
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="icon-btn"
+          (click)="closeReleaseForm()"
+        >
           <span class="material-icons">close</span>
         </button>
       </div>
@@ -1377,6 +1448,7 @@
               <label for="relEndsAt">{{ 'PLATFORM.ENDS_AT' | translate }} *</label>
               <input
                 id="relEndsAt"
+                [attr.min]="releaseForm().startsAt || null"
                 type="datetime-local"
                 class="form-input"
                 [ngModel]="releaseForm().endsAt"
@@ -1424,7 +1496,13 @@
             <button type="button" class="btn btn-outline" (click)="closeReleaseForm()">
               {{ 'COMMON.CANCEL' | translate }}
             </button>
-            <button type="submit" class="btn btn-primary" [disabled]="saving()">
+            <button
+              appSubmitGuard
+              submitGuardRequired
+              type="submit"
+              class="btn btn-primary"
+              [disabled]="saving()"
+            >
               @if (saving()) {
                 <div class="spinner spinner-xs"></div>
                 {{ 'PLATFORM.SCHEDULING' | translate }}

@@ -89,6 +89,9 @@ public class DispenseResponseDTO {
     /** Why a preparation was cancelled or voided ({@code ReadyCancelReason}); null otherwise. */
     private String cancelReason;
 
+    /** QA D1069: why the pharmacist cancelled a completed fill; null otherwise. */
+    private String cancelNote;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

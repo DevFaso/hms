@@ -71,6 +71,17 @@ export const ACTION_PERMISSIONS = {
       'ROLE_SUPER_ADMIN',
     ],
   },
+  labSpecimenReject: {
+    endpoint: 'LabSpecimenController#rejectSpecimen',
+    roles: [
+      'ROLE_LAB_TECHNICIAN',
+      'ROLE_LAB_SCIENTIST',
+      'ROLE_LAB_MANAGER',
+      'ROLE_LAB_DIRECTOR',
+      'ROLE_QUALITY_MANAGER',
+      'ROLE_SUPER_ADMIN',
+    ],
+  },
   imagingReportsByHospital: {
     endpoint: 'ImagingResultController#getReportsByHospital',
     roles: ['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR', 'ROLE_RADIOLOGIST'],
@@ -127,15 +138,35 @@ export const ACTION_PERMISSIONS = {
     endpoint: 'EncounterController#delete',
     roles: ['ROLE_SUPER_ADMIN'],
   },
+  // QA D1015: the midwife starts the visits booked with her (the service
+  // refuses her any other one).
   encounterStart: {
     endpoint: 'EncounterController#startEncounter',
-    roles: ['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR'],
+    roles: ['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR', 'ROLE_MIDWIFE'],
+  },
+  // QA D954: closing a visit nobody has seen (LWBS / cancelled).
+  encounterCloseUnseen: {
+    endpoint: 'EncounterController#closeUnseen',
+    roles: ['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_RECEPTIONIST'],
+  },
+  // QA D961: a medical certificate is a physician's act. Product decision
+  // 2026-10-28: any licensed physician (general practitioner, physician,
+  // surgeon, anaesthesiologist, radiologist); never a nurse or a midwife.
+  encounterMedicalCertificate: {
+    endpoint: 'EncounterController#issueMedicalCertificate',
+    roles: [
+      'ROLE_DOCTOR',
+      'ROLE_PHYSICIAN',
+      'ROLE_SURGEON',
+      'ROLE_ANESTHESIOLOGIST',
+      'ROLE_RADIOLOGIST',
+    ],
   },
   referralCreate: {
     endpoint: 'GeneralReferralController#createReferral',
     roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
   },
-  // QA D661: the receiving-side and cancel actions are physician-only.
+  // QA D661: the receiving-side actions are physician-only.
   referralAcknowledge: {
     endpoint: 'GeneralReferralController#acknowledgeReferral',
     roles: ['ROLE_DOCTOR'],
@@ -156,9 +187,11 @@ export const ACTION_PERMISSIONS = {
     endpoint: 'GeneralReferralController#rejectReferral',
     roles: ['ROLE_DOCTOR'],
   },
+  // QA D1026 class: the referrer withdraws it, whoever may write one (the page
+  // also checks that the caller is the referrer).
   referralCancel: {
     endpoint: 'GeneralReferralController#cancelReferral',
-    roles: ['ROLE_DOCTOR'],
+    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
   },
   // QA D611/D677: signing is the prescriber's own act; nurses and midwives
   // may draft and edit, but POST /sign and /cosign admit ROLE_DOCTOR only.
@@ -189,6 +222,11 @@ export const ACTION_PERMISSIONS = {
   allergyDeactivate: {
     endpoint: 'PatientController#deactivatePatientAllergy',
     roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_PHARMACIST'],
+  },
+  // QA D965: sending the reorder alerts is the store's act, not the pharmacist's.
+  inventoryReorderTrigger: {
+    endpoint: 'pharmacy.InventoryController#triggerReorderAlerts',
+    roles: ['ROLE_STORE_MANAGER', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
   },
 } as const satisfies Record<string, ActionPermission>;
 

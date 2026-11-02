@@ -155,16 +155,21 @@
                     class="action-link"
                     (click)="viewDetail(p)"
                     [title]="'TREATMENT.VIEW_PLAN' | translate"
+                    [attr.aria-label]="'TREATMENT.VIEW_PLAN' | translate"
                   >
                     <span class="material-symbols-outlined">visibility</span>
                   </button>
-                  <button
-                    class="action-link"
-                    (click)="openEdit(p)"
-                    [title]="'TREATMENT.EDIT_PLAN' | translate"
-                  >
-                    <span class="material-symbols-outlined">edit</span>
-                  </button>
+                  <!-- QA D1081: a plan is rewritten by its author (the server refuses others). -->
+                  @if (canEditPlan(p)) {
+                    <button
+                      class="action-link"
+                      (click)="openEdit(p)"
+                      [title]="'TREATMENT.EDIT_PLAN' | translate"
+                      [attr.aria-label]="'TREATMENT.EDIT_PLAN' | translate"
+                    >
+                      <span class="material-symbols-outlined">edit</span>
+                    </button>
+                  }
                 </div>
               </td>
             </tr>
@@ -175,10 +180,20 @@
   }
   @if (selectedPlan(); as plan) {
     <div class="detail-overlay" tabindex="-1" (keydown.escape)="closeDetail()">
-      <div class="detail-panel">
+      <div
+        appModalDialog
+        aria-labelledby="treatment-plans-panel-1-title"
+        (escaped)="closeDetail()"
+        class="detail-panel"
+      >
         <div class="detail-header">
-          <h2>{{ 'TREATMENT.TREATMENT_PLAN' | translate }}</h2>
-          <button class="btn-close" (click)="closeDetail()" [title]="'COMMON.CLOSE' | translate">
+          <h2 id="treatment-plans-panel-1-title">{{ 'TREATMENT.TREATMENT_PLAN' | translate }}</h2>
+          <button
+            class="btn-close"
+            (click)="closeDetail()"
+            [title]="'COMMON.CLOSE' | translate"
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
@@ -206,11 +221,19 @@
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'TREATMENT.START' | translate }}</span
-              ><span class="field-value">{{ plan.timelineStartDate || '—' }}</span>
+              ><span class="field-value">{{
+                plan.timelineStartDate
+                  ? (plan.timelineStartDate | serverTime | date: 'mediumDate')
+                  : '—'
+              }}</span>
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'TREATMENT.REVIEW' | translate }}</span
-              ><span class="field-value">{{ plan.timelineReviewDate || '—' }}</span>
+              ><span class="field-value">{{
+                plan.timelineReviewDate
+                  ? (plan.timelineReviewDate | serverTime | date: 'mediumDate')
+                  : '—'
+              }}</span>
             </div>
           </div>
           @if (plan.problemStatement) {
@@ -246,7 +269,8 @@
                 <div class="followup-item">
                   <strong>{{ f.label }}</strong
                   ><span>{{ f.dueOn ? (f.dueOn | serverTime | date: 'mediumDate') : '—' }}</span
-                  ><span
+                  >{{ ' '
+                  }}<span
                     class="status-badge {{
                       f.status === 'COMPLETED' ? 'status-completed' : 'status-pending'
                     }}"
@@ -254,6 +278,20 @@
                   >
                 </div>
               }
+            </div>
+          }
+          <!-- QA D1127: another clinician approves the plan; its author cannot. -->
+          @if (canApprovePlan(plan)) {
+            <div class="detail-section">
+              <button
+                type="button"
+                class="btn-primary"
+                data-testid="approve-plan"
+                (click)="approvePlan(plan)"
+                [attr.aria-busy]="approving() ? 'true' : null"
+              >
+                {{ 'TREATMENT.APPROVE_PLAN' | translate }}
+              </button>
             </div>
           }
         </div>
@@ -269,9 +307,14 @@
       (click)="closeModal()"
       (keydown.escape)="closeModal()"
     ></div>
-    <div class="modal modal-lg">
+    <div
+      appModalDialog
+      aria-labelledby="treatment-plans-dialog-form-title"
+      (escaped)="closeModal()"
+      class="modal modal-lg"
+    >
       <div class="modal-header">
-        <h2>
+        <h2 id="treatment-plans-dialog-form-title">
           {{ editing() ? ('COMMON.EDIT' | translate) : ('TREATMENT.NEW' | translate) }}
           {{ 'TREATMENT.TREATMENT_PLAN' | translate }}
         </h2>
@@ -287,11 +330,9 @@
               <div class="picker-chip">
                 <div class="chip-avatar">{{ patientInitials(selectedPatient()!) }}</div>
                 <div class="chip-info">
-                  <span class="chip-name"
-                    >{{ selectedPatient()!.firstName }} {{ selectedPatient()!.lastName }}</span
-                  >
+                  <span class="chip-name">{{ selectedPatient() | personName }}</span>
                   @if (selectedPatient() | patientSubline; as sub) {
-                    <span class="chip-sub">{{ sub }}</span>
+                    {{ ' ' }}<span class="chip-sub">{{ sub }}</span>
                   }
                 </div>
                 <button
@@ -299,6 +340,7 @@
                   class="chip-clear"
                   (click)="clearPatient()"
                   [title]="'TREATMENT.CHANGE_PATIENT' | translate"
+                  [attr.aria-label]="'TREATMENT.CHANGE_PATIENT' | translate"
                 >
                   <span class="material-symbols-outlined">close</span>
                 </button>
@@ -307,6 +349,7 @@
               <div class="patient-picker-wrap">
                 <span class="material-symbols-outlined picker-search-icon">person_search</span>
                 <input
+                  data-escape-discards
                   id="tp-patientSearch"
                   class="picker-input"
                   type="text"
@@ -328,7 +371,7 @@
                       <li class="picker-option" (mousedown)="selectPatient(p)">
                         <div class="opt-avatar">{{ patientInitials(p) }}</div>
                         <div class="opt-info">
-                          <span class="opt-name">{{ p.firstName }} {{ p.lastName }}</span>
+                          <span class="opt-name">{{ p | personName }}</span>
                           @if (p | patientSubline; as sub) {
                             <span class="opt-meta">{{ sub }}</span>
                           }

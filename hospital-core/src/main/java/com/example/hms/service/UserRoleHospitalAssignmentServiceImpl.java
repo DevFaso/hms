@@ -10,6 +10,7 @@ import com.example.hms.security.LoginAttemptService;
 import com.example.hms.utility.TransactionCallbacks;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.event.AssignmentCreatedEvent;
+import com.example.hms.service.i18n.PatientLocaleResolver;
 import com.example.hms.mapper.UserRoleHospitalAssignmentMapper;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Organization;
@@ -68,6 +69,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -79,6 +81,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.i18n.LocaleContextHolder;
 import com.example.hms.security.provider.ClinicalHospitals;
 import com.example.hms.security.provider.FacilityAssignmentGuard;
@@ -144,6 +148,8 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     /** QA D915: a key, so the refusal reads in the caller's language. */
     private static final String DEFAULT_ACTIVATION_THROUGH_CODE = "assignment.activation.throughCode";
     private static final long CONFIRMATION_CODE_EXPIRY_HOURS = 48;
+    /** The checklist of a role with no checklist of its own (its bundle key segment). */
+    private static final String DEFAULT_CHECKLIST_KEY = "DEFAULT";
     private static final List<String> DEFAULT_PROFILE_CHECKLIST = List.of(
         "Review and confirm your personal information",
         "Add at least one emergency contact",
@@ -210,6 +216,17 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     private final FacilityAssignmentGuard facilityAssignmentGuard;
     /** Every other kind of record that still points at an assignment (QA round 14). */
     private final AssignmentReferences assignmentReferences;
+    /**
+     * QA D1123: the language a patient stated (medical-history tab) for their
+     * activation SMS. Setter-injected and optional: unit tests that build this
+     * service with mocks fall back to the request's language.
+     */
+    private PatientLocaleResolver patientLocaleResolver;
+
+    @Autowired(required = false)
+    void setPatientLocaleResolver(PatientLocaleResolver patientLocaleResolver) {
+        this.patientLocaleResolver = patientLocaleResolver;
+    }
 
     /* ===================== Create ===================== */
 
@@ -223,7 +240,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             dto.setProfileCompletionUrl(profileCompletionUrl(assignment));
             dto.setAssignerConfirmationUrl(assignerConfirmationUrl(assignment));
         }
-        dto.setProfileChecklist(buildRoleProfileChecklist(assignment.getRole()));
+        dto.setProfileChecklist(localizedProfileChecklist(assignment.getRole()));
         dto.setConfirmationVerified(assignment.getConfirmationVerifiedAt() != null);
         return dto;
     }
@@ -975,7 +992,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             .assignmentCode(assignment.getAssignmentCode())
             .roleName(role != null ? role.getName() : null)
             .roleCode(role != null ? getRoleCode(role) : null)
-            .roleDescription(role != null ? role.getDescription() : null)
+            .roleDescription(localizedRoleDescription(role))
             .hospitalName(hospital != null ? hospital.getName() : null)
             .hospitalCode(hospital != null ? hospital.getCode() : null)
             .hospitalAddress(hospital != null ? hospital.getAddress() : null)
@@ -983,7 +1000,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             .confirmationVerified(assignment.getConfirmationVerifiedAt() != null)
             .confirmationVerifiedAt(assignment.getConfirmationVerifiedAt())
             .profileCompletionUrl(profileCompletionUrl(assignment))
-            .profileChecklist(buildRoleProfileChecklist(role))
+            .profileChecklist(localizedProfileChecklist(role))
             .build();
     }
 
@@ -1017,6 +1034,98 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         // Include credentials if this was a new-user assignment (temp creds were set)
         String exposedUsername = tempPassword != null ? tempUsername : null;
         return buildPublicViewDTO(assignment, exposedUsername, tempPassword);
+    }
+
+    /**
+     * QA D1123: "I have a code" — a phone-only holder activates with the
+     * number the desk registered and the one-time code from the SMS, no e-mail
+     * and no link needed. The code decides which pending assignment it is (a
+     * number never picks one alone); a wrong pair answers exactly as a wrong
+     * code does, so the endpoint tells nobody whether a number has an account.
+     *
+     * <p>Brute force: the public path is per-IP rate-limited (RateLimitFilter),
+     * and each number takes {@link #PHONE_ACTIVATION_MAX_FAILURES} wrong codes
+     * per {@link #PHONE_ACTIVATION_WINDOW_MS} window; the code itself expires
+     * after {@link #CONFIRMATION_CODE_EXPIRY_HOURS} hours.
+     */
+    @Override
+    public UserRoleAssignmentPublicViewDTO verifyAssignmentByPhone(String phone, String confirmationCode) {
+        String code = sanitizeConfirmationInput(confirmationCode);
+        String typed = phone != null ? phone.trim() : "";
+        if (typed.isEmpty()) {
+            throw invalidConfirmationCode();
+        }
+        String e164 = com.example.hms.utility.PhoneNumbers.toE164(
+            typed, com.example.hms.utility.PhoneNumbers.DEFAULT_CALLING_CODE);
+        String attemptsKey = e164 != null ? e164 : typed;
+        requireUnderPhoneActivationLimit(attemptsKey);
+
+        Optional<User> holder = (e164 == null ? Optional.<User>empty() : userRepository.findByPhoneNumber(e164))
+            .or(() -> userRepository.findByPhoneNumber(typed));
+        List<UserRoleHospitalAssignment> matching = holder
+            .map(user -> assignmentRepository.findByUserId(user.getId()))
+            .orElse(List.of())
+            .stream()
+            .filter(a -> !(a.getConfirmationVerifiedAt() != null && Boolean.TRUE.equals(a.getActive())))
+            .filter(a -> a.getConfirmationCode() != null && a.getConfirmationCode().equalsIgnoreCase(code))
+            .toList();
+        if (matching.size() != 1) {
+            recordPhoneActivationFailure(attemptsKey);
+            throw invalidConfirmationCode();
+        }
+        UserRoleAssignmentPublicViewDTO view = verifyAssignmentByCode(matching.get(0).getAssignmentCode(), code);
+        phoneActivationFailures.remove(attemptsKey);
+        return view;
+    }
+
+    private static final int PHONE_ACTIVATION_MAX_FAILURES = 5;
+    private static final long PHONE_ACTIVATION_WINDOW_MS = 15L * 60 * 1000;
+    private static final int PHONE_ACTIVATION_TRACKED_MAX = 10_000;
+
+    private static boolean isStale(java.util.Deque<Long> failures, long cutoff) {
+        Long last = failures.peekLast();
+        return last == null || last < cutoff;
+    }
+    /** Wrong-code times per number, oldest first, thread-safe deques (in memory: per instance, reset on restart). */
+    private final Map<String, java.util.Deque<Long>> phoneActivationFailures =
+        new java.util.concurrent.ConcurrentHashMap<>();
+
+    private void requireUnderPhoneActivationLimit(String key) {
+        java.util.Deque<Long> failures = phoneActivationFailures.get(key);
+        if (failures == null) {
+            return;
+        }
+        long cutoff = System.currentTimeMillis() - PHONE_ACTIVATION_WINDOW_MS;
+        Long oldest = failures.peekFirst();
+        while (oldest != null && oldest < cutoff) {
+            failures.pollFirst();
+            oldest = failures.peekFirst();
+        }
+        if (failures.size() >= PHONE_ACTIVATION_MAX_FAILURES) {
+            // QA D1152: the lock ends by itself after the window; the old text
+            // told the patient to request a new code this page does not offer.
+            throw new BusinessException("assignment.phoneActivation.tooManyAttempts",
+                PHONE_ACTIVATION_WINDOW_MS / 60_000);
+        }
+    }
+
+    private void recordPhoneActivationFailure(String key) {
+        // Bounded: numbers whose wrong codes are all older than the window are
+        // forgotten once the map grows (a caller typing random numbers cannot
+        // grow it without limit; the per-IP rate limit slows it first).
+        if (phoneActivationFailures.size() > PHONE_ACTIVATION_TRACKED_MAX) {
+            long cutoff = System.currentTimeMillis() - PHONE_ACTIVATION_WINDOW_MS;
+            phoneActivationFailures.values().removeIf(d -> isStale(d, cutoff));
+        }
+        phoneActivationFailures
+            .computeIfAbsent(key, k -> new java.util.concurrent.ConcurrentLinkedDeque<>())
+            .addLast(System.currentTimeMillis());
+    }
+
+    private BusinessException invalidConfirmationCode() {
+        return new BusinessException(
+            messageSource.getMessage(MSG_ASSIGNMENT_INVALID_CODE, null,
+                DEFAULT_CONFIRMATION_CODE_INVALID, LocaleContextHolder.getLocale()));
     }
 
     private String sanitizeRequiredInput(String value, String messageKey) {
@@ -1125,7 +1234,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             .assignmentCode(assignment.getAssignmentCode())
             .roleName(role != null ? role.getName() : null)
             .roleCode(role != null ? getRoleCode(role) : null)
-            .roleDescription(role != null ? role.getDescription() : null)
+            .roleDescription(localizedRoleDescription(role))
             .hospitalName(hospital != null ? hospital.getName() : null)
             .hospitalCode(hospital != null ? hospital.getCode() : null)
             .hospitalAddress(hospital != null ? hospital.getAddress() : null)
@@ -1133,7 +1242,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             .confirmationVerified(assignment.getConfirmationVerifiedAt() != null)
             .confirmationVerifiedAt(assignment.getConfirmationVerifiedAt())
             .profileCompletionUrl(profileCompletionUrl(assignment))
-            .profileChecklist(buildRoleProfileChecklist(role))
+            .profileChecklist(localizedProfileChecklist(role))
             .tempUsername(tempUsername)
             .tempPassword(tempPassword)
             .build();
@@ -2179,9 +2288,12 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             Hospital hospital = assignment.getHospital();
             User user = assignment.getUser();
 
+            // QA D1123: every SMS is written in the reader's language (the
+            // request's: the desk's at registration, the holder's own on a
+            // re-send), names the role by its label, never its code.
+            Locale locale = smsLocaleFor(assignment, user);
             String confirmationCode = assignment.getConfirmationCode();
-            String assignmentCode = assignment.getAssignmentCode();
-            String roleDisplay = role != null ? getRoleCode(role) : UNKNOWN_ROLE;
+            String roleLabel = smsRoleLabel(role, locale);
             String hospitalDisplay = resolveHospitalName(hospital);
             String assigneeDisplay = resolveDisplayName(user, user != null ? user.getEmail() : "user");
 
@@ -2189,14 +2301,64 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             // isolated: a throwing registrar/hospital notification used to
             // abort the whole method before the one SMS that matters was even
             // attempted — and before any SMS outcome could be recorded.
-            notifyAssigneeBySms(assignment, user, roleDisplay, hospitalDisplay, confirmationCode, assignmentCode);
+            notifyAssigneeBySms(assignment, user, locale, roleLabel, hospitalDisplay, confirmationCode);
             sendFyiSmsQuietly(assignment.getId(), "Registrar", () ->
-                notifyRegistrarBySms(assignment.getRegisteredBy(), roleDisplay, assigneeDisplay, hospitalDisplay, assignmentCode, confirmationCode));
+                notifyRegistrarBySms(assignment.getRegisteredBy(), locale, roleLabel, assigneeDisplay, hospitalDisplay, confirmationCode));
             sendFyiSmsQuietly(assignment.getId(), "Hospital", () ->
-                notifyHospitalBySms(hospital, assigneeDisplay, roleDisplay, assignmentCode, confirmationCode));
+                notifyHospitalBySms(hospital, locale, assigneeDisplay, roleLabel, confirmationCode));
         } catch (RuntimeException e) {
             log.warn("⚠️ Failed to send SMS notifications for assignment '{}': {}", assignment.getId(), e.getMessage());
         }
+    }
+
+    /** The SMS languages the bundles carry; anything else reads French, the house default. */
+    private static final Set<String> SMS_LANGUAGES = Set.of("fr", "en", "es");
+
+    static Locale smsLocale() {
+        // LocaleContextHolder never answers null (it falls back to the JVM default).
+        String language = LocaleContextHolder.getLocale().getLanguage();
+        return SMS_LANGUAGES.contains(language) ? Locale.forLanguageTag(language) : Locale.FRENCH;
+    }
+
+    /**
+     * A patient's activation SMS is in the language they stated, else the
+     * request's; a staff member's in the request's (staff state none).
+     */
+    private Locale smsLocaleFor(UserRoleHospitalAssignment assignment, User user) {
+        Locale fallback = smsLocale();
+        if (patientLocaleResolver == null || user == null || user.getId() == null || !isPatientRole(assignment)) {
+            return fallback;
+        }
+        return patientLocaleResolver.resolve(patientRepository.findByUserId(user.getId()).orElse(null), fallback);
+    }
+
+    private boolean isPatientRole(UserRoleHospitalAssignment assignment) {
+        return assignment.getRole() != null
+            && stripRolePrefix(ROLE_PATIENT).equalsIgnoreCase(stripRolePrefix(getRoleCode(assignment.getRole())));
+    }
+
+    /**
+     * The role as its reader names it ({@code email.role.label.NURSE} =
+     * "Infirmier(ère)"), the same labels as the activation e-mail. An unknown
+     * role reads as a humanised code ("Lab Manager"), never {@code ROLE_X}.
+     */
+    private String smsRoleLabel(Role role, Locale locale) {
+        String code = role != null ? getRoleCode(role) : null;
+        if (code == null || code.isBlank()) {
+            return "";
+        }
+        String bare = stripRolePrefix(code);
+        String humanised = Arrays.stream(bare.split("_"))
+            .filter(word -> !word.isEmpty())
+            .map(word -> word.charAt(0) + word.substring(1).toLowerCase(Locale.ROOT))
+            .collect(Collectors.joining(" "));
+        return messageSource.getMessage("email.role.label." + bare, null, humanised, locale);
+    }
+
+    /** One SMS sentence from the notification bundle; a missing key reads as the key, never null. */
+    private String smsText(String key, Locale locale, Object... args) {
+        String text = messageSource.getMessage(key, args, key, locale);
+        return text == null ? key : text.strip();
     }
 
     /**
@@ -2213,57 +2375,44 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     }
 
     private void notifyRegistrarBySms(User registrar,
-                                      String roleDisplay,
+                                      Locale locale,
+                                      String roleLabel,
                                       String assigneeDisplay,
                                       String hospitalDisplay,
-                                      String assignmentCode,
                                       String confirmationCode) {
-        if (registrar == null) {
+        if (registrar == null || !hasText(confirmationCode)) {
             return;
         }
         String phone = registrar.getPhoneNumber();
         if (phone == null || phone.isBlank()) {
             return;
         }
-        String message = String.format(
-            "✅ You assigned role '%s' to %s in '%s'. Assignment: %s%s",
-            roleDisplay,
-            assigneeDisplay,
-            hospitalDisplay,
-            assignmentCode,
-            buildConfirmationSuffix(confirmationCode)
-        );
-        sendSmsSilently(phone, message);
+        sendSmsSilently(phone, smsText("sms.activation.registrar", locale,
+            assigneeDisplay, roleLabel, hospitalDisplay, confirmationCode));
     }
 
     private void notifyHospitalBySms(Hospital hospital,
+                                     Locale locale,
                                      String assigneeDisplay,
-                                     String roleDisplay,
-                                     String assignmentCode,
+                                     String roleLabel,
                                      String confirmationCode) {
-        if (hospital == null) {
+        if (hospital == null || !hasText(confirmationCode)) {
             return;
         }
         String phone = hospital.getPhoneNumber();
         if (phone == null || phone.isBlank()) {
             return;
         }
-        String message = String.format(
-            "📢 New assignment: %s -> role '%s'. Assignment ref: %s%s",
-            assigneeDisplay,
-            roleDisplay,
-            assignmentCode,
-            buildConfirmationSuffix(confirmationCode)
-        );
-        sendSmsSilently(phone, message);
+        sendSmsSilently(phone, smsText("sms.activation.hospital", locale,
+            assigneeDisplay, roleLabel, confirmationCode));
     }
 
     private void notifyAssigneeBySms(UserRoleHospitalAssignment assignment,
                                      User user,
-                                     String roleDisplay,
+                                     Locale locale,
+                                     String roleLabel,
                                      String hospitalDisplay,
-                                     String confirmationCode,
-                                     String assignmentCode) {
+                                     String confirmationCode) {
         if (user == null) {
             return;
         }
@@ -2282,13 +2431,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                 ActivationDeliveryTracker.maskPhone(phone), "confirmation code missing");
             return;
         }
-        String message = String.format(
-            "👋 Confirm your '%s' role at '%s'. Use code: %s (reference: %s)",
-            roleDisplay,
-            hospitalDisplay,
-            confirmationCode,
-            assignmentCode
-        );
+        String message = activationSmsText(assignment, locale, roleLabel, hospitalDisplay, confirmationCode);
         // Own try/catch: this is the one SMS the ACTIVATION depends on, so
         // its outcome must not be lumped in with the registrar/hospital FYI
         // messages the outer catch covers.
@@ -2322,10 +2465,27 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         }
     }
 
-    private String buildConfirmationSuffix(String confirmationCode) {
-        return (confirmationCode != null && !confirmationCode.isBlank())
-            ? ". Staff confirmation code: " + confirmationCode
-            : "";
+    /**
+     * QA D1123: the activation SMS a phone-only holder can act on — the
+     * one-time code and the link to the page that takes it, in their language.
+     * The link carries only the assignment reference; the code is the one
+     * secret in the message (no temporary password, ever).
+     */
+    String activationSmsText(UserRoleHospitalAssignment assignment, Locale locale,
+                             String roleLabel, String hospitalDisplay, String confirmationCode) {
+        String link = profileCompletionUrl(assignment);
+        String linkText = link != null ? link : "";
+        return isPatientRole(assignment)
+            ? smsText("sms.activation.patient", locale, hospitalDisplay, confirmationCode, linkText)
+            : smsText("sms.activation.staff", locale, roleLabel, hospitalDisplay, confirmationCode, linkText);
+    }
+
+    private static String stripRolePrefix(String code) {
+        if (code == null) {
+            return "";
+        }
+        String upper = code.trim().toUpperCase(Locale.ROOT);
+        return upper.startsWith(ROLE_PREFIX) ? upper.substring(ROLE_PREFIX.length()) : upper;
     }
 
     private void sendSmsSilently(String phoneNumber, String message) {
@@ -2335,43 +2495,24 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         smsService.send(phoneNumber, message);
     }
 
-    /** One-time credentials for email-less (phone-first) accounts, sent by SMS. */
-    private void sendCredentialsSmsFallback(UserRoleHospitalAssignment assignment, User user) {
+    /**
+     * One-time credentials of an email-less (phone-first) account. QA D1123:
+     * they are NEVER sent by SMS (a temporary password in an SMS sits on the
+     * handset and in carrier logs). The activation SMS carries the one-time
+     * code and the link; the page that takes the code shows the sign-in
+     * details once (verifyAssignmentByCode). Only the no-phone case is
+     * reported: QA D1061, a dependant registered under a guardian's number,
+     * whose registration response carries the credentials instead.
+     */
+    private void reportCredentialsRoute(UserRoleHospitalAssignment assignment, User user) {
         String tempPassword = assignment.getTempPlainPassword();
         if (tempPassword == null || tempPassword.isBlank()) {
             return;
         }
-        // Credentials must NEVER reach the mock SMS channel — it logs full
-        // message bodies, which would put the temp password into plaintext logs.
-        if (!smsService.deliversRealSms()) {
-            log.warn("⚠️ No real SMS channel configured — one-time credentials for assignment '{}' were NOT delivered; "
-                + "the patient can still activate via the staff-read confirmation code.", assignment.getId());
+        if (user.getPhoneNumber() == null || user.getPhoneNumber().isBlank()) {
             recordDelivery(NotificationDeliveryStatusDTO.CHANNEL_SMS,
                 NotificationDeliveryStatusDTO.PURPOSE_CREDENTIALS,
-                NotificationDeliveryStatusDTO.OUTCOME_NOT_CONFIGURED,
-                ActivationDeliveryTracker.maskPhone(user.getPhoneNumber()),
-                "no real SMS channel — one-time credentials were not delivered");
-            return;
-        }
-        String message = String.format(
-            "🔐 e-Keneya account created. Username: %s Temp password: %s — change it at first login.",
-            user.getUsername(),
-            tempPassword
-        );
-        // Own try/catch: an SMS failure here must not be misfiled as an
-        // EMAIL outcome by sendAssignmentEmailNotification's catch.
-        try {
-            sendSmsSilently(user.getPhoneNumber(), message);
-            recordDelivery(NotificationDeliveryStatusDTO.CHANNEL_SMS,
-                NotificationDeliveryStatusDTO.PURPOSE_CREDENTIALS,
-                NotificationDeliveryStatusDTO.OUTCOME_SENT,
-                ActivationDeliveryTracker.maskPhone(user.getPhoneNumber()), null);
-        } catch (RuntimeException ex) {
-            log.warn("⚠️ Failed to send credentials SMS for assignment '{}': {}", assignment.getId(), ex.getMessage());
-            recordDelivery(NotificationDeliveryStatusDTO.CHANNEL_SMS,
-                NotificationDeliveryStatusDTO.PURPOSE_CREDENTIALS,
-                NotificationDeliveryStatusDTO.OUTCOME_FAILED,
-                ActivationDeliveryTracker.maskPhone(user.getPhoneNumber()), DETAIL_SEE_SERVER_LOGS);
+                NotificationDeliveryStatusDTO.OUTCOME_NO_CONTACT, null, null);
         }
     }
 
@@ -2384,15 +2525,15 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
             String email = user.getEmail();
             if (email == null || email.isBlank()) {
-                // Phone-first patients have no email: deliver the one-time
-                // credentials over SMS instead. The confirmation code already
-                // goes out separately via sendAssignmentSmsNotifications.
+                // Phone-first patients have no email: the activation SMS
+                // (sendAssignmentSmsNotifications) carries the code and the
+                // link; the sign-in details are shown once the code is typed.
                 // NO_CONTACT is informational, not a warning — the portal
                 // only alerts on FAILED / NOT_CONFIGURED / MOCKED.
                 recordDelivery(NotificationDeliveryStatusDTO.CHANNEL_EMAIL,
                     NotificationDeliveryStatusDTO.PURPOSE_ACTIVATION,
                     NotificationDeliveryStatusDTO.OUTCOME_NO_CONTACT, null, null);
-                sendCredentialsSmsFallback(assignment, user);
+                reportCredentialsRoute(assignment, user);
                 return;
             }
 
@@ -2555,26 +2696,58 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         }
     }
 
-    private List<String> buildRoleProfileChecklist(Role role) {
+    /**
+     * QA D941: the welcome page read the seeded English role description in a
+     * French session. A seeded role reads {@code role.description.<CODE>} in
+     * the caller's language; a role an administrator created keeps its own text.
+     */
+    private String localizedRoleDescription(Role role) {
         if (role == null) {
-            return DEFAULT_PROFILE_CHECKLIST;
+            return null;
         }
         String code = getRoleCode(role);
         if (code == null || code.isBlank()) {
-            return DEFAULT_PROFILE_CHECKLIST;
+            return role.getDescription();
         }
         String normalized = code.trim().toUpperCase(Locale.ROOT);
-        List<String> checklist = ROLE_PROFILE_CHECKLISTS.get(normalized);
-        if (checklist != null) {
-            return checklist;
+        String key = "role.description." + (normalized.startsWith(ROLE_PREFIX) ? normalized : ROLE_PREFIX + normalized);
+        // A description an administrator rewrote is theirs; only the seeded text is translated.
+        String seeded = messageSource.getMessage(key, null, null, Locale.ENGLISH);
+        if (seeded == null || (role.getDescription() != null && !role.getDescription().trim().equals(seeded.trim()))) {
+            return role.getDescription();
         }
-        if (!normalized.startsWith(ROLE_PREFIX)) {
-            checklist = ROLE_PROFILE_CHECKLISTS.get(ROLE_PREFIX + normalized);
-            if (checklist != null) {
-                return checklist;
-            }
+        return messageSource.getMessage(key, null, role.getDescription(), LocaleContextHolder.getLocale());
+    }
+
+    /** QA D941: each checklist line in the caller's language, the English line when a key is missing. */
+    private List<String> localizedProfileChecklist(Role role) {
+        String owner = checklistKey(role);
+        List<String> english = buildRoleProfileChecklist(role);
+        Locale locale = LocaleContextHolder.getLocale();
+        List<String> out = new java.util.ArrayList<>(english.size());
+        for (int i = 0; i < english.size(); i++) {
+            out.add(messageSource.getMessage("onboarding.checklist." + owner + "." + (i + 1), null, english.get(i), locale));
         }
-        return DEFAULT_PROFILE_CHECKLIST;
+        return out;
+    }
+
+    /** The checklist's key: the role code it is listed under (with or without ROLE_), else DEFAULT. */
+    private String checklistKey(Role role) {
+        String code = role != null ? getRoleCode(role) : null;
+        if (code == null || code.isBlank()) {
+            return DEFAULT_CHECKLIST_KEY;
+        }
+        String normalized = code.trim().toUpperCase(Locale.ROOT);
+        if (ROLE_PROFILE_CHECKLISTS.containsKey(normalized)) {
+            return normalized;
+        }
+        String prefixed = normalized.startsWith(ROLE_PREFIX) ? normalized : ROLE_PREFIX + normalized;
+        return ROLE_PROFILE_CHECKLISTS.containsKey(prefixed) ? prefixed : DEFAULT_CHECKLIST_KEY;
+    }
+
+    private List<String> buildRoleProfileChecklist(Role role) {
+        String key = checklistKey(role);
+        return DEFAULT_CHECKLIST_KEY.equals(key) ? DEFAULT_PROFILE_CHECKLIST : ROLE_PROFILE_CHECKLISTS.get(key);
     }
 
     @Override
@@ -2644,6 +2817,13 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         // at an archived hospital queued an EMAIL and an SMS activation (200).
         // It is the same re-invitation as regenerate-code: the same 409.
         FacilityAssignmentGuard.requireOpenForAssignment(assignment.getHospital());
+        // QA r22 (setup observation): an assignment already verified has no
+        // activation left to send; re-sending it mailed and texted a live
+        // account its activation code again (200). Same answer as the public
+        // re-send, whose claim skips an active row: refused, 409, localized.
+        if (assignment.getConfirmationVerifiedAt() != null) {
+            throw new com.example.hms.exception.ConflictException("assignment.resend.alreadyVerified");
+        }
         notifyAssignee(assignment);
     }
 

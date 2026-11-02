@@ -94,18 +94,24 @@
         class="modal"
         [open]="showModal()"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="closeModal()"
+        (keydown.escape)="closeModal(); $event.stopPropagation()"
         tabindex="-1"
+        appModalDialog
+        aria-labelledby="announcement-list-dialog-2-title"
       >
         <div class="modal-header">
-          <h2>
+          <h2 id="announcement-list-dialog-2-title">
             {{
               editing()
                 ? ('ANNOUNCEMENTS.EDIT_ANNOUNCEMENT' | translate)
                 : ('ANNOUNCEMENTS.CREATE_ANNOUNCEMENT' | translate)
             }}
           </h2>
-          <button class="modal-close" (click)="closeModal()">
+          <button
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+            class="modal-close"
+            (click)="closeModal()"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
@@ -127,7 +133,13 @@
             <button type="button" class="btn-secondary" (click)="closeModal()">
               {{ 'COMMON.CANCEL' | translate }}
             </button>
-            <button type="submit" class="btn-primary" [disabled]="saving()">
+            <button
+              appSubmitGuard
+              submitGuardRequired
+              type="submit"
+              class="btn-primary"
+              [disabled]="saving()"
+            >
               {{
                 saving()
                   ? ('COMMON.SAVING' | translate)
@@ -154,12 +166,20 @@
         class="modal"
         [open]="showDeleteConfirm()"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="cancelDelete()"
+        (keydown.escape)="cancelDelete(); $event.stopPropagation()"
         tabindex="-1"
+        appModalDialog
+        aria-labelledby="announcement-list-dialog-1-title"
       >
         <div class="modal-header">
-          <h2>{{ 'ANNOUNCEMENTS.DELETE_ANNOUNCEMENT' | translate }}</h2>
-          <button class="modal-close" (click)="cancelDelete()">
+          <h2 id="announcement-list-dialog-1-title">
+            {{ 'ANNOUNCEMENTS.DELETE_ANNOUNCEMENT' | translate }}
+          </h2>
+          <button
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+            class="modal-close"
+            (click)="cancelDelete()"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>

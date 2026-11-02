@@ -151,7 +151,12 @@
         </label>
         <label class="filter-field">
           <span>{{ 'AUDIT_SEARCH.FILTER.TO_DATE' | translate }}</span>
-          <input type="datetime-local" [ngModel]="toDate()" (ngModelChange)="toDate.set($event)" />
+          <input
+            type="datetime-local"
+            [attr.min]="fromDate() || null"
+            [ngModel]="toDate()"
+            (ngModelChange)="toDate.set($event)"
+          />
         </label>
       </div>
       <div class="filter-actions">
@@ -315,7 +320,12 @@
         </label>
         <label class="filter-field">
           <span>{{ 'AUDIT_SEARCH.FILTER.TO_DATE' | translate }}</span>
-          <input type="datetime-local" [ngModel]="toDate()" (ngModelChange)="toDate.set($event)" />
+          <input
+            type="datetime-local"
+            [attr.min]="fromDate() || null"
+            [ngModel]="toDate()"
+            (ngModelChange)="toDate.set($event)"
+          />
         </label>
       </div>
       <div class="filter-actions">

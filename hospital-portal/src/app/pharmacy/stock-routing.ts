@@ -1,3 +1,4 @@
+import { personName } from '../shared/pipes/person-name.pipe';
 import {
   Component,
   computed,
@@ -25,11 +26,15 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { RoleContextService } from '../core/role-context.service';
 import { HospitalScopeHintComponent } from '../shared/hospital-scope-chip/hospital-scope-hint.component';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { PrintLabelService } from '../services/print-label.service';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { refusalReason } from '../shared/refusal-reason';
 @Component({
   selector: 'app-stock-routing',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
     ServerTimePipe,
     CommonModule,
     FormsModule,
@@ -47,6 +52,8 @@ export class StockRoutingComponent implements OnInit {
   private readonly translate = inject(TranslateService);
   private readonly route = inject(ActivatedRoute);
   private readonly roleContext = inject(RoleContextService);
+  /** QA D966: opens the printed copy for printing. */
+  private readonly printService = inject(PrintLabelService);
 
   /**
    * Whether this caller has a hospital pinned, and therefore whether the
@@ -311,7 +318,7 @@ export class StockRoutingComponent implements OnInit {
   }
 
   patientLabel(rx: WorkQueuePrescription): string {
-    return [rx.patient?.firstName, rx.patient?.lastName].filter((p) => !!p).join(' ');
+    return personName(rx.patient);
   }
 
   private searchText(rx: WorkQueuePrescription): string {
@@ -433,12 +440,19 @@ export class StockRoutingComponent implements OnInit {
 
   // ── Print for patient (Tier 3) ──
 
+  /**
+   * QA D966: the decision is recorded, then the copy is opened for printing.
+   * It only recorded the decision before, and said "printed" with nothing in
+   * hand; the page then still offered the routing buttons, which failed.
+   */
   printForPatient(): void {
     this.saving.set(true);
-    this.svc.printForPatient(this.prescriptionId).subscribe({
+    const prescriptionId = this.prescriptionId;
+    this.svc.printForPatient(prescriptionId).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('PHARMACY.PRINTED_FOR_PATIENT'));
         this.saving.set(false);
+        this.openPrintedCopy(prescriptionId);
         this.checkStock();
       },
       error: (err) => {
@@ -446,6 +460,43 @@ export class StockRoutingComponent implements OnInit {
         this.saving.set(false);
       },
     });
+  }
+
+  /** QA D966: the copy of an order already printed for the patient, printed again. */
+  reprintCopy(): void {
+    this.openPrintedCopy(this.prescriptionId);
+  }
+
+  private openPrintedCopy(prescriptionId: string): void {
+    this.svc.getPrintedPrescriptionCopy(prescriptionId).subscribe({
+      next: (blob) => this.printService.openForPrint(blob),
+      error: (err: unknown) =>
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PHARMACY.PRINT_COPY_FAILED'),
+        ),
+    });
+  }
+
+  /** QA D966: a routing action is offered only while the order can still be routed. */
+  /**
+   * QA D1124: why a routing decision refuses, shown next to its button; null
+   * when it may be sent. The buttons are never silently disabled.
+   */
+  routeBlockReason(): string | null {
+    if (!this.scopeReady()) return this.translate.instant('SUBMIT_GUARD.SCOPE');
+    const result = this.stockResult();
+    if (!result) return this.translate.instant('SUBMIT_GUARD.PRESCRIPTION');
+    return result.routable === false ? this.translate.instant('SUBMIT_GUARD.NOT_ROUTABLE') : null;
+  }
+
+  canRoute(): boolean {
+    const result = this.stockResult();
+    return this.scopeReady() && !!result && result.routable !== false;
+  }
+
+  /** QA D966: the order was printed for the patient; its copy can be printed again. */
+  isPrinted(): boolean {
+    return this.stockResult()?.prescriptionStatus === 'PRINTED_FOR_PATIENT';
   }
 
   // ── Back-order ──

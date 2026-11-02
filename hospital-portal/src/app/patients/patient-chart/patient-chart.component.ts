@@ -1,3 +1,6 @@
+import { LabValuePipe, LabRangePipe } from '../../shared/pipes/lab-value.pipe';
+import { MaternityService } from '../../services/maternity.service';
+import { ongoingPregnancy } from '../../maternity/pregnancy-dates';
 import {
   Component,
   Input,
@@ -43,7 +46,10 @@ import { LabService, LabOrderResponse } from '../../services/lab.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { RestrictedRowsComponent } from '../restricted-rows/restricted-rows.component';
 import { shortOrderCode } from '../../shared/lab/order-code';
+import { DialogFocusDirective } from '../../shared/a11y/dialog-focus.directive';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { LabCorrectionBadgeComponent } from '../../lab/shared/lab-correction-badge.component';
+import { refusalReason } from '../../shared/refusal-reason';
 
 type ChartSection = 'allergies' | 'problems' | 'updates' | 'timeline' | 'labs';
 
@@ -61,12 +67,16 @@ const UNSCOPED_KEY = 'UNSCOPED';
   selector: 'app-patient-chart',
   standalone: true,
   imports: [
+    LabValuePipe,
+    LabRangePipe,
     ServerTimePipe,
     CommonModule,
     FormsModule,
     TranslateModule,
     EnumLabelPipe,
     RestrictedRowsComponent,
+    DialogFocusDirective,
+    LabCorrectionBadgeComponent,
   ],
   templateUrl: './patient-chart.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -82,6 +92,8 @@ export class PatientChartComponent implements OnInit, OnChanges {
    * sections re-read on their next visit.
    */
   @Input() refreshToken = 0;
+  /** QA D1005 review: the pregnancy line is asked for only when the patient may be pregnant. */
+  @Input() patientGender: string | null | undefined = undefined;
 
   /** E9 #64 — "Ouvrir avec motif" on a restricted line; the host opens the declaration. */
   readonly openRestricted = output<void>();
@@ -93,6 +105,37 @@ export class PatientChartComponent implements OnInit, OnChanges {
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
   private readonly registrations = inject(RegistrationService);
+  private readonly maternity = inject(MaternityService);
+
+  /**
+   * QA D1005: the ongoing pregnancy (gestational age today and due date) on
+   * the chart, read from the patient's current maternal history the way the
+   * maternity list reads it; null when there is none or it is over.
+   */
+  readonly pregnancy = signal<{ weeks: number; days: number; dueDate: string } | null>(null);
+
+  private loadPregnancy(): void {
+    this.pregnancy.set(null);
+    const gender = (this.patientGender ?? '').toUpperCase();
+    if (
+      !this.patientId ||
+      (gender !== 'FEMALE' && gender !== 'F') ||
+      // rbac-inline-ok: a read, not a write button: only the roles GET /maternal-history/patient/{id}/current admits ask for it (no 403 for everyone else).
+      !this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'])
+    ) {
+      return;
+    }
+    const asked = this.patientId;
+    this.maternity.currentForPatient(asked).subscribe({
+      next: (history) => {
+        if (asked !== this.patientId) return;
+        // QA D1067: a delivered woman has no pregnancy in progress; QA D1082:
+        // no history at all answers 204 (null), not a 404.
+        this.pregnancy.set(ongoingPregnancy(history));
+      },
+      error: () => this.pregnancy.set(null),
+    });
+  }
 
   section = signal<ChartSection>('allergies');
 
@@ -344,6 +387,7 @@ export class PatientChartComponent implements OnInit, OnChanges {
     this.section.set(this.firstVisibleSection());
     this.loadCurrentSection();
     this.loadRegistrationHere();
+    this.loadPregnancy();
   }
 
   /**
@@ -642,8 +686,8 @@ export class PatientChartComponent implements OnInit, OnChanges {
         this.closeAllergyModal();
         this.loadAllergies();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('CHART.ALLERGY_SAVE_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('CHART.ALLERGY_SAVE_ERROR'));
         this.allergySaving.set(false);
       },
     });
@@ -674,7 +718,10 @@ export class PatientChartComponent implements OnInit, OnChanges {
           this.closeDeactivateAllergy();
           this.loadAllergies();
         },
-        error: () => this.toast.error(this.translate.instant('CHART.ALLERGY_SAVE_ERROR')),
+        error: (err: unknown) =>
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('CHART.ALLERGY_SAVE_ERROR'),
+          ),
       });
   }
 
@@ -769,8 +816,8 @@ export class PatientChartComponent implements OnInit, OnChanges {
         this.closeProblemModal();
         this.loadProblems();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('CHART.PROBLEM_SAVE_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('CHART.PROBLEM_SAVE_ERROR'));
         this.problemSaving.set(false);
       },
     });
@@ -801,7 +848,10 @@ export class PatientChartComponent implements OnInit, OnChanges {
           this.closeDeleteProblem();
           this.loadProblems();
         },
-        error: () => this.toast.error(this.translate.instant('CHART.PROBLEM_SAVE_ERROR')),
+        error: (err: unknown) =>
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('CHART.PROBLEM_SAVE_ERROR'),
+          ),
       });
   }
 
@@ -864,8 +914,8 @@ export class PatientChartComponent implements OnInit, OnChanges {
           this.closeUpdateModal();
           this.loadUpdates();
         },
-        error: () => {
-          this.toast.error(this.translate.instant('CHART.UPDATE_SAVE_ERROR'));
+        error: (err: unknown) => {
+          this.toast.error(refusalReason(err) ?? this.translate.instant('CHART.UPDATE_SAVE_ERROR'));
           this.updateSaving.set(false);
         },
       });
@@ -1109,11 +1159,62 @@ export class PatientChartComponent implements OnInit, OnChanges {
         return 'medication';
       case 'LAB_RESULT':
         return 'science';
+      case 'LAB_ORDER':
+        return 'biotech';
       case 'ALLERGY':
         return 'warning';
+      case 'DIAGNOSIS':
+        return 'diagnosis';
+      case 'IMAGING':
+        return 'radiology';
+      case 'NOTE':
+        return 'description';
+      case 'REFERRAL':
+        return 'forward_to_inbox';
+      // QA D959 (round 18): surgical history had no icon of its own.
+      case 'PROCEDURE':
+        return 'medical_services';
+      // QA D959 (round 17): the visit's other documents.
+      case 'TREATMENT_PLAN':
+        return 'assignment';
+      case 'CONSULTATION':
+        return 'group';
+      case 'DISCHARGE_SUMMARY':
+        return 'logout';
+      case 'DOCUMENT':
+        return 'verified';
+      // QA D959 (round 18): transfusions, procedure orders, OB/GYN referrals,
+      // nursing notes, vaccinations and deliveries.
+      case 'TRANSFUSION':
+        return 'bloodtype';
+      case 'PROCEDURE_ORDER':
+        return 'healing';
+      case 'OBGYN_REFERRAL':
+        return 'pregnant_woman';
+      case 'NURSING_NOTE':
+        return 'clinical_notes';
+      case 'IMMUNIZATION':
+        return 'vaccines';
+      case 'DELIVERY':
+        return 'child_care';
+      case 'DEATH':
+        return 'deceased';
+      case 'MICRO_CULTURE':
+        return 'microbiology';
       default:
         return 'event_note';
     }
+  }
+
+  /**
+   * QA D996: what kind of row it is. A visit reads its own type
+   * ("Hospitalisation", "Urgence") instead of "Consultation" for every one.
+   */
+  timelineKind(e: TimelineEntry): { domain: string; value: string } {
+    const type = e.category === 'ENCOUNTER' ? e.metadata?.['encounterType'] : null;
+    return typeof type === 'string' && type
+      ? { domain: 'encounterType', value: type }
+      : { domain: 'timelineCategory', value: e.category };
   }
 
   /**
@@ -1126,6 +1227,18 @@ export class PatientChartComponent implements OnInit, OnChanges {
    */
   entryHospital(entry: TimelineEntry): string | null {
     return entry.metadata?.sourceHospitalName ?? null;
+  }
+
+  /**
+   * QA D1113: a dose transcribed from a vaccination card or another
+   * facility's record names the hospital that RECORDED it; the server sends
+   * no source hospital for it, because it was not given there.
+   */
+  entryRecordedAt(entry: TimelineEntry): string | null {
+    const recordedAt = entry.metadata?.['recordedAtHospitalName'];
+    return entry.metadata?.['transcribed'] === true && typeof recordedAt === 'string' && recordedAt
+      ? recordedAt
+      : null;
   }
 
   /** Attending, prescriber, or the clinician who ORDERED the result. */

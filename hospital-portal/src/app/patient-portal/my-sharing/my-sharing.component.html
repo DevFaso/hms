@@ -33,7 +33,7 @@
     } @else if (optOutFailed()) {
       <p class="opt-out-status opt-out-status--failed" data-testid="opt-out-failed">
         <span class="material-symbols-outlined" aria-hidden="true">error</span>
-        {{ 'PORTAL.SHARING.OPT_OUT.LOAD_FAILED' | translate }}
+        {{ optOutFailureReason() ?? ('PORTAL.SHARING.OPT_OUT.LOAD_FAILED' | translate) }}
       </p>
     } @else {
       <p class="opt-out-status" data-testid="opt-out-status">
@@ -46,7 +46,15 @@
       </p>
 
       @if (showOptOutForm()) {
-        <div class="opt-out-form" data-testid="opt-out-form">
+        <!-- QA D1198 (round 22): the form that replaced the button takes the keyboard;
+             Escape closes it (asking first over a typed reason). -->
+        <div
+          class="opt-out-form"
+          data-testid="opt-out-form"
+          appInlineSubForm
+          #optOutForm="inlineSubForm"
+          (dismissed)="cancelOptOut()"
+        >
           <label for="opt-out-reason">{{
             'PORTAL.SHARING.OPT_OUT.REASON_LABEL' | translate
           }}</label>
@@ -57,6 +65,7 @@
             [(ngModel)]="optOutReason"
             [placeholder]="'PORTAL.SHARING.OPT_OUT.REASON_PLACEHOLDER' | translate"
           ></textarea>
+          <app-inline-discard-ask [form]="optOutForm" />
           <div class="opt-out-actions">
             <button
               type="button"
@@ -128,7 +137,7 @@
     <div class="portal-empty">
       <span class="material-symbols-outlined">error</span>
       <h3>{{ 'PORTAL.SHARING.LOG_FAILED_TITLE' | translate }}</h3>
-      <p>{{ 'PORTAL.SHARING.LOG_FAILED_DESC' | translate }}</p>
+      <p>{{ logFailureReason() ?? ('PORTAL.SHARING.LOG_FAILED_DESC' | translate) }}</p>
       <button type="button" class="portal-btn" (click)="retryAccessLog()">
         {{ 'PORTAL.SHARING.LOG_RETRY' | translate }}
       </button>

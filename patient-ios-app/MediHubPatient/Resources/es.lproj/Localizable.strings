@@ -426,6 +426,7 @@
 "document_type_prescription" = "Receta";
 "document_type_insurance_document" = "Documento de seguro";
 "document_type_invoice" = "Factura";
+"document_type_medical_certificate" = "Certificado médico";
 "document_type_immunization_record" = "Registro de vacunas";
 "document_type_other" = "Otro";
 "preparing_file" = "Preparando…";

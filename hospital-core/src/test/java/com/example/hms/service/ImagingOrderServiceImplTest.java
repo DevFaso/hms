@@ -124,6 +124,64 @@ class ImagingOrderServiceImplTest {
         imagingOrderService.setSelf(imagingOrderService);
     }
 
+    /** QA D972 (round 18): an imaging order written with no visit joins the open visit, so checkout bills it. */
+    @Test
+    void anOrderWithNoVisitJoinsThePatientsOpenVisit_D972() {
+        com.example.hms.repository.EncounterRepository encounters = mock(com.example.hms.repository.EncounterRepository.class);
+        imagingOrderService.setEncounterRepository(encounters);
+        com.example.hms.model.Encounter older = new com.example.hms.model.Encounter();
+        older.setId(UUID.randomUUID());
+        older.setEncounterDate(LocalDateTime.now().minusDays(3));
+        com.example.hms.model.Encounter today = new com.example.hms.model.Encounter();
+        today.setId(UUID.randomUUID());
+        today.setEncounterDate(LocalDateTime.now().minusHours(1));
+        when(encounters.findByPatient_IdAndHospital_IdAndStatusNotIn(eq(patientId), eq(hospitalId), any()))
+            .thenReturn(List.of(older, today));
+        ImagingOrder order = stubCreate(null);
+
+        imagingOrderService.createOrder(requestWithVisit(null), null);
+
+        assertThat(order.getEncounterId()).isEqualTo(today.getId());
+    }
+
+    /** QA D972: a visit of another patient is refused; it would put the order on someone else's invoice. */
+    @Test
+    void aVisitOfAnotherPatientIsRefused_D972() {
+        com.example.hms.repository.EncounterRepository encounters = mock(com.example.hms.repository.EncounterRepository.class);
+        imagingOrderService.setEncounterRepository(encounters);
+        Patient other = new Patient();
+        other.setId(UUID.randomUUID());
+        com.example.hms.model.Encounter theirs = new com.example.hms.model.Encounter();
+        theirs.setId(UUID.randomUUID());
+        theirs.setPatient(other);
+        when(encounters.findByIdAndHospital_Id(theirs.getId(), hospitalId)).thenReturn(Optional.of(theirs));
+        stubCreate(theirs.getId());
+        ImagingOrderRequestDTO request = requestWithVisit(theirs.getId());
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> imagingOrderService.createOrder(request, null))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        verify(imagingOrderRepository, never()).save(any());
+    }
+
+    private ImagingOrderRequestDTO requestWithVisit(UUID encounterId) {
+        return ImagingOrderRequestDTO.builder().patientId(patientId).hospitalId(hospitalId)
+            .encounterId(encounterId).modality(ImagingModality.XRAY).studyType("Radiographie thoracique")
+            .bodyRegion(BODY_REGION_CHEST).priority(ImagingOrderPriority.ROUTINE).build();
+    }
+
+    private ImagingOrder stubCreate(UUID encounterId) {
+        ImagingOrder order = new ImagingOrder();
+        order.setPatient(patient);
+        order.setHospital(hospital);
+        order.setModality(ImagingModality.XRAY);
+        order.setEncounterId(encounterId);
+        org.mockito.Mockito.lenient().when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        org.mockito.Mockito.lenient().when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        org.mockito.Mockito.lenient().when(imagingOrderMapper.toEntity(any(), eq(patient), eq(hospital))).thenReturn(order);
+        org.mockito.Mockito.lenient().when(imagingOrderRepository.save(order)).thenReturn(order);
+        return order;
+    }
+
     @Test
     void createOrderSetsOrderingUserAndDuplicateMetadata() {
         UUID orderingUserId = UUID.randomUUID();
@@ -277,6 +335,36 @@ class ImagingOrderServiceImplTest {
         assertThat(order.getDuplicateOfRecentOrder()).isFalse();
         assertThat(order.getDuplicateReferenceOrderId()).isNull();
         assertThat(result).isSameAs(responseDTO);
+    }
+
+    /** QA D970 (sibling): an edited imaging order is not flagged a duplicate of itself. */
+    @Test
+    void d970_anEditedOrderIsNotADuplicateOfItself() {
+        ImagingOrder order = new ImagingOrder();
+        order.setId(orderId);
+        order.setPatient(patient);
+        order.setHospital(hospital);
+        order.setModality(ImagingModality.XRAY);
+        ImagingOrderRequestDTO request = ImagingOrderRequestDTO.builder()
+            .patientId(patientId)
+            .hospitalId(hospitalId)
+            .modality(ImagingModality.XRAY)
+            .studyType("XR Knee")
+            .priority(ImagingOrderPriority.ROUTINE)
+            .build();
+        ImagingOrderResponseDTO responseDTO = ImagingOrderResponseDTO.builder().id(orderId).build();
+
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        doNothing().when(imagingOrderMapper).updateEntityFromRequest(order, request);
+        when(imagingOrderRepository.findPotentialDuplicates(eq(patientId), eq(ImagingModality.XRAY), isNull(), any(LocalDateTime.class)))
+            .thenReturn(List.of(order));
+        when(imagingOrderRepository.save(order)).thenReturn(order);
+        when(imagingOrderMapper.toResponseDTO(order, Collections.emptyList())).thenReturn(responseDTO);
+
+        imagingOrderService.updateOrder(orderId, request, null);
+
+        assertThat(order.getDuplicateOfRecentOrder()).isFalse();
+        assertThat(order.getDuplicateReferenceOrderId()).isNull();
     }
 
     @Test
@@ -584,6 +672,62 @@ class ImagingOrderServiceImplTest {
         assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.SCHEDULED);
         assertThat(order.getCancellationReason()).isNull();
         assertThat(order.getCancelledAt()).isNull();
+    }
+
+    /** QA D1098 (round 19): a resulted order is closed to a cancel and to a step back. */
+    @Test
+    void updateOrderStatus_refusesToCancelOrResetAResultedOrder_D1098() {
+        ImagingOrder order = new ImagingOrder();
+        order.setId(orderId);
+        order.setStatus(ImagingOrderStatus.RESULTS_AVAILABLE);
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+
+        for (ImagingOrderStatus target : new ImagingOrderStatus[] {
+                ImagingOrderStatus.CANCELLED, ImagingOrderStatus.ORDERED, ImagingOrderStatus.COMPLETED}) {
+            ImagingOrderStatusUpdateRequestDTO request = ImagingOrderStatusUpdateRequestDTO.builder()
+                .status(target).cancellationReason("Duplicate").build();
+            org.assertj.core.api.Assertions.assertThatThrownBy(
+                    () -> imagingOrderService.updateOrderStatus(orderId, request))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                .extracting(e -> ((com.example.hms.exception.BusinessException) e).getMessageKey())
+                .isEqualTo("order.lifecycle.resultedLocked");
+        }
+        assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.RESULTS_AVAILABLE);
+        verify(imagingOrderRepository, never()).save(any());
+    }
+
+    @Test
+    void updateOrderStatus_aCompletedOrderStillMovesToResultsAvailable_D1098() {
+        ImagingOrder order = new ImagingOrder();
+        order.setId(orderId);
+        order.setStatus(ImagingOrderStatus.COMPLETED);
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(imagingOrderRepository.save(order)).thenReturn(order);
+        when(imagingOrderMapper.toResponseDTO(order)).thenReturn(ImagingOrderResponseDTO.builder().id(orderId).build());
+
+        imagingOrderService.updateOrderStatus(orderId, ImagingOrderStatusUpdateRequestDTO.builder()
+            .status(ImagingOrderStatus.RESULTS_AVAILABLE).build());
+
+        assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.RESULTS_AVAILABLE);
+    }
+
+    @Test
+    void updateOrderStatus_refusesACancelWithoutAReason_D1098() {
+        ImagingOrder order = new ImagingOrder();
+        order.setId(orderId);
+        order.setStatus(ImagingOrderStatus.ORDERED);
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+
+        for (String blank : new String[] {null, "", "   "}) {
+            ImagingOrderStatusUpdateRequestDTO request = ImagingOrderStatusUpdateRequestDTO.builder()
+                .status(ImagingOrderStatus.CANCELLED).cancellationReason(blank).build();
+            org.assertj.core.api.Assertions.assertThatThrownBy(
+                    () -> imagingOrderService.updateOrderStatus(orderId, request))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                .extracting(e -> ((com.example.hms.exception.BusinessException) e).getMessageKey())
+                .isEqualTo("order.lifecycle.cancelReasonRequired");
+        }
+        assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.ORDERED);
     }
 
     @Test
@@ -1007,5 +1151,197 @@ class ImagingOrderServiceImplTest {
         org.assertj.core.api.Assertions.assertThatThrownBy(
                 () -> imagingOrderService.captureProviderSignature(orderId, new ImagingOrderSignatureRequestDTO(), null))
             .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+    }
+
+    // ═══════════════ QA D930 class (round 16 siblings): cancel and sign ═══════════════
+
+    private ImagingOrderResponseDTO cancelAs(UUID sessionUserId, ImagingOrder order) {
+        com.example.hms.model.User sessionUser = new com.example.hms.model.User();
+        sessionUser.setId(sessionUserId);
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(sessionUser, null, List.of()));
+        try {
+            return imagingOrderService.updateOrderStatus(order.getId(), ImagingOrderStatusUpdateRequestDTO.builder()
+                .status(ImagingOrderStatus.CANCELLED).cancellationReason("Not needed").build());
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+    }
+
+    @Test
+    void d930_anotherDoctorCannotCancelAColleaguesOrder() {
+        ImagingOrder order = orderAt(hospital);
+        order.setStatus(ImagingOrderStatus.ORDERED);
+        order.setOrderingProviderUserId(UUID.randomUUID());
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        UUID colleague = UUID.randomUUID();
+        when(roleValidator.hasRole(colleague, hospitalId, "RADIOLOGIST")).thenReturn(false);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> cancelAs(colleague, order))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.ORDERED);
+        verify(imagingOrderRepository, never()).save(any());
+    }
+
+    @Test
+    void d930_theOrderingProviderCancelsHerOrder() {
+        ImagingOrder order = orderAt(hospital);
+        order.setStatus(ImagingOrderStatus.ORDERED);
+        UUID provider = UUID.randomUUID();
+        order.setOrderingProviderUserId(provider);
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(imagingOrderRepository.save(order)).thenReturn(order);
+
+        cancelAs(provider, order);
+
+        assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.CANCELLED);
+    }
+
+    /** Declared exception: the imaging department (a radiologist of the hospital) calls an exam off. */
+    @Test
+    void d930_aRadiologistCancelsAnOrderSheDidNotPlace() {
+        ImagingOrder order = orderAt(hospital);
+        order.setStatus(ImagingOrderStatus.ORDERED);
+        order.setOrderingProviderUserId(UUID.randomUUID());
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(imagingOrderRepository.save(order)).thenReturn(order);
+        UUID radiologist = UUID.randomUUID();
+        when(roleValidator.hasRole(radiologist, hospitalId, "RADIOLOGIST")).thenReturn(true);
+
+        cancelAs(radiologist, order);
+
+        assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.CANCELLED);
+    }
+
+    @Test
+    void d930_anotherDoctorCannotSignAColleaguesUnsignedOrder() {
+        ImagingOrder order = orderAt(hospital);
+        UUID author = UUID.randomUUID();
+        order.setOrderingProviderUserId(author);
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        UUID colleague = UUID.randomUUID();
+        signer(colleague, "Doc", "Two");
+        when(roleValidator.draftsForPhysicianSignature(author, hospitalId)).thenReturn(false);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> imagingOrderService.captureProviderSignature(
+                orderId, ImagingOrderSignatureRequestDTO.builder().signatureStatement("Signed").build(), colleague))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThat(order.getOrderingProviderUserId()).isEqualTo(author);
+        assertThat(order.getProviderSignedAt()).isNull();
+        verify(imagingOrderRepository, never()).save(any());
+    }
+
+    /** Declared exception: a nurse's or midwife's draft is signed by a physician of the hospital (QA D934 rule). */
+    @Test
+    void d930_aDoctorOfTheHospitalSignsANursesDraftOrder() {
+        ImagingOrder order = orderAt(hospital);
+        UUID nurse = UUID.randomUUID();
+        order.setOrderingProviderUserId(nurse);
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(imagingOrderRepository.save(order)).thenReturn(order);
+        UUID doctor = UUID.randomUUID();
+        signer(doctor, "Doc", "One");
+        when(roleValidator.draftsForPhysicianSignature(nurse, hospitalId)).thenReturn(true);
+        when(roleValidator.isSigningPhysician(doctor, hospitalId)).thenReturn(true);
+
+        imagingOrderService.captureProviderSignature(
+            orderId, ImagingOrderSignatureRequestDTO.builder().signatureStatement("Signed").build(), doctor);
+
+        assertThat(order.getProviderSignedAt()).isNotNull();
+        assertThat(order.getOrderingProviderUserId()).isEqualTo(doctor);
+    }
+
+    // ═══ Review of #976 (QA D930 class): the cancel stamp and the way back out ═══
+
+    private ImagingOrderResponseDTO statusAs(UUID sessionUserId, ImagingOrder order, ImagingOrderStatus status) {
+        com.example.hms.model.User sessionUser = new com.example.hms.model.User();
+        sessionUser.setId(sessionUserId);
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(sessionUser, null, List.of()));
+        try {
+            return imagingOrderService.updateOrderStatus(order.getId(), ImagingOrderStatusUpdateRequestDTO.builder()
+                .status(status).cancellationReason("Rewritten reason").build());
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+    }
+
+    private static final LocalDateTime ORIGINAL_CANCELLED_AT = LocalDateTime.of(2026, 1, 5, 9, 30);
+
+    private ImagingOrder cancelledBy(UUID author) {
+        ImagingOrder order = orderAt(hospital);
+        order.setOrderingProviderUserId(author);
+        order.setStatus(ImagingOrderStatus.CANCELLED);
+        order.setCancellationReason("Original reason");
+        order.setCancelledAt(ORIGINAL_CANCELLED_AT);
+        order.setCancelledByUserId(author);
+        order.setCancelledByName("Original Author");
+        return order;
+    }
+
+    /*
+     * QA D1066 (round 18): the four review-976 tests below used to let the
+     * ordering provider or a radiologist reopen a cancelled order, and a
+     * colleague re-send CANCELLED. Product decision (round-18 brief): a
+     * cancelled order is closed and nobody revives it - the clinician places a
+     * new one. Each now asserts the refusal, and that nothing was written.
+     */
+    @Test
+    void d1066_reCancellingACancelledOrderIsRefusedAndKeepsTheOriginalStamp() {
+        UUID author = UUID.randomUUID();
+        ImagingOrder order = cancelledBy(author);
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> statusAs(UUID.randomUUID(), order, ImagingOrderStatus.CANCELLED))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .hasMessage("imaging.order.cancelled.locked");
+
+        assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.CANCELLED);
+        assertThat(order.getCancellationReason()).isEqualTo("Original reason");
+        assertThat(order.getCancelledAt()).isEqualTo(ORIGINAL_CANCELLED_AT);
+        assertThat(order.getCancelledByUserId()).isEqualTo(author);
+        assertThat(order.getCancelledByName()).isEqualTo("Original Author");
+        verify(imagingOrderRepository, never()).save(any());
+    }
+
+    @Test
+    void d1066_aColleagueCannotReopenTheAuthorsCancelledOrder() {
+        ImagingOrder order = cancelledBy(UUID.randomUUID());
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> statusAs(UUID.randomUUID(), order, ImagingOrderStatus.ORDERED))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .hasMessage("imaging.order.cancelled.locked");
+        assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.CANCELLED);
+        verify(imagingOrderRepository, never()).save(any());
+    }
+
+    @Test
+    void d1066_theOrderingProviderCannotReopenHerCancelledOrder() {
+        UUID author = UUID.randomUUID();
+        ImagingOrder order = cancelledBy(author);
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+
+        for (ImagingOrderStatus revived : List.of(ImagingOrderStatus.ORDERED, ImagingOrderStatus.SCHEDULED)) {
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> statusAs(author, order, revived))
+                .as(revived.name())
+                .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                .hasMessage("imaging.order.cancelled.locked");
+        }
+        assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.CANCELLED);
+        verify(imagingOrderRepository, never()).save(any());
+    }
+
+    @Test
+    void d1066_aRadiologistCannotReopenACancelledOrderEither() {
+        ImagingOrder order = cancelledBy(UUID.randomUUID());
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        UUID radiologist = UUID.randomUUID();
+        org.mockito.Mockito.lenient().when(roleValidator.hasRole(radiologist, hospitalId, "RADIOLOGIST")).thenReturn(true);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> statusAs(radiologist, order, ImagingOrderStatus.ORDERED))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class);
+        assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.CANCELLED);
     }
 }

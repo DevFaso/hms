@@ -97,6 +97,13 @@
   letter-spacing: 0.03em;
 }
 
+.emar__queue-chip--controlled {
+  /* QA D922: a controlled substance, in the queue as in the detail. */
+  border: 1px solid #5b21b6;
+  color: #5b21b6;
+  background: #ede9fe;
+}
+
 .emar__queue-chip--blocked {
   border: 1px solid var(--color-warning, #b7791f);
   color: var(--color-warning, #b7791f);
@@ -314,4 +321,17 @@
   padding: 2rem;
   text-align: center;
   color: var(--color-text-muted, #4a5568);
+}
+
+/* QA D1025: the dose and route inputs carry their own labels; the prescription is read beside them. */
+.emar__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex: 1;
+}
+
+.emar__prescribed {
+  margin: 0 0 0.5rem;
+  color: var(--text-secondary, #555);
 }

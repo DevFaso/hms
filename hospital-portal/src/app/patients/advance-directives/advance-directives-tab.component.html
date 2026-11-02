@@ -111,26 +111,32 @@
       data-testid="directive-modal"
     >
       <div
+        appModalDialog
+        aria-labelledby="advance-directives-tab-panel-1-title"
+        (escaped)="closeModal()"
         class="form-card"
         (click)="$event.stopPropagation()"
         (keydown.escape)="$event.stopPropagation()"
         tabindex="-1"
       >
-        <h2>
+        <h2 id="advance-directives-tab-panel-1-title">
           {{ (editingId() ? 'DIRECTIVES.EDIT_TITLE' : 'DIRECTIVES.ADD_TITLE') | translate }}
         </h2>
         <form (ngSubmit)="submit()">
           <label for="directive-type"
             >{{ 'DIRECTIVES.TYPE' | translate }} *
             <select id="directive-type" [(ngModel)]="form.directiveType" name="directiveType">
+              <!-- QA D1148: never pre-filled; the clinician picks the type. -->
+              <option value="" disabled>{{ 'DIRECTIVES.TYPE_CHOOSE' | translate }}</option>
               @for (t of directiveTypes; track t) {
                 <option [ngValue]="t">{{ 'DIRECTIVES.TYPE_' + t | translate }}</option>
               }
             </select>
           </label>
           <label for="directive-status"
-            >{{ 'DIRECTIVES.STATUS' | translate }}
+            >{{ 'DIRECTIVES.STATUS' | translate }} *
             <select id="directive-status" [(ngModel)]="form.status" name="status">
+              <option value="" disabled>{{ 'DIRECTIVES.STATUS_CHOOSE' | translate }}</option>
               @for (s of editableStatuses; track s) {
                 <option [ngValue]="s">{{ 'DIRECTIVES.STATUS_' + s | translate }}</option>
               }
@@ -148,7 +154,7 @@
           </label>
           <div class="form-row">
             <label for="directive-effective"
-              >{{ 'DIRECTIVES.EFFECTIVE_DATE' | translate }}
+              >{{ 'DIRECTIVES.EFFECTIVE_DATE' | translate }} *
               <input
                 id="directive-effective"
                 type="date"
@@ -169,7 +175,7 @@
           </div>
           <div class="form-row">
             <label for="directive-physician"
-              >{{ 'DIRECTIVES.PHYSICIAN' | translate }}
+              >{{ 'DIRECTIVES.PHYSICIAN' | translate }}{{ needsPhysician() ? ' *' : '' }}
               <input
                 id="directive-physician"
                 type="text"
@@ -217,41 +223,21 @@
     </div>
   }
 
-  <!-- Revoke confirmation -->
+  <!-- Revoke confirmation. QA D1180: the server keeps why a directive was revoked. -->
   @if (revokeTarget(); as target) {
-    <div
-      class="form-overlay"
-      (click)="cancelRevoke()"
-      (keydown.escape)="cancelRevoke()"
-      tabindex="-1"
+    <app-reason-dialog
+      titleKey="DIRECTIVES.REVOKE_TITLE"
+      labelKey="DIRECTIVES.REVOKE_REASON"
+      confirmKey="DIRECTIVES.REVOKE"
+      [busy]="revoking()"
+      (confirmed)="executeRevoke($event)"
+      (cancelled)="cancelRevoke()"
       data-testid="directive-revoke-modal"
     >
-      <div
-        class="form-card confirm-card"
-        (click)="$event.stopPropagation()"
-        (keydown.escape)="$event.stopPropagation()"
-        tabindex="-1"
-      >
-        <h2>{{ 'DIRECTIVES.REVOKE_TITLE' | translate }}</h2>
-        <p>
-          <strong>{{ 'DIRECTIVES.TYPE_' + target.directiveType | translate }}</strong>
-        </p>
-        <p>{{ 'DIRECTIVES.REVOKE_WARNING' | translate }}</p>
-        <div class="modal-actions">
-          <button type="button" class="btn-secondary" (click)="cancelRevoke()">
-            {{ 'COMMON.CANCEL' | translate }}
-          </button>
-          <button
-            type="button"
-            class="btn-danger-solid"
-            [disabled]="revoking()"
-            (click)="executeRevoke()"
-            data-testid="directive-revoke-confirm"
-          >
-            {{ 'DIRECTIVES.REVOKE' | translate }}
-          </button>
-        </div>
-      </div>
-    </div>
+      <p>
+        <strong>{{ 'DIRECTIVES.TYPE_' + target.directiveType | translate }}</strong>
+      </p>
+      <p>{{ 'DIRECTIVES.REVOKE_WARNING' | translate }}</p>
+    </app-reason-dialog>
   }
 </section>

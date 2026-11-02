@@ -67,7 +67,8 @@
       <button
         class="btn-primary"
         (click)="uploadDocument()"
-        [disabled]="uploading() || !selectedFile()"
+        [disabled]="uploading()"
+        [appSubmitGuard]="!selectedFile() && ('SUBMIT_GUARD.FILE' | translate)"
       >
         {{
           uploading()
@@ -114,7 +115,8 @@
             <span class="material-symbols-outlined doc-icon">description</span>
             <div class="doc-meta">
               <strong class="doc-name">{{ doc.displayName }}</strong>
-              <span class="badge doc-type">{{ typeLabelKey(doc.documentType) | translate }}</span>
+              {{ ' '
+              }}<span class="badge doc-type">{{ typeLabelKey(doc.documentType) | translate }}</span>
             </div>
           </div>
           <div class="doc-details">
@@ -131,7 +133,8 @@
             @if (doc.uploadedByDisplayName) {
               <span>
                 <span class="material-symbols-outlined detail-icon">person</span>
-                {{ 'PORTAL.DOCUMENTS.UPLOADED_BY' | translate }}: {{ doc.uploadedByDisplayName }}
+                {{ 'PORTAL.DOCUMENTS.UPLOADED_BY' | translate }}{{ 'COMMON.COLON' | translate }}
+                {{ doc.uploadedByDisplayName }}
               </span>
             }
           </div>
@@ -150,14 +153,17 @@
               <span class="material-symbols-outlined">download</span>
               {{ 'PORTAL.DOCUMENTS.DOWNLOAD' | translate }}
             </button>
-            <button
-              class="btn-danger-sm"
-              (click)="deleteDocument(doc.id)"
-              [disabled]="deleting() === doc.id"
-            >
-              <span class="material-symbols-outlined">delete</span>
-              {{ 'PORTAL.DOCUMENTS.DELETE' | translate }}
-            </button>
+            <!-- QA D961: a certificate the doctor issued stays in the record. -->
+            @if (doc.documentType !== 'MEDICAL_CERTIFICATE') {
+              <button
+                class="btn-danger-sm"
+                (click)="deleteDocument(doc.id)"
+                [disabled]="deleting() === doc.id"
+              >
+                <span class="material-symbols-outlined">delete</span>
+                {{ 'PORTAL.DOCUMENTS.DELETE' | translate }}
+              </button>
+            }
           </div>
         </div>
       }

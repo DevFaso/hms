@@ -154,7 +154,8 @@
                       <span class="shift-staff-name">{{ shift.staffName }}</span>
                       <span class="shift-time">{{ formatShiftRange(shift) }}</span>
                       @if (shift.crossMidnight && shift.shiftEndDate === day.date) {
-                        <span class="cross-midnight-badge">{{
+                        {{ ' '
+                        }}<span class="cross-midnight-badge">{{
                           'SCHEDULING.SHIFT_CONTD' | translate
                         }}</span>
                       }
@@ -242,7 +243,8 @@
               <div class="leave-title-row">
                 <span class="leave-staff-name">{{ leave.staffName }}</span>
                 <span class="leave-type-label">{{ leave.leaveType | enumLabel: 'leaveType' }}</span>
-                <span class="leave-status-badge" [attr.data-status]="leave.status">{{
+                {{ ' '
+                }}<span class="leave-status-badge" [attr.data-status]="leave.status">{{
                   leave.status | enumLabel: 'leaveStatus'
                 }}</span>
               </div>
@@ -278,7 +280,8 @@
               }
               @if (leave.reviewedByName) {
                 <span class="reviewed-by"
-                  >{{ 'SCHEDULING.REVIEWED' | translate }}: {{ leave.reviewedByName }}</span
+                  >{{ 'SCHEDULING.REVIEWED' | translate }}{{ 'COMMON.COLON' | translate }}
+                  {{ leave.reviewedByName }}</span
                 >
               }
               @if (leave.managerNote) {
@@ -294,7 +297,13 @@
 
 <!-- ═══ BULK SCHEDULE MODAL ═══ -->
 @if (bulkModalOpen() && isSchedulingAdmin && canManageSchedules()) {
-  <dialog class="modal-panel" open aria-labelledby="bulk-modal-title">
+  <dialog
+    appModalDialog
+    (escaped)="closeBulkModal()"
+    class="modal-panel"
+    open
+    aria-labelledby="bulk-modal-title"
+  >
     <!-- Header -->
     <div class="modal-header">
       <div class="modal-title-group">
@@ -332,7 +341,8 @@
               <span class="chip-avatar">{{ staffInitials(selectedStaff()!) }}</span>
               <div class="chip-info">
                 <span class="chip-name">{{ selectedStaff()!.name }}</span>
-                <span class="chip-sub">{{
+                {{ ' '
+                }}<span class="chip-sub">{{
                   (selectedStaff()!.jobTitle | enumLabel: 'jobTitle') ||
                     (selectedStaff()!.roleName | roleLabel) ||
                     ('SCHEDULING.STAFF_FALLBACK' | translate)
@@ -352,6 +362,7 @@
             <div class="staff-search-wrap">
               <span class="material-symbols-outlined search-icon">search</span>
               <input
+                data-escape-discards
                 id="bulk-staffSearch"
                 class="form-input staff-search-input"
                 type="text"
@@ -412,12 +423,8 @@
                 <span class="locked-name">{{
                   selectedStaff()!.hospitalName ?? ('ENCOUNTERS.HOSPITAL' | translate)
                 }}</span>
-                <span class="locked-sub"
-                  >{{ 'SCHEDULING.AUTO_MATCHED' | translate }} ·
-                  <span class="uuid-pill"
-                    >{{ selectedStaff()!.hospitalId | slice: 0 : 8 }}…</span
-                  ></span
-                >
+                <!-- QA D992 class: the hospital's name is above; its id is never shown. -->
+                <span class="locked-sub">{{ 'SCHEDULING.AUTO_MATCHED' | translate }}</span>
               </div>
             </div>
           } @else {
@@ -446,7 +453,13 @@
             <span class="material-symbols-outlined">event</span>
             {{ 'SCHEDULING.END_DATE' | translate }} <span class="required">*</span>
           </label>
-          <input id="bulk-endDate" class="form-input" type="date" [(ngModel)]="bulk.endDate" />
+          <input
+            id="bulk-endDate"
+            class="form-input"
+            type="date"
+            [attr.min]="bulk.startDate || null"
+            [(ngModel)]="bulk.endDate"
+          />
         </div>
       </div>
 

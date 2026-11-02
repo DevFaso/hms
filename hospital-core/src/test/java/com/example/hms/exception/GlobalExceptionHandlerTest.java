@@ -6,6 +6,8 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.context.request.WebRequest;
 
 import java.util.Map;
@@ -887,6 +889,51 @@ class GlobalExceptionHandlerTest {
             } finally {
                 org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
             }
+        }
+    }
+
+    /**
+     * QA D1037 / D984: a refused request body answers with the field reasons
+     * as the message, so every page that shows the server's message tells the
+     * user what to fix; the generic sentence was all a refused registration
+     * showed.
+     */
+    @Nested
+    @DisplayName("handleValidationException")
+    class HandleValidationException {
+
+        private MethodArgumentNotValidException refusal(FieldError... errors) throws Exception {
+            org.springframework.validation.BeanPropertyBindingResult result =
+                new org.springframework.validation.BeanPropertyBindingResult(new Object(), "patientRequestDTO");
+            for (FieldError error : errors) {
+                result.addError(error);
+            }
+            return new MethodArgumentNotValidException(
+                new org.springframework.core.MethodParameter(Object.class.getMethod("toString"), -1), result);
+        }
+
+        @Test
+        @DisplayName("the field reasons are the message, the fields stay under fieldErrors")
+        void theFieldReasonsAreTheMessage_D1037() throws Exception {
+            ResponseEntity<Object> response = handler.handleValidationException(refusal(
+                new FieldError("patientRequestDTO", "phoneNumberPrimary", "Phone number cannot exceed 30 characters.")),
+                request);
+
+            @SuppressWarnings("unchecked")
+            Map<String, Object> body = (Map<String, Object>) response.getBody();
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+            assertThat(body).containsEntry("message", "Phone number cannot exceed 30 characters.")
+                .containsEntry("error", "Validation Failed");
+            assertThat(((Map<?, ?>) body.get("fieldErrors")).keySet()).extracting(String::valueOf).contains("phoneNumberPrimary");
+        }
+
+        @Test
+        @DisplayName("a refusal with no readable reason keeps the generic message")
+        void noReasonKeepsTheGenericMessage() throws Exception {
+            ResponseEntity<Object> response = handler.handleValidationException(refusal(), request);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> body = (Map<String, Object>) response.getBody();
+            assertThat((String) body.get("message")).isNotBlank();
         }
     }
 }

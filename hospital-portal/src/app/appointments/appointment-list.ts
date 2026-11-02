@@ -1,3 +1,5 @@
+import { textMatches } from '../shared/person-search';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import {
   Component,
   inject,
@@ -26,7 +28,15 @@ type SortDir = 'asc' | 'desc';
 @Component({
   selector: 'app-appointment-list',
   standalone: true,
-  imports: [ClockTimePipe, CommonModule, RouterLink, FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [
+    ClockTimePipe,
+    ServerTimePipe,
+    CommonModule,
+    RouterLink,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+  ],
   templateUrl: './appointment-list.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './appointment-list.scss',
@@ -153,10 +163,10 @@ export class AppointmentListComponent implements OnInit, OnDestroy {
     if (term) {
       result = result.filter(
         (a) =>
-          a.patientName.toLowerCase().includes(term) ||
-          a.staffName.toLowerCase().includes(term) ||
-          a.reason.toLowerCase().includes(term) ||
-          (a.hospitalName?.toLowerCase().includes(term) ?? false),
+          textMatches(a.patientName, term) ||
+          textMatches(a.staffName, term) ||
+          textMatches(a.reason, term) ||
+          textMatches(a.hospitalName, term),
       );
     }
 

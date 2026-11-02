@@ -22,4 +22,8 @@ public class LabResultReferenceRangeDTO {
     private String notes;
     private Double criticalLow;
     private Double criticalHigh;
+    /** Round 18: YEARS (also when null), MONTHS or DAYS. */
+    private String ageUnit;
+    /** Round 18: where the limits come from. */
+    private String source;
 }

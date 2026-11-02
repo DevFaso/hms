@@ -135,7 +135,7 @@ class EncounterNoteSignatureTest {
         encounter.setPatient(patient);
         encounter.setStaff(authorStaff);
 
-        note = EncounterNote.builder()
+        note = EncounterNote.builder().assessment("Paludisme simple")
             .encounter(encounter)
             .patient(patient)
             .hospital(hospital)
@@ -631,7 +631,7 @@ class EncounterNoteSignatureTest {
 
     /** DOCTOR2_A's J1 entry, written after DOCTOR_A's J0 on the same encounter (d831.js). */
     private EncounterNote secondDoctorsEntry(User doctor2) {
-        EncounterNote secondEntry = EncounterNote.builder()
+        EncounterNote secondEntry = EncounterNote.builder().assessment("Paludisme simple")
             .encounter(encounter).patient(encounter.getPatient()).hospital(encounter.getHospital())
             .author(doctor2).authorName("Issouf Compaoré").documentedAt(LocalDateTime.now()).build();
         secondEntry.setId(UUID.randomUUID());
@@ -729,7 +729,7 @@ class EncounterNoteSignatureTest {
 
     @Test
     void d831_aNamedEntryIsSignedAndAnEntryOfAnotherEncounterIs404() {
-        EncounterNote other = EncounterNote.builder().author(authorUser).documentedAt(LocalDateTime.now()).build();
+        EncounterNote other = EncounterNote.builder().assessment("Paludisme simple").author(authorUser).documentedAt(LocalDateTime.now()).build();
         other.setId(UUID.randomUUID());
         when(encounterNoteRepository.findByEncounter_IdOrderByCreatedAtAscIdAsc(encounterId))
             .thenReturn(List.of(note, other));
@@ -764,7 +764,7 @@ class EncounterNoteSignatureTest {
         // current entry only, and an earlier entry is co-signed by its id.
         makeSignedRequiringCosign();
         note.setCreatedAt(LocalDateTime.now().minusHours(3));
-        EncounterNote laterDraft = EncounterNote.builder().author(authorUser).documentedAt(LocalDateTime.now()).build();
+        EncounterNote laterDraft = EncounterNote.builder().assessment("Paludisme simple").author(authorUser).documentedAt(LocalDateTime.now()).build();
         laterDraft.setId(UUID.randomUUID());
         laterDraft.setCreatedAt(LocalDateTime.now());
         when(encounterNoteRepository.findByEncounter_IdOrderByCreatedAtAscIdAsc(encounterId))
@@ -800,7 +800,7 @@ class EncounterNoteSignatureTest {
         service.signEncounterNote(encounterId, note.getId(), LOCALE);
         User doctor2 = new User();
         doctor2.setId(UUID.randomUUID());
-        EncounterNote j1 = EncounterNote.builder()
+        EncounterNote j1 = EncounterNote.builder().assessment("Paludisme simple")
             .encounter(encounter).patient(encounter.getPatient()).hospital(encounter.getHospital())
             .author(doctor2).authorName("Issouf Compaoré").subjective("QA R13 J1 apyrétique")
             .documentedAt(LocalDateTime.now()).build();
@@ -838,7 +838,7 @@ class EncounterNoteSignatureTest {
     void d831_anAddendumWithoutAnEntryGoesToTheCurrentOneAndAForeignEntryIs404() {
         User doctor2 = new User();
         doctor2.setId(UUID.randomUUID());
-        EncounterNote j1 = EncounterNote.builder()
+        EncounterNote j1 = EncounterNote.builder().assessment("Paludisme simple")
             .encounter(encounter).patient(encounter.getPatient()).hospital(encounter.getHospital())
             .author(doctor2).documentedAt(LocalDateTime.now()).build();
         j1.setId(UUID.randomUUID());

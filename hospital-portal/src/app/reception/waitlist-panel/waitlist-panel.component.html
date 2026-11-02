@@ -60,7 +60,10 @@
             </td>
             <td>
               @if (entry.requestedDateFrom || entry.requestedDateTo) {
-                {{ entry.requestedDateFrom ?? '?' }} → {{ entry.requestedDateTo ?? '?' }}
+                <!-- QA D1119: the reader's date format, as the recall list beside it. -->
+                {{ entry.requestedDateFrom ? (entry.requestedDateFrom | date: 'mediumDate') : '?' }}
+                →
+                {{ entry.requestedDateTo ? (entry.requestedDateTo | date: 'mediumDate') : '?' }}
               } @else {
                 —
               }
@@ -88,7 +91,7 @@
                 <button class="btn-sm btn-primary" (click)="openOfferModal(entry)">
                   {{ 'RECEPTION.OFFER_SLOT' | translate }}
                 </button>
-                <button class="btn-sm btn-ghost" (click)="closeEntry(entry.id)">
+                <button class="btn-sm btn-ghost" (click)="askCloseEntry(entry)">
                   {{ 'COMMON.CLOSE' | translate }}
                 </button>
               } @else if (entry.status === 'OFFERED') {
@@ -106,7 +109,7 @@
                 >
                   {{ 'RECEPTION.DECLINE_OFFER' | translate }}
                 </button>
-                <button class="btn-sm btn-ghost" (click)="closeEntry(entry.id)">
+                <button class="btn-sm btn-ghost" (click)="askCloseEntry(entry)">
                   {{ 'COMMON.CLOSE' | translate }}
                 </button>
               }
@@ -121,6 +124,7 @@
 <!-- Add to Waitlist Modal -->
 @if (showAddForm()) {
   <div
+    [attr.aria-label]="'COMMON.CLOSE' | translate"
     class="modal-backdrop"
     (click)="showAddForm.set(false)"
     (keydown.enter)="showAddForm.set(false)"
@@ -132,6 +136,8 @@
     role="dialog"
     aria-modal="true"
     [attr.aria-label]="'RECEPTION.ADD_TO_WAITLIST' | translate"
+    appDialogFocus
+    (dialogDismiss)="showAddForm.set(false)"
   >
     <div class="modal-header">
       <h2>{{ 'RECEPTION.ADD_TO_WAITLIST' | translate }}</h2>
@@ -149,6 +155,7 @@
         <label class="form-label" for="wl-patient">{{ 'PATIENTS.PATIENT' | translate }} *</label>
         <div class="autocomplete-wrap">
           <input
+            data-escape-discards
             id="wl-patient"
             class="form-input"
             type="text"
@@ -161,7 +168,7 @@
             <ul class="autocomplete-list">
               @for (p of patientResults(); track p.id) {
                 <li (click)="selectPatient(p)" (keydown.enter)="selectPatient(p)" tabindex="0">
-                  {{ p.firstName }} {{ p.lastName }}
+                  {{ p | personName }}
                   @if (p | patientSubline; as sub) {
                     <span class="mrn-hint">· {{ sub }}</span>
                   }
@@ -200,6 +207,7 @@
         }}</label>
         <div class="autocomplete-wrap">
           <input
+            data-escape-discards
             id="wl-staff"
             class="form-input"
             type="text"
@@ -234,6 +242,7 @@
             id="wl-from"
             class="form-input"
             type="date"
+            [attr.max]="dateTo() || null"
             [ngModel]="dateFrom()"
             (ngModelChange)="dateFrom.set($event)"
           />
@@ -244,6 +253,7 @@
             id="wl-to"
             class="form-input"
             type="date"
+            [attr.min]="dateToMin()"
             [ngModel]="dateTo()"
             (ngModelChange)="dateTo.set($event)"
           />
@@ -307,6 +317,8 @@
     role="dialog"
     aria-modal="true"
     [attr.aria-label]="'RECEPTION.OFFER_SLOT' | translate"
+    appDialogFocus
+    (dialogDismiss)="offerEntry.set(null)"
   >
     <div class="modal-header">
       <h2>{{ 'RECEPTION.OFFER_SLOT_TO' | translate: { name: entry.patientName } }}</h2>
@@ -338,7 +350,10 @@
                 [checked]="selectedSlotId() === slot.id"
                 (change)="selectedSlotId.set(slot.id)"
               />
-              <span class="slot-when">{{ slot.startAt | date: 'EEE d MMM, HH:mm' }}</span>
+              <!-- D1140 class: the locale orders day, month and time. -->
+              <span class="slot-when"
+                >{{ slot.startAt | date: 'EEEE' }} {{ slot.startAt | date: 'short' }}</span
+              >
               <span class="slot-who">{{ slot.staffName ?? '—' }}</span>
               @if (slot.visitTypeName) {
                 <span class="slot-type">{{ slot.visitTypeName }}</span>
@@ -369,7 +384,8 @@
       </button>
       <button
         class="btn-primary"
-        [disabled]="offering() || !selectedSlotId()"
+        [disabled]="offering()"
+        [appSubmitGuard]="!selectedSlotId() && ('RECEPTION.SELECT_SLOT_FIRST' | translate)"
         (click)="submitOffer()"
       >
         @if (offering()) {
@@ -379,4 +395,16 @@
       </button>
     </div>
   </div>
+}
+
+<!-- QA D1157: a waitlist entry is closed with a reason, after a confirmation. -->
+@if (closing(); as entry) {
+  <app-reason-dialog
+    titleKey="RECEPTION.CLOSE_ENTRY_TITLE"
+    labelKey="RECEPTION.CLOSE_ENTRY_REASON"
+    confirmKey="RECEPTION.CLOSE_ENTRY_CONFIRM"
+    [busy]="closeBusy()"
+    (confirmed)="closeEntry(entry.id, $event)"
+    (cancelled)="closing.set(null)"
+  />
 }

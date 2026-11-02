@@ -67,6 +67,7 @@
                     class="icon-btn"
                     (click)="openEditWard(w); $event.stopPropagation()"
                     [title]="'COMMON.EDIT' | translate"
+                    [attr.aria-label]="'COMMON.EDIT' | translate"
                   >
                     <span class="material-symbols-outlined">edit</span>
                   </button>
@@ -75,6 +76,7 @@
                       class="icon-btn icon-danger"
                       (click)="deleteWard(w); $event.stopPropagation()"
                       [title]="'COMMON.DELETE' | translate"
+                      [attr.aria-label]="'COMMON.DELETE' | translate"
                     >
                       <span class="material-symbols-outlined">delete</span>
                     </button>
@@ -153,6 +155,7 @@
                         class="icon-btn"
                         (click)="openEditBed(b)"
                         [title]="'COMMON.EDIT' | translate"
+                        [attr.aria-label]="'COMMON.EDIT' | translate"
                       >
                         <span class="material-symbols-outlined">edit</span>
                       </button>
@@ -161,6 +164,7 @@
                           class="icon-btn icon-danger"
                           (click)="deleteBed(b)"
                           [title]="'COMMON.DELETE' | translate"
+                          [attr.aria-label]="'COMMON.DELETE' | translate"
                         >
                           <span class="material-symbols-outlined">delete</span>
                         </button>
@@ -192,10 +196,19 @@
       (keydown.enter)="$event.stopPropagation()"
       tabindex="-1"
       role="dialog"
+      appModalDialog
+      aria-labelledby="bed-management-dialog-2-title"
+      (escaped)="closeWardModal()"
     >
       <div class="modal-header">
-        <h3>{{ (editingWardId() ? 'BEDS.EDIT_WARD' : 'BEDS.NEW_WARD') | translate }}</h3>
-        <button class="modal-close" (click)="closeWardModal()">
+        <h3 id="bed-management-dialog-2-title">
+          {{ (editingWardId() ? 'BEDS.EDIT_WARD' : 'BEDS.NEW_WARD') | translate }}
+        </h3>
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="modal-close"
+          (click)="closeWardModal()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
@@ -277,10 +290,19 @@
       (keydown.enter)="$event.stopPropagation()"
       tabindex="-1"
       role="dialog"
+      appModalDialog
+      aria-labelledby="bed-management-dialog-1-title"
+      (escaped)="closeBedModal()"
     >
       <div class="modal-header">
-        <h3>{{ (editingBedId() ? 'BEDS.EDIT_BED' : 'BEDS.NEW_BED') | translate }}</h3>
-        <button class="modal-close" (click)="closeBedModal()">
+        <h3 id="bed-management-dialog-1-title">
+          {{ (editingBedId() ? 'BEDS.EDIT_BED' : 'BEDS.NEW_BED') | translate }}
+        </h3>
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="modal-close"
+          (click)="closeBedModal()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>

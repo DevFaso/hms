@@ -165,9 +165,38 @@ describe('PostpartumTabComponent — screening', () => {
     );
     component.onPatientPicked({ id: 'p1' } as PatientResponse);
     component.openObservation();
+    // QA D1151: an observation records something (an empty one is refused).
+    component.observationForm.pulseBpm = 88;
     component.submitObservation();
     const body = postpartumSpy.createObservation.calls.mostRecent().args[1];
     expect(body.hospitalId).toBe('h1');
+  });
+
+  it('QA D1151: an empty observation and an empty newborn assessment are refused, the missing finding marked', () => {
+    const fixture = TestBed.createComponent(PostpartumTabComponent);
+    const cmp = fixture.componentInstance;
+    cmp.onPatientPicked({ id: 'p1' } as PatientResponse);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+
+    cmp.openObservation();
+    fixture.detectChanges();
+    cmp.submitObservation();
+    expect(postpartumSpy.createObservation).not.toHaveBeenCalled();
+    expect(host.querySelector('#obs-temp')?.getAttribute('aria-invalid')).toBe('true');
+    cmp.closeObservation();
+
+    cmp.openAssessment();
+    fixture.detectChanges();
+    cmp.submitAssessment();
+    expect(postpartumSpy.createNewbornAssessment).not.toHaveBeenCalled();
+    expect(host.querySelector('#nb-apgar1')?.getAttribute('aria-invalid')).toBe('true');
+
+    // One finding is enough.
+    postpartumSpy.createNewbornAssessment.and.returnValue(of({ alerts: [] }) as never);
+    cmp.assessmentForm.apgarOneMinute = 8;
+    cmp.submitAssessment();
+    expect(postpartumSpy.createNewbornAssessment).toHaveBeenCalled();
   });
 
   it('picking a patient loads the screening history for the plan instrument', () => {
@@ -507,5 +536,44 @@ describe('PostpartumTabComponent — screening', () => {
 
     expect(postpartumSpy.createObservation).not.toHaveBeenCalled();
     expect(toastSpy.error).toHaveBeenCalledWith('Douleur : entre 0 et 10.');
+  });
+  it('QA D1068: the observation and newborn tables read back what was typed', () => {
+    postpartumSpy.recentObservations.and.returnValue(
+      of([
+        {
+          id: 'o1',
+          patientId: 'p1',
+          observationTime: '2026-10-30T18:00:00',
+          uterotonicGiven: true,
+          psychosocialNotes: 'Mère anxieuse, soutien familial présent',
+        } as PostpartumObservationResponse,
+      ]),
+    );
+    postpartumSpy.recentNewbornAssessments.and.returnValue(
+      of([
+        {
+          id: 'a1',
+          patientId: 'p1',
+          assessmentTime: '2026-10-30T18:10:00',
+          examGeneralAppearance: 'Rose, tonique',
+          examNotes: 'Fontanelle normale',
+          followUpNotes: 'Revoir à J3',
+        } as NewbornAssessmentResponse,
+      ]),
+    );
+    const fixture = TestBed.createComponent(PostpartumTabComponent);
+    fixture.componentInstance.onPatientPicked({ id: 'p1' } as PatientResponse);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const obs = el.querySelector('[data-testid="postpartum-observation-notes"]')?.textContent ?? '';
+    expect(obs).toContain('Mère anxieuse, soutien familial présent');
+    expect(obs).toContain('POSTPARTUM.UTEROTONIC');
+
+    fixture.componentInstance.setSection('newborn');
+    fixture.detectChanges();
+    const nb = el.querySelector('[data-testid="newborn-assessment-notes"]')?.textContent ?? '';
+    expect(nb).toContain('Rose, tonique');
+    expect(nb).toContain('Fontanelle normale');
+    expect(nb).toContain('Revoir à J3');
   });
 });

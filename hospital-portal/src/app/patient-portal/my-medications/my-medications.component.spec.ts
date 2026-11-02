@@ -19,6 +19,7 @@ describe('MyMedicationsComponent', () => {
     getMyPrescriptions: () => of([]),
     getMyRefills: () => of([]),
     requestRefill: () => of({}),
+    getMyPrintedPrescription: (_id: string) => of(new Blob(['%PDF-1.4'])),
   };
 
   const mockToast = {
@@ -64,6 +65,23 @@ describe('MyMedicationsComponent', () => {
     ]);
     expect(groups[0].meds.map((m) => m.id)).toEqual(['a']);
     expect(groups[1].meds.map((m) => m.id)).toEqual(['c', 'd']);
+  });
+
+  it('QA D966: a prescription printed for the patient offers its copy, which opens', () => {
+    component.prescriptions.set([
+      { id: 'rx-p', medicationName: 'Métronidazole', status: 'PRINTED_FOR_PATIENT' } as never,
+      { id: 'rx-s', medicationName: 'Fer', status: 'SIGNED' } as never,
+    ]);
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    expect(el.querySelector('[data-testid="rx-printed-copy-rx-s"]')).toBeNull();
+    const fetch = spyOn(mockPortalService, 'getMyPrintedPrescription').and.callThrough();
+    const open = spyOn(window, 'open');
+
+    (el.querySelector('[data-testid="rx-printed-copy-rx-p"]') as HTMLButtonElement).click();
+
+    expect(fetch).toHaveBeenCalledWith('rx-p');
+    expect(open).toHaveBeenCalled();
   });
 
   it('should toggle medication expand', () => {
@@ -231,6 +249,7 @@ describe('MyMedicationsComponent — refill visibility', () => {
     await render(med());
     requestRefill.and.returnValue(
       throwError(() => ({
+        status: 409,
         error: { message: 'You already have a refill request awaiting review' },
       })),
     );

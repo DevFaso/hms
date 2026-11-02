@@ -1,3 +1,5 @@
+import { refusalReason } from '../../shared/refusal-reason';
+import { DialogFocusDirective } from '../../shared/a11y/dialog-focus.directive';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -21,7 +23,7 @@ import { ToastService } from '../../core/toast.service';
 @Component({
   selector: 'app-close-unseen-dialog',
   standalone: true,
-  imports: [FormsModule, TranslateModule],
+  imports: [DialogFocusDirective, FormsModule, TranslateModule],
   templateUrl: './close-unseen-dialog.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: [
@@ -69,7 +71,7 @@ export class CloseUnseenDialogComponent implements OnInit {
         error: (err) => {
           this.saving.set(false);
           this.error.set(
-            err?.error?.message ?? this.translate.instant('RECEPTION.CLOSE_UNSEEN_FAILED'),
+            refusalReason(err) ?? this.translate.instant('RECEPTION.CLOSE_UNSEEN_FAILED'),
           );
         },
       });

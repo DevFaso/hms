@@ -47,6 +47,8 @@ public class TreatmentPlanMapper {
 
         return TreatmentPlanResponseDTO.builder()
             .id(plan.getId())
+            .authorUserId(plan.getAuthor() != null && plan.getAuthor().getUser() != null
+                ? plan.getAuthor().getUser().getId() : null)
             .patientId(patient != null ? patient.getId() : null)
             .patientName(patient != null ? patient.getFullName() : null)
             .hospitalId(hospital != null ? hospital.getId() : null)

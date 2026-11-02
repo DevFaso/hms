@@ -21,6 +21,9 @@ public interface EncounterNoteRepository extends JpaRepository<EncounterNote, UU
     /** QA D831: every entry of the encounter, oldest first. */
     List<EncounterNote> findByEncounter_IdOrderByCreatedAtAscIdAsc(UUID encounterId);
 
+    /** Whether the user wrote a note entry on the visit (TreatingClinician). */
+    boolean existsByEncounter_IdAndAuthor_Id(UUID encounterId, UUID authorUserId);
+
     boolean existsByEncounter_Id(UUID encounterId);
 
     /**

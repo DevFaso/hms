@@ -88,7 +88,15 @@
         <tbody>
           @for (def of filtered(); track def.id) {
             <tr class="data-row">
-              <td class="order-code">{{ def.testCode }}</td>
+              <td class="order-code">
+                {{ def.testCode }}
+                @if ((def.versionNumber ?? 1) > 1) {
+                  <!-- QA D1120: a new version, which replaces the active one on activation -->
+                  <span class="code-badge" data-testid="approval-def-version">{{
+                    'LAB_TEST_CONFIG.VERSION_LABEL' | translate: { version: def.versionNumber }
+                  }}</span>
+                }
+              </td>
               <td>
                 <div class="cell-primary">{{ def.testName }}</div>
                 @if (def.description) {
@@ -112,6 +120,7 @@
                   <button
                     class="btn-action btn-view"
                     [title]="'LAB_APPROVAL.ACTION.VIEW_TITLE' | translate"
+                    [attr.aria-label]="'LAB_APPROVAL.ACTION.VIEW_TITLE' | translate"
                     (click)="viewDefinition(def)"
                   >
                     <span class="material-symbols-outlined">visibility</span>
@@ -244,14 +253,23 @@
 <!-- ══ Definition Detail Panel ════════════════════════════════════════ -->
 @if (selectedDefinition(); as def) {
   <div class="detail-overlay" tabindex="-1" (keydown.escape)="closeDetail()">
-    <div class="detail-panel">
+    <div
+      class="detail-panel"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="lab-approval-dialog-title-1"
+      appModalDialog
+      (escaped)="closeDetail()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
       <div class="panel-header">
-        <h2>
+        <h2 id="lab-approval-dialog-title-1">
           {{ def.testName }} <span class="code-badge">{{ def.testCode }}</span>
         </h2>
         <button
           class="close-btn"
           [title]="'LAB_APPROVAL.ACTION.CLOSE_TITLE' | translate"
+          [attr.aria-label]="'LAB_APPROVAL.ACTION.CLOSE_TITLE' | translate"
           (click)="closeDetail()"
         >
           <span class="material-symbols-outlined">close</span>
@@ -273,7 +291,8 @@
           </div>
           <div class="detail-field">
             <span class="field-label">{{ 'LAB_APPROVAL.FIELD.APPROVAL_STATUS' | translate }}</span>
-            <span class="status-badge" [class]="getApprovalStatusClass(def.approvalStatus)">
+            {{ ' '
+            }}<span class="status-badge" [class]="getApprovalStatusClass(def.approvalStatus)">
               {{ 'LAB.APPROVAL_STATUS.' + def.approvalStatus | translate }}
             </span>
           </div>
@@ -318,7 +337,8 @@
                   <span class="study-type">{{
                     study.studyType | enumLabel: 'validationStudyType'
                   }}</span>
-                  <span class="status-badge" [class]="studyPassedClass(study.passed)">
+                  {{ ' '
+                  }}<span class="status-badge" [class]="studyPassedClass(study.passed)">
                     {{
                       (study.passed ? 'LAB_APPROVAL.STUDIES.PASSED' : 'LAB_APPROVAL.STUDIES.FAILED')
                         | translate
@@ -327,6 +347,7 @@
                   <button
                     class="btn-icon delete-btn"
                     [title]="'LAB_APPROVAL.STUDIES.DELETE_TITLE' | translate"
+                    [attr.aria-label]="'LAB_APPROVAL.STUDIES.DELETE_TITLE' | translate"
                     (click)="deleteStudy(study)"
                   >
                     <span class="material-symbols-outlined">delete</span>
@@ -336,7 +357,9 @@
                   <div class="study-meta">
                     <span
                       ><strong>{{ 'LAB_APPROVAL.STUDIES.DATE_LABEL' | translate }}</strong>
-                      {{ study.studyDate }}</span
+                      {{
+                        study.studyDate ? (study.studyDate | serverTime | date: 'mediumDate') : '—'
+                      }}</span
                     >
                     @if (study.performedByDisplay) {
                       <span
@@ -591,13 +614,22 @@
   >
     <div
       class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="lab-approval-dialog-title-2"
+      appModalDialog
+      (escaped)="closeStudyModal()"
+      (keydown.escape)="$event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ 'LAB_APPROVAL.STUDY_FORM.TITLE' | translate }}</h2>
-        <button class="modal-close" (click)="closeStudyModal()">
+        <h2 id="lab-approval-dialog-title-2">{{ 'LAB_APPROVAL.STUDY_FORM.TITLE' | translate }}</h2>
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="modal-close"
+          (click)="closeStudyModal()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
@@ -689,7 +721,9 @@
         </button>
         <button
           class="btn-primary"
-          [disabled]="savingStudy() || !studyForm.studyType || !studyForm.studyDate"
+          [disabled]="savingStudy()"
+          [appSubmitGuard]="!studyForm.studyType || !studyForm.studyDate"
+          [submitGuardFields]="['study-type', 'study-date']"
           (click)="saveStudy()"
         >
           @if (savingStudy()) {
@@ -712,12 +746,17 @@
   >
     <div
       class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="lab-approval-dialog-title-3"
+      appModalDialog
+      (escaped)="closeApprovalModal()"
+      (keydown.escape)="$event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>
+        <h2 id="lab-approval-dialog-title-3">
           @switch (approvalAction()) {
             @case ('SUBMIT_FOR_QA') {
               {{ 'LAB_APPROVAL.CONFIRM.TITLE_SUBMIT' | translate }}
@@ -739,7 +778,11 @@
             }
           }
         </h2>
-        <button class="modal-close" (click)="closeApprovalModal()">
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="modal-close"
+          (click)="closeApprovalModal()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
@@ -775,9 +818,9 @@
         </button>
         <button
           class="btn-primary"
-          [disabled]="
-            processingApproval() || (approvalAction() === 'REJECT' && !approvalRejectionReason())
-          "
+          [disabled]="processingApproval()"
+          [appSubmitGuard]="approvalAction() === 'REJECT' && !approvalRejectionReason()"
+          [submitGuardFields]="['rejection-reason']"
           (click)="submitApprovalAction()"
         >
           @if (processingApproval()) {

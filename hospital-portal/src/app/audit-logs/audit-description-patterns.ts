@@ -629,6 +629,16 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     re: /^Patient linked to hospital '(.*)'$/,
     params: ['hospital'],
   },
+  // QA D926: the desk's demographics corrections (PATCH names the fields, PUT replaces all).
+  {
+    key: 'AUDIT.DESC.PATIENT_DEMOGRAPHICS_UPDATED',
+    re: /^Patient demographics updated: (.+)$/,
+    params: ['fields'],
+  },
+  {
+    key: 'AUDIT.DESC.PATIENT_DEMOGRAPHICS_REPLACED',
+    re: /^Patient demographics replaced$/,
+  },
   {
     key: 'AUDIT.DESC.PATIENT_ADDRESS_CHANGED',
     re: /^Patient address changed — previous address kept as history row (\S+)$/,
@@ -917,6 +927,36 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     params: ['id'],
   },
   {
+    key: 'AUDIT.DESC.CDS_OVERRIDE_CREATED',
+    re: /^Critical decision-support alert overridden at creation$/,
+  },
+  {
+    key: 'AUDIT.DESC.CDS_OVERRIDE_EDITED',
+    re: /^Critical decision-support alert overridden on edit$/,
+  },
+  {
+    key: 'AUDIT.DESC.DOSE_LIMITS_APPROVED',
+    re: /^Paediatric dose limits approved on catalog item '(.*)'$/,
+    params: ['item'],
+  },
+  {
+    key: 'AUDIT.DESC.DOSE_LIMITS_DEFAULT',
+    re: /^Paediatric dose limits set as a default pending approval on catalog item '(.*)'$/,
+    params: ['item'],
+  },
+  {
+    key: 'AUDIT.DESC.RX_SIGN_REAUTH_VERIFIED',
+    re: /^Re-authentication to sign a controlled-drug prescription verified by (\S+)$/,
+    params: ['method'],
+    localise: { method: 'phrase:RX_SIGN_REAUTH' },
+  },
+  {
+    key: 'AUDIT.DESC.RX_SIGN_REAUTH_REFUSED',
+    re: /^Re-authentication to sign a controlled-drug prescription refused \((\S+)\)$/,
+    params: ['reason'],
+    localise: { reason: 'phrase:RX_SIGN_REAUTH' },
+  },
+  {
     key: 'AUDIT.DESC.ALLERGY_OVERRIDE',
     re: /^Allergy override (recorded at creation|recorded on edit|reason replaced on edit|cleared: the edited order no longer conflicts)$/,
     params: ['what'],
@@ -936,6 +976,14 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     key: 'AUDIT.DESC.RX_PRINTED',
     re: /^Prescription (\S+) printed for patient$/,
     params: ['rx'],
+  },
+  {
+    key: 'AUDIT.DESC.RX_SIGNED_WITHDRAWN_BY_PRESCRIBER',
+    re: /^Signed prescription withdrawn by its prescriber$/,
+  },
+  {
+    key: 'AUDIT.DESC.RX_SIGNED_WITHDRAWN_BY_COLLEAGUE',
+    re: /^Signed prescription withdrawn by another prescriber of the hospital$/,
   },
   {
     key: 'AUDIT.DESC.RX_ROUTED_PARTNER',
@@ -1191,10 +1239,41 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     localise: { why: 'enum' },
   },
   {
+    // QA D1100: an inpatient's bed freed, with its reason in the details.
+    key: 'AUDIT.DESC.ADMISSION_BED_RELEASED',
+    re: /^Bed (.+) released from admission (\S+)$/,
+    params: ['bed', 'admission'],
+  },
+  {
+    // QA D1096: the paediatric dose review an order needed before signing.
+    key: 'AUDIT.DESC.PRESCRIPTION_PEDIATRIC_DOSE_REVIEWED',
+    re: /^Paediatric dose review recorded$/,
+  },
+  {
     key: 'AUDIT.DESC.PAYMENT_EVENT',
     re: /^(Payment recorded|Payment reversed|Pending payment confirmed|Pending payment rejected|Check-in copay recorded): payment (\S+) on invoice (\S+)$/,
     params: ['what', 'payment', 'invoice'],
     localise: { what: 'phrase:PAYMENT_EVENT' },
+  },
+  {
+    // QA D974: a discount, waiver or credit note on an invoice.
+    key: 'AUDIT.DESC.INVOICE_ADJUSTMENT',
+    re: /^Invoice adjustment ([A-Z_]+) on invoice (\S+)$/,
+    params: ['kind', 'invoice'],
+    localise: { kind: 'phrase:INVOICE_ADJUSTMENT' },
+  },
+  {
+    // QA D1105: a discount, waiver or credit note undone; the reason is kept on the row, not in the audit text.
+    key: 'AUDIT.DESC.INVOICE_ADJUSTMENT_REVERSED',
+    re: /^Invoice adjustment ([A-Z_]+) (\S+) reversed with a recorded reason on invoice (\S+)$/,
+    params: ['kind', 'adjustment', 'invoice'],
+    localise: { kind: 'phrase:INVOICE_ADJUSTMENT' },
+  },
+  {
+    // QA D1069: an issued invoice cancelled; the reason is kept on the invoice, not in the audit text.
+    key: 'AUDIT.DESC.INVOICE_CANCELLED',
+    re: /^Invoice cancelled with a recorded reason: invoice (\S+)$/,
+    params: ['invoice'],
   },
   {
     key: 'AUDIT.DESC.STATUS_WAS',

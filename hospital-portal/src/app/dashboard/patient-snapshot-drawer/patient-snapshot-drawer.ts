@@ -1,14 +1,24 @@
+import { LabValuePipe } from '../../shared/pipes/lab-value.pipe';
 import { ChangeDetectionStrategy, Component, input, output, signal } from '@angular/core';
 
 import { RouterLink } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
+import { LabCorrectionBadgeComponent } from '../../lab/shared/lab-correction-badge.component';
 import { PatientSnapshot } from '../../services/dashboard.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
+import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
 
 @Component({
   selector: 'app-patient-snapshot-drawer',
   standalone: true,
-  imports: [RouterLink, TranslateModule, EnumLabelPipe],
+  imports: [
+    LabValuePipe,
+    LabCorrectionBadgeComponent,
+    RouterLink,
+    TranslateModule,
+    EnumLabelPipe,
+    ModalDialogDirective,
+  ],
   templateUrl: './patient-snapshot-drawer.html',
   styleUrl: './patient-snapshot-drawer.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

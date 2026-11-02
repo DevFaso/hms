@@ -17,6 +17,8 @@ import {
 import { ToastService } from '../core/toast.service';
 import { CfaPipe } from '../shared/pipes/cfa.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { ReasonDialogComponent } from '../shared/reason-dialog/reason-dialog.component';
+import { refusalReason } from '../shared/refusal-reason';
 
 interface StatusOption {
   value: PharmacyClaimStatus;
@@ -32,7 +34,15 @@ interface StatusOption {
 @Component({
   selector: 'app-pharmacy-claims',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule, DatePipe, CfaPipe],
+  imports: [
+    ReasonDialogComponent,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    DatePipe,
+    CfaPipe,
+  ],
   templateUrl: './pharmacy-claims.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './pharmacy-claims.scss',
@@ -89,7 +99,10 @@ export class PharmacyClaimsComponent implements OnInit {
         this.toast.success(this.translate.instant('PHARMACY.CLAIM_SUBMITTED'));
         this.load();
       },
-      error: () => this.toast.error(this.translate.instant('PHARMACY.CLAIM_SUBMIT_FAILED')),
+      error: (err: unknown) =>
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PHARMACY.CLAIM_SUBMIT_FAILED'),
+        ),
     });
   }
 
@@ -99,21 +112,37 @@ export class PharmacyClaimsComponent implements OnInit {
         this.toast.success(this.translate.instant('PHARMACY.CLAIM_ACCEPTED'));
         this.load();
       },
-      error: () => this.toast.error(this.translate.instant('PHARMACY.CLAIM_ACCEPT_FAILED')),
+      error: (err: unknown) =>
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PHARMACY.CLAIM_ACCEPT_FAILED'),
+        ),
     });
   }
 
+  /** QA D1201: the claim being rejected; the shared reason dialog asks why. */
+  rejecting = signal<PharmacyClaimResponse | null>(null);
+  rejectBusy = signal(false);
+
   reject(c: PharmacyClaimResponse): void {
-    const reason = window.prompt(this.translate.instant('PHARMACY.CLAIM_REJECT_REASON_PROMPT'));
-    if (!reason || !reason.trim()) {
-      return;
-    }
+    this.rejecting.set(c);
+  }
+
+  confirmReject(c: PharmacyClaimResponse, reason: string): void {
+    if (this.rejectBusy()) return;
+    this.rejectBusy.set(true);
     this.pharmacy.rejectClaim(c.id, reason).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('PHARMACY.CLAIM_REJECTED'));
+        this.rejectBusy.set(false);
+        this.rejecting.set(null);
         this.load();
       },
-      error: () => this.toast.error(this.translate.instant('PHARMACY.CLAIM_REJECT_FAILED')),
+      error: (err: unknown) => {
+        this.rejectBusy.set(false);
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PHARMACY.CLAIM_REJECT_FAILED'),
+        );
+      },
     });
   }
 
@@ -123,21 +152,28 @@ export class PharmacyClaimsComponent implements OnInit {
         this.toast.success(this.translate.instant('PHARMACY.PAYMENT_RECORDED'));
         this.load();
       },
-      error: () => this.toast.error(this.translate.instant('PHARMACY.CLAIM_PAY_FAILED')),
+      error: (err: unknown) =>
+        this.toast.error(refusalReason(err) ?? this.translate.instant('PHARMACY.CLAIM_PAY_FAILED')),
     });
   }
 
   exportCsv(): void {
     this.pharmacy.exportClaimsCsv(['SUBMITTED', 'ACCEPTED']).subscribe({
       next: (blob) => this.download(blob, 'pharmacy-claims.csv'),
-      error: () => this.toast.error(this.translate.instant('PHARMACY.CLAIM_EXPORT_CSV_FAILED')),
+      error: (err: unknown) =>
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PHARMACY.CLAIM_EXPORT_CSV_FAILED'),
+        ),
     });
   }
 
   exportFhir(): void {
     this.pharmacy.exportClaimsFhir(['SUBMITTED', 'ACCEPTED']).subscribe({
       next: (blob) => this.download(blob, 'pharmacy-claims.fhir.json'),
-      error: () => this.toast.error(this.translate.instant('PHARMACY.CLAIM_EXPORT_FHIR_FAILED')),
+      error: (err: unknown) =>
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PHARMACY.CLAIM_EXPORT_FHIR_FAILED'),
+        ),
     });
   }
 

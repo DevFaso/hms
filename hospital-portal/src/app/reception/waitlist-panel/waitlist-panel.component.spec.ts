@@ -1,4 +1,4 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { WaitlistPanelComponent } from './waitlist-panel.component';
 import { SUBLINE_AWA, SUBLINE_FATIMATA } from '../../testing/patient-subline.fixtures';
 import { TranslateModule } from '@ngx-translate/core';
@@ -172,7 +172,10 @@ describe('WaitlistPanelComponent', () => {
 
     it('surfaces the backend refusal verbatim when the offer fails', () => {
       mockReceptionService.offerWaitlistSlot.and.returnValue(
-        throwError(() => ({ error: { message: 'That slot is no longer available.' } })),
+        throwError(() => ({
+          status: 400,
+          error: { message: 'That slot is no longer available.' },
+        })),
       );
       component.openOfferModal(entry());
       component.selectedSlotId.set('slot-1');
@@ -215,5 +218,120 @@ describe('WaitlistPanelComponent', () => {
       expect(component.offerExpired(entry({ offerExpiresAt: '2999-01-01T00:00:00' }))).toBe(false);
       expect(component.offerExpired(entry())).toBe(false);
     });
+  });
+
+  it('QA D1157: "Fermer" asks for a reason in a dialog before closing the entry', fakeAsync(() => {
+    mockReceptionService.getWaitlist.and.returnValue(of([entry({ id: 'w9', status: 'WAITING' })]));
+    component.loadEntries();
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    document.body.appendChild(host);
+    try {
+      const opener = Array.from(host.querySelectorAll<HTMLButtonElement>('td button')).find((b) =>
+        b.textContent?.includes('COMMON.CLOSE'),
+      )!;
+      opener.focus();
+      opener.click();
+      fixture.detectChanges();
+      tick();
+      expect(mockReceptionService.closeWaitlistEntry).not.toHaveBeenCalled();
+      const dialog = host.querySelector<HTMLElement>('[data-testid="reason-dialog"]')!;
+      expect(dialog.contains(document.activeElement)).toBeTrue();
+
+      host.querySelector<HTMLButtonElement>('[data-testid="reason-dialog-confirm"]')!.click();
+      fixture.detectChanges();
+      expect(mockReceptionService.closeWaitlistEntry).not.toHaveBeenCalled();
+
+      const reason = host.querySelector<HTMLTextAreaElement>(
+        '[data-testid="reason-dialog-reason"]',
+      )!;
+      reason.value = 'Patient vu en urgence';
+      reason.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      host.querySelector<HTMLButtonElement>('[data-testid="reason-dialog-confirm"]')!.click();
+      fixture.detectChanges();
+      tick();
+      expect(mockReceptionService.closeWaitlistEntry).toHaveBeenCalledWith(
+        'w9',
+        'Patient vu en urgence',
+      );
+      expect(host.querySelector('[data-testid="reason-dialog"]')).toBeNull();
+      expect(document.activeElement?.classList.contains('filter-btn')).toBeTrue();
+    } finally {
+      host.remove();
+    }
+  }));
+
+  /**
+   * QA D1215 (round 23): an entry "from 20/11 to 10/11" was saved (201) and
+   * could never be offered a slot. Each end of the range bounds the other in
+   * the picker, and a typed reversed range is refused on the end field.
+   */
+  it('QA D1215: the range ends bound each other and a reversed range is refused on the field', () => {
+    // The window is in the future of the pinned day (the past-end rule below).
+    jasmine.clock().install();
+    jasmine.clock().mockDate(new Date(2026, 10, 1, 9, 0));
+    component.openAddForm();
+    component.selectPatient({ id: 'p1', firstName: 'Hamed', lastName: 'Tiendrebeogo' } as any);
+    component.selectedDeptId.set('d1');
+    component.dateFrom.set('2026-11-20');
+    component.dateTo.set('2026-11-10');
+    fixture.detectChanges();
+    const host: HTMLElement = fixture.nativeElement;
+    const from = host.querySelector<HTMLInputElement>('#wl-from')!;
+    const to = host.querySelector<HTMLInputElement>('#wl-to')!;
+    expect(from.getAttribute('max')).toBe('2026-11-10');
+    expect(to.getAttribute('min')).toBe('2026-11-20');
+
+    component.submitAdd();
+    fixture.detectChanges();
+
+    expect(mockReceptionService.addToWaitlist).not.toHaveBeenCalled();
+    expect(mockToastService.error).toHaveBeenCalledWith('DATE_RULES.END_BEFORE_START');
+    expect(to.getAttribute('aria-invalid')).toBe('true');
+    expect(host.querySelector('#wl-to-invalid-msg')?.textContent).toBe(
+      'DATE_RULES.END_BEFORE_START',
+    );
+    expect(document.activeElement).toBe(to);
+
+    // A one-day window (start = end) is a valid range.
+    component.dateTo.set('2026-11-20');
+    component.submitAdd();
+    fixture.detectChanges();
+    expect(mockReceptionService.addToWaitlist).toHaveBeenCalledTimes(1);
+    jasmine.clock().uninstall();
+  });
+
+  /**
+   * QA D1215 (round 23, portal half of #1011): the server now also refuses a
+   * window that ends before today (`waitlist.dateRange.past`). The end picker
+   * starts at today, and a typed past end is refused on the field before any
+   * request is sent.
+   */
+  it('QA D1215: a window that already ended is refused on the end field, before the server refuses it', () => {
+    jasmine.clock().install();
+    try {
+      jasmine.clock().mockDate(new Date(2026, 10, 1, 9, 0));
+      component.openAddForm();
+      component.selectPatient({ id: 'p1', firstName: 'Hamed', lastName: 'Tiendrebeogo' } as any);
+      component.selectedDeptId.set('d1');
+      fixture.detectChanges();
+      const host: HTMLElement = fixture.nativeElement;
+      const to = host.querySelector<HTMLInputElement>('#wl-to')!;
+      expect(to.getAttribute('min')).withContext('the end picker starts today').toBe('2026-11-01');
+
+      component.dateTo.set('2026-10-20');
+      component.submitAdd();
+      fixture.detectChanges();
+      expect(mockReceptionService.addToWaitlist).not.toHaveBeenCalled();
+      expect(mockToastService.error).toHaveBeenCalledWith('DATE_RULES.NOT_IN_PAST');
+      expect(to.getAttribute('aria-invalid')).toBe('true');
+
+      component.dateTo.set('2026-11-01');
+      component.submitAdd();
+      expect(mockReceptionService.addToWaitlist).toHaveBeenCalledTimes(1);
+    } finally {
+      jasmine.clock().uninstall();
+    }
   });
 });

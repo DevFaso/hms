@@ -11,7 +11,7 @@ import {
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
-import { Subject, Subscription, debounceTime, distinctUntilChanged, of, switchMap } from 'rxjs';
+import { Subject, Subscription, debounceTime, of, switchMap } from 'rxjs';
 
 import {
   AcuityLevel,
@@ -28,6 +28,7 @@ import { ToastService } from '../../core/toast.service';
 import { EnumLabelService } from '../../core/enum-label.service';
 import { bareRole } from '../../core/role-token';
 import { refusalReason } from '../../shared/refusal-reason';
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 
 interface HospitalOption {
   id: string;
@@ -118,7 +119,7 @@ const EMPTY_FORM: IntakeFormState = {
 @Component({
   selector: 'app-adt-intake-config',
   standalone: true,
-  imports: [FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [FormsModule, TranslateModule, EnumLabelPipe, SubmitGuardDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="adt-intake" data-testid="adt-intake-admin">
@@ -447,6 +448,8 @@ const EMPTY_FORM: IntakeFormState = {
             type="submit"
             class="btn-primary"
             [disabled]="saving()"
+            appSubmitGuard
+            submitGuardRequired
             data-testid="adt-intake-save"
           >
             {{ saving() ? ('ADT_INTAKE.SAVING' | translate) : ('ADT_INTAKE.SAVE' | translate) }}
@@ -588,7 +591,6 @@ export class AdtIntakeConfigComponent implements OnInit, OnDestroy {
     this.hospitalSearchSub = this.hospitalSearchSubject
       .pipe(
         debounceTime(300),
-        distinctUntilChanged(),
         switchMap((term) => {
           // Below-threshold queries must clear stale suggestions
           // (user deletes back to 1 char and the prior list would

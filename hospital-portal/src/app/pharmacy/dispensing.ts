@@ -1,12 +1,15 @@
+import { refusalReason } from '../shared/refusal-reason';
 import {
   Component,
   computed,
   inject,
+  ElementRef,
   OnDestroy,
   OnInit,
   signal,
   ChangeDetectionStrategy,
 } from '@angular/core';
+import { refuseFields } from '../shared/forms/invalid-fields';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -29,12 +32,17 @@ import {
   StockWitnessCandidate,
 } from '../services/pharmacy.service';
 import { AuthService } from '../auth/auth.service';
+import { PrintLabelService } from '../services/print-label.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { OfflineDispenseQueueService } from './offline-dispense-queue.service';
 import { PrescriptionClarificationComponent } from '../shared/prescription-clarification/prescription-clarification.component';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
 import { serverInstant } from '../shared/date-utils';
+import { DialogFocusDirective } from '../shared/a11y/dialog-focus.directive';
+import { earlierLotWithStock, fefoAllocation, FefoPart, fefoFirstLot } from './fefo-lots';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 /** The viewer's local calendar date as YYYY-MM-DD (not the UTC one). */
 function localIsoDate(d: Date): string {
   const mm = String(d.getMonth() + 1).padStart(2, '0');
@@ -124,16 +132,44 @@ export const UNRECOGNISED_ATTENTION = {
   labelKey: 'PHARMACY.ATTENTION.UNRECOGNISED',
 };
 
+/** A unit read for comparison: case, accents and a plural "s" do not matter. */
+function unitKey(unit: string | null | undefined): string {
+  return (unit ?? '')
+    .normalize('NFD')
+    .replaceAll(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+    .replace(/s$/, '');
+}
+
+/**
+ * QA D1163: whether a lot can fill an order written in `orderUnit`. An infant
+ * "1 flacon" order was filled from a tablet lot. Either side unknown (an old
+ * order, a server that does not send the lot's unit) leaves the lot offered:
+ * the server's check is the control.
+ */
+export function sameDispenseUnit(
+  lotUnit: string | null | undefined,
+  orderUnit: string | null | undefined,
+): boolean {
+  const lot = unitKey(lotUnit);
+  const order = unitKey(orderUnit);
+  return lot === '' || order === '' || lot === order;
+}
+
 @Component({
   selector: 'app-dispensing',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
     ServerTimePipe,
+    PersonNamePipe,
     CommonModule,
     FormsModule,
     TranslateModule,
     EnumLabelPipe,
     PrescriptionClarificationComponent,
+    DialogFocusDirective,
   ],
   templateUrl: './dispensing.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -141,11 +177,14 @@ export const UNRECOGNISED_ATTENTION = {
 })
 export class DispensingComponent implements OnInit, OnDestroy {
   private readonly svc = inject(PharmacyService);
+  /** QA D966: opens a fetched PDF for printing. */
+  private readonly printService = inject(PrintLabelService);
   private readonly auth = inject(AuthService);
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
   private readonly offlineQueue = inject(OfflineDispenseQueueService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   // Work queue
   workQueue = signal<WorkQueuePrescription[]>([]);
@@ -179,14 +218,25 @@ export class DispensingComponent implements OnInit, OnDestroy {
   /** QA D654: colleagues who may witness a controlled substance leaving or coming back. */
   witnessCandidates = signal<StockWitnessCandidate[]>([]);
   /** QA D654: the controlled fill whose cancel waits for its witness. */
+  /** QA D654 / D1069: the fill whose cancel panel is open (reason always, witness for a controlled one). */
   readonly cancelWitnessFor = signal<string | null>(null);
+  readonly cancelNeedsWitness = signal(false);
   cancelWitnessId: string | undefined = undefined;
+  /** QA D1069: why the fill is cancelled; it voids the payment and returns the stock. */
+  dispenseCancelReason = '';
 
   // Dispensing form
   showForm = signal(false);
   saving = signal(false);
   selectedPrescription: WorkQueuePrescription | null = null;
   form: DispenseRequest = this.emptyForm();
+  /**
+   * QA D1102 class: the serious interaction alerts the server refused the
+   * last fill with. While set, the form shows them and asks for the
+   * pharmacist's override reason; the screen had no such field, so the fill
+   * could never go through.
+   */
+  readonly cdsAlerts = signal<string[]>([]);
 
   // Recent dispenses
   recentDispenses = signal<DispenseResponse[]>([]);
@@ -494,7 +544,7 @@ export class DispensingComponent implements OnInit, OnDestroy {
 
   /** A claim call was refused: say why and show the queue as it now is. */
   private claimRefused(err: { status?: number; error?: { message?: string } }): void {
-    this.toast.error(err?.error?.message ?? this.translate.instant('PHARMACY.QUEUE_CLAIM.FAILED'));
+    this.toast.error(refusalReason(err) ?? this.translate.instant('PHARMACY.QUEUE_CLAIM.FAILED'));
     this.loadWorkQueue(true);
   }
 
@@ -570,7 +620,9 @@ export class DispensingComponent implements OnInit, OnDestroy {
     this.svc.listDispensableLots(rxId, this.selectedPharmacyId).subscribe({
       next: (res) => {
         // A late answer for a prescription that is no longer open is dropped.
-        if (this.selectedPrescription?.id === rxId) this.stockLots.set(res?.data ?? []);
+        if (this.selectedPrescription?.id !== rxId) return;
+        this.stockLots.set(res?.data ?? []);
+        this.preselectFefoLot();
       },
       error: () => this.stockLots.set([]),
     });
@@ -585,8 +637,71 @@ export class DispensingComponent implements OnInit, OnDestroy {
   readonly dispensableLots = computed(() =>
     this.stockLots()
       .filter((lot) => lot.remainingQuantity > 0 && !this.isExpired(lot))
+      .filter((lot) => sameDispenseUnit(lot.unit, this.orderUnit()))
       .sort((a, b) => a.expiryDate.localeCompare(b.expiryDate)),
   );
+
+  /** QA D1163: the unit the open order was written in ("flacon", "comprimé"). */
+  readonly orderUnit = signal<string | null>(null);
+
+  /** QA D1163: lots of the drug in another form than the order, kept off the list. */
+  readonly otherFormLots = computed(
+    () =>
+      this.stockLots().filter(
+        (lot) => lot.remainingQuantity > 0 && !sameDispenseUnit(lot.unit, this.orderUnit()),
+      ).length,
+  );
+
+  /**
+   * QA D964 / D1029: first expired, first out. The shortest-dated usable lot,
+   * whatever the quantity (a larger fill is split: {@link fefoSplit});
+   * pre-selected when the lots arrive, unless the pharmacist already chose.
+   */
+  fefoLot(): StockLotResponse | undefined {
+    return fefoFirstLot(this.dispensableLots());
+  }
+
+  /**
+   * QA D1029: the fill split across lots in expiry order, when the chosen lot
+   * is the shortest-dated one and holds less than the quantity: the first lot
+   * is emptied and the rest comes from the next. Empty when one lot covers it
+   * (or the lots together cannot, which the server refuses as before). A
+   * method, not a computed: it reads the quantity typed in the form.
+   */
+  fefoSplit(): FefoPart<StockLotResponse>[] {
+    const chosen = this.selectedLot();
+    const qty = Number(this.form.quantityDispensed) || 0;
+    if (!chosen || chosen.id !== this.fefoLot()?.id || qty <= chosen.remainingQuantity) return [];
+    // An order with no stated quantity (or 0) counts one complete fill as the whole
+    // order (the server's rule), so a first part would close it and refuse
+    // the rest: such a fill is not split (the shortest lot, or a reason).
+    if (!((this.selectedPrescription?.quantity ?? 0) > 0)) return [];
+    const parts = fefoAllocation(this.dispensableLots(), qty);
+    return parts.length > 1 ? parts : [];
+  }
+
+  private preselectFefoLot(): void {
+    const lot = this.fefoLot();
+    if (lot && !this.form.stockLotId) {
+      this.form.stockLotId = lot.id;
+      this.onLotChange();
+    }
+  }
+
+  /**
+   * QA D964 / D1029: a shorter-dated lot of the same item that still holds
+   * stock (the server's FefoLotPolicy rule). While it exists, taking the
+   * chosen lot needs a reason, whether or not the earlier lot could cover the
+   * whole fill.
+   */
+  earlierLot(): StockLotResponse | undefined {
+    return earlierLotWithStock(this.dispensableLots(), this.selectedLot());
+  }
+
+  /** QA D964: a FEFO skip with no reason keeps Dispense and Ready disabled. */
+  fefoReasonMissing(): boolean {
+    return !!this.earlierLot() && !this.form.fefoOverrideReason?.trim();
+  }
 
   isExpired(lot: StockLotResponse): boolean {
     if (!lot?.expiryDate) return false;
@@ -628,7 +743,15 @@ export class DispensingComponent implements OnInit, OnDestroy {
   printLotLabel(): void {
     const lotId = this.form.stockLotId;
     if (!lotId) return;
-    window.open(`/pharmacy/stock-lots/${lotId}/label.pdf`, '_blank', 'noopener');
+    // QA D966: fetched with the session (the interceptors add /api and the
+    // token), then opened for printing; a refusal is said, not a blank tab.
+    this.svc.getStockLotLabel(lotId).subscribe({
+      next: (blob) => this.printService.openForPrint(blob),
+      error: (err: unknown) =>
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PHARMACY.PRINT_LABEL_FAILED'),
+        ),
+    });
   }
 
   onPharmacyChange(): void {
@@ -721,9 +844,7 @@ export class DispensingComponent implements OnInit, OnDestroy {
       return;
     }
     const refused = () =>
-      this.toast.error(
-        err?.error?.message ?? this.translate.instant('PHARMACY.QUEUE_CLAIM.FAILED'),
-      );
+      this.toast.error(refusalReason(err) ?? this.translate.instant('PHARMACY.QUEUE_CLAIM.FAILED'));
     // The visible list refreshes with its own filter; the decision does not
     // read it, because MINE / UNCLAIMED omit exactly the row a colleague has
     // just claimed.
@@ -767,6 +888,39 @@ export class DispensingComponent implements OnInit, OnDestroy {
     });
   }
 
+  /** QA D1001: what is still owed on the order; the prescribed amount only when the server sent none. */
+  remainingQuantity(rx: WorkQueuePrescription): number {
+    return rx.remainingQuantity ?? rx.quantity ?? 0;
+  }
+
+  /** QA D1001: true when part of the order was already dispensed, so the queue shows both figures. */
+  isPartlyDispensed(rx: WorkQueuePrescription): boolean {
+    return (
+      rx.remainingQuantity != null && rx.quantity != null && rx.remainingQuantity < rx.quantity
+    );
+  }
+
+  /**
+   * QA D1124 / D1089: why "Dispenser" (or, with `ready`, "Prêt") refuses,
+   * shown next to the button; null when the fill may be sent. The buttons
+   * are never silently disabled.
+   */
+  dispenseBlockReason(ready: boolean): string | null {
+    if (!(Number(this.form.quantityDispensed) > 0)) {
+      return this.translate.instant('SUBMIT_GUARD.QUANTITY');
+    }
+    if (!this.form.unit?.trim()) {
+      return this.translate.instant('SUBMIT_GUARD.UNIT');
+    }
+    if (!this.verifyAttested()) {
+      return this.translate.instant('SUBMIT_GUARD.ATTESTATION');
+    }
+    if (ready && this.fefoSplit().length > 1) {
+      return this.translate.instant('SUBMIT_GUARD.READY_SPLIT');
+    }
+    return null;
+  }
+
   private openForm(rx: WorkQueuePrescription): void {
     this.selectedPrescription = rx;
     this.form = this.emptyForm();
@@ -774,12 +928,18 @@ export class DispensingComponent implements OnInit, OnDestroy {
     this.form.patientId = rx.patient?.id ?? '';
     this.form.pharmacyId = this.selectedPharmacyId;
     this.form.medicationName = rx.medicationName ?? '';
-    this.form.quantityRequested = rx.quantity ?? 0;
-    // QA D432: the fill starts at what was prescribed, not at 0 (which kept
-    // Dispense disabled until the pharmacist retyped the quantity).
-    this.form.quantityDispensed = rx.quantity ?? 0;
+    // QA D1141: the unit the order was written in (fills were saved without one).
+    this.form.unit = rx.quantityUnit ?? '';
+    this.orderUnit.set(rx.quantityUnit ?? null);
+    // QA D432 then D1001: the fill starts at what is still owed on the order
+    // (the server's ceiling), not at 0 and not at the full prescribed amount,
+    // which a partly filled order refuses ("il reste au plus 10").
+    const owed = this.remainingQuantity(rx);
+    this.form.quantityRequested = owed;
+    this.form.quantityDispensed = owed;
     this.form.dispensedBy = this.auth.currentProfile()?.id ?? '';
     this.verifyAttested.set(false);
+    this.cdsAlerts.set([]);
     this.showForm.set(true);
     this.loadStockLots();
   }
@@ -798,12 +958,41 @@ export class DispensingComponent implements OnInit, OnDestroy {
     if (this.verifyAttested()) {
       body.verifiedBy = this.form.dispensedBy;
     }
+    // QA D1102 class: the interaction override travels once the server asked for it.
+    if (this.cdsAlerts().length > 0) {
+      body.cdsOverrideReason = this.form.cdsOverrideReason?.trim();
+    } else {
+      delete body.cdsOverrideReason;
+    }
+    // QA D964: the reason travels only when a shorter-dated lot was skipped.
+    if (this.earlierLot()) {
+      body.fefoOverrideReason = this.form.fefoOverrideReason?.trim();
+    } else {
+      delete body.fefoOverrideReason;
+    }
     return body;
   }
 
   /** QA D654: refuses a controlled fill with no witness before the server does. */
   private missingWitness(): boolean {
+    // QA D1089 class (round 19): the FEFO reason is asked for where it is
+    // typed; a dead "Délivrer" button used to hide the message.
+    if (this.fefoReasonMissing()) {
+      refuseFields(
+        this.host.nativeElement,
+        ['fefoReason'],
+        ['fefoReason'],
+        this.translate.instant('PHARMACY.FEFO_REASON_REQUIRED'),
+      );
+      return true;
+    }
     if (this.lotIsControlled() && !this.form.witnessedBy) {
+      refuseFields(
+        this.host.nativeElement,
+        ['dispWitness'],
+        ['dispWitness'],
+        this.translate.instant('PHARMACY.WITNESS_REQUIRED'),
+      );
       this.toast.error(this.translate.instant('PHARMACY.WITNESS_REQUIRED'));
       return true;
     }
@@ -812,6 +1001,11 @@ export class DispensingComponent implements OnInit, OnDestroy {
 
   submitDispense(): void {
     if (this.missingWitness()) return;
+    const split = this.fefoSplit();
+    if (split.length > 1) {
+      this.submitSplitDispense(split);
+      return;
+    }
     this.saving.set(true);
     this.svc.createDispense(this.attestedForm()).subscribe({
       next: () => {
@@ -825,9 +1019,68 @@ export class DispensingComponent implements OnInit, OnDestroy {
       },
       error: (err) => {
         this.saving.set(false);
-        this.toast.error(err?.error?.message ?? this.translate.instant('PHARMACY.DISPENSE_FAILED'));
+        this.noteCdsAlerts(err);
+        this.toast.error(refusalReason(err) ?? this.translate.instant('PHARMACY.DISPENSE_FAILED'));
       },
     });
+  }
+
+  /** QA D1102 class: the alerts a refused fill came back with, kept for the override field. */
+  private noteCdsAlerts(err: unknown): void {
+    const cards = (err as { error?: { cdsAdvisories?: { summary?: string }[] } } | null)?.error
+      ?.cdsAdvisories;
+    if (Array.isArray(cards) && cards.length > 0) {
+      this.cdsAlerts.set(cards.map((c) => c.summary ?? '').filter((s) => s.length > 0));
+    }
+  }
+
+  /** The override reason is asked for and still empty: said before the server says it. */
+  cdsOverrideMissing(): boolean {
+    return this.cdsAlerts().length > 0 && !this.form.cdsOverrideReason?.trim();
+  }
+
+  /**
+   * QA D1029: one fill per lot, in expiry order, so the shorter-dated lot is
+   * emptied first. Sequential: the second fill is sent only once the first
+   * is recorded (the order is then partly filled, and the next fill is FEFO
+   * because the earlier lot is empty). If a later part fails, the parts
+   * already recorded stand and the order shows what is still owed.
+   */
+  private async submitSplitDispense(parts: FefoPart<StockLotResponse>[]): Promise<void> {
+    this.saving.set(true);
+    const base = this.attestedForm();
+    let recorded = 0;
+    try {
+      for (const [index, part] of parts.entries()) {
+        const body: DispenseRequest = {
+          ...base,
+          stockLotId: part.lot.id,
+          quantityRequested: part.quantity,
+          quantityDispensed: part.quantity,
+        };
+        delete body.fefoOverrideReason;
+        // The product scan names one pack's lot: it is checked on the first part only.
+        if (index > 0) delete body.productScanValue;
+        await firstValueFrom(this.svc.createDispense(body));
+        recorded++;
+      }
+      this.toast.success(
+        this.translate.instant('PHARMACY.DISPENSE_SPLIT_SUCCESS', { count: parts.length }),
+      );
+    } catch (err) {
+      const e = err as { error?: { message?: string } };
+      this.toast.error(e?.error?.message ?? this.translate.instant('PHARMACY.DISPENSE_FAILED'));
+      if (recorded === 0) {
+        this.saving.set(false);
+        return;
+      }
+    }
+    this.formClaimedRowId.set(null);
+    this.saving.set(false);
+    this.showForm.set(false);
+    this.selectedPrescription = null;
+    this.loadWorkQueue();
+    this.loadRecentDispenses();
   }
 
   /**
@@ -849,7 +1102,8 @@ export class DispensingComponent implements OnInit, OnDestroy {
       },
       error: (err) => {
         this.saving.set(false);
-        this.toast.error(err?.error?.message ?? this.translate.instant('PHARMACY.READY_FAILED'));
+        this.noteCdsAlerts(err);
+        this.toast.error(refusalReason(err) ?? this.translate.instant('PHARMACY.READY_FAILED'));
       },
     });
   }
@@ -903,7 +1157,7 @@ export class DispensingComponent implements OnInit, OnDestroy {
 
   private readyActionFailed(err: { error?: { message?: string } }, fallbackKey: string): void {
     this.readyActionSaving.set(false);
-    this.toast.error(err?.error?.message ?? this.translate.instant(fallbackKey));
+    this.toast.error(refusalReason(err) ?? this.translate.instant(fallbackKey));
   }
 
   /** Whole days a prepared fill has waited, for the queue's cue. */
@@ -918,31 +1172,47 @@ export class DispensingComponent implements OnInit, OnDestroy {
     return rx.attentionReason === 'READY_UNCOLLECTED' ? { days: this.daysWaiting(rx) } : {};
   }
 
+  /**
+   * QA D1069: every cancel opens the panel that asks why (the server refuses a
+   * cancel without a reason; it voids the payment and returns the stock).
+   * QA D654: a controlled fill also asks for the witness.
+   */
   cancelDispense(id: string): void {
     const fill = this.recentDispenses().find((d) => d.id === id);
-    if (fill && this.isControlledFill(fill)) {
-      // QA D654: the stock goes back in front of a witness, chosen first.
-      this.cancelWitnessId = undefined;
-      this.cancelWitnessFor.set(id);
-      return;
-    }
-    if (!confirm(this.translate.instant('PHARMACY.CANCEL_DISPENSE_CONFIRM'))) return;
-    this.sendCancel(id);
+    this.cancelWitnessId = undefined;
+    this.dispenseCancelReason = '';
+    this.cancelNeedsWitness.set(!!fill && this.isControlledFill(fill));
+    this.cancelWitnessFor.set(id);
   }
 
-  /** QA D654: the witnessed cancel of a controlled fill. */
+  /** QA D654 / D1069: the cancel, once the reason (and for a controlled fill, the witness) is given. */
   confirmWitnessedCancel(): void {
     const id = this.cancelWitnessFor();
     if (!id) return;
-    if (!this.cancelWitnessId) {
-      this.toast.error(this.translate.instant('PHARMACY.WITNESS_REQUIRED'));
+    const reason = this.dispenseCancelReason.trim();
+    const missing = [
+      !reason ? 'dispenseCancelReason' : null,
+      this.cancelNeedsWitness() && !this.cancelWitnessId ? 'cancelWitness' : null,
+    ].filter((f): f is string => f !== null);
+    if (missing.length > 0) {
+      const key =
+        missing[0] === 'dispenseCancelReason'
+          ? 'PHARMACY.CANCEL_REASON_REQUIRED'
+          : 'PHARMACY.WITNESS_REQUIRED';
+      refuseFields(
+        this.host.nativeElement,
+        missing,
+        ['dispenseCancelReason', 'cancelWitness'],
+        this.translate.instant(key),
+      );
+      this.toast.error(this.translate.instant(key));
       return;
     }
-    this.sendCancel(id, this.cancelWitnessId);
+    this.sendCancel(id, reason, this.cancelNeedsWitness() ? this.cancelWitnessId : undefined);
   }
 
-  private sendCancel(id: string, witnessedBy?: string): void {
-    this.svc.cancelDispense(id, witnessedBy).subscribe({
+  private sendCancel(id: string, reason: string, witnessedBy?: string): void {
+    this.svc.cancelDispense(id, reason, witnessedBy).subscribe({
       next: () => {
         this.cancelWitnessFor.set(null);
         this.toast.success(this.translate.instant('PHARMACY.DISPENSE_CANCELLED'));
@@ -950,7 +1220,7 @@ export class DispensingComponent implements OnInit, OnDestroy {
         this.loadWorkQueue();
       },
       error: (err) =>
-        this.toast.error(err?.error?.message ?? this.translate.instant('PHARMACY.CANCEL_FAILED')),
+        this.toast.error(refusalReason(err) ?? this.translate.instant('PHARMACY.CANCEL_FAILED')),
     });
   }
 

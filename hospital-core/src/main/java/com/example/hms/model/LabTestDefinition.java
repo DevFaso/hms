@@ -16,7 +16,6 @@ import jakarta.persistence.OneToMany;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
@@ -38,10 +37,10 @@ import java.util.UUID;
 @Table(
     name = "lab_test_definitions",
     schema = "lab",
-    uniqueConstraints = {
-        @UniqueConstraint(name = "uq_lab_testdef_name_global", columnNames = {"name"}),
-        @UniqueConstraint(name = "uq_lab_testdef_code_global", columnNames = {"test_code"})
-    },
+    // QA D1120: no unique key on the code or the name. The database never had
+    // one (these were schema-generation-only and hid the duplicate in tests);
+    // versions of one test share both. The service refuses a second live
+    // definition with a code (requireCodeFree) and links versions instead.
     indexes = {
         @Index(name = "idx_lab_testdef_hospital", columnList = "hospital_id"),
         @Index(name = "idx_lab_testdef_name", columnList = "name"),
@@ -187,6 +186,18 @@ public class LabTestDefinition extends BaseEntity {
 
     @Column(name = "rejection_reason", length = 2048)
     private String rejectionReason;
+
+    /**
+     * QA D1120: the ACTIVE definition this version replaces once it is
+     * activated (null for a first version). Versions share the test code.
+     */
+    @Column(name = "supersedes_definition_id")
+    private UUID supersedesDefinitionId;
+
+    /** QA D1120: 1 for a first definition, the replaced version's plus one for a new version. */
+    @Column(name = "version_number", nullable = false)
+    @Builder.Default
+    private Integer versionNumber = 1;
 
     /**
      * QA D834: a qualitative test states the answer it expects instead of a numeric range.

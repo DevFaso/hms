@@ -1,17 +1,28 @@
+import { refusalReason } from '../shared/refusal-reason';
 import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { ToastService } from '../core/toast.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { RoleContextService } from '../core/role-context.service';
 import { PharmacyService, PharmacyRequest, PharmacyResponse } from '../services/pharmacy.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { PhoneFieldDirective } from '../shared/forms/phone-field.directive';
 
 @Component({
   selector: 'app-pharmacy-registry',
   standalone: true,
-  imports: [FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [
+    PhoneFieldDirective,
+    SubmitGuardDirective,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+    ModalDialogDirective,
+  ],
   templateUrl: './pharmacy-registry.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './pharmacy-registry.scss',
@@ -174,7 +185,7 @@ export class PharmacyRegistryComponent implements OnInit {
       },
       error: (err) => {
         const msg =
-          err?.error?.message ??
+          refusalReason(err) ??
           this.translate.instant(
             existing ? 'PHARMACY.TOAST.UPDATE_FAILED' : 'PHARMACY.TOAST.CREATE_FAILED',
           );
@@ -207,7 +218,7 @@ export class PharmacyRegistryComponent implements OnInit {
       },
       error: (err) => {
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('PHARMACY.TOAST.DELETE_FAILED'),
+          refusalReason(err) ?? this.translate.instant('PHARMACY.TOAST.DELETE_FAILED'),
         );
         this.deleting.set(false);
       },

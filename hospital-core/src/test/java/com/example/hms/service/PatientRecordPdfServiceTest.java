@@ -368,6 +368,17 @@ class PatientRecordPdfServiceTest {
         assertThat(PatientRecordPdfService.label(t, null)).isNull();
     }
 
+    /** QA D1168 (D1134 class): the allergy's severity is the feminine "gravité" word, as on the chart. */
+    @Test
+    void theAllergySeverityAgreesWithGraviteInEveryLocale_D1168() {
+        org.springframework.context.MessageSource real = com.example.hms.i18n.TestMessageSources.bundles();
+        assertThat(PatientRecordPdfService.severityLabel(PdfLabels.of(real, Locale.FRENCH), "MODERATE"))
+            .isEqualTo("modérée");
+        assertThat(PatientRecordPdfService.severityLabel(PdfLabels.of(real, Locale.forLanguageTag("es")), "MODERATE"))
+            .isEqualTo("moderada");
+        assertThat(PatientRecordPdfService.severityLabel(PdfLabels.of(real, Locale.FRENCH), null)).isNull();
+    }
+
     @Test
     void d740_anUnreleasedResultPrintsAsPendingWithNoValueOrFlag() throws Exception {
         // Re-test D740: record.pdf printed "Kaliémie (KAL-A) - 1.8 mmol/L - Critique" before release.
@@ -397,5 +408,22 @@ class PatientRecordPdfServiceTest {
         byte[] pdf = PatientRecordPdfService.write(PatientStoryboardDTO.builder().allergies(List.of()).build(),
             chart, null, PdfLabels.of(messageSource, Locale.FRENCH));
         assertThat(textOf(pdf)).contains("pdf.record.medication.controlled");
+    }
+    @Test
+    void qaD1106AReleasedLabValuePrintsWithTheReadersDecimalSeparator() throws Exception {
+        // Round 19: record.pdf printed "Kaliémie (K) - 2.5 mmol/L" in a French export.
+        echoKeys();
+        ChartReviewDTO.ResultEntryDTO r = new ChartReviewDTO.ResultEntryDTO();
+        r.setTestName("Kaliemie");
+        r.setTestCode("K");
+        r.setResultValue("2.5");
+        r.setResultUnit("mmol/L");
+        r.setReleased(true);
+        ChartReviewDTO chart = ChartReviewDTO.builder().results(List.of(r)).build();
+        PatientStoryboardDTO board = PatientStoryboardDTO.builder().allergies(List.of()).build();
+        assertThat(textOf(PatientRecordPdfService.write(board, chart, null, PdfLabels.of(messageSource, Locale.FRENCH))))
+            .contains("2,5 mmol/L").doesNotContain("2.5");
+        assertThat(textOf(PatientRecordPdfService.write(board, chart, null, PdfLabels.of(messageSource, Locale.ENGLISH))))
+            .contains("2.5 mmol/L");
     }
 }

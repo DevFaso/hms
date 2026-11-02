@@ -110,6 +110,8 @@ class TreatmentConsentServiceImplTest {
     void verbalConsentHasNoDigest() {
         TreatmentConsentRequestDTO verbal = TreatmentConsentRequestDTO.builder()
             .method(TreatmentConsentMethod.VERBAL)
+            // QA D1148: a consent names who gave it, verbal too.
+            .signedName("Awa Kaboré")
             .build();
 
         TreatmentConsentResponseDTO created =
@@ -117,6 +119,20 @@ class TreatmentConsentServiceImplTest {
 
         assertThat(created.getSignatureHash()).isNull();
         assertThat(created.getMethod()).isEqualTo(TreatmentConsentMethod.VERBAL);
+    }
+
+    @Test
+    void aConsentRecordedInTheChartNamesItsSigner_D1148() {
+        for (String blank : new String[] {null, "", "  "}) {
+            TreatmentConsentRequestDTO unsigned = TreatmentConsentRequestDTO.builder()
+                .method(TreatmentConsentMethod.VERBAL)
+                .signedName(blank)
+                .build();
+            org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                    service.record(patientId, hospitalId, null, TreatmentConsentSource.MANUAL, unsigned))
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                .extracting("field").isEqualTo("signedName");
+        }
     }
 
     @Test

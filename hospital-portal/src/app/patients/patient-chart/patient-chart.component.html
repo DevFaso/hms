@@ -1,4 +1,12 @@
 <div class="chart-container">
+  <!-- QA D1005: the ongoing pregnancy is read on every tab of the chart. -->
+  @if (pregnancy(); as pg) {
+    <p class="chart-pregnancy" data-testid="chart-pregnancy">
+      <span class="material-symbols-outlined" aria-hidden="true">pregnant_woman</span>
+      {{ 'CHART.PREGNANCY' | translate: { weeks: pg.weeks, days: pg.days } }} ·
+      {{ 'MATERNITY.EDD' | translate }} {{ pg.dueDate | serverTime | date: 'mediumDate' }}
+    </p>
+  }
   <div class="chart-tabs">
     @if (canViewAllergies()) {
       <button
@@ -119,6 +127,7 @@
                           class="action-link"
                           (click)="openEditAllergy(a)"
                           [title]="'COMMON.EDIT' | translate"
+                          [attr.aria-label]="'COMMON.EDIT' | translate"
                         >
                           <span class="material-symbols-outlined">edit</span>
                         </button>
@@ -128,6 +137,7 @@
                             class="action-link delete-link"
                             (click)="openDeactivateAllergy(a)"
                             [title]="'CHART.DEACTIVATE' | translate"
+                            [attr.aria-label]="'CHART.DEACTIVATE' | translate"
                           >
                             <span class="material-symbols-outlined">block</span>
                           </button>
@@ -215,6 +225,7 @@
                         class="action-link"
                         (click)="openEditProblem(p)"
                         [title]="'COMMON.EDIT' | translate"
+                        [attr.aria-label]="'COMMON.EDIT' | translate"
                       >
                         <span class="material-symbols-outlined">edit</span>
                       </button>
@@ -223,6 +234,7 @@
                         class="action-link delete-link"
                         (click)="openDeleteProblem(p)"
                         [title]="'COMMON.DELETE' | translate"
+                        [attr.aria-label]="'COMMON.DELETE' | translate"
                       >
                         <span class="material-symbols-outlined">delete</span>
                       </button>
@@ -535,12 +547,20 @@
                     </td>
                   } @else {
                     <td>
-                      <span class="lab-value">{{ r.value || '—' }}</span>
+                      <!-- Round 19 (D1095/D1106 merge): Angular drops whitespace-only text
+                           between elements, so the spaces between value, unit and the
+                           correction badge are real text, not markup indentation
+                           ("9,2 g/dL Corrigé", never "9,2g/dLCorrigé"). -->
+                      <span class="lab-value">{{ r.value | labValue }}</span>
                       @if (r.unit) {
-                        <span class="lab-unit">{{ r.unit }}</span>
+                        <span class="lab-unit">{{ ' ' + r.unit }}</span>
+                      }
+                      <!-- QA D1016 (round 18): the chart's own Labs table marks a correction -->
+                      @if (r.corrected) {
+                        {{ ' ' }}<app-lab-correction-badge [corrected]="r.corrected" />
                       }
                     </td>
-                    <td>{{ r.referenceRange || '—' }}</td>
+                    <td>{{ r.referenceRange | labRange }}</td>
                   }
                   <td>
                     <span [class]="labStatusClass(r)">{{ labStatusKey(r) | translate }}</span>
@@ -569,7 +589,8 @@
       <div class="loading-state"><div class="spinner"></div></div>
     } @else if (timeline(); as tl) {
       <p class="timeline-meta">
-        {{ 'CHART.TIMELINE_REASON' | translate }}: {{ tl.accessReason }} — {{ tl.totalEntries }}
+        {{ 'CHART.TIMELINE_REASON' | translate }}{{ 'COMMON.COLON' | translate }}
+        {{ tl.accessReason }} — {{ tl.totalEntries }}
         {{ 'CHART.ENTRIES' | translate }}
       </p>
       <ul class="timeline-list">
@@ -581,7 +602,8 @@
             <div>
               <div class="timeline-summary">{{ e.summary }}</div>
               <div class="timeline-date">
-                {{ e.category | enumLabel: 'timelineCategory' }} ·
+                @let kind = timelineKind(e);
+                {{ kind.value | enumLabel: kind.domain }} ·
                 {{ e.occurredAt | serverTime | date: 'medium' }}
               </div>
               <!--
@@ -596,6 +618,13 @@
                     {{ hospital }}
                   </span>
                 }
+                @if (entryRecordedAt(e); as recordedAt) {
+                  <!-- QA D1113: a transcribed dose was recorded here, not given here -->
+                  <span class="provenance-hospital" data-testid="timeline-transcribed">
+                    <span class="material-symbols-outlined" aria-hidden="true">edit_note</span>
+                    {{ 'CHART.TIMELINE_TRANSCRIBED_AT' | translate: { hospital: recordedAt } }}
+                  </span>
+                }
                 @if (entryClinician(e); as clinician) {
                   <span class="provenance-clinician">
                     <span class="material-symbols-outlined" aria-hidden="true">person</span>
@@ -603,7 +632,8 @@
                   </span>
                 }
                 @if (isForeignEntry(e)) {
-                  <span class="provenance-badge">{{
+                  {{ ' '
+                  }}<span class="provenance-badge">{{
                     'CHART.TIMELINE_FROM_OTHER_HOSPITAL' | translate
                   }}</span>
                 }
@@ -645,15 +675,25 @@
   >
     <div
       class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="chart-dialog-1-title"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown)="$event.stopPropagation()"
+      appDialogFocus
+      (dialogDismiss)="closeAllergyModal()"
     >
       <div class="modal-header">
-        <h2>
+        <h2 id="chart-dialog-1-title">
           {{ (editingAllergyId() ? 'CHART.EDIT_ALLERGY' : 'CHART.ADD_ALLERGY') | translate }}
         </h2>
-        <button type="button" class="modal-close" (click)="closeAllergyModal()">
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          type="button"
+          class="modal-close"
+          (click)="closeAllergyModal()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
@@ -731,13 +771,23 @@
   >
     <div
       class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="chart-dialog-2-title"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown)="$event.stopPropagation()"
+      appDialogFocus
+      (dialogDismiss)="closeDeactivateAllergy()"
     >
       <div class="modal-header">
-        <h2>{{ 'CHART.DEACTIVATE_ALLERGY' | translate }}</h2>
-        <button type="button" class="modal-close" (click)="closeDeactivateAllergy()">
+        <h2 id="chart-dialog-2-title">{{ 'CHART.DEACTIVATE_ALLERGY' | translate }}</h2>
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          type="button"
+          class="modal-close"
+          (click)="closeDeactivateAllergy()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
@@ -772,15 +822,25 @@
   >
     <div
       class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="chart-dialog-3-title"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown)="$event.stopPropagation()"
+      appDialogFocus
+      (dialogDismiss)="closeProblemModal()"
     >
       <div class="modal-header">
-        <h2>
+        <h2 id="chart-dialog-3-title">
           {{ (editingProblemId() ? 'CHART.EDIT_PROBLEM' : 'CHART.ADD_PROBLEM') | translate }}
         </h2>
-        <button type="button" class="modal-close" (click)="closeProblemModal()">
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          type="button"
+          class="modal-close"
+          (click)="closeProblemModal()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
@@ -858,13 +918,23 @@
   >
     <div
       class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="chart-dialog-4-title"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown)="$event.stopPropagation()"
+      appDialogFocus
+      (dialogDismiss)="closeDeleteProblem()"
     >
       <div class="modal-header">
-        <h2>{{ 'CHART.DELETE_PROBLEM' | translate }}</h2>
-        <button type="button" class="modal-close" (click)="closeDeleteProblem()">
+        <h2 id="chart-dialog-4-title">{{ 'CHART.DELETE_PROBLEM' | translate }}</h2>
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          type="button"
+          class="modal-close"
+          (click)="closeDeleteProblem()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
@@ -903,13 +973,23 @@
   >
     <div
       class="modal modal-lg"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="chart-dialog-5-title"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown)="$event.stopPropagation()"
+      appDialogFocus
+      (dialogDismiss)="closeUpdateModal()"
     >
       <div class="modal-header">
-        <h2>{{ 'CHART.NEW_UPDATE' | translate }}</h2>
-        <button type="button" class="modal-close" (click)="closeUpdateModal()">
+        <h2 id="chart-dialog-5-title">{{ 'CHART.NEW_UPDATE' | translate }}</h2>
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          type="button"
+          class="modal-close"
+          (click)="closeUpdateModal()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
@@ -948,11 +1028,13 @@
               <input
                 type="text"
                 [placeholder]="'CHART.SECTION_DISPLAY' | translate"
+                [attr.aria-label]="'CHART.SECTION_DISPLAY' | translate"
                 [(ngModel)]="s.display"
               />
               <input
                 type="text"
                 [placeholder]="'CHART.SECTION_NARRATIVE' | translate"
+                [attr.aria-label]="'CHART.SECTION_NARRATIVE' | translate"
                 [(ngModel)]="s.narrative"
               />
               <button
@@ -994,13 +1076,23 @@
   >
     <div
       class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="chart-dialog-6-title"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown)="$event.stopPropagation()"
+      appDialogFocus
+      (dialogDismiss)="closeTimelineReason()"
     >
       <div class="modal-header">
-        <h2>{{ 'CHART.TIMELINE_ACCESS' | translate }}</h2>
-        <button type="button" class="modal-close" (click)="closeTimelineReason()">
+        <h2 id="chart-dialog-6-title">{{ 'CHART.TIMELINE_ACCESS' | translate }}</h2>
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          type="button"
+          class="modal-close"
+          (click)="closeTimelineReason()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>

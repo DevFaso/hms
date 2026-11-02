@@ -55,6 +55,8 @@ public enum AuditEventType {
     ADMISSION_AUTOCREATED,
     ADMISSION_DISCHARGED,
     ADMISSION_TRANSFERRED,
+    /** QA D1100: an inpatient's bed freed by hand ("Retirer le lit"), with its reason. */
+    ADMISSION_BED_RELEASED,
     ENCOUNTER_AUTOCREATED,
     ENCOUNTER_UPDATE,
     PRESCRIPTION_CREATED,
@@ -131,6 +133,14 @@ public enum AuditEventType {
     /** G13: a lapsed claim was found and removed by a later write. */
     PRESCRIPTION_QUEUE_CLAIM_EXPIRED,
     MEDICATION_DEACTIVATED,
+    /** Round 18 (QA D935): the pharmacy set or approved an item's paediatric dose limits. */
+    MEDICATION_DOSE_LIMITS_UPDATED,
+    /** Round 18 (QA D935): a prescriber overrode a critical dose-check (CDS) alert, with a reason. */
+    PRESCRIPTION_CDS_OVERRIDDEN,
+    /** Round 18: the prescriber's re-authentication when signing a controlled-drug order (success or failure). */
+    PRESCRIPTION_SIGN_REAUTHENTICATION,
+    /** Round 19 (QA D1096): a pharmacist or physician recorded the paediatric dose review an order needed. */
+    PRESCRIPTION_PEDIATRIC_DOSE_REVIEWED,
     PHARMACY_DEACTIVATED,
     MTM_REVIEW_STARTED,
     MTM_INTERVENTION_RECORDED,

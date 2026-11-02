@@ -82,6 +82,14 @@ class HospitalRepositoryCallerCoverageTest {
         entry("PatientPortalServiceImpl.toProfileDTO#findById", LABEL + " (a hospital on the patient's own record)"),
         entry("UserServiceImpl.createUserWithRolesAndHospital#findById", LABEL + " (the activation message)"),
         entry("UserServiceImpl.normalizePhone#findById", "reads the hospital's country for the phone calling code; grants, writes and lists nothing"),
+        // QA D942: a patient's numbers are stored in E.164 for the hospital's country.
+        entry("PatientServiceImpl.countryFor#findById", "reads the hospital's country for the phone calling code; grants, writes and lists nothing"),
+        entry("PatientServiceImpl.organizationOf#findById", "QA D1064: reads the hospital's organisation to keep the registration identity match inside it; grants, writes and lists nothing"),
+        entry("ReceptionServiceImpl.carriedOverVisits#findById", "reads the hospital's zone to know its calendar day (QA D1021 carry-over); grants, writes and lists nothing"),
+        entry("ReceptionServiceImpl.getDuplicateCandidates#findById", "reads the hospital's country for the phone calling code; grants, writes and lists nothing"),
+        entry("LookupController.getAppointmentsByPatientPhone#findById", "reads the hospital's country for the phone calling code; grants, writes and lists nothing"),
+        entry("AuditEventLogServiceImpl.phoneHoldersAt#findById", "reads the event hospital's country for the phone calling code; grants, writes and lists nothing"),
+        entry("PatientServiceImpl.updatePatient#findById", "reads the hospital's country for the phone calling code; grants, writes and lists nothing"),
         entry("UserServiceImpl.findByPhoneInAnyForm#findById", "reads the acting hospital's country for the legacy phone forms; grants, writes and lists nothing"),
         entry("FacilityAssignmentGuard.requireCompatible#findById",
             ANY_TYPE + "the role/facility compatibility check is about providers (slice 1)"),
@@ -145,7 +153,11 @@ class HospitalRepositoryCallerCoverageTest {
         entry("UserRoleHospitalAssignmentServiceImpl#findByNameIgnoreCase",
             "the assignment target by name: a provider is a valid target, held to RoleFacilityCompatibility (slice 1)"),
         entry("UserServiceImpl#findByCodeIgnoreCase", "the dev default hospital by its fixed code"),
-        entry("DevSyntheticDataSeeder#findByCodeIgnoreCase", "dev seed data, by the seed's own fixed codes"));
+        entry("DevSyntheticDataSeeder#findByCodeIgnoreCase", "dev seed data, by the seed's own fixed codes"),
+        // QA D1121: moved from BY_ID_RECORDED ("CdsCardText.zoneOf#findById"), the same read as a plain value.
+        entry("CdsCardText#findTimezoneIdById",
+            "QA D1114/D1121: reads the hospital's time-zone id as a value to write a card time on its wall clock;"
+                + " grants, writes and lists nothing"));
 
     @Test
     @DisplayName("every unfiltered HospitalRepository caller is recorded with its reason")

@@ -16,7 +16,8 @@
         <p class="page-subtitle">
           <span class="code-badge">{{ org.code }}</span>
           @if (lifecycle(); as lc) {
-            <span
+            {{ ' '
+            }}<span
               class="state-chip"
               [style.background]="stateColor() + '14'"
               [style.color]="stateColor()"
@@ -36,7 +37,8 @@
         <div class="lifecycle-grid">
           <div class="lifecycle-row">
             <span class="lifecycle-label">{{ 'TENANT_LIFECYCLE.FIELD.STATE' | translate }}</span>
-            <span
+            {{ ' '
+            }}<span
               class="state-chip"
               [style.background]="stateColor() + '14'"
               [style.color]="stateColor()"
@@ -162,7 +164,10 @@
     >
       <div
         class="modal"
+        appModalDialog
+        aria-labelledby="organization-detail-dialog-1-title"
         role="dialog"
+        (escaped)="closeModal()"
         (click)="$event.stopPropagation()"
         (keydown)="$event.stopPropagation()"
       >
@@ -170,7 +175,7 @@
           <span class="material-symbols-outlined" [class.danger]="cfg.destructive">{{
             cfg.iconKey
           }}</span>
-          <h3>{{ cfg.titleKey | translate }}</h3>
+          <h3 id="organization-detail-dialog-1-title">{{ cfg.titleKey | translate }}</h3>
         </header>
 
         <p class="modal-desc">{{ cfg.descKey | translate }}</p>
@@ -261,7 +266,8 @@
             class="btn"
             [class.btn-danger]="cfg.destructive"
             [class.btn-primary]="!cfg.destructive"
-            [disabled]="!canConfirm() || submitting()"
+            [disabled]="submitting()"
+            [appSubmitGuard]="!canConfirm()"
             (click)="confirm()"
             data-test="action-confirm"
           >

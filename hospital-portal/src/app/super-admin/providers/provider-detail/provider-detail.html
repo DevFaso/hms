@@ -385,13 +385,14 @@
         (keydown.escape)="closeDialogs()"
       >
         <div
+          appModalDialog
           class="modal modal-xl"
           role="dialog"
           aria-modal="true"
           aria-labelledby="verify-title"
           tabindex="-1"
           (click)="$event.stopPropagation()"
-          (keydown.escape)="closeDialogs()"
+          (keydown.escape)="closeDialogs(); $event.stopPropagation()"
         >
           <div class="modal-header">
             <h2 id="verify-title">{{ 'PROVIDER.VERIFY.TITLE' | translate }}</h2>
@@ -498,7 +499,8 @@
               type="button"
               class="btn-primary"
               data-test="verify-confirm"
-              [disabled]="busy() || !verifyReady()"
+              [disabled]="busy()"
+              [appSubmitGuard]="!verifyReady()"
               (click)="submitVerify()"
             >
               {{ 'PROVIDER.VERIFY.SUBMIT' | translate }}
@@ -517,13 +519,14 @@
         (keydown.escape)="closeDialogs()"
       >
         <div
+          appModalDialog
           class="modal"
           role="dialog"
           aria-modal="true"
           aria-labelledby="decision-title"
           tabindex="-1"
           (click)="$event.stopPropagation()"
-          (keydown.escape)="closeDialogs()"
+          (keydown.escape)="closeDialogs(); $event.stopPropagation()"
         >
           <div class="modal-header">
             <h2 id="decision-title">
@@ -578,7 +581,9 @@
               type="button"
               class="btn-primary"
               data-test="decision-confirm"
-              [disabled]="busy() || dialog.reason.trim() === ''"
+              [disabled]="busy()"
+              [appSubmitGuard]="dialog.reason.trim() === ''"
+              [submitGuardFields]="['decision-reason']"
               (click)="submitDecision()"
             >
               @if (dialog.kind === 'reject') {
@@ -601,13 +606,14 @@
         (keydown.escape)="closeDialogs()"
       >
         <div
+          appModalDialog
           class="modal"
           role="dialog"
           aria-modal="true"
           aria-labelledby="lifecycle-title"
           tabindex="-1"
           (click)="$event.stopPropagation()"
-          (keydown.escape)="closeDialogs()"
+          (keydown.escape)="closeDialogs(); $event.stopPropagation()"
         >
           <div class="modal-header">
             <h2 id="lifecycle-title">
@@ -695,7 +701,8 @@
               type="button"
               class="btn-primary"
               data-test="lifecycle-confirm"
-              [disabled]="busy() || !lifecycleReady()"
+              [disabled]="busy()"
+              [appSubmitGuard]="!lifecycleReady()"
               (click)="submitLifecycle()"
             >
               {{ 'PROVIDER.COMMON.CONFIRM' | translate }}

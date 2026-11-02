@@ -103,6 +103,10 @@ import com.example.hms.i18n.TestMessageSources;
 @SuppressWarnings({"java:S100", "java:S1192"})
 class PatientPortalServiceImplPhase2Test {
 
+    /** QA D978: a patient books in the future only, so the fixture dates move with the clock. */
+    private static final LocalDate RESCHEDULE_DATE = LocalDate.now().plusDays(20);
+    private static final LocalDate BOOKING_DATE = LocalDate.now().plusDays(30);
+
     @Mock private PatientRepository patientRepository;
     @Mock private ControllerAuthUtils authUtils;
     @Mock private PatientLabResultService labResultService;
@@ -145,6 +149,10 @@ class PatientPortalServiceImplPhase2Test {
 
     @Mock private com.example.hms.service.pharmacy.PrescriptionControlledResolver controlledResolver;
 
+    /** QA D1060: the slot rules, stubbed to their 30-minute fallback (SlotPolicyStubs). */
+    @org.mockito.Mock
+    private com.example.hms.service.scheduling.AppointmentSlotPolicy slotPolicy;
+
     @InjectMocks
     private PatientPortalServiceImpl service;
 
@@ -157,6 +165,8 @@ class PatientPortalServiceImplPhase2Test {
 
     @BeforeEach
     void setUp() {
+        com.example.hms.testsupport.SlotPolicyStubs.defaultLength(slotPolicy);
+        com.example.hms.testsupport.SlotPolicyStubs.publishedSlots(slotPolicy);
         // findClinicalById answers as the database does: the stubbed row, when it is a hospital.
         lenient().when(hospitalRepository.findClinicalById(any()))
             .thenAnswer(invocation -> hospitalRepository.findById(invocation.getArgument(0))
@@ -225,7 +235,9 @@ class PatientPortalServiceImplPhase2Test {
             assertThat(result).isNotNull();
             assertThat(result.getId()).isEqualTo(apptId);
             assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.CANCELLED);
-            assertThat(appointment.getNotes()).contains("Patient cancelled: Schedule conflict");
+            // QA D1196: the reason is data in its own column, not English in the notes.
+            assertThat(appointment.getStatusReason()).isEqualTo("Schedule conflict");
+            assertThat(appointment.getNotes()).isNull();
             verify(appointmentRepository).save(appointment);
             // The appointment owns its slot (P3 #22): a portal cancel frees
             // the time just like a desk cancel.
@@ -368,7 +380,7 @@ class PatientPortalServiceImplPhase2Test {
             when(appointmentRepository.findById(apptId)).thenReturn(Optional.of(appointment));
             RescheduleAppointmentRequestDTO dto = RescheduleAppointmentRequestDTO.builder()
                     .appointmentId(apptId)
-                    .newDate(LocalDate.of(2026, 5, 20))
+                    .newDate(RESCHEDULE_DATE)
                     .newStartTime(LocalTime.of(14, 0))
                     .newEndTime(LocalTime.of(14, 30))
                     .build();
@@ -417,7 +429,9 @@ class PatientPortalServiceImplPhase2Test {
 
             service.cancelMyAppointment(auth, dto, Locale.ENGLISH);
 
-            assertThat(appointment.getNotes()).isEqualTo("Doctor note | Patient cancelled: Emergency");
+            // QA D1196: the staff notes are left as they were; the reason is its own field.
+            assertThat(appointment.getNotes()).isEqualTo("Doctor note");
+            assertThat(appointment.getStatusReason()).isEqualTo("Emergency");
         }
     }
 
@@ -446,7 +460,7 @@ class PatientPortalServiceImplPhase2Test {
 
             service.rescheduleMyAppointment(auth, RescheduleAppointmentRequestDTO.builder()
                     .appointmentId(apptId)
-                    .newDate(LocalDate.of(2026, 5, 20))
+                    .newDate(RESCHEDULE_DATE)
                     .newStartTime(LocalTime.of(14, 0))
                     .newEndTime(LocalTime.of(14, 30))
                     .build(), Locale.ENGLISH);
@@ -471,7 +485,7 @@ class PatientPortalServiceImplPhase2Test {
 
             RescheduleAppointmentRequestDTO dto = RescheduleAppointmentRequestDTO.builder()
                     .appointmentId(apptId)
-                    .newDate(LocalDate.of(2026, 5, 20))
+                    .newDate(RESCHEDULE_DATE)
                     .newStartTime(LocalTime.of(14, 0))
                     .newEndTime(LocalTime.of(14, 30))
                     .reason("Need afternoon slot")
@@ -480,12 +494,37 @@ class PatientPortalServiceImplPhase2Test {
             AppointmentResponseDTO result = service.rescheduleMyAppointment(auth, dto, Locale.ENGLISH);
 
             assertThat(result).isNotNull();
-            assertThat(appointment.getAppointmentDate()).isEqualTo(LocalDate.of(2026, 5, 20));
+            assertThat(appointment.getAppointmentDate()).isEqualTo(RESCHEDULE_DATE);
             assertThat(appointment.getStartTime()).isEqualTo(LocalTime.of(14, 0));
             assertThat(appointment.getEndTime()).isEqualTo(LocalTime.of(14, 30));
-            assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.RESCHEDULED);
-            assertThat(appointment.getNotes()).contains("Patient rescheduled: Need afternoon slot");
+            // QA D977: a moved appointment is booked at its new time, as the desk lands it.
+            assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.SCHEDULED);
+            // QA D1196: the reason for the move is data, never "Patient rescheduled: ..." in the notes.
+            assertThat(appointment.getStatusReason()).isEqualTo("Need afternoon slot");
+            assertThat(java.util.Objects.toString(appointment.getNotes(), "")).doesNotContain("Need afternoon slot");
             verify(appointmentRepository).save(appointment);
+        }
+
+        @Test
+        @DisplayName("review round 13: a tentative (PENDING) booking moved by the patient stays tentative")
+        void reschedule_pendingStaysPending() {
+            stubPatientResolution();
+            UUID apptId = UUID.randomUUID();
+            Appointment appointment = buildAppointment(apptId, AppointmentStatus.PENDING);
+            when(appointmentRepository.findById(apptId)).thenReturn(Optional.of(appointment));
+            when(appointmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+            when(appointmentMapper.toAppointmentResponseDTO(any()))
+                    .thenReturn(AppointmentResponseDTO.builder().id(apptId).build());
+
+            service.rescheduleMyAppointment(auth, RescheduleAppointmentRequestDTO.builder()
+                    .appointmentId(apptId)
+                    .newDate(RESCHEDULE_DATE)
+                    .newStartTime(LocalTime.of(14, 0))
+                    .newEndTime(LocalTime.of(14, 30))
+                    .build(), Locale.ENGLISH);
+
+            assertThat(appointment.getAppointmentDate()).isEqualTo(RESCHEDULE_DATE);
+            assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.PENDING);
         }
 
         @Test
@@ -497,7 +536,7 @@ class PatientPortalServiceImplPhase2Test {
 
             RescheduleAppointmentRequestDTO dto = RescheduleAppointmentRequestDTO.builder()
                     .appointmentId(apptId)
-                    .newDate(LocalDate.of(2026, 5, 20))
+                    .newDate(RESCHEDULE_DATE)
                     .newStartTime(LocalTime.of(14, 0))
                     .newEndTime(LocalTime.of(14, 30))
                     .build();
@@ -521,7 +560,7 @@ class PatientPortalServiceImplPhase2Test {
 
             RescheduleAppointmentRequestDTO dto = RescheduleAppointmentRequestDTO.builder()
                     .appointmentId(apptId)
-                    .newDate(LocalDate.of(2026, 5, 20))
+                    .newDate(RESCHEDULE_DATE)
                     .newStartTime(LocalTime.of(14, 0))
                     .newEndTime(LocalTime.of(14, 30))
                     .build();
@@ -545,7 +584,7 @@ class PatientPortalServiceImplPhase2Test {
 
             RescheduleAppointmentRequestDTO dto = RescheduleAppointmentRequestDTO.builder()
                     .appointmentId(apptId)
-                    .newDate(LocalDate.of(2026, 5, 20))
+                    .newDate(RESCHEDULE_DATE)
                     .newStartTime(LocalTime.of(14, 0))
                     .newEndTime(LocalTime.of(14, 30))
                     .build();
@@ -566,7 +605,7 @@ class PatientPortalServiceImplPhase2Test {
 
             RescheduleAppointmentRequestDTO dto = RescheduleAppointmentRequestDTO.builder()
                     .appointmentId(apptId)
-                    .newDate(LocalDate.of(2026, 5, 20))
+                    .newDate(RESCHEDULE_DATE)
                     .newStartTime(LocalTime.of(14, 0))
                     .newEndTime(LocalTime.of(14, 30))
                     .build();
@@ -577,26 +616,109 @@ class PatientPortalServiceImplPhase2Test {
         }
 
         @Test
-        @DisplayName("should throw when end time is not after start time")
-        void endBeforeStart_throws() {
+        @DisplayName("QA D1060: the patient's end time is ignored, the slot rules set the length")
+        void reschedule_theSlotRulesSetTheLength() {
+            // Was "should throw when end time is not after start time": the end
+            // is no longer the patient's to send (the dialog saved 08:20-09:20).
             stubPatientResolution();
             UUID apptId = UUID.randomUUID();
             Appointment appointment = buildAppointment(apptId, AppointmentStatus.SCHEDULED);
-
             when(appointmentRepository.findById(apptId)).thenReturn(Optional.of(appointment));
+            when(appointmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+            when(appointmentMapper.toAppointmentResponseDTO(any()))
+                    .thenReturn(AppointmentResponseDTO.builder().id(apptId).build());
+            // QA D1093: the length is the published slot's own (a 20-minute slot).
+            when(slotPolicy.requirePublishedFreeSlot(any(), any(), any(), any()))
+                    .thenReturn(com.example.hms.model.scheduling.AppointmentSlot.builder()
+                            .startAt(java.time.LocalDateTime.of(RESCHEDULE_DATE, LocalTime.of(14, 0)))
+                            .endAt(java.time.LocalDateTime.of(RESCHEDULE_DATE, LocalTime.of(14, 20)))
+                            .build());
 
             RescheduleAppointmentRequestDTO dto = RescheduleAppointmentRequestDTO.builder()
                     .appointmentId(apptId)
-                    .newDate(LocalDate.of(2026, 5, 20))
-                    .newStartTime(LocalTime.of(14, 30))
-                    .newEndTime(LocalTime.of(14, 0))
+                    .newDate(RESCHEDULE_DATE)
+                    .newStartTime(LocalTime.of(14, 0))
+                    .newEndTime(LocalTime.of(20, 0))
                     .build();
 
+            service.rescheduleMyAppointment(auth, dto, Locale.ENGLISH);
+
+            assertThat(appointment.getStartTime()).isEqualTo(LocalTime.of(14, 0));
+            assertThat(appointment.getEndTime()).isEqualTo(LocalTime.of(14, 20));
+        }
+
+        @Test
+        @DisplayName("QA D1093: a reschedule to a time that is not a published, free slot is refused")
+        void d1093_rescheduleOffGridIsRefused() {
+            stubPatientResolution();
+            UUID apptId = UUID.randomUUID();
+            Appointment appointment = buildAppointment(apptId, AppointmentStatus.SCHEDULED);
+            when(appointmentRepository.findById(apptId)).thenReturn(Optional.of(appointment));
+            when(slotPolicy.requirePublishedFreeSlot(any(), any(), any(), any()))
+                    .thenThrow(new BusinessException("portal.booking.notAPublishedSlot"));
+
+            RescheduleAppointmentRequestDTO dto = RescheduleAppointmentRequestDTO.builder()
+                    .appointmentId(apptId).newDate(RESCHEDULE_DATE).newStartTime(LocalTime.of(15, 0)).build();
+
+            assertThatThrownBy(() -> service.rescheduleMyAppointment(auth, dto, Locale.ENGLISH))
+                    .hasFieldOrPropertyWithValue("messageKey", "portal.booking.notAPublishedSlot");
+            verify(appointmentRepository, never()).save(any());
+            verify(slotInventoryService, never()).releaseForAppointment(any());
+        }
+
+        @Test
+        @DisplayName("QA D1093: a reschedule frees the old slot and takes the new one")
+        void d1093_rescheduleMovesTheSlot() {
+            stubPatientResolution();
+            UUID apptId = UUID.randomUUID();
+            Appointment appointment = buildAppointment(apptId, AppointmentStatus.SCHEDULED);
+            Hospital hospital = new Hospital();
+            hospital.setId(UUID.randomUUID());
+            appointment.setHospital(hospital);
+            when(appointmentRepository.findById(apptId)).thenReturn(Optional.of(appointment));
+            when(appointmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+            when(appointmentMapper.toAppointmentResponseDTO(any()))
+                    .thenReturn(AppointmentResponseDTO.builder().id(apptId).build());
+            com.example.hms.model.scheduling.AppointmentSlot newSlot = com.example.hms.model.scheduling.AppointmentSlot
+                    .builder().startAt(java.time.LocalDateTime.of(RESCHEDULE_DATE, LocalTime.of(14, 0)))
+                    .endAt(java.time.LocalDateTime.of(RESCHEDULE_DATE, LocalTime.of(14, 20))).build();
+            when(slotPolicy.requirePublishedFreeSlot(any(), eq(java.time.LocalDateTime.of(RESCHEDULE_DATE,
+                    LocalTime.of(14, 0))), eq(hospital.getId()), eq(null))).thenReturn(newSlot);
+
+            service.rescheduleMyAppointment(auth, RescheduleAppointmentRequestDTO.builder()
+                    .appointmentId(apptId).newDate(RESCHEDULE_DATE).newStartTime(LocalTime.of(14, 0)).build(),
+                    Locale.ENGLISH);
+
+            org.mockito.InOrder order = org.mockito.Mockito.inOrder(slotInventoryService, slotPolicy);
+            order.verify(slotInventoryService).releaseForAppointment(apptId);
+            order.verify(slotPolicy).takeSlot(newSlot, appointment);
+            assertThat(appointment.getEndTime()).isEqualTo(LocalTime.of(14, 20));
+        }
+
+        @Test
+        @DisplayName("QA D1063: a reschedule onto a slot held for a waitlist offer is refused")
+        void reschedule_ontoAHeldSlotIsRefused() {
+            stubPatientResolution();
+            UUID apptId = UUID.randomUUID();
+            Appointment appointment = buildAppointment(apptId, AppointmentStatus.SCHEDULED);
+            when(appointmentRepository.findById(apptId)).thenReturn(Optional.of(appointment));
+            doThrow(new BusinessException("slot.heldForOffer"))
+                    .when(slotPolicy).requireNoLiveHold(any(), any(), any());
+
+            RescheduleAppointmentRequestDTO dto = RescheduleAppointmentRequestDTO.builder()
+                    .appointmentId(apptId)
+                    .newDate(RESCHEDULE_DATE)
+                    .newStartTime(LocalTime.of(14, 0))
+                    .build();
+
+            com.example.hms.model.Staff clinician = new com.example.hms.model.Staff();
+            clinician.setId(UUID.randomUUID());
+            appointment.setStaff(clinician);
+            when(staffAvailabilityService.isStaffAvailable(eq(clinician.getId()), any())).thenReturn(true);
             assertThatThrownBy(() -> service.rescheduleMyAppointment(auth, dto, Locale.ENGLISH))
                     .isInstanceOf(BusinessException.class)
-                    .hasFieldOrPropertyWithValue("messageKey", "appointment.timeRange.invalid");
-
-            assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.SCHEDULED);
+                    .hasFieldOrPropertyWithValue("messageKey", "slot.heldForOffer");
+            verify(appointmentRepository, never()).save(any());
         }
     }
 
@@ -1145,7 +1267,7 @@ class PatientPortalServiceImplPhase2Test {
 
             assertThatThrownBy(() -> service.cancelMyRefill(auth, refillId))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("Only pending refill requests can be cancelled");
+                    .hasMessageContaining("patient.refill.cancel.notPending");
         }
 
         @Test
@@ -1160,7 +1282,7 @@ class PatientPortalServiceImplPhase2Test {
 
             assertThatThrownBy(() -> service.cancelMyRefill(auth, refillId))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("Only pending refill requests");
+                    .hasMessageContaining("patient.refill.cancel.notPending");
         }
     }
 
@@ -1394,7 +1516,7 @@ class PatientPortalServiceImplPhase2Test {
                     .build();
 
             Pageable pageable = PageRequest.of(0, 20);
-            when(disclosureAccountingService.getEntries(patientId, null, null, pageable))
+            when(disclosureAccountingService.getEntriesAsPatientSees(patientId, null, null, pageable))
                     .thenReturn(new PageImpl<>(List.of(expected), pageable, 1));
 
             Page<AccessLogEntryDTO> result = service.getMyAccessLog(auth, pageable);
@@ -1416,12 +1538,12 @@ class PatientPortalServiceImplPhase2Test {
             // emergency override and every disclosure to an insurer.
             stubPatientResolution();
             Pageable pageable = PageRequest.of(0, 20);
-            when(disclosureAccountingService.getEntries(patientId, null, null, pageable))
+            when(disclosureAccountingService.getEntriesAsPatientSees(patientId, null, null, pageable))
                     .thenReturn(Page.empty(pageable));
 
             service.getMyAccessLog(auth, pageable);
 
-            verify(disclosureAccountingService).getEntries(patientId, null, null, pageable);
+            verify(disclosureAccountingService).getEntriesAsPatientSees(patientId, null, null, pageable);
             // No "never called the old query" assertion here: the service no
             // longer holds an AuditEventLogService at all, so the compiler
             // enforces that far harder than a mock verification could.
@@ -1432,7 +1554,7 @@ class PatientPortalServiceImplPhase2Test {
         void getAccessLog_empty() {
             stubPatientResolution();
             Pageable pageable = PageRequest.of(0, 20);
-            when(disclosureAccountingService.getEntries(patientId, null, null, pageable))
+            when(disclosureAccountingService.getEntriesAsPatientSees(patientId, null, null, pageable))
                     .thenReturn(Page.empty(pageable));
 
             Page<AccessLogEntryDTO> result = service.getMyAccessLog(auth, pageable);
@@ -1452,14 +1574,14 @@ class PatientPortalServiceImplPhase2Test {
             LocalDateTime to = LocalDateTime.of(2026, 8, 1, 0, 0);
             DisclosureAccountingDTO expected =
                     DisclosureAccountingDTO.builder().totalEvents(4).build();
-            when(disclosureAccountingService.getAccounting(patientId, from, to, pageable))
+            when(disclosureAccountingService.getAccountingAsPatientSees(patientId, from, to, pageable))
                     .thenReturn(expected);
 
             DisclosureAccountingDTO result =
                     service.getMyDisclosureAccounting(auth, from, to, pageable);
 
             assertThat(result).isSameAs(expected);
-            verify(disclosureAccountingService).getAccounting(patientId, from, to, pageable);
+            verify(disclosureAccountingService).getAccountingAsPatientSees(patientId, from, to, pageable);
         }
     }
 
@@ -1481,7 +1603,7 @@ class PatientPortalServiceImplPhase2Test {
 
             assertThatThrownBy(() -> service.cancelMyAppointment(auth, dto, Locale.ENGLISH))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("Unable to resolve user");
+                    .hasMessageContaining("patient.refill.decision.userUnresolved");
         }
 
         @Test
@@ -1585,7 +1707,7 @@ class PatientPortalServiceImplPhase2Test {
                     .hospitalId(hospitalId)
                     .departmentId(departmentId)
                     .staffId(staffId)
-                    .date(LocalDate.of(2026, 6, 15))
+                    .date(BOOKING_DATE)
                     .startTime(LocalTime.of(10, 0))
                     .reason("Annual checkup")
                     .notes("First visit")
@@ -1608,6 +1730,13 @@ class PatientPortalServiceImplPhase2Test {
             stubSchedulingBasics();
             when(staffRepository.findActiveProvidersByHospitalAndDepartment(hospitalId, departmentId))
                     .thenReturn(List.of(staff));
+            // QA D1093: "any clinician" is the one whose published slot starts then.
+            when(slotPolicy.offerableAt(departmentId, java.time.LocalDateTime.of(BOOKING_DATE, LocalTime.of(10, 0))))
+                    .thenReturn(List.of(com.example.hms.model.scheduling.AppointmentSlot.builder()
+                            .staff(staff)
+                            .startAt(java.time.LocalDateTime.of(BOOKING_DATE, LocalTime.of(10, 0)))
+                            .endAt(java.time.LocalDateTime.of(BOOKING_DATE, LocalTime.of(10, 30)))
+                            .build()));
             when(staffAvailabilityService.isStaffAvailable(eq(staffId), any())).thenReturn(true);
             when(appointmentRepository.findByStaff_IdAndAppointmentDate(eq(staffId), any()))
                     .thenReturn(List.of());
@@ -1625,7 +1754,7 @@ class PatientPortalServiceImplPhase2Test {
                     .hospitalId(hospitalId)
                     .departmentId(departmentId)
                     .staffId(null)
-                    .date(LocalDate.of(2026, 6, 15))
+                    .date(BOOKING_DATE)
                     .startTime(LocalTime.of(10, 0))
                     .build();
 
@@ -1636,7 +1765,7 @@ class PatientPortalServiceImplPhase2Test {
         }
 
         @Test
-        @DisplayName("should default endTime to startTime + 30 min when omitted")
+        @DisplayName("should default endTime to the slot rules' 30-minute fallback when no template covers it")
         void scheduleDefaultEndTime() {
             stubSchedulingBasics();
             when(staffRepository.findByIdAndActiveTrue(staffId)).thenReturn(Optional.of(staff));
@@ -1653,7 +1782,7 @@ class PatientPortalServiceImplPhase2Test {
                     .hospitalId(hospitalId)
                     .departmentId(departmentId)
                     .staffId(staffId)
-                    .date(LocalDate.of(2026, 6, 15))
+                    .date(BOOKING_DATE)
                     .startTime(LocalTime.of(14, 0))
                     .endTime(null) // should default to 14:30
                     .build();
@@ -1677,7 +1806,7 @@ class PatientPortalServiceImplPhase2Test {
                     .hospitalId(hospitalId)
                     .departmentId(departmentId)
                     .staffId(staffId)
-                    .date(LocalDate.of(2026, 6, 15))
+                    .date(BOOKING_DATE)
                     .startTime(LocalTime.of(10, 0))
                     .build();
 
@@ -1699,7 +1828,7 @@ class PatientPortalServiceImplPhase2Test {
                     .hospitalId(hospitalId)
                     .departmentId(departmentId)
                     .staffId(staffId)
-                    .date(LocalDate.of(2026, 6, 15))
+                    .date(BOOKING_DATE)
                     .startTime(LocalTime.of(10, 0))
                     .build();
 
@@ -1723,7 +1852,7 @@ class PatientPortalServiceImplPhase2Test {
                     .hospitalId(hospitalId)
                     .departmentId(departmentId)
                     .staffId(staffId)
-                    .date(LocalDate.of(2026, 6, 15))
+                    .date(BOOKING_DATE)
                     .startTime(LocalTime.of(10, 0))
                     .build();
 
@@ -1744,7 +1873,7 @@ class PatientPortalServiceImplPhase2Test {
                     .hospitalId(hospitalId)
                     .departmentId(departmentId)
                     .staffId(staffId)
-                    .date(LocalDate.of(2026, 6, 15))
+                    .date(BOOKING_DATE)
                     .startTime(LocalTime.of(10, 0))
                     .build();
 
@@ -1763,7 +1892,7 @@ class PatientPortalServiceImplPhase2Test {
 
             // Create existing appointment at 10:00-10:30 that overlaps the request
             Appointment existing = new Appointment();
-            existing.setAppointmentDate(LocalDate.of(2026, 6, 15));
+            existing.setAppointmentDate(BOOKING_DATE);
             existing.setStartTime(LocalTime.of(10, 0));
             existing.setEndTime(LocalTime.of(10, 30));
             when(appointmentRepository.findByStaff_IdAndAppointmentDate(eq(staffId), any()))
@@ -1773,7 +1902,7 @@ class PatientPortalServiceImplPhase2Test {
                     .hospitalId(hospitalId)
                     .departmentId(departmentId)
                     .staffId(staffId)
-                    .date(LocalDate.of(2026, 6, 15))
+                    .date(BOOKING_DATE)
                     .startTime(LocalTime.of(10, 15))
                     .build();
 
@@ -1781,6 +1910,108 @@ class PatientPortalServiceImplPhase2Test {
                     .isInstanceOf(BusinessException.class)
                     .satisfies(e -> org.assertj.core.api.Assertions.assertThat(e.getMessage())
                             .containsAnyOf("portal.booking.providerBusy", "already has an appointment"));
+        }
+
+        @Test
+        @DisplayName("QA D1093: a time that is not a published, free slot is refused and nothing is booked")
+        void d1093_anOffGridTimeIsRefused() {
+            stubSchedulingBasics();
+            when(staffRepository.findByIdAndActiveTrue(staffId)).thenReturn(Optional.of(staff));
+            when(slotPolicy.requirePublishedFreeSlot(eq(staffId), any(), eq(hospitalId), eq(departmentId)))
+                    .thenThrow(new BusinessException("portal.booking.notAPublishedSlot"));
+
+            PortalBookAppointmentRequestDTO dto = PortalBookAppointmentRequestDTO.builder()
+                    .hospitalId(hospitalId).departmentId(departmentId).staffId(staffId)
+                    .date(BOOKING_DATE).startTime(LocalTime.of(10, 10)).build();
+
+            assertThatThrownBy(() -> service.scheduleMyAppointment(auth, dto, Locale.ENGLISH))
+                    .hasFieldOrPropertyWithValue("messageKey", "portal.booking.notAPublishedSlot");
+            verify(appointmentRepository, never()).save(any());
+            verify(slotPolicy, never()).takeSlot(any(), any());
+        }
+
+        @Test
+        @DisplayName("QA D1093: the self-booking takes its slot, so nobody else is offered it")
+        void d1093_theBookingTakesItsSlot() {
+            stubSchedulingBasics();
+            when(staffRepository.findByIdAndActiveTrue(staffId)).thenReturn(Optional.of(staff));
+            when(staffAvailabilityService.isStaffAvailable(eq(staffId), any())).thenReturn(true);
+            when(appointmentRepository.findByStaff_IdAndAppointmentDate(eq(staffId), any())).thenReturn(List.of());
+            when(assignmentRepository.findActiveStaffAssignment(staff.getUser().getId(), hospitalId))
+                    .thenReturn(Optional.of(assignment));
+            com.example.hms.model.scheduling.AppointmentSlot slot = com.example.hms.model.scheduling.AppointmentSlot
+                    .builder().startAt(java.time.LocalDateTime.of(BOOKING_DATE, LocalTime.of(10, 20)))
+                    .endAt(java.time.LocalDateTime.of(BOOKING_DATE, LocalTime.of(10, 40))).build();
+            when(slotPolicy.requirePublishedFreeSlot(staffId,
+                    java.time.LocalDateTime.of(BOOKING_DATE, LocalTime.of(10, 20)), hospitalId, departmentId))
+                    .thenReturn(slot);
+            when(appointmentRepository.save(any(Appointment.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(appointmentMapper.toAppointmentResponseDTO(any())).thenReturn(AppointmentResponseDTO.builder().build());
+
+            service.scheduleMyAppointment(auth, PortalBookAppointmentRequestDTO.builder()
+                    .hospitalId(hospitalId).departmentId(departmentId).staffId(staffId)
+                    .date(BOOKING_DATE).startTime(LocalTime.of(10, 20)).build(), Locale.ENGLISH);
+
+            ArgumentCaptor<Appointment> saved = ArgumentCaptor.forClass(Appointment.class);
+            verify(appointmentRepository).save(saved.capture());
+            assertThat(saved.getValue().getEndTime()).isEqualTo(LocalTime.of(10, 40));
+            verify(slotPolicy).takeSlot(slot, saved.getValue());
+        }
+
+        @Test
+        @DisplayName("QA D1093: any clinician with no published slot at that time is refused")
+        void d1093_anyClinicianWithoutASlotIsRefused() {
+            stubSchedulingBasics();
+            when(staffRepository.findActiveProvidersByHospitalAndDepartment(hospitalId, departmentId))
+                    .thenReturn(List.of(staff));
+            when(slotPolicy.offerableAt(eq(departmentId), any())).thenReturn(List.of());
+
+            PortalBookAppointmentRequestDTO dto = PortalBookAppointmentRequestDTO.builder()
+                    .hospitalId(hospitalId).departmentId(departmentId)
+                    .date(BOOKING_DATE).startTime(LocalTime.of(15, 0)).build();
+
+            assertThatThrownBy(() -> service.scheduleMyAppointment(auth, dto, Locale.ENGLISH))
+                    .hasFieldOrPropertyWithValue("messageKey", "portal.booking.notAPublishedSlot");
+            verify(appointmentRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("QA D1093: the slots offered are the published, free ones of the day inside the patient day")
+        void d1093_openSlotsAreThePublishedFreeOnes() {
+            stubPatientResolution();
+            when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospitalId))
+                    .thenReturn(Optional.of(new PatientHospitalRegistration()));
+            when(departmentRepository.findById(departmentId)).thenReturn(Optional.of(department));
+            when(staffRepository.findActiveProvidersByHospitalAndDepartment(hospitalId, departmentId))
+                    .thenReturn(List.of(staff));
+            java.util.function.BiFunction<Integer, Integer, com.example.hms.model.scheduling.AppointmentSlot> at =
+                    (h, m) -> {
+                        com.example.hms.model.scheduling.AppointmentSlot s = com.example.hms.model.scheduling
+                                .AppointmentSlot.builder().staff(staff).slotDate(BOOKING_DATE)
+                                .startAt(java.time.LocalDateTime.of(BOOKING_DATE, LocalTime.of(h, m)))
+                                .endAt(java.time.LocalDateTime.of(BOOKING_DATE, LocalTime.of(h, m)).plusMinutes(20))
+                                .build();
+                        s.setId(UUID.randomUUID());
+                        return s;
+                    };
+            com.example.hms.model.scheduling.AppointmentSlot early = at.apply(6, 0);    // before the patient day
+            com.example.hms.model.scheduling.AppointmentSlot free = at.apply(10, 0);
+            com.example.hms.model.scheduling.AppointmentSlot bookedOver = at.apply(10, 20);
+            when(slotPolicy.openOn(eq(hospitalId), eq(departmentId), eq(null), eq(BOOKING_DATE), any(), any(Integer.class)))
+                    .thenReturn(List.of(early, free, bookedOver));
+            Appointment desk = new Appointment();
+            desk.setAppointmentDate(BOOKING_DATE);
+            desk.setStartTime(LocalTime.of(10, 20));
+            desk.setEndTime(LocalTime.of(10, 40));
+            desk.setStatus(AppointmentStatus.SCHEDULED);
+            when(appointmentRepository.findByStaff_IdAndAppointmentDate(staffId, BOOKING_DATE)).thenReturn(List.of(desk));
+
+            List<java.util.Map<String, Object>> slots =
+                    service.getOpenSlots(auth, hospitalId, departmentId, null, BOOKING_DATE);
+
+            assertThat(slots).extracting(m -> m.get("slotId")).containsExactly(free.getId());
+            assertThat(slots.get(0)).containsEntry("startTime", LocalTime.of(10, 0))
+                    .containsEntry("endTime", LocalTime.of(10, 20));
         }
 
         @Test
@@ -1794,7 +2025,7 @@ class PatientPortalServiceImplPhase2Test {
                     .hospitalId(hospitalId)
                     .departmentId(departmentId)
                     .staffId(null)
-                    .date(LocalDate.of(2026, 6, 15))
+                    .date(BOOKING_DATE)
                     .startTime(LocalTime.of(10, 0))
                     .build();
 
@@ -1803,22 +2034,63 @@ class PatientPortalServiceImplPhase2Test {
         }
 
         @Test
-        @DisplayName("should throw when end time is not after start time")
-        void endTimeNotAfterStart_throws() {
+        @DisplayName("QA D1060: a self-booking of a whole day takes one slot; the patient's end time is ignored")
+        void aWholeDayRequestTakesTheSlotLength() {
+            // Was "should throw when end time is not after start time": the API
+            // accepted 07:00-19:00 for one patient; the end is no longer theirs.
             stubSchedulingBasics();
             when(staffRepository.findByIdAndActiveTrue(staffId)).thenReturn(Optional.of(staff));
+            when(staffAvailabilityService.isStaffAvailable(eq(staffId), any())).thenReturn(true);
+            when(appointmentRepository.findByStaff_IdAndAppointmentDate(eq(staffId), any())).thenReturn(List.of());
+            when(assignmentRepository.findActiveStaffAssignment(staff.getUser().getId(), hospitalId))
+                    .thenReturn(Optional.of(assignment));
+            when(appointmentRepository.save(any(Appointment.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(appointmentMapper.toAppointmentResponseDTO(any())).thenReturn(AppointmentResponseDTO.builder().build());
+            // QA D1093: the length is the published slot's own (a 20-minute slot).
+            when(slotPolicy.requirePublishedFreeSlot(staffId,
+                    java.time.LocalDateTime.of(BOOKING_DATE, LocalTime.of(10, 0)), hospitalId, departmentId))
+                    .thenReturn(com.example.hms.model.scheduling.AppointmentSlot.builder()
+                            .startAt(java.time.LocalDateTime.of(BOOKING_DATE, LocalTime.of(10, 0)))
+                            .endAt(java.time.LocalDateTime.of(BOOKING_DATE, LocalTime.of(10, 20)))
+                            .build());
 
             PortalBookAppointmentRequestDTO dto = PortalBookAppointmentRequestDTO.builder()
                     .hospitalId(hospitalId)
                     .departmentId(departmentId)
                     .staffId(staffId)
-                    .date(LocalDate.of(2026, 6, 15))
+                    .date(BOOKING_DATE)
                     .startTime(LocalTime.of(10, 0))
-                    .endTime(LocalTime.of(10, 0)) // same as start — invalid
+                    .endTime(LocalTime.of(19, 0))
+                    .build();
+
+            service.scheduleMyAppointment(auth, dto, Locale.ENGLISH);
+
+            ArgumentCaptor<Appointment> captor = ArgumentCaptor.forClass(Appointment.class);
+            verify(appointmentRepository).save(captor.capture());
+            assertThat(captor.getValue().getEndTime()).isEqualTo(LocalTime.of(10, 20));
+        }
+
+        @Test
+        @DisplayName("QA D1063: a self-booking over a slot held for a waitlist offer is refused")
+        void aHeldSlotIsNotSelfBooked() {
+            stubSchedulingBasics();
+            when(staffRepository.findByIdAndActiveTrue(staffId)).thenReturn(Optional.of(staff));
+            when(staffAvailabilityService.isStaffAvailable(eq(staffId), any())).thenReturn(true);
+            doThrow(new BusinessException("slot.heldForOffer"))
+                    .when(slotPolicy).requireNoLiveHold(eq(staffId), any(), any());
+
+            PortalBookAppointmentRequestDTO dto = PortalBookAppointmentRequestDTO.builder()
+                    .hospitalId(hospitalId)
+                    .departmentId(departmentId)
+                    .staffId(staffId)
+                    .date(BOOKING_DATE)
+                    .startTime(LocalTime.of(8, 0))
                     .build();
 
             assertThatThrownBy(() -> service.scheduleMyAppointment(auth, dto, Locale.ENGLISH))
-                    .isInstanceOf(BusinessException.class);
+                    .isInstanceOf(BusinessException.class)
+                    .hasFieldOrPropertyWithValue("messageKey", "slot.heldForOffer");
+            verify(appointmentRepository, never()).save(any());
         }
     }
 
@@ -1990,6 +2262,25 @@ class PatientPortalServiceImplPhase2Test {
                     service.getProvidersForDepartment(auth, hospId, deptId);
 
             assertThat(result).isEmpty();
+        }
+    }
+
+    @Nested
+    @DisplayName("portal invoice detail (QA D982)")
+    class PortalInvoiceDetail {
+        @Test
+        void theDetailThePdfAndTheReceiptAreThePatientsOwn() {
+            stubPatientResolution();
+            UUID invoiceId = UUID.randomUUID();
+            UUID paymentId = UUID.randomUUID();
+
+            service.getMyInvoiceDetail(auth, invoiceId);
+            service.getMyInvoicePdf(auth, invoiceId, java.util.Locale.FRENCH);
+            service.getMyReceiptPdf(auth, invoiceId, paymentId, java.util.Locale.FRENCH);
+
+            verify(billingInvoiceService).getPortalInvoiceDetail(invoiceId, patientId);
+            verify(billingInvoiceService).getPortalInvoicePdf(invoiceId, patientId, java.util.Locale.FRENCH);
+            verify(billingInvoiceService).getPortalReceiptPdf(invoiceId, paymentId, patientId, java.util.Locale.FRENCH);
         }
     }
 }

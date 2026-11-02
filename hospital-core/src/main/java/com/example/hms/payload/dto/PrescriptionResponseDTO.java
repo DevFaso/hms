@@ -94,6 +94,14 @@ public class PrescriptionResponseDTO {
      */
     private boolean controlledSubstance;
     private boolean requiresCosign;
+    /**
+     * QA D934: drafted by a nurse or a midwife (no signature of her own) and
+     * still unsigned, so a doctor of the order's hospital signs it. Lets the
+     * prescribing screen offer that doctor the Sign action.
+     */
+    private boolean awaitingPhysicianSignature;
+    /** QA D922: the catalogue item the order was written from (or resolved to), so an edit keeps it. */
+    private java.util.UUID medicationCatalogItemId;
     /** QA D757: a take-home order outlives its stay; every other stay order ends at discharge. */
     private boolean takeHome;
     private java.time.LocalDateTime twoFactorVerifiedAt;
@@ -158,6 +166,23 @@ public class PrescriptionResponseDTO {
     /** QA D660: why a signed order was withdrawn; null otherwise. */
     private String withdrawalReason;
 
+    /**
+     * QA D1101 (round 19): why the prescriber passed an alert - a documented
+     * allergy ({@link #allergyOverride} true) or a critical decision-support
+     * alert such as a paediatric dose soft stop. Stored and audited since
+     * round 18, it was never returned, so the verifying pharmacist, the
+     * co-signer and the chart could not see why the stop was passed.
+     */
+    private String overrideReason;
+    /** True when {@link #overrideReason} is an allergy override, false for a decision-support one. */
+    private Boolean allergyOverride;
+
+    /** QA D1096 (round 19): the paediatric dose check asked for a recorded review before signing. */
+    private Boolean pediatricDoseReviewRequired;
+    private LocalDateTime pediatricDoseReviewedAt;
+    private String pediatricDoseReviewedByName;
+    private String pediatricDoseReviewReason;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
@@ -167,6 +192,11 @@ public class PrescriptionResponseDTO {
      * consultation about the order — comes off. Mutates and returns this.
      */
     public PrescriptionResponseDTO withoutClarificationExchange() {
+        // QA D1101/D1096: the clinicians' justifications between themselves
+        // stay on the staff side, like the clarification exchange.
+        this.overrideReason = null;
+        this.allergyOverride = null;
+        this.pediatricDoseReviewReason = null;
         this.clarificationReason = null;
         this.clarificationRequestedAt = null;
         this.clarificationResponse = null;

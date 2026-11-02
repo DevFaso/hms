@@ -1,3 +1,4 @@
+import { textMatches } from '../shared/person-search';
 import {
   Component,
   inject,
@@ -27,11 +28,13 @@ import {
 
 import { currentLocale } from '../shared/i18n/app-locale';
 import { serverInstant, toServerDateTime } from '../shared/date-utils';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { refusalReason } from '../shared/refusal-reason';
 
 @Component({
   selector: 'app-digital-signatures',
   standalone: true,
-  imports: [FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [ModalDialogDirective, FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './digital-signatures.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './digital-signatures.scss',
@@ -131,7 +134,7 @@ export class DigitalSignaturesComponent implements OnInit {
     if (q) {
       list = list.filter(
         (s) =>
-          s.signedByName?.toLowerCase().includes(q) ||
+          textMatches(s.signedByName, q) ||
           s.hospitalName?.toLowerCase().includes(q) ||
           s.reportType?.toLowerCase().includes(q),
       );
@@ -387,12 +390,12 @@ export class DigitalSignaturesComponent implements OnInit {
         this.lookupLoading.set(false);
         this.lookupDone.set(true);
       },
-      error: () => {
+      error: (err: unknown) => {
         this.lookupSignatures.set([]);
         this.lookupSigned.set(null);
         this.lookupLoading.set(false);
         this.lookupDone.set(true);
-        this.toast.error(this.translate.instant('SIGNATURES.LOOKUP_ERROR'));
+        this.toast.error(refusalReason(err) ?? this.translate.instant('SIGNATURES.LOOKUP_ERROR'));
       },
     });
   }

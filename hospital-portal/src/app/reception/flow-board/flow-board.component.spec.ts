@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { FlowBoardComponent } from './flow-board.component';
 import { DragDropModule, CdkDragDrop } from '@angular/cdk/drag-drop';
 import { ToastService } from '../../core/toast.service';
@@ -90,6 +90,33 @@ describe('FlowBoardComponent', () => {
       },
     });
     expect(component.localBoard.scheduled.length).toBe(1);
+  });
+
+  it('QA D1200: the wait time is a sentence of the reader language, not "706Attente min."', () => {
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', { RECEPTION: { WAIT_DURATION: 'Attente : {{minutes}} min' } });
+    translate.use('fr');
+    const board = {
+      scheduled: [],
+      confirmed: [],
+      arrived: [makeItem({ waitMinutes: 706 })],
+      inProgress: [],
+      completed: [],
+      noShow: [],
+      walkIn: [],
+    };
+    component.board = board;
+    component.ngOnChanges({
+      board: {
+        currentValue: board,
+        previousValue: null,
+        firstChange: true,
+        isFirstChange: () => true,
+      },
+    });
+    fixture.detectChanges();
+    const wait = (fixture.nativeElement as HTMLElement).querySelector('.card-wait');
+    expect(wait?.textContent?.trim()).toBe('Attente : 706 min');
   });
 
   it('should have 7 columns', () => {
@@ -197,6 +224,69 @@ describe('FlowBoardComponent', () => {
 
       component.drop(event, 'arrived');
 
+      expect(component.statusChanged.emit).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('QA D1023: keyboard and button paths (WCAG 2.1.1)', () => {
+    const board = (arrived: ReceptionQueueItem[], inProgress: ReceptionQueueItem[] = []) => ({
+      scheduled: [],
+      confirmed: [],
+      arrived,
+      inProgress,
+      completed: [],
+      noShow: [],
+      walkIn: [],
+    });
+
+    it('a never-seen card has a close-unseen button that opens the dialog request', () => {
+      spyOn(component.closeUnseenRequested, 'emit');
+      spyOn(component.patientClicked, 'emit');
+      component.board = board([makeItem({ patientName: 'Aïcha' })]);
+      component.ngOnChanges({ board: { currentValue: component.board } as never });
+      fixture.detectChanges();
+      const button = (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="flow-close-unseen"]',
+      ) as HTMLButtonElement;
+      expect(button).withContext('the button is rendered').toBeTruthy();
+      expect(button.getAttribute('aria-label')).toContain('Aïcha');
+      expect(button.closest('[role="button"]')).withContext('not nested in the card').toBeNull();
+      button.click();
+      expect(component.closeUnseenRequested.emit).toHaveBeenCalledWith({
+        encounterId: 'e1',
+        patientName: 'Aïcha',
+        outcome: 'LEFT_WITHOUT_BEING_SEEN',
+      });
+      expect(component.patientClicked.emit).not.toHaveBeenCalled();
+    });
+
+    it('a seen card has no close-unseen button', () => {
+      component.board = board([], [makeItem({ status: 'IN_PROGRESS' })]);
+      component.ngOnChanges({ board: { currentValue: component.board } as never });
+      fixture.detectChanges();
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector('[data-testid="flow-close-unseen"]'),
+      ).toBeNull();
+    });
+
+    it('Alt+Right moves a card through the same rules as a drop', () => {
+      spyOn(component.statusChanged, 'emit');
+      const seen = makeItem({ status: 'IN_PROGRESS' });
+      component.board = board([], [seen]);
+      component.ngOnChanges({ board: { currentValue: component.board } as never });
+      component.moveCard(seen, 'inProgress', 1);
+      expect(component.statusChanged.emit).toHaveBeenCalledWith({
+        encounterId: 'e1',
+        newStatus: 'COMPLETED',
+      });
+      expect(component.localBoard.completed).toContain(seen);
+    });
+
+    it('Alt+Left from the first column does nothing', () => {
+      spyOn(component.statusChanged, 'emit');
+      const item = makeItem({ status: 'SCHEDULED' });
+      component.localBoard.scheduled = [item];
+      component.moveCard(item, 'scheduled', -1);
       expect(component.statusChanged.emit).not.toHaveBeenCalled();
     });
   });

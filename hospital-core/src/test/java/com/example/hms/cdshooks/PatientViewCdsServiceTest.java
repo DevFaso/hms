@@ -94,7 +94,7 @@ class PatientViewCdsServiceTest {
                 Map.of("patientId", patientId.toString()), null)).cards().get(0);
 
             assertThat(card.summary()).isEqualTo("2 allergies actives au dossier");
-            assertThat(card.detail()).contains("réaction : urticaire").contains("(sévère)")
+            assertThat(card.detail()).contains("réaction : urticaire").contains("(gravité : sévère)") // QA D1134 (changed assertion): the severity names its noun
                 .doesNotContain("reaction:").doesNotContain("severe");
         } finally {
             org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();

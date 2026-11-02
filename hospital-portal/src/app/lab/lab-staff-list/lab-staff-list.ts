@@ -1,3 +1,4 @@
+import { FocusOnRenderDirective } from '../../shared/a11y/focus-on-render.directive';
 import {
   Component,
   computed,
@@ -31,7 +32,14 @@ const ASSIGNABLE_LAB_ROLES: readonly { code: string }[] = [
 @Component({
   selector: 'app-lab-staff-list',
   standalone: true,
-  imports: [CommonModule, RouterModule, FormsModule, TranslateModule, RoleLabelPipe],
+  imports: [
+    FocusOnRenderDirective,
+    CommonModule,
+    RouterModule,
+    FormsModule,
+    TranslateModule,
+    RoleLabelPipe,
+  ],
   templateUrl: './lab-staff-list.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './lab-staff-list.scss',

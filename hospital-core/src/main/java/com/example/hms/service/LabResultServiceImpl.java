@@ -66,6 +66,8 @@ public class LabResultServiceImpl implements LabResultService {
 
     private static final String LAB_RESULT_NOT_FOUND = "labresult.notfound";
     private static final String LAB_ORDER_NOT_FOUND = "laborder.notfound";
+    /** The in-basket reference type of a lab result item. */
+    private static final String LAB_RESULT_REFERENCE_TYPE = "LAB_RESULT";
 
     private static final Logger LOG = LoggerFactory.getLogger(LabResultServiceImpl.class);
 
@@ -102,6 +104,8 @@ public class LabResultServiceImpl implements LabResultService {
     private final AuditEventLogService auditEventLogService;
     /** QA D178: a released result lands in the ordering clinician's in-basket. */
     private final InBasketService inBasketService;
+    /** QA D938 / D931: the patient's and the clinician's notice of a release or a correction. */
+    private final com.example.hms.service.lab.LabResultReleaseNotifier releaseNotifier;
 
     /**
      * Whether a normal-range result is released the moment it is saved, with
@@ -269,7 +273,7 @@ public class LabResultServiceImpl implements LabResultService {
         // first-level cache.
         LabOrderStatus committedStatus = labOrderRepository.findStatusById(lockedOrder.getId());
         if (!ingested) {
-            requireSpecimenTaken(committedStatus, lockedOrder);
+            requireSpecimenTaken(committedStatus, lockedOrder, labSpecimenRepository);
         }
 
         // QA D708 (round 10) narrows what follows: an order is one test
@@ -326,6 +330,8 @@ public class LabResultServiceImpl implements LabResultService {
             // QA D286: a positive qualitative answer is abnormal. An ingested
             // result keeps the analyzer's own OBX-8 flag.
             result.setAbnormalFlag(LabResultValueRules.flagFor(result.getResultValue(), null, result.getAbnormalFlag()));
+            // QA D1095: units come from the test definition; a blank one is the definition's.
+            result.setResultUnit(LabResultMapper.unitOrTestUnit(result.getResultUnit(), labOrder.getLabTestDefinition()));
         }
         if (superseded != null) {
             result.setSupersedesResultId(superseded.getId());
@@ -353,10 +359,9 @@ public class LabResultServiceImpl implements LabResultService {
         // auto-release on the flag alone released critical manual results.
         String severity = severityOf(saved);
         performAutoVerification(saved, severity);
+        LabResult supersededOnRelease = null;
         if (saved.isReleased()) {
-            linkCorrectionOnRelease(saved, lockedOrder, currentUserId);
-        }
-        if (saved.isReleased()) {
+            supersededOnRelease = linkCorrectionOnRelease(saved, lockedOrder, currentUserId);
             completeOrderIfAllReleased(lockedOrder);
         }
         triggerReflexOrders(saved);
@@ -367,6 +372,11 @@ public class LabResultServiceImpl implements LabResultService {
         // lose them. The service defers only its SMS, which is the blocking
         // network hop.
         criticalValueNotificationService.notifyIfCritical(saved, severity);
+        if (saved.isReleased()) {
+            // QA D938 / D931: an auto-verified result is released here, and a
+            // release tells the same people whichever path performed it.
+            announceRelease(saved, supersededOnRelease);
+        }
 
         // The outbound message is queued IN this transaction too. It was
         // deferred to after the commit for a moment, which quietly made it
@@ -811,6 +821,8 @@ public class LabResultServiceImpl implements LabResultService {
         request.setResultDate(plausibleResultDate(request.getResultDate(), labOrder));
         request.setResultValue(LabResultValueRules.normalizeDecimalComma(request.getResultValue()));
         LabResultValueRules.requireValidValue(request.getResultValue(), labOrder.getLabTestDefinition());
+        // QA D1095: as on entry, a blank unit is the test definition's.
+        request.setResultUnit(LabResultMapper.unitOrTestUnit(request.getResultUnit(), labOrder.getLabTestDefinition()));
     UUID currentUserId = authService.getCurrentUserId();
     validateLabResultAuthor(currentUserId, authorityHospitalId(labOrder, hospital, activeHospitalId));
 
@@ -860,8 +872,15 @@ public class LabResultServiceImpl implements LabResultService {
      * collected (still ORDERED or PENDING). A point-of-care test is measured
      * at the bedside with no specimen workflow and is exempt; an analyzer's
      * message is evidence of its own sample.
+     *
+     * <p>QA D1204 (round 23): a rejected specimen sends the order back to
+     * awaiting collection, and the refusal said "no specimen has been
+     * collected", which is false and hides why. An order whose specimen the
+     * laboratory rejected (and that has no live specimen since) gets its own
+     * refusal: the specimen was rejected, collect a new one.
      */
-    private static void requireSpecimenTaken(LabOrderStatus committedStatus, LabOrder labOrder) {
+    static void requireSpecimenTaken(LabOrderStatus committedStatus, LabOrder labOrder,
+                                     com.example.hms.repository.LabSpecimenRepository specimens) {
         if (committedStatus != LabOrderStatus.ORDERED && committedStatus != LabOrderStatus.PENDING) {
             return;
         }
@@ -869,7 +888,10 @@ public class LabResultServiceImpl implements LabResultService {
         if (test != null && test.isPointOfCare()) {
             return;
         }
-        throw new BusinessException(com.example.hms.utility.MessageUtil.resolve("labresult.specimen.required"));
+        boolean rejected = specimens != null && labOrder.getId() != null
+            && specimens.findByLabOrder_Id(labOrder.getId()).stream()
+                .anyMatch(s -> s.getStatus() == com.example.hms.enums.LabSpecimenStatus.REJECTED);
+        throw new BusinessException(rejected ? "labresult.specimen.rejected" : "labresult.specimen.required");
     }
 
     /** Clock skew tolerated between the entering workstation and the server. */
@@ -1004,17 +1026,25 @@ public class LabResultServiceImpl implements LabResultService {
      * the same result cannot both be released over it; the target is re-read
      * and re-checked under that lock.
      */
-    private void linkCorrectionOnRelease(LabResult correction, LabOrder lockedOrder, UUID actorId) {
+    private LabResult linkCorrectionOnRelease(LabResult correction, LabOrder lockedOrder, UUID actorId) {
         UUID targetId = correction.getSupersedesResultId();
         if (targetId == null) {
-            return;
+            return null;
         }
         LabResult target = requireSupersedable(targetId, lockedOrder);
         // Only the link is written on the released row; its value, release
         // stamps and critical history stay exactly as released.
         target.setSupersededByResultId(correction.getId());
         labResultRepository.save(target);
+        // QA D931: the superseded result's in-basket items stayed open, and
+        // opening one answered 404 (a superseded result is withdrawn from
+        // every clinical read). The open items go with the link, in this
+        // transaction; acknowledged ones stay as the record of who saw what.
+        if (inBasketService != null) {
+            inBasketService.removeOpenItemsForReference(target.getId(), LAB_RESULT_REFERENCE_TYPE);
+        }
         auditCorrectionAfterCommit(target.getId(), correction.getId(), actorId);
+        return target;
     }
 
     /** Deleting a correction must leave the original it named current again. */
@@ -1313,17 +1343,24 @@ public class LabResultServiceImpl implements LabResultService {
     @Override
     @Transactional
     public LabResultResponseDTO releaseLabResult(UUID id, Locale locale) {
-        return doReleaseLabResult(id, false);
+        return doReleaseLabResult(id, false, false);
     }
 
     @Override
     @Transactional
     public LabResultResponseDTO releaseLabResult(UUID id, boolean selfReleaseConfirmed, Locale locale) {
-        return doReleaseLabResult(id, selfReleaseConfirmed);
+        return doReleaseLabResult(id, selfReleaseConfirmed, false);
     }
 
-    /** The release itself; both public entry points run it in their own transaction. */
-    private LabResultResponseDTO doReleaseLabResult(UUID id, boolean selfReleaseConfirmed) {
+    @Override
+    @Transactional
+    public LabResultResponseDTO releaseLabResult(UUID id, boolean selfReleaseConfirmed, boolean ungradedConfirmed,
+                                                 Locale locale) {
+        return doReleaseLabResult(id, selfReleaseConfirmed, ungradedConfirmed);
+    }
+
+    /** The release itself; every public entry point runs it in its own transaction. */
+    private LabResultResponseDTO doReleaseLabResult(UUID id, boolean selfReleaseConfirmed, boolean ungradedConfirmed) {
         LabResult labResult = labResultRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(LAB_RESULT_NOT_FOUND));
         // Release was the one write path here without the scope comparison
@@ -1359,11 +1396,24 @@ public class LabResultServiceImpl implements LabResultService {
         if (selfRelease && !selfReleaseConfirmed) {
             throw new ConflictException(com.example.hms.utility.MessageUtil.resolve("labresult.selfRelease.confirmRequired"));
         }
+        // QA D1092: a value no range can grade (its unit matches none and
+        // converts to none) carries no severity, so it can raise no critical
+        // alert. It is never released in one unconsidered click: the releaser
+        // confirms they reviewed it, and the ordering clinician's in-basket
+        // item is flagged for review (fileInOrderingClinicianInBasketAfterCommit).
+        if (!ungradedConfirmed) {
+            initialiseTestDefinition(labResult.getLabOrder());
+            if (labResultMapper.isUngradedForUnitMismatch(labResult)) {
+                throw new ConflictException(com.example.hms.utility.MessageUtil.resolve(
+                    UNGRADED_RELEASE_CONFIRM_KEY, LabResultMapper.unitOf(labResult)));
+            }
+        }
 
+        LabResult superseded = null;
         if (labResult.getSupersedesResultId() != null) {
             LabOrder lockedOrder = labOrderRepository.findWithLockById(labResult.getLabOrder().getId())
                 .orElse(labResult.getLabOrder());
-            linkCorrectionOnRelease(labResult, lockedOrder, actorId);
+            superseded = linkCorrectionOnRelease(labResult, lockedOrder, actorId);
         }
         labResult.setReleased(true);
         labResult.setReleasedAt(LocalDateTime.now());
@@ -1384,8 +1434,34 @@ public class LabResultServiceImpl implements LabResultService {
         // registered for after this transaction commits.
         completeOrderIfAllReleased(labResult.getLabOrder());
         enqueueReleasedObservationAfterCommit(labResult);
-        fileInOrderingClinicianInBasketAfterCommit(labResult);
+        announceRelease(labResult, superseded);
         return labResultMapper.toResponseDTO(labResult);
+    }
+
+    /**
+     * Everything a release tells people, for every path that releases: the
+     * ordering clinician's in-basket item (QA D178), the patient's notice
+     * (QA D938) and, for a correction, the clinician's notice naming the old
+     * and the new value (QA D931). Run after the critical check: a correction
+     * that paged as critical already says it is a correction, so it is not
+     * announced twice.
+     */
+    @Override
+    public void announceReleasedResult(LabResult result) {
+        if (result != null && result.isReleased()) {
+            announceRelease(result, null);
+        }
+    }
+
+    private void announceRelease(LabResult labResult, LabResult superseded) {
+        fileInOrderingClinicianInBasketAfterCommit(labResult, superseded);
+        if (releaseNotifier == null) {
+            return;
+        }
+        releaseNotifier.patientResultReleased(labResult);
+        if (superseded != null && labResult.getCriticalNotifiedAt() == null) {
+            releaseNotifier.correctionReleased(labResult, superseded);
+        }
     }
 
     /**
@@ -1399,7 +1475,14 @@ public class LabResultServiceImpl implements LabResultService {
      * touch a lazy association. Its own transaction, and a failure is logged
      * (ids only) rather than undoing the release.
      */
-    private void fileInOrderingClinicianInBasketAfterCommit(LabResult labResult) {
+    static final String CORRECTION_IN_BASKET_TITLE_KEY = "lab.result.correction.inBasketTitle";
+    /** QA D1092: the 409 a release of an ungraded result answers until it is confirmed. */
+    static final String UNGRADED_RELEASE_CONFIRM_KEY = "labresult.release.ungraded.confirmRequired";
+    /** QA D1092: the in-basket body of a released result no range could grade. */
+    static final String UNGRADED_IN_BASKET_BODY_KEY = "lab.result.ungraded.inBasketBody";
+    static final String CORRECTION_IN_BASKET_BODY_KEY = "lab.result.correction.inBasketBody";
+
+    private void fileInOrderingClinicianInBasketAfterCommit(LabResult labResult, LabResult superseded) {
         if (inBasketService == null) {
             return;
         }
@@ -1408,15 +1491,8 @@ public class LabResultServiceImpl implements LabResultService {
                 || order.getHospital() == null) {
             return;
         }
-        String severity = labResultMapper.severityFlagOf(labResult);
-        com.example.hms.enums.InBasketPriority priority = switch (severity) {
-            case LabResultMapper.FLAG_CRITICAL -> com.example.hms.enums.InBasketPriority.CRITICAL;
-            case "LOW", "HIGH", LabResultMapper.FLAG_ABNORMAL -> com.example.hms.enums.InBasketPriority.URGENT;
-            // QA D286: no range grades a qualitative answer; its recorded flag does.
-            default -> labResult.getAbnormalFlag() != null && labResult.getAbnormalFlag() != AbnormalFlag.NORMAL
-                ? com.example.hms.enums.InBasketPriority.URGENT
-                : com.example.hms.enums.InBasketPriority.NORMAL;
-        };
+        boolean ungraded = labResultMapper.isUngradedForUnitMismatch(labResult);
+        com.example.hms.enums.InBasketPriority priority = inBasketPriorityOf(labResult, superseded, ungraded);
         String testName = order.getLabTestDefinition() != null
             ? order.getLabTestDefinition().getName()
             // QA D648: the same "deleted test" label as every other lab screen.
@@ -1428,11 +1504,13 @@ public class LabResultServiceImpl implements LabResultService {
         request.setHospitalId(order.getHospital().getId());
         request.setItemType(com.example.hms.enums.InBasketItemType.RESULT);
         request.setPriority(priority);
-        request.setTitle(testName != null ? testName : "Lab result");
+        String title = describeChange(request, testName != null ? testName : "Lab result", labResult, superseded,
+            ungraded);
+        request.setTitle(title);
         request.setReferenceId(labResult.getId());
-        request.setReferenceType("LAB_RESULT");
+        request.setReferenceType(LAB_RESULT_REFERENCE_TYPE);
         request.setPatientId(patient != null ? patient.getId() : null);
-        request.setPatientName(patient != null ? (patient.getFirstName() + " " + patient.getLastName()).trim() : null);
+        request.setPatientName(patient != null ? patient.getFullName() : null);
         request.setEncounterId(order.getEncounter() != null ? order.getEncounter().getId() : null);
         UUID resultId = labResult.getId();
         TransactionCallbacks.afterCommit(() -> {
@@ -1442,6 +1520,62 @@ public class LabResultServiceImpl implements LabResultService {
                 LOG.warn("In-basket item not filed for released result {}: {}", resultId, ex.getClass().getSimpleName());
             }
         });
+    }
+
+    /** The in-basket priority of a released result for its ordering clinician. */
+    private com.example.hms.enums.InBasketPriority inBasketPriorityOf(LabResult labResult, LabResult superseded,
+                                                                     boolean ungraded) {
+        String severity = labResultMapper.severityFlagOf(labResult);
+        com.example.hms.enums.InBasketPriority priority = switch (severity) {
+            case LabResultMapper.FLAG_CRITICAL -> com.example.hms.enums.InBasketPriority.CRITICAL;
+            case "LOW", "HIGH", LabResultMapper.FLAG_ABNORMAL -> com.example.hms.enums.InBasketPriority.URGENT;
+            // QA D286: no range grades a qualitative answer; its recorded flag does.
+            default -> labResult.getAbnormalFlag() != null && labResult.getAbnormalFlag() != AbnormalFlag.NORMAL
+                ? com.example.hms.enums.InBasketPriority.URGENT
+                : com.example.hms.enums.InBasketPriority.NORMAL;
+        };
+        // QA D931: a value the clinician may already have acted on has changed;
+        // that is never a routine item, whatever the new value grades as.
+        // QA D1092: no range could grade the value (its unit matches none), so
+        // nothing can say it is not critical. The clinician reviews it.
+        if ((superseded != null || ungraded) && priority == com.example.hms.enums.InBasketPriority.NORMAL) {
+            return com.example.hms.enums.InBasketPriority.URGENT;
+        }
+        return priority;
+    }
+
+    /**
+     * The correction (QA D931) or ungraded (QA D1092) wording of the item, as text
+     * and as keys (QA D1053: each reader sees it in their language). Returns the title.
+     */
+    private static String describeChange(com.example.hms.payload.dto.clinical.CreateInBasketItemRequest request,
+                                         String title, LabResult labResult, LabResult superseded, boolean ungraded) {
+        if (superseded != null) {
+            // QA D931: the item says it replaces a result, and from what to what.
+            Object[] titleArgs = {title};
+            Object[] bodyArgs = {
+                com.example.hms.service.lab.LabResultReleaseNotifier.valueOf(superseded),
+                com.example.hms.service.lab.LabResultReleaseNotifier.valueOf(labResult)
+            };
+            request.setTitleKey(CORRECTION_IN_BASKET_TITLE_KEY);
+            request.setTitleArgs(titleArgs);
+            request.setBody(com.example.hms.utility.MessageUtil.resolve(
+                com.example.hms.service.i18n.NotificationLocales.STAFF, CORRECTION_IN_BASKET_BODY_KEY, bodyArgs));
+            request.setBodyKey(CORRECTION_IN_BASKET_BODY_KEY);
+            request.setBodyArgs(bodyArgs);
+            return com.example.hms.utility.MessageUtil.resolve(
+                com.example.hms.service.i18n.NotificationLocales.STAFF, CORRECTION_IN_BASKET_TITLE_KEY, titleArgs);
+        }
+        if (ungraded) {
+            Object[] bodyArgs = {
+                com.example.hms.service.lab.LabResultReleaseNotifier.valueOf(labResult)
+            };
+            request.setBody(com.example.hms.utility.MessageUtil.resolve(
+                com.example.hms.service.i18n.NotificationLocales.STAFF, UNGRADED_IN_BASKET_BODY_KEY, bodyArgs));
+            request.setBodyKey(UNGRADED_IN_BASKET_BODY_KEY);
+            request.setBodyArgs(bodyArgs);
+        }
+        return title;
     }
 
     /**
@@ -2253,10 +2387,12 @@ public class LabResultServiceImpl implements LabResultService {
 
             LabResultComparisonDTO.TrendDirection direction = determineTrendDirection(trendHistory);
             String significance = determineSignificance(percentageChange);
-            String interpretation = generateInterpretation(currentNum, previousNum, absoluteChange, percentageChange, daysBetween, current.getResultUnit());
+            String interpretation = generateInterpretation(currentNum, previousNum, absoluteChange, percentageChange, daysBetween, LabResultMapper.unitOf(current));
 
             return LabResultComparisonDTO.ComparisonMetadata.builder()
-                .absoluteChange(String.format("%.2f %s", absoluteChange, current.getResultUnit() != null ? current.getResultUnit() : ""))
+                .absoluteChange((com.example.hms.utility.DisplayNumbers.decimal(absoluteChange, 2,
+                    com.example.hms.utility.DisplayNumbers.requestLocale()) + " "
+                    + (LabResultMapper.unitOf(current) != null ? LabResultMapper.unitOf(current) : "")).trim())
                 .percentageChange(percentageChange)
                 .trendDirection(direction)
                 .daysBetween(daysBetween)
@@ -2337,9 +2473,10 @@ public class LabResultServiceImpl implements LabResultService {
         String unitStr = unit != null ? " " + unit : "";
         java.util.Locale locale = org.springframework.context.i18n.LocaleContextHolder.getLocale();
         return com.example.hms.utility.MessageUtil.resolve(key,
-            String.format(locale, "%.2f", Math.abs(absoluteChange)), unitStr,
-            String.format(locale, "%.1f", Math.abs(percentageChange)), String.valueOf(daysBetween),
-            String.format(locale, "%.2f", previous), String.format(locale, "%.2f", current));
+            com.example.hms.utility.DisplayNumbers.decimal(Math.abs(absoluteChange), 2, locale), unitStr,
+            com.example.hms.utility.DisplayNumbers.decimal(Math.abs(percentageChange), 1, locale), String.valueOf(daysBetween),
+            com.example.hms.utility.DisplayNumbers.decimal(previous, 2, locale),
+            com.example.hms.utility.DisplayNumbers.decimal(current, 2, locale));
     }
 
     private List<LabResultReferenceRangeDTO> extractReferenceRanges(LabOrder labOrder) {
@@ -2348,17 +2485,8 @@ public class LabResultServiceImpl implements LabResultService {
         }
 
         return labOrder.getLabTestDefinition().getReferenceRanges().stream()
-            .map(range -> LabResultReferenceRangeDTO.builder()
-                .minValue(range.getMinValue())
-                .maxValue(range.getMaxValue())
-                .unit(range.getUnit())
-                .ageMin(range.getAgeMin())
-                .ageMax(range.getAgeMax())
-                .gender(range.getGender())
-                .notes(range.getNotes())
-                .criticalLow(range.getCriticalLow())
-                .criticalHigh(range.getCriticalHigh())
-                .build())
+            .filter(java.util.Objects::nonNull)
+            .map(LabResultMapper::toReferenceRangeDto)
             .toList();
     }
 }

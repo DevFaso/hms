@@ -68,17 +68,21 @@
                     type="button"
                     class="btn-secondary btn-sm"
                     [title]="'COMMON.EDIT' | translate"
+                    [attr.aria-label]="'COMMON.EDIT' | translate"
                     (click)="openEdit(i)"
+                    [attr.aria-label]="'COMMON.EDIT' | translate"
                   >
-                    <span class="material-symbols-outlined">edit</span>
+                    <span class="material-symbols-outlined" aria-hidden="true">edit</span>
                   </button>
                   <button
                     type="button"
                     class="btn-secondary btn-sm danger"
                     [title]="'COMMON.DELETE' | translate"
+                    [attr.aria-label]="'COMMON.DELETE' | translate"
                     (click)="confirmDelete(i)"
+                    [attr.aria-label]="'COMMON.DELETE' | translate"
                   >
-                    <span class="material-symbols-outlined">delete</span>
+                    <span class="material-symbols-outlined" aria-hidden="true">delete</span>
                   </button>
                 }
               </td>
@@ -314,14 +318,17 @@
   <div class="modal-backdrop" tabindex="-1" (click)="closeLink()" (keydown.escape)="closeLink()">
     <div
       class="modal"
+      aria-labelledby="coverage-tab-dialog-6-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
       (keydown.escape)="$event.stopPropagation()"
+      appDialogFocus
+      (dialogDismiss)="closeLink()"
     >
       <div class="modal-header">
-        <h2>{{ 'COVERAGE.LINK_INSURANCE' | translate }}</h2>
+        <h2 id="coverage-tab-dialog-6-title">{{ 'COVERAGE.LINK_INSURANCE' | translate }}</h2>
         <button
           type="button"
           class="modal-close"
@@ -343,6 +350,19 @@
             <input id="cov-policy" type="text" [(ngModel)]="linkForm.policyNumber" />
           </div>
         </div>
+        <!-- QA D925: the insurer's name; the payer code stands in when left blank. -->
+        <div class="form-row">
+          <div class="field">
+            <label for="cov-link-provider">{{ 'COVERAGE.PROVIDER' | translate }}</label>
+            <input
+              id="cov-link-provider"
+              type="text"
+              maxlength="150"
+              [(ngModel)]="linkForm.providerName"
+              [placeholder]="'COVERAGE.PROVIDER_DEFAULTS_TO_PAYER' | translate"
+            />
+          </div>
+        </div>
         <div class="checkbox-row">
           <label>
             <input type="checkbox" [(ngModel)]="linkPrimary" />
@@ -357,7 +377,9 @@
         <button
           type="button"
           class="btn-primary"
-          [disabled]="linkSaving() || !linkForm.payerCode || !linkForm.policyNumber"
+          [disabled]="linkSaving()"
+          [appSubmitGuard]="!linkForm.payerCode || !linkForm.policyNumber"
+          [submitGuardFields]="['cov-payer', 'cov-policy']"
           (click)="submitLink()"
         >
           {{ 'COMMON.SAVE' | translate }}
@@ -372,14 +394,17 @@
   <div class="modal-backdrop" tabindex="-1" (click)="closeEdit()" (keydown.escape)="closeEdit()">
     <div
       class="modal"
+      aria-labelledby="coverage-tab-dialog-5-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
       (keydown.escape)="$event.stopPropagation()"
+      appDialogFocus
+      (dialogDismiss)="closeEdit()"
     >
       <div class="modal-header">
-        <h2>{{ 'COVERAGE.EDIT_INSURANCE' | translate }}</h2>
+        <h2 id="coverage-tab-dialog-5-title">{{ 'COVERAGE.EDIT_INSURANCE' | translate }}</h2>
         <button
           type="button"
           class="modal-close"
@@ -440,7 +465,9 @@
         <button
           type="button"
           class="btn-primary"
-          [disabled]="editSaving() || !editForm.providerName || !editForm.policyNumber"
+          [disabled]="editSaving()"
+          [appSubmitGuard]="!editForm.providerName || !editForm.policyNumber"
+          [submitGuardFields]="['cov-provider', 'cov-edit-policy']"
           (click)="submitEdit()"
         >
           {{ 'COMMON.SAVE' | translate }}
@@ -460,14 +487,17 @@
   >
     <div
       class="modal"
+      aria-labelledby="coverage-tab-dialog-4-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
       (keydown.escape)="$event.stopPropagation()"
+      appDialogFocus
+      (dialogDismiss)="closeDelete()"
     >
       <div class="modal-header">
-        <h2>{{ 'COVERAGE.DELETE_TITLE' | translate }}</h2>
+        <h2 id="coverage-tab-dialog-4-title">{{ 'COVERAGE.DELETE_TITLE' | translate }}</h2>
         <button
           type="button"
           class="modal-close"
@@ -480,7 +510,7 @@
       <div class="modal-body">
         <p>
           {{ 'COVERAGE.DELETE_CONFIRM' | translate }} <strong>{{ target.providerName }}</strong> —
-          {{ target.policyNumber }}?
+          {{ target.policyNumber }}{{ 'COMMON.QUESTION_MARK' | translate }}
         </p>
       </div>
       <div class="modal-actions">
@@ -505,14 +535,17 @@
   >
     <div
       class="modal"
+      aria-labelledby="coverage-tab-dialog-3-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
       (keydown.escape)="$event.stopPropagation()"
+      appDialogFocus
+      (dialogDismiss)="closeGuarantor()"
     >
       <div class="modal-header">
-        <h2>
+        <h2 id="coverage-tab-dialog-3-title">
           {{
             (editingGuarantor() ? 'COVERAGE.EDIT_GUARANTOR' : 'COVERAGE.ADD_GUARANTOR') | translate
           }}
@@ -551,7 +584,13 @@
         <div class="form-row">
           <div class="field">
             <label for="gua-phone">{{ 'COVERAGE.GUARANTOR_PHONE' | translate }}</label>
-            <input id="gua-phone" type="text" maxlength="20" [(ngModel)]="guarantorForm.phone" />
+            <input
+              id="gua-phone"
+              type="tel"
+              appPhoneField
+              maxlength="20"
+              [(ngModel)]="guarantorForm.phone"
+            />
           </div>
           <div class="field">
             <label for="gua-email">{{ 'COVERAGE.GUARANTOR_EMAIL' | translate }}</label>
@@ -595,7 +634,9 @@
           type="button"
           class="btn-primary"
           data-testid="guarantor-save"
-          [disabled]="guarantorSaving() || !guarantorForm.fullName"
+          [disabled]="guarantorSaving()"
+          [appSubmitGuard]="!guarantorForm.fullName"
+          [submitGuardFields]="['gua-name']"
           (click)="submitGuarantor()"
         >
           {{ 'COMMON.SAVE' | translate }}
@@ -615,14 +656,17 @@
   >
     <div
       class="modal"
+      aria-labelledby="coverage-tab-dialog-2-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
       (keydown.escape)="$event.stopPropagation()"
+      appDialogFocus
+      (dialogDismiss)="closeConsent()"
     >
       <div class="modal-header">
-        <h2>{{ 'COVERAGE.RECORD_CONSENT' | translate }}</h2>
+        <h2 id="coverage-tab-dialog-2-title">{{ 'COVERAGE.RECORD_CONSENT' | translate }}</h2>
         <button
           type="button"
           class="modal-close"
@@ -646,7 +690,8 @@
             </select>
           </div>
           <div class="field">
-            <label for="con-name">{{ 'COVERAGE.CONSENT_SIGNED_BY' | translate }}</label>
+            <!-- QA D1148: a consent names who gave it; it is never stored unsigned. -->
+            <label for="con-name">{{ 'COVERAGE.CONSENT_SIGNED_BY' | translate }} *</label>
             <input
               id="con-name"
               type="text"
@@ -677,6 +722,8 @@
           class="btn-primary"
           data-testid="consent-save"
           [disabled]="consentSaving()"
+          [appSubmitGuard]="!consentForm.signedName.trim()"
+          [submitGuardFields]="['con-name']"
           (click)="submitConsent()"
         >
           {{ 'COMMON.SAVE' | translate }}
@@ -696,14 +743,17 @@
   >
     <div
       class="modal"
+      aria-labelledby="coverage-tab-dialog-1-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
       (keydown.escape)="$event.stopPropagation()"
+      appDialogFocus
+      (dialogDismiss)="closeRevoke()"
     >
       <div class="modal-header">
-        <h2>{{ 'COVERAGE.REVOKE_CONSENT' | translate }}</h2>
+        <h2 id="coverage-tab-dialog-1-title">{{ 'COVERAGE.REVOKE_CONSENT' | translate }}</h2>
         <button
           type="button"
           class="modal-close"

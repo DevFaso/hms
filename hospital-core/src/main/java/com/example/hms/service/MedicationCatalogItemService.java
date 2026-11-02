@@ -22,4 +22,11 @@ public interface MedicationCatalogItemService {
     MedicationCatalogItemResponseDTO update(UUID id, MedicationCatalogItemRequestDTO dto);
 
     void deactivate(UUID id, UUID hospitalId);
+
+    /**
+     * Round 18 (QA D935): the hospital pharmacy sets, or approves, an item's
+     * paediatric dose limits. Scoped to the caller's acting hospital; audited.
+     */
+    MedicationCatalogItemResponseDTO updatePediatricDosing(
+        UUID id, com.example.hms.payload.dto.medication.PediatricDosingRequestDTO dto);
 }

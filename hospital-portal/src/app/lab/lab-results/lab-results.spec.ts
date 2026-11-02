@@ -166,6 +166,46 @@ describe('LabResultsComponent', () => {
     expect(component.filtered()[0].patientFullName).toBe('Alice Smith');
   });
 
+  it('QA D968: the detail panel takes focus, keeps Tab inside, closes on Escape and gives focus back', async () => {
+    fixture.detectChanges();
+    flushInit();
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    const trigger = host.querySelector<HTMLButtonElement>('.view-link')!;
+    trigger.focus();
+    trigger.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    await new Promise((resolve) => setTimeout(resolve));
+
+    const dialog = host.querySelector<HTMLElement>('.detail-panel[role="dialog"]')!;
+    expect(dialog.getAttribute('aria-modal')).toBe('true');
+    expect(dialog.getAttribute('aria-labelledby')).toBeTruthy();
+    expect(dialog.contains(document.activeElement)).withContext('focus moved in').toBeTrue();
+    // Tab from the last element comes back to the first instead of walking to
+    // the page behind (round 22: the shared appModalDialog trap replaced
+    // cdkTrapFocus, so the dialog also keeps typed text on Escape).
+    const focusables = Array.from(
+      dialog.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), a[href], input, select, textarea',
+      ),
+    );
+    const last = focusables[focusables.length - 1];
+    last.focus();
+    const tab = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+    last.dispatchEvent(tab);
+    expect(tab.defaultPrevented).withContext('Tab is kept inside the dialog').toBeTrue();
+    expect(document.activeElement).toBe(focusables[0]);
+
+    (document.activeElement as HTMLElement).dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+    );
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(component.selectedResult()).toBeNull();
+    expect(document.activeElement).withContext('focus returned to the trigger').toBe(trigger);
+  });
+
   describe('D81: released results', () => {
     function allowEntry(): void {
       spyOn(
@@ -209,6 +249,44 @@ describe('LabResultsComponent', () => {
       expect(host.querySelector('[data-testid="superseded-result-1"]')).not.toBeNull();
       expect(host.querySelector('[data-testid="correct-result-1"]')).toBeNull();
     });
+
+    it('QA D931: keeps a released correction marked "Corrected", in the list and the detail', () => {
+      fixture.detectChanges();
+      flushInit([mockResult({ released: true, supersedesResultId: 'result-0' })]);
+      fixture.detectChanges();
+
+      const host = fixture.nativeElement as HTMLElement;
+      expect(host.querySelector('[data-testid="corrected-result-1"]')?.textContent).toContain(
+        'LAB_RESULTS.CORRECTED',
+      );
+      component.viewResult(component.results()[0]);
+      fixture.detectChanges();
+      expect(host.querySelector('[data-testid="detail-corrected"]')).not.toBeNull();
+    });
+  });
+
+  // QA D1205 / D1167 / D1137 (round 22): "RectificationEn attente de publication".
+  it('QA D1205: every badge pair of the status cell is separated by a word space', () => {
+    fixture.detectChanges();
+    flushInit([
+      mockResult({ id: 'r-pend', released: false, supersedesResultId: 'result-0' }),
+      mockResult({
+        id: 'r-rel',
+        released: true,
+        supersedesResultId: 'result-0',
+        supersededByResultId: 'result-9',
+      }),
+    ]);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    const cells = Array.from(host.querySelectorAll<HTMLElement>('tbody tr')).map((tr) =>
+      Array.from(tr.querySelectorAll('td')).find((td) => td.querySelector('.status-badge')),
+    );
+    const pending = cells[0]!.textContent!.replace(/\s+/g, ' ').trim();
+    // QA D1222: the row pill has its own singular key (es "Pendiente de publicación").
+    expect(pending).toBe('LAB_RESULTS.CORRECTION LAB_RESULTS.ROW_PENDING_RELEASE');
+    const released = cells[1]!.textContent!.replace(/\s+/g, ' ').trim();
+    expect(released).toContain('LAB_RESULTS.RELEASED LAB_RESULTS.SUPERSEDED LAB_RESULTS.CORRECTED');
   });
 
   it('should open create modal', () => {
@@ -915,6 +993,81 @@ describe('LabResultsComponent — rendered delete gate and order picker', () => 
     expect(component.orders().map((o) => o.id)).toEqual(['o-glu']);
   });
 
+  it('QA D1204: "New result" offers no order whose specimen was never taken or was rejected', () => {
+    setup(['ROLE_LAB_SCIENTIST']);
+    const order = (id: string, status: string) => ({
+      id,
+      labOrderCode: id,
+      patientId: 'p-1',
+      labTestName: 'NFS',
+      labTestCode: 'CBC',
+      status,
+    });
+    flushInit(
+      [],
+      [
+        order('LAB-000029', 'ORDERED'), // never collected
+        order('LAB-000032', 'PENDING'), // specimen rejected, back to awaiting collection
+        order('o-collected', 'COLLECTED'),
+        order('o-received', 'RECEIVED'),
+        order('o-running', 'IN_PROGRESS'),
+      ],
+    );
+    component.openCreate();
+    fixture.detectChanges();
+    const picker = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLOptionElement>(
+        '#lr-orderId option',
+      ),
+    ).map((o) => o.value);
+    expect(picker).toEqual(['', 'o-collected', 'o-received', 'o-running']);
+  });
+
+  it('QA D1176: "New result" offers no order that already has a result or is closed; a correction keeps its own', () => {
+    setup(['ROLE_LAB_SCIENTIST']);
+    const order = (id: string, status: string) => ({
+      id,
+      labOrderCode: id,
+      patientId: 'p-1',
+      labTestName: 'Glucose',
+      labTestCode: 'GLU',
+      status,
+    });
+    flushInit(
+      [],
+      [
+        order('o-new', 'COLLECTED'),
+        order('o-resulted', 'RESULTED'),
+        order('o-done', 'COMPLETED'),
+        order('o-verified', 'VERIFIED'),
+        order('o-cancelled', 'CANCELLED'),
+      ],
+    );
+    expect(component.orders().map((o) => o.id)).toEqual(['o-new']);
+    const options = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('#lr-orderId option'),
+    );
+    // Rendered only once the modal is open.
+    component.openCreate();
+    fixture.detectChanges();
+    const picker = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLOptionElement>(
+        '#lr-orderId option',
+      ),
+    ).map((o) => o.value);
+    expect(options.length).toBe(0);
+    expect(picker).toEqual(['', 'o-new']);
+    component.closeModal();
+
+    // Correcting the released result of a completed order keeps that order selectable.
+    component.openCorrection(
+      mockResult({ id: 'r-1', labOrderId: 'o-done', released: true }) as never,
+    );
+    expect(component.orders().map((o) => o.id)).toEqual(['o-new', 'o-done']);
+    component.closeModal();
+    expect(component.orders().map((o) => o.id)).toEqual(['o-new']);
+  });
+
   it('QA D648: an order flagged as missing its definition stays out of the picker despite its label', () => {
     setup(['ROLE_LAB_SCIENTIST']);
     flushInit(
@@ -938,5 +1091,63 @@ describe('LabResultsComponent — rendered delete gate and order picker', () => 
     );
 
     expect(component.orders().map((o) => o.id)).toEqual(['o-glu']);
+  });
+
+  it('QA D1095: choosing an order prefills the unit from its test, and a blank unit is filled on save', () => {
+    setup(['ROLE_LAB_SCIENTIST']);
+    flushInit(
+      [],
+      [
+        {
+          id: 'o-glu',
+          labOrderCode: 'o-glu',
+          patientId: 'patient-1',
+          labTestName: 'Glucose',
+          labTestCode: 'GLU',
+          labTestUnit: 'g/L',
+        },
+      ],
+    );
+
+    component.form.labOrderId = 'o-glu';
+    component.onOrderChange('o-glu');
+    expect(component.form.resultUnit).toBe('g/L');
+    expect(component.selectedTestUnit()).toBe('g/L');
+
+    component.form.resultUnit = '   ';
+    component.form.resultValue = '0,40';
+    component.submitForm();
+    const req = httpMock.expectOne((r) => r.url === '/lab-results' && r.method === 'POST');
+    expect(req.request.body.resultUnit).toBe('g/L');
+  });
+
+  it('QA D1092: a result no range can grade is released only after the warning is confirmed', () => {
+    setup(['ROLE_LAB_SCIENTIST']);
+    const ungraded = mockResult({
+      unitMismatch: true,
+      enteredByUserId: 'user-2',
+      resultUnit: 'mEq/L',
+    });
+    flushInit([ungraded], []);
+
+    component.releaseResult(ungraded as unknown as LabResultResponse);
+    fixture.detectChanges();
+    httpMock.expectNone((r) => r.method === 'POST');
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[data-testid="release-ungraded-note"]')).not.toBeNull();
+
+    component.confirmSelfRelease();
+    const req = httpMock.expectOne(
+      (r) => r.url === '/lab-results/result-1/release' && r.method === 'POST',
+    );
+    expect(req.request.params.get('ungradedConfirmed')).toBe('true');
+    expect(req.request.params.has('selfRelease')).toBeFalse();
+    req.flush({ ...ungraded, released: true });
+    httpMock
+      .expectOne((r) => r.url === '/lab-results' && r.method === 'GET')
+      .flush({
+        data: { content: [], totalElements: 0, totalPages: 1, number: 0 },
+        success: true,
+      });
   });
 });

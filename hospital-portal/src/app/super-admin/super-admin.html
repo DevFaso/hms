@@ -119,7 +119,7 @@
           @for (row of selectedActivityRows(); track row.id; let i = $index) {
             <div class="activity-row" [attr.data-test]="'activity-row-' + i">
               <div class="activity-id">
-                <code>{{ row.id || '—' }}</code>
+                <code>{{ row.code || '—' }}</code>
               </div>
               <div class="activity-summary">{{ row.summary || '—' }}</div>
               <div class="activity-timestamp">

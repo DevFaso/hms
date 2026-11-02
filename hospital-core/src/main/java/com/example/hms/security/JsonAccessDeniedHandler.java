@@ -6,6 +6,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.web.access.AccessDeniedHandler;
+import org.springframework.security.web.csrf.CsrfException;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -22,6 +23,13 @@ import java.time.Instant;
 public final class JsonAccessDeniedHandler implements AccessDeniedHandler {
 
     static final String CODE_ACCESS_DENIED = "ACCESS_DENIED";
+    /**
+     * QA D1145: a missing or stale CSRF token is not "you may not do this".
+     * It was answered as the same opaque ACCESS_DENIED, so the portal sent a
+     * billing user who may search invoices to the forbidden page. Its own code
+     * lets the portal fetch a fresh token and replay the request once.
+     */
+    static final String CODE_CSRF_TOKEN_INVALID = "CSRF_TOKEN_INVALID";
 
     @Override
     public void handle(HttpServletRequest request, HttpServletResponse response,
@@ -29,8 +37,10 @@ public final class JsonAccessDeniedHandler implements AccessDeniedHandler {
         if (response.isCommitted()) {
             return;
         }
-        String message = MessageUtil.resolveOrRaw("error.access.denied");
-        if (message == null || "error.access.denied".equals(message)) {
+        boolean csrf = accessDeniedException instanceof CsrfException;
+        String key = csrf ? "error.csrf.invalid" : "error.access.denied";
+        String message = MessageUtil.resolveOrRaw(key);
+        if (message == null || key.equals(message)) {
             message = "Access denied";
         }
         response.setStatus(HttpServletResponse.SC_FORBIDDEN);
@@ -40,7 +50,7 @@ public final class JsonAccessDeniedHandler implements AccessDeniedHandler {
             + ",\"status\":403,\"error\":\"Forbidden\""
             + ",\"message\":\"" + jsonEscape(message) + "\""
             + ",\"path\":\"" + jsonEscape(request.getRequestURI()) + "\""
-            + ",\"code\":\"" + CODE_ACCESS_DENIED + "\"}");
+            + ",\"code\":\"" + (csrf ? CODE_CSRF_TOKEN_INVALID : CODE_ACCESS_DENIED) + "\"}");
     }
 
     static String jsonEscape(String raw) {

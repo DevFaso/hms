@@ -13,6 +13,12 @@ export interface NurseVitalTask {
   overdue: boolean;
 }
 
+/** QA D922: a colleague who may witness a controlled dose. */
+export interface AdministrationWitnessCandidate {
+  userId: string;
+  displayName: string;
+}
+
 export interface NurseMedicationTask {
   id: string;
   patientId: string;
@@ -20,8 +26,15 @@ export interface NurseMedicationTask {
   medication: string;
   dose: string;
   route: string;
+  /** QA D950: the route as a form code (PO, IV…) whatever way it was stored; null when unknown. */
+  routeCode?: string | null;
   dueTime: string;
+  /** DUE, OVERDUE, UPCOMING (next slot not yet open, QA D949) or COMPLETED (no dose left). */
   status: string;
+  /** QA D929: GIVEN, HELD, REFUSED or MISSED for the last closed dose; null when none. */
+  lastOutcome?: string | null;
+  /** QA D922: a controlled substance (prescriber's tick or the catalogue's flag). */
+  controlledSubstance?: boolean;
   /**
    * Pharmacist verification (Tier 2 item 33). Both flags come from the server
    * on the task itself rather than being derived in the UI, so a nurse sees
@@ -79,6 +92,11 @@ export interface NurseHandoff {
   patientName: string;
   direction: string;
   updatedAt: string;
+  /**
+   * QA D1075: when the handoff was reported. `updatedAt` moves on completion,
+   * so it is never the report time (absent only on a server that predates it).
+   */
+  createdAt?: string | null;
   /** SBAR situation line. */
   note: string | null;
   background: string | null;
@@ -197,6 +215,8 @@ export interface NurseVitalCaptureRequest {
   onOxygen?: boolean;
   /** NEWS2 (P3 #25b): ACVPU consciousness assessment. */
   consciousnessLevel?: 'ALERT' | 'NEW_CONFUSION' | 'VOICE' | 'PAIN' | 'UNRESPONSIVE';
+  /** QA D1045: the 0-10 pain score of a ward reassessment. */
+  painScale?: number;
   notes?: string;
 }
 
@@ -263,6 +283,16 @@ export interface NurseCareNoteResponse {
   documentedAt: string;
 }
 
+/** PUT /nurse/medications/mar/{id}/administer (NurseMedicationAdministrationRequestDTO). */
+export interface MedicationAdministrationRequest {
+  status: string;
+  note?: string;
+  overrideReason?: string;
+  witnessUserId?: string;
+  /** QA D1210: why a dose is given before the minimum interval since the last one. */
+  earlyDoseReason?: string;
+}
+
 @Injectable({ providedIn: 'root' })
 export class NurseTaskService {
   private readonly http = inject(HttpClient);
@@ -294,9 +324,23 @@ export class NurseTaskService {
     });
   }
 
+  /**
+   * QA D922: the clinicians of the active hospital, the caller excluded, who
+   * may witness a controlled dose (NurseTaskController).
+   */
+  getAdministrationWitnessCandidates(): Observable<AdministrationWitnessCandidate[]> {
+    return this.http.get<AdministrationWitnessCandidate[]>(
+      `${this.baseUrl}/medications/mar/witness-candidates`,
+    );
+  }
+
+  /**
+   * QA D1210 (round 23): `earlyDoseReason` answers the server's "dose too soon"
+   * refusal (nurse-station/early-dose.ts); it is sent only when the nurse gave one.
+   */
   administerMedication(
     taskId: string,
-    data: { status: string; note?: string; overrideReason?: string },
+    data: MedicationAdministrationRequest,
   ): Observable<NurseMedicationTask> {
     return this.http.put<NurseMedicationTask>(
       `${this.baseUrl}/medications/mar/${taskId}/administer`,

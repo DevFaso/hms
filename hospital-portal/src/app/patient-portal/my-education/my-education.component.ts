@@ -16,14 +16,24 @@ import {
 } from '../../services/patient-portal.service';
 import { ToastService } from '../../core/toast.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
+import { DialogA11yDirective } from '../../shared/a11y/dialog-a11y.directive';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { refusalReason } from '../../shared/refusal-reason';
 
 type EducationTab = 'assigned' | 'completed' | 'questions';
 
 @Component({
   selector: 'app-my-education',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, DatePipe, FormsModule, EnumLabelPipe, TranslateModule],
+  imports: [
+    ServerTimePipe,
+    CommonModule,
+    DatePipe,
+    FormsModule,
+    EnumLabelPipe,
+    TranslateModule,
+    DialogA11yDirective,
+  ],
   templateUrl: './my-education.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./my-education.component.scss', '../patient-portal-pages.scss'],
@@ -130,10 +140,12 @@ export class MyEducationComponent implements OnInit {
           this.toast.success(this.translate.instant('PORTAL.EDUCATION.SAVED'));
         }
       },
-      error: () => {
+      error: (err: unknown) => {
         this.savingProgress.set(false);
         if (notify) {
-          this.toast.error(this.translate.instant('PORTAL.EDUCATION.SAVE_FAILED'));
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('PORTAL.EDUCATION.SAVE_FAILED'),
+          );
         }
       },
     });
@@ -141,19 +153,24 @@ export class MyEducationComponent implements OnInit {
 
   // ── Questions ────────────────────────────────────────────────────
 
+  /**
+   * QA D1130: the dialog's open state is its own signal. It was derived as
+   * `askTarget() !== null`, and the general "Poser une question" opens with
+   * no resource (`openAsk(null)`), so it never opened.
+   */
+  readonly askOpen = signal(false);
+
   openAsk(item: PatientEducationItem | null): void {
     this.askTarget.set(item);
     this.askText = '';
     this.askUrgent = false;
+    this.askOpen.set(true);
   }
 
   closeAsk(): void {
+    this.askOpen.set(false);
     this.askTarget.set(null);
     this.askText = '';
-  }
-
-  get askOpen(): boolean {
-    return this.askTarget() !== null;
   }
 
   submitQuestion(): void {
@@ -177,9 +194,11 @@ export class MyEducationComponent implements OnInit {
           this.closeAsk();
           this.toast.success(this.translate.instant('PORTAL.EDUCATION.QUESTION_SENT'));
         },
-        error: () => {
+        error: (err: unknown) => {
           this.askSubmitting.set(false);
-          this.toast.error(this.translate.instant('PORTAL.EDUCATION.QUESTION_FAILED'));
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('PORTAL.EDUCATION.QUESTION_FAILED'),
+          );
         },
       });
   }

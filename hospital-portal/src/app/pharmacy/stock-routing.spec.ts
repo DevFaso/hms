@@ -12,12 +12,15 @@ import { ToastService } from '../core/toast.service';
 import { PharmacyService } from '../services/pharmacy.service';
 import { StockRoutingComponent } from './stock-routing';
 import { RoleContextService } from '../core/role-context.service';
+import { PrintLabelService } from '../services/print-label.service';
+import { isSubmitBlocked } from '../shared/forms/submit-guard.testing';
 
 describe('StockRoutingComponent', () => {
   let component: StockRoutingComponent;
   let fixture: ComponentFixture<StockRoutingComponent>;
   let pharmacySvc: jasmine.SpyObj<PharmacyService>;
   let toastSvc: jasmine.SpyObj<ToastService>;
+  let printSvc: jasmine.SpyObj<PrintLabelService>;
   /** Only the scope gate is read here; a writable signal so a test can flip it. */
   const hasHospitalScope = signal(true);
   const roleContextStub = { hasHospitalScope } as unknown as RoleContextService;
@@ -73,8 +76,13 @@ describe('StockRoutingComponent', () => {
       'partnerRespond',
       'confirmPartnerDispense',
       'getDispenseWorkQueue',
+      'getPrintedPrescriptionCopy',
     ]);
     toastSvc = jasmine.createSpyObj('ToastService', ['success', 'error']);
+    printSvc = jasmine.createSpyObj('PrintLabelService', ['openForPrint']);
+    pharmacySvc.getPrintedPrescriptionCopy.and.returnValue(
+      of(new Blob(['%PDF-1.4'], { type: 'application/pdf' })) as any,
+    );
 
     pharmacySvc.checkStock.and.returnValue(of(stockCheckResponse as any));
     pharmacySvc.listRoutingDecisionsByPrescription.and.returnValue(of(decisionsResponse as any));
@@ -112,6 +120,7 @@ describe('StockRoutingComponent', () => {
         provideHttpClientTesting(),
         { provide: PharmacyService, useValue: pharmacySvc },
         { provide: ToastService, useValue: toastSvc },
+        { provide: PrintLabelService, useValue: printSvc },
         { provide: RoleContextService, useValue: roleContextStub },
         // P-05: component now reads :prescriptionId from the route — provide an
         // empty paramMap by default so the existing tests don't auto-trigger
@@ -139,6 +148,7 @@ describe('StockRoutingComponent', () => {
         provideHttpClientTesting(),
         { provide: PharmacyService, useValue: pharmacySvc },
         { provide: ToastService, useValue: toastSvc },
+        { provide: PrintLabelService, useValue: printSvc },
         { provide: RoleContextService, useValue: roleContextStub },
         {
           provide: ActivatedRoute,
@@ -394,7 +404,7 @@ describe('StockRoutingComponent', () => {
 
   it('should show backend error when stock check fails', () => {
     pharmacySvc.checkStock.and.returnValue(
-      throwError(() => ({ error: { message: 'Stock lookup failed' } })),
+      throwError(() => ({ status: 400, error: { message: 'Stock lookup failed' } })),
     );
     component.prescriptionId = 'rx-1';
 
@@ -580,23 +590,23 @@ describe('StockRoutingComponent', () => {
 
     const backOrder = fixture.nativeElement.querySelector('[data-testid="open-back-order"]');
     const print = fixture.nativeElement.querySelector('[data-testid="print-for-patient"]');
-    expect(backOrder.disabled).toBeTrue();
-    expect(print.disabled).toBeTrue();
+    expect(isSubmitBlocked(backOrder)).toBeTrue();
+    expect(isSubmitBlocked(print)).toBeTrue();
     // "Route here" is the control that starts a routing, and it carries its
     // own disabled condition — a second [disabled] binding silently replaced
     // the gate here once, so it is asserted rather than assumed.
     expect(
-      fixture.nativeElement.querySelector('[data-testid="route-here-partner-1"]').disabled,
+      isSubmitBlocked(fixture.nativeElement.querySelector('[data-testid="route-here-partner-1"]')),
     ).toBeTrue();
 
     hasHospitalScope.set(true);
     fixture.detectChanges();
 
     expect(
-      fixture.nativeElement.querySelector('[data-testid="open-back-order"]').disabled,
+      isSubmitBlocked(fixture.nativeElement.querySelector('[data-testid="open-back-order"]')),
     ).toBeFalse();
     expect(
-      fixture.nativeElement.querySelector('[data-testid="print-for-patient"]').disabled,
+      isSubmitBlocked(fixture.nativeElement.querySelector('[data-testid="print-for-patient"]')),
     ).toBeFalse();
     expect(
       fixture.nativeElement.querySelector('[data-testid="route-here-partner-1"]').disabled,
@@ -665,6 +675,7 @@ describe('StockRoutingComponent', () => {
           provideHttpClientTesting(),
           { provide: PharmacyService, useValue: pharmacySvc },
           { provide: ToastService, useValue: toastSvc },
+          { provide: PrintLabelService, useValue: printSvc },
           { provide: RoleContextService, useValue: roleContextStub },
           {
             provide: ActivatedRoute,
@@ -705,6 +716,46 @@ describe('StockRoutingComponent', () => {
       expect(component.stockStatus()).toBe('IN_STOCK');
       expect(badge.textContent?.trim()).toBe('En stock');
       expect(badge.classList).toContain('badge-success');
+    });
+  });
+
+  describe('QA D966: print for the patient produces the copy', () => {
+    it('records the decision, then opens the printed copy for printing', () => {
+      component.prescriptionId = 'rx-1';
+      component.printForPatient();
+
+      expect(pharmacySvc.printForPatient).toHaveBeenCalledWith('rx-1');
+      expect(pharmacySvc.getPrintedPrescriptionCopy).toHaveBeenCalledWith('rx-1');
+      expect(printSvc.openForPrint).toHaveBeenCalled();
+    });
+
+    it('says so when the copy cannot be opened, instead of a silent "printed"', () => {
+      pharmacySvc.getPrintedPrescriptionCopy.and.returnValue(throwError(() => new Error('x')));
+      component.prescriptionId = 'rx-1';
+      component.printForPatient();
+
+      expect(toastSvc.error).toHaveBeenCalledWith('PHARMACY.PRINT_COPY_FAILED');
+    });
+
+    it('a printed order offers its copy again, not the routing buttons that would fail', () => {
+      pharmacySvc.checkStock.and.returnValue(
+        of({
+          data: {
+            ...stockCheckResponse.data,
+            prescriptionStatus: 'PRINTED_FOR_PATIENT',
+            routable: false,
+          },
+        } as any),
+      );
+      component.prescriptionId = 'rx-1';
+      component.checkStock();
+      fixture.detectChanges();
+      const el: HTMLElement = fixture.nativeElement;
+
+      expect(el.querySelector('[data-testid="print-for-patient"]')).toBeNull();
+      expect(el.querySelector('[data-testid="open-back-order"]')).toBeNull();
+      (el.querySelector('[data-testid="reprint-copy"]') as HTMLButtonElement).click();
+      expect(printSvc.openForPrint).toHaveBeenCalled();
     });
   });
 });

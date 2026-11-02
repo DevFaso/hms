@@ -13,6 +13,7 @@ import { AuthService } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 import { roleContextStub } from '../testing/role-context.stub';
+import { isSubmitBlocked } from '../shared/forms/submit-guard.testing';
 
 /**
  * The prenatal schedule generator. Asserted through the rendered DOM in French
@@ -118,7 +119,7 @@ describe('PrenatalTabComponent', () => {
   it('shows nothing but the form until a schedule is generated', () => {
     expect(host().querySelector('table')).toBeNull();
     const generate = host().querySelector('.modal-actions .btn-primary') as HTMLButtonElement;
-    expect(generate.disabled).toBeTrue();
+    expect(isSubmitBlocked(generate)).toBeTrue();
   });
 
   it('refuses to generate without a patient and an LMP, in French', () => {
@@ -283,6 +284,8 @@ describe('PrenatalTabComponent', () => {
       date: target,
       time: '09:30',
       reason: 'Consultation prénatale (CPN) — 24 SA',
+      // QA D1055: the recommended length travels with the link.
+      duration: '30',
     });
     // The scheduler counts a reason naming antenatal care as the visit.
     expect(links[0]?.['reason']).toMatch(/pr[ée]natal/i);
@@ -290,6 +293,27 @@ describe('PrenatalTabComponent', () => {
     const book = host().querySelectorAll('a[href^="/appointments/new"]');
     expect(book.length).toBe(1);
     expect(book[0].textContent).toContain('Planifier');
+  });
+
+  it('QA D1055 / D1031: Book carries the first-visit length and the provider; the contacts held are shown', () => {
+    generateFor(
+      schedule({
+        staffId: 'staff-midwife',
+        completedContacts: 2,
+        recommendations: [
+          {
+            gestationalWeek: 12,
+            durationMinutes: 45,
+            visitType: 'INITIAL_INTAKE',
+            scheduled: false,
+          },
+        ],
+      }),
+    );
+    const link = component.bookLinks()[0];
+    expect(link?.['duration']).toBe('45');
+    expect(link?.['staffId']).toBe('staff-midwife');
+    expect(host().querySelector('[data-testid="anc-contacts"]')).toBeTruthy();
   });
 
   it('QA D810: a recommended day already past is booked from today', () => {

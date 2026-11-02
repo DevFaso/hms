@@ -1,3 +1,4 @@
+import { refusalReason } from '../shared/refusal-reason';
 import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -14,6 +15,7 @@ import { AuthService } from '../auth/auth.service';
 import { ToastService } from '../core/toast.service';
 import { CfaPipe } from '../shared/pipes/cfa.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { cfaAmountMessageKey, cfaAmountProblem } from '../shared/cfa-amount';
 
 /**
  * T-43 / T-44: pharmacy checkout and French printable receipt.
@@ -147,7 +149,7 @@ export class PharmacyCheckoutComponent implements OnInit {
       },
       error: (err) => {
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('PHARMACY.CHECKOUT_DISPENSE_NOT_FOUND'),
+          refusalReason(err) ?? this.translate.instant('PHARMACY.CHECKOUT_DISPENSE_NOT_FOUND'),
         );
         this.dispense.set(null);
         this.loading.set(false);
@@ -165,13 +167,21 @@ export class PharmacyCheckoutComponent implements OnInit {
       this.toast.error(this.translate.instant('PHARMACY_CHECKOUT.ALREADY_PAID'));
       return;
     }
-    if (!this.amount || this.amount <= 0) {
-      this.toast.error(this.translate.instant('PHARMACY.CHECKOUT_INVALID_AMOUNT'));
+    // QA D204 / D1089: an amount first, then whole francs (the franc CFA has no minor unit).
+    const amount = this.amount;
+    const amountProblem = cfaAmountProblem(amount);
+    if (amountProblem || amount === null) {
+      this.toast.error(
+        this.translate.instant(
+          cfaAmountMessageKey(amountProblem ?? 'required', 'PHARMACY.CHECKOUT_INVALID_AMOUNT'),
+        ),
+      );
       return;
     }
-    // QA D204: the franc CFA has no minor unit.
-    if (!Number.isInteger(this.amount)) {
-      this.toast.error(this.translate.instant('BILLING.PAYMENT_WHOLE_AMOUNT'));
+    // QA D1033: a mobile-money payment is recorded with the transaction
+    // reference the patient's phone shows; the server refuses one without it.
+    if (this.paymentMethod === 'MOBILE_MONEY' && !this.referenceNumber.trim()) {
+      this.toast.error(this.translate.instant('PHARMACY_CHECKOUT.REFERENCE_REQUIRED'));
       return;
     }
     const hospitalId = this.auth.getHospitalId();
@@ -186,9 +196,9 @@ export class PharmacyCheckoutComponent implements OnInit {
       patientId: d.patientId,
       hospitalId,
       paymentMethod: this.paymentMethod,
-      amount: this.amount,
+      amount,
       currency: 'XOF',
-      referenceNumber: this.referenceNumber || undefined,
+      referenceNumber: this.referenceNumber.trim() || undefined,
       receivedBy: userId,
       notes: this.notes || undefined,
     };
@@ -201,7 +211,7 @@ export class PharmacyCheckoutComponent implements OnInit {
         this.loading.set(false);
       },
       error: (err) => {
-        this.toast.error(err?.error?.message ?? this.translate.instant('PHARMACY.PAYMENT_FAILED'));
+        this.toast.error(refusalReason(err) ?? this.translate.instant('PHARMACY.PAYMENT_FAILED'));
         this.loading.set(false);
       },
     });
@@ -220,11 +230,6 @@ export class PharmacyCheckoutComponent implements OnInit {
     this.notes = '';
     this.dispense.set(null);
     this.receipt.set(null);
-  }
-
-  /** A short receipt reference instead of the raw payment UUID (QA D102). */
-  receiptNumber(id: string | null | undefined): string {
-    return (id ?? '').replace(/-/g, '').substring(0, 10).toUpperCase();
   }
 
   methodLabel(m: PharmacyPaymentMethod): string {

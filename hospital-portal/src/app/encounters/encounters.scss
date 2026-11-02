@@ -680,3 +680,10 @@
   font-size: 0.72rem;
   font-weight: 600;
 }
+
+// QA D954: the left-without-being-seen action above the visit details.
+.detail-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 0.75rem;
+}
