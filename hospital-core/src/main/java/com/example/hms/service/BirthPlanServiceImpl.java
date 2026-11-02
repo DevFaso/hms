@@ -241,7 +241,7 @@ public class BirthPlanServiceImpl implements BirthPlanService {
         if (Boolean.TRUE.equals(review.getReviewed())) {
             // QA D1241 (round 25): once a provider has reviewed the plan it is part
             // of the record; an edit resets the signature but never this stamp.
-            birthPlan.setReviewTimestamp(LocalDateTime.now());
+            birthPlan.setReviewTimestamp(LocalDateTime.now(java.time.ZoneId.systemDefault()));
         }
         birthPlan.setProviderSignature(review.getSignature());
         birthPlan.setProviderSignatureDate(LocalDateTime.now());
@@ -278,7 +278,7 @@ public class BirthPlanServiceImpl implements BirthPlanService {
             log.info("Deleted unreviewed birth plan ID {} by its author {} (reason given)", id, username);
             return;
         }
-        birthPlan.setWithdrawnAt(LocalDateTime.now());
+        birthPlan.setWithdrawnAt(LocalDateTime.now(java.time.ZoneId.systemDefault()));
         birthPlan.setWithdrawnByUserId(user.getId());
         birthPlan.setWithdrawalReason(kept.length() > 500 ? kept.substring(0, 500) : kept);
         birthPlanRepository.save(birthPlan);

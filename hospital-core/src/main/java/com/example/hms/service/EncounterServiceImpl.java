@@ -571,12 +571,7 @@ public class EncounterServiceImpl implements EncounterService {
                 // first AVS query. Pass the throwable so the full cause/stack is captured;
                 // include patient/hospital IDs to make constraint-violation diagnosis
                 // tractable without grepping by encounter ID.
-                log.warn(
-                    "Failed to persist DischargeSummary on COMPLETED transition for encounter {}, patient {}, hospital {}",
-                    saved.getId(),
-                    saved.getPatient() != null ? saved.getPatient().getId() : null,
-                    saved.getHospital() != null ? saved.getHospital().getId() : null,
-                    ex);
+                logSummaryFailure(saved, ex);
             }
             // QA D972: billing hears of the completed visit even if the summary
             // or the notification above failed (they are best effort).
@@ -586,6 +581,15 @@ public class EncounterServiceImpl implements EncounterService {
         recordHistory(saved, "UPDATED", resolveHistoryActor(request.getUpdatedBy(), ctx.staff()), previousValues);
 
         return encounterMapper.toEncounterResponseDTO(saved);
+    }
+
+    private static void logSummaryFailure(Encounter saved, RuntimeException ex) {
+        log.warn(
+            "Failed to persist DischargeSummary on COMPLETED transition for encounter {}, patient {}, hospital {}",
+            saved.getId(),
+            saved.getPatient() != null ? saved.getPatient().getId() : null,
+            saved.getHospital() != null ? saved.getHospital().getId() : null,
+            ex);
     }
 
     /**
@@ -2538,6 +2542,17 @@ public class EncounterServiceImpl implements EncounterService {
         encounter.setNotes(combined);
     }
 
+    /** The follow-up and the discharge diagnoses the check-out sent, onto the encounter. */
+    private void storeDischargeData(Encounter encounter, com.example.hms.payload.dto.clinical.CheckOutRequestDTO request) {
+        if (request == null) {
+            return;
+        }
+        encounter.setFollowUpInstructions(request.getFollowUpInstructions());
+        if (request.getDischargeDiagnoses() != null && !request.getDischargeDiagnoses().isEmpty()) {
+            encounter.setDischargeDiagnoses(checkOutMapper.serializeDiagnoses(request.getDischargeDiagnoses()));
+        }
+    }
+
     /**
      * MVP 6 — Check-Out & After-Visit Summary.
      * Atomically: (a) transitions encounter → COMPLETED, (b) transitions linked appointment → COMPLETED,
@@ -2580,12 +2595,7 @@ public class EncounterServiceImpl implements EncounterService {
         encounter.setCheckoutTimestamp(now);
 
         // (b) Store discharge data
-        if (request != null) {
-            encounter.setFollowUpInstructions(request.getFollowUpInstructions());
-            if (request.getDischargeDiagnoses() != null && !request.getDischargeDiagnoses().isEmpty()) {
-                encounter.setDischargeDiagnoses(checkOutMapper.serializeDiagnoses(request.getDischargeDiagnoses()));
-            }
-        }
+        storeDischargeData(encounter, request);
 
         encounterRepository.save(encounter);
         trackerEventPublisher.publishStatusTransition(encounter,

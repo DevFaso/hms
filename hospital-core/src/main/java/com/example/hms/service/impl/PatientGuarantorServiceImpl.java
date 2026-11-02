@@ -112,7 +112,7 @@ public class PatientGuarantorServiceImpl implements PatientGuarantorService {
         guarantor.setActive(false);
         guarantor.setPrimary(false);
         guarantor.setDeactivationReason(kept.length() > 500 ? kept.substring(0, 500) : kept);
-        guarantor.setDeactivatedAt(java.time.LocalDateTime.now());
+        guarantor.setDeactivatedAt(java.time.LocalDateTime.now(java.time.ZoneId.systemDefault()));
         guarantor.setDeactivatedByUserId(actorUserId);
         return toDto(guarantorRepository.save(guarantor));
     }

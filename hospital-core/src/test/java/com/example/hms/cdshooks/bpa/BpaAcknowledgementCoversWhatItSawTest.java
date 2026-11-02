@@ -169,17 +169,24 @@ class BpaAcknowledgementCoversWhatItSawTest {
     @Test
     void everyRuleIsCovered() throws IOException {
         Path main = Path.of("src/main/java/com/example/hms");
-        Pattern implementsRule = Pattern.compile("class\\s+(\\w+)[^{]*\\bimplements\\s+[^{]*\\bBpaRule\\b");
+        // A class header up to its brace, then "implements ... BpaRule" read inside it:
+        // linear scans, no backtracking between overlapping quantifiers (Sonar S8786).
+        Pattern classHeader = Pattern.compile("class\\s++(\\w++)([^{]*+)\\{");
+        Pattern implementsRule = Pattern.compile("\\bimplements\\b");
+        Pattern bpaRule = Pattern.compile("\\bBpaRule\\b");
         TreeSet<String> rules = new TreeSet<>();
         try (Stream<Path> files = Files.walk(main)) {
             for (Path file : files.filter(f -> f.toString().endsWith(".java")).toList()) {
-                Matcher m = implementsRule.matcher(SourceScan.stripComments(Files.readString(file, StandardCharsets.UTF_8)));
-                if (m.find()) {
-                    rules.add(m.group(1));
+                Matcher m = classHeader.matcher(SourceScan.stripComments(Files.readString(file, StandardCharsets.UTF_8)));
+                while (m.find()) {
+                    Matcher implementsAt = implementsRule.matcher(m.group(2));
+                    if (implementsAt.find() && bpaRule.matcher(m.group(2).substring(implementsAt.end())).find()) {
+                        rules.add(m.group(1));
+                        break;
+                    }
                 }
             }
-        }
-        TreeSet<String> covered = new TreeSet<>();
+        }        TreeSet<String> covered = new TreeSet<>();
         cases().forEach(c -> covered.add(c.ruleClass()));
         assertThat(rules).as("BPA rules found").isNotEmpty();
         assertThat(covered).as("every BPA rule has a triggering reading in this guard (D1238)%s", SourceScan.MANDATE)
