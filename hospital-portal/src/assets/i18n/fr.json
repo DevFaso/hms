@@ -1204,7 +1204,8 @@
     "TOAST_DENIED": "Renouvellement refusé",
     "TOAST_DENY_FAILED": "Impossible de refuser la demande de renouvellement",
     "TOAST_PAUSED": "Renouvellement mis en attente",
-    "TOAST_PAUSE_FAILED": "Impossible de mettre la demande de renouvellement en attente"
+    "TOAST_PAUSE_FAILED": "Impossible de mettre la demande de renouvellement en attente",
+    "NOTES_REQUIRED_FOR": "(obligatoires pour refuser ou mettre en attente)"
   },
   "ADMISSIONS": {
     "ACUITY": "Gravité",
@@ -5075,7 +5076,9 @@
     "EXISTING_MATCH_DESC_IDENTITY_MIXED": "Des dossiers avec les mêmes nom et date de naissance existent déjà, ici ou dans un autre hôpital. Ouvrez ou liez le bon dossier au lieu de créer un doublon.",
     "EXISTING_MATCH_DESC_BOTH": "Des dossiers avec les mêmes nom et date de naissance, ou avec ce numéro de téléphone ou cet e-mail, existent déjà dans un autre hôpital. Liez ici le bon dossier au lieu de créer un doublon.",
     "EXISTING_MATCH_DESC_BOTH_HERE": "Des dossiers avec les mêmes nom et date de naissance, ou avec ce numéro de téléphone ou cet e-mail, sont déjà enregistrés dans cet hôpital. Ouvrez le bon dossier au lieu de créer un doublon.",
-    "EXISTING_MATCH_DESC_BOTH_MIXED": "Des dossiers avec les mêmes nom et date de naissance, ou avec ce numéro de téléphone ou cet e-mail, existent déjà, ici ou dans un autre hôpital. Ouvrez ou liez le bon dossier au lieu de créer un doublon."
+    "EXISTING_MATCH_DESC_BOTH_MIXED": "Des dossiers avec les mêmes nom et date de naissance, ou avec ce numéro de téléphone ou cet e-mail, existent déjà, ici ou dans un autre hôpital. Ouvrez ou liez le bon dossier au lieu de créer un doublon.",
+    "BORN_FEMALE": "Née en",
+    "BORN_MALE": "Né en"
   },
   "PLATFORM": {
     "ACCESS_LOGS": "Journaux d'accès",

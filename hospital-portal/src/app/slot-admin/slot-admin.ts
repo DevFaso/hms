@@ -1,6 +1,7 @@
 import {
   Component,
   DestroyRef,
+  ElementRef,
   inject,
   OnInit,
   signal,
@@ -30,7 +31,18 @@ import { ClockTimePipe } from '../shared/pipes/clock-time.pipe';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { refuseFields } from '../shared/forms/invalid-fields';
 type AdminSection = 'visit-types' | 'templates' | 'slots';
+
+/** QA D1306 (round 28): the fields each form may refuse, so a fixed one loses its mark. */
+const VT_FIELD_IDS = ['vt-code', 'vt-duration', 'vt-name'] as const;
+const TPL_FIELD_IDS = [
+  'tpl-staff',
+  'tpl-department',
+  'tpl-start',
+  'tpl-end',
+  'tpl-effective-from',
+] as const;
 
 /**
  * Slot-inventory administration (P2 #11).
@@ -64,6 +76,7 @@ export class SlotAdminComponent implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
   private readonly roleContext = inject(RoleContextService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   section = signal<AdminSection>('visit-types');
 
@@ -198,14 +211,25 @@ export class SlotAdminComponent implements OnInit {
   }
 
   submitVisitType(): void {
+    // QA D1306 (round 28): the refused fields are marked, not only a toast.
+    const root = this.host.nativeElement;
     if (!this.vtForm.code.trim() || !this.vtForm.name.trim()) {
-      this.toast.error(this.translate.instant('SLOT_ADMIN.VT_REQUIRED'));
+      const message = this.translate.instant('SLOT_ADMIN.VT_REQUIRED');
+      const blank = [
+        this.vtForm.code.trim() ? null : 'vt-code',
+        this.vtForm.name.trim() ? null : 'vt-name',
+      ].filter((id): id is string => id !== null);
+      refuseFields(root, blank, VT_FIELD_IDS, message);
+      this.toast.error(message);
       return;
     }
     if (!this.vtForm.durationMinutes || this.vtForm.durationMinutes < 1) {
-      this.toast.error(this.translate.instant('SLOT_ADMIN.VT_DURATION_INVALID'));
+      const message = this.translate.instant('SLOT_ADMIN.VT_DURATION_INVALID');
+      refuseFields(root, ['vt-duration'], VT_FIELD_IDS, message);
+      this.toast.error(message);
       return;
     }
+    refuseFields(root, [], VT_FIELD_IDS, '');
     this.vtSaving.set(true);
     const id = this.vtEditingId();
     const request = { ...this.vtForm, departmentId: this.vtForm.departmentId || undefined };
@@ -304,20 +328,34 @@ export class SlotAdminComponent implements OnInit {
     this.tplForm = this.emptyTemplate();
   }
 
-  submitTemplate(): void {
-    const form = this.tplForm;
+  /** The first rule the template form breaks: its message key and the fields to mark. */
+  private templateRefusal(form: SessionTemplateRequest): { key: string; ids: string[] } | null {
     if (!form.staffId || !form.departmentId) {
-      this.toast.error(this.translate.instant('SLOT_ADMIN.TPL_REQUIRED'));
-      return;
+      const ids = [form.staffId ? null : 'tpl-staff', form.departmentId ? null : 'tpl-department'];
+      return { key: 'SLOT_ADMIN.TPL_REQUIRED', ids: ids.filter((id): id is string => !!id) };
     }
     if (!form.startTime || !form.endTime || form.endTime <= form.startTime) {
-      this.toast.error(this.translate.instant('SLOT_ADMIN.TPL_WINDOW_INVALID'));
-      return;
+      const ids = form.startTime ? ['tpl-end'] : ['tpl-start'];
+      if (!form.startTime && !form.endTime) ids.push('tpl-end');
+      return { key: 'SLOT_ADMIN.TPL_WINDOW_INVALID', ids };
     }
     if (!form.effectiveFrom) {
-      this.toast.error(this.translate.instant('SLOT_ADMIN.TPL_EFFECTIVE_REQUIRED'));
+      return { key: 'SLOT_ADMIN.TPL_EFFECTIVE_REQUIRED', ids: ['tpl-effective-from'] };
+    }
+    return null;
+  }
+
+  submitTemplate(): void {
+    const form = this.tplForm;
+    const refusal = this.templateRefusal(form);
+    if (refusal) {
+      // QA D1306 (round 28): the refused fields are marked, not only a toast.
+      const message = this.translate.instant(refusal.key);
+      refuseFields(this.host.nativeElement, refusal.ids, TPL_FIELD_IDS, message);
+      this.toast.error(message);
       return;
     }
+    refuseFields(this.host.nativeElement, [], TPL_FIELD_IDS, '');
     this.tplSaving.set(true);
     const id = this.tplEditingId();
     const request = { ...form, visitTypeId: form.visitTypeId || undefined };

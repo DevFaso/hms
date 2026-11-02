@@ -116,6 +116,19 @@ describe('ControlledRegisterComponent (QA D967)', () => {
     expect(toast.error).toHaveBeenCalledWith('PHARMACY.REGISTER_PERIOD_INVALID');
   });
 
+  it('QA D1306: a backwards period marks the end date, not only a toast', () => {
+    component.from = '2026-10-27';
+    component.to = '2026-10-01';
+    component.load();
+    const el: HTMLElement = fixture.nativeElement;
+    expect(el.querySelector('#register-to')?.getAttribute('aria-invalid')).toBe('true');
+    expect(el.querySelector('#register-from')?.hasAttribute('aria-invalid')).toBeFalse();
+
+    component.to = '2026-10-28';
+    component.load();
+    expect(el.querySelector('#register-to')?.hasAttribute('aria-invalid')).toBeFalse();
+  });
+
   it('exports the same register as CSV and PDF', () => {
     const blob = new Blob(['x']);
     svc.exportControlledRegister.and.returnValue(of(blob));

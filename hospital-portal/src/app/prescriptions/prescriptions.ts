@@ -38,7 +38,7 @@ import {
   EncounterResponse,
   isClosedEncounterStatus,
 } from '../services/encounter.service';
-import { currentLocale } from '../shared/i18n/app-locale';
+import { encounterOptionLabel } from '../shared/encounter-option-label';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { expandRoleEquivalents, roleSatisfies } from '../core/role-equivalence';
@@ -155,6 +155,9 @@ export const PRESCRIPTION_TABS: readonly { id: PrescriptionTab; labelKey: string
   { id: 'dispensed', labelKey: 'PRESCRIPTIONS.TAB.DISPENSED' },
   { id: 'closed', labelKey: 'PRESCRIPTIONS.TAB.CLOSED' },
 ];
+
+/** The prescribed quantity, refused when blank or not positive (QA D1306). */
+const RX_QUANTITY_IDS = ['rx-quantity'];
 
 @Component({
   selector: 'app-prescriptions',
@@ -606,12 +609,12 @@ export class PrescriptionsComponent implements OnInit {
     return this.patientEncounters().some((e) => e.id === id);
   }
 
-  /** QA D177: the date and department of an encounter, for the picker (the type is a pipe). */
+  /**
+   * QA D177: the date and department of an encounter, for the picker (the
+   * type is a pipe). QA D1309: and its time, so same-day visits differ.
+   */
   encounterLabel(e: EncounterResponse): string {
-    const date = e.encounterDate
-      ? serverInstant(e.encounterDate).toLocaleDateString(currentLocale())
-      : '';
-    return [date, e.departmentName].filter((part) => !!part).join(' · ');
+    return encounterOptionLabel(e);
   }
 
   /**
@@ -752,9 +755,13 @@ export class PrescriptionsComponent implements OnInit {
     // pharmacy caps the dispense at it (the server refuses it too).
     const qty = this.form.quantity;
     if (!this.editing() && (qty == null || !(Number(qty) > 0))) {
-      this.formError.set(this.translate.instant('PRESCRIPTIONS.PRESCRIBED_QUANTITY_REQUIRED'));
+      // QA D1306 (round 28): the quantity is marked, not only the banner.
+      const message = this.translate.instant('PRESCRIPTIONS.PRESCRIBED_QUANTITY_REQUIRED');
+      refuseFields(this.host.nativeElement, RX_QUANTITY_IDS, RX_QUANTITY_IDS, message);
+      this.formError.set(message);
       return;
     }
+    refuseFields(this.host.nativeElement, [], RX_QUANTITY_IDS, '');
     this.saving.set(true);
     const op = this.editing()
       ? this.prescriptionService.update(this.editingId()!, this.form)

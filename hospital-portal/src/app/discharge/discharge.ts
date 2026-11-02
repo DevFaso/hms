@@ -21,7 +21,8 @@ import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
-import { serverLocalDate } from '../shared/date-utils';
+import { encounterOptionLabel } from '../shared/encounter-option-label';
+import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { AuthorshipService } from '../shared/authorship.service';
 import { refusalReason } from '../shared/refusal-reason';
@@ -34,6 +35,7 @@ type SummaryFilter = 'unfinalized' | 'pending-results' | 'range';
   selector: 'app-discharge',
   standalone: true,
   imports: [
+    EnumLabelPipe,
     SubmitGuardDirective,
     ModalDialogDirective,
     ServerTimePipe,
@@ -771,11 +773,14 @@ export class DischargeComponent implements OnInit {
     });
   }
 
+  /**
+   * #948 review: the reader's day (slicing the UTC string listed a 21:00 New
+   * York visit under the next day). QA D1309: and the time and department,
+   * so same-day visits differ; the type and status are enum labels in the
+   * template (they were raw codes here).
+   */
   encounterLabel(e: EncounterResponse): string {
-    // #948 review: the reader's day; slicing the UTC string listed a 21:00
-    // New York visit under the next day.
-    const date = serverLocalDate(e.encounterDate);
-    return `${date} — ${e.encounterType ?? ''} (${e.status ?? ''})`.trim();
+    return encounterOptionLabel(e);
   }
 
   /* ── Helpers ── */

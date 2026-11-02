@@ -128,6 +128,9 @@ describe('MyBillingComponent', () => {
   it('QA D1089: an empty amount is answered, not ignored', () => {
     create([invoice({ balance: 50 })]);
     openDialog();
+    // Round 28 (QA D1302): cash, so the blank reference is not refused too and
+    // the amount's own reason is the whole message.
+    component.payMethod = 'CASH';
     component.payAmount = null as unknown as number;
     // Round 19 (NOT_FIXED in round 18): the DOM is rendered with the empty
     // amount BEFORE the click, as the patient sees it. "Payer" used to be
@@ -145,12 +148,36 @@ describe('MyBillingComponent', () => {
   it('QA D1089: a zero amount is answered the same way', () => {
     create([invoice({ balance: 50 })]);
     openDialog();
+    // Round 28 (QA D1302): cash, so the blank reference is not refused too and
+    // the amount's own reason is the whole message.
+    component.payMethod = 'CASH';
     component.payAmount = 0;
     fixture.detectChanges();
     (host().querySelector('.pay-submit-btn') as HTMLButtonElement).click();
     fixture.detectChanges();
     expect(portal.payInvoice).not.toHaveBeenCalled();
     expect(component.payError()).toBe('BILLING.PAYMENT_AMOUNT_REQUIRED');
+  });
+
+  it('QA D1302: a blank amount and a blank reference are named and marked in one press', () => {
+    create([invoice({ balance: 50 })]);
+    openDialog();
+    component.payAmount = null as unknown as number;
+    component.payMethod = 'MOBILE_MONEY';
+    component.payReference = '';
+    fixture.detectChanges();
+    (host().querySelector('.pay-submit-btn') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    expect(portal.payInvoice).not.toHaveBeenCalled();
+    expect(component.payError()).toContain('BILLING.PAYMENT_AMOUNT_REQUIRED');
+    expect(component.payError()).toContain('PORTAL.BILLING.REFERENCE_REQUIRED');
+    expect(host().querySelector('#payAmount')?.getAttribute('aria-invalid')).toBe('true');
+    expect(host().querySelector('#payRef')?.getAttribute('aria-invalid')).toBe('true');
+    // Each field carries its own reason, not the other's.
+    expect(host().querySelector('#payRef-invalid-msg')?.textContent).toBe(
+      'PORTAL.BILLING.REFERENCE_REQUIRED',
+    );
+    expect(host().querySelector('#payAmount')?.hasAttribute('required')).toBeTrue();
   });
 
   it('QA D254: a paid invoice shows its total, not 0', () => {
@@ -176,6 +203,9 @@ describe('MyBillingComponent', () => {
   it('QA D421: an amount above what is left is refused in the figures on screen', () => {
     create([invoice({ balance: 300, amount: 300, pending: 150 })]);
     openDialog();
+    // Round 28 (QA D1302): cash, so the blank reference is not refused too and
+    // the amount's own reason is the whole message.
+    component.payMethod = 'CASH';
     component.payAmount = 200;
     (host().querySelector('.pay-submit-btn') as HTMLElement).click();
     fixture.detectChanges();
@@ -200,6 +230,9 @@ describe('MyBillingComponent', () => {
   it('refuses an amount above the balance on screen, without calling the server', () => {
     create([invoice({ balance: 50 })]);
     openDialog();
+    // Round 28 (QA D1302): cash, so the blank reference is not refused too and
+    // the amount's own reason is the whole message.
+    component.payMethod = 'CASH';
     component.payAmount = 100;
     (host().querySelector('.pay-submit-btn') as HTMLElement).click();
     fixture.detectChanges();

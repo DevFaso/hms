@@ -35,6 +35,9 @@ function visitKey(a: PortalAppointment): string {
   return `${a.date ?? ''}T${a.rawStartTime ?? ''}`;
 }
 
+/** The reschedule dialog's date and start-time inputs. */
+const RESCHEDULE_FIELD_IDS = ['reschedDate', 'reschedStart'];
+
 @Component({
   selector: 'app-my-appointments',
   standalone: true,
@@ -348,7 +351,7 @@ export class MyAppointmentsComponent implements OnInit {
           !this.rescheduleDate ? 'reschedDate' : null,
           !this.rescheduleStartTime ? 'reschedStart' : null,
         ].filter((id): id is string => id !== null),
-        ['reschedDate', 'reschedStart'],
+        RESCHEDULE_FIELD_IDS,
         this.translate.instant('COMMON.FIELD_REQUIRED'),
       );
       this.rescheduleError.set(
@@ -357,9 +360,13 @@ export class MyAppointmentsComponent implements OnInit {
       return;
     }
     if (this.rescheduleDate < this.todayDate) {
-      this.rescheduleError.set(this.translate.instant('PORTAL.APPOINTMENTS.RESCHEDULE.PAST_DATE'));
+      // QA D1306 (round 28): the date field is marked, not only the banner.
+      const message = this.translate.instant('PORTAL.APPOINTMENTS.RESCHEDULE.PAST_DATE');
+      refuseFields(this.host.nativeElement, ['reschedDate'], RESCHEDULE_FIELD_IDS, message);
+      this.rescheduleError.set(message);
       return;
     }
+    refuseFields(this.host.nativeElement, [], RESCHEDULE_FIELD_IDS, '');
 
     this.rescheduleLoading.set(true);
     this.rescheduleError.set(null);

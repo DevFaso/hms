@@ -40,12 +40,25 @@ const NONE = new Set();
 
 const unquote = (v) => (v ?? '').replace(/^["']|["']$/g, '').trim();
 
+/** A bound expression with its spacing and quote style normalised, so two spellings compare equal. */
+const normalExpr = (expr) => expr.replaceAll('"', "'").replaceAll(/\s+/g, '');
+
+/**
+ * A control's id: its literal id, or — QA D1305 (round 28) — the normalised
+ * expression of a bound `[id]` that builds it (`'rx-clarification-text-' +
+ * prescriptionId()`). The clarification box was listed in its guard by that
+ * same expression; read as "no id", it escaped the listed-undeclared rule and
+ * was refused blank with no `required` and no star.
+ */
 function staticId(tag) {
   if (PICKERS.has(tag.name)) return unquote(tag.attrs.get('inputId'));
   const id = unquote(tag.attrs.get('id'));
   if (id) return id;
-  const bound = /^'([^']+)'$/.exec(unquote(tag.attrs.get('[id]')));
-  return bound ? bound[1] : '';
+  // The attribute's own quotes are already gone: `'x'` here is a string literal.
+  const raw = (tag.attrs.get('[id]') ?? tag.attrs.get('[attr.id]') ?? '').trim();
+  const bound = /^'([^']+)'$/.exec(raw);
+  if (bound) return bound[1];
+  return raw ? `{${normalExpr(raw)}}` : '';
 }
 
 /** Whether a control (or a picker) declares itself required. */
@@ -143,9 +156,40 @@ function handlerName(binding) {
   return /^\s*(?:this\.)?([A-Za-z_$][\w$]*)\s*\(/.exec(binding ?? '')?.[1] ?? null;
 }
 
+/** The entries of an array literal, split at its top-level commas. */
+function arrayEntries(raw) {
+  const body = raw.trim().replace(/^\[/, '').replace(/\]$/, '');
+  const out = [];
+  let depth = 0;
+  let quote = '';
+  let from = 0;
+  for (let i = 0; i < body.length; i++) {
+    const ch = body[i];
+    if (quote) {
+      if (ch === quote) quote = '';
+    } else if (ch === "'" || ch === '"') quote = ch;
+    else if ('([{'.includes(ch)) depth++;
+    else if (')]}'.includes(ch)) depth--;
+    else if (ch === ',' && depth === 0) {
+      out.push(body.slice(from, i));
+      from = i + 1;
+    }
+  }
+  out.push(body.slice(from));
+  return out.map((e) => e.trim()).filter(Boolean);
+}
+
+/** The ids a guarded button lists: each literal, or a built id as its normalised expression. */
 function listedFields(button) {
-  const raw = button.attrs.get('[submitGuardFields]') ?? '';
-  return new Set([...raw.matchAll(/'([^']+)'/g)].map((m) => m[1]));
+  const raw = (button.attrs.get('[submitGuardFields]') ?? '').trim();
+  const ids = new Set();
+  // `cond ? ['a'] : []` and other shapes: every literal they hold.
+  const entries = raw.trim().startsWith('[') ? arrayEntries(raw) : [raw];
+  for (const entry of entries) {
+    if (/^'[^']*'\s*\+/.test(entry)) ids.add(`{${normalExpr(entry)}}`);
+    else for (const m of entry.matchAll(/'([^']+)'/g)) ids.add(m[1]);
+  }
+  return ids;
 }
 
 function isSubmitButton(tag, inForm) {
@@ -306,26 +350,44 @@ function readLabel(raw, translate) {
  * but the reader saw nothing marking them before pressing it. The converse of
  * `star-undeclared`: every control that declares itself required and has a
  * visible label (`<label for>` or a wrapping `<label>`) shows the star in that
- * label, written in the template or in the label's translation. A control
- * named only by `aria-label` (a search box, a reason dialog's single field)
- * has no label to carry it.
+ * label, written in the template or in the label's translation.
+ *
+ * Round 28 (QA D1304, D1272 NOT_FIXED): the marker must be VISIBLE. A control
+ * whose label is `sr-only`, or that is named only by `aria-label` (it had "no
+ * label to carry" the star and was skipped), shows the reader nothing, so it
+ * is a finding too: give it a visible, starred label. Only a shared
+ * component's own control whose id the host binds (`[id]="inputId"`) is
+ * left to the host's label.
  *
  * @param translate key → the label's words in one language (null if unknown)
  * @returns {{ line: number, id: string }[]}
  */
+/**
+ * A shared component's own control whose id the host passes in (`[id]="inputId"`
+ * in the patient picker): the host's `<label for>` names it and carries the
+ * star, so the component template itself has no label to read.
+ */
+function namedByHost(tag) {
+  const bound = (tag.attrs.get('[id]') ?? tag.attrs.get('[attr.id]') ?? '').trim();
+  return /^[A-Za-z_$][\w$]*(?:\(\))?$/.test(bound);
+}
+
 export function unstarredRequiredFindings(html, translate, subForms = NONE) {
   const tokens = tags(html);
   const labelFor = new Map();
   const wrapped = new Map();
   tokens.forEach((t, i) => {
     if (t.type !== 'open' || t.name !== 'label') return;
-    // A visually hidden label shows no text to star; the control declares
-    // aria-required for assistive technology instead (nurse-station reason box).
-    if (/\bsr-only\b/.test(unquote(t.attrs.get('class')))) return;
     const close = closeIndexOf(tokens, i);
     if (close === i) return;
-    const text = readLabel(html.slice(t.end, tokens[close].start), translate);
-    const forId = unquote(t.attrs.get('for'));
+    // QA D1304 (D1272 NOT_FIXED in round 28): a visually hidden label shows
+    // the reader nothing, so a star in it counts for nothing either. The MAR
+    // reason box ("Motif", sr-only) was required and refused blank by name
+    // with no visible marker: round 26 exempted sr-only labels outright.
+    const hidden = /\bsr-only\b/.test(unquote(t.attrs.get('class')));
+    const text = hidden ? '' : readLabel(html.slice(t.end, tokens[close].start), translate);
+    const boundFor = (t.attrs.get('[for]') ?? t.attrs.get('[attr.for]') ?? '').trim();
+    const forId = unquote(t.attrs.get('for')) || (boundFor ? `{${normalExpr(boundFor)}}` : '');
     if (forId) labelFor.set(forId, text);
     for (let k = i + 1; k < close; k++) if (tokens[k].type === 'open') wrapped.set(k, text);
   });
@@ -335,7 +397,8 @@ export function unstarredRequiredFindings(html, translate, subForms = NONE) {
     if (!declaresRequired(t)) return;
     const id = staticId(t);
     const text = (id ? labelFor.get(id) : undefined) ?? wrapped.get(i);
-    if (text === undefined || text.includes('*')) return;
+    if (text === undefined && namedByHost(t)) return;
+    if (text?.includes('*')) return;
     out.push({ line: t.line, id });
   });
   return out;

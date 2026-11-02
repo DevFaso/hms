@@ -37,6 +37,7 @@ import {
   refuseInvalidPhones,
 } from '../shared/forms/phone-field.directive';
 import { joinReasons } from '../shared/required-fields';
+import { bornLabelKey } from '../shared/i18n/born-label';
 
 /**
  * QA D1118: the card names what the match is really on. A record found by the
@@ -90,6 +91,9 @@ export function matchBasisSuffix(matches: readonly Pick<RegistrationMatch, 'matc
 export class PatientFormComponent implements OnInit {
   /** QA D1037: the server's reason per refused field, shown under the field. */
   serverFieldErrors: Record<string, string> = {};
+
+  /** QA D1311: "Né / Née en", "Nacido / Nacida en", by the matched record's sex. */
+  protected readonly bornLabelKey = bornLabelKey;
 
   private readonly patientService = inject(PatientService);
   private readonly userService = inject(UserService);
@@ -426,7 +430,11 @@ export class PatientFormComponent implements OnInit {
   /** Register the matched existing patient at THIS hospital instead of duplicating. */
   linkExistingPatient(match: RegistrationMatch): void {
     if (!this.form.hospitalId) {
-      this.toast.error(this.translate.instant('PATIENTS.SELECT_HOSPITAL_FIRST'));
+      // QA D1306 (round 28): the hospital field is marked, not only a toast.
+      const message = this.translate.instant('PATIENTS.SELECT_HOSPITAL_FIRST');
+      this.serverFieldErrors = { ...this.serverFieldErrors, hospitalId: message };
+      focusFirstInvalid(this.host.nativeElement, [PATIENT_FORM_FIELD_IDS['hospitalId']]);
+      this.toast.error(message);
       return;
     }
     this.linking = true;

@@ -1,5 +1,12 @@
 import { refusalReason } from '../shared/refusal-reason';
-import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  inject,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -10,7 +17,11 @@ import { RoleContextService } from '../core/role-context.service';
 import { PharmacyService, PharmacyRequest, PharmacyResponse } from '../services/pharmacy.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { blankFields, refuseFields } from '../shared/forms/invalid-fields';
 import { PhoneFieldDirective } from '../shared/forms/phone-field.directive';
+
+/** The required fields of the pharmacy form (QA D1306). */
+const REG_IDS = ['pHospital', 'pName'];
 
 @Component({
   selector: 'app-pharmacy-registry',
@@ -33,6 +44,7 @@ export class PharmacyRegistryComponent implements OnInit {
   private readonly roleContext = inject(RoleContextService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   pharmacies = signal<PharmacyResponse[]>([]);
   loading = signal(true);
@@ -161,10 +173,16 @@ export class PharmacyRegistryComponent implements OnInit {
   }
 
   submitForm(): void {
-    if (!this.form.name || !this.form.hospitalId) {
-      this.toast.error(this.translate.instant('PHARMACY.TOAST.REQUIRED_FIELDS'));
+    const root = this.host.nativeElement;
+    const blank = blankFields({ pHospital: this.form.hospitalId, pName: this.form.name }, REG_IDS);
+    if (blank.length > 0) {
+      // QA D1306 (round 28): every blank field is marked, not only a toast.
+      const message = this.translate.instant('PHARMACY.TOAST.REQUIRED_FIELDS');
+      refuseFields(root, blank, REG_IDS, message);
+      this.toast.error(message);
       return;
     }
+    refuseFields(root, [], REG_IDS, '');
     this.saving.set(true);
     const existing = this.editing();
     // QA D336: an unselected type or mode went out as "" and the server

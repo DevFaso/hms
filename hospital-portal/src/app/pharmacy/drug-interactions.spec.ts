@@ -121,6 +121,27 @@ describe('DrugInteractionsComponent', () => {
     expect(interactionService.create).not.toHaveBeenCalled();
   });
 
+  it('QA D1306: a non-RxCUI code marks that code field, not only a toast', () => {
+    setup(['ROLE_PHARMACIST'], []);
+    component.openCreate();
+    fixture.detectChanges();
+    component.form = {
+      drug1Code: 'amox-500',
+      drug1Name: 'amoxicillin',
+      drug2Code: '1191',
+      drug2Name: 'aspirin',
+      severity: 'MAJOR',
+      recommendation: 'Something.',
+    };
+
+    component.submit();
+
+    const el: HTMLElement = fixture.nativeElement;
+    expect(el.querySelector('#ddi-drug1-code')?.getAttribute('aria-invalid')).toBe('true');
+    expect(el.querySelector('#ddi-drug2-code')?.hasAttribute('aria-invalid')).toBeFalse();
+    expect(interactionService.create).not.toHaveBeenCalled();
+  });
+
   it('surfaces the retired-pair refusal verbatim so the admin knows to reactivate', () => {
     setup(['ROLE_PHARMACIST'], []);
     const backendMessage =

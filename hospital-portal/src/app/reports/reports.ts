@@ -1,4 +1,11 @@
-import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  OnInit,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -12,6 +19,7 @@ import {
 import { ToastService } from '../core/toast.service';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { refusalReason } from '../shared/refusal-reason';
+import { focusFirstInvalid, refuseFields } from '../shared/forms/invalid-fields';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
@@ -20,6 +28,9 @@ import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
  * so a typo is caught on the field before the round trip.
  */
 const DELIVERABLE_EMAIL = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+
+/** QA D1306 (round 28): the fields the create form may refuse when blank. */
+const REPORT_FIELD_IDS = ['rep-name', 'rep-recipients'] as const;
 
 /**
  * Scheduled reports (P3 #25a): the admin page for aggregate-only CSV
@@ -46,6 +57,7 @@ export class ReportsComponent implements OnInit {
   private readonly reportsService = inject(ReportsService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   /* ── List state ─────────────── */
   definitions = signal<ReportDefinitionResponse[]>([]);
@@ -102,10 +114,20 @@ export class ReportsComponent implements OnInit {
   }
 
   submitCreate(): void {
+    const root = this.host.nativeElement;
     if (!this.name().trim() || !this.recipients().trim()) {
-      this.toast.error(this.translate.instant('REPORTS.FIELDS_REQUIRED'));
+      // QA D1306 (round 28): the blank fields are marked, not only a toast.
+      const message = this.translate.instant('REPORTS.FIELDS_REQUIRED');
+      const blank = [
+        this.name().trim() ? null : 'rep-name',
+        this.recipients().trim() ? null : 'rep-recipients',
+      ].filter((id): id is string => id !== null);
+      refuseFields(root, blank, REPORT_FIELD_IDS, message);
+      this.toast.error(message);
       return;
     }
+    // The address check below is marked by the template's own binding.
+    refuseFields(root, [], REPORT_FIELD_IDS, '');
     const invalid = this.recipients()
       .split(',')
       .map((a) => a.trim())
@@ -114,6 +136,8 @@ export class ReportsComponent implements OnInit {
       this.recipientsError.set(
         this.translate.instant('REPORTS.RECIPIENT_INVALID', { address: invalid }),
       );
+      // QA D1306 (round 28): focus the field the template marks, not only the message.
+      focusFirstInvalid(root, ['rep-recipients']);
       return;
     }
     this.recipientsError.set(null);

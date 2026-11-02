@@ -3,6 +3,7 @@ import { InlineSubFormDirective } from '../shared/a11y/inline-sub-form.directive
 import { Subscription } from 'rxjs';
 import {
   Component,
+  ElementRef,
   inject,
   OnInit,
   signal,
@@ -33,6 +34,7 @@ import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { toServerDateTime, localDateString } from '../shared/date-utils';
 import { OrgTextPipe } from '../shared/pipes/org-text.pipe';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { blankFields, refuseFields } from '../shared/forms/invalid-fields';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { refusalReason } from '../shared/refusal-reason';
 import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
@@ -173,6 +175,9 @@ function linkKey(serviceId: string, hospitalId: string): string {
   return serviceId + ':' + hospitalId;
 }
 
+/** The required fields of the release-window form (QA D1306). */
+const RELEASE_FIELD_IDS = ['relName', 'relEnvironment', 'relStartsAt', 'relEndsAt'];
+
 @Component({
   selector: 'app-platform',
   standalone: true,
@@ -197,6 +202,7 @@ export class PlatformComponent implements OnInit {
   private readonly orgSvc = inject(OrganizationService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly confirmService = inject(ConfirmService);
 
   /* ── Reactive state ── */
@@ -895,10 +901,24 @@ export class PlatformComponent implements OnInit {
 
   scheduleRelease(): void {
     const f = this.releaseForm();
-    if (!f.name || !f.startsAt || !f.endsAt || !f.environment) {
-      this.toast.error(this.translate.instant('PLATFORM.TOAST.RELEASE_REQUIRED_FIELDS'));
+    const root = this.host.nativeElement;
+    const blank = blankFields(
+      {
+        relName: f.name,
+        relEnvironment: f.environment,
+        relStartsAt: f.startsAt,
+        relEndsAt: f.endsAt,
+      },
+      RELEASE_FIELD_IDS,
+    );
+    if (blank.length > 0) {
+      // QA D1306 (round 28): every blank field is marked, not only a toast.
+      const message = this.translate.instant('PLATFORM.TOAST.RELEASE_REQUIRED_FIELDS');
+      refuseFields(root, blank, RELEASE_FIELD_IDS, message);
+      this.toast.error(message);
       return;
     }
+    refuseFields(root, [], RELEASE_FIELD_IDS, '');
 
     const request: ReleaseWindowRequest = {
       name: f.name,

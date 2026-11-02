@@ -537,7 +537,12 @@
             <select required id="summary-encounter" [(ngModel)]="summaryForm.encounterId">
               <option value="">{{ 'DISCHARGE.SELECT_ENCOUNTER' | translate }}</option>
               @for (e of patientEncounters(); track e.id) {
-                <option [value]="e.id">{{ encounterLabel(e) }}</option>
+                <option [value]="e.id">
+                  {{ encounterLabel(e)
+                  }}{{
+                    e.encounterType ? ' · ' + (e.encounterType | enumLabel: 'encounterType') : ''
+                  }}{{ e.status ? ' · ' + (e.status | enumLabel: 'encounterStatus') : '' }}
+                </option>
               }
             </select>
           </div>

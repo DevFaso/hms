@@ -160,6 +160,16 @@ describe('RefillApprovalListComponent', () => {
     expect(toast.error).toHaveBeenCalled();
   });
 
+  it('QA D1305: a refusal without notes marks the card notes box, not only a toast', () => {
+    service.list.and.returnValue(page([refill()]));
+    fixture.detectChanges();
+    api().reject(refill());
+    fixture.detectChanges();
+    const box = (fixture.nativeElement as HTMLElement).querySelector('#refill-notes-r1')!;
+    expect(box.getAttribute('aria-invalid')).toBe('true');
+    expect(document.activeElement).toBe(box);
+  });
+
   it('refuses to pause without a reason — the patient is shown that note', () => {
     fixture.detectChanges();
     api().pause(refill());

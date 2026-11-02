@@ -1,6 +1,7 @@
 import {
   Component,
   DestroyRef,
+  ElementRef,
   OnInit,
   computed,
   inject,
@@ -10,6 +11,7 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { refuseFields } from '../shared/forms/invalid-fields';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
@@ -51,6 +53,9 @@ interface OnCallFormModel {
  * rosters. Offering anyone else (or an inactive account) only produced a 400
  * on save (D242).
  */
+/** The shift dialog's inputs its submit may refuse. */
+const ON_CALL_FIELD_IDS = ['oncall-staff', 'oncall-start', 'oncall-end'];
+
 const ON_CALL_JOB_TITLES: ReadonlySet<string> = new Set([
   'DOCTOR',
   'PHYSICIAN',
@@ -97,6 +102,7 @@ export class OnCallComponent implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
   private readonly roleContext = inject(RoleContextService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   entries = signal<OnCallScheduleResponse[]>([]);
   loading = signal(true);
@@ -179,19 +185,32 @@ export class OnCallComponent implements OnInit {
   }
 
   submit(): void {
+    // QA D1306 (round 28): each refusal marks its field, not only a toast.
+    const root = this.host.nativeElement;
     if (!this.form.staffId) {
-      this.toast.error(this.translate.instant('ON_CALL.STAFF_REQUIRED'));
+      const message = this.translate.instant('ON_CALL.STAFF_REQUIRED');
+      refuseFields(root, ['oncall-staff'], ON_CALL_FIELD_IDS, message);
+      this.toast.error(message);
       return;
     }
     if (!this.form.startLocal || !this.form.endLocal) {
-      this.toast.error(this.translate.instant('ON_CALL.WINDOW_REQUIRED'));
+      const message = this.translate.instant('ON_CALL.WINDOW_REQUIRED');
+      const blank = [
+        this.form.startLocal ? null : 'oncall-start',
+        this.form.endLocal ? null : 'oncall-end',
+      ].filter((id): id is string => id !== null);
+      refuseFields(root, blank, ON_CALL_FIELD_IDS, message);
+      this.toast.error(message);
       return;
     }
     // Strict: the backend rejects a zero-length shift too.
     if (new Date(this.form.endLocal) <= new Date(this.form.startLocal)) {
-      this.toast.error(this.translate.instant('ON_CALL.WINDOW_INVALID'));
+      const message = this.translate.instant('ON_CALL.WINDOW_INVALID');
+      refuseFields(root, ['oncall-end'], ON_CALL_FIELD_IDS, message);
+      this.toast.error(message);
       return;
     }
+    refuseFields(root, [], ON_CALL_FIELD_IDS, '');
 
     const request: OnCallScheduleRequest = {
       staffId: this.form.staffId,

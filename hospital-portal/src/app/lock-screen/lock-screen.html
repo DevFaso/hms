@@ -29,6 +29,10 @@
     }
 
     <form (ngSubmit)="unlock()" class="unlock-form">
+      <!-- QA D1304 (D1272 class): the required password has a visible, starred label. -->
+      <label class="unlock-label" for="unlock-password"
+        >{{ 'LOCK.PASSWORD_PLACEHOLDER' | translate }} *</label
+      >
       <div class="input-wrapper">
         <span class="material-symbols-outlined input-icon">lock</span>
         <input

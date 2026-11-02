@@ -1,5 +1,12 @@
 import { refusalReason } from '../shared/refusal-reason';
-import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  OnInit,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -16,6 +23,10 @@ import { ToastService } from '../core/toast.service';
 import { CfaPipe } from '../shared/pipes/cfa.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { cfaAmountMessageKey, cfaAmountProblem } from '../shared/cfa-amount';
+import { FieldRefusal, refuseFields } from '../shared/forms/invalid-fields';
+
+/** The payment fields the checkout may refuse. */
+const CHECKOUT_FIELDS = ['amount', 'ref'];
 
 /**
  * T-43 / T-44: pharmacy checkout and French printable receipt.
@@ -26,6 +37,9 @@ import { cfaAmountMessageKey, cfaAmountProblem } from '../shared/cfa-amount';
  * is in French and is hardcoded in the template for now; moving copy to
  * ngx-translate keys is a follow-up task.
  */
+/** The fill picker, refused when blank (QA D1306). */
+const DISPENSE_PICK_IDS = ['dispenseId'];
+
 @Component({
   selector: 'app-pharmacy-checkout',
   standalone: true,
@@ -39,6 +53,7 @@ export class PharmacyCheckoutComponent implements OnInit {
   private readonly auth = inject(AuthService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   dispenseId = '';
   amount: number | null = null;
@@ -135,9 +150,13 @@ export class PharmacyCheckoutComponent implements OnInit {
 
   loadDispense(): void {
     if (!this.dispenseId) {
-      this.toast.error(this.translate.instant('PHARMACY.CHECKOUT_DISPENSE_ID_REQUIRED'));
+      // QA D1306 (round 28): the fill picker is marked, not only a toast.
+      const message = this.translate.instant('PHARMACY.CHECKOUT_DISPENSE_ID_REQUIRED');
+      refuseFields(this.host.nativeElement, DISPENSE_PICK_IDS, DISPENSE_PICK_IDS, message);
+      this.toast.error(message);
       return;
     }
+    refuseFields(this.host.nativeElement, [], DISPENSE_PICK_IDS, '');
     this.loading.set(true);
     this.svc.getDispense(this.dispenseId).subscribe({
       next: (res) => {
@@ -170,20 +189,32 @@ export class PharmacyCheckoutComponent implements OnInit {
     // QA D204 / D1089: an amount first, then whole francs (the franc CFA has no minor unit).
     const amount = this.amount;
     const amountProblem = cfaAmountProblem(amount);
+    // QA D1306 (round 28): every refused field is marked (aria-invalid, its
+    // own reason under it, focus on the first) in one press; a toast alone
+    // named none of them.
+    const refusals: FieldRefusal[] = [];
     if (amountProblem || amount === null) {
-      this.toast.error(
-        this.translate.instant(
+      refusals.push({
+        id: 'amount',
+        message: this.translate.instant(
           cfaAmountMessageKey(amountProblem ?? 'required', 'PHARMACY.CHECKOUT_INVALID_AMOUNT'),
         ),
-      );
-      return;
+      });
     }
     // QA D1033: a mobile-money payment is recorded with the transaction
     // reference the patient's phone shows; the server refuses one without it.
     if (this.paymentMethod === 'MOBILE_MONEY' && !this.referenceNumber.trim()) {
-      this.toast.error(this.translate.instant('PHARMACY_CHECKOUT.REFERENCE_REQUIRED'));
+      refusals.push({
+        id: 'ref',
+        message: this.translate.instant('PHARMACY_CHECKOUT.REFERENCE_REQUIRED'),
+      });
+    }
+    if (refusals.length > 0 || amount === null) {
+      refuseFields(this.host.nativeElement, refusals, CHECKOUT_FIELDS);
+      this.toast.error(refusals.map((r) => r.message).join(' '));
       return;
     }
+    refuseFields(this.host.nativeElement, [], CHECKOUT_FIELDS);
     const hospitalId = this.auth.getHospitalId();
     const userId = this.auth.getUserId();
     if (!hospitalId || !userId) {

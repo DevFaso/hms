@@ -200,8 +200,10 @@
 
         @if (canResult() && selectedLocked()) {
           <div class="form-field correction-field">
-            <label for="correction-reason">{{ 'MICRO.CORRECTION_REASON' | translate }}</label>
+            <!-- QA D1305: shown only on a locked report, where it is required. -->
+            <label for="correction-reason">{{ 'MICRO.CORRECTION_REASON' | translate }} *</label>
             <input
+              required
               id="correction-reason"
               data-testid="correction-reason"
               type="text"
@@ -390,8 +392,9 @@
         <h3 id="microbiology-dialog-3-title">{{ 'MICRO.CREATE_TITLE' | translate }}</h3>
 
         <div class="form-field">
-          <label for="create-order">{{ 'MICRO.FIELD_ORDER' | translate }}</label>
+          <label for="create-order">{{ 'MICRO.FIELD_ORDER' | translate }} *</label>
           <select
+            required
             id="create-order"
             data-testid="create-order"
             [ngModel]="formOrderId()"
@@ -499,8 +502,9 @@
         <h3 id="microbiology-dialog-2-title">{{ 'MICRO.ISOLATE_TITLE' | translate }}</h3>
 
         <div class="form-field">
-          <label for="iso-organism">{{ 'MICRO.FIELD_ORGANISM' | translate }}</label>
+          <label for="iso-organism">{{ 'MICRO.FIELD_ORGANISM' | translate }} *</label>
           <input
+            required
             id="iso-organism"
             data-testid="iso-organism"
             type="text"

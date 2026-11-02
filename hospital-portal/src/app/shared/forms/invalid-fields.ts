@@ -63,26 +63,41 @@ export function invalidMessageId(fieldId: string): string {
  * For a form whose template does not bind a message per field. A template
  * that does (the patient registration form) calls {@link focusFirstInvalid}.
  *
+ * QA D1302 / D1296 / D1306 (D1256 class, round 28): when the refused fields
+ * have different reasons (a blank amount AND a blank reference), pass each
+ * field with its own message — `[{ id: 'payAmt', message: … }, { id: 'payRef',
+ * message: … }]` — so one press names every one of them. A single message
+ * for all would print "enter an amount" under the reference, so forms used
+ * to refuse the first field only and hide the rest until it was fixed.
+ *
  * @param root the form's host element
- * @param invalid the ids of the refused fields, in reading order
+ * @param invalid the ids of the refused fields in reading order, or each one
+ *   with its own message (then `message` is not used)
  * @param all every id this form may refuse, so a fixed field loses its mark
  * @param message the message shown under each refused field (already translated)
  */
 export function refuseFields(
   root: ParentNode | null | undefined,
-  invalid: readonly string[],
+  invalid: readonly string[] | readonly FieldRefusal[],
   all: readonly string[],
-  message: string,
+  message = '',
 ): boolean {
   if (!root) return false;
-  const refused = new Set(invalid);
-  for (const el of elementsById(root, all)) {
+  const reasons = new Map<string, string>();
+  for (const entry of invalid) {
+    if (typeof entry === 'string') reasons.set(entry, message);
+    else reasons.set(entry.id, entry.message);
+  }
+  const ids = [...reasons.keys()];
+  const known = new Set(all);
+  for (const el of elementsById(root, [...all, ...ids.filter((id) => !known.has(id))])) {
     const msgId = invalidMessageId(el.id);
     const others = (el.getAttribute('aria-describedby') ?? '')
       .split(/\s+/)
       .filter((t) => t !== '' && t !== msgId);
     let msg = root.querySelector<HTMLElement>(`#${CSS.escape(msgId)}`);
-    if (refused.has(el.id)) {
+    const reason = reasons.get(el.id);
+    if (reason !== undefined) {
       el.setAttribute('aria-invalid', 'true');
       if (!msg) {
         msg = document.createElement('small');
@@ -91,7 +106,7 @@ export function refuseFields(
         msg.setAttribute('role', 'alert');
         el.insertAdjacentElement('afterend', msg);
       }
-      msg.textContent = message;
+      msg.textContent = reason;
       others.push(msgId);
     } else {
       el.removeAttribute('aria-invalid');
@@ -100,7 +115,13 @@ export function refuseFields(
     if (others.length > 0) el.setAttribute('aria-describedby', others.join(' '));
     else el.removeAttribute('aria-describedby');
   }
-  return focusFirstInvalid(root, invalid);
+  return focusFirstInvalid(root, ids);
+}
+
+/** A refused field and the reason shown under it (already translated). */
+export interface FieldRefusal {
+  readonly id: string;
+  readonly message: string;
 }
 
 /**

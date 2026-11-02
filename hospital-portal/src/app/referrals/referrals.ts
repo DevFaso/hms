@@ -37,7 +37,7 @@ import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospit
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { ActionKey, actionRoles, SERVICE_RULE_ROLES } from '../core/action-permissions';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
-import { missingRequiredMessage } from '../shared/required-fields';
+import { hasValue, missingRequiredMessage } from '../shared/required-fields';
 import { labelledRefusalReason } from '../shared/refusal-reason';
 import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
@@ -478,20 +478,43 @@ export class ReferralsComponent implements OnInit {
     referralReason: 'REFERRALS.REFERRAL_REASON',
   };
 
+  /** QA D1306 (round 28): the control each required field is entered in (the provider has none). */
+  private static readonly FIELD_IDS: Readonly<Record<string, string>> = {
+    patientId: 'ref-patientSearch',
+    hospitalId: 'ref-hospitalId',
+    targetSpecialty: 'ref-specialty',
+    urgency: 'ref-urgency',
+    referralType: 'ref-type',
+    referralReason: 'ref-reason',
+  };
+
   submitForm(): void {
     // QA D890: an empty form was posted, and the refusal named the field
     // "targetSpecialty". The missing fields are named by their labels instead.
+    const values = this.form as unknown as Record<string, unknown>;
     const missing = missingRequiredMessage(
       this.translate,
       Object.entries(ReferralsComponent.FIELD_LABELS).map(([field, labelKey]) => ({
         labelKey,
-        value: (this.form as unknown as Record<string, unknown>)[field],
+        value: values[field],
       })),
     );
+    const allIds = Object.values(ReferralsComponent.FIELD_IDS);
     if (missing) {
+      // QA D1306 (round 28): the fields are marked, not only a toast.
+      const blankIds = Object.entries(ReferralsComponent.FIELD_IDS)
+        .filter(([field]) => !hasValue(values[field]))
+        .map(([, id]) => id);
+      refuseFields(
+        this.host.nativeElement,
+        blankIds,
+        allIds,
+        this.translate.instant('COMMON.FIELD_REQUIRED'),
+      );
       this.toast.error(missing);
       return;
     }
+    refuseFields(this.host.nativeElement, [], allIds, '');
     this.saving.set(true);
     this.referralService.create(this.form).subscribe({
       next: () => {

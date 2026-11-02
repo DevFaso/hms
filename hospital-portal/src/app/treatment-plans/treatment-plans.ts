@@ -1,6 +1,13 @@
 import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
 import { textMatches, rankPeopleByName } from '../shared/person-search';
-import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  inject,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
@@ -21,7 +28,8 @@ import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
-import { missingRequiredMessage } from '../shared/required-fields';
+import { hasValue, missingRequiredMessage } from '../shared/required-fields';
+import { refuseFields } from '../shared/forms/invalid-fields';
 import { labelledRefusalReason } from '../shared/refusal-reason';
 import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
@@ -60,6 +68,7 @@ export class TreatmentPlansComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly scopeUrl = inject(HospitalScopeUrlService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly authorship = inject(AuthorshipService);
   private readonly auth = inject(AuthService);
 
@@ -273,6 +282,14 @@ export class TreatmentPlansComponent implements OnInit {
     problemStatement: 'TREATMENT.PROBLEM_STATEMENT',
   };
 
+  /** QA D1306 (round 28): the control each required field is entered in. */
+  private static readonly FIELD_IDS: Readonly<Record<string, string>> = {
+    patientId: 'tp-patientSearch',
+    hospitalId: 'tp-hospitalId',
+    authorStaffId: 'tp-authorStaff',
+    problemStatement: 'tp-problem',
+  };
+
   submitForm(): void {
     // QA D890: an empty form was posted and answered with a generic toast.
     const missing = missingRequiredMessage(this.translate, [
@@ -281,10 +298,23 @@ export class TreatmentPlansComponent implements OnInit {
       { labelKey: 'TREATMENT.AUTHOR_STAFF', value: this.form.authorStaffId },
       { labelKey: 'TREATMENT.PROBLEM_STATEMENT', value: this.form.problemStatement },
     ]);
+    const allIds = Object.values(TreatmentPlansComponent.FIELD_IDS);
     if (missing) {
+      // QA D1306 (round 28): the blank fields are marked, not only a toast.
+      const values = this.form as unknown as Record<string, unknown>;
+      const blankIds = Object.entries(TreatmentPlansComponent.FIELD_IDS)
+        .filter(([field]) => !hasValue(values[field]))
+        .map(([, id]) => id);
+      refuseFields(
+        this.host.nativeElement,
+        blankIds,
+        allIds,
+        this.translate.instant('COMMON.FIELD_REQUIRED'),
+      );
       this.toast.error(missing);
       return;
     }
+    refuseFields(this.host.nativeElement, [], allIds, '');
     this.saving.set(true);
     const op = this.editing()
       ? this.tpService.update(this.editId, this.form)

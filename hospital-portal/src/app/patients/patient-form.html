@@ -428,7 +428,7 @@
               {{ ' '
               }}<span class="match-meta">
                 @if (m.birthYear) {
-                  {{ 'PATIENTS.BORN' | translate }} {{ m.birthYear }} ·
+                  {{ bornLabelKey(m.gender) | translate }} {{ m.birthYear }} ·
                 }
                 @if (m.matchedOn === 'PHONE') {
                   {{ m.maskedPhone ?? '' }} ·

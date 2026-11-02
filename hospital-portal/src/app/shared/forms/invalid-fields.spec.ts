@@ -63,6 +63,30 @@ describe('invalid-fields (QA D1072)', () => {
     expect(focusFirstInvalid(null, ['first'])).toBeFalse();
   });
 
+  it('QA D1302: each refused field carries its own reason, all in one call', () => {
+    refuseFields(
+      root,
+      [
+        { id: 'first', message: 'Saisissez un montant.' },
+        { id: 'gender', message: 'Saisissez la référence.' },
+      ],
+      ['first', 'last', 'gender'],
+    );
+    expect(root.querySelector(`#${invalidMessageId('first')}`)!.textContent).toBe(
+      'Saisissez un montant.',
+    );
+    expect(root.querySelector(`#${invalidMessageId('gender')}`)!.textContent).toBe(
+      'Saisissez la référence.',
+    );
+    expect(root.querySelector('#last')!.hasAttribute('aria-invalid')).toBeFalse();
+    expect(document.activeElement).toBe(root.querySelector('#first'));
+  });
+
+  it('round 28: a refused id missing from `all` is still marked (it used to be skipped)', () => {
+    refuseFields(root, ['gender'], [], 'Obligatoire');
+    expect(root.querySelector('#gender')!.getAttribute('aria-invalid')).toBe('true');
+  });
+
   it('blankFields lists the blank required values in order', () => {
     expect(
       blankFields({ a: 'x', b: '  ', c: null, d: undefined, e: 0 }, ['a', 'b', 'c', 'd', 'e']),

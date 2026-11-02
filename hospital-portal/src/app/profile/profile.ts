@@ -41,6 +41,12 @@ import { FocusOnRenderDirective } from '../shared/a11y/focus-on-render.directive
 import { PhoneFieldDirective } from '../shared/forms/phone-field.directive';
 type ProfileTab = 'overview' | 'edit' | 'security' | 'activity';
 
+/** QA D1306 (round 28): the fields each profile refusal marks. */
+const MFA_STEPUP_IDS = ['mfaStepUpCode'];
+const MFA_TOTP_IDS = ['mfaTotpCode'];
+const EMAIL_PASSWORD_IDS = ['editEmailPassword'];
+const PASSWORD_FIELD_IDS = ['pwdNew', 'pwdConfirm'];
+
 @Component({
   selector: 'app-profile',
   standalone: true,
@@ -345,9 +351,13 @@ export class ProfileComponent implements OnInit {
   submitMfaStepUp(): void {
     const code = this.mfaStepUpCode.trim();
     if (!code) {
-      this.mfaError.set(this.translate.instant('PROFILE.MFA_STEPUP_REQUIRED'));
+      // QA D1306 (round 28): the code box is marked, not only the banner.
+      const message = this.translate.instant('PROFILE.MFA_STEPUP_REQUIRED');
+      refuseFields(this.host.nativeElement, MFA_STEPUP_IDS, MFA_STEPUP_IDS, message);
+      this.mfaError.set(message);
       return;
     }
+    refuseFields(this.host.nativeElement, [], MFA_STEPUP_IDS, '');
     this.requestEnrollment(code);
   }
 
@@ -392,9 +402,13 @@ export class ProfileComponent implements OnInit {
 
   verifyMfaCode(): void {
     if (!this.mfaTotpCode || this.mfaTotpCode.length < 6) {
-      this.mfaError.set(this.translate.instant('PROFILE.MFA_CODE_LENGTH'));
+      // QA D1306 (round 28): the code box is marked, not only the banner.
+      const message = this.translate.instant('PROFILE.MFA_CODE_LENGTH');
+      refuseFields(this.host.nativeElement, MFA_TOTP_IDS, MFA_TOTP_IDS, message);
+      this.mfaError.set(message);
       return;
     }
+    refuseFields(this.host.nativeElement, [], MFA_TOTP_IDS, '');
     this.mfaLoading.set(true);
     this.mfaError.set('');
     this.mfaService.verifyEnrollment(this.mfaTotpCode).subscribe({
@@ -464,9 +478,14 @@ export class ProfileComponent implements OnInit {
   saveRecoveryContact(): void {
     const value = this.newRecoveryValue().trim();
     if (!value) {
-      this.recoveryError.set(this.translate.instant('PROFILE.RECOVERY_VALUE_REQUIRED'));
+      // QA D1303 (D1306 class): the value box is marked and focused, not
+      // only the message above it.
+      const message = this.translate.instant('PROFILE.RECOVERY_VALUE_REQUIRED');
+      refuseFields(this.host.nativeElement, ['recovery-value'], ['recovery-value'], message);
+      this.recoveryError.set(message);
       return;
     }
+    refuseFields(this.host.nativeElement, [], ['recovery-value'], '');
     this.recoverySaving.set(true);
     this.recoveryError.set('');
 
@@ -754,9 +773,13 @@ export class ProfileComponent implements OnInit {
     const password = this.emailChangePassword();
     const newEmail = (data.email ?? '').trim();
     if (emailChanged && !password) {
-      this.toast.error(this.translate.instant('PROFILE.EMAIL_CHANGE_PASSWORD_REQUIRED'));
+      // QA D1306 (round 28): the password box is marked, not only a toast.
+      const message = this.translate.instant('PROFILE.EMAIL_CHANGE_PASSWORD_REQUIRED');
+      refuseFields(this.host.nativeElement, EMAIL_PASSWORD_IDS, EMAIL_PASSWORD_IDS, message);
+      this.toast.error(message);
       return;
     }
+    refuseFields(this.host.nativeElement, [], EMAIL_PASSWORD_IDS, '');
     const phoneChanged = (data.phoneNumber ?? '') !== (u.phoneNumber ?? '');
 
     this.saving.set(true);
@@ -1081,18 +1104,24 @@ export class ProfileComponent implements OnInit {
     if (next.length < 8) {
       // QA D1281 class: the short password is marked where it is typed.
       const message = this.translate.instant('PROFILE.PASSWORD_TOO_SHORT');
-      refuseFields(this.host.nativeElement, ['pwdNew'], ['pwdNew'], message);
+      refuseFields(this.host.nativeElement, ['pwdNew'], PASSWORD_FIELD_IDS, message);
       this.toast.error(message);
       return;
     }
+    // QA D1306 (round 28): a mismatch marks the confirmation, a reuse the new password.
     if (next !== this.pwdConfirm()) {
-      this.toast.error(this.translate.instant('PROFILE.PASSWORD_MISMATCH'));
+      const message = this.translate.instant('PROFILE.PASSWORD_MISMATCH');
+      refuseFields(this.host.nativeElement, ['pwdConfirm'], PASSWORD_FIELD_IDS, message);
+      this.toast.error(message);
       return;
     }
     if (next === current) {
-      this.toast.error(this.translate.instant('PROFILE.PASSWORD_SAME_AS_CURRENT'));
+      const message = this.translate.instant('PROFILE.PASSWORD_SAME_AS_CURRENT');
+      refuseFields(this.host.nativeElement, ['pwdNew'], PASSWORD_FIELD_IDS, message);
+      this.toast.error(message);
       return;
     }
+    refuseFields(this.host.nativeElement, [], PASSWORD_FIELD_IDS, '');
     this.changingPassword.set(true);
     this.profileService
       .changePassword(current, next)

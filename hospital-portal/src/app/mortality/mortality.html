@@ -298,6 +298,8 @@
         <div class="modal-body">
           <p class="modal-hint warn">{{ 'MORTALITY.RECORD_HINT' | translate }}</p>
 
+          <!-- QA D1304 (D1272 class): the required picker shows a visible, starred label. -->
+          <label for="mort-patientSearch">{{ 'PATIENTS.PATIENT_NAME' | translate }} *</label>
           <app-patient-picker
             inputId="mort-patientSearch"
             required

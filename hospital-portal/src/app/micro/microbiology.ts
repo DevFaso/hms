@@ -1,6 +1,7 @@
 import {
   Component,
   DestroyRef,
+  ElementRef,
   OnInit,
   computed,
   inject,
@@ -32,6 +33,7 @@ import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { InlineSubFormDirective } from '../shared/a11y/inline-sub-form.directive';
 import { InlineDiscardAskComponent } from '../shared/a11y/inline-discard-ask.component';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { refuseFields } from '../shared/forms/invalid-fields';
 
 /**
  * Microbiology workbench (P3 #19) — the lab-facing resulting surface:
@@ -63,6 +65,7 @@ export class MicrobiologyComponent implements OnInit {
   private readonly labService = inject(LabService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly roleContext = inject(RoleContextService);
 
   readonly growthResults = GROWTH_RESULTS;
@@ -195,9 +198,14 @@ export class MicrobiologyComponent implements OnInit {
   /** The selected report is locked and no correction reason is present yet. */
   private missingCorrectionReason(): boolean {
     if (this.selectedLocked() && !this.correctionReason().trim()) {
-      this.toast.error(this.translate.instant('MICRO.CORRECTION_REASON_REQUIRED'));
+      // QA D1305 (D1306 class): the reason box itself is marked and focused,
+      // not only a toast.
+      const message = this.translate.instant('MICRO.CORRECTION_REASON_REQUIRED');
+      refuseFields(this.host.nativeElement, ['correction-reason'], ['correction-reason'], message);
+      this.toast.error(message);
       return true;
     }
+    refuseFields(this.host.nativeElement, [], ['correction-reason'], '');
     return false;
   }
 
@@ -242,7 +250,10 @@ export class MicrobiologyComponent implements OnInit {
 
   submitCreate(): void {
     if (!this.formOrderId()) {
-      this.toast.error(this.translate.instant('MICRO.ORDER_REQUIRED'));
+      // QA D1305 (D1306 class): the order select is marked, not only a toast.
+      const message = this.translate.instant('MICRO.ORDER_REQUIRED');
+      refuseFields(this.host.nativeElement, ['create-order'], ['create-order'], message);
+      this.toast.error(message);
       return;
     }
     if (this.creating()) return;
@@ -334,7 +345,10 @@ export class MicrobiologyComponent implements OnInit {
     const culture = this.selected();
     if (!culture) return;
     if (!this.isoOrganism().trim()) {
-      this.toast.error(this.translate.instant('MICRO.ORGANISM_REQUIRED'));
+      // QA D1305 (D1306 class): the organism box is marked, not only a toast.
+      const message = this.translate.instant('MICRO.ORGANISM_REQUIRED');
+      refuseFields(this.host.nativeElement, ['iso-organism'], ['iso-organism'], message);
+      this.toast.error(message);
       return;
     }
     if (this.savingIsolate()) return;

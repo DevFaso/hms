@@ -379,6 +379,10 @@
               (keydown.escape)="onAddendumEscape($event)"
             >
               <h3 id="addendum-form-title">{{ 'ENCOUNTERS.ADD_ADDENDUM' | translate }}</h3>
+              <!-- QA D1304 (D1272 class): the required text has a visible, starred label. -->
+              <label class="addendum-label" for="addendum-content"
+                >{{ 'ENCOUNTERS.ADDENDUM_ARIA' | translate }} *</label
+              >
               <textarea
                 id="addendum-content"
                 required
@@ -386,7 +390,6 @@
                 data-testid="addendum-content"
                 [(ngModel)]="addendumContent"
                 rows="3"
-                [attr.aria-label]="'ENCOUNTERS.ADDENDUM_ARIA' | translate"
                 [placeholder]="'ENCOUNTERS.ADDENDUM_PLACEHOLDER' | translate"
               ></textarea>
               <div class="note-actions">

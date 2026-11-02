@@ -148,13 +148,18 @@
         }
 
         <label class="field clarify-field">
-          <span>{{
-            (isPharmacy()
-              ? 'PRESCRIPTIONS.CLARIFICATION.REASON_LABEL'
-              : 'PRESCRIPTIONS.CLARIFICATION.ANSWER_INPUT_LABEL'
-            ) | translate
-          }}</span>
+          <span
+            >{{
+              (isPharmacy()
+                ? 'PRESCRIPTIONS.CLARIFICATION.REASON_LABEL'
+                : 'PRESCRIPTIONS.CLARIFICATION.ANSWER_INPUT_LABEL'
+              ) | translate
+            }}{{ isPharmacy() ? ' *' : '' }}</span
+          >
+          <!-- QA D1305: the pharmacist's question is required (declared and
+               starred); the prescriber's answer may be left blank. -->
           <textarea
+            [required]="isPharmacy()"
             [id]="'rx-clarification-text-' + prescriptionId()"
             rows="4"
             maxlength="1000"

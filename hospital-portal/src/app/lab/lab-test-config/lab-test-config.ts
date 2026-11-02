@@ -1,6 +1,13 @@
 import { EnumLabelService } from '../../core/enum-label.service';
 import { currentLocale } from '../../shared/i18n/app-locale';
-import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  inject,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -20,6 +27,10 @@ import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
 import { refusalReason } from '../../shared/refusal-reason';
+import { refuseFields } from '../../shared/forms/invalid-fields';
+
+/** Every reflex-rule field submitReflexRule() may refuse. */
+const REFLEX_FIELD_IDS = ['reflexTrigger', 'reflexTest', 'reflexValue'];
 @Component({
   selector: 'app-lab-test-config',
   standalone: true,
@@ -36,6 +47,7 @@ import { refusalReason } from '../../shared/refusal-reason';
   styleUrl: './lab-test-config.scss',
 })
 export class LabTestConfigComponent implements OnInit {
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly labService = inject(LabService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
@@ -522,12 +534,26 @@ export class LabTestConfigComponent implements OnInit {
     };
   }
 
+  /** The reflex-rule fields buildReflexRequest() refuses, in reading order. */
+  private reflexBlankFields(): string[] {
+    const f = this.reflexForm;
+    return [
+      f.triggerTestDefinitionId ? null : 'reflexTrigger',
+      f.reflexTestDefinitionId ? null : 'reflexTest',
+      f.conditionType === 'threshold' && f.thresholdValue === null ? 'reflexValue' : null,
+    ].filter((id): id is string => id !== null);
+  }
+
   submitReflexRule(): void {
     const req = this.buildReflexRequest();
     if (!req) {
-      this.toast.error(this.translate.instant('LAB_TEST_CONFIG.REFLEX_VALIDATION'));
+      const message = this.translate.instant('LAB_TEST_CONFIG.REFLEX_VALIDATION');
+      // QA D1306 (round 28): the blank fields are marked, not only a toast.
+      refuseFields(this.host.nativeElement, this.reflexBlankFields(), REFLEX_FIELD_IDS, message);
+      this.toast.error(message);
       return;
     }
+    refuseFields(this.host.nativeElement, [], REFLEX_FIELD_IDS, '');
     this.reflexSaving.set(true);
     const id = this.editingRuleId();
     const op = id

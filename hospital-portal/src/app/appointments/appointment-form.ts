@@ -37,6 +37,9 @@ const APPOINTMENT_FIELD_LABELS: Readonly<Record<string, string>> = {
   notes: 'APPOINTMENTS.NOTES',
 };
 
+/** The clinician picker's search field. */
+const STAFF_FIELD = 'apptStaffSearch';
+
 interface DeptOption {
   id: string;
   name: string;
@@ -385,7 +388,10 @@ export class AppointmentFormComponent implements OnInit {
     // For multi-hospital users, check against the form's selected hospital.
     const activeHospital = this.form.hospitalId ?? this.lockedHospitalId;
     if (activeHospital && s.hospitalId && s.hospitalId !== activeHospital) {
-      this.toast.error(this.translate.instant('APPOINTMENTS.TOAST.STAFF_OTHER_HOSPITAL'));
+      // QA D1306 (round 28): the clinician field is marked, not only a toast.
+      const message = this.translate.instant('APPOINTMENTS.TOAST.STAFF_OTHER_HOSPITAL');
+      refuseFields(this.host.nativeElement, [STAFF_FIELD], [STAFF_FIELD], message);
+      this.toast.error(message);
       return;
     }
 
@@ -476,19 +482,21 @@ export class AppointmentFormComponent implements OnInit {
       { id: 'date', labelKey: 'APPOINTMENTS.APPOINTMENT_DATE', value: this.form.appointmentDate },
       { id: 'start', labelKey: 'APPOINTMENTS.START_TIME', value: this.form.startTime },
       { id: 'apptPatientSearch', labelKey: 'PATIENTS.PATIENT', value: this.form.patientId },
-      { id: 'apptStaffSearch', labelKey: 'APPOINTMENTS.DOCTOR_STAFF', value: this.form.staffId },
+      { id: STAFF_FIELD, labelKey: 'APPOINTMENTS.DOCTOR_STAFF', value: this.form.staffId },
     ];
-    refuseFields(
-      this.host.nativeElement,
-      required.filter((f) => !hasValue(f.value)).map((f) => f.id),
-      required.map((f) => f.id),
-      this.translate.instant('COMMON.FIELD_REQUIRED'),
-    );
+    const allIds = required.map((f) => f.id);
     const missing = missingRequiredMessage(this.translate, required);
     if (missing) {
+      refuseFields(
+        this.host.nativeElement,
+        required.filter((f) => !hasValue(f.value)).map((f) => f.id),
+        allIds,
+        this.translate.instant('COMMON.FIELD_REQUIRED'),
+      );
       this.toast.error(missing);
       return;
     }
+    refuseFields(this.host.nativeElement, [], allIds, '');
 
     this.saving.set(true);
 

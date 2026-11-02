@@ -382,8 +382,28 @@ test('QA D1272 guard: the scan sees the round-26 lab test definition', () => {
       .length,
     1,
   );
-  // Named only by aria-label: no label to carry the star.
-  assert.deepEqual(unstarredRequiredFindings('<input aria-label="Motif" required />', tr), []);
+  // Changed in round 28 (QA D1304): a control named only by aria-label shows
+  // the reader no marker either; it was exempt ("no label to carry it") and
+  // now needs a visible, starred label.
+  assert.equal(unstarredRequiredFindings('<input aria-label="Motif" required />', tr).length, 1);
+  // A shared component's control whose id the host passes in is labelled by the host.
+  assert.deepEqual(
+    unstarredRequiredFindings('<input [id]="inputId" [required]="required" />', tr),
+    [],
+  );
+});
+
+test('QA D1304 guard: the scan sees the round-28 MAR reason box (sr-only label)', () => {
+  const tr = (k) => ({ 'N.REASON': 'Motif' })[k] ?? null;
+  // The round-28 shape: required, aria-required, its label visually hidden.
+  const broken = `<label class="sr-only" for="mar-reason-input">{{ 'N.REASON' | translate }} *</label>
+      <textarea id="mar-reason-input" required aria-required="true"></textarea>`;
+  assert.deepEqual(
+    unstarredRequiredFindings(broken, tr).map((f) => f.id),
+    ['mar-reason-input'],
+  );
+  const fixed = broken.replace('class="sr-only" ', '');
+  assert.deepEqual(unstarredRequiredFindings(fixed, tr), []);
 });
 
 // QA D1272, the other half: a field a guard refuses blank (listed in its

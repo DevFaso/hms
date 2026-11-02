@@ -1,6 +1,13 @@
 import { refusalReason } from '../shared/refusal-reason';
 import { FocusOnRenderDirective } from '../shared/a11y/focus-on-render.directive';
-import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  inject,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -22,6 +29,10 @@ import { InlineSubFormDirective } from '../shared/a11y/inline-sub-form.directive
 import { InlineDiscardAskComponent } from '../shared/a11y/inline-discard-ask.component';
 import { serverDateOrInstant } from '../shared/date-utils';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { refuseFields } from '../shared/forms/invalid-fields';
+
+/** The add-item field the form may refuse (QA D1306). */
+const CI_FIELD_IDS = ['ciMed'];
 
 @Component({
   selector: 'app-inventory-dashboard',
@@ -47,6 +58,7 @@ export class InventoryDashboardComponent implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   activeTab = signal<'stock' | 'alerts' | 'expiry'>('stock');
 
@@ -214,10 +226,16 @@ export class InventoryDashboardComponent implements OnInit {
   }
 
   submitCreateForm(): void {
+    const root = this.host.nativeElement;
     if (!this.createForm.pharmacyId || !this.createForm.medicationCatalogItemId) {
-      this.toast.error(this.translate.instant('PHARMACY.ITEM_REQUIRED_FIELDS'));
+      // QA D1306 (round 28): the blank medication is marked, not only a toast.
+      const message = this.translate.instant('PHARMACY.ITEM_REQUIRED_FIELDS');
+      const blank = this.createForm.medicationCatalogItemId ? [] : CI_FIELD_IDS;
+      refuseFields(root, blank, CI_FIELD_IDS, message);
+      this.toast.error(message);
       return;
     }
+    refuseFields(root, [], CI_FIELD_IDS, '');
     this.saving.set(true);
     this.svc.createInventoryItem(this.createForm).subscribe({
       next: () => {
@@ -238,8 +256,12 @@ export class InventoryDashboardComponent implements OnInit {
   /** QA D264: the checkout charges quantity x this price, so the pharmacy sets it here. */
   savePrice(item: InventoryItemResponse, raw: string): void {
     const price = Number(raw);
+    const priceId = `price-input-${item.id}`;
     if (raw === '' || !Number.isInteger(price) || price < 0) {
-      this.toast.error(this.translate.instant('PHARMACY.PRICE_INVALID'));
+      // QA D1306 (round 28): the price box is marked, not only a toast.
+      const message = this.translate.instant('PHARMACY.PRICE_INVALID');
+      refuseFields(this.host.nativeElement, [priceId], [priceId], message);
+      this.toast.error(message);
       return;
     }
     this.svc

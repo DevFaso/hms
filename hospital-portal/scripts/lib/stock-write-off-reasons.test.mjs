@@ -85,9 +85,12 @@ test('QA D1243: every adjustment reason the form offers is classified as the ser
     'the form refuses a positive quantity for exactly the offered write-offs',
   );
   assert.match(ts, /WRITE_OFF_KEY = 'PHARMACY\.WRITE_OFF_REMOVES_ONLY'/);
+  // Changed in round 28 (QA D1306): every typed refusal marks its own field
+  // through one map; the write-off key still marks the quantity.
+  assert.match(ts, /\[WRITE_OFF_KEY\]: 'txQty'/, 'refused on the quantity');
   assert.match(
     ts,
-    /refuseFields\(this\.host\.nativeElement, \['txQty'\]/,
+    /refuseFields\(root, fieldId \? \[fieldId\] : \[\], TX_FIELD_IDS, message\)/,
     'refused on the quantity',
   );
 });

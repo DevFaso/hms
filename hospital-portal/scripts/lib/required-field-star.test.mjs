@@ -9,9 +9,9 @@
 //
 // Rule `listed-unstarred`: every id a button lists in `[submitGuardFields]`
 // (the fields its guard names when it refuses) has a `<label for="id">` whose
-// text shows `*`, unless the label is visually hidden (`sr-only`: the control
-// then declares `required` / `aria-required` for assistive technology), or the
-// field is pinned below with why. Pins are of two kinds: a field required only
+// text shows `*` — a visually hidden (`sr-only`) label counts as no star
+// since round 28 (QA D1304: the MAR reason box) — or the field is pinned
+// below with why. Pins are of two kinds: a field required only
 // for one of the dialog's actions or as one of several (its label says so, or
 // a star would mislead), and the known instances in screens owned by another
 // round-26 branch (D1272 class, to be removed by that branch). A pin that no
@@ -129,8 +129,12 @@ export function unstarredListedFields(html, translators = [() => null]) {
   const out = [];
   for (const id of listedIds(tokens)) {
     const label = labels.get(id);
-    if (!label || label.hidden) continue;
-    if (!translators.every((tr) => labelWords(label.text, tr).includes('*'))) out.push(id);
+    if (!label) continue;
+    // QA D1304 (round 28): a visually hidden label shows no star to the
+    // reader, whatever it holds; it was exempt in rounds 26 and 27.
+    if (label.hidden || !translators.every((tr) => labelWords(label.text, tr).includes('*'))) {
+      out.push(id);
+    }
   }
   return out;
 }
@@ -182,9 +186,11 @@ test('QA D1272: the scan sees the round-26 handoff dialog', () => {
   const wrapped = `<label for="r"><span>Motif</span><textarea id="r"></textarea></label>
       <button [submitGuardFields]="['r']">OK</button>`;
   assert.deepEqual(unstarredListedFields(wrapped), ['r']);
-  // A visually hidden label: the control declares the requirement instead.
+  // Changed in round 28 (QA D1304): a visually hidden label shows the reader
+  // no star, even with one inside it (the MAR reason box); it was exempt.
   const hidden = wrapped.replace('<label for="r">', '<label class="sr-only" for="r">');
-  assert.deepEqual(unstarredListedFields(hidden), []);
+  assert.deepEqual(unstarredListedFields(hidden), ['r']);
+  assert.deepEqual(unstarredListedFields(hidden.replace('Motif<', 'Motif *<')), ['r']);
   // The star in the translation, in every language.
   const keyed = `<label for="t">{{ 'L.TYPE' | translate }}</label><select id="t"></select>
       <button [submitGuardFields]="['t']">OK</button>`;

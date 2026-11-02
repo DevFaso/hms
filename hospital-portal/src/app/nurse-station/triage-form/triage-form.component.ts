@@ -9,8 +9,10 @@ import {
   computed,
   ChangeDetectionStrategy,
   DestroyRef,
+  ElementRef,
 } from '@angular/core';
-import { firstImplausibleVital } from '../../shared/vital-sign-limits';
+import { firstImplausibleVital, type VitalSignField } from '../../shared/vital-sign-limits';
+import { refuseFields, type FieldRefusal } from '../../shared/forms/invalid-fields';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -30,6 +32,19 @@ import { offersFundalHeight } from '../../shared/patient-measures';
 
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 type ConsciousnessOption = 'ALERT' | 'NEW_CONFUSION' | 'VOICE' | 'PAIN' | 'UNRESPONSIVE';
+
+/** Each bounded reading of the form and the id of its input. */
+const TRIAGE_VITAL_INPUTS: readonly (readonly [VitalSignField, string])[] = [
+  ['temperatureCelsius', 'temperature'],
+  ['heartRateBpm', 'heartRate'],
+  ['respiratoryRateBpm', 'respiratoryRate'],
+  ['systolicBpMmHg', 'systolicBp'],
+  ['diastolicBpMmHg', 'diastolicBp'],
+  ['spo2Percent', 'spo2'],
+  ['weightKg', 'weight'],
+  ['heightCm', 'height'],
+];
+const TRIAGE_VITAL_IDS = TRIAGE_VITAL_INPUTS.map(([, id]) => id);
 
 @Component({
   selector: 'app-triage-form',
@@ -92,6 +107,7 @@ export class TriageFormComponent {
   }
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   /* ── Vital signs ────────────────────────── */
   temperatureCelsius = signal<number | null>(null);
@@ -238,6 +254,34 @@ export class TriageFormComponent {
     ];
   }
 
+  private boundedReadings(): Partial<Record<VitalSignField, number | null>> {
+    return {
+      temperatureCelsius: this.temperatureCelsius(),
+      heartRateBpm: this.heartRateBpm(),
+      respiratoryRateBpm: this.respiratoryRateBpm(),
+      systolicBpMmHg: this.systolicBpMmHg(),
+      diastolicBpMmHg: this.diastolicBpMmHg(),
+      spo2Percent: this.spo2Percent(),
+      weightKg: this.weightKg(),
+      heightCm: this.heightCm(),
+    };
+  }
+
+  /** Each reading outside its bounds, with its own "between min and max" message. */
+  private implausibleRefusals(
+    readings: Partial<Record<VitalSignField, number | null>>,
+  ): FieldRefusal[] {
+    return TRIAGE_VITAL_INPUTS.flatMap(([field, id]) => {
+      const limit = firstImplausibleVital({ [field]: readings[field] });
+      if (!limit) return [];
+      const message = this.translate.instant(limit.messageKey, {
+        min: limit.min,
+        max: limit.max,
+      });
+      return [{ id, message }];
+    });
+  }
+
   submit(): void {
     if (!this.encounter?.id) {
       this.toast.error(this.translate.instant('TRIAGE.NO_ENCOUNTER_SELECTED'));
@@ -247,17 +291,11 @@ export class TriageFormComponent {
     // QA D1158: the submit guard says why first; nothing empty is ever sent.
     if (esiScore === null || !this.hasVitalSign()) return;
 
-    const implausible = firstImplausibleVital({
-      temperatureCelsius: this.temperatureCelsius(),
-      heartRateBpm: this.heartRateBpm(),
-      respiratoryRateBpm: this.respiratoryRateBpm(),
-      systolicBpMmHg: this.systolicBpMmHg(),
-      diastolicBpMmHg: this.diastolicBpMmHg(),
-      spo2Percent: this.spo2Percent(),
-      weightKg: this.weightKg(),
-      heightCm: this.heightCm(),
-    });
+    const readings = this.boundedReadings();
+    const implausible = firstImplausibleVital(readings);
     if (implausible) {
+      // QA D1306 (round 28): every implausible reading is marked, not only a toast.
+      refuseFields(this.host.nativeElement, this.implausibleRefusals(readings), TRIAGE_VITAL_IDS);
       this.toast.error(
         this.translate.instant(implausible.messageKey, {
           min: implausible.min,
@@ -266,6 +304,7 @@ export class TriageFormComponent {
       );
       return;
     }
+    refuseFields(this.host.nativeElement, [], TRIAGE_VITAL_IDS, '');
 
     this.saving.set(true);
 

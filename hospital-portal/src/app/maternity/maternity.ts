@@ -62,6 +62,7 @@ import { AuthorshipService } from '../shared/authorship.service';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { focusWhenRendered } from '../shared/a11y/focus-when-rendered';
+import { refuseFields } from '../shared/forms/invalid-fields';
 /** The history form's fields the server names under `fieldErrors`. */
 const HISTORY_LABELS: Record<string, string> = {
   recordedDate: 'MATERNITY.RECORDED',
@@ -74,6 +75,24 @@ const HISTORY_LABELS: Record<string, string> = {
   'obstetricHistory.livingChildren': 'MATERNITY.LIVING_CHILDREN',
   'obstetricHistory.previousCesareanSections': 'MATERNITY.CSECTIONS',
 };
+
+const HISTORY_PATIENT_ID = 'history-patient';
+const HISTORY_RECORDED_ID = 'history-recorded';
+const HISTORY_PARA_ID = 'ob-para';
+const HISTORY_ABORTIONS_ID = 'ob-abortions';
+/** QA D1306 (round 28): the history field each historyFormProblem() key refuses. */
+const HISTORY_PROBLEM_FIELD: Readonly<Record<string, string>> = {
+  'MATERNITY.RECORDED_FUTURE': HISTORY_RECORDED_ID,
+  'MATERNITY.PARA_ABOVE_GRAVIDA': HISTORY_PARA_ID,
+  'MATERNITY.OUTCOMES_ABOVE_GRAVIDA': HISTORY_ABORTIONS_ID,
+};
+/** Every history field submitHistory() may refuse. */
+const HISTORY_FIELD_IDS = [
+  HISTORY_PATIENT_ID,
+  HISTORY_RECORDED_ID,
+  HISTORY_PARA_ID,
+  HISTORY_ABORTIONS_ID,
+];
 
 /** The charting-device clock allowance the server grants a clinical time (NotInClinicalFuture). */
 const CLOCK_SKEW_MS = 10 * 60 * 1000;
@@ -656,14 +675,29 @@ export class MaternityComponent implements OnInit {
     if (!this.editingHistoryId() && this.historyHeldElsewhere()) return;
     const form = this.historyForm;
     if (!form.patientId || !form.recordedDate) {
-      this.toast.error(this.translate.instant('MATERNITY.HISTORY_REQUIRED_FIELDS'));
+      const message = this.translate.instant('MATERNITY.HISTORY_REQUIRED_FIELDS');
+      const blank = [
+        form.patientId ? null : HISTORY_PATIENT_ID,
+        form.recordedDate ? null : HISTORY_RECORDED_ID,
+      ].filter((id): id is string => id !== null);
+      refuseFields(this.hostEl.nativeElement, blank, HISTORY_FIELD_IDS, message);
+      this.toast.error(message);
       return;
     }
     const problem = historyFormProblem(form);
     if (problem) {
-      this.toast.error(this.translate.instant(problem));
+      const message = this.translate.instant(problem);
+      // QA D1306 (round 28): the field is marked, not only a toast.
+      refuseFields(
+        this.hostEl.nativeElement,
+        [HISTORY_PROBLEM_FIELD[problem]],
+        HISTORY_FIELD_IDS,
+        message,
+      );
+      this.toast.error(message);
       return;
     }
+    refuseFields(this.hostEl.nativeElement, [], HISTORY_FIELD_IDS, '');
     form.hospitalId = this.hospitalId;
     form.recordedByStaffId = this.auth.getUserProfile()?.staffId ?? undefined;
     this.historySaving.set(true);

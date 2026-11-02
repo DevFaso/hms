@@ -4,6 +4,7 @@ import { textMatches, rankPeopleByName } from '../shared/person-search';
 import {
   Component,
   computed,
+  ElementRef,
   inject,
   OnInit,
   signal,
@@ -35,7 +36,8 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { serverInstant, toServerDateTime } from '../shared/date-utils';
-import { missingRequiredMessage } from '../shared/required-fields';
+import { hasValue, missingRequiredMessage } from '../shared/required-fields';
+import { refuseFields } from '../shared/forms/invalid-fields';
 import { labelledRefusalReason, refusalReason } from '../shared/refusal-reason';
 import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
@@ -68,6 +70,7 @@ const CONSULTANT_TAB_ROLES = ['ROLE_DOCTOR', 'ROLE_SUPER_ADMIN'];
   styleUrl: './consultations.scss',
 })
 export class ConsultationsComponent implements OnInit {
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly consultService = inject(ConsultationService);
   private readonly authorship = inject(AuthorshipService);
   private readonly hospitalService = inject(HospitalService);
@@ -336,18 +339,36 @@ export class ConsultationsComponent implements OnInit {
 
   submitForm(): void {
     // QA D890: an empty form was posted and answered with a generic toast.
-    const missing = missingRequiredMessage(this.translate, [
-      { labelKey: 'PATIENTS.PATIENT', value: this.form.patientId },
-      { labelKey: 'ENCOUNTERS.HOSPITAL', value: this.form.hospitalId },
-      { labelKey: 'CONSULTATIONS.TYPE', value: this.form.consultationType },
-      { labelKey: 'CONSULTATIONS.URGENCY', value: this.form.urgency },
-      { labelKey: 'CONSULTATIONS.SPECIALTY_REQUESTED', value: this.form.specialtyRequested },
-      { labelKey: 'CONSULTATIONS.REASON_FOR_CONSULT', value: this.form.reasonForConsult },
-    ]);
+    const required = [
+      { id: 'con-patientSearch', labelKey: 'PATIENTS.PATIENT', value: this.form.patientId },
+      { id: 'con-hospitalId', labelKey: 'ENCOUNTERS.HOSPITAL', value: this.form.hospitalId },
+      { id: 'con-type', labelKey: 'CONSULTATIONS.TYPE', value: this.form.consultationType },
+      { id: 'con-urgency', labelKey: 'CONSULTATIONS.URGENCY', value: this.form.urgency },
+      {
+        id: 'con-specialty',
+        labelKey: 'CONSULTATIONS.SPECIALTY_REQUESTED',
+        value: this.form.specialtyRequested,
+      },
+      {
+        id: 'con-reason',
+        labelKey: 'CONSULTATIONS.REASON_FOR_CONSULT',
+        value: this.form.reasonForConsult,
+      },
+    ];
+    const allIds = required.map((f) => f.id);
+    const missing = missingRequiredMessage(this.translate, required);
     if (missing) {
+      // QA D1306 (round 28): every blank field is marked, not only a toast.
+      refuseFields(
+        this.host.nativeElement,
+        required.filter((f) => !hasValue(f.value)).map((f) => f.id),
+        allIds,
+        this.translate.instant('COMMON.FIELD_REQUIRED'),
+      );
       this.toast.error(missing);
       return;
     }
+    refuseFields(this.host.nativeElement, [], allIds, '');
     this.saving.set(true);
     this.consultService.create(this.form).subscribe({
       next: () => {
