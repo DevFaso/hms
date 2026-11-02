@@ -11933,7 +11933,9 @@
       "TITLE": "Dosis antes del intervalo mínimo",
       "REASON_LABEL": "¿Por qué se administra esta dosis antes del intervalo mínimo?",
       "CONFIRM": "Administrar antes de tiempo"
-    }
+    },
+    "FREQUENCY_UNREAD_CHIP": "Frecuencia no reconocida",
+    "FREQUENCY_UNREAD_LABEL": "Frecuencia no reconocida — revise la receta. Se desconoce la hora de la próxima dosis: una dosis administrada ahora pide un motivo."
   },
   "CREDENTIALING": {
     "CURRENT_EXPIRY": "Caducidad actual",

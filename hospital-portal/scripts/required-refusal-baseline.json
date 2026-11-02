@@ -421,10 +421,6 @@
       "count": 1,
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
     },
-    "src/app/pharmacy/stock-adjustment.ts::unmarked-refusal::submitForm::PHARMACY.TX_REQUIRED_FIELDS": {
-      "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
-    },
     "src/app/platform/platform.ts::unmarked-refusal::scheduleRelease::PLATFORM.TOAST.RELEASE_REQUIRED_FIELDS": {
       "count": 1,
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"

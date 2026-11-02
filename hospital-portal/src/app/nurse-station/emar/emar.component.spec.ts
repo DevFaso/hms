@@ -431,6 +431,58 @@ describe('EmarComponent (P1 #8 — five-rights barcode-scan loop)', () => {
     expect(toastSpy.success).toHaveBeenCalled();
   });
 
+  // QA D1237 (round 25): an order whose frequency the MAR cannot schedule
+  // stays open; the row says so, and a later dose is refused on
+  // earlyDoseReason (nurse.mar.frequencyUnread) like a dose given too soon.
+  it('QA D1237: a frequency the MAR cannot read is shown on the row and its refusal opens the reason dialog', () => {
+    const unread: NurseMedicationTask = { ...sampleTask, id: 'task-unread', frequencyUnread: true };
+    const unreadRefusal = throwError(
+      () =>
+        new HttpErrorResponse({
+          status: 400,
+          error: {
+            field: 'earlyDoseReason',
+            fieldErrors: {
+              earlyDoseReason:
+                'La fréquence de cette ordonnance (« toutes les heures ») ne peut pas être lue comme un horaire.',
+            },
+          },
+        }),
+    ) as Observable<NurseMedicationTask>;
+    nurseSpy.getMedicationMAR.and.returnValue(of([unread, sampleTask]));
+    nurseSpy.administerMedication.and.returnValues(unreadRefusal, of(unread));
+    fixture.detectChanges();
+
+    const chip = root().querySelector('[data-testid="emar-frequency-unread-chip-task-unread"]');
+    expect(chip?.textContent?.trim()).toBe('EMAR.FREQUENCY_UNREAD_CHIP');
+    expect(chip?.getAttribute('aria-label')).toBe('EMAR.FREQUENCY_UNREAD_LABEL');
+    expect(root().querySelector(`[data-testid="emar-frequency-unread-chip-${sampleTask.id}"]`))
+      .withContext('a readable frequency has no chip')
+      .toBeNull();
+
+    component['selectTask'](unread);
+    component['verification'].set({
+      marId: unread.id,
+      outcomes: { PATIENT: true, DRUG: true, DOSE: true, ROUTE: true, TIME: true },
+      failedChecks: [],
+      failureReasons: {},
+      allPassed: true,
+      verifiedAt: '2026-04-30T08:01:00',
+    });
+    fixture.detectChanges();
+    expect(
+      root().querySelector('[data-testid="emar-frequency-unread"]')?.getAttribute('role'),
+    ).toBe('note');
+    root().querySelector<HTMLButtonElement>('[data-testid="emar-administer-given"]')!.click();
+    fixture.detectChanges();
+
+    const dialog = reasonDialog(fixture)!;
+    expect(dialog).withContext('the reason is asked for').not.toBeNull();
+    expect(dialog.querySelector('[data-testid="early-dose-why"]')?.textContent).toContain(
+      'ne peut pas être lue',
+    );
+  });
+
   it('QA D1210: "Retour" on the early-dose reason records nothing', () => {
     nurseSpy.getMedicationMAR.and.returnValue(of([sampleTask]));
     nurseSpy.administerMedication.and.returnValue(tooSoon());

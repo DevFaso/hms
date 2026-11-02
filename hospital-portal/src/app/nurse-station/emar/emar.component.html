@@ -58,6 +58,16 @@
                 <!-- Marked in the queue, not only in the detail: a nurse
                      planning a round needs to see which doses they cannot give
                      before they walk to the bed. -->
+                <!-- QA D1237: a frequency the MAR cannot schedule is said in the queue. -->
+                @if (task.frequencyUnread) {
+                  {{ ' '
+                  }}<span
+                    class="emar__queue-chip emar__queue-chip--blocked"
+                    [attr.data-testid]="'emar-frequency-unread-chip-' + task.id"
+                    [attr.aria-label]="'EMAR.FREQUENCY_UNREAD_LABEL' | translate"
+                    >{{ 'EMAR.FREQUENCY_UNREAD_CHIP' | translate }}</span
+                  >
+                }
                 @if (task.cdsAdvisories?.length) {
                   {{ ' '
                   }}<span
@@ -92,6 +102,15 @@
                 {{ 'COMMON.CLOSE' | translate }}
               </button>
             </header>
+
+            <!-- QA D1237: the MAR cannot say when the next dose is due; a dose
+                 given now asks for a reason (the early-dose dialog opens on the
+                 server's refusal). -->
+            @if (task.frequencyUnread) {
+              <p class="emar__blocked" role="note" data-testid="emar-frequency-unread">
+                {{ 'EMAR.FREQUENCY_UNREAD_LABEL' | translate }}
+              </p>
+            }
 
             <!-- QA D1225: the doses already recorded on this row, with their
                  reasons (held, refused, given early, five-rights override). -->

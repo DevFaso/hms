@@ -515,6 +515,21 @@ describe('NurseStationComponent — two-tier polling', () => {
       expect(text).not.toContain('INTRAVENOUS');
     });
 
+    it('QA D1237: a frequency the MAR cannot read is marked on its row, with a label', () => {
+      const el = render();
+      expect(el.querySelector('[data-testid="med-frequency-unread-m3"]')).toBeNull();
+      const flagged = rows.map((r) => (r.id === 'm3' ? { ...r, frequencyUnread: true } : r));
+      nurseServiceSpy.getMedicationMAR.and.returnValue(
+        of(flagged as unknown as NurseMedicationTask[]),
+      );
+      component.refresh();
+      component['pendingLoads'].set(0);
+      fixture.detectChanges();
+      const badge = el.querySelector('[data-testid="med-frequency-unread-m3"]');
+      expect(badge?.textContent?.trim()).toBe('EMAR.FREQUENCY_UNREAD_CHIP');
+      expect(badge?.getAttribute('aria-label')).toBe('EMAR.FREQUENCY_UNREAD_LABEL');
+    });
+
     it('a controlled substance is marked on its row', () => {
       const el = render();
       expect(el.querySelector('[data-testid="med-controlled-m2"]')).toBeTruthy();

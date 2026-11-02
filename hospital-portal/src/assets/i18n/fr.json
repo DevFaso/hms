@@ -11933,7 +11933,9 @@
       "TITLE": "Dose avant l’intervalle minimal",
       "REASON_LABEL": "Pourquoi donner cette dose avant l’intervalle minimal ?",
       "CONFIRM": "Administrer en avance"
-    }
+    },
+    "FREQUENCY_UNREAD_CHIP": "Fréquence non reconnue",
+    "FREQUENCY_UNREAD_LABEL": "Fréquence non reconnue — vérifier l’ordonnance. L’heure de la prochaine dose est inconnue : une dose donnée maintenant demande un motif."
   },
   "CREDENTIALING": {
     "CURRENT_EXPIRY": "Expiration actuelle",

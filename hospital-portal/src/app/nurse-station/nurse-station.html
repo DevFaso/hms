@@ -320,6 +320,17 @@
                           >{{ 'NURSE.CONTROLLED_SUBSTANCE' | translate }}</span
                         >
                       }
+                      <!-- QA D1237: a frequency the MAR cannot schedule. -->
+                      @if (m.frequencyUnread) {
+                        {{ ' '
+                        }}<span
+                          class="status-badge status-advisory"
+                          [attr.data-testid]="'med-frequency-unread-' + m.id"
+                          [attr.aria-label]="'EMAR.FREQUENCY_UNREAD_LABEL' | translate"
+                          [title]="'EMAR.FREQUENCY_UNREAD_LABEL' | translate"
+                          >{{ 'EMAR.FREQUENCY_UNREAD_CHIP' | translate }}</span
+                        >
+                      }
                       @if (m.cdsAdvisories?.length) {
                         {{ ' '
                         }}<span
