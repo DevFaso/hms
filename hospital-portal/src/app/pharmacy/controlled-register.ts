@@ -22,7 +22,8 @@ import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
-import { refuseFields } from '../shared/forms/invalid-fields';
+import { FieldRefusal, refuseFields } from '../shared/forms/invalid-fields';
+import { missingRequiredMessage } from '../shared/required-fields';
 import { DashPipe } from '../shared/pipes/dash.pipe';
 
 /** The period's two date inputs. */
@@ -116,21 +117,50 @@ export class ControlledRegisterComponent implements OnInit {
     return !!this.from && !!this.to && this.from <= this.to;
   }
 
-  /** The period's blank dates, or the end when it comes before the start. */
-  private refusedPeriodIds(): string[] {
-    const blank = [!this.from ? 'register-from' : null, !this.to ? 'register-to' : null].filter(
-      (id): id is string => id !== null,
-    );
-    return blank.length > 0 ? blank : ['register-to'];
+  /**
+   * QA D1337 (round 29): each refused date with its own reason — a blank
+   * "Du" / "Au" is named as missing ("Champs obligatoires manquants : Du,
+   * Au"), only two filled dates in the wrong order say "end before start".
+   * Round 28 gave every case the period sentence.
+   */
+  private periodRefusals(): FieldRefusal[] {
+    const required = this.translate.instant('COMMON.FIELD_REQUIRED');
+    const blank: FieldRefusal[] = [];
+    if (!this.from) blank.push({ id: 'register-from', message: required });
+    if (!this.to) blank.push({ id: 'register-to', message: required });
+    if (blank.length > 0) return blank;
+    return this.from > this.to
+      ? [{ id: 'register-to', message: this.translate.instant('PHARMACY.REGISTER_PERIOD_INVALID') }]
+      : [];
+  }
+
+  /**
+   * Why an export refuses the period (QA D1337: a blank date is named as
+   * missing, not as "end before start"), or `false` when it can be read.
+   */
+  periodReason(): string | false {
+    const refusals = this.periodRefusals();
+    if (refusals.length === 0) return false;
+    const missing = refusals.some((r) => r.id === 'register-from' ? !this.from : !this.to);
+    return missing ? this.periodMessage(refusals) : this.translate.instant('SUBMIT_GUARD.PERIOD');
+  }
+
+  /** The sentence for the refused dates: the missing ones by label, else the period rule. */
+  private periodMessage(refusals: readonly FieldRefusal[]): string {
+    const missing = missingRequiredMessage(this.translate, [
+      { labelKey: 'PHARMACY.REGISTER_FROM', value: this.from },
+      { labelKey: 'PHARMACY.REGISTER_TO', value: this.to },
+    ]);
+    return missing ?? refusals[0]?.message ?? '';
   }
 
   load(): void {
     if (!this.selectedPharmacyId) return;
-    if (!this.periodValid()) {
+    const refusals = this.periodRefusals();
+    if (refusals.length > 0) {
       // QA D1306 (round 28): the wrong date is marked, not only a toast.
-      const message = this.translate.instant('PHARMACY.REGISTER_PERIOD_INVALID');
-      refuseFields(this.host.nativeElement, this.refusedPeriodIds(), REGISTER_PERIOD_IDS, message);
-      this.toast.error(message);
+      refuseFields(this.host.nativeElement, refusals, REGISTER_PERIOD_IDS);
+      this.toast.error(this.periodMessage(refusals));
       return;
     }
     refuseFields(this.host.nativeElement, [], REGISTER_PERIOD_IDS, '');

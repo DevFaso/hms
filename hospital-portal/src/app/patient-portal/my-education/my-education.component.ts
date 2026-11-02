@@ -22,6 +22,7 @@ import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { refusalReason } from '../../shared/refusal-reason';
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 import { refuseFields } from '../../shared/forms/invalid-fields';
+import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
 
 /** QA D1281: the ask-a-question dialog's required field. */
 const ASK_TEXT_ID = 'askText';
@@ -32,6 +33,7 @@ type EducationTab = 'assigned' | 'completed' | 'questions';
   selector: 'app-my-education',
   standalone: true,
   imports: [
+    DateTimePipe,
     ServerTimePipe,
     CommonModule,
     DatePipe,

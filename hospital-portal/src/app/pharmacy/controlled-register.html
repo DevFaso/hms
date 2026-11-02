@@ -13,7 +13,7 @@
         [appSubmitGuard]="
           !selectedPharmacyId
             ? ('SUBMIT_GUARD.PHARMACY' | translate)
-            : !periodValid() && ('SUBMIT_GUARD.PERIOD' | translate)
+            : periodReason()
         "
         (click)="export('csv')"
       >
@@ -28,7 +28,7 @@
         [appSubmitGuard]="
           !selectedPharmacyId
             ? ('SUBMIT_GUARD.PHARMACY' | translate)
-            : !periodValid() && ('SUBMIT_GUARD.PERIOD' | translate)
+            : periodReason()
         "
         (click)="export('pdf')"
       >

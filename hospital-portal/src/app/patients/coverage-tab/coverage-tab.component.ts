@@ -35,6 +35,7 @@ import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive'
 import { PhoneFieldDirective } from '../../shared/forms/phone-field.directive';
 import { ReasonDialogComponent } from '../../shared/reason-dialog/reason-dialog.component';
 import { focusWhenRendered } from '../../shared/a11y/focus-when-rendered';
+import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
 /**
  * Coverage tab on patient detail (Phase 3 task 17): insurance policies and
  * hospital registrations for one patient. Insurance roles are HOSPITAL_ADMIN/
@@ -47,6 +48,7 @@ import { focusWhenRendered } from '../../shared/a11y/focus-when-rendered';
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    DateTimePipe,
     PhoneFieldDirective,
     SubmitGuardDirective,
     ReasonDialogComponent,

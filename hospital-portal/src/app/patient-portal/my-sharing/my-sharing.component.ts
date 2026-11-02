@@ -22,6 +22,7 @@ import { InlineSubFormDirective } from '../../shared/a11y/inline-sub-form.direct
 import { InlineDiscardAskComponent } from '../../shared/a11y/inline-discard-ask.component';
 import { focusWhenRendered } from '../../shared/a11y/focus-when-rendered';
 import { refusalReason } from '../../shared/refusal-reason';
+import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
 
 /**
  * "Who accessed my record" (E9 #66, decision D7).
@@ -36,6 +37,7 @@ import { refusalReason } from '../../shared/refusal-reason';
   selector: 'app-my-sharing',
   standalone: true,
   imports: [
+    DateTimePipe,
     InlineSubFormDirective,
     InlineDiscardAskComponent,
     ServerTimePipe,

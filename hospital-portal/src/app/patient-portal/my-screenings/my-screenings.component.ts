@@ -29,6 +29,7 @@ import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 import { refusalReason } from '../../shared/refusal-reason';
 import { refuseFields } from '../../shared/forms/invalid-fields';
+import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
 
 /** Must match `idPrefix` of the questionnaire in the template. */
 const PRO_ID_PREFIX = 'my-pro';
@@ -54,6 +55,7 @@ function itemIds(instrument: ProInstrumentView, only?: readonly number[]): strin
   selector: 'app-my-screenings',
   standalone: true,
   imports: [
+    DateTimePipe,
     SubmitGuardDirective,
     ServerTimePipe,
     CommonModule,

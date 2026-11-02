@@ -28,6 +28,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { serverDateOrInstant } from '../shared/date-utils';
+import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 
 /** Roles permitted to update appointment status (confirm / complete / no-show). */
 const STATUS_UPDATE_ROLES: readonly string[] = [
@@ -69,6 +70,7 @@ const RESCHEDULE_FIELDS = ['reschedDate', 'reschedStart'];
   selector: 'app-appointment-detail',
   standalone: true,
   imports: [
+    DateTimePipe,
     SubmitGuardDirective,
     DialogFocusDirective,
     ServerTimePipe,

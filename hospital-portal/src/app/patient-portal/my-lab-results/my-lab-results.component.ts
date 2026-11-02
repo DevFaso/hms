@@ -16,11 +16,13 @@ import { focusWhenRendered } from '../../shared/a11y/focus-when-rendered';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { localizeDecimals } from '../../shared/i18n/app-locale';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
 
 @Component({
   selector: 'app-my-lab-results',
   standalone: true,
   imports: [
+    DateTimePipe,
     LabCorrectionBadgeComponent,
     ServerTimePipe,
     CommonModule,

@@ -7,11 +7,13 @@ import { Router } from '@angular/router';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { refusalReason } from '../../shared/refusal-reason';
+import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
 
 @Component({
   selector: 'app-my-notifications',
   standalone: true,
-  imports: [ServerTimePipe, DatePipe, TranslateModule, EnumLabelPipe],
+  imports: [
+    DateTimePipe,ServerTimePipe, DatePipe, TranslateModule, EnumLabelPipe],
   templateUrl: './my-notifications.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['./my-notifications.component.scss', '../patient-portal-pages.scss'],

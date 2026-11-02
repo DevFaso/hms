@@ -211,7 +211,7 @@
                     }}</span>
                     @if (n.documentedAt) {
                       <time class="chart-review__card-date">
-                        {{ n.documentedAt | serverTime | date: 'medium' }}
+                        {{ n.documentedAt | serverTime | dateTime }}
                       </time>
                     }
                     <span
@@ -299,7 +299,7 @@
               <tbody>
                 @for (r of c.results; track r.id) {
                   <tr>
-                    <td>{{ r.resultDate | serverTime | date: 'medium' }}</td>
+                    <td>{{ r.resultDate | serverTime | dateTime }}</td>
                     <td>
                       {{ r.testName || '—' }}
                       @if (r.testCode) {
@@ -424,7 +424,7 @@
                     @if (i.orderedAt) {
                       <span
                         >{{ 'CHART_REVIEW.ORDERED' | translate }}{{ 'COMMON.COLON' | translate }}
-                        {{ i.orderedAt | serverTime | date: 'medium' }}</span
+                        {{ i.orderedAt | serverTime | dateTime }}</span
                       >
                     }
                     @if (i.scheduledFor) {

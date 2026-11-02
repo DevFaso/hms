@@ -46,6 +46,7 @@ import { earlierLotWithStock, fefoAllocation, FefoPart, fefoFirstLot } from './f
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { joinReasons } from '../shared/required-fields';
+import { focusWhenRendered } from '../shared/a11y/focus-when-rendered';
 
 /** The viewer's local calendar date as YYYY-MM-DD (not the UTC one). */
 function localIsoDate(d: Date): string {
@@ -572,7 +573,7 @@ export class DispensingComponent implements OnInit, OnDestroy {
     });
   }
 
-  private loadRecentDispenses(): void {
+  private loadRecentDispenses(afterLoad?: () => void): void {
     if (!this.selectedPharmacyId) return;
     this.dispensesLoading.set(true);
     this.svc.listDispensesByPharmacy(this.selectedPharmacyId, 0, 10).subscribe({
@@ -585,6 +586,7 @@ export class DispensingComponent implements OnInit, OnDestroy {
           ),
         );
         this.dispensesLoading.set(false);
+        afterLoad?.();
       },
       error: () => {
         this.dispensesLoading.set(false);
@@ -1222,7 +1224,13 @@ export class DispensingComponent implements OnInit, OnDestroy {
       next: () => {
         this.cancelWitnessFor.set(null);
         this.toast.success(this.translate.instant('PHARMACY.DISPENSE_CANCELLED'));
-        this.loadRecentDispenses();
+        // QA D1336 (round 29): the history reloads and the cancelled row's
+        // button is gone; focus went to a look-alike button in the queue
+        // (another patient's "Prendre en charge — Paracétamol"), where Enter
+        // would claim it. The keyboard stays in this section: its heading.
+        this.loadRecentDispenses(() =>
+          focusWhenRendered(this.host.nativeElement, '#recent-dispenses-title'),
+        );
         this.loadWorkQueue();
       },
       error: (err) =>

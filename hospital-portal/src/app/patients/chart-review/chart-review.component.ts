@@ -27,6 +27,7 @@ import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { MedicationRoutePipe } from '../../shared/pipes/medication-route.pipe';
 import { LabValuePipe } from '../../lab/shared/lab-value.pipe';
 import { CredentialsLabelPipe } from '../../shared/pipes/credentials-label.pipe';
+import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
 
 type LoadState = 'loading' | 'ready' | 'empty' | 'error';
 
@@ -57,6 +58,7 @@ const ABNORMAL_DANGER = new Set(['CRITICAL', 'ABNORMAL']);
   selector: 'app-chart-review',
   standalone: true,
   imports: [
+    DateTimePipe,
     LabCorrectionBadgeComponent,
     ServerTimePipe,
     CommonModule,

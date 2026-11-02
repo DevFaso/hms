@@ -58,6 +58,7 @@ import { PatientDemographicsEditComponent } from './patient-demographics-edit/pa
 import { isGrowthAge } from '../shared/patient-measures';
 import { refusalReason } from '../shared/refusal-reason';
 import { DashPipe } from '../shared/pipes/dash.pipe';
+import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 
 type TabKey =
   | 'overview'
@@ -79,6 +80,7 @@ type TabKey =
   selector: 'app-patient-detail',
   standalone: true,
   imports: [
+    DateTimePipe,
     DashPipe,
     LocaleNumberPipe,
     MeasurePipe,
