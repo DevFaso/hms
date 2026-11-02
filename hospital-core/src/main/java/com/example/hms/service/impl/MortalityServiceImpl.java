@@ -118,12 +118,10 @@ public class MortalityServiceImpl implements MortalityService {
         Patient patient = patientChartAccess.require(request.getPatientId(), hospitalId);
 
         if (deathRecordRepository.existsByPatient_Id(patient.getId())) {
-            throw new BusinessException(
-                "A death is already recorded for this patient. Amend that record rather than "
-                    + "filing a second one.");
+            throw new BusinessException("mortality.alreadyRecorded");
         }
         if (request.getDiedAt().isAfter(LocalDateTime.now(clock))) {
-            throw new BusinessException("The time of death cannot be in the future.");
+            throw new BusinessException("mortality.timeInFuture");
         }
         validateMortalityFlags(request);
 
@@ -171,7 +169,7 @@ public class MortalityServiceImpl implements MortalityService {
     @Override
     public DeathRecordResponseDTO amendDeathRecord(UUID recordId, DeathRecordAmendmentDTO request) {
         if (!StringUtils.hasText(request.getAmendmentReason())) {
-            throw new BusinessException("An amendment reason is required.");
+            throw new BusinessException("mortality.amendmentReasonRequired");
         }
         DeathRecord deathRecord = loadScoped(recordId);
 
@@ -209,12 +207,10 @@ public class MortalityServiceImpl implements MortalityService {
         // maternal without saying when would break the reporting query.
         if (Boolean.TRUE.equals(deathRecord.getMaternalDeath())
             && deathRecord.getMaternalDeathTiming() == null) {
-            throw new BusinessException(
-                "A maternal death must state when it occurred relative to the pregnancy.");
+            throw new BusinessException("mortality.maternalTimingRequired");
         }
         if (Boolean.TRUE.equals(deathRecord.getPerinatalDeath()) && deathRecord.getPerinatalType() == null) {
-            throw new BusinessException(
-                "A perinatal death must state whether it was a stillbirth or a neonatal death.");
+            throw new BusinessException("mortality.perinatalTypeRequired");
         }
 
         deathRecord.setAmendedAt(LocalDateTime.now(clock));
@@ -238,10 +234,10 @@ public class MortalityServiceImpl implements MortalityService {
     public MortalityRegisterDTO getRegister(LocalDate from, LocalDate to) {
         UUID hospitalId = requireHospital();
         if (from == null || to == null) {
-            throw new BusinessException("A period is required to read the mortality register.");
+            throw new BusinessException("mortality.periodRequired");
         }
         if (to.isBefore(from)) {
-            throw new BusinessException("The end of the period cannot precede its start.");
+            throw new BusinessException("mortality.periodReversed");
         }
         // Half-open on the upper bound so a death at 23:59 on the last day is
         // inside the period rather than silently dropped.
@@ -387,14 +383,10 @@ public class MortalityServiceImpl implements MortalityService {
 
     private void validateMortalityFlags(DeathRecordRequestDTO request) {
         if (Boolean.TRUE.equals(request.getMaternalDeath()) && request.getMaternalDeathTiming() == null) {
-            throw new BusinessException(
-                "A maternal death must state when it occurred relative to the pregnancy — the WHO "
-                    + "definition depends on it, and a late maternal death is reported separately.");
+            throw new BusinessException("mortality.maternalTimingRequiredWho");
         }
         if (Boolean.TRUE.equals(request.getPerinatalDeath()) && request.getPerinatalType() == null) {
-            throw new BusinessException(
-                "A perinatal death must state whether it was a stillbirth or a neonatal death: a "
-                    + "stillborn infant was never born alive, so the two are never summed.");
+            throw new BusinessException("mortality.perinatalTypeRequiredWhy");
         }
     }
 
@@ -422,8 +414,7 @@ public class MortalityServiceImpl implements MortalityService {
     private UUID requireHospital() {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId == null) {
-            throw new BusinessException(
-                "An active hospital is required: a death is certified at a facility.");
+            throw new BusinessException("mortality.hospitalRequired");
         }
         return hospitalId;
     }

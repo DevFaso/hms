@@ -196,7 +196,7 @@ public class AdmissionController {
     public ResponseEntity<Void> deactivateOrderSet(
         @PathVariable UUID orderSetId,
         @RequestParam String reason,
-        @RequestParam UUID deactivatedByStaffId
+        @RequestParam(required = false) UUID deactivatedByStaffId
     ) {
         admissionService.deactivateOrderSet(orderSetId, reason, deactivatedByStaffId);
         return ResponseEntity.noContent().build();

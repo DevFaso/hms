@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.TreeMap;
+import java.util.regex.MatchResult;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
@@ -176,6 +177,12 @@ class ExceptionProseRatchetTest {
     }
 
     @Test
+    @DisplayName("QA D1232 (round 24): the clinical refusals are really translated, not copied")
+    void roundTwentyFourKeysAreTranslated() throws IOException {
+        assertTranslated("# QA round 24 (D1232)", 80);
+    }
+
+    @Test
     @DisplayName("QA round 14 (D833-D877): the platform and integration refusals are really translated")
     void roundFourteenKeysAreTranslated() throws IOException {
         assertTranslated("# QA round 14 (D833-D877)", 40);
@@ -285,7 +292,9 @@ class ExceptionProseRatchetTest {
 
     /** Keys whose French or Spanish value is legitimately the English word (e.g. "Suspension"). */
     private static final java.util.Set<String> IDENTICAL_BY_DESIGN = java.util.Set.of(
-        "hospital.lifecycle.action.suspend");
+        "hospital.lifecycle.action.suspend",
+        // "contact" is the French name of contact precautions too.
+        "isolation.type.CONTACT");
 
     /**
      * QA D317 (D226 regression): the screens QA re-tested in round 6 (check-in,
@@ -415,5 +424,210 @@ class ExceptionProseRatchetTest {
             .isEqualTo(1);
         assertThat(countProse("throw new BusinessException(\"recall.close.alreadyCancelled\");")).isZero();
         assertThat(countProse("throw new ResourceNotFoundException(\"recall.notFound\", id);")).isZero();
+    }
+
+    /**
+     * QA D1232 (round 24): a signed imaging report refused its edit in English
+     * to French and Spanish doctors. The sentence sat under the per-file
+     * allowance, as did the rest of the clinical record's refusals (isolation,
+     * cultures, deaths, chart updates, intake/output, vitals, nursing notes,
+     * treatment plans and consents, high-risk pregnancy plans). These files
+     * are now at zero, whatever the baseline says; the number beside a file
+     * counts its internal failures (a missing SHA-256 algorithm), which answer
+     * a generic 500 and never show their text.
+     */
+    static final Map<String, Integer> ROUND_TWENTY_FOUR_CLINICAL = Map.ofEntries(
+        Map.entry("com/example/hms/service/impl/ImagingReportServiceImpl.java", 1),
+        Map.entry("com/example/hms/service/impl/IsolationServiceImpl.java", 0),
+        Map.entry("com/example/hms/service/impl/MicroCultureServiceImpl.java", 0),
+        Map.entry("com/example/hms/service/impl/MortalityServiceImpl.java", 0),
+        Map.entry("com/example/hms/service/PatientChartUpdateServiceImpl.java", 0),
+        Map.entry("com/example/hms/service/impl/IntakeOutputServiceImpl.java", 0),
+        Map.entry("com/example/hms/service/impl/PatientVitalSignServiceImpl.java", 0),
+        Map.entry("com/example/hms/service/impl/NursingNoteServiceImpl.java", 0),
+        Map.entry("com/example/hms/service/TreatmentPlanServiceImpl.java", 0),
+        Map.entry("com/example/hms/service/impl/TreatmentConsentServiceImpl.java", 1),
+        Map.entry("com/example/hms/service/HighRiskPregnancyCarePlanServiceImpl.java", 0));
+
+    @Test
+    @DisplayName("QA D1232: the clinical record's refusals are keys only, helpers included")
+    void roundTwentyFourClinicalFilesHoldNoProse() throws IOException {
+        List<String> found = new ArrayList<>();
+        for (Map.Entry<String, Integer> file : ROUND_TWENTY_FOUR_CLINICAL.entrySet()) {
+            String source = Files.readString(MAIN_JAVA.resolve(file.getKey()), StandardCharsets.UTF_8);
+            int n = countProse(source) + countHelperProse(source) + countThrowerProse(source);
+            if (n > file.getValue()) {
+                found.add(file.getKey() + ": " + n + " (internal failures allowed: " + file.getValue() + ")");
+            }
+        }
+        assertThat(found).as("Throw a messages*.properties key (en/fr/es), not an English sentence (QA D1232)").isEmpty();
+    }
+
+    /**
+     * QA D1232 (round 24) guard extension: a sentence handed to a private
+     * helper that throws its parameter ({@code findPlanInReach(user, id,
+     * "You do not have permission…")}, {@code normalizeRequiredText(value,
+     * "Clinical indication is required…")}) reached the reader in English
+     * while the constructor scan, reading {@code new X(errorMessage)}, saw
+     * nothing. A method whose String parameter is thrown is a thrower; every
+     * call that hands it a sentence (a literal or a same-file constant) is
+     * counted, across the whole tree. The FHIR package is outside: its helpers
+     * build HAPI exceptions whose text becomes an OperationOutcome, English by
+     * convention (as in {@code StoredTextProseGuardTest}).
+     */
+    @Test
+    @DisplayName("QA D1232: no sentence is handed to a helper that throws it")
+    void noProseHandedToAThrowingHelper() throws IOException {
+        List<String> found = new ArrayList<>();
+        try (Stream<Path> files = Files.walk(MAIN_JAVA)) {
+            for (Path p : files.filter(f -> f.toString().endsWith(".java")).toList()) {
+                String rel = MAIN_JAVA.relativize(p).toString().replace('\\', '/');
+                if (rel.startsWith("com/example/hms/fhir/")) {
+                    continue;
+                }
+                int n = countThrowerProse(Files.readString(p, StandardCharsets.UTF_8));
+                if (n > 0) {
+                    found.add(rel + ": " + n);
+                }
+            }
+        }
+        assertThat(found).as("Hand the helper a messages*.properties key, not an English sentence (QA D1232)").isEmpty();
+    }
+
+    @Test
+    @DisplayName("QA D1232: the thrower scan sees a literal and a constant handed to a throwing helper, not a key")
+    void throwerScanRecognisesProse() {
+        String helper = "private String normalizeRequiredText(String value, String errorMessage) {\n"
+            + "    if (value == null) {\n        throw new BusinessException(errorMessage);\n    }\n    return value;\n}\n";
+        assertThat(countThrowerProse(helper
+            + "void a() { normalizeRequiredText(x, \"Clinical indication is required for lab orders.\"); }\n"))
+            .isEqualTo(1);
+        assertThat(countThrowerProse("private static final String DENIED = \"You do not have permission\";\n" + helper
+            + "void a() { normalizeRequiredText(x, DENIED); }\n")).isEqualTo(1);
+        assertThat(countThrowerProse(helper
+            + "void a() { normalizeRequiredText(x, \"labOrder.clinicalIndication.required\"); }\n")).isZero();
+        assertThat(countThrowerProse("private void note(String text) {\n    logger.info(text);\n}\n"
+            + "void a() { note(\"Something happened here\"); }\n")).isZero();
+    }
+
+    /** A method declaration: its name and its parameter list. */
+    // Reluctant before the name: a possessive run would swallow the method name itself.
+    private static final Pattern METHOD_DECLARATION = Pattern.compile(
+        "(?:private|static|protected|public)\\s[^;{}=()]*?\\b(\\w++)\\s*+\\(([^()]*+)\\)\\s*+(?:throws[^{;]*+)?\\{");
+
+    private static final String THROWN_TYPES = "(?:BusinessException|BusinessRuleException|BusinessValidationException"
+        + "|BadRequestException|ConflictException|IllegalArgumentException|IllegalStateException|UnauthorizedException"
+        + "|CdsCriticalBlockException|ResponseStatusException|ClientSafeAccessDeniedException|ResourceNotFoundException"
+        + "|FieldBusinessException)";
+
+    /** Calls that hand a sentence to a helper that throws the parameter it lands in. */
+    static int countThrowerProse(String source) {
+        Map<String, String> constants = new TreeMap<>();
+        Matcher c = STRING_CONSTANT.matcher(source);
+        while (c.find()) {
+            constants.put(c.group(1), c.group(2));
+        }
+        int n = 0;
+        for (Map.Entry<String, List<int[]>> thrower : throwers(source).entrySet()) {
+            Matcher call = Pattern.compile("(?<![\\w.])" + Pattern.quote(thrower.getKey()) + "\\s*+\\(").matcher(source);
+            while (call.find()) {
+                List<String> args = splitArguments(source, call.end());
+                for (int[] slot : thrower.getValue()) {
+                    if (args.size() == slot[1] && isProseArgument(args.get(slot[0]), constants)) {
+                        n++;
+                    }
+                }
+            }
+        }
+        return n;
+    }
+
+    /** Each thrower's name, with the position of the thrown String parameter and its parameter count. */
+    private static Map<String, List<int[]>> throwers(String source) {
+        Map<String, List<int[]>> out = new TreeMap<>();
+        List<MatchResult> methods = METHOD_DECLARATION.matcher(source).results().toList();
+        for (int i = 0; i < methods.size(); i++) {
+            MatchResult m = methods.get(i);
+            int bodyEnd = i + 1 < methods.size() ? methods.get(i + 1).start() : source.length();
+            String body = source.substring(m.end(), bodyEnd);
+            List<String> params = splitTopLevel(m.group(2));
+            for (int p = 0; p < params.size(); p++) {
+                String[] words = params.get(p).trim().split("\\s+");
+                if (words.length >= 2 && "String".equals(words[words.length - 2])
+                    && throwsParameter(body, words[words.length - 1])) {
+                    out.computeIfAbsent(m.group(1), k -> new ArrayList<>()).add(new int[] {p, params.size()});
+                }
+            }
+        }
+        return out;
+    }
+
+    private static boolean throwsParameter(String body, String parameter) {
+        return Pattern.compile("new\\s+(?:[a-z]\\w*+\\.)*+" + THROWN_TYPES + "\\s*+\\(\\s*+"
+            + Pattern.quote(parameter) + "\\s*+[,)]").matcher(body).find();
+    }
+
+    private static boolean isProseArgument(String argument, Map<String, String> constants) {
+        String a = argument.trim();
+        if (a.length() >= 2 && a.startsWith("\"") && a.endsWith("\"")) {
+            return isProse(a.substring(1, a.length() - 1));
+        }
+        String constant = constants.get(a);
+        return constant != null && isProse(constant);
+    }
+
+    /** The top-level arguments of the call whose opening parenthesis ends at {@code from}. */
+    private static List<String> splitArguments(String source, int from) {
+        int depth = 1;
+        int i = from;
+        while (i < source.length() && depth > 0) {
+            char ch = source.charAt(i);
+            if (ch == '"') {
+                i = skipString(source, i);
+                continue;
+            }
+            if (ch == '(') {
+                depth++;
+            } else if (ch == ')') {
+                depth--;
+            }
+            i++;
+        }
+        return splitTopLevel(source.substring(from, Math.max(from, i - 1)));
+    }
+
+    private static int skipString(String source, int quote) {
+        int i = quote + 1;
+        while (i < source.length() && source.charAt(i) != '"') {
+            i += source.charAt(i) == '\\' ? 2 : 1;
+        }
+        return i + 1;
+    }
+
+    private static List<String> splitTopLevel(String text) {
+        List<String> out = new ArrayList<>();
+        int depth = 0;
+        int start = 0;
+        int i = 0;
+        while (i < text.length()) {
+            char ch = text.charAt(i);
+            if (ch == '"') {
+                i = skipString(text, i);
+                continue;
+            }
+            if (ch == '(' || ch == '<' || ch == '[' || ch == '{') {
+                depth++;
+            } else if (ch == ')' || ch == '>' || ch == ']' || ch == '}') {
+                depth--;
+            } else if (ch == ',' && depth == 0) {
+                out.add(text.substring(start, i).trim());
+                start = i + 1;
+            }
+            i++;
+        }
+        if (!text.substring(start).isBlank()) {
+            out.add(text.substring(start).trim());
+        }
+        return out;
     }
 }

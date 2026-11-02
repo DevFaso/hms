@@ -13,6 +13,7 @@ import com.example.hms.repository.DepartmentRepository;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.StaffAvailabilityRepository;
 import com.example.hms.repository.StaffRepository;
+import com.example.hms.utility.DisplayDates;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.MessageSource;
@@ -71,7 +72,7 @@ public class StaffAvailabilityServiceImpl implements StaffAvailabilityService {
 
         if (availabilityRepository.existsByStaff_IdAndDate(dto.staffId(), dto.date())) {
             throw new BusinessRuleException(
-                getLocalizedMessage("availability.exists", new Object[]{dto.date()}, locale));
+                getLocalizedMessage("availability.exists", new Object[]{DisplayDates.date(dto.date(), locale)}, locale));
         }
 
         if (!dto.dayOff()) {

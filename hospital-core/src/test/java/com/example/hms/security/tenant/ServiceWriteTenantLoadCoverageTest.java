@@ -96,7 +96,6 @@ class ServiceWriteTenantLoadCoverageTest {
 
     /** Class.method#call → why the method needs no tenant check of its own. Frozen: it only shrinks. */
     private static final Map<String, String> RECORDED = Map.ofEntries(
-        entry("AdmissionOrderSetServiceImpl.deactivate#findById", ACTOR + "; the order set itself is loaded scoped"),
         entry("AppointmentServiceImpl.resolvePatient#findByIdUnscoped", PATIENT),
         entry("AppointmentServiceImpl.resolveStaff#findById", ACTOR),
         entry("AuditEventLogServiceImpl.resolveAssignment#findById", "the caller's own assignment, checked against the caller"),

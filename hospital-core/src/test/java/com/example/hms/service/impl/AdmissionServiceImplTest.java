@@ -472,7 +472,8 @@ class AdmissionServiceImplTest {
         AdmissionOrderSet orderSet = new AdmissionOrderSet();
         orderSet.setActive(true);
         when(orderSetRepository.findById(orderSetId)).thenReturn(Optional.of(orderSet));
-        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        // QA D1226 class (round 24): the named staff id is no longer looked up;
+        // the actor is the session (none in this test).
 
         service.deactivateOrderSet(orderSetId, "No longer needed", staffId);
 

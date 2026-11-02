@@ -693,8 +693,11 @@ public class AdmissionServiceImpl implements AdmissionService {
     public void deactivateOrderSet(UUID orderSetId, String reason, UUID deactivatedByStaffId) {
         AdmissionOrderSet orderSet = loadTenantScopedOrderSet(orderSetId);
 
-        Staff deactivatedBy = staffRepository.findById(deactivatedByStaffId)
-            .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", deactivatedByStaffId));
+        // QA D1226 class (round 24): who deactivated it is the session, never a
+        // staff id the client names (any staff of any hospital was accepted).
+        // The parameter is kept for old clients and ignored.
+        Staff deactivatedBy = com.example.hms.security.CallerIdentity.resolveActor(staffRepository, null,
+            com.example.hms.security.CallerIdentity.hospitalIdOf(orderSet.getHospital()));
 
         orderSet.deactivate(reason, deactivatedBy);
         orderSetRepository.save(orderSet);

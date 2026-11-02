@@ -91,20 +91,20 @@ public class PatientChartUpdateServiceImpl implements PatientChartUpdateService 
         DoctorPatientChartUpdateRequestDTO request
     ) {
         if (request == null) {
-            throw new BusinessException("Chart update payload is required.");
+            throw new BusinessException("chartUpdate.payloadRequired");
         }
         if (request.getHospitalId() == null && hospitalId == null) {
-            throw new BusinessException("Hospital context is required for chart updates.");
+            throw new BusinessException("chartUpdate.hospitalRequired");
         }
         UUID effectiveHospitalId = hospitalId != null ? hospitalId : request.getHospitalId();
         if (effectiveHospitalId == null) {
-            throw new BusinessException("Hospital context could not be resolved for chart update request.");
+            throw new BusinessException("chartUpdate.hospitalUnresolved");
         }
         validatePatientHospitalContext(patientId, effectiveHospitalId);
 
         if (assignment == null || assignment.getHospital() == null
             || !Objects.equals(assignment.getHospital().getId(), effectiveHospitalId)) {
-            throw new BusinessException("Hospital assignment does not match requested context.");
+            throw new BusinessException("chartUpdate.assignmentMismatch");
         }
 
         Patient patient = patientRepository.findById(patientId)
@@ -113,11 +113,11 @@ public class PatientChartUpdateServiceImpl implements PatientChartUpdateService 
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", effectiveHospitalId));
 
         Staff staff = staffRepository.findByUserIdAndHospitalId(requesterUserId, effectiveHospitalId)
-            .orElseThrow(() -> new BusinessException("Staff profile not found for authenticated user in hospital."));
+            .orElseThrow(() -> new BusinessException("chartUpdate.staffNotFound"));
 
         String updateReason = trim(request.getUpdateReason());
         if (updateReason == null) {
-            throw new BusinessException("Update reason is required for chart updates.");
+            throw new BusinessException("chartUpdate.reasonRequired");
         }
 
         int nextVersion = patientChartUpdateRepository
@@ -147,16 +147,16 @@ public class PatientChartUpdateServiceImpl implements PatientChartUpdateService 
 
     private void validatePatientHospitalContext(UUID patientId, UUID hospitalId) {
         if (patientId == null) {
-            throw new BusinessException("Patient identifier is required.");
+            throw new BusinessException("chartUpdate.patientRequired");
         }
         if (hospitalId == null) {
-            throw new BusinessException("Hospital identifier is required for chart updates.");
+            throw new BusinessException("chartUpdate.hospitalIdRequired");
         }
         if (!patientRepository.existsById(patientId)) {
             throw new ResourceNotFoundException("patient.notFound", patientId);
         }
         if (!registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)) {
-            throw new BusinessException("Patient is not registered in the specified hospital.");
+            throw new BusinessException("chartUpdate.patientNotRegistered");
         }
     }
 
@@ -217,7 +217,7 @@ public class PatientChartUpdateServiceImpl implements PatientChartUpdateService 
             return objectMapper.writeValueAsString(details);
         } catch (JacksonException e) {
             log.warn("Failed to serialize chart section details", e);
-            throw new BusinessException("Unable to process structured chart details.");
+            throw new BusinessException("chartUpdate.detailsUnreadable");
         }
     }
 }

@@ -95,6 +95,18 @@ describe('AuditDescriptionService (QA D894)', () => {
     );
   });
 
+  it('tells an allergy acknowledgement given at the signature from one given on edit (r23 residual)', () => {
+    expect(describeIn('fr', 'Allergy override recorded at signature')).toBe(
+      'Passage outre une allergie : enregistré à la signature de la prescription',
+    );
+    expect(describeIn('es', 'Allergy override recorded at signature')).toBe(
+      'Alerta de alergia ignorada: registrada al firmar la orden',
+    );
+    expect(describeIn('fr', 'Allergy override recorded on edit')).toBe(
+      'Passage outre une allergie : enregistré à la modification de la prescription',
+    );
+  });
+
   it('reads a code with no portal-wide label through AUDIT.CODE, and keeps an unknown one', () => {
     expect(describeIn('fr', 'CHW empanelment ended')).toBe(
       'Inscription agent de santé communautaire sur la patientèle terminée',

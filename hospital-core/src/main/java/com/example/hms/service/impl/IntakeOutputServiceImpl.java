@@ -43,20 +43,20 @@ public class IntakeOutputServiceImpl implements IntakeOutputService {
                                                     UUID recorderUserId,
                                                     IntakeOutputEntryRequestDTO request) {
         if (hospitalId == null) {
-            throw new BusinessException("An active hospital is required to record intake/output.");
+            throw new BusinessException("intakeOutput.hospitalRequired");
         }
         if (request == null || request.getRoute() == null) {
-            throw new BusinessException("An intake/output route is required.");
+            throw new BusinessException("intakeOutput.routeRequired");
         }
         if (request.getVolumeMl() == null || request.getVolumeMl() <= 0) {
             // Belt over the bean-validation braces: the nurse-station path has
             // historically shipped DTOs with no validation annotations at all.
-            throw new BusinessException("A positive volume in millilitres is required.");
+            throw new BusinessException("intakeOutput.volumeRequired");
         }
         LocalDateTime observationTime =
             request.getObservationTime() != null ? request.getObservationTime() : LocalDateTime.now();
         if (observationTime.isAfter(LocalDateTime.now())) {
-            throw new BusinessException("An intake/output entry cannot be observed in the future.");
+            throw new BusinessException("intakeOutput.observedInFuture");
         }
 
         // Unscoped resolve + registration check (see PatientChartAccess); the
@@ -65,7 +65,7 @@ public class IntakeOutputServiceImpl implements IntakeOutputService {
         Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
         if (!patient.isRegisteredInHospital(hospitalId)) {
-            throw new BusinessException("Patient is not registered at this hospital.");
+            throw new BusinessException("intakeOutput.patientNotRegistered");
         }
 
         IntakeOutputEntry entry = IntakeOutputEntry.builder()
@@ -101,7 +101,7 @@ public class IntakeOutputServiceImpl implements IntakeOutputService {
         LocalDateTime windowTo = to != null ? to : LocalDateTime.now();
         LocalDateTime windowFrom = from != null ? from : windowTo.minus(DEFAULT_WINDOW);
         if (windowFrom.isAfter(windowTo)) {
-            throw new BusinessException("The window must start before it ends.");
+            throw new BusinessException("intakeOutput.windowReversed");
         }
 
         List<IntakeOutputEntry> entries =

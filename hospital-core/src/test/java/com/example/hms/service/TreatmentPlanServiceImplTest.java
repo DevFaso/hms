@@ -56,6 +56,20 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class TreatmentPlanServiceImplTest {
 
+    // QA D1232 (round 24): the refusals are message keys now; the assertions
+    // read them in English through the real bundles.
+    @org.junit.jupiter.api.BeforeEach
+    void readRefusalsInEnglish() {
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.ENGLISH);
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void resetRefusalLocale() {
+        com.example.hms.utility.MessageUtil.setMessageSource(null);
+        org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+    }
+
     @Mock
     private com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
 
@@ -306,8 +320,9 @@ class TreatmentPlanServiceImplTest {
         when(staffRepository.findById(signOffId)).thenReturn(Optional.of(signOff));
 
         assertThatThrownBy(() -> service.create(requestDTO))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("Assignment hospital mismatch");
+                // QA D1232 (round 24): a keyed refusal, read through the bundles (was an English IllegalStateException).
+                .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                .hasMessageContaining("The assignment belongs to another hospital.");
     }
 
     @Test
@@ -344,8 +359,9 @@ class TreatmentPlanServiceImplTest {
         when(staffRepository.findById(signOffId)).thenReturn(Optional.of(signOff));
 
         assertThatThrownBy(() -> service.create(requestDTO))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("Encounter hospital mismatch");
+                // QA D1232 (round 24): a keyed refusal, read through the bundles (was an English IllegalStateException).
+                .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                .hasMessageContaining("The encounter belongs to another hospital.");
     }
 
     @Test
@@ -363,7 +379,8 @@ class TreatmentPlanServiceImplTest {
         when(staffRepository.findById(signOffId)).thenReturn(Optional.of(signOff));
 
         assertThatThrownBy(() -> service.create(requestDTO))
-                .isInstanceOf(IllegalStateException.class)
+                // QA D1232 (round 24): a keyed refusal, read through the bundles (was an English IllegalStateException).
+                .isInstanceOf(com.example.hms.exception.BusinessException.class)
                 .hasMessageContaining("same patient");
     }
 

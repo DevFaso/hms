@@ -61,8 +61,8 @@ public class HighRiskPregnancyCarePlanServiceImpl implements HighRiskPregnancyCa
 
     private static final String MSG_PLAN_ID_REQUIRED = "Plan ID is required";
     private static final String MSG_PATIENT_ID_REQUIRED = "Patient ID is required";
-    private static final String MSG_LOG_ACCESS_DENIED = "You do not have permission to update monitoring logs";
-    private static final String MSG_PLAN_ACCESS_DENIED = "You do not have permission to access this care plan";
+    private static final String MSG_LOG_ACCESS_DENIED = "highRiskPregnancy.log.accessDenied";
+    private static final String MSG_PLAN_ACCESS_DENIED = "highRiskPregnancy.plan.accessDenied";
     private static final String MSG_PATIENT_ACCESS_DENIED = "highRiskPregnancy.access.denied";
 
     private static final EnumSet<HighRiskMilestoneType> REQUIRED_BASELINE_MILESTONES = EnumSet.of(

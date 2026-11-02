@@ -3,6 +3,7 @@ package com.example.hms.service.pharmacy;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.model.pharmacy.StockLot;
 import com.example.hms.repository.pharmacy.StockLotRepository;
+import com.example.hms.utility.DisplayDates;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -100,9 +101,7 @@ public class FefoLotPolicy {
             BigDecimal left = lot.getRemainingQuantity()
                     .subtract(alreadyTaken.getOrDefault(lot.getId(), BigDecimal.ZERO));
             throw new BusinessException("pharmacy.fefo.reasonRequired", lot.getLotNumber(),
-                    java.time.format.DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.MEDIUM)
-                            .withLocale(org.springframework.context.i18n.LocaleContextHolder.getLocale())
-                            .format(lot.getExpiryDate()),
+                    DisplayDates.date(lot.getExpiryDate()),
                     com.example.hms.utility.DisplayNumbers.quantity(left));
         }
         if (reason.length() > REASON_MAX) {

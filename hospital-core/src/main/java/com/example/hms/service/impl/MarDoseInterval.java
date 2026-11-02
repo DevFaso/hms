@@ -5,10 +5,10 @@ import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.MedicationAdministrationRecord;
 import com.example.hms.model.Prescription;
+import com.example.hms.utility.DisplayDates;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.Collection;
 import java.util.Objects;
 import java.util.Optional;
@@ -50,8 +50,6 @@ public final class MarDoseInterval {
 
     /** The longest reason kept (the MAR row's reason column is TEXT; the request caps it). */
     public static final int REASON_MAX = 1024;
-
-    private static final DateTimeFormatter WALL_CLOCK = DateTimeFormatter.ofPattern("dd/MM HH:mm");
 
     private MarDoseInterval() {
     }
@@ -103,8 +101,10 @@ public final class MarDoseInterval {
         if (why.isEmpty()) {
             Hospital hospital = rx.getHospital();
             throw new FieldBusinessException(REASON_FIELD, TOO_SOON_KEY,
-                com.example.hms.utility.HospitalTime.at(lastGiven.get(), hospital).format(WALL_CLOCK),
-                com.example.hms.utility.HospitalTime.at(earliest, hospital).format(WALL_CLOCK),
+                // QA D1234: the reader's own date ("2 nov. 2026, 00:28", "Nov 2, 2026, 12:28 AM"),
+                // never dd/MM, which an English reader takes for the month first.
+                DisplayDates.dateTime(com.example.hms.utility.HospitalTime.at(lastGiven.get(), hospital)),
+                DisplayDates.dateTime(com.example.hms.utility.HospitalTime.at(earliest, hospital)),
                 String.valueOf(interval));
         }
         if (why.length() > REASON_MAX) {

@@ -85,11 +85,28 @@ class IsolationServiceImplTest {
         patient.setFirstName("Aminata");
         patient.setLastName("Diallo");
 
+        // QA D1232 (round 24): the refusals are keys now; read them in English.
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.ENGLISH);
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(patientChartAccess.require(any(), any())).thenReturn(patient);
         when(precautionRepository.save(any())).thenAnswer(i -> i.getArgument(0));
         when(precautionRepository.findActiveOfType(any(), any())).thenReturn(Optional.empty());
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void tearDown() {
+        com.example.hms.utility.MessageUtil.setMessageSource(null);
+        org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+        org.springframework.security.core.context.SecurityContextHolder.clearContext();
+    }
+
+    private void signedInAs(UUID userId) {
+        com.example.hms.model.User user = new com.example.hms.model.User();
+        user.setId(userId);
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(user, null, List.of()));
     }
 
     private IsolationPrecautionRequestDTO.IsolationPrecautionRequestDTOBuilder base() {
@@ -135,7 +152,9 @@ class IsolationServiceImplTest {
 
         assertThatThrownBy(() -> service.startPrecaution(request))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("already on CONTACT");
+            // QA D1232 (round 24): the type is named in words, in the reader's
+            // language, not by its code ("already on CONTACT").
+            .hasMessageContaining("already on contact precautions");
         verify(precautionRepository, never()).save(any());
     }
 
@@ -233,6 +252,47 @@ class IsolationServiceImplTest {
         // The row survives — contact tracing asks what WAS in force.
         assertThat(result.getStartedAt()).isNotNull();
         verify(precautionRepository, never()).delete(any());
+    }
+
+    /**
+     * QA D1226 (round 24): the bed board lifts a precaution without naming
+     * anyone, and the lift recorded nobody (discontinuedByName null). The
+     * nurse who lifts it is the session, as at the start.
+     */
+    @Test
+    void liftingAPrecautionRecordsTheNurseWhoLiftedIt() {
+        IsolationPrecaution precaution = persisted(IsolationPrecautionType.CONTACT);
+        UUID nurseUserId = UUID.randomUUID();
+        signedInAs(nurseUserId);
+        Staff nurse = new Staff();
+        nurse.setId(UUID.randomUUID());
+        nurse.setHospital(hospital);
+        when(staffRepository.findByUserIdAndHospitalId(nurseUserId, hospitalId)).thenReturn(Optional.of(nurse));
+
+        service.discontinuePrecaution(precaution.getId(),
+            DiscontinuePrecautionRequestDTO.builder().discontinuationReason("Stool culture negative").build());
+
+        assertThat(precaution.getDiscontinuedBy()).isSameAs(nurse);
+    }
+
+    @Test
+    void aColleagueCannotBeNamedAsHavingLiftedIt() {
+        IsolationPrecaution precaution = persisted(IsolationPrecautionType.CONTACT);
+        signedInAs(UUID.randomUUID());
+        com.example.hms.model.User colleagueUser = new com.example.hms.model.User();
+        colleagueUser.setId(UUID.randomUUID());
+        Staff colleague = new Staff();
+        colleague.setId(UUID.randomUUID());
+        colleague.setHospital(hospital);
+        colleague.setUser(colleagueUser);
+        when(staffRepository.findById(colleague.getId())).thenReturn(Optional.of(colleague));
+        UUID id = precaution.getId();
+        DiscontinuePrecautionRequestDTO request = DiscontinuePrecautionRequestDTO.builder()
+            .discontinuationReason("Not mine to lift").discontinuedByStaffId(colleague.getId()).build();
+
+        assertThatThrownBy(() -> service.discontinuePrecaution(id, request))
+            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        assertThat(precaution.getDiscontinuedBy()).isNull();
     }
 
     @Test

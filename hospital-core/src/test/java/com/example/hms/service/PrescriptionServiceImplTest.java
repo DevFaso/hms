@@ -1374,8 +1374,11 @@ class PrescriptionServiceImplTest {
         assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.SIGNED);
         assertThat(rx.isAllergiesReviewed()).isTrue();
         assertThat(rx.getOverrideReason()).isEqualTo("Tolerated co-trimoxazole in 2025, documented");
+        // r23 residual: an acknowledgement given at the signature says so in
+        // the audit log (it read "recorded on edit", an edit nobody made).
         verify(auditEventLogService).logEvent(org.mockito.ArgumentMatchers.argThat(e ->
-            e.getEventType() == com.example.hms.enums.AuditEventType.PRESCRIPTION_ALLERGY_OVERRIDDEN));
+            e.getEventType() == com.example.hms.enums.AuditEventType.PRESCRIPTION_ALLERGY_OVERRIDDEN
+                && "Allergy override recorded at signature".equals(e.getEventDescription())));
     }
 
     @Test

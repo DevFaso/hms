@@ -103,10 +103,10 @@ public class ImagingReportServiceImpl implements ImagingReportService {
     @Override
     public ImagingReportResponseDTO createReport(ImagingReportUpsertRequestDTO request) {
         if (request == null) {
-            throw new BusinessException("Imaging report payload is required.");
+            throw new BusinessException("imaging.report.payloadRequired");
         }
         if (request.getImagingOrderId() == null) {
-            throw new BusinessException("Imaging order ID is required to create a report.");
+            throw new BusinessException("imaging.report.orderRequired");
         }
 
         ImagingOrder imagingOrder = loadOrderScoped(request.getImagingOrderId());
@@ -115,7 +115,7 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         requireOrderNotCancelled(imagingOrder);
         Hospital hospital = imagingOrder.getHospital();
         if (hospital == null) {
-            throw new BusinessException("Imaging order has no hospital context; a report cannot be filed against it.");
+            throw new BusinessException("imaging.report.orderWithoutHospital");
         }
 
         ImagingReport report = new ImagingReport();
@@ -161,7 +161,7 @@ public class ImagingReportServiceImpl implements ImagingReportService {
     @Override
     public ImagingReportResponseDTO updateReport(UUID reportId, ImagingReportUpsertRequestDTO request) {
         if (request == null) {
-            throw new BusinessException("Update request payload is required.");
+            throw new BusinessException("imaging.report.updatePayloadRequired");
         }
 
         ImagingReport report = loadReportScoped(reportId);
@@ -172,22 +172,20 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         // report_version / is_latest_version have modelled since V1 — editing
         // the signed row in place would rewrite what a clinician attested to.
         if (report.isSigned()) {
-            throw new BusinessException(
-                "This report has been signed and can no longer be edited. File an addendum or a "
-                    + "corrected report against the same imaging order instead.");
+            throw new BusinessException("imaging.report.signedNoEdit");
         }
 
         Hospital hospital = report.getHospital();
         ImagingOrder imagingOrder = report.getImagingOrder();
         if (imagingOrder == null) {
-            throw new BusinessException("Imaging report must remain associated with an imaging order.");
+            throw new BusinessException("imaging.report.orderMustRemain");
         }
         requireOrderNotCancelled(imagingOrder);
         if (request.getImagingOrderId() != null
             && !Objects.equals(imagingOrder.getId(), request.getImagingOrderId())) {
             // Re-pointing a report at a different order would move it between
             // patients. A report belongs to the study it interprets.
-            throw new BusinessException("An imaging report cannot be moved to a different imaging order.");
+            throw new BusinessException("imaging.report.orderCannotMove");
         }
 
         if (request.getDepartmentId() != null) {
@@ -222,14 +220,12 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         requireOrderNotCancelled(report.getImagingOrder());
 
         if (report.isSigned()) {
-            throw new BusinessException(
-                "This report has already been signed. A signature cannot be reissued; file an "
-                    + "addendum or a corrected report instead.");
+            throw new BusinessException("imaging.report.alreadySigned");
         }
         // A signature over an empty read attests to nothing. The impression is
         // the part the ordering clinician acts on, so that is the floor.
         if (!StringUtils.hasText(report.getImpression())) {
-            throw new BusinessException("A report cannot be signed without an impression.");
+            throw new BusinessException("imaging.report.impressionRequired");
         }
 
         Hospital hospital = report.getHospital();
@@ -275,12 +271,10 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         ImagingReport report = loadReportScoped(reportId);
 
         if (!report.isCriticalFlagged()) {
-            throw new BusinessException(
-                "This report carries no critical finding to acknowledge.");
+            throw new BusinessException("imaging.report.noCriticalFinding");
         }
         if (report.isCriticalAcknowledged()) {
-            throw new BusinessException("This critical finding has already been acknowledged by %s."
-                .formatted(displayName(report.getCriticalResultAcknowledgedBy())));
+            throw new BusinessException("imaging.report.criticalAlreadyAcknowledged", displayName(report.getCriticalResultAcknowledgedBy()));
         }
 
         Staff acknowledger = currentStaff(report.getHospital());
@@ -301,26 +295,22 @@ public class ImagingReportServiceImpl implements ImagingReportService {
     @Override
     public ImagingReportResponseDTO updateReportStatus(UUID reportId, ImagingReportStatusUpdateRequestDTO request) {
         if (request == null || request.getStatus() == null) {
-            throw new BusinessException("Status update payload with status is required.");
+            throw new BusinessException("imaging.report.statusRequired");
         }
         if (!ADMINISTRATIVE_STATUSES.contains(request.getStatus())) {
-            throw new BusinessException(
-                "%s is not an administrative outcome. Content states are set by authoring the report, and "
-                    + "FINAL only by signing it.".formatted(request.getStatus()));
+            throw new BusinessException("imaging.report.statusNotAdministrative");
         }
         if (!StringUtils.hasText(request.getStatusReason())) {
             // Voiding a radiology report without saying why leaves the chart
             // with a hole and no account of it.
-            throw new BusinessException("A reason is required when cancelling or voiding a report.");
+            throw new BusinessException("imaging.report.statusReasonRequired");
         }
 
         ImagingReport report = loadReportScoped(reportId);
         // QA D930 class: cancelling or voiding a draft read is its author's call.
         requireReportAuthor(report);
         if (report.isSigned()) {
-            throw new BusinessException(
-                "A signed report cannot be voided. Supersede it with a corrected report against the "
-                    + "same imaging order.");
+            throw new BusinessException("imaging.report.signedNoVoid");
         }
 
         Staff changedBy = currentStaff(report.getHospital());
@@ -402,7 +392,7 @@ public class ImagingReportServiceImpl implements ImagingReportService {
     @Transactional(readOnly = true)
     public List<ImagingReportResponseDTO> getReportsByHospitalAndStatus(UUID hospitalId, ImagingReportStatus status) {
         if (status == null) {
-            throw new BusinessException("Status filter is required to list imaging reports.");
+            throw new BusinessException("imaging.report.statusFilterRequired");
         }
         return imagingReportRepository
             .findByHospital_IdAndReportStatusOrderByPerformedAtDesc(requireReadableHospital(hospitalId), status).stream()
@@ -414,7 +404,7 @@ public class ImagingReportServiceImpl implements ImagingReportService {
     @Transactional(readOnly = true)
     public List<ImagingReportResponseDTO> getReportsByHospitalAndModality(UUID hospitalId, ImagingModality modality) {
         if (modality == null) {
-            throw new BusinessException("Modality filter is required to list imaging reports.");
+            throw new BusinessException("imaging.report.modalityFilterRequired");
         }
         return imagingReportRepository
             .findByHospital_IdAndModalityOrderByPerformedAtDesc(requireReadableHospital(hospitalId), modality).stream()
@@ -494,7 +484,7 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         UUID scope = roleValidator.requireActiveHospitalId();
         if (scope == null) {
             if (requestedHospitalId == null) {
-                throw new BusinessException("Hospital ID is required to list imaging reports.");
+                throw new BusinessException("imaging.report.hospitalRequired");
             }
             return requestedHospitalId;
         }
@@ -530,10 +520,7 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         if (creating
             && !REVISION_STATUSES.contains(requested)
             && hasSignedReport(imagingOrder.getId())) {
-            throw new BusinessException(
-                "This study already has a signed report. A further report must be filed as an "
-                    + "ADDENDUM, CORRECTED or AMENDED version so the record shows that the read "
-                    + "changed after sign-off.");
+            throw new BusinessException("imaging.report.studyAlreadySigned");
         }
         report.setReportStatus(requested);
     }
@@ -593,7 +580,7 @@ public class ImagingReportServiceImpl implements ImagingReportService {
             .orElseThrow(() -> new ResourceNotFoundException("department.notFound", departmentId));
         if (hospital != null && department.getHospital() != null
             && !Objects.equals(department.getHospital().getId(), hospital.getId())) {
-            throw new BusinessException("Department must belong to the same hospital as the imaging report.");
+            throw new BusinessException("imaging.report.departmentOtherHospital");
         }
         return department;
     }
@@ -606,7 +593,7 @@ public class ImagingReportServiceImpl implements ImagingReportService {
             .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", staffId));
         if (hospital != null && staff.getHospital() != null
             && !Objects.equals(staff.getHospital().getId(), hospital.getId())) {
-            throw new BusinessException("Staff must belong to the same hospital context as the imaging report.");
+            throw new BusinessException("imaging.report.staffOtherHospital");
         }
         return staff;
     }
@@ -694,7 +681,7 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         imagingReportRepository.findByReportNumberAndHospital_Id(reportNumber, hospitalId)
             .filter(existing -> currentReportId == null || !Objects.equals(existing.getId(), currentReportId))
             .ifPresent(existing -> {
-                throw new BusinessException("Report number %s already exists for this hospital.".formatted(reportNumber));
+                throw new BusinessException("imaging.report.numberExists", reportNumber);
             });
     }
 

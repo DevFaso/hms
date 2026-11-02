@@ -40,7 +40,6 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -79,7 +78,10 @@ class BpaRulesOutsideSessionIT extends BaseIT {
 
     /** A zone no test host runs in, so the wall-clock conversion always shows. */
     private static final ZoneId HOSPITAL_ZONE = ZoneId.of("Pacific/Kiritimati");
-    private static final DateTimeFormatter WHEN = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+    // QA D1234 class (round 24): the card writes its times the reader's way (French here).
+    private static String shown(LocalDateTime wallClock) {
+        return com.example.hms.utility.DisplayDates.dateTime(wallClock, Locale.FRENCH);
+    }
     private static final String TEST_DATA_PREFIX = "BPA-IT-";
 
     @Autowired private List<BpaRule> bpaRules;
@@ -225,8 +227,8 @@ class BpaRulesOutsideSessionIT extends BaseIT {
         List<CdsCard> febrileCards = bpaService.evaluate(hook(febrile.getId())).cards();
         List<CdsCard> pregnantCards = bpaService.evaluate(hook(pregnant.getId())).cards();
 
-        String febrileTime = HospitalTime.at(febrileReadingAt, HOSPITAL_ZONE).format(WHEN);
-        String pregnantTime = HospitalTime.at(pregnantReadingAt, HOSPITAL_ZONE).format(WHEN);
+        String febrileTime = shown(HospitalTime.at(febrileReadingAt, HOSPITAL_ZONE));
+        String pregnantTime = shown(HospitalTime.at(pregnantReadingAt, HOSPITAL_ZONE));
         // Malaria, sepsis (qSOFA, untimed) and NEWS2 for the febrile man, in French.
         assertThat(febrileCards).hasSize(3);
         assertThat(febrileCards).extracting(CdsCard::summary)

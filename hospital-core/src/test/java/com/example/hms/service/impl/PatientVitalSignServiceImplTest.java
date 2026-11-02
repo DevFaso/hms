@@ -225,7 +225,8 @@ class PatientVitalSignServiceImplTest {
 
         assertThatThrownBy(() -> service.recordVital(patientId, request, recorderUserId))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("assignment is not associated");
+            // QA D1232 (round 24): a keyed refusal now (this test runs without bundles).
+            .hasFieldOrPropertyWithValue("messageKey", "vitals.recorderAssignmentOtherHospital");
 
         verify(vitalSignRepository, never()).save(any());
     }
@@ -258,7 +259,8 @@ class PatientVitalSignServiceImplTest {
         UUID randomId = UUID.randomUUID();
         assertThatThrownBy(() -> service.recordVital(patientId, request, randomId))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Recorder staff is not assigned");
+            // QA D1232 (round 24): a keyed refusal now (this test runs without bundles).
+            .hasFieldOrPropertyWithValue("messageKey", "vitals.recorderStaffOtherHospital");
     }
 
     @Test
@@ -340,7 +342,8 @@ class PatientVitalSignServiceImplTest {
         UUID randomId = UUID.randomUUID();
         assertThatThrownBy(() -> service.recordVital(patientId, request, randomId))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Registration does not belong");
+            // QA D1232 (round 24): a keyed refusal now (this test runs without bundles).
+            .hasFieldOrPropertyWithValue("messageKey", "vitals.registrationOtherPatient");
     }
 
     @Test
@@ -371,7 +374,8 @@ class PatientVitalSignServiceImplTest {
         UUID randomId = UUID.randomUUID();
         assertThatThrownBy(() -> service.recordVital(patientId, request, randomId))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Assignment is not active");
+            // QA D1232 (round 24): a keyed refusal now (this test runs without bundles).
+            .hasFieldOrPropertyWithValue("messageKey", "vitals.assignmentInactive");
     }
 
     @Test

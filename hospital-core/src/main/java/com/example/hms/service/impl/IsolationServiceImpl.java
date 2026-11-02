@@ -7,7 +7,6 @@ import com.example.hms.model.Admission;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.IsolationPrecaution;
 import com.example.hms.model.Patient;
-import com.example.hms.model.Staff;
 import com.example.hms.payload.dto.isolation.DiscontinuePrecautionRequestDTO;
 import com.example.hms.payload.dto.isolation.IsolationPrecautionRequestDTO;
 import com.example.hms.payload.dto.isolation.IsolationPrecautionResponseDTO;
@@ -60,14 +59,12 @@ public class IsolationServiceImpl implements IsolationService {
         Patient patient = patientChartAccess.require(request.getPatientId(), hospitalId);
 
         if (!StringUtils.hasText(request.getReason())) {
-            throw new BusinessException(
-                "A reason is required: the next clinician needs to know what they are guarding against.");
+            throw new BusinessException("isolation.precaution.reasonRequired");
         }
         precautionRepository.findActiveOfType(patient.getId(), request.getPrecautionType())
             .ifPresent(existing -> {
-                throw new BusinessException(
-                    "This patient is already on %s precautions. Amend or discontinue the existing one."
-                        .formatted(request.getPrecautionType()));
+                throw new BusinessException("isolation.precaution.alreadyActive",
+                    com.example.hms.utility.MessageUtil.resolve("isolation.type." + request.getPrecautionType().name()));
             });
 
         IsolationPrecaution precaution = IsolationPrecaution.builder()
@@ -98,18 +95,20 @@ public class IsolationServiceImpl implements IsolationService {
     public IsolationPrecautionResponseDTO discontinuePrecaution(UUID precautionId,
                                                                DiscontinuePrecautionRequestDTO request) {
         if (!StringUtils.hasText(request.getDiscontinuationReason())) {
-            throw new BusinessException(
-                "A reason is required to lift a precaution — usually a negative result or a completed course.");
+            throw new BusinessException("isolation.precaution.liftReasonRequired");
         }
         IsolationPrecaution precaution = loadScoped(precautionId);
         if (!precaution.isActive()) {
-            throw new BusinessException("This precaution has already been discontinued.");
+            throw new BusinessException("isolation.precaution.alreadyDiscontinued");
         }
 
         precaution.setEndedAt(LocalDateTime.now(clock));
         precaution.setDiscontinuationReason(request.getDiscontinuationReason());
-        precaution.setDiscontinuedBy(
-            resolveStaff(request.getDiscontinuedByStaffId(), precaution.getHospital().getId()));
+        // QA D1226: who lifted it is the session (or a staff id the caller may
+        // claim, checked by the one actor resolver), never null when the
+        // screen names nobody - as the start records orderedBy.
+        precaution.setDiscontinuedBy(com.example.hms.security.CallerIdentity.resolveActor(staffRepository,
+            request.getDiscontinuedByStaffId(), com.example.hms.security.CallerIdentity.hospitalIdOf(precaution.getHospital())));
 
         return mapper.toDto(precautionRepository.save(precaution));
     }
@@ -172,8 +171,7 @@ public class IsolationServiceImpl implements IsolationService {
     private UUID requireHospital() {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId == null) {
-            throw new BusinessException(
-                "An active hospital is required: a precaution is nursed on a ward.");
+            throw new BusinessException("isolation.precaution.hospitalRequired");
         }
         return hospitalId;
     }
@@ -181,14 +179,5 @@ public class IsolationServiceImpl implements IsolationService {
     private Hospital hospitalRef(UUID hospitalId) {
         return hospitalRepository.findClinicalById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
-    }
-
-    private Staff resolveStaff(UUID staffId, UUID hospitalId) {
-        if (staffId == null) {
-            return null;
-        }
-        return staffRepository.findById(staffId)
-            .filter(s -> s.getHospital() == null || Objects.equals(s.getHospital().getId(), hospitalId))
-            .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", staffId));
     }
 }

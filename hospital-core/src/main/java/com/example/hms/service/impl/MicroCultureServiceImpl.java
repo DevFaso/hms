@@ -79,7 +79,7 @@ public class MicroCultureServiceImpl implements MicroCultureService {
     public MicroCultureResponseDTO createCulture(UUID hospitalId, UUID actorUserId,
                                                  MicroCultureRequestDTO request) {
         if (hospitalId == null) {
-            throw new BusinessException("An active hospital is required to record a culture.");
+            throw new BusinessException("micro.culture.hospitalRequired");
         }
         LabOrder order = labOrderRepository.findById(request.getLabOrderId())
             .orElseThrow(() -> new ResourceNotFoundException("labOrder.notFound", request.getLabOrderId()));
@@ -89,7 +89,7 @@ public class MicroCultureServiceImpl implements MicroCultureService {
             throw new ResourceNotFoundException("labOrder.notFound", request.getLabOrderId());
         }
         if (order.getStatus() == LabOrderStatus.CANCELLED) {
-            throw new BusinessException("A cancelled lab order cannot receive a culture report.");
+            throw new BusinessException("micro.culture.orderCancelled");
         }
         // QA D820: nor can one voided as entered in error.
         if (order.getStatus() == LabOrderStatus.ENTERED_IN_ERROR) {
@@ -97,7 +97,7 @@ public class MicroCultureServiceImpl implements MicroCultureService {
         }
         Patient patient = order.getPatient();
         if (patient == null) {
-            throw new BusinessException("The lab order has no patient attached.");
+            throw new BusinessException("micro.culture.orderWithoutPatient");
         }
 
         LabSpecimen specimen = null;
@@ -106,7 +106,7 @@ public class MicroCultureServiceImpl implements MicroCultureService {
                 .orElseThrow(() -> new ResourceNotFoundException("labspecimen.notfound", request.getSpecimenId()));
             if (specimen.getLabOrder() == null
                 || !Objects.equals(specimen.getLabOrder().getId(), order.getId())) {
-                throw new BusinessException("The specimen belongs to a different lab order.");
+                throw new BusinessException("micro.culture.specimenOtherOrder");
             }
         }
 
@@ -152,7 +152,7 @@ public class MicroCultureServiceImpl implements MicroCultureService {
     public Page<MicroCultureResponseDTO> getForHospital(UUID hospitalId, MicroCultureStatus status,
                                                         Pageable pageable) {
         if (hospitalId == null) {
-            throw new BusinessException("An active hospital is required to list culture reports.");
+            throw new BusinessException("micro.culture.hospitalRequiredToList");
         }
         return cultureRepository.findForHospital(hospitalId, status, pageable).map(this::toDto);
     }
@@ -166,8 +166,7 @@ public class MicroCultureServiceImpl implements MicroCultureService {
         if (request.getGrowthResult() != null
             && request.getGrowthResult() == MicroGrowthResult.NO_GROWTH
             && isolateRepository.countByCultureResult_Id(culture.getId()) > 0) {
-            throw new BusinessException(
-                "A report carrying isolates cannot be marked no-growth. Remove the isolates first.");
+            throw new BusinessException("micro.culture.isolatesBlockNoGrowth");
         }
 
         // Null request fields are left unchanged — corrections rewrite values,
@@ -194,16 +193,14 @@ public class MicroCultureServiceImpl implements MicroCultureService {
     public MicroCultureResponseDTO finalizeCulture(UUID cultureId, UUID hospitalId, UUID actorUserId) {
         MicroCultureResult culture = loadScoped(cultureId, hospitalId);
         if (culture.getStatus() != MicroCultureStatus.PRELIMINARY) {
-            throw new BusinessException(
-                "This report is already final. Corrections go through the edit endpoints with a reason.");
+            throw new BusinessException("micro.culture.alreadyFinal");
         }
         if (culture.getGrowthResult() == null) {
-            throw new BusinessException("A growth result is required before the report can be finalized.");
+            throw new BusinessException("micro.culture.growthRequired");
         }
         long isolates = isolateRepository.countByCultureResult_Id(culture.getId());
         if (culture.getGrowthResult() == MicroGrowthResult.GROWTH && isolates == 0) {
-            throw new BusinessException(
-                "A growth report needs at least one isolate before it can be finalized.");
+            throw new BusinessException("micro.culture.isolateRequired");
         }
         culture.setStatus(MicroCultureStatus.FINAL);
         culture.setFinalizedAt(LocalDateTime.now());
@@ -222,8 +219,7 @@ public class MicroCultureServiceImpl implements MicroCultureService {
         MicroCultureResult culture = loadScoped(cultureId, hospitalId);
         applyCorrectionGuard(culture, request.getCorrectionReason());
         if (culture.getGrowthResult() == MicroGrowthResult.NO_GROWTH) {
-            throw new BusinessException(
-                "A no-growth report cannot carry isolates. Correct the growth result first.");
+            throw new BusinessException("micro.culture.noGrowthBlocksIsolates");
         }
         int number = request.getIsolateNumber() != null
             ? request.getIsolateNumber()
@@ -279,8 +275,7 @@ public class MicroCultureServiceImpl implements MicroCultureService {
         applyCorrectionGuard(culture, request.getCorrectionReason());
         String antibiotic = request.getAntibioticName().trim();
         if (susceptibilityRepository.existsByIsolate_IdAndAntibioticNameIgnoreCase(isolate.getId(), antibiotic)) {
-            throw new BusinessException(
-                "This antibiotic is already recorded for the isolate. Remove the existing row to re-enter it.");
+            throw new BusinessException("micro.culture.antibioticDuplicate");
         }
         MicroSusceptibility row = MicroSusceptibility.builder()
             .isolate(isolate)
@@ -346,8 +341,7 @@ public class MicroCultureServiceImpl implements MicroCultureService {
             return;
         }
         if (correctionReason == null || correctionReason.isBlank()) {
-            throw new BusinessException(
-                "This report is final. Changing it requires a correction reason.");
+            throw new BusinessException("micro.culture.correctionReasonRequired");
         }
         culture.setStatus(MicroCultureStatus.CORRECTED);
         culture.setCorrectedAt(LocalDateTime.now());

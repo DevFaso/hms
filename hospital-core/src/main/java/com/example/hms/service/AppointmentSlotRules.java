@@ -79,8 +79,10 @@ public final class AppointmentSlotRules {
             throw new BusinessException("portal.booking.pastTime");
         }
         if (!withinPatientDay(start, end)) {
+            // QA D1234 class: the hours on the reader's clock (07:00 in French, 7:00 AM in English).
             throw new BusinessException("portal.booking.outsideHours",
-                PATIENT_DAY_START.toString(), PATIENT_DAY_END.toString());
+                com.example.hms.utility.DisplayDates.time(PATIENT_DAY_START),
+                com.example.hms.utility.DisplayDates.time(PATIENT_DAY_END));
         }
     }
 

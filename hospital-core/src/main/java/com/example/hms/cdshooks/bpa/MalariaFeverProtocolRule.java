@@ -85,7 +85,20 @@ public class MalariaFeverProtocolRule implements BpaRule {
         Optional<BpaProtocol> protocol = protocolRepository.findByProtocolCodeAndActiveTrue(PROTOCOL_CODE);
         if (protocol.isEmpty()) return List.of();
 
-        return List.of(buildCard(protocol.get(), feverEvent.get(), text.zoneOf(context.hospitalId())));
+        PatientVitalSign latest = latestTemperature(context.recentVitals()).orElse(null);
+        return List.of(buildCard(protocol.get(), feverEvent.get(), latest, text.zoneOf(context.hospitalId())));
+    }
+
+    /**
+     * QA D1231 (round 24): the newest temperature on record, febrile or not.
+     * The card used to call the febrile reading the "most recent temperature"
+     * while a later, lower reading stood in the history. A reading with no
+     * time cannot be placed and is skipped.
+     */
+    static Optional<PatientVitalSign> latestTemperature(List<PatientVitalSign> vitals) {
+        return vitals.stream()
+            .filter(v -> v.getTemperatureCelsius() != null && v.getRecordedAt() != null)
+            .max(java.util.Comparator.comparing(PatientVitalSign::getRecordedAt));
     }
 
     Optional<PatientVitalSign> findFeverInWindow(List<PatientVitalSign> vitals) {
@@ -114,11 +127,19 @@ public class MalariaFeverProtocolRule implements BpaRule {
         return hints.stream().anyMatch(lower::contains);
     }
 
-    private CdsCard buildCard(BpaProtocol protocol, PatientVitalSign feverEvent, java.time.ZoneId zone) {
-        String detail = BpaCardText.summary(text, protocol) + "\n\n" + text.get("cds.bpa.malaria.temperature",
-            "Most recent temperature: {0}°C at {1}.",
+    private CdsCard buildCard(BpaProtocol protocol, PatientVitalSign feverEvent,
+                              PatientVitalSign latest, java.time.ZoneId zone) {
+        // QA D1231: the reading that fired the rule is labelled for what it is,
+        // the febrile one; when a later temperature exists it is shown too, as
+        // the latest, so the card never calls an older reading the last one.
+        String fever = text.get("cds.bpa.malaria.feverReading", "Fever recorded: {0} °C at {1}.",
             text.decimal(feverEvent.getTemperatureCelsius(), 1),
             BpaCardText.when(text, feverEvent.getRecordedAt(), zone));
+        String later = latest == null || !latest.getRecordedAt().isAfter(feverEvent.getRecordedAt()) ? ""
+            : " " + text.get("cds.bpa.malaria.latestTemperature", "Latest temperature: {0} °C at {1}.",
+                text.decimal(latest.getTemperatureCelsius(), 1),
+                BpaCardText.when(text, latest.getRecordedAt(), zone));
+        String detail = BpaCardText.summary(text, protocol) + "\n\n" + fever + later;
         List<CdsLink> links = protocol.getProtocolUrl() == null
             ? null
             : List.of(new CdsLink(

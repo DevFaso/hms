@@ -1,6 +1,7 @@
 package com.example.hms.service;
 
 import com.example.hms.enums.TreatmentPlanStatus;
+import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.TreatmentPlanMapper;
 import com.example.hms.model.Encounter;
@@ -434,7 +435,7 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
                                          Staff signOff) {
         UUID hospitalId = hospital.getId();
         if (assignment.getHospital() == null || !hospitalId.equals(assignment.getHospital().getId())) {
-            throw new IllegalStateException("Assignment hospital mismatch");
+            throw new BusinessException("treatmentPlan.assignmentOtherHospital");
         }
         ensureStaffInHospital(author, hospitalId, AUTHOR_LABEL);
         if (supervising != null) {
@@ -456,10 +457,10 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
             return;
         }
         if (encounter.getHospital() == null || !hospital.getId().equals(encounter.getHospital().getId())) {
-            throw new IllegalStateException("Encounter hospital mismatch");
+            throw new BusinessException("treatmentPlan.encounterOtherHospital");
         }
         if (encounter.getPatient() == null || !patient.getId().equals(encounter.getPatient().getId())) {
-            throw new IllegalStateException("Encounter must reference the same patient");
+            throw new BusinessException("treatmentPlan.encounterOtherPatient");
         }
     }
 }
