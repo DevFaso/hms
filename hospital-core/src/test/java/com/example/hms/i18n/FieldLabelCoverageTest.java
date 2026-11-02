@@ -76,13 +76,16 @@ class FieldLabelCoverageTest {
     }
 
     @Test
-    @DisplayName("the French and Spanish labels are not the English property name")
+    @DisplayName("no French or Spanish label is the camel-case property name itself")
     void labelsAreTranslated() throws IOException {
         List<String> raw = new ArrayList<>();
         for (String suffix : List.of("_fr", "_es")) {
             Properties labels = labels(suffix);
             for (String key : labels.stringPropertyNames()) {
-                if (key.startsWith("field.label.") && labels.getProperty(key).equals(key.substring(12))) {
+                String property = key.substring("field.label.".length());
+                // "fullName" left as its own label; a one-word homograph ("code", "type") is a real word.
+                if (key.startsWith("field.label.") && !property.equals(property.toLowerCase(java.util.Locale.ROOT))
+                        && labels.getProperty(key).equals(property)) {
                     raw.add(suffix + ": " + key);
                 }
             }
