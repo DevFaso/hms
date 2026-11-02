@@ -32,6 +32,17 @@ public class NurseMedicationTaskResponseDTO {
     private String status;
     /** QA D929: GIVEN, HELD, REFUSED or MISSED for the last closed dose; null when none. */
     private String lastOutcome;
+    /** QA D1225: when the last closed dose was recorded. */
+    private LocalDateTime lastOutcomeAt;
+    /**
+     * QA D1225: the reason recorded on the last closed dose (held, refused,
+     * or given early); null when it carries none.
+     */
+    private String lastReason;
+    /** QA D1225: the last dose was given before the minimum interval, with a reason. */
+    private boolean lastGivenEarly;
+    /** QA D1225: the most recent closed doses of this row, newest first, with their reasons. */
+    private java.util.List<MarDoseHistoryDTO> doseHistory;
 
     /* ── Pharmacist verification (Tier 2 item 33) ───────────────────────── */
     //
