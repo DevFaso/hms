@@ -1,3 +1,4 @@
+import { DialogFocusDirective } from '../../shared/a11y/dialog-focus.directive';
 import { ChangeDetectionStrategy, Component, Input, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -32,7 +33,7 @@ import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
   selector: 'app-coverage-tab',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule],
+  imports: [DialogFocusDirective, ServerTimePipe, CommonModule, FormsModule, TranslateModule],
   templateUrl: './coverage-tab.component.html',
   styleUrl: './coverage-tab.component.scss',
 })

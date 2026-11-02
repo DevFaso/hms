@@ -1,3 +1,4 @@
+import { DialogFocusDirective } from '../../shared/a11y/dialog-focus.directive';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -21,7 +22,7 @@ import { ToastService } from '../../core/toast.service';
 @Component({
   selector: 'app-close-unseen-dialog',
   standalone: true,
-  imports: [FormsModule, TranslateModule],
+  imports: [DialogFocusDirective, FormsModule, TranslateModule],
   templateUrl: './close-unseen-dialog.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: [

@@ -3,6 +3,7 @@ import { AuthGuard } from './auth/auth.guard';
 import { AccountSetupGuard } from './auth/account-setup.guard';
 import { LoginRedirectGuard } from './auth/login-redirect.guard';
 import { RoleGuard } from './auth/role.guard';
+import { empiEnabledGuard } from './reception/empi-status.service';
 import { SuperAdminRedirectGuard } from './auth/super-admin-redirect.guard';
 import { superAdminPathRewriteGuard } from './auth/super-admin-path-rewrite.guard';
 import { FacilityTypeGuard, ProviderHomeRedirectGuard } from './auth/facility-type.guard';
@@ -1261,7 +1262,8 @@ export const routes: Routes = [
       // lesson on PR #341.
       {
         path: 'reception/empi-candidates',
-        canActivate: [RoleGuard],
+        // QA D987: not offered while the matcher is switched off (it answers 404).
+        canActivate: [RoleGuard, empiEnabledGuard],
         data: {
           roles: [
             'ROLE_RECEPTIONIST',

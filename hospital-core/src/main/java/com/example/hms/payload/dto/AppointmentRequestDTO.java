@@ -50,6 +50,12 @@ public class AppointmentRequestDTO {
 
     // Optionally allow department to be specified directly
     private UUID departmentId;
+
+    /**
+     * QA D985: the recall this booking answers, when the desk books from the
+     * recall list. Optional; the recall then moves to SCHEDULED.
+     */
+    private UUID recallId;
     private String departmentName;
     private String departmentCode;
 

@@ -2205,6 +2205,51 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
 
 ## Standing platform debt — owed, not parity
 
+- **QA round 16 residuals (PR #972 review round 8), noted, not fixed there.**
+  (1) The slot inventory and the overlap rule disagree on RESCHEDULED: the
+  status action releases the inventory slot, while `holdsSlot()` keeps the
+  row's time held, so the picker can offer a time the booking then refuses
+  (pre-existing; decide which one is the truth). (2) The desk reschedule
+  modal sends SCHEDULED, which NO_SHOW cannot reach (its only exit is
+  RESCHEDULED), so a missed visit can be moved only through the API
+  (`PUT /appointments/{id}` with status RESCHEDULED). (3) A demographics PATCH
+  or PUT that renames the patient leaves the linked login account's
+  `User.firstName/lastName` unchanged. (4) The portal profile's phone
+  uniqueness (D113, `existsByPhoneNumberPrimaryAndIdNot`) compares the stored
+  string exactly, so a legacy national-format holder is not seen; the rule
+  itself is in question now that the desk records shared family numbers.
+  (5) Fixed in #972 round 10 (a short number lists every holder). (6) The phone match is a
+  sequential scan; a stored digits column with an index needs a migration.
+  (7) Round 9: `AuditEventLogServiceImpl` resolves a phone-only PATIENT
+  resource name to the first holder, across hospitals; with shared family
+  numbers it should resolve within the event's hospital or not at all.
+  (8) The D919 "scoped onlyDeleted is an empty page" rule lives in both
+  `UserController` and `UserServiceImpl`; keep it in the service only.
+  (9) Blob downloads revoke the object URL right after `click()` (billing,
+  governance, the check-in receipt); a shared download helper that defers the
+  revoke would cover every caller.
+  (10) Round 13: a phone the facility rule cannot normalise is stored as
+  typed (as on develop); refusing it at the desk is a product decision.
+  (11) A missed visit moved back into a slot-holding status does not re-link
+  the recall the no-show reopened. (12) `PatientMatchKeys.samePhone` (full
+  match) and `PhoneNumbers.isSameSubscriber` (last 8 digits) define "same
+  subscriber" differently; one definition should serve both.
+  Remaining after round 18 (#972, bounded by the coordinator):
+  (13) The audit's phone-only PATIENT resolution (item 7) can attribute an
+  access row to the wrong holder of a shared number, possibly at another
+  hospital: resolve only a unique holder at the event's hospital, else leave
+  the resource unresolved. (14) Recall auto-linking (no recallId) takes any
+  open recall of the same department or clinician from 30 days before its
+  due date, so an unrelated visit there can close it on completion; decide
+  the targeting rule with the clinic. (15) PATCH identity fields (name, DOB,
+  sex) are open to every role the endpoint admits and change the shared row
+  for every hospital; gender is free text up to 10 characters (as the PUT).
+  (16) `appDialogFocus` closes the whole dialog on an Escape meant for a
+  suggestion list inside it (walk-in, recall). (17) The duplicate check's two
+  Page searches each run an unused COUNT; a Slice/List variant would drop
+  them. (18) The check-in copay receipt hard-codes the French "recu-" file
+  prefix.
+
 - **QA D899 residual (round 15): the stock check counts expired lots.**
   Stock routing now resolves a free-text order to the shelf by the dispense
   DRUG rule (`fix/qa-r15-clinical-pharmacy`), but its on-hand figure is still

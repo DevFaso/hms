@@ -217,7 +217,7 @@ public class AuditEventLogServiceImpl implements AuditEventLogService {
         String resourceId = requestDTO.getResourceId();
         String resourceName = requestDTO.getResourceName();
         if ("PATIENT".equalsIgnoreCase(requestDTO.getEntityType())) {
-            resourceId = resolvePatientResourceId(resourceId, resourceName);
+            resourceId = resolvePatientResourceId(resourceId, resourceName, assignment);
             resourceName = resolvePatientResourceName(resourceName, resourceId);
         }
         // QA D309/D429: rows written by the generic write audit (consents,
@@ -399,7 +399,8 @@ public class AuditEventLogServiceImpl implements AuditEventLogService {
         return EffectiveRoles.codes(user, rows).stream().sorted().findFirst().orElse(null);
     }
 
-    private String resolvePatientResourceId(String resourceId, String resourceName) {
+    private String resolvePatientResourceId(String resourceId, String resourceName,
+                                            UserRoleHospitalAssignment assignment) {
         if ((resourceId != null && !resourceId.isBlank()) || resourceName == null || resourceName.isBlank()) {
             return resourceId;
         }
@@ -409,7 +410,7 @@ public class AuditEventLogServiceImpl implements AuditEventLogService {
                 .stream().findFirst().orElse(null);
         }
         if (patient == null && resourceName.matches("\\d{6,}")) {
-            patient = findPatientByPhone(resourceName);
+            patient = findPatientByPhone(resourceName, assignment);
         }
         return patient != null ? patient.getId().toString() : resourceId;
     }
@@ -425,10 +426,27 @@ public class AuditEventLogServiceImpl implements AuditEventLogService {
             .stream().findFirst().orElse(null);
     }
 
-    private Patient findPatientByPhone(String resourceName) {
-        Patient patient = patientRepository.findByPhoneNumberPrimary(resourceName).orElse(null);
+    private Patient findPatientByPhone(String resourceName, UserRoleHospitalAssignment assignment) {
+        // A number may be shared: the first holder, never an exception.
+        Patient patient = patientRepository.findFirstByPhoneNumberPrimary(resourceName).orElse(null);
         if (patient == null) {
-            patient = patientRepository.findByPhoneNumberSecondary(resourceName).orElse(null);
+            patient = patientRepository.findFirstByPhoneNumberSecondary(resourceName).orElse(null);
+        }
+        // QA D942: numbers are stored in E.164 now; digits find them too.
+        String key = com.example.hms.utility.PatientMatchKeys.phoneKey(resourceName);
+        if (patient == null && com.example.hms.utility.PatientMatchKeys.isSubscriberKey(key)) {
+            // A national number takes the event's hospital calling code, as every
+            // patient match does (QA D942): at an Ivorian hospital 70001002 is
+            // never the Burkina +22670001002 of another patient.
+            String callingCode = com.example.hms.utility.PhoneNumbers.callingCodeForCountry(
+                assignment != null && assignment.getHospital() != null ? assignment.getHospital().getCountry() : null);
+            patient = patientRepository.findAllByPhoneSubscriber("%" + key,
+                    org.springframework.data.domain.PageRequest.of(0, PatientRepository.PHONE_SUBSCRIBER_CAP)).stream()
+                .filter(p -> com.example.hms.utility.PatientMatchKeys.samePhone(
+                        p.getPhoneNumberPrimary(), resourceName, callingCode)
+                    || com.example.hms.utility.PatientMatchKeys.samePhone(
+                        p.getPhoneNumberSecondary(), resourceName, callingCode))
+                .findFirst().orElse(null);
         }
         return patient;
     }

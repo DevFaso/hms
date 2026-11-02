@@ -48,4 +48,14 @@ public final class HospitalCalendar {
     public static LocalDate today(Hospital hospital) {
         return today(hospital, Clock.systemDefaultZone());
     }
+
+    /**
+     * The wall-clock time at this hospital, on the system clock: whether a
+     * visit has started, or a slot is in the past, is judged on it (QA D978,
+     * D946).
+     */
+    public static java.time.LocalDateTime now(Hospital hospital) {
+        Clock clock = Clock.systemDefaultZone();
+        return java.time.LocalDateTime.now(clock.withZone(zoneOf(hospital, clock)));
+    }
 }

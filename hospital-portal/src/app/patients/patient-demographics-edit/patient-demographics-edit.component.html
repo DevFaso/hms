@@ -1,0 +1,223 @@
+<div class="dialog-overlay" aria-hidden="true" (click)="dismissed.emit()"></div>
+<div
+  class="dialog-box demographics-dialog"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="demographicsEditTitle"
+  appDialogFocus
+  (dialogDismiss)="dismissed.emit()"
+>
+  <div class="dialog-header">
+    <span class="material-symbols-outlined header-icon" aria-hidden="true">edit</span>
+    <h2 id="demographicsEditTitle">{{ 'PATIENTS.EDIT_DEMOGRAPHICS' | translate }}</h2>
+    <button
+      type="button"
+      class="btn-close"
+      (click)="dismissed.emit()"
+      [attr.aria-label]="'COMMON.CLOSE' | translate"
+    >
+      <span class="material-symbols-outlined" aria-hidden="true">close</span>
+    </button>
+  </div>
+
+  <form class="dialog-body" (ngSubmit)="submit()">
+    <fieldset class="edit-section">
+      <legend>{{ 'PATIENTS.PERSONAL_INFO' | translate }}</legend>
+      <div class="edit-grid">
+        <div class="field-group">
+          <label for="demoFirstName"
+            >{{ 'PATIENTS.FIRST_NAME' | translate }} <span class="required">*</span></label
+          >
+          <input
+            id="demoFirstName"
+            name="firstName"
+            class="form-control"
+            maxlength="100"
+            required
+            [(ngModel)]="form.firstName"
+          />
+        </div>
+        <div class="field-group">
+          <label for="demoMiddleName">{{ 'PATIENTS.MIDDLE_NAME' | translate }}</label>
+          <input
+            id="demoMiddleName"
+            name="middleName"
+            class="form-control"
+            maxlength="100"
+            [(ngModel)]="form.middleName"
+          />
+        </div>
+        <div class="field-group">
+          <label for="demoLastName"
+            >{{ 'PATIENTS.LAST_NAME' | translate }} <span class="required">*</span></label
+          >
+          <input
+            id="demoLastName"
+            name="lastName"
+            class="form-control"
+            maxlength="100"
+            required
+            [(ngModel)]="form.lastName"
+          />
+        </div>
+        <div class="field-group">
+          <label for="demoDob"
+            >{{ 'PATIENTS.DOB' | translate }} <span class="required">*</span></label
+          >
+          <input
+            id="demoDob"
+            name="dateOfBirth"
+            type="date"
+            class="form-control"
+            required
+            [max]="today"
+            [(ngModel)]="form.dateOfBirth"
+          />
+        </div>
+        <div class="field-group">
+          <label for="demoGender"
+            >{{ 'PATIENTS.GENDER' | translate }} <span class="required">*</span></label
+          >
+          <select id="demoGender" name="gender" class="form-control" [(ngModel)]="form.gender">
+            @for (g of genders; track g) {
+              <option [value]="g">{{ 'PATIENTS.' + g | translate }}</option>
+            }
+          </select>
+        </div>
+      </div>
+    </fieldset>
+
+    <fieldset class="edit-section">
+      <legend>{{ 'PATIENTS.CONTACT_INFO' | translate }}</legend>
+      <div class="edit-grid">
+        <div class="field-group">
+          <label for="demoPhone"
+            >{{ 'PATIENTS.PHONE' | translate }} <span class="required">*</span></label
+          >
+          <input
+            id="demoPhone"
+            name="phoneNumberPrimary"
+            type="tel"
+            class="form-control"
+            maxlength="100"
+            required
+            [(ngModel)]="form.phoneNumberPrimary"
+          />
+        </div>
+        <div class="field-group">
+          <label for="demoPhone2">{{ 'PATIENTS.PHONE_SECONDARY' | translate }}</label>
+          <input
+            id="demoPhone2"
+            name="phoneNumberSecondary"
+            type="tel"
+            class="form-control"
+            maxlength="100"
+            [(ngModel)]="form.phoneNumberSecondary"
+          />
+        </div>
+        <div class="field-group">
+          <label for="demoEmail">{{ 'PATIENTS.EMAIL' | translate }}</label>
+          <input
+            id="demoEmail"
+            name="email"
+            type="email"
+            class="form-control"
+            maxlength="150"
+            [(ngModel)]="form.email"
+          />
+        </div>
+        <div class="field-group">
+          <label for="demoAddress">{{ 'PATIENTS.ADDRESS' | translate }}</label>
+          <input
+            id="demoAddress"
+            name="addressLine1"
+            class="form-control"
+            maxlength="255"
+            [(ngModel)]="form.addressLine1"
+          />
+        </div>
+        <div class="field-group">
+          <label for="demoCity">{{ 'PATIENTS.CITY' | translate }}</label>
+          <input
+            id="demoCity"
+            name="city"
+            class="form-control"
+            maxlength="100"
+            [(ngModel)]="form.city"
+          />
+        </div>
+        <div class="field-group">
+          <label for="demoState">{{ 'PATIENTS.STATE' | translate }}</label>
+          <input
+            id="demoState"
+            name="state"
+            class="form-control"
+            maxlength="100"
+            [(ngModel)]="form.state"
+          />
+        </div>
+        <div class="field-group">
+          <label for="demoCountry">{{ 'PATIENTS.COUNTRY' | translate }}</label>
+          <input
+            id="demoCountry"
+            name="country"
+            class="form-control"
+            maxlength="100"
+            [(ngModel)]="form.country"
+          />
+        </div>
+      </div>
+    </fieldset>
+
+    <fieldset class="edit-section">
+      <legend>{{ 'PATIENTS.EMERGENCY_CONTACT' | translate }}</legend>
+      <div class="edit-grid">
+        <div class="field-group">
+          <label for="demoEcName">{{ 'PATIENTS.EC_NAME' | translate }}</label>
+          <input
+            id="demoEcName"
+            name="emergencyContactName"
+            class="form-control"
+            maxlength="100"
+            [(ngModel)]="form.emergencyContactName"
+          />
+        </div>
+        <div class="field-group">
+          <label for="demoEcRelation">{{ 'PATIENTS.EC_RELATIONSHIP' | translate }}</label>
+          <input
+            id="demoEcRelation"
+            name="emergencyContactRelationship"
+            class="form-control"
+            maxlength="50"
+            [placeholder]="'PATIENTS.EC_RELATIONSHIP_PLACEHOLDER' | translate"
+            [(ngModel)]="form.emergencyContactRelationship"
+          />
+        </div>
+        <div class="field-group">
+          <label for="demoEcPhone">{{ 'PATIENTS.EC_PHONE' | translate }}</label>
+          <input
+            id="demoEcPhone"
+            name="emergencyContactPhone"
+            type="tel"
+            class="form-control"
+            maxlength="20"
+            [(ngModel)]="form.emergencyContactPhone"
+          />
+        </div>
+      </div>
+    </fieldset>
+
+    @if (error()) {
+      <p class="edit-error" role="alert">{{ error() }}</p>
+    }
+
+    <div class="dialog-footer">
+      <button type="button" class="btn btn-secondary" (click)="dismissed.emit()">
+        {{ 'COMMON.CANCEL' | translate }}
+      </button>
+      <button type="submit" class="btn btn-primary" [disabled]="saving()">
+        {{ (saving() ? 'COMMON.SAVING' : 'COMMON.SAVE') | translate }}
+      </button>
+    </div>
+  </form>
+</div>

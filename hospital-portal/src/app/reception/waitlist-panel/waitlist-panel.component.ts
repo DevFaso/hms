@@ -1,3 +1,4 @@
+import { DialogFocusDirective } from '../../shared/a11y/dialog-focus.directive';
 import {
   Component,
   inject,
@@ -35,7 +36,14 @@ type WaitlistStatus = 'ALL' | 'WAITING' | 'OFFERED' | 'CLOSED';
 @Component({
   selector: 'app-waitlist-panel',
   standalone: true,
-  imports: [PatientSublinePipe, ServerTimePipe, CommonModule, FormsModule, TranslateModule],
+  imports: [
+    DialogFocusDirective,
+    PatientSublinePipe,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+  ],
   templateUrl: './waitlist-panel.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './waitlist-panel.component.scss',

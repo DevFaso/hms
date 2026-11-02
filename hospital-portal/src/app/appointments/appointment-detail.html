@@ -92,8 +92,18 @@
                   {{ 'APPOINTMENTS.COMPLETE' | translate }}
                 </button>
               }
+            }
+            <!--
+              QA D946: "Absent" is for a patient who never came: a SCHEDULED or
+              CONFIRMED appointment whose time has passed. The desk no longer
+              records a confirmation the patient never gave to reach it, and a
+              patient who arrived (CHECKED_IN, IN_PROGRESS) leaves through the
+              "left without being seen" closure instead.
+            -->
+            @if (appt.status === 'SCHEDULED' || appt.status === 'CONFIRMED') {
               <button
                 class="btn-xs btn-noshow"
+                data-testid="mark-no-show"
                 (click)="markAsNoShow()"
                 [disabled]="saving() || !hasAppointmentStarted"
                 [title]="
@@ -227,15 +237,23 @@
     tabindex="-1"
   >
     <dialog
+      aria-modal="true"
       class="modal"
       [open]="showReschedule()"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="closeReschedule()"
+      (keydown.escape)="$event.stopPropagation()"
+      appDialogFocus
+      (dialogDismiss)="closeReschedule()"
       tabindex="-1"
     >
       <div class="modal-header">
         <h2>{{ 'APPOINTMENTS.RESCHEDULE_APPOINTMENT' | translate }}</h2>
-        <button class="modal-close" (click)="closeReschedule()">
+        <button
+          type="button"
+          class="modal-close"
+          (click)="closeReschedule()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
@@ -310,15 +328,23 @@
     tabindex="-1"
   >
     <dialog
+      aria-modal="true"
       class="modal modal-confirm"
       [open]="showCancelConfirm()"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="closeCancelConfirm()"
+      (keydown.escape)="$event.stopPropagation()"
+      appDialogFocus
+      (dialogDismiss)="closeCancelConfirm()"
       tabindex="-1"
     >
       <div class="modal-header">
         <h2>{{ 'APPOINTMENTS.CANCEL_APPOINTMENT' | translate }}</h2>
-        <button class="modal-close" (click)="closeCancelConfirm()">
+        <button
+          type="button"
+          class="modal-close"
+          (click)="closeCancelConfirm()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>

@@ -167,7 +167,11 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
             .appointmentDate(request.getNewAppointmentDate())
             .startTime(request.getNewStartTime())
             .endTime(endTime)
-            .status(AppointmentStatus.RESCHEDULED)
+            // QA D977 class (branch C1): a moved visit is booked at its new
+            // time, SCHEDULED, as the desk and the portal reschedules land it.
+            // A missed one (NO_SHOW, FAILED) leaves through RESCHEDULED, the
+            // only move the state machine allows out of those states.
+            .status(rescheduledStatus(appointment.getStatus()))
             .patientId(appointment.getPatient().getId())
             .staffId(resolveStaffForReschedule(request, appointment))
             .hospitalId(appointment.getHospital().getId())
@@ -177,6 +181,20 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
             .build();
 
         return appointmentService.updateAppointment(appointment.getId(), updateDto, locale, username);
+    }
+
+    /**
+     * The status a moved ANC visit lands on (QA D977 class). A tentative
+     * (PENDING) visit stays tentative: moving it is not confirming it, as on
+     * the portal (review round 14).
+     */
+    static AppointmentStatus rescheduledStatus(AppointmentStatus current) {
+        if (current == AppointmentStatus.PENDING) {
+            return AppointmentStatus.PENDING;
+        }
+        return current == AppointmentStatus.NO_SHOW || current == AppointmentStatus.FAILED
+            ? AppointmentStatus.RESCHEDULED
+            : AppointmentStatus.SCHEDULED;
     }
 
     @Override

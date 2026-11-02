@@ -180,4 +180,27 @@ describe('WalkInDialogComponent', () => {
 
     expect(component.departments()).toEqual([]);
   });
+
+  it('QA D944: the "Motif principal" travels as the chief complaint', () => {
+    const httpMock = TestBed.inject(HttpTestingController);
+    httpMock.match('/departments').forEach((r) => r.flush([]));
+    component.selectedPatient.set({ id: 'p1', firstName: 'Aïcha', lastName: 'Kaboré' } as never);
+    component.selectedStaff.set({ id: 's1', name: 'Dr' } as never);
+    component.departmentId.set('d1');
+    component.notes.set('  Fièvre depuis 2 jours, toux ');
+    component.submit();
+    const req = httpMock.expectOne('/encounters');
+    expect(req.request.body.chiefComplaint).toBe('Fièvre depuis 2 jours, toux');
+    expect(req.request.body.notes).toBeUndefined();
+    req.flush({});
+  });
+
+  it('QA D988: the clear buttons are named, not announced as "close"', () => {
+    component.selectedPatient.set({ id: 'p1', firstName: 'A', lastName: 'B' } as never);
+    component.selectedStaff.set({ id: 's1', name: 'Dr' } as never);
+    fixture.detectChanges();
+    const clear = (fixture.nativeElement as HTMLElement).querySelectorAll('.clear-btn');
+    expect(clear.length).toBe(2);
+    clear.forEach((b) => expect(b.getAttribute('aria-label')).toBeTruthy());
+  });
 });

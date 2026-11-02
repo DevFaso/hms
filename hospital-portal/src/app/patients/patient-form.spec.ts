@@ -345,4 +345,16 @@ describe('PatientFormComponent', () => {
     expect(userSpy.adminRegister).toHaveBeenCalled();
     expect(routerSpy.navigate).toHaveBeenCalledWith(['/patients', 'p9']);
   });
+
+  it('QA D986: the match sentence says where the matched records are', () => {
+    component.registrationMatches = [{ ...mockMatch(), alreadyRegisteredHere: true }];
+    expect(component.matchDescriptionKey()).toBe('PATIENTS.EXISTING_MATCH_DESC_HERE');
+    component.registrationMatches = [{ ...mockMatch(), alreadyRegisteredHere: false }];
+    expect(component.matchDescriptionKey()).toBe('PATIENTS.EXISTING_MATCH_DESC');
+    component.registrationMatches = [
+      { ...mockMatch(), alreadyRegisteredHere: true },
+      { ...mockMatch(), patientId: 'p9', alreadyRegisteredHere: false },
+    ];
+    expect(component.matchDescriptionKey()).toBe('PATIENTS.EXISTING_MATCH_DESC_MIXED');
+  });
 });

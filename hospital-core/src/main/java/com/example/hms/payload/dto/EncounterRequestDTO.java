@@ -60,6 +60,14 @@ public class EncounterRequestDTO {
     @Size(max = 2000, message = "{encounter.notes.size}")
     private String notes;
 
+    /**
+     * QA D944: the reason for the visit typed at the desk ("Motif principal"
+     * of a walk-in). It used to travel as {@code notes}, so the queue showed
+     * "Walk-in" and triage started with an empty chief complaint.
+     */
+    @Size(max = 2000, message = "{encounter.chiefComplaint.size}")
+    private String chiefComplaint;
+
     /** Department is usually required for check-in/queueing */
     @NotNull
     private UUID departmentId;

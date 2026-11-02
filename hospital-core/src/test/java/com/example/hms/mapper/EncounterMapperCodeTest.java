@@ -70,4 +70,18 @@ class EncounterMapperCodeTest {
         // Path re-verified: a clinician's own note is untouched.
         assertThat(new EncounterMapper().toEncounterResponseDTO(visit).getNotes()).isEqualTo("Toux depuis 3 jours");
     }
+
+    @Test
+    void qaD944_theWalkInReasonTypedAtTheDeskIsTheChiefComplaint() {
+        com.example.hms.payload.dto.EncounterRequestDTO dto = new com.example.hms.payload.dto.EncounterRequestDTO();
+        dto.setChiefComplaint("  Fièvre depuis 2 jours, toux ");
+        Encounter merged = new EncounterMapper().mergeEncounter(dto, null, null, null, null, null, null);
+        assertThat(merged.getChiefComplaint()).isEqualTo("Fièvre depuis 2 jours, toux");
+
+        Encounter kept = new Encounter();
+        kept.setChiefComplaint("Toux");
+        new EncounterMapper().mergeEncounter(new com.example.hms.payload.dto.EncounterRequestDTO(),
+            kept, null, null, null, null, null);
+        assertThat(kept.getChiefComplaint()).isEqualTo("Toux");
+    }
 }

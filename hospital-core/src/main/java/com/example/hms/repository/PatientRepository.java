@@ -1,6 +1,7 @@
 package com.example.hms.repository;
 
 import com.example.hms.model.Patient;
+import com.example.hms.utility.PatientMatchKeys;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -14,6 +15,45 @@ import java.util.UUID;
 
 @Repository
 public interface PatientRepository extends JpaRepository<Patient, UUID> {
+
+    // -- QA D924/D942/D943: the stored side of every name and phone comparison --
+    // Folded exactly like PatientMatchKeys folds the typed side: names
+    // lower-cased with accents removed, phone numbers reduced to their digits.
+    // PatientMatchKeysGuardTest fails the build when a query here compares a
+    // name or phone column without them.
+
+    /** Lower-cases {@code column} and removes its accents. */
+    String FOLD_OPEN = "TRANSLATE(LOWER(";
+    /** Closes {@link #FOLD_OPEN}. */
+    String FOLD_CLOSE = "), '" + PatientMatchKeys.NAME_FOLD_FROM + "', '" + PatientMatchKeys.NAME_FOLD_TO + "')";
+
+    /**
+     * {@code :namePattern} (built by {@link PatientMatchKeys#nameContainsPattern})
+     * against the first name, the last name, "first last", "last first" and the
+     * MRN, accents ignored on both sides.
+     */
+    String NAME_OR_MRN_MATCH = "(:namePattern IS NULL"
+        + " OR " + FOLD_OPEN + "p.firstName" + FOLD_CLOSE + " LIKE :namePattern"
+        + " OR " + FOLD_OPEN + "p.lastName" + FOLD_CLOSE + " LIKE :namePattern"
+        + " OR " + FOLD_OPEN + "CONCAT(p.firstName, ' ', p.lastName)" + FOLD_CLOSE + " LIKE :namePattern"
+        + " OR " + FOLD_OPEN + "CONCAT(p.lastName, ' ', p.firstName)" + FOLD_CLOSE + " LIKE :namePattern"
+        + " OR LOWER(r.mrn) LIKE :namePattern)";
+
+    /** {@code p.phoneNumberPrimary} reduced to its digits ("+226 70-00.10/02" becomes "22670001002"). */
+    String PRIMARY_PHONE_DIGITS =
+        PatientMatchKeys.DIGITS_SQL_OPEN + "p.phoneNumberPrimary" + PatientMatchKeys.DIGITS_SQL_CLOSE;
+    /** {@code p.phoneNumberSecondary} reduced to its digits. */
+    String SECONDARY_PHONE_DIGITS =
+        PatientMatchKeys.DIGITS_SQL_OPEN + "p.phoneNumberSecondary" + PatientMatchKeys.DIGITS_SQL_CLOSE;
+
+    /**
+     * {@code :phonePattern} (built by {@link PatientMatchKeys#phoneContainsPattern})
+     * against the digits of either number, however it was stored.
+     */
+    String PHONE_MATCH = "(:phonePattern IS NULL"
+        + " OR " + PRIMARY_PHONE_DIGITS + " LIKE :phonePattern"
+        + " OR " + SECONDARY_PHONE_DIGITS + " LIKE :phonePattern)";
+
     /**
      * Extended search for patients by MRN, name, DOB, phone, email, hospital, and active status.
      */
@@ -23,15 +63,9 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
         JOIN p.hospitalRegistrations r
         WHERE (:hospitalId IS NULL OR r.hospital.id = :hospitalId)
           AND (:mrn IS NULL OR r.mrn = :mrn)
-          AND (
-                :namePattern IS NULL OR
-                LOWER(p.firstName) LIKE :namePattern OR
-                LOWER(p.lastName)  LIKE :namePattern OR
-                LOWER(CONCAT(p.firstName, ' ', p.lastName)) LIKE :namePattern OR
-                LOWER(r.mrn) LIKE :namePattern
-              )
+          AND """ + NAME_OR_MRN_MATCH + """
           AND (:dob IS NULL OR CAST(p.dateOfBirth AS string) = :dob)
-          AND (:phonePattern IS NULL OR p.phoneNumberPrimary LIKE :phonePattern ESCAPE '\\' OR p.phoneNumberSecondary LIKE :phonePattern ESCAPE '\\')
+          AND """ + PHONE_MATCH + """
           AND (:emailPattern IS NULL OR LOWER(p.email) LIKE :emailPattern)
           AND (:active IS NULL OR p.active = :active)
           AND r.active = true
@@ -47,15 +81,9 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
         JOIN p.hospitalRegistrations r
         WHERE (:hospitalId IS NULL OR r.hospital.id = :hospitalId)
           AND (:mrn IS NULL OR r.mrn = :mrn)
-          AND (
-                :namePattern IS NULL OR
-                LOWER(p.firstName) LIKE :namePattern OR
-                LOWER(p.lastName)  LIKE :namePattern OR
-                LOWER(CONCAT(p.firstName, ' ', p.lastName)) LIKE :namePattern OR
-                LOWER(r.mrn) LIKE :namePattern
-              )
+          AND """ + NAME_OR_MRN_MATCH + """
           AND (:dob IS NULL OR CAST(p.dateOfBirth AS string) = :dob)
-          AND (:phonePattern IS NULL OR p.phoneNumberPrimary LIKE :phonePattern ESCAPE '\\' OR p.phoneNumberSecondary LIKE :phonePattern ESCAPE '\\')
+          AND """ + PHONE_MATCH + """
           AND (:emailPattern IS NULL OR LOWER(p.email) LIKE :emailPattern)
           AND (:active IS NULL OR p.active = :active)
           AND r.active = true
@@ -82,9 +110,20 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
   @Query("SELECT p FROM Patient p JOIN p.hospitalRegistrations r WHERE r.mrn = :mrn")
   List<Patient> findByMrn(@Param("mrn") String mrn);
 
-    Optional<Patient> findByPhoneNumberPrimary(String phoneNumberPrimary);
+    // QA D926/D942: a number may be shared (a child carries the mother's
+    // phone, and the database has no unique constraint), so no lookup by
+    // number is single-result: these return the first holder, never throw.
+    Optional<Patient> findFirstByPhoneNumberPrimary(String phoneNumberPrimary);
 
-    Optional<Patient> findByPhoneNumberSecondary(String phoneNumberSecondary);
+    Optional<Patient> findFirstByPhoneNumberSecondary(String phoneNumberSecondary);
+
+    /** Every holder of a number stored exactly so (a short or legacy value; review round 10). */
+    List<Patient> findAllByPhoneNumberPrimary(String phoneNumberPrimary);
+
+    List<Patient> findAllByPhoneNumberSecondary(String phoneNumberSecondary);
+
+    /** Whether a patient other than {@code id} holds this primary number. */
+    boolean existsByPhoneNumberPrimaryAndIdNot(String phoneNumberPrimary, UUID id);
 
     /** Another patient already holds this e-mail, in any letter case (QA D113). */
     @Query("SELECT COUNT(p) > 0 FROM Patient p WHERE LOWER(p.email) = LOWER(:email) AND p.id <> :id")
@@ -181,7 +220,22 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
 
   List<Patient> findByActive(boolean active);
 
-    List<Patient> findByFirstNameContainingIgnoreCaseOrLastNameContainingIgnoreCase(String firstName, String lastName);
+    /**
+     * QA D943: first name OR last name contains the typed text, accents and
+     * case ignored on both sides (the EMPI matcher's name block and the audit
+     * resource-name lookup). An empty text matches every name, as the derived
+     * query it replaces did; a '%' or '_' in the text is a literal character,
+     * escaped as the derived query escaped it (review round 14).
+     */
+    @Query("SELECT p FROM Patient p WHERE "
+        + FOLD_OPEN + "p.firstName" + FOLD_CLOSE + " LIKE CONCAT('%', "
+        + FOLD_OPEN + PatientMatchKeys.LIKE_ESCAPE_SQL_OPEN + "CAST(:firstName AS string)" + PatientMatchKeys.LIKE_ESCAPE_SQL_CLOSE
+        + FOLD_CLOSE + ", '%')"
+        + " OR " + FOLD_OPEN + "p.lastName" + FOLD_CLOSE + " LIKE CONCAT('%', "
+        + FOLD_OPEN + PatientMatchKeys.LIKE_ESCAPE_SQL_OPEN + "CAST(:lastName AS string)" + PatientMatchKeys.LIKE_ESCAPE_SQL_CLOSE
+        + FOLD_CLOSE + ", '%')")
+    List<Patient> findByFirstNameContainingIgnoreCaseOrLastNameContainingIgnoreCase(
+        @Param("firstName") String firstName, @Param("lastName") String lastName);
 
     List<Patient> findByEmailContainingIgnoreCase(String email);
 
@@ -192,9 +246,33 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
     // only expose minimal, masked fields (see RegistrationMatchDTO).
     List<Patient> findAllByEmailIgnoreCase(String email);
 
-    List<Patient> findAllByPhoneNumberPrimary(String phoneNumberPrimary);
+    /**
+     * QA D942: every patient whose primary or secondary number ends with
+     * {@code subscriberPattern} ({@code "%" + the eight national digits}),
+     * however the number was stored ("70001002", "+22670001002",
+     * "70 00 10 02"). Cross-hospital by design, like the matchers above.
+     */
+    @Query("SELECT p FROM Patient p WHERE " + PRIMARY_PHONE_DIGITS + " LIKE :subscriberPattern"
+        + " OR " + SECONDARY_PHONE_DIGITS + " LIKE :subscriberPattern ORDER BY p.createdAt DESC, p.id")
+    List<Patient> findAllByPhoneSubscriber(@Param("subscriberPattern") String subscriberPattern,
+                                           Pageable pageable);
 
-    List<Patient> findAllByPhoneNumberSecondary(String phoneNumberSecondary);
+    /**
+     * {@link #findAllByPhoneSubscriber} at one hospital (an active
+     * registration there): the duplicate check's candidates, so a number
+     * shared across the country cannot crowd this hospital's patient out of
+     * the capped page.
+     */
+    @Query("SELECT DISTINCT p FROM Patient p JOIN p.hospitalRegistrations r"
+        + " WHERE r.hospital.id = :hospitalId AND r.active = true"
+        + " AND (" + PRIMARY_PHONE_DIGITS + " LIKE :subscriberPattern"
+        + " OR " + SECONDARY_PHONE_DIGITS + " LIKE :subscriberPattern) ORDER BY p.createdAt DESC, p.id")
+    List<Patient> findAllByPhoneSubscriberAtHospital(@Param("subscriberPattern") String subscriberPattern,
+                                                     @Param("hospitalId") UUID hospitalId,
+                                                     Pageable pageable);
+
+    /** The candidate cap of {@link #findAllByPhoneSubscriber}: a shared number never loads a crowd. */
+    int PHONE_SUBSCRIBER_CAP = 50;
 
     /**
      * Retrieves all patients registered to a specific hospital with active registrations.
@@ -243,13 +321,7 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
         SELECT DISTINCT p FROM Patient p
         JOIN p.hospitalRegistrations r
         WHERE (:hospitalId IS NULL OR r.hospital.id = :hospitalId)
-          AND (
-                :namePattern IS NULL OR
-                LOWER(p.firstName) LIKE :namePattern OR
-                LOWER(p.lastName)  LIKE :namePattern OR
-                LOWER(CONCAT(p.firstName, ' ', p.lastName)) LIKE :namePattern OR
-                LOWER(r.mrn) LIKE :namePattern
-              )
+          AND """ + NAME_OR_MRN_MATCH + """
           AND (:emailPattern IS NULL OR LOWER(p.email) LIKE :emailPattern)
           AND (:active IS NULL OR p.active = :active)
           AND r.active = true
@@ -264,13 +336,7 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
         SELECT COUNT(DISTINCT p) FROM Patient p
         JOIN p.hospitalRegistrations r
         WHERE (:hospitalId IS NULL OR r.hospital.id = :hospitalId)
-          AND (
-                :namePattern IS NULL OR
-                LOWER(p.firstName) LIKE :namePattern OR
-                LOWER(p.lastName)  LIKE :namePattern OR
-                LOWER(CONCAT(p.firstName, ' ', p.lastName)) LIKE :namePattern OR
-                LOWER(r.mrn) LIKE :namePattern
-              )
+          AND """ + NAME_OR_MRN_MATCH + """
           AND (:emailPattern IS NULL OR LOWER(p.email) LIKE :emailPattern)
           AND (:active IS NULL OR p.active = :active)
           AND r.active = true

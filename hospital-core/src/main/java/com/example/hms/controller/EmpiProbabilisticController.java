@@ -32,6 +32,17 @@ public class EmpiProbabilisticController {
         this.matcher = matcher;
     }
 
+    /**
+     * QA D987: whether the matcher is switched on, so the portal offers the
+     * duplicate-patient page only when it works (it answers 404 off). Same
+     * roles as the search; reveals nothing but the deployment's switch.
+     */
+    @org.springframework.web.bind.annotation.GetMapping("/candidates/status")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','RECEPTIONIST','NURSE','DOCTOR')")
+    public ResponseEntity<java.util.Map<String, Boolean>> status() {
+        return ResponseEntity.ok(java.util.Map.of("enabled", matcher.isEnabled()));
+    }
+
     @PostMapping("/candidates")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','RECEPTIONIST','NURSE','DOCTOR')")
     public ResponseEntity<List<EmpiCandidateMatchDTO>> candidates(
