@@ -57,19 +57,27 @@ class MarScreenServerAgreementTest {
                 MedicationAdministrationStatus.HELD, MedicationAdministrationStatus.REFUSED,
                 MedicationAdministrationStatus.MISSED)) {
                 for (long lateMinutes : new long[] {0, 30, 75, 150, 26 * 60}) {
-                    for (long sinceMinutes = 1; sinceMinutes <= 30 * 60; sinceMinutes += 7) {
-                        checked++;
-                        String why = disagreement(frequency, outcome, lateMinutes, sinceMinutes);
-                        if (why != null) {
-                            broken.add(frequency + " / " + outcome + " " + lateMinutes + " min late / +"
-                                + sinceMinutes + " min: " + why);
-                        }
-                    }
+                    checked += checkEveryMoment(frequency, outcome, lateMinutes, broken);
                 }
             }
         }
         assertThat(checked).isGreaterThan(10_000);
         assertThat(broken).isEmpty();
+    }
+
+    /** Every moment from a minute after the outcome to 30 hours later, every 7 minutes. */
+    private static int checkEveryMoment(String frequency, MedicationAdministrationStatus outcome, long lateMinutes,
+                                        List<String> broken) {
+        int checked = 0;
+        for (long sinceMinutes = 1; sinceMinutes <= 30 * 60; sinceMinutes += 7) {
+            checked++;
+            String why = disagreement(frequency, outcome, lateMinutes, sinceMinutes);
+            if (why != null) {
+                broken.add(frequency + " / " + outcome + " " + lateMinutes + " min late / +" + sinceMinutes
+                    + " min: " + why);
+            }
+        }
+        return checked;
     }
 
     private static String disagreement(String frequency, MedicationAdministrationStatus outcome,
@@ -102,18 +110,28 @@ class MarScreenServerAgreementTest {
             return status + " but the slot rule refuses it";
         }
         if (offered && !due.frequencyUnread()) {
-            boolean asks = asksForAReason(rx, lastGiven, now);
-            if (early != asks) {
-                return status + (early ? " flagged early but no reason is asked" : " but a reason is asked");
+            String reason = reasonDisagreement(rx, lastGiven, now, status, early);
+            if (reason != null) {
+                return reason;
             }
         }
-        if (slotOk && !offered) {
-            boolean backlog = lastGiven.isPresent() && due.scheduledSlot().plus(WINDOW).isBefore(lastGiven.get());
-            if (!backlog) {
-                return status + " but the server accepts it (the early-dose path is unreachable)";
-            }
+        return slotOk && !offered ? hiddenDisagreement(due, lastGiven, status) : null;
+    }
+
+    /** Offered: a reason is asked exactly when the row is flagged early. */
+    private static String reasonDisagreement(Prescription rx, Optional<LocalDateTime> lastGiven, LocalDateTime now,
+                                             String status, boolean early) {
+        boolean asks = asksForAReason(rx, lastGiven, now);
+        if (early == asks) {
+            return null;
         }
-        return null;
+        return early ? status + " flagged early but no reason is asked" : status + " but a reason is asked";
+    }
+
+    /** Accepted by the server but not offered: only a missed backlog slot inside the gap (D1236). */
+    private static String hiddenDisagreement(MarNextDose.Due due, Optional<LocalDateTime> lastGiven, String status) {
+        boolean backlog = lastGiven.isPresent() && due.scheduledSlot().plus(WINDOW).isBefore(lastGiven.get());
+        return backlog ? null : status + " but the server accepts it (the early-dose path is unreachable)";
     }
 
     private static boolean asksForAReason(Prescription rx, Optional<LocalDateTime> lastGiven, LocalDateTime now) {

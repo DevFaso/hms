@@ -567,7 +567,6 @@ describe('NurseStationComponent — two-tier polling', () => {
       (row.querySelector('.action-give') as HTMLButtonElement).click();
       component.reasonText.set('Pas de scanner au chevet');
       component.confirmHoldRefuse();
-      fixture.detectChanges();
       expect(component.earlyDose()?.why).toBe(why);
       expect(component.earlyDoseKeys().title).toBe('EMAR.EARLY_DOSE.TITLE');
     });
@@ -577,6 +576,10 @@ describe('NurseStationComponent — two-tier polling', () => {
     it('QA D1265: the refusal of an unreadable frequency opens a dialog titled for it', () => {
       const unread = rows.map((r) => (r.id === 'm3' ? { ...r, frequencyUnread: true } : r));
       component.medications.set(unread as unknown as NurseMedicationTask[]);
+      // The first render starts the polling, which reads the list again.
+      nurseServiceSpy.getMedicationMAR.and.returnValue(
+        of(unread as unknown as NurseMedicationTask[]),
+      );
       const why = 'La fréquence « quand il veut » ne peut pas être lue comme un horaire.';
       nurseServiceSpy.administerMedication.and.returnValue(
         throwError(() => ({
@@ -592,8 +595,8 @@ describe('NurseStationComponent — two-tier polling', () => {
         label: 'EMAR.FREQUENCY_UNREAD_DIALOG.REASON_LABEL',
         confirm: 'EMAR.FREQUENCY_UNREAD_DIALOG.CONFIRM',
       });
-      component.activeSection.set('medications');
-      component['pendingLoads'].set(0);
+      // The Give prompt underneath holds a chart link this test bed has no router for.
+      component.reasonPrompt.set(null);
       fixture.detectChanges();
       const title = (fixture.nativeElement as HTMLElement)
         .querySelector('app-reason-dialog h2')
