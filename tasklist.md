@@ -6026,3 +6026,8 @@ ships*, not for building — and check the shipped surface before trusting a
 - [ ] **StaffController create/update bind `StaffRequestDTO` without `@Valid`** (`RequiredRequestIdGuardTest` allowlist): the DTO puts `@NotBlank`/`@Size` on enum fields, which bean validation cannot apply (UnexpectedTypeException, a 500). Fix the DTO constraints first, then add `@Valid` and delete the allowlist lines.
 - [ ] **Field labels for parsed scalars** (UUID / enum / date / number fields whose constraints all carry their own message, ~375 names): an unreadable value still reads "La valeur saisie pour « xxxId » n'est pas valide." Extend `FieldLabelCoverageTest` to parsed types once those labels exist.
 - [ ] **In-Basket items stored before D1269** keep their staff-locale text (no backfill: the escalation's arguments are not recoverable from the stored title).
+
+## Standing debt — round 27 (fix/r27-backend)
+
+- [ ] `AuthController#resendActivationByPhone` finds only the account that logs in with the number, and the notifier sends no SMS to an account without a login phone, so "resend the code" delivers nothing to a patient registered on a family phone (D1275 sibling). Needs the user's decision on sending the code to the contact number.
+- [ ] `PharmacySaleResponseDTO` names the patient by id only (`PatientQueueDisplayNameGuardTest` allowlist): add the patient name before any screen lists sales.
