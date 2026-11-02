@@ -6007,3 +6007,8 @@ ships*, not for building — and check the shipped surface before trusting a
 - [ ] D1241 portal half: the birth-plan delete now requires `?reason=`; the portal's delete button must ask for it (owner: fix/r25-portal-forms or the next portal branch).
 - [ ] D1225 class: `PatientAllergy.deactivationReason`, `PatientGuarantor.deactivationReason` and `BirthPlan.withdrawalReason` are on the wire (response DTOs); no screen shows them yet.
 - [ ] D1245 class, labels: a default-message constraint now reads "{label} : {message}", with `field.label.<name>` when the bundle has one and the raw property name otherwise; most request fields have no label yet.
+
+## Standing debt — round 25 (fix/r25-mar-cds-pharmacy-billing)
+- [ ] D1237 portal half: the eMAR and nurse-station MAR rows carry `frequencyUnread: true` for an order whose frequency cannot be read as a schedule (course kept open, each later dose asks for a reason on `earlyDoseReason`). The portal should show that flag on the row (fix/r25-portal-forms owns hospital-portal).
+- [ ] D1237 prevention: the prescriber is not told at signature that a frequency will not schedule on the MAR (`MarDoseSchedule.read(...) == UNREAD`, e.g. "après les repas", "toutes les 30 minutes"). A non-blocking card at sign time would let the prescriber restate it before the nurse meets it.
+- [ ] Pre-existing, not changed: an as-needed (PRN, "si besoin") order ends on the MAR after its first recorded outcome, as a one-off does. A PRN order should stay available with its own minimum interval; needs a decision on the PRN interval source (the order's "q4h PRN" part, else a catalogue value - never an invented one).

@@ -1,5 +1,6 @@
 package com.example.hms.cdshooks.service;
 
+import com.example.hms.cdshooks.bpa.BpaRuleContext;
 import com.example.hms.cdshooks.bpa.BpaRuleEngine;
 import com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard;
 import com.example.hms.cdshooks.dto.CdsHookDtos.CdsHookRequest;
@@ -15,6 +16,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 /**
@@ -84,7 +87,11 @@ public class BpaProtocolsCdsService implements CdsHookService {
 
         UUID hospitalId = patient.getHospitalId();
         List<CdsCard> cards = ruleEngine.evaluateForPatient(patient, hospitalId);
-        return CdsHookResponse.of(suppressAcknowledged(cards, patientId));
+        // QA D1238: read again only when an acknowledged card needs it.
+        AtomicReference<BpaRuleContext> context = new AtomicReference<>();
+        Supplier<BpaRuleContext> contextOnce = () -> context.updateAndGet(
+                c -> c != null ? c : ruleEngine.buildContext(patient, hospitalId));
+        return CdsHookResponse.of(suppressAcknowledged(cards, patientId, contextOnce));
     }
 
     /**
@@ -99,8 +106,14 @@ public class BpaProtocolsCdsService implements CdsHookService {
      * acknowledgements count: each clinician acknowledges an advisory for
      * themself, as in a hospital EHR. The {summary, indicator} fallback is
      * kept for a card that carries no uuid.
+     *
+     * <p>QA D1238 (round 25): an acknowledgement covers the readings its
+     * author saw. A reading entered after it that raises the card again (or
+     * a more severe one) brings the card back
+     * ({@link BpaRuleEngine#raisedAgainSince}).
      */
-    private List<CdsCard> suppressAcknowledged(List<CdsCard> cards, UUID patientId) {
+    private List<CdsCard> suppressAcknowledged(List<CdsCard> cards, UUID patientId,
+                                               Supplier<BpaRuleContext> context) {
         if (cards == null || cards.isEmpty()) {
             return cards == null ? List.of() : cards;
         }
@@ -118,22 +131,33 @@ public class BpaProtocolsCdsService implements CdsHookService {
         if (active.isEmpty()) {
             return cards;
         }
-        Set<String> ackedUuids = active.stream()
-                .map(CdsAcknowledgement::getCardUuid)
-                .filter(u -> u != null && !u.isBlank())
-                .collect(Collectors.toSet());
+        // The newest acknowledgement of each card: what its author last saw.
+        java.util.Map<String, LocalDateTime> ackedUuids = active.stream()
+                .filter(a -> a.getCardUuid() != null && !a.getCardUuid().isBlank())
+                .collect(Collectors.toMap(CdsAcknowledgement::getCardUuid, BpaProtocolsCdsService::acknowledgedAt,
+                        BpaProtocolsCdsService::later));
         Set<String> ackedFingerprints = active.stream()
                 .map(a -> fingerprint(a.getCardSummary(), a.getIndicator()))
                 .collect(Collectors.toSet());
         return cards.stream()
                 .filter(c -> {
                     if (c.uuid() != null && !c.uuid().isBlank()) {
-                        return !ackedUuids.contains(c.uuid());
+                        return !ackedUuids.containsKey(c.uuid())
+                                || ruleEngine.raisedAgainSince(context.get(), c.uuid(), ackedUuids.get(c.uuid()));
                     }
                     String indicator = c.indicator() != null ? c.indicator().wire() : null;
                     return !ackedFingerprints.contains(fingerprint(c.summary(), indicator));
                 })
                 .toList();
+    }
+
+    /** When the card was acknowledged; an undated row covers everything (as before). */
+    private static LocalDateTime acknowledgedAt(CdsAcknowledgement a) {
+        return a.getCreatedAt() != null ? a.getCreatedAt() : LocalDateTime.MAX;
+    }
+
+    private static LocalDateTime later(LocalDateTime a, LocalDateTime b) {
+        return a.isAfter(b) ? a : b;
     }
 
     private static String fingerprint(String summary, String indicator) {

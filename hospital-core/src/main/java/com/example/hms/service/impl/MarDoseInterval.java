@@ -54,9 +54,19 @@ public final class MarDoseInterval {
     private MarDoseInterval() {
     }
 
+    /** The refusal's message key when the frequency cannot be read as a schedule (QA D1237). */
+    public static final String FREQUENCY_UNREAD_KEY = "nurse.mar.frequencyUnread";
+
     /** The shortest time between two GIVEN doses of an order given every {@code intervalHours}. */
     public static Duration minimumGap(int intervalHours, Duration earlyWindow) {
-        Duration interval = Duration.ofHours(intervalHours);
+        return minimumGap(Duration.ofHours(intervalHours), earlyWindow);
+    }
+
+    /**
+     * The shortest time between two GIVEN doses of an order given every
+     * {@code interval} (QA D1237: "5 fois par jour" is every 4 h 48).
+     */
+    public static Duration minimumGap(Duration interval, Duration earlyWindow) {
         Duration lessWindow = interval.minus(earlyWindow);
         Duration half = interval.dividedBy(2);
         return lessWindow.compareTo(half) > 0 ? lessWindow : half;
@@ -89,23 +99,51 @@ public final class MarDoseInterval {
         if (status != MedicationAdministrationStatus.GIVEN || rx == null || lastGiven.isEmpty() || now == null) {
             return null;
         }
-        Integer interval = MarDoseSchedule.intervalHours(rx.getFrequency());
-        if (interval == null) {
+        MarDoseSchedule.Reading reading = MarDoseSchedule.read(rx.getFrequency());
+        if (reading.kind() == MarDoseSchedule.Kind.UNREAD) {
+            // QA D1237: the course stays open, but the MAR cannot say when the
+            // next dose is due, so every later dose says why it is given now.
+            return requireReason(reason, FREQUENCY_UNREAD_KEY, rx.getFrequency().trim());
+        }
+        if (!reading.repeating()) {
             return null;
         }
-        LocalDateTime earliest = lastGiven.get().plus(minimumGap(interval, earlyWindow));
+        Duration interval = Duration.ofMinutes(reading.intervalMinutes());
+        LocalDateTime earliest = earliestNext(lastGiven.get(), interval, earlyWindow);
         if (!now.isBefore(earliest)) {
             return null;
         }
+        Hospital hospital = rx.getHospital();
+        return requireReason(reason, TOO_SOON_KEY,
+            // QA D1234: the reader's own date ("2 nov. 2026, 00:28", "Nov 2, 2026, 12:28 AM"),
+            // never dd/MM, which an English reader takes for the month first.
+            DisplayDates.dateTime(com.example.hms.utility.HospitalTime.at(lastGiven.get(), hospital)),
+            DisplayDates.dateTime(com.example.hms.utility.HospitalTime.at(earliest, hospital)),
+            hoursLabel(interval));
+    }
+
+    /**
+     * QA D1236: the first moment the next dose may be given without a reason,
+     * measured from when the last dose was REALLY given.
+     */
+    public static LocalDateTime earliestNext(LocalDateTime lastGiven, Duration interval, Duration earlyWindow) {
+        return lastGiven.plus(minimumGap(interval, earlyWindow));
+    }
+
+    /** The interval in hours for the message: "6", or "4,8" in the reader's language. */
+    private static String hoursLabel(Duration interval) {
+        long minutes = interval.toMinutes();
+        if (minutes % 60 == 0) {
+            return String.valueOf(minutes / 60);
+        }
+        return com.example.hms.utility.DisplayNumbers.measure(minutes / 60d, 1,
+            com.example.hms.utility.DisplayNumbers.requestLocale());
+    }
+
+    private static String requireReason(String reason, String refusalKey, Object... args) {
         String why = reason == null ? "" : reason.trim();
         if (why.isEmpty()) {
-            Hospital hospital = rx.getHospital();
-            throw new FieldBusinessException(REASON_FIELD, TOO_SOON_KEY,
-                // QA D1234: the reader's own date ("2 nov. 2026, 00:28", "Nov 2, 2026, 12:28 AM"),
-                // never dd/MM, which an English reader takes for the month first.
-                DisplayDates.dateTime(com.example.hms.utility.HospitalTime.at(lastGiven.get(), hospital)),
-                DisplayDates.dateTime(com.example.hms.utility.HospitalTime.at(earliest, hospital)),
-                String.valueOf(interval));
+            throw new FieldBusinessException(REASON_FIELD, refusalKey, args);
         }
         if (why.length() > REASON_MAX) {
             throw new FieldBusinessException(REASON_FIELD, "nurse.mar.earlyDoseReasonTooLong", String.valueOf(REASON_MAX));

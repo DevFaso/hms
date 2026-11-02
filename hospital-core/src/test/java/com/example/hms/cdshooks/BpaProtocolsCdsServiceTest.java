@@ -178,6 +178,43 @@ class BpaProtocolsCdsServiceTest {
         assertThat(service.evaluate(viewRequest(patientId)).cards()).containsExactly(card);
     }
 
+    /**
+     * QA D1238 (round 25): an acknowledgement covers what its author saw. A
+     * reading entered after the NEWEST acknowledgement of the card that
+     * raises it again brings the card back; without one it stays hidden.
+     */
+    @Test
+    void aReadingAfterTheAcknowledgementBringsTheCardBack_D1238() {
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Patient patient = Patient.builder().build();
+        patient.setId(patientId);
+        patient.setHospitalId(hospitalId);
+        when(patients.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        String stable = UUID.randomUUID().toString();
+        CdsCard card = new CdsCard("Hypertension in pregnancy", null, CdsCard.Indicator.CRITICAL,
+            new Source("HMS", null, null), null, null, null, stable);
+        when(engine.evaluateForPatient(patient, hospitalId)).thenReturn(List.of(card));
+        com.example.hms.cdshooks.bpa.BpaRuleContext context = new com.example.hms.cdshooks.bpa.BpaRuleContext(
+            patient, hospitalId, List.of(), List.of(), List.of());
+        when(engine.buildContext(patient, hospitalId)).thenReturn(context);
+        LocalDateTime first = LocalDateTime.of(2026, 11, 1, 18, 38);
+        LocalDateTime second = first.plusHours(3);
+        CdsAcknowledgement older = CdsAcknowledgement.builder().cardUuid(stable).indicator("critical").build();
+        older.setCreatedAt(first);
+        CdsAcknowledgement newer = CdsAcknowledgement.builder().cardUuid(stable).indicator("critical").build();
+        newer.setCreatedAt(second);
+        UUID viewer = UUID.randomUUID();
+        when(acknowledgements.findActiveForPatientAndUser(any(UUID.class), org.mockito.ArgumentMatchers.eq(viewer),
+            any(LocalDateTime.class))).thenReturn(List.of(older, newer));
+
+        when(engine.raisedAgainSince(context, stable, second)).thenReturn(false);
+        assertThat(asViewer(viewer, () -> service.evaluate(viewRequest(patientId))).cards()).isEmpty();
+
+        when(engine.raisedAgainSince(context, stable, second)).thenReturn(true);
+        assertThat(asViewer(viewer, () -> service.evaluate(viewRequest(patientId))).cards()).containsExactly(card);
+    }
+
     private static <T> T asViewer(UUID userId, java.util.function.Supplier<T> call) {
         com.example.hms.security.context.HospitalContextHolder.setContext(
             com.example.hms.security.context.HospitalContext.builder().principalUserId(userId).build());

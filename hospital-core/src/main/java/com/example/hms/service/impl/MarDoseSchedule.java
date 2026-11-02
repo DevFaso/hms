@@ -1,39 +1,122 @@
 package com.example.hms.service.impl;
 
+import java.text.Normalizer;
 import java.util.Locale;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
  * Reads a prescription's free-text frequency as a dosing interval for the
- * MAR schedule (D77). Only unambiguous repeating frequencies are read;
- * anything else (STAT, once, PRN, free prose) yields {@code null}, which the
- * MAR treats as a single dose.
+ * MAR schedule (D77). This is the ONE reader of a frequency in hospital-core
+ * (MarFrequencyReaderGuardTest): the MAR's due time and minimum interval, the
+ * paediatric daily-dose check and the dispense quantity estimate all go
+ * through it.
+ *
+ * <p>QA D1237 (round 25): "toutes les six heures", "toutes les heures",
+ * "cada hora" and "every hour" were not read, and anything not read was
+ * treated as a single dose, so the MAR ended the course after its first
+ * outcome. A frequency now reads as one of four {@link Kind}s. Only a
+ * frequency that says so ({@link Kind#ONE_OFF}: STAT, once, "dose unique";
+ * {@link Kind#AS_NEEDED}: PRN, "si besoin") gives one dose. A frequency the
+ * reader cannot place is {@link Kind#UNREAD}: the MAR keeps that course open
+ * and flags it, it never ends it.
  */
 public final class MarDoseSchedule {
 
+    /** What a frequency says about repeating. */
+    public enum Kind {
+        /** A fixed repeat: {@link Reading#intervalMinutes()} is set. */
+        REPEATING,
+        /** A single dose (STAT, once, "dose unique", or no frequency written). */
+        ONE_OFF,
+        /** PRN, "si besoin", "as needed": no fixed repeat. */
+        AS_NEEDED,
+        /** Written, but not readable as a schedule: never read as a single dose (D1237). */
+        UNREAD
+    }
+
+    /** A frequency read: its kind and, for a repeat, the minutes between doses. */
+    public record Reading(Kind kind, Integer intervalMinutes) {
+        static final Reading ONE_OFF = new Reading(Kind.ONE_OFF, null);
+        static final Reading AS_NEEDED = new Reading(Kind.AS_NEEDED, null);
+        static final Reading UNREAD = new Reading(Kind.UNREAD, null);
+
+        static Reading every(int minutes) {
+            return new Reading(Kind.REPEATING, minutes);
+        }
+
+        public boolean repeating() {
+            return kind == Kind.REPEATING;
+        }
+    }
+
+    private static final int MINUTES_PER_HOUR = 60;
+    private static final int HOURS_PER_DAY = 24;
+    private static final int MINUTES_PER_DAY = HOURS_PER_DAY * MINUTES_PER_HOUR;
+    /** The longest repeat read as a schedule (q72h); anything longer is not a MAR interval. */
+    private static final int MAX_INTERVAL_HOURS = 72;
+
+    /** The hour units in English, French and Spanish (accents removed before matching). */
+    private static final String HOUR_UNIT = "(?:H|HR|HRS|HOUR|HOURS|HEURE|HEURES|HORA|HORAS)";
+    private static final String EVERY = "(?:EVERY|TOUTES LES|CHAQUE|CADA)";
+
     private static final Pattern Q_HOURS = Pattern.compile("\\bQ\\s*(\\d{1,2})\\s*H\\b");
-    private static final Pattern EVERY_HOURS =
-        Pattern.compile("\\b(?:EVERY|TOUTES LES|CADA)\\s+(\\d{1,2})\\s*(?:H|HR|HRS|HOURS|HEURES|HORAS)\\b");
+    private static final Pattern EVERY_HOURS = Pattern.compile("\\b" + EVERY + "\\s+(\\d{1,2})\\s*" + HOUR_UNIT + "\\b");
+    /** QA D1237: "toutes les heures", "chaque heure", "cada hora", "every hour". */
+    private static final Pattern EVERY_HOUR = Pattern.compile("\\b" + EVERY + "\\s+(?:HOUR|HEURES?|HORA)\\b");
+    /** QA D1237: "6 h/6 h", "6h/6", "6/6 h", the French way of writing q6h ("24h/24" is continuous, not read). */
+    private static final Pattern SLASH_HOURS = Pattern.compile("\\b(\\d{1,2})\\s*(H?)\\s*/\\s*(\\d{1,2})\\s*(H?)\\b");
+    /** QA D1237: "every 2 days", "tous les 2 jours", "cada 2 dias". */
+    private static final Pattern EVERY_DAYS =
+        Pattern.compile("\\b(?:EVERY|TOUS LES|CADA)\\s+(\\d)\\s*(?:DAYS|JOURS|DIAS)\\b");
     /** "3 x", "2 fois", "dos veces", "3 times": a count of doses, read with {@link #PER_DAY} after it. */
     private static final Pattern TIMES = Pattern.compile("\\b(\\d)\\s*(?:X|FOIS|VECES|VEZ|TIMES)\\s*");
     /**
-     * "/j", "par jour", "par 24 h", "al día", "por día", "daily", "a day",
-     * "per day", right after {@link #TIMES}. Two patterns rather than one, so
-     * each stays simple enough to read (Sonar S5843).
+     * "/j", "par jour", "par 24 h", "al dia", "por dia", "daily", "a day",
+     * "per day", right after {@link #TIMES}.
      */
-    private static final Pattern PER_DAY = Pattern.compile(
-        "(?:/\\s*[JD]|PAR JOUR|PAR 24 ?H|AL DIA|AL DÍA|POR DIA|POR DÍA|DAILY|A DAY|PER DAY)\\b", Pattern.CANON_EQ);
+    private static final Pattern PER_DAY =
+        Pattern.compile("(?:/\\s*[JD]|PAR JOUR|PAR 24 ?H|AL DIA|POR DIA|DAILY|A DAY|PER DAY)\\b");
 
     /**
      * QA D928: a count written as a word ("une fois par jour", "dos veces al
-     * día", "three times a day"). It is read as its digit before the patterns
-     * above, so "Une fois par jour" repeats like "1 fois par jour" instead of
-     * reading as a single dose that ends the course after its first outcome.
+     * dia", "three times a day"), read as its digit.
      */
     private static final Pattern COUNT_WORD = Pattern.compile("\\b([A-Z]+)(?=\\s*(?:FOIS|VECES|VEZ|TIMES)\\b)");
+    /** QA D1237: a number of hours written as a word ("toutes les six heures", "cada ocho horas"). */
+    private static final Pattern HOUR_WORD = Pattern.compile("\\b([A-Z]+(?:-[A-Z]+)?)(?=\\s*" + HOUR_UNIT + "\\b)");
+
+    /** Frequencies (accents and spaces removed, counts as digits) that mean a single dose, in EN, FR and ES. */
+    private static final Set<String> ONE_OFF_WORDS = Set.of(
+        "ONCE", "ONCEONLY", "ONETIME", "SINGLEDOSE", "IMMEDIATELY", "NOW", "1X", "1FOIS",
+        "UNESEULEFOIS", "1FOISSEULEMENT", "DOSEUNIQUE", "ENDOSEUNIQUE", "PRISEUNIQUE",
+        "IMMEDIATEMENT", "MAINTENANT", "1VEZ", "UNASOLAVEZ", "DOSISUNICA", "AHORA", "INMEDIATAMENTE");
 
     private MarDoseSchedule() {
+    }
+
+    /**
+     * QA D1237: what the frequency says. A blank frequency is a one-off order
+     * (nothing to repeat was written); a written one that is not read is
+     * {@link Kind#UNREAD}, never a single dose.
+     */
+    public static Reading read(String frequency) {
+        if (frequency == null || frequency.isBlank()) {
+            return Reading.ONE_OFF;
+        }
+        String upper = normalize(frequency);
+        if (upper.contains("STAT")) {
+            return Reading.ONE_OFF;
+        }
+        if (isAsNeeded(upper)) {
+            return Reading.AS_NEEDED;
+        }
+        Integer minutes = intervalMinutesOf(frequency);
+        if (minutes != null) {
+            return Reading.every(minutes);
+        }
+        return ONE_OFF_WORDS.contains(upper.replace(" ", "")) ? Reading.ONE_OFF : Reading.UNREAD;
     }
 
     /**
@@ -43,50 +126,64 @@ public final class MarDoseSchedule {
      * interval longer than a day gives a fraction ("q48h" = 0.5).
      */
     public static Double dosesPerDay(String frequency) {
-        if (frequency == null || frequency.isBlank() || isAsNeeded(frequency.toUpperCase(Locale.ROOT))) {
+        if (frequency == null || frequency.isBlank() || isAsNeeded(normalize(frequency))) {
             return null;
         }
-        String f = countWordsAsDigits(frequency.trim().toUpperCase(Locale.ROOT)
-            .replace('_', ' ').replace('.', ' ').replace(',', ' '));
-        Matcher m = TIMES.matcher(f);
-        while (m.find()) {
-            if (PER_DAY.matcher(f).region(m.end(), f.length()).lookingAt()) {
-                int perDay = Integer.parseInt(m.group(1));
-                return perDay > 0 ? (double) perDay : null;
-            }
+        Integer perDay = timesPerDay(normalize(frequency));
+        if (perDay != null) {
+            return perDay > 0 ? (double) perDay : null;
         }
-        Integer interval = intervalHours(frequency);
-        return interval == null ? null : 24d / interval;
+        Reading reading = read(frequency);
+        return reading.repeating() ? (double) MINUTES_PER_DAY / reading.intervalMinutes() : null;
     }
 
-    /** Hours between doses, or {@code null} when the frequency is not a fixed repeat. */
+    /**
+     * Whole hours between doses, or {@code null} when the frequency is not a
+     * fixed repeat of whole hours ("5 fois par jour" is a repeat, every 4 h 48,
+     * which {@link #read} gives in minutes).
+     */
     public static Integer intervalHours(String frequency) {
-        if (frequency == null || frequency.isBlank()) {
+        Reading reading = read(frequency);
+        if (!reading.repeating() || reading.intervalMinutes() % MINUTES_PER_HOUR != 0) {
             return null;
         }
-        if (isAsNeeded(frequency.toUpperCase(Locale.ROOT))) {
-            return null;
-        }
+        return reading.intervalMinutes() / MINUTES_PER_HOUR;
+    }
+
+    private static Integer intervalMinutesOf(String frequency) {
         // QA D928: a label that carries its code, "Once daily (QD)" or
         // "Deux fois par jour (BID)", reads as its words, else as its code.
         int open = frequency.indexOf('(');
         int close = frequency.indexOf(')', open + 1);
         if (open >= 0 && close > open) {
-            Integer words = readInterval(frequency.substring(0, open) + ' ' + frequency.substring(close + 1));
-            return words != null ? words : readInterval(frequency.substring(open + 1, close));
+            Integer words = readMinutes(frequency.substring(0, open) + ' ' + frequency.substring(close + 1));
+            return words != null ? words : readMinutes(frequency.substring(open + 1, close));
         }
-        return readInterval(frequency);
+        return readMinutes(frequency);
     }
 
-    private static Integer readInterval(String frequency) {
+    private static Integer readMinutes(String frequency) {
         if (frequency.isBlank()) {
             return null;
         }
-        String f = countWordsAsDigits(frequency.trim().toUpperCase(Locale.ROOT)
-            .replace('_', ' ').replace('.', ' ').replace(',', ' '));
+        String f = normalize(frequency);
         if (isAsNeeded(f)) {
             return null;
         }
+        Integer hours = hoursOf(f);
+        if (hours != null) {
+            return hours * MINUTES_PER_HOUR;
+        }
+        Integer perDay = timesPerDay(f);
+        if (perDay != null) {
+            return perDay > 0 ? MINUTES_PER_DAY / perDay : null;
+        }
+        Integer named = namedHours(f.replace(" ", ""));
+        return named == null ? null : named * MINUTES_PER_HOUR;
+    }
+
+    /** The hours of a "q6h", "every 6 hours", "toutes les heures", "6h/6h" or "tous les 2 jours" frequency. */
+    private static Integer hoursOf(String f) {
         Matcher m = Q_HOURS.matcher(f);
         if (m.find()) {
             return positive(Integer.parseInt(m.group(1)));
@@ -95,45 +192,87 @@ public final class MarDoseSchedule {
         if (m.find()) {
             return positive(Integer.parseInt(m.group(1)));
         }
-        m = TIMES.matcher(f);
+        if (EVERY_HOUR.matcher(f).find()) {
+            return 1;
+        }
+        Integer slashed = slashHours(f);
+        if (slashed != null) {
+            return slashed;
+        }
+        m = EVERY_DAYS.matcher(f);
+        if (m.find()) {
+            return positive(Integer.parseInt(m.group(1)) * HOURS_PER_DAY);
+        }
+        return null;
+    }
+
+    /** "6h/6h": the same number of hours on both sides, at least one marked h, less than a day. */
+    private static Integer slashHours(String f) {
+        Matcher m = SLASH_HOURS.matcher(f);
         while (m.find()) {
-            if (PER_DAY.matcher(f).region(m.end(), f.length()).lookingAt()) {
-                int perDay = Integer.parseInt(m.group(1));
-                return perDay > 0 && 24 % perDay == 0 ? 24 / perDay : null;
+            boolean anHour = !m.group(2).isEmpty() || !m.group(4).isEmpty();
+            int hours = Integer.parseInt(m.group(1));
+            if (anHour && m.group(1).equals(m.group(3)) && hours < HOURS_PER_DAY) {
+                return positive(hours);
             }
         }
-        String compact = f.replace(" ", "");
+        return null;
+    }
+
+    /** The count of a "3 fois par jour" frequency, or {@code null}. */
+    private static Integer timesPerDay(String f) {
+        Matcher m = TIMES.matcher(f);
+        while (m.find()) {
+            if (PER_DAY.matcher(f).region(m.end(), f.length()).lookingAt()) {
+                return Integer.parseInt(m.group(1));
+            }
+        }
+        return null;
+    }
+
+    private static Integer namedHours(String compact) {
         return switch (compact) {
-            case "QD", "OD", "DAILY", "ONCEDAILY", "ONCEADAY", "QAM", "QPM", "QHS", "HS", "1XDAILY",
+            case "QD", "OD", "DAILY", "ONCEDAILY", "ONCEADAY", "QAM", "QPM", "QHS", "HS", "1XDAILY", "EVERYDAY",
                  // QA D928: the French and Spanish ways of writing "daily".
                  "TOUSLESJOURS", "CHAQUEJOUR", "QUOTIDIEN", "QUOTIDIENNE", "QUOTIDIENNEMENT",
-                 "DIARIO", "DIARIA", "CADADIA", "CADADÍA" -> 24;
-            case "BID", "BD", "TWICEDAILY", "TWICEADAY", "MATINETSOIR", "MAÑANAYNOCHE", "MANANAYNOCHE" -> 12;
-            case "TID", "TDS", "THREETIMESDAILY", "THREETIMESADAY", "MATINMIDIETSOIR",
-                 "MAÑANAMEDIODÍAYNOCHE", "MANANAMEDIODIAYNOCHE" -> 8;
+                 "DIARIO", "DIARIA", "CADADIA", "TODOSLOSDIAS" -> 24;
+            case "BID", "BD", "TWICEDAILY", "TWICEADAY", "MATINETSOIR", "MANANAYNOCHE" -> 12;
+            case "TID", "TDS", "THREETIMESDAILY", "THREETIMESADAY", "MATINMIDIETSOIR", "MANANAMEDIODIAYNOCHE" -> 8;
             case "QID", "QDS", "FOURTIMESDAILY", "FOURTIMESADAY" -> 6;
+            // QA D1237: hourly, and every other day.
+            case "QH", "HOURLY" -> 1;
+            case "EVERYOTHERDAY", "QOD", "UNJOURSURDEUX", "TOUSLESDEUXJOURS", "CADADOSDIAS", "DIASALTERNOS" -> 48;
             default -> null;
         };
     }
 
-    /** PRN, STAT and "as needed" in English, French and Spanish: never a fixed repeat. */
+    /** Upper case, accents removed, separators read as spaces, number words read as digits. */
+    private static String normalize(String frequency) {
+        String plain = Normalizer.normalize(frequency.trim(), Normalizer.Form.NFD)
+            .replaceAll("\\p{M}", "")
+            .toUpperCase(Locale.ROOT)
+            .replace('_', ' ').replace('.', ' ').replace(',', ' ');
+        return wordsAsDigits(wordsAsDigits(plain, COUNT_WORD, false), HOUR_WORD, true);
+    }
+
+    /** PRN and "as needed" in English, French and Spanish: never a fixed repeat. */
     private static boolean isAsNeeded(String upper) {
-        return upper.contains("PRN") || upper.contains("STAT") || upper.contains("AS NEEDED")
+        return upper.contains("PRN") || upper.contains("AS NEEDED")
             || upper.contains("SI BESOIN") || upper.contains("SI NECESARIO") || upper.contains("SI ES NECESARIO");
     }
 
-    private static String countWordsAsDigits(String upper) {
-        Matcher m = COUNT_WORD.matcher(upper);
+    private static String wordsAsDigits(String upper, Pattern pattern, boolean hours) {
+        Matcher m = pattern.matcher(upper);
         StringBuilder out = new StringBuilder();
         while (m.find()) {
-            String digit = digitOf(m.group(1));
+            String digit = hours ? hoursDigitOf(m.group(1)) : countDigitOf(m.group(1));
             m.appendReplacement(out, digit != null ? digit : m.group(1));
         }
         m.appendTail(out);
         return out.toString();
     }
 
-    private static String digitOf(String word) {
+    private static String countDigitOf(String word) {
         return switch (word) {
             case "UNE", "UN", "UNA", "UNO", "ONE" -> "1";
             case "DEUX", "DOS", "TWO" -> "2";
@@ -145,7 +284,28 @@ public final class MarDoseSchedule {
         };
     }
 
+    /** QA D1237: a number of hours as a word in EN, FR and ES ("ONCE" before an hour unit is Spanish eleven). */
+    private static String hoursDigitOf(String word) {
+        return switch (word) {
+            case "UNE", "UN", "UNA", "ONE" -> "1";
+            case "DEUX", "DOS", "TWO" -> "2";
+            case "TROIS", "TRES", "THREE" -> "3";
+            case "QUATRE", "CUATRO", "FOUR" -> "4";
+            case "CINQ", "CINCO", "FIVE" -> "5";
+            case "SIX", "SEIS" -> "6";
+            case "SEPT", "SIETE", "SEVEN" -> "7";
+            case "HUIT", "OCHO", "EIGHT" -> "8";
+            case "NEUF", "NUEVE", "NINE" -> "9";
+            case "DIX", "DIEZ", "TEN" -> "10";
+            case "ONZE", "ONCE", "ELEVEN" -> "11";
+            case "DOUZE", "DOCE", "TWELVE" -> "12";
+            case "VINGT-QUATRE", "VEINTICUATRO", "TWENTY-FOUR" -> "24";
+            case "QUARANTE-HUIT", "FORTY-EIGHT" -> "48";
+            default -> null;
+        };
+    }
+
     private static Integer positive(int hours) {
-        return hours > 0 && hours <= 72 ? hours : null;
+        return hours > 0 && hours <= MAX_INTERVAL_HOURS ? hours : null;
     }
 }

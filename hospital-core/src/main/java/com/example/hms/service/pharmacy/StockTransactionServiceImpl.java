@@ -294,7 +294,8 @@ public class StockTransactionServiceImpl implements StockTransactionService {
      *   <li>Every movement other than a receipt carries a reason.</li>
      *   <li>An item that is tracked in lots moves through a lot, and the lot
      *       must be that item's own.</li>
-     *   <li>Quantities are positive; an adjustment is signed but not zero.</li>
+     *   <li>Quantities are positive; an adjustment is signed but not zero, and
+     *       negative when its reason writes stock off (QA D1243).</li>
      *   <li>Nothing is received into an expired lot (D108).</li>
      * </ul>
      */
@@ -319,6 +320,11 @@ public class StockTransactionServiceImpl implements StockTransactionService {
         }
         if (dto.getReason() == null || dto.getReason().isBlank()) {
             throw new BusinessException(MessageUtil.resolve("stockTransaction.reason.required"));
+        }
+        // QA D1243: a write-off reason (damage, expiry, loss) only removes stock.
+        if (type == StockTransactionType.ADJUSTMENT && quantity.signum() > 0
+                && StockWriteOffReason.isWriteOff(dto.getReason())) {
+            throw new com.example.hms.exception.FieldBusinessException("quantity", StockWriteOffReason.MUST_REMOVE_KEY);
         }
         if (lot != null) {
             if (lot.getInventoryItem() == null || !item.getId().equals(lot.getInventoryItem().getId())) {
