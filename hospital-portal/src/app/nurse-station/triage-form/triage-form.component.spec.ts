@@ -92,6 +92,52 @@ describe('TriageFormComponent', () => {
     }
   });
 
+  // QA D1277 (D1256 class, round 27): the first press named only "Score ESI";
+  // the vital-sign rule came on the next press.
+  it('QA D1277: an empty triage names the ESI and the vital-sign rule on the first press', () => {
+    const el = fixture.nativeElement as HTMLElement;
+    document.body.appendChild(el);
+    try {
+      el.querySelector<HTMLButtonElement>('button[type="submit"]')!.click();
+      fixture.detectChanges();
+      expect(mockEncounterService.submitTriage).not.toHaveBeenCalled();
+      const said = el.querySelector('[data-testid="submit-guard-reason"]')?.textContent ?? '';
+      // The blank required ESI is named ("Champs obligatoires manquants : Score ESI")
+      // in the same sentence as the vital-sign rule.
+      expect(said).toContain('COMMON.MISSING_REQUIRED_FIELDS');
+      expect(said).toContain('TRIAGE.VITAL_REQUIRED');
+      expect(el.querySelector('#esiScore')?.getAttribute('aria-invalid')).toBe('true');
+      expect(el.querySelector('#temperature')?.getAttribute('aria-invalid')).toBe('true');
+    } finally {
+      el.remove();
+    }
+  });
+
+  // QA D1285 (round 27): "Abandonner le texte" kept the dialog open and every Escape after it was ignored.
+  it('QA D1285: discarding typed text closes the triage dialog', () => {
+    const el = fixture.nativeElement as HTMLElement;
+    document.body.appendChild(el);
+    const closed = jasmine.createSpy('dismissed');
+    component.dismissed.subscribe(closed);
+    try {
+      const complaint = el.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+        '#chiefComplaint, textarea, input[type="text"]',
+      )!;
+      complaint.focus();
+      complaint.value = 'Douleur thoracique';
+      complaint.dispatchEvent(new Event('input', { bubbles: true }));
+      component.chiefComplaint.set('Douleur thoracique');
+      fixture.detectChanges();
+      complaint.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      fixture.detectChanges();
+      expect(closed).not.toHaveBeenCalled();
+      el.querySelector<HTMLButtonElement>('[data-testid="dialog-discard"]')!.click();
+      expect(closed).toHaveBeenCalledTimes(1);
+    } finally {
+      el.remove();
+    }
+  });
+
   // QA D1077: the triage form offered and stored a fundal height for a man.
   it('D1077: offers no fundal height for a patient recorded as male, and sends none', () => {
     mockPatientService.getById.and.returnValue(

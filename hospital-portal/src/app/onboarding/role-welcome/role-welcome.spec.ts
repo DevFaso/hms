@@ -147,12 +147,26 @@ describe('RoleWelcomeComponent', () => {
       create(null);
       await fixture.whenStable();
       submit();
-      expect(fixture.componentInstance.verifyError).toBe('ONBOARDING.ERR_PHONE_REQUIRED');
+      // QA D1256 class (round 27): both gaps on the first press (it named the phone alone).
+      expect(fixture.componentInstance.verifyError).toContain('ONBOARDING.ERR_PHONE_REQUIRED');
+      expect(fixture.componentInstance.verifyError).toContain('ONBOARDING.ERR_CODE_FORMAT');
       fill('rw-phone', '70003201');
       fill('rw-phone-code', '123');
       await fixture.whenStable();
       submit();
       expect(fixture.componentInstance.verifyError).toBe('ONBOARDING.ERR_CODE_FORMAT');
+      expect(service.verifyByPhone).not.toHaveBeenCalled();
+    });
+
+    it('QA D1289: refuses a phone number the server would refuse, before any request', async () => {
+      create(null);
+      await fixture.whenStable();
+      fill('rw-phone', '70a2b');
+      fill('rw-phone-code', '482913');
+      await fixture.whenStable();
+      submit();
+      expect(fixture.componentInstance.verifyError).toBe('USERS.PHONE_INVALID');
+      expect(fixture.componentInstance.phoneInvalid).toBeTrue();
       expect(service.verifyByPhone).not.toHaveBeenCalled();
     });
 

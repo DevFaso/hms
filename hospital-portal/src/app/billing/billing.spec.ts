@@ -790,7 +790,38 @@ describe('BillingComponent', () => {
       component.adjustmentAmount.set(1000);
       component.submitAdjustment();
       expect(billingSpy.addAdjustment).not.toHaveBeenCalled();
-      expect(toastSpy.error).toHaveBeenCalledWith('BILLING.ADJUSTMENT_REASON_REQUIRED');
+    });
+
+    // QA D1278 (D1256 class, round 27): every blank field on the first press,
+    // each marked; it was one toast per press (the reason, then the amount, then the line).
+    it('QA D1278: an empty adjustment names the amount and the reason at once and marks both', () => {
+      const el = fixture.nativeElement as HTMLElement;
+      document.body.appendChild(el);
+      try {
+        component.adjustmentType.set('DISCOUNT');
+        fixture.detectChanges();
+        el.querySelector<HTMLButtonElement>('[data-testid="adjustment-submit"]')!.click();
+        fixture.detectChanges();
+        expect(billingSpy.addAdjustment).not.toHaveBeenCalled();
+        expect(el.querySelector('#adj-amount')!.getAttribute('aria-invalid')).toBe('true');
+        expect(el.querySelector('#adj-reason')!.getAttribute('aria-invalid')).toBe('true');
+        // One "required fields missing" sentence for both (no toast per field).
+        const said = el.querySelector('[data-testid="submit-guard-reason"]')!.textContent ?? '';
+        expect(said).toContain('COMMON.MISSING_REQUIRED_FIELDS');
+        expect(toastSpy.error).not.toHaveBeenCalled();
+
+        // A credit note: the line and the reason, together; the amount is optional.
+        component.adjustmentType.set('CREDIT_NOTE');
+        fixture.detectChanges();
+        el.querySelector<HTMLButtonElement>('[data-testid="adjustment-submit"]')!.click();
+        fixture.detectChanges();
+        expect(el.querySelector('#adj-line')!.getAttribute('aria-invalid')).toBe('true');
+        expect(el.querySelector('#adj-reason')!.getAttribute('aria-invalid')).toBe('true');
+        expect(el.querySelector('#adj-amount')!.getAttribute('aria-invalid')).toBeNull();
+        expect(billingSpy.addAdjustment).not.toHaveBeenCalled();
+      } finally {
+        el.remove();
+      }
     });
 
     it('a credit note names its line and may leave the amount to the server', () => {
@@ -1081,8 +1112,17 @@ describe('BillingComponent', () => {
       component.adjustmentAmount.set(null);
       component.submitAdjustment();
       expect(billingSpy.addAdjustment).not.toHaveBeenCalled();
-      expect(toastSpy.error).toHaveBeenCalledWith('BILLING.ADJUSTMENT_AMOUNT_REQUIRED');
+      // QA D1278: the blank amount is the submit guard's to name (with any other blank field).
       expect(toastSpy.error).not.toHaveBeenCalledWith('BILLING.PAYMENT_WHOLE_AMOUNT');
+    });
+
+    it('QA D1278: a typed zero amount is refused under the amount (the guard sees a value)', () => {
+      component.adjustmentType.set('DISCOUNT');
+      component.adjustmentReason.set('Geste commercial');
+      component.adjustmentAmount.set(0);
+      component.submitAdjustment();
+      expect(billingSpy.addAdjustment).not.toHaveBeenCalled();
+      expect(toastSpy.error).toHaveBeenCalledWith('BILLING.ADJUSTMENT_AMOUNT_REQUIRED');
     });
 
     it('a waiver with decimals is told about decimals', () => {
@@ -1148,7 +1188,9 @@ describe('BillingComponent', () => {
       fixture.detectChanges();
       expect(billingSpy.createInvoiceItem).not.toHaveBeenCalled();
       expect(host.querySelector('#line-price')!.getAttribute('aria-invalid')).toBe('true');
-      expect(host.textContent).toContain('BILLING.PAYMENT_AMOUNT_REQUIRED');
+      // QA D1294 (round 27): a blank unit price speaks of the price, never of a payment.
+      expect(host.textContent).toContain('BILLING.LINE_UNIT_PRICE_REQUIRED');
+      expect(host.textContent).not.toContain('BILLING.PAYMENT_AMOUNT_REQUIRED');
     });
   });
 

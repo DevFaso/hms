@@ -46,6 +46,16 @@
             }}</span>
           </div>
           <dl class="refill-card__meta">
+            <!-- QA D1276: each card names the patient (and the MRN here). -->
+            <div data-testid="refill-patient">
+              <dt>{{ 'PATIENTS.PATIENT' | translate }}</dt>
+              <dd>
+                {{ r.patientName || ('REFILLS.UNKNOWN_PATIENT' | translate) }}
+                @if (r.patientMrn) {
+                  {{ ' ' }}<span class="refill-card__mrn">({{ r.patientMrn }})</span>
+                }
+              </dd>
+            </div>
             @if (r.requestedAt) {
               <div>
                 <dt>{{ 'REFILLS.FIELD_REQUESTED_AT' | translate }}</dt>

@@ -25,6 +25,21 @@ export function cfaAmountOffenders(source, file = 'source') {
       `${at(m.index)} amount judged by hand: use cfaAmountProblem / cfaAmountMessageKey`,
     );
   }
+  // QA D1294 (round 27): every caller names the wording for an empty field,
+  // and a price never borrows the payment's ("Enter a payment amount…").
+  for (const m of source.matchAll(
+    /cfaAmountMessageKey\(([^,()]*(?:\([^()]*\))?[^,()]*)(?:,\s*([^)]*))?\)/g,
+  )) {
+    const [problem, key] = [m[1].trim(), (m[2] ?? '').trim()];
+    if (key === '') {
+      offenders.push(`${at(m.index)} cfaAmountMessageKey without the field's own wording`);
+    } else if (
+      /price/i.test(problem) &&
+      /PAYMENT_AMOUNT_REQUIRED|CFA_AMOUNT_REQUIRED_KEY/.test(key)
+    ) {
+      offenders.push(`${at(m.index)} a price refused with the payment wording`);
+    }
+  }
   return offenders;
 }
 
@@ -44,5 +59,25 @@ test('QA D1089 guard: the scan sees the shape the defect had', () => {
       .length,
     1,
   );
-  assert.deepEqual(cfaAmountOffenders('cfaAmountMessageKey(problem)'), []);
+  assert.deepEqual(cfaAmountOffenders('cfaAmountMessageKey(problem, CFA_AMOUNT_REQUIRED_KEY)'), []);
+});
+
+test('QA D1294 guard: the scan sees the blank unit price that spoke of a payment', () => {
+  // The shape round 27 found: the default (payment) wording on a line price.
+  assert.equal(
+    cfaAmountOffenders('this.translate.instant(cfaAmountMessageKey(priceProblem))').length,
+    1,
+  );
+  assert.equal(
+    cfaAmountOffenders('cfaAmountMessageKey(priceProblem, CFA_AMOUNT_REQUIRED_KEY)').length,
+    1,
+  );
+  assert.deepEqual(
+    cfaAmountOffenders("cfaAmountMessageKey(priceProblem, 'BILLING.LINE_UNIT_PRICE_REQUIRED')"),
+    [],
+  );
+  assert.deepEqual(
+    cfaAmountOffenders("cfaAmountMessageKey(amountProblem ?? 'required', CFA_AMOUNT_REQUIRED_KEY)"),
+    [],
+  );
 });

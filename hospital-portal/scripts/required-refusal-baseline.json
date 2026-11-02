@@ -81,14 +81,6 @@
       "count": 1,
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
     },
-    "src/app/billing/billing.ts::unmarked-refusal::submitAdjustment::BILLING.ADJUSTMENT_LINE_REQUIRED": {
-      "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
-    },
-    "src/app/billing/billing.ts::unmarked-refusal::submitAdjustment::BILLING.ADJUSTMENT_REASON_REQUIRED": {
-      "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
-    },
     "src/app/consultations/consultations.ts::unmarked-refusal::executeCancel::CONSULTATIONS.CANCEL_REASON_REQUIRED": {
       "count": 1,
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
@@ -149,15 +141,7 @@
       "count": 1,
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
     },
-    "src/app/encounters/eligibility-check-dialog/eligibility-check-dialog.component.ts::unmarked-refusal::run::ENCOUNTERS.ELIGIBILITY.MEMBER_ID_REQUIRED": {
-      "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
-    },
     "src/app/encounters/eligibility-check-dialog/eligibility-check-dialog.component.ts::unmarked-refusal::run::ENCOUNTERS.ELIGIBILITY.MISSING_CONTEXT": {
-      "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
-    },
-    "src/app/encounters/eligibility-check-dialog/eligibility-check-dialog.component.ts::unmarked-refusal::run::ENCOUNTERS.ELIGIBILITY.SERVICE_CODE_REQUIRED": {
       "count": 1,
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
     },
@@ -238,14 +222,6 @@
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
     },
     "src/app/micro/microbiology.ts::unmarked-refusal::submitIsolate::MICRO.ORGANISM_REQUIRED": {
-      "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
-    },
-    "src/app/micro/microbiology.ts::unmarked-refusal::submitSusc::MICRO.ANTIBIOTIC_REQUIRED": {
-      "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
-    },
-    "src/app/micro/microbiology.ts::unmarked-refusal::submitSusc::MICRO.INTERPRETATION_REQUIRED": {
       "count": 1,
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
     },

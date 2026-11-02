@@ -11,7 +11,7 @@ import {
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 import {
   AssignmentPublicService,
@@ -22,6 +22,8 @@ import { RoleLabelPipe } from '../../shared/pipes/role-label.pipe';
 
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 import { PhoneFieldDirective } from '../../shared/forms/phone-field.directive';
+import { isFacilityPhone } from '../../shared/phone-number';
+import { joinReasons } from '../../shared/required-fields';
 
 type PageState =
   'loading' | 'loaded' | 'already-verified' | 'success' | 'not-found' | 'error' | 'by-phone';
@@ -65,6 +67,7 @@ export class RoleWelcomeComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly service = inject(AssignmentPublicService);
+  private readonly translate = inject(TranslateService);
   private readonly platformId = inject(PLATFORM_ID);
   private readonly isBrowser = isPlatformBrowser(this.platformId);
 
@@ -210,19 +213,32 @@ export class RoleWelcomeComponent implements OnInit {
 
   phone = '';
   phoneCode = '';
+  /** The phone field is refused (blank, or a number the server refuses). */
+  phoneInvalid = false;
+  /** The code field is refused (not six digits, or refused by the server). */
+  codeInvalid = false;
 
   submitByPhone(): void {
     if (this.verifying) return;
     const phone = this.phone.trim();
     const code = this.phoneCode.replaceAll(/\D/g, '');
-    if (!phone) {
-      this.verifyError = 'ONBOARDING.ERR_PHONE_REQUIRED';
-      this.focusField('rw-phone');
-      return;
-    }
-    if (code.length !== 6) {
-      this.verifyError = 'ONBOARDING.ERR_CODE_FORMAT';
-      this.focusField('rw-phone-code');
+    // QA D1289 / D1256 class (round 27): a number the server refuses is refused
+    // here, and every gap is said on the first press (the phone, then the
+    // code, one per press before).
+    let phoneProblem: string | null = null;
+    if (!phone) phoneProblem = 'ONBOARDING.ERR_PHONE_REQUIRED';
+    else if (!isFacilityPhone(phone)) phoneProblem = 'USERS.PHONE_INVALID';
+    const codeProblem = code.length === 6 ? null : 'ONBOARDING.ERR_CODE_FORMAT';
+    this.phoneInvalid = phoneProblem !== null;
+    this.codeInvalid = codeProblem !== null;
+    if (phoneProblem || codeProblem) {
+      const keys = [phoneProblem, codeProblem].filter((k): k is string => k !== null);
+      // One gap: its key (the template translates it); two: both sentences.
+      this.verifyError =
+        keys.length === 1
+          ? keys[0]
+          : (joinReasons(keys.map((k) => this.translate.instant(k) as string)) ?? '');
+      this.focusField(phoneProblem ? 'rw-phone' : 'rw-phone-code');
       return;
     }
     this.verifying = true;
@@ -240,6 +256,7 @@ export class RoleWelcomeComponent implements OnInit {
         // in the reader's language; the generic key covers a silent failure.
         const serverMessage = err?.status === 400 ? err?.error?.message : null;
         this.verifyError = serverMessage || 'ONBOARDING.ERR_PHONE_CODE_INCORRECT';
+        this.codeInvalid = true;
         this.focusField('rw-phone-code');
       },
     });

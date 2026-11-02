@@ -3,7 +3,7 @@ import { AbstractControl, NG_VALIDATORS, ValidationErrors, Validator } from '@an
 import { TranslateService } from '@ngx-translate/core';
 
 import { isFacilityPhone } from '../phone-number';
-import { invalidMessageId } from './invalid-fields';
+import { focusFirstInvalid, invalidMessageId } from './invalid-fields';
 
 let nextId = 0;
 
@@ -33,6 +33,8 @@ let nextId = 0;
     { provide: NG_VALIDATORS, useExisting: forwardRef(() => PhoneFieldDirective), multi: true },
   ],
   host: {
+    // QA D1289: how a submit finds every phone field of its form (refuseInvalidPhones).
+    'data-phone-field': '',
     '(blur)': 'onBlur()',
     '(input)': 'onInput()',
   },
@@ -103,4 +105,39 @@ export class PhoneFieldDirective implements Validator, OnDestroy {
     if (described.length > 0) input.setAttribute('aria-describedby', described.join(' '));
     else input.removeAttribute('aria-describedby');
   }
+}
+
+/** The phone fields of `root` (each carries {@link PhoneFieldDirective}) holding a value the server refuses. */
+export function invalidPhoneInputs(root: ParentNode | null | undefined): HTMLInputElement[] {
+  if (!root) return [];
+  return Array.from(root.querySelectorAll<HTMLInputElement>('input[data-phone-field]')).filter(
+    (el) => !el.disabled && el.closest('[hidden]') === null && !isFacilityPhone(el.value),
+  );
+}
+
+/**
+ * QA D1289 (round 27): a submit never sends a phone number the server refuses.
+ * Registration posted "70a2b" and learned it from the server's 400: the field's
+ * own message appears only once the field is left, and the submit did not
+ * look. Every phone field of `root` holding a refused number shows its message
+ * now (the directive's own, as when it is left) and the first one takes the
+ * focus (unless `focus` is false). Returns whether any was refused. The submit guard calls it for every
+ * guarded form; a form with its own submit handler calls it there.
+ */
+export function refuseInvalidPhones(
+  root: ParentNode | null | undefined,
+  bad: readonly HTMLInputElement[] = invalidPhoneInputs(root),
+  focus = true,
+): boolean {
+  if (bad.length === 0) return false;
+  // The directive renders its message on blur, the way a reader leaving the field sees it.
+  for (const el of bad) el.dispatchEvent(new Event('blur'));
+  // A form that also refuses blank fields focuses the first of those instead.
+  if (focus) {
+    focusFirstInvalid(
+      root,
+      bad.map((el) => el.id),
+    );
+  }
+  return true;
 }

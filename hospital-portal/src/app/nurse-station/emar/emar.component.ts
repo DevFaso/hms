@@ -35,6 +35,8 @@ import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive'
 import { ReasonDialogComponent } from '../../shared/reason-dialog/reason-dialog.component';
 import { MarDoseHistoryComponent } from '../mar-dose-history/mar-dose-history.component';
 import { earlyDoseDialogKeys, earlyDoseRefusal } from '../early-dose';
+import { joinReasons } from '../../shared/required-fields';
+
 type LoadState = 'loading' | 'ready' | 'empty' | 'error';
 type ScanField = 'patient' | 'medication';
 
@@ -171,15 +173,19 @@ export class EmarComponent implements OnInit, OnDestroy {
     if (this.blockedPendingPharmacist()) {
       return this.translate.instant('EMAR.PHARMACIST_BLOCKED_TITLE');
     }
-    if (this.needsWitness() && !this.witnessUserId()) {
-      return this.translate.instant('SUBMIT_GUARD.WITNESS');
-    }
     const v = this.verification();
-    if (!v) return this.translate.instant('SUBMIT_GUARD.VERIFY_FIRST');
-    if (!v.allPassed && this.overrideReason().trim().length === 0) {
-      return this.translate.instant('SUBMIT_GUARD.OVERRIDE_REASON');
-    }
-    return null;
+    // QA D1256 class (round 27): the witness and the five-rights check (or its
+    // override reason) are said together, not one per press.
+    return joinReasons([
+      this.needsWitness() &&
+        !this.witnessUserId() &&
+        this.translate.instant('SUBMIT_GUARD.WITNESS'),
+      !v && this.translate.instant('SUBMIT_GUARD.VERIFY_FIRST'),
+      !!v &&
+        !v.allPassed &&
+        this.overrideReason().trim().length === 0 &&
+        this.translate.instant('SUBMIT_GUARD.OVERRIDE_REASON'),
+    ]);
   }
 
   @ViewChild('scannerVideo') protected scannerVideo?: ElementRef<HTMLVideoElement>;

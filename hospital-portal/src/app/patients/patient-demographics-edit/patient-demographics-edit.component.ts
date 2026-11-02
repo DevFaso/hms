@@ -20,7 +20,12 @@ import {
 import { ToastService } from '../../core/toast.service';
 import { DialogFocusDirective } from '../../shared/a11y/dialog-focus.directive';
 import { localDateString } from '../../shared/date-utils';
-import { PhoneFieldDirective } from '../../shared/forms/phone-field.directive';
+import {
+  PhoneFieldDirective,
+  invalidPhoneInputs,
+  refuseInvalidPhones,
+} from '../../shared/forms/phone-field.directive';
+import { joinReasons } from '../../shared/required-fields';
 
 /**
  * QA D926: the front desk corrects a registered patient's identity, contact
@@ -175,8 +180,17 @@ export class PatientDemographicsEditComponent implements OnInit {
       required.map((k) => DEMOGRAPHICS_FIELD_IDS[k]),
       this.translate.instant('COMMON.FIELD_REQUIRED'),
     );
-    if (missing.length > 0) {
-      this.error.set(this.translate.instant('PATIENTS.EDIT_REQUIRED_MISSING'));
+    // QA D1289 (round 27): a phone number the server refuses is refused on its
+    // field, in the same press as the missing fields.
+    const badPhones = invalidPhoneInputs(this.host.nativeElement);
+    if (missing.length > 0 || badPhones.length > 0) {
+      refuseInvalidPhones(this.host.nativeElement, badPhones, missing.length === 0);
+      this.error.set(
+        joinReasons([
+          missing.length > 0 && this.translate.instant('PATIENTS.EDIT_REQUIRED_MISSING'),
+          badPhones.length > 0 && this.translate.instant('USERS.PHONE_INVALID'),
+        ]),
+      );
       return;
     }
     const body = this.changes();

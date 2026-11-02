@@ -107,6 +107,7 @@ interface EditableItem extends OrderSetItem {
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { refusalReason } from '../../shared/refusal-reason';
+import { joinReasons } from '../../shared/required-fields';
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 
 @Component({
@@ -220,18 +221,17 @@ export class OrderSetEditComponent implements OnInit {
       .filter((i) => i !== -1);
     this.nameMissing.set(nameMissing);
     this.itemsMissingName.set(unnamed);
-    if (nameMissing) {
-      this.toast.error(this.translate.instant('ORDER_SETS.NAME_REQUIRED'));
-      return;
-    }
-    if (itemsOut.length === 0) {
-      this.toast.error(this.translate.instant('ORDER_SETS.ITEM_REQUIRED'));
-      return;
-    }
-    if (unnamed.length > 0) {
-      this.toast.error(
-        this.translate.instant('ORDER_SETS.ITEM_NAME_MISSING', { position: unnamed[0] + 1 }),
-      );
+    // QA D1256 class (round 27): every gap on the first press — the name, an
+    // empty list, each unnamed item — instead of one per press.
+    const gaps = joinReasons([
+      nameMissing && this.translate.instant('ORDER_SETS.NAME_REQUIRED'),
+      itemsOut.length === 0 && this.translate.instant('ORDER_SETS.ITEM_REQUIRED'),
+      ...unnamed.map((i) =>
+        this.translate.instant('ORDER_SETS.ITEM_NAME_MISSING', { position: i + 1 }),
+      ),
+    ]);
+    if (gaps) {
+      this.toast.error(gaps);
       return;
     }
 

@@ -1,10 +1,5 @@
 import { PersonNamePipe, personName } from '../shared/pipes/person-name.pipe';
-import {
-  exactIdentifierFirst,
-  personNameMatches,
-  phoneMatches,
-  textMatches,
-} from '../shared/person-search';
+import { exactIdentifierFirst, patientMatchesTerm } from '../shared/person-search';
 import {
   Component,
   inject,
@@ -149,14 +144,8 @@ export class PatientListComponent implements OnInit, OnDestroy {
     // format are folded, like the server's patient search.
     const term = this.searchTerm.trim();
     if (term) {
-      result = result.filter(
-        (p) =>
-          personNameMatches(p, term) ||
-          textMatches(p.email, term) ||
-          textMatches(p.mrn, term) ||
-          phoneMatches(p.phoneNumberPrimary, term) ||
-          phoneMatches(p.phoneNumberSecondary, term),
-      );
+      // QA D1274: and the birth date, in any format the desk types it.
+      result = result.filter((p) => patientMatchesTerm(p, term));
     }
     if (this.genderFilter) {
       result = result.filter((p) => (p.gender ?? '').toUpperCase() === this.genderFilter);

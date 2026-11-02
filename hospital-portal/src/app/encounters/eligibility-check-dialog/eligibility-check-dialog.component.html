@@ -49,9 +49,11 @@
         </div>
 
         <label class="elig-dialog__field">
-          <span>{{ 'ENCOUNTERS.ELIGIBILITY.MEMBER_ID' | translate }}</span>
+          <span>{{ 'ENCOUNTERS.ELIGIBILITY.MEMBER_ID' | translate }} *</span>
           <input
+            id="elig-member-id"
             type="text"
+            required
             [ngModel]="memberId()"
             (ngModelChange)="memberId.set($event)"
             name="memberId"
@@ -61,9 +63,11 @@
 
         @if (checkType() === 'PRIOR_AUTH') {
           <label class="elig-dialog__field">
-            <span>{{ 'ENCOUNTERS.ELIGIBILITY.SERVICE_CODE' | translate }}</span>
+            <span>{{ 'ENCOUNTERS.ELIGIBILITY.SERVICE_CODE' | translate }} *</span>
             <input
+              id="elig-service-code"
               type="text"
+              required
               [ngModel]="serviceCode()"
               (ngModelChange)="serviceCode.set($event)"
               name="serviceCode"
@@ -73,7 +77,14 @@
         }
 
         <div class="elig-dialog__actions">
-          <button type="button" class="btn btn--primary" (click)="run()" [disabled]="running()">
+          <button
+            type="button"
+            class="btn btn--primary"
+            appSubmitGuard
+            submitGuardRequired
+            (click)="run()"
+            [disabled]="running()"
+          >
             {{
               (running() ? 'ENCOUNTERS.ELIGIBILITY.RUNNING' : 'ENCOUNTERS.ELIGIBILITY.RUN')
                 | translate

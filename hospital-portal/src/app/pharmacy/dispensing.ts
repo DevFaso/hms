@@ -9,7 +9,7 @@ import {
   signal,
   ChangeDetectionStrategy,
 } from '@angular/core';
-import { refuseFields } from '../shared/forms/invalid-fields';
+import { focusFirstInvalid, refuseFields } from '../shared/forms/invalid-fields';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -43,6 +43,8 @@ import { DialogFocusDirective } from '../shared/a11y/dialog-focus.directive';
 import { earlierLotWithStock, fefoAllocation, FefoPart, fefoFirstLot } from './fefo-lots';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { joinReasons } from '../shared/required-fields';
+
 /** The viewer's local calendar date as YYYY-MM-DD (not the UTC one). */
 function localIsoDate(d: Date): string {
   const mm = String(d.getMonth() + 1).padStart(2, '0');
@@ -906,19 +908,14 @@ export class DispensingComponent implements OnInit, OnDestroy {
    * are never silently disabled.
    */
   dispenseBlockReason(ready: boolean): string | null {
-    if (!(Number(this.form.quantityDispensed) > 0)) {
-      return this.translate.instant('SUBMIT_GUARD.QUANTITY');
-    }
-    if (!this.form.unit?.trim()) {
-      return this.translate.instant('SUBMIT_GUARD.UNIT');
-    }
-    if (!this.verifyAttested()) {
-      return this.translate.instant('SUBMIT_GUARD.ATTESTATION');
-    }
-    if (ready && this.fefoSplit().length > 1) {
-      return this.translate.instant('SUBMIT_GUARD.READY_SPLIT');
-    }
-    return null;
+    // QA D1256 class (round 27): every gap on the first press (quantity, unit,
+    // attestation, a split fill), not one per press.
+    return joinReasons([
+      !(Number(this.form.quantityDispensed) > 0) && this.translate.instant('SUBMIT_GUARD.QUANTITY'),
+      !this.form.unit?.trim() && this.translate.instant('SUBMIT_GUARD.UNIT'),
+      !this.verifyAttested() && this.translate.instant('SUBMIT_GUARD.ATTESTATION'),
+      ready && this.fefoSplit().length > 1 && this.translate.instant('SUBMIT_GUARD.READY_SPLIT'),
+    ]);
   }
 
   private openForm(rx: WorkQueuePrescription): void {
@@ -1195,17 +1192,22 @@ export class DispensingComponent implements OnInit, OnDestroy {
       this.cancelNeedsWitness() && !this.cancelWitnessId ? 'cancelWitness' : null,
     ].filter((f): f is string => f !== null);
     if (missing.length > 0) {
-      const key =
-        missing[0] === 'dispenseCancelReason'
-          ? 'PHARMACY.CANCEL_REASON_REQUIRED'
-          : 'PHARMACY.WITNESS_REQUIRED';
-      refuseFields(
-        this.host.nativeElement,
-        missing,
-        ['dispenseCancelReason', 'cancelWitness'],
-        this.translate.instant(key),
-      );
-      this.toast.error(this.translate.instant(key));
+      // QA D1256 class (round 27): each blank field under its own message, and
+      // both in the toast; it named only the first.
+      const keys: Record<string, string> = {
+        dispenseCancelReason: 'PHARMACY.CANCEL_REASON_REQUIRED',
+        cancelWitness: 'PHARMACY.WITNESS_REQUIRED',
+      };
+      for (const id of Object.keys(keys)) {
+        refuseFields(
+          this.host.nativeElement,
+          missing.filter((f) => f === id),
+          [id],
+          this.translate.instant(keys[id]),
+        );
+      }
+      focusFirstInvalid(this.host.nativeElement, missing);
+      this.toast.error(joinReasons(missing.map((f) => this.translate.instant(keys[f]))) ?? '');
       return;
     }
     this.sendCancel(id, reason, this.cancelNeedsWitness() ? this.cancelWitnessId : undefined);

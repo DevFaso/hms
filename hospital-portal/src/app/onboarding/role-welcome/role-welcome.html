@@ -79,7 +79,7 @@
             name="phone"
             autocomplete="tel"
             [(ngModel)]="phone"
-            [attr.aria-invalid]="verifyError === 'ONBOARDING.ERR_PHONE_REQUIRED' ? 'true' : null"
+            [attr.aria-invalid]="phoneInvalid ? 'true' : null"
             [attr.aria-describedby]="verifyError ? 'rw-phone-error' : null"
           />
         </div>
@@ -96,9 +96,7 @@
             autocomplete="one-time-code"
             maxlength="6"
             [(ngModel)]="phoneCode"
-            [attr.aria-invalid]="
-              verifyError && verifyError !== 'ONBOARDING.ERR_PHONE_REQUIRED' ? 'true' : null
-            "
+            [attr.aria-invalid]="codeInvalid ? 'true' : null"
             [attr.aria-describedby]="verifyError ? 'rw-phone-error' : null"
           />
         </div>

@@ -676,7 +676,7 @@
               </ul>
             }
             @if (canAdjustInvoice(inv)) {
-              <div class="adjustment-form">
+              <div class="adjustment-form" data-submit-scope>
                 <div class="field">
                   <label for="adj-type">{{ 'BILLING.ADJUSTMENT_TYPE' | translate }}</label>
                   <select
@@ -717,6 +717,7 @@
                     type="number"
                     min="1"
                     step="1"
+                    [required]="adjustmentType() !== 'CREDIT_NOTE'"
                     [ngModel]="adjustmentAmount()"
                     (ngModelChange)="adjustmentAmount.set($event)"
                   />
@@ -740,6 +741,8 @@
                   class="btn-secondary"
                   data-testid="adjustment-submit"
                   [disabled]="adjustmentSaving()"
+                  appSubmitGuard
+                  submitGuardRequired
                   (click)="submitAdjustment()"
                 >
                   {{ 'BILLING.ADJUSTMENT_SUBMIT' | translate }}

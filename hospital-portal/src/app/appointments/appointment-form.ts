@@ -1,4 +1,5 @@
 import { refuseFields } from '../shared/forms/invalid-fields';
+import { hasValue, missingRequiredMessage } from '../shared/required-fields';
 import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
 import {
   Component,
@@ -40,9 +41,6 @@ interface DeptOption {
   id: string;
   name: string;
 }
-
-/** QA D1072: the fields the booking form may refuse, in reading order. */
-const APPOINTMENT_FORM_REQUIRED_IDS = ['date', 'start', 'apptPatientSearch', 'apptStaffSearch'];
 
 @Component({
   selector: 'app-appointment-form',
@@ -471,30 +469,24 @@ export class AppointmentFormComponent implements OnInit {
 
   // ── Submit ───────────────────────────────────────────────
   submit(): void {
-    // QA D1072: every missing field is marked and the first one focused, with
-    // the toast naming the first gap as before.
-    const missing = [
-      !this.form.appointmentDate ? 'date' : null,
-      !this.form.startTime ? 'start' : null,
-      !this.form.patientId ? 'apptPatientSearch' : null,
-      !this.form.staffId ? 'apptStaffSearch' : null,
-    ].filter((id): id is string => id !== null);
+    // QA D1072: every missing field is marked and the first one focused.
+    // QA D1256 class (round 27): the toast names every gap at once; it named
+    // only the first (date, then patient, then clinician, one per press).
+    const required = [
+      { id: 'date', labelKey: 'APPOINTMENTS.APPOINTMENT_DATE', value: this.form.appointmentDate },
+      { id: 'start', labelKey: 'APPOINTMENTS.START_TIME', value: this.form.startTime },
+      { id: 'apptPatientSearch', labelKey: 'PATIENTS.PATIENT', value: this.form.patientId },
+      { id: 'apptStaffSearch', labelKey: 'APPOINTMENTS.DOCTOR_STAFF', value: this.form.staffId },
+    ];
     refuseFields(
       this.host.nativeElement,
-      missing,
-      APPOINTMENT_FORM_REQUIRED_IDS,
+      required.filter((f) => !hasValue(f.value)).map((f) => f.id),
+      required.map((f) => f.id),
       this.translate.instant('COMMON.FIELD_REQUIRED'),
     );
-    if (!this.form.appointmentDate || !this.form.startTime) {
-      this.toast.error(this.translate.instant('APPOINTMENTS.TOAST.DATE_TIME_REQUIRED'));
-      return;
-    }
-    if (!this.form.patientId) {
-      this.toast.error(this.translate.instant('APPOINTMENTS.TOAST.PATIENT_REQUIRED'));
-      return;
-    }
-    if (!this.form.staffId) {
-      this.toast.error(this.translate.instant('APPOINTMENTS.TOAST.STAFF_REQUIRED'));
+    const missing = missingRequiredMessage(this.translate, required);
+    if (missing) {
+      this.toast.error(missing);
       return;
     }
 

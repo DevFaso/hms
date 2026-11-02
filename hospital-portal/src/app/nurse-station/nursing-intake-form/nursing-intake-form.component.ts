@@ -25,6 +25,7 @@ import {
 import { ToastService } from '../../core/toast.service';
 import { canonicalRoute } from '../../shared/pipes/medication-route.pipe';
 import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
+import { escapeDiscardConfirmed } from '../../shared/a11y/escape-keeps-typed-text';
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 import { PatientAllergy, PatientService } from '../../services/patient.service';
 import { PrescriptionResponse, PrescriptionService } from '../../services/prescription.service';
@@ -108,7 +109,8 @@ export class NursingIntakeFormComponent {
 
   /** Review of #971: Escape closes the intake only while nothing has been typed. */
   onEscape(): void {
-    if (!this.hasEntries()) this.dismissed.emit();
+    // QA D1285: "Abandonner le texte" sends the Escape on; it closes, whatever was entered.
+    if (escapeDiscardConfirmed() || !this.hasEntries()) this.dismissed.emit();
   }
 
   hasEntries(): boolean {

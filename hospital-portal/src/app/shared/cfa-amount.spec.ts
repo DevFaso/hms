@@ -1,4 +1,4 @@
-import { cfaAmountMessageKey, cfaAmountProblem } from './cfa-amount';
+import { CFA_AMOUNT_REQUIRED_KEY, cfaAmountMessageKey, cfaAmountProblem } from './cfa-amount';
 
 describe('cfaAmountProblem (QA D1089)', () => {
   it('asks for an amount when the field is empty, zero or negative', () => {
@@ -13,8 +13,16 @@ describe('cfaAmountProblem (QA D1089)', () => {
   });
 
   it('maps each problem to its own message', () => {
-    expect(cfaAmountMessageKey('required')).toBe('BILLING.PAYMENT_AMOUNT_REQUIRED');
-    expect(cfaAmountMessageKey('whole')).toBe('BILLING.PAYMENT_WHOLE_AMOUNT');
+    // QA D1294: no default wording any more; a payment screen names the payment key.
+    expect(cfaAmountMessageKey('required', CFA_AMOUNT_REQUIRED_KEY)).toBe(
+      'BILLING.PAYMENT_AMOUNT_REQUIRED',
+    );
+    expect(cfaAmountMessageKey('whole', CFA_AMOUNT_REQUIRED_KEY)).toBe(
+      'BILLING.PAYMENT_WHOLE_AMOUNT',
+    );
+    expect(cfaAmountMessageKey('required', 'BILLING.LINE_UNIT_PRICE_REQUIRED')).toBe(
+      'BILLING.LINE_UNIT_PRICE_REQUIRED',
+    );
     expect(cfaAmountMessageKey('required', 'PHARMACY.CHECKOUT_INVALID_AMOUNT')).toBe(
       'PHARMACY.CHECKOUT_INVALID_AMOUNT',
     );

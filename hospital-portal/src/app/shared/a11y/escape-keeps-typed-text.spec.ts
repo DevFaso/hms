@@ -5,6 +5,7 @@ import { TranslateModule } from '@ngx-translate/core';
 import { DialogA11yDirective } from './dialog-a11y.directive';
 import { DialogFocusDirective } from './dialog-focus.directive';
 import { ModalDialogDirective } from './modal-dialog.directive';
+import { escapeDiscardConfirmed } from './escape-keeps-typed-text';
 
 /**
  * QA D1131 / D1144 / D1190 / D1195 / D1208 (NOT_FIXED rounds 19–22): Escape
@@ -194,5 +195,54 @@ describe('Escape keeps typed text (every dialog directive)', () => {
     escape(q('#a11y-reason'));
     expect(host.a11y()).toBeTrue();
     expect(q('#a11y [data-testid="dialog-discard-ask"]')).not.toBeNull();
+  });
+});
+
+@Component({
+  standalone: true,
+  imports: [ModalDialogDirective],
+  template: `
+    @if (open()) {
+      <div appModalDialog aria-label="Triage" (escaped)="onEscape()">
+        <input id="vetoed" type="text" />
+      </div>
+    }
+  `,
+})
+class VetoHostComponent {
+  readonly open = signal(true);
+  /** The triage shape: Escape closes only while nothing is entered, or once the reader said Discard. */
+  entered = false;
+  onEscape(): void {
+    if (escapeDiscardConfirmed() || !this.entered) this.open.set(false);
+  }
+}
+
+describe('escapeDiscardConfirmed (QA D1285)', () => {
+  it('is true for the Escape "Discard" sends on, and only for it', () => {
+    TestBed.configureTestingModule({ imports: [VetoHostComponent, TranslateModule.forRoot()] });
+    const fixture = TestBed.createComponent(VetoHostComponent);
+    const el = fixture.nativeElement as HTMLElement;
+    document.body.appendChild(el);
+    try {
+      fixture.detectChanges();
+      const field = el.querySelector<HTMLInputElement>('#vetoed')!;
+      field.focus();
+      field.value = 'Douleur';
+      field.dispatchEvent(new Event('input', { bubbles: true }));
+      fixture.componentInstance.entered = true;
+      field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      fixture.detectChanges();
+      expect(fixture.componentInstance.open()).toBeTrue();
+      expect(escapeDiscardConfirmed()).toBeFalse();
+      el.querySelector<HTMLButtonElement>('[data-testid="dialog-discard"]')!.click();
+      fixture.detectChanges();
+      expect(fixture.componentInstance.open())
+        .withContext('Discard closes the vetoing dialog')
+        .toBeFalse();
+      expect(escapeDiscardConfirmed()).withContext('the flag does not outlive the key').toBeFalse();
+    } finally {
+      el.remove();
+    }
   });
 });
