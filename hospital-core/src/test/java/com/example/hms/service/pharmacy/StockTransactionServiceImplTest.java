@@ -487,6 +487,40 @@ class StockTransactionServiceImplTest {
             verify(inventoryItemRepository, never()).incrementOnHand(any(), any(), any());
         }
 
+        /** QA D1243 replay (j1.js): "Détérioration" with +2 added two units; a write-off only removes. */
+        @org.junit.jupiter.params.ParameterizedTest(name = "{0}")
+        @org.junit.jupiter.params.provider.ValueSource(strings = {
+            "DAMAGE: Flacon cassé", "EXPIRY_WRITE_OFF: lot périmé", "DAMAGED", "Détérioration", "perte"})
+        @DisplayName("D1243: a positive adjustment with a write-off reason is refused on the quantity, nothing moves")
+        void aPositiveWriteOffIsRefused(String reason) {
+            StockTransactionRequestDTO dto = buildRequest(StockTransactionType.ADJUSTMENT, new BigDecimal("2"));
+            dto.setReason(reason);
+            org.mockito.Mockito.lenient().when(inventoryItemRepository.findById(inventoryItemId))
+                    .thenReturn(Optional.of(inventoryItem));
+            org.mockito.Mockito.lenient().when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+            org.mockito.Mockito.lenient().when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            org.mockito.Mockito.lenient().when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            org.mockito.Mockito.lenient().when(roleValidator.getCurrentUserId()).thenReturn(userId);
+
+            assertThatThrownBy(() -> service.recordTransaction(dto))
+                    .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                    .hasFieldOrPropertyWithValue("field", "quantity")
+                    .hasFieldOrPropertyWithValue("messageKey", StockWriteOffReason.MUST_REMOVE_KEY);
+            assertThat(inventoryItem.getQuantityOnHand()).isEqualByComparingTo(new BigDecimal("100.00"));
+            verify(inventoryItemRepository, never()).incrementOnHand(any(), any(), any());
+            verify(stockTransactionRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("D1243: the same write-off as a removal goes through, and a count variance may still add")
+        void aNegativeWriteOffAndAPositiveCountVarianceGoThrough() {
+            StockTransactionRequestDTO writeOff = buildRequest(StockTransactionType.ADJUSTMENT, new BigDecimal("-2.00"));
+            writeOff.setReason("DAMAGE: Flacon cassé");
+            stubCommonMocks(writeOff, true);
+            service.recordTransaction(writeOff);
+            assertThat(inventoryItem.getQuantityOnHand()).isEqualByComparingTo(new BigDecimal("98.00"));
+        }
+
         @Test
         @DisplayName("subtracts negative adjustment from item and lot")
         void negativeAdjustment() {
