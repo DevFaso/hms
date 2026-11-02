@@ -84,7 +84,7 @@
               <span class="lifecycle-label">{{
                 'TENANT_LIFECYCLE.FIELD.PURGE_AT' | translate
               }}</span>
-              <span>{{ lc.purgeScheduledFor | serverTime | date: 'medium' }}</span>
+              {{ ' ' }}<span>{{ lc.purgeScheduledFor | serverTime | date: 'medium' }}</span>
             </div>
           }
           @if (lc.purgeReason) {
