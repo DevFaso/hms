@@ -46,6 +46,8 @@ type WaitlistStatus = 'ALL' | 'WAITING' | 'OFFERED' | 'CLOSED';
 
 /** Every field the add form may refuse, so a corrected one loses its mark. */
 const WAITLIST_FIELDS = ['wl-patient', 'wl-dept', 'wl-to'];
+/** QA D1306 (round 28): the offer dialog's slot list, refused when no slot is picked. */
+const OFFER_SLOT_IDS = ['waitlist-offer-slots'];
 
 @Component({
   selector: 'app-waitlist-panel',
@@ -361,9 +363,15 @@ export class WaitlistPanelComponent implements OnInit {
     const entry = this.offerEntry();
     const slotId = this.selectedSlotId();
     if (!entry || !slotId || this.offering()) {
-      if (!slotId) this.toast.error(this.translate.instant('RECEPTION.SELECT_SLOT_FIRST'));
+      if (!slotId) {
+        // QA D1306 (round 28): the slot list is marked, not only a toast.
+        const message = this.translate.instant('RECEPTION.SELECT_SLOT_FIRST');
+        refuseFields(this.host.nativeElement, OFFER_SLOT_IDS, OFFER_SLOT_IDS, message);
+        this.toast.error(message);
+      }
       return;
     }
+    refuseFields(this.host.nativeElement, [], OFFER_SLOT_IDS, '');
     this.offering.set(true);
     this.receptionService.offerWaitlistSlot(entry.id, slotId, this.offerHours() || 48).subscribe({
       next: () => {

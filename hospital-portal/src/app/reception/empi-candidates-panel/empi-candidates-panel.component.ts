@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  ElementRef,
   EventEmitter,
   Output,
   computed,
@@ -17,6 +18,7 @@ import { EmpiCandidateMatch, EmpiCandidateQuery, EmpiService } from '../../servi
 import { ToastService } from '../../core/toast.service';
 import { RoleContextService } from '../../core/role-context.service';
 import { MeasurePipe } from '../../shared/pipes/measure.pipe';
+import { refuseFields } from '../../shared/forms/invalid-fields';
 import { refusalReason } from '../../shared/refusal-reason';
 
 interface CandidateFormState {
@@ -51,6 +53,9 @@ const SEX_OPTIONS: string[] = ['F', 'M', 'X'];
  * up to the parent component; the {@code (newPatient)} output
  * signals the parent to start a fresh-create flow.
  */
+/** The search fields, one of which is needed (QA D1306). */
+const EMPI_FIELD_IDS = ['empi-first', 'empi-last', 'empi-dob', 'empi-sex', 'empi-national-id'];
+
 @Component({
   selector: 'app-empi-candidates-panel',
   standalone: true,
@@ -401,6 +406,7 @@ export class EmpiCandidatesPanelComponent {
   private readonly empi = inject(EmpiService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly router = inject(Router);
   private readonly roleContext = inject(RoleContextService);
 
@@ -414,9 +420,13 @@ export class EmpiCandidatesPanelComponent {
     event.preventDefault();
     const query = this.toQuery();
     if (!hasAnyField(query)) {
-      this.toast.error(this.translate.instant('EMPI.VALIDATION.AT_LEAST_ONE_FIELD'));
+      // QA D1306 (round 28): one of the fields is needed, so all are marked.
+      const message = this.translate.instant('EMPI.VALIDATION.AT_LEAST_ONE_FIELD');
+      refuseFields(this.host.nativeElement, EMPI_FIELD_IDS, EMPI_FIELD_IDS, message);
+      this.toast.error(message);
       return;
     }
+    refuseFields(this.host.nativeElement, [], EMPI_FIELD_IDS, '');
     this.searching.set(true);
     this.error.set(false);
     this.disabled.set(false);

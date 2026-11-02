@@ -35,11 +35,10 @@ import { AuthService } from '../auth/auth.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { PrintLabelService } from '../services/print-label.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
-import { currentLocale } from '../shared/i18n/app-locale';
+import { encounterOptionLabel } from '../shared/encounter-option-label';
 import { shortOrderCode } from '../shared/lab/order-code';
 import { actionRoles } from '../core/action-permissions';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
-import { serverInstant } from '../shared/date-utils';
 import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
 import { ActivatedRoute } from '@angular/router';
 
@@ -439,12 +438,12 @@ export class LabComponent implements OnInit {
     });
   }
 
-  /** QA D177: the date and department of an encounter, for the picker (the type is a pipe). */
+  /**
+   * QA D177: the date and department of an encounter, for the picker (the
+   * type is a pipe). QA D1309: and its time, so same-day visits differ.
+   */
   encounterLabel(e: EncounterResponse): string {
-    const date = e.encounterDate
-      ? serverInstant(e.encounterDate).toLocaleDateString(currentLocale())
-      : '';
-    return [date, e.departmentName].filter((part) => !!part).join(' · ');
+    return encounterOptionLabel(e);
   }
 
   onHospitalChange(hospitalId: string): void {

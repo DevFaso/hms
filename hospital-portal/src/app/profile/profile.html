@@ -686,11 +686,12 @@
                 >
                   <p>{{ 'PROFILE.MFA_REPLACE_INTRO' | translate }}</p>
                   <form (ngSubmit)="submitMfaStepUp()" class="mfa-verify-form">
-                    <label class="sr-only" for="mfaStepUpCode">{{
-                      'PROFILE.MFA_STEPUP_LABEL' | translate
-                    }}</label>
+                    <label for="mfaStepUpCode"
+                      >{{ 'PROFILE.MFA_STEPUP_LABEL' | translate }} *</label
+                    >
                     <input
                       id="mfaStepUpCode"
+                      required
                       type="text"
                       [(ngModel)]="mfaStepUpCode"
                       name="mfaStepUpCode"
@@ -743,9 +744,13 @@
                   tabindex="-1"
                   appFocusOnRender
                 >
-                  <p>{{ 'PROFILE.MFA_ENTER_CODE' | translate }}</p>
+                  <p>
+                    <label for="mfaTotpCode">{{ 'PROFILE.MFA_ENTER_CODE' | translate }} *</label>
+                  </p>
                   <form (ngSubmit)="verifyMfaCode()" class="mfa-verify-form">
                     <input
+                      id="mfaTotpCode"
+                      required
                       type="text"
                       [(ngModel)]="mfaTotpCode"
                       name="mfaTotpCode"
@@ -886,13 +891,17 @@
                     </select>
                   </div>
                   <div class="form-row">
-                    <label class="form-label" for="recovery-value">{{
-                      (newRecoveryType() === 'EMAIL'
-                        ? 'PROFILE.EMAIL_ADDRESS'
-                        : 'PROFILE.PHONE_NUMBER'
-                      ) | translate
-                    }}</label>
+                    <label class="form-label" for="recovery-value"
+                      >{{
+                        (newRecoveryType() === 'EMAIL'
+                          ? 'PROFILE.EMAIL_ADDRESS'
+                          : 'PROFILE.PHONE_NUMBER'
+                        ) | translate
+                      }}
+                      *</label
+                    >
                     <input
+                      required
                       id="recovery-value"
                       class="form-control"
                       [type]="newRecoveryType() === 'EMAIL' ? 'email' : 'tel'"

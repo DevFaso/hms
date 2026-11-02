@@ -5,6 +5,7 @@ import {
   EventEmitter,
   Input,
   computed,
+  ElementRef,
   inject,
   signal,
   ChangeDetectionStrategy,
@@ -26,6 +27,10 @@ import { DESK_PAYMENT_METHODS, deskMethodNeedsReference } from '../desk-payment-
 
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 import { joinReasons } from '../../shared/required-fields';
+import { refuseFields } from '../../shared/forms/invalid-fields';
+
+/** The identity tick, refused when not ticked (QA D1306). */
+const IDENTITY_IDS = ['checkinIdentityConfirmed'];
 
 @Component({
   selector: 'app-checkin-dialog',
@@ -44,6 +49,7 @@ export class CheckinDialogComponent {
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
   private readonly billing = inject(BillingService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   /* ── Form fields ────────────────────────── */
   chiefComplaint = signal('');
@@ -98,9 +104,13 @@ export class CheckinDialogComponent {
     }
 
     if (!this.identityConfirmed()) {
-      this.toast.error(this.translate.instant('RECEPTION.CONFIRM_IDENTITY_FIRST'));
+      // QA D1306 (round 28): the identity tick is marked, not only a toast.
+      const message = this.translate.instant('RECEPTION.CONFIRM_IDENTITY_FIRST');
+      refuseFields(this.host.nativeElement, IDENTITY_IDS, IDENTITY_IDS, message);
+      this.toast.error(message);
       return;
     }
+    refuseFields(this.host.nativeElement, [], IDENTITY_IDS, '');
 
     this.saving.set(true);
 

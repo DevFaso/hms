@@ -1,5 +1,5 @@
 import { refusalReason } from '../shared/refusal-reason';
-import { refuseFields } from '../shared/forms/invalid-fields';
+import { blankFields, refuseFields } from '../shared/forms/invalid-fields';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import {
   Component,
@@ -68,6 +68,40 @@ const LEGACY_REASON_CODES: Readonly<Record<string, string>> = {
   DAMAGED: 'DAMAGE',
   EXPIRED: 'EXPIRY_WRITE_OFF',
   EXPIRY: 'EXPIRY_WRITE_OFF',
+};
+
+/** Every field the movement form may refuse (QA D1306). */
+const TX_FIELD_IDS = [
+  'txType',
+  'txItem',
+  'txQty',
+  'txWitness',
+  'txLot',
+  'trFefo',
+  'trDest',
+  'rxLot',
+  'rxExpiry',
+  'adjReason',
+  'adjNotes',
+  'retDispense',
+  'retRef',
+];
+
+/** The field each type-specific refusal of {@link validateTyped} is about (QA D1306). */
+const TYPED_REFUSAL_FIELD: Readonly<Record<string, string>> = {
+  'PHARMACY.ADJUSTMENT_REASON_REQUIRED': 'adjReason',
+  'PHARMACY.ADJUSTMENT_NOTES_REQUIRED': 'adjNotes',
+  [WRITE_OFF_KEY]: 'txQty',
+  'PHARMACY.TRANSFER_DESTINATION_REQUIRED': 'trDest',
+  'PHARMACY.FEFO_REASON_REQUIRED': 'trFefo',
+  'PHARMACY.RETURN_DISPENSE_REQUIRED': 'retDispense',
+  'PHARMACY.RETURN_REFERENCE_REQUIRED': 'retRef',
+  'PHARMACY.RETURN_EXCEEDS_DISPENSE': 'txQty',
+  'PHARMACY.RECEIPT_LOT_REQUIRED': 'rxLot',
+  'PHARMACY.RECEIPT_EXPIRY_REQUIRED': 'rxExpiry',
+  'PHARMACY.RECEIPT_LOT_EXPIRED': 'rxExpiry',
+  'PHARMACY.LOT_REQUIRED_FOR_MOVEMENT': 'txLot',
+  'PHARMACY.WITNESS_REQUIRED': 'txWitness',
 };
 
 @Component({
@@ -390,18 +424,26 @@ export class StockAdjustmentComponent implements OnInit {
    * sending to the backend.
    */
   submitForm(): void {
-    if (!this.form.inventoryItemId || !this.txType()) {
-      this.toast.error(this.translate.instant('PHARMACY.TX_REQUIRED_FIELDS'));
+    // QA D1306 (round 28): every refusal marks its field, not only a toast.
+    const root = this.host.nativeElement;
+    const blank = blankFields({ txType: this.txType(), txItem: this.form.inventoryItemId }, [
+      'txType',
+      'txItem',
+    ]);
+    if (blank.length > 0) {
+      const message = this.translate.instant('PHARMACY.TX_REQUIRED_FIELDS');
+      refuseFields(root, blank, TX_FIELD_IDS, message);
+      this.toast.error(message);
       return;
     }
     if (!this.quantityValid()) {
-      this.toast.error(
-        this.translate.instant(
-          this.isAdjustment()
-            ? 'PHARMACY.ADJUSTMENT_QUANTITY_NONZERO'
-            : 'PHARMACY.TX_QUANTITY_POSITIVE',
-        ),
+      const message = this.translate.instant(
+        this.isAdjustment()
+          ? 'PHARMACY.ADJUSTMENT_QUANTITY_NONZERO'
+          : 'PHARMACY.TX_QUANTITY_POSITIVE',
       );
+      refuseFields(root, ['txQty'], TX_FIELD_IDS, message);
+      this.toast.error(message);
       return;
     }
 
@@ -409,13 +451,14 @@ export class StockAdjustmentComponent implements OnInit {
     if (validationErrorKey) {
       const message = this.translate.instant(validationErrorKey);
       // QA D1243: the write-off refusal is on the quantity, as the server's
-      // `stockTransaction.writeOff.mustRemove` is on `quantity`.
-      if (validationErrorKey === WRITE_OFF_KEY) {
-        refuseFields(this.host.nativeElement, ['txQty'], ['txQty'], message);
-      }
+      // `stockTransaction.writeOff.mustRemove` is on `quantity`. Each typed
+      // refusal marks the field it is about.
+      const fieldId = TYPED_REFUSAL_FIELD[validationErrorKey];
+      refuseFields(root, fieldId ? [fieldId] : [], TX_FIELD_IDS, message);
       this.toast.error(message);
       return;
     }
+    refuseFields(root, [], TX_FIELD_IDS, '');
 
     this.applyTypedFieldsToForm();
 

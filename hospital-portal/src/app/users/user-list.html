@@ -327,10 +327,14 @@
                   name="firstName"
                   required
                   [class.input-error]="fieldErrors()['firstName']"
+                  [attr.aria-invalid]="fieldErrors()['firstName'] ? true : null"
+                  [attr.aria-describedby]="fieldErrors()['firstName'] ? 'firstName-error' : null"
                   (ngModelChange)="clearFieldError('firstName')"
                 />
                 @if (fieldErrors()['firstName']) {
-                  <span class="field-error-msg">{{ fieldErrors()['firstName'] }}</span>
+                  <span id="firstName-error" class="field-error-msg" role="alert">{{
+                    fieldErrors()['firstName']
+                  }}</span>
                 }
               </div>
               <div class="field">
@@ -342,10 +346,14 @@
                   name="lastName"
                   required
                   [class.input-error]="fieldErrors()['lastName']"
+                  [attr.aria-invalid]="fieldErrors()['lastName'] ? true : null"
+                  [attr.aria-describedby]="fieldErrors()['lastName'] ? 'lastName-error' : null"
                   (ngModelChange)="clearFieldError('lastName')"
                 />
                 @if (fieldErrors()['lastName']) {
-                  <span class="field-error-msg">{{ fieldErrors()['lastName'] }}</span>
+                  <span id="lastName-error" class="field-error-msg" role="alert">{{
+                    fieldErrors()['lastName']
+                  }}</span>
                 }
               </div>
             </div>
@@ -363,10 +371,14 @@
                     name="username"
                     required
                     [class.input-error]="fieldErrors()['username']"
+                    [attr.aria-invalid]="fieldErrors()['username'] ? true : null"
+                    [attr.aria-describedby]="fieldErrors()['username'] ? 'username-error' : null"
                     (ngModelChange)="clearFieldError('username')"
                   />
                   @if (fieldErrors()['username']) {
-                    <span class="field-error-msg">{{ fieldErrors()['username'] }}</span>
+                    <span id="username-error" class="field-error-msg" role="alert">{{
+                      fieldErrors()['username']
+                    }}</span>
                   }
                 </div>
               }
@@ -381,10 +393,14 @@
                   name="email"
                   [required]="emailRequired"
                   [class.input-error]="fieldErrors()['email']"
+                  [attr.aria-invalid]="fieldErrors()['email'] ? true : null"
+                  [attr.aria-describedby]="fieldErrors()['email'] ? 'email-error' : null"
                   (ngModelChange)="clearFieldError('email')"
                 />
                 @if (fieldErrors()['email']) {
-                  <span class="field-error-msg">{{ fieldErrors()['email'] }}</span>
+                  <span id="email-error" class="field-error-msg" role="alert">{{
+                    fieldErrors()['email']
+                  }}</span>
                 }
                 @if (!emailRequired) {
                   <span class="hint-text">{{
@@ -406,10 +422,14 @@
                     name="password"
                     autocomplete="new-password"
                     [class.input-error]="fieldErrors()['password']"
+                    [attr.aria-invalid]="fieldErrors()['password'] ? true : null"
+                    [attr.aria-describedby]="fieldErrors()['password'] ? 'password-error' : null"
                     (ngModelChange)="clearFieldError('password')"
                   />
                   @if (fieldErrors()['password']) {
-                    <span class="field-error-msg">{{ fieldErrors()['password'] }}</span>
+                    <span id="password-error" class="field-error-msg" role="alert">{{
+                      fieldErrors()['password']
+                    }}</span>
                   }
                 </div>
               }
@@ -423,10 +443,16 @@
                   required
                   placeholder="70 20 20 20"
                   [class.input-error]="fieldErrors()['phoneNumber']"
+                  [attr.aria-invalid]="fieldErrors()['phoneNumber'] ? true : null"
+                  [attr.aria-describedby]="
+                    fieldErrors()['phoneNumber'] ? 'phoneNumber-error' : null
+                  "
                   (ngModelChange)="clearFieldError('phoneNumber')"
                 />
                 @if (fieldErrors()['phoneNumber']) {
-                  <span class="field-error-msg">{{ fieldErrors()['phoneNumber'] }}</span>
+                  <span id="phoneNumber-error" class="field-error-msg" role="alert">{{
+                    fieldErrors()['phoneNumber']
+                  }}</span>
                 }
                 <span class="hint-text">{{ 'USERS.PHONE_HINT' | translate }}</span>
               </div>
@@ -444,7 +470,7 @@
                 <span class="hint-text">{{ 'USERS.ROLES_EDIT_HINT' | translate }}</span>
               </div>
             } @else {
-              <fieldset class="field">
+              <fieldset id="user-roles" class="field" tabindex="-1">
                 <legend>{{ 'USERS.ROLES' | translate }} *</legend>
                 <div class="role-checkbox-group">
                   @for (role of grantableRoles(); track role.id) {

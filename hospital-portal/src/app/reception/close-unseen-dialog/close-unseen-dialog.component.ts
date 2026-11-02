@@ -3,6 +3,7 @@ import { DialogFocusDirective } from '../../shared/a11y/dialog-focus.directive';
 import {
   ChangeDetectionStrategy,
   Component,
+  ElementRef,
   EventEmitter,
   Input,
   OnInit,
@@ -16,6 +17,11 @@ import { EncounterService, UnseenVisitOutcome } from '../../services/encounter.s
 import { ToastService } from '../../core/toast.service';
 
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+import { refuseFields } from '../../shared/forms/invalid-fields';
+
+/** The reason box, refused when blank (QA D1306). */
+const REASON_IDS = ['closeUnseenReason'];
+
 /**
  * QA D788: the desk closes a visit no clinician has seen. It is "left without
  * being seen" or cancelled, always with a reason, and is never counted as a
@@ -42,6 +48,7 @@ export class CloseUnseenDialogComponent implements OnInit {
   private readonly encounterService = inject(EncounterService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   readonly outcomes: UnseenVisitOutcome[] = ['LEFT_WITHOUT_BEING_SEEN', 'CANCELLED'];
   readonly outcome = signal<UnseenVisitOutcome>('LEFT_WITHOUT_BEING_SEEN');
@@ -56,9 +63,13 @@ export class CloseUnseenDialogComponent implements OnInit {
   submit(): void {
     const reason = this.reason().trim();
     if (!reason) {
-      this.error.set(this.translate.instant('RECEPTION.CLOSE_UNSEEN_REASON_REQUIRED'));
+      // QA D1306 (round 28): the reason box is marked, not only the banner.
+      const message = this.translate.instant('RECEPTION.CLOSE_UNSEEN_REASON_REQUIRED');
+      refuseFields(this.host.nativeElement, REASON_IDS, REASON_IDS, message);
+      this.error.set(message);
       return;
     }
+    refuseFields(this.host.nativeElement, [], REASON_IDS, '');
     this.error.set(null);
     this.saving.set(true);
     this.encounterService

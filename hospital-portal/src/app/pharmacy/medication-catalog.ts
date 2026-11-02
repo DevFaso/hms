@@ -2,6 +2,7 @@ import { refusalReason } from '../shared/refusal-reason';
 import {
   Component,
   computed,
+  ElementRef,
   inject,
   OnInit,
   signal,
@@ -22,6 +23,10 @@ import {
   PediatricWeightBand,
 } from '../services/pharmacy.service';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { blankFields, focusFirstInvalid, refuseFields } from '../shared/forms/invalid-fields';
+
+/** The required fields of the medication form (QA D1306). */
+const MED_REQUIRED_IDS = ['nameFr', 'genericName'];
 
 @Component({
   selector: 'app-medication-catalog',
@@ -41,6 +46,7 @@ export class MedicationCatalogComponent implements OnInit {
   private readonly svc = inject(PharmacyService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly roleContext = inject(RoleContextService);
 
   /**
@@ -215,15 +221,27 @@ export class MedicationCatalogComponent implements OnInit {
   }
 
   submitForm(): void {
-    if (!this.form.nameFr || !this.form.genericName) {
-      this.toast.error(this.translate.instant('PHARMACY.MED_REQUIRED_FIELDS'));
+    // QA D1306 (round 28): a refused field is marked and focused, not only a toast.
+    const root = this.host.nativeElement;
+    const blank = blankFields(
+      { nameFr: this.form.nameFr, genericName: this.form.genericName },
+      MED_REQUIRED_IDS,
+    );
+    if (blank.length > 0) {
+      const message = this.translate.instant('PHARMACY.MED_REQUIRED_FIELDS');
+      refuseFields(root, blank, MED_REQUIRED_IDS, message);
+      this.toast.error(message);
       return;
     }
+    refuseFields(root, [], MED_REQUIRED_IDS, '');
+    // The code fields bind their own aria-invalid and hint: focus the field.
     if (!this.isAtcValid()) {
+      focusFirstInvalid(root, ['atcCode']);
       this.toast.error(this.translate.instant('PHARMACY.ATC_FORMAT_HINT'));
       return;
     }
     if (!this.isRxNormValid()) {
+      focusFirstInvalid(root, ['rxnormCode']);
       this.toast.error(this.translate.instant('PHARMACY.RXNORM_FORMAT_HINT'));
       return;
     }

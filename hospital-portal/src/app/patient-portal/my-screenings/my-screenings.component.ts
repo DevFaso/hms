@@ -1,4 +1,11 @@
-import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  OnInit,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -21,6 +28,10 @@ import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 import { refusalReason } from '../../shared/refusal-reason';
+import { refuseFields } from '../../shared/forms/invalid-fields';
+
+/** Must match `idPrefix` of the questionnaire in the template. */
+const PRO_ID_PREFIX = 'my-pro';
 /**
  * A mother answers her own mental-health screening (EPDS) from home while a
  * postpartum plan is open for her (Tier 2 item 47).
@@ -31,6 +42,14 @@ import { refusalReason } from '../../shared/refusal-reason';
  * whether her care team will follow up, and whether they were alerted
  * straight away.
  */
+/** The first option of each item (of `only`, when given): where an unanswered item is marked. */
+function itemIds(instrument: ProInstrumentView, only?: readonly number[]): string[] {
+  return instrument.items
+    .filter((item) => !only || only.includes(item.itemNo))
+    .filter((item) => item.options.length > 0)
+    .map((item) => `${PRO_ID_PREFIX}-item-${item.itemNo}-opt-${item.options[0].optionNo}`);
+}
+
 @Component({
   selector: 'app-my-screenings',
   standalone: true,
@@ -51,6 +70,7 @@ export class MyScreeningsComponent implements OnInit {
   private readonly screenings = inject(ProScreeningService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   loading = signal(true);
   /**
@@ -158,10 +178,19 @@ export class MyScreeningsComponent implements OnInit {
     const instrument = this.instrument();
     if (!instrument) return;
     const missing = this.unanswered();
+    const allItems = itemIds(instrument);
     if (missing.length > 0) {
+      // QA D1306 (round 28): each unanswered item is marked, not only a toast.
+      refuseFields(
+        this.host.nativeElement,
+        itemIds(instrument, missing),
+        allItems,
+        this.translate.instant('COMMON.FIELD_REQUIRED'),
+      );
       this.toast.warning(this.translate.instant('PRO.INCOMPLETE', { items: missing.join(', ') }));
       return;
     }
+    refuseFields(this.host.nativeElement, [], allItems, '');
     this.submitting.set(true);
     this.screenings
       .submitMine({

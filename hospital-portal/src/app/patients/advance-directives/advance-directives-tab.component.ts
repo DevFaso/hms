@@ -57,6 +57,7 @@ const DIRECTIVE_FIELD_IDS = [
   'directive-status',
   'directive-effective',
   'directive-physician',
+  'directive-expiration',
 ];
 
 @Component({
@@ -196,7 +197,6 @@ export class AdvanceDirectivesTabComponent implements OnInit {
       );
       return;
     }
-    refuseFields(this.host.nativeElement, [], DIRECTIVE_FIELD_IDS, '');
     // Mirrors the backend rule ("cannot expire before it takes effect");
     // equal dates are allowed there, so they are allowed here.
     if (
@@ -204,9 +204,13 @@ export class AdvanceDirectivesTabComponent implements OnInit {
       this.form.expirationDate &&
       this.form.expirationDate < this.form.effectiveDate
     ) {
-      this.toast.error(this.translate.instant('DIRECTIVES.DATES_INVALID'));
+      // QA D1306 (round 28): the expiration field is marked, not only a toast.
+      const message = this.translate.instant('DIRECTIVES.DATES_INVALID');
+      refuseFields(this.host.nativeElement, ['directive-expiration'], DIRECTIVE_FIELD_IDS, message);
+      this.toast.error(message);
       return;
     }
+    refuseFields(this.host.nativeElement, [], DIRECTIVE_FIELD_IDS, '');
 
     this.saving.set(true);
     const id = this.editingId();

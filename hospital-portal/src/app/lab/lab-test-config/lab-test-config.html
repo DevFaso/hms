@@ -750,8 +750,10 @@
           }
           <div class="def-form-grid" [hidden]="!canEditReflexRules">
             <div class="form-group">
-              <label for="reflexTrigger">{{ 'LAB_TEST_CONFIG.REFLEX_TRIGGER' | translate }}</label>
-              <select id="reflexTrigger" [(ngModel)]="reflexForm.triggerTestDefinitionId">
+              <label for="reflexTrigger"
+                >{{ 'LAB_TEST_CONFIG.REFLEX_TRIGGER' | translate }} *</label
+              >
+              <select id="reflexTrigger" required [(ngModel)]="reflexForm.triggerTestDefinitionId">
                 <option value="">&mdash;</option>
                 @for (d of definitions(); track d.id) {
                   <option [value]="d.id">{{ d.testName }}</option>
@@ -759,8 +761,8 @@
               </select>
             </div>
             <div class="form-group">
-              <label for="reflexTest">{{ 'LAB_TEST_CONFIG.REFLEX_TEST' | translate }}</label>
-              <select id="reflexTest" [(ngModel)]="reflexForm.reflexTestDefinitionId">
+              <label for="reflexTest">{{ 'LAB_TEST_CONFIG.REFLEX_TEST' | translate }} *</label>
+              <select id="reflexTest" required [(ngModel)]="reflexForm.reflexTestDefinitionId">
                 <option value="">&mdash;</option>
                 @for (d of definitions(); track d.id) {
                   <option [value]="d.id">{{ d.testName }}</option>
@@ -805,8 +807,13 @@
                 </select>
               </div>
               <div class="form-group">
-                <label for="reflexValue">{{ 'LAB_TEST_CONFIG.REFLEX_VALUE' | translate }}</label>
-                <input id="reflexValue" type="number" [(ngModel)]="reflexForm.thresholdValue" />
+                <label for="reflexValue">{{ 'LAB_TEST_CONFIG.REFLEX_VALUE' | translate }} *</label>
+                <input
+                  id="reflexValue"
+                  type="number"
+                  required
+                  [(ngModel)]="reflexForm.thresholdValue"
+                />
               </div>
             }
             <div class="form-group">

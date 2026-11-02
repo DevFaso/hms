@@ -24,9 +24,10 @@
       }
       <!-- QA D416: the fill is picked from the pharmacy's list, not typed as an id -->
       <div class="form-row">
-        <label for="dispenseId">{{ 'PHARMACY_CHECKOUT.DISPENSE_PICK' | translate }}</label>
+        <label for="dispenseId">{{ 'PHARMACY_CHECKOUT.DISPENSE_PICK' | translate }} *</label>
         <select
           id="dispenseId"
+          required
           [ngModel]="dispenseId"
           (ngModelChange)="pickDispense($event)"
           [disabled]="loading() || dispensesLoading()"
@@ -74,8 +75,9 @@
     <section class="card no-print">
       <h3>{{ 'PHARMACY_CHECKOUT.STEP_PAYMENT' | translate }}</h3>
       <div class="form-row">
-        <label for="amount">{{ 'PHARMACY_CHECKOUT.AMOUNT_XOF' | translate }}</label>
+        <label for="amount">{{ 'PHARMACY_CHECKOUT.AMOUNT_XOF' | translate }} *</label>
         <input
+          required
           id="amount"
           type="number"
           min="1"
@@ -108,8 +110,10 @@
             >{{ 'PHARMACY_CHECKOUT.REFERENCE' | translate
             }}{{ paymentMethod === 'MOBILE_MONEY' ? ' *' : '' }}</label
           >
+          <!-- QA D1306: required for Mobile Money, as its star says. -->
           <input
             id="ref"
+            [required]="paymentMethod === 'MOBILE_MONEY'"
             type="text"
             [(ngModel)]="referenceNumber"
             [placeholder]="'PHARMACY_CHECKOUT.REFERENCE_PLACEHOLDER' | translate"

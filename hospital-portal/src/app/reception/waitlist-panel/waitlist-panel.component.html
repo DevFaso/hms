@@ -360,8 +360,14 @@
       } @else if (offerSlots().length === 0) {
         <div class="empty-state">{{ 'RECEPTION.NO_OPEN_SLOTS' | translate }}</div>
       } @else {
-        <fieldset class="slot-picker">
-          <legend class="form-label">{{ 'RECEPTION.SELECT_SLOT' | translate }}</legend>
+        <fieldset
+          id="waitlist-offer-slots"
+          class="slot-picker"
+          role="radiogroup"
+          aria-required="true"
+          tabindex="-1"
+        >
+          <legend class="form-label">{{ 'RECEPTION.SELECT_SLOT' | translate }} *</legend>
           @for (slot of offerSlots(); track slot.id) {
             <label class="slot-option" [class.selected]="selectedSlotId() === slot.id">
               <input

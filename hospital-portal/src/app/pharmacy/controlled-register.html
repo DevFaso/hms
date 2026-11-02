@@ -64,13 +64,20 @@
           }
         </select>
       </label>
-      <label class="field">
-        {{ 'PHARMACY.REGISTER_FROM' | translate }}
-        <input type="date" name="from" [(ngModel)]="from" />
+      <label class="field" for="register-from">
+        {{ 'PHARMACY.REGISTER_FROM' | translate }} *
+        <input id="register-from" type="date" name="from" required [(ngModel)]="from" />
       </label>
-      <label class="field">
-        {{ 'PHARMACY.REGISTER_TO' | translate }}
-        <input type="date" name="to" [attr.min]="from || null" [(ngModel)]="to" />
+      <label class="field" for="register-to">
+        {{ 'PHARMACY.REGISTER_TO' | translate }} *
+        <input
+          id="register-to"
+          type="date"
+          name="to"
+          required
+          [attr.min]="from || null"
+          [(ngModel)]="to"
+        />
       </label>
       <button class="btn-primary" type="submit" data-testid="register-load" [disabled]="loading()">
         {{ 'PHARMACY.REGISTER_SHOW' | translate }}

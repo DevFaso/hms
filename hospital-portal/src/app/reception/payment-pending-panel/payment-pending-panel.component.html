@@ -77,14 +77,17 @@
         <p class="no-invoices">{{ 'RECEPTION.NO_OPEN_INVOICES' | translate }}</p>
       } @else {
         <div class="field-group">
-          <label for="invSelect">{{ 'RECEPTION.INVOICE' | translate }}</label>
+          <label for="invSelect">{{ 'RECEPTION.INVOICE' | translate }} *</label>
           <select
+            required
             id="invSelect"
             class="form-control"
             [ngModel]="selectedInvoiceId()"
             (ngModelChange)="selectedInvoiceId.set($event)"
           >
-            <option [value]="null">-- {{ 'RECEPTION.SELECT_INVOICE' | translate }} --</option>
+            <!-- QA D1296: [ngValue], not [value]: [value]="null" is the string
+                 "null", which passed the check and was posted as an invoice id. -->
+            <option [ngValue]="null">-- {{ 'RECEPTION.SELECT_INVOICE' | translate }} --</option>
             @for (inv of openInvoices(); track inv.id) {
               <option [value]="inv.id">
                 {{ inv.invoiceNumber }} — {{ 'RECEPTION.BALANCE' | translate
@@ -95,8 +98,9 @@
           </select>
         </div>
         <div class="field-group">
-          <label for="payAmt">{{ 'RECEPTION.AMOUNT' | translate }}</label>
+          <label for="payAmt">{{ 'RECEPTION.AMOUNT' | translate }} *</label>
           <input
+            required
             id="payAmt"
             type="number"
             class="form-control"
@@ -113,8 +117,9 @@
           }
         </div>
         <div class="field-group">
-          <label for="payMeth">{{ 'RECEPTION.METHOD' | translate }}</label>
+          <label for="payMeth">{{ 'RECEPTION.METHOD' | translate }} *</label>
           <select
+            required
             id="payMeth"
             class="form-control"
             [ngModel]="payMethod()"

@@ -248,9 +248,13 @@
                   [placeholder]="'PHARMACY.ATC_PLACEHOLDER' | translate"
                   pattern="^[A-Za-z]\d{2}[A-Za-z]{2}\d{2}$"
                   [class.invalid]="!isAtcValid()"
+                  [attr.aria-invalid]="!isAtcValid() || null"
+                  [attr.aria-describedby]="!isAtcValid() ? 'atc-format-hint' : null"
                 />
                 @if (!isAtcValid()) {
-                  <small class="error-hint">{{ 'PHARMACY.ATC_FORMAT_HINT' | translate }}</small>
+                  <small class="error-hint" id="atc-format-hint">{{
+                    'PHARMACY.ATC_FORMAT_HINT' | translate
+                  }}</small>
                 }
               </div>
             </div>
@@ -354,9 +358,13 @@
                   name="rxnormCode"
                   pattern="^\d{1,12}$"
                   [class.invalid]="!isRxNormValid()"
+                  [attr.aria-invalid]="!isRxNormValid() || null"
+                  [attr.aria-describedby]="!isRxNormValid() ? 'rxnorm-format-hint' : null"
                 />
                 @if (!isRxNormValid()) {
-                  <small class="error-hint">{{ 'PHARMACY.RXNORM_FORMAT_HINT' | translate }}</small>
+                  <small class="error-hint" id="rxnorm-format-hint">{{
+                    'PHARMACY.RXNORM_FORMAT_HINT' | translate
+                  }}</small>
                 }
               </div>
               <div class="field checkbox-group">

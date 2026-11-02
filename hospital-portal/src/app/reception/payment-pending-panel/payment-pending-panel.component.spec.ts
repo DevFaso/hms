@@ -97,6 +97,84 @@ describe('PaymentPendingPanelComponent', () => {
     expect(host.textContent).toContain('BILLING.PAYMENT_AMOUNT_REQUIRED');
   });
 
+  it('QA D1296: the placeholder invoice is refused on the client, never posted as "null"', () => {
+    const spy = spyOn(mockReceptionService, 'recordPayment').and.returnValue(of({}));
+    component.payingItem.set({ patientId: 'p1', patientName: 'Ousmane' } as any);
+    component.openInvoices.set([
+      {
+        id: 'inv-1',
+        invoiceNumber: 'F-1',
+        totalAmount: 2000,
+        amountPaid: 0,
+        currency: 'XOF',
+      } as any,
+      {
+        id: 'inv-2',
+        invoiceNumber: 'F-2',
+        totalAmount: 500,
+        amountPaid: 0,
+        currency: 'XOF',
+      } as any,
+    ]);
+    component.selectedInvoiceId.set('inv-1');
+    fixture.detectChanges();
+    const host: HTMLElement = fixture.nativeElement;
+    const select = host.querySelector<HTMLSelectElement>('#invSelect')!;
+    // Back to "-- Sélectionner la facture --", as the receptionist did.
+    select.selectedIndex = 0;
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    expect(component.selectedInvoiceId()).toBeNull();
+    component.payAmount.set(100);
+    component.submitPayment();
+    fixture.detectChanges();
+
+    expect(spy).not.toHaveBeenCalled();
+    expect(select.getAttribute('aria-invalid')).toBe('true');
+    expect(host.querySelector('#payAmt')!.hasAttribute('aria-invalid')).toBeFalse();
+    // Every control is declared required and starred.
+    for (const id of ['invSelect', 'payAmt', 'payMeth']) {
+      expect(host.querySelector('#' + id)!.hasAttribute('required'))
+        .withContext(id)
+        .toBeTrue();
+      expect(host.querySelector(`label[for="${id}"]`)!.textContent)
+        .withContext(id)
+        .toContain('*');
+    }
+  });
+
+  it('QA D1296: a blank invoice and a blank amount are both named in one press', () => {
+    component.payingItem.set({ patientId: 'p1', patientName: 'Ousmane' } as any);
+    component.openInvoices.set([
+      {
+        id: 'inv-1',
+        invoiceNumber: 'F-1',
+        totalAmount: 2000,
+        amountPaid: 0,
+        currency: 'XOF',
+      } as any,
+      {
+        id: 'inv-2',
+        invoiceNumber: 'F-2',
+        totalAmount: 500,
+        amountPaid: 0,
+        currency: 'XOF',
+      } as any,
+    ]);
+    component.selectedInvoiceId.set(null);
+    component.payAmount.set(null);
+    fixture.detectChanges();
+    component.submitPayment();
+    fixture.detectChanges();
+    const host: HTMLElement = fixture.nativeElement;
+    expect(host.querySelector('#invSelect')!.getAttribute('aria-invalid')).toBe('true');
+    expect(host.querySelector('#payAmt')!.getAttribute('aria-invalid')).toBe('true');
+    expect(host.querySelector('#invSelect-invalid-msg')!.textContent).toBe('COMMON.FIELD_REQUIRED');
+    expect(host.querySelector('#payAmt-invalid-msg')!.textContent).toBe(
+      'BILLING.PAYMENT_AMOUNT_REQUIRED',
+    );
+  });
+
   it('QA D948: offers Mobile Money, needs its reference, and sends it', () => {
     expect(component.methods.map((m) => m.value)).toContain('MOBILE_MONEY');
     const spy = spyOn(mockReceptionService, 'recordPayment').and.returnValue(of({}));

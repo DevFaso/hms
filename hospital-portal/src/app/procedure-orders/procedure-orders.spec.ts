@@ -1,3 +1,4 @@
+import { ElementRef } from '@angular/core';
 import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
@@ -46,6 +47,8 @@ describe('ProcedureOrdersComponent', () => {
         },
         { provide: ToastService, useValue: { success: () => undefined, error: () => undefined } },
         { provide: TranslateService, useValue: { instant: (k: string) => k } },
+        // QA D1306 (round 28): the component marks refused fields in its host.
+        { provide: ElementRef, useValue: new ElementRef(document.createElement('div')) },
       ],
     });
     component = TestBed.runInInjectionContext(() => new ProcedureOrdersComponent());

@@ -1182,11 +1182,12 @@
       }
       <!-- QA D993: the reason box has a real label, not only a placeholder. -->
       <!-- QA D1173: the label is a name ("Motif"), not the placeholder's instruction. -->
-      <label class="sr-only" for="mar-reason-input">{{
-        'NURSE.MAR_REASON_LABEL' | translate
-      }}</label>
-      <!-- QA D1272 class: the reason is required; its label is visually hidden,
-           so the requirement is declared for assistive technology. -->
+      <!-- QA D1304 (D1272 NOT_FIXED in round 28): the label is visible and
+           starred, like the witness below it; an sr-only label showed the
+           reader no marker. -->
+      <label class="mar-reason-label" for="mar-reason-input"
+        >{{ 'NURSE.MAR_REASON_LABEL' | translate }} *</label
+      >
       <textarea
         id="mar-reason-input"
         class="reason-input"

@@ -145,6 +145,21 @@ describe('AppointmentDetailComponent', () => {
     expect(req.endTime).toBeUndefined();
   });
 
+  it('QA D1306: a past reschedule date is marked on the field, not only toasted', () => {
+    mockAppointmentService.update.calls.reset();
+    component.showReschedule.set(true);
+    fixture.detectChanges();
+    component.rescheduleDate = '2000-01-01';
+    component.rescheduleStart = '09:00:00';
+
+    component.submitReschedule();
+
+    expect(mockAppointmentService.update).not.toHaveBeenCalled();
+    expect(mockToastService.error).toHaveBeenCalledWith('APPOINTMENTS.DATE_IN_PAST');
+    const date = (fixture.nativeElement as HTMLElement).querySelector('#reschedDate');
+    expect(date?.getAttribute('aria-invalid')).toBe('true');
+  });
+
   it('markAsScheduled sends the SCHEDULE action for legacy stranded rows', () => {
     mockAppointmentService.updateStatus.calls.reset();
     component.markAsScheduled();

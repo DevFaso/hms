@@ -25,10 +25,6 @@ const KNOWN = {
   'departments/department-list.html': 2,
   'digital-signatures/digital-signatures.html': 3,
   'discharge/discharge.html': 7,
-  'lock-screen/lock-screen.html': 1,
-  'mfa/mfa-challenge.html': 1,
-  'mfa/mfa-enroll.html': 1,
-  'profile/profile.html': 1,
 };
 
 function offendersByFile() {

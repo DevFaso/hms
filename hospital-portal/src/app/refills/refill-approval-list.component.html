@@ -83,9 +83,15 @@
           </dl>
           @if (isOpen(r.status)) {
             <div class="refill-card__actions">
+              <!-- QA D1305: required to refuse or pause only, so the label says
+                   so in words (a star would claim approval needs it too). -->
               <label class="refill-card__notes">
-                <span>{{ 'REFILLS.FIELD_PROVIDER_NOTES' | translate }}</span>
+                <span
+                  >{{ 'REFILLS.FIELD_PROVIDER_NOTES' | translate }}
+                  {{ 'REFILLS.NOTES_REQUIRED_FOR' | translate }}</span
+                >
                 <textarea
+                  [id]="notesFieldId(r.id)"
                   rows="2"
                   [(ngModel)]="decisionNotes[r.id]"
                   [name]="'notes-' + r.id"

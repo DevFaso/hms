@@ -1,4 +1,4 @@
-import { TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { Observable, of } from 'rxjs';
 import { PharmacyCheckoutComponent } from './pharmacy-checkout';
@@ -11,6 +11,7 @@ type DispenseResult =
 
 describe('PharmacyCheckoutComponent (QA D264)', () => {
   let svc: jasmine.SpyObj<PharmacyService>;
+  let fixture: ComponentFixture<PharmacyCheckoutComponent>;
 
   function create(
     chargeAmount: number | null,
@@ -56,7 +57,8 @@ describe('PharmacyCheckoutComponent (QA D264)', () => {
         },
       ],
     });
-    const c = TestBed.createComponent(PharmacyCheckoutComponent).componentInstance;
+    fixture = TestBed.createComponent(PharmacyCheckoutComponent);
+    const c = fixture.componentInstance;
     c.ngOnInit();
     c.pickDispense('d-1');
     return c;
@@ -114,6 +116,25 @@ describe('PharmacyCheckoutComponent (QA D264)', () => {
     c.submit();
     expect(svc.createPayment).toHaveBeenCalledWith(
       jasmine.objectContaining({ paymentMethod: 'MOBILE_MONEY', referenceNumber: 'OM-R17-662001' }),
+    );
+  });
+
+  it('QA D1306: a blank Mobile Money reference marks the field, in the same press as the amount', () => {
+    const c = create(null, false);
+    // The first render runs ngOnInit again, which reloads the pharmacy and clears the pick.
+    fixture.detectChanges();
+    c.pickDispense('d-1');
+    c.paymentMethod = 'MOBILE_MONEY';
+    c.referenceNumber = '';
+    fixture.detectChanges();
+    c.submit();
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    expect(svc.createPayment).not.toHaveBeenCalled();
+    expect(host.querySelector('#ref')!.getAttribute('aria-invalid')).toBe('true');
+    expect(host.querySelector('#amount')!.getAttribute('aria-invalid')).toBe('true');
+    expect(host.querySelector('#ref-invalid-msg')!.textContent).toBe(
+      'PHARMACY_CHECKOUT.REFERENCE_REQUIRED',
     );
   });
 

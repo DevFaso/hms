@@ -1,5 +1,6 @@
 import { refusalReason } from '../../../shared/refusal-reason';
 import {
+  ChangeDetectorRef,
   Component,
   ElementRef,
   EventEmitter,
@@ -36,6 +37,8 @@ import {
 import { isFacilityPhone } from '../../../shared/phone-number';
 /** The e-mail field, marked when its address is refused (QA D1179 class). */
 const EMAIL_FIELD_ID = 'email';
+/** The details step's two phone inputs (QA D1289 class). */
+const PHONE_FIELD_IDS = ['phone', 'ecPhone'];
 
 @Component({
   selector: 'app-pre-checkin-form',
@@ -62,6 +65,7 @@ export class PreCheckinFormComponent implements OnInit, OnChanges {
   private readonly portal = inject(PatientPortalService);
   private readonly translate = inject(TranslateService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly cdr = inject(ChangeDetectorRef);
 
   // ── State ──────────────────────────────────────────────────────────
   step = signal<'demographics' | 'questionnaires' | 'review'>('demographics');
@@ -154,12 +158,24 @@ export class PreCheckinFormComponent implements OnInit, OnChanges {
     this.answers.set(updated);
   }
 
+  /** The phone inputs whose number the server would refuse, in reading order. */
+  private badPhoneIds(): string[] {
+    return [
+      isFacilityPhone(this.phoneNumber) ? null : 'phone',
+      isFacilityPhone(this.emergencyContactPhone) ? null : 'ecPhone',
+    ].filter((id): id is string => id !== null);
+  }
+
   submit(): void {
     if (!this.appointment || this.saving()) return;
     // QA D1289: a number that slipped past the details step goes back to it.
     if (!isFacilityPhone(this.phoneNumber) || !isFacilityPhone(this.emergencyContactPhone)) {
+      const message = this.translate.instant('USERS.PHONE_INVALID');
       this.step.set('demographics');
-      this.errorMessage.set(this.translate.instant('USERS.PHONE_INVALID'));
+      // QA D1306 (round 28): render the details step so the bad number is marked there.
+      this.cdr.detectChanges();
+      refuseFields(this.host.nativeElement, this.badPhoneIds(), PHONE_FIELD_IDS, message);
+      this.errorMessage.set(message);
       return;
     }
     // QA D1179 class: a malformed address is refused on its field before anything is sent.

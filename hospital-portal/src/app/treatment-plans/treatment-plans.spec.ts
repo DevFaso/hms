@@ -1,3 +1,4 @@
+import { ElementRef } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { ActivatedRoute } from '@angular/router';
@@ -39,6 +40,8 @@ describe('TreatmentPlansComponent (QA D890)', () => {
     TestBed.configureTestingModule({
       providers: [
         { provide: TreatmentPlanService, useValue: plans },
+        // QA D1306 (round 28): the component marks refused fields in its host.
+        { provide: ElementRef, useValue: new ElementRef(document.createElement('div')) },
         { provide: HospitalService, useValue: {} },
         { provide: StaffService, useValue: {} },
         { provide: PatientService, useValue: {} },
@@ -175,6 +178,8 @@ describe('TreatmentPlansComponent approval (QA D1127)', () => {
     TestBed.configureTestingModule({
       providers: [
         { provide: TreatmentPlanService, useValue: plans },
+        // QA D1306 (round 28): the component marks refused fields in its host.
+        { provide: ElementRef, useValue: new ElementRef(document.createElement('div')) },
         { provide: HospitalService, useValue: {} },
         { provide: StaffService, useValue: {} },
         { provide: PatientService, useValue: {} },

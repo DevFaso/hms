@@ -21,7 +21,10 @@ import { DialogFocusDirective } from '../../shared/a11y/dialog-focus.directive';
 import { DESK_PAYMENT_METHODS, deskMethodNeedsReference } from '../desk-payment-methods';
 import { BillingService, PaymentRow } from '../../services/billing.service';
 import { saveResponse } from '../../shared/download-file';
-import { refuseFields } from '../../shared/forms/invalid-fields';
+import { FieldRefusal, refuseFields } from '../../shared/forms/invalid-fields';
+
+/** The fields the collect dialog may refuse. */
+const PAY_FIELDS = ['invSelect', 'payAmt', 'payRef'];
 import {
   CFA_AMOUNT_REQUIRED_KEY,
   cfaAmountMessageKey,
@@ -129,23 +132,27 @@ export class PaymentPendingPanelComponent {
     const method = this.payMethod();
     const reference = this.payReference().trim();
     // QA D1089: the button is never dead; an empty field says what is missing.
+    // QA D1296 (round 28): every refused field in one press, each with its
+    // own reason (the amount's reason was printed under every field, so the
+    // invoice was refused only once the amount was valid).
     const amountProblem = cfaAmountProblem(amount);
-    const missing = [
-      !invoiceId ? 'invSelect' : null,
-      amountProblem ? 'payAmt' : null,
-      this.needsReference() && !reference ? 'payRef' : null,
-    ].filter((id): id is string => id !== null);
-    if (missing.length > 0 || !invoiceId || !amount) {
-      refuseFields(
-        this.host.nativeElement,
-        missing,
-        ['invSelect', 'payAmt', 'payRef'],
-        missing[0] === 'payAmt' && amountProblem
-          ? this.translate.instant(cfaAmountMessageKey(amountProblem, CFA_AMOUNT_REQUIRED_KEY))
-          : this.translate.instant('COMMON.FIELD_REQUIRED'),
-      );
+    const required = this.translate.instant('COMMON.FIELD_REQUIRED');
+    const refusals: FieldRefusal[] = [];
+    if (!invoiceId) refusals.push({ id: 'invSelect', message: required });
+    if (amountProblem) {
+      refusals.push({
+        id: 'payAmt',
+        message: this.translate.instant(
+          cfaAmountMessageKey(amountProblem, CFA_AMOUNT_REQUIRED_KEY),
+        ),
+      });
+    }
+    if (this.needsReference() && !reference) refusals.push({ id: 'payRef', message: required });
+    if (refusals.length > 0 || !invoiceId || !amount) {
+      refuseFields(this.host.nativeElement, refusals, PAY_FIELDS);
       return;
     }
+    refuseFields(this.host.nativeElement, [], PAY_FIELDS);
 
     this.paying.set(true);
     this.receptionService

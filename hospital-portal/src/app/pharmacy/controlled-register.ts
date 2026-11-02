@@ -1,5 +1,12 @@
 import { refusalReason } from '../shared/refusal-reason';
-import { ChangeDetectionStrategy, Component, inject, OnInit, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  inject,
+  OnInit,
+  signal,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -15,6 +22,10 @@ import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { refuseFields } from '../shared/forms/invalid-fields';
+
+/** The period's two date inputs. */
+const REGISTER_PERIOD_IDS = ['register-from', 'register-to'];
 /** ISO date (YYYY-MM-DD) in the browser's calendar. */
 function localIsoDate(d: Date): string {
   const mm = String(d.getMonth() + 1).padStart(2, '0');
@@ -49,6 +60,7 @@ export class ControlledRegisterComponent implements OnInit {
   private readonly svc = inject(PharmacyService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   readonly pharmacies = signal<PharmacyResponse[]>([]);
   readonly pharmaciesLoaded = signal(false);
@@ -102,12 +114,24 @@ export class ControlledRegisterComponent implements OnInit {
     return !!this.from && !!this.to && this.from <= this.to;
   }
 
+  /** The period's blank dates, or the end when it comes before the start. */
+  private refusedPeriodIds(): string[] {
+    const blank = [!this.from ? 'register-from' : null, !this.to ? 'register-to' : null].filter(
+      (id): id is string => id !== null,
+    );
+    return blank.length > 0 ? blank : ['register-to'];
+  }
+
   load(): void {
     if (!this.selectedPharmacyId) return;
     if (!this.periodValid()) {
-      this.toast.error(this.translate.instant('PHARMACY.REGISTER_PERIOD_INVALID'));
+      // QA D1306 (round 28): the wrong date is marked, not only a toast.
+      const message = this.translate.instant('PHARMACY.REGISTER_PERIOD_INVALID');
+      refuseFields(this.host.nativeElement, this.refusedPeriodIds(), REGISTER_PERIOD_IDS, message);
+      this.toast.error(message);
       return;
     }
+    refuseFields(this.host.nativeElement, [], REGISTER_PERIOD_IDS, '');
     const seq = ++this.loadSeq;
     this.loading.set(true);
     this.failed.set(false);

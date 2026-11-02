@@ -107,3 +107,71 @@ export class F {
     ['submitQuestion::PORTAL.EDUCATION.QUESTION_TOO_SHORT'],
   );
 });
+
+test('QA D1302 (round 28): an early refusal is caught even when the method marks a field later', () => {
+  // The patient payment dialog refused a blank amount with a banner and
+  // returned before the reference's refuseFields: one helper anywhere in the
+  // method excused every refusal in it, and the amount's key was not
+  // REQUIRED-shaped (cfaAmountMessageKey).
+  const src = `
+export class F {
+  submitPayment() {
+    const amountProblem = cfaAmountProblem(this.payAmount);
+    if (amountProblem) {
+      this.payError.set(
+        this.translate.instant(cfaAmountMessageKey(amountProblem, CFA_AMOUNT_REQUIRED_KEY)),
+      );
+      return;
+    }
+    if (this.payMethod !== 'CASH' && !this.payReference.trim()) {
+      refuseFields(this.host.nativeElement, ['payRef'], PAY_FIELDS, message);
+      return;
+    }
+  }
+}
+`;
+  assert.deepEqual(
+    requiredRefusalFindings(src).map((f) => `${f.rule}::${f.anchor}`),
+    ['toast-only-refusal::submitPayment::if(amountProblem)'],
+  );
+});
+
+test('QA D1306 (round 28): a toast refusal whatever its key, one statement or a block', () => {
+  const src = `
+export class F {
+  submit(): void {
+    if (amountProblem || amount === null) {
+      this.toast.error(this.translate.instant(cfaAmountMessageKey(amountProblem, 'X.INVALID')));
+      return;
+    }
+    if (!this.code) return this.toast.warning(this.translate.instant('X.CODE_FORMAT'));
+  }
+}
+`;
+  assert.deepEqual(
+    requiredRefusalFindings(src).map((f) => f.anchor),
+    ['submit::if(amountProblem || amount === null)', 'submit::X.CODE_FORMAT'],
+  );
+});
+
+test('round 28: marking in the same block, a page-level message, or a builder of refusals passes', () => {
+  const src = `
+export class F {
+  submit(): void {
+    if (!this.ref.trim()) {
+      refuseFields(this.host.nativeElement, ['ref'], ['ref'], m);
+      this.toast.error(m);
+      return;
+    }
+    if (!hospitalId) {
+      this.toast.error(this.translate.instant('X.NO_HOSPITAL_CONTEXT'));
+      return;
+    }
+  }
+  private refusals(): FieldRefusal[] {
+    return [{ id: 'a', message: this.translate.instant('X.A_REQUIRED') }];
+  }
+}
+`;
+  assert.deepEqual(requiredRefusalFindings(src), []);
+});

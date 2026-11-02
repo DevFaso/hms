@@ -1,4 +1,11 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  OnInit,
+  inject,
+  signal,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -14,6 +21,7 @@ import {
 import { RoleContextService } from '../../core/role-context.service';
 import { ToastService } from '../../core/toast.service';
 import { AuthService } from '../../auth/auth.service';
+import { focusFirstInvalid } from '../../shared/forms/invalid-fields';
 
 type Mode = 'new' | 'edit';
 
@@ -165,6 +173,7 @@ export class OrderSetEditComponent implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly auth = inject(AuthService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   ngOnInit(): void {
     const id = this.route.snapshot.paramMap.get('id');
@@ -231,6 +240,13 @@ export class OrderSetEditComponent implements OnInit {
       ),
     ]);
     if (gaps) {
+      // QA D1306 (round 28): focus the first marked field, not only a toast.
+      const refused = [
+        ...(nameMissing ? ['order-set-name'] : []),
+        ...(itemsOut.length === 0 ? ['order-set-item-add'] : []),
+        ...unnamed.map((i) => `order-set-item-name-${i}`),
+      ];
+      focusFirstInvalid(this.host.nativeElement, refused);
       this.toast.error(gaps);
       return;
     }

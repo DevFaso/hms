@@ -286,8 +286,9 @@
 
           @if (!paySuccess()) {
             <div class="pay-field">
-              <label for="payAmount">{{ 'PORTAL.BILLING.AMOUNT' | translate }}</label>
+              <label for="payAmount">{{ 'PORTAL.BILLING.AMOUNT' | translate }} *</label>
               <input
+                required
                 id="payAmount"
                 type="number"
                 [min]="1"

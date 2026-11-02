@@ -1204,7 +1204,8 @@
     "TOAST_DENIED": "Reposición denegada",
     "TOAST_DENY_FAILED": "No se pudo denegar la solicitud de reposición",
     "TOAST_PAUSED": "Reposición puesta en espera",
-    "TOAST_PAUSE_FAILED": "No se pudo poner en espera la solicitud de reposición"
+    "TOAST_PAUSE_FAILED": "No se pudo poner en espera la solicitud de reposición",
+    "NOTES_REQUIRED_FOR": "(obligatorias para denegar o poner en espera)"
   },
   "ADMISSIONS": {
     "ACUITY": "Gravedad",
@@ -4859,7 +4860,7 @@
     "BLOOD_GLUCOSE": "Glucemia",
     "BLOOD_PRESSURE": "Presión arterial",
     "BLOOD_TYPE": "Tipo de sangre",
-    "BORN": "Nacido en",
+    "BORN": "Nacido/a en",
     "BY": "por",
     "CHART_RESTRICTED_BODY": "El administrador del hospital restringió este expediente. Para abrirlo, declare un acceso de emergencia con su justificación clínica — cada lectura quedará registrada y será revisada.",
     "CHART_RESTRICTED_CHIP": "Expediente restringido",
@@ -5075,7 +5076,9 @@
     "EXISTING_MATCH_DESC_IDENTITY_MIXED": "Ya existen expedientes con el mismo nombre y la misma fecha de nacimiento, aquí o en otro hospital. Abra o vincule el expediente correcto en lugar de crear un duplicado.",
     "EXISTING_MATCH_DESC_BOTH": "Ya existen en otro hospital expedientes con el mismo nombre y fecha de nacimiento, o con este teléfono o correo. Vincule aquí el expediente correcto en lugar de crear un duplicado.",
     "EXISTING_MATCH_DESC_BOTH_HERE": "Ya hay en este hospital expedientes con el mismo nombre y fecha de nacimiento, o con este teléfono o correo. Abra el expediente correcto en lugar de crear un duplicado.",
-    "EXISTING_MATCH_DESC_BOTH_MIXED": "Ya existen expedientes con el mismo nombre y fecha de nacimiento, o con este teléfono o correo, aquí o en otro hospital. Abra o vincule el expediente correcto en lugar de crear un duplicado."
+    "EXISTING_MATCH_DESC_BOTH_MIXED": "Ya existen expedientes con el mismo nombre y fecha de nacimiento, o con este teléfono o correo, aquí o en otro hospital. Abra o vincule el expediente correcto en lugar de crear un duplicado.",
+    "BORN_FEMALE": "Nacida en",
+    "BORN_MALE": "Nacido en"
   },
   "PLATFORM": {
     "ACCESS_LOGS": "Registros de acceso",

@@ -6,6 +6,7 @@ import { TranslateModule } from '@ngx-translate/core';
 import { DischargeComponent } from './discharge';
 import { EncounterResponse } from '../services/encounter.service';
 import { DischargeSummary } from '../services/discharge.service';
+import { currentLocale } from '../shared/i18n/app-locale';
 
 describe('DischargeComponent — encounter picker label', () => {
   let component: DischargeComponent;
@@ -76,7 +77,22 @@ describe('DischargeComponent — encounter picker label', () => {
       encounterType: 'OUTPATIENT',
       status: 'COMPLETED',
     } as EncounterResponse);
-    expect(label).toBe('2026-10-24 — OUTPATIENT (COMPLETED)');
+    // Changed in round 28 (QA D1309): the day in the reader's locale, then the
+    // time; the type and status moved to the template as enum labels (they
+    // were raw codes: "2026-10-24 — OUTPATIENT (COMPLETED)").
+    expect(label).toBe(
+      `${new Date(2026, 9, 24).toLocaleDateString(currentLocale())} · ${new Date(
+        2026,
+        9,
+        24,
+        21,
+        0,
+      ).toLocaleTimeString(currentLocale(), {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      })}`,
+    );
   });
 
   it('labels an encounter with no date without a stray date', () => {
@@ -85,7 +101,8 @@ describe('DischargeComponent — encounter picker label', () => {
       encounterType: 'INPATIENT',
       status: 'ARRIVED',
     } as EncounterResponse);
-    expect(label).toBe('— INPATIENT (ARRIVED)');
+    // Changed in round 28 (QA D1309): no date, no stray separator at all.
+    expect(label).toBe('');
   });
 
   // QA D903: reopening a summary rebuilds the picker chip from the row, so the

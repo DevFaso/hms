@@ -118,27 +118,11 @@
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/lock-screen/lock-screen.html::field-label::input password": {
-      "count": 1,
-      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
-    },
-    "src/app/mfa/mfa-challenge.html::field-label::input mfaCode": {
-      "count": 1,
-      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
-    },
-    "src/app/mfa/mfa-enroll.html::field-label::input totpCode": {
-      "count": 1,
-      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
-    },
     "src/app/patient-education/patient-education.html::field-label::select categoryFilter()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
     "src/app/patient-education/patient-education.html::field-label::select typeFilter()": {
-      "count": 1,
-      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
-    },
-    "src/app/profile/profile.html::field-label::input mfaTotpCode": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     }

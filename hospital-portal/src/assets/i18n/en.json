@@ -1204,7 +1204,8 @@
     "TOAST_DENIED": "Refill denied",
     "TOAST_DENY_FAILED": "Could not deny the refill request",
     "TOAST_PAUSED": "Refill put on hold",
-    "TOAST_PAUSE_FAILED": "Could not put the refill request on hold"
+    "TOAST_PAUSE_FAILED": "Could not put the refill request on hold",
+    "NOTES_REQUIRED_FOR": "(required to deny or hold)"
   },
   "ADMISSIONS": {
     "ACUITY": "Acuity",
@@ -5075,7 +5076,9 @@
     "EXISTING_MATCH_DESC_IDENTITY_MIXED": "Records with the same name and date of birth already exist, here or at another hospital. Open or link the right record instead of creating a duplicate.",
     "EXISTING_MATCH_DESC_BOTH": "Records with the same name and date of birth, or with this phone number or e-mail, already exist at another hospital. Link the right record here instead of creating a duplicate.",
     "EXISTING_MATCH_DESC_BOTH_HERE": "Records with the same name and date of birth, or with this phone number or e-mail, are already registered at this hospital. Open the right record instead of creating a duplicate.",
-    "EXISTING_MATCH_DESC_BOTH_MIXED": "Records with the same name and date of birth, or with this phone number or e-mail, already exist, here or at another hospital. Open or link the right record instead of creating a duplicate."
+    "EXISTING_MATCH_DESC_BOTH_MIXED": "Records with the same name and date of birth, or with this phone number or e-mail, already exist, here or at another hospital. Open or link the right record instead of creating a duplicate.",
+    "BORN_FEMALE": "Born",
+    "BORN_MALE": "Born"
   },
   "PLATFORM": {
     "ACCESS_LOGS": "Access Logs",

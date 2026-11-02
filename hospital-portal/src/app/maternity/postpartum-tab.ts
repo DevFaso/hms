@@ -83,6 +83,26 @@ export const OBSERVATION_LIMITS: readonly FieldLimit[] = [
   { field: 'painScore', labelKey: 'POSTPARTUM.PAIN', min: 0, max: 10 },
 ];
 
+/** QA D1306 (round 28): the template id of each number a form's range check may refuse. */
+const OBSERVATION_FIELD_IDS: Readonly<Record<string, string>> = {
+  temperatureCelsius: 'obs-temp',
+  systolicBpMmHg: 'obs-sys',
+  diastolicBpMmHg: 'obs-dia',
+  pulseBpm: 'obs-pulse',
+  respirationsPerMin: 'obs-resp',
+  painScore: 'obs-pain',
+};
+const NEWBORN_FIELD_IDS: Readonly<Record<string, string>> = {
+  apgarOneMinute: 'nb-apgar1',
+  apgarFiveMinute: 'nb-apgar5',
+  apgarTenMinute: 'nb-apgar10',
+  temperatureCelsius: 'nb-temp',
+};
+const OBSERVATION_IDS = Object.values(OBSERVATION_FIELD_IDS);
+const NEWBORN_IDS = Object.values(NEWBORN_FIELD_IDS);
+/** The id prefix the screening modal gives its instrument form's radios. */
+const SCREENING_ID_PREFIX = 'pp-pro';
+
 /**
  * QA D1151: what IS a postpartum observation. A row with none of these (only
  * a time and a signer) was saved and counted as one of the 15-minute checks.
@@ -518,16 +538,24 @@ export class PostpartumTabComponent {
       // QA D1151: an empty row is not a check; the vitals it needs are named.
       refuseFields(
         this.host.nativeElement,
-        ['obs-temp'],
-        ['obs-temp'],
+        [OBSERVATION_FIELD_IDS['temperatureCelsius']],
+        OBSERVATION_IDS,
         this.translate.instant('POSTPARTUM.OBSERVATION_EMPTY'),
       );
       return;
     }
-    refuseFields(this.host.nativeElement, [], ['obs-temp'], '');
+    refuseFields(this.host.nativeElement, [], OBSERVATION_IDS, '');
     const outOfRange = firstOutOfRange(this.observationForm, OBSERVATION_LIMITS);
     if (outOfRange) {
-      this.toast.error(rangeMessage(outOfRange, this.translate));
+      const message = rangeMessage(outOfRange, this.translate);
+      // QA D1306 (round 28): the field is marked, not only a toast.
+      refuseFields(
+        this.host.nativeElement,
+        [OBSERVATION_FIELD_IDS[outOfRange.field]],
+        OBSERVATION_IDS,
+        message,
+      );
+      this.toast.error(message);
       return;
     }
     this.observationSaving.set(true);
@@ -589,16 +617,24 @@ export class PostpartumTabComponent {
       // QA D1151: an assessment with no APGAR, vital sign or examination is refused.
       refuseFields(
         this.host.nativeElement,
-        ['nb-apgar1'],
-        ['nb-apgar1'],
+        [NEWBORN_FIELD_IDS['apgarOneMinute']],
+        NEWBORN_IDS,
         this.translate.instant('POSTPARTUM.ASSESSMENT_EMPTY'),
       );
       return;
     }
-    refuseFields(this.host.nativeElement, [], ['nb-apgar1'], '');
+    refuseFields(this.host.nativeElement, [], NEWBORN_IDS, '');
     const outOfRange = firstOutOfRange(this.assessmentForm, NEWBORN_LIMITS);
     if (outOfRange) {
-      this.toast.error(rangeMessage(outOfRange, this.translate));
+      const message = rangeMessage(outOfRange, this.translate);
+      // QA D1306 (round 28): the field is marked, not only a toast.
+      refuseFields(
+        this.host.nativeElement,
+        [NEWBORN_FIELD_IDS[outOfRange.field]],
+        NEWBORN_IDS,
+        message,
+      );
+      this.toast.error(message);
       return;
     }
     this.assessmentSaving.set(true);
@@ -676,6 +712,17 @@ export class PostpartumTabComponent {
     return instrument ? unansweredItems(instrument, this.screeningAnswers()) : [];
   }
 
+  /**
+   * The id of the first radio of each item (of `only`, when given) in the
+   * screening form — the control a refusal marks for that item.
+   */
+  private screeningItemIds(instrument: ProInstrumentView, only?: readonly number[]): string[] {
+    return instrument.items
+      .filter((item) => !only || only.includes(item.itemNo))
+      .filter((item) => item.options.length > 0)
+      .map((item) => `${SCREENING_ID_PREFIX}-item-${item.itemNo}-opt-${item.options[0].optionNo}`);
+  }
+
   submitScreening(): void {
     const patient = this.patient();
     const instrument = this.screeningInstrument();
@@ -683,10 +730,19 @@ export class PostpartumTabComponent {
     // Every item or nothing: a partial EPDS has no validated cutoff, and the
     // server would refuse it anyway — better to say which ones are missing.
     const missing = this.screeningUnanswered();
+    const allItems = this.screeningItemIds(instrument);
     if (missing.length > 0) {
+      // QA D1306 (round 28): each unanswered item is marked, not only a toast.
+      refuseFields(
+        this.host.nativeElement,
+        this.screeningItemIds(instrument, missing),
+        allItems,
+        this.translate.instant('COMMON.FIELD_REQUIRED'),
+      );
       this.toast.warning(this.translate.instant('PRO.INCOMPLETE', { items: missing.join(', ') }));
       return;
     }
+    refuseFields(this.host.nativeElement, [], allItems, '');
     this.screeningSaving.set(true);
     this.screeningService
       .record(patient.id, {

@@ -30,7 +30,7 @@ import {
   cfaAmountMessageKey,
   cfaAmountProblem,
 } from '../../shared/cfa-amount';
-import { refuseFields } from '../../shared/forms/invalid-fields';
+import { FieldRefusal, refuseFields } from '../../shared/forms/invalid-fields';
 
 /** The pay dialog's fields a refusal can mark (QA D1245). */
 const PAY_FIELDS = ['payAmount', 'payRef'];
@@ -208,6 +208,41 @@ export class MyBillingComponent implements OnInit {
     this.paySuccess.set('');
   }
 
+  /** Every reason the payment form refuses, field by field, in reading order. */
+  private payRefusals(inv: PortalInvoice): FieldRefusal[] {
+    const refusals: FieldRefusal[] = [];
+    // QA D184 / D1089: an empty amount is answered (it used to do nothing),
+    // then whole francs (francs CFA have no cents).
+    const amountProblem = cfaAmountProblem(this.payAmount);
+    const amountMessage = amountProblem
+      ? this.translate.instant(cfaAmountMessageKey(amountProblem, CFA_AMOUNT_REQUIRED_KEY))
+      : this.amountRangeMessage(inv);
+    if (amountMessage) refusals.push({ id: 'payAmount', message: amountMessage });
+    // QA D433: only cash is declared without a reference staff can check.
+    if (this.payMethod !== 'CASH' && !this.payReference.trim()) {
+      refusals.push({
+        id: 'payRef',
+        message: this.translate.instant('PORTAL.BILLING.REFERENCE_REQUIRED'),
+      });
+    }
+    return refusals;
+  }
+
+  /** Why a whole-franc amount is too high, or null. */
+  private amountRangeMessage(inv: PortalInvoice): string | null {
+    if (this.payAmount > inv.balance) {
+      return this.translate.instant('PORTAL.BILLING.AMOUNT_EXCEEDS');
+    }
+    // QA D421: refused in the figures the dialog shows.
+    if (this.payAmount > this.declarable(inv)) {
+      return this.translate.instant('PORTAL.BILLING.AMOUNT_EXCEEDS_PENDING', {
+        max: formatCfa(this.declarable(inv)),
+        pending: formatCfa(this.pendingOf(inv)),
+      });
+    }
+    return null;
+  }
+
   closePayDialog() {
     this.payingInvoice.set(null);
     this.payError.set('');
@@ -218,40 +253,16 @@ export class MyBillingComponent implements OnInit {
     const inv = this.payingInvoice();
     if (!inv) return;
 
-    // QA D184 / D1089: an empty amount is answered (it used to do nothing),
-    // then whole francs (francs CFA have no cents).
-    const amountProblem = cfaAmountProblem(this.payAmount);
-    if (amountProblem) {
-      this.payError.set(
-        this.translate.instant(cfaAmountMessageKey(amountProblem, CFA_AMOUNT_REQUIRED_KEY)),
-      );
+    // QA D1302 (round 28): one press names and marks every refused field,
+    // each with its own reason. The amount returned first with a banner only,
+    // so the blank reference stayed hidden and nothing was aria-invalid.
+    const refusals = this.payRefusals(inv);
+    if (refusals.length > 0) {
+      refuseFields(this.host.nativeElement, refusals, PAY_FIELDS);
+      this.payError.set(refusals.map((r) => r.message).join(' '));
       return;
     }
-
-    if (this.payAmount > inv.balance) {
-      this.payError.set(this.translate.instant('PORTAL.BILLING.AMOUNT_EXCEEDS'));
-      return;
-    }
-    // QA D421: refused in the figures the dialog shows.
-    if (this.payAmount > this.declarable(inv)) {
-      this.payError.set(
-        this.translate.instant('PORTAL.BILLING.AMOUNT_EXCEEDS_PENDING', {
-          max: formatCfa(this.declarable(inv)),
-          pending: formatCfa(this.pendingOf(inv)),
-        }),
-      );
-      return;
-    }
-
-    // QA D433: only cash is declared without a reference staff can check.
-    if (this.payMethod !== 'CASH' && !this.payReference.trim()) {
-      const message = this.translate.instant('PORTAL.BILLING.REFERENCE_REQUIRED');
-      // QA D1245: the field itself is marked and focused, not only the message.
-      refuseFields(this.host.nativeElement, ['payRef'], PAY_FIELDS, message);
-      this.payError.set(message);
-      return;
-    }
-    refuseFields(this.host.nativeElement, [], PAY_FIELDS, '');
+    refuseFields(this.host.nativeElement, [], PAY_FIELDS);
 
     this.payProcessing.set(true);
     this.payError.set('');

@@ -62,6 +62,9 @@ const CHECK_IN_ROLES: readonly string[] = [
  */
 const CHECK_IN_ELIGIBLE: readonly AppointmentStatus[] = ['SCHEDULED', 'CONFIRMED'];
 
+/** Every field the reschedule form may refuse. */
+const RESCHEDULE_FIELDS = ['reschedDate', 'reschedStart'];
+
 @Component({
   selector: 'app-appointment-detail',
   standalone: true,
@@ -270,7 +273,7 @@ export class AppointmentDetailComponent implements OnInit {
           !this.rescheduleDate ? 'reschedDate' : null,
           !this.rescheduleStart ? 'reschedStart' : null,
         ].filter((id): id is string => id !== null),
-        ['reschedDate', 'reschedStart'],
+        RESCHEDULE_FIELDS,
         this.translate.instant('COMMON.FIELD_REQUIRED'),
       );
       this.toast.error(this.translate.instant('APPOINTMENTS.REQUIRED_FIELDS'));
@@ -282,9 +285,13 @@ export class AppointmentDetailComponent implements OnInit {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     if (selectedDate < today) {
-      this.toast.error(this.translate.instant('APPOINTMENTS.DATE_IN_PAST'));
+      // QA D1306 (round 28): the date is marked, not only a toast.
+      const message = this.translate.instant('APPOINTMENTS.DATE_IN_PAST');
+      refuseFields(this.host.nativeElement, ['reschedDate'], RESCHEDULE_FIELDS, message);
+      this.toast.error(message);
       return;
     }
+    refuseFields(this.host.nativeElement, [], RESCHEDULE_FIELDS, '');
 
     this.saving.set(true);
     const req: AppointmentUpsertRequest = {

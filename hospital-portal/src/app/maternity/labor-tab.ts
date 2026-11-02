@@ -1,4 +1,11 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  ElementRef,
+  inject,
+  signal,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -34,6 +41,7 @@ import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { FieldRefusal, refuseFields } from '../shared/forms/invalid-fields';
 /**
  * QA D808: the bounds PartographEntryRequestDTO puts on each number. The
  * server refused a dilation of 15 with a bare "≤ 10"; the form now refuses it
@@ -84,6 +92,44 @@ const EPISODE_LABELS: Record<string, string> = {
   laborOnsetAt: 'LABOR.ONSET_TIME',
 };
 
+/** QA D1306 (round 28): the template id of each field a form's check may refuse. */
+const EPISODE_FIELD_IDS: Readonly<Record<string, string>> = {
+  gestationalAgeWeeks: 'labor-ga',
+  gravida: 'labor-gravida',
+  para: 'labor-para',
+};
+const PARTOGRAPH_FIELD_IDS: Readonly<Record<string, string>> = {
+  fetalHeartRateBpm: 'pe-fhr',
+  cervicalDilationCm: 'pe-dilation',
+  descentFifths: 'pe-descent',
+  contractionsPerTenMinutes: 'pe-contractions',
+  contractionDurationSeconds: 'pe-duration',
+  oxytocinDropsPerMinute: 'pe-oxytocin',
+  pulseBpm: 'pe-pulse',
+  systolicBpMmHg: 'pe-sys',
+  diastolicBpMmHg: 'pe-dia',
+  temperatureCelsius: 'pe-temp',
+  urineOutputMl: 'pe-urine',
+};
+const DELIVERY_MODE_ID = 'dl-mode';
+const DELIVERY_BIRTH_TIME_ID = 'dl-time';
+const DELIVERY_PLACENTA_TIME_ID = 'dl-placenta-time';
+const DELIVERY_FIELD_IDS: Readonly<Record<string, string>> = {
+  numberOfInfants: 'dl-infants',
+  birthWeightGrams: 'dl-weight',
+  apgarOneMinute: 'dl-apgar1',
+  apgarFiveMinute: 'dl-apgar5',
+  estimatedBloodLossMl: 'dl-ebl',
+};
+const EPISODE_IDS = Object.values(EPISODE_FIELD_IDS);
+const PARTOGRAPH_IDS = Object.values(PARTOGRAPH_FIELD_IDS);
+const DELIVERY_IDS = [
+  DELIVERY_BIRTH_TIME_ID,
+  DELIVERY_MODE_ID,
+  ...Object.values(DELIVERY_FIELD_IDS),
+  DELIVERY_PLACENTA_TIME_ID,
+];
+
 @Component({
   selector: 'app-labor-tab',
   standalone: true,
@@ -103,6 +149,7 @@ const EPISODE_LABELS: Record<string, string> = {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class LaborTabComponent {
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly laborService = inject(LaborService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
@@ -224,7 +271,15 @@ export class LaborTabComponent {
     if (!patient || !this.startForm.laborOnsetAt) return;
     const outOfRange = firstOutOfRange(this.startForm, EPISODE_LIMITS);
     if (outOfRange) {
-      this.toast.error(rangeMessage(outOfRange, this.translate));
+      const message = rangeMessage(outOfRange, this.translate);
+      // QA D1306 (round 28): the field is marked, not only a toast.
+      refuseFields(
+        this.host.nativeElement,
+        [EPISODE_FIELD_IDS[outOfRange.field]],
+        EPISODE_IDS,
+        message,
+      );
+      this.toast.error(message);
       return;
     }
     // QA D809: G1 P3 was saved. P counts births, each of which ended a pregnancy counted in G.
@@ -236,9 +291,12 @@ export class LaborTabComponent {
       para !== null &&
       para > gravida
     ) {
-      this.toast.error(this.translate.instant('MATERNITY.PARA_ABOVE_GRAVIDA'));
+      const message = this.translate.instant('MATERNITY.PARA_ABOVE_GRAVIDA');
+      refuseFields(this.host.nativeElement, [EPISODE_FIELD_IDS['para']], EPISODE_IDS, message);
+      this.toast.error(message);
       return;
     }
+    refuseFields(this.host.nativeElement, [], EPISODE_IDS, '');
     this.saving.set(true);
     this.laborService
       .startEpisode(
@@ -287,14 +345,31 @@ export class LaborTabComponent {
       form.notes,
     ].some((value) => value !== undefined && value !== null && value !== ('' as unknown));
     if (!hasObservation) {
-      this.toast.error(this.translate.instant('LABOR.ENTRY_REQUIRED'));
+      const message = this.translate.instant('LABOR.ENTRY_REQUIRED');
+      // At least one observation: the first one (the fetal heart rate) is marked.
+      refuseFields(
+        this.host.nativeElement,
+        [PARTOGRAPH_FIELD_IDS['fetalHeartRateBpm']],
+        PARTOGRAPH_IDS,
+        message,
+      );
+      this.toast.error(message);
       return;
     }
     const outOfRange = firstOutOfRange(form, PARTOGRAPH_LIMITS);
     if (outOfRange) {
-      this.toast.error(rangeMessage(outOfRange, this.translate));
+      const message = rangeMessage(outOfRange, this.translate);
+      // QA D1306 (round 28): the field is marked, not only a toast.
+      refuseFields(
+        this.host.nativeElement,
+        [PARTOGRAPH_FIELD_IDS[outOfRange.field]],
+        PARTOGRAPH_IDS,
+        message,
+      );
+      this.toast.error(message);
       return;
     }
+    refuseFields(this.host.nativeElement, [], PARTOGRAPH_IDS, '');
     this.saving.set(true);
     this.laborService
       .addEntry(patient.id, episode.id, withServerDateTimes(form, ['observationTime']))
@@ -339,14 +414,19 @@ export class LaborTabComponent {
     const episode = this.activeEpisode();
     if (!patient || !episode) return;
     if (!this.deliveryForm.deliveryMode) {
-      this.toast.error(this.translate.instant('LABOR.DELIVERY_MODE_REQUIRED'));
+      const message = this.translate.instant('LABOR.DELIVERY_MODE_REQUIRED');
+      refuseFields(this.host.nativeElement, [DELIVERY_MODE_ID], DELIVERY_IDS, message);
+      this.toast.error(message);
       return;
     }
     const problem = this.deliveryProblem();
     if (problem) {
-      this.toast.error(problem);
+      // QA D1306 (round 28): the field is marked, not only a toast.
+      refuseFields(this.host.nativeElement, [problem], DELIVERY_IDS);
+      this.toast.error(problem.message);
       return;
     }
+    refuseFields(this.host.nativeElement, [], DELIVERY_IDS, '');
     this.saving.set(true);
     this.laborService
       .recordDelivery(
@@ -384,11 +464,16 @@ export class LaborTabComponent {
    * null. A number outside the server's bounds; a birth earlier than an
    * observation already charted on the partograph; a placenta delivered
    * before the birth (no birth time typed means the birth is recorded now).
-   * The server refuses the same, on the same fields.
+   * The server refuses the same, on the same fields. Returns the field to mark with its reason.
    */
-  private deliveryProblem(): string | null {
+  private deliveryProblem(): FieldRefusal | null {
     const outOfRange = firstOutOfRange(this.deliveryForm, DELIVERY_LIMITS);
-    if (outOfRange) return rangeMessage(outOfRange, this.translate);
+    if (outOfRange) {
+      return {
+        id: DELIVERY_FIELD_IDS[outOfRange.field],
+        message: rangeMessage(outOfRange, this.translate),
+      };
+    }
     const typedBirth = localInputInstant(this.deliveryForm.birthDateTime);
     const birth = typedBirth ?? new Date();
     const lastObservation = this.entries()
@@ -396,11 +481,17 @@ export class LaborTabComponent {
       .filter((when): when is Date => when !== null)
       .reduce<Date | null>((latest, when) => (!latest || when > latest ? when : latest), null);
     if (typedBirth && lastObservation && typedBirth < lastObservation) {
-      return this.translate.instant('LABOR.BIRTH_BEFORE_LAST_ENTRY');
+      return {
+        id: DELIVERY_BIRTH_TIME_ID,
+        message: this.translate.instant('LABOR.BIRTH_BEFORE_LAST_ENTRY'),
+      };
     }
     const placenta = localInputInstant(this.deliveryForm.placentaDeliveredAt);
     if (placenta && placenta < birth) {
-      return this.translate.instant('LABOR.PLACENTA_BEFORE_BIRTH');
+      return {
+        id: DELIVERY_PLACENTA_TIME_ID,
+        message: this.translate.instant('LABOR.PLACENTA_BEFORE_BIRTH'),
+      };
     }
     return null;
   }
