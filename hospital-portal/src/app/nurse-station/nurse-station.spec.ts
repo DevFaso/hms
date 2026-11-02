@@ -926,9 +926,11 @@ describe('NurseStationComponent — two-tier polling', () => {
         sent: nurseServiceSpy.captureVitals,
       });
       expect(marked).toEqual(['vf-temp']);
-      const reason = (fixture.nativeElement as HTMLElement).querySelector(
-        '[data-testid="submit-guard-reason"]',
-      );
+      // Round 29 merge: the save has no submit guard any more (#1031's D1342 rule);
+      // submitVitals itself puts the reason under Température.
+      const temp = (fixture.nativeElement as HTMLElement).querySelector('#vf-temp');
+      const reasonId = temp?.getAttribute('aria-describedby') ?? '';
+      const reason = (fixture.nativeElement as HTMLElement).querySelector(`#${reasonId}`);
       expect(reason?.textContent).toContain('NURSE.TOAST.VITALS_REQUIRED');
       expect(toastSpy.error).not.toHaveBeenCalled();
     });
