@@ -500,9 +500,9 @@ public class StaffServiceImpl implements StaffService {
             throw new com.example.hms.exception.FieldBusinessException("licenseNumber", "staff.license.required");
         }
         if (staffRepository.existsByLicenseNumber(licenseNumber)) {
-            throw new BusinessRuleException(
-                getLocalizedMessage("staff.license.duplicate", new Object[]{licenseNumber}, locale)
-            );
+            // QA D1301 class (round 29): a licence number another record holds is marked on its field.
+            throw new com.example.hms.exception.FieldBusinessException("licenseNumber", "staff.license.duplicate",
+                licenseNumber);
         }
     }
 
