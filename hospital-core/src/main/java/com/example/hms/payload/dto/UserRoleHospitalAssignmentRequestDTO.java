@@ -58,6 +58,7 @@ public class UserRoleHospitalAssignmentRequestDTO {
     private LocalDate startDate;
 
     /** Bean Validation: exactly one of roleId or roleName must be present */
+    @com.example.hms.validation.ReportedOn("roleId")
     @AssertTrue(message = "{userRoleHospitalAssignment.role.required}")
     public boolean isExactlyOneRoleIdentifierPresent() {
         boolean hasId = roleId != null;
@@ -65,11 +66,13 @@ public class UserRoleHospitalAssignmentRequestDTO {
         return hasId ^ hasName;
     }
 
+    @com.example.hms.validation.ReportedOn("userIdentifier")
     @AssertTrue(message = "{userRoleHospitalAssignment.user.required}")
     public boolean isUserIdentifierValid() {
         return userId != null || (userIdentifier != null && !userIdentifier.isBlank());
     }
 
+    @com.example.hms.validation.ReportedOn("hospitalId")
     @AssertTrue(message = "{userRoleHospitalAssignment.hospital.required}")
     public boolean isHospitalIdentifierValid() {
     // Relaxed: allow omission entirely; service layer will enforce requirement based on role.

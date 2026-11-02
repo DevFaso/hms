@@ -137,7 +137,7 @@ public class TreatmentConsentServiceImpl implements TreatmentConsentService {
             throw new BusinessException("consent.alreadyRevoked");
         }
         if (reason == null || reason.isBlank()) {
-            throw new BusinessException("consent.revocationReasonRequired");
+            throw new com.example.hms.exception.FieldBusinessException("reason", "consent.revocationReasonRequired");
         }
         consent.setStatus(TreatmentConsentStatus.REVOKED);
         consent.setRevokedAt(LocalDateTime.now());

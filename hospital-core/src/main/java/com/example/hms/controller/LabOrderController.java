@@ -180,13 +180,13 @@ public class LabOrderController {
 
         String rawStatus = request == null ? null : request.getStatus();
         if (rawStatus == null || rawStatus.isBlank()) {
-            throw new com.example.hms.exception.BusinessException("lab.order.statusFieldRequired");
+            throw new com.example.hms.exception.FieldBusinessException("status", "lab.order.statusFieldRequired");
         }
         LabOrderStatus toStatus;
         try {
             toStatus = LabOrderStatus.valueOf(rawStatus.trim().toUpperCase(java.util.Locale.ROOT));
         } catch (IllegalArgumentException ex) {
-            throw new com.example.hms.exception.BusinessException("lab.order.unknownStatus", rawStatus);
+            throw new com.example.hms.exception.FieldBusinessException("status", "lab.order.unknownStatus", rawStatus);
         }
         LabOrderResponseDTO result = labOrderService.transitionLabOrderStatus(id, toStatus, request.getReason(), locale);
         // QA D673: a cancel is its own audit event, not a generic update.

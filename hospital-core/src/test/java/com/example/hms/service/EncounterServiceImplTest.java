@@ -1747,7 +1747,8 @@ class EncounterServiceImplTest {
         encounter.setStatus(EncounterStatus.IN_PROGRESS);
         encounter.setHospital(new Hospital());
         encounter.setPatient(new Patient());
-        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        // QA round 29 (stub now lenient): the empty summary is refused before the visit is read.
+        org.mockito.Mockito.lenient().when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         CheckOutRequestDTO request = switch (shape) {
             case "none" -> null;
             case "empty" -> CheckOutRequestDTO.builder().build();
@@ -2710,7 +2711,10 @@ class EncounterServiceImplTest {
             encounterExists(foreign);
 
             assertThatThrownBy(() -> service.checkOut(
-                    foreign.getId(), new com.example.hms.payload.dto.clinical.CheckOutRequestDTO(),
+                    // QA round 29 (request changed): a summary with content, since an empty one is
+                    // refused before the scope check now; the scope refusal is what this test reads.
+                    foreign.getId(), com.example.hms.payload.dto.clinical.CheckOutRequestDTO.builder()
+                        .followUpInstructions("Revoir dans 7 jours").build(),
                     "doctor", false, CALLER_HOSPITAL))
                 .isInstanceOf(ResourceNotFoundException.class);
 

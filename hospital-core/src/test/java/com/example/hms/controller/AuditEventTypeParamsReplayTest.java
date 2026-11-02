@@ -217,7 +217,7 @@ class AuditEventTypeParamsReplayTest {
 
             mvc.perform(get("/audit-logs/event-type-status").header("Accept-Language", "fr"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message", containsString("Indiquez au moins un type")));
+                .andExpect(jsonPath("$.message", containsString("Choisissez au moins un type")));
         }
 
         @Test

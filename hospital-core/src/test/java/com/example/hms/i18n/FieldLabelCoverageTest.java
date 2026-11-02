@@ -91,6 +91,50 @@ class FieldLabelCoverageTest {
         assertThat(raw).as("a label that is the property name itself (QA D1268)").isEmpty();
     }
 
+    /**
+     * QA D1313 (round 29, regression of D1312): the handler's "no label" test
+     * was {@code label.equals(field)}, so every real label that spells its key
+     * (EN relationship, date, amount; FR permissions) lost its name. Every
+     * request field a refusal can name is named by its own label, in EN, FR
+     * and ES, through the real handler and the real bundles.
+     */
+    @Test
+    @DisplayName("D1313: every nameable field is named by its label in a malformed-value refusal, in every language")
+    void everyNameableFieldIsNamedInTheRefusal() throws IOException {
+        org.springframework.context.MessageSource source = TestMessageSources.bundles();
+        com.example.hms.exception.GlobalExceptionHandler handler = new com.example.hms.exception.GlobalExceptionHandler();
+        handler.setMessageSource(source);
+        org.springframework.web.context.request.WebRequest request =
+            org.mockito.Mockito.mock(org.springframework.web.context.request.WebRequest.class);
+        org.mockito.Mockito.when(request.getDescription(false)).thenReturn("uri=/api/x");
+        List<String> unnamed = new ArrayList<>();
+        try {
+            for (String lang : List.of("en", "fr", "es")) {
+                java.util.Locale locale = java.util.Locale.forLanguageTag(lang);
+                org.springframework.context.i18n.LocaleContextHolder.setLocale(locale);
+                for (String field : nameableFields()) {
+                    String label = source.getMessage("field.label." + field, null, null, locale);
+                    Object body = handler.handleHttpMessageNotReadable(malformed(field), request).getBody();
+                    String message = String.valueOf(((Map<?, ?>) body).get("message"));
+                    if (label == null || !message.contains(label)) {
+                        unnamed.add(lang + ":" + field + " -> " + message);
+                    }
+                }
+            }
+        } finally {
+            org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+        }
+        assertThat(unnamed).as("refusals that do not name the field by its label (QA D1313)").isEmpty();
+    }
+
+    private static org.springframework.http.converter.HttpMessageNotReadableException malformed(String property) {
+        var cause = tools.jackson.databind.exc.InvalidFormatException.from(
+            (tools.jackson.core.JsonParser) null, "bad value", "x", Object.class);
+        cause.prependPath(new tools.jackson.core.JacksonException.Reference(null, property));
+        return new org.springframework.http.converter.HttpMessageNotReadableException(
+            "x", cause, new org.springframework.mock.http.MockHttpInputMessage(new byte[0]));
+    }
+
     /** The JSON names of every request-body field a refusal can name. */
     static Set<String> nameableFields() throws IOException {
         Set<String> out = new TreeSet<>();

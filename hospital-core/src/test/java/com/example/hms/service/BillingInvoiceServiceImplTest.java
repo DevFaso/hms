@@ -3121,6 +3121,8 @@ class BillingInvoiceServiceImplTest {
             () -> billingInvoiceService.recordStaffPayment(invoiceId, whole, null, Locale.FRENCH));
 
         assertEquals("billing.payment.staffExceedsWithPending", refused.getMessageKey());
+        // QA D1321 (round 29): marked on the amount field the desk typed.
+        assertEquals("amount", ((com.example.hms.exception.FieldBusinessException) refused).getField());
         assertEquals("Vous avez saisi 450 F CFA, mais le patient a déclaré 150 F CFA en attente de confirmation : "
             + "confirmez ou rejetez d’abord cette déclaration, ou encaissez au plus 300 F CFA.",
             rendered(refused, Locale.FRENCH));

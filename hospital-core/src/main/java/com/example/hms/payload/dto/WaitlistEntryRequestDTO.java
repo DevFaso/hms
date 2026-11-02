@@ -27,7 +27,8 @@ public class WaitlistEntryRequestDTO {
     private LocalDate requestedDateFrom;
     private LocalDate requestedDateTo;
 
-    /** ROUTINE | URGENT | STAT */
+    /** ROUTINE | URGENT | STAT. QA D1323 (round 29): any other value is refused by name. */
+    @jakarta.validation.constraints.Pattern(regexp = "ROUTINE|URGENT|STAT", message = "{waitlist.priority.invalid}")
     @Builder.Default
     private String priority = "ROUTINE";
 

@@ -1,7 +1,6 @@
 package com.example.hms.service.pharmacy;
 
 import com.example.hms.enums.StockTransactionType;
-import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Patient;
 import com.example.hms.model.Prescription;
@@ -89,12 +88,18 @@ public class ControlledDrugRegisterService {
 
     /** The register itself; the exports call it directly, inside their own read-only transaction. */
     private ControlledRegisterDTO buildRegister(UUID pharmacyId, UUID inventoryItemId, LocalDate from, LocalDate to) {
-        if (from == null || to == null || to.isBefore(from)) {
-            throw new BusinessException("pharmacy.register.periodInvalid");
+        // QA D1337 (round 29): a blank start or end is named as missing, both at
+        // once; it read "the end is before the start".
+        com.example.hms.exception.RequiredFields.check()
+            .requireValue(from, "from", "pharmacy.register.fromRequired")
+            .requireValue(to, "to", "pharmacy.register.toRequired")
+            .orThrow();
+        if (to.isBefore(from)) {
+            throw new com.example.hms.exception.FieldBusinessException("to", "pharmacy.register.periodInvalid");
         }
         // Both ends are included: a period of MAX_DAYS days at most (review of #975).
         if (java.time.temporal.ChronoUnit.DAYS.between(from, to) + 1 > MAX_DAYS) {
-            throw new BusinessException("pharmacy.register.periodTooLong", String.valueOf(MAX_DAYS));
+            throw new com.example.hms.exception.FieldBusinessException("to", "pharmacy.register.periodTooLong", String.valueOf(MAX_DAYS));
         }
         Pharmacy pharmacy = pharmacyInScope(pharmacyId);
         List<InventoryItem> drugs = inventoryItemRepository.findAllWithCatalogItemByPharmacyId(pharmacy.getId())

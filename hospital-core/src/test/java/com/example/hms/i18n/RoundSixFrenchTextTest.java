@@ -4,7 +4,6 @@ import com.example.hms.cdshooks.CdsCriticalBlockException;
 import com.example.hms.enums.AllergySeverity;
 import com.example.hms.enums.DispenseCheck;
 import com.example.hms.exception.BusinessException;
-import com.example.hms.exception.BusinessRuleException;
 import com.example.hms.exception.ConflictException;
 import com.example.hms.model.PatientAllergy;
 import com.example.hms.model.User;
@@ -79,7 +78,8 @@ class RoundSixFrenchTextTest {
     void d317_hospitalLifecycleRefusalNamesTheActionInFrench() {
         HospitalLifecycleServiceImpl service = Mockito.mock(HospitalLifecycleServiceImpl.class, Mockito.CALLS_REAL_METHODS);
         Throwable refused = catchThrowable(() -> ReflectionTestUtils.invokeMethod(service, "requireReason", null, "schedule purge"));
-        assertThat(refused).isInstanceOf(BusinessRuleException.class)
+        // QA round 29 sweep (assertion changed): the same 400 sentence, now a field refusal on "reason".
+        assertThat(refused).isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
             .hasMessage("Un motif est requis (Planification de la purge).");
     }
 

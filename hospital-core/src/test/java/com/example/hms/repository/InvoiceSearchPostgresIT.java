@@ -177,6 +177,65 @@ class InvoiceSearchPostgresIT {
         }
     }
 
+    /**
+     * QA D1322 (round 29): the appointment list's search did not find the
+     * patient by MRN. Every identifier finds hospital A's appointment, under
+     * every scope the service composes (none, A's scope, the patient's own
+     * filter), and the MRN, being hospital A's, never finds hospital B's.
+     */
+    @Test
+    @DisplayName("D1322: the appointment search finds the patient by MRN, e-mail, phone, birth date and name")
+    void theAppointmentSearchFindsThePatientByMrn() {
+        List<UUID> rows = new ArrayList<>();
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            entityManager.createNativeQuery("SET LOCAL session_replication_role = replica").executeUpdate();
+            rows.add(appointment(hospitalA));
+            rows.add(appointment(hospitalB));
+        });
+        try {
+            List<String> missed = new ArrayList<>();
+            for (String term : List.of("CHW8266", "chw8266", "W826", EMAIL, "70284317", "15/06/1990", "Sawadogo")) {
+                for (List<UUID> scope : Arrays.asList(null, List.of(hospitalA))) {
+                    long found = appointmentCount(term, scope);
+                    boolean perHospital = term.toLowerCase(java.util.Locale.ROOT).contains("826");
+                    long expected = scope != null || perHospital ? 1 : 2;
+                    if (found != expected) {
+                        missed.add(term + " scope=" + scope + " -> " + found + " (expected " + expected + ")");
+                    }
+                }
+            }
+            assertThat(missed).isEmpty();
+            assertThat(appointmentCount("CHW0000", null)).isZero();
+            assertThat(appointmentCount("CHW8266", List.of(hospitalB))).isZero();
+        } finally {
+            new TransactionTemplate(transactionManager).executeWithoutResult(status ->
+                entityManager.createNativeQuery("DELETE FROM clinical.appointments WHERE id IN (:ids)")
+                    .setParameter("ids", rows).executeUpdate());
+        }
+    }
+
+    private UUID appointment(UUID hospital) {
+        UUID id = UUID.randomUUID();
+        entityManager.createNativeQuery("""
+            INSERT INTO clinical.appointments (id, patient_id, staff_id, hospital_id, department_id, assignment_id,
+                appointment_date, start_time, end_time, status, pre_checked_in, created_at, updated_at)
+            VALUES (:id, :p, :s, :h, :d, :a, :day, TIME '09:00', TIME '09:30', 'SCHEDULED', false, now(), now())
+            """).setParameter("id", id).setParameter("p", patientId).setParameter("s", UUID.randomUUID())
+            .setParameter("h", hospital).setParameter("d", UUID.randomUUID()).setParameter("a", UUID.randomUUID())
+            .setParameter("day", TODAY.plusDays(1)).executeUpdate();
+        return id;
+    }
+
+    private long appointmentCount(String term, List<UUID> hospitals) {
+        AppointmentFilterDTO filter = AppointmentFilterDTO.builder().search(term).build();
+        org.springframework.data.jpa.domain.Specification<com.example.hms.model.Appointment> spec =
+            AppointmentSpecification.withFilter(filter);
+        if (hospitals != null) {
+            spec = spec.and(AppointmentSpecification.inHospitals(new java.util.HashSet<>(hospitals)));
+        }
+        return appointments.count(spec);
+    }
+
     private long count(UUID patient, UUID hospital, List<InvoiceStatus> statuses, boolean dated, String term) {
         return repository.findAllWithFilters(patient, hospital, statuses,
                 dated ? TODAY.minusDays(30) : null, dated ? TODAY.plusDays(1) : null,

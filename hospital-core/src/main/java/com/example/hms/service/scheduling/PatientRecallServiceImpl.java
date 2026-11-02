@@ -130,13 +130,15 @@ public class PatientRecallServiceImpl implements PatientRecallService {
     @Override
     @Transactional
     public RecallResponseDTO cancelRecall(UUID recallId, UUID hospitalId, String reason) {
+        // QA D1157 (round 21): a cancelled recall says why, on the server.
+        // QA round 29: read before any lookup, so a missing reason is always named.
+        String closeReason = com.example.hms.service.support.CancelledOrders.requireReason(reason, "reason",
+            com.example.hms.service.support.CancelledOrders.CANCEL_REASON_REQUIRED);
         PatientRecall recall = loadScoped(recallId, hospitalId);
         if (!OPEN_STATUSES.contains(recall.getStatus())) {
             throw new BusinessException("recall.cancel.notOpen");
         }
-        // QA D1157 (round 21): a cancelled recall says why, on the server.
-        recall.setCloseReason(com.example.hms.service.support.CancelledOrders.requireReason(reason, "reason",
-            com.example.hms.service.support.CancelledOrders.CANCEL_REASON_REQUIRED));
+        recall.setCloseReason(closeReason);
         return toDto(finish(recall, RecallStatus.CANCELLED), hospitalId);
     }
 

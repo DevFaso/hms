@@ -74,6 +74,7 @@ public class HomeVitalReadingDTO {
     @Schema(description = "When the reading was taken (defaults to now if omitted)")
     private LocalDateTime recordedAt;
 
+    @com.example.hms.validation.ReportedOn("diastolicBpMmHg")
     @AssertTrue(message = "{vitals.bloodPressure.invalid}")
     @JsonIgnore
     public boolean isBloodPressureOrdered() {
@@ -81,6 +82,7 @@ public class HomeVitalReadingDTO {
     }
 
     /** D111: a submission with no measurement at all is not a reading. */
+    @com.example.hms.validation.ReportedOn("temperatureCelsius")
     @AssertTrue(message = "{vitals.empty}")
     @JsonIgnore
     public boolean isAnyMeasurementPresent() {

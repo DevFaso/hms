@@ -116,6 +116,8 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
     @Override
     @Transactional
     public MedicationRefillResponseDTO reject(Authentication auth, UUID refillId, RefillDecisionRequestDTO decision) {
+        // QA D1315 (round 29): a denial the patient cannot read is refused, as a hold is.
+        requireReason(decision);
         return decide(auth, refillId, decision, RefillStatus.DENIED);
     }
 
@@ -123,11 +125,15 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
     @Transactional
     public MedicationRefillResponseDTO pause(Authentication auth, UUID refillId, RefillDecisionRequestDTO decision) {
         // A hold the patient can't interpret is worse than a denial, so the reason
-        // is mandatory here even though approve/reject leave it optional.
+        // is mandatory here, as for a denial (approval leaves it optional).
+        requireReason(decision);
+        return decide(auth, refillId, decision, RefillStatus.PAUSED);
+    }
+
+    private static void requireReason(RefillDecisionRequestDTO decision) {
         if (decision == null || decision.getProviderNotes() == null || decision.getProviderNotes().isBlank()) {
             throw new com.example.hms.exception.FieldBusinessException("providerNotes", "patient.refill.decision.reasonRequired");
         }
-        return decide(auth, refillId, decision, RefillStatus.PAUSED);
     }
 
     private MedicationRefillResponseDTO decide(Authentication auth,

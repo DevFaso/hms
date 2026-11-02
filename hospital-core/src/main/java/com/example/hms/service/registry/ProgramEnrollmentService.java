@@ -155,7 +155,7 @@ public class ProgramEnrollmentService {
             restoreCancelledTracingRecall(enrollment);
         } else {
             if (reason == null) {
-                throw new BusinessException("program.enrollment.closeReasonRequired");
+                throw new com.example.hms.exception.FieldBusinessException("reason", "program.enrollment.closeReasonRequired");
             }
             enrollment.setStatus(target);
             enrollment.setClosedOn(LocalDate.now(clock));
@@ -188,7 +188,7 @@ public class ProgramEnrollmentService {
         LocalDate visitDate = request != null && request.getVisitDate() != null
             ? request.getVisitDate() : LocalDate.now(clock);
         if (visitDate.isBefore(enrollment.getEnrolledOn())) {
-            throw new BusinessException("program.enrollment.visitBeforeEnrolment");
+            throw new com.example.hms.exception.FieldBusinessException("visitDate", "program.enrollment.visitBeforeEnrolment");
         }
         // lastVisitOn/nextExpectedVisit summarize the LATEST visit. A
         // backfilled earlier visit would move nextExpectedVisit backwards
@@ -197,7 +197,7 @@ public class ProgramEnrollmentService {
         // absorb it (deliberately: the summary pair is all item 36 needs).
         if (enrollment.getLastVisitOn() != null
             && visitDate.isBefore(enrollment.getLastVisitOn())) {
-            throw new BusinessException("program.enrollment.visitBeforeLast",
+            throw new com.example.hms.exception.FieldBusinessException("visitDate", "program.enrollment.visitBeforeLast",
                 DisplayDates.date(enrollment.getLastVisitOn()));
         }
 

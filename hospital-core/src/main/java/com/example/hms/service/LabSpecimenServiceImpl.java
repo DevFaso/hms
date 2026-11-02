@@ -87,12 +87,12 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
         LocalDateTime collectedAt = request.getCollectedAt() != null ? request.getCollectedAt() : LocalDateTime.now(ZoneId.systemDefault());
         LocalDateTime orderedAt = labOrder.getOrderDatetime();
         if (orderedAt != null && collectedAt.isBefore(orderedAt.minus(COLLECTION_SKEW))) {
-            throw new BusinessException("lab.specimen.collectedBeforeOrder");
+            throw new com.example.hms.exception.FieldBusinessException("collectedAt", "lab.specimen.collectedBeforeOrder");
         }
         // QA D649: nor in the future - a collection 48 h ahead was accepted and
         // then blocked every result on the order (a result cannot predate it).
         if (collectedAt.isAfter(LocalDateTime.now(ZoneId.systemDefault()).plus(COLLECTION_SKEW))) {
-            throw new BusinessException("lab.specimen.collectedInFuture");
+            throw new com.example.hms.exception.FieldBusinessException("collectedAt", "lab.specimen.collectedInFuture");
         }
 
         String accessionNumber = generateAccessionNumber();
@@ -193,10 +193,10 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
         }
         String trimmed = reason == null ? "" : reason.trim();
         if (trimmed.isEmpty()) {
-            throw new BusinessException("lab.specimen.rejectReasonRequired");
+            throw new com.example.hms.exception.FieldBusinessException("reason", "lab.specimen.rejectReasonRequired");
         }
         if (trimmed.length() > MAX_REJECTION_REASON) {
-            throw new BusinessException("lab.specimen.rejectReasonTooLong", MAX_REJECTION_REASON);
+            throw new com.example.hms.exception.FieldBusinessException("reason", "lab.specimen.rejectReasonTooLong", MAX_REJECTION_REASON);
         }
         if (labOrder.getStatus() == LabOrderStatus.ENTERED_IN_ERROR) {
             throw new BusinessException("lab.order.enteredInError");

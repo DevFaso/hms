@@ -40,7 +40,8 @@ class LabTestDefinitionBatchValidationTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("[{\"id\":\"317d5ee5-0000-4000-8000-000000000001\",\"testCode\":\"TDR-R9A\"}]"))
             .andExpect(status().isBadRequest())
-            .andExpect(jsonPath("$.fieldErrors.name").exists());
+            // QA D1338 (round 29, assertion changed): keyed on the request property testName (it was "name").
+            .andExpect(jsonPath("$.fieldErrors.testName").exists());
         verifyNoInteractions(service);
     }
 

@@ -132,7 +132,9 @@ public class PharmacyClaimServiceImpl implements PharmacyClaimService {
     @Transactional
     public PharmacyClaimResponseDTO markRejected(UUID id, String rejectionReason) {
         if (rejectionReason == null || rejectionReason.isBlank()) {
-            throw new BusinessException("pharmacy.claim.rejectionReasonRequired");
+            // QA round 29 sweep (D1333 class): named, so the form marks the reason.
+            throw new com.example.hms.exception.FieldBusinessException("rejectionReason",
+                    "pharmacy.claim.rejectionReasonRequired");
         }
         return transition(id, PharmacyClaimStatus.REJECTED,
                 EnumSet.of(PharmacyClaimStatus.SUBMITTED),

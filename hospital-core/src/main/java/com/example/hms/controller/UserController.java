@@ -95,7 +95,7 @@ public class UserController {
         // written in one transaction, so no PATIENT account is left without one.
         final boolean patientRegistration = Boolean.TRUE.equals(request.getPatientRegistration());
         if (patientRegistration && request.getPatient() == null) {
-            throw new com.example.hms.exception.BusinessException("users.patientRegistration.patientRequired");
+            throw new com.example.hms.exception.FieldBusinessException("patient", "users.patientRegistration.patientRequired");
         }
 
         // SUPER_ADMIN is a global (platform-level) role — it has no hospital context.

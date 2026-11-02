@@ -203,7 +203,7 @@ public class MedicalCertificateServiceImpl implements MedicalCertificateService 
                 }
                 LocalDate start = request.getStartDate() != null ? request.getStartDate() : visitDay;
                 if (start.isBefore(visitDay)) {
-                    throw new BusinessException("medicalCertificate.start.beforeVisit");
+                    throw new com.example.hms.exception.FieldBusinessException("startDate", "medicalCertificate.start.beforeVisit");
                 }
                 yield new Certificate(MedicalCertificateType.SICK_LEAVE, visitDay, start,
                     start.plusDays(request.getDays() - 1L), request.getDays(), remarks);
@@ -211,7 +211,7 @@ public class MedicalCertificateServiceImpl implements MedicalCertificateService 
             case ATTENDANCE -> new Certificate(MedicalCertificateType.ATTENDANCE, visitDay, visitDay, visitDay, null, remarks);
             case GENERAL -> {
                 if (remarks == null) {
-                    throw new BusinessException("medicalCertificate.remarks.required");
+                    throw new com.example.hms.exception.FieldBusinessException("remarks", "medicalCertificate.remarks.required");
                 }
                 yield new Certificate(MedicalCertificateType.GENERAL, visitDay, visitDay, visitDay, null, remarks);
             }

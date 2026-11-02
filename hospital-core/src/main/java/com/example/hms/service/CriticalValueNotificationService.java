@@ -432,7 +432,7 @@ public class CriticalValueNotificationService {
     static boolean readBackMatches(String reportedValue, String reportedUnit, String repeatedValue) {
         String[] reported = numberAndUnit(reportedValue);
         String[] repeated = numberAndUnit(repeatedValue);
-        if (reported == null || repeated == null) {
+        if (reported.length == 0 || repeated.length == 0) {
             String a = normalizeForComparison(reportedValue);
             return a != null && a.equals(normalizeForComparison(repeatedValue));
         }
@@ -446,14 +446,17 @@ public class CriticalValueNotificationService {
         return repeated[1].equals(unit);
     }
 
-    /** {@code [number, unit key or null]} of "6,8 mmol/L", "6.8" or "-2"; null when it does not start with a number. */
+    /**
+     * {@code [number, unit key or null]} of "6,8 mmol/L", "6.8" or "-2"; an
+     * empty array when it does not start with a number (Sonar S1168: never null).
+     */
     private static String[] numberAndUnit(String value) {
         if (value == null) {
-            return null;
+            return new String[0];
         }
         java.util.regex.Matcher m = NUMBER_THEN_UNIT.matcher(value.trim());
         if (!m.matches()) {
-            return null;
+            return new String[0];
         }
         return new String[] {m.group(1), unitKey(m.group(2))};
     }

@@ -202,6 +202,10 @@ public class UserRoleHospitalAssignmentController {
             @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "JSON body with confirmationCode field")
             @RequestBody java.util.Map<String, String> body) {
         String confirmationCode = body != null ? body.get("confirmationCode") : null;
+        // QA round 29 sweep: a missing code is named, not answered "invalid code".
+        com.example.hms.exception.RequiredFields.check()
+            .requireValue(confirmationCode, "confirmationCode", "assignment.verify.codeRequired")
+            .orThrow();
         log.info("🔐 Self-service verification attempt for assignment code '{}'", assignmentCode);
         return ResponseEntity.ok(assignmentService.verifyAssignmentByCode(assignmentCode, confirmationCode));
     }
@@ -213,6 +217,11 @@ public class UserRoleHospitalAssignmentController {
             @RequestBody java.util.Map<String, String> body) {
         String phone = body != null ? body.get("phone") : null;
         String confirmationCode = body != null ? body.get("confirmationCode") : null;
+        // QA round 29 sweep: both are named at once when missing, not answered "invalid code".
+        com.example.hms.exception.RequiredFields.check()
+            .requireValue(phone, "phone", "assignment.verify.phoneRequired")
+            .requireValue(confirmationCode, "confirmationCode", "assignment.verify.codeRequired")
+            .orThrow();
         log.info("🔐 Self-service activation attempt by phone");
         return ResponseEntity.ok(assignmentService.verifyAssignmentByPhone(phone, confirmationCode));
     }

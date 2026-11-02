@@ -127,17 +127,21 @@ public class LabSpecimenController {
     @ApiResponse(responseCode = "404", description = "Specimen not found")
     public ResponseEntity<ApiResponseWrapper<LabSpecimenResponseDTO>> rejectSpecimen(
         @PathVariable UUID id,
-        @RequestBody(required = false) RejectSpecimenRequestDTO request,
+        @jakarta.validation.Valid @RequestBody RejectSpecimenRequestDTO request,
         @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
 
-        LabSpecimenResponseDTO rejected = labSpecimenService.rejectSpecimen(id,
-            request == null ? null : request.getReason(), locale);
+        LabSpecimenResponseDTO rejected = labSpecimenService.rejectSpecimen(id, request.getReason(), locale);
         auditSpecimen(rejected);
         return ResponseEntity.ok(ApiResponseWrapper.success(rejected));
     }
 
-    /** QA D962: the body of a rejection. The reason is required (checked by the service, localised). */
+    /**
+     * QA D962: the body of a rejection. QA D1333 (round 29): the reason is
+     * required at the edge, by field, so an empty body is refused with
+     * {@code fieldErrors.reason} before any lookup (the service keeps its check).
+     */
     static class RejectSpecimenRequestDTO {
+        @jakarta.validation.constraints.NotBlank(message = "{lab.specimen.rejectReasonRequired}")
         private String reason;
 
         public String getReason() { return reason; }

@@ -54,6 +54,13 @@ public class JacksonConfig {
         @Override
         public LocalTime deserialize(JsonParser p, DeserializationContext ctxt) {
             String text = p.getString().trim();
+            // QA D1316 (round 29): a cleared time picker sends "". Read as
+            // absent, like every other blank typed value
+            // (RequestBodyDefaultsModule), so bean validation names it with the
+            // body's other missing fields instead of the parse stopping here.
+            if (text.isEmpty()) {
+                return null;
+            }
             // Try ISO formats first (HH:mm, HH:mm:ss)
             try {
                 return LocalTime.parse(text);

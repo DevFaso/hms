@@ -37,12 +37,14 @@ public final class RequiredFields {
 
     /** Records {@code field} as refused with the reason {@code messageKey} when {@code present} is false. */
     public RequiredFields require(boolean present, String field, String messageKey, Object... args) {
-        if (!present && !missing.containsKey(field)) {
-            missing.put(field, MessageUtil.resolveOrRaw(messageKey, args));
-            Object[] keyAndArgs = new Object[args.length + 1];
-            keyAndArgs[0] = messageKey;
-            System.arraycopy(args, 0, keyAndArgs, 1, args.length);
-            keys.put(field, keyAndArgs);
+        if (!present) {
+            missing.computeIfAbsent(field, f -> {
+                Object[] keyAndArgs = new Object[args.length + 1];
+                keyAndArgs[0] = messageKey;
+                System.arraycopy(args, 0, keyAndArgs, 1, args.length);
+                keys.put(f, keyAndArgs);
+                return MessageUtil.resolveOrRaw(messageKey, args);
+            });
         }
         return this;
     }

@@ -117,10 +117,10 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
             throw new BusinessRuleException(message(DATE_RANGE_INVALID_KEY, effectiveLocale));
         }
         if (dto.daysOfWeek() == null || dto.daysOfWeek().isEmpty()) {
-            throw new BusinessRuleException(message("schedule.bulk.daysOfWeek.required", effectiveLocale));
+            throw new com.example.hms.exception.FieldBusinessException("daysOfWeek", "schedule.bulk.daysOfWeek.required");
         }
         if (dto.endTime().equals(dto.startTime())) {
-            throw new BusinessRuleException(message(SHIFT_TIME_RANGE_INVALID_KEY, effectiveLocale));
+            throw new com.example.hms.exception.FieldBusinessException("endTime", SHIFT_TIME_RANGE_INVALID_KEY);
         }
         ensureCrossMidnightAllowed(dto.shiftType(), dto.startTime(), dto.endTime(), effectiveLocale);
 
@@ -265,13 +265,13 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
 
         StaffShiftStatus newStatus = dto.status();
         if (newStatus == null) {
-            throw new BusinessRuleException(message("schedule.shift.status.required", effectiveLocale));
+            throw new com.example.hms.exception.FieldBusinessException("status", "schedule.shift.status.required");
         }
         if (shift.getStatus() == newStatus) {
             return mapper.toShiftDto(shift);
         }
         if (newStatus == StaffShiftStatus.CANCELLED && (dto.cancellationReason() == null || dto.cancellationReason().isBlank())) {
-            throw new BusinessRuleException(message("schedule.shift.cancellation.reason.required", effectiveLocale));
+            throw new com.example.hms.exception.FieldBusinessException("cancellationReason", "schedule.shift.cancellation.reason.required");
         }
 
         shift.setStatus(newStatus);
@@ -375,7 +375,7 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
         }
         StaffLeaveStatus newStatus = dto.status();
         if (newStatus == null) {
-            throw new BusinessRuleException(message("schedule.leave.status.required", effectiveLocale));
+            throw new com.example.hms.exception.FieldBusinessException("status", "schedule.leave.status.required");
         }
         if (newStatus == StaffLeaveStatus.CANCELLED) {
             throw new BusinessRuleException(message("schedule.leave.status.invalid", effectiveLocale));
@@ -554,7 +554,7 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
         }
         // Allow cross-midnight shifts where endTime < startTime (e.g. NIGHT: 16:30 → 01:30 next day)
         if (dto.endTime().equals(dto.startTime())) {
-            throw new BusinessRuleException(message(SHIFT_TIME_RANGE_INVALID_KEY, locale));
+            throw new com.example.hms.exception.FieldBusinessException("endTime", SHIFT_TIME_RANGE_INVALID_KEY);
         }
         ensureCrossMidnightAllowed(dto.shiftType(), dto.startTime(), dto.endTime(), locale);
         // QA D282: two concurrent submits both passed the check below and both
@@ -641,7 +641,7 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
      */
     private void ensureCrossMidnightAllowed(StaffShiftType type, LocalTime start, LocalTime end, Locale locale) {
         if (isCrossMidnight(start, end) && type != null && !CROSS_MIDNIGHT_TYPES.contains(type)) {
-            throw new BusinessRuleException(message(SHIFT_TIME_RANGE_INVALID_KEY, locale));
+            throw new com.example.hms.exception.FieldBusinessException("endTime", SHIFT_TIME_RANGE_INVALID_KEY);
         }
     }
 

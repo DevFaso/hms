@@ -245,10 +245,10 @@ class StaffAvailabilityServiceImplTest {
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(departmentRepository.findById(departmentId)).thenReturn(Optional.of(department));
         when(availabilityRepository.existsByStaff_IdAndDate(staffId, dto.date())).thenReturn(false);
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("time required");
-
+        // QA round 29 (assertion changed): a field refusal on availableFrom (it was a field-less BusinessRuleException).
         assertThatThrownBy(() -> service.create(dto, locale))
-            .isInstanceOf(BusinessRuleException.class);
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getField()).isEqualTo("availableFrom"));
     }
 
     @Test
@@ -261,10 +261,10 @@ class StaffAvailabilityServiceImplTest {
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(departmentRepository.findById(departmentId)).thenReturn(Optional.of(department));
         when(availabilityRepository.existsByStaff_IdAndDate(staffId, dto.date())).thenReturn(false);
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("invalid");
-
+        // QA round 29 (assertion changed): a field refusal on availableTo (it was a field-less BusinessRuleException).
         assertThatThrownBy(() -> service.create(dto, locale))
-            .isInstanceOf(BusinessRuleException.class);
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getField()).isEqualTo("availableTo"));
     }
 
     @Test

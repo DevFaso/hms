@@ -119,11 +119,13 @@ class HospitalLifecycleServiceImplTest {
 
     @Test
     void suspendRequiresAReason() {
-        when(hospitalRepository.findByIdForUpdate(hospitalId)).thenReturn(Optional.of(hospital));
+        // QA round 29 (assertion changed): refused on "reason" before the hospital is locked.
         TenantLifecycleActionRequestDTO blank = withReason("  ");
         assertThatThrownBy(() -> service.suspend(hospitalId, blank, null))
-            .isInstanceOf(BusinessRuleException.class)
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getField()).isEqualTo("reason"))
             .hasMessageContaining("reason is required");
+        verify(hospitalRepository, never()).findByIdForUpdate(any());
         verify(hospitalRepository, never()).save(any());
     }
 

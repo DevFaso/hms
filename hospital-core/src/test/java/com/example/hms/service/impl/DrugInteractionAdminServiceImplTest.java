@@ -102,8 +102,11 @@ class DrugInteractionAdminServiceImplTest {
         dto.setDrug2Code(dto.getDrug1Code());
 
         assertThatThrownBy(() -> service.create(dto))
-            .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("two different drugs");
+            // QA round 29 (assertion changed): a translated key on drug2Code, not an English sentence.
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class, ex -> {
+                assertThat(ex.getMessageKey()).isEqualTo("drugInteraction.sameDrug");
+                assertThat(ex.getField()).isEqualTo("drug2Code");
+            });
     }
 
     @Test
@@ -114,8 +117,11 @@ class DrugInteractionAdminServiceImplTest {
         dto.setRecommendation("  ");
 
         assertThatThrownBy(() -> service.create(dto))
-            .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("recommendation is required");
+            // QA round 29 (assertion changed): a translated key on recommendation, not an English sentence.
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class, ex -> {
+                assertThat(ex.getMessageKey()).isEqualTo("drugInteraction.recommendationRequired");
+                assertThat(ex.getField()).isEqualTo("recommendation");
+            });
     }
 
     @Test

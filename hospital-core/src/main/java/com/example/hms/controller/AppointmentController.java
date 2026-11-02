@@ -470,13 +470,14 @@ public class AppointmentController {
         Authentication authentication,
         @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage
     ) {
-        if (from == null || to == null || from.isAfter(to)) {
-            return ResponseEntity.badRequest().build();
+        // QA round 29 sweep: a refusal names its field (it was an empty 400).
+        if (from.isAfter(to)) {
+            throw new com.example.hms.exception.FieldBusinessException("to", "query.dateRange.reversed");
         }
         // The cap is INCLUSIVE: ChronoUnit.DAYS.between excludes the end date,
         // so the 42-day month grid yields 41; reject anything longer.
         if (java.time.temporal.ChronoUnit.DAYS.between(from, to) > CALENDAR_MAX_RANGE_DAYS - 1) {
-            return ResponseEntity.badRequest().build();
+            throw new com.example.hms.exception.FieldBusinessException("to", "query.dateRange.tooLong", CALENDAR_MAX_RANGE_DAYS);
         }
         Locale locale = (acceptLanguage == null || acceptLanguage.isBlank())
             ? Locale.ENGLISH : Locale.forLanguageTag(acceptLanguage);

@@ -125,7 +125,7 @@ public class SuperAdminLabOrderServiceImpl implements SuperAdminLabOrderService 
 
         String documentationReference = normalize(request.getDocumentationReference());
         if (Boolean.TRUE.equals(documentationShared) && documentationReference == null) {
-            throw new BusinessException("lab.order.documentationReferenceRequired");
+            throw new com.example.hms.exception.FieldBusinessException("documentationReference", "lab.order.documentationReferenceRequired");
         }
 
         return LabOrderRequestDTO.builder()

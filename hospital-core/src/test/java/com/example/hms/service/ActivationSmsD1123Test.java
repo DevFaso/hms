@@ -260,12 +260,12 @@ class ActivationSmsD1123Test {
     void aStaffRoleOfAPatientRecordAtTheNumberIsNotActivatedByTheContactNumber() {
         assignment.setRole(role("ROLE_NURSE"));
         patient.setPhoneNumber(null);
-        com.example.hms.model.Patient record = new com.example.hms.model.Patient();
-        record.setId(UUID.randomUUID());
-        record.setUser(patient);
-        record.setPhoneNumberPrimary("+22670003201");
+        com.example.hms.model.Patient patientRecord = new com.example.hms.model.Patient();
+        patientRecord.setId(UUID.randomUUID());
+        patientRecord.setUser(patient);
+        patientRecord.setPhoneNumberPrimary("+22670003201");
         when(patientRepository.findAllByPhoneSubscriber(org.mockito.ArgumentMatchers.eq("%70003201"),
-            org.mockito.ArgumentMatchers.any())).thenReturn(List.of(record));
+            org.mockito.ArgumentMatchers.any())).thenReturn(List.of(patientRecord));
         when(assignmentRepository.findByUserId(patient.getId())).thenReturn(List.of(assignment));
 
         assertThatThrownBy(() -> service.verifyAssignmentByPhone("+22670003201", CODE))

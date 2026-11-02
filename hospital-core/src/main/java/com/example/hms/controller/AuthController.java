@@ -569,7 +569,8 @@ public class AuthController {
         String phone = firstNonBlank(body == null ? null : body.get("phone"), phoneParam);
         if (email == null || email.isBlank()) {
             if (phone == null || phone.isBlank()) {
-                throw new com.example.hms.exception.BusinessException("auth.r7.contactRequired");
+                // QA round 29 sweep: named, so the form marks the contact field.
+                throw new com.example.hms.exception.FieldBusinessException("email", "auth.r7.contactRequired");
             }
             return resendActivationByPhone(phone.trim());
         }
@@ -1133,12 +1134,12 @@ public class AuthController {
         }
 
         if (request.newPassword() == null || request.newPassword().length() < 8) {
-            return ResponseEntity.badRequest()
-                    .body(new MessageResponse(MessageUtil.resolve("auth.password.tooShort")));
+            // QA round 29 sweep: named, so the form marks the field.
+            throw new com.example.hms.exception.FieldBusinessException("newPassword", "auth.password.tooShort");
         }
         if (request.newPassword().equals(request.currentPassword())) {
-            return ResponseEntity.badRequest()
-                    .body(new MessageResponse(MessageUtil.resolve("auth.password.sameAsCurrent")));
+            // QA round 29 sweep: named, so the form marks the field.
+            throw new com.example.hms.exception.FieldBusinessException("newPassword", "auth.password.sameAsCurrent");
         }
 
         // Password history check (T-20) — reject reuse of last 5 passwords
@@ -1150,8 +1151,8 @@ public class AuthController {
                     .userId(user.getId())
                     .status(AuditStatus.FAILURE)
                     .build());
-            return ResponseEntity.badRequest()
-                    .body(new MessageResponse(MessageUtil.resolve("auth.password.reused")));
+            // QA round 29 sweep: named, so the form marks the field.
+            throw new com.example.hms.exception.FieldBusinessException("newPassword", "auth.password.reused");
         }
 
         // Update password, clear force-change flag, and record in history
@@ -1191,16 +1192,16 @@ public class AuthController {
 
         String newUsername = request.newUsername() == null ? "" : request.newUsername().trim();
         if (newUsername.length() < 3 || newUsername.length() > com.example.hms.model.User.USERNAME_MAX_LENGTH) {
-            return ResponseEntity.badRequest()
-                    .body(new MessageResponse(MessageUtil.resolve("auth.username.length")));
+            // QA round 29 sweep: named, so the form marks the field.
+            throw new com.example.hms.exception.FieldBusinessException("newUsername", "auth.username.length");
         }
         if (!newUsername.matches("^[a-zA-Z0-9._-]+$")) {
-            return ResponseEntity.badRequest()
-                    .body(new MessageResponse(MessageUtil.resolve("auth.username.characters")));
+            // QA round 29 sweep: named, so the form marks the field.
+            throw new com.example.hms.exception.FieldBusinessException("newUsername", "auth.username.characters");
         }
         if (newUsername.equals(currentUsername)) {
-            return ResponseEntity.badRequest()
-                    .body(new MessageResponse(MessageUtil.resolve("auth.username.sameAsCurrent")));
+            // QA round 29 sweep: named, so the form marks the field.
+            throw new com.example.hms.exception.FieldBusinessException("newUsername", "auth.username.sameAsCurrent");
         }
 
         try {
@@ -1362,7 +1363,8 @@ public class AuthController {
                     .effectiveIdentifier();
         }
         if (named == null) {
-            return ResponseEntity.badRequest().build();
+            // QA round 29 sweep: an empty 400 said nothing; the identifier is named.
+            throw new com.example.hms.exception.FieldBusinessException("identifier", "auth.reset.identifierRequired");
         }
         // QA D802: the account work runs off the request thread, so the answer
         // takes the same time whether or not the identifier names an account.

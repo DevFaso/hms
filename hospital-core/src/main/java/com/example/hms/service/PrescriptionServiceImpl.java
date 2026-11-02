@@ -713,6 +713,15 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     @Override
     @Transactional
     public PrescriptionResponseDTO recordPediatricDoseReview(UUID id, String reason, Locale locale) {
+        // QA round 29 sweep: the mandatory reason is read first and named, so an
+        // empty body is refused by field whatever the order's state.
+        String trimmed = reason == null ? "" : reason.trim();
+        if (trimmed.isEmpty()) {
+            throw new com.example.hms.exception.FieldBusinessException("reason", "prescription.pediatricReview.reasonRequired");
+        }
+        if (trimmed.length() > 1000) {
+            throw new com.example.hms.exception.FieldBusinessException("reason", "prescription.pediatricReview.reasonTooLong", 1000);
+        }
         UUID actingHospitalId = roleValidator.requireActiveHospitalId();
         Prescription prescription = lockForUpdateInActingHospital(id, actingHospitalId);
         UUID callerId = roleValidator.getCurrentUserId();
@@ -727,13 +736,6 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         }
         if (prescription.getPediatricDoseReviewedAt() != null) {
             throw new BusinessException("prescription.pediatricReview.alreadyReviewed");
-        }
-        String trimmed = reason == null ? "" : reason.trim();
-        if (trimmed.isEmpty()) {
-            throw new BusinessException("prescription.pediatricReview.reasonRequired");
-        }
-        if (trimmed.length() > 1000) {
-            throw new BusinessException("prescription.pediatricReview.reasonTooLong", 1000);
         }
         com.example.hms.model.User reviewer = doseReviewUsers == null ? null
             : doseReviewUsers.findById(callerId).orElse(null);
@@ -1098,7 +1100,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             // does (D660); it used to go through with no reason at all.
             String reason = request.getWithdrawalReason() == null ? null : request.getWithdrawalReason().trim();
             if (reason == null || reason.isEmpty()) {
-                throw new BusinessException("prescription.signed.withdrawalReason.required");
+                throw new com.example.hms.exception.FieldBusinessException("reason", "prescription.signed.withdrawalReason.required");
             }
             existing.setWithdrawalReason(reason);
             closeClarificationOnWithdrawal(existing);
@@ -1382,7 +1384,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             Prescription prescription, com.example.hms.model.medication.MedicationCatalogItem catalogItem) {
         boolean controlled = prescription.isControlledSubstance() || catalogItem != null && catalogItem.isControlled();
         if (controlled && prescription.getQuantity() == null) {
-            throw new BusinessException("prescription.quantity.requiredControlled");
+            throw new com.example.hms.exception.FieldBusinessException("quantity", "prescription.quantity.requiredControlled");
         }
     }
 
@@ -1568,7 +1570,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         }
         String reason = request.getWithdrawalReason() == null ? null : request.getWithdrawalReason().trim();
         if (reason == null || reason.isEmpty()) {
-            throw new BusinessException("prescription.signed.withdrawalReason.required");
+            throw new com.example.hms.exception.FieldBusinessException("reason", "prescription.signed.withdrawalReason.required");
         }
         UUID currentUserId = authService.getCurrentUserId();
         UUID hospitalId = existing.getHospital() != null ? existing.getHospital().getId() : null;
@@ -1892,7 +1894,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
             throw new ResourceNotFoundException("patient.notFoundByIdentifier", identifier);
         }
-        throw new BusinessException("prescription.patient.required");
+        throw new com.example.hms.exception.FieldBusinessException("patientId", "prescription.patient.required");
     }
 
     private void ensureContextConsistency(Patient patient, Staff staff, Encounter encounter) {

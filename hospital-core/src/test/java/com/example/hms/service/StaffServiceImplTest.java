@@ -328,7 +328,7 @@ class StaffServiceImplTest {
         dto.setUserEmail("");
         dto.setHospitalName("H");
         dto.setJobTitle("Doctor");
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Required");
+        // QA round 29 (stub removed): the required fields go through RequiredFields, not the service's messageSource.
 
         assertThatThrownBy(() -> staffService.createStaff(dto, locale))
                 .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
@@ -341,7 +341,7 @@ class StaffServiceImplTest {
         dto.setUserEmail("user@test.com");
         dto.setHospitalName("");
         dto.setJobTitle("Doctor");
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Required");
+        // QA round 29 (stub removed): the required fields go through RequiredFields, not the service's messageSource.
 
         assertThatThrownBy(() -> staffService.createStaff(dto, locale))
                 .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
@@ -354,7 +354,7 @@ class StaffServiceImplTest {
         dto.setUserEmail("user@test.com");
         dto.setHospitalName("Hospital");
         dto.setJobTitle("");
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Required");
+        // QA round 29 (stub removed): the required fields go through RequiredFields, not the service's messageSource.
 
         assertThatThrownBy(() -> staffService.createStaff(dto, locale))
                 .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
@@ -624,10 +624,11 @@ class StaffServiceImplTest {
         when(assignmentRepository.findFirstByUserIdAndHospitalIdAndRoleId(any(), any(), any()))
             .thenReturn(Optional.of(assignment));
         when(staffRepository.existsByLicenseNumber("LIC-EXISTING")).thenReturn(true);
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Duplicate");
+        // QA round 29 (stub removed, assertion changed): a field refusal on licenseNumber.
 
         assertThatThrownBy(() -> staffService.createStaff(dto, locale))
-                .isInstanceOf(BusinessRuleException.class);
+                .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                    ex -> assertThat(ex.getField()).isEqualTo("licenseNumber"));
     }
 
     @Test
@@ -653,10 +654,11 @@ class StaffServiceImplTest {
         when(roleRepository.findByCode("ROLE_DOCTOR")).thenReturn(Optional.of(role));
         when(assignmentRepository.findFirstByUserIdAndHospitalIdAndRoleId(any(), any(), any()))
             .thenReturn(Optional.of(assignment));
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Required");
+        // QA round 29 (stub removed, assertion changed): a field refusal on licenseNumber.
 
         assertThatThrownBy(() -> staffService.createStaff(dto, locale))
-                .isInstanceOf(BusinessRuleException.class);
+                .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                    ex -> assertThat(ex.getField()).isEqualTo("licenseNumber"));
     }
 
     @Test

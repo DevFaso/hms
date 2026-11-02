@@ -60,15 +60,14 @@ public class PrescriptionController {
     @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
     @Operation(summary = "Create Prescription", description = "Creates a new prescription (doctor, nurse or midwife).")
     public ResponseEntity<PrescriptionResponseDTO> create(
-        @Valid @RequestBody PrescriptionRequestDTO request,
+        @org.springframework.validation.annotation.Validated({jakarta.validation.groups.Default.class,
+            com.example.hms.validation.OnCreate.class}) @RequestBody PrescriptionRequestDTO request,
         Locale locale) {
         // QA D706: a new prescription from the prescribing form states the
-        // quantity to hand over; the dispense is capped at it. (Order sets
-        // and legacy rows without one are handled in the service and the
-        // dispense: a controlled substance is refused without it.)
-        if (request.getQuantity() == null) {
-            throw new com.example.hms.exception.BusinessException("prescription.quantity.required");
-        }
+        // quantity to hand over; the dispense is capped at it (OnCreate on the
+        // body: QA D1318, named with the other missing fields). Order sets and
+        // legacy rows without one are handled in the service and the dispense:
+        // a controlled substance is refused without it.
         PrescriptionResponseDTO created = prescriptionService.createPrescription(request, locale);
         return new ResponseEntity<>(created, HttpStatus.CREATED);
     }

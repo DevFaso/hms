@@ -127,7 +127,7 @@ public class DischargeApprovalServiceImpl implements DischargeApprovalService {
         // discharge it refuses to leave the after-visit summary with no diagnosis.
         String dischargeDiagnosis = trim(decision.getDischargeDiagnosis());
         if (dischargeDiagnosis == null || dischargeDiagnosis.isEmpty()) {
-            throw new BusinessException("admissionDischarge.dischargeDiagnosis.required");
+            throw new com.example.hms.exception.FieldBusinessException("dischargeDiagnosis", "admissionDischarge.dischargeDiagnosis.required");
         }
         approval.setDoctorNote(trim(decision.getDoctorNote()));
         approval.setRejectionReason(null);

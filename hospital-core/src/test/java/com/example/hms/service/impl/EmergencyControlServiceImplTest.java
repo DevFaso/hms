@@ -271,8 +271,11 @@ class EmergencyControlServiceImplTest {
             .userIds(List.of()).reason("oops, blank field").build();
 
         assertThatThrownBy(() -> service.forceMfaReenrol(req, "123456"))
-            .isInstanceOf(com.example.hms.exception.BusinessException.class)
-            .hasMessageContaining("resetAll");
+            // QA round 29 (assertion changed): a translated refusal on the user picker, not an English sentence.
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class, ex -> {
+                assertThat(ex.getField()).isEqualTo("userIds");
+                assertThat(ex.getMessageKey()).isEqualTo("emergency.mfaReset.noTarget");
+            });
         verify(mfaEnrollmentRepository, never()).findAll();
         verify(mfaEnrollmentRepository, never()).deleteAll(any());
         verify(mfaBackupCodeRepository, never()).deleteAllByUserId(any());

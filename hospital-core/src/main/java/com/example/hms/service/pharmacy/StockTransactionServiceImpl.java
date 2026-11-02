@@ -331,7 +331,7 @@ public class StockTransactionServiceImpl implements StockTransactionService {
                 throw new BusinessException(MessageUtil.resolve("stockTransaction.lot.wrongItem"));
             }
         } else if (stockLotRepository.existsByInventoryItemId(item.getId())) {
-            throw new BusinessException(MessageUtil.resolve("stockTransaction.lot.required"));
+            throw new com.example.hms.exception.FieldBusinessException("stockLotId", "stockTransaction.lot.required");
         }
     }
 
@@ -386,7 +386,7 @@ public class StockTransactionServiceImpl implements StockTransactionService {
         }
         BigDecimal returnable = nz(issued).subtract(nz(returned));
         if (quantity.compareTo(returnable) > 0) {
-            throw new BusinessException("stockTransaction.return.exceedsIssued",
+            throw new com.example.hms.exception.FieldBusinessException("quantity", "stockTransaction.return.exceedsIssued",
                     com.example.hms.utility.DisplayNumbers.quantity(returnable.max(BigDecimal.ZERO)));
         }
     }
@@ -430,7 +430,7 @@ public class StockTransactionServiceImpl implements StockTransactionService {
         BigDecimal returnable = nz(dispense.getQuantityDispensed()).subtract(nz(
                 stockTransactionRepository.sumQuantityForReference(dispense.getId(), RETURNED_TYPES)));
         if (dto.getQuantity().compareTo(returnable) > 0) {
-            throw new BusinessException("stockTransaction.return.exceedsDispensed",
+            throw new com.example.hms.exception.FieldBusinessException("quantity", "stockTransaction.return.exceedsDispensed",
                     com.example.hms.utility.DisplayNumbers.quantity(returnable.max(BigDecimal.ZERO)));
         }
     }
@@ -456,7 +456,7 @@ public class StockTransactionServiceImpl implements StockTransactionService {
         BigDecimal returnable = nz(transfer.getQuantity()).subtract(nz(
                 stockTransactionRepository.sumQuantityForReference(transfer.getId(), RETURNED_TYPES)));
         if (dto.getQuantity().compareTo(returnable) > 0) {
-            throw new BusinessException("stockTransaction.return.exceedsDispensed",
+            throw new com.example.hms.exception.FieldBusinessException("quantity", "stockTransaction.return.exceedsDispensed",
                     com.example.hms.utility.DisplayNumbers.quantity(returnable.max(BigDecimal.ZERO)));
         }
     }

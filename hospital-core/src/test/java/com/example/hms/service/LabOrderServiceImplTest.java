@@ -186,8 +186,9 @@ class LabOrderServiceImplTest {
             .build();
 
         assertThatThrownBy(() -> labOrderService.createLabOrder(request, Locale.ENGLISH))
-            .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("orderChannelOther must be provided");
+            // QA D1319 class (round 29, assertion changed): named on the field; the sentence shows no property.
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getField()).isEqualTo("orderChannelOther"));
 
         verify(labOrderRepository, never()).save(any());
     }

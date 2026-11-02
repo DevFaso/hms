@@ -177,7 +177,7 @@ public class SuperAdminPlatformRegistryServiceImpl implements SuperAdminPlatform
     @Override
     public PlatformReleaseWindowResponseDTO scheduleReleaseWindow(PlatformReleaseWindowRequestDTO request) {
         if (!request.getEndsAt().isAfter(request.getStartsAt())) {
-            throw new BusinessException("platform.releaseWindow.endBeforeStart");
+            throw new com.example.hms.exception.FieldBusinessException("endsAt", "platform.releaseWindow.endBeforeStart");
         }
         // D7b: the unique (name, environment) constraint used to fire at
         // flush, after the audit row had already committed in its own

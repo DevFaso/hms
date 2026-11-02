@@ -317,6 +317,18 @@ class RefillApprovalServiceImplTest {
     }
 
     @Test
+    @DisplayName("QA D1315: reject — refuses without a reason, before any lookup, keyed providerNotes")
+    void aDenialWithoutAReasonIsRefused_D1315() {
+        for (RefillDecisionRequestDTO decision : java.util.Arrays.asList(null, new RefillDecisionRequestDTO(),
+                RefillDecisionRequestDTO.builder().providerNotes("  ").build())) {
+            assertThatThrownBy(() -> service.reject(auth, refillId, decision))
+                    .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                        ex -> assertThat(ex.getFieldErrors()).containsKey("providerNotes"));
+        }
+        verify(refillRequestRepository, never()).findById(any());
+    }
+
+    @Test
     @DisplayName("pause — refuses a null decision body")
     void pause_requiresBody() {
         assertThatThrownBy(() -> service.pause(auth, refillId, null))
@@ -345,7 +357,9 @@ class RefillApprovalServiceImplTest {
         when(refillRequestRepository.findById(refillId)).thenReturn(Optional.of(paused));
         when(refillRequestRepository.save(any(RefillRequest.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        assertThat(service.reject(auth, refillId, null).getStatus()).isEqualTo("DENIED");
+        // QA D1315 (assertion changed): a denial now needs its reason.
+        assertThat(service.reject(auth, refillId,
+                RefillDecisionRequestDTO.builder().providerNotes("Arrêté").build()).getStatus()).isEqualTo("DENIED");
     }
 
     @Test
@@ -606,7 +620,8 @@ class RefillApprovalServiceImplTest {
         when(refillRequestRepository.findById(refillId)).thenReturn(Optional.of(pendingRefill()));
         when(refillRequestRepository.save(any(RefillRequest.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        service.reject(auth, refillId, null);
+        // QA D1315 (assertion changed): a denial now needs its reason.
+        service.reject(auth, refillId, RefillDecisionRequestDTO.builder().providerNotes("Arrêté").build());
 
         assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.DISPENSED);
         assertThat(prescription.getRefillsUsed()).isZero();

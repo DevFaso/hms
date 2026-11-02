@@ -86,8 +86,8 @@ class ExceptionProseRatchetTest {
                 n++;
             }
         }
-        // QA D1299 (round 28): a FieldBusinessException carries its message SECOND, after the field;
-        // a sentence there is still a sentence (the round-28 conversions kept their text).
+        // QA D1299 (round 28): a field refusal carries its message second, after the field name,
+        // and a sentence in that place is still a sentence: the round-28 conversions kept their text.
         Matcher f = FIELD_PROSE.matcher(source);
         while (f.find()) {
             if (isProse(f.group(1))) {

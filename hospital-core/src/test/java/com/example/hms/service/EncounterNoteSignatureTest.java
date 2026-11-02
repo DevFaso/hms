@@ -689,7 +689,8 @@ class EncounterNoteSignatureTest {
 
         assertThatThrownBy(() -> service.signEncounterNote(encounterId, LOCALE))
             .isInstanceOf(BusinessException.class)
-            .hasMessage("You have several unsigned note entries on this encounter. Name the one to sign (noteId).");
+            // QA D1319 class (round 29, assertion changed): no raw property in the sentence.
+            .hasMessage("You have several unsigned note entries on this visit. Choose the one to sign.");
         assertThat(note.isSigned()).isFalse();
         assertThat(laterOwn.isSigned()).isFalse();
 
@@ -713,9 +714,10 @@ class EncounterNoteSignatureTest {
             throw new AssertionError(e);
         }
         assertThat(fr.getProperty("encounter.note.sign.noOwnUnsigned")).contains("non signée");
-        assertThat(fr.getProperty("encounter.note.sign.ambiguous")).contains("noteId");
+        // QA D1319 class (round 29, assertion changed): the sentence never shows the property "noteId".
+        assertThat(fr.getProperty("encounter.note.sign.ambiguous")).contains("Choisissez").doesNotContain("noteId");
         assertThat(es.getProperty("encounter.note.sign.noOwnUnsigned")).contains("sin firmar");
-        assertThat(es.getProperty("encounter.note.sign.ambiguous")).contains("noteId");
+        assertThat(es.getProperty("encounter.note.sign.ambiguous")).contains("Elija").doesNotContain("noteId");
     }
 
     @Test

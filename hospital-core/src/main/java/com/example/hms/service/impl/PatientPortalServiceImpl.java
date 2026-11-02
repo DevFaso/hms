@@ -299,7 +299,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         if (dto.getPhoneNumberPrimary() != null) {
             String primary = selfServicePhone(patient, dto.getPhoneNumberPrimary(), "phoneNumberPrimary");
             if (primary == null) {
-                throw new BusinessException(MessageUtil.resolve("patient.phoneNumberPrimary.required"));
+                throw new com.example.hms.exception.FieldBusinessException("phoneNumberPrimary", "patient.phoneNumberPrimary.required");
             }
             UUID selfId = patient.getId();
             // Never single-result: two records may already share the number,
@@ -318,8 +318,10 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         }
     }
 
-    /** A phone typed on the profile in E.164; blank is null; anything else is refused. */
-    /** QA D1299: a number refused names the field it was typed in. */
+    /**
+     * A phone typed on the profile in E.164; blank is null; anything else is
+     * refused. QA D1299: a number refused names the field it was typed in.
+     */
     private static String selfServicePhone(Patient patient, String raw, String field) {
         if (raw.isBlank()) {
             return null;
@@ -749,7 +751,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                         appointmentRepository.findByStaff_IdAndAppointmentDate(st.getId(), dto.getDate()),
                         null, start, slotted.get(st.getId()).getEndAt()))
                 .findFirst()
-                .orElseThrow(() -> new BusinessException("portal.booking.notAPublishedSlot"));
+                .orElseThrow(() -> new com.example.hms.exception.FieldBusinessException("startTime", "portal.booking.notAPublishedSlot"));
     }
 
     /** At most this many slots are offered for one day: a list of times, not an export. */
@@ -767,7 +769,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                                                    java.time.LocalDate date, UUID movingAppointmentId,
                                                    java.time.LocalDateTime hospitalNow) {
         if (date == null) {
-            throw new BusinessException("portal.booking.dateRequired");
+            throw new com.example.hms.exception.FieldBusinessException("date", "portal.booking.dateRequired");
         }
         java.util.Set<UUID> bookable = staffId != null ? null
                 : staffRepository.findActiveProvidersByHospitalAndDepartment(hospitalId, departmentId).stream()

@@ -196,7 +196,7 @@ public class MicroCultureServiceImpl implements MicroCultureService {
             throw new BusinessException("micro.culture.alreadyFinal");
         }
         if (culture.getGrowthResult() == null) {
-            throw new BusinessException("micro.culture.growthRequired");
+            throw new com.example.hms.exception.FieldBusinessException("growthResult", "micro.culture.growthRequired");
         }
         long isolates = isolateRepository.countByCultureResult_Id(culture.getId());
         if (culture.getGrowthResult() == MicroGrowthResult.GROWTH && isolates == 0) {

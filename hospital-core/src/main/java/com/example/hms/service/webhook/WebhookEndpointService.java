@@ -220,7 +220,7 @@ public class WebhookEndpointService {
      */
     private static void requireSubscribable(WebhookEndpointRequestDTO request) {
         if (request.getEvents().contains(WebhookEventType.PING)) {
-            throw new BusinessException("webhook.event.pingNotSubscribable");
+            throw new com.example.hms.exception.FieldBusinessException("events", "webhook.event.pingNotSubscribable");
         }
     }
 

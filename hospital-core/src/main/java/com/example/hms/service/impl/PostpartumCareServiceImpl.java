@@ -120,7 +120,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
         // immediate-recovery checks. A postpartum check follows the birth.
         if (carePlan.getDeliveryOccurredAt() != null && observation.getObservationTime() != null
             && observation.getObservationTime().isBefore(carePlan.getDeliveryOccurredAt())) {
-            throw new BusinessException("maternity.postpartum.observationTime.beforeBirth");
+            throw new com.example.hms.exception.FieldBusinessException("observationTime", "maternity.postpartum.observationTime.beforeBirth");
         }
         AlertEvaluation evaluation = evaluateObservation(observation);
 

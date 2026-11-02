@@ -123,24 +123,18 @@ class ReceptionControllerTest {
 
     @Test
     void updateEncounterStatus_missingStatusField_returns400() {
-        ResponseEntity<Void> response = controller.updateEncounterStatus(
-            ENCOUNTER_ID,
-            Map.of(),
-            receptionistPrincipal
-        );
-
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        // QA round 29 sweep (assertion changed): still a 400, now named on "status" (it was an empty body).
+        assertThatThrownBy(() -> controller.updateEncounterStatus(ENCOUNTER_ID, Map.of(), receptionistPrincipal))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getFieldErrors()).containsKey("status"));
     }
 
     @Test
     void updateEncounterStatus_invalidStatusValue_returns400() {
-        ResponseEntity<Void> response = controller.updateEncounterStatus(
-            ENCOUNTER_ID,
-            Map.of("status", "NOT_A_REAL_STATUS"),
-            receptionistPrincipal
-        );
-
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        // QA round 29 sweep (assertion changed): still a 400, now named on "status" (it was an empty body).
+        assertThatThrownBy(() -> controller.updateEncounterStatus(ENCOUNTER_ID, Map.of("status", "NOT_A_REAL_STATUS"), receptionistPrincipal))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getFieldErrors()).containsKey("status"));
     }
 
     /* ═══════════════════════════════════════════════════════════════════

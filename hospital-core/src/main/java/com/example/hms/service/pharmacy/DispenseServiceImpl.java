@@ -902,7 +902,7 @@ public class DispenseServiceImpl implements DispenseService {
         // fill with no lot used to be accepted as DISPENSED with no stock
         // movement at all, so the shelf and the ledger drifted apart.
         if (stockLot == null && inventoryItemRepository.existsByPharmacyIdAndActiveTrue(pharmacy.getId())) {
-            throw new BusinessException(MessageUtil.resolve("dispense.lot.required"));
+            throw new com.example.hms.exception.FieldBusinessException("stockLotId", "dispense.lot.required");
         }
         recordFefoOverride(dto, stockLot);
 
@@ -1075,7 +1075,7 @@ public class DispenseServiceImpl implements DispenseService {
             return;
         }
         if (actors.verifiedBy() == null) {
-            throw new BusinessException(MessageUtil.resolve("dispense.verification.required"));
+            throw new com.example.hms.exception.FieldBusinessException("verifiedBy", "dispense.verification.required");
         }
         // #922 review: the dispense endpoints also admit HOSPITAL_ADMIN, but
         // the verification is a pharmacist's attestation — the same roles
@@ -1440,11 +1440,13 @@ public class DispenseServiceImpl implements DispenseService {
         // QA D1069: a cancel voids the payment and returns the stock; it says
         // why, as an invoice cancel, a payment reversal and an adjustment do.
         String why = reason == null ? "" : reason.trim();
+        // QA D1333 (round 29): named under fieldErrors.reason, so the form marks it.
         if (why.isEmpty()) {
-            throw new BusinessException("pharmacy.dispense.cancelReasonRequired");
+            throw new com.example.hms.exception.FieldBusinessException("reason", "pharmacy.dispense.cancelReasonRequired");
         }
         if (why.length() > CANCEL_NOTE_MAX) {
-            throw new BusinessException("pharmacy.dispense.cancelReasonTooLong", CANCEL_NOTE_MAX);
+            throw new com.example.hms.exception.FieldBusinessException("reason", "pharmacy.dispense.cancelReasonTooLong",
+                CANCEL_NOTE_MAX);
         }
         Dispense dispense = dispenseRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(DISPENSE_NOT_FOUND));
@@ -1799,7 +1801,7 @@ public class DispenseServiceImpl implements DispenseService {
             throw new com.example.hms.exception.FieldBusinessException("quantityDispensed", "pharmacy.dispense.dispensedPositive");
         }
         if (dispensed.compareTo(requested) > 0) {
-            throw new BusinessException("pharmacy.dispense.exceedsRequested");
+            throw new com.example.hms.exception.FieldBusinessException("quantityDispensed", "pharmacy.dispense.exceedsRequested");
         }
     }
 

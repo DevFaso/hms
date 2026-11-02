@@ -505,7 +505,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         enforceDecisionHospitalScopeForWrite(decision, hospitalId);
 
         if (reason == null || reason.isBlank()) {
-            throw new BusinessException("stock.routing.noShowReasonRequired");
+            throw new com.example.hms.exception.FieldBusinessException("reason", "stock.routing.noShowReasonRequired");
         }
         if (decision.getRoutingType() != RoutingType.PARTNER) {
             throw new BusinessException("stock.routing.noShowNotPartner");

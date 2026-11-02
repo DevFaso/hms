@@ -805,7 +805,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         //    This used to file the booking under the hospital's FIRST
         //    department (alphabetically, e.g. the laboratory), a silent and
         //    wrong placement the patient's chart then carried.
-        throw new BusinessException("appointment.department.required");
+        throw new com.example.hms.exception.FieldBusinessException("departmentId", "appointment.department.required");
     }
 
 

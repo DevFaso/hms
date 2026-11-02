@@ -46,8 +46,10 @@ public class ControlledRegisterController {
     public ResponseEntity<ApiResponseWrapper<ControlledRegisterDTO>> register(
             @RequestParam UUID pharmacyId,
             @RequestParam(required = false) UUID inventoryItemId,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+            // QA D1337 (round 29): optional here so a blank start and end are named
+            // together by the service, not one per request by the binder.
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
         return ResponseEntity.ok(ApiResponseWrapper.success(
                 registerService.register(pharmacyId, inventoryItemId, from, to)));
     }
@@ -59,8 +61,8 @@ public class ControlledRegisterController {
     public ResponseEntity<byte[]> exportCsv(
             @RequestParam UUID pharmacyId,
             @RequestParam(required = false) UUID inventoryItemId,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
         return file(registerService.exportCsv(pharmacyId, inventoryItemId, from, to),
                 new MediaType("text", "csv", java.nio.charset.StandardCharsets.UTF_8),
                 "registre-stupefiants-" + from + "-" + to + ".csv");
@@ -73,8 +75,8 @@ public class ControlledRegisterController {
     public ResponseEntity<byte[]> exportPdf(
             @RequestParam UUID pharmacyId,
             @RequestParam(required = false) UUID inventoryItemId,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
         return file(registerService.exportPdf(pharmacyId, inventoryItemId, from, to), MediaType.APPLICATION_PDF,
                 "registre-stupefiants-" + from + "-" + to + ".pdf");
     }

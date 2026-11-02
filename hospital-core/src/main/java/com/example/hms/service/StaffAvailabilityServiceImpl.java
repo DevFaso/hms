@@ -77,10 +77,10 @@ public class StaffAvailabilityServiceImpl implements StaffAvailabilityService {
 
         if (!dto.dayOff()) {
             if (dto.availableFrom() == null || dto.availableTo() == null) {
-                throw new BusinessRuleException(getLocalizedMessage("availability.time.required", null, locale));
+                throw new com.example.hms.exception.FieldBusinessException(dto.availableFrom() == null ? "availableFrom" : "availableTo", "availability.time.required");
             }
             if (!dto.availableTo().isAfter(dto.availableFrom())) {
-                throw new BusinessRuleException(getLocalizedMessage("availability.time.range.invalid", null, locale));
+                throw new com.example.hms.exception.FieldBusinessException("availableTo", "availability.time.range.invalid");
             }
         }
 

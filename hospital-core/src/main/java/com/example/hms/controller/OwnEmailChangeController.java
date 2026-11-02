@@ -58,7 +58,7 @@ public class OwnEmailChangeController {
     @ApiResponse(responseCode = "200", description = "Mail sent (see delivery); the email is unchanged until confirmed")
     @ApiResponse(responseCode = "400", description = "Current password incorrect, endpoint locked, too many "
         + "requests, address invalid or unchanged, or a single sign-on session")
-    public ResponseEntity<Object> request(@RequestBody ChangeEmailRequest request) {
+    public ResponseEntity<Object> request(@jakarta.validation.Valid @RequestBody ChangeEmailRequest request) {
         Optional<UUID> userId = selfServiceUserId();
         if (userId.isEmpty()) {
             return notAuthenticated();
@@ -83,7 +83,7 @@ public class OwnEmailChangeController {
         + "sign-on session")
     @ApiResponse(responseCode = "410", description = "No change is waiting: never requested, expired, or "
         + "cancelled by too many wrong codes")
-    public ResponseEntity<Object> confirm(@RequestBody ConfirmEmailChangeRequest request) {
+    public ResponseEntity<Object> confirm(@jakarta.validation.Valid @RequestBody ConfirmEmailChangeRequest request) {
         Optional<UUID> userId = selfServiceUserId();
         if (userId.isEmpty()) {
             return notAuthenticated();
@@ -133,10 +133,12 @@ public class OwnEmailChangeController {
     }
 
     /** Request body of step 1; checked, and every refusal audited, by the service. */
-    public record ChangeEmailRequest(String currentPassword, String newEmail) {}
+    /** QA round 29 sweep: both are required, named at once before the service is reached. */
+    public record ChangeEmailRequest(@jakarta.validation.constraints.NotBlank String currentPassword,
+                                     @jakarta.validation.constraints.NotBlank String newEmail) {}
 
     /** Request body of step 2. */
-    public record ConfirmEmailChangeRequest(String code) {}
+    public record ConfirmEmailChangeRequest(@jakarta.validation.constraints.NotBlank String code) {}
 
     /** The answer to both steps: a message, and what was mailed where (masked). */
     public record ChangeEmailResponse(String message, List<NotificationDeliveryStatusDTO> delivery) {}

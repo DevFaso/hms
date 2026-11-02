@@ -75,7 +75,7 @@ public final class MarDoseSchedule {
     private static final Pattern EVERY_DAYS =
         Pattern.compile("\\b(?:EVERY|TOUS LES|CADA)\\s+(\\d)\\s*(?:DAYS|JOURS|DIAS)\\b");
     /**
-     * "3 x", "2 fois", "dos veces", "3 times", "12 fois": a count of doses, read with {@link #PER_DAY}
+     * "3 x", "2 fois", "dos veces", "3 times", "12 fois": a count of doses, read with {@link #perDayAt}
      * after it (QA D1263: up to twelve as a word, so two digits).
      */
     private static final Pattern TIMES = Pattern.compile("\\b(\\d{1,2}+)\\s*+(?:X|FOIS|VECES|VEZ|TIMES)\\s*+");
@@ -86,8 +86,12 @@ public final class MarDoseSchedule {
      * "per day", right after {@link #TIMES}.
      */
     // QA D1291 (round 27): "/JOUR", "/DIA" and "/DAY" too; the word boundary after "/J" refused them.
-    private static final Pattern PER_DAY = Pattern.compile(
-        "(?:/\\s*+(?:JOURS?+|J|DIAS?+|DAYS?+|D)|PAR JOUR|PAR 24 ?H|AL DIA|POR DIA|DAILY|A DAY|PER DAY)\\b");
+    // Sonar S5843 (regex complexity): the one alternation is split in two
+    // patterns tried in turn at the same place; the slash form and the worded
+    // forms share no first character, so the union reads what the one pattern read.
+    private static final Pattern PER_DAY_SLASH = Pattern.compile("/\\s*+(?:JOURS?+|J|DIAS?+|DAYS?+|D)\\b");
+    private static final Pattern PER_DAY_WORDS =
+        Pattern.compile("(?:PAR JOUR|PAR 24 ?H|AL DIA|POR DIA|DAILY|A DAY|PER DAY)\\b");
     /**
      * QA D1291: a posology "1-0-1" (morning, noon, evening; "1-0-0-1" with a
      * bedtime dose): three or four intakes of one digit each, read as the
@@ -243,6 +247,12 @@ public final class MarDoseSchedule {
         return null;
     }
 
+    /** Whether a per-day unit ({@link #PER_DAY_SLASH} or {@link #PER_DAY_WORDS}) starts at {@code from}. */
+    private static boolean perDayAt(String f, int from) {
+        return PER_DAY_SLASH.matcher(f).region(from, f.length()).lookingAt()
+            || PER_DAY_WORDS.matcher(f).region(from, f.length()).lookingAt();
+    }
+
     /** The count of a "3 fois par jour" (or "1-0-1") frequency, or {@code null}. */
     private static Integer timesPerDay(String f) {
         String compact = f.replace(" ", "");
@@ -251,7 +261,7 @@ public final class MarDoseSchedule {
         }
         Matcher m = TIMES.matcher(f);
         while (m.find()) {
-            if (PER_DAY.matcher(f).region(m.end(), f.length()).lookingAt()) {
+            if (perDayAt(f, m.end())) {
                 int count = Integer.parseInt(m.group(1));
                 return count <= MAX_DOSES_PER_DAY ? count : null;
             }

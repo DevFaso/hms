@@ -157,12 +157,13 @@ public class RoiRequestService {
 
     @Transactional
     public RoiRequestResponseDTO deny(UUID requestId, RoiDecisionDTO decision) {
-        UUID hospitalId = requireHospital();
-        String note = trimToNull(decision.getNote());
+        // QA round 29 sweep (D1333 class): read before the scope and the lookup,
+        // named under fieldErrors.note and translated (it was English prose with no field).
+        String note = trimToNull(decision == null ? null : decision.getNote());
         if (note == null) {
-            throw new BusinessException(
-                "Denying a request needs a reason - it is the outcome the requester is told.");
+            throw new com.example.hms.exception.FieldBusinessException("note", "roi.deny.noteRequired");
         }
+        UUID hospitalId = requireHospital();
         RoiRequest request = requirePendingInTenant(requestId, hospitalId);
         decide(request, RoiRequestStatus.DENIED, note, hospitalId);
         emitAudit(AuditEventType.ROI_DENIED, request, "ROI request denied");

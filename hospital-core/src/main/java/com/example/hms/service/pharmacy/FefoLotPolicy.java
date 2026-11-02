@@ -100,7 +100,7 @@ public class FefoLotPolicy {
             // "covers this quantity": it often does not (250 left for 300).
             BigDecimal left = lot.getRemainingQuantity()
                     .subtract(alreadyTaken.getOrDefault(lot.getId(), BigDecimal.ZERO));
-            throw new BusinessException("pharmacy.fefo.reasonRequired", lot.getLotNumber(),
+            throw new com.example.hms.exception.FieldBusinessException("fefoOverrideReason", "pharmacy.fefo.reasonRequired", lot.getLotNumber(),
                     DisplayDates.date(lot.getExpiryDate()),
                     com.example.hms.utility.DisplayNumbers.quantity(left));
         }

@@ -21,6 +21,12 @@ import java.util.UUID;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+// QA D1318 class (round 29): the content rule is checked with the ids, in one answer. A new plan
+// needs a planned item (the active flag alone is not one); an edit may only close the plan.
+@com.example.hms.validation.AnyAnswer(metadata = {"patientId", "hospitalId", "active"}, reportedOn = "riskProfile",
+    message = "{highRiskPlan.contentRequired}", groups = com.example.hms.validation.OnCreate.class)
+@com.example.hms.validation.AnyAnswer(metadata = {"patientId", "hospitalId"}, reportedOn = "riskProfile",
+    message = "{highRiskPlan.contentRequired}")
 public class HighRiskPregnancyCarePlanRequestDTO {
 
     @NotNull

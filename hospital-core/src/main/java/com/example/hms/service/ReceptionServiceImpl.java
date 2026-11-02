@@ -851,7 +851,7 @@ public class ReceptionServiceImpl implements ReceptionService {
             throw new BusinessException("reception.offer.notWaiting");
         }
         if (slotId == null) {
-            throw new BusinessException("reception.offer.slotRequired");
+            throw new com.example.hms.exception.FieldBusinessException("slotId", "reception.offer.slotRequired");
         }
         AppointmentSlot slot = slotRepo.findById(slotId)
                 .filter(s -> s.getHospital() != null && hospitalId.equals(s.getHospital().getId()))
@@ -1003,6 +1003,12 @@ public class ReceptionServiceImpl implements ReceptionService {
     @Override
     @Transactional
     public void closeWaitlistEntry(UUID waitlistId, UUID hospitalId, String reason) {
+        // QA D1157 (round 21): closing an entry says why, on the server; an
+        // empty body closed it at once and nothing recorded the decision.
+        // QA round 29: the body is read before any lookup, so a missing reason
+        // is named whatever the entry's state.
+        String closeReason = com.example.hms.service.support.CancelledOrders.requireReason(reason, "reason",
+            "waitlist.close.reasonRequired");
         AppointmentWaitlist entry = waitlistRepo.findByIdAndHospital_Id(waitlistId, hospitalId)
                 .orElseThrow(() -> new ResourceNotFoundException(WAITLIST_ENTRY_NOT_FOUND_KEY, waitlistId));
         // QA D1186 (round 22): a closed entry stays closed, and the reason it
@@ -1010,10 +1016,6 @@ public class ReceptionServiceImpl implements ReceptionService {
         if (WAITLIST_STATUS_CLOSED.equals(entry.getStatus())) {
             throw new BusinessException("waitlist.close.alreadyClosed");
         }
-        // QA D1157 (round 21): closing an entry says why, on the server; an
-        // empty body closed it at once and nothing recorded the decision.
-        String closeReason = com.example.hms.service.support.CancelledOrders.requireReason(reason, "reason",
-            "waitlist.close.reasonRequired");
         // QA D1185 (round 22): closing an OFFERED entry withdraws the offer and
         // frees the held slot at once, as a decline and the expiry sweep do;
         // the slot stayed HELD (and out of search) until the hold expired.
@@ -1123,10 +1125,10 @@ public class ReceptionServiceImpl implements ReceptionService {
         java.math.BigDecimal copay = request.getCopayAmount();
         if (copay != null) {
             if (copay.signum() < 0) {
-                throw new com.example.hms.exception.BusinessException("reception.checkin.copayNegative");
+                throw new com.example.hms.exception.FieldBusinessException("copayAmount", "reception.checkin.copayNegative");
             }
             if (copay.stripTrailingZeros().scale() > 0) {
-                throw new com.example.hms.exception.BusinessException("billing.payment.wholeAmountOnly");
+                throw new com.example.hms.exception.FieldBusinessException("copayAmount", "billing.payment.wholeAmountOnly");
             }
             // QA D1293: a copay taken needs its method, refused before anything is written.
             if (copay.signum() > 0 && request.getCopayMethod() == null) {

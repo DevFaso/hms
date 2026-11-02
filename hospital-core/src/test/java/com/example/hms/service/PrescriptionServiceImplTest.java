@@ -6060,16 +6060,14 @@ class PrescriptionServiceImplTest {
     /** QA D1096: a physician of the hospital may review too; the reason is mandatory. */
     @Test
     void d1096_aReviewWithoutAReasonIsRefused() {
-        Prescription rx = reviewableRow(UUID.randomUUID());
-        UUID physician = UUID.randomUUID();
-        when(roleValidator.getCurrentUserId()).thenReturn(physician);
-        when(roleValidator.isSigningPhysician(physician, rx.getHospital().getId())).thenReturn(true);
-
-        UUID rxId = rx.getId();
+        // QA round 29 (test reshaped): the mandatory reason is read first, named on "reason",
+        // before the order is looked up or locked.
+        UUID rxId = UUID.randomUUID();
         assertThatThrownBy(() -> prescriptionService.recordPediatricDoseReview(rxId, "   ", Locale.ENGLISH))
-            .isInstanceOf(BusinessException.class)
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getField()).isEqualTo("reason"))
             .extracting("messageKey").isEqualTo("prescription.pediatricReview.reasonRequired");
-        assertThat(rx.getPediatricDoseReviewedAt()).isNull();
+        verify(prescriptionRepository, never()).findByIdAndHospitalIdForUpdate(any(), any());
     }
 
     /** QA D1096: the prescriber does not review their own order. */
