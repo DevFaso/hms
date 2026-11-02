@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 import { SubmitGuardDirective } from './submit-guard.directive';
+import { PhoneFieldDirective } from './phone-field.directive';
 
 @Component({
   standalone: true,
@@ -82,12 +83,16 @@ describe('SubmitGuardDirective (QA D1124 / D1089)', () => {
     expect(document.activeElement).toBe(med);
   }));
 
-  it('says a reason that is not a field as given', () => {
+  it('says a reason that is not a field as given, after the blank required fields', () => {
     host.guard.set('Choisissez d’abord un établissement.');
     fixture.detectChanges();
     button().click();
     expect(host.clicked).toBe(0);
-    expect(reason()?.textContent).toBe('Choisissez d’abord un établissement.');
+    // QA D1277 (round 27): the blank required field is named with the reason,
+    // in the same press (it was the reason alone, the field on a later press).
+    expect(reason()?.textContent).toBe(
+      'Champs obligatoires manquants : Médicament. Choisissez d’abord un établissement.',
+    );
     // The blank listed field is still marked, with its own message.
     expect((el.querySelector('#med') as HTMLInputElement).getAttribute('aria-invalid')).toBe(
       'true',
@@ -369,5 +374,123 @@ describe('SubmitGuardDirective outside a form (QA D1245)', () => {
     tick();
     expect(fixture.componentInstance.farSent).toBe(0);
     expect(el.querySelector('#far')?.getAttribute('aria-invalid')).toBe('true');
+  }));
+});
+
+@Component({
+  standalone: true,
+  imports: [FormsModule, SubmitGuardDirective, PhoneFieldDirective],
+  template: `
+    <div role="dialog">
+      <label for="esi">Score ESI *</label>
+      <select id="esi" name="esi" required [(ngModel)]="esi">
+        <option value="">—</option>
+        <option value="2">2</option>
+      </select>
+      <label for="tel">Téléphone</label>
+      <input id="tel" name="tel" type="tel" appPhoneField [(ngModel)]="tel" />
+      <button
+        id="go"
+        type="button"
+        submitGuardRequired
+        [appSubmitGuard]="reason()"
+        (click)="sent = sent + 1"
+      >
+        OK
+      </button>
+    </div>
+    <form (ngSubmit)="formSent = formSent + 1">
+      <label for="tel2">Téléphone</label>
+      <input id="tel2" name="tel2" type="tel" appPhoneField [(ngModel)]="tel2" />
+      <button id="otp" type="button" appSubmitGuard (click)="otp = otp + 1">Code</button>
+      <button id="save2" type="submit" appSubmitGuard>Enregistrer</button>
+    </form>
+  `,
+})
+class RoundTwentySevenHostComponent {
+  esi = '';
+  tel = '';
+  tel2 = '';
+  sent = 0;
+  otp = 0;
+  formSent = 0;
+  readonly reason = signal<unknown>(false);
+}
+
+describe('SubmitGuardDirective, round 27 (QA D1277, D1289)', () => {
+  let fixture: ComponentFixture<RoundTwentySevenHostComponent>;
+  let el: HTMLElement;
+  const said = (id: string) => el.querySelector(`#${id}-invalid-msg`)?.textContent ?? '';
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      imports: [RoundTwentySevenHostComponent, TranslateModule.forRoot()],
+    });
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', {
+      COMMON: {
+        FIELD_REQUIRED: 'Ce champ est obligatoire.',
+        MISSING_REQUIRED_FIELDS: 'Champs obligatoires manquants : {{fields}}',
+      },
+      USERS: { PHONE_INVALID: 'Numéro de téléphone invalide.' },
+    });
+    translate.use('fr');
+    fixture = TestBed.createComponent(RoundTwentySevenHostComponent);
+    fixture.detectChanges();
+    el = fixture.nativeElement as HTMLElement;
+    document.body.appendChild(el);
+  });
+
+  afterEach(() => el.remove());
+
+  function type(id: string, value: string): void {
+    const input = el.querySelector<HTMLInputElement>(`#${id}`)!;
+    input.value = value;
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+  }
+
+  it('QA D1277: a reason is said together with the blank required fields, on the first press', fakeAsync(() => {
+    fixture.componentInstance.reason.set('Saisissez au moins un signe vital.');
+    fixture.detectChanges();
+    el.querySelector<HTMLButtonElement>('#go')!.click();
+    fixture.detectChanges();
+    tick();
+    expect(fixture.componentInstance.sent).toBe(0);
+    expect(said('go')).toBe(
+      'Champs obligatoires manquants : Score ESI. Saisissez au moins un signe vital.',
+    );
+    expect(el.querySelector('#esi')?.getAttribute('aria-invalid')).toBe('true');
+  }));
+
+  it('QA D1289: a phone number the server refuses is refused on its field, nothing is sent', fakeAsync(() => {
+    const select = el.querySelector<HTMLSelectElement>('#esi')!;
+    select.value = '2';
+    select.dispatchEvent(new Event('change'));
+    type('tel', '70a2b');
+    el.querySelector<HTMLButtonElement>('#go')!.click();
+    fixture.detectChanges();
+    tick();
+    expect(fixture.componentInstance.sent).toBe(0);
+    expect(said('go')).toBe('Numéro de téléphone invalide.');
+    expect(el.querySelector('#tel')?.getAttribute('aria-invalid')).toBe('true');
+    expect(said('tel')).toBe('Numéro de téléphone invalide.');
+
+    type('tel', '70 00 27 81');
+    el.querySelector<HTMLButtonElement>('#go')!.click();
+    tick();
+    expect(fixture.componentInstance.sent).toBe(1);
+  }));
+
+  it("QA D1289: the form's submit reads its phones; a secondary action of the form does not", fakeAsync(() => {
+    type('tel2', '70a2b');
+    el.querySelector<HTMLButtonElement>('#otp')!.click();
+    tick();
+    expect(fixture.componentInstance.otp).toBe(1);
+    el.querySelector<HTMLButtonElement>('#save2')!.click();
+    fixture.detectChanges();
+    tick();
+    expect(fixture.componentInstance.formSent).toBe(0);
+    expect(el.querySelector('#tel2')?.getAttribute('aria-invalid')).toBe('true');
   }));
 });

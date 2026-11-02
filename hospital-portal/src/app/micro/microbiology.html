@@ -590,9 +590,10 @@
         <h3 id="microbiology-dialog-1-title">{{ 'MICRO.SUSC_TITLE' | translate }}</h3>
 
         <div class="form-field">
-          <label for="susc-antibiotic">{{ 'MICRO.FIELD_ANTIBIOTIC' | translate }}</label>
+          <label for="susc-antibiotic">{{ 'MICRO.FIELD_ANTIBIOTIC' | translate }} *</label>
           <input
             id="susc-antibiotic"
+            required
             data-testid="susc-antibiotic"
             type="text"
             maxlength="150"
@@ -630,9 +631,10 @@
         </div>
 
         <div class="form-field">
-          <label for="susc-interp">{{ 'MICRO.COL_INTERPRETATION' | translate }}</label>
+          <label for="susc-interp">{{ 'MICRO.COL_INTERPRETATION' | translate }} *</label>
           <select
             id="susc-interp"
+            required
             data-testid="susc-interp"
             [ngModel]="suscInterpretation()"
             (ngModelChange)="suscInterpretation.set($event)"
@@ -669,6 +671,8 @@
             type="button"
             class="btn-primary"
             data-testid="susc-save"
+            appSubmitGuard
+            submitGuardRequired
             (click)="submitSusc()"
             [disabled]="savingSusc()"
           >

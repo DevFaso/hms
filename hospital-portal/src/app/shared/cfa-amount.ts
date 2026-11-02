@@ -22,10 +22,12 @@ export function cfaAmountProblem(
   return Number.isInteger(value) ? null : 'whole';
 }
 
-/** The message key for a problem; `requiredKey` lets a screen keep its own wording for an empty field. */
-export function cfaAmountMessageKey(
-  problem: CfaAmountProblem,
-  requiredKey: string = CFA_AMOUNT_REQUIRED_KEY,
-): string {
+/**
+ * The message key for a problem. `requiredKey` is the screen's own wording for
+ * an empty field, and every caller names it: QA D1294 (round 27) — an invoice
+ * line's blank unit price took the default and said "Enter a payment amount
+ * greater than zero". A payment screen passes {@link CFA_AMOUNT_REQUIRED_KEY}.
+ */
+export function cfaAmountMessageKey(problem: CfaAmountProblem, requiredKey: string): string {
   return problem === 'whole' ? CFA_WHOLE_AMOUNT_KEY : requiredKey;
 }

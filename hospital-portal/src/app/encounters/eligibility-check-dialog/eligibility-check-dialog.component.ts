@@ -23,6 +23,7 @@ import {
 import { ToastService } from '../../core/toast.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 import { refusalReason } from '../../shared/refusal-reason';
 
 interface SchemeOption {
@@ -47,6 +48,7 @@ interface SchemeOption {
     DatePipe,
     ServerTimePipe,
     ModalDialogDirective,
+    SubmitGuardDirective,
   ],
   templateUrl: './eligibility-check-dialog.component.html',
   styleUrl: './eligibility-check-dialog.component.scss',
@@ -121,14 +123,10 @@ export class EligibilityCheckDialogComponent implements OnInit, OnChanges {
       this.toast.error(this.translate.instant('ENCOUNTERS.ELIGIBILITY.MISSING_CONTEXT'));
       return;
     }
-    if (!this.memberId().trim()) {
-      this.toast.error(this.translate.instant('ENCOUNTERS.ELIGIBILITY.MEMBER_ID_REQUIRED'));
-      return;
-    }
-    if (this.checkType() === 'PRIOR_AUTH' && !this.serviceCode().trim()) {
-      this.toast.error(this.translate.instant('ENCOUNTERS.ELIGIBILITY.SERVICE_CODE_REQUIRED'));
-      return;
-    }
+    // QA D1256 class (round 27): the submit guard names the member id and, for
+    // a prior authorisation, the service code together; one per press before.
+    if (!this.memberId().trim()) return;
+    if (this.checkType() === 'PRIOR_AUTH' && !this.serviceCode().trim()) return;
     this.running.set(true);
     const payload = {
       patientId: this.patientId,

@@ -45,6 +45,23 @@ const PASS = Symbol('escape-keeps-typed-text:pass');
 
 type PassingEvent = KeyboardEvent & { [PASS]?: true };
 
+/** True only while the Escape the reader confirmed with "Discard" is being dispatched. */
+let discardConfirmed = false;
+
+/**
+ * QA D1285 (round 27): whether the Escape being handled is the one the reader
+ * confirmed with "Discard". A dialog whose own Escape handler refuses to close
+ * while something is entered (`if (!this.hasEntries()) close()`) swallowed
+ * it: "Abandonner le texte" discarded nothing, the dialog stayed open, and
+ * every Escape after it was ignored (triage, nursing intake). Such a handler
+ * closes when this is true: the reader has already said to throw the text
+ * away. `scripts/lib/escape-discard.test.mjs` fails the build on an Escape
+ * handler that vetoes on entries without reading it.
+ */
+export function escapeDiscardConfirmed(): boolean {
+  return discardConfirmed;
+}
+
 function isTextField(el: EventTarget | null): el is HTMLInputElement | HTMLTextAreaElement {
   return el instanceof HTMLElement && el.matches(TEXT_FIELD) && !el.matches(QUERY_FIELD);
 }
@@ -148,7 +165,14 @@ export class EscapeKeepsTypedText {
       cancelable: true,
     }) as PassingEvent;
     escape[PASS] = true;
-    from.dispatchEvent(escape);
+    // Every dialog directive emits its close output synchronously from this
+    // keydown, so the host's handler reads the flag while it is set.
+    discardConfirmed = true;
+    try {
+      from.dispatchEvent(escape);
+    } finally {
+      discardConfirmed = false;
+    }
   }
 
   private consume(event: KeyboardEvent): void {

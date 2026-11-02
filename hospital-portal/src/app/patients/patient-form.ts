@@ -31,7 +31,13 @@ import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { MeasurePipe } from '../shared/pipes/measure.pipe';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
-import { PhoneFieldDirective } from '../shared/forms/phone-field.directive';
+import {
+  PhoneFieldDirective,
+  invalidPhoneInputs,
+  refuseInvalidPhones,
+} from '../shared/forms/phone-field.directive';
+import { joinReasons } from '../shared/required-fields';
+
 /**
  * QA D1118: the card names what the match is really on. A record found by the
  * same name and date of birth (matchedOn IDENTITY) was described as "a record
@@ -474,17 +480,27 @@ export class PatientFormComponent implements OnInit {
       >,
       PATIENT_FORM_REQUIRED.filter((f) => f !== 'hospitalId' || !this.hospitalLocked),
     );
-    if (missing.length > 0 || !this.form.hospitalId) {
+    // QA D1289 (round 27): a phone number the server refuses ("70a2b") is
+    // refused here, on its field, with the missing fields in the same press.
+    const badPhones = invalidPhoneInputs(this.host.nativeElement);
+    if (missing.length > 0 || !this.form.hospitalId || badPhones.length > 0) {
       const required = this.translate.instant('COMMON.FIELD_REQUIRED');
       this.serverFieldErrors = Object.fromEntries(missing.map((f) => [f, required]));
       focusFirstInvalid(
         this.host.nativeElement,
         missing.map((f) => PATIENT_FORM_FIELD_IDS[f] ?? f),
       );
+      if (missing.length === 0) refuseInvalidPhones(this.host.nativeElement, badPhones);
+      else badPhones.forEach((el) => el.dispatchEvent(new Event('blur')));
+      const gap =
+        missing.length > 0 || !this.form.hospitalId
+          ? this.translate.instant(
+              missing.length > 0 ? 'PATIENTS.REQUIRED_FIELDS' : 'PATIENTS.SELECT_HOSPITAL_FIRST',
+            )
+          : null;
       this.toast.error(
-        this.translate.instant(
-          missing.length > 0 ? 'PATIENTS.REQUIRED_FIELDS' : 'PATIENTS.SELECT_HOSPITAL_FIRST',
-        ),
+        joinReasons([gap, badPhones.length > 0 && this.translate.instant('USERS.PHONE_INVALID')]) ??
+          '',
       );
       return;
     }

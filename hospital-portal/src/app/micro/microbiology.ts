@@ -31,6 +31,7 @@ import { toServerDateTime } from '../shared/date-utils';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { InlineSubFormDirective } from '../shared/a11y/inline-sub-form.directive';
 import { InlineDiscardAskComponent } from '../shared/a11y/inline-discard-ask.component';
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 
 /**
  * Microbiology workbench (P3 #19) — the lab-facing resulting surface:
@@ -44,6 +45,7 @@ import { InlineDiscardAskComponent } from '../shared/a11y/inline-discard-ask.com
   standalone: true,
   imports: [
     ModalDialogDirective,
+    SubmitGuardDirective,
     ServerTimePipe,
     CommonModule,
     FormsModule,
@@ -394,15 +396,10 @@ export class MicrobiologyComponent implements OnInit {
   submitSusc(): void {
     const culture = this.selected();
     if (!culture) return;
-    if (!this.suscAntibiotic().trim()) {
-      this.toast.error(this.translate.instant('MICRO.ANTIBIOTIC_REQUIRED'));
-      return;
-    }
+    // QA D1256 class (round 27): the submit guard names the antibiotic and the
+    // interpretation together and marks each; this used to refuse one per press.
     const interpretation = this.suscInterpretation();
-    if (!interpretation) {
-      this.toast.error(this.translate.instant('MICRO.INTERPRETATION_REQUIRED'));
-      return;
-    }
+    if (!this.suscAntibiotic().trim() || !interpretation) return;
     if (this.savingSusc()) return;
     this.savingSusc.set(true);
     this.microService

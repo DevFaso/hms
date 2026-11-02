@@ -24,6 +24,7 @@ import {
 import { ToastService } from '../../core/toast.service';
 import { RovingFocusDirective } from '../../shared/a11y/roving-focus.directive';
 import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
+import { escapeDiscardConfirmed } from '../../shared/a11y/escape-keeps-typed-text';
 import { PatientService } from '../../services/patient.service';
 import { offersFundalHeight } from '../../shared/patient-measures';
 
@@ -167,7 +168,8 @@ export class TriageFormComponent {
    * (the Close button still closes).
    */
   onEscape(): void {
-    if (!this.hasEntries()) this.dismissed.emit();
+    // QA D1285: "Abandonner le texte" sends the Escape on; it closes, whatever was entered.
+    if (escapeDiscardConfirmed() || !this.hasEntries()) this.dismissed.emit();
   }
 
   hasEntries(): boolean {
@@ -216,18 +218,24 @@ export class TriageFormComponent {
   }
 
   /**
-   * QA D1158: why "Soumettre le triage" refuses, for the submit guard: the
-   * ESI (marked), else a translated "at least one vital sign" (the first vital marked).
+   * QA D1158: why "Soumettre le triage" refuses, for the submit guard.
+   * QA D1277 (D1256 class, round 27): every gap on the FIRST press. The rule
+   * "at least one vital sign" is returned first and the guard names the blank
+   * ESI with it ("Champs obligatoires manquants : Score ESI. Saisissez au
+   * moins un signe vital…"); it used to say the ESI alone, and the vital-sign
+   * rule only on the next press.
    */
   submitBlockReason(): string | boolean {
-    if (!this.encounter?.id || !this.esiChosen()) return true;
     if (!this.hasVitalSign()) return this.translate.instant('TRIAGE.VITAL_REQUIRED') as string;
-    return false;
+    return !this.encounter?.id || !this.esiChosen();
   }
 
-  /** The fields the submit guard marks, matching {@link submitBlockReason}. */
+  /** The fields the submit guard marks, matching {@link submitBlockReason}: each blank one. */
   submitGuardFieldIds(): string[] {
-    return this.esiChosen() ? ['temperature'] : ['esiScore'];
+    return [
+      ...(this.esiChosen() ? [] : ['esiScore']),
+      ...(this.hasVitalSign() ? [] : ['temperature']),
+    ];
   }
 
   submit(): void {

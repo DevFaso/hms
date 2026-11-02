@@ -15,9 +15,14 @@ import {
 import { TranslateModule } from '@ngx-translate/core';
 import { forkJoin, of, Subject, Subscription } from 'rxjs';
 import { catchError, debounceTime, switchMap } from 'rxjs/operators';
-import { PatientService, PatientResponse } from '../../services/patient.service';
+import {
+  PatientService,
+  PatientResponse,
+  searchPatientsByTerm,
+} from '../../services/patient.service';
 import { patientSubline } from './patient-subline';
 import { rankPeopleByName } from '../person-search';
+import { birthDateQuery, isCompactDate } from '../patient-query';
 import { ListEscapeDirective } from '../a11y/list-escape.directive';
 
 /** How many patients a search asks for, and how many the list shows (QA D1239). */
@@ -89,18 +94,16 @@ export class PatientPickerComponent implements OnInit, OnDestroy {
         switchMap((q) => {
           this.searchLoading.set(true);
           this.noMatch.set(false);
-          const scoped = this.patientService
-            .search({
-              name: q,
-              hospitalId: this.hospitalId ?? undefined,
-              // QA D1239: more than the list shows, so the ranking below
-              // has the patient whose name starts with the query to offer.
-              size: SEARCH_SIZE,
-              // QA D80: an admitted patient whose record is inactive must still
-              // be found by the task, handoff and discharge pickers.
-              includeInactive: true,
-            })
-            .pipe(catchError(() => of([] as PatientResponse[])));
+          // QA D1274: a birth date or an e-mail is searched by that field too.
+          const scoped = searchPatientsByTerm(this.patientService, q, {
+            hospitalId: this.hospitalId ?? undefined,
+            // QA D1239: more than the list shows, so the ranking below
+            // has the patient whose name starts with the query to offer.
+            size: SEARCH_SIZE,
+            // QA D80: an admitted patient whose record is inactive must still
+            // be found by the task, handoff and discharge pickers.
+            includeInactive: true,
+          }).pipe(catchError(() => of([] as PatientResponse[])));
           // Cross-hospital lookup fires only for EXACT identifiers (phone/email/
           // MRN) — free-text name fragments must never leave the hospital scope.
           const exact = this.looksLikeIdentifier(q)
@@ -144,6 +147,8 @@ export class PatientPickerComponent implements OnInit, OnDestroy {
    */
   private looksLikeIdentifier(q: string): boolean {
     const trimmed = q.trim();
+    // QA D1274: "2020-03-15" is a birth date, never a phone number (eight digits may be both).
+    if (birthDateQuery(trimmed) !== null && !isCompactDate(trimmed)) return false;
     return (
       trimmed.includes('@') ||
       /^mrn-/i.test(trimmed) ||

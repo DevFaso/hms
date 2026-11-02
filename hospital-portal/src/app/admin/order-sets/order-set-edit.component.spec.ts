@@ -162,7 +162,10 @@ describe('OrderSetEditComponent', () => {
       'true',
     );
     expect(host.querySelector('[data-testid="order-set-item-name-error-0"]')).not.toBeNull();
-    expect(toast.error).toHaveBeenCalledWith('ORDER_SETS.NAME_REQUIRED');
+    // QA D1256 class (round 27): the name AND the unnamed item in one toast (it said the name only).
+    const said = toast.error.calls.mostRecent().args[0] as string;
+    expect(said).toContain('ORDER_SETS.NAME_REQUIRED');
+    expect(said).toContain('ORDER_SETS.ITEM_NAME_MISSING');
   });
 
   it('QA D859: item types, units, routes and frequencies are read, not shown as codes', async () => {

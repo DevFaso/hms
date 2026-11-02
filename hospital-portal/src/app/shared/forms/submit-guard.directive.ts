@@ -10,6 +10,7 @@ import {
 import { TranslateService } from '@ngx-translate/core';
 
 import { invalidMessageId, refuseFields } from './invalid-fields';
+import { invalidPhoneInputs, refuseInvalidPhones } from './phone-field.directive';
 
 /** Under each blank field the guard marks. */
 const FIELD_KEY = 'COMMON.FIELD_REQUIRED';
@@ -17,6 +18,8 @@ const FIELD_KEY = 'COMMON.FIELD_REQUIRED';
 const MISSING_FIELDS_KEY = 'COMMON.MISSING_REQUIRED_FIELDS';
 /** Next to the button when no blank field can be named. */
 const BLOCKED_KEY = 'COMMON.SUBMIT_BLOCKED_REQUIRED';
+/** Next to the button when a phone field holds a number the server refuses (QA D1289). */
+const PHONE_KEY = 'USERS.PHONE_INVALID';
 
 /**
  * QA D1124 / D1089 (NOT_FIXED in rounds 18–20): a submit button is never
@@ -143,7 +146,15 @@ export class SubmitGuardDirective {
       // whatever the expression says.
       reason = true;
     }
-    if (!reason) {
+    // QA D1289 (round 27): a phone number the server would refuse is never
+    // sent ("70a2b" went to the server and came back as a 400).
+    // A secondary action (the OTP check inside the registration form: a
+    // non-submit button of a form that has its own submit) reads only the
+    // phone fields it lists; the form's submit, and a dialog's, read them all.
+    const wholeForm = this.submitGuardRequired() || !this.isSecondaryAction();
+    const phones = invalidPhoneInputs(root).filter((el) => wholeForm || all.includes(el.id));
+    const badPhones = phones.length > 0;
+    if (!reason && !badPhones) {
       // Every required field is filled now: an earlier refusal goes away.
       if (this.marked.length > 0) this.clear();
       return;
@@ -156,7 +167,13 @@ export class SubmitGuardDirective {
     if (blank.length > 0) {
       refuseFields(root, blank, all, this.translate.instant(FIELD_KEY));
     }
-    this.showMessage(this.messageFor(reason, root, blank));
+    // After refuseFields, which clears the marks of the fields it does not refuse.
+    if (badPhones) refuseInvalidPhones(root, phones);
+    const said = [
+      reason ? this.messageFor(reason, root, blank) : '',
+      badPhones ? this.translate.instant(PHONE_KEY) : '',
+    ].filter((t) => t !== '');
+    this.showMessage(said.join(' '));
   }
 
   /**
@@ -171,16 +188,37 @@ export class SubmitGuardDirective {
     return ids.sort((a, b) => documentOrder(at(a), at(b)));
   }
 
+  /** A non-submit button inside a form that has a submit of its own. */
+  private isSecondaryAction(): boolean {
+    const button = this.host.nativeElement as HTMLButtonElement;
+    const form = button.closest('form');
+    if (button.type === 'submit' || form === null) return false;
+    return Array.from(
+      form.querySelectorAll<HTMLButtonElement>('button, input[type="submit"]'),
+    ).some((b) => b.type === 'submit');
+  }
+
   /** Whether field `id` is a rendered control that declares itself required. */
   private requiredById(root: HTMLElement, id: string): boolean {
     const el = root.querySelector<HTMLElement>(`#${CSS.escape(id)}`);
     return el !== null && isRequiredControl(el);
   }
 
-  private messageFor(reason: unknown, root: ParentNode, blank: readonly string[]): string {
+  private messageFor(reason: unknown, root: HTMLElement, blank: readonly string[]): string {
     // A reason that is not a field (a witness, an attestation) is said as
     // given; the blank fields are still marked, each with its own message.
-    if (typeof reason === 'string') return reason;
+    // QA D1277 (D1256 class, round 27): the blank REQUIRED fields are named
+    // with it, in the same sentence. Empty triage said "Score ESI" on the
+    // first press and the vital-sign rule only on the next one.
+    if (typeof reason === 'string') {
+      const required = blank
+        .filter((id) => this.requiredById(root, id))
+        .map((id) => labelOf(root, id))
+        .filter((l) => l !== '');
+      if (required.length === 0) return reason;
+      const fields = this.translate.instant(MISSING_FIELDS_KEY, { fields: required.join(', ') });
+      return `${fields}. ${reason}`;
+    }
     const labels = blank.map((id) => labelOf(root, id)).filter((l) => l !== '');
     if (labels.length > 0) {
       return this.translate.instant(MISSING_FIELDS_KEY, { fields: labels.join(', ') });

@@ -1,6 +1,8 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { Observable, map } from 'rxjs';
+import { Observable, catchError, forkJoin, map, of } from 'rxjs';
+
+import { birthDateQuery, emailQuery, isCompactDate } from '../shared/patient-query';
 
 export interface PatientAddressHistoryEntry {
   id: string;
@@ -428,6 +430,74 @@ export function recordsWithheld(headers: { get(name: string): string | null }): 
   return headers.get('X-Records-Withheld') === 'OTHER_HOSPITALS';
 }
 
+/** How many patients a birth-date or e-mail search asks for (QA D1274). */
+const FIELD_SEARCH_SIZE = 20;
+
+/** Every source's patients, each once, in source order (a failed source reads as none). */
+function mergeSources(sources: Observable<PatientResponse[]>[]): Observable<PatientResponse[]> {
+  if (sources.length === 1) return sources[0];
+  return forkJoin(sources).pipe(
+    map((lists) => {
+      const seen = new Set<string>();
+      const out: PatientResponse[] = [];
+      for (const p of lists.flat()) {
+        if (p && !seen.has(p.id)) {
+          seen.add(p.id);
+          out.push(p);
+        }
+      }
+      return out;
+    }),
+  );
+}
+
+interface TermSearchParams {
+  hospitalId?: string;
+  size?: number;
+  includeInactive?: boolean;
+}
+
+/** The search by birth date or e-mail `term` calls for, or null (a failure reads as no match). */
+function fieldSearch(
+  patients: Pick<PatientService, 'search'>,
+  term: string,
+  params: TermSearchParams,
+): Observable<PatientResponse[]> | null {
+  const dob = birthDateQuery(term);
+  const email = dob ? null : emailQuery(term);
+  if (!dob && !email) return null;
+  return patients
+    .search({ ...params, dob: dob ?? undefined, email: email ?? undefined })
+    .pipe(catchError(() => of([] as PatientResponse[])));
+}
+
+/**
+ * QA D1274 (D1253 sibling, round 27): a patient typeahead's search. The term
+ * is searched as a name (the server also matches it as an MRN or a phone
+ * number) within the hospital scope and, when it is a birth date (ISO,
+ * 15/03/2020, 15-03-2020, 15032020) or an e-mail (or a piece of one), by that
+ * field too; the results are merged, each patient once. A birth date used to
+ * be sent only as a name, and found nobody in any format. A failed source
+ * reads as no match.
+ */
+export function searchPatientsByTerm(
+  patients: Pick<PatientService, 'search'>,
+  term: string,
+  params: TermSearchParams,
+): Observable<PatientResponse[]> {
+  // A day-first or ISO date is never a name; eight digits are a phone number too.
+  const asName =
+    birthDateQuery(term) && !isCompactDate(term)
+      ? null
+      : patients
+          .search({ ...params, name: term })
+          .pipe(catchError(() => of([] as PatientResponse[])));
+  const sources = [asName, fieldSearch(patients, term, params)].filter(
+    (o): o is Observable<PatientResponse[]> => o !== null,
+  );
+  return mergeSources(sources);
+}
+
 @Injectable({ providedIn: 'root' })
 export class PatientService {
   private readonly http = inject(HttpClient);
@@ -436,7 +506,16 @@ export class PatientService {
     let params = new HttpParams();
     if (hospitalId) params = params.set('hospitalId', hospitalId);
     if (search) params = params.set('search', search);
-    return this.http.get<PatientResponse[]>('/patients', { params });
+    const listed = this.http.get<PatientResponse[]>('/patients', { params });
+    // QA D1274: a typed birth date or e-mail is also asked of the search that
+    // answers it by that field (the 11 hand-written typeaheads call list()).
+    const byField = search ? this.fieldMatches(search, hospitalId) : null;
+    return byField ? mergeSources([listed, byField]) : listed;
+  }
+
+  /** The search by birth date or e-mail a term calls for, or null (failures read as no match). */
+  private fieldMatches(term: string, hospitalId?: string): Observable<PatientResponse[]> | null {
+    return fieldSearch(this, term, { hospitalId, size: FIELD_SEARCH_SIZE, includeInactive: true });
   }
 
   /** Superseded addresses, newest move first (Tier 2 item 38). */
@@ -534,10 +613,12 @@ export class PatientService {
     });
   }
 
-  /** Hospital-scoped free search (GET /patients/search) — name/MRN/phone/email patterns. */
+  /** Hospital-scoped free search (GET /patients/search) — name/MRN/birth date/phone/email. */
   search(params: {
     name?: string;
     mrn?: string;
+    /** QA D1274: a birth date, yyyy-mm-dd (birthDateQuery reads the desk's formats). */
+    dob?: string;
     phone?: string;
     email?: string;
     hospitalId?: string;
@@ -547,6 +628,7 @@ export class PatientService {
   }): Observable<PatientResponse[]> {
     let httpParams = new HttpParams();
     if (params.name) httpParams = httpParams.set('name', params.name);
+    if (params.dob) httpParams = httpParams.set('dob', params.dob);
     if (params.mrn) httpParams = httpParams.set('mrn', params.mrn);
     if (params.phone) httpParams = httpParams.set('phone', params.phone);
     if (params.email) httpParams = httpParams.set('email', params.email);

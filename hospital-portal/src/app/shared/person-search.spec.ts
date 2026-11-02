@@ -1,5 +1,7 @@
 import {
+  birthDateMatches,
   exactIdentifierFirst,
+  patientMatchesTerm,
   personNameMatches,
   phoneMatches,
   phoneSearchKey,
@@ -100,5 +102,38 @@ describe('rankPeopleByName (QA D1239)', () => {
       { id: 'k', firstName: 'Salif', lastName: 'Kaboré' },
     ];
     expect(rankPeopleByName(rows, 'kabore').map((r) => r.id)).toEqual(['k', 'x']);
+  });
+});
+
+describe('patientMatchesTerm (QA D1274)', () => {
+  const awa = {
+    firstName: 'Awa',
+    lastName: 'Kaboré',
+    email: 'awa.kabore@example.test',
+    mrn: 'CHW9395',
+    phoneNumberPrimary: '+22670002781',
+    dateOfBirth: '2020-03-15',
+  };
+
+  it('finds the patient by birth date in every format the desk types it', () => {
+    for (const typed of ['2020-03-15', '15/03/2020', '15-03-2020', '15032020']) {
+      expect(patientMatchesTerm(awa, typed)).withContext(typed).toBeTrue();
+    }
+    expect(patientMatchesTerm(awa, '16/03/2020')).toBeFalse();
+    expect(birthDateMatches('2020-03-15T00:00:00', '15/03/2020')).toBeTrue();
+  });
+
+  it('still finds by name, e-mail (whole or in part), MRN and phone', () => {
+    for (const typed of [
+      'kabore',
+      'Awa Kaboré',
+      'awa.kabore',
+      'awa.kabore@example.test',
+      'chw9395',
+      '70 00 27 81',
+    ]) {
+      expect(patientMatchesTerm(awa, typed)).withContext(typed).toBeTrue();
+    }
+    expect(patientMatchesTerm(awa, 'Sawadogo')).toBeFalse();
   });
 });

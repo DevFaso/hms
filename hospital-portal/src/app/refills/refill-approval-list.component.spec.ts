@@ -90,6 +90,27 @@ describe('RefillApprovalListComponent', () => {
     expect(service.list).toHaveBeenCalledWith('REQUESTED', 0, 50);
   });
 
+  // QA D1276 (round 27): three "Paracétamol" cards could not be told apart.
+  it('QA D1276: each card names the patient and the MRN', () => {
+    service.list.and.returnValue(
+      page([
+        refill({ id: 'r1', patientName: 'Awa Kaboré', patientMrn: 'CHW9395' }),
+        refill({ id: 'r2', patientName: 'Ali Ouédraogo', patientMrn: null }),
+        refill({ id: 'r3' }),
+      ]),
+    );
+    fixture.detectChanges();
+    const patientOf = (id: string) =>
+      (fixture.nativeElement as HTMLElement)
+        .querySelector(`[data-testid="refill-card-${id}"] [data-testid="refill-patient"]`)
+        ?.textContent?.replace(/\s+/g, ' ')
+        .trim();
+    expect(patientOf('r1')).toContain('Awa Kaboré (CHW9395)');
+    expect(patientOf('r2')).toContain('Ali Ouédraogo');
+    expect(patientOf('r2')).not.toContain('(');
+    expect(patientOf('r3')).toContain('REFILLS.UNKNOWN_PATIENT');
+  });
+
   it('renders the empty state when the queue is clear', () => {
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('[data-testid="refill-list-empty"]')).not.toBeNull();

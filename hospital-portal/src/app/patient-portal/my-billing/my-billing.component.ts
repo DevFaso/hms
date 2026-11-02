@@ -25,7 +25,11 @@ import { CfaPipe } from '../../shared/pipes/cfa.pipe';
 import { DialogA11yDirective } from '../../shared/a11y/dialog-a11y.directive';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { formatCfa } from '../../shared/i18n/app-locale';
-import { cfaAmountMessageKey, cfaAmountProblem } from '../../shared/cfa-amount';
+import {
+  CFA_AMOUNT_REQUIRED_KEY,
+  cfaAmountMessageKey,
+  cfaAmountProblem,
+} from '../../shared/cfa-amount';
 import { refuseFields } from '../../shared/forms/invalid-fields';
 
 /** The pay dialog's fields a refusal can mark (QA D1245). */
@@ -218,7 +222,9 @@ export class MyBillingComponent implements OnInit {
     // then whole francs (francs CFA have no cents).
     const amountProblem = cfaAmountProblem(this.payAmount);
     if (amountProblem) {
-      this.payError.set(this.translate.instant(cfaAmountMessageKey(amountProblem)));
+      this.payError.set(
+        this.translate.instant(cfaAmountMessageKey(amountProblem, CFA_AMOUNT_REQUIRED_KEY)),
+      );
       return;
     }
 

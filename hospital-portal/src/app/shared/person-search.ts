@@ -15,6 +15,8 @@
  * on that shape anywhere in the portal.
  */
 
+import { birthDateQuery } from './patient-query';
+
 const COMBINING_MARKS = /[̀-ͯ]/g;
 const SPACES = /\s+/g;
 const NON_DIGITS = /\D/g;
@@ -149,4 +151,47 @@ export function rankPeopleByName<
     .map((row, index) => ({ row, index, rank: nameRank(row, foldSearchText(row.mrn), needle) }))
     .sort((a, b) => a.rank - b.rank || a.index - b.index)
     .map((r) => r.row);
+}
+
+/**
+ * QA D1274 (round 27): whether a stored birth date (yyyy-mm-dd, or an
+ * ISO date-time) is the date typed, in any format the desk writes it
+ * (patient-query.ts: 2020-03-15, 15/03/2020, 15-03-2020, 15032020).
+ */
+export function birthDateMatches(
+  stored: string | null | undefined,
+  term: string | null | undefined,
+): boolean {
+  const day = birthDateQuery(term);
+  return day !== null && (stored ?? '').slice(0, 10) === day;
+}
+
+/**
+ * QA D1274: the one filter of the patients a page already holds — the name
+ * (folded, full or in part), the e-mail, the MRN, either phone number, and
+ * the birth date, each read the way the server's search reads it. The patient
+ * list filtered on everything but the birth date. `scripts/lib/patient-term-search.test.mjs`
+ * fails the build on a page that composes its own filter from the parts.
+ */
+export function patientMatchesTerm(
+  p: {
+    firstName?: string | null;
+    middleName?: string | null;
+    lastName?: string | null;
+    email?: string | null;
+    mrn?: string | null;
+    phoneNumberPrimary?: string | null;
+    phoneNumberSecondary?: string | null;
+    dateOfBirth?: string | null;
+  },
+  term: string | null | undefined,
+): boolean {
+  return (
+    personNameMatches(p, term) ||
+    textMatches(p.email, term) ||
+    textMatches(p.mrn, term) ||
+    phoneMatches(p.phoneNumberPrimary, term) ||
+    phoneMatches(p.phoneNumberSecondary, term) ||
+    birthDateMatches(p.dateOfBirth, term)
+  );
 }

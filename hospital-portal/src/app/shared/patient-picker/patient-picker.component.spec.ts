@@ -49,6 +49,38 @@ describe('PatientPickerComponent', () => {
     }, 400);
   });
 
+  // QA D1274 (D1253 sibling, round 27): a birth date found nobody, in any format.
+  it('QA D1274: a typed birth date is searched by birth date, never as a name or a phone', (done) => {
+    component.hospitalId = 'h1';
+    patientSpy.search.and.returnValue(of([mockPatient('p1', 'Awa')]));
+    component.ngOnInit();
+    component.onQueryChange('15/03/2020');
+    setTimeout(() => {
+      expect(patientSpy.search).toHaveBeenCalledOnceWith({
+        hospitalId: 'h1',
+        size: 20,
+        includeInactive: true,
+        dob: '2020-03-15',
+        email: undefined,
+      });
+      expect(patientSpy.lookup).not.toHaveBeenCalled();
+      expect(component.suggestions().map((p) => p.id)).toEqual(['p1']);
+      done();
+    }, 400);
+  });
+
+  it('QA D1274: a piece of an e-mail is searched by e-mail within the hospital', (done) => {
+    component.hospitalId = 'h1';
+    component.ngOnInit();
+    component.onQueryChange('awa.kabore');
+    setTimeout(() => {
+      expect(patientSpy.search).toHaveBeenCalledWith(
+        jasmine.objectContaining({ email: 'awa.kabore', hospitalId: 'h1' }),
+      );
+      done();
+    }, 400);
+  });
+
   it('adds the exact cross-hospital lookup for identifier queries, exact hits first', (done) => {
     component.hospitalId = 'h1';
     patientSpy.search.and.returnValue(of([mockPatient('p1', 'Anna'), mockPatient('p2', 'Ben')]));

@@ -251,9 +251,11 @@ describe('DispensingComponent', () => {
     submit.click();
     fixture.detectChanges();
     expect(pharmacySvc.createDispense).not.toHaveBeenCalled();
-    expect(el.querySelector('[data-testid="submit-guard-reason"]')?.textContent).toBe(
-      'SUBMIT_GUARD.UNIT',
-    );
+    // QA D1256 class (round 27): every gap on the first press — the unit AND
+    // the attestation (it said the unit, then the attestation on the next press).
+    const first = el.querySelector('[data-testid="submit-guard-reason"]')?.textContent ?? '';
+    expect(first).toContain('SUBMIT_GUARD.UNIT');
+    expect(first).toContain('SUBMIT_GUARD.ATTESTATION');
     expect(el.querySelector('#unit')!.getAttribute('aria-invalid')).toBe('true');
 
     component.form.unit = 'comprimé';
@@ -261,9 +263,9 @@ describe('DispensingComponent', () => {
     submit.click();
     fixture.detectChanges();
     expect(pharmacySvc.createDispense).not.toHaveBeenCalled();
-    expect(el.querySelector('[data-testid="submit-guard-reason"]')?.textContent).toBe(
-      'SUBMIT_GUARD.ATTESTATION',
-    );
+    const second = el.querySelector('[data-testid="submit-guard-reason"]')?.textContent ?? '';
+    expect(second).toContain('SUBMIT_GUARD.ATTESTATION');
+    expect(second).not.toContain('SUBMIT_GUARD.UNIT');
   });
 
   it('should close form', () => {

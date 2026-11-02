@@ -22,7 +22,11 @@ import { DESK_PAYMENT_METHODS, deskMethodNeedsReference } from '../desk-payment-
 import { BillingService, PaymentRow } from '../../services/billing.service';
 import { saveResponse } from '../../shared/download-file';
 import { refuseFields } from '../../shared/forms/invalid-fields';
-import { cfaAmountMessageKey, cfaAmountProblem } from '../../shared/cfa-amount';
+import {
+  CFA_AMOUNT_REQUIRED_KEY,
+  cfaAmountMessageKey,
+  cfaAmountProblem,
+} from '../../shared/cfa-amount';
 
 interface OpenInvoice {
   id: string;
@@ -137,7 +141,7 @@ export class PaymentPendingPanelComponent {
         missing,
         ['invSelect', 'payAmt', 'payRef'],
         missing[0] === 'payAmt' && amountProblem
-          ? this.translate.instant(cfaAmountMessageKey(amountProblem))
+          ? this.translate.instant(cfaAmountMessageKey(amountProblem, CFA_AMOUNT_REQUIRED_KEY))
           : this.translate.instant('COMMON.FIELD_REQUIRED'),
       );
       return;

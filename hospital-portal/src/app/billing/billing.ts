@@ -39,7 +39,11 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { DialogA11yDirective } from '../shared/a11y/dialog-a11y.directive';
 import { saveResponse } from '../shared/download-file';
-import { cfaAmountMessageKey, cfaAmountProblem } from '../shared/cfa-amount';
+import {
+  CFA_AMOUNT_REQUIRED_KEY,
+  cfaAmountMessageKey,
+  cfaAmountProblem,
+} from '../shared/cfa-amount';
 import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
 import { refuseFields } from '../shared/forms/invalid-fields';
 import { emailAddresses, invalidEmailAddresses } from '../shared/forms/email-address';
@@ -57,6 +61,9 @@ const CANCEL_REASON_ID = 'bill-cancel-reason';
 const EMAIL_TO_ID = 'email-to';
 const EMAIL_CC_ID = 'email-cc';
 const EMAIL_FIELD_IDS = [EMAIL_TO_ID, EMAIL_CC_ID];
+
+/** QA D1294: a blank or zero unit price says so (not "a payment amount"). */
+const LINE_PRICE_REQUIRED_KEY = 'BILLING.LINE_UNIT_PRICE_REQUIRED';
 
 @Component({
   selector: 'app-billing',
@@ -311,22 +318,18 @@ export class BillingComponent implements OnInit {
     const type = this.adjustmentType();
     const amount = this.adjustmentAmount();
     const line = this.adjustmentLineId();
-    if (!reason) {
-      this.toast.error(this.translate.instant('BILLING.ADJUSTMENT_REASON_REQUIRED'));
-      return;
-    }
-    if (type === 'CREDIT_NOTE' && !line) {
-      this.toast.error(this.translate.instant('BILLING.ADJUSTMENT_LINE_REQUIRED'));
-      return;
-    }
-    // QA D1089: an empty amount asks for one; only a typed one is checked for decimals.
+    // QA D1278 (D1256 class, round 27): the submit guard names every blank
+    // field at once (Montant, Motif, the credit note's line) and marks each;
+    // this handler used to refuse them one press at a time, as toasts.
     const amountProblem = type === 'CREDIT_NOTE' ? null : cfaAmountProblem(amount);
+    if (!reason || (type === 'CREDIT_NOTE' && !line) || amountProblem === 'required') return;
+    // QA D1089: only a typed amount is checked for decimals.
     if (amountProblem) {
-      this.toast.error(
-        this.translate.instant(
-          cfaAmountMessageKey(amountProblem, 'BILLING.ADJUSTMENT_AMOUNT_REQUIRED'),
-        ),
+      const message = this.translate.instant(
+        cfaAmountMessageKey(amountProblem, 'BILLING.ADJUSTMENT_AMOUNT_REQUIRED'),
       );
+      refuseFields(this.host.nativeElement, ['adj-amount'], ['adj-amount'], message);
+      this.toast.error(message);
       return;
     }
     this.adjustmentSaving.set(true);
@@ -792,7 +795,7 @@ export class BillingComponent implements OnInit {
         missing,
         ['line-desc', 'line-qty', 'line-price'],
         missing[0] === 'line-price' && priceProblem
-          ? this.translate.instant(cfaAmountMessageKey(priceProblem))
+          ? this.translate.instant(cfaAmountMessageKey(priceProblem, LINE_PRICE_REQUIRED_KEY))
           : this.translate.instant('COMMON.FIELD_REQUIRED'),
       );
       return;
@@ -866,7 +869,7 @@ export class BillingComponent implements OnInit {
         ),
         ['line-edit-qty', 'line-edit-price'],
         !qtyWrong && priceProblem
-          ? this.translate.instant(cfaAmountMessageKey(priceProblem))
+          ? this.translate.instant(cfaAmountMessageKey(priceProblem, LINE_PRICE_REQUIRED_KEY))
           : this.translate.instant('COMMON.FIELD_REQUIRED'),
       );
       return;
@@ -1168,7 +1171,11 @@ export class BillingComponent implements OnInit {
     // QA D184 / D1089: an amount first, then whole francs (francs CFA have no cents).
     const amountProblem = cfaAmountProblem(amount);
     if (amountProblem || amount === null) {
-      this.toast.error(this.translate.instant(cfaAmountMessageKey(amountProblem ?? 'required')));
+      this.toast.error(
+        this.translate.instant(
+          cfaAmountMessageKey(amountProblem ?? 'required', CFA_AMOUNT_REQUIRED_KEY),
+        ),
+      );
       return;
     }
     if (amount > (inv.balanceDue ?? 0)) {

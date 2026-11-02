@@ -29,7 +29,11 @@ import { DialogA11yDirective } from '../../../shared/a11y/dialog-a11y.directive'
 import { SubmitGuardDirective } from '../../../shared/forms/submit-guard.directive';
 import { refuseFields } from '../../../shared/forms/invalid-fields';
 import { isEmailAddress } from '../../../shared/forms/email-address';
-import { PhoneFieldDirective } from '../../../shared/forms/phone-field.directive';
+import {
+  PhoneFieldDirective,
+  refuseInvalidPhones,
+} from '../../../shared/forms/phone-field.directive';
+import { isFacilityPhone } from '../../../shared/phone-number';
 /** The e-mail field, marked when its address is refused (QA D1179 class). */
 const EMAIL_FIELD_ID = 'email';
 
@@ -123,6 +127,15 @@ export class PreCheckinFormComponent implements OnInit, OnChanges {
   }
 
   goToStep(s: 'demographics' | 'questionnaires' | 'review'): void {
+    // QA D1289 (round 27): the details step is not left with a phone number the
+    // server refuses; the submit, two steps later, could no longer show it.
+    if (
+      this.step() === 'demographics' &&
+      s !== 'demographics' &&
+      refuseInvalidPhones(this.host.nativeElement)
+    ) {
+      return;
+    }
     this.step.set(s);
     this.errorMessage.set(null);
   }
@@ -143,6 +156,12 @@ export class PreCheckinFormComponent implements OnInit, OnChanges {
 
   submit(): void {
     if (!this.appointment || this.saving()) return;
+    // QA D1289: a number that slipped past the details step goes back to it.
+    if (!isFacilityPhone(this.phoneNumber) || !isFacilityPhone(this.emergencyContactPhone)) {
+      this.step.set('demographics');
+      this.errorMessage.set(this.translate.instant('USERS.PHONE_INVALID'));
+      return;
+    }
     // QA D1179 class: a malformed address is refused on its field before anything is sent.
     const email = this.email.trim();
     if (email !== '' && !isEmailAddress(email)) {

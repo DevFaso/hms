@@ -25,6 +25,8 @@ import { saveResponse } from '../../shared/download-file';
 import { DESK_PAYMENT_METHODS, deskMethodNeedsReference } from '../desk-payment-methods';
 
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+import { joinReasons } from '../../shared/required-fields';
+
 @Component({
   selector: 'app-checkin-dialog',
   standalone: true,
@@ -79,12 +81,14 @@ export class CheckinDialogComponent {
     if (!this.queueItem?.appointmentId) {
       return this.translate.instant('RECEPTION.NO_APPOINTMENT_SELECTED');
     }
-    if (!this.identityConfirmed()) {
-      return this.translate.instant('RECEPTION.CONFIRM_IDENTITY_FIRST');
-    }
     const referenceMissing =
       (this.copayAmount() ?? 0) > 0 && this.copayNeedsReference() && !this.copayReference().trim();
-    return referenceMissing ? this.translate.instant('SUBMIT_GUARD.PAYMENT_REFERENCE') : null;
+    // QA D1256 class (round 27): the identity tick and the payment reference
+    // are said together, not one per press.
+    return joinReasons([
+      !this.identityConfirmed() && this.translate.instant('RECEPTION.CONFIRM_IDENTITY_FIRST'),
+      referenceMissing && this.translate.instant('SUBMIT_GUARD.PAYMENT_REFERENCE'),
+    ]);
   }
 
   submit(): void {
