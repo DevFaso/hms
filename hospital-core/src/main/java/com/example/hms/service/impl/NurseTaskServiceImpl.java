@@ -335,10 +335,11 @@ public class NurseTaskServiceImpl implements NurseTaskService {
 
             // Review of #975: the closed-dose history is read once per row and
             // answers the due time, the status and the last outcome.
-            List<MedicationAdministrationRecord> closed = closedDoses(rx);
-            Optional<MedicationAdministrationRecord> lastClosed = closed.stream().findFirst();
-            LocalDateTime dueTime = computeMedicationDueTime(rx, now, lastClosed);
-            String marStatus = resolveMarStatus(dueTime, now);
+            List<MedicationAdministrationRecord> rows = doseRows(rx);
+            List<MedicationAdministrationRecord> closed = closedDoses(rows);
+            MarNextDose.Due due = MarNextDose.of(rx, now, rows, EARLY_ADMINISTRATION_WINDOW);
+            LocalDateTime dueTime = due.dueTime();
+            String marStatus = resolveMarStatus(due, now);
             if (!isFilteredOut(statusFilter, marStatus)) {
                 if (allergies == null) {
                     allergies = patientAllergyRepository.findByPatient_Id(ctx.patientId());
@@ -354,6 +355,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
                     .routeCode(com.example.hms.service.emar.MedicationRoutes.canonical(rx.getRoute()))
                     .dueTime(dueTime)
                     .status(marStatus)
+                    .frequencyUnread(due.frequencyUnread())
                     .controlledSubstance(controlled)
                     .requiresPharmacistVerification(
                         pharmacistVerificationService.requiresVerification(rx, controlled))
@@ -525,7 +527,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
                 .witnessName(witnessName(marRecord.getWitnessUser()))
                 // QA D1080: the same catalogue-or-tick answer the GET gives (#978 rule).
                 .controlledSubstance(pharmacistVerificationService.isControlledSubstance(marRecord.getPrescription()))
-                .build(), closedDoses(marRecord.getPrescription()));
+                .build(), closedDoses(doseRows(marRecord.getPrescription())));
         }
 
         // Last resort: work with synthetic task list (backward-compatible)
@@ -1192,35 +1194,35 @@ public class NurseTaskServiceImpl implements NurseTaskService {
        Private helpers — MAR
        ═══════════════════════════════════════════════════════════════════ */
 
-    /** Determine MAR status from a Prescription's creation time (simplified schedule). */
+    /** The MAR status of a prescription's next dose ({@link MarNextDose}). */
     private String resolveMarStatus(Prescription rx, LocalDateTime now) {
-        return resolveMarStatus(computeMedicationDueTime(rx, now), now);
+        return resolveMarStatus(nextDose(rx, now), now);
     }
 
-    private static String resolveMarStatus(LocalDateTime dueBy, LocalDateTime now) {
+    private static String resolveMarStatus(MarNextDose.Due due, LocalDateTime now) {
+        LocalDateTime dueBy = due.dueTime();
         if (dueBy == null) return STATUS_COMPLETED;
+        // QA D1237: an unread frequency keeps the course open; the row is
+        // flagged (frequencyUnread) and each later dose asks for a reason.
+        if (due.frequencyUnread()) return STATUS_DUE;
         // A dose may be given up to an hour either side of its slot (D154).
         if (dueBy.plus(EARLY_ADMINISTRATION_WINDOW).isBefore(now)) return STATUS_OVERDUE;
         // QA D949: a slot beyond the early window cannot be given yet (the
-        // administer call refuses it), so it is not "due".
-        if (dueBy.isAfter(now.plus(EARLY_ADMINISTRATION_WINDOW))) return STATUS_UPCOMING;
+        // administer call refuses it), so it is not "due". QA D1236: nor is
+        // one inside the minimum gap since the dose was really given.
+        if (due.notBefore() != null && now.isBefore(due.notBefore())) return STATUS_UPCOMING;
         return STATUS_DUE;
     }
 
-    /**
-     * QA D929: the outcome of the last closed dose (GIVEN, HELD, REFUSED,
-     * MISSED), or null when none was recorded. A COMPLETED row only says no
-     * dose is left; this says what happened to the last one, so a held or
-     * refused dose is never read as given.
-     */
-    private Optional<MedicationAdministrationRecord> lastClosedDose(Prescription rx) {
-        return closedDoses(rx).stream().findFirst();
+    /** Every dose row of the prescription (PENDING included), newest slot first. */
+    private List<MedicationAdministrationRecord> doseRows(Prescription rx) {
+        if (rx == null || rx.getId() == null) return List.of();
+        return marRepository.findByPrescription_IdOrderByScheduledTimeDesc(rx.getId());
     }
 
-    /** Every closed (non-PENDING) dose of the prescription, newest slot first. */
-    private List<MedicationAdministrationRecord> closedDoses(Prescription rx) {
-        if (rx == null || rx.getId() == null) return List.of();
-        return marRepository.findByPrescription_IdOrderByScheduledTimeDesc(rx.getId()).stream()
+    /** The closed (non-PENDING) rows among {@code rows}, in their order. */
+    private static List<MedicationAdministrationRecord> closedDoses(List<MedicationAdministrationRecord> rows) {
+        return rows.stream()
             .filter(r -> r.getStatus() != MedicationAdministrationStatus.PENDING)
             .toList();
     }
@@ -1270,31 +1272,11 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     }
 
     /**
-     * When the next dose of a prescription is due, or {@code null} when no
-     * dose is left to give (D77).
-     *
-     * <p>The first dose is due four hours after the order. Each recorded
-     * outcome (given, held, refused, missed) closes its slot; a repeating
-     * frequency then schedules the next slot one interval after it, and a
-     * one-off, PRN or unparseable frequency leaves nothing more to give.
-     * Before this, the first GIVEN marked the whole course COMPLETED, so a
-     * q12h order never produced its second dose, and nothing stopped the
-     * same dose being recorded again.
+     * When the next dose of a prescription is due (D77, QA D1236, QA D1237):
+     * {@link MarNextDose}, on the order's own rows.
      */
-    private LocalDateTime computeMedicationDueTime(Prescription rx, LocalDateTime now) {
-        return computeMedicationDueTime(rx, now, lastClosedDose(rx));
-    }
-
-    private static LocalDateTime computeMedicationDueTime(Prescription rx, LocalDateTime now,
-                                                          Optional<MedicationAdministrationRecord> lastClosed) {
-        // QA D154: the first dose is due when the order starts, which is its
-        // signature (or, failing that, its creation), not four hours later.
-        LocalDateTime start = rx.getSignedAt() != null ? rx.getSignedAt() : rx.getCreatedAt();
-        LocalDateTime first = start != null ? start : now.plusHours(1);
-        if (rx.getId() == null || lastClosed.isEmpty()) return first;
-        Integer interval = MarDoseSchedule.intervalHours(rx.getFrequency());
-        if (interval == null) return null;
-        return lastClosed.get().getScheduledTime().plusHours(interval);
+    private MarNextDose.Due nextDose(Prescription rx, LocalDateTime now) {
+        return MarNextDose.of(rx, now, doseRows(rx), EARLY_ADMINISTRATION_WINDOW);
     }
 
     /**
@@ -1324,11 +1306,16 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     /** The slot the next administration fills; refuses when the course has none left. */
     private LocalDateTime requireNextDue(Prescription rx) {
         LocalDateTime now = LocalDateTime.now();
-        LocalDateTime slot = computeMedicationDueTime(rx, now);
+        MarNextDose.Due due = nextDose(rx, now);
+        LocalDateTime slot = due.dueTime();
         if (slot == null) {
             throw new BusinessException("nurse.mar.noDoseDue");
         }
-        if (slot.isAfter(now.plus(EARLY_ADMINISTRATION_WINDOW))) {
+        // The slot rule (D154) reads the schedule's own slot; a dose inside the
+        // minimum gap since the last real one is then refused by the interval
+        // rule unless the nurse says why (QA D1210). The row fills the next
+        // dose's slot (QA D1236), never a missed backlog slot.
+        if (due.scheduledSlot().isAfter(now.plus(EARLY_ADMINISTRATION_WINDOW))) {
             throw new BusinessException("nurse.mar.doseNotYetDue");
         }
         return slot;
@@ -1519,7 +1506,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .witnessName(witnessName(saved.getWitnessUser()))
             // QA D1080: the same catalogue-or-tick answer the GET gives (#978 rule).
             .controlledSubstance(pharmacistVerificationService.isControlledSubstance(rx))
-            .build(), closedDoses(rx));
+            .build(), closedDoses(doseRows(rx)));
     }
 
     /**
@@ -1570,7 +1557,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .witnessName(witnessName(saved.getWitnessUser()))
             // QA D1080: the same catalogue-or-tick answer the GET gives (#978 rule).
             .controlledSubstance(pharmacistVerificationService.isControlledSubstance(rx))
-            .build(), closedDoses(rx));
+            .build(), closedDoses(doseRows(rx)));
     }
 
     /**

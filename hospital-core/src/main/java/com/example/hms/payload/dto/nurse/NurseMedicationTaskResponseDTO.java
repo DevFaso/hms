@@ -30,6 +30,13 @@ public class NurseMedicationTaskResponseDTO {
     private LocalDateTime dueTime;
     /** DUE, OVERDUE, UPCOMING (next slot not yet open, QA D949) or COMPLETED (no dose left). */
     private String status;
+    /**
+     * QA D1237: the order's frequency is written but cannot be read as a
+     * schedule. The course stays open (status DUE, due now) instead of ending
+     * after its first dose; each later dose asks for a reason, and the
+     * prescriber should restate the frequency.
+     */
+    private boolean frequencyUnread;
     /** QA D929: GIVEN, HELD, REFUSED or MISSED for the last closed dose; null when none. */
     private String lastOutcome;
     /** QA D1225: when the last closed dose was recorded. */

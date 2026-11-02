@@ -85,4 +85,86 @@ class MarDoseScheduleTest {
         assertThat(checked).isGreaterThanOrEqualTo(24);
         assertThat(wrong).isEmpty();
     }
+
+    /**
+     * QA D1237 replay (freqmar.js): frequencies written in words. "toutes les
+     * six heures", "toutes les heures" and "cada hora" used to read as no
+     * repeat, so the MAR ended the course after the first dose.
+     */
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', value = {
+        "toutes les six heures|6", "toutes les heures|1", "Toutes les deux heures|2", "toutes les 6 heure|6",
+        "toutes les huit heures|8", "toutes les douze heures|12", "toutes les vingt-quatre heures|24",
+        "chaque heure|1", "cada hora|1", "cada seis horas|6", "cada ocho horas|8", "cada once horas|11",
+        "every hour|1", "every six hours|6", "every twelve hours|12", "hourly|1", "Every 1 hour|1",
+        "6h/6h|6", "6 h / 6 h|6", "8/8h|8", "12h/12|12", "tous les 2 jours|48", "every other day|48",
+        "Toutes les six heures pendant 2 jours|6", "toutes les 6 heures (Q6H)|6", "Cada 8 horas (Q8H)|8"
+    })
+    void d1237_readsHourFrequenciesWrittenInWords(String frequency, int hours) {
+        assertThat(MarDoseSchedule.intervalHours(frequency)).isEqualTo(hours);
+        assertThat(MarDoseSchedule.read(frequency).kind()).isEqualTo(MarDoseSchedule.Kind.REPEATING);
+    }
+
+    /**
+     * QA D1237 guard: every number of hours a prescriber may write as a word,
+     * in each language and form the portal is used in, reads as that number.
+     * A new language, phrasing or number word the reader does not know fails
+     * here instead of ending a course on the ward.
+     */
+    @Test
+    void d1237_everyHourWordInEveryLanguageReadsAsItsNumber() {
+        Map<Integer, List<String>> words = Map.ofEntries(
+            Map.entry(1, List.of("une", "una", "one")), Map.entry(2, List.of("deux", "dos", "two")),
+            Map.entry(3, List.of("trois", "tres", "three")), Map.entry(4, List.of("quatre", "cuatro", "four")),
+            Map.entry(5, List.of("cinq", "cinco", "five")), Map.entry(6, List.of("six", "seis", "six")),
+            Map.entry(7, List.of("sept", "siete", "seven")), Map.entry(8, List.of("huit", "ocho", "eight")),
+            Map.entry(9, List.of("neuf", "nueve", "nine")), Map.entry(10, List.of("dix", "diez", "ten")),
+            Map.entry(11, List.of("onze", "once", "eleven")), Map.entry(12, List.of("douze", "doce", "twelve")),
+            Map.entry(24, List.of("vingt-quatre", "veinticuatro", "twenty-four")));
+        List<String> templates = List.of("toutes les %s heures", "cada %s horas", "every %s hours");
+        List<String> wrong = new ArrayList<>();
+        int checked = 0;
+        for (Map.Entry<Integer, List<String>> e : words.entrySet()) {
+            for (int lang = 0; lang < templates.size(); lang++) {
+                String text = String.format(templates.get(lang), e.getValue().get(lang));
+                checked++;
+                if (!java.util.Objects.equals(MarDoseSchedule.intervalHours(text), e.getKey())) {
+                    wrong.add(text + " -> " + MarDoseSchedule.intervalHours(text));
+                }
+            }
+        }
+        assertThat(checked).isEqualTo(39);
+        assertThat(wrong).isEmpty();
+    }
+
+    /** QA D1237: only a frequency that says so is a single dose or as-needed. */
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', value = {
+        "once|ONE_OFF", "STAT|ONE_OFF", "une seule fois|ONE_OFF", "Une fois|ONE_OFF", "dose unique|ONE_OFF",
+        "una vez|ONE_OFF", "dosis única|ONE_OFF", "single dose|ONE_OFF",
+        "PRN|AS_NEEDED", "si besoin|AS_NEEDED", "q4h PRN|AS_NEEDED", "cada 6 horas si es necesario|AS_NEEDED",
+        "after meals|UNREAD", "après les repas|UNREAD", "une fois par semaine|UNREAD", "q0h|UNREAD",
+        "24h/24|UNREAD", "2 fois|UNREAD", "toutes les 30 minutes|UNREAD"
+    })
+    void d1237_readsWhatTheFrequencySays(String frequency, MarDoseSchedule.Kind kind) {
+        assertThat(MarDoseSchedule.read(frequency).kind()).isEqualTo(kind);
+    }
+
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = {"   "})
+    void d1237_noFrequencyWrittenIsAOneOffOrder(String frequency) {
+        assertThat(MarDoseSchedule.read(frequency).kind()).isEqualTo(MarDoseSchedule.Kind.ONE_OFF);
+    }
+
+    /** QA D1237: "5 fois par jour" repeats (every 4 h 48), though not in whole hours. */
+    @Test
+    void d1237_aCountThatDoesNotDivideTheDayStillRepeats() {
+        MarDoseSchedule.Reading reading = MarDoseSchedule.read("5 fois par jour");
+        assertThat(reading.kind()).isEqualTo(MarDoseSchedule.Kind.REPEATING);
+        assertThat(reading.intervalMinutes()).isEqualTo(288);
+        assertThat(MarDoseSchedule.intervalHours("5 fois par jour")).isNull();
+        assertThat(MarDoseSchedule.dosesPerDay("5 fois par jour")).isEqualTo(5d);
+        assertThat(MarDoseSchedule.dosesPerDay("toutes les six heures")).isEqualTo(4d);
+    }
 }

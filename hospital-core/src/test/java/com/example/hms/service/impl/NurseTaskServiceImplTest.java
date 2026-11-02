@@ -4378,4 +4378,131 @@ class NurseTaskServiceImplTest {
         assertThat(answer.getLastReason()).isEqualTo("Départ au bloc");
         assertThat(answer.getDoseHistory()).hasSize(2);
     }
+
+    /* ════════════════════════════════════════════════════════════════════
+       QA round 25: D1236 (the next dose counts from when the last one was
+       really given) and D1237 (a frequency in words never ends the course)
+       ════════════════════════════════════════════════════════════════════ */
+
+    /**
+     * QA D1236 replay (nsgive.js): morphine q6h, slots missed for two days, a
+     * dose given a minute ago for a backlog slot. The row used to read
+     * OVERDUE with the next backlog slot; the next dose is now due at the
+     * minimum gap after the real dose and is not offered before it.
+     */
+    @Test
+    void d1236_aLateDoseMovesTheNextDoseAndTheBacklogIsNotOfferedAgain() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "q6h");
+        rx.setStatus(PrescriptionStatus.SIGNED);
+        rx.setSignedAt(null);
+        rx.setCreatedAt(LocalDateTime.now().minusDays(2));
+        LocalDateTime given = LocalDateTime.now().minusMinutes(1);
+        UUID nurseId = UUID.randomUUID();
+
+        List<NurseMedicationTaskResponseDTO> tasks = marFor(nurseId, hospitalId, rx, null,
+            givenAt(rx, rx.getCreatedAt(), given));
+
+        assertThat(tasks).hasSize(1);
+        assertThat(tasks.get(0).getStatus()).isEqualTo("UPCOMING");
+        assertThat(tasks.get(0).getDueTime()).isEqualTo(given.plusHours(5));
+        assertThat(service.getMedicationTasks(nurseId, hospitalId, "OVERDUE")).isEmpty();
+    }
+
+    /** QA D1236: a dose given on time keeps the schedule exactly as before. */
+    @Test
+    void d1236_anOnTimeDoseKeepsTheSchedule() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "q6h");
+        rx.setStatus(PrescriptionStatus.SIGNED);
+        rx.setSignedAt(null);
+        LocalDateTime slot = rx.getCreatedAt();
+
+        List<NurseMedicationTaskResponseDTO> tasks = marFor(UUID.randomUUID(), hospitalId, rx, null,
+            givenAt(rx, slot, slot));
+
+        assertThat(tasks.get(0).getDueTime()).isEqualTo(slot.plusHours(6));
+        assertThat(tasks.get(0).getStatus()).isEqualTo("UPCOMING");
+    }
+
+    /**
+     * QA D1237 replay (freqmar.js): the frequencies the prescriber wrote in
+     * words. The course used to be COMPLETED after its first dose.
+     */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {
+        "toutes les six heures", "Toutes les 6 heures", "cada seis horas", "every six hours", "6h/6h"})
+    void d1237_aFrequencyInWordsKeepsTheCourseAfterTheFirstDose(String frequency) {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, frequency);
+        rx.setStatus(PrescriptionStatus.SIGNED);
+        rx.setSignedAt(null);
+        LocalDateTime slot = rx.getCreatedAt();
+
+        List<NurseMedicationTaskResponseDTO> tasks = marFor(UUID.randomUUID(), hospitalId, rx, null,
+            givenAt(rx, slot, slot));
+
+        assertThat(tasks.get(0).getStatus()).isEqualTo("UPCOMING");
+        assertThat(tasks.get(0).getDueTime()).isEqualTo(slot.plusHours(6));
+        assertThat(tasks.get(0).isFrequencyUnread()).isFalse();
+    }
+
+    /** QA D1237: "toutes les heures" is hourly; four hours after the first dose the course is overdue, not over. */
+    @Test
+    void d1237_hourlyInWordsIsHourly() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "toutes les heures");
+        rx.setStatus(PrescriptionStatus.SIGNED);
+        rx.setSignedAt(null);
+        LocalDateTime slot = rx.getCreatedAt();
+
+        List<NurseMedicationTaskResponseDTO> tasks = marFor(UUID.randomUUID(), hospitalId, rx, null,
+            givenAt(rx, slot, slot));
+
+        assertThat(tasks.get(0).getStatus()).isEqualTo("OVERDUE");
+        assertThat(tasks.get(0).getDueTime()).isEqualTo(slot.plusHours(1));
+    }
+
+    /**
+     * QA D1237: a frequency the reader cannot place keeps the course open and
+     * flagged; it is never read as a single dose.
+     */
+    @Test
+    void d1237_anUnreadFrequencyKeepsTheCourseOpenAndFlagged() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "après les repas");
+        rx.setStatus(PrescriptionStatus.SIGNED);
+        LocalDateTime slot = rx.getCreatedAt();
+
+        List<NurseMedicationTaskResponseDTO> tasks = marFor(UUID.randomUUID(), hospitalId, rx, null,
+            givenAt(rx, slot, slot));
+
+        assertThat(tasks.get(0).getStatus()).isEqualTo("DUE");
+        assertThat(tasks.get(0).isFrequencyUnread()).isTrue();
+    }
+
+    /** QA D1237: the next dose of an unread order is accepted only with a reason, which is kept on the row. */
+    @Test
+    void d1237_anUnreadFrequencyAsksWhyEachLaterDoseIsGiven() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "après les repas");
+        when(prescriptionRepository.findByIdForUpdate(rx.getId())).thenReturn(Optional.of(rx));
+        when(marRepository.findByPrescription_IdOrderByScheduledTimeDesc(rx.getId()))
+            .thenReturn(List.of(givenAt(rx, rx.getCreatedAt(), rx.getCreatedAt())));
+        UUID rxId = rx.getId();
+        UUID nurseId = UUID.randomUUID();
+        NurseMedicationAdministrationRequestDTO given = givenRequest();
+
+        assertThatThrownBy(() -> service.recordMedicationAdministration(rxId, nurseId, hospitalId, given))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", MarDoseInterval.FREQUENCY_UNREAD_KEY)
+            .hasFieldOrPropertyWithValue("field", "earlyDoseReason");
+        verify(marRepository, never()).save(any(MedicationAdministrationRecord.class));
+
+        ArgumentCaptor<MedicationAdministrationRecord> saved = ArgumentCaptor.forClass(MedicationAdministrationRecord.class);
+        when(marRepository.save(saved.capture())).thenAnswer(i -> i.getArgument(0));
+        given.setEarlyDoseReason("Prescriber confirmed: after each meal");
+        service.recordMedicationAdministration(rxId, nurseId, hospitalId, given);
+        assertThat(saved.getValue().getReason()).isEqualTo("Prescriber confirmed: after each meal");
+    }
 }
