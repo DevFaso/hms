@@ -29,11 +29,12 @@ class PaymentMethodRequiredGuardTest {
 
     private static final Path MAIN = Paths.get("src/main/java/com/example/hms");
 
+    /** A payment method constant, maybe package-qualified (lower-case segments, so the enum name is not eaten). */
+    private static final String QUALIFIED_METHOD = "(?:[a-z]\\w*+\\.)*+(?:Pharmacy)?PaymentMethod\\.[A-Z_]++";
     /** A null/blank test whose ternary yields a payment method constant, in one statement. */
     private static final Pattern DEFAULTED = Pattern.compile(
-        "(?:==\\s*+null|isBlank\\(\\)|isEmpty\\(\\))[^;?]*+\\?\\s*+(?:\\w++\\.)*+(?:Pharmacy)?PaymentMethod\\.[A-Z_]++");
-    private static final Pattern OR_ELSE = Pattern.compile(
-        "orElse\\(\\s*+(?:\\w++\\.)*+(?:Pharmacy)?PaymentMethod\\.[A-Z_]++\\s*+\\)");
+        "(?:==\\s*+null|isBlank\\(\\)|isEmpty\\(\\))[^;?]*+\\?\\s*+" + QUALIFIED_METHOD);
+    private static final Pattern OR_ELSE = Pattern.compile("orElse\\(\\s*+" + QUALIFIED_METHOD + "\\s*+\\)");
 
     @Test
     void noMissingPaymentMethodIsGuessed() throws IOException {
