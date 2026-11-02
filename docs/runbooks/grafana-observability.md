@@ -273,8 +273,8 @@ a healthy connection does.
 - **Ticket/auth failures.** `respondUnauthorized` is written inside
   `JwtAuthenticationFilter`, before any `HandlerMapping` runs, so those 401s
   carry `uri="UNKNOWN"` and never reach this rate. A fleet-wide ticket expiry
-  leaves this alert silent — but it is loud in the logs: every ticket refusal is
-  WARN (see step 3).
+  leaves this alert silent, and it is quiet in the logs too: the ticket refusal
+  lines are DEBUG, for the reasons in step 3.
 - **A path that stopped routing.** Tagged `uri="NOT_FOUND"`, attributable to no
   endpoint. A blackbox probe cannot cover this either: `SecurityConfig` ends in
   `anyRequest().authenticated()`, so authorization answers 401 on the path
@@ -329,12 +329,16 @@ alert that covers it.
    expiry will leave this alert silent and the per-URI panel empty. If clients
    report chat failing and the chat metrics look clean, that is the shape to
    suspect: check `WsTicketService` and `JwtAuthenticationFilter` logs directly.
-   You do not need to raise a log level to see a rejection: every 401 these
-   classes produce is announced at WARN, including the blacklisted-token,
-   MFA-challenge and unknown/expired-ticket cases. (Two DEBUG lines stay quiet by
-   design — the cached-missing-principal short-circuit, which is the suppressed
-   repeat of a WARN that already fired, and the token parse detail behind the
-   "Token provided but invalid" WARN.) Those four loggers sit at INFO on dev
+   Most rejections are visible without raising anything: invalid token, global
+   session revocation, idle window, blocked tenant, disabled principal and a
+   disabled-account ticket refusal are all WARN. **Four are not**, and they are
+   the ones that matter for a ticket problem: the blacklisted-jti and MFA-challenge
+   rejections, and `WsTicketService`'s unknown/expired ticket refusals. All four
+   are DEBUG, deliberately — each is reached on a client-controlled path and fires
+   once per request, so a WARN would be a volume lever and the expiry line would
+   put a username into prod logs. So for a suspected ticket problem you *will* need
+   DEBUG on `LOG_LEVEL_SECURITY`, which means accepting the restart below. Those
+   four loggers sit at INFO on dev
    (`LOG_LEVEL_SECURITY`) only to suppress per-request DEBUG chatter. **Do not
    raise it mid-incident** — a Railway variable change restarts the service, which
    drops every SockJS connection and all in-memory ws tickets, destroying the state

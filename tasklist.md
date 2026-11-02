@@ -5758,3 +5758,16 @@ ships*, not for building — and check the shipped surface before trusting a
   Not removed there because these predate it and may be queried ad hoc in Explore —
   worth confirming with whoever uses the SLO dashboards, then deleting or wiring
   them into a panel.
+- **Four auth-rejection lines are invisible on dev (PR #1013):** `JwtAuthenticationFilter`'s
+  blacklisted-jti and MFA-challenge rejections, and `WsTicketService`'s unknown- and
+  expired-ticket refusals, are all `log.debug`, and #1013 demotes those loggers to
+  INFO on dev — so a revoked token or a fleet-wide ws-ticket expiry 401s with no
+  line at any enabled level. Promoting them to WARN was tried in #1013 and reverted:
+  `redeem()` is reached from the filter **before authentication** for any request to
+  `/api/ws-chat` with a `?ticket=`, so a blanket WARN hands any unauthenticated
+  caller a log-volume lever, fires once per request rather than once per incident
+  (a stale polling tab is thousands of lines a day), and the expiry line carries a
+  username that prod — which already runs at INFO — has never logged. The right fix
+  is warn-once-per-subject with suppression, which the same class already does for a
+  missing principal (`isKnownMissingPrincipal` + "suppressing future warnings"):
+  apply that shape to these four, then they can be WARN safely.

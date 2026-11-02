@@ -35,26 +35,23 @@ logging:
     # against a 50 GB/month allowance. The top six messages alone, each one a
     # log.debug, account for 1,124 lines.
     #
-    # What it does NOT silence: the rejection paths. Every 401 these classes produce
-    # is announced at WARN — invalid token, blacklisted jti, global revocation, idle
-    # window, blocked tenant, MFA challenge outside the MFA step, pre-password-change
-    # token, refresh presented as access, disabled principal — plus WsTicketService's
-    # unknown/expired/disabled-account ticket refusals. The eviction summary is INFO.
+    # What it does NOT silence: most rejection paths are already WARN and stay
+    # visible — invalid token, global session revocation, idle window, blocked
+    # tenant, pre-password-change token, refresh presented as access, disabled
+    # principal, and WsTicketService's refusal of a disabled account. The ticket
+    # eviction summary is INFO.
     #
-    # Four of those were DEBUG until this change and are promoted in the same commit:
-    # the blacklisted-jti and MFA-challenge rejections in the filter, and the two
-    # ticket refusals in WsTicketService. All four would otherwise have 401'd with no
-    # line at any enabled level, which is exactly the case the runbook sends the
-    # on-call to these logs for. They fire only on a refusal, so they add no
-    # per-request volume: none of them occurred at all in the measured window.
-    #
-    # Two DEBUG lines in the filter do stay silenced, on purpose. The
-    # cached-missing-principal short-circuit is the deliberate follow-up to
-    # "Ignoring token for a missing user (suppressing future warnings)" — the first
-    # occurrence warns and the repeats are the thing being suppressed — and the
-    # subject-extraction failure is detail behind the "Token provided but invalid"
-    # WARN that is emitted anyway. In both cases the rejection is visible; only the
-    # per-repeat detail is not.
+    # Four rejection lines ARE silenced on dev by this change, and that is accepted
+    # rather than fixed here: the blacklisted-jti and MFA-challenge rejections in the
+    # filter, and WsTicketService's unknown/expired ticket refusals. Promoting them
+    # to WARN was tried in this PR and reverted — every one of them is reached on a
+    # client-controlled path (ticket redemption runs BEFORE authentication) and fires
+    # once per REQUEST rather than once per incident, so a stale polling tab produces
+    # thousands of lines a day, and the expiry line carries a username that prod —
+    # which runs at INFO — has never logged. That would have clawed back a slice of
+    # the reduction above and put a username into a third-party store, which is half
+    # of why this change exists. The real fix is warn-once-per-subject, like
+    # isKnownMissingPrincipal already does; it is recorded in tasklist.md.
     #
     # Named one by one rather than demoting the com.example.hms.security package:
     # that package holds 40+ classes and 11 subpackages (tenant, oidc, permission,

@@ -76,17 +76,21 @@ public class WsTicketService {
         }
         TicketEntry entry = tickets.get(ticket);
         if (entry == null) {
-            // WARN, like the disabled-account refusal below: a refused handshake is the
-            // diagnostic for a chat outage, and these two lines are the only per-user detail
-            // behind it. At DEBUG they disappeared under the dev INFO demotion of this logger,
-            // leaving a fleet-wide ticket expiry with no trace. They fire only on a refusal —
-            // zero occurrences in the 14.7-minute window the demotion was measured against.
-            log.warn("[WS-TICKET] Unknown ticket");
+            // DEBUG, deliberately, and not WARN however tempting. redeem() is reached from
+            // JwtAuthenticationFilter BEFORE authentication, for any request to /api/ws-chat
+            // carrying a ?ticket= — so at WARN any unauthenticated caller could drive
+            // unbounded warning volume, and an ordinary TTL lapse followed by a SockJS retry
+            // would do it by accident. See the comment on the expiry branch for the other half.
+            log.debug("[WS-TICKET] Unknown ticket");
             return null;
         }
         if (System.currentTimeMillis() > entry.expiresAt()) {
             tickets.remove(ticket, entry);
-            log.warn("[WS-TICKET] Expired ticket for user='{}'", entry.username());
+            // DEBUG for the volume reason above, and for a second one: this line carries a
+            // username. Prod runs these loggers at INFO, so promoting it would put a username
+            // into a third-party log store for the first time, on a recurring event — the exact
+            // thing the dev log-level change was partly meant to stop.
+            log.debug("[WS-TICKET] Expired ticket for user='{}'", entry.username());
             return null;
         }
         log.debug("[WS-TICKET] Redeemed ticket for user='{}'", entry.username());

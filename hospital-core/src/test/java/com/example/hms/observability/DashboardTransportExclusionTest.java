@@ -1,7 +1,7 @@
 package com.example.hms.observability;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -77,7 +77,11 @@ class DashboardTransportExclusionTest {
     /**
      * The metric, plus its label set.
      *
-     * <p>The label set is matched as "anything but braces, or a whole {@code ${...}} variable".
+     * <p>The label set is matched as "anything but braces, a whole quoted value, or a whole
+     * {@code ${...}} variable". The quoted-value alternative is what lets a Spring path pattern
+     * through: {@code uri!="/patients/{id}"} contains literal braces, and without it the selector
+     * matched nothing at all and was silently left unjudged — the precise silent-pass class this
+     * class exists to prevent.
      * A plain {@code [^}]*} truncates at the first closing brace, which in Grafana is routinely
      * part of a variable reference — {@code le="${apdex_tolerable}"} in the endpoint deep-dive is
      * one. Truncating there drops the rest of the label set, so a correctly guarded selector fails
@@ -85,7 +89,7 @@ class DashboardTransportExclusionTest {
      * {@code uri=~} sits before it. The deep-dive only passed by that ordering luck.
      */
     private static final Pattern METRIC_SELECTOR = Pattern.compile(
-        "http_server_requests_seconds_(\\w+)\\{((?:[^{}]|\\$\\{[^{}]*\\})*)\\}");
+        "http_server_requests_seconds_(\\w+)\\{((?:[^{}\"]|\"[^\"]*\"|\\$\\{[^{}]*\\})*)\\}");
 
     /** The same metric with no label set at all — guarded by nothing, so worth naming. */
     private static final Pattern BARE_METRIC =
@@ -107,8 +111,17 @@ class DashboardTransportExclusionTest {
      */
     private static final Pattern URI_PIN = Pattern.compile("uri\\s*=(~?)\\s*\"([^\"]*)\"");
 
-    /** A pattern that pins nothing: it admits every endpoint, transport included. */
-    private static final Pattern MATCH_ALL = Pattern.compile("|\\.\\*|\\.\\+|\\(\\?s\\)\\.\\*");
+    /**
+     * A pattern that pins nothing: it admits every endpoint, transport included.
+     *
+     * <p>Note what is NOT here: an empty alternative. An earlier version read
+     * {@code "|\\.\\*|..."}, whose leading empty branch matches the empty string — so every
+     * variable without a default, the deep-dive's own {@code uri} among them, was classed as a
+     * wildcard, and a correctly pinned {@code uri=~"$textbox"} panel would have been reported.
+     * An unset default is not a match-all; it is Grafana resolving the first option on load.
+     */
+    private static final Pattern MATCH_ALL =
+        Pattern.compile("\\.\\*|\\.\\+|\\(\\?s\\)\\.\\*");
 
     /**
      * Regex constructs RE2 does not implement, and {@code java.util.regex} does.
@@ -337,8 +350,12 @@ class DashboardTransportExclusionTest {
         // The files are flat enough to read with a line scanner, which keeps a YAML parser off the
         // test classpath. `- record: x` declares a series; `app:...`/`app_uri:...` in an alert
         // file reads one.
+        // stripComments on this side too. The alert side was already stripped, but reading the
+        // recording rules raw meant a commented-out `# - record: x` still counted as declared —
+        // so deleting a rule by commenting it out would leave every alert that reads it passing
+        // this check while never being able to fire again.
         Set<String> recorded = Pattern.compile("- record:\\s*(\\S+)")
-            .matcher(Files.readString(RECORDING_RULES))
+            .matcher(stripComments(Files.readString(RECORDING_RULES)))
             .results()
             .map(r -> r.group(1))
             .collect(java.util.stream.Collectors.toSet());
