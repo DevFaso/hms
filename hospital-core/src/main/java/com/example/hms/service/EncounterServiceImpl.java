@@ -536,6 +536,12 @@ public class EncounterServiceImpl implements EncounterService {
         // discharge date.
         boolean transitioningToCompleted = merged.getStatus() == EncounterStatus.COMPLETED
                 && previousStatus != EncounterStatus.COMPLETED;
+        if (transitioningToCompleted) {
+            // QA D1246 (round 25): the generic update that ends a visit feeds the
+            // same after-visit summary as the checkout, so the same rule applies.
+            AfterVisitSummaryContent.require(merged.getFollowUpInstructions(),
+                checkOutMapper.parseDiagnoses(merged.getDischargeDiagnoses()));
+        }
         if (transitioningToCompleted && merged.getCheckoutTimestamp() == null) {
             merged.setCheckoutTimestamp(LocalDateTime.now());
         }
@@ -2561,6 +2567,10 @@ public class EncounterServiceImpl implements EncounterService {
         if (current == EncounterStatus.IN_PROGRESS) {
             EncounterClosureRules.requireExaminingClinician(encounter);
         }
+        // QA D1246 (round 25): an after-visit summary says something.
+        AfterVisitSummaryContent.require(
+            request != null ? request.getFollowUpInstructions() : null,
+            request != null ? request.getDischargeDiagnoses() : null);
 
         LocalDateTime now = LocalDateTime.now();
 

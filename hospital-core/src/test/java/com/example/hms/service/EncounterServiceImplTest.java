@@ -1052,7 +1052,7 @@ class EncounterServiceImplTest {
         encounter.setStaff(staff);
         encounter.setAssignment(assignment);
 
-        CheckOutRequestDTO request = CheckOutRequestDTO.builder()
+        CheckOutRequestDTO request = CheckOutRequestDTO.builder().followUpInstructions("Repos")
             .followUpInstructions("Follow up in 2 weeks")
             .dischargeDiagnoses(List.of("Upper respiratory infection"))
             .build();
@@ -1105,7 +1105,7 @@ class EncounterServiceImplTest {
         lenient().when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("ok");
         // QA D972 (round 18): the event names the visit only; billing reads the
         // visit's orders itself, through its registry (EncounterCheckoutChargeListenerTest).
-        service.checkOut(encounterId, CheckOutRequestDTO.builder().build(), "doctor1", true, null);
+        service.checkOut(encounterId, CheckOutRequestDTO.builder().followUpInstructions("Repos").build(), "doctor1", true, null);
 
         org.mockito.ArgumentCaptor<com.example.hms.event.EncounterCheckedOutEvent> event =
             org.mockito.ArgumentCaptor.forClass(com.example.hms.event.EncounterCheckedOutEvent.class);
@@ -1157,7 +1157,7 @@ class EncounterServiceImplTest {
             lenient().when(patientLocaleResolver.resolve(any(), any())).thenReturn(Locale.FRENCH);
             lenient().when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("ok");
 
-            service.checkOut(encounterId, CheckOutRequestDTO.builder().build(), "doctor1", true, null);
+            service.checkOut(encounterId, CheckOutRequestDTO.builder().followUpInstructions("Repos").build(), "doctor1", true, null);
 
             org.mockito.ArgumentCaptor<DischargeSummary> saved = org.mockito.ArgumentCaptor.forClass(DischargeSummary.class);
             verify(dischargeSummaryRepository).save(saved.capture());
@@ -1205,7 +1205,7 @@ class EncounterServiceImplTest {
             lenient().when(patientLocaleResolver.resolve(any(), any())).thenReturn(Locale.FRENCH);
             lenient().when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("ok");
 
-            service.checkOut(encounterId, CheckOutRequestDTO.builder().build(), "doctor1", true, null);
+            service.checkOut(encounterId, CheckOutRequestDTO.builder().followUpInstructions("Repos").build(), "doctor1", true, null);
 
             org.mockito.ArgumentCaptor<DischargeSummary> saved = org.mockito.ArgumentCaptor.forClass(DischargeSummary.class);
             verify(dischargeSummaryRepository).save(saved.capture());
@@ -1229,7 +1229,7 @@ class EncounterServiceImplTest {
         encounter.setStatus(EncounterStatus.IN_PROGRESS);
         encounter.setHospital(hospital);
         encounter.setPatient(patient);
-        CheckOutRequestDTO request = CheckOutRequestDTO.builder()
+        CheckOutRequestDTO request = CheckOutRequestDTO.builder().followUpInstructions("Repos")
             .dischargeDiagnoses(List.of("Paludisme simple"))
             .prescriptionSummary("Artéméther-luméfantrine 3 jours")
             .referralSummary("Aucune")
@@ -1270,7 +1270,7 @@ class EncounterServiceImplTest {
         note.setPlan("Metformine 500 mg deux fois par jour.");
         note.setSignedAt(java.time.LocalDateTime.now().minusMinutes(5));
         encounter.setEncounterNote(note);
-        CheckOutRequestDTO request = CheckOutRequestDTO.builder()
+        CheckOutRequestDTO request = CheckOutRequestDTO.builder().followUpInstructions("Repos")
             .followUpInstructions("Revoir dans 3 mois avec le résultat HbA1c")
             .build();
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
@@ -1315,7 +1315,7 @@ class EncounterServiceImplTest {
         encounter.setPatient(patient);
         encounter.setStaff(staff);
 
-        CheckOutRequestDTO request = CheckOutRequestDTO.builder()
+        CheckOutRequestDTO request = CheckOutRequestDTO.builder().followUpInstructions("Repos")
             .followUpInstructions("Follow up in 2 weeks")
             .dischargeDiagnoses(List.of("Upper respiratory infection"))
             .build();
@@ -1357,7 +1357,7 @@ class EncounterServiceImplTest {
         encounter.setHospital(new Hospital());
         encounter.setPatient(new Patient());
 
-        CheckOutRequestDTO request = CheckOutRequestDTO.builder().build();
+        CheckOutRequestDTO request = CheckOutRequestDTO.builder().followUpInstructions("Repos").build();
         AfterVisitSummaryDTO avs = AfterVisitSummaryDTO.builder().encounterId(encounterId).build();
 
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
@@ -1405,7 +1405,7 @@ class EncounterServiceImplTest {
         Encounter encounter = checkoutRecallEncounter(encounterId);
         LocalDate preferred = LocalDate.now().plusWeeks(6);
 
-        CheckOutRequestDTO request = CheckOutRequestDTO.builder()
+        CheckOutRequestDTO request = CheckOutRequestDTO.builder().followUpInstructions("Repos")
             .followUpAppointment(CheckOutRequestDTO.FollowUpAppointmentRequest.builder()
                 .reason("Repeat HbA1c")
                 .preferredDate(preferred.toString())
@@ -1444,7 +1444,7 @@ class EncounterServiceImplTest {
         UUID encounterId = UUID.randomUUID();
         checkoutRecallEncounter(encounterId);
         LocalDate preferred = LocalDate.now().plusWeeks(3);
-        CheckOutRequestDTO request = CheckOutRequestDTO.builder()
+        CheckOutRequestDTO request = CheckOutRequestDTO.builder().followUpInstructions("Repos")
             .followUpAppointment(CheckOutRequestDTO.FollowUpAppointmentRequest.builder()
                 .preferredDate(preferred.toString())
                 .build())
@@ -1476,7 +1476,7 @@ class EncounterServiceImplTest {
         lenient().when(patientLocaleResolver.resolve(any(), any())).thenReturn(Locale.FRENCH);
         lenient().when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("ok");
 
-        AfterVisitSummaryDTO returned = service.checkOut(encounterId, CheckOutRequestDTO.builder().build(),
+        AfterVisitSummaryDTO returned = service.checkOut(encounterId, CheckOutRequestDTO.builder().followUpInstructions("Repos").build(),
             "doctor1", true, null);
 
         assertThat(returned.getPrescriptionSummary()).isEqualTo("Amoxicilline 1 g 3x/j");
@@ -1487,7 +1487,7 @@ class EncounterServiceImplTest {
         UUID encounterId = UUID.randomUUID();
         checkoutRecallEncounter(encounterId);
 
-        CheckOutRequestDTO request = CheckOutRequestDTO.builder()
+        CheckOutRequestDTO request = CheckOutRequestDTO.builder().followUpInstructions("Repos")
             .followUpAppointment(CheckOutRequestDTO.FollowUpAppointmentRequest.builder()
                 .reason("Wound check")
                 .preferredDate("next Tuesday")
@@ -1512,7 +1512,7 @@ class EncounterServiceImplTest {
         UUID encounterId = UUID.randomUUID();
         checkoutRecallEncounter(encounterId);
 
-        service.checkOut(encounterId, CheckOutRequestDTO.builder().build(), "doctor1", true, null);
+        service.checkOut(encounterId, CheckOutRequestDTO.builder().followUpInstructions("Repos").build(), "doctor1", true, null);
 
         verify(patientRecallRepository, never()).save(any());
     }
@@ -1524,7 +1524,7 @@ class EncounterServiceImplTest {
         Encounter encounter = checkoutRecallEncounter(encounterId);
         when(patientRecallRepository.save(any())).thenThrow(new RuntimeException("db down"));
 
-        CheckOutRequestDTO request = CheckOutRequestDTO.builder()
+        CheckOutRequestDTO request = CheckOutRequestDTO.builder().followUpInstructions("Repos")
             .followUpAppointment(CheckOutRequestDTO.FollowUpAppointmentRequest.builder()
                 .reason("Repeat labs")
                 .build())
@@ -1551,7 +1551,7 @@ class EncounterServiceImplTest {
         encounter.setHospital(new Hospital());
         encounter.setPatient(new Patient());
 
-        CheckOutRequestDTO request = CheckOutRequestDTO.builder().build();
+        CheckOutRequestDTO request = CheckOutRequestDTO.builder().followUpInstructions("Repos").build();
         AfterVisitSummaryDTO avs = AfterVisitSummaryDTO.builder().encounterId(encounterId).build();
 
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
@@ -1579,7 +1579,7 @@ class EncounterServiceImplTest {
 
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
 
-        CheckOutRequestDTO request = CheckOutRequestDTO.builder().build();
+        CheckOutRequestDTO request = CheckOutRequestDTO.builder().followUpInstructions("Repos").build();
         // The after-visit summary bell entry is rendered through the message
         // source in the patient's language; lenient, since not every path notifies.
         lenient().when(patientLocaleResolver.resolve(any(), any())).thenReturn(Locale.FRENCH);
@@ -1602,7 +1602,7 @@ class EncounterServiceImplTest {
 
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
 
-        CheckOutRequestDTO cancelledRequest = CheckOutRequestDTO.builder().build();
+        CheckOutRequestDTO cancelledRequest = CheckOutRequestDTO.builder().followUpInstructions("Repos").build();
         assertThatThrownBy(() -> service.checkOut(encounterId, cancelledRequest, "doctor1", true, null))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("already Cancelled");
@@ -1618,7 +1618,7 @@ class EncounterServiceImplTest {
         // The not-found refusal now carries the message KEY, not resolved prose,
         // so no messageSource stub is needed (and strict stubs reject one).
 
-        CheckOutRequestDTO notFoundRequest = CheckOutRequestDTO.builder().build();
+        CheckOutRequestDTO notFoundRequest = CheckOutRequestDTO.builder().followUpInstructions("Repos").build();
         assertThatThrownBy(() -> service.checkOut(encounterId, notFoundRequest, "doctor1", true, null))
             .isInstanceOf(ResourceNotFoundException.class);
     }
@@ -1638,7 +1638,7 @@ class EncounterServiceImplTest {
         encounter.setPatient(new Patient());
         encounter.setAppointment(appointment);
 
-        CheckOutRequestDTO request = CheckOutRequestDTO.builder().build();
+        CheckOutRequestDTO request = CheckOutRequestDTO.builder().followUpInstructions("Repos").build();
         AfterVisitSummaryDTO avs = AfterVisitSummaryDTO.builder().encounterId(encounterId).build();
 
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
@@ -1671,7 +1671,7 @@ class EncounterServiceImplTest {
         encounter.setPatient(new Patient());
         encounter.setAppointment(appointment);
 
-        CheckOutRequestDTO request = CheckOutRequestDTO.builder().build();
+        CheckOutRequestDTO request = CheckOutRequestDTO.builder().followUpInstructions("Repos").build();
         AfterVisitSummaryDTO avs = AfterVisitSummaryDTO.builder().encounterId(encounterId).build();
 
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
@@ -1689,8 +1689,15 @@ class EncounterServiceImplTest {
         verify(appointmentRepository, never()).save(any());
     }
 
-    @Test
-    void checkOut_nullRequest_setsNoDischargeFields() {
+    /**
+     * QA D1246 (round 25), declared behaviour change: a checkout with no body
+     * (or an all-empty one) closed the visit with an empty after-visit
+     * summary. It is now refused, naming dischargeDiagnoses, and the visit
+     * stays open. (Was: checkOut_nullRequest_setsNoDischargeFields.)
+     */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"none", "empty", "blank"})
+    void checkOut_anEmptySummaryIsRefusedAndTheVisitStaysOpen_D1246(String shape) {
         UUID encounterId = UUID.randomUUID();
 
         Encounter encounter = new Encounter();
@@ -1698,19 +1705,27 @@ class EncounterServiceImplTest {
         encounter.setStatus(EncounterStatus.IN_PROGRESS);
         encounter.setHospital(new Hospital());
         encounter.setPatient(new Patient());
-
-        AfterVisitSummaryDTO avs = AfterVisitSummaryDTO.builder().encounterId(encounterId).build();
-
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
-        when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(checkOutMapper.toAfterVisitSummary(any(), any(), any())).thenReturn(avs);
+        CheckOutRequestDTO request = switch (shape) {
+            case "none" -> null;
+            case "empty" -> CheckOutRequestDTO.builder().build();
+            default -> CheckOutRequestDTO.builder().followUpInstructions("   ")
+                .dischargeDiagnoses(java.util.List.of(" ", "")).build();
+        };
 
-        AfterVisitSummaryDTO result = service.checkOut(encounterId, null, "doctor1", true, null);
+        assertThatThrownBy(() -> service.checkOut(encounterId, request, "doctor1", true, null))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .extracting("field").isEqualTo("dischargeDiagnoses");
+        assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.IN_PROGRESS);
+        verify(encounterRepository, never()).save(any());
+    }
 
-        assertThat(result).isNotNull();
-        assertThat(encounter.getFollowUpInstructions()).isNull();
-        assertThat(encounter.getDischargeDiagnoses()).isNull();
-        assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.COMPLETED);
+    @Test
+    void checkOut_instructionsAloneOrADiagnosisAloneAreEnough_D1246() {
+        com.example.hms.service.AfterVisitSummaryContent.require("Repos 3 jours", null);
+        com.example.hms.service.AfterVisitSummaryContent.require(null, java.util.List.of("J06.9"));
+        assertThatThrownBy(() -> com.example.hms.service.AfterVisitSummaryContent.require(" ", java.util.List.of()))
+            .extracting("messageKey").isEqualTo("encounter.checkout.summaryContentRequired");
     }
 
     // ---------- startEncounter ----------
@@ -1989,7 +2004,7 @@ class EncounterServiceImplTest {
 
         UUID hospitalId = hospital.getId();
         com.example.hms.payload.dto.clinical.CheckOutRequestDTO checkOut =
-            com.example.hms.payload.dto.clinical.CheckOutRequestDTO.builder().build();
+            com.example.hms.payload.dto.clinical.CheckOutRequestDTO.builder().followUpInstructions("Repos").build();
 
         assertThatThrownBy(() -> service.checkOut(encounterId, checkOut, "midwife1", false, hospitalId))
             .isInstanceOf(BusinessException.class)
@@ -3319,7 +3334,7 @@ class EncounterServiceImplTest {
         lenient().when(patientLocaleResolver.resolve(any(), any())).thenReturn(Locale.FRENCH);
         lenient().when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("ok");
 
-        service.checkOut(encounterId, CheckOutRequestDTO.builder().followUpInstructions("Repos").build(),
+        service.checkOut(encounterId, CheckOutRequestDTO.builder().followUpInstructions("Repos").followUpInstructions("Repos").build(),
             "doctor1", true, null);
 
         org.mockito.ArgumentCaptor<DischargeSummary> summary = org.mockito.ArgumentCaptor.forClass(DischargeSummary.class);
@@ -3394,7 +3409,7 @@ class EncounterServiceImplTest {
     }
 
     private static CheckOutRequestDTO followUpOn(LocalDate date) {
-        return CheckOutRequestDTO.builder()
+        return CheckOutRequestDTO.builder().followUpInstructions("Repos")
             .followUpAppointment(CheckOutRequestDTO.FollowUpAppointmentRequest.builder()
                 .reason("Contrôle").preferredDate(date.toString()).build())
             .build();
@@ -3453,7 +3468,7 @@ class EncounterServiceImplTest {
         lenient().when(patientLocaleResolver.resolve(any(), any())).thenReturn(Locale.FRENCH);
         lenient().when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("ok");
 
-        service.checkOut(encounterId, CheckOutRequestDTO.builder()
+        service.checkOut(encounterId, CheckOutRequestDTO.builder().followUpInstructions("Repos")
                 .followUpAppointment(CheckOutRequestDTO.FollowUpAppointmentRequest.builder()
                     .reason("Contrôle").preferredDate(LocalDate.now().plusDays(7).toString()).build())
                 .build(), "doctor1", true, null);
@@ -3508,7 +3523,7 @@ class EncounterServiceImplTest {
         void deskCheckoutOfANeverSeenVisitIsRefused() {
             Encounter encounter = visit(EncounterStatus.ARRIVED);
 
-            assertThatThrownBy(() -> service.checkOut(encounter.getId(), CheckOutRequestDTO.builder().build(),
+            assertThatThrownBy(() -> service.checkOut(encounter.getId(), CheckOutRequestDTO.builder().followUpInstructions("Repos").build(),
                     "receptionist1", true, null))
                 .isInstanceOf(com.example.hms.exception.BusinessException.class)
                 .satisfies(ex -> assertThat(keyOf(ex)).isEqualTo("encounter.checkout.notSeen"));
@@ -3531,7 +3546,7 @@ class EncounterServiceImplTest {
                     org.springframework.security.core.authority.AuthorityUtils.createAuthorityList("ROLE_DOCTOR")));
             Encounter encounter = visit(status);
 
-            assertThatThrownBy(() -> service.checkOut(encounter.getId(), CheckOutRequestDTO.builder().build(),
+            assertThatThrownBy(() -> service.checkOut(encounter.getId(), CheckOutRequestDTO.builder().followUpInstructions("Repos").build(),
                     "doctor1", true, null))
                 .satisfies(ex -> assertThat(keyOf(ex)).isEqualTo("encounter.checkout.notSeen"));
         }
@@ -3541,7 +3556,7 @@ class EncounterServiceImplTest {
         void deskCheckoutMidConsultationIsRefused() {
             Encounter encounter = visit(EncounterStatus.IN_PROGRESS);
 
-            assertThatThrownBy(() -> service.checkOut(encounter.getId(), CheckOutRequestDTO.builder().build(),
+            assertThatThrownBy(() -> service.checkOut(encounter.getId(), CheckOutRequestDTO.builder().followUpInstructions("Repos").build(),
                     "receptionist1", true, null))
                 .satisfies(ex -> assertThat(keyOf(ex)).isEqualTo("encounter.checkout.examinationNotCompleted"));
             assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.IN_PROGRESS);
@@ -3558,7 +3573,7 @@ class EncounterServiceImplTest {
                     .isEqualTo("encounter.readyForDischarge.examinationNotCompleted"));
             assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.IN_PROGRESS);
 
-            assertThatThrownBy(() -> service.checkOut(encounter.getId(), CheckOutRequestDTO.builder().build(),
+            assertThatThrownBy(() -> service.checkOut(encounter.getId(), CheckOutRequestDTO.builder().followUpInstructions("Repos").build(),
                     "receptionist1", true, null))
                 .satisfies(ex -> assertThat(keyOf(ex)).isEqualTo("encounter.checkout.examinationNotCompleted"));
 
@@ -3593,7 +3608,7 @@ class EncounterServiceImplTest {
             lenient().when(patientLocaleResolver.resolve(any(), any())).thenReturn(Locale.FRENCH);
             lenient().when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("x");
 
-            service.checkOut(encounter.getId(), CheckOutRequestDTO.builder().build(), "receptionist1", true, null);
+            service.checkOut(encounter.getId(), CheckOutRequestDTO.builder().followUpInstructions("Repos").build(), "receptionist1", true, null);
 
             assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.COMPLETED);
             assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.COMPLETED);
@@ -3646,7 +3661,7 @@ class EncounterServiceImplTest {
         void aLeftWithoutBeingSeenVisitIsClosed() {
             Encounter encounter = visit(EncounterStatus.LEFT_WITHOUT_BEING_SEEN);
 
-            assertThatThrownBy(() -> service.checkOut(encounter.getId(), CheckOutRequestDTO.builder().build(),
+            assertThatThrownBy(() -> service.checkOut(encounter.getId(), CheckOutRequestDTO.builder().followUpInstructions("Repos").build(),
                     "receptionist1", true, null))
                 .satisfies(ex -> assertThat(keyOf(ex)).isEqualTo("encounter.checkout.alreadyClosed"));
             assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.LEFT_WITHOUT_BEING_SEEN);

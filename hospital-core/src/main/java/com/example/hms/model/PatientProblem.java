@@ -122,6 +122,16 @@ public class PatientProblem extends BaseEntity {
     @Column(name = "status_change_reason", length = 500)
     private String statusChangeReason;
 
+    /**
+     * QA D1240 (round 25): removed from the chart as entered in error. Set by
+     * the removal, cleared when a clinician sets the diagnosis active again.
+     * Patient-facing, proxy and FHIR readers leave such a row out
+     * ({@code EnteredInErrorReaderGuardTest}).
+     */
+    @Builder.Default
+    @Column(name = "entered_in_error", nullable = false)
+    private boolean enteredInError = false;
+
     @Builder.Default
     @Column(name = "is_chronic", nullable = false)
     private boolean chronic = false;

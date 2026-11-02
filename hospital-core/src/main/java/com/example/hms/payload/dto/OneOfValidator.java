@@ -25,8 +25,19 @@ public class OneOfValidator implements ConstraintValidator<OneOf, Object> {
         for (String fieldName : fields) {
             present += countFieldPresence(value, fieldName);
         }
-
-        return present >= 1;
+        if (present >= 1) {
+            return true;
+        }
+        // QA D1245 (round 25): a class-level refusal reached the client with an
+        // EMPTY fieldErrors ("Nouvelle ordonnance" with no patient). It is
+        // reported on the first field, the one a form asks for.
+        if (context != null && fields.length > 0) {
+            context.disableDefaultConstraintViolation();
+            context.buildConstraintViolationWithTemplate(context.getDefaultConstraintMessageTemplate())
+                .addPropertyNode(fields[0])
+                .addConstraintViolation();
+        }
+        return false;
     }
 
     @SuppressWarnings("java:S3011")

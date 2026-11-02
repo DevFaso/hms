@@ -14,6 +14,7 @@ import com.example.hms.repository.BirthPlanRepository;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.UserRepository;
+import com.example.hms.service.support.CancelledOrders;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -89,6 +90,8 @@ public class BirthPlanServiceImpl implements BirthPlanService {
         birthPlan.setHospital(hospital);
         birthPlan.setCreatedAt(LocalDateTime.now());
         birthPlan.setProviderReviewRequired(true);
+        // QA D1241 (round 25): the author decides whether an unreviewed draft may be deleted.
+        birthPlan.setCreatedByUserId(user.getId());
 
         // Map request to entity
         birthPlanMapper.updateEntityFromRequest(birthPlan, request);
@@ -104,7 +107,7 @@ public class BirthPlanServiceImpl implements BirthPlanService {
     @Transactional
     public BirthPlanResponseDTO updateBirthPlan(UUID id, BirthPlanRequestDTO request, String username) {
         User user = getUserOrThrow(username);
-        BirthPlan birthPlan = getBirthPlanInReach(user, id);
+        BirthPlan birthPlan = requireNotWithdrawn(getBirthPlanInReach(user, id));
 
         // Update entity
         birthPlanMapper.updateEntityFromRequest(birthPlan, request);
@@ -152,7 +155,7 @@ public class BirthPlanServiceImpl implements BirthPlanService {
         }
         UUID requesterUserId = ctx.getPrincipalUserId();
         Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, actingHospitalId);
-        List<BirthPlan> birthPlans = birthPlanRepository.findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(patientId, readable);
+        List<BirthPlan> birthPlans = birthPlanRepository.findByPatient_IdAndHospital_IdInAndWithdrawnAtIsNullOrderByCreatedAtDesc(patientId, readable);
         reachRecorder.recordReach(patientId, actingHospitalId, requesterUserId, null,
             CrossHospitalReachRecorder.reachOf(birthPlans.stream().map(r -> CrossHospitalReachRecorder.hospitalIdOf(r.getHospital())).toList(), actingHospitalId),
             "Cross-hospital birth plan read on the treatment relationship");
@@ -177,7 +180,7 @@ public class BirthPlanServiceImpl implements BirthPlanService {
         }
         UUID requesterUserId = ctx.getPrincipalUserId();
         Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, actingHospitalId);
-        List<BirthPlan> active = birthPlanRepository.findFirstByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(patientId, readable).stream().toList();
+        List<BirthPlan> active = birthPlanRepository.findFirstByPatient_IdAndHospital_IdInAndWithdrawnAtIsNullOrderByCreatedAtDesc(patientId, readable).stream().toList();
         reachRecorder.recordReach(patientId, actingHospitalId, requesterUserId, null,
             CrossHospitalReachRecorder.reachOf(active.stream().map(r -> CrossHospitalReachRecorder.hospitalIdOf(r.getHospital())).toList(), actingHospitalId),
             "Cross-hospital birth plan read on the treatment relationship");
@@ -222,10 +225,15 @@ public class BirthPlanServiceImpl implements BirthPlanService {
 
         // Only providers can review, and only at the hospital they act at
         checkProviderReviewAccess(user);
-        BirthPlan birthPlan = requireAtActingHospital(getBirthPlanByIdOrThrow(id));
+        BirthPlan birthPlan = requireNotWithdrawn(requireAtActingHospital(getBirthPlanByIdOrThrow(id)));
 
         // Update review fields
         birthPlan.setProviderReviewed(review.getReviewed());
+        if (Boolean.TRUE.equals(review.getReviewed())) {
+            // QA D1241 (round 25): once a provider has reviewed the plan it is part
+            // of the record; an edit resets the signature but never this stamp.
+            birthPlan.setReviewTimestamp(LocalDateTime.now());
+        }
         birthPlan.setProviderSignature(review.getSignature());
         birthPlan.setProviderSignatureDate(LocalDateTime.now());
         birthPlan.setProviderComments(review.getComments());
@@ -239,12 +247,41 @@ public class BirthPlanServiceImpl implements BirthPlanService {
 
     @Override
     @Transactional
-    public void deleteBirthPlan(UUID id, String username) {
+    public void deleteBirthPlan(UUID id, String reason, String username) {
+        // QA D1241 (round 25): a co-signed plan was hard-deleted on a plain
+        // confirm, with no reason and no trace. A reason is always required;
+        // a plan a provider has reviewed (or a draft someone else wrote) is
+        // withdrawn - kept, marked and audited - and only the author's own
+        // unreviewed draft is deleted.
+        String kept = CancelledOrders.requireCancelReason(reason);
         User user = getUserOrThrow(username);
         BirthPlan birthPlan = getBirthPlanInReach(user, id);
+        if (birthPlan.isWithdrawn()) {
+            throw new BusinessException("maternity.birthPlan.alreadyWithdrawn");
+        }
+        boolean everReviewed = birthPlan.isProviderReviewed()
+            || birthPlan.getReviewTimestamp() != null
+            || birthPlan.getProviderSignatureDate() != null;
+        boolean authoredByCaller = birthPlan.getCreatedByUserId() == null
+            || birthPlan.getCreatedByUserId().equals(user.getId());
+        if (!everReviewed && authoredByCaller) {
+            birthPlanRepository.delete(birthPlan);
+            log.info("Deleted unreviewed birth plan ID {} by its author {} (reason given)", id, username);
+            return;
+        }
+        birthPlan.setWithdrawnAt(LocalDateTime.now());
+        birthPlan.setWithdrawnByUserId(user.getId());
+        birthPlan.setWithdrawalReason(kept.length() > 500 ? kept.substring(0, 500) : kept);
+        birthPlanRepository.save(birthPlan);
+        log.info("Withdrew birth plan ID {} by user {} (reviewed: {}, reason given)", id, username, everReviewed);
+    }
 
-        birthPlanRepository.delete(birthPlan);
-        log.info("Deleted birth plan ID {} by user {}", id, username);
+    /** QA D1241: a withdrawn plan is kept for the record and can no longer be edited or reviewed. */
+    private BirthPlan requireNotWithdrawn(BirthPlan birthPlan) {
+        if (birthPlan.isWithdrawn()) {
+            throw new BusinessException("maternity.birthPlan.withdrawn");
+        }
+        return birthPlan;
     }
 
     @Override

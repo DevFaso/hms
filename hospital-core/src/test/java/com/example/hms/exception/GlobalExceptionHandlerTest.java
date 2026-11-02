@@ -935,5 +935,117 @@ class GlobalExceptionHandlerTest {
             Map<String, Object> body = (Map<String, Object>) response.getBody();
             assertThat((String) body.get("message")).isNotBlank();
         }
+
+        @SuppressWarnings("unchecked")
+        private Map<String, Object> validated(Object target) throws Exception {
+            org.springframework.validation.BeanPropertyBindingResult result =
+                new org.springframework.validation.BeanPropertyBindingResult(target, "body");
+            try (jakarta.validation.ValidatorFactory factory = jakarta.validation.Validation.buildDefaultValidatorFactory()) {
+                new org.springframework.validation.beanvalidation.SpringValidatorAdapter(factory.getValidator())
+                    .validate(target, result);
+            }
+            MethodArgumentNotValidException ex = new MethodArgumentNotValidException(
+                new org.springframework.core.MethodParameter(Object.class.getMethod("toString"), -1), result);
+            return (Map<String, Object>) handler.handleValidationException(ex, request).getBody();
+        }
+
+        @Test
+        @DisplayName("QA D1250: several reasons are separate sentences, not one run-on line")
+        void severalReasonsAreSeparateSentences_D1250() throws Exception {
+            ResponseEntity<Object> response = handler.handleValidationException(refusal(
+                new FieldError("body", "vaccineDisplay", "Le libellé du vaccin est obligatoire"),
+                new FieldError("body", "administrationDate", "La date d'administration est obligatoire"),
+                new FieldError("body", "status", "Le statut est obligatoire.")), request);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> body = (Map<String, Object>) response.getBody();
+            assertThat(body).containsEntry("message", "Le libellé du vaccin est obligatoire. "
+                + "La date d'administration est obligatoire. Le statut est obligatoire.");
+            assertThat(((Map<?, ?>) body.get("fieldErrors")).keySet()).extracting(String::valueOf)
+                .containsExactly("vaccineDisplay", "administrationDate", "status");
+        }
+
+        @Test
+        @DisplayName("QA D1249: a constraint left on its default text names its field")
+        void aDefaultConstraintMessageNamesItsField_D1249() throws Exception {
+            Map<String, Object> body = validated(new DefaultMessageBody());
+            assertThat((String) ((Map<?, ?>) body.get("fieldErrors")).get("reason")).startsWith("reason: ");
+            assertThat((String) body.get("message")).startsWith("reason: ");
+        }
+
+        @Test
+        @DisplayName("QA D1249: the diagnosis removal names the missing reason with its own key")
+        void theDiagnosisRemovalReasonHasItsOwnMessage_D1249() throws Exception {
+            Map<String, Object> body = validated(new com.example.hms.payload.dto.PatientDiagnosisDeleteRequestDTO());
+            assertThat(((Map<?, ?>) body.get("fieldErrors")).keySet()).extracting(String::valueOf).containsExactly("reason");
+        }
+
+        @Test
+        @DisplayName("QA D1245: a prescription with no patient names patientId, not an empty fieldErrors")
+        void aOneOfRuleNamesItsFirstField_D1245() throws Exception {
+            Map<String, Object> body = validated(new com.example.hms.payload.dto.PrescriptionRequestDTO());
+            assertThat(((Map<?, ?>) body.get("fieldErrors")).keySet()).extracting(String::valueOf).contains("patientId");
+        }
+
+        @Test
+        @DisplayName("QA D1245: a value that cannot be bound names its field instead of Spring's conversion text")
+        void aBindingFailureNamesItsField_D1245() throws Exception {
+            ResponseEntity<Object> response = handler.handleValidationException(refusal(
+                new FieldError("body", "patientId", "", true, new String[] {"typeMismatch"}, null,
+                    "Failed to convert property value of type 'java.lang.String' to required type 'java.util.UUID'")),
+                request);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> body = (Map<String, Object>) response.getBody();
+            String reason = (String) ((Map<?, ?>) body.get("fieldErrors")).get("patientId");
+            assertThat(reason).contains("patientId").doesNotContain("Failed to convert");
+        }
+    }
+
+    /** A body whose constraint keeps bean validation's default text. */
+    static class DefaultMessageBody {
+        @jakarta.validation.constraints.NotBlank
+        private String reason;
+
+        public String getReason() {
+            return reason;
+        }
+    }
+
+    @Nested
+    @DisplayName("QA D1245: parameter and body refusals name the field in fieldErrors")
+    class FieldNamedParameterRefusals {
+
+        @Test
+        void aMissingParameterIsNamedInFieldErrors() {
+            var ex = new org.springframework.web.bind.MissingServletRequestParameterException("reason", "String");
+            @SuppressWarnings("unchecked")
+            Map<String, Object> body = (Map<String, Object>) handler.handleMissingParameter(ex, request).getBody();
+            assertThat(((Map<?, ?>) body.get("fieldErrors")).keySet()).extracting(String::valueOf).contains("reason");
+        }
+
+        @Test
+        void anUnreadableDateNamesItsFieldThroughTheCauseChain() {
+            tools.jackson.databind.json.JsonMapper mapper = tools.jackson.databind.json.JsonMapper.builder().build();
+            Throwable cause = org.assertj.core.api.Assertions.catchThrowable(() ->
+                mapper.readValue("{\"administrationDate\":\"pas-une-date\"}", DatedBody.class));
+            var ex = new org.springframework.http.converter.HttpMessageNotReadableException("unreadable", cause,
+                new org.springframework.mock.http.MockHttpInputMessage(new byte[0]));
+            @SuppressWarnings("unchecked")
+            Map<String, Object> body = (Map<String, Object>) handler.handleHttpMessageNotReadable(ex, request).getBody();
+            assertThat(body).containsEntry("field", "administrationDate");
+            assertThat(((Map<?, ?>) body.get("fieldErrors")).keySet()).extracting(String::valueOf).contains("administrationDate");
+        }
+    }
+
+    /** A body with one date field. */
+    static class DatedBody {
+        private java.time.LocalDate administrationDate;
+
+        public java.time.LocalDate getAdministrationDate() {
+            return administrationDate;
+        }
+
+        public void setAdministrationDate(java.time.LocalDate administrationDate) {
+            this.administrationDate = administrationDate;
+        }
     }
 }

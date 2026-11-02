@@ -97,17 +97,20 @@ public class PatientGuarantorController {
 
     @PostMapping("/{guarantorId}/deactivate")
     @PreAuthorize(ROLES)
-    @Operation(summary = "Deactivate a guarantor (never delete)",
+    @Operation(summary = "Deactivate a guarantor (never delete; a reason is required)",
         security = @SecurityRequirement(name = "bearerAuth"))
     public ResponseEntity<GuarantorResponseDTO> deactivate(
         @PathVariable UUID patientId,
         @PathVariable UUID guarantorId,
         @RequestParam(required = false) UUID hospitalId,
+        // QA D1247 (round 25): the body states why; an empty body is refused naming "reason".
+        @Valid @RequestBody com.example.hms.payload.dto.scheduling.CloseReasonRequestDTO request,
         Authentication auth
     ) {
         authUtils.requireAuth(auth);
         UUID scope = authUtils.resolveHospitalScope(auth, hospitalId, null, true);
-        return ResponseEntity.ok(guarantorService.deactivate(patientId, guarantorId, scope));
+        UUID actor = authUtils.resolveUserId(auth).orElse(null);
+        return ResponseEntity.ok(guarantorService.deactivate(patientId, guarantorId, scope, request.getReason(), actor));
     }
 
     @PostMapping("/{guarantorId}/reactivate")

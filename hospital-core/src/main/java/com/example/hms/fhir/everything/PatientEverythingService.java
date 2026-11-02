@@ -440,6 +440,8 @@ public class PatientEverythingService {
         // problem in a sensitive category is withheld (D3).
         List<com.example.hms.model.PatientProblem> problems = patientProblemRepository
             .findByPatient_IdAndHospital_IdIn(ctx.patientId(), ctx.readable()).stream()
+            // QA D1240 (round 25): a problem removed as entered in error is not part of the record.
+            .filter(c -> !c.isEnteredInError())
             .filter(c -> CrossHospitalRows.maySurface(c.getHospital(), ctx.hospitalId(), sensitivityClassifier.effectiveCategory(c), ctx.unlocked()))
             .toList();
         ctx.account(problems.stream().map(c -> CrossHospitalReachRecorder.hospitalIdOf(c.getHospital())).toList());

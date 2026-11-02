@@ -336,15 +336,15 @@ class BirthPlanControllerTest {
         void deletesSuccessfully() {
             when(authentication.getName()).thenReturn("user1");
             UUID id = UUID.randomUUID();
-            doNothing().when(birthPlanService).deleteBirthPlan(id, "user1");
+            doNothing().when(birthPlanService).deleteBirthPlan(id, "doublon", "user1");
 
-            ResponseEntity<Void> result = controller.deleteBirthPlan(id, authentication);
+            ResponseEntity<Void> result = controller.deleteBirthPlan(id, "doublon", authentication);
 
             assertAll(
                 () -> assertEquals(HttpStatus.NO_CONTENT, result.getStatusCode()),
                 () -> assertNull(result.getBody())
             );
-            verify(birthPlanService).deleteBirthPlan(id, "user1");
+            verify(birthPlanService).deleteBirthPlan(id, "doublon", "user1");
         }
     }
 

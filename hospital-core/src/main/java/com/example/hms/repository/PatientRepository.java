@@ -55,6 +55,54 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
         + " OR " + NAME_MATCH
         + " OR LOWER(r.mrn) LIKE :namePattern)";
 
+    /**
+     * QA D1239 (round 25): the typed text with its {@code %} wildcards
+     * stripped ({@code :namePattern} is {@code %text%}), as a LIKE pattern
+     * that matches the text exactly, and as one that matches it at the start.
+     */
+    String NAME_TERM_EXACT = "SUBSTRING(:namePattern, 2, LENGTH(:namePattern) - 2)";
+    /** Closes on {@code text%}: the name starts with the typed text. */
+    String NAME_TERM_PREFIX = "SUBSTRING(:namePattern, 2)";
+
+    /**
+     * QA D1239 (round 25): the order of a capped name search. "Awa" filled the
+     * picker's eight rows with Sawadogo patients (the text inside their last
+     * name) and never offered Awa Kaboré: matches were cut at the page limit
+     * in no particular order. A name equal to the text comes first, then a
+     * name or a name order that starts with it, then a word of the full name
+     * that starts with it, then any other match - all BEFORE the page limit,
+     * then by last name, first name and id so pages are stable.
+     */
+    String NAME_RANK_ORDER = " ORDER BY CASE"
+        + " WHEN :namePattern IS NULL THEN 0"
+        + " WHEN " + FOLD_OPEN + "p.firstName" + FOLD_CLOSE + " LIKE " + NAME_TERM_EXACT
+        + " OR " + FOLD_OPEN + "p.lastName" + FOLD_CLOSE + " LIKE " + NAME_TERM_EXACT
+        + " OR " + FOLD_OPEN + "CONCAT(p.firstName, ' ', p.lastName)" + FOLD_CLOSE + " LIKE " + NAME_TERM_EXACT
+        + " OR " + FOLD_OPEN + "CONCAT(p.lastName, ' ', p.firstName)" + FOLD_CLOSE + " LIKE " + NAME_TERM_EXACT
+        + " THEN 0"
+        + " WHEN " + FOLD_OPEN + "p.firstName" + FOLD_CLOSE + " LIKE " + NAME_TERM_PREFIX
+        + " OR " + FOLD_OPEN + "p.lastName" + FOLD_CLOSE + " LIKE " + NAME_TERM_PREFIX
+        + " OR (p.middleName IS NOT NULL AND " + FOLD_OPEN + "p.middleName" + FOLD_CLOSE + " LIKE " + NAME_TERM_PREFIX + ")"
+        + " THEN 1"
+        + " WHEN " + FOLD_OPEN + "CONCAT(' ', p.firstName, ' ', COALESCE(p.middleName, ''), ' ', p.lastName)" + FOLD_CLOSE
+        + " LIKE CONCAT('% ', " + NAME_TERM_PREFIX + ")"
+        + " THEN 2"
+        + " ELSE 3 END, p.lastName, p.firstName, p.id";
+
+    /**
+     * The registration side of a patient search: an active registration in
+     * scope (tenant clause and optional hospital), with the MRN filters. An
+     * EXISTS rather than a join, so the search needs no DISTINCT and can be
+     * ordered by {@link #NAME_RANK_ORDER} (PostgreSQL refuses ORDER BY
+     * expressions outside a DISTINCT select list).
+     */
+    String REGISTRATION_IN_SCOPE_OPEN = " EXISTS (SELECT 1 FROM PatientHospitalRegistration r"
+        + " WHERE r.patient = p AND r.active = true"
+        + " AND (:hospitalId IS NULL OR r.hospital.id = :hospitalId)"
+        + " AND (:#{@tenantContext.isGlobalView()} = true OR ("
+        + "(p.hospitalId IS NOT NULL AND p.hospitalId IN :#{@tenantContext.effectiveHospitalIds()})"
+        + " OR (r.hospital.id IS NOT NULL AND r.hospital.id IN :#{@tenantContext.effectiveHospitalIds()})))";
+
     /** {@code p.phoneNumberPrimary} reduced to its digits ("+226 70-00.10/02" becomes "22670001002"). */
     String PRIMARY_PHONE_DIGITS =
         PatientMatchKeys.DIGITS_SQL_OPEN + "p.phoneNumberPrimary" + PatientMatchKeys.DIGITS_SQL_CLOSE;
@@ -75,40 +123,26 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
      */
     @Query(
         value = """
-        SELECT DISTINCT p FROM Patient p
-        JOIN p.hospitalRegistrations r
-        WHERE (:hospitalId IS NULL OR r.hospital.id = :hospitalId)
-          AND (:mrn IS NULL OR r.mrn = :mrn)
-          AND """ + NAME_OR_MRN_MATCH + """
+        SELECT p FROM Patient p
+        WHERE """ + REGISTRATION_IN_SCOPE_OPEN + """
+              AND (:mrn IS NULL OR r.mrn = :mrn)
+              AND """ + NAME_OR_MRN_MATCH + """
+          )
           AND (:dob IS NULL OR CAST(p.dateOfBirth AS string) = :dob)
           AND """ + PHONE_MATCH + """
           AND (:emailPattern IS NULL OR LOWER(p.email) LIKE :emailPattern)
           AND (:active IS NULL OR p.active = :active)
-          AND r.active = true
-          AND (
-                :#{@tenantContext.isGlobalView()} = true OR (
-                    (p.hospitalId IS NOT NULL AND p.hospitalId IN :#{@tenantContext.effectiveHospitalIds()})
-                    OR (r.hospital.id IS NOT NULL AND r.hospital.id IN :#{@tenantContext.effectiveHospitalIds()})
-                )
-              )
-        """,
+        """ + NAME_RANK_ORDER,
         countQuery = """
-        SELECT COUNT(DISTINCT p) FROM Patient p
-        JOIN p.hospitalRegistrations r
-        WHERE (:hospitalId IS NULL OR r.hospital.id = :hospitalId)
-          AND (:mrn IS NULL OR r.mrn = :mrn)
-          AND """ + NAME_OR_MRN_MATCH + """
+        SELECT COUNT(p) FROM Patient p
+        WHERE """ + REGISTRATION_IN_SCOPE_OPEN + """
+              AND (:mrn IS NULL OR r.mrn = :mrn)
+              AND """ + NAME_OR_MRN_MATCH + """
+          )
           AND (:dob IS NULL OR CAST(p.dateOfBirth AS string) = :dob)
           AND """ + PHONE_MATCH + """
           AND (:emailPattern IS NULL OR LOWER(p.email) LIKE :emailPattern)
           AND (:active IS NULL OR p.active = :active)
-          AND r.active = true
-          AND (
-                :#{@tenantContext.isGlobalView()} = true OR (
-          (p.hospitalId IS NOT NULL AND p.hospitalId IN :#{@tenantContext.effectiveHospitalIds()})
-          OR (r.hospital.id IS NOT NULL AND r.hospital.id IN :#{@tenantContext.effectiveHospitalIds()})
-                )
-              )
         """
     )
   @SuppressWarnings("java:S107")
@@ -345,34 +379,20 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
 
     @Query(
         value = """
-        SELECT DISTINCT p FROM Patient p
-        JOIN p.hospitalRegistrations r
-        WHERE (:hospitalId IS NULL OR r.hospital.id = :hospitalId)
-          AND """ + NAME_OR_MRN_MATCH + """
+        SELECT p FROM Patient p
+        WHERE """ + REGISTRATION_IN_SCOPE_OPEN + """
+              AND """ + NAME_OR_MRN_MATCH + """
+          )
           AND (:emailPattern IS NULL OR LOWER(p.email) LIKE :emailPattern)
           AND (:active IS NULL OR p.active = :active)
-          AND r.active = true
-          AND (
-                :#{@tenantContext.isGlobalView()} = true OR (
-                    (p.hospitalId IS NOT NULL AND p.hospitalId IN :#{@tenantContext.effectiveHospitalIds()})
-                    OR (r.hospital.id IS NOT NULL AND r.hospital.id IN :#{@tenantContext.effectiveHospitalIds()})
-                )
-              )
-        """,
+        """ + NAME_RANK_ORDER,
         countQuery = """
-        SELECT COUNT(DISTINCT p) FROM Patient p
-        JOIN p.hospitalRegistrations r
-        WHERE (:hospitalId IS NULL OR r.hospital.id = :hospitalId)
-          AND """ + NAME_OR_MRN_MATCH + """
+        SELECT COUNT(p) FROM Patient p
+        WHERE """ + REGISTRATION_IN_SCOPE_OPEN + """
+              AND """ + NAME_OR_MRN_MATCH + """
+          )
           AND (:emailPattern IS NULL OR LOWER(p.email) LIKE :emailPattern)
           AND (:active IS NULL OR p.active = :active)
-          AND r.active = true
-          AND (
-                :#{@tenantContext.isGlobalView()} = true OR (
-                    (p.hospitalId IS NOT NULL AND p.hospitalId IN :#{@tenantContext.effectiveHospitalIds()})
-                    OR (r.hospital.id IS NOT NULL AND r.hospital.id IN :#{@tenantContext.effectiveHospitalIds()})
-                )
-              )
         """
     )
   Page<Patient> searchPatients(@Param("namePattern") String namePattern,

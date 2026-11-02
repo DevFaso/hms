@@ -99,13 +99,20 @@ public class PatientGuarantorServiceImpl implements PatientGuarantorService {
     }
 
     @Override
-    public GuarantorResponseDTO deactivate(UUID patientId, UUID guarantorId, UUID hospitalId) {
+    public GuarantorResponseDTO deactivate(UUID patientId, UUID guarantorId, UUID hospitalId,
+                                           String reason, UUID actorUserId) {
+        // QA D1247 (round 25): one click with an empty body deactivated a
+        // guarantor; the reason is required (the shared cancellation rule).
+        String kept = com.example.hms.service.support.CancelledOrders.requireCancelReason(reason);
         PatientGuarantor guarantor = loadScoped(patientId, guarantorId, hospitalId);
         if (!guarantor.isActive()) {
             throw new BusinessException("guarantor.alreadyInactive");
         }
         guarantor.setActive(false);
         guarantor.setPrimary(false);
+        guarantor.setDeactivationReason(kept.length() > 500 ? kept.substring(0, 500) : kept);
+        guarantor.setDeactivatedAt(java.time.LocalDateTime.now());
+        guarantor.setDeactivatedByUserId(actorUserId);
         return toDto(guarantorRepository.save(guarantor));
     }
 
@@ -116,6 +123,9 @@ public class PatientGuarantorServiceImpl implements PatientGuarantorService {
             throw new BusinessException("guarantor.alreadyActive");
         }
         guarantor.setActive(true);
+        guarantor.setDeactivationReason(null);
+        guarantor.setDeactivatedAt(null);
+        guarantor.setDeactivatedByUserId(null);
         return toDto(guarantorRepository.save(guarantor));
     }
 
@@ -152,6 +162,8 @@ public class PatientGuarantorServiceImpl implements PatientGuarantorService {
             .address(guarantor.getAddress())
             .primary(guarantor.isPrimary())
             .active(guarantor.isActive())
+            .deactivationReason(guarantor.getDeactivationReason())
+            .deactivatedAt(guarantor.getDeactivatedAt())
             .notes(guarantor.getNotes())
             .createdAt(guarantor.getCreatedAt())
             .updatedAt(guarantor.getUpdatedAt())

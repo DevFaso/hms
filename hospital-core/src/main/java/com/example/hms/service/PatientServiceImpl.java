@@ -11,6 +11,7 @@ import com.example.hms.enums.AuditStatus;
 import com.example.hms.enums.ProblemChangeType;
 import com.example.hms.enums.ProblemStatus;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.exception.ConflictException;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -1511,6 +1512,16 @@ public class PatientServiceImpl implements PatientService {
         if (allergy.getRecordedBy() == null) {
             allergy.setRecordedBy(staff);
         }
+        // QA D1242 (round 25): an edit is not a way around the deactivation's
+        // reason and trace; set active again, the entry drops the old stamp.
+        if (Boolean.FALSE.equals(request.getActive()) && allergy.isActive()) {
+            throw new FieldBusinessException("active", "patient.r25.allergyDeactivateNeedsReason");
+        }
+        if (Boolean.TRUE.equals(request.getActive()) && !allergy.isActive()) {
+            allergy.setDeactivationReason(null);
+            allergy.setDeactivatedAt(null);
+            allergy.setDeactivatedByUserId(null);
+        }
         patientAllergyMapper.updateEntityFromRequest(request, allergy);
         enforceAllergyDisplay(allergy.getAllergenDisplay());
         if (allergy.getRecordedDate() == null) {
@@ -1540,8 +1551,17 @@ public class PatientServiceImpl implements PatientService {
             throw new BusinessException("patient.r7.allergyDeactivateReasonRequired");
         }
         PatientAllergy allergy = loadPatientAllergy(patientId, effectiveHospitalId, allergyId);
+        // QA D1242 (round 25), the D1186 class: an entry already deactivated
+        // stays as it was; a second call wrote another DEACTIVATED trace with a
+        // new reason. Refused like a removed diagnosis; the first reason is kept.
+        if (!allergy.isActive()) {
+            throw new BusinessException("patient.r25.allergyAlreadyDeactivated");
+        }
         resolveStaffContext(requesterUserId, effectiveHospitalId);
         allergy.setActive(false);
+        allergy.setDeactivationReason(normalizedReason.length() > 500 ? normalizedReason.substring(0, 500) : normalizedReason);
+        allergy.setDeactivatedAt(LocalDateTime.now());
+        allergy.setDeactivatedByUserId(requesterUserId);
         patientAllergyRepository.save(allergy);
         allergySummarySync.refresh(allergy.getPatient());
         logAllergyMutation("DEACTIVATED", patientId, effectiveHospitalId, allergy.getId(), requesterUserId, allergy, normalizedReason);
@@ -1737,7 +1757,7 @@ public class PatientServiceImpl implements PatientService {
         // latest STATUS change is the removal - a diagnosis set active again
         // after a removal and later marked INACTIVE can be removed (review
         // round 2), and a note edit after a removal does not reopen it (round 3).
-        if (problem.getStatus() == ProblemStatus.INACTIVE
+        if (problem.isEnteredInError() || problem.getStatus() == ProblemStatus.INACTIVE
                 && patientProblemHistoryRepository.findFirstByProblem_IdAndChangeTypeInOrderByChangedAtDesc(
                         problem.getId(), STATUS_CHANGE_TYPES)
                     .map(h -> h.getChangeType() == ProblemChangeType.DELETED).orElse(false)) {
@@ -1748,6 +1768,9 @@ public class PatientServiceImpl implements PatientService {
 
         problem.setStatus(ProblemStatus.INACTIVE);
         problem.setStatusChangeReason(normalizedReason);
+        // QA D1240 (round 25): removed as entered in error, so no patient-facing,
+        // proxy or FHIR reader lists it as part of the patient's history.
+        problem.setEnteredInError(true);
         if (problem.getResolvedDate() == null) {
             problem.setResolvedDate(LocalDate.now());
         }
@@ -1832,6 +1855,8 @@ public class PatientServiceImpl implements PatientService {
         }
         problem.setStatus(requestedStatus);
         problem.setStatusChangeReason(normalizedReason);
+        // QA D1240: a status set by a clinician after a removal reopens the entry.
+        problem.setEnteredInError(false);
         if (requestedStatus == ProblemStatus.RESOLVED) {
             problem.setResolvedDate(request.getResolvedDate() != null ? request.getResolvedDate() : LocalDate.now());
         } else if (request.getResolvedDate() != null) {
@@ -2684,6 +2709,9 @@ public class PatientServiceImpl implements PatientService {
     ) {
         List<PatientProblem> problems = patientProblemRepository
             .findByPatient_IdAndHospital_IdIn(patientId, readableHospitalIds).stream()
+            // QA D1240 (round 25): the record summary (and its exports) leaves out a
+            // diagnosis removed as entered in error.
+            .filter(problem -> !problem.isEnteredInError())
             .filter(problem -> maySurface(problem.getHospital(), hospitalId,
                 sensitivityClassifier.effectiveCategory(problem), unlocked))
             .toList();
