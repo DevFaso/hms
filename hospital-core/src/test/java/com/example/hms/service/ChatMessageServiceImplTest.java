@@ -32,6 +32,8 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -100,6 +102,21 @@ class ChatMessageServiceImplTest {
             .build();
         user.getUserRoles().add(ur);
         return user;
+    }
+
+    /** QA D1299 (round 28): an empty body names the recipient and the message, in one refusal. */
+    @Test
+    void sendMessage_emptyBody_namesTheRecipientAndTheMessage_D1299() {
+        ChatMessageRequestDTO dto = new ChatMessageRequestDTO();
+        assertThatThrownBy(() -> chatMessageService.sendMessage(dto, Locale.FRENCH))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                refusal -> assertThat(refusal.getFieldErrors())
+                    .containsOnlyKeys("recipientId", "content"));
+        dto.setContent("Bonjour");
+        assertThatThrownBy(() -> chatMessageService.sendMessage(dto, Locale.FRENCH))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                refusal -> assertThat(refusal.getFieldErrors())
+                    .containsOnlyKeys("recipientId"));
     }
 
     @Test

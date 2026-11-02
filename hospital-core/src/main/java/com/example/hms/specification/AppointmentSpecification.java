@@ -251,6 +251,7 @@ public final class AppointmentSpecification {
         if (joins.patientJoin() != null) {
             searchPredicates.add(cb.like(cb.lower(joins.patientJoin().get(FIRST_NAME)), localLike));
             searchPredicates.add(cb.like(cb.lower(joins.patientJoin().get(LAST_NAME)), localLike));
+            addPatientIdentifierPredicates(filter.getSearch().trim(), cb, searchPredicates, joins.patientJoin(), localLike);
         }
         if (joins.patientUserJoin() != null) {
             searchPredicates.add(cb.like(cb.lower(joins.patientUserJoin().get(EMAIL)), localLike));
@@ -267,6 +268,43 @@ public final class AppointmentSpecification {
         if (!searchPredicates.isEmpty()) {
             predicates.add(cb.or(searchPredicates.toArray(new Predicate[0])));
         }
+    }
+
+    /** The characters a stored phone may carry that {@code PatientMatchKeys.DIGITS_SQL_OPEN} strips. */
+    private static final List<String> PHONE_SEPARATORS = List.of(" ", "+", "-", ".", "(", ")", "/");
+
+    /**
+     * QA D1310 class (round 28): a free-text search box that finds a patient
+     * by name only. The appointment list's search now reads the term as the
+     * patient-search router does (QA D1274): the patient's own e-mail, a birth
+     * date in any accepted format, and a number against either phone.
+     */
+    private static void addPatientIdentifierPredicates(String term,
+                                                       jakarta.persistence.criteria.CriteriaBuilder cb,
+                                                       List<Predicate> searchPredicates,
+                                                       Join<Appointment, Patient> patient,
+                                                       String localLike) {
+        searchPredicates.add(cb.like(cb.lower(patient.get(EMAIL)), localLike));
+        LocalDate birthDate = com.example.hms.utility.PatientMatchKeys.birthDate(term);
+        if (birthDate != null) {
+            searchPredicates.add(cb.equal(patient.get("dateOfBirth"), birthDate));
+            return;
+        }
+        if (com.example.hms.utility.PatientMatchKeys.looksLikePhone(term)) {
+            String phone = com.example.hms.utility.PatientMatchKeys.phoneContainsPattern(term);
+            searchPredicates.add(cb.like(digitsOf(cb, patient.get("phoneNumberPrimary")), phone));
+            searchPredicates.add(cb.like(digitsOf(cb, patient.get("phoneNumberSecondary")), phone));
+        }
+    }
+
+    /** A stored phone reduced to its digits, the same separators as the shared SQL. */
+    private static jakarta.persistence.criteria.Expression<String> digitsOf(
+            jakarta.persistence.criteria.CriteriaBuilder cb, jakarta.persistence.criteria.Expression<String> phone) {
+        jakarta.persistence.criteria.Expression<String> digits = phone;
+        for (String separator : PHONE_SEPARATORS) {
+            digits = cb.function("REPLACE", String.class, digits, cb.literal(separator), cb.literal(""));
+        }
+        return digits;
     }
 
     private record JoinBundle(Join<Appointment, Patient> patientJoin,

@@ -292,24 +292,35 @@ class PatientHospitalRegistrationServiceImplTest {
             .isInstanceOf(ResourceNotFoundException.class);
     }
 
+    // QA D1299 (round 28; assertions changed): the refusal was an IllegalArgumentException with no
+    // field; it is a FieldBusinessException (a 400, as before) naming the missing reference.
     @Test
-    void registerPatient_noPatientRef_throwsIllegalArg() {
+    void registerPatient_noPatientRef_namesPatientId() {
         PatientHospitalRegistrationRequestDTO dto = PatientHospitalRegistrationRequestDTO.builder()
             .hospitalId(hospitalId).build();
 
         assertThatThrownBy(() -> service.registerPatient(dto))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("registration.patient.required");
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                refusal -> assertThat(refusal.getFieldErrors()).containsOnlyKeys("patientId"));
     }
 
     @Test
-    void registerPatient_noHospitalRef_throwsIllegalArg() {
+    void registerPatient_noHospitalRef_namesHospitalId() {
         PatientHospitalRegistrationRequestDTO dto = PatientHospitalRegistrationRequestDTO.builder()
             .patientId(patientId).build();
 
         assertThatThrownBy(() -> service.registerPatient(dto))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("registration.hospital.required");
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                refusal -> assertThat(refusal.getFieldErrors()).containsOnlyKeys("hospitalId"));
+    }
+
+    /** QA D1299: an empty body names the patient and the hospital in one refusal. */
+    @Test
+    void registerPatient_emptyBody_namesBothReferences_D1299() {
+        assertThatThrownBy(() -> service.registerPatient(PatientHospitalRegistrationRequestDTO.builder().build()))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                refusal -> assertThat(refusal.getFieldErrors())
+                    .containsOnlyKeys("patientId", "hospitalId"));
     }
 
     @Test

@@ -1341,15 +1341,39 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
                 .map(InvoiceStatus::valueOf)
                 .toList();
         }
+        String typed = searchRequest != null ? searchRequest.getQuery() : null;
         return invoiceRepository.findAllWithFilters(
             searchRequest != null ? searchRequest.getPatientId() : null,
             effectiveHospitalId,
             statuses,
             searchRequest != null ? searchRequest.getFromDate() : null,
             searchRequest != null ? searchRequest.getToDate() : null,
-            likePattern(searchRequest != null ? searchRequest.getQuery() : null),
+            likePattern(typed),
+            typedBirthDate(typed),
+            typedPhonePattern(typed),
             stableOrder(pageable)
         ).map(invoiceMapper::toBillingInvoiceResponseDTO);
+    }
+
+    /**
+     * QA D1310 (round 28): the invoice list's search found a patient by name
+     * and MRN only; a birth date typed in any accepted format (15/06/1990,
+     * 1990-06-15) is the patient's date of birth, as on every patient search
+     * (the router of QA D1274). Null when the term is not a date.
+     */
+    public static String typedBirthDate(String typed) {
+        return typed == null || com.example.hms.utility.PatientMatchKeys.birthDate(typed.trim()) == null
+            ? null : com.example.hms.utility.PatientMatchKeys.birthDateKey(typed.trim());
+    }
+
+    /**
+     * QA D1310: a typed number (70284317, +226 70 28 43 17) is also matched
+     * against the patient's phones; a birth date is a date, never a phone (the router's order).
+     */
+    public static String typedPhonePattern(String typed) {
+        return typed == null || typedBirthDate(typed) != null
+                || !com.example.hms.utility.PatientMatchKeys.looksLikePhone(typed.trim())
+            ? null : com.example.hms.utility.PatientMatchKeys.phoneContainsPattern(typed.trim());
     }
 
     private static java.time.LocalDateTime receivedAt(PaymentTransaction row) {

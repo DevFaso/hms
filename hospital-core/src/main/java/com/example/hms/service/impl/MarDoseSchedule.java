@@ -94,6 +94,14 @@ public final class MarDoseSchedule {
      * count of non-zero intakes a day.
      */
     private static final Pattern POSOLOGY = Pattern.compile("\\d(?:-\\d){2,3}+");
+    /**
+     * QA D1308 (round 28): "2/j", "3/j", "2/jour", "2/day", "3/dia" - a bare
+     * count straight before a per-day slash, the usual Burkinabe shorthand of a
+     * frequency (D1291 read only a count followed by "fois", "x" or "times").
+     * Only the slash forms: "2 daily" can be two tablets a day.
+     */
+    private static final Pattern BARE_PER_DAY =
+        Pattern.compile("\\b(\\d{1,2}+)\\s*+/\\s*+(?:JOURS?+|J|DIAS?+|DAYS?+|D)\\b");
 
     /**
      * QA D928: a count written as a word ("une fois par jour", "dos veces al
@@ -247,6 +255,11 @@ public final class MarDoseSchedule {
                 int count = Integer.parseInt(m.group(1));
                 return count <= MAX_DOSES_PER_DAY ? count : null;
             }
+        }
+        Matcher bare = BARE_PER_DAY.matcher(f);
+        if (bare.find()) {
+            int count = Integer.parseInt(bare.group(1));
+            return count <= MAX_DOSES_PER_DAY ? count : null;
         }
         return null;
     }

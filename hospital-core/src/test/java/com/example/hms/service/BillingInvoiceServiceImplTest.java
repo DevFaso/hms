@@ -477,6 +477,8 @@ class BillingInvoiceServiceImplTest {
             eq(fromDate),
             eq(toDate),
             any(),
+            any(),
+            any(),
             any(Pageable.class)
         )).thenReturn(page);
 
@@ -493,6 +495,8 @@ class BillingInvoiceServiceImplTest {
             statusesCaptor.capture(),
             eq(fromDate),
             eq(toDate),
+            any(),
+            any(),
             any(),
             any(Pageable.class)
         );
@@ -1683,9 +1687,31 @@ class BillingInvoiceServiceImplTest {
 
     // ---- QA round 4 (billing) ----
 
+    /** QA D1310 (round 28): a birth date and a phone number typed into the list's search are routed. */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource(delimiter = '|', nullValues = "null", value = {
+        "15/06/1990|1990-06-15|null", "1990-06-15|1990-06-15|null", "15-06-1990|1990-06-15|null",
+        "70284317|null|%70284317%", "Sawadogo|null|null", "inoussa.sawadogo.r28@example.com|null|null"})
+    void searchInvoices_routesABirthDateAndAPhone_D1310(String typed, String dob, String phonePresent) {
+        when(invoiceRepository.findAllWithFilters(any(), any(), any(), any(), any(), any(), any(), any(), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of()));
+
+        billingInvoiceService.searchInvoices(
+            BillingInvoiceSearchRequest.builder().query(typed).build(), PageRequest.of(0, 20), Locale.ENGLISH);
+
+        ArgumentCaptor<String> query = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> birth = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> phone = ArgumentCaptor.forClass(String.class);
+        verify(invoiceRepository).findAllWithFilters(any(), any(), any(), any(), any(), query.capture(), birth.capture(),
+            phone.capture(), any(Pageable.class));
+        assertEquals(dob, birth.getValue());
+        assertEquals(phonePresent == null, phone.getValue() == null, typed);
+        assertEquals("%" + typed.toLowerCase(Locale.ROOT).replace("_", "") + "%", query.getValue());
+    }
+
     @Test
     void searchInvoices_sendsTheTermToTheServerQueryAndAStableOrder_D203() {
-        when(invoiceRepository.findAllWithFilters(any(), any(), any(), any(), any(), any(), any(Pageable.class)))
+        when(invoiceRepository.findAllWithFilters(any(), any(), any(), any(), any(), any(), any(), any(), any(Pageable.class)))
             .thenReturn(new PageImpl<>(List.of()));
 
         billingInvoiceService.searchInvoices(
@@ -1693,7 +1719,8 @@ class BillingInvoiceServiceImplTest {
 
         ArgumentCaptor<String> query = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<Pageable> paging = ArgumentCaptor.forClass(Pageable.class);
-        verify(invoiceRepository).findAllWithFilters(any(), any(), any(), any(), any(), query.capture(), paging.capture());
+        verify(invoiceRepository).findAllWithFilters(any(), any(), any(), any(), any(), query.capture(), any(), any(),
+            paging.capture());
         assertEquals("%gh-20260024%", query.getValue());
         assertEquals(1, paging.getValue().getPageNumber());
         // A unique last key: equal dates can no longer swap rows between pages.

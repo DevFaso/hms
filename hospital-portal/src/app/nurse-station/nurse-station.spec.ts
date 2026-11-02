@@ -921,6 +921,28 @@ describe('NurseStationComponent — two-tier polling', () => {
     expect(toastSpy.error).toHaveBeenCalledWith('VITAL_LIMITS.TEMPERATURE');
   });
 
+  it('QA D1306 class: every implausible vital is marked at once, each with its own bounds', () => {
+    component.recordVitals('p1', 'Awa');
+    component.updateVitalsField('temperatureCelsius', '45');
+    component.updateVitalsField('heartRateBpm', '400');
+    component.updateVitalsField('spo2Percent', '97');
+    fixture.detectChanges();
+    component.submitVitals();
+    expect(nurseServiceSpy.captureVitals).not.toHaveBeenCalled();
+    const root = fixture.nativeElement as HTMLElement;
+    expect(root.querySelector('#vf-temp')?.getAttribute('aria-invalid')).toBe('true');
+    expect(root.querySelector('#vf-hr')?.getAttribute('aria-invalid')).toBe('true');
+    expect(root.querySelector('#vf-spo2')?.getAttribute('aria-invalid')).toBeNull();
+    expect(root.querySelector('#vf-temp-invalid-msg')?.textContent).toBe('VITAL_LIMITS.TEMPERATURE');
+    expect(root.querySelector('#vf-hr-invalid-msg')?.textContent).toBe('VITAL_LIMITS.HEART_RATE');
+    // Fixed and sent again: the marks go.
+    nurseServiceSpy.captureVitals.and.returnValue(of(undefined));
+    component.updateVitalsField('temperatureCelsius', '37');
+    component.updateVitalsField('heartRateBpm', '80');
+    component.submitVitals();
+    expect(root.querySelector('[aria-invalid="true"]')).toBeNull();
+  });
+
   it('sends plausible vitals and shows the server field message on a 400', () => {
     nurseServiceSpy.captureVitals.and.returnValue(
       throwError(() => ({

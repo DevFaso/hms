@@ -13,7 +13,28 @@ import {
   DestroyRef,
 } from '@angular/core';
 import { isNeverSeenVisit } from '../core/encounter-start';
-import { firstImplausibleVital } from '../shared/vital-sign-limits';
+import { VITAL_SIGN_LIMITS, VitalSignField } from '../shared/vital-sign-limits';
+import { refuseFields } from '../shared/forms/invalid-fields';
+
+/** The vitals dialog's input of each bounded reading (nurse-station.html). */
+const VITAL_FIELD_IDS: Record<VitalSignField, string> = {
+  temperatureCelsius: 'vf-temp',
+  heartRateBpm: 'vf-hr',
+  respiratoryRateBpm: 'vf-rr',
+  systolicBpMmHg: 'vf-sbp',
+  diastolicBpMmHg: 'vf-dbp',
+  spo2Percent: 'vf-spo2',
+  bloodGlucoseMgDl: 'vf-glucose',
+  weightKg: 'vf-weight',
+  heightCm: 'vf-height',
+  headCircumferenceCm: 'vf-head-circumference',
+};
+
+/** One refused reading: its input and its own reason (already translated). */
+export interface VitalRefusal {
+  id: string;
+  message: string;
+}
 import { glucoseMmolToMgDl } from '../shared/glucose-units';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { CommonModule } from '@angular/common';
@@ -188,6 +209,7 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   readonly showHeadCircumference = computed(() => offersHeadCircumference(this.vitalsPatientDob()));
   private readonly patientLookup = inject(PatientService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   vitalsForm = signal<NurseVitalCaptureRequest>({});
   vitalsCapturing = signal(false);
 
@@ -769,16 +791,16 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
       this.toast.error(this.translate.instant('NURSE.TOAST.VITALS_REQUIRED'));
       return;
     }
-    const implausible = firstImplausibleVital(form);
-    if (implausible) {
-      this.toast.error(
-        this.translate.instant(implausible.messageKey, {
-          min: implausible.min,
-          max: implausible.max,
-        }),
-      );
+    // QA D1306 class (round 28, found by #1027): an implausible reading was
+    // refused by a toast naming the first one only, and no field was marked.
+    // Every implausible reading is marked at once, each with its own bounds.
+    const refusals = this.implausibleVitals(form);
+    if (refusals.length > 0) {
+      this.markVitalRefusals(refusals);
+      this.toast.error(refusals[0].message);
       return;
     }
+    this.markVitalRefusals([]);
     this.vitalsCapturing.set(true);
     this.nurseService.captureVitals(target.patientId, form).subscribe({
       next: () => {
@@ -792,11 +814,57 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
       error: (err: { error?: { fieldErrors?: Record<string, string> } }) => {
         // A 400 from the plausibility bounds carries the server's translated
         // per-field message; anything else keeps the generic toast.
-        const fieldMessage = Object.values(err?.error?.fieldErrors ?? {})[0];
+        const fieldErrors = err?.error?.fieldErrors ?? {};
+        const fieldMessage = Object.values(fieldErrors)[0];
+        // QA D1306 class: the server's refused readings are marked too, each with its reason.
+        this.markVitalRefusals(
+          Object.entries(fieldErrors)
+            .filter(([field]) => field in VITAL_FIELD_IDS)
+            .map(([field, message]) => ({ id: VITAL_FIELD_IDS[field as VitalSignField], message })),
+        );
         this.toast.error(fieldMessage ?? this.translate.instant('NURSE.TOAST.VITALS_SAVE_FAILED'));
         this.vitalsCapturing.set(false);
       },
     });
+  }
+
+  /** Every reading outside its plausibility bounds, in the dialog's order, each with its own reason. */
+  implausibleVitals(values: Partial<Record<VitalSignField, unknown>>): VitalRefusal[] {
+    const out: VitalRefusal[] = [];
+    for (const field of Object.keys(VITAL_SIGN_LIMITS) as VitalSignField[]) {
+      const value = values[field];
+      if (value === null || value === undefined || value === '') continue;
+      const limit = VITAL_SIGN_LIMITS[field];
+      const n = Number(value);
+      if (Number.isNaN(n) || n < limit.min || n > limit.max) {
+        out.push({
+          id: VITAL_FIELD_IDS[field],
+          message: this.translate.instant(limit.messageKey, { min: limit.min, max: limit.max }),
+        });
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Marks each refused reading with its own message and clears the others;
+   * focus goes to the first refused one. One call per field because the base
+   * `refuseFields` takes one message for all (#1027 adds a per-field form the
+   * merge can switch this helper to).
+   */
+  markVitalRefusals(refusals: readonly VitalRefusal[]): void {
+    const root = this.host.nativeElement;
+    const all = Object.values(VITAL_FIELD_IDS);
+    refuseFields(
+      root,
+      [],
+      all.filter((id) => !refusals.some((r) => r.id === id)),
+      '',
+    );
+    // The last call focuses its field; the first refused one is called last.
+    for (const refusal of [...refusals].reverse()) {
+      refuseFields(root, [refusal.id], [refusal.id], refusal.message);
+    }
   }
 
   /* ── Acuity display ─────────────────────────────────────── */
