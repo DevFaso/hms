@@ -15,10 +15,11 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class CloseReasonRequestDTO {
 
-    // QA D1267 (round 26): no @NotBlank here. The body is shared by a
-    // cancellation, a closure, a revocation and a deactivation; its one
-    // message read "the reason for the cancellation" for all of them. Each
-    // service refuses a blank reason with its own wording, on "reason"
+    // QA D1267 (round 26): no @NotBlank here. The body is shared by the
+    // recall cancel and the waitlist close (the directive revoke and the
+    // guarantor deactivation have their own bodies now); its one message read
+    // "the reason for the cancellation" for all of them. Each service refuses
+    // a blank reason with its own wording, on "reason"
     // (CancelledOrders.requireReason), and an empty body the same way.
     @Size(max = 500, message = "{validation.reason.size}")
     private String reason;

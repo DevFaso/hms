@@ -90,7 +90,7 @@ class CloseReasonWordingGuardTest {
                 worded.add(a.toString());
             }
         }
-        assertThat(worded).as("CloseReasonRequestDTO serves a cancel, a close, a revoke and a deactivate (QA D1267)")
+        assertThat(worded).as("CloseReasonRequestDTO serves a recall cancel and a waitlist close (QA D1267)")
             .isEmpty();
     }
 }
