@@ -30,7 +30,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   <li>offered and flagged early: the reason is asked, and accepted;</li>
  *   <li>a dose the slot rule accepts is offered, except a missed backlog slot
  *       inside the minimum gap (the D1236 decision): round 25 hid every dose
- *       inside the gap, and the early-dose path was unreachable from the UI.</li>
+ *       inside the gap, and the early-dose path was unreachable from the UI;</li>
+ *   <li>QA D1236 / D1262: right after an outcome is recorded (given, held,
+ *       refused or missed, however late), the row is never OVERDUE: a missed
+ *       backlog slot is not offered again.</li>
  * </ul>
  */
 class MarScreenServerAgreementTest {
@@ -42,6 +45,8 @@ class MarScreenServerAgreementTest {
         "q12h", "une fois par jour", "cinq fois par jour", "après les repas");
     private static final String OVERDUE = "OVERDUE";
     private static final String DUE = "DUE";
+    /** "Right after" an outcome: the next slot is at least an hour away for every frequency read. */
+    private static final long JUST_RECORDED_MINUTES = 15;
 
     @Test
     void theScreenOffersExactlyWhatTheServerAccepts() {
@@ -90,6 +95,9 @@ class MarScreenServerAgreementTest {
         boolean slotOk = NurseTaskServiceImpl.slotRuleAllows(due, now);
         Optional<LocalDateTime> lastGiven = MarDoseInterval.lastGivenAt(rows, null);
 
+        if (OVERDUE.equals(status) && sinceMinutes <= JUST_RECORDED_MINUTES) {
+            return "OVERDUE right after the outcome was recorded (a missed backlog slot)";
+        }
         if (offered && !slotOk) {
             return status + " but the slot rule refuses it";
         }
