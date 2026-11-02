@@ -32,6 +32,7 @@ import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { refuseFields } from '../shared/forms/invalid-fields';
+import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 type AdminSection = 'visit-types' | 'templates' | 'slots';
 
 /** QA D1306 (round 28): the fields each form may refuse, so a fixed one loses its mark. */
@@ -57,6 +58,7 @@ const TPL_FIELD_IDS = [
   selector: 'app-slot-admin',
   standalone: true,
   imports: [
+    DateTimePipe,
     SubmitGuardDirective,
     ModalDialogDirective,
     ClockTimePipe,

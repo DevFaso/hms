@@ -5,6 +5,11 @@ import { of, throwError } from 'rxjs';
 
 import { LaborTabComponent } from './labor-tab';
 import {
+  expectEmptySubmitRefusal,
+  expectFieldsMarked,
+  fieldErrorsResponse,
+} from '../testing/form-refusal-behaviour';
+import {
   LaborService,
   LaborEpisodeResponse,
   PartographEntryResponse,
@@ -625,5 +630,152 @@ describe('LaborTabComponent', () => {
     expect(el.querySelector('[data-testid="labor-risk-notes"]')?.textContent).toContain(
       'Antécédent de césarienne',
     );
+  });
+});
+
+describe('LaborTabComponent recent-delivery override (rendered, QA D1339 / D1340)', () => {
+  let laborSpy: jasmine.SpyObj<LaborService>;
+  let attached: HTMLElement | null = null;
+
+  /** A zone-less UTC wall time `days` ago, as the API sends it. */
+  function serverWallDaysAgo(days: number): string {
+    return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().slice(0, 19);
+  }
+
+  function delivered(id: string, daysAgo: number): LaborEpisodeResponse {
+    return {
+      ...episode(id, 'DELIVERED'),
+      admittedAt: serverWallDaysAgo(daysAgo),
+      deliveryRecorded: true,
+    };
+  }
+
+  beforeEach(async () => {
+    laborSpy = jasmine.createSpyObj('LaborService', [
+      'startEpisode',
+      'episodes',
+      'addEntry',
+      'entries',
+      'recordDelivery',
+      'delivery',
+    ]);
+    laborSpy.entries.and.returnValue(of([]));
+    laborSpy.delivery.and.returnValue(throwError(() => ({ status: 404 })));
+    const patientSpy = jasmine.createSpyObj('PatientService', ['search', 'lookup']);
+    patientSpy.search.and.returnValue(of([]));
+    patientSpy.lookup.and.returnValue(of([]));
+    await TestBed.configureTestingModule({
+      imports: [LaborTabComponent, TranslateModule.forRoot()],
+      providers: [
+        { provide: LaborService, useValue: laborSpy },
+        {
+          provide: ToastService,
+          useValue: jasmine.createSpyObj('ToastService', ['success', 'error', 'info']),
+        },
+        { provide: PatientService, useValue: patientSpy },
+      ],
+    }).compileComponents();
+  });
+
+  afterEach(() => {
+    attached?.remove();
+    attached = null;
+  });
+
+  function render(episodes: LaborEpisodeResponse[]) {
+    laborSpy.episodes.and.returnValue(of(episodes));
+    const fixture = TestBed.createComponent(LaborTabComponent);
+    attached = fixture.nativeElement as HTMLElement;
+    document.body.appendChild(attached);
+    fixture.componentInstance.onPatientChange({ id: 'p1' } as PatientResponse);
+    fixture.detectChanges();
+    return fixture;
+  }
+
+  function openStart(episodes: LaborEpisodeResponse[]) {
+    const fixture = render(episodes);
+    fixture.componentInstance.openStartForm();
+    fixture.componentInstance.startForm.laborOnsetAt = nowLocalDatetime();
+    fixture.detectChanges();
+    return fixture;
+  }
+
+  it('after a birth in the last 20 weeks the override is starred, required and marked when blank', async () => {
+    const fixture = openStart([delivered('e0', 1)]);
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const marked = expectEmptySubmitRefusal(fixture, {
+      button: '[data-testid="labor-start-submit"]',
+      sent: laborSpy.startEpisode,
+    });
+    expect(marked).toContain('labor-override');
+  });
+
+  it('with no recent birth the override is optional (negative control)', async () => {
+    const fixture = openStart([delivered('e0', 200)]);
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const override = (fixture.nativeElement as HTMLElement).querySelector('#labor-override');
+    expect(override?.hasAttribute('required')).toBeFalse();
+    expect(fixture.componentInstance.startOverrideRequired()).toBeFalse();
+  });
+
+  it('the server naming the override under fieldErrors marks it with its reason', async () => {
+    laborSpy.startEpisode.and.returnValue(
+      throwError(() =>
+        fieldErrorsResponse({ recentDeliveryOverrideReason: 'Motif requis après une naissance' }),
+      ),
+    );
+    const fixture = openStart([]);
+    await fixture.whenStable();
+    fixture.componentInstance.submitStart();
+    fixture.detectChanges();
+    expect(laborSpy.startEpisode).toHaveBeenCalled();
+    expectFieldsMarked(fixture, { 'labor-override': 'Motif requis après une naissance' });
+  });
+
+  it('the delivery form asks for the override when another birth is recent', async () => {
+    const fixture = render([episode('e1', 'ACTIVE'), delivered('e0', 30)]);
+    fixture.componentInstance.openDeliveryForm();
+    fixture.componentInstance.deliveryForm.deliveryMode = 'SPONTANEOUS_VAGINAL';
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const marked = expectEmptySubmitRefusal(fixture, {
+      button: '[data-testid="labor-delivery-submit"]',
+      sent: laborSpy.recordDelivery,
+    });
+    expect(marked).toContain('dl-override');
+  });
+
+  it('QA D1340: the delivery card shows the birth time without seconds', () => {
+    laborSpy.delivery.and.returnValue(
+      of({
+        id: 'd1',
+        episodeId: 'e0',
+        patientId: 'p1',
+        deliveredByStaffName: null,
+        birthDateTime: '2026-11-02T15:00:00',
+        deliveryMode: 'SPONTANEOUS_VAGINAL',
+        liveBirth: true,
+        numberOfInfants: 1,
+        infantSex: null,
+        birthWeightGrams: null,
+        gestationalAgeWeeksAtBirth: null,
+        apgarOneMinute: null,
+        apgarFiveMinute: null,
+        placentaDeliveredAt: null,
+        placentaComplete: null,
+        uterotonicGiven: null,
+        estimatedBloodLossMl: null,
+        perinealTear: null,
+        notes: null,
+        alerts: [],
+      }),
+    );
+    const fixture = render([delivered('e0', 200)]);
+    const text = ((fixture.nativeElement as HTMLElement).textContent ?? '').replace(/\s+/g, ' ');
+    expect(text).toMatch(/2026, \d{2}:\d{2}/);
+    expect(text).not.toMatch(/\d{1,2}:\d{2}:\d{2}/);
   });
 });

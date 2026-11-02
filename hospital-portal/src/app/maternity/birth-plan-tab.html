@@ -262,11 +262,7 @@
             <h3>{{ 'BIRTH_PLAN.PROVIDER_REVIEW' | translate }}</h3>
             <p>
               {{ p.providerSignature }} —
-              {{
-                p.providerSignatureDate
-                  ? (p.providerSignatureDate | serverTime | date: 'medium')
-                  : ''
-              }}
+              {{ p.providerSignatureDate ? (p.providerSignatureDate | serverTime | dateTime) : '' }}
             </p>
             @if (p.providerComments) {
               <p class="muted">{{ p.providerComments }}</p>

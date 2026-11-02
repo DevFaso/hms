@@ -169,13 +169,13 @@
             {{ 'PROCEDURES.ORDERED_BY' | translate }}{{ 'COMMON.COLON' | translate }}
             {{ o.orderingProviderName || '—' }}
             @if (o.orderedAt) {
-              — {{ o.orderedAt | serverTime | date: 'medium' }}
+              — {{ o.orderedAt | serverTime | dateTime }}
             }
           </p>
           @if (o.scheduledDatetime) {
             <p>
               {{ 'PROCEDURES.SCHEDULED_FOR' | translate }}{{ 'COMMON.COLON' | translate }}
-              {{ o.scheduledDatetime | serverTime | date: 'medium' }}
+              {{ o.scheduledDatetime | serverTime | dateTime }}
             </p>
           }
           @if (o.laterality) {
@@ -247,7 +247,7 @@
                 — {{ o.consentObtainedBy }}
               }
               @if (o.consentObtainedAt) {
-                ({{ o.consentObtainedAt | serverTime | date: 'medium' }})
+                ({{ o.consentObtainedAt | serverTime | dateTime }})
               }
             </p>
             @if (o.consentFormLocation) {

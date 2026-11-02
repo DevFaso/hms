@@ -19,6 +19,7 @@ import {
   PatientTrackerWsService,
   PatientTrackerEvent,
 } from '../services/patient-tracker-ws.service';
+import { expectEmptySubmitRefusal } from '../testing/form-refusal-behaviour';
 
 describe('NurseStationComponent — two-tier polling', () => {
   let component: NurseStationComponent;
@@ -910,6 +911,50 @@ describe('NurseStationComponent — two-tier polling', () => {
     // this spec sets the signal directly, so that string is not in its
     // universe and the check could never fail. NurseTaskServiceImplTest
     // pins the wire value instead.
+  });
+
+  describe('QA D1330 (round 29): an empty vitals save is refused inline, not by a toast alone', () => {
+    afterEach(() => (fixture.nativeElement as HTMLElement).remove());
+
+    it('the press marks Température with the "at least one reading" reason and sends nothing', () => {
+      document.body.appendChild(fixture.nativeElement);
+      component.recordVitals('p1', 'Awa');
+      fixture.detectChanges();
+      const marked = expectEmptySubmitRefusal(fixture, {
+        button: '[data-testid="vitals-save"]',
+        alsoMarked: ['vf-temp'],
+        sent: nurseServiceSpy.captureVitals,
+      });
+      expect(marked).toEqual(['vf-temp']);
+      const reason = (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="submit-guard-reason"]',
+      );
+      expect(reason?.textContent).toContain('NURSE.TOAST.VITALS_REQUIRED');
+      expect(toastSpy.error).not.toHaveBeenCalled();
+    });
+
+    it('one reading is enough: the guard lets the save through (negative control)', () => {
+      nurseServiceSpy.captureVitals.and.returnValue(of(undefined));
+      component.recordVitals('p1', 'Awa');
+      component.updateVitalsField('heartRateBpm', '80');
+      fixture.detectChanges();
+      expect(component.vitalsBlockReason()).toBeFalse();
+      expect(component.vitalsGuardFieldIds()).toEqual([]);
+      component.submitVitals();
+      expect(nurseServiceSpy.captureVitals).toHaveBeenCalled();
+    });
+
+    it('a method call that bypasses the button is refused the same way', () => {
+      component.recordVitals('p1', 'Awa');
+      fixture.detectChanges();
+      component.submitVitals();
+      expect(nurseServiceSpy.captureVitals).not.toHaveBeenCalled();
+      expect(
+        (fixture.nativeElement as HTMLElement)
+          .querySelector('#vf-temp')
+          ?.getAttribute('aria-invalid'),
+      ).toBe('true');
+    });
   });
 
   it('refuses an impossible vital reading before it reaches the server (QA D29)', () => {

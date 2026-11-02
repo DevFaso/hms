@@ -40,7 +40,7 @@
         {{ ' ' }}<span class="badge badge-muted">{{ snap.label }}</span>
       }
       <span class="meta-text">
-        {{ snap.createdBy || '—' }} · {{ snap.createdAt | serverTime | date: 'medium' }}
+        {{ snap.createdBy || '—' }} · {{ snap.createdAt | serverTime | dateTime }}
       </span>
     </div>
     <div class="table-wrap">

@@ -26,11 +26,34 @@ import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
-import { refusalReason } from '../../shared/refusal-reason';
+import { refusalReason, refusedFieldReasons } from '../../shared/refusal-reason';
 import { refuseFields } from '../../shared/forms/invalid-fields';
 
 /** Every reflex-rule field submitReflexRule() may refuse. */
 const REFLEX_FIELD_IDS = ['reflexTrigger', 'reflexTest', 'reflexValue'];
+
+/**
+ * QA D1338 (D1301 / D1256 class, round 29): the definition dialog's control
+ * for each request property a refusal names under `fieldErrors` (a duplicate
+ * code is `testCode`), so the field is marked with the server's reason
+ * instead of a toast alone. `name` is the key the server used for the test
+ * name before round 29 (the DTO field behind `testName`).
+ */
+const DEF_FIELD_IDS: Readonly<Record<string, string>> = {
+  testCode: 'defTestCode',
+  testName: 'defTestName',
+  name: 'defTestName',
+  category: 'defCategory',
+  unit: 'defUnit',
+  sampleType: 'defSampleType',
+  turnaroundTime: 'defTurnaround',
+  loincCode: 'defLoincCode',
+  loincDisplay: 'defLoincDisplay',
+  description: 'defDescription',
+  preparationInstructions: 'defPrepInstructions',
+  expectedResult: 'defExpectedResult',
+};
+const DEF_CONTROL_IDS = [...new Set(Object.values(DEF_FIELD_IDS))];
 @Component({
   selector: 'app-lab-test-config',
   standalone: true,
@@ -323,6 +346,7 @@ export class LabTestConfigComponent implements OnInit {
   }
 
   submitDefForm(): void {
+    refuseFields(this.host.nativeElement, [], DEF_CONTROL_IDS, '');
     this.savingDef.set(true);
     const op = this.editingDefCrud()
       ? this.labService.updateTestDefinition(this.editingDefId()!, this.defForm)
@@ -339,6 +363,14 @@ export class LabTestConfigComponent implements OnInit {
         this.loadDefinitions();
       },
       error: (err) => {
+        const refused = refusedFieldReasons(err, DEF_FIELD_IDS);
+        if (refused.length > 0) {
+          refuseFields(
+            this.host.nativeElement,
+            refused.map(([id, message]) => ({ id, message })),
+            DEF_CONTROL_IDS,
+          );
+        }
         this.toast.error(
           err?.error?.message ?? this.translate.instant('LAB_TEST_CONFIG.DEF_SAVE_ERROR'),
         );

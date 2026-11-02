@@ -58,10 +58,12 @@ import {
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { focusWhenRendered } from '../shared/a11y/focus-when-rendered';
 import { ListEscapeDirective } from '../shared/a11y/list-escape.directive';
+import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 @Component({
   selector: 'app-encounters',
   standalone: true,
   imports: [
+    DateTimePipe,
     ListEscapeDirective,
     SubmitGuardDirective,
     PersonNamePipe,

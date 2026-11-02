@@ -42,6 +42,7 @@ import { ModalDialogDirective } from '../../../shared/a11y/modal-dialog.directiv
 import { refuseFields } from '../../../shared/forms/invalid-fields';
 
 import { SubmitGuardDirective } from '../../../shared/forms/submit-guard.directive';
+import { DateTimePipe } from '../../../shared/pipes/date-time.pipe';
 /** A verification decision taken with a reason. */
 type DecisionKind = 'reject' | 'revoke';
 
@@ -73,6 +74,7 @@ const STEP_UP_FAILED_KEY = 'HOSPITAL_LIFECYCLE.ERROR.STEP_UP_FAILED';
   selector: 'app-provider-detail',
   standalone: true,
   imports: [
+    DateTimePipe,
     SubmitGuardDirective,
     ServerTimePipe,
     DatePipe,

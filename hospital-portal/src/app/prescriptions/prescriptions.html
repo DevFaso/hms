@@ -368,7 +368,7 @@
             <div class="detail-field">
               <span class="field-label">{{ 'COMMON.CREATED' | translate }}</span
               ><span class="field-value">{{
-                rx.createdAt ? (rx.createdAt | serverTime | date: 'medium') : '—'
+                rx.createdAt ? (rx.createdAt | serverTime | dateTime) : '—'
               }}</span>
             </div>
           </div>
@@ -393,7 +393,7 @@
               @if (rx.signedAt) {
                 <div class="detail-field">
                   <span class="field-label">{{ 'PRESCRIPTIONS.SIGNED_AT' | translate }}</span
-                  ><span class="field-value">{{ rx.signedAt | serverTime | date: 'medium' }}</span>
+                  ><span class="field-value">{{ rx.signedAt | serverTime | dateTime }}</span>
                 </div>
               }
               @if (rx.requiresCosign) {
@@ -401,7 +401,7 @@
                   <span class="field-label">{{ 'PRESCRIPTIONS.COSIGN_STATE' | translate }}</span
                   ><span class="field-value">{{
                     rx.cosignedAt
-                      ? (rx.cosignedAt | serverTime | date: 'medium')
+                      ? (rx.cosignedAt | serverTime | dateTime)
                       : ('PRESCRIPTIONS.COSIGN_PENDING' | translate)
                   }}</span>
                 </div>
@@ -413,7 +413,7 @@
                   }}</span
                   ><span class="field-value">{{
                     rx.twoFactorVerifiedAt
-                      ? (rx.twoFactorVerifiedAt | serverTime | date: 'medium')
+                      ? (rx.twoFactorVerifiedAt | serverTime | dateTime)
                       : ('PRESCRIPTIONS.TWO_FACTOR_PENDING' | translate)
                   }}</span>
                 </div>
@@ -429,7 +429,7 @@
                   }}</span
                   ><span class="field-value">{{
                     rx.pharmacistVerifiedAt
-                      ? (rx.pharmacistVerifiedAt | serverTime | date: 'medium')
+                      ? (rx.pharmacistVerifiedAt | serverTime | dateTime)
                       : ('PRESCRIPTIONS.PHARMACIST_VERIFY_PENDING' | translate)
                   }}</span>
                 </div>
@@ -471,7 +471,7 @@
                   }}</span
                   ><span class="field-value">{{
                     rx.pediatricDoseReviewedAt
-                      ? (rx.pediatricDoseReviewedAt | serverTime | date: 'medium')
+                      ? (rx.pediatricDoseReviewedAt | serverTime | dateTime)
                       : ('PRESCRIPTIONS.DOSE_REVIEW.DUE' | translate)
                   }}</span>
                 </div>
@@ -540,7 +540,7 @@
                       ) | translate
                     }}</span
                     ><span class="field-value" data-testid="rx-dispatched-at">{{
-                      rx.dispatchedAt | serverTime | date: 'medium'
+                      rx.dispatchedAt | serverTime | dateTime
                     }}</span>
                   </div>
                 }
@@ -568,7 +568,7 @@
                     ><span class="field-value" data-testid="rx-last-pharmacy-event">
                       {{ rx.lastPharmacyEvent | enumLabel: 'prescriptionStatus' }}
                       @if (rx.lastPharmacyEventAt) {
-                        — {{ rx.lastPharmacyEventAt | serverTime | date: 'medium' }}
+                        — {{ rx.lastPharmacyEventAt | serverTime | dateTime }}
                       }
                     </span>
                   </div>

@@ -4,6 +4,7 @@ import { provideHttpClientTesting, HttpTestingController } from '@angular/common
 import { provideRouter } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { LabTestConfigComponent } from './lab-test-config';
+import { expectEmptySubmitRefusal, expectFieldsMarked } from '../../testing/form-refusal-behaviour';
 
 function mockDefinition(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -360,6 +361,63 @@ describe('LabTestConfigComponent', () => {
 
     expect(component.showDefModal()).toBeFalse();
     expect(component.savingDef()).toBeFalse();
+  });
+
+  describe('QA D1338 (round 29): the definition dialog marks what is refused', () => {
+    afterEach(() => (fixture.nativeElement as HTMLElement).remove());
+
+    function openCreate(): void {
+      document.body.appendChild(fixture.nativeElement);
+      fixture.detectChanges();
+      flushInit();
+      component.openCreateDef();
+      fixture.detectChanges();
+    }
+
+    it('an empty press marks code and name, starred, and sends nothing', () => {
+      openCreate();
+      const marked = expectEmptySubmitRefusal(fixture, { button: '[data-testid="def-submit"]' });
+      expect(marked).toEqual(['defTestCode', 'defTestName']);
+      httpMock.expectNone((r) => r.method === 'POST');
+    });
+
+    it('a duplicate code (409 with fieldErrors.testCode) marks the code with the server reason', () => {
+      openCreate();
+      component.defForm.testCode = 'K';
+      component.defForm.testName = 'Potassium';
+      component.submitDefForm();
+      httpMock
+        .expectOne((r) => r.url.includes('/lab-test-definitions') && r.method === 'POST')
+        .flush(
+          {
+            message: 'Le code K est déjà utilisé.',
+            fieldErrors: { testCode: 'Le code K est déjà utilisé.' },
+          },
+          { status: 409, statusText: 'Conflict' },
+        );
+      fixture.detectChanges();
+      expectFieldsMarked(fixture, { defTestCode: 'Le code K est déjà utilisé.' });
+      expect(
+        (fixture.nativeElement as HTMLElement)
+          .querySelector('#defTestName')
+          ?.getAttribute('aria-invalid'),
+      ).toBeNull();
+    });
+
+    it('a blank name keyed testName marks the name field', () => {
+      openCreate();
+      component.defForm.testCode = 'K';
+      component.defForm.testName = 'x';
+      component.submitDefForm();
+      httpMock
+        .expectOne((r) => r.url.includes('/lab-test-definitions') && r.method === 'POST')
+        .flush(
+          { error: 'Validation Failed', fieldErrors: { testName: 'ne doit pas être vide' } },
+          { status: 400, statusText: 'Bad Request' },
+        );
+      fixture.detectChanges();
+      expectFieldsMarked(fixture, { defTestName: 'ne doit pas être vide' });
+    });
   });
 
   it('should submit update definition form', () => {

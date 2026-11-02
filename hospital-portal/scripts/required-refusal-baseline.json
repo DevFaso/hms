@@ -221,10 +221,6 @@
       "count": 1,
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
     },
-    "src/app/nurse-station/nurse-station.ts::toast-only-refusal::submitVitals::NURSE.TOAST.VITALS_REQUIRED": {
-      "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
-    },
     "src/app/organizations/organization-detail.ts::unmarked-refusal::ngOnInit::TENANT_LIFECYCLE.TOAST.MISSING_ID": {
       "count": 1,
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"

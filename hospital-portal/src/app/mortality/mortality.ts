@@ -25,6 +25,7 @@ import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { refusalReason } from '../shared/refusal-reason';
 import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
+import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 /**
  * The mortality register (Tier 2 item 29) — the first and only caller of every
  * `/mortality` endpoint.
@@ -37,6 +38,7 @@ import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
   selector: 'app-mortality',
   standalone: true,
   imports: [
+    DateTimePipe,
     SubmitGuardDirective,
     ModalDialogDirective,
     ServerTimePipe,

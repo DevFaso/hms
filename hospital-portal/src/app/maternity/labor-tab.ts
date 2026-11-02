@@ -27,7 +27,7 @@ import {
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
-import { labelledRefusalReason } from '../shared/refusal-reason';
+import { labelledRefusalReason, refusedFieldReasons } from '../shared/refusal-reason';
 import { FieldLimit, firstOutOfRange, labelKeysOf, rangeMessage } from '../shared/field-limits';
 import { MeasurePipe } from '../shared/pipes/measure.pipe';
 import { PartographChartComponent } from './partograph-chart.component';
@@ -42,6 +42,7 @@ import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { FieldRefusal, refuseFields } from '../shared/forms/invalid-fields';
+import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 /**
  * QA D808: the bounds PartographEntryRequestDTO puts on each number. The
  * server refused a dilation of 15 with a bare "≤ 10"; the form now refuses it
@@ -86,10 +87,12 @@ const DELIVERY_LABELS: Record<string, string> = {
   ...labelKeysOf(DELIVERY_LIMITS),
   birthDateTime: 'LABOR.BIRTH_TIME',
   placentaDeliveredAt: 'LABOR.PLACENTA_TIME',
+  recentDeliveryOverrideReason: 'LABOR.RECENT_DELIVERY_OVERRIDE',
 };
 const EPISODE_LABELS: Record<string, string> = {
   ...labelKeysOf(EPISODE_LIMITS),
   laborOnsetAt: 'LABOR.ONSET_TIME',
+  recentDeliveryOverrideReason: 'LABOR.RECENT_DELIVERY_OVERRIDE',
 };
 
 /** QA D1306 (round 28): the template id of each field a form's check may refuse. */
@@ -97,6 +100,8 @@ const EPISODE_FIELD_IDS: Readonly<Record<string, string>> = {
   gestationalAgeWeeks: 'labor-ga',
   gravida: 'labor-gravida',
   para: 'labor-para',
+  laborOnsetAt: 'labor-onset',
+  recentDeliveryOverrideReason: 'labor-override',
 };
 const PARTOGRAPH_FIELD_IDS: Readonly<Record<string, string>> = {
   fetalHeartRateBpm: 'pe-fhr',
@@ -120,8 +125,25 @@ const DELIVERY_FIELD_IDS: Readonly<Record<string, string>> = {
   apgarOneMinute: 'dl-apgar1',
   apgarFiveMinute: 'dl-apgar5',
   estimatedBloodLossMl: 'dl-ebl',
+  recentDeliveryOverrideReason: 'dl-override',
 };
+
+/**
+ * QA D1339 (D1272 / D1256 class, round 29): the server refuses a labour, or a
+ * birth, within this many days of another recorded birth unless an override
+ * reason is given (`LaborServiceImpl.MIN_DAYS_BETWEEN_DELIVERIES`; the hint
+ * says "20 weeks"). The override field is then required, starred and marked.
+ */
+const RECENT_DELIVERY_DAYS = 140;
+const DAY_MS = 24 * 60 * 60 * 1000;
 const EPISODE_IDS = Object.values(EPISODE_FIELD_IDS);
+/** The template id of each field the server may name under a delivery refusal's `fieldErrors`. */
+const DELIVERY_SERVER_FIELD_IDS: Readonly<Record<string, string>> = {
+  ...DELIVERY_FIELD_IDS,
+  deliveryMode: DELIVERY_MODE_ID,
+  birthDateTime: DELIVERY_BIRTH_TIME_ID,
+  placentaDeliveredAt: DELIVERY_PLACENTA_TIME_ID,
+};
 const PARTOGRAPH_IDS = Object.values(PARTOGRAPH_FIELD_IDS);
 const DELIVERY_IDS = [
   DELIVERY_BIRTH_TIME_ID,
@@ -134,6 +156,7 @@ const DELIVERY_IDS = [
   selector: 'app-labor-tab',
   standalone: true,
   imports: [
+    DateTimePipe,
     SubmitGuardDirective,
     ModalDialogDirective,
     ServerTimePipe,
@@ -311,6 +334,8 @@ export class LaborTabComponent {
           this.loadEpisodes(patient.id);
         },
         error: (err: unknown) => {
+          // QA D1339: the fields the refusal names are marked, each with its reason.
+          this.markServerRefusals(err, EPISODE_FIELD_IDS, EPISODE_IDS);
           // QA D214: the server's reason (e.g. a recent delivery needs an
           // override) is shown, not hidden behind a generic failure; QA D746:
           // a field reason (an admission in the future) included.
@@ -398,6 +423,51 @@ export class LaborTabComponent {
       });
   }
 
+  /* ── Recent-delivery override (QA D1339) ─────────────────── */
+
+  /**
+   * Whether another of this patient's labours ended in a birth within
+   * {@link RECENT_DELIVERY_DAYS} days before `at`. Read from the labour's
+   * admission, which precedes its birth: an admission inside the window puts
+   * the birth inside it too, so the field is never required when the server
+   * would not ask for it (a birth just inside the window after an admission
+   * just outside it is refused by the server and marked from its fieldErrors).
+   */
+  private recentDeliveryBefore(at: Date, excludeEpisodeId: string | null): boolean {
+    const from = at.getTime() - RECENT_DELIVERY_DAYS * DAY_MS;
+    return this.episodes().some((episode) => {
+      if (!episode.deliveryRecorded || episode.id === excludeEpisodeId) return false;
+      const admitted = fromServerDateTime(episode.admittedAt)?.getTime();
+      return admitted !== undefined && admitted >= from && admitted <= at.getTime();
+    });
+  }
+
+  /** The start form's override reason is required: a birth was recorded recently. */
+  startOverrideRequired(): boolean {
+    return this.recentDeliveryBefore(new Date(), null);
+  }
+
+  /** The delivery form's override reason is required: another birth is recent. */
+  deliveryOverrideRequired(): boolean {
+    const at = localInputInstant(this.deliveryForm.birthDateTime) ?? new Date();
+    return this.recentDeliveryBefore(at, this.activeEpisode()?.id ?? null);
+  }
+
+  /** Marks each field a refusal names under `fieldErrors` with the server's reason. */
+  private markServerRefusals(
+    err: unknown,
+    idByField: Readonly<Record<string, string>>,
+    all: readonly string[],
+  ): void {
+    const refused = refusedFieldReasons(err, idByField);
+    if (refused.length === 0) return;
+    refuseFields(
+      this.host.nativeElement,
+      refused.map(([id, message]) => ({ id, message })),
+      all,
+    );
+  }
+
   /* ── Delivery ──────────────────────────────────────────── */
 
   openDeliveryForm(): void {
@@ -450,6 +520,8 @@ export class LaborTabComponent {
           this.loadEpisodes(patient.id);
         },
         error: (err: unknown) => {
+          // QA D1339: the fields the refusal names are marked, each with its reason.
+          this.markServerRefusals(err, DELIVERY_SERVER_FIELD_IDS, DELIVERY_IDS);
           this.toast.error(
             labelledRefusalReason(err, this.translate, DELIVERY_LABELS) ??
               this.translate.instant('LABOR.DELIVERY_SAVE_ERROR'),

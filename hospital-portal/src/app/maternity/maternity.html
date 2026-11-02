@@ -142,7 +142,7 @@
             @for (h of histories(); track h.id) {
               <tr class="data-row">
                 <td>{{ patientName(h.patientId) }}</td>
-                <td>{{ h.recordedDate | serverTime | date: 'medium' }}</td>
+                <td>{{ h.recordedDate | serverTime | dateTime }}</td>
                 <td data-testid="history-edd-cell">
                   {{ dueDateOf(h) ? (dueDateOf(h) | serverTime | date: 'mediumDate') : '—' }}
                 </td>
@@ -553,7 +553,8 @@
             <ul class="version-list">
               @for (v of historyVersions(); track v.id) {
                 <li>
-                  v{{ v.versionNumber ?? 1 }} — {{ v.recordedDate | serverTime | date: 'medium' }}
+                  v{{ v.versionNumber ?? 1 }} —
+                  {{ v.recordedDate | serverTime | dateTime }}
                   @if (v.updateReason) {
                     <span class="muted">({{ v.updateReason }})</span>
                   }
@@ -1154,7 +1155,7 @@
           @if (r.slaDueAt) {
             <p class="muted">
               {{ 'MATERNITY.SLA_DUE' | translate }}{{ 'COMMON.COLON' | translate }}
-              {{ r.slaDueAt | serverTime | date: 'medium' }}
+              {{ r.slaDueAt | serverTime | dateTime }}
               @if (isOverdue(r)) {
                 <span class="risk-badge risk-high">{{ 'MATERNITY.OVERDUE' | translate }}</span>
               }

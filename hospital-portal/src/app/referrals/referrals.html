@@ -348,13 +348,13 @@
             <div class="detail-field">
               <span class="field-label">{{ 'REFERRALS.SUBMITTED' | translate }}</span
               ><span class="field-value">{{
-                ref.submittedAt ? (ref.submittedAt | serverTime | date: 'medium') : '—'
+                ref.submittedAt ? (ref.submittedAt | serverTime | dateTime) : '—'
               }}</span>
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'REFERRALS.SCHEDULED_AT' | translate }}</span
               ><span class="field-value">{{
-                ref.scheduledAppointmentAt ? (ref.scheduledAppointmentAt | date: 'medium') : '—'
+                ref.scheduledAppointmentAt ? (ref.scheduledAppointmentAt | dateTime) : '—'
               }}</span>
             </div>
             <div class="detail-field">
@@ -364,19 +364,19 @@
             <div class="detail-field">
               <span class="field-label">{{ 'REFERRALS.STARTED_AT' | translate }}</span
               ><span class="field-value">{{
-                ref.startedAt ? (ref.startedAt | serverTime | date: 'medium') : '—'
+                ref.startedAt ? (ref.startedAt | serverTime | dateTime) : '—'
               }}</span>
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'COMMON.COMPLETED' | translate }}</span
               ><span class="field-value">{{
-                ref.completedAt ? (ref.completedAt | serverTime | date: 'medium') : '—'
+                ref.completedAt ? (ref.completedAt | serverTime | dateTime) : '—'
               }}</span>
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'COMMON.CREATED' | translate }}</span
               ><span class="field-value">{{
-                ref.createdAt ? (ref.createdAt | serverTime | date: 'medium') : '—'
+                ref.createdAt ? (ref.createdAt | serverTime | dateTime) : '—'
               }}</span>
             </div>
           </div>

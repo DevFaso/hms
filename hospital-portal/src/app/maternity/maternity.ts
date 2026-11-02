@@ -63,6 +63,7 @@ import { AuthorshipService } from '../shared/authorship.service';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { focusWhenRendered } from '../shared/a11y/focus-when-rendered';
 import { refuseFields } from '../shared/forms/invalid-fields';
+import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 /** The history form's fields the server names under `fieldErrors`. */
 const HISTORY_LABELS: Record<string, string> = {
   recordedDate: 'MATERNITY.RECORDED',
@@ -138,6 +139,7 @@ type MaternityTab =
   selector: 'app-maternity',
   standalone: true,
   imports: [
+    DateTimePipe,
     InlineDiscardAskComponent,
     InlineSubFormDirective,
     SubmitGuardDirective,

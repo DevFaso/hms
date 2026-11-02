@@ -20,6 +20,7 @@ import {
 import { ToastService } from '../core/toast.service';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { refuseFields } from '../shared/forms/invalid-fields';
+import { refusalReason, refusedFieldReasons } from '../shared/refusal-reason';
 
 const STATUS_FILTERS: { value: RefillStatus | 'ALL'; labelKey: string }[] = [
   { value: 'REQUESTED', labelKey: 'REFILLS.STATUS_REQUESTED' },
@@ -172,9 +173,18 @@ export class RefillApprovalListComponent implements OnInit {
         this.toast.success(this.translate.instant(successKey));
         this.loadRefills();
       },
-      error: () => {
+      error: (err: unknown) => {
         this.busyId.set(null);
-        this.toast.error(this.translate.instant(errorKey));
+        // QA D1315 (round 29): a deny or a hold the server refuses for its
+        // notes (`fieldErrors.providerNotes`) marks the card's notes box with
+        // the server's reason; any refusal shows the server's reason, never
+        // only the generic failure (D1111 class).
+        const id = notesFieldId(refill.id);
+        const refused = refusedFieldReasons(err, { providerNotes: id });
+        if (refused.length > 0) {
+          refuseFields(this.host.nativeElement, [id], [id], refused[0][1]);
+        }
+        this.toast.error(refusalReason(err) ?? this.translate.instant(errorKey));
       },
     });
   }

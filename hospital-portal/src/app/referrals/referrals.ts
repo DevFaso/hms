@@ -44,10 +44,12 @@ import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { ListEscapeDirective } from '../shared/a11y/list-escape.directive';
+import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 @Component({
   selector: 'app-referrals',
   standalone: true,
   imports: [
+    DateTimePipe,
     ListEscapeDirective,
     SubmitGuardDirective,
     PersonNamePipe,

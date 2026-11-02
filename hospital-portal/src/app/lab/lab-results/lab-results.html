@@ -149,7 +149,7 @@
                 }
               </td>
               <td class="date-cell">
-                {{ r.resultDate ? (r.resultDate | serverTime | date: 'medium') : '—' }}
+                {{ r.resultDate ? (r.resultDate | serverTime | dateTime) : '—' }}
               </td>
               <td>
                 @if (r.released) {
@@ -377,7 +377,7 @@
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'LAB_RESULTS.RESULT_DATE' | translate }}</span>
-              <span class="field-value">{{ r.resultDate | serverTime | date: 'medium' }}</span>
+              <span class="field-value">{{ r.resultDate | serverTime | dateTime }}</span>
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</span>
@@ -399,7 +399,8 @@
               <div class="detail-field">
                 <span class="field-label">{{ 'LAB_RESULTS.RELEASED_AT' | translate }}</span>
                 <span class="field-value"
-                  >{{ r.releasedAt | serverTime | date: 'medium' }} — {{ getReleasedByDisplay(r) }}
+                  >{{ r.releasedAt | serverTime | dateTime }} —
+                  {{ getReleasedByDisplay(r) }}
                   @if (r.selfReleased) {
                     ({{ 'LAB_RESULTS.SELF_RELEASED' | translate }})
                   }
@@ -410,8 +411,7 @@
               <div class="detail-field">
                 <span class="field-label">{{ 'LAB_RESULTS.ACKNOWLEDGED' | translate }}</span>
                 <span class="field-value"
-                  >{{ r.acknowledgedAt | serverTime | date: 'medium' }} —
-                  {{ r.acknowledgedBy }}</span
+                  >{{ r.acknowledgedAt | serverTime | dateTime }} — {{ r.acknowledgedBy }}</span
                 >
               </div>
             }
@@ -420,7 +420,7 @@
                 <span class="field-label">{{ 'LAB_RESULTS.READ_BACK_RECORDED' | translate }}</span>
                 <span class="field-value"
                   >“{{ r.criticalReadBackValue }}” —
-                  {{ r.criticalReadBackAt | serverTime | date: 'medium' }} —
+                  {{ r.criticalReadBackAt | serverTime | dateTime }} —
                   {{ r.criticalReadBackBy || '—' }}</span
                 >
               </div>
@@ -441,7 +441,7 @@
               <div class="detail-field">
                 <span class="field-label">{{ 'LAB_RESULTS.SIGNED' | translate }}</span>
                 <span class="field-value"
-                  >{{ r.signedAt ? (r.signedAt | serverTime | date: 'medium') : '—' }} —
+                  >{{ r.signedAt ? (r.signedAt | serverTime | dateTime) : '—' }} —
                   {{ r.signedBy || '—' }}</span
                 >
               </div>
@@ -512,7 +512,7 @@
                 </div>
                 @for (tp of sortedTrendHistory(r); track $index) {
                   <div class="trend-row">
-                    <span>{{ tp.resultDate | serverTime | date: 'medium' }}</span>
+                    <span>{{ tp.resultDate | serverTime | dateTime }}</span>
                     <span
                       >{{ tp.resultValue | labValue: tp.resultUnit }}
                       <app-lab-correction-badge [corrected]="tp.corrected"
@@ -932,7 +932,7 @@
                 {{ cur.resultValue | labValue: cur.resultUnit }}
                 <app-lab-correction-badge [corrected]="cur.corrected" />
               </p>
-              <p class="compare-date">{{ cur.resultDate | serverTime | date: 'medium' }}</p>
+              <p class="compare-date">{{ cur.resultDate | serverTime | dateTime }}</p>
             } @else {
               <p>—</p>
             }
@@ -944,7 +944,9 @@
                 {{ prev.resultValue | labValue: prev.resultUnit }}
                 <app-lab-correction-badge [corrected]="prev.corrected" />
               </p>
-              <p class="compare-date">{{ prev.resultDate | serverTime | date: 'medium' }}</p>
+              <p class="compare-date">
+                {{ prev.resultDate | serverTime | dateTime }}
+              </p>
             } @else {
               <p>{{ 'LAB_RESULTS.BASELINE' | translate }}</p>
             }
@@ -988,7 +990,7 @@
               <tbody>
                 @for (pt of cmp.trendHistory; track pt.labResultId) {
                   <tr>
-                    <td>{{ pt.resultDate | serverTime | date: 'medium' }}</td>
+                    <td>{{ pt.resultDate | serverTime | dateTime }}</td>
                     <td>
                       {{ pt.resultValue | labValue: pt.resultUnit }}
                       <!-- QA D1016/D931 (round 18): a corrected point says so in the trend too -->

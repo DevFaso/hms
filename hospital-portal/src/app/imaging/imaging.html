@@ -787,7 +787,7 @@
             <div class="detail-field">
               <span class="field-label">{{ 'IMAGING.ORDERED_AT' | translate }}</span
               ><span class="field-value">{{
-                ord.orderedAt ? (ord.orderedAt | serverTime | date: 'medium') : '—'
+                ord.orderedAt ? (ord.orderedAt | serverTime | dateTime) : '—'
               }}</span>
             </div>
             <div class="detail-field">
@@ -802,7 +802,7 @@
             <div class="detail-field">
               <span class="field-label">{{ 'IMAGING.COMPLETED_AT' | translate }}</span
               ><span class="field-value">{{
-                ord.completedAt ? (ord.completedAt | serverTime | date: 'medium') : '—'
+                ord.completedAt ? (ord.completedAt | serverTime | dateTime) : '—'
               }}</span>
             </div>
           </div>

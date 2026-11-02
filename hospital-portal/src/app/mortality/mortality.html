@@ -223,7 +223,7 @@
           <div class="detail-grid">
             <div class="detail-field">
               <span class="field-label">{{ 'MORTALITY.DIED_AT' | translate }}</span>
-              <span class="field-value">{{ rec.diedAt | serverTime | date: 'medium' }}</span>
+              <span class="field-value">{{ rec.diedAt | serverTime | dateTime }}</span>
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'MORTALITY.PLACE' | translate }}</span>

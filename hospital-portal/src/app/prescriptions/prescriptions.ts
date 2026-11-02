@@ -63,6 +63,7 @@ import { refuseFields } from '../shared/forms/invalid-fields';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { refusalReason } from '../shared/refusal-reason';
 import { ListEscapeDirective } from '../shared/a11y/list-escape.directive';
+import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 /**
  * The prescriber's list tabs (gap G10).
  *
@@ -163,6 +164,7 @@ const RX_QUANTITY_IDS = ['rx-quantity'];
   selector: 'app-prescriptions',
   standalone: true,
   imports: [
+    DateTimePipe,
     ListEscapeDirective,
     SubmitGuardDirective,
     PersonNamePipe,

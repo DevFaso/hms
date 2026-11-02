@@ -277,13 +277,13 @@
             <div class="detail-field">
               <span class="field-label">{{ 'COMMON.DATE' | translate }}</span
               ><span class="field-value">{{
-                enc.encounterDate ? (enc.encounterDate | serverTime | date: 'medium') : '—'
+                enc.encounterDate ? (enc.encounterDate | serverTime | dateTime) : '—'
               }}</span>
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'ENCOUNTERS.CREATED' | translate }}</span
               ><span class="field-value">{{
-                enc.createdAt ? (enc.createdAt | serverTime | date: 'medium') : '—'
+                enc.createdAt ? (enc.createdAt | serverTime | dateTime) : '—'
               }}</span>
             </div>
           </div>
@@ -711,7 +711,7 @@
       <div class="modal-body">
         <div class="avs-meta">
           <p>
-            {{ summary.visitDate | serverTime | date: 'medium' }} · {{ summary.providerName }} ·
+            {{ summary.visitDate | serverTime | dateTime }} · {{ summary.providerName }} ·
             {{ summary.departmentName }} · {{ summary.hospitalName }}
           </p>
         </div>

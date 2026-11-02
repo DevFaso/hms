@@ -571,6 +571,7 @@
           </button>
           <button
             class="btn-primary"
+            data-testid="def-submit"
             (click)="submitDefForm()"
             [disabled]="savingDef()"
             [appSubmitGuard]="!defForm.testCode || !defForm.testName || !isLoincValid()"

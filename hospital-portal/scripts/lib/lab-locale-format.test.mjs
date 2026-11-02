@@ -35,7 +35,7 @@ export function localeOffenders(html, file = 'template') {
     if (LAB_VALUE.test(expr) && !/\|\s*labValue\b/.test(expr)) {
       offenders.push(`${at(m.index)} lab value without | labValue: ${expr.trim()}`);
     }
-    if (DATE_FIELD.test(expr) && !/\|\s*date\b/.test(expr)) {
+    if (DATE_FIELD.test(expr) && !/\|\s*date(?:Time)?\b/.test(expr)) {
       offenders.push(`${at(m.index)} date without | date: ${expr.trim()}`);
     }
   }
