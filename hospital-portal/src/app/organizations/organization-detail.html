@@ -182,7 +182,7 @@
 
         @if (cfg.reasonRequired) {
           <label class="field">
-            <span class="field-label">{{ 'TENANT_LIFECYCLE.FIELD.REASON' | translate }}</span>
+            <span class="field-label">{{ 'TENANT_LIFECYCLE.FIELD.REASON' | translate }}</span> *
             <textarea
               [ngModel]="modalReason()"
               (ngModelChange)="modalReason.set($event)"

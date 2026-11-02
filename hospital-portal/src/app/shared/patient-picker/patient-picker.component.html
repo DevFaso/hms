@@ -33,6 +33,8 @@
       [value]="query()"
       (input)="onQueryChange($any($event.target).value)"
       (blur)="dropdownOpen.set(false)"
+      [appListEscape]="dropdownOpen()"
+      (listEscape)="dropdownOpen.set(false)"
       autocomplete="off"
     />
     @if (searchLoading()) {
@@ -55,7 +57,7 @@
             <div class="opt-info">
               <span class="opt-name">{{ p | personName }}</span>
               @if (subline(p); as sub) {
-                <span class="opt-meta">{{ sub }}</span>
+                {{ ' ' }}<span class="opt-meta">{{ sub }}</span>
               }
             </div>
           </div>

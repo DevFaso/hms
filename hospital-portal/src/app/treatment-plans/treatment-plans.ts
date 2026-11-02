@@ -29,10 +29,12 @@ import { AuthService } from '../auth/auth.service';
 import { AuthorshipService } from '../shared/authorship.service';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { ListEscapeDirective } from '../shared/a11y/list-escape.directive';
 @Component({
   selector: 'app-treatment-plans',
   standalone: true,
   imports: [
+    ListEscapeDirective,
     SubmitGuardDirective,
     PersonNamePipe,
     ModalDialogDirective,

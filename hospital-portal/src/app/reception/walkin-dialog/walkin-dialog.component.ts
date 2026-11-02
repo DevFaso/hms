@@ -26,12 +26,14 @@ import { PatientSublinePipe } from '../../shared/patient-picker/patient-subline'
 
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 import { rankPeopleByName } from '../../shared/person-search';
+import { ListEscapeDirective } from '../../shared/a11y/list-escape.directive';
 type EncounterType = 'CONSULTATION' | 'FOLLOW_UP' | 'EMERGENCY' | 'OUTPATIENT' | 'INPATIENT';
 
 @Component({
   selector: 'app-walkin-dialog',
   standalone: true,
   imports: [
+    ListEscapeDirective,
     SubmitGuardDirective,
     PersonNamePipe,
     DialogFocusDirective,
@@ -70,6 +72,17 @@ export class WalkInDialogComponent implements OnInit {
     return q ? this.allStaff().filter((s) => s.name.toLowerCase().includes(q)) : this.allStaff();
   });
   selectedStaff = signal<StaffResponse | null>(null);
+  /** QA D1259: Escape closed the provider list (typing opens it again). */
+  readonly staffListDismissed = signal(false);
+  readonly staffListShown = computed(
+    () => this.filteredStaff().length > 0 && !this.selectedStaff() && !this.staffListDismissed(),
+  );
+
+  onStaffQueryChange(value: string): void {
+    this.staffQuery.set(value);
+    this.selectedStaff.set(null);
+    this.staffListDismissed.set(false);
+  }
 
   /* ── Department ─────────────────────────
      Required by the backend (EncounterRequestDTO.departmentId is @NotNull)

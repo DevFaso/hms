@@ -555,7 +555,7 @@
               }
             </p>
             <div class="field">
-              <label for="decision-reason">{{ 'PROVIDER.DECISION.REASON' | translate }}</label>
+              <label for="decision-reason">{{ 'PROVIDER.DECISION.REASON' | translate }} *</label>
               <textarea
                 id="decision-reason"
                 rows="3"
@@ -655,7 +655,9 @@
             </p>
             @if (lifecycleNeedsReason(dialog.kind)) {
               <div class="field">
-                <label for="lifecycle-reason">{{ 'PROVIDER.LIFECYCLE.REASON' | translate }}</label>
+                <label for="lifecycle-reason"
+                  >{{ 'PROVIDER.LIFECYCLE.REASON' | translate }} *</label
+                >
                 <textarea
                   id="lifecycle-reason"
                   rows="3"

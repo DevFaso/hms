@@ -63,7 +63,7 @@ export class DialogA11yDirective implements OnInit, AfterViewInit, OnDestroy {
   );
 
   ngOnInit(): void {
-    this.opener = captureOpener();
+    this.opener = captureOpener(this.host.nativeElement as HTMLElement);
     this.layer = new OverlayLayer(this.host.nativeElement as HTMLElement);
     // After the content inside the box has rendered.
     setTimeout(() => this.focusInitial());

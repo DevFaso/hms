@@ -256,7 +256,7 @@
                     }}
                   </span>
                   @if (att.kind === 'AUDIO' && att.durationSeconds) {
-                    <span class="pending-meta">{{ att.durationSeconds }}s</span>
+                    {{ ' ' }}<span class="pending-meta">{{ att.durationSeconds }}s</span>
                   }
                   <button
                     type="button"

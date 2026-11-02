@@ -55,9 +55,11 @@
                 <app-lab-correction-badge [corrected]="lab.corrected" audience="patient"
               /></span>
               @if (lab.isPending) {
-                <span class="pli-sub">{{ 'PORTAL.LAB_RESULTS.PENDING_RESULT' | translate }}</span>
+                {{ ' '
+                }}<span class="pli-sub">{{ 'PORTAL.LAB_RESULTS.PENDING_RESULT' | translate }}</span>
               } @else {
-                <span class="pli-sub">
+                {{ ' '
+                }}<span class="pli-sub">
                   {{ 'PORTAL.LAB_RESULTS.RESULT_PREFIX' | translate }}
                   <!-- QA D1095: the value is never shown without its unit -->
                   <strong
@@ -69,7 +71,8 @@
                   }
                 </span>
               }
-              <span class="pli-meta"
+              {{ ' '
+              }}<span class="pli-meta"
                 >{{ lab.collectedDate | serverTime | date: 'mediumDate' }} ·
                 {{ lab.status | enumLabel: 'status' }}</span
               >

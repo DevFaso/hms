@@ -88,6 +88,10 @@ describe('SubmitGuardDirective (QA D1124 / D1089)', () => {
     button().click();
     expect(host.clicked).toBe(0);
     expect(reason()?.textContent).toBe('Choisissez d’abord un établissement.');
+    // The blank listed field is still marked, with its own message.
+    expect((el.querySelector('#med') as HTMLInputElement).getAttribute('aria-invalid')).toBe(
+      'true',
+    );
   });
 
   it('marks the listed fields only, an unticked box included', () => {
@@ -263,7 +267,12 @@ describe('SubmitGuardDirective submitGuardRequired (QA D1193)', () => {
       />
       <label for="rx-reason">Motif *</label>
       <textarea id="rx-reason" aria-required="true" [(ngModel)]="reason"></textarea>
-      <button id="rx-create" [appSubmitGuard]="!med" submitGuardRequired (click)="sent = sent + 1">
+      <button
+        id="rx-create"
+        [appSubmitGuard]="!med()"
+        submitGuardRequired
+        (click)="sent = sent + 1"
+      >
         Créer
       </button>
     </div>
@@ -287,7 +296,7 @@ class DialogHostComponent {
   readonly patientId = signal('');
   query = 'Awa';
   reason = '';
-  med = 'Paracétamol';
+  readonly med = signal('Paracétamol');
   sent = 0;
   far = '';
   farSent = 0;
@@ -320,6 +329,21 @@ describe('SubmitGuardDirective outside a form (QA D1245)', () => {
     expect(fixture.componentInstance.sent).toBe(0);
     expect(msg()?.textContent).toBe('Champs obligatoires manquants : Nom du patient, Motif');
     expect(el.querySelector('#rx-patient')?.getAttribute('aria-invalid')).toBe('true');
+  }));
+
+  it('QA D1256 / D1257: while the expression refuses, every blank required field is still named', fakeAsync(() => {
+    const app = fixture.componentInstance;
+    // The expression refuses for the drug; the patient and the reason are
+    // blank too and were left out in round 25.
+    app.med.set('');
+    fixture.detectChanges();
+    el.querySelector<HTMLButtonElement>('#rx-create')!.click();
+    fixture.detectChanges();
+    tick();
+    expect(app.sent).toBe(0);
+    expect(msg()?.textContent).toBe('Champs obligatoires manquants : Nom du patient, Motif');
+    expect(el.querySelector('#rx-patient')?.getAttribute('aria-invalid')).toBe('true');
+    expect(el.querySelector('#rx-reason')?.getAttribute('aria-invalid')).toBe('true');
   }));
 
   it('aria-required counts as required, and a picked patient lets the click through', fakeAsync(() => {

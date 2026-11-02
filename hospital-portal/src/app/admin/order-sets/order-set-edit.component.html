@@ -22,7 +22,7 @@
   @if (!loadError()) {
     <form class="order-set-edit__form" (ngSubmit)="save()" data-testid="order-set-edit-form">
       <label>
-        {{ 'ORDER_SETS.FIELD_NAME' | translate }}
+        {{ 'ORDER_SETS.FIELD_NAME' | translate }} *
         <input
           type="text"
           [(ngModel)]="form.name"
@@ -42,7 +42,7 @@
         <textarea [(ngModel)]="form.description" name="description" rows="2"></textarea>
       </label>
       <label>
-        {{ 'ORDER_SETS.FIELD_ADMISSION_TYPE' | translate }}
+        {{ 'ORDER_SETS.FIELD_ADMISSION_TYPE' | translate }} *
         <select [(ngModel)]="form.admissionType" name="admissionType" required>
           @for (t of admissionTypes; track t) {
             <option [value]="t">{{ t | enumLabel: 'admissionType' }}</option>
@@ -71,7 +71,7 @@
                 </select>
               </label>
               <label class="order-set-item__name">
-                <span>{{ 'ORDER_SETS.FIELD_ITEM_NAME' | translate }}</span>
+                <span>{{ 'ORDER_SETS.FIELD_ITEM_NAME' | translate }}</span> *
                 <input
                   type="text"
                   [ngModel]="itemName(item)"

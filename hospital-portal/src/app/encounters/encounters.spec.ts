@@ -2,7 +2,7 @@ import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Subject, of, throwError } from 'rxjs';
 
 import { EncountersComponent } from './encounters';
@@ -1071,5 +1071,28 @@ describe('EncountersComponent', () => {
       signInAs('ROLE_SURGEON');
       expect(component.canIssueCertificate(mockEncounter({ status: 'ARRIVED' }))).toBeFalse();
     });
+  });
+
+  it('QA D1257 (round 26): an empty "Créer" names the patient with the other blank fields', () => {
+    const fixture = TestBed.createComponent(EncountersComponent);
+    fixture.detectChanges();
+    const cmp = fixture.componentInstance;
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation(
+      'en',
+      { COMMON: { MISSING_REQUIRED_FIELDS: 'Missing: {{fields}}' } },
+      true,
+    );
+    translate.use('en');
+    cmp.openCreate();
+    fixture.detectChanges();
+    const create = fixture.nativeElement.querySelector(
+      '.modal-actions .btn-primary',
+    ) as HTMLButtonElement;
+    create.click();
+    fixture.detectChanges();
+    const reason = fixture.nativeElement.querySelector('[data-testid="submit-guard-reason"]');
+    expect(reason?.textContent).toContain('APPOINTMENTS.PATIENT');
+    expect(reason?.textContent).toContain('ENCOUNTERS.STAFF');
   });
 });

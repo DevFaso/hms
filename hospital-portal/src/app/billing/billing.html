@@ -224,7 +224,8 @@
                 }}</span>
                 @if (inv.creditedToInvoiceNumber) {
                   <!-- QA D428: a folded copay names the invoice it was credited to -->
-                  <span class="field-hint">{{
+                  {{ ' '
+                  }}<span class="field-hint">{{
                     'PORTAL.BILLING.CREDITED_TO'
                       | translate: { number: inv.creditedToInvoiceNumber }
                   }}</span>
@@ -385,7 +386,8 @@
                 (inv.status | enumLabel: 'invoiceStatus') || '—'
               }}</span>
               @if (inv.creditedToInvoiceNumber) {
-                <span class="field-hint">{{
+                {{ ' '
+                }}<span class="field-hint">{{
                   'PORTAL.BILLING.CREDITED_TO' | translate: { number: inv.creditedToInvoiceNumber }
                 }}</span>
               }
@@ -657,7 +659,7 @@
                         {{ a.reversedAt | serverTime | date: 'short' }}
                       </span>
                       @if (a.reversalReason) {
-                        <span class="field-hint">{{ a.reversalReason }}</span>
+                        {{ ' ' }}<span class="field-hint">{{ a.reversalReason }}</span>
                       }
                     } @else if (canReverseAdjustment(inv, a)) {
                       <button
@@ -1024,6 +1026,7 @@
           class="btn-primary"
           (click)="submitForm()"
           [disabled]="saving()"
+          submitGuardRequired
           [appSubmitGuard]="!form.patientId || !form.invoiceDate || !form.dueDate"
           [submitGuardFields]="['bill-patient', 'bill-invoiceDate', 'bill-dueDate']"
         >

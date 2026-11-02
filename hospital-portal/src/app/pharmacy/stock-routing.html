@@ -431,10 +431,10 @@
                   }}</span>
                 }
                 @if (d.noShowReason) {
-                  <span class="cell-sub">{{ d.noShowReason }}</span>
+                  {{ ' ' }}<span class="cell-sub">{{ d.noShowReason }}</span>
                 }
                 @if (d.reason) {
-                  <span class="cell-sub">{{ d.reason }}</span>
+                  {{ ' ' }}<span class="cell-sub">{{ d.reason }}</span>
                 }
                 @if (!d.partnerNoShow && !d.noShowReason && !d.reason) {
                   —

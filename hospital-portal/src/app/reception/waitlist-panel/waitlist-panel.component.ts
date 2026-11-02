@@ -41,6 +41,7 @@ import { PatientSublinePipe } from '../../shared/patient-picker/patient-subline'
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 import { rankPeopleByName } from '../../shared/person-search';
 import { comboboxKey } from '../../shared/a11y/combobox-keys';
+import { ListEscapeDirective } from '../../shared/a11y/list-escape.directive';
 type WaitlistStatus = 'ALL' | 'WAITING' | 'OFFERED' | 'CLOSED';
 
 /** Every field the add form may refuse, so a corrected one loses its mark. */
@@ -50,6 +51,7 @@ const WAITLIST_FIELDS = ['wl-patient', 'wl-dept', 'wl-to'];
   selector: 'app-waitlist-panel',
   standalone: true,
   imports: [
+    ListEscapeDirective,
     ReasonDialogComponent,
     SubmitGuardDirective,
     PersonNamePipe,
@@ -178,19 +180,37 @@ export class WaitlistPanelComponent implements OnInit {
     this.loadEntries();
   }
 
-  loadEntries(): void {
+  loadEntries(focusEntryId?: string): void {
     this.loading.set(true);
     const status = this.statusFilter() === 'ALL' ? undefined : this.statusFilter();
     this.receptionService.getWaitlist({ status }).subscribe({
       next: (list) => {
         this.entries.set(list);
         this.loading.set(false);
+        if (focusEntryId) this.focusEntry(focusEntryId);
       },
       error: () => {
         this.toast.error(this.translate.instant('RECEPTION.LOAD_WAITLIST_FAILED'));
         this.loading.set(false);
       },
     });
+  }
+
+  /**
+   * QA D1270 (round 26): an offer, an acceptance or a refusal re-renders the
+   * row (the list reloads and the button pressed is gone), and focus fell to
+   * the panel. It goes to the row's first action now — "Accepter" after an
+   * offer — or, when the row has left the filtered list, to the active filter.
+   */
+  private focusEntry(id: string): void {
+    setTimeout(() => {
+      const root = this.host.nativeElement;
+      const row = root.querySelector<HTMLElement>(`tr[data-entry-id="${CSS.escape(id)}"]`);
+      const target =
+        row?.querySelector<HTMLElement>('.actions-cell button:not([disabled])') ??
+        root.querySelector<HTMLElement>('.filter-btn.active');
+      target?.focus();
+    }, 0);
   }
 
   onPatientQueryChange(value: string): void {
@@ -350,7 +370,7 @@ export class WaitlistPanelComponent implements OnInit {
         this.toast.success(this.translate.instant('RECEPTION.SLOT_OFFERED'));
         this.offering.set(false);
         this.offerEntry.set(null);
-        this.loadEntries();
+        this.loadEntries(entry.id);
       },
       error: (err) => {
         this.toast.error(refusalReason(err) ?? this.translate.instant('RECEPTION.OFFER_FAILED'));
@@ -366,7 +386,7 @@ export class WaitlistPanelComponent implements OnInit {
       next: () => {
         this.toast.success(this.translate.instant('RECEPTION.OFFER_ACCEPTED'));
         this.actingOnEntryId.set(null);
-        this.loadEntries();
+        this.loadEntries(entry.id);
       },
       error: (err) => {
         this.toast.error(
@@ -384,7 +404,7 @@ export class WaitlistPanelComponent implements OnInit {
       next: () => {
         this.toast.success(this.translate.instant('RECEPTION.OFFER_DECLINED'));
         this.actingOnEntryId.set(null);
-        this.loadEntries();
+        this.loadEntries(entry.id);
       },
       error: (err) => {
         this.toast.error(

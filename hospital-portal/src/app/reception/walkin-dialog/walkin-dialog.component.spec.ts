@@ -203,4 +203,21 @@ describe('WalkInDialogComponent', () => {
     expect(clear.length).toBe(2);
     clear.forEach((b) => expect(b.getAttribute('aria-label')).toBeTruthy());
   });
+
+  it('QA D1259: Escape over the provider list hides the list, not the dialog; typing shows it again', () => {
+    component.allStaff.set([{ id: 's1', name: 'Dr Issouf', departmentName: 'Cardio' } as never]);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const dismissed = spyOn(component.dismissed, 'emit');
+    const input = el.querySelector('#staffSearch')!;
+    expect(component.staffListShown()).toBeTrue();
+    input.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+    );
+    fixture.detectChanges();
+    expect(component.staffListShown()).toBeFalse();
+    expect(dismissed).not.toHaveBeenCalled();
+    component.onStaffQueryChange('Iss');
+    expect(component.staffListShown()).toBeTrue();
+  });
 });

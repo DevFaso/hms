@@ -92,7 +92,7 @@
               </div>
               <div class="pli-body">
                 <span class="pli-title">{{ a.name }}</span>
-                <span class="pli-sub">{{ 'PRO.MY.AVAILABLE_HINT' | translate }}</span>
+                {{ ' ' }}<span class="pli-sub">{{ 'PRO.MY.AVAILABLE_HINT' | translate }}</span>
               </div>
               <button type="button" class="screen-btn" (click)="start(a)">
                 {{ 'PRO.MY.START' | translate }}
@@ -123,7 +123,8 @@
               </div>
               <div class="pli-body">
                 <span class="pli-title">{{ h.instrumentName || h.instrumentCode }}</span>
-                <span class="pli-sub">
+                {{ ' '
+                }}<span class="pli-sub">
                   @if (h.careTeamAlerted) {
                     {{ 'PRO.MY.CARE_TEAM_ALERTED' | translate }}
                   } @else if (h.followUpPlanned) {
@@ -132,7 +133,8 @@
                     {{ 'PRO.MY.RECORDED' | translate }}
                   }
                 </span>
-                <span class="pli-meta">{{ h.administeredAt | serverTime | date: 'medium' }}</span>
+                {{ ' '
+                }}<span class="pli-meta">{{ h.administeredAt | serverTime | date: 'medium' }}</span>
               </div>
             </div>
           }

@@ -296,7 +296,8 @@
             <button type="button" class="update-header" (click)="toggleUpdate(u)">
               <span class="update-version">v{{ u.versionNumber }}</span>
               <span class="update-reason">{{ u.updateReason }}</span>
-              <span class="update-meta">
+              {{ ' '
+              }}<span class="update-meta">
                 {{ u.recordedByName }} — {{ u.recordedAt | serverTime | date: 'short' }}
                 @if (u.hospitalName) {
                   <span class="update-hospital">· {{ u.hospitalName }}</span>

@@ -162,22 +162,29 @@
               <td>{{ (a.startTime | clockTime) || '—' }}</td>
               <td>{{ (a.status | enumLabel: 'appointmentStatus') || '—' }}</td>
               <td class="actions-cell">
-                <button
-                  [attr.aria-label]="'PRENATAL.RESCHEDULE' | translate"
-                  class="btn-secondary btn-sm"
-                  [title]="'PRENATAL.RESCHEDULE' | translate"
-                  (click)="openReschedule(a)"
-                >
-                  <span class="material-symbols-outlined" aria-hidden="true">edit_calendar</span>
-                </button>
-                <button
-                  [attr.aria-label]="'PRENATAL.SEND_REMINDER' | translate"
-                  class="btn-secondary btn-sm"
-                  [title]="'PRENATAL.SEND_REMINDER' | translate"
-                  (click)="openReminder(a)"
-                >
-                  <span class="material-symbols-outlined" aria-hidden="true">notifications</span>
-                </button>
+                @if (canReschedule(a)) {
+                  <button
+                    [attr.aria-label]="'PRENATAL.RESCHEDULE' | translate"
+                    class="btn-secondary btn-sm"
+                    [title]="'PRENATAL.RESCHEDULE' | translate"
+                    (click)="openReschedule(a)"
+                  >
+                    <span class="material-symbols-outlined" aria-hidden="true">edit_calendar</span>
+                  </button>
+                }
+                @if (canRemind(a)) {
+                  <button
+                    [attr.aria-label]="'PRENATAL.SEND_REMINDER' | translate"
+                    class="btn-secondary btn-sm"
+                    [title]="'PRENATAL.SEND_REMINDER' | translate"
+                    (click)="openReminder(a)"
+                  >
+                    <span class="material-symbols-outlined" aria-hidden="true">notifications</span>
+                  </button>
+                }
+                @if (!canReschedule(a) && !canRemind(a)) {
+                  —
+                }
               </td>
             </tr>
           }

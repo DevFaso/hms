@@ -1275,7 +1275,7 @@
             </div>
           }
           @if (canMessage && r.status !== 'CANCELLED' && r.status !== 'COMPLETED') {
-            <div class="message-composer">
+            <div class="message-composer" data-submit-scope>
               <textarea
                 rows="2"
                 [(ngModel)]="messageDraft"

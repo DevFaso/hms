@@ -91,7 +91,8 @@
             </span>
             <span class="wl-patient-info">
               <span class="wl-name">{{ item.patientName }}</span>
-              <span class="wl-meta">
+              {{ ' '
+              }}<span class="wl-meta">
                 {{ item.age }}{{ item.sex ? '/' + item.sex.charAt(0) : '' }}
                 @if (item.mrn) {
                   <span class="wl-mrn">{{ item.mrn }}</span>

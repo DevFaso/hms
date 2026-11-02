@@ -443,9 +443,9 @@
                 @if (emailChanged() && !pendingEmail()) {
                   <div class="form-row">
                     <div class="form-group">
-                      <label for="editEmailPassword">{{
-                        'PROFILE.CURRENT_PASSWORD' | translate
-                      }}</label>
+                      <label for="editEmailPassword"
+                        >{{ 'PROFILE.CURRENT_PASSWORD' | translate }} *</label
+                      >
                       <input
                         type="password"
                         id="editEmailPassword"

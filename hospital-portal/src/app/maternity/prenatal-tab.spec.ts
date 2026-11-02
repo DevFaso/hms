@@ -334,4 +334,69 @@ describe('PrenatalTabComponent', () => {
     const expected = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
     expect(component.bookLinks()[0]?.['date']).toBe(expected);
   });
+
+  it('QA D1273: a visit is offered only the actions the server accepts, for every status', () => {
+    const future = '2999-01-01';
+    const past = '2000-01-01';
+    const all = [
+      'SCHEDULED',
+      'CONFIRMED',
+      'CHECKED_IN',
+      'CANCELLED',
+      'COMPLETED',
+      'NO_SHOW',
+      'PENDING',
+      'RESCHEDULED',
+      'IN_PROGRESS',
+      'FAILED',
+      'UNKNOWN',
+    ];
+    const movable = ['PENDING', 'SCHEDULED', 'CONFIRMED', 'RESCHEDULED', 'NO_SHOW', 'FAILED'];
+    const upcoming = ['PENDING', 'SCHEDULED', 'CONFIRMED', 'RESCHEDULED'];
+    for (const status of all) {
+      const a = { appointmentId: 'x', appointmentDate: future, status, gestationalWeek: 30 };
+      expect(component.canReschedule(a)).withContext(status).toBe(movable.includes(status));
+      expect(component.canRemind(a)).withContext(status).toBe(upcoming.includes(status));
+      expect(component.canRemind({ ...a, appointmentDate: past }))
+        .withContext(status)
+        .toBeFalse();
+    }
+  });
+
+  it('QA D1273: the completed past visit of round 26 shows no action button', () => {
+    generateFor(
+      schedule({
+        existingAppointments: [
+          {
+            appointmentId: 'a-done',
+            appointmentDate: '2026-10-31',
+            startTime: '23:52',
+            status: 'COMPLETED',
+            gestationalWeek: 23,
+          },
+        ],
+      }),
+    );
+    const existing = host().querySelectorAll('table')[1];
+    expect(existing.querySelectorAll('.actions-cell button').length).toBe(0);
+    expect(existing.querySelector('.actions-cell')?.textContent?.trim()).toBe('—');
+  });
+
+  it('QA D1273: an upcoming visit keeps both actions', () => {
+    generateFor(
+      schedule({
+        existingAppointments: [
+          {
+            appointmentId: 'a-next',
+            appointmentDate: '2999-01-01',
+            startTime: '09:00',
+            status: 'SCHEDULED',
+            gestationalWeek: 30,
+          },
+        ],
+      }),
+    );
+    const existing = host().querySelectorAll('table')[1];
+    expect(existing.querySelectorAll('.actions-cell button').length).toBe(2);
+  });
 });

@@ -65,7 +65,7 @@
         @if (serverFieldErrors['email']; as reason) {
           <small class="field-error" id="email-server-error" role="alert">{{ reason }}</small>
         }
-        <small class="field-hint">{{ 'PATIENTS.EMAIL_OPTIONAL_HINT' | translate }}</small>
+        {{ ' ' }}<small class="field-hint">{{ 'PATIENTS.EMAIL_OPTIONAL_HINT' | translate }}</small>
       </div>
       <div class="form-group">
         <label for="phonePrimary"
@@ -98,7 +98,7 @@
         }
         <!-- SMS OTP phone verification (hidden when the SMS provider is off) -->
         @if (otpAvailable) {
-          <div class="otp-verify-row">
+          <div class="otp-verify-row" data-submit-scope>
             @if (phoneVerified) {
               <span class="phone-verified-badge">
                 <span class="material-symbols-outlined" aria-hidden="true">verified</span>
@@ -425,7 +425,8 @@
           <div class="existing-match-row">
             <div class="existing-match-info">
               <span class="match-name">{{ m.fullName ?? '—' }}</span>
-              <span class="match-meta">
+              {{ ' '
+              }}<span class="match-meta">
                 @if (m.birthYear) {
                   {{ 'PATIENTS.BORN' | translate }} {{ m.birthYear }} ·
                 }

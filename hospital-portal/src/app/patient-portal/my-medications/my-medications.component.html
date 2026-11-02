@@ -36,7 +36,7 @@
               </div>
               <div class="pli-body">
                 <span class="pli-title">{{ med.medicationName }}</span>
-                <span class="pli-sub">{{ med.dosage }} · {{ med.frequency }}</span>
+                {{ ' ' }}<span class="pli-sub">{{ med.dosage }} · {{ med.frequency }}</span>
                 @if (med.readyForCollectionAt) {
                   <!-- G15: a fill is waiting at the pharmacy counter. -->
                   {{ ' '
@@ -54,7 +54,8 @@
                     }}
                   </span>
                 }
-                <span class="pli-meta"
+                {{ ' '
+                }}<span class="pli-meta"
                   >{{ 'PORTAL.MEDICATIONS.PRESCRIBED_BY' | translate }}
                   {{ med.prescribedBy || ('PORTAL.MEDICATIONS.PROVIDER' | translate) }} ·
                   {{ 'PORTAL.MEDICATIONS.STARTED' | translate }}
@@ -186,7 +187,7 @@
               </div>
               <div class="pli-body">
                 <span class="pli-title">{{ rx.medicationName }}</span>
-                <span class="pli-sub">{{ rx.dosage }} · {{ rx.frequency }}</span>
+                {{ ' ' }}<span class="pli-sub">{{ rx.dosage }} · {{ rx.frequency }}</span>
                 @if (rx.readyForCollectionAt) {
                   {{ ' '
                   }}<span class="ready-chip" [attr.data-testid]="'rx-ready-' + rx.id">
@@ -203,7 +204,8 @@
                     }}
                   </span>
                 }
-                <span class="pli-meta">
+                {{ ' '
+                }}<span class="pli-meta">
                   {{ 'PORTAL.MEDICATIONS.PRESCRIBED_BY' | translate }}
                   {{ rx.prescribedBy || ('PORTAL.MEDICATIONS.PROVIDER' | translate) }}
                 </span>
@@ -286,7 +288,8 @@
               </div>
               <div class="pli-body">
                 <span class="pli-title">{{ r.medicationName }}</span>
-                <span class="pli-meta">
+                {{ ' '
+                }}<span class="pli-meta">
                   {{ 'PORTAL.MEDICATIONS.REQUESTED' | translate }}
                   {{ r.requestedAt | serverTime | date: 'mediumDate' }}
                   @if (r.updatedAt && r.status !== 'REQUESTED' && r.status !== 'PAUSED') {

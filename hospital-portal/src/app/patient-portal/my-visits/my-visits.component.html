@@ -37,13 +37,15 @@
                 >{{ enc.type | enumLabel: 'encounterType' }} ·
                 {{ enc.department || ('PORTAL.VISITS.GENERAL' | translate) }}</span
               >
-              <span class="pli-sub"
+              {{ ' '
+              }}<span class="pli-sub"
                 >{{ enc.providerName || ('PORTAL.VISITS.PROVIDER' | translate) }}
                 @if (enc.hospitalName) {
                   · <span class="pli-hospital">{{ enc.hospitalName }}</span>
                 }
               </span>
-              <span class="pli-meta">
+              {{ ' '
+              }}<span class="pli-meta">
                 {{ enc.date | serverTime | date: 'mediumDate' }}
                 @if (enc.chiefComplaint) {
                   · {{ enc.chiefComplaint }}

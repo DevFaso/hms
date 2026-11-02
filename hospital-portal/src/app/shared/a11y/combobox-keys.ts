@@ -6,7 +6,14 @@
  * and `role="listbox"` / `role="option"` on the list.
  *
  * Returns what the picker must do; the caller owns its state.
+ *
+ * QA D1259 (round 26): Escape over the open list closes the list only; it no
+ * longer goes on to the dialog around the field (which closed with it). With
+ * the list closed, Escape goes on as before. `listOpen` defaults to "there are
+ * options"; pass it when the list can be open with none (a "no match" row).
  */
+import { stopEscapeAtOpenList } from './list-escape.directive';
+
 export interface ComboboxStep {
   /** The option now active (-1: none). */
   active: number;
@@ -20,11 +27,14 @@ export function comboboxKey(
   event: KeyboardEvent,
   optionCount: number,
   active: number,
+  listOpen = optionCount > 0,
 ): ComboboxStep {
   const stay: ComboboxStep = { active, pick: false, close: false };
-  if (optionCount <= 0) {
-    return event.key === 'Escape' ? { active: -1, pick: false, close: true } : stay;
+  if (event.key === 'Escape') {
+    stopEscapeAtOpenList(event, listOpen);
+    return { active: -1, pick: false, close: true };
   }
+  if (optionCount <= 0) return stay;
   switch (event.key) {
     case 'ArrowDown':
       event.preventDefault();
@@ -44,9 +54,6 @@ export function comboboxKey(
         return { active, pick: true, close: true };
       }
       return stay;
-    case 'Escape':
-      event.preventDefault();
-      return { active: -1, pick: false, close: true };
     case 'Tab':
       // Tab picks the active option (a keyboard user who arrowed to it meant
       // it), then lets focus move on as usual.

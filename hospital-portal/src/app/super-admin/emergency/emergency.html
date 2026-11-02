@@ -113,6 +113,8 @@
           placeholder="{{ 'EMERGENCY.FORCE_MFA.SEARCH_PLACEHOLDER' | translate }}"
           [ngModel]="mfaQuery()"
           (ngModelChange)="onMfaQueryChange($event)"
+          [appListEscape]="mfaResults().length > 0"
+          (listEscape)="mfaResults.set([])"
           [attr.aria-busy]="mfaSearching()"
           aria-controls="mfa-search-results"
         />
@@ -124,7 +126,8 @@
             <li>
               <button type="button" (click)="addMfaTarget(u)">
                 <strong>{{ u.firstName }} {{ u.lastName }}</strong>
-                <span class="picker-meta">{{ u.username }} · {{ u.roleName | roleLabel }}</span>
+                {{ ' '
+                }}<span class="picker-meta">{{ u.username }} · {{ u.roleName | roleLabel }}</span>
               </button>
             </li>
           }

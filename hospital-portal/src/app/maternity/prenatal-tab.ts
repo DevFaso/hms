@@ -31,6 +31,25 @@ import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { ClockTimePipe } from '../shared/pipes/clock-time.pipe';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+/**
+ * QA D1273 (round 26): the statuses a prenatal visit can be moved from — the
+ * ones the server's state machine lets a reschedule leave
+ * (AppointmentServiceImpl.VALID_TRANSITIONS, through
+ * PrenatalSchedulingServiceImpl.rescheduledStatus: a missed visit leaves
+ * through RESCHEDULED). A completed, cancelled, checked-in or running visit
+ * cannot be moved.
+ */
+const RESCHEDULABLE = new Set([
+  'PENDING',
+  'SCHEDULED',
+  'CONFIRMED',
+  'RESCHEDULED',
+  'NO_SHOW',
+  'FAILED',
+]);
+/** A reminder is for a visit still to come (the server refuses a past date). */
+const REMINDABLE = new Set(['PENDING', 'SCHEDULED', 'CONFIRMED', 'RESCHEDULED']);
+
 @Component({
   selector: 'app-prenatal-tab',
   standalone: true,
@@ -161,6 +180,19 @@ export class PrenatalTabComponent implements OnInit {
   }
 
   /* ── Reschedule ── */
+
+  /**
+   * QA D1273: "Reprogrammer" and "Envoyer un rappel" were offered on a
+   * completed visit of last week; both dialogs opened and failed only after
+   * they were filled. An action is offered only where the server accepts it.
+   */
+  canReschedule(a: PrenatalAppointmentSummary): boolean {
+    return RESCHEDULABLE.has(a.status ?? '');
+  }
+
+  canRemind(a: PrenatalAppointmentSummary): boolean {
+    return REMINDABLE.has(a.status ?? '') && (a.appointmentDate ?? '') >= localDateString();
+  }
 
   openReschedule(appointment: PrenatalAppointmentSummary): void {
     this.rescheduleTarget.set(appointment);

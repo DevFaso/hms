@@ -118,7 +118,8 @@
               <td>
                 <div class="patient-cell">
                   <span class="patient-name">{{ row.patientName }}</span>
-                  <span class="patient-meta">
+                  {{ ' '
+                  }}<span class="patient-meta">
                     @if (row.mrn) {
                       {{ row.mrn }}
                     }

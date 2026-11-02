@@ -56,7 +56,7 @@ export class DialogFocusDirective implements AfterViewInit, OnDestroy {
 
   ngAfterViewInit(): void {
     this.layer.raise();
-    this.previouslyFocused = captureOpener();
+    this.previouslyFocused = captureOpener(this.host.nativeElement as HTMLElement);
     const el = this.host.nativeElement as HTMLElement;
     const first = this.focusables()[0];
     if (first) {
