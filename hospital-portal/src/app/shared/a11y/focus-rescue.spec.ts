@@ -31,22 +31,33 @@ describe('focus rescue (QA D1202 class)', () => {
     page.remove();
   });
 
-  it('a removed row: focus goes to the nearest surviving container, never the body', async () => {
+  // QA D1297 (round 28, declared change): the nearest surviving container is
+  // no longer used as it is. An anonymous UL or SECTION announces nothing; the
+  // stand-in is the nearest NAMED place — here the page's main landmark.
+  it('a removed row: focus goes to the nearest named place, never the body or a bare list', async () => {
     const button = page.querySelector<HTMLButtonElement>('#close-1')!;
     button.focus();
     page.querySelector('#row-1')!.remove();
     await settle();
     expect(document.activeElement).not.toBe(document.body);
-    expect(document.activeElement?.tagName).toBe('UL');
+    expect(document.activeElement).toBe(page.querySelector('main'));
     // Script-only focus: no new tab stop.
     expect(document.activeElement?.getAttribute('tabindex')).toBe('-1');
   });
 
-  it('a whole panel replaced: focus goes to the section that is still there', async () => {
+  it('a whole panel replaced: focus goes to the section that is still there, once it has a name', async () => {
     page.querySelector<HTMLButtonElement>('#close-2')!.focus();
     page.querySelector('ul')!.remove();
     await settle();
-    expect(document.activeElement).toBe(page.querySelector('#recalls'));
+    expect(document.activeElement).toBe(page.querySelector('main'));
+
+    const recalls = page.querySelector<HTMLElement>('#recalls')!;
+    recalls.innerHTML =
+      '<h2>Rappels</h2><ul><li><span>Awa</span><button id="c3">Fermer</button></li></ul>';
+    page.querySelector<HTMLButtonElement>('#c3')!.focus();
+    recalls.querySelector('ul')!.remove();
+    await settle();
+    expect(document.activeElement).toBe(recalls.querySelector('h2'));
   });
 
   it('a submit button disabled while saving gets focus back when enabled', async () => {

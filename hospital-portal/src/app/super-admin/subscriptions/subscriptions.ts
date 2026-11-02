@@ -17,6 +17,8 @@ import { SubscriptionService } from '../../services/subscription.service';
 import { SubscriptionPlan, SubscriptionPlanRequest } from '../../services/subscription.model';
 import { currentLocale, formatCfa } from '../../shared/i18n/app-locale';
 import { refusalReason } from '../../shared/refusal-reason';
+import { InlineSubFormDirective } from '../../shared/a11y/inline-sub-form.directive';
+import { InlineDiscardAskComponent } from '../../shared/a11y/inline-discard-ask.component';
 
 /**
  * QA D865: the currencies a plan can be priced in, as ISO 4217 codes. The
@@ -42,7 +44,13 @@ const FRESH_REQUEST: SubscriptionPlanRequest = {
 @Component({
   selector: 'app-super-admin-subscriptions',
   standalone: true,
-  imports: [FormsModule, RouterLink, TranslateModule],
+  imports: [
+    FormsModule,
+    RouterLink,
+    TranslateModule,
+    InlineSubFormDirective,
+    InlineDiscardAskComponent,
+  ],
   templateUrl: './subscriptions.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './subscriptions.scss',

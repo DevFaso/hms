@@ -384,7 +384,16 @@
 
   <!-- G15: hand over a prepared fill, or cancel the preparation -->
   @if (readyAction(); as action) {
-    <div class="form-card form-card-accent" data-testid="ready-action">
+    <!-- QA D1307 class (round 28): opened from a queue row, the form takes the
+         keyboard (its first field), keeps Escape to itself and gives focus back
+         to the row's button when it closes. -->
+    <div
+      class="form-card form-card-accent"
+      data-testid="ready-action"
+      appInlineSubForm
+      #readyForm="inlineSubForm"
+      (dismissed)="closeReadyAction()"
+    >
       <div class="form-header">
         <h3>
           @if (action.kind === 'handOver') {
@@ -471,6 +480,7 @@
           </button>
         </div>
       }
+      <app-inline-discard-ask [form]="readyForm" />
     </div>
   }
 
@@ -856,8 +866,18 @@
     </h2>
 
     <!-- QA D1069: every cancel says why; QA D654: a controlled fill goes back in front of a witness -->
+    <!-- QA D1307 (round 28): the row's cancel button opened this form above the
+         table and kept the focus, so a keyboard or screen-reader user never
+         reached the reason. The form takes the keyboard (the reason field),
+         keeps Escape to itself, and gives focus back to the row on close. -->
     @if (cancelWitnessFor()) {
-      <div class="form-row" data-testid="cancel-witness">
+      <div
+        class="form-row"
+        data-testid="cancel-witness"
+        appInlineSubForm
+        #cancelForm="inlineSubForm"
+        (dismissed)="cancelWitnessFor.set(null)"
+      >
         <div class="field">
           <label for="dispenseCancelReason">{{ 'PHARMACY.CANCEL_REASON' | translate }} *</label>
           <textarea
@@ -891,6 +911,7 @@
             {{ 'COMMON.CONFIRM' | translate }}
           </button>
         </div>
+        <app-inline-discard-ask [form]="cancelForm" />
       </div>
     }
 

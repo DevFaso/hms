@@ -5,7 +5,12 @@
     @for (col of columns; track col.key) {
       <div class="flow-col" [ngClass]="col.colorClass">
         <div class="col-header">
-          <span class="col-title">{{ col.labelKey | translate }}</span>
+          <!-- QA D1297 (round 28): the column is titled for assistive technology,
+               so focus waits on "Arrivé" when a card leaves it (a visit closed
+               unseen), not on the anonymous card list. -->
+          <span class="col-title" role="heading" aria-level="2">{{
+            col.labelKey | translate
+          }}</span>
           <span class="col-count">{{ localBoard[col.key].length }}</span>
         </div>
         <div

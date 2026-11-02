@@ -69,6 +69,11 @@ export class OverlayLayer {
     }
   }
 
+  /** The dialog box this layer was opened for. */
+  hostElement(): HTMLElement {
+    return this.host;
+  }
+
   close(): void {
     const at = open.indexOf(this);
     if (at >= 0) open.splice(at, 1);
@@ -108,6 +113,18 @@ export class OverlayLayer {
         ? prev
         : null;
   }
+}
+
+/**
+ * QA D1298: the box of the open dialog on top (the one that owns the
+ * keyboard), still on the page. The focus rescue never parks focus behind it.
+ */
+export function topLayerHost(): HTMLElement | null {
+  for (let i = open.length - 1; i >= 0; i--) {
+    const host = open[i].hostElement();
+    if (host.isConnected) return host;
+  }
+  return null;
 }
 
 /** For specs: no layer may outlive the test that opened it. */
