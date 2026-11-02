@@ -65,18 +65,6 @@
       "count": 1,
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
     },
-    "src/app/billing/billing.ts::toast-only-refusal::recordPayment::BILLING.PAYMENT_EXCEEDS_BALANCE": {
-      "count": 1,
-      "why": "QA D1306 class (round 28): billing.ts belongs to branch fix/r28-portal-focus this round; flagged in the hand-back, to be marked there"
-    },
-    "src/app/billing/billing.ts::toast-only-refusal::recordPayment::if(amountProblem || amount === null)": {
-      "count": 1,
-      "why": "QA D1306 class (round 28): billing.ts belongs to branch fix/r28-portal-focus this round; flagged in the hand-back, to be marked there"
-    },
-    "src/app/billing/billing.ts::unmarked-refusal::recordPayment::BILLING.PAYMENT_REFERENCE_REQUIRED": {
-      "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
-    },
     "src/app/chat/chat.ts::toast-only-refusal::finalizeVoiceMemo::CHAT.VOICE_MEMO_EMPTY": {
       "count": 1,
       "why": "not a field: the microphone recorded nothing (a device result)"

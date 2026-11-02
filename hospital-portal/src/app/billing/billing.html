@@ -472,26 +472,34 @@
                           </div>
                         </td>
                         <td>
+                          <!-- QA D1296 class (round 28): both fields are refused blank, so
+                               both declare it: required, and a visible starred label. -->
+                          <label class="line-edit-label" for="line-edit-qty"
+                            >{{ 'BILLING.LINE_QUANTITY' | translate }} *</label
+                          >
                           <input
+                            required
                             type="number"
                             min="1"
                             step="1"
                             id="line-edit-qty"
                             class="line-edit-input"
-                            [attr.aria-label]="'BILLING.LINE_QUANTITY' | translate"
                             [attr.data-testid]="'line-qty-' + it.id"
                             [ngModel]="editLineQuantity()"
                             (ngModelChange)="editLineQuantity.set($event)"
                           />
                         </td>
                         <td class="amount">
+                          <label class="line-edit-label" for="line-edit-price"
+                            >{{ 'BILLING.LINE_UNIT_PRICE' | translate }} *</label
+                          >
                           <input
+                            required
                             type="number"
                             min="1"
                             step="1"
                             id="line-edit-price"
                             class="line-edit-input"
-                            [attr.aria-label]="'BILLING.LINE_UNIT_PRICE' | translate"
                             [attr.data-testid]="'line-price-' + it.id"
                             [ngModel]="editLineUnitPrice()"
                             (ngModelChange)="editLineUnitPrice.set($event)"

@@ -738,6 +738,14 @@
   width: 6.5rem;
   padding: 0.25rem 0.4rem;
 }
+/* QA D1296 class (round 28): the visible, starred name of a line field edited in place */
+.line-edit-label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-muted, #6b7280);
+  margin-bottom: 0.15rem;
+}
 .line-actions {
   display: flex;
   gap: 0.25rem;

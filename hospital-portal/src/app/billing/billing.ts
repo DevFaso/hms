@@ -45,13 +45,14 @@ import {
   cfaAmountProblem,
 } from '../shared/cfa-amount';
 import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
-import { refuseFields } from '../shared/forms/invalid-fields';
+import { refuseFields, type FieldRefusal } from '../shared/forms/invalid-fields';
 import { emailAddresses, invalidEmailAddresses } from '../shared/forms/email-address';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { InlineSubFormDirective } from '../shared/a11y/inline-sub-form.directive';
 import { InlineDiscardAskComponent } from '../shared/a11y/inline-discard-ask.component';
 import { refusalReason } from '../shared/refusal-reason';
+import { joinReasons } from '../shared/required-fields';
 import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 type BillingTab = 'all' | 'outstanding' | 'paid' | 'overdue';
 
@@ -61,6 +62,8 @@ const CANCEL_REASON_ID = 'bill-cancel-reason';
 const EMAIL_TO_ID = 'email-to';
 const EMAIL_CC_ID = 'email-cc';
 const EMAIL_FIELD_IDS = [EMAIL_TO_ID, EMAIL_CC_ID];
+/** QA D1306 class: the payment form's fields a refusal marks or clears. */
+const PAYMENT_FIELD_IDS = ['payment-amount', 'payment-reference'];
 
 /** QA D1294: a blank or zero unit price says so (not "a payment amount"). */
 const LINE_PRICE_REQUIRED_KEY = 'BILLING.LINE_UNIT_PRICE_REQUIRED';
@@ -863,16 +866,24 @@ export class BillingComponent implements OnInit {
     const priceProblem = cfaAmountProblem(this.editLineUnitPrice());
     const qtyWrong = !qty || qty < 1 || !Number.isInteger(qty);
     if (qtyWrong || priceProblem) {
-      refuseFields(
-        this.host.nativeElement,
-        [qtyWrong ? 'line-edit-qty' : null, priceProblem ? 'line-edit-price' : null].filter(
-          (id): id is string => id !== null,
-        ),
-        ['line-edit-qty', 'line-edit-price'],
-        !qtyWrong && priceProblem
-          ? this.translate.instant(cfaAmountMessageKey(priceProblem, LINE_PRICE_REQUIRED_KEY))
-          : this.translate.instant('COMMON.FIELD_REQUIRED'),
-      );
+      // QA D1296 class (round 28): every wrong field at once, each under its
+      // own reason (the price said "required" when only the quantity was).
+      const refusals: FieldRefusal[] = [];
+      if (qtyWrong) {
+        refusals.push({
+          id: 'line-edit-qty',
+          message: this.translate.instant('COMMON.FIELD_REQUIRED'),
+        });
+      }
+      if (priceProblem) {
+        refusals.push({
+          id: 'line-edit-price',
+          message: this.translate.instant(
+            cfaAmountMessageKey(priceProblem, LINE_PRICE_REQUIRED_KEY),
+          ),
+        });
+      }
+      refuseFields(this.host.nativeElement, refusals, ['line-edit-qty', 'line-edit-price']);
       return;
     }
     this.itemSaving.set(true);
@@ -1169,25 +1180,19 @@ export class BillingComponent implements OnInit {
     const inv = this.paymentInv();
     const amount = this.paymentAmount();
     if (!inv) return;
-    // QA D184 / D1089: an amount first, then whole francs (francs CFA have no cents).
-    const amountProblem = cfaAmountProblem(amount);
-    if (amountProblem || amount === null) {
-      this.toast.error(
-        this.translate.instant(
-          cfaAmountMessageKey(amountProblem ?? 'required', CFA_AMOUNT_REQUIRED_KEY),
-        ),
-      );
+    // QA D1306 class (round 28): a refusal was a toast only, one field per
+    // press. Every refused field is now marked at once, each under its own
+    // reason, focused, and named in the toast.
+    const refusals = this.paymentRefusals(inv, amount);
+    if (refusals.length > 0) {
+      refuseFields(this.host.nativeElement, refusals, PAYMENT_FIELD_IDS);
+      this.toast.error(joinReasons(refusals.map((r) => r.message)) ?? '');
       return;
     }
-    if (amount > (inv.balanceDue ?? 0)) {
-      this.toast.error(this.translate.instant('BILLING.PAYMENT_EXCEEDS_BALANCE'));
-      return;
-    }
+    // A field fixed since the last press loses its mark.
+    refuseFields(this.host.nativeElement, [], PAYMENT_FIELD_IDS);
+    if (amount === null) return; // refused above; narrows the type
     const reference = this.paymentReference().trim();
-    if (this.paymentReferenceRequired() && !reference) {
-      this.toast.error(this.translate.instant('BILLING.PAYMENT_REFERENCE_REQUIRED'));
-      return;
-    }
     this.paymentSaving.set(true);
     const payment = { amount, method: this.paymentMethod(), reference: reference || undefined };
     this.billingService.recordPayment(inv.id, payment).subscribe({
@@ -1208,6 +1213,33 @@ export class BillingComponent implements OnInit {
         this.toast.error(err.error?.message ?? this.translate.instant('BILLING.PAYMENT_FAILED'));
       },
     });
+  }
+
+  /** The payment form's refused fields, each with its reason (empty: it may be sent). */
+  private paymentRefusals(inv: BillingInvoiceResponse, amount: number | null): FieldRefusal[] {
+    const refusals: FieldRefusal[] = [];
+    // QA D184 / D1089: an amount first, then whole francs (francs CFA have no cents).
+    const amountProblem = cfaAmountProblem(amount);
+    if (amountProblem || amount === null) {
+      refusals.push({
+        id: 'payment-amount',
+        message: this.translate.instant(
+          cfaAmountMessageKey(amountProblem ?? 'required', CFA_AMOUNT_REQUIRED_KEY),
+        ),
+      });
+    } else if (amount > (inv.balanceDue ?? 0)) {
+      refusals.push({
+        id: 'payment-amount',
+        message: this.translate.instant('BILLING.PAYMENT_EXCEEDS_BALANCE'),
+      });
+    }
+    if (this.paymentReferenceRequired() && !this.paymentReference().trim()) {
+      refusals.push({
+        id: 'payment-reference',
+        message: this.translate.instant('BILLING.PAYMENT_REFERENCE_REQUIRED'),
+      });
+    }
+    return refusals;
   }
 
   getStatusClass(status: string): string {
