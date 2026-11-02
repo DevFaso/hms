@@ -157,6 +157,15 @@ class MalformedRequestFieldLabelTest {
         assertThat(missing).isEmpty();
     }
 
+    /** QA D1313 (round 29): the three fields the round found unnamed in English. */
+    @ParameterizedTest
+    @CsvSource({"relationship", "date", "amount"})
+    void aLabelThatSpellsItsKeyIsStillUsed(String property) {
+        LocaleContextHolder.setLocale(Locale.ENGLISH);
+        assertThat((String) body(badField(property)).get("message"))
+            .isEqualTo("The value entered for \"" + property + "\" is not valid.");
+    }
+
     @Test
     void labelsResolveThroughTheRealMessageSource() {
         MessageSource source = TestMessageSources.bundles();

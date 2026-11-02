@@ -348,8 +348,19 @@ public class GlobalExceptionHandler {
      * raw path so clients can still map it to an input.
      */
     private String fieldLabel(String path) {
+        String label = existingLabel(path);
+        return label == null ? path : label;
+    }
+
+    /**
+     * The translated {@code field.label.<leaf>} of a request path, or null when
+     * no such message exists. QA D1313 (round 29): "no label" is a lookup that
+     * finds nothing, never a label that happens to spell its key - English
+     * {@code field.label.relationship=relationship} is a real label.
+     */
+    private String existingLabel(String path) {
         if (path == null || messageSource == null) {
-            return path;
+            return null;
         }
         String leaf = path.replaceAll("\\[\\d+]", "");
         int dot = leaf.lastIndexOf('.');
@@ -357,10 +368,10 @@ public class GlobalExceptionHandler {
             leaf = leaf.substring(dot + 1);
         }
         if (leaf.isEmpty()) {
-            return path;
+            return null;
         }
         String label = messageSource.getMessage("field.label." + leaf, null, null, LocaleContextHolder.getLocale());
-        return label == null || label.isBlank() ? path : label;
+        return label == null || label.isBlank() ? null : label;
     }
 
     /**
@@ -370,11 +381,16 @@ public class GlobalExceptionHandler {
      * name (the form still marks it from {@code fieldErrors}). Every parsed
      * request field has a label ({@code FieldLabelCoverageTest}); this keeps a
      * new one from ever printing its property.
+     *
+     * <p>QA D1313 (round 29): the D1312 test was {@code label.equals(field)},
+     * which also dropped every real label that spells its key (EN
+     * "relationship", "date", "amount"). The test is now whether the label
+     * message exists.
      */
     private String invalidFieldReason(String field) {
-        String label = fieldLabel(field);
         // Without a message source (a bare handler in a unit test) no label can be read: keep the path.
-        if (messageSource != null && (label == null || label.equals(field))) {
+        String label = messageSource == null ? field : existingLabel(field);
+        if (label == null) {
             return localized("error.request.invalidUnlabelledField", "A value entered is not valid.");
         }
         return localized("error.request.invalidField", "The value entered for \"{0}\" is not valid.", label);
