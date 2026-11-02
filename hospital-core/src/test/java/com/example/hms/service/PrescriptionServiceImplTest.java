@@ -325,6 +325,11 @@ class PrescriptionServiceImplTest {
             new com.example.hms.model.medication.MedicationCatalogItem();
         item.setCode("N02AA01");
         item.setControlled(true);
+        // QA D1223: the picked item is the drug the order names (a real item has
+        // its NOT NULL names; a typed name naming another drug is refused).
+        item.setNameFr("Morphine");
+        item.setGenericName("morphine");
+        request.setMedicationName("Morphine 10 mg");
         UserRoleHospitalAssignment encounterAssignment = new UserRoleHospitalAssignment();
         encounterAssignment.setId(UUID.randomUUID());
         encounterAssignment.setHospital(encounter.getHospital());
@@ -5475,6 +5480,8 @@ class PrescriptionServiceImplTest {
         // QA D922: a catalogue-controlled drug states its quantity, as the form always sends it.
         request.setQuantity(java.math.BigDecimal.TEN);
         request.setMedicationCode("N02AA01");
+        // QA D1223: the code's item is the drug the order names.
+        request.setMedicationName("Morphine 10 mg");
         com.example.hms.model.medication.MedicationCatalogItem morphine = catalogItem("Morphine", true);
         Prescription mappedEntity = new Prescription();
         mappedEntity.setQuantity(java.math.BigDecimal.TEN); // the mapper copies the request's quantity
@@ -6146,5 +6153,205 @@ class PrescriptionServiceImplTest {
                 .hasMessageNotContaining("CDS ALERT");
         }
         verify(prescriptionRepository, never()).save(any());
+    }
+
+    // ═══════════════ QA D1223 (round 24): one input never hides the other ═══════════════
+
+    private static com.example.hms.model.medication.MedicationCatalogItem d1223Item(String nameFr, String generic,
+                                                                                    String atc) {
+        com.example.hms.model.medication.MedicationCatalogItem item =
+            new com.example.hms.model.medication.MedicationCatalogItem();
+        item.setId(UUID.randomUUID());
+        item.setNameFr(nameFr);
+        item.setGenericName(generic);
+        item.setAtcCode(atc);
+        return item;
+    }
+
+    private final com.example.hms.model.medication.MedicationCatalogItem d1223Paracetamol =
+        d1223Item("Paracétamol", "Paracétamol", "N02BE01");
+    private final com.example.hms.model.medication.MedicationCatalogItem d1223Amoxicillin =
+        d1223Item("Amoxicilline", "Amoxicilline", "J01CA04");
+    private final com.example.hms.model.medication.MedicationCatalogItem d1223Cotrimoxazole =
+        d1223Item("Cotrimoxazole", "Sulfaméthoxazole + Triméthoprime", "J01EE01");
+
+    /**
+     * {@link #d1183StubCreate} with the patient's allergies stubbed leniently:
+     * a mismatched order is refused before the allergy list is read.
+     */
+    private void d1223StubCreate(String allergen) {
+        UserRoleHospitalAssignment encounterAssignment = new UserRoleHospitalAssignment();
+        encounterAssignment.setId(UUID.randomUUID());
+        encounterAssignment.setHospital(encounter.getHospital());
+        encounter.setAssignment(encounterAssignment);
+        UUID currentUser = staff.getUser().getId();
+        PatientAllergy allergy = new PatientAllergy();
+        allergy.setActive(true);
+        allergy.setAllergenDisplay(allergen);
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(authService.getCurrentUserId()).thenReturn(currentUser);
+        when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
+        lenient().when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(List.of(allergy));
+    }
+
+    /** The hospital's catalogue: paracetamol and one member of each allergy class. */
+    private void d1223StubCatalogue() {
+        List<com.example.hms.model.medication.MedicationCatalogItem> all =
+            List.of(d1223Paracetamol, d1223Amoxicillin, d1223Cotrimoxazole);
+        for (com.example.hms.model.medication.MedicationCatalogItem item : all) {
+            lenient().when(catalogRepo.findByIdAndHospital_Id(eq(item.getId()), any())).thenReturn(Optional.of(item));
+        }
+        lenient().when(catalogRepo.findActivePage(any(), any())).thenReturn(new PageImpl<>(all));
+        lenient().when(catalogRepo.findByHospital_IdAndActiveTrue(any(), any())).thenReturn(new PageImpl<>(all));
+    }
+
+    /** How the drug reaches the order (QA D1223 report: free text, catalogue, mismatched id, stale id). */
+    enum D1223Input { FREE_TEXT, CATALOGUE, MISMATCHED_ID, STALE_ID }
+
+    /** The typed name and the catalogue id an order carries for the class of an allergen. */
+    private record D1223Drug(String typedName, UUID catalogItemId) { }
+
+    private D1223Drug d1223Drug(String allergen, D1223Input input) {
+        boolean penicillin = allergen.startsWith("P");
+        // Names the system does not recognise, as QA typed them (round 24).
+        String unknown = penicillin ? "Bristopen 500 mg" : "Kotrimazol-Faso 480";
+        com.example.hms.model.medication.MedicationCatalogItem member =
+            penicillin ? d1223Amoxicillin : d1223Cotrimoxazole;
+        return switch (input) {
+            case FREE_TEXT -> new D1223Drug(unknown, null);
+            case CATALOGUE -> new D1223Drug(member.getNameFr() + " 500 mg", member.getId());
+            case MISMATCHED_ID, STALE_ID -> new D1223Drug(unknown, d1223Paracetamol.getId());
+        };
+    }
+
+    private static void d1223AssertRefusedOrBlocked(D1223Input input,
+                                                    org.assertj.core.api.ThrowableAssert.ThrowingCallable call) {
+        if (input == D1223Input.MISMATCHED_ID || input == D1223Input.STALE_ID) {
+            assertThatThrownBy(call)
+                .isInstanceOfSatisfying(BusinessException.class, ex ->
+                    assertThat(ex.getMessageKey()).isEqualTo("prescription.catalog.nameMismatch"));
+        } else {
+            assertThatThrownBy(call).isInstanceOf(com.example.hms.cdshooks.CdsCriticalBlockException.class);
+        }
+    }
+
+    @ParameterizedTest(name = "create, allergy {0}, {1}: never saved in silence")
+    @org.junit.jupiter.params.provider.MethodSource("d1223CreateMatrix")
+    void d1223_createMatrix(String allergen, D1223Input input) {
+        d1223StubCreate(allergen);
+        d1223StubCatalogue();
+        D1223Drug drug = d1223Drug(allergen, input);
+        PrescriptionRequestDTO request = d1183Request(drug.typedName(), false, null);
+        request.setMedicationCatalogItemId(drug.catalogItemId());
+
+        d1223AssertRefusedOrBlocked(input, () -> prescriptionService.createPrescription(request, Locale.FRENCH));
+        verify(prescriptionRepository, never()).save(any());
+    }
+
+    static java.util.stream.Stream<org.junit.jupiter.params.provider.Arguments> d1223CreateMatrix() {
+        return java.util.stream.Stream.of("Pénicilline", "Sulfamides").flatMap(allergen ->
+            java.util.stream.Stream.of(D1223Input.FREE_TEXT, D1223Input.CATALOGUE, D1223Input.MISMATCHED_ID)
+                .map(input -> org.junit.jupiter.params.provider.Arguments.of(allergen, input)));
+    }
+
+    @ParameterizedTest(name = "edit, allergy {0}, {1}: never saved in silence")
+    @org.junit.jupiter.params.provider.MethodSource("d1223EditMatrix")
+    void d1223_editMatrix(String allergen, D1223Input input) {
+        d1223StubCreate(allergen);
+        d1223StubCatalogue();
+        // The order the QA script edited: a plain paracetamol order the server linked.
+        UUID prescriptionId = UUID.randomUUID();
+        Prescription existing = new Prescription();
+        existing.setId(prescriptionId);
+        existing.setMedicationName("Paracétamol 500 mg");
+        existing.setMedicationCatalogItemId(d1223Paracetamol.getId());
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(existing));
+        D1223Drug drug = d1223Drug(allergen, input);
+        PrescriptionRequestDTO request = d1183Request(drug.typedName(), false, null);
+        // STALE_ID: the edit sends the order's own body back, the old id included.
+        request.setMedicationCatalogItemId(input == D1223Input.FREE_TEXT ? null : drug.catalogItemId());
+
+        d1223AssertRefusedOrBlocked(input,
+            () -> prescriptionService.updatePrescription(prescriptionId, request, Locale.FRENCH));
+        verify(prescriptionRepository, never()).save(any());
+        assertThat(existing.getMedicationName()).isEqualTo("Paracétamol 500 mg");
+    }
+
+    static java.util.stream.Stream<org.junit.jupiter.params.provider.Arguments> d1223EditMatrix() {
+        return java.util.stream.Stream.of("Pénicilline", "Sulfamides").flatMap(allergen ->
+            java.util.stream.Stream.of(D1223Input.values())
+                .map(input -> org.junit.jupiter.params.provider.Arguments.of(allergen, input)));
+    }
+
+    @ParameterizedTest(name = "sign, allergy {0}, {1}: never signed in silence")
+    @org.junit.jupiter.params.provider.MethodSource("d1223EditMatrix")
+    void d1223_signMatrix(String allergen, D1223Input input) {
+        d1223StubCatalogue();
+        UUID prescriberUserId = UUID.randomUUID();
+        Prescription rx = signablePrescription(prescriberUserId);
+        D1223Drug drug = d1223Drug(allergen, input);
+        // A row saved before round 24: STALE_ID and MISMATCHED_ID both carry paracetamol's link.
+        rx.setMedicationName(drug.typedName());
+        rx.setMedicationCatalogItemId(drug.catalogItemId());
+        PatientAllergy allergy = new PatientAllergy();
+        allergy.setActive(true);
+        allergy.setAllergenDisplay(allergen);
+        stubSignable(rx, prescriberUserId);
+        lenient().when(patientAllergyRepository.findByPatient_Id(rx.getPatient().getId())).thenReturn(List.of(allergy));
+        UUID rxId = rx.getId();
+
+        d1223AssertRefusedOrBlocked(input, () -> prescriptionService.signPrescription(rxId, null, Locale.FRENCH));
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.DRAFT);
+        assertThat(rx.getSignatureValue()).isNull();
+    }
+
+    @Test
+    void d1223_anAcknowledgementDoesNotMakeAMismatchedOrderAcceptable() {
+        d1223StubCreate("Pénicilline");
+        d1223StubCatalogue();
+        PrescriptionRequestDTO request = d1183Request("Bristopen 500 mg", true, "Acknowledged");
+        request.setMedicationCatalogItemId(d1223Paracetamol.getId());
+
+        assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("Bristopen 500 mg")
+            .hasMessageContaining("does not name the catalogue item");
+        verify(prescriptionRepository, never()).save(any());
+    }
+
+    @Test
+    void d1223_aCodeForAnotherDrugIsRefusedLikeAnId() {
+        d1223StubCreate("Sulfamides");
+        d1223StubCatalogue();
+        d1223Paracetamol.setCode("PARA500");
+        when(catalogRepo.findByHospitalIdAndCode(any(), eq("PARA500"))).thenReturn(Optional.of(d1223Paracetamol));
+        PrescriptionRequestDTO request = d1183Request("Kotrimazol-Faso 480", false, null);
+        request.setMedicationCode("PARA500");
+
+        assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
+            .isInstanceOfSatisfying(BusinessException.class, ex ->
+                assertThat(ex.getMessageKey()).isEqualTo("prescription.catalog.nameMismatch"));
+        verify(prescriptionRepository, never()).save(any());
+    }
+
+    @Test
+    void d1223_theAgreeingPickIsStillCreatedForAnAllergicPatient() {
+        // Control: paracetamol picked from the catalogue, typed as the form types it, for a
+        // penicillin-allergic patient - the drug is known and is not a penicillin.
+        d1223StubCreate("Pénicilline");
+        d1223StubCatalogue();
+        PrescriptionRequestDTO request = d1183Request("Paracétamol 500 mg Comprimé", false, null);
+        request.setMedicationCatalogItemId(d1223Paracetamol.getId());
+        Prescription mappedEntity = new Prescription();
+        when(prescriptionMapper.toEntity(request, patient, staff, encounter)).thenReturn(mappedEntity);
+        when(prescriptionRepository.save(mappedEntity)).thenReturn(mappedEntity);
+        when(prescriptionMapper.toResponseDTO(mappedEntity)).thenReturn(PrescriptionResponseDTO.builder().build());
+
+        prescriptionService.createPrescription(request, Locale.FRENCH);
+
+        verify(prescriptionRepository).save(mappedEntity);
+        assertThat(mappedEntity.isAllergiesReviewed()).isFalse();
     }
 }

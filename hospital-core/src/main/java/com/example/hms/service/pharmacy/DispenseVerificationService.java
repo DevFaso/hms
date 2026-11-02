@@ -204,10 +204,21 @@ public class DispenseVerificationService {
         // QA D899: the catalog item the order was written from (V221) is the
         // drug, whatever its code or name. A UI-created item has no code, so
         // without this the match fell to the typed name alone.
-        if (rx.getMedicationCatalogItemId() != null && rx.getMedicationCatalogItemId().equals(item.getId())) {
+        String prescribedCode = normalize(rx.getMedicationCode());
+        boolean linked = rx.getMedicationCatalogItemId() != null && rx.getMedicationCatalogItemId().equals(item.getId());
+        // QA D1223 (round 24): the link (or the formulary code the link wrote)
+        // says "this item", but the name written on the order names another
+        // drug - an order saved with a mismatched catalogue id. The lot is not
+        // the drug the order reads as: the DRUG check fails rather than letting
+        // one input hide the other. The prescription is refused at creation,
+        // edit and signature since round 24; this closes an older row.
+        if ((linked || (!prescribedCode.isEmpty() && prescribedCode.equals(normalize(item.getCode()))))
+                && OrderedDrugIdentity.contradicts(rx.getMedicationName(), item)) {
+            return false;
+        }
+        if (linked) {
             return true;
         }
-        String prescribedCode = normalize(rx.getMedicationCode());
         if (!prescribedCode.isEmpty()) {
             return prescribedCode.equals(normalize(item.getCode()))
                 || prescribedCode.equals(normalize(item.getRxnormCode()))

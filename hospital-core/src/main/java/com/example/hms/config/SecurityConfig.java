@@ -117,6 +117,18 @@ public class SecurityConfig {
     };
 
     /**
+     * QA D1224 (round 24): the roles that pass the edge on a WRITE (PUT, PATCH,
+     * DELETE) of a chart sub-resource. The clinicians who chart; each
+     * controller's {@code @PreAuthorize} is the precise gate.
+     */
+    static final String[] CHART_WRITE_AUTHORITIES = {
+        ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_PHARMACIST
+    };
+
+    /** QA D1224: the patient photo (its own WRITE_ROLES, not the whole-patient delete). */
+    static final String API_PATIENT_PHOTO = "/patients/*/photo";
+
+    /**
      * E8 #52 — the patient's own sharing opt-out: the one /patients/* surface a
      * PATIENT reaches. Matched per verb ahead of the chart patterns and the
      * /patients/** blanket, which lists no patient role (see the block below and
@@ -662,6 +674,28 @@ public class SecurityConfig {
                         ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
                         ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER, ROLE_PHARMACIST,
                         ROLE_RADIOLOGIST, ROLE_ANESTHESIOLOGIST, ROLE_PHYSIOTHERAPIST, ROLE_SUPER_ADMIN)
+
+                // QA D1224 (round 24): the WRITES on a chart sub-resource reach
+                // their own @PreAuthorize. The blanket DELETE /patients/** below
+                // (HOSPITAL_ADMIN, SUPER_ADMIN - deleting a whole patient) refused
+                // every clinician deactivating an allergy or removing a diagnosis
+                // with a reason, and PUT /patients/** refused the pharmacist the
+                // allergy edit its annotation admits. The clinical roles pass the
+                // edge; the controller annotation decides per surface, and
+                // PreAuthorizeMatcherPairingTest holds every pair. Whole-patient
+                // deletion is not a chart sub-resource and stays admin-only.
+                .requestMatchers(HttpMethod.DELETE, API_PATIENT_CHART_PATTERNS)
+                .hasAnyAuthority(CHART_WRITE_AUTHORITIES)
+                .requestMatchers(HttpMethod.PUT, API_PATIENT_CHART_PATTERNS)
+                .hasAnyAuthority(CHART_WRITE_AUTHORITIES)
+                .requestMatchers(HttpMethod.PATCH, API_PATIENT_CHART_PATTERNS)
+                .hasAnyAuthority(CHART_WRITE_AUTHORITIES)
+                // QA D1224 class: removing the photo is the photo controller's
+                // WRITE_ROLES (who uploads a photo also replaces or removes it),
+                // not the whole-patient delete rule.
+                .requestMatchers(HttpMethod.DELETE, API_PATIENT_PHOTO)
+                .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_NURSE, ROLE_MIDWIFE, ROLE_DOCTOR,
+                        ROLE_SUPER_ADMIN)
 
                 // -------------------- Patients --------------------
                 // PHARMACIST: the shared patient picker (/patients/search, /patients/lookup)

@@ -19,8 +19,10 @@ import java.util.Optional;
  * <p>The drug is <b>resolved</b> to an active ingredient when one of these
  * holds:
  * <ul>
- *   <li>a catalogue item stands behind it: the pharmacy recorded its generic
- *       name (a NOT NULL column) and possibly its ATC code;</li>
+ *   <li>a catalogue item the typed name names stands behind it: the pharmacy
+ *       recorded its generic name (a NOT NULL column) and possibly its ATC
+ *       code. QA D1223: an item the typed name does NOT name is checked, never
+ *       trusted to resolve ({@code OrderedDrugIdentity});</li>
  *   <li>the name carries a cited brand ({@link DrugClassAllergy#carriesBrand});</li>
  *   <li>the text names a class member by its INN stem
  *       ({@link DrugClassAllergy#namesClassMember}).</li>
@@ -52,27 +54,42 @@ public final class AllergyDrugIdentity {
      */
     public static AllergyDrugIdentity of(String typedName, Collection<MedicationCatalogItem> items) {
         StringBuilder raw = new StringBuilder(typedName == null ? "" : typedName);
+        StringBuilder resolving = new StringBuilder(typedName == null ? "" : typedName);
         List<String> atc = new ArrayList<>();
         boolean catalogued = false;
+        boolean typedBlank = typedName == null || typedName.isBlank();
         if (items != null) {
             for (MedicationCatalogItem item : items) {
                 if (item == null) {
                     continue;
                 }
-                catalogued = true;
-                appendIfPresent(raw, item.getGenericName());
-                appendIfPresent(raw, item.getBrandName());
-                appendIfPresent(raw, item.getNameFr());
+                appendNames(raw, item);
                 if (item.getAtcCode() != null && !item.getAtcCode().isBlank()) {
                     atc.add(item.getAtcCode().trim());
+                }
+                // QA D1223 (round 24): an item the typed name does not name
+                // (a mismatched or stale catalogue id, a code for another
+                // drug) is still CHECKED - its names and ATC class are matched
+                // above - but it never resolves the typed name: "Bristopen"
+                // sent with paracetamol's id stays unresolved, and the safety
+                // net fires. Never one input hiding the other.
+                if (typedBlank || com.example.hms.service.pharmacy.OrderedDrugIdentity.agrees(typedName, item)) {
+                    catalogued = true;
+                    appendNames(resolving, item);
                 }
             }
         }
         String text = DrugClassAllergy.withGenericNames(raw.toString());
         boolean resolved = catalogued
             || DrugClassAllergy.carriesBrand(typedName)
-            || DrugClassAllergy.namesClassMember(text);
+            || DrugClassAllergy.namesClassMember(DrugClassAllergy.withGenericNames(resolving.toString()));
         return new AllergyDrugIdentity(DrugClassAllergy.normalize(typedName), text, List.copyOf(atc), resolved);
+    }
+
+    private static void appendNames(StringBuilder out, MedicationCatalogItem item) {
+        appendIfPresent(out, item.getGenericName());
+        appendIfPresent(out, item.getBrandName());
+        appendIfPresent(out, item.getNameFr());
     }
 
     private static void appendIfPresent(StringBuilder out, String value) {

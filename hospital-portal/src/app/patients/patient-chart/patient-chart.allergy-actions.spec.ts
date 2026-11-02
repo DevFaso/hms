@@ -143,7 +143,9 @@ describe('PatientChartComponent — allergy actions (QA D527)', () => {
     expect(fixture.componentInstance.canAddAllergy()).toBeTrue();
   });
 
-  it('a midwife reads allergies but is offered no write (the API refuses her)', () => {
+  // QA D1224 (round 24): the API now admits the midwife on the three allergy
+  // writes (as in real hospitals), so the chart offers them to her.
+  it('a midwife records, edits and deactivates an allergy (QA D1224)', () => {
     const { fixture } = setup({
       role: 'ROLE_MIDWIFE',
       hospitalId: HOSPITAL_A,
@@ -151,8 +153,10 @@ describe('PatientChartComponent — allergy actions (QA D527)', () => {
       allergies: [allergy(HOSPITAL_A)],
     });
 
-    expect(fixture.componentInstance.canAddAllergy()).toBeFalse();
-    expect((fixture.nativeElement as HTMLElement).querySelector('tbody .action-link')).toBeNull();
+    expect(fixture.componentInstance.canAddAllergy()).toBeTrue();
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('tbody .action-link').length,
+    ).toBe(2);
   });
   it('asks about the acting hospital only, not the first page of every registration', () => {
     const { registrationService } = setup({
@@ -211,5 +215,34 @@ describe('PatientChartComponent — allergy actions (QA D527)', () => {
       active: true,
     });
     expect(fixture.componentInstance.canAddAllergy()).toBeFalse();
+  });
+  // QA D1224 (round 24): who removes a chart entry is the endpoint's own rule.
+  it('a nurse or a midwife removes a diagnosis but does not record or recode one (QA D1224)', () => {
+    for (const role of ['ROLE_NURSE', 'ROLE_MIDWIFE']) {
+      TestBed.resetTestingModule();
+      const { fixture } = setup({ role, hospitalId: HOSPITAL_A, registrations: [], allergies: [] });
+      expect(fixture.componentInstance.canRemoveProblems()).withContext(role).toBeTrue();
+      expect(fixture.componentInstance.canEditProblems()).withContext(role).toBeFalse();
+      expect(fixture.componentInstance.showProblemActions()).withContext(role).toBeTrue();
+    }
+  });
+
+  it('a doctor both edits and removes a diagnosis; a receptionist neither (QA D1224)', () => {
+    const { fixture } = setup({
+      role: 'ROLE_DOCTOR',
+      hospitalId: HOSPITAL_A,
+      registrations: [],
+      allergies: [],
+    });
+    expect(fixture.componentInstance.canEditProblems()).toBeTrue();
+    expect(fixture.componentInstance.canRemoveProblems()).toBeTrue();
+    TestBed.resetTestingModule();
+    const desk = setup({
+      role: 'ROLE_RECEPTIONIST',
+      hospitalId: HOSPITAL_A,
+      registrations: [],
+      allergies: [],
+    });
+    expect(desk.fixture.componentInstance.showProblemActions()).toBeFalse();
   });
 });

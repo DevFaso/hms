@@ -189,7 +189,7 @@
               <th scope="col">{{ 'CHART.ONSET' | translate }}</th>
               <th scope="col">{{ 'CHART.CHRONIC' | translate }}</th>
               <th scope="col">{{ 'HOSPITAL_SCOPE.HOSPITAL_COLUMN' | translate }}</th>
-              @if (canEditProblems()) {
+              @if (showProblemActions()) {
                 <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
               }
             </tr>
@@ -217,27 +217,31 @@
                 <td>{{ p.onsetDate ? (p.onsetDate | serverTime | date: 'mediumDate') : '—' }}</td>
                 <td>{{ (p.chronic ? 'COMMON.YES' : 'COMMON.NO') | translate }}</td>
                 <td class="hospital-cell">{{ p.hospitalName || '—' }}</td>
-                @if (canEditProblems()) {
+                @if (showProblemActions()) {
                   <td>
                     <div class="action-group">
-                      <button
-                        type="button"
-                        class="action-link"
-                        (click)="openEditProblem(p)"
-                        [title]="'COMMON.EDIT' | translate"
-                        [attr.aria-label]="'COMMON.EDIT' | translate"
-                      >
-                        <span class="material-symbols-outlined">edit</span>
-                      </button>
-                      <button
-                        type="button"
-                        class="action-link delete-link"
-                        (click)="openDeleteProblem(p)"
-                        [title]="'COMMON.DELETE' | translate"
-                        [attr.aria-label]="'COMMON.DELETE' | translate"
-                      >
-                        <span class="material-symbols-outlined">delete</span>
-                      </button>
+                      @if (canEditProblems()) {
+                        <button
+                          type="button"
+                          class="action-link"
+                          (click)="openEditProblem(p)"
+                          [title]="'COMMON.EDIT' | translate"
+                          [attr.aria-label]="'COMMON.EDIT' | translate"
+                        >
+                          <span class="material-symbols-outlined">edit</span>
+                        </button>
+                      }
+                      @if (canRemoveProblems()) {
+                        <button
+                          type="button"
+                          class="action-link delete-link"
+                          (click)="openDeleteProblem(p)"
+                          [title]="'COMMON.DELETE' | translate"
+                          [attr.aria-label]="'COMMON.DELETE' | translate"
+                        >
+                          <span class="material-symbols-outlined">delete</span>
+                        </button>
+                      }
                     </div>
                   </td>
                 }

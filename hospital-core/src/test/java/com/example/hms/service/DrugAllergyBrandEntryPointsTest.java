@@ -160,6 +160,87 @@ class DrugAllergyBrandEntryPointsTest {
         }
     }
 
+    /**
+     * QA D1223 (round 24, D1149/D1183 NOT_FIXED): the tokens by which code reads
+     * the catalogue item behind an order - its link, the item its code names,
+     * the item the CDS engine resolved. An order also carries a typed name;
+     * a check reading only the item judged "Bristopen" sent with paracetamol's
+     * id as paracetamol.
+     */
+    private static final java.util.regex.Pattern CATALOGUE_IDENTITY_READ = java.util.regex.Pattern.compile(
+        "getMedicationCatalogItemId\\(\\)|findByHospitalIdAndCode\\(|resolveCatalogItem\\("
+            + "|findActiveByHospitalIdAndRxnormCode\\(|proposedCatalogItem\\(\\)|\\.catalogItem\\(\\)");
+
+    /** Readers of an order's catalogue item that decide safety: each goes through the one agreement rule. */
+    private static final Set<String> IDENTITY_CHECKS = Set.of(
+        "service/PrescriptionServiceImpl.java",
+        "service/pharmacy/DispenseVerificationService.java",
+        "cdshooks/service/MedicationAllergyCdsService.java",
+        "cdshooks/rules/OrderedDrugIdentityRule.java");
+
+    /** Readers of an order's catalogue item that are not an identity decision, and why. */
+    private static final Map<String, String> NOT_IDENTITY_CHECKS = Map.ofEntries(
+        Map.entry("cdshooks/rules/CdsRuleEngine.java", "builds the rule context; OrderedDrugIdentityRule, a rule of"
+            + " every engine, flags a name that contradicts the item it resolved"),
+        Map.entry("cdshooks/rules/PediatricDoseRule.java", "reads the ceiling of the context's item; the engine's"
+            + " OrderedDrugIdentityRule flags a contradiction, and the prescription service refuses one first"),
+        Map.entry("cdshooks/service/MedicationPrescribeRulesCdsService.java", "an INFO card with the item's tall-man"
+            + " lettering: display, no safety decision"),
+        Map.entry("cdshooks/service/OrderSelectRulesCdsService.java", "names the engine's resolver in a comment"),
+        Map.entry("mapper/PrescriptionMapper.java", "copies the link and reads the controlled flag of a SAVED order,"
+            + " whose name and item agree since the prescription service refuses a contradiction (an older row"
+            + " is refused at signature and fails the dispense DRUG check)"),
+        Map.entry("service/pharmacy/PrescriptionControlledResolver.java", "the controlled flag of a SAVED order, as"
+            + " for the mapper"),
+        Map.entry("service/pharmacy/DispenseServiceImpl.java", "the product the pharmacist dispenses, not the order;"
+            + " the lot is checked against the order by DispenseVerificationService"),
+        Map.entry("service/pharmacy/InventoryServiceImpl.java", "a stock item, no order"),
+        Map.entry("service/pharmacy/PharmacySaleServiceImpl.java", "an over-the-counter sale line, no order"),
+        Map.entry("service/pharmacy/StockOutRoutingServiceImpl.java", "stock availability of a SAVED order; the"
+            + " DRUG check still runs on the fill"));
+
+    @Test
+    void everyReaderOfAnOrdersCatalogueItemIsClassifiedAndTheChecksUseTheAgreementRule() throws IOException {
+        Set<String> readers = new TreeSet<>();
+        try (Stream<Path> files = Files.walk(MAIN)) {
+            for (Path file : files.filter(f -> f.toString().endsWith(".java")).toList()) {
+                String rel = MAIN.relativize(file).toString().replace('\\', '/');
+                if (rel.startsWith("repository/")) {
+                    continue;
+                }
+                String src = Files.readString(file, StandardCharsets.UTF_8);
+                if (CATALOGUE_IDENTITY_READ.matcher(src).find()) {
+                    readers.add(rel);
+                }
+            }
+        }
+        assertThat(readers).as("the scan reaches the readers").contains("service/PrescriptionServiceImpl.java");
+        Set<String> unclassified = new TreeSet<>(readers);
+        unclassified.removeAll(IDENTITY_CHECKS);
+        unclassified.removeAll(NOT_IDENTITY_CHECKS.keySet());
+        assertThat(unclassified)
+            .as("a file reads the catalogue item behind an order (QA D1223): if it decides safety from it, route it"
+                + " through OrderedDrugIdentity (the typed name must agree with the item) and list it in"
+                + " IDENTITY_CHECKS; otherwise say why in NOT_IDENTITY_CHECKS%s", SourceScan.MANDATE)
+            .isEmpty();
+        Set<String> stale = new TreeSet<>(NOT_IDENTITY_CHECKS.keySet());
+        stale.removeAll(readers);
+        assertThat(stale).as("NOT_IDENTITY_CHECKS entries that no longer read the item: delete them").isEmpty();
+        for (String check : IDENTITY_CHECKS) {
+            String src = SourceScan.stripComments(Files.readString(MAIN.resolve(check), StandardCharsets.UTF_8));
+            assertThat(src.contains("OrderedDrugIdentity.") || src.contains("AllergyDrugIdentity.of("))
+                .as("%s decides from the catalogue item behind an order: it must ask OrderedDrugIdentity (or the"
+                    + " allergy identity built on it) whether the typed name names that item (QA D1223)", check)
+                .isTrue();
+        }
+        // The allergy identity itself never lets an item resolve a name it does not name.
+        assertThat(SourceScan.stripComments(Files.readString(MAIN.resolve("service/allergy/AllergyDrugIdentity.java"),
+            StandardCharsets.UTF_8))).contains("OrderedDrugIdentity.agrees(");
+        // The engine-wide card is a Spring rule, so every engine (the three CDS hooks, the prescription) runs it.
+        assertThat(Files.readString(MAIN.resolve("cdshooks/rules/OrderedDrugIdentityRule.java"), StandardCharsets.UTF_8))
+            .contains("@Component").contains("implements CdsRule");
+    }
+
     private static PatientAllergy allergy(String display) {
         PatientAllergy a = new PatientAllergy();
         a.setAllergenDisplay(display);

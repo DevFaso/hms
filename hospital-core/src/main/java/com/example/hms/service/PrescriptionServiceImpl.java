@@ -166,6 +166,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
         com.example.hms.model.medication.MedicationCatalogItem catalogItem =
             applyCatalogPick(request, hospitalId, false);
+        // QA D1223: the typed name and the item behind the order name one drug.
+        refuseNameItemMismatch(request.getMedicationName(), catalogItem);
 
         // DECISION SUPPORT: Check allergies before prescribing. QA D1149: after
         // the catalogue pick, so the item's ATC class is known to the check.
@@ -468,6 +470,11 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // absolute daily maximum (or with an override) is checked again at
         // the signature; a hard stop is never signed. Before the
         // re-authentication, so no code is spent on a refusal.
+        // QA D1223 (round 24): an order whose typed name names another drug
+        // than its catalogue item (saved before the rule, or by a stale edit)
+        // is never signed: every check below would judge the item, not the
+        // drug written on the order.
+        refuseNameItemMismatch(prescription.getMedicationName(), linkedOrCodedItem(prescription));
         List<CdsCard> signingCards = refuseHardStopAtSigning(prescription);
         // Round 19 (QA D1096): a dose the check could not judge is signed
         // only once a pharmacist or another physician recorded the review.
@@ -590,22 +597,53 @@ public class PrescriptionServiceImpl implements PrescriptionService {
      */
     private List<com.example.hms.model.medication.MedicationCatalogItem> allergyItems(
             String medicationName, com.example.hms.model.medication.MedicationCatalogItem picked, UUID hospitalId) {
+        // QA D1223 (round 24): the picked item AND every item the typed name
+        // names - never the picked item alone. An item the name does not name
+        // is checked but does not resolve the name (AllergyDrugIdentity), so a
+        // mismatched or stale id cannot hide the drug that was typed.
+        List<com.example.hms.model.medication.MedicationCatalogItem> items = new java.util.ArrayList<>();
         if (picked != null) {
-            return List.of(picked);
+            items.add(picked);
         }
         if (medicationCatalogItemRepository == null || hospitalId == null
                 || medicationName == null || medicationName.isBlank()) {
-            return List.of();
+            return items;
         }
         org.springframework.data.domain.Page<com.example.hms.model.medication.MedicationCatalogItem> page =
             medicationCatalogItemRepository.findActivePage(hospitalId, org.springframework.data.domain.Pageable.unpaged());
         if (page == null) {
-            return List.of();
+            return items;
         }
-        return page.getContent().stream()
+        page.getContent().stream()
+            .filter(item -> picked == null || !sameCatalogItem(picked, item))
             .filter(item -> com.example.hms.service.pharmacy.DispenseVerificationService
                 .namesCatalogItem(medicationName, item))
-            .toList();
+            .forEach(items::add);
+        return items;
+    }
+
+    private static boolean sameCatalogItem(com.example.hms.model.medication.MedicationCatalogItem a,
+                                           com.example.hms.model.medication.MedicationCatalogItem b) {
+        return a == b || (a.getId() != null && a.getId().equals(b.getId()));
+    }
+
+    /**
+     * QA D1223: the catalogue item a saved order carries - by its link, else
+     * by its code at the order's hospital - for the name-item agreement check
+     * at signature. {@code null} when it carries neither.
+     */
+    private com.example.hms.model.medication.MedicationCatalogItem linkedOrCodedItem(Prescription prescription) {
+        UUID hospitalId = prescription.getHospital() != null ? prescription.getHospital().getId() : null;
+        if (medicationCatalogItemRepository == null || hospitalId == null) {
+            return null;
+        }
+        if (prescription.getMedicationCatalogItemId() != null) {
+            return medicationCatalogItemRepository
+                .findByIdAndHospital_Id(prescription.getMedicationCatalogItemId(), hospitalId).orElse(null);
+        }
+        String code = prescription.getMedicationCode();
+        return code == null || code.isBlank() ? null
+            : medicationCatalogItemRepository.findByHospitalIdAndCode(hospitalId, code.trim()).orElse(null);
     }
 
     /** The catalogue item behind a saved order: its link, else the strictest item its name names. */
@@ -1418,6 +1456,9 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         boolean sameDrugEdit = keepCatalogLinkBeforeResolution(existing, request);
         com.example.hms.model.medication.MedicationCatalogItem catalogItem = keepCatalogLinkAfterResolution(
             existing, request, hospitalId, sameDrugEdit, applyCatalogPick(request, hospitalId, sameDrugEdit));
+        // QA D1223: a stale catalogue id (or the order's old link) must name
+        // the drug the edit types, or the edit is refused.
+        refuseNameItemMismatch(request.getMedicationName(), catalogItem);
 
         // DECISION SUPPORT: Check allergies before updating prescription
         // (QA D1149: after the catalogue pick, with the item's ATC class).
@@ -2622,6 +2663,23 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             throw new BusinessException("prescription.catalog.ambiguousControlled");
         }
         return strictestPediatricCeiling(named);
+    }
+
+    /**
+     * QA D1223 (round 24): an order whose typed name does not name the
+     * catalogue item it carries (by id or by code) is refused, at creation,
+     * edit and signature. Every safety check read the item and never the name,
+     * so "Bristopen" sent with paracetamol's id was created and signed for a
+     * penicillin-allergic patient, as uncontrolled and with paracetamol's
+     * paediatric ceiling. The prescriber corrects the name or picks the item
+     * again; the portal clears the id whenever the name is edited.
+     */
+    private static void refuseNameItemMismatch(String medicationName,
+                                               com.example.hms.model.medication.MedicationCatalogItem item) {
+        if (com.example.hms.service.pharmacy.OrderedDrugIdentity.contradicts(medicationName, item)) {
+            throw new BusinessException("prescription.catalog.nameMismatch", medicationName.trim(),
+                com.example.hms.service.pharmacy.DispenseVerificationService.describe(item));
+        }
     }
 
     /** QA D922: this hospital's active catalogue items the typed name names. */
