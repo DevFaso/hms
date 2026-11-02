@@ -1,5 +1,9 @@
 import { installDecimalCommaSupport } from './shared/decimal-comma';
 import { installFocusRescue } from './shared/a11y/focus-rescue';
+import {
+  installServerFieldMarks,
+  serverFieldErrorsInterceptor,
+} from './shared/forms/server-field-errors';
 import { ApplicationConfig, LOCALE_ID, provideAppInitializer, inject } from '@angular/core';
 import { DOCUMENT, registerLocaleData } from '@angular/common';
 import localeFr from '@angular/common/locales/fr';
@@ -60,6 +64,10 @@ export const appConfig: ApplicationConfig = {
     provideHttpClient(
       withXhr(),
       withInterceptors([
+        // QA D1341 / D1320 / D1321: a write refused with `fieldErrors` marks
+        // the named fields in the form it was sent from (outermost, so it sees
+        // the refusal the page sees, after CSRF replays and the error path).
+        serverFieldErrorsInterceptor,
         apiPrefixInterceptor,
         languageInterceptor,
         csrfInterceptor,
@@ -94,5 +102,8 @@ export const appConfig: ApplicationConfig = {
     // QA D1202 / D1198 / D1199 / D1197: focus never falls to the page body when
     // the control that held it goes away (shared/a11y/focus-rescue.ts).
     provideAppInitializer(() => installFocusRescue(inject(DOCUMENT))),
+    // QA D1341: remember where the reader acts, so a refused write's fields
+    // are marked in that form (shared/forms/server-field-errors.ts).
+    provideAppInitializer(() => installServerFieldMarks(inject(DOCUMENT))),
   ],
 };
