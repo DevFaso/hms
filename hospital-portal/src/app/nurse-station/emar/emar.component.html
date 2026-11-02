@@ -64,8 +64,10 @@
                   }}<span
                     class="emar__queue-chip emar__queue-chip--blocked"
                     [attr.data-testid]="'emar-frequency-unread-chip-' + task.id"
-                    [attr.aria-label]="'EMAR.FREQUENCY_UNREAD_LABEL' | translate"
-                    >{{ 'EMAR.FREQUENCY_UNREAD_CHIP' | translate }}</span
+                    ><span aria-hidden="true">{{ 'EMAR.FREQUENCY_UNREAD_CHIP' | translate }}</span
+                    ><span class="sr-only">{{
+                      'EMAR.FREQUENCY_UNREAD_LABEL' | translate
+                    }}</span></span
                   >
                 }
                 @if (task.cdsAdvisories?.length) {

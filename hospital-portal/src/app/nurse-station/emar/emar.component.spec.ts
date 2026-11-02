@@ -454,8 +454,13 @@ describe('EmarComponent (P1 #8 — five-rights barcode-scan loop)', () => {
     fixture.detectChanges();
 
     const chip = root().querySelector('[data-testid="emar-frequency-unread-chip-task-unread"]');
-    expect(chip?.textContent?.trim()).toBe('EMAR.FREQUENCY_UNREAD_CHIP');
-    expect(chip?.getAttribute('aria-label')).toBe('EMAR.FREQUENCY_UNREAD_LABEL');
+    expect(chip?.querySelector('[aria-hidden="true"]')?.textContent?.trim()).toBe(
+      'EMAR.FREQUENCY_UNREAD_CHIP',
+    );
+    // The accessible label is the full sentence, read by a screen reader.
+    expect(chip?.querySelector('.sr-only')?.textContent?.trim()).toBe(
+      'EMAR.FREQUENCY_UNREAD_LABEL',
+    );
     expect(root().querySelector(`[data-testid="emar-frequency-unread-chip-${sampleTask.id}"]`))
       .withContext('a readable frequency has no chip')
       .toBeNull();

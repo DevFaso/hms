@@ -526,8 +526,12 @@ describe('NurseStationComponent — two-tier polling', () => {
       component['pendingLoads'].set(0);
       fixture.detectChanges();
       const badge = el.querySelector('[data-testid="med-frequency-unread-m3"]');
-      expect(badge?.textContent?.trim()).toBe('EMAR.FREQUENCY_UNREAD_CHIP');
-      expect(badge?.getAttribute('aria-label')).toBe('EMAR.FREQUENCY_UNREAD_LABEL');
+      expect(badge?.querySelector('[aria-hidden="true"]')?.textContent?.trim()).toBe(
+        'EMAR.FREQUENCY_UNREAD_CHIP',
+      );
+      expect(badge?.querySelector('.sr-only')?.textContent?.trim()).toBe(
+        'EMAR.FREQUENCY_UNREAD_LABEL',
+      );
     });
 
     it('a controlled substance is marked on its row', () => {
