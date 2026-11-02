@@ -313,7 +313,7 @@
   "tags": ["hms", "slo", "sli", "overview", "golden-signals"],
   "templating": {
     "list": [
-      { "name": "exclude_uri", "type": "textbox", "label": "Exclude URIs (regex)", "query": "/api/ws-chat.*|/ws/.*", "current": { "text": "/api/ws-chat.*|/ws/.*", "value": "/api/ws-chat.*|/ws/.*" }, "description": "Transport endpoints held open by design (SockJS/WebSocket). Their 25-50s lifetimes are not request latency and would dominate every percentile and top-N panel. Clear this box to include them." },
+      { "name": "exclude_uri", "type": "textbox", "label": "Exclude URIs (regex)", "query": "(/api)?/ws-chat.*", "current": { "text": "(/api)?/ws-chat.*", "value": "(/api)?/ws-chat.*" }, "description": "Transport endpoints held open by design (SockJS/WebSocket). Their 25-50s lifetimes are not request latency and would dominate every percentile and top-N panel. Clear this box to include them." },
       { "name": "prometheus_ds", "type": "datasource", "label": "Prometheus", "query": "prometheus", "current": { "text": "Prometheus", "value": "hms-prometheus" } },
       { "name": "loki_ds", "type": "datasource", "label": "Loki", "query": "loki", "current": { "text": "Loki", "value": "hms-loki" } },
       {

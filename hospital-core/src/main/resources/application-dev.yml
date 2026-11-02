@@ -31,10 +31,16 @@ logging:
     # Loki against a 50 GB/month free allowance — and every line carries a
     # username or principal into a third-party store for no diagnostic gain.
     #
-    # The rest of com.example.hms stays at DEBUG: this suppresses the hot path,
-    # not dev debuggability. Raise it for a session without a redeploy:
+    # Named one by one rather than demoting the com.example.hms.security package:
+    # that package holds 40+ classes and 11 subpackages (tenant, oidc, permission,
+    # audit, ...), and silencing the tenancy and authorization surface is exactly
+    # what you do NOT want on dev. Only the four per-request loggers move.
+    # Raise them for a session without a redeploy:
     #   railway variables --set LOG_LEVEL_SECURITY=DEBUG --service hms-backend-dev
-    '[com.example.hms.security]': ${LOG_LEVEL_SECURITY:INFO}
+    '[com.example.hms.security.JwtAuthenticationFilter]': ${LOG_LEVEL_SECURITY:INFO}
+    '[com.example.hms.security.JwtTokenProvider]': ${LOG_LEVEL_SECURITY:INFO}
+    '[com.example.hms.security.CustomUserDetailsService]': ${LOG_LEVEL_SECURITY:INFO}
+    '[com.example.hms.security.WsTicketService]': ${LOG_LEVEL_SECURITY:INFO}
     '[org.springframework.web]': INFO
 
 # ===================== Seed Data =====================
