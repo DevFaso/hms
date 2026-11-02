@@ -212,7 +212,8 @@
           @if (rec.amended) {
             <div class="amended-banner">
               <span class="material-symbols-outlined">history_edu</span>
-              <span>
+              {{ ' '
+              }}<span>
                 {{ 'MORTALITY.AMENDED_ON' | translate }}
                 {{ rec.amendedAt | serverTime | date: 'short' }} —
                 {{ rec.amendmentReason }}

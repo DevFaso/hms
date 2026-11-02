@@ -44,7 +44,7 @@
     </div>
   </div>
 
-  <div class="tabs">
+  <div class="tabs" data-focus-place="lab-tabs">
     <button
       class="tab"
       [class.active]="activeTab() === 'all'"
@@ -71,7 +71,7 @@
     </button>
   </div>
 
-  <div class="search-box">
+  <div class="search-box" data-focus-place="lab-search">
     <span class="material-symbols-outlined">search</span
     ><input
       [attr.aria-label]="'LAB.SEARCH' | translate"
@@ -90,7 +90,12 @@
   }
 
   @if (!loading() && filtered().length > 0) {
-    <div class="data-table">
+    <!-- QA D1284: a void (or any dialog action) reloads this table; focus comes
+         back to the order's row, or to the active tab when the order left the list. -->
+    <div
+      class="data-table"
+      data-focus-return="[data-focus-place=lab-tabs] .tab.active || [data-focus-place=lab-search] input"
+    >
       <table>
         <thead>
           <tr>

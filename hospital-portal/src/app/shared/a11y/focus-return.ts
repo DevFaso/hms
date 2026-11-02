@@ -1,3 +1,5 @@
+import { awaitReturn, focusKeyOf, type FocusKey } from './focus-rescue';
+
 /**
  * QA D1125 / D1004 (round 20): where focus goes back when an overlay closes.
  *
@@ -44,6 +46,8 @@ track();
  */
 const openerOfDialog = new WeakMap<HTMLElement, HTMLElement | null>();
 const fallbackOf = new WeakMap<HTMLElement, HTMLElement>();
+/** QA D1283: each opener's key, taken while it was on the page, to find it again after a reload. */
+const keyOf = new WeakMap<HTMLElement, FocusKey>();
 
 /**
  * The element an overlay opening now should give focus back to: the focused
@@ -59,6 +63,7 @@ export function captureOpener(dialog?: HTMLElement): HTMLElement | null {
   if (active instanceof HTMLElement && active !== document.body) opener = active;
   else if (lastFocused?.isConnected) opener = lastFocused;
   if (opener) {
+    keyOf.set(opener, focusKeyOf(opener));
     const outer = enclosingDialogOpener(opener);
     if (outer) fallbackOf.set(opener, outer);
   }
@@ -81,9 +86,19 @@ function enclosingDialogOpener(el: HTMLElement): HTMLElement | null {
 export function restoreFocus(opener: HTMLElement | null): void {
   let target = opener;
   const seen = new Set<HTMLElement>();
+  const keys: FocusKey[] = [];
   while (target && !target.isConnected && !seen.has(target)) {
     seen.add(target);
+    const key = keyOf.get(target);
+    if (key) keys.push(key);
     target = fallbackOf.get(target) ?? null;
   }
-  if (target?.isConnected && typeof target.focus === 'function') target.focus();
+  if (target?.isConnected && typeof target.focus === 'function') {
+    target.focus();
+    return;
+  }
+  // QA D1283 / D1284: a successful action reloads the list the opener sat in
+  // (it is destroyed with the table while the screen loads): the focus rescue
+  // gives focus back to its twin when the list is back, never the page host.
+  awaitReturn(keys);
 }

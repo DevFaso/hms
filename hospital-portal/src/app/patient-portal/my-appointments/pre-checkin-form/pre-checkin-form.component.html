@@ -362,10 +362,11 @@
             <input
               id="preCheckinConsent"
               type="checkbox"
+              required
               [(ngModel)]="consentAcknowledged"
               [title]="'PRE_CHECKIN.CONSENT_TITLE' | translate"
             />
-            {{ 'PRE_CHECKIN.CONSENT' | translate }}
+            {{ 'PRE_CHECKIN.CONSENT' | translate }} *
           </label>
         </div>
 

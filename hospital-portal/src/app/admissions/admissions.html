@@ -322,9 +322,11 @@
         } @else {
           <div class="form-row">
             <div class="field">
-              <label for="adm-bed-select">{{ 'ADMISSIONS.SELECT_BED' | translate }}</label>
+              <!-- QA D1280: the bed is required (the guard refuses it blank): star and required. -->
+              <label for="adm-bed-select">{{ 'ADMISSIONS.SELECT_BED' | translate }} *</label>
               <select
                 id="adm-bed-select"
+                required
                 [ngModel]="selectedBedId()"
                 (ngModelChange)="selectedBedId.set($event)"
               >

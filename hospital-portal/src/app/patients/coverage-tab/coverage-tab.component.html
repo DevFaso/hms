@@ -209,8 +209,12 @@
                         <span>{{ g.deactivatedAt | serverTime | date: 'short' }}</span>
                       }
                       @if (g.deactivationReason) {
-                        <span
-                          >{{ 'COVERAGE.DEACTIVATION_REASON' | translate
+                        <!-- QA D1288: the time and the reason are two spans; the whitespace
+                             between elements is dropped, so they are spaced and joined by a dot. -->
+                        {{ ' '
+                        }}<span
+                          >{{ g.deactivatedAt ? '· ' : ''
+                          }}{{ 'COVERAGE.DEACTIVATION_REASON' | translate
                           }}{{ 'COMMON.COLON' | translate }} {{ g.deactivationReason }}</span
                         >
                       }

@@ -393,44 +393,29 @@ test('QA D1272 guard: the scan sees the round-26 lab test definition', () => {
 // reason, and a pin fails once its site is fixed, so the list only shrinks.
 // The mortality and transfusion patient pickers were fixed in this PR
 // (`required` on the shared picker).
-const MAR_BRANCH =
-  'D1272 — nurse-station / eMAR, owned by fix/r26-mar-schedule (handoff stars are its scope)';
+// Round 27 (QA D1280 / D1281, D1272 NOT_FIXED): the bed board, assign-bed,
+// lab rejection and read-back, password, addendum, unlock and the three
+// attestation checkboxes now declare `required` (and show the star); their
+// pins are gone. What is left is required only in part, by design:
+const ONE_OF_SEVERAL =
+  'not required on its own: the record needs one of several parts (its label says so)';
 const CONDITIONAL =
-  'D1272 debt — shown only for one action of the dialog; required + star to add with a test of that action';
+  'listed only for one action of the dialog (hold or refuse, clearing an address)';
 const SECONDARY =
-  'D1272 debt — a secondary step of a larger form (OTP / verification code), not a form field';
-const CONSENT =
-  'D1272 debt — an attestation checkbox; its label is the consent sentence, star to add';
-const REASON = 'D1272 debt — the single reason field of a confirm dialog; required + star to add';
+  'a one-time code: a secondary step of a larger form; `required` would make the main save refuse it too';
 const LISTED_UNDECLARED_ALLOWED = new Map([
-  ['admissions/admissions.html:adm-bed-select', CONDITIONAL],
-  ['bed-board/bed-board.html:precaution-reason', REASON],
-  ['bed-board/bed-board.html:transfer-destination', CONDITIONAL],
-  ['bed-board/bed-board.html:override-confirm', CONDITIONAL],
-  ['bed-board/bed-board.html:override-reason', CONDITIONAL],
-  ['bed-board/bed-board.html:transfer-reason', CONDITIONAL],
-  ['checkout/checkout-dialog/checkout-dialog.component.html:checkout-diagnoses', CONDITIONAL],
-  ['checkout/checkout-dialog/checkout-dialog.component.html:checkout-instructions', CONDITIONAL],
-  ['encounters/encounters.html:addendum-content', REASON],
-  ['lab/lab-approval-queue/lab-approval-queue.html:rejection-reason', REASON],
-  ['lab/lab-results/lab-results.html:readBackValue', CONDITIONAL],
-  ['lock-screen/lock-screen.html:unlock-password', REASON],
-  ['nurse-station/emar/emar.component.html:emar-hold-reason', MAR_BRANCH],
-  ['nurse-station/nurse-station.html:cn-narrative', MAR_BRANCH],
-  ['nurse-station/nursing-intake-form/nursing-intake-form.component.html:nursingNotes', MAR_BRANCH],
+  ['checkout/checkout-dialog/checkout-dialog.component.html:checkout-diagnoses', ONE_OF_SEVERAL],
+  ['checkout/checkout-dialog/checkout-dialog.component.html:checkout-instructions', ONE_OF_SEVERAL],
+  ['nurse-station/emar/emar.component.html:emar-hold-reason', CONDITIONAL],
+  ['nurse-station/nurse-station.html:cn-narrative', ONE_OF_SEVERAL],
   [
-    'patient-portal/my-appointments/pre-checkin-form/pre-checkin-form.component.html:preCheckinConsent',
-    CONSENT,
+    'nurse-station/nursing-intake-form/nursing-intake-form.component.html:nursingNotes',
+    ONE_OF_SEVERAL,
   ],
   ['patients/patient-form.html:otpCode', SECONDARY],
-  ['pharmacy/dispensing.html:verifyAttest', CONSENT],
   ['profile/profile.html:editEmail', CONDITIONAL],
   ['profile/profile.html:emailChangeCode', SECONDARY],
-  ['profile/profile.html:pwdCurrent', CONDITIONAL],
-  ['profile/profile.html:pwdNew', CONDITIONAL],
-  ['profile/profile.html:pwdConfirm', CONDITIONAL],
   ['profile/profile.html:verification-code', SECONDARY],
-  ['reception/checkin-dialog/checkin-dialog.component.html:checkinIdentityConfirmed', CONSENT],
 ]);
 
 test('QA D1272: a field its guard refuses blank declares itself required (pins shrink only)', () => {

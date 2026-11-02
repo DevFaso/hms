@@ -301,7 +301,7 @@
               <span class="field-label">{{
                 'LAB_APPROVAL.FIELD.REJECTION_REASON' | translate
               }}</span>
-              <span class="field-value rejection">{{ def.rejectionReason }}</span>
+              {{ ' ' }}<span class="field-value rejection">{{ def.rejectionReason }}</span>
             </div>
           }
         </div>
@@ -801,6 +801,7 @@
               }}</label>
               <textarea
                 id="rejection-reason"
+                required
                 rows="4"
                 [ngModel]="approvalRejectionReason()"
                 (ngModelChange)="approvalRejectionReason.set($event)"

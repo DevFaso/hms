@@ -126,8 +126,12 @@
                         <span>{{ a.deactivatedAt | serverTime | date: 'short' }}</span>
                       }
                       @if (a.deactivationReason) {
-                        <span
-                          >{{ 'CHART.DEACTIVATION_REASON' | translate
+                        <!-- QA D1288: the time and the reason are two spans; the whitespace
+                             between elements is dropped, so they are spaced and joined by a dot. -->
+                        {{ ' '
+                        }}<span
+                          >{{ a.deactivatedAt ? '· ' : ''
+                          }}{{ 'CHART.DEACTIVATION_REASON' | translate
                           }}{{ 'COMMON.COLON' | translate }} {{ a.deactivationReason }}</span
                         >
                       }
@@ -295,8 +299,7 @@
           <div class="update-card" [class.foreign-row]="isForeignRow(u)">
             <button type="button" class="update-header" (click)="toggleUpdate(u)">
               <span class="update-version">v{{ u.versionNumber }}</span>
-              <span class="update-reason">{{ u.updateReason }}</span>
-              {{ ' '
+              {{ ' ' }}<span class="update-reason">{{ u.updateReason }}</span> {{ ' '
               }}<span class="update-meta">
                 {{ u.recordedByName }} — {{ u.recordedAt | serverTime | date: 'short' }}
                 @if (u.hospitalName) {

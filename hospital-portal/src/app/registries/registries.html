@@ -151,7 +151,8 @@
                   {{ 'REGISTRIES.STATUS.' + row.status | translate }}
                 </span>
                 @if (row.closureReason) {
-                  <span class="closure-reason" [title]="row.closureReason">
+                  {{ ' '
+                  }}<span class="closure-reason" [title]="row.closureReason">
                     {{ row.closureReason }}
                   </span>
                 }

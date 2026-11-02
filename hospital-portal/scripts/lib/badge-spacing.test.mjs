@@ -16,7 +16,12 @@ import { relative, join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { templatesIn } from './inline-templates.mjs';
-import { gluedBadges, gluedBefore, gluedHints } from './badge-spacing-scan.mjs';
+import {
+  gluedBadges,
+  gluedBefore,
+  gluedHints,
+  gluedLifecycleNotes,
+} from './badge-spacing-scan.mjs';
 
 const appDir = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'src', 'app');
 
@@ -85,12 +90,8 @@ test('QA D1205 guard: the scan sees the round-22 row and the shapes that are spa
 // {{ ' ' }}. The one left is in the eMAR, owned by the MAR branch of round 26
 // (fix/r26-mar-schedule): pinned with its defect id, and the pin fails once
 // the site is spaced, so it cannot outlive the fix.
-const HINT_ALLOWED = new Map([
-  [
-    'nurse-station/emar/emar.component.html:52',
-    'D1271 — eMAR queue meta, MAR branch owns the file',
-  ],
-]);
+// Round 27 (fix/r27-portal-markers-focus) spaced the eMAR queue meta: none is left.
+const HINT_ALLOWED = new Map();
 
 test('QA D1271: no hint, meta or sub-line runs into the text before it, in any template', () => {
   const found = [];
@@ -123,4 +124,45 @@ test('QA D1271 guard: the scan sees the round-26 suggestion row', () => {
   );
   const fixed = row.replace('<span class="dob-hint"', '{{ \' \' }}<span class="dob-hint"');
   assert.deepEqual(gluedHints(fixed), []);
+});
+
+// QA D1288 (D1271 NOT_FIXED in round 27): the inactive-guarantor and
+// inactive-allergy notes glued the time to "Motif" — plain <span>s, which the
+// class-name rule above never read. Every inline element that shows a
+// lifecycle reason or a close time (deactivated, revoked, suspended,
+// cancelled, archived …) is now read too. The first run found 18 sites in 12
+// templates (the two reported notes, the tenant lifecycle rows, the
+// correction banners, the label/value pairs of reasons); all were spaced.
+// Allowlist: none.
+test('QA D1288: no lifecycle note (a reason, a close time) runs into the text before it', () => {
+  const found = [];
+  let notes = 0;
+  for (const { file, text, lineOffset } of templatesIn(appDir)) {
+    const rel = relative(appDir, file).replaceAll('\\', '/');
+    notes += (text.match(/Reason\b|(?:deactivated|revoked|suspended|cancelled)At\b/g) ?? []).length;
+    for (const g of gluedLifecycleNotes(text))
+      found.push(`${rel}:${g.line + (lineOffset ?? 0)} ${g.tag}`);
+  }
+  assert.ok(notes >= 100, `the lifecycle notes must be read, saw ${notes}`);
+  assert.deepEqual(found, [], "separate it with {{ ' ' }} (and a ' · ' when it joins a time)");
+});
+
+test('QA D1288 guard: the scan sees the round-27 guarantor note', () => {
+  const note = `<div class="muted">
+      @if (g.deactivatedAt) {
+        <span>{{ g.deactivatedAt | serverTime | date: 'short' }}</span>
+      }
+      @if (g.deactivationReason) {
+        <span>{{ 'COVERAGE.DEACTIVATION_REASON' | translate }} {{ g.deactivationReason }}</span>
+      }
+    </div>`;
+  assert.equal(gluedLifecycleNotes(note).length, 1);
+  const fixed = note.replace("<span>{{ 'COVERAGE", "{{ ' ' }}<span>{{ 'COVERAGE");
+  assert.deepEqual(gluedLifecycleNotes(fixed), []);
+  // A label and its reason, side by side.
+  const pair = `<span class="field-label">{{ 'X' | translate }}</span>
+      <span class="field-value">{{ o.cancellationReason }}</span>`;
+  assert.equal(gluedLifecycleNotes(pair).length, 1);
+  // A reason that is not an inline element's text, or that starts a block, is not this class.
+  assert.deepEqual(gluedLifecycleNotes('<p>{{ o.cancellationReason }}</p>'), []);
 });

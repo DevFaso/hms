@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  ElementRef,
   OnChanges,
   OnDestroy,
   SimpleChanges,
@@ -10,6 +11,7 @@ import {
   output,
   signal,
 } from '@angular/core';
+import { refuseFields } from '../../shared/forms/invalid-fields';
 
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -57,6 +59,7 @@ export class BreakGlassBannerComponent implements OnChanges, OnDestroy {
   private readonly toast = inject(ToastService);
   private readonly auth = inject(AuthService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   protected readonly state = signal<LoadState>('idle');
   protected readonly mySession = signal<BreakGlassSession | null>(null);
@@ -185,7 +188,10 @@ export class BreakGlassBannerComponent implements OnChanges, OnDestroy {
       return;
     }
     if (reason.length < 10) {
-      this.toast.error(this.translate.instant('BREAK_GLASS.REASON_TOO_SHORT'));
+      // QA D1281 class: the short justification is marked where it is typed.
+      const message = this.translate.instant('BREAK_GLASS.REASON_TOO_SHORT');
+      refuseFields(this.host.nativeElement, ['bgReason'], ['bgReason'], message);
+      this.toast.error(message);
       return;
     }
 

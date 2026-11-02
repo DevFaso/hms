@@ -241,6 +241,15 @@ export class EmarComponent implements OnInit, OnDestroy {
     this.stopScanner();
   }
 
+  /**
+   * QA D1283 (round 27): where focus goes when this task's panel leaves (a
+   * dose recorded closes it and reloads the queue): the task in the queue,
+   * else the queue's first task (shared/a11y/focus-rescue.ts reads it).
+   */
+  protected focusReturnFor(task: NurseMedicationTask): string {
+    return `[data-testid="emar-task-${task.id}"] || [data-testid="emar-queue"] button`;
+  }
+
   protected closeTask(): void {
     this.activeTask.set(null);
     this.earlyDose.set(null);

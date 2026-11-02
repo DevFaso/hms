@@ -16,20 +16,24 @@
 
   <!-- Grant Form -->
   @if (showGrantForm()) {
-    <div class="portal-card grant-form">
+    <!-- QA D1281: the two required fields show the star and declare it; the
+         guard on "Accorder" names and marks only the blank ones. -->
+    <div class="portal-card grant-form" data-submit-scope>
       <h3>{{ 'PORTAL.FAMILY.GRANT_PROXY' | translate }}</h3>
       <div class="form-grid">
         <label>
-          {{ 'PORTAL.FAMILY.USERNAME' | translate }}
+          {{ 'PORTAL.FAMILY.USERNAME' | translate }} *
           <input
+            id="family-proxy-username"
             type="text"
+            required
             [(ngModel)]="form.proxyUsername"
             [placeholder]="'PORTAL.FAMILY.USERNAME_PLACEHOLDER' | translate"
           />
         </label>
         <label>
-          {{ 'PORTAL.FAMILY.RELATIONSHIP' | translate }}
-          <select [(ngModel)]="form.relationship">
+          {{ 'PORTAL.FAMILY.RELATIONSHIP' | translate }} *
+          <select id="family-relationship" required [(ngModel)]="form.relationship">
             <option value="">{{ 'PORTAL.FAMILY.SELECT' | translate }}</option>
             <option value="PARENT">{{ 'PORTAL.FAMILY.PARENT' | translate }}</option>
             <option value="SPOUSE">{{ 'PORTAL.FAMILY.SPOUSE' | translate }}</option>
@@ -79,7 +83,13 @@
           />
         </label>
       </div>
-      <button class="btn-primary" (click)="grantAccess()" [disabled]="granting()">
+      <button
+        class="btn-primary"
+        (click)="grantAccess()"
+        [disabled]="granting()"
+        appSubmitGuard
+        submitGuardRequired
+      >
         {{
           granting()
             ? ('PORTAL.FAMILY.GRANTING' | translate)

@@ -13,6 +13,7 @@ import {
 import { ToastService } from '../../core/toast.service';
 import { mouseClick } from '../../testing/mouse-click';
 import { reasonDialog } from '../../shared/reason-dialog/reason-dialog.testing';
+import { installFocusRescue, uninstallFocusRescue } from '../../shared/a11y/focus-rescue';
 
 describe('EmarComponent (P1 #8 — five-rights barcode-scan loop)', () => {
   let fixture: ComponentFixture<EmarComponent>;
@@ -377,6 +378,67 @@ describe('EmarComponent (P1 #8 — five-rights barcode-scan loop)', () => {
           },
         }),
     ) as Observable<NurseMedicationTask>;
+
+  // QA D1283 (round 27): the early dose given, the panel closed and the queue
+  // reloaded under the loading state; focus fell to the eMAR SECTION. The
+  // panel now names the task's queue button as where focus comes back.
+  it('QA D1283: after an early dose is given focus returns to the task in the queue', async () => {
+    installFocusRescue(document);
+    try {
+      const settle = async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      };
+      const morphine: NurseMedicationTask = { ...sampleTask, id: 'task-mor' };
+      nurseSpy.getMedicationMAR.and.returnValue(of([morphine, sampleTask]));
+      nurseSpy.administerMedication.and.returnValues(tooSoon(), of(morphine));
+      fixture.detectChanges();
+      const queueButton = () =>
+        root().querySelector<HTMLButtonElement>('[data-testid="emar-task-task-mor"]');
+      queueButton()!.focus();
+      queueButton()!.click();
+      fixture.detectChanges();
+      component['verification'].set({
+        marId: morphine.id,
+        outcomes: { PATIENT: true, DRUG: true, DOSE: true, ROUTE: true, TIME: true },
+        failedChecks: [],
+        failureReasons: {},
+        allPassed: true,
+        verifiedAt: '2026-04-30T08:01:00',
+      });
+      fixture.detectChanges();
+      const give = root().querySelector<HTMLButtonElement>(
+        '[data-testid="emar-administer-given"]',
+      )!;
+      give.focus();
+      give.click();
+      fixture.detectChanges();
+      await settle();
+      const dialog = reasonDialog(fixture)!;
+      const field = dialog.querySelector<HTMLTextAreaElement>(
+        '[data-testid="reason-dialog-reason"]',
+      )!;
+      field.value = 'Douleur EVA 9/10, avis du médecin de garde';
+      field.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      const reload = new Subject<NurseMedicationTask[]>();
+      nurseSpy.getMedicationMAR.and.returnValue(reload.asObservable());
+      dialog.querySelector<HTMLElement>('[data-testid="reason-dialog-confirm"]')!.click();
+      fixture.detectChanges();
+      await settle();
+      expect(reasonDialog(fixture)).toBeNull();
+      expect(document.activeElement).not.toBe(root());
+      expect(document.activeElement).not.toBe(document.body);
+
+      reload.next([morphine, sampleTask]);
+      reload.complete();
+      fixture.detectChanges();
+      await settle();
+      expect(document.activeElement).toBe(queueButton());
+    } finally {
+      uninstallFocusRescue();
+    }
+  });
 
   it('QA D1210: a dose refused as too soon shows why and is given early with the reason (witness kept)', () => {
     const morphine: NurseMedicationTask = {

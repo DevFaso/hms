@@ -1,12 +1,14 @@
 import { refusalReason } from '../shared/refusal-reason';
 import {
   Component,
+  ElementRef,
   inject,
   OnInit,
   signal,
   computed,
   ChangeDetectionStrategy,
 } from '@angular/core';
+import { refuseFields } from '../shared/forms/invalid-fields';
 
 import { FormsModule } from '@angular/forms';
 import { finalize } from 'rxjs';
@@ -64,6 +66,7 @@ export class ProfileComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly oidcAuth = inject(OidcAuthService);
   private readonly auditDescriptions = inject(AuditDescriptionService);
   private readonly patientPortal = inject(PatientPortalService);
@@ -1076,7 +1079,10 @@ export class ProfileComponent implements OnInit {
     const current = this.pwdCurrent();
     const next = this.pwdNew();
     if (next.length < 8) {
-      this.toast.error(this.translate.instant('PROFILE.PASSWORD_TOO_SHORT'));
+      // QA D1281 class: the short password is marked where it is typed.
+      const message = this.translate.instant('PROFILE.PASSWORD_TOO_SHORT');
+      refuseFields(this.host.nativeElement, ['pwdNew'], ['pwdNew'], message);
+      this.toast.error(message);
       return;
     }
     if (next !== this.pwdConfirm()) {

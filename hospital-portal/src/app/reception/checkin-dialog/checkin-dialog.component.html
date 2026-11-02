@@ -79,10 +79,11 @@
           <input
             id="checkinIdentityConfirmed"
             type="checkbox"
+            required
             [checked]="identityConfirmed()"
             (change)="identityConfirmed.set($any($event.target).checked)"
           />
-          {{ 'RECEPTION.IDENTITY_CONFIRMED' | translate }}
+          {{ 'RECEPTION.IDENTITY_CONFIRMED' | translate }} *
         </label>
       </div>
 

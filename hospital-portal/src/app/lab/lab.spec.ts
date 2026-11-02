@@ -3,7 +3,7 @@ import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { of, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 
 import { EncounterService, EncounterResponse } from '../services/encounter.service';
 import { LabComponent } from './lab';
@@ -27,6 +27,7 @@ import { AuthService } from '../auth/auth.service';
 import { PrintLabelService } from '../services/print-label.service';
 import { RoleContextStub, roleContextStub } from '../testing/role-context.stub';
 import { isSubmitBlocked } from '../shared/forms/submit-guard.testing';
+import { installFocusRescue, uninstallFocusRescue } from '../shared/a11y/focus-rescue';
 
 /**
  * Audit gap B1 on the order form and the worklist: a provider can send an
@@ -659,6 +660,62 @@ describe('LabComponent — performing laboratory', () => {
       expect(toast.success).toHaveBeenCalled();
       expect(labService.listOrders).toHaveBeenCalled();
       expect(component.voidingOrder()).toBeNull();
+    });
+
+    // QA D1284 (round 27; the D1270 sibling): the void reloads the worklist
+    // under the loading flag, the row's void button left with the table, and
+    // focus fell to APP-LAB. It now waits on the active tab (the table names
+    // it) and comes back to the order's row when the list is back.
+    it('QA D1284: after a void focus returns to the order row, never the page host', async () => {
+      installFocusRescue(document);
+      try {
+        const settle = async () => {
+          await new Promise((resolve) => setTimeout(resolve, 0));
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        };
+        const listed = [
+          order({ id: 'lab-35', labOrderCode: 'LAB-000171', status: 'COMPLETED' }),
+          order({ id: 'lab-36', labOrderCode: 'LAB-000172', status: 'COMPLETED' }),
+        ];
+        await setup(['ROLE_LAB_DIRECTOR'], listed);
+        const page = fixture.nativeElement as HTMLElement;
+        if (!page.isConnected) document.body.appendChild(page);
+        const reload = new Subject<LabOrderResponse[]>();
+        labService.listOrders.and.returnValue(reload.asObservable());
+        labService.voidOrder.and.returnValue(
+          of(order({ id: 'lab-35', status: 'ENTERED_IN_ERROR' })),
+        );
+        const opener = voidButton('lab-35')!;
+        opener.focus();
+        opener.click();
+        fixture.detectChanges();
+        await settle();
+        const reason = page.querySelector<HTMLTextAreaElement>('[data-testid="lab-void-reason"]')!;
+        reason.value = 'Wrong patient';
+        reason.dispatchEvent(new Event('input'));
+        fixture.detectChanges();
+        page.querySelector<HTMLButtonElement>('[data-testid="lab-void-confirm"]')!.click();
+        fixture.detectChanges();
+        await settle();
+        expect(document.activeElement).not.toBe(page);
+        expect(document.activeElement).not.toBe(document.body);
+        expect(document.activeElement).toBe(page.querySelector('.tabs .tab.active'));
+
+        reload.next([order({ ...listed[0], status: 'ENTERED_IN_ERROR' }), listed[1]]);
+        reload.complete();
+        fixture.detectChanges();
+        await settle();
+        const row = [...page.querySelectorAll<HTMLTableRowElement>('tr.data-row')].find(
+          (r) => r.cells[0]?.getAttribute('title') === 'LAB-000171',
+        );
+        if (row) {
+          expect(row.contains(document.activeElement)).withContext('the order row').toBeTrue();
+        } else {
+          expect(document.activeElement).toBe(page.querySelector('.tabs .tab.active'));
+        }
+      } finally {
+        uninstallFocusRescue();
+      }
     });
 
     it('a lab manager and a super-admin are offered it too', async () => {

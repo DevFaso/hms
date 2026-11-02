@@ -4,6 +4,7 @@ import { Router } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, Subject, Subscription, throwError } from 'rxjs';
 import { localInputToUtcIso, NurseStationComponent } from './nurse-station';
+import { installFocusRescue, uninstallFocusRescue } from '../shared/a11y/focus-rescue';
 import {
   NurseTaskService,
   NurseFlowBoard,
@@ -569,6 +570,54 @@ describe('NurseStationComponent — two-tier polling', () => {
       component.confirmHoldRefuse();
       expect(component.earlyDose()?.why).toBe(why);
       expect(component.earlyDoseKeys().title).toBe('EMAR.EARLY_DOSE.TITLE');
+    });
+
+    // QA D1283 (round 27; the D1004 / D1260 sibling): after a dose is recorded
+    // the table reloads under the loading flag, so the row's Give button left
+    // with it and focus fell to APP-NURSE-STATION. The focus rescue now waits
+    // on a stand-in that is never the page host and gives focus back to the
+    // row's Give when the list is back.
+    it('QA D1283: after a dose is recorded (held) focus returns to the row, never the page host', async () => {
+      installFocusRescue(document);
+      try {
+        const settle = async () => {
+          await new Promise((resolve) => setTimeout(resolve, 0));
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        };
+        const el = render();
+        // Hold goes through the same prompt and the same sendAdministration as
+        // Give; the Give prompt holds an eMAR link this test bed has no router for.
+        const holdOf = (drug: string) =>
+          [...el.querySelectorAll<HTMLTableRowElement>('tr.data-row')]
+            .find((r) => r.cells[1]?.textContent?.includes(drug))
+            ?.querySelector<HTMLButtonElement>('.action-hold') ?? null;
+        const hold = holdOf('Paracétamol')!;
+        hold.focus();
+        hold.click();
+        fixture.detectChanges();
+        await settle();
+        const reload = new Subject<NurseMedicationTask[]>();
+        nurseServiceSpy.getMedicationMAR.and.returnValue(reload.asObservable());
+        nurseServiceSpy.administerMedication.and.returnValue(of({} as any));
+        expect(el.querySelector('#mar-reason-input'))
+          .withContext('the prompt is open')
+          .not.toBeNull();
+        component.reasonText.set('Patient au bloc');
+        component.confirmHoldRefuse();
+        fixture.detectChanges();
+        await settle();
+        expect(component.loading()).withContext('the table reloads').toBeTrue();
+        expect(document.activeElement).not.toBe(el);
+        expect(document.activeElement).not.toBe(document.body);
+        reload.next(rows as unknown as NurseMedicationTask[]);
+        reload.complete();
+        component['pendingLoads'].set(0);
+        fixture.detectChanges();
+        await settle();
+        expect(document.activeElement).toBe(holdOf('Paracétamol'));
+      } finally {
+        uninstallFocusRescue();
+      }
     });
 
     // QA D1265 (round 26): an unreadable frequency is refused on the same

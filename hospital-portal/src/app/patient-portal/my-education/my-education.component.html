@@ -340,9 +340,11 @@
             </p>
           }
           <div class="booking-field">
-            <label for="askText">{{ 'PORTAL.EDUCATION.YOUR_QUESTION' | translate }}</label>
+            <!-- QA D1281: the question is required: star, required, marked when blank. -->
+            <label for="askText">{{ 'PORTAL.EDUCATION.YOUR_QUESTION' | translate }} *</label>
             <textarea
               id="askText"
+              required
               [(ngModel)]="askText"
               [placeholder]="'PORTAL.EDUCATION.QUESTION_PLACEHOLDER' | translate"
               maxlength="2000"
@@ -361,6 +363,8 @@
               class="booking-submit-btn"
               data-testid="edu-submit-question"
               [disabled]="askSubmitting()"
+              [appSubmitGuard]="questionRefusal()"
+              [submitGuardFields]="['askText']"
               (click)="submitQuestion()"
             >
               {{ 'PORTAL.EDUCATION.SEND_QUESTION' | translate }}

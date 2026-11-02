@@ -18,6 +18,7 @@
 // longer matches fails, so the list only shrinks.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { relative, join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -41,29 +42,30 @@ const PINNED = new Map([
     'nurse-station/nursing-intake-form/nursing-intake-form.component.html nursingNotes',
     'the intake needs an assessment (notes or any assessed item), not the notes themselves',
   ],
+  // QA D1280 (round 27): the discharge summary needs a diagnosis OR
+  // instructions, not each; a star on both would say each is required.
+  [
+    'checkout/checkout-dialog/checkout-dialog.component.html checkout-diagnoses',
+    'the summary needs a diagnosis or instructions (one of two), not each',
+  ],
+  [
+    'checkout/checkout-dialog/checkout-dialog.component.html checkout-instructions',
+    'the summary needs a diagnosis or instructions (one of two), not each',
+  ],
+  // Listed only when the reader clears an address they had: required then only.
+  ['profile/profile.html editEmail', 'listed only when an existing address is cleared'],
+  // A one-time code: a secondary step of the profile form, refused by its own
+  // short reason; `required` would make the profile's save refuse it too.
+  ['profile/profile.html emailChangeCode', 'secondary verification step of the profile form'],
+  ['profile/profile.html verification-code', 'secondary verification step of the profile form'],
 ]);
 
-/** D1272 class in screens owned by fix/r26-portal-forms (round 26): that branch removes them. */
-const OTHER_BRANCH = [
-  'admissions/admissions.html adm-bed-select',
-  'bed-board/bed-board.html precaution-reason',
-  'bed-board/bed-board.html transfer-destination',
-  'bed-board/bed-board.html transfer-reason',
-  'bed-board/bed-board.html override-reason',
-  'checkout/checkout-dialog/checkout-dialog.component.html checkout-diagnoses',
-  'checkout/checkout-dialog/checkout-dialog.component.html checkout-instructions',
-  'lab/lab-approval-queue/lab-approval-queue.html study-type',
-  'lab/lab-approval-queue/lab-approval-queue.html study-date',
-  'lab/lab-approval-queue/lab-approval-queue.html rejection-reason',
-  'lab/lab-results/lab-results.html readBackValue',
-  'profile/profile.html editEmail',
-  'profile/profile.html emailChangeCode',
-  'profile/profile.html pwdCurrent',
-  'profile/profile.html pwdNew',
-  'profile/profile.html pwdConfirm',
-  'profile/profile.html verification-code',
-];
-for (const key of OTHER_BRANCH) PINNED.set(key, 'D1272 class, fix/r26-portal-forms');
+// QA D1280 (D1272 NOT_FIXED in round 27): the round-26 list of "another
+// branch's screens" (admissions, bed board, lab approval, read-back, the
+// password form) outlived the round; round 27 starred them all and deleted
+// the list. The three lab-approval fields were never unstarred: their star is
+// in the translation, which the scan now reads (as the declared-required rule
+// does), in every language.
 
 const unquote = (v) => (v ?? '').replace(/^["']|["']$/g, '').trim();
 
@@ -106,25 +108,51 @@ function labelsOf(html, tokens) {
   return labels;
 }
 
-export function unstarredListedFields(html) {
+/** A label's words: each `'KEY' | translate` read as the key's value in one language. */
+function labelWords(text, translate) {
+  return text.replaceAll(/\{\{([\s\S]*?)\}\}/g, (_, expr) =>
+    [...expr.matchAll(/'([^']*)'/g)]
+      .map((m) =>
+        /^[A-Z][A-Z0-9_]*(?:\.[A-Z0-9_]+)+$/.test(m[1]) ? (translate(m[1]) ?? '') : m[1],
+      )
+      .join(' '),
+  );
+}
+
+/**
+ * @param translators key → value, one per language; a label is starred when
+ *   its template text or its translation shows `*` in EVERY language.
+ */
+export function unstarredListedFields(html, translators = [() => null]) {
   const tokens = tags(html);
   const labels = labelsOf(html, tokens);
   const out = [];
   for (const id of listedIds(tokens)) {
     const label = labels.get(id);
     if (!label || label.hidden) continue;
-    if (!label.text.includes('*')) out.push(id);
+    if (!translators.every((tr) => labelWords(label.text, tr).includes('*'))) out.push(id);
   }
   return out;
+}
+
+function translator(lang) {
+  const json = JSON.parse(
+    readFileSync(join(appDir, '..', 'assets', 'i18n', `${lang}.json`), 'utf8'),
+  );
+  return (key) => {
+    const v = key.split('.').reduce((o, p) => (o == null ? undefined : o[p]), json);
+    return typeof v === 'string' ? v : null;
+  };
 }
 
 function scanAll() {
   const found = [];
   let listed = 0;
+  const translators = ['fr', 'en', 'es'].map(translator);
   for (const { file, text } of templatesIn(appDir)) {
     const rel = relative(appDir, file).replaceAll('\\', '/');
     listed += listedIds(tags(text)).size;
-    for (const id of unstarredListedFields(text)) found.push(`${rel} ${id}`);
+    for (const id of unstarredListedFields(text, translators)) found.push(`${rel} ${id}`);
   }
   return { found, listed };
 }
@@ -157,4 +185,20 @@ test('QA D1272: the scan sees the round-26 handoff dialog', () => {
   // A visually hidden label: the control declares the requirement instead.
   const hidden = wrapped.replace('<label for="r">', '<label class="sr-only" for="r">');
   assert.deepEqual(unstarredListedFields(hidden), []);
+  // The star in the translation, in every language.
+  const keyed = `<label for="t">{{ 'L.TYPE' | translate }}</label><select id="t"></select>
+      <button [submitGuardFields]="['t']">OK</button>`;
+  const fr = (k) => ({ 'L.TYPE': "Type d'étude *" })[k] ?? null;
+  const esUnstarred = (k) => ({ 'L.TYPE': 'Tipo de estudio' })[k] ?? null;
+  assert.deepEqual(unstarredListedFields(keyed, [fr]), []);
+  assert.deepEqual(unstarredListedFields(keyed, [fr, esUnstarred]), ['t']);
+});
+
+test('QA D1280 guard: the scan sees the round-27 assign-bed field', () => {
+  const bed = `<div class="modal" role="dialog">
+      <label for="adm-bed-select">{{ 'ADMISSIONS.SELECT_BED' | translate }}</label>
+      <select id="adm-bed-select"></select>
+      <button [appSubmitGuard]="!bed" [submitGuardFields]="['adm-bed-select']">OK</button></div>`;
+  assert.deepEqual(unstarredListedFields(bed), ['adm-bed-select']);
+  assert.deepEqual(unstarredListedFields(bed.replace('}}</label>', '}} *</label>')), []);
 });
