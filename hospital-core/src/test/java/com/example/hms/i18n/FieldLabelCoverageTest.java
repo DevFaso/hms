@@ -111,7 +111,10 @@ class FieldLabelCoverageTest {
                         || f.isAnnotationPresent(com.fasterxml.jackson.annotation.JsonIgnore.class)) {
                     continue;
                 }
-                if (hasDefaultMessageConstraint(f)) {
+                // QA D1312 (round 28): a field Jackson parses (enum, UUID, date,
+                // number, flag) is named by the "value not valid for {field}"
+                // refusal whatever its constraints; copayMethod was not read.
+                if (hasDefaultMessageConstraint(f) || isParsed(f.getType())) {
                     out.add(jsonName(f));
                 }
                 collect(f.getType(), seen, out);
@@ -124,6 +127,21 @@ class FieldLabelCoverageTest {
                 }
             }
         }
+    }
+
+    /**
+     * A type Jackson parses from what a form sends (a select's enum, a
+     * picker's UUID, a typed date or number), so a malformed value is refused
+     * with the field's label. A flag is not: a checkbox sends true or false,
+     * and a malformed one from the API gets the handler's generic sentence,
+     * which never prints the raw property ({@code GlobalExceptionHandler#fieldLabel}).
+     */
+    static boolean isParsed(Class<?> type) {
+        if (type == boolean.class || type == Boolean.class) {
+            return false;
+        }
+        return type.isEnum() || type.isPrimitive() || Number.class.isAssignableFrom(type)
+            || type == java.util.UUID.class || java.time.temporal.Temporal.class.isAssignableFrom(type);
     }
 
     private static boolean hasDefaultMessageConstraint(Field field) {

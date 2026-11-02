@@ -39,16 +39,19 @@ class PaymentReferenceRegistryTest {
     void aReferenceOnAnInvoiceOrCopayPaymentIsRefused() {
         when(invoicePayments.existsLiveReference(eq(hospitalId), eq("om-r20-77812"), any())).thenReturn(true);
 
-        assertThatThrownBy(() -> registry.requireUnused(hospitalId, " OM-R20-77812 "))
+        assertThatThrownBy(() -> registry.requireUnused(hospitalId, " OM-R20-77812 ", "reference"))
             .isInstanceOf(BusinessException.class)
-            .hasFieldOrPropertyWithValue("messageKey", "billing.payment.duplicateReference");
+            .hasFieldOrPropertyWithValue("messageKey", "billing.payment.duplicateReference")
+            // QA D1301: the refusal names the field the caller reads the reference from.
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                refusal -> assertThat(refusal.getFieldErrors()).containsOnlyKeys("reference"));
     }
 
     @Test
     void aReferenceOnAnotherDispensePaymentIsRefused() {
         when(pharmacyPayments.existsLiveReference(hospitalId, "om-r20-55123")).thenReturn(true);
 
-        assertThatThrownBy(() -> registry.requireUnused(hospitalId, "OM-R20-55123"))
+        assertThatThrownBy(() -> registry.requireUnused(hospitalId, "OM-R20-55123", "referenceNumber"))
             .isInstanceOf(BusinessException.class)
             .hasFieldOrPropertyWithValue("messageKey", "billing.payment.duplicateReference");
     }
@@ -57,22 +60,23 @@ class PaymentReferenceRegistryTest {
     void aReferenceOnAWalkInSaleIsRefused() {
         when(pharmacySales.existsLiveReference(hospitalId, "mtn1")).thenReturn(true);
 
-        assertThatThrownBy(() -> registry.requireUnused(hospitalId, "MTN 1"))
-            .isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> registry.requireUnused(hospitalId, "MTN 1", "copayReference"))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                refusal -> assertThat(refusal.getField()).isEqualTo("copayReference"));
     }
 
     @Test
     void aNewReferenceAndABlankOneAreAccepted() {
         when(pharmacyPayments.existsLiveReference(any(), anyString())).thenReturn(false);
-        assertThatCode(() -> registry.requireUnused(hospitalId, "OM-NEW-1")).doesNotThrowAnyException();
+        assertThatCode(() -> registry.requireUnused(hospitalId, "OM-NEW-1", "reference")).doesNotThrowAnyException();
 
         PaymentReferenceRegistry quiet = new PaymentReferenceRegistry(
             mock(PaymentTransactionRepository.class), mock(PharmacyPaymentRepository.class),
             mock(PharmacySaleRepository.class));
         PharmacySaleRepository untouched = mock(PharmacySaleRepository.class);
         new PaymentReferenceRegistry(mock(PaymentTransactionRepository.class), mock(PharmacyPaymentRepository.class),
-            untouched).requireUnused(hospitalId, "  ");
+            untouched).requireUnused(hospitalId, "  ", "reference");
         verifyNoInteractions(untouched);
-        assertThatCode(() -> quiet.requireUnused(null, "OM-1")).doesNotThrowAnyException();
+        assertThatCode(() -> quiet.requireUnused(null, "OM-1", "reference")).doesNotThrowAnyException();
     }
 }

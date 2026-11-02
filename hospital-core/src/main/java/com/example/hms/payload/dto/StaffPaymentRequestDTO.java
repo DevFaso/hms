@@ -15,7 +15,11 @@ public class StaffPaymentRequestDTO {
     @NotNull
     @DecimalMin(value = "0.01", message = "{staffPayment.amount.min}")
     private BigDecimal amount;
-    /** CASH | CARD | INSURANCE | OTHER */
+    /**
+     * CASH | CARD | INSURANCE | OTHER. QA D1300 (round 28): always required
+     * (D1293), so bean validation names it with the amount in one refusal.
+     */
+    @jakarta.validation.constraints.NotBlank(message = "{billing.payment.methodRequired}")
     private String method;
     /** billing.payment_transactions.reference_number is VARCHAR(120). */
     @jakarta.validation.constraints.Size(max = 120)

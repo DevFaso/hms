@@ -820,7 +820,7 @@ public class DispenseServiceImpl implements DispenseService {
             unit = prescription.getQuantityUnit().trim();
         }
         if (unit.isEmpty()) {
-            throw new BusinessException("dispense.unit.required");
+            throw new com.example.hms.exception.FieldBusinessException("unit", "dispense.unit.required");
         }
         return unit;
     }
@@ -1037,7 +1037,7 @@ public class DispenseServiceImpl implements DispenseService {
         if (pharmacistVerificationService != null
                 && pharmacistVerificationService.blocksAdministration(prescription)
                 && dto.getVerifiedBy() == null) {
-            throw new BusinessException(MessageUtil.resolve("dispense.verification.required"));
+            throw new com.example.hms.exception.FieldBusinessException("verifiedBy", "dispense.verification.required");
         }
         return prescription;
     }
@@ -1793,10 +1793,10 @@ public class DispenseServiceImpl implements DispenseService {
 
     private void validateQuantities(BigDecimal requested, BigDecimal dispensed) {
         if (requested == null || requested.signum() <= 0) {
-            throw new BusinessException("pharmacy.dispense.requestedPositive");
+            throw new com.example.hms.exception.FieldBusinessException("quantityRequested", "pharmacy.dispense.requestedPositive");
         }
         if (dispensed == null || dispensed.signum() <= 0) {
-            throw new BusinessException("pharmacy.dispense.dispensedPositive");
+            throw new com.example.hms.exception.FieldBusinessException("quantityDispensed", "pharmacy.dispense.dispensedPositive");
         }
         if (dispensed.compareTo(requested) > 0) {
             throw new BusinessException("pharmacy.dispense.exceedsRequested");

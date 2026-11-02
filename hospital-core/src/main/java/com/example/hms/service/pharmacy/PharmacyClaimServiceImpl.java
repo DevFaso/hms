@@ -253,7 +253,7 @@ public class PharmacyClaimServiceImpl implements PharmacyClaimService {
             throw new BusinessException("pharmacy.claim.requestRequired");
         }
         if (dto.getAmount() == null || dto.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
-            throw new BusinessException("pharmacy.claim.amountPositive");
+            throw new com.example.hms.exception.FieldBusinessException("amount", "pharmacy.claim.amountPositive");
         }
     }
 }

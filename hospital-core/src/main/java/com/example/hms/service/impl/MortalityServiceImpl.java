@@ -169,7 +169,7 @@ public class MortalityServiceImpl implements MortalityService {
     @Override
     public DeathRecordResponseDTO amendDeathRecord(UUID recordId, DeathRecordAmendmentDTO request) {
         if (!StringUtils.hasText(request.getAmendmentReason())) {
-            throw new BusinessException("mortality.amendmentReasonRequired");
+            throw new com.example.hms.exception.FieldBusinessException("amendmentReason", "mortality.amendmentReasonRequired");
         }
         DeathRecord deathRecord = loadScoped(recordId);
 
@@ -383,10 +383,10 @@ public class MortalityServiceImpl implements MortalityService {
 
     private void validateMortalityFlags(DeathRecordRequestDTO request) {
         if (Boolean.TRUE.equals(request.getMaternalDeath()) && request.getMaternalDeathTiming() == null) {
-            throw new BusinessException("mortality.maternalTimingRequiredWho");
+            throw new com.example.hms.exception.FieldBusinessException("maternalDeathTiming", "mortality.maternalTimingRequiredWho");
         }
         if (Boolean.TRUE.equals(request.getPerinatalDeath()) && request.getPerinatalType() == null) {
-            throw new BusinessException("mortality.perinatalTypeRequiredWhy");
+            throw new com.example.hms.exception.FieldBusinessException("perinatalType", "mortality.perinatalTypeRequiredWhy");
         }
     }
 

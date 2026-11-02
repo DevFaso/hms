@@ -275,7 +275,7 @@ public class MicroCultureServiceImpl implements MicroCultureService {
         applyCorrectionGuard(culture, request.getCorrectionReason());
         String antibiotic = request.getAntibioticName().trim();
         if (susceptibilityRepository.existsByIsolate_IdAndAntibioticNameIgnoreCase(isolate.getId(), antibiotic)) {
-            throw new BusinessException("micro.culture.antibioticDuplicate");
+            throw new com.example.hms.exception.FieldBusinessException("antibioticName", "micro.culture.antibioticDuplicate");
         }
         MicroSusceptibility row = MicroSusceptibility.builder()
             .isolate(isolate)
@@ -341,7 +341,7 @@ public class MicroCultureServiceImpl implements MicroCultureService {
             return;
         }
         if (correctionReason == null || correctionReason.isBlank()) {
-            throw new BusinessException("micro.culture.correctionReasonRequired");
+            throw new com.example.hms.exception.FieldBusinessException("correctionReason", "micro.culture.correctionReasonRequired");
         }
         culture.setStatus(MicroCultureStatus.CORRECTED);
         culture.setCorrectedAt(LocalDateTime.now());

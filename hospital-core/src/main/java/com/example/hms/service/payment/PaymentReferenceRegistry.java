@@ -1,6 +1,6 @@
 package com.example.hms.service.payment;
 
-import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.enums.PaymentStatus;
 import com.example.hms.repository.PaymentTransactionRepository;
 import com.example.hms.repository.pharmacy.PharmacyPaymentRepository;
@@ -64,8 +64,12 @@ public class PaymentReferenceRegistry {
      * Refuses a reference already recorded on a live payment of this hospital,
      * in any of the three ledgers. A blank reference (cash) or an unknown
      * hospital is not checked.
+     *
+     * <p>QA D1301 (round 28): the refusal names the request field that carries
+     * the reference ({@code field}), so the form marks it; it was a toast with
+     * no field. The reason never names the other payment or its patient.</p>
      */
-    public void requireUnused(UUID hospitalId, String reference) {
+    public void requireUnused(UUID hospitalId, String reference, String field) {
         String normal = normalize(reference);
         if (hospitalId == null || normal == null) {
             return;
@@ -73,7 +77,7 @@ public class PaymentReferenceRegistry {
         if (invoicePayments.existsLiveReference(hospitalId, normal, LIVE_INVOICE_PAYMENTS)
                 || pharmacyPayments.existsLiveReference(hospitalId, normal)
                 || pharmacySales.existsLiveReference(hospitalId, normal)) {
-            throw new BusinessException(DUPLICATE_KEY);
+            throw new FieldBusinessException(field, DUPLICATE_KEY);
         }
     }
 }

@@ -132,7 +132,7 @@ class PharmacySaleServiceImplTest {
         dto.setReferenceNumber("OM-R20-55123");
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         doThrow(new BusinessException("billing.payment.duplicateReference"))
-                .when(referenceRegistry).requireUnused(hospitalId, "OM-R20-55123");
+                .when(referenceRegistry).requireUnused(hospitalId, "OM-R20-55123", "referenceNumber");
 
         assertThatThrownBy(() -> service.createSale(dto))
                 .isInstanceOf(BusinessException.class)

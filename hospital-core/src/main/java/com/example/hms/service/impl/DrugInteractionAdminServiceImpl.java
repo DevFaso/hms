@@ -103,19 +103,18 @@ public class DrugInteractionAdminServiceImpl implements DrugInteractionAdminServ
     private void validate(DrugInteractionDTO request) {
         if (request.getDrug1Code() == null || request.getDrug1Code().isBlank()
             || request.getDrug2Code() == null || request.getDrug2Code().isBlank()) {
-            throw new BusinessException("Both drug codes are required.");
+            throw new com.example.hms.exception.FieldBusinessException("drug1Code", "Both drug codes are required.");
         }
         if (request.getDrug1Code().equalsIgnoreCase(request.getDrug2Code())) {
             throw new BusinessException("An interaction needs two different drugs.");
         }
         if (request.getSeverity() == null) {
-            throw new BusinessException("Severity is required.");
+            throw new com.example.hms.exception.FieldBusinessException("severity", "Severity is required.");
         }
         if (request.getRecommendation() == null || request.getRecommendation().isBlank()) {
             // An alert that says "these interact" and nothing else is the kind
             // clinicians learn to dismiss without reading.
-            throw new BusinessException(
-                "A recommendation is required — an alert with no action is an alert that gets ignored.");
+            throw new com.example.hms.exception.FieldBusinessException("recommendation", "A recommendation is required — an alert with no action is an alert that gets ignored.");
         }
     }
 

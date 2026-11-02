@@ -720,15 +720,11 @@ public class DepartmentServiceImpl implements DepartmentService {
         }
 
         if (dto.getHospitalId() == null && !StringUtils.hasText(dto.getHospitalName())) {
-            throw new IllegalArgumentException(
-                    messageSource.getMessage("department.hospital.required", null, locale)
-            );
+            throw new com.example.hms.exception.FieldBusinessException("hospitalId", messageSource.getMessage("department.hospital.required", null, locale));
         }
 
         if (!StringUtils.hasText(dto.getName())) {
-            throw new IllegalArgumentException(
-                    messageSource.getMessage("department.name.required", null, locale)
-            );
+            throw new com.example.hms.exception.FieldBusinessException("name", messageSource.getMessage("department.name.required", null, locale));
         }
     }
 

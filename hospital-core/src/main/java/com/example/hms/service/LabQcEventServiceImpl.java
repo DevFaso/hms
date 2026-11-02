@@ -40,7 +40,7 @@ public class LabQcEventServiceImpl implements LabQcEventService {
             throw new FieldBusinessException("hospitalId", "lab.qc.hospital.required");
         }
         if (request.getMeasuredValue() == null || request.getExpectedValue() == null) {
-            throw new BusinessException("lab.qc.valuesRequired");
+            throw new com.example.hms.exception.FieldBusinessException("measuredValue", "lab.qc.valuesRequired");
         }
 
         LabQcEventLevel level;

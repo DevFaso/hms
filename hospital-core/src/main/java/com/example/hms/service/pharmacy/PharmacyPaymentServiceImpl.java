@@ -180,7 +180,7 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
         // anything is charged. An insurance authorisation is not a provider
         // transaction (one can cover several dispenses), so it is not checked.
         if (dto.getPaymentMethod() == PharmacyPaymentMethod.MOBILE_MONEY && !isRealProvider()) {
-            referenceRegistry.requireUnused(hospitalId, providerReference);
+            referenceRegistry.requireUnused(hospitalId, providerReference, "referenceNumber");
         }
 
         if (dto.getPaymentMethod() == PharmacyPaymentMethod.MOBILE_MONEY) {
@@ -306,14 +306,14 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
             throw new BusinessException("pharmacy.payment.requestRequired");
         }
         if (dto.getAmount() == null || dto.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
-            throw new BusinessException("pharmacy.payment.amountPositive");
+            throw new com.example.hms.exception.FieldBusinessException("amount", "pharmacy.payment.amountPositive");
         }
         // QA D204 (D184): the franc CFA has no minor unit.
         if (dto.getAmount().stripTrailingZeros().scale() > 0) {
             throw new BusinessException("billing.payment.wholeAmountOnly");
         }
         if (dto.getPaymentMethod() == null) {
-            throw new BusinessException("pharmacy.payment.methodRequired");
+            throw new com.example.hms.exception.FieldBusinessException("paymentMethod", "pharmacy.payment.methodRequired");
         }
         // SUPER_ADMIN may have no active hospital; require one for payment creation.
         if (hospitalId == null) {

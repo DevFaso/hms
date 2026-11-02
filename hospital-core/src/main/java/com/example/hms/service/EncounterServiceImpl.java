@@ -424,7 +424,7 @@ public class EncounterServiceImpl implements EncounterService {
         requireAtLeastOne("departmentId or departmentIdentifier", request.getDepartmentId(), request.getDepartmentIdentifier());
 
         if (request.getEncounterType() == null) {
-            throw new BusinessException(messageSource.getMessage("encounter.type.required", null, locale));
+            throw new com.example.hms.exception.FieldBusinessException("encounterType", messageSource.getMessage("encounter.type.required", null, locale));
         }
 
         EncounterResolution ctx = resolveEncounterResolution(request, locale);
@@ -2170,7 +2170,7 @@ public class EncounterServiceImpl implements EncounterService {
         // queue unranked. The DTO refuses it at the edge; this keeps any other
         // caller of the service honest.
         if (request == null || request.getEsiScore() == null) {
-            throw new BusinessException("triage.esi.required");
+            throw new com.example.hms.exception.FieldBusinessException("esiScore", "triage.esi.required");
         }
         requireTriageFindings(request);
         // (a) Record vital signs as PatientVitalSign

@@ -186,7 +186,7 @@ public class LaborServiceImpl implements LaborService {
         }
         // QA D295: an episode with no onset time has no partograph clock.
         if (request.getLaborOnsetAt() == null) {
-            throw new BusinessException("maternity.labor.onset.required");
+            throw new com.example.hms.exception.FieldBusinessException("laborOnsetAt", "maternity.labor.onset.required");
         }
         if (request.getLaborOnsetAt().isAfter(LocalDateTime.now(java.time.ZoneId.systemDefault()).plusMinutes(5))) {
             throw new BusinessException("maternity.labor.onset.future");

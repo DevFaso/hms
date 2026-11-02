@@ -409,19 +409,13 @@ public class StaffServiceImpl implements StaffService {
 
     private void validateBaseStaffRequirements(StaffRequestDTO dto, Locale locale) {
         if (dto.getUserEmail() == null || dto.getUserEmail().isBlank()) {
-            throw new BusinessRuleException(
-                messageSource.getMessage("staff.user.required", null, locale)
-            );
+            throw new com.example.hms.exception.FieldBusinessException("userEmail", messageSource.getMessage("staff.user.required", null, locale));
         }
         if (dto.getHospitalName() == null || dto.getHospitalName().isBlank()) {
-            throw new BusinessRuleException(
-                messageSource.getMessage("staff.hospital.required", null, locale)
-            );
+            throw new com.example.hms.exception.FieldBusinessException("hospitalName", messageSource.getMessage("staff.hospital.required", null, locale));
         }
         if (dto.getJobTitle() == null || dto.getJobTitle().isBlank()) {
-            throw new BusinessRuleException(
-                messageSource.getMessage("staff.jobTitle.required", null, locale)
-            );
+            throw new com.example.hms.exception.FieldBusinessException("jobTitle", messageSource.getMessage("staff.jobTitle.required", null, locale));
         }
     }
 
@@ -537,22 +531,16 @@ public class StaffServiceImpl implements StaffService {
 
     private void validateDoctorFields(StaffRequestDTO dto, Locale locale) {
         if (dto.getSpecialization() == null) {
-            throw new BusinessRuleException(
-                getLocalizedMessage("staff.doctor.specializationRequired", null, locale)
-            );
+            throw new com.example.hms.exception.FieldBusinessException("specialization", getLocalizedMessage("staff.doctor.specializationRequired", null, locale));
         }
     }
 
     private void validateNurseFields(StaffRequestDTO dto, Locale locale) {
         if (dto.getEmploymentType() == null) {
-            throw new BusinessRuleException(
-                getLocalizedMessage("staff.nurse.employmentTypeRequired", null, locale)
-            );
+            throw new com.example.hms.exception.FieldBusinessException("employmentType", getLocalizedMessage("staff.nurse.employmentTypeRequired", null, locale));
         }
         if (dto.getStartDate() == null) {
-            throw new BusinessRuleException(
-                getLocalizedMessage("staff.nurse.startDateRequired", null, locale)
-            );
+            throw new com.example.hms.exception.FieldBusinessException("startDate", getLocalizedMessage("staff.nurse.startDateRequired", null, locale));
         }
         if (dto.getEndDate() != null && dto.getEndDate().isBefore(dto.getStartDate())) {
             throw new BusinessRuleException(
@@ -563,14 +551,10 @@ public class StaffServiceImpl implements StaffService {
 
     private void validateRadiologistFields(StaffRequestDTO dto, Locale locale) {
         if (dto.getLicenseNumber() == null || dto.getLicenseNumber().isBlank()) {
-            throw new BusinessRuleException(
-                getLocalizedMessage("staff.radiologist.licenseRequired", null, locale)
-            );
+            throw new com.example.hms.exception.FieldBusinessException("licenseNumber", getLocalizedMessage("staff.radiologist.licenseRequired", null, locale));
         }
         if (dto.getStartDate() == null) {
-            throw new BusinessRuleException(
-                getLocalizedMessage("staff.radiologist.startDateRequired", null, locale)
-            );
+            throw new com.example.hms.exception.FieldBusinessException("startDate", getLocalizedMessage("staff.radiologist.startDateRequired", null, locale));
         }
         if (dto.getEndDate() != null && dto.getEndDate().isBefore(dto.getStartDate())) {
             throw new BusinessRuleException(
@@ -579,9 +563,7 @@ public class StaffServiceImpl implements StaffService {
         }
 
         if (dto.getSpecialization() == null) {
-            throw new BusinessRuleException(
-                getLocalizedMessage("staff.radiologist.specializationRequired", null, locale)
-            );
+            throw new com.example.hms.exception.FieldBusinessException("specialization", getLocalizedMessage("staff.radiologist.specializationRequired", null, locale));
         }
     }
 

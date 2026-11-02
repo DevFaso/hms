@@ -235,15 +235,27 @@ public class AppointmentServiceImpl implements AppointmentService {
      * any other status (a reason describes the drop, not the next status).
      */
     public static String requireStatusReason(AppointmentStatus status, String reason) {
+        return requireStatusReason(status, reason, "statusReason");
+    }
+
+    /**
+     * QA D1299 (round 28): the refusal names the request field that carries
+     * the reason ({@code reason} on the status action, {@code statusReason} on
+     * the booking and edit forms), so the form can mark it; it answered a
+     * message with no field before.
+     */
+    public static String requireStatusReason(AppointmentStatus status, String reason, String field) {
         if (!NEEDS_STATUS_REASON.contains(status)) {
             return null;
         }
         String trimmed = reason == null ? "" : reason.trim();
         if (trimmed.isEmpty()) {
-            throw new BusinessException("appointment.status.reasonRequired", AppointmentStatus.labelOf(status));
+            throw new com.example.hms.exception.FieldBusinessException(field, "appointment.status.reasonRequired",
+                AppointmentStatus.labelOf(status));
         }
         if (trimmed.length() > STATUS_REASON_MAX) {
-            throw new BusinessException("appointment.status.reasonTooLong", STATUS_REASON_MAX);
+            throw new com.example.hms.exception.FieldBusinessException(field, "appointment.status.reasonTooLong",
+                STATUS_REASON_MAX);
         }
         return trimmed;
     }
@@ -298,11 +310,11 @@ public class AppointmentServiceImpl implements AppointmentService {
             throw new FieldBusinessException("hospitalId", "appointment.hospital.required");
         }
         if (request.getAppointmentDate() == null) {
-            throw new BusinessException("appointment.date.required");
+            throw new com.example.hms.exception.FieldBusinessException("appointmentDate", "appointment.date.required");
         }
         // QA D1060: the end time is the slot rules', never the caller's, so only the start is required.
         if (request.getStartTime() == null) {
-            throw new BusinessException("appointment.timeRange.invalid");
+            throw new com.example.hms.exception.FieldBusinessException("startTime", "appointment.timeRange.invalid");
         }
     }
 
@@ -536,7 +548,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         // end time in the request is ignored: a patient booked a clinician's
         // whole day through this endpoint.
         if (request.getStartTime() == null || request.getAppointmentDate() == null) {
-            throw new BusinessException("appointment.timeRange.invalid");
+            throw new com.example.hms.exception.FieldBusinessException("startTime", "appointment.timeRange.invalid");
         }
         LocalTime endTime = slotPolicy.endFor(staff.getId(), request.getAppointmentDate(), request.getStartTime());
         LocalDateTime requestedStart = LocalDateTime.of(request.getAppointmentDate(), request.getStartTime());
@@ -1088,7 +1100,7 @@ public class AppointmentServiceImpl implements AppointmentService {
 
         requireFreedSlotStillFree(appointment, currentStatus, newStatus);
         // QA D1126 / D1132: a cancel or a no-show needs the reason, and keeps it.
-        String statusReason = requireStatusReason(newStatus, reason);
+        String statusReason = requireStatusReason(newStatus, reason, "reason");
 
         appointment.setStatus(newStatus);
         appointment.setStatusReason(statusReason);

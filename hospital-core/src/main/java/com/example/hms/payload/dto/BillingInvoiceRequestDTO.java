@@ -20,6 +20,9 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+// QA D1300 (round 28): the patient is named with the dates in one refusal (create only: an edit keeps the patient).
+@OneOf(fields = {"patientId", "patientEmail"}, message = "{billing.invoice.patientRequired}",
+    groups = com.example.hms.validation.OnCreate.class)
 public class BillingInvoiceRequestDTO {
 
     private String id;

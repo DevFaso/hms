@@ -59,7 +59,7 @@ public class IsolationServiceImpl implements IsolationService {
         Patient patient = patientChartAccess.require(request.getPatientId(), hospitalId);
 
         if (!StringUtils.hasText(request.getReason())) {
-            throw new BusinessException("isolation.precaution.reasonRequired");
+            throw new com.example.hms.exception.FieldBusinessException("reason", "isolation.precaution.reasonRequired");
         }
         precautionRepository.findActiveOfType(patient.getId(), request.getPrecautionType())
             .ifPresent(existing -> {
@@ -95,7 +95,7 @@ public class IsolationServiceImpl implements IsolationService {
     public IsolationPrecautionResponseDTO discontinuePrecaution(UUID precautionId,
                                                                DiscontinuePrecautionRequestDTO request) {
         if (!StringUtils.hasText(request.getDiscontinuationReason())) {
-            throw new BusinessException("isolation.precaution.liftReasonRequired");
+            throw new com.example.hms.exception.FieldBusinessException("discontinuationReason", "isolation.precaution.liftReasonRequired");
         }
         IsolationPrecaution precaution = loadScoped(precautionId);
         if (!precaution.isActive()) {

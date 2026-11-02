@@ -199,7 +199,7 @@ public class ProviderOnboardingServiceImpl implements ProviderOnboardingService 
         boolean ifu = request != null && Boolean.TRUE.equals(request.getIfuMatchesRccm());
         boolean cnss = request != null && Boolean.TRUE.equals(request.getCnssMatchesRccm());
         if (!ifu || !cnss) {
-            throw new BusinessException(MSG_IDENTITY_INCONSISTENT);
+            throw new com.example.hms.exception.FieldBusinessException("ifuMatchesRccm", MSG_IDENTITY_INCONSISTENT);
         }
         // AC-3: one business is one facility (v1). The partial unique indexes
         // of V180 hold the same rule against a concurrent verify.

@@ -86,7 +86,7 @@ public class TransferServiceImpl implements TransferService {
         UUID hospitalId = requireHospital();
 
         if (!StringUtils.hasText(request.getReason())) {
-            throw new BusinessException("transfer.r7.reasonRequired");
+            throw new com.example.hms.exception.FieldBusinessException("reason", "transfer.r7.reasonRequired");
         }
         Admission admission = loadAdmissionScoped(request.getAdmissionId(), hospitalId);
 
@@ -193,8 +193,7 @@ public class TransferServiceImpl implements TransferService {
     public TransferOrderResponseDTO cancelTransfer(UUID orderId,
                                                    TransferCancellationRequestDTO request) {
         if (!StringUtils.hasText(request.getCancellationReason())) {
-            throw new BusinessException(
-                "transfer.r7.heldBedReasonRequired");
+            throw new com.example.hms.exception.FieldBusinessException("cancellationReason", "transfer.r7.heldBedReasonRequired");
         }
         TransferOrder order = loadScoped(orderId);
         if (!order.isPending()) {
@@ -261,7 +260,7 @@ public class TransferServiceImpl implements TransferService {
                 BedAssignmentService.bedLabel(destination));
         }
         if (!StringUtils.hasText(request.getIsolationOverrideReason())) {
-            throw new BusinessException("transfer.r7.overrideReasonRequired");
+            throw new com.example.hms.exception.FieldBusinessException("isolationOverrideReason", "transfer.r7.overrideReasonRequired");
         }
         return true;
     }

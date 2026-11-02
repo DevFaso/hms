@@ -125,7 +125,7 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
         // A hold the patient can't interpret is worse than a denial, so the reason
         // is mandatory here even though approve/reject leave it optional.
         if (decision == null || decision.getProviderNotes() == null || decision.getProviderNotes().isBlank()) {
-            throw new BusinessException("patient.refill.decision.reasonRequired");
+            throw new com.example.hms.exception.FieldBusinessException("providerNotes", "patient.refill.decision.reasonRequired");
         }
         return decide(auth, refillId, decision, RefillStatus.PAUSED);
     }
