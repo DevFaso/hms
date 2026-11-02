@@ -85,9 +85,15 @@
         <textarea id="labor-risk" rows="2" [(ngModel)]="startForm.riskNotes"></textarea>
       </div>
       <div class="field">
-        <label for="labor-override">{{ 'LABOR.RECENT_DELIVERY_OVERRIDE' | translate }}</label>
+        <label for="labor-override"
+          >{{ 'LABOR.RECENT_DELIVERY_OVERRIDE' | translate }}
+          @if (startOverrideRequired()) {
+            *
+          }
+        </label>
         <textarea
           id="labor-override"
+          [required]="startOverrideRequired()"
           rows="2"
           maxlength="500"
           aria-describedby="labor-override-hint"
@@ -104,6 +110,7 @@
         </button>
         <button
           class="btn-primary"
+          data-testid="labor-start-submit"
           (click)="submitStart()"
           [disabled]="saving()"
           [appSubmitGuard]="!startForm.laborOnsetAt"
@@ -177,7 +184,7 @@
           <span class="risk-badge risk-low">{{ 'LABOR.STATUS_DELIVERED' | translate }}</span>
         </h3>
         <p>
-          {{ record.birthDateTime | serverTime | date: 'medium' }} ·
+          {{ record.birthDateTime | serverTime | dateTime }} ·
           {{ 'LABOR.MODE_' + record.deliveryMode | translate }}
           @if (record.infantSex) {
             · {{ 'LABOR.SEX_' + record.infantSex | translate }}
@@ -695,9 +702,15 @@
           <textarea id="dl-notes" rows="2" [(ngModel)]="deliveryForm.notes"></textarea>
         </div>
         <div class="field">
-          <label for="dl-override">{{ 'LABOR.RECENT_DELIVERY_OVERRIDE' | translate }}</label>
+          <label for="dl-override"
+            >{{ 'LABOR.RECENT_DELIVERY_OVERRIDE' | translate }}
+            @if (deliveryOverrideRequired()) {
+              *
+            }
+          </label>
           <textarea
             id="dl-override"
+            [required]="deliveryOverrideRequired()"
             rows="2"
             maxlength="500"
             aria-describedby="dl-override-hint"
@@ -716,6 +729,7 @@
           appSubmitGuard
           submitGuardRequired
           class="btn-primary"
+          data-testid="labor-delivery-submit"
           (click)="submitDelivery()"
           [disabled]="saving()"
         >

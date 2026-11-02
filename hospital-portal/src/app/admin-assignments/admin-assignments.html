@@ -504,19 +504,19 @@
           </div>
           <div>
             <span class="label">{{ 'ASSIGN_ADMIN.ASSIGNED_AT' | translate }}</span>
-            <span>{{ row.assignedAt ? (row.assignedAt | serverTime | date: 'medium') : '—' }}</span>
+            <span>{{ row.assignedAt ? (row.assignedAt | serverTime | dateTime) : '—' }}</span>
           </div>
           <div>
             <span class="label">{{ 'ASSIGN_ADMIN.CONFIRMATION_SENT' | translate }}</span>
             <span>{{
-              row.confirmationSentAt ? (row.confirmationSentAt | serverTime | date: 'medium') : '—'
+              row.confirmationSentAt ? (row.confirmationSentAt | serverTime | dateTime) : '—'
             }}</span>
           </div>
           <div>
             <span class="label">{{ 'ASSIGN_ADMIN.CONFIRMATION_VERIFIED' | translate }}</span>
             <span>{{
               row.confirmationVerifiedAt
-                ? (row.confirmationVerifiedAt | serverTime | date: 'medium')
+                ? (row.confirmationVerifiedAt | serverTime | dateTime)
                 : ('ASSIGN_ADMIN.NOT_VERIFIED' | translate)
             }}</span>
           </div>

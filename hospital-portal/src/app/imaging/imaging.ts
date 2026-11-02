@@ -42,6 +42,7 @@ import { AuthorshipService } from '../shared/authorship.service';
 import { CANCEL_REASON_REQUIRED_KEY, isOrderCancellable } from '../shared/order-lifecycle';
 import { refuseFields } from '../shared/forms/invalid-fields';
 import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
+import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 
 /** The cancellation reason's field (QA D1098), marked when it is refused. */
 const CANCEL_REASON_ID = 'imaging-cancel-reason';
@@ -107,6 +108,7 @@ const ORDER_FIELD_LABELS: Readonly<Record<string, string>> = {
   selector: 'app-imaging',
   standalone: true,
   imports: [
+    DateTimePipe,
     SubmitGuardDirective,
     ModalDialogDirective,
     ServerTimePipe,

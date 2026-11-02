@@ -17,6 +17,7 @@ import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 interface EditableRow {
   domain: string;
   actions: string;
@@ -28,6 +29,7 @@ interface EditableRow {
   selector: 'app-gov-matrix-tab',
   standalone: true,
   imports: [
+    DateTimePipe,
     SubmitGuardDirective,
     ModalDialogDirective,
     ServerTimePipe,

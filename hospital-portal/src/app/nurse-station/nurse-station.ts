@@ -99,6 +99,7 @@ import { refusalReason } from '../shared/refusal-reason';
 import { ReasonDialogComponent } from '../shared/reason-dialog/reason-dialog.component';
 import { MarDoseHistoryComponent } from './mar-dose-history/mar-dose-history.component';
 import { earlyDoseDialogKeys, earlyDoseRefusal } from './early-dose';
+import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 type FilterMode = 'me' | 'unit' | 'all';
 type SectionType =
   | 'vitals'
@@ -125,6 +126,7 @@ export function localInputToUtcIso(value: string | undefined | null): string | u
   selector: 'app-nurse-station',
   standalone: true,
   imports: [
+    DateTimePipe,
     SubmitGuardDirective,
     ModalDialogDirective,
     MedicationRoutePipe,
@@ -779,6 +781,31 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
     }));
   }
 
+  /**
+   * Whether the vitals dialog holds at least one answer (the oxygen box is a
+   * yes/no answered by leaving it unticked, so it is not one).
+   */
+  vitalsHasReading(): boolean {
+    return Object.entries(this.vitalsForm()).some(
+      ([field, v]) => field !== 'onOxygen' && v !== undefined && v !== '',
+    );
+  }
+
+  /**
+   * QA D1330 (D1256 class, round 29): why "Enregistrer les signes vitaux"
+   * refuses, for the submit guard — shown under the button and under
+   * Température, as triage does; it was a toast alone with nothing marked.
+   */
+  vitalsBlockReason(): string | false {
+    if (this.vitalsHasReading()) return false;
+    return this.translate.instant('NURSE.TOAST.VITALS_REQUIRED') as string;
+  }
+
+  /** The field the vitals guard marks while the dialog is empty. */
+  vitalsGuardFieldIds(): string[] {
+    return this.vitalsHasReading() ? [] : [VITAL_FIELD_IDS.temperatureCelsius];
+  }
+
   submitVitals(): void {
     const target = this.vitalsCaptureFor();
     if (!target) return;
@@ -787,9 +814,15 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
     // It is not a reading, so it alone does not make the set "not empty".
     const { onOxygen, ...readings } = this.vitalsForm();
     const form: NurseVitalCaptureRequest = { ...readings, onOxygen: onOxygen === true };
-    const hasAtLeastOne = Object.values(readings).some((v) => v !== undefined && v !== '');
-    if (!hasAtLeastOne) {
-      this.toast.error(this.translate.instant('NURSE.TOAST.VITALS_REQUIRED'));
+    if (!this.vitalsHasReading()) {
+      // QA D1330 (D1256 class, round 29): refused inline, Température marked,
+      // as triage does (the submit guard stops the click first; this is the
+      // same refusal for a caller that reaches the method another way).
+      refuseFields(
+        this.host.nativeElement,
+        [{ id: VITAL_FIELD_IDS.temperatureCelsius, message: this.vitalsBlockReason() || '' }],
+        Object.values(VITAL_FIELD_IDS),
+      );
       return;
     }
     // QA D1306 class (round 28, found by #1027): an implausible reading was

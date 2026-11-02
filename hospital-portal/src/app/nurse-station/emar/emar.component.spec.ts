@@ -14,6 +14,7 @@ import { ToastService } from '../../core/toast.service';
 import { mouseClick } from '../../testing/mouse-click';
 import { reasonDialog } from '../../shared/reason-dialog/reason-dialog.testing';
 import { installFocusRescue, uninstallFocusRescue } from '../../shared/a11y/focus-rescue';
+import { expectEmptySubmitRefusal } from '../../testing/form-refusal-behaviour';
 
 describe('EmarComponent (P1 #8 — five-rights barcode-scan loop)', () => {
   let fixture: ComponentFixture<EmarComponent>;
@@ -245,6 +246,40 @@ describe('EmarComponent (P1 #8 — five-rights barcode-scan loop)', () => {
       routeScanValue: 'PO',
     });
     expect(toastSpy.success).toHaveBeenCalled();
+  });
+
+  describe('QA D1329 (round 29): the five-rights entries are starred, required and marked one by one', () => {
+    function openTask(): void {
+      nurseSpy.getMedicationMAR.and.returnValue(of([sampleTask]));
+      document.body.appendChild(fixture.nativeElement);
+      fixture.detectChanges();
+      component['selectTask'](sampleTask);
+      fixture.detectChanges();
+    }
+    afterEach(() => (fixture.nativeElement as HTMLElement).remove());
+
+    it('an empty press marks all four, each starred, and sends nothing', () => {
+      openTask();
+      const marked = expectEmptySubmitRefusal(fixture, {
+        button: '[data-testid="emar-verify"]',
+        sent: nurseSpy.verifyMedication,
+      });
+      expect(marked).toEqual(['emar-patient-scan', 'emar-med-scan', 'emar-dose', 'emar-route']);
+    });
+
+    it('with the patient scanned, the refusal names and marks only the three blank entries', () => {
+      openTask();
+      const patient = root().querySelector<HTMLInputElement>('#emar-patient-scan')!;
+      patient.value = 'CHW';
+      patient.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      const marked = expectEmptySubmitRefusal(fixture, {
+        button: '[data-testid="emar-verify"]',
+        notMarked: ['emar-patient-scan'],
+        sent: nurseSpy.verifyMedication,
+      });
+      expect(marked).toEqual(['emar-med-scan', 'emar-dose', 'emar-route']);
+    });
   });
 
   it('QA D1025: choosing a dose prefills neither the dose nor the route the nurse must confirm', () => {

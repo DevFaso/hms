@@ -8,8 +8,7 @@
       <div class="header-meta">
         <span class="material-symbols-outlined">schedule</span>
         <span
-          >{{ 'SUPER_ADMIN.AS_OF' | translate }}
-          {{ generatedAt() | serverTime | date: 'medium' }}</span
+          >{{ 'SUPER_ADMIN.AS_OF' | translate }} {{ generatedAt() | serverTime | dateTime }}</span
         >
       </div>
     }

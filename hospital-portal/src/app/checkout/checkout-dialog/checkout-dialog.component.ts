@@ -33,10 +33,12 @@ import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
 
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
 @Component({
   selector: 'app-checkout-dialog',
   standalone: true,
   imports: [
+    DateTimePipe,
     SubmitGuardDirective,
     ModalDialogDirective,
     ServerTimePipe,

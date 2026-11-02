@@ -109,7 +109,7 @@
           @for (l of logs(); track l.eventTimestamp + l.userName) {
             <tr class="data-row">
               <td class="time-cell">
-                {{ l.eventTimestamp ? (l.eventTimestamp | serverTime | date: 'medium') : '--' }}
+                {{ l.eventTimestamp ? (l.eventTimestamp | serverTime | dateTime) : '--' }}
               </td>
               <td>
                 <div class="cell-primary">{{ l.userName || '--' }}</div>

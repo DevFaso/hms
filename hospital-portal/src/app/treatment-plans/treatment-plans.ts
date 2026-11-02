@@ -30,7 +30,7 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { hasValue, missingRequiredMessage } from '../shared/required-fields';
 import { refuseFields } from '../shared/forms/invalid-fields';
-import { labelledRefusalReason } from '../shared/refusal-reason';
+import { labelledRefusalReason, refusedFieldReasons } from '../shared/refusal-reason';
 import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { AuthService } from '../auth/auth.service';
@@ -85,6 +85,10 @@ export class TreatmentPlansComponent implements OnInit {
 
   hospitals = signal<HospitalResponse[]>([]);
   staffList = signal<StaffResponse[]>([]);
+  /** Every staff row of the scope, the caller's own included whatever their role. */
+  private readonly allStaff = signal<StaffResponse[]>([]);
+  /** The author named by the plan being edited, when it is not in the staff list. */
+  private editAuthorName = '';
 
   // Patient picker
   patientQuery = signal('');
@@ -109,9 +113,10 @@ export class TreatmentPlansComponent implements OnInit {
 
     this.load();
     this.loadAssignedHospitals();
-    this.staffService
-      .list()
-      .subscribe((s) => this.staffList.set((s ?? []).filter(isClinicalProvider)));
+    this.staffService.list().subscribe((s) => {
+      this.allStaff.set(s ?? []);
+      this.staffList.set((s ?? []).filter(isClinicalProvider));
+    });
     this.initPatientSearch();
   }
 
@@ -230,6 +235,37 @@ export class TreatmentPlansComponent implements OnInit {
     return ((p.firstName?.[0] ?? '') + (p.lastName?.[0] ?? '')).toUpperCase() || '?';
   }
 
+  /**
+   * QA D1332 (round 29, user decision): a treatment plan's author is the
+   * signed-in clinician, as real hospitals record it. The server refuses any
+   * other author ("you can only act in your own name") unless the caller is a
+   * super-admin, so only a super-admin is offered the staff list; everyone
+   * else sees their own name, read-only, and it is sent for them.
+   */
+  get authorChoosable(): boolean {
+    return this.roleContext.isSuperAdmin();
+  }
+
+  /** The caller's own staff row at the form's hospital, or '' when they have none there. */
+  ownAuthorStaffId(): string {
+    const userId = this.auth.getUserProfile()?.id;
+    if (!userId) return '';
+    const hospitalId = this.form.hospitalId;
+    return (
+      this.allStaff().find(
+        (st) => st.userId === userId && (!hospitalId || st.hospitalId === hospitalId),
+      )?.id ?? ''
+    );
+  }
+
+  /** The author shown read-only: the plan's on an edit, the caller on a create. */
+  authorDisplayName(): string {
+    const id = this.editing() ? this.form.authorStaffId : this.ownAuthorStaffId();
+    const row = this.allStaff().find((st) => st.id === id);
+    if (row) return row.name;
+    return this.editing() ? this.editAuthorName : '';
+  }
+
   openCreate(): void {
     this.form = this.emptyForm();
     this.editing.set(false);
@@ -264,6 +300,7 @@ export class TreatmentPlansComponent implements OnInit {
       status: p.status ?? 'DRAFT',
     };
     this.editId = p.id;
+    this.editAuthorName = p.authorStaffName ?? '';
     this.selectedPatient.set(null);
     this.patientQuery.set('');
     this.editing.set(true);
@@ -290,7 +327,24 @@ export class TreatmentPlansComponent implements OnInit {
     problemStatement: 'tp-problem',
   };
 
+  /**
+   * The control of each required field as rendered: the author is the staff
+   * select for a super-admin, the read-only name of the caller otherwise (QA D1332).
+   */
+  private fieldIds(): Readonly<Record<string, string>> {
+    return {
+      ...TreatmentPlansComponent.FIELD_IDS,
+      authorStaffId: this.authorChoosable ? 'tp-authorStaff' : 'tp-authorSelf',
+    };
+  }
+
   submitForm(): void {
+    // QA D1332: on a create the author is the caller (the staff list arrives
+    // after the dialog may have opened, so it is read now); an edit keeps the
+    // plan's author, as the server requires.
+    if (!this.editing() && !this.authorChoosable) {
+      this.form.authorStaffId = this.ownAuthorStaffId();
+    }
     // QA D890: an empty form was posted and answered with a generic toast.
     const missing = missingRequiredMessage(this.translate, [
       { labelKey: 'PATIENTS.PATIENT', value: this.form.patientId },
@@ -298,11 +352,12 @@ export class TreatmentPlansComponent implements OnInit {
       { labelKey: 'TREATMENT.AUTHOR_STAFF', value: this.form.authorStaffId },
       { labelKey: 'TREATMENT.PROBLEM_STATEMENT', value: this.form.problemStatement },
     ]);
-    const allIds = Object.values(TreatmentPlansComponent.FIELD_IDS);
+    const fieldIds = this.fieldIds();
+    const allIds = Object.values(fieldIds);
     if (missing) {
       // QA D1306 (round 28): the blank fields are marked, not only a toast.
       const values = this.form as unknown as Record<string, unknown>;
-      const blankIds = Object.entries(TreatmentPlansComponent.FIELD_IDS)
+      const blankIds = Object.entries(fieldIds)
         .filter(([field]) => !hasValue(values[field]))
         .map(([, id]) => id);
       refuseFields(
@@ -331,6 +386,16 @@ export class TreatmentPlansComponent implements OnInit {
         this.load();
       },
       error: (err: unknown) => {
+        // D1256 class (round 29): the fields a 400 names are marked too, each
+        // with the server's own reason, not only listed in the toast.
+        const refused = refusedFieldReasons(err, fieldIds);
+        if (refused.length > 0) {
+          refuseFields(
+            this.host.nativeElement,
+            refused.map(([id, message]) => ({ id, message })),
+            allIds,
+          );
+        }
         this.toast.error(
           labelledRefusalReason(err, this.translate, TreatmentPlansComponent.FIELD_LABELS) ??
             this.translate.instant('TREATMENT.SAVE_FAILED'),

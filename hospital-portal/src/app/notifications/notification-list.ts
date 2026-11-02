@@ -7,11 +7,12 @@ import { ToastService } from '../core/toast.service';
 import { Notification, NotificationService } from '../services/notification.service';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { refusalReason } from '../shared/refusal-reason';
+import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 
 @Component({
   selector: 'app-notification-list',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, RouterLink, TranslateModule],
+  imports: [DateTimePipe, ServerTimePipe, CommonModule, RouterLink, TranslateModule],
   templateUrl: './notification-list.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './notification-list.scss',

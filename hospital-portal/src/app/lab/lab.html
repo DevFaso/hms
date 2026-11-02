@@ -149,9 +149,7 @@
                 }
               </td>
               <td class="date-cell">
-                {{
-                  order.orderDatetime ? (order.orderDatetime | serverTime | date: 'medium') : '—'
-                }}
+                {{ order.orderDatetime ? (order.orderDatetime | serverTime | dateTime) : '—' }}
               </td>
               <td>
                 <span class="status-badge" [class]="getStatusClass(order.status)">{{
@@ -274,7 +272,7 @@
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'LAB.ORDER_DATE' | translate }}</span
-              ><span class="field-value">{{ o.orderDatetime | serverTime | date: 'medium' }}</span>
+              ><span class="field-value">{{ o.orderDatetime | serverTime | dateTime }}</span>
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span
@@ -334,9 +332,7 @@
               <p>
                 {{ rs.rejectionReason || '—' }}
                 @if (rs.rejectedAt) {
-                  <span class="cell-secondary">
-                    — {{ rs.rejectedAt | serverTime | date: 'medium' }}</span
-                  >
+                  <span class="cell-secondary"> — {{ rs.rejectedAt | serverTime | dateTime }}</span>
                 }
               </p>
             </div>

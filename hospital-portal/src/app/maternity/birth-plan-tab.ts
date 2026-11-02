@@ -20,12 +20,14 @@ import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { refusalReason } from '../shared/refusal-reason';
 import { ReasonDialogComponent } from '../shared/reason-dialog/reason-dialog.component';
+import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 type BirthPlanFilter = 'all' | 'pending-review' | 'reviewed';
 
 @Component({
   selector: 'app-birth-plan-tab',
   standalone: true,
   imports: [
+    DateTimePipe,
     ReasonDialogComponent,
     SubmitGuardDirective,
     ModalDialogDirective,

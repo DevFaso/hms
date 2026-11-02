@@ -41,6 +41,7 @@ import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { blankFields, refuseFields } from '../shared/forms/invalid-fields';
+import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 type Worklist = 'all' | 'pending-consent' | ProcedureOrderStatus;
 
 /**
@@ -62,6 +63,7 @@ const PAST_DATE_KEY = 'PROCEDURES.PAST_DATE';
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    DateTimePipe,
     InlineDiscardAskComponent,
     InlineSubFormDirective,
     SubmitGuardDirective,

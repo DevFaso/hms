@@ -70,10 +70,19 @@ interface ActivityRow {
 }
 
 import { EnumLabelService } from '../core/enum-label.service';
+import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 @Component({
   selector: 'app-super-admin',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, RouterLink, TranslateModule, DatePipe, EnumLabelPipe],
+  imports: [
+    DateTimePipe,
+    ServerTimePipe,
+    CommonModule,
+    RouterLink,
+    TranslateModule,
+    DatePipe,
+    EnumLabelPipe,
+  ],
   templateUrl: './super-admin.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './super-admin.scss',

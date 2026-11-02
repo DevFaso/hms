@@ -45,6 +45,7 @@ import { MeasurePipe } from '../../shared/pipes/measure.pipe';
 
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
+import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
 /**
  * D49: the order code the API sends is the order's UUID. Readers get its first
  * eight characters, enough to tell two orders apart on one screen.
@@ -87,6 +88,7 @@ export const ORDER_STATUSES_AWAITING_SPECIMEN: ReadonlySet<string> = new Set([
   selector: 'app-lab-results',
   standalone: true,
   imports: [
+    DateTimePipe,
     SubmitGuardDirective,
     MeasurePipe,
     LabCorrectionBadgeComponent,

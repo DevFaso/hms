@@ -412,18 +412,31 @@
         </div>
         <div class="form-row">
           <div class="field full-width">
-            <label for="tp-authorStaff">{{ 'TREATMENT.AUTHOR_STAFF' | translate }} *</label>
-            <select
-              required
-              id="tp-authorStaff"
-              [(ngModel)]="form.authorStaffId"
-              [title]="'TREATMENT.AUTHOR_STAFF' | translate"
-            >
-              <option value="">{{ 'TREATMENT.SELECT_STAFF' | translate }}</option>
-              @for (s of staffList(); track s.id) {
-                <option [value]="s.id">{{ s.name }}</option>
-              }
-            </select>
+            <!-- QA D1332: the author is the signed-in clinician; only a
+                 super-admin (whom the server lets name another) picks one. -->
+            @if (authorChoosable) {
+              <label for="tp-authorStaff">{{ 'TREATMENT.AUTHOR_STAFF' | translate }} *</label>
+              <select
+                required
+                id="tp-authorStaff"
+                [(ngModel)]="form.authorStaffId"
+                [title]="'TREATMENT.AUTHOR_STAFF' | translate"
+              >
+                <option value="">{{ 'TREATMENT.SELECT_STAFF' | translate }}</option>
+                @for (s of staffList(); track s.id) {
+                  <option [value]="s.id">{{ s.name }}</option>
+                }
+              </select>
+            } @else {
+              <label for="tp-authorSelf">{{ 'TREATMENT.AUTHOR_STAFF' | translate }}</label>
+              <input
+                id="tp-authorSelf"
+                type="text"
+                readonly
+                data-testid="tp-author-self"
+                [value]="authorDisplayName() || '—'"
+              />
+            }
           </div>
         </div>
         <div class="form-row">
@@ -471,6 +484,7 @@
           appSubmitGuard
           submitGuardRequired
           class="btn-primary"
+          data-testid="tp-submit"
           (click)="submitForm()"
           [disabled]="saving()"
         >

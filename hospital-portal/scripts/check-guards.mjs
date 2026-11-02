@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * The round-16 regression gates (and the round-17 person-search and translate-params gates, and
- * the round-18 required-refusal gate) in one
+ * the round-18 required-refusal gate, the round-29 form-behaviour gate) in one
  * process (`npm run guards`).
  *
  * Each gate can run on its own (`node scripts/check-a11y-dialogs.mjs`), but CI
@@ -28,6 +28,7 @@ import { gate as fragments } from './check-uuid-fragments.mjs';
 import { gate as personSearch } from './check-person-search.mjs';
 import { gate as translateParams } from './check-translate-params.mjs';
 import { gate as requiredRefusal } from './check-required-refusal.mjs';
+import { gate as formBehaviour } from './check-form-behaviour.mjs';
 
 const argv = process.argv.slice(2);
 // The `.ts` sources are read once and handed to the template loader, so a
@@ -46,6 +47,7 @@ for (const gate of [
   personSearch,
   translateParams,
   requiredRefusal,
+  formBehaviour,
 ]) {
   if (!evaluateGate(gate, argv, ctx)) failed++;
 }

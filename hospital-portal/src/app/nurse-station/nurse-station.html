@@ -609,7 +609,7 @@
                     }
                     <!-- QA D1075: the report time, never the completion time. -->
                     <span [attr.data-testid]="'handoff-reported-at-' + h.id">{{
-                      handoffReportedAt(h) | serverTime | date: 'medium'
+                      handoffReportedAt(h) | serverTime | dateTime
                     }}</span>
                   </span>
                   @if (h.completedAt) {
@@ -620,7 +620,7 @@
                       <span class="material-symbols-outlined">check_circle</span>
                       {{ 'NURSE.HANDOFF_COMPLETED_BY' | translate }}
                       {{ h.completedByName || '—' }} ·
-                      {{ h.completedAt | serverTime | date: 'medium' }}
+                      {{ h.completedAt | serverTime | dateTime }}
                     </span>
                   } @else if (canCompleteHandoff(h)) {
                     <!-- QA D776: only the recipient completes (server rule) -->
@@ -1453,8 +1453,11 @@
         </button>
         <button
           class="modal-btn modal-confirm"
+          data-testid="vitals-save"
           (click)="submitVitals()"
           [disabled]="vitalsCapturing()"
+          [appSubmitGuard]="vitalsBlockReason()"
+          [submitGuardFields]="vitalsGuardFieldIds()"
         >
           @if (vitalsCapturing()) {
             <span class="material-symbols-outlined">hourglass_empty</span>
