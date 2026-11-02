@@ -101,7 +101,7 @@ test('QA D1243: the copy of the server classification is the server file', () =>
   }
   const java = readFileSync(SERVER, 'utf8');
   assert.match(java, /MUST_REMOVE_KEY = "stockTransaction\.writeOff\.mustRemove"/);
-  const writeOff = javaSetCodes(java, 'WRITE_OFF');
+  const writeOff = javaSetCodes(java, 'WRITE_OFF_CODES');
   for (const code of SERVER_WRITE_OFF_CODES) assert.ok(writeOff.includes(code), code);
   assert.deepEqual(javaSetCodes(java, 'TWO_WAY').sort(), [...SERVER_TWO_WAY_CODES].sort());
 });
