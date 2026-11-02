@@ -98,9 +98,17 @@ public class AppointmentRequestDTO {
         }
         org.springframework.security.core.Authentication caller =
             org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
-        return caller != null && !caller.getAuthorities().isEmpty() && caller.getAuthorities().stream()
-            .allMatch(a -> "ROLE_PATIENT".equals(a.getAuthority()));
+        if (caller == null) {
+            return false;
+        }
+        // Required for a staff booker only; any other caller (a patient, an OIDC token carrying
+        // scopes beside its role) books for themselves, which the service resolves.
+        return caller.getAuthorities().stream().noneMatch(a -> STAFF_BOOKER_ROLES.contains(a.getAuthority()));
     }
+
+    /** The staff roles of {@code POST /appointments} (AppointmentController.APPOINTMENT_BOOK_ROLES, less PATIENT). */
+    private static final java.util.Set<String> STAFF_BOOKER_ROLES = java.util.Set.of("ROLE_SUPER_ADMIN",
+        "ROLE_HOSPITAL_ADMIN", "ROLE_STAFF", "ROLE_RECEPTIONIST", "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE");
 
     private static boolean hasText(String value) {
         return value != null && !value.isBlank();

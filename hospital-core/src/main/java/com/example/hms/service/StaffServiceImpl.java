@@ -178,7 +178,7 @@ public class StaffServiceImpl implements StaffService {
     @Override
     @Transactional
     public StaffResponseDTO createStaff(StaffRequestDTO dto, Locale locale) {
-        validateBaseStaffRequirements(dto, locale);
+        validateBaseStaffRequirements(dto);
 
         User user = resolveStaffUser(dto.getUserEmail());
 
@@ -212,7 +212,7 @@ public class StaffServiceImpl implements StaffService {
                     getLocalizedMessage("staff.assignment.required", new Object[]{dto.getUserEmail(), dto.getHospitalName()}, locale)));
         }
 
-        validateLicenseNumber(dto, locale);
+        validateLicenseNumber(dto);
         validateRoleSpecificRequirements(dto, dto.getRoleName(), locale);
 
         Staff staff = staffMapper.toStaff(dto, user, hospital, department, assignment);
@@ -228,7 +228,7 @@ public class StaffServiceImpl implements StaffService {
     @Transactional
     public StaffResponseDTO updateStaff(UUID id, StaffRequestDTO dto, Locale locale) {
         Staff existingStaff = findStaffOrThrow(id, locale);
-        validateBaseStaffRequirements(dto, locale);
+        validateBaseStaffRequirements(dto);
 
         User user = resolveStaffUser(dto.getUserEmail());
 
@@ -270,7 +270,7 @@ public class StaffServiceImpl implements StaffService {
         boolean licenceChanged = (existingLic == null && newLic != null)
                 || (existingLic != null && !existingLic.equals(newLic));
         if (licenceChanged) {
-            validateLicenseNumber(dto, locale);
+            validateLicenseNumber(dto);
         }
 
         validateRoleSpecificRequirements(dto, dto.getRoleName(), locale);
@@ -407,7 +407,7 @@ public class StaffServiceImpl implements StaffService {
             .orElseThrow(() -> new ResourceNotFoundException("user.notFoundByEmail", value));
     }
 
-    private void validateBaseStaffRequirements(StaffRequestDTO dto, Locale locale) {
+    private void validateBaseStaffRequirements(StaffRequestDTO dto) {
         // QA round 29 sweep (D1318 class): the three named in one answer, not one per request.
         com.example.hms.exception.RequiredFields.check()
             .requireValue(dto.getUserEmail(), "userEmail", "staff.user.required")
@@ -488,7 +488,7 @@ public class StaffServiceImpl implements StaffService {
         "LAB_TECHNICIAN", "LABORATORY_SCIENTIST"
     );
 
-    private void validateLicenseNumber(StaffRequestDTO dto, Locale locale) {
+    private void validateLicenseNumber(StaffRequestDTO dto) {
         String jobTitle = dto.getJobTitle();
         // Only clinical roles require a license number
         if (jobTitle == null || !CLINICAL_JOB_TITLES.contains(jobTitle.toUpperCase())) {
@@ -496,9 +496,8 @@ public class StaffServiceImpl implements StaffService {
         }
         String licenseNumber = dto.getLicenseNumber();
         if (licenseNumber == null || licenseNumber.isBlank()) {
-            throw new BusinessRuleException(
-                getLocalizedMessage("staff.license.required", null, locale)
-            );
+            // QA round 29 sweep: named, so the staff form marks the licence number.
+            throw new com.example.hms.exception.FieldBusinessException("licenseNumber", "staff.license.required");
         }
         if (staffRepository.existsByLicenseNumber(licenseNumber)) {
             throw new BusinessRuleException(
