@@ -20,6 +20,7 @@ import {
 import { ToastService } from '../core/toast.service';
 import fr from '../../assets/i18n/fr.json';
 import { isSubmitBlocked } from '../shared/forms/submit-guard.testing';
+import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 
 function org(
   id: string,
@@ -440,20 +441,20 @@ describe('PlatformComponent', () => {
       expect(platform.unlinkHospital).not.toHaveBeenCalled();
     });
 
-    it('asks before the hard delete, and does nothing when the user declines', () => {
-      const confirm = spyOn(window, 'confirm').and.returnValue(false);
+    it('asks before the hard delete, and does nothing when the user declines', async () => {
+      const confirm = spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(false);
 
-      c.unlinkHospital(row);
+      await c.unlinkHospital(row);
 
       expect(confirm).toHaveBeenCalled();
       expect(platform.unlinkHospital).not.toHaveBeenCalled();
     });
 
-    it('deletes after confirmation and updates the count', () => {
-      spyOn(window, 'confirm').and.returnValue(true);
+    it('deletes after confirmation and updates the count', async () => {
+      spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
       platform.unlinkHospital.and.returnValue(of(undefined));
 
-      c.unlinkHospital(row);
+      await c.unlinkHospital(row);
 
       expect(platform.unlinkHospital).toHaveBeenCalledWith('h1', 's1');
       expect(c.hospitalRows()[0].link).toBeNull();

@@ -42,10 +42,13 @@ let nextId = 0;
         (keydown.escape)="$event.stopPropagation()"
         data-testid="confirm-dialog"
       >
-        <h2 [id]="titleId">{{ titleKey() | translate }}</h2>
+        <h2 [id]="titleId">{{ titleKey() | translate: params() ?? {} }}</h2>
         <div class="dialog-body">
+          @if (messageText()) {
+            <p>{{ messageText() }}</p>
+          }
           @if (messageKey()) {
-            <p>{{ messageKey()! | translate }}</p>
+            <p>{{ messageKey()! | translate: params() ?? {} }}</p>
           }
           <ng-content />
         </div>
@@ -76,6 +79,10 @@ let nextId = 0;
 export class ConfirmDialogComponent {
   readonly titleKey = input.required<string>();
   readonly messageKey = input<string | null>(null);
+  /** An already-translated sentence (QA D1229: a server's refusal shown before the question). */
+  readonly messageText = input<string | null>(null);
+  /** Parameters of the title and the message (QA D1229: a hospital name, a count). */
+  readonly params = input<Record<string, unknown> | null>(null);
   readonly confirmKey = input('COMMON.CONFIRM');
   /** QA D1219 (round 23): never the same label as the confirm button. */
   readonly dismissKey = input('COMMON.CANCEL');

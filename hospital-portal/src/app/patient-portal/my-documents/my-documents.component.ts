@@ -14,6 +14,7 @@ import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 import { blobRefusalReason } from '../../shared/blob-refusal';
 import { refusalReason } from '../../shared/refusal-reason';
+import { ConfirmService } from '../../shared/confirm-dialog/confirm.service';
 /**
  * The largest file the upload endpoint accepts: spring.servlet.multipart
  * max-file-size is 10MB (the backend is being aligned on this one number).
@@ -53,6 +54,8 @@ export class MyDocumentsComponent implements OnInit {
   private readonly portalService = inject(PatientPortalService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  /** QA D1229: the in-app confirmation, never the browser's. */
+  private readonly confirmService = inject(ConfirmService);
 
   readonly documentTypes = DOCUMENT_TYPES;
 
@@ -185,8 +188,14 @@ export class MyDocumentsComponent implements OnInit {
     });
   }
 
-  deleteDocument(docId: string): void {
-    if (!confirm(this.translate.instant('PORTAL.DOCUMENTS.DELETE_CONFIRM'))) return;
+  async deleteDocument(docId: string): Promise<void> {
+    if (
+      !(await this.confirmService.ask({
+        titleKey: 'PORTAL.DOCUMENTS.DELETE_CONFIRM',
+        confirmKey: 'COMMON.DELETE',
+      }))
+    )
+      return;
     this.deleting.set(docId);
     this.portalService.deleteDocument(docId).subscribe({
       next: () => {

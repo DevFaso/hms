@@ -19,6 +19,26 @@ export interface AdministrationWitnessCandidate {
   displayName: string;
 }
 
+/**
+ * QA D1225 (round 24): one closed dose of a MAR row, read back with WHY —
+ * the hold or refusal reason, the early-dose reason (QA D1210) and the
+ * five-rights override reason the administer call required.
+ */
+export interface MarDoseHistoryEntry {
+  id: string;
+  /** GIVEN, HELD, REFUSED or MISSED. */
+  status: string;
+  scheduledTime?: string | null;
+  /** When the outcome was recorded. */
+  recordedAt?: string | null;
+  reason?: string | null;
+  /** A GIVEN dose recorded before the minimum interval, with a reason. */
+  givenEarly?: boolean;
+  overrideReason?: string | null;
+  administeredBy?: string | null;
+  witnessName?: string | null;
+}
+
 export interface NurseMedicationTask {
   id: string;
   patientId: string;
@@ -33,6 +53,14 @@ export interface NurseMedicationTask {
   status: string;
   /** QA D929: GIVEN, HELD, REFUSED or MISSED for the last closed dose; null when none. */
   lastOutcome?: string | null;
+  /** QA D1225: when the last closed dose was recorded. */
+  lastOutcomeAt?: string | null;
+  /** QA D1225: the reason on the last closed dose (held, refused or given early). */
+  lastReason?: string | null;
+  /** QA D1225: the last dose was given early, with a reason. */
+  lastGivenEarly?: boolean;
+  /** QA D1225: the recent closed doses of this row, newest first. */
+  doseHistory?: MarDoseHistoryEntry[];
   /** QA D922: a controlled substance (prescriber's tick or the catalogue's flag). */
   controlledSubstance?: boolean;
   /**

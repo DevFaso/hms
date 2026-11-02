@@ -129,7 +129,17 @@
     }
 
     @if (selected(); as culture) {
-      <div class="detail-panel" data-testid="culture-detail">
+      <!-- QA D1230 class (round 24): the detail closes on Escape as on its
+           close button, asks before dropping a typed edit, and gives the
+           keyboard back to the culture that opened it. -->
+      <div
+        class="detail-panel"
+        data-testid="culture-detail"
+        appInlineSubForm
+        #detailForm="inlineSubForm"
+        (dismissed)="closeDetail()"
+      >
+        <app-inline-discard-ask [form]="detailForm" />
         <div class="detail-header">
           <div>
             <h2>{{ culture.labTestName || ('MICRO.CULTURE' | translate) }}</h2>

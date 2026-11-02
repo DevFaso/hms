@@ -31,6 +31,8 @@ import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
 import { serverInstant } from '../shared/date-utils';
 import { refusalReason } from '../shared/refusal-reason';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { captureOpener, restoreFocus } from '../shared/a11y/focus-return';
+import { FocusOnRenderDirective } from '../shared/a11y/focus-on-render.directive';
 /** Maps each role to the set of roles it is allowed to message. */
 const ALLOWED_MESSAGE_TARGETS: Record<string, Set<string>> = {
   ROLE_SUPER_ADMIN: new Set([
@@ -157,7 +159,13 @@ function clinicianTarget(c: MessageableClinician): ChatTarget {
 @Component({
   selector: 'app-chat',
   standalone: true,
-  imports: [SubmitGuardDirective, FormsModule, TranslateModule, RoleLabelPipe],
+  imports: [
+    SubmitGuardDirective,
+    FormsModule,
+    TranslateModule,
+    RoleLabelPipe,
+    FocusOnRenderDirective,
+  ],
   templateUrl: './chat.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './chat.scss',
@@ -525,15 +533,27 @@ export class ChatComponent implements OnInit, OnDestroy {
   }
 
   /* ── New Conversation actions ── */
+  /** QA D1230: the control that opened the panel, given the keyboard back on close. */
+  private newConversationOpener: HTMLElement | null = null;
+
   openNewConversation(): void {
+    this.newConversationOpener = captureOpener();
     this.showNewConversation.set(true);
     this.userSearchTerm.set('');
     this.availableUsers.set([]);
     this.loadUsers();
   }
 
+  /**
+   * QA D1230 (round 24): Fermer and Escape close the panel and give the
+   * keyboard back to "Nouvelle conversation" (Escape did nothing and focus
+   * was left on the message area).
+   */
   closeNewConversation(): void {
     this.showNewConversation.set(false);
+    const opener = this.newConversationOpener;
+    this.newConversationOpener = null;
+    setTimeout(() => restoreFocus(opener), 0);
   }
 
   loadUsers(): void {

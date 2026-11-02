@@ -116,6 +116,38 @@ export class ProfileComponent implements OnInit {
     return !!u && !this.ssoSession() && typed !== '' && typed !== (u.email ?? '').toLowerCase();
   });
 
+  /**
+   * QA D1228 (round 24): the reader emptied the e-mail field of an account
+   * that has one. An account keeps its address (a blank field is "no
+   * change"), so the save said nothing and did nothing; the form now refuses
+   * on the field and says why.
+   */
+  emailCleared = computed(() => {
+    const u = this.user();
+    return (
+      !!u &&
+      !this.ssoSession() &&
+      !this.pendingEmail() &&
+      !!(u.email ?? '').trim() &&
+      (this.editForm().email ?? '').trim() === ''
+    );
+  });
+
+  /** QA D1228: the names or the phone differ from the account's. */
+  detailsChanged = computed(() => {
+    const u = this.user();
+    const data = this.editForm();
+    return (
+      !!u &&
+      ((data.firstName ?? '') !== (u.firstName ?? '') ||
+        (data.lastName ?? '') !== (u.lastName ?? '') ||
+        (data.phoneNumber ?? '') !== (u.phoneNumber ?? ''))
+    );
+  });
+
+  /** QA D1228: the only edit is an emptied e-mail: nothing can be saved. */
+  emailClearedOnly = computed(() => this.emailCleared() && !this.detailsChanged());
+
   /** The address waiting for its code, once the server has sent one. */
   pendingEmail = signal<string | null>(null);
   emailCode = signal('');
@@ -706,7 +738,11 @@ export class ProfileComponent implements OnInit {
 
   saveProfile(): void {
     const u = this.user();
-    if (!u || this.saving() || this.blankName()) return;
+    if (!u || this.saving() || this.blankName() || this.emailClearedOnly()) return;
+    if (this.emailCleared()) {
+      // QA D1228: the rest is saved; the reader is told the address stays.
+      this.toast.info(this.translate.instant('PROFILE.EMAIL_CANNOT_CLEAR'));
+    }
 
     const data = this.editForm();
     const emailChanged = this.emailChanged();
@@ -824,7 +860,9 @@ export class ProfileComponent implements OnInit {
     } else if (emailChanged) {
       this.requestEmailChange(newEmail, password);
     } else {
+      // QA D1228: a save that changes nothing says so, never nothing at all.
       this.saving.set(false);
+      this.toast.info(this.translate.instant('SUBMIT_GUARD.NO_CHANGES'));
     }
   }
 

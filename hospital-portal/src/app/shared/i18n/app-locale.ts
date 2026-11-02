@@ -1,4 +1,5 @@
 import type { TranslateService } from '@ngx-translate/core';
+import type { ConfirmService } from '../confirm-dialog/confirm.service';
 
 /**
  * The one place the UI language and the Intl/Angular locale are decided.
@@ -186,9 +187,14 @@ export function applyLanguage(lang: SupportedLang): boolean {
  * Reloading discards unsaved forms, so the user is asked first; a refusal
  * leaves everything as it was.
  */
-export function switchLanguage(lang: string, translate: TranslateService): boolean {
+export async function switchLanguage(
+  lang: string,
+  translate: TranslateService,
+  confirmService: ConfirmService,
+): Promise<boolean> {
   if (!isSupportedLang(lang) || lang === storedLang()) return false;
-  if (!window.confirm(translate.instant('COMMON.LANGUAGE_RELOAD_CONFIRM'))) return false;
+  // QA D1229: the in-app confirmation, in the reader's language, never the browser's.
+  if (!(await confirmService.ask({ titleKey: 'COMMON.LANGUAGE_RELOAD_CONFIRM' }))) return false;
   translate.use(lang);
   if (applyLanguage(lang)) window.location.reload();
   return true;

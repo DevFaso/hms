@@ -491,9 +491,15 @@
                       blankName() ||
                       (pendingEmail()
                         ? ('SUBMIT_GUARD.EMAIL_PENDING' | translate)
-                        : !formDirty() && ('SUBMIT_GUARD.NO_CHANGES' | translate))
+                        : emailClearedOnly()
+                          ? ('PROFILE.EMAIL_CANNOT_CLEAR' | translate)
+                          : !formDirty() && ('SUBMIT_GUARD.NO_CHANGES' | translate))
                     "
-                    [submitGuardFields]="['editFirstName', 'editLastName']"
+                    [submitGuardFields]="
+                      emailClearedOnly() && !blankName()
+                        ? ['editEmail']
+                        : ['editFirstName', 'editLastName']
+                    "
                   >
                     @if (saving()) {
                       <span class="material-symbols-outlined spinning">progress_activity</span>

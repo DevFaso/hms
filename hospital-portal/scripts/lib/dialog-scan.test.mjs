@@ -541,3 +541,39 @@ test('QA D1146 (round 21): an opener rendered only while its dialog is closed ca
   const other = hidden.replace('(click)="openBookingForm()"', '(click)="refresh()"');
   assert.deepEqual(scan(other, other + ts + ' refresh(): void { this.load(); }'), []);
 });
+
+test('QA D1230 (round 24): a panel with its own Close button closes on Escape', () => {
+  const chat = `@if (showNewConversation()) {
+    <div class="new-conv-panel">
+      <h3>{{ 'CHAT.NEW_CONVERSATION' | translate }}</h3>
+      <button class="btn-icon" (click)="closeNewConversation()">x</button>
+      <input type="text" />
+    </div>
+  }`;
+  assert.deepEqual(
+    scan(chat).map((f) => f.rule),
+    ['panel-escape'],
+  );
+  const fixed = chat.replace(
+    '<div class="new-conv-panel">',
+    '<div class="new-conv-panel" (keydown.escape)="closeNewConversation()">',
+  );
+  assert.deepEqual(scan(fixed), []);
+  const subForm = chat.replace(
+    '<div class="new-conv-panel">',
+    '<div class="new-conv-panel" appInlineSubForm (dismissed)="closeNewConversation()">',
+  );
+  assert.deepEqual(scan(subForm), []);
+  // A button closing a RECORD (an argument) is not the panel's close.
+  const recordClose = chat.replace('closeNewConversation()', 'closeRecall(recall)');
+  assert.deepEqual(scan(recordClose), []);
+  // A swallowing binding is no Escape handler.
+  const swallowed = chat.replace(
+    '<div class="new-conv-panel">',
+    '<div class="new-conv-panel" (keydown.escape)="$event.stopPropagation()">',
+  );
+  assert.deepEqual(
+    scan(swallowed).map((f) => f.rule),
+    ['panel-escape'],
+  );
+});

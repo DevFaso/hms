@@ -7,6 +7,7 @@ import { LabInventoryComponent } from './lab-inventory';
 import { AuthService } from '../../auth/auth.service';
 import { LabInventoryItemResponse } from '../../services/lab-instrument.service';
 import { PagedResponse } from '../../services/staff.service';
+import { ConfirmService } from '../../shared/confirm-dialog/confirm.service';
 
 function mockItem(overrides: Partial<LabInventoryItemResponse> = {}): LabInventoryItemResponse {
   return {
@@ -274,14 +275,14 @@ describe('LabInventoryComponent', () => {
     expect(component.saving()).toBeFalse();
   });
 
-  it('should deactivate inventory item', () => {
+  it('should deactivate inventory item', async () => {
     fixture.detectChanges();
     flushItems();
 
-    spyOn(globalThis, 'confirm').and.returnValue(true);
+    spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
 
     const item = component.items()[0];
-    component.deactivate(item);
+    await component.deactivate(item);
 
     const req = httpMock.expectOne(
       (r) => r.url.includes('/lab/inventory/item-1') && r.method === 'DELETE',
@@ -292,26 +293,26 @@ describe('LabInventoryComponent', () => {
     flushItems();
   });
 
-  it('should not deactivate if user cancels confirm', () => {
+  it('should not deactivate if user cancels confirm', async () => {
     fixture.detectChanges();
     flushItems();
 
-    spyOn(globalThis, 'confirm').and.returnValue(false);
+    spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(false);
 
     const item = component.items()[0];
-    component.deactivate(item);
+    await component.deactivate(item);
 
     // No HTTP request should fire
   });
 
-  it('should handle deactivate error', () => {
+  it('should handle deactivate error', async () => {
     fixture.detectChanges();
     flushItems();
 
-    spyOn(globalThis, 'confirm').and.returnValue(true);
+    spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
 
     const item = component.items()[0];
-    component.deactivate(item);
+    await component.deactivate(item);
 
     const req = httpMock.expectOne((r) => r.method === 'DELETE');
     req.error(new ProgressEvent('error'));

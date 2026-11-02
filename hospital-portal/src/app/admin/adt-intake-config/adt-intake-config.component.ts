@@ -29,6 +29,7 @@ import { EnumLabelService } from '../../core/enum-label.service';
 import { bareRole } from '../../core/role-token';
 import { refusalReason } from '../../shared/refusal-reason';
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+import { ConfirmService } from '../../shared/confirm-dialog/confirm.service';
 
 interface HospitalOption {
   id: string;
@@ -581,6 +582,8 @@ export class AdtIntakeConfigComponent implements OnInit, OnDestroy {
   private readonly referralService = inject(ReferralService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  /** QA D1229: the in-app confirmation, never the browser's. */
+  private readonly confirmService = inject(ConfirmService);
   private readonly enumLabels = inject(EnumLabelService);
 
   private readonly hospitalSearchSubject = new Subject<string>();
@@ -808,15 +811,14 @@ export class AdtIntakeConfigComponent implements OnInit, OnDestroy {
     });
   }
 
-  protected remove(cfg: AdtIntakeConfig): void {
-    // ToastService and globalThis.confirm both render their input
-    // verbatim; resolve the i18n key via TranslateService first so the
-    // admin page stays localizable. Caught on PR #360 Copilot review
-    // (High + Medium).
-    const message = this.translate.instant('ADT_INTAKE.CONFIRM_DELETE', {
-      hospital: cfg.hospitalName || cfg.hospitalId,
+  protected async remove(cfg: AdtIntakeConfig): Promise<void> {
+    // QA D1229: the in-app confirmation (localized, keyboard contract), never
+    // the browser's own confirm.
+    const confirmed = await this.confirmService.ask({
+      titleKey: 'ADT_INTAKE.CONFIRM_DELETE',
+      params: { hospital: cfg.hospitalName || cfg.hospitalId },
+      confirmKey: 'COMMON.DELETE',
     });
-    const confirmed = globalThis.confirm(message);
     if (!confirmed) return;
     this.service.remove(cfg.id).subscribe({
       next: () => {

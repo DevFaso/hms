@@ -4,6 +4,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TranslateModule } from '@ngx-translate/core';
 import { ToastService } from '../core/toast.service';
 import { FeatureFlagsComponent } from './feature-flags';
+import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 
 describe('FeatureFlagsComponent', () => {
   let component: FeatureFlagsComponent;
@@ -27,15 +28,15 @@ describe('FeatureFlagsComponent', () => {
 
   const flag = { key: 'beta.x', enabled: true, editing: false, description: '' };
 
-  it('does not delete an override the admin did not confirm (D126)', () => {
-    spyOn(globalThis, 'confirm').and.returnValue(false);
-    component.removeOverride(flag);
+  it('does not delete an override the admin did not confirm (D126)', async () => {
+    spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(false);
+    await component.removeOverride(flag);
     httpMock.expectNone((r) => r.method === 'DELETE');
   });
 
-  it('deletes the override once confirmed', () => {
-    spyOn(globalThis, 'confirm').and.returnValue(true);
-    component.removeOverride(flag);
+  it('deletes the override once confirmed', async () => {
+    spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
+    await component.removeOverride(flag);
     httpMock.expectOne((r) => r.method === 'DELETE' && r.url === '/feature-flags/beta.x');
   });
 

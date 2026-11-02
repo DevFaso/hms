@@ -9,6 +9,7 @@ import { BillingService, BillingInvoiceResponse, InvoicePage } from '../services
 import { ToastService } from '../core/toast.service';
 import { PermissionService } from '../core/permission.service';
 import { RoleContextService } from '../core/role-context.service';
+import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 
 function mockInvoice(overrides: Partial<BillingInvoiceResponse> = {}): BillingInvoiceResponse {
   return {
@@ -466,29 +467,29 @@ describe('BillingComponent', () => {
     expect(mailButtons.length).toBe(1);
   });
 
-  it('QA D529: a stay already invoiced asks before a supplementary invoice', () => {
+  it('QA D529: a stay already invoiced asks before a supplementary invoice', async () => {
     fixture.detectChanges();
     billingSpy.createInvoice.and.returnValues(
       throwError(() => ({ status: 409, error: { message: 'Already invoiced RHA-12' } })),
       of(mockInvoice()),
     );
-    const confirm = spyOn(globalThis, 'confirm').and.returnValue(true);
+    const confirm = spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
     component.openCreate();
-    component.submitForm();
+    await component.submitForm();
     expect(confirm).toHaveBeenCalled();
     expect(billingSpy.createInvoice).toHaveBeenCalledTimes(2);
     expect(billingSpy.createInvoice.calls.mostRecent().args[0].supplementary).toBeTrue();
     expect(billingSpy.createInvoice.calls.first().args[0].supplementary).toBeUndefined();
   });
 
-  it('QA D529: declining the supplementary invoice creates nothing more', () => {
+  it('QA D529: declining the supplementary invoice creates nothing more', async () => {
     fixture.detectChanges();
     billingSpy.createInvoice.and.returnValue(
       throwError(() => ({ status: 409, error: { message: 'Already invoiced RHA-12' } })),
     );
-    spyOn(globalThis, 'confirm').and.returnValue(false);
+    spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(false);
     component.openCreate();
-    component.submitForm();
+    await component.submitForm();
     expect(billingSpy.createInvoice).toHaveBeenCalledTimes(1);
     expect(component.saving()).toBeFalse();
   });
@@ -1337,11 +1338,11 @@ describe('BillingComponent', () => {
       expect(toastSpy.error).toHaveBeenCalled();
     });
 
-    it('does not remove a line the user did not confirm (QA D147)', () => {
+    it('does not remove a line the user did not confirm (QA D147)', async () => {
       fixture.detectChanges();
       component.viewInvoice(component.invoices()[0]);
-      spyOn(globalThis, 'confirm').and.returnValue(false);
-      component.removeItem({ id: 'item-1' } as never);
+      spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(false);
+      await component.removeItem({ id: 'item-1' } as never);
       expect(billingSpy.deleteInvoiceItem).not.toHaveBeenCalled();
     });
   });

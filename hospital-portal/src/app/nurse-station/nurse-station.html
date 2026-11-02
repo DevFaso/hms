@@ -352,6 +352,22 @@
                           {{ m.lastOutcome | enumLabel: 'medicationAdministrationStatus' }}</span
                         >
                       }
+                      <!-- QA D1225: the last dose's reason (held, refused or given
+                           early) and the dose history, read where the row is read. -->
+                      @if (m.lastGivenEarly) {
+                        {{ ' '
+                        }}<span
+                          class="status-badge status-early"
+                          [attr.data-testid]="'med-last-early-' + m.id"
+                          >{{ 'MAR_HISTORY.EARLY' | translate }}</span
+                        >
+                      }
+                      @if (m.lastReason) {
+                        <span class="last-reason" [attr.data-testid]="'med-last-reason-' + m.id"
+                          >{{ 'MAR_HISTORY.REASON' | translate }} {{ m.lastReason }}</span
+                        >
+                      }
+                      <app-mar-dose-history [doses]="m.doseHistory ?? []" />
                     </td>
                     <td class="action-cell">
                       @if (canRecordDose(m)) {

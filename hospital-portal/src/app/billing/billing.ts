@@ -48,6 +48,7 @@ import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { InlineSubFormDirective } from '../shared/a11y/inline-sub-form.directive';
 import { InlineDiscardAskComponent } from '../shared/a11y/inline-discard-ask.component';
 import { refusalReason } from '../shared/refusal-reason';
+import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 type BillingTab = 'all' | 'outstanding' | 'paid' | 'overdue';
 
 /** The cancellation reason's field (QA D1069), marked when it is refused (QA D1072). */
@@ -84,6 +85,8 @@ export class BillingComponent implements OnInit {
   private readonly permissions = inject(PermissionService);
   private readonly roleContext = inject(RoleContextService);
   private readonly translate = inject(TranslateService);
+  /** QA D1229: the in-app confirmation, never the browser's. */
+  private readonly confirmService = inject(ConfirmService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   // Permission-gated action flags
@@ -548,14 +551,14 @@ export class BillingComponent implements OnInit {
         // QA D529: the stay already has an invoice. Billed twice only on purpose.
         if (!this.editing() && err.status === 409 && !this.form.supplementary) {
           const why = err.error?.message ?? '';
-          if (
-            globalThis.confirm(`${why}
-
-${this.translate.instant('BILLING.SUPPLEMENTARY_CONFIRM')}`)
-          ) {
-            this.form = { ...this.form, supplementary: true };
-            this.submitForm();
-          }
+          // QA D1229: the in-app confirmation, never the browser's.
+          void this.confirmService
+            .ask({ titleKey: 'BILLING.SUPPLEMENTARY_CONFIRM', message: why })
+            .then((confirmed) => {
+              if (!confirmed) return;
+              this.form = { ...this.form, supplementary: true };
+              this.submitForm();
+            });
           return;
         }
         this.toast.error(refusalReason(err) ?? this.translate.instant('BILLING.SAVE_FAILED'));
@@ -893,11 +896,15 @@ ${this.translate.instant('BILLING.SUPPLEMENTARY_CONFIRM')}`)
       });
   }
 
-  removeItem(item: InvoiceItemResponse): void {
+  async removeItem(item: InvoiceItemResponse): Promise<void> {
     const inv = this.selectedInvoice();
     if (!inv || this.itemSaving()) return;
-    // QA D147: a line deletion is not silent.
-    if (!globalThis.confirm(this.translate.instant('BILLING.ITEM_REMOVE_CONFIRM'))) return;
+    // QA D147: a line deletion is not silent. QA D1229: asked in the app.
+    const confirmed = await this.confirmService.ask({
+      titleKey: 'BILLING.ITEM_REMOVE_CONFIRM',
+      confirmKey: 'COMMON.DELETE',
+    });
+    if (!confirmed || this.itemSaving()) return;
     this.itemSaving.set(true);
     this.billingService.deleteInvoiceItem(item.id).subscribe({
       next: () => {

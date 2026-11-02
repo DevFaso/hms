@@ -273,6 +273,43 @@ describe('ProfileComponent — editing the profile', () => {
     );
   });
 
+  it('QA D1228: emptying the e-mail alone is refused on the field, with the reason', () => {
+    const email = byId('editEmail')!;
+    email.value = '';
+    email.dispatchEvent(new Event('input'));
+    component.markDirty();
+    fixture.detectChanges();
+    const save = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
+      '.edit-form button[type="submit"]',
+    )!;
+    save.click();
+    fixture.detectChanges();
+
+    expect(profiles.updateProfile).not.toHaveBeenCalled();
+    expect(profiles.changeOwnEmail).not.toHaveBeenCalled();
+    expect(byId('editEmail')?.getAttribute('aria-invalid')).toBe('true');
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain(
+      'PROFILE.EMAIL_CANNOT_CLEAR',
+    );
+  });
+
+  it('QA D1228: names saved with the e-mail emptied say the address stays', () => {
+    component.updateField('firstName', 'Aminata');
+    component.updateField('email', '');
+    component.saveProfile();
+
+    expect(toast.info).toHaveBeenCalledWith('PROFILE.EMAIL_CANNOT_CLEAR');
+    expect(profiles.updateProfile).toHaveBeenCalled();
+  });
+
+  it('QA D1228: a save that changes nothing says so', () => {
+    component.markDirty();
+    component.saveProfile();
+
+    expect(profiles.updateProfile).not.toHaveBeenCalled();
+    expect(toast.info).toHaveBeenCalledWith('SUBMIT_GUARD.NO_CHANGES');
+  });
+
   it('refuses to send an email change without the current password', () => {
     component.updateField('email', 'new@example.test');
     component.saveProfile();

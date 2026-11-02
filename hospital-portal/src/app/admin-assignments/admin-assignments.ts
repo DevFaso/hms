@@ -32,6 +32,7 @@ import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { refusalReason } from '../shared/refusal-reason';
+import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 
 type ModalKind = 'create' | 'multi' | 'edit' | 'detail' | 'regen' | 'import' | null;
 
@@ -65,6 +66,8 @@ export class AdminAssignmentsComponent implements OnInit {
   private readonly auth = inject(AuthService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  /** QA D1229: the in-app confirmation, never the browser's. */
+  private readonly confirmService = inject(ConfirmService);
   private readonly route = inject(ActivatedRoute);
 
   /* List state */
@@ -467,8 +470,14 @@ export class AdminAssignmentsComponent implements OnInit {
     this.toast.error(refusalReason(err) ?? this.translate.instant(fallbackKey));
   }
 
-  delete(row: AssignmentResponse): void {
-    if (!confirm(this.translate.instant('ASSIGN_ADMIN.DELETE_CONFIRM'))) return;
+  async delete(row: AssignmentResponse): Promise<void> {
+    if (
+      !(await this.confirmService.ask({
+        titleKey: 'ASSIGN_ADMIN.DELETE_CONFIRM',
+        confirmKey: 'COMMON.DELETE',
+      }))
+    )
+      return;
     this.service.delete(row.id).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('ASSIGN_ADMIN.DELETED'));

@@ -22,6 +22,7 @@ import { ToastService } from '../../core/toast.service';
 import { labelledRefusalReason, refusalReason } from '../../shared/refusal-reason';
 import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+import { ConfirmService } from '../../shared/confirm-dialog/confirm.service';
 
 /**
  * QA D1193 (round 22): a field the server refuses is named with its label, not
@@ -56,6 +57,8 @@ export class LabInstrumentsComponent implements OnInit {
   private readonly auth = inject(AuthService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  /** QA D1229: the in-app confirmation, never the browser's. */
+  private readonly confirmService = inject(ConfirmService);
 
   loading = signal(true);
   error = signal<string | null>(null);
@@ -171,8 +174,9 @@ export class LabInstrumentsComponent implements OnInit {
     });
   }
 
-  deactivate(instrument: LabInstrumentResponse): void {
-    if (!confirm(this.translate.instant('LAB_INSTRUMENTS.CONFIRM_DEACTIVATE'))) return;
+  async deactivate(instrument: LabInstrumentResponse): Promise<void> {
+    if (!(await this.confirmService.ask({ titleKey: 'LAB_INSTRUMENTS.CONFIRM_DEACTIVATE' })))
+      return;
 
     this.instrumentService.deactivateInstrument(instrument.id).subscribe({
       next: () => {

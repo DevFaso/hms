@@ -424,6 +424,47 @@ function panelFinding(html, tokens, index, childDialog) {
 }
 
 /**
+ * QA D1230 (round 24): a panel opened in place of the page's content — the
+ * chat's "Nouvelle conversation" — with its own Close button, that Escape did
+ * not close: it was no dialog (role, aria-modal) and no drawer, so neither the
+ * dialog rules nor the panel rule above read it. A `*-panel` element (any
+ * prefix) holding a button that CLOSES it (`(click)="close…()"`, or a flag set
+ * off) closes on Escape as well: `(keydown.escape)` on the panel or an
+ * ancestor, `appInlineSubForm` with `(dismissed)`, or a dialog directive.
+ */
+const CLOSABLE_PANEL_TOKEN = /^(?:[a-z0-9]+-)+panel$/;
+// The panel's own close: a no-argument close method (`closeRecall(recall)`
+// closes a record, not the panel) or a flag switched off.
+const CLOSE_METHOD_CLICK = /\(click\)="\s*(?:this\.)?(?:close|dismiss|hide|cancel)\w*\(\s*\)/;
+const FLAG_OFF_CLICK = /\(click\)="\s*[\w.]+\.set\(\s*(?:false|null)\s*\)\s*"/;
+const CLOSE_CLICK = {
+  test: (inner) => CLOSE_METHOD_CLICK.test(inner) || FLAG_OFF_CLICK.test(inner),
+};
+
+function closablePanelFinding(html, tokens, index, stack, componentEscape) {
+  const tag = tokens[index];
+  if (tag.type !== 'open' || INLINE_REGION_TAGS.has(tag.name)) return null;
+  if (![...classTokens(tag)].some((t) => CLOSABLE_PANEL_TOKEN.test(t))) return null;
+  if (componentEscape || hasEscapeAttr(tag) || hasKeydownEscape(tag, '')) return null;
+  // A dialog is read by the dialog rules (role, name, Escape, focus).
+  if (isDialogTag(tag) || directiveEscape(tag)) return null;
+  if (tag.attrs.has('appInlineSubForm') && (tag.attrs.get('(dismissed)') ?? '').trim() !== '')
+    return null;
+  if (isDrawerDialog(tag) || stack.some((s) => s.escape || s.isDialog)) return null;
+  const inner = innerHtml(html, tokens, index) ?? '';
+  if (!CLOSE_CLICK.test(inner)) return null;
+  // A panel wrapping a dialog leaves its Escape to the dialog's rules.
+  if (DIALOG_MARKUP.test(inner)) return null;
+  return {
+    line: tag.line,
+    rule: 'panel-escape',
+    anchor: anchor(tag, inner),
+    message:
+      'a panel with its own Close button that Escape does not close: bind (keydown.escape) to the same close on the panel, focus its first field when it opens and give the keyboard back to its opener',
+  };
+}
+
+/**
  * QA D1125 (round 20): `(keydown.escape)` bound on an element that can never
  * hold focus (the shell's `aria-hidden` backdrop, an empty cover) never fires:
  * keyboard events go to the focused element and bubble UP, never sideways.
@@ -496,6 +537,8 @@ export function dialogFindings(html, componentSource = html, dialogSelectors = n
     if (!stack.some((s) => s.isDialog)) {
       const panel = panelFinding(html, tokens, index, childDialog);
       if (panel) out.push(panel);
+      const closable = closablePanelFinding(html, tokens, index, stack, componentEscape);
+      if (closable) out.push(closable);
     }
     const directive = directiveDialog(tag);
     const role = attrValue(tag, 'role') ?? (directive ? 'dialog' : undefined);

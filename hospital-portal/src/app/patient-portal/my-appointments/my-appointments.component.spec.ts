@@ -625,12 +625,57 @@ describe('MyAppointmentsComponent — cancel and reschedule', () => {
     }
   });
 
-  it('openReschedule prefills the form from the raw HH:mm times', () => {
+  it('openReschedule prefills the date and leaves the slot to be chosen (QA D1227)', () => {
     component.openReschedule(
       appt({ date: '2027-02-01', rawStartTime: '10:00', rawEndTime: '10:30' }),
     );
     expect(component.rescheduleDate).toBe('2027-02-01');
-    expect(component.rescheduleStartTime).toBe('10:00');
+    // QA D1227: the visit's own time is not among the free slots; preset, it
+    // hid behind the placeholder and an empty submit sent it.
+    expect(component.rescheduleStartTime).toBe('');
+  });
+
+  it('QA D1227: an empty slot is refused on the field and sends nothing', () => {
+    portal.getRescheduleSlots.and.returnValue(
+      of([
+        {
+          slotId: 'x1',
+          staffId: 's1',
+          date: '2027-02-01',
+          startTime: '14:00:00',
+          endTime: '14:20:00',
+        },
+      ]),
+    );
+    component.openReschedule(appt({ id: 'a-3', date: '2027-02-01', rawStartTime: '08:40' }));
+    fixture.detectChanges();
+    const select = (fixture.nativeElement as HTMLElement).querySelector<HTMLSelectElement>(
+      '#reschedStart',
+    )!;
+    expect(select.value).toBe('');
+
+    component.submitReschedule();
+
+    expect(portal.rescheduleAppointment).not.toHaveBeenCalled();
+    expect(component.rescheduleError()).toBeTruthy();
+  });
+
+  it('QA D1227: a chosen slot that the new day does not offer is dropped', () => {
+    portal.getRescheduleSlots.and.returnValue(
+      of([
+        {
+          slotId: 'x2',
+          staffId: 's1',
+          date: '2027-02-03',
+          startTime: '15:00:00',
+          endTime: '15:20:00',
+        },
+      ]),
+    );
+    component.openReschedule(appt({ id: 'a-4', date: '2027-02-01' }));
+    component.rescheduleStartTime = '14:00:00';
+    component.loadRescheduleSlots();
+    expect(component.rescheduleStartTime).toBe('');
   });
 
   it('QA D1060: the reschedule dialog asks no end time and says the slot length sets it', () => {
@@ -672,6 +717,7 @@ describe('MyAppointmentsComponent — cancel and reschedule', () => {
   it('submitReschedule rejects a past date', () => {
     component.openReschedule(appt({}));
     component.rescheduleDate = '2020-01-01';
+    component.rescheduleStartTime = '09:00';
     component.submitReschedule();
 
     expect(portal.rescheduleAppointment).not.toHaveBeenCalled();

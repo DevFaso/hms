@@ -56,6 +56,7 @@ import { clearReportedSilent403s } from '../interceptors/error.interceptor';
 import { storedLang, switchLanguage } from '../shared/i18n/app-locale';
 import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 
 interface NavItem {
   icon: string;
@@ -129,6 +130,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   private readonly providerContext = inject(ProviderContextService);
   private readonly empiStatus = inject(EmpiStatusService);
   readonly translate = inject(TranslateService);
+  private readonly confirmService = inject(ConfirmService);
   private readonly injector = inject(Injector);
   private notifSub?: Subscription;
   private readCountSub?: Subscription;
@@ -2002,10 +2004,12 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   onLangSelect(event: Event): void {
-    this.switchLang((event.target as HTMLSelectElement).value);
+    void this.switchLang((event.target as HTMLSelectElement).value);
   }
 
-  switchLang(lang: string): void {
-    if (switchLanguage(lang, this.translate)) this.currentLang.set(storedLang());
+  async switchLang(lang: string): Promise<void> {
+    if (await switchLanguage(lang, this.translate, this.confirmService)) {
+      this.currentLang.set(storedLang());
+    }
   }
 }

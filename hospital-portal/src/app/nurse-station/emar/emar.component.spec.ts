@@ -174,6 +174,39 @@ describe('EmarComponent (P1 #8 — five-rights barcode-scan loop)', () => {
     });
   });
 
+  it('QA D1225: the chosen dose shows the doses already recorded, with their reasons', () => {
+    const task = {
+      ...sampleTask,
+      doseHistory: [
+        { id: 'h1', status: 'GIVEN', reason: 'Départ au bloc', givenEarly: true },
+        { id: 'h0', status: 'REFUSED', reason: 'Nausées', givenEarly: false },
+      ],
+    };
+    nurseSpy.getMedicationMAR.and.returnValue(of([task]));
+    fixture.detectChanges();
+    component['selectTask'](task);
+    fixture.detectChanges();
+
+    const history = root().querySelector('[data-testid="emar-dose-history"]');
+    expect(history).not.toBeNull();
+    expect(history?.querySelector('details')?.hasAttribute('open')).toBeTrue();
+    expect(root().querySelector('[data-testid="mar-dose-early-h1"]')).not.toBeNull();
+    expect(root().querySelector('[data-testid="mar-dose-reason-h1"]')?.textContent).toContain(
+      'Départ au bloc',
+    );
+    expect(root().querySelector('[data-testid="mar-dose-reason-h0"]')?.textContent).toContain(
+      'Nausées',
+    );
+  });
+
+  it('QA D1225: a dose never recorded shows no history (negative control)', () => {
+    nurseSpy.getMedicationMAR.and.returnValue(of([sampleTask]));
+    fixture.detectChanges();
+    component['selectTask'](sampleTask);
+    fixture.detectChanges();
+    expect(root().querySelector('[data-testid="emar-dose-history"]')).toBeNull();
+  });
+
   it('shows the error state when the MAR fetch fails', () => {
     nurseSpy.getMedicationMAR.and.returnValue(
       throwError(() => new Error('network')) as Observable<NurseMedicationTask[]>,

@@ -7608,7 +7608,8 @@
     "PASSWORD_MANAGED_BY_SSO": "Your password is managed by your single sign-on provider.",
     "SAVE_NEW_PASSWORD": "Save new password",
     "FORGOT_PASSWORD_DESC": "Forgot your current password? We can email you a reset link.",
-    "FORGOT_PASSWORD_DESC_SMS": "Forgot your current password? We can text you a reset link."
+    "FORGOT_PASSWORD_DESC_SMS": "Forgot your current password? We can text you a reset link.",
+    "EMAIL_CANNOT_CLEAR": "An account keeps its e-mail address: enter a new address, or keep the current one."
   },
   "RECEPTION": {
     "BOOK_RECALL": "Book",
@@ -12488,5 +12489,13 @@
     "LAB_LOAD_MORE": "Show older results",
     "LAB_LOAD_FAILED": "Your test results could not be loaded.",
     "LAB_LOAD_MORE_FAILED": "The older results could not be loaded. Try again."
+  },
+  "MAR_HISTORY": {
+    "TITLE": "Dose history",
+    "EARLY": "Given early",
+    "REASON": "Reason:",
+    "OVERRIDE": "Five-rights override reason:",
+    "BY": "by {{name}}",
+    "WITNESS": "Witness:"
   }
 }

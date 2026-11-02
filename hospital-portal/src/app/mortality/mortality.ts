@@ -24,6 +24,7 @@ import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { refusalReason } from '../shared/refusal-reason';
+import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 /**
  * The mortality register (Tier 2 item 29) — the first and only caller of every
  * `/mortality` endpoint.
@@ -54,6 +55,8 @@ export class MortalityComponent implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
   private readonly translate = inject(TranslateService);
+  /** QA D1229: the in-app confirmation, never the browser's. */
+  private readonly confirmService = inject(ConfirmService);
 
   loading = signal(false);
   register = signal<MortalityRegister | null>(null);
@@ -138,10 +141,16 @@ export class MortalityComponent implements OnInit {
     this.form.patientId = patient?.id ?? '';
   }
 
-  submitRecord(): void {
+  async submitRecord(): Promise<void> {
     if (!this.form.patientId || !this.form.diedAt || !this.form.immediateCause.trim()) return;
     // Irreversible and cascading — there is no un-death path, so ask first.
-    if (!window.confirm(this.translate.instant('MORTALITY.RECORD_CONFIRM'))) return;
+    if (
+      !(await this.confirmService.ask({
+        titleKey: 'MORTALITY.RECORD_CONFIRM',
+        confirmKey: 'MORTALITY.RECORD_DEATH',
+      }))
+    )
+      return;
 
     this.recording.set(true);
     this.mortality

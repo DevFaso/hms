@@ -29,6 +29,8 @@ import {
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { toServerDateTime } from '../shared/date-utils';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { InlineSubFormDirective } from '../shared/a11y/inline-sub-form.directive';
+import { InlineDiscardAskComponent } from '../shared/a11y/inline-discard-ask.component';
 
 /**
  * Microbiology workbench (P3 #19) — the lab-facing resulting surface:
@@ -40,7 +42,15 @@ import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 @Component({
   selector: 'app-microbiology',
   standalone: true,
-  imports: [ModalDialogDirective, ServerTimePipe, CommonModule, FormsModule, TranslateModule],
+  imports: [
+    ModalDialogDirective,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    InlineSubFormDirective,
+    InlineDiscardAskComponent,
+  ],
   templateUrl: './microbiology.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './microbiology.scss',
