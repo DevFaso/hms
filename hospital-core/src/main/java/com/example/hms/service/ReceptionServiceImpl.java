@@ -55,6 +55,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.MessageSource;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -80,6 +82,10 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class ReceptionServiceImpl implements ReceptionService {
+
+    /** QA D1295 class: a patient's invoices at one hospital, all of them, newest first. */
+    public static final Pageable EVERY_INVOICE_NEWEST_FIRST =
+        Pageable.unpaged(Sort.by(Sort.Direction.DESC, "invoiceDate", "id"));
     private static final String WAITLIST_ENTRY_NOT_FOUND_KEY = "waitlist.entry.notFound";
 
 
@@ -260,8 +266,9 @@ public class ReceptionServiceImpl implements ReceptionService {
                 .build();
 
         // Billing
+        // QA D1295 class: every invoice of the patient here, not an unordered first 100.
         List<BillingInvoice> invoices = invoiceRepo.findByPatient_IdAndHospital_Id(patientId, hospitalId,
-                PageRequest.of(0, 100)).getContent();
+                EVERY_INVOICE_NEWEST_FIRST).getContent();
         List<BillingInvoice> openInvoices = invoices.stream()
                 .filter(inv -> inv.getStatus() != InvoiceStatus.PAID
                         && inv.getStatus() != InvoiceStatus.CANCELLED

@@ -43,11 +43,6 @@ public interface BillingInvoiceRepository extends JpaRepository<BillingInvoice, 
         @Query("SELECT bi FROM BillingInvoice bi WHERE LOWER(bi.patient.email) = LOWER(CAST(:email AS string))")
         List<BillingInvoice> findByPatientEmail(@Param("email") String email);
     
-        // Find invoices by patient name
-        // QA D1103: the middle name is part of the name a clerk types.
-        @Query("SELECT bi FROM BillingInvoice bi WHERE LOWER(bi.patient.firstName) LIKE LOWER(CONCAT('%', CAST(:name AS string), '%')) OR LOWER(bi.patient.lastName) LIKE LOWER(CONCAT('%', CAST(:name AS string), '%'))"
-            + " OR LOWER(bi.patient.middleName) LIKE LOWER(CONCAT('%', CAST(:name AS string), '%'))")
-        List<BillingInvoice> findByPatientName(@Param("name") String name);
     
         // Find invoices by hospital name
         @Query("SELECT bi FROM BillingInvoice bi WHERE LOWER(bi.hospital.name) = LOWER(CAST(:hospitalName AS string))")
@@ -110,6 +105,35 @@ public interface BillingInvoiceRepository extends JpaRepository<BillingInvoice, 
         @Param("hospitalId") UUID hospitalId
     );
 
+    /**
+     * QA D1310 (round 28): the list's search box. A term matches the invoice
+     * number, the visit code, the patient's name parts, MRN at the invoicing
+     * hospital and e-mail (whole or a piece); a birth date ({@code :dob},
+     * yyyy-mm-dd) and a phone number ({@code :phonePattern}, digits) come
+     * through the patient-search router, as on every patient search. Tenant
+     * scope stays {@code :hospitalId}.
+     */
+    String TERM_MATCH = """
+           AND ((CAST(:query AS String) IS NULL AND CAST(:dob AS String) IS NULL
+                 AND CAST(:phonePattern AS String) IS NULL)
+                OR LOWER(bi.invoiceNumber) LIKE :query
+                OR LOWER(p.firstName) LIKE :query
+                OR LOWER(p.lastName) LIKE :query
+                OR LOWER(CONCAT(CONCAT(p.firstName, ' '), p.lastName)) LIKE :query
+                OR LOWER(p.middleName) LIKE :query
+                OR LOWER(CONCAT(p.firstName, ' ', p.middleName, ' ', p.lastName)) LIKE :query
+                OR LOWER(CONCAT(p.firstName, ' ', p.middleName)) LIKE :query
+                OR LOWER(CONCAT(p.middleName, ' ', p.lastName)) LIKE :query
+                OR LOWER(p.email) LIKE :query
+                OR LOWER(enc.code) LIKE :query
+                OR EXISTS (SELECT 1 FROM PatientHospitalRegistration r
+                           WHERE r.patient.id = bi.patient.id AND r.hospital.id = bi.hospital.id AND LOWER(r.mrn) LIKE :query)
+                OR CAST(p.dateOfBirth AS string) = :dob
+           """
+        // Plain strings: a text block strips the trailing space of "OR ".
+        + " OR " + PatientRepository.PRIMARY_PHONE_DIGITS + " LIKE :phonePattern"
+        + " OR " + PatientRepository.SECONDARY_PHONE_DIGITS + " LIKE :phonePattern)\n";
+
     @Query(value = """
            SELECT bi FROM BillingInvoice bi
            LEFT JOIN FETCH bi.patient p
@@ -120,19 +144,7 @@ public interface BillingInvoiceRepository extends JpaRepository<BillingInvoice, 
            AND (:statuses IS NULL OR bi.status IN :statuses)
            AND (CAST(:fromDate AS LocalDate) IS NULL OR bi.invoiceDate >= :fromDate)
            AND (CAST(:toDate AS LocalDate) IS NULL OR bi.invoiceDate <= :toDate)
-           AND (CAST(:query AS String) IS NULL
-                OR LOWER(bi.invoiceNumber) LIKE :query
-                OR LOWER(p.firstName) LIKE :query
-                OR LOWER(p.lastName) LIKE :query
-                OR LOWER(CONCAT(CONCAT(p.firstName, ' '), p.lastName)) LIKE :query
-                OR LOWER(p.middleName) LIKE :query
-                OR LOWER(CONCAT(p.firstName, ' ', p.middleName, ' ', p.lastName)) LIKE :query
-                OR LOWER(CONCAT(p.firstName, ' ', p.middleName)) LIKE :query
-                OR LOWER(CONCAT(p.middleName, ' ', p.lastName)) LIKE :query
-                OR LOWER(enc.code) LIKE :query
-                OR EXISTS (SELECT 1 FROM PatientHospitalRegistration r
-                           WHERE r.patient.id = bi.patient.id AND r.hospital.id = bi.hospital.id AND LOWER(r.mrn) LIKE :query))
-           """,
+           """ + TERM_MATCH,
            countQuery = """
            SELECT COUNT(bi) FROM BillingInvoice bi
            LEFT JOIN bi.patient p
@@ -142,19 +154,8 @@ public interface BillingInvoiceRepository extends JpaRepository<BillingInvoice, 
            AND (:statuses IS NULL OR bi.status IN :statuses)
            AND (CAST(:fromDate AS LocalDate) IS NULL OR bi.invoiceDate >= :fromDate)
            AND (CAST(:toDate AS LocalDate) IS NULL OR bi.invoiceDate <= :toDate)
-           AND (CAST(:query AS String) IS NULL
-                OR LOWER(bi.invoiceNumber) LIKE :query
-                OR LOWER(p.firstName) LIKE :query
-                OR LOWER(p.lastName) LIKE :query
-                OR LOWER(CONCAT(CONCAT(p.firstName, ' '), p.lastName)) LIKE :query
-                OR LOWER(p.middleName) LIKE :query
-                OR LOWER(CONCAT(p.firstName, ' ', p.middleName, ' ', p.lastName)) LIKE :query
-                OR LOWER(CONCAT(p.firstName, ' ', p.middleName)) LIKE :query
-                OR LOWER(CONCAT(p.middleName, ' ', p.lastName)) LIKE :query
-                OR LOWER(enc.code) LIKE :query
-                OR EXISTS (SELECT 1 FROM PatientHospitalRegistration r
-                           WHERE r.patient.id = bi.patient.id AND r.hospital.id = bi.hospital.id AND LOWER(r.mrn) LIKE :query))
-           """)
+           """ + TERM_MATCH)
+    @SuppressWarnings("java:S107")
     Page<BillingInvoice> findAllWithFilters(
         @Param("patientId") UUID patientId,
         @Param("hospitalId") UUID hospitalId,
@@ -162,8 +163,17 @@ public interface BillingInvoiceRepository extends JpaRepository<BillingInvoice, 
         @Param("fromDate") LocalDate fromDate,
         @Param("toDate") LocalDate toDate,
         @Param("query") String query,
+        @Param("dob") String dob,
+        @Param("phonePattern") String phonePattern,
         Pageable pageable
     );
+
+    /** The list search by a term only (no birth date or phone routing): the callers before QA D1310. */
+    default Page<BillingInvoice> findAllWithFilters(UUID patientId, UUID hospitalId, List<InvoiceStatus> statuses,
+                                                    LocalDate fromDate, LocalDate toDate, String query,
+                                                    Pageable pageable) {
+        return findAllWithFilters(patientId, hospitalId, statuses, fromDate, toDate, query, null, null, pageable);
+    }
 
     /**
      * QA D209: the billing KPIs over every invoice in scope, not one page.

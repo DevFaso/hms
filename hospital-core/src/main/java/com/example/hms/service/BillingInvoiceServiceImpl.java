@@ -521,7 +521,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         }
         boolean creditNote = request.getType() == com.example.hms.enums.InvoiceAdjustmentType.CREDIT_NOTE;
         if (creditNote && request.getInvoiceItemId() == null) {
-            throw new BusinessException("billing.adjustment.lineRequired");
+            throw new com.example.hms.exception.FieldBusinessException("invoiceItemId", "billing.adjustment.lineRequired");
         }
         BigDecimal total = nz(invoice.getTotalAmount());
         BigDecimal paid = nz(invoice.getAmountPaid());
@@ -1341,15 +1341,39 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
                 .map(InvoiceStatus::valueOf)
                 .toList();
         }
+        String typed = searchRequest != null ? searchRequest.getQuery() : null;
         return invoiceRepository.findAllWithFilters(
             searchRequest != null ? searchRequest.getPatientId() : null,
             effectiveHospitalId,
             statuses,
             searchRequest != null ? searchRequest.getFromDate() : null,
             searchRequest != null ? searchRequest.getToDate() : null,
-            likePattern(searchRequest != null ? searchRequest.getQuery() : null),
+            likePattern(typed),
+            typedBirthDate(typed),
+            typedPhonePattern(typed),
             stableOrder(pageable)
         ).map(invoiceMapper::toBillingInvoiceResponseDTO);
+    }
+
+    /**
+     * QA D1310 (round 28): the invoice list's search found a patient by name
+     * and MRN only; a birth date typed in any accepted format (15/06/1990,
+     * 1990-06-15) is the patient's date of birth, as on every patient search
+     * (the router of QA D1274). Null when the term is not a date.
+     */
+    public static String typedBirthDate(String typed) {
+        return typed == null || com.example.hms.utility.PatientMatchKeys.birthDate(typed.trim()) == null
+            ? null : com.example.hms.utility.PatientMatchKeys.birthDateKey(typed.trim());
+    }
+
+    /**
+     * QA D1310: a typed number (70284317, +226 70 28 43 17) is also matched
+     * against the patient's phones; a birth date is a date, never a phone (the router's order).
+     */
+    public static String typedPhonePattern(String typed) {
+        return typed == null || typedBirthDate(typed) != null
+                || !com.example.hms.utility.PatientMatchKeys.looksLikePhone(typed.trim())
+            ? null : com.example.hms.utility.PatientMatchKeys.phoneContainsPattern(typed.trim());
     }
 
     private static java.time.LocalDateTime receivedAt(PaymentTransaction row) {
@@ -1621,7 +1645,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             }
         }
         requirePayable(invoice, patientId, declared);
-        rejectReusedReference(invoice, method, payment.getTransactionReference());
+        rejectReusedReference(invoice, method, payment.getTransactionReference(), "transactionReference");
         savePaymentRow(invoice, payment.getAmount(), method,
             payment.getTransactionReference(), payment.getNotes(), recordedBy, PaymentStatus.PENDING);
         BillingInvoiceResponseDTO response = invoiceMapper.toBillingInvoiceResponseDTO(invoice);
@@ -1642,12 +1666,12 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
      * reused across hospitals is reconciled against the operator's statement
      * by each hospital, not refused here.
      */
-    private void rejectReusedReference(BillingInvoice invoice, PaymentMethod method, String reference) {
+    private void rejectReusedReference(BillingInvoice invoice, PaymentMethod method, String reference, String field) {
         if (method == PaymentMethod.CASH || invoice.getHospital() == null) {
             return;
         }
         // QA D1129: the pharmacy payments and walk-in sales are read too.
-        referenceRegistry.requireUnused(invoice.getHospital().getId(), reference);
+        referenceRegistry.requireUnused(invoice.getHospital().getId(), reference, field);
     }
 
     /** The ledger row a cashier reconciles against: one per recorded payment, patient or staff. */
@@ -1774,7 +1798,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
                 && (payment.getReference() == null || payment.getReference().isBlank())) {
             throw new FieldBusinessException("reference", MSG_REFERENCE_REQUIRED);
         }
-        rejectReusedReference(invoice, method, payment.getReference());
+        rejectReusedReference(invoice, method, payment.getReference(), "reference");
         // QA D272: the copay already taken at check-in counts before the clerk's payment.
         creditCheckInCopays(invoice);
         requireRoomBesidePendingDeclarations(invoice, payment.getAmount());
@@ -2027,7 +2051,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             .build();
         BillingInvoice saved = invoiceRepository.saveAndFlush(invoice);
         // One operator transaction pays once: the same rule as the desk payment.
-        rejectReusedReference(saved, copayMethod, copayReference);
+        rejectReusedReference(saved, copayMethod, copayReference, "copayReference");
         BillingInvoice settled = settle(saved, amount);
         PaymentTransaction row = savePaymentRow(settled, amount, copayMethod, copayReference, null, recordedBy,
             PaymentStatus.CONFIRMED);

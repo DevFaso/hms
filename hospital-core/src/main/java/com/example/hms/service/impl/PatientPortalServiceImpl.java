@@ -281,7 +281,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         if (dto.getCountry() != null)                  patient.setCountry(dto.getCountry());
         if (dto.getEmergencyContactName() != null)     patient.setEmergencyContactName(dto.getEmergencyContactName());
         if (dto.getEmergencyContactPhone() != null) {
-            patient.setEmergencyContactPhone(selfServicePhone(patient, dto.getEmergencyContactPhone()));
+            patient.setEmergencyContactPhone(selfServicePhone(patient, dto.getEmergencyContactPhone(), "emergencyContactPhone"));
         }
         if (dto.getEmergencyContactRelationship() != null)
             patient.setEmergencyContactRelationship(dto.getEmergencyContactRelationship());
@@ -297,7 +297,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     /** The phones and e-mail of a self-service edit: normalised, checked, never stored as typed. */
     private void applySelfServiceIdentifiers(Patient patient, PatientProfileUpdateDTO dto) {
         if (dto.getPhoneNumberPrimary() != null) {
-            String primary = selfServicePhone(patient, dto.getPhoneNumberPrimary());
+            String primary = selfServicePhone(patient, dto.getPhoneNumberPrimary(), "phoneNumberPrimary");
             if (primary == null) {
                 throw new BusinessException(MessageUtil.resolve("patient.phoneNumberPrimary.required"));
             }
@@ -306,12 +306,12 @@ public class PatientPortalServiceImpl implements PatientPortalService {
             // and keeping one's own (unchanged) number is never a conflict.
             if (!primary.equals(patient.getPhoneNumberPrimary())
                     && patientRepository.existsByPhoneNumberPrimaryAndIdNot(primary, selfId)) {
-                throw new BusinessException(MessageUtil.resolve("patient.profile.phone.taken"));
+                throw new com.example.hms.exception.FieldBusinessException("phoneNumberPrimary", "patient.profile.phone.taken");
             }
             patient.setPhoneNumberPrimary(primary);
         }
         if (dto.getPhoneNumberSecondary() != null) {
-            patient.setPhoneNumberSecondary(selfServicePhone(patient, dto.getPhoneNumberSecondary()));
+            patient.setPhoneNumberSecondary(selfServicePhone(patient, dto.getPhoneNumberSecondary(), "phoneNumberSecondary"));
         }
         if (dto.getEmail() != null) {
             patient.setEmail(selfServiceEmail(patient, dto.getEmail()));
@@ -319,14 +319,15 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     }
 
     /** A phone typed on the profile in E.164; blank is null; anything else is refused. */
-    private static String selfServicePhone(Patient patient, String raw) {
+    /** QA D1299: a number refused names the field it was typed in. */
+    private static String selfServicePhone(Patient patient, String raw, String field) {
         if (raw.isBlank()) {
             return null;
         }
         String e164 = com.example.hms.utility.PhoneNumbers.toE164(
                 raw, com.example.hms.utility.PhoneNumbers.callingCodeForCountry(patient.getCountry()));
         if (e164 == null) {
-            throw new BusinessException(MessageUtil.resolve("adminSignup.phoneNumber.invalid"));
+            throw new com.example.hms.exception.FieldBusinessException(field, "adminSignup.phoneNumber.invalid");
         }
         return e164;
     }
@@ -341,7 +342,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         boolean takenByAccount = patient.getUser() != null
                 && userRepository.existsEmailOnOtherAccount(email, patient.getUser().getId());
         if (patientRepository.existsEmailOnOtherPatient(email, patient.getId()) || takenByAccount) {
-            throw new BusinessException(MessageUtil.resolve("user.update.email.taken"));
+            throw new com.example.hms.exception.FieldBusinessException("email", "user.update.email.taken");
         }
         return email;
     }
@@ -1697,7 +1698,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         patientProxyRepository.findByGrantorPatient_IdAndProxyUser_IdAndStatus(
                 patient.getId(), proxyUser.getId(), ProxyStatus.ACTIVE
         ).ifPresent(existing -> {
-            throw new BusinessException("portal.proxy.duplicate");
+            throw new com.example.hms.exception.FieldBusinessException("proxyUsername", "portal.proxy.duplicate");
         });
 
         PatientProxy proxy = PatientProxy.builder()

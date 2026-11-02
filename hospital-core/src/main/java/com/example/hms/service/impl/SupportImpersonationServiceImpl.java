@@ -85,10 +85,10 @@ public class SupportImpersonationServiceImpl implements SupportImpersonationServ
                                                String mfaToken,
                                                String bearerJwt) {
         if (request == null || request.getTargetUserId() == null) {
-            throw new BusinessException("targetUserId is required");
+            throw new com.example.hms.exception.FieldBusinessException("targetUserId", "targetUserId is required");
         }
         if (request.getReason() == null || request.getReason().isBlank()) {
-            throw new BusinessException("reason is required to start impersonation");
+            throw new com.example.hms.exception.FieldBusinessException("reason", "reason is required to start impersonation");
         }
         if (ImpersonationContextHolder.isImpersonating()) {
             // Belt-and-braces: the controller is gated on ROLE_SUPER_ADMIN

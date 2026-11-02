@@ -742,7 +742,8 @@ public class UserServiceImpl implements UserService {
         String e164 = com.example.hms.utility.PhoneNumbers.toE164(
                 raw, com.example.hms.utility.PhoneNumbers.callingCodeForCountry(country));
         if (e164 == null) {
-            throw new BusinessException(MessageUtil.resolve("adminSignup.phoneNumber.invalid"));
+            // QA D1299: the refused number is named, so the form marks it.
+            throw new com.example.hms.exception.FieldBusinessException("phoneNumber", "adminSignup.phoneNumber.invalid");
         }
         return e164;
     }
@@ -1927,11 +1928,11 @@ public class UserServiceImpl implements UserService {
     private void requireIdentifiersFree(User user, UpdateUserRequestDTO dto) {
         if (hasText(dto.getUsername()) && !dto.getUsername().equals(user.getUsername())
                 && userRepository.existsUsernameOnOtherAccount(dto.getUsername(), user.getId())) {
-            throw new BusinessException(MessageUtil.resolve("user.update.username.taken"));
+            throw new com.example.hms.exception.FieldBusinessException("username", "user.update.username.taken");
         }
         if (hasText(dto.getEmail()) && !dto.getEmail().equals(user.getEmail())
                 && userRepository.existsEmailOnOtherAccount(dto.getEmail(), user.getId())) {
-            throw new BusinessException(MessageUtil.resolve("user.update.email.taken"));
+            throw new com.example.hms.exception.FieldBusinessException("email", "user.update.email.taken");
         }
     }
 
@@ -2255,7 +2256,7 @@ public class UserServiceImpl implements UserService {
             // Any letter case, deleted accounts included: the same rule as an
             // administrator's rename (requireIdentifiersFree).
             if (userRepository.existsUsernameOnOtherAccount(newUsername, userId)) {
-                throw new BusinessException(MessageUtil.resolve("account.setup.username.taken"));
+                throw new com.example.hms.exception.FieldBusinessException("username", "account.setup.username.taken");
             }
             user.setUsername(newUsername);
             user.setForceUsernameChange(false);

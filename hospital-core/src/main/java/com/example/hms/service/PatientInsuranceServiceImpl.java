@@ -408,11 +408,11 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
                 PATIENT_REQUIRED_KEY, null, PATIENT_REQUIRED_MSG, locale));
         }
         if (req.getPayerCode() == null || req.getPayerCode().isBlank()) {
-            throw new BusinessException(messageSource.getMessage(
+            throw new com.example.hms.exception.FieldBusinessException("payerCode", messageSource.getMessage(
                 "patientinsurance.payer.required", null, "Payer code is required", locale));
         }
         if (req.getPolicyNumber() == null || req.getPolicyNumber().isBlank()) {
-            throw new BusinessException(messageSource.getMessage(
+            throw new com.example.hms.exception.FieldBusinessException("policyNumber", messageSource.getMessage(
                 "patientinsurance.policy.required", null, "Policy number is required", locale));
         }
     }

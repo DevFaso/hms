@@ -32,6 +32,8 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -100,6 +102,21 @@ class ChatMessageServiceImplTest {
             .build();
         user.getUserRoles().add(ur);
         return user;
+    }
+
+    /** QA D1299 (round 28): an empty body names the recipient and the message, in one refusal. */
+    @Test
+    void sendMessage_emptyBody_namesTheRecipientAndTheMessage_D1299() {
+        ChatMessageRequestDTO dto = new ChatMessageRequestDTO();
+        assertThatThrownBy(() -> chatMessageService.sendMessage(dto, Locale.FRENCH))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                refusal -> assertThat(refusal.getFieldErrors())
+                    .containsOnlyKeys("recipientId", "content"));
+        dto.setContent("Bonjour");
+        assertThatThrownBy(() -> chatMessageService.sendMessage(dto, Locale.FRENCH))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                refusal -> assertThat(refusal.getFieldErrors())
+                    .containsOnlyKeys("recipientId"));
     }
 
     @Test
@@ -605,9 +622,11 @@ class ChatMessageServiceImplTest {
         ChatMessageServiceImpl service = spy(chatMessageService);
         doReturn(senderId).when(service).getCurrentUserId();
 
-        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-            () -> service.sendMessage(dto, Locale.ENGLISH));
+        // QA D1299: a FieldBusinessException naming the message field (was an IllegalArgumentException; still 400).
+        com.example.hms.exception.FieldBusinessException ex = assertThrows(
+            com.example.hms.exception.FieldBusinessException.class, () -> service.sendMessage(dto, Locale.ENGLISH));
         assertTrue(ex.getMessage().contains("add an attachment"));
+        assertEquals("content", ex.getField());
     }
 
     @Test
@@ -626,8 +645,9 @@ class ChatMessageServiceImplTest {
         assertEquals("Vous ne pouvez pas vous envoyer un message à vous-même.", self.getMessage());
 
         ChatMessageRequestDTO empty = ChatMessageRequestDTO.builder().recipientId(UUID.randomUUID()).content("").build();
-        IllegalArgumentException blank = assertThrows(IllegalArgumentException.class,
-            () -> service.sendMessage(empty, Locale.FRENCH));
+        // QA D1299: now a FieldBusinessException on "content" (still 400, same sentence).
+        com.example.hms.exception.FieldBusinessException blank = assertThrows(
+            com.example.hms.exception.FieldBusinessException.class, () -> service.sendMessage(empty, Locale.FRENCH));
         assertEquals("Écrivez un message ou ajoutez une pièce jointe avant d'envoyer.", blank.getMessage());
     }
 

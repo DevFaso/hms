@@ -78,7 +78,7 @@ public class BedManagementServiceImpl implements BedManagementService {
 
         String code = request.getCode().trim();
         if (wardRepository.existsByHospital_IdAndCodeIgnoreCase(hospitalId, code)) {
-            throw new BusinessException("ward.code.duplicate", code);
+            throw new com.example.hms.exception.FieldBusinessException("code", "ward.code.duplicate", code);
         }
 
         Ward ward = Ward.builder()
@@ -105,7 +105,7 @@ public class BedManagementServiceImpl implements BedManagementService {
 
         String code = request.getCode().trim();
         if (wardRepository.existsByHospital_IdAndCodeIgnoreCaseAndIdNot(hospitalId, code, wardId)) {
-            throw new BusinessException("ward.code.duplicate", code);
+            throw new com.example.hms.exception.FieldBusinessException("code", "ward.code.duplicate", code);
         }
 
         ward.setName(request.getName().trim());
@@ -196,7 +196,7 @@ public class BedManagementServiceImpl implements BedManagementService {
 
         String bedNumber = request.getBedNumber().trim();
         if (bedRepository.existsByWard_IdAndBedNumberIgnoreCase(wardId, bedNumber)) {
-            throw new BusinessException("bed.number.duplicate", bedNumber, ward.getCode());
+            throw new com.example.hms.exception.FieldBusinessException("bedNumber", "bed.number.duplicate", bedNumber, ward.getCode());
         }
 
         Bed bed = Bed.builder()
@@ -222,7 +222,8 @@ public class BedManagementServiceImpl implements BedManagementService {
 
         String bedNumber = request.getBedNumber().trim();
         if (bedRepository.existsByWard_IdAndBedNumberIgnoreCaseAndIdNot(bed.getWard().getId(), bedNumber, bedId)) {
-            throw new BusinessException("bed.number.duplicate", bedNumber, bed.getWard().getCode());
+            throw new com.example.hms.exception.FieldBusinessException("bedNumber", "bed.number.duplicate", bedNumber,
+                bed.getWard().getCode());
         }
         if (Boolean.FALSE.equals(request.getActive()) && bed.getStatus() == BedStatus.OCCUPIED) {
             throw new BusinessException("bed.occupied.cannotRetire");

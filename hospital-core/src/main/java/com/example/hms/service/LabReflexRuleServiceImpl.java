@@ -82,7 +82,7 @@ public class LabReflexRuleServiceImpl implements LabReflexRuleService {
             throw new FieldBusinessException("reflexTestDefinitionId", "lab.reflex.reflex.required");
         }
         if (request.getCondition() == null || request.getCondition().isBlank()) {
-            throw new BusinessException("lab.reflex.conditionRequired");
+            throw new com.example.hms.exception.FieldBusinessException("condition", "lab.reflex.conditionRequired");
         }
     }
 

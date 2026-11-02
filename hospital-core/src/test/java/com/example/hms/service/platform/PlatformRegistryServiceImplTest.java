@@ -1117,11 +1117,12 @@ class PlatformRegistryServiceImplTest {
 
     @Test
     void updateHospitalServiceLinkRequiresEnabled() {
+        // QA D1299 (round 28; assertion changed): the refusal names its field (FieldBusinessException, still 400).
         UUID hospitalId = UUID.randomUUID();
         UUID serviceId = UUID.randomUUID();
         PlatformServiceLinkUpdateRequestDTO request = new PlatformServiceLinkUpdateRequestDTO();
         assertThatThrownBy(() -> platformRegistryService.updateHospitalServiceLink(hospitalId, serviceId, request, Locale.ENGLISH))
-            .isInstanceOf(IllegalArgumentException.class);
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
     }
 
     @Test

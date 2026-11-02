@@ -62,7 +62,7 @@ public class TreatmentConsentServiceImpl implements TreatmentConsentService {
             throw new BusinessException("consent.hospitalRequired");
         }
         if (request == null || request.getMethod() == null) {
-            throw new BusinessException("consent.captureMethodRequired");
+            throw new com.example.hms.exception.FieldBusinessException("method", "consent.captureMethodRequired");
         }
         // QA D1148 (round 21, user decision): a consent recorded in the chart
         // names who gave it; one was stored with no signer. The pre-check-in

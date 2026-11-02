@@ -292,8 +292,9 @@ public class LabOrderServiceImpl implements LabOrderService {
     }
 
     private LabOrder buildLabOrder(LabOrder base, LabOrderRequestDTO request, boolean isNew) {
-    String clinicalIndication = normalizeRequiredText(request.getClinicalIndication(), "labOrder.clinicalIndication.required");
-    String medicalNecessityNote = normalizeRequiredText(request.getMedicalNecessityNote(), "labOrder.medicalNecessityNote.required");
+    String clinicalIndication = normalizeRequiredText(request.getClinicalIndication(), "labOrder.clinicalIndication.required", "clinicalIndication");
+    String medicalNecessityNote = normalizeRequiredText(request.getMedicalNecessityNote(), "labOrder.medicalNecessityNote.required",
+        "medicalNecessityNote");
         String notes = normalizeOptionalText(request.getNotes());
 
         Patient patient = patientRepository.findByIdUnscoped(request.getPatientId())
@@ -1045,7 +1046,7 @@ public class LabOrderServiceImpl implements LabOrderService {
         }
         requireOrderDecisionAuthority(roleValidator.getCurrentUserId(), labOrder.getHospital().getId(),
             "lab.order.voidForbidden");
-        String voidReason = normalizeRequiredText(reason, "lab.order.voidReasonRequired");
+        String voidReason = normalizeRequiredText(reason, "lab.order.voidReasonRequired", "reason");
         if (voidReason.length() > MAX_CANCELLATION_REASON) {
             throw new BusinessException("lab.order.voidReasonTooLong", MAX_CANCELLATION_REASON);
         }
@@ -1081,7 +1082,7 @@ public class LabOrderServiceImpl implements LabOrderService {
         validateStatusTransition(current, toStatus, authorityHospitalId, orderingHospitalId);
         if (toStatus == LabOrderStatus.CANCELLED) {
             // QA D673: a cancel states why, and the reason is kept on the order.
-            String cancelReason = normalizeRequiredText(reason, "lab.order.cancelReasonRequired");
+            String cancelReason = normalizeRequiredText(reason, "lab.order.cancelReasonRequired", "reason");
             if (cancelReason.length() > MAX_CANCELLATION_REASON) {
                 throw new BusinessException("lab.order.cancelReasonTooLong", MAX_CANCELLATION_REASON);
             }
@@ -1132,10 +1133,11 @@ public class LabOrderServiceImpl implements LabOrderService {
         }
     }
 
-    private String normalizeRequiredText(String value, String errorMessage) {
+    /** QA D1299: the refusal names the request field the text belongs to. */
+    private String normalizeRequiredText(String value, String errorMessage, String field) {
         String normalized = normalizeOptionalText(value);
         if (normalized == null) {
-            throw new BusinessException(errorMessage);
+            throw new com.example.hms.exception.FieldBusinessException(field, errorMessage);
         }
         return normalized;
     }

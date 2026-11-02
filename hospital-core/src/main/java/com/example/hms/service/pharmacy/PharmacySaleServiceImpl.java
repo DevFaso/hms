@@ -76,12 +76,12 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
             throw new BusinessException("pharmacy.sale.hospitalMismatch");
         }
         if (dto.getLines() == null || dto.getLines().isEmpty()) {
-            throw new BusinessException("pharmacy.sale.linesRequired");
+            throw new com.example.hms.exception.FieldBusinessException("lines", "pharmacy.sale.linesRequired");
         }
         // QA D1129: the same mobile-money transaction is not counted at two tills
         // (an insurance authorisation can cover several sales, so it is not checked).
         if (dto.getPaymentMethod() == com.example.hms.enums.PharmacyPaymentMethod.MOBILE_MONEY) {
-            referenceRegistry.requireUnused(activeHospitalId, dto.getReferenceNumber());
+            referenceRegistry.requireUnused(activeHospitalId, dto.getReferenceNumber(), "referenceNumber");
         }
 
         Hospital hospital = hospitalRepository.findById(dto.getHospitalId())
@@ -144,10 +144,10 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
     private SaleLine buildLine(SaleLineRequestDTO lineDto, Pharmacy pharmacy,
                                java.util.Map<java.util.UUID, BigDecimal> takenByLot) {
         if (lineDto.getQuantity() == null || lineDto.getQuantity().signum() <= 0) {
-            throw new BusinessException("pharmacy.sale.lineQuantityPositive");
+            throw new com.example.hms.exception.FieldBusinessException("quantity", "pharmacy.sale.lineQuantityPositive");
         }
         if (lineDto.getUnitPrice() == null || lineDto.getUnitPrice().signum() < 0) {
-            throw new BusinessException("pharmacy.sale.linePriceNegative");
+            throw new com.example.hms.exception.FieldBusinessException("unitPrice", "pharmacy.sale.linePriceNegative");
         }
 
         MedicationCatalogItem item = catalogItemRepository.findById(lineDto.getMedicationCatalogItemId())

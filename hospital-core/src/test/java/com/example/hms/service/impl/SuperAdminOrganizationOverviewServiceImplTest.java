@@ -427,7 +427,8 @@ class SuperAdminOrganizationOverviewServiceImplTest {
 
         when(organizationRepository.findAll()).thenReturn(List.of(gamma, delta));
 
-        PageRequest staffRequest = PageRequest.of(0, 1);
+        // QA D1295 class: the capped previews are ordered (oldest record first).
+        PageRequest staffRequest = PageRequest.of(0, 1, SuperAdminOrganizationOverviewServiceImpl.OLDEST_FIRST);
         StaffResponseDTO staffMember = StaffResponseDTO.builder()
             .id("not-a-uuid")
             .username("nurse.gamma")
@@ -440,7 +441,7 @@ class SuperAdminOrganizationOverviewServiceImplTest {
         when(staffService.getStaffByHospitalIdAndActiveTrue(satelliteClinic.getId(), staffRequest))
             .thenReturn(new PageImpl<>(List.of(), staffRequest, 0));
 
-        PageRequest patientRequest = PageRequest.of(0, 100);
+        PageRequest patientRequest = PageRequest.of(0, 100, SuperAdminOrganizationOverviewServiceImpl.OLDEST_FIRST);
         PatientResponseDTO patientA = PatientResponseDTO.builder()
             .id(UUID.randomUUID())
             .firstName("Alice")

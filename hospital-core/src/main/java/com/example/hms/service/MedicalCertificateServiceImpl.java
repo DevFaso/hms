@@ -199,7 +199,7 @@ public class MedicalCertificateServiceImpl implements MedicalCertificateService 
         return switch (request.getType()) {
             case SICK_LEAVE -> {
                 if (request.getDays() == null) {
-                    throw new BusinessException("medicalCertificate.days.required");
+                    throw new com.example.hms.exception.FieldBusinessException("days", "medicalCertificate.days.required");
                 }
                 LocalDate start = request.getStartDate() != null ? request.getStartDate() : visitDay;
                 if (start.isBefore(visitDay)) {

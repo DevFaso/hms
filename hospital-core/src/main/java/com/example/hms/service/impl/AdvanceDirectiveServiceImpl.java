@@ -179,7 +179,8 @@ public class AdvanceDirectiveServiceImpl implements AdvanceDirectiveService {
         // client-supplied id would otherwise be a cross-tenant write vector.
         UUID targetId = activeHospitalId != null ? activeHospitalId : requestedHospitalId;
         if (targetId == null) {
-            throw new BusinessException("advanceDirective.hospital.required");
+            // QA D1299: the body's hospitalId is what is missing; the form marks it.
+            throw new com.example.hms.exception.FieldBusinessException("hospitalId", "advanceDirective.hospital.required");
         }
         return hospitalRepository.findClinicalById(targetId)
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", targetId));

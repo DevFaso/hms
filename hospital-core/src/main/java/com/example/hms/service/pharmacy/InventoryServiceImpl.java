@@ -90,7 +90,7 @@ public class InventoryServiceImpl implements InventoryService {
         inventoryItemRepository.findByPharmacyIdAndMedicationCatalogItemId(
                 pharmacy.getId(), medication.getId())
             .ifPresent(existing -> {
-                throw new BusinessException("stock.inventory.duplicate");
+                throw new com.example.hms.exception.FieldBusinessException("medicationCatalogItemId", "stock.inventory.duplicate");
             });
         // QA D208: the same drug under another catalogue row (same molecule,
         // strength and form) is the same stock item; a second one splits the
@@ -101,7 +101,7 @@ public class InventoryServiceImpl implements InventoryService {
                     org.springframework.data.domain.Pageable.unpaged()).stream()
                 .anyMatch(existing -> key.equals(sameDrugKey(existing.getMedicationCatalogItem())));
             if (twin) {
-                throw new BusinessException("stock.inventory.duplicate");
+                throw new com.example.hms.exception.FieldBusinessException("medicationCatalogItemId", "stock.inventory.duplicate");
             }
         }
         // QA D208: stock enters through a goods receipt (lot + ledger), never
@@ -213,8 +213,7 @@ public class InventoryServiceImpl implements InventoryService {
         // the database CHECK and came back as a generic constraint error.
         if (dto.getInitialQuantity() == null || dto.getInitialQuantity().signum() <= 0
             || (dto.getRemainingQuantity() != null && dto.getRemainingQuantity().signum() < 0)) {
-            throw new BusinessException(
-                com.example.hms.utility.MessageUtil.resolve("stockLot.quantity.positive"));
+            throw new com.example.hms.exception.FieldBusinessException("initialQuantity", "stockLot.quantity.positive");
         }
         // QA D733: 1e9 units were accepted; no single delivery is that size.
         if (dto.getInitialQuantity().compareTo(MAX_RECEIPT_QUANTITY) > 0) {

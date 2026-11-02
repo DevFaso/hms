@@ -193,15 +193,16 @@ public class RoleServiceImpl implements RoleService {
     }
 
     private void checkDuplicate(String name, String code, UUID currentId) {
+        // QA D1301 class: the refusal names the field whose value is already used.
         roleRepository.findByCode(code).ifPresent(existing -> {
             if (currentId == null || !existing.getId().equals(currentId)) {
-                throw new BusinessException("role.duplicate");
+                throw new com.example.hms.exception.FieldBusinessException("code", "role.duplicate");
             }
         });
 
         roleRepository.findByNameIgnoreCase(name).ifPresent(existing -> {
             if (currentId == null || !existing.getId().equals(currentId)) {
-                throw new BusinessException("role.duplicate");
+                throw new com.example.hms.exception.FieldBusinessException("name", "role.duplicate");
             }
         });
     }

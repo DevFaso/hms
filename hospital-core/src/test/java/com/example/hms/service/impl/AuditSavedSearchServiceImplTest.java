@@ -113,17 +113,19 @@ class AuditSavedSearchServiceImplTest {
 
     @Test
     void createRejectsBlankName() {
+        // QA D1299 (round 28; assertion changed): the refusal names its field (FieldBusinessException, still 400).
         AuditSavedSearchRequestDTO req = request("   ", "{}", false);
         assertThatThrownBy(() -> service.create(req))
-            .isInstanceOf(BusinessRuleException.class)
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
             .hasMessageContaining("name is required");
     }
 
     @Test
     void createRejectsBlankFilterJson() {
+        // QA D1299 (round 28; assertion changed): the refusal names its field (FieldBusinessException, still 400).
         AuditSavedSearchRequestDTO req = request("name", "", false);
         assertThatThrownBy(() -> service.create(req))
-            .isInstanceOf(BusinessRuleException.class)
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
             .hasMessageContaining("filterJson is required");
     }
 

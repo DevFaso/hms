@@ -1,5 +1,6 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.utility.MessageUtil;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Hospital;
@@ -169,9 +170,14 @@ public class SuperAdminLabOrderServiceImpl implements SuperAdminLabOrderService 
         LocalDateTime orderDatetime
     ) {}
 
+    /** The translated label of a request field (field.label.*), never the raw property. */
+    private static String fieldLabel(String field) {
+        return MessageUtil.resolveOrRaw("field.label." + field);
+    }
+
     private Boolean requireBoolean(Boolean value, String field) {
         if (value == null) {
-            throw new BusinessException("lab.order.missingField", field);
+            throw new com.example.hms.exception.FieldBusinessException(field, "lab.order.missingField", fieldLabel(field));
         }
         return value;
     }
@@ -386,7 +392,8 @@ public class SuperAdminLabOrderServiceImpl implements SuperAdminLabOrderService 
     private String requireValue(String value, String field) {
         String normalized = normalize(value);
         if (normalized == null) {
-            throw new BusinessException("lab.order.missingField", field);
+            // QA D1299 / D1312: named in fieldErrors, and by its label in the sentence.
+            throw new com.example.hms.exception.FieldBusinessException(field, "lab.order.missingField", fieldLabel(field));
         }
         return normalized;
     }

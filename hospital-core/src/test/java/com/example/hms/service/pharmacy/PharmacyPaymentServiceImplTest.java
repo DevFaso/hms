@@ -240,7 +240,7 @@ class PharmacyPaymentServiceImplTest {
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         doThrow(new BusinessException("billing.payment.duplicateReference"))
-                .when(referenceRegistry).requireUnused(hospitalId, "OM-R20-77812");
+                .when(referenceRegistry).requireUnused(hospitalId, "OM-R20-77812", "referenceNumber");
 
         assertThatThrownBy(() -> service.createPayment(dto))
                 .isInstanceOf(BusinessException.class)

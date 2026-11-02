@@ -350,8 +350,14 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
     private void validateRequest(PatientHospitalRegistrationRequestDTO dto) {
         boolean hasUserRef = !isBlank(dto.getPatientUsername()) || dto.getPatientId() != null;
         boolean hasHospitalRef = !isBlank(dto.getHospitalName()) || dto.getHospitalId() != null;
-        if (!hasUserRef) throw new IllegalArgumentException("registration.patient.required");
-        if (!hasHospitalRef) throw new IllegalArgumentException("registration.hospital.required");
+        // QA D1299 (round 28): an IllegalArgumentException carrying the key
+        // answered "Choisissez le patient à enregistrer." with no field, before
+        // the field-named check in applyEditableFields was ever reached. Both
+        // missing references are named in one refusal.
+        com.example.hms.exception.RequiredFields.check()
+            .require(hasUserRef, "patientId", "registration.patient.required")
+            .require(hasHospitalRef, "hospitalId", "registration.hospital.required")
+            .orThrow();
     }
 
     private boolean isBlank(String s) {

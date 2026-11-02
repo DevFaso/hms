@@ -312,7 +312,7 @@ public class AdmissionStayEncounterService {
 
     private void addStayMedications(com.example.hms.model.discharge.DischargeSummary summary, Encounter enc) {
         var prescriptions = prescriptionRepository
-            .findByEncounter_Id(enc.getId(), org.springframework.data.domain.PageRequest.of(0, 100))
+            .findByEncounter_Id(enc.getId(), com.example.hms.repository.PrescriptionRepository.EVERY_ORDER_OF_THE_VISIT)
             .getContent();
         for (com.example.hms.model.Prescription rx : prescriptions) {
             // QA D757: a ward order ends with the stay; only an order the

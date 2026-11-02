@@ -94,7 +94,7 @@ public class PatientChartUpdateServiceImpl implements PatientChartUpdateService 
             throw new BusinessException("chartUpdate.payloadRequired");
         }
         if (request.getHospitalId() == null && hospitalId == null) {
-            throw new BusinessException("chartUpdate.hospitalRequired");
+            throw new com.example.hms.exception.FieldBusinessException("hospitalId", "chartUpdate.hospitalRequired");
         }
         UUID effectiveHospitalId = hospitalId != null ? hospitalId : request.getHospitalId();
         if (effectiveHospitalId == null) {

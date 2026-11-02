@@ -319,7 +319,7 @@ public class StockTransactionServiceImpl implements StockTransactionService {
             throw new BusinessException(MessageUtil.resolve("stockTransaction.quantity.invalid"));
         }
         if (dto.getReason() == null || dto.getReason().isBlank()) {
-            throw new BusinessException(MessageUtil.resolve("stockTransaction.reason.required"));
+            throw new com.example.hms.exception.FieldBusinessException("reason", "stockTransaction.reason.required");
         }
         // QA D1243: a write-off reason (damage, expiry, loss) only removes stock.
         if (type == StockTransactionType.ADJUSTMENT && quantity.signum() > 0

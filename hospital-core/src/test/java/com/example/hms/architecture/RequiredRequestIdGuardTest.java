@@ -306,6 +306,523 @@ class RequiredRequestIdGuardTest {
         }
     }
 
+    /**
+     * QA D1299 (round 28; the D1258 / D1282 class, NOT_FIXED again): the
+     * earlier rules read only {@code if (x.getYId() == null) throw}. They could
+     * not see a refusal of any OTHER missing request value - a blank reason
+     * ({@code PUT /appointments/{id}/status} with {@code {}}), a blank message
+     * tested through local booleans ({@code boolean hasContent = dto.getContent()...;
+     * if (!hasContent && !hasAttachments) throw}), an id tested inside a
+     * compound condition ({@code registration.patient.required} as an
+     * IllegalArgumentException). The rule now reads the BEHAVIOUR: any
+     * {@code if} whose condition tests a request-body getter (directly or
+     * through a local copy) for absence and whose body throws, must throw a
+     * {@link com.example.hms.exception.FieldBusinessException} (or go through
+     * {@link com.example.hms.exception.RequiredFields}, which throws one).
+     */
+    @Test
+    @DisplayName("every refusal of a missing or blank request value names its field")
+    void everyMissingRequestValueRefusalNamesItsField() throws IOException {
+        Map<String, Class<?>> bodies = requestBodyTypes();
+        List<String> fieldless = new ArrayList<>();
+        Set<String> excused = new LinkedHashSet<>();
+        int refusals = 0;
+        for (Path file : serviceFiles()) {
+            String source = SourceScan.stripComments(Files.readString(file, StandardCharsets.UTF_8));
+            Matcher m = IF_OPEN.matcher(source);
+            while (m.find()) {
+                int open = m.end() - 1;
+                int close = SourceScan.closingParen(source, open);
+                String thrown = thrownRightAfter(source, close + 1);
+                if (thrown == null || NOT_A_REFUSAL_OF_THE_BODY.contains(thrown.substring(thrown.lastIndexOf('.') + 1))) {
+                    continue;
+                }
+                String method = AppointmentSlotRulesGuardTest.enclosingMethod(source, m.start());
+                String getter = absentBodyValue(source.substring(open + 1, close), method, bodies);
+                if (getter == null) {
+                    continue;
+                }
+                refusals++;
+                String site = file.getFileName().toString().replace(".java", "") + "#" + methodName(method) + ":" + getter;
+                if (thrown.endsWith("FieldBusinessException")) {
+                    continue;
+                }
+                if (CONTEXT_NOT_FIELD.containsKey(site)) {
+                    excused.add(site);
+                    continue;
+                }
+                fieldless.add(site + " (line " + SourceScan.lineOf(source, m.start()) + ", " + thrown + ")");
+            }
+        }
+        assertThat(refusals).as("missing-value refusals read").isGreaterThan(40);
+        fieldless.addAll(helperRefusalsOfBodyValues(bodies));
+        assertThat(fieldless)
+            .as("an empty body is refused with no fieldErrors, so the form cannot mark the field; throw a"
+                + " FieldBusinessException naming it, or collect every check in RequiredFields (QA D1299)"
+                + SourceScan.MANDATE)
+            .isEmpty();
+        assertThat(excused).as("an excused site that disappeared: delete its entry")
+            .containsExactlyInAnyOrderElementsOf(CONTEXT_NOT_FIELD.keySet());
+    }
+
+    /**
+     * QA D1301 (round 28): a payment reference already used was refused with
+     * a toast and no {@code fieldErrors}, so the Référence field was never
+     * marked. The class is a refusal of a VALUE the user typed because another
+     * record holds it (a duplicate, a name taken). Every such refusal in the
+     * services - read by its message key, literal or through a
+     * {@code static final String} constant ({@code DUPLICATE_KEY}) - throws a
+     * {@link com.example.hms.exception.FieldBusinessException}.
+     */
+    @Test
+    @DisplayName("a value refused because another record holds it names its field")
+    void everyDuplicateValueRefusalNamesItsField() throws IOException {
+        List<String> fieldless = new ArrayList<>();
+        Set<String> excused = new LinkedHashSet<>();
+        int refusals = 0;
+        for (Path file : serviceFiles()) {
+            String source = SourceScan.stripComments(Files.readString(file, StandardCharsets.UTF_8));
+            Map<String, String> constants = new HashMap<>();
+            Matcher constant = Pattern.compile("static\\s++final\\s++String\\s++(\\w++)\\s*+=\\s*+\"([^\"]++)\"").matcher(source);
+            while (constant.find()) {
+                constants.put(constant.group(1), constant.group(2));
+            }
+            Matcher thrown = Pattern.compile("throw\\s++new\\s++(" + QUALIFIED_TYPE + ")\\(\\s*+"
+                + "(?:(?:com\\.example\\.hms\\.utility\\.)?MessageUtil\\.resolve(?:OrRaw)?\\(\\s*+)?"
+                + "(?:\"([\\w.]++)\"|([A-Z][A-Z0-9_]++)\\b)").matcher(source);
+            while (thrown.find()) {
+                String key = thrown.group(2) != null ? thrown.group(2) : constants.get(thrown.group(3));
+                if (key == null || !DUPLICATE_KEY.matcher(key).find()) {
+                    continue;
+                }
+                refusals++;
+                if (thrown.group(1).endsWith("FieldBusinessException")) {
+                    continue;
+                }
+                if (NOT_A_TYPED_VALUE.containsKey(key)) {
+                    excused.add(key);
+                    continue;
+                }
+                fieldless.add(file.getFileName() + ":" + SourceScan.lineOf(source, thrown.start()) + " " + key
+                    + " -> " + thrown.group(1));
+            }
+        }
+        assertThat(refusals).as("duplicate-value refusals read").isGreaterThan(10);
+        assertThat(fieldless)
+            .as("a duplicate value is refused with no fieldErrors, so the form cannot mark the field (QA D1301)"
+                + SourceScan.MANDATE)
+            .isEmpty();
+        assertThat(excused).as("an excused key that disappeared: delete its entry")
+            .containsExactlyInAnyOrderElementsOf(NOT_A_TYPED_VALUE.keySet());
+    }
+
+    /**
+     * QA D1300 (round 28): {@code POST /billing-invoices {}} named the dates
+     * (bean validation) and the patient only on the next press (the service);
+     * {@code /invoice-items {}} never named the invoice with the other four;
+     * {@code /payments {}} named the amount, the method next. A service check
+     * of a field whose body ALSO declares bean constraints runs only after
+     * those passed. Every field a service refuses absent, on such a body,
+     * carries its own constraint (in a group when it is create-only, a
+     * class-level {@code @OneOf} when one of two will do), or is listed here
+     * as required only conditionally.
+     */
+    @Test
+    @DisplayName("a field a service refuses absent is constrained on its body, so one refusal names it with the rest")
+    void everyServiceRequiredFieldIsAlsoABeanConstraint() throws IOException {
+        Map<String, Class<?>> bodies = requestBodyTypes();
+        List<String> oneAtATime = new ArrayList<>();
+        Set<String> excused = new LinkedHashSet<>();
+        for (Path file : serviceFiles()) {
+            String source = SourceScan.stripComments(Files.readString(file, StandardCharsets.UTF_8));
+            Matcher m = IF_OPEN.matcher(source);
+            while (m.find()) {
+                int open = m.end() - 1;
+                int close = SourceScan.closingParen(source, open);
+                String thrown = thrownRightAfter(source, close + 1);
+                String condition = source.substring(open + 1, close);
+                String method = methodAround(source, m.start());
+                if (method == null) {
+                    continue;
+                }
+                String chained = finalElseRefusal(source, m.start());
+                boolean fieldRefusal = (thrown != null && thrown.endsWith("FieldBusinessException"))
+                    || (chained != null && chained.endsWith("FieldBusinessException")
+                        && condition.contains("!= null"));
+                if (!fieldRefusal) {
+                    continue;
+                }
+                Matcher getter = GETTER.matcher(condition);
+                while (getter.find()) {
+                    Class<?> body = parameterType(method, getter.group(1), bodies);
+                    boolean tested = chained != null || testedAbsent(condition, getter);
+                    if (body == null || !tested || !declaresConstraints(body, new LinkedHashSet<>())) {
+                        continue;
+                    }
+                    String field = Character.toLowerCase(getter.group(2).charAt(0)) + getter.group(2).substring(1);
+                    if (constrainedPresent(body, field)) {
+                        continue;
+                    }
+                    String site = body.getSimpleName() + "." + field;
+                    if (CONDITIONALLY_REQUIRED.containsKey(site)) {
+                        excused.add(site);
+                    } else {
+                        oneAtATime.add(site + " (" + file.getFileName() + ":" + SourceScan.lineOf(source, m.start()) + ")");
+                    }
+                    break;
+                }
+            }
+        }
+        assertThat(oneAtATime)
+            .as("checked only after bean validation passed, so an empty body names it one press later; give it"
+                + " @NotNull (groups = OnCreate.class when create-only) or a class-level @OneOf (QA D1300)"
+                + SourceScan.MANDATE)
+            .isEmpty();
+        assertThat(excused).as("a conditional field that is no longer read: delete its entry")
+            .containsExactlyInAnyOrderElementsOf(CONDITIONALLY_REQUIRED.keySet());
+    }
+
+    /**
+     * Fields required only in some cases (a status, another field's value),
+     * each with when; and the KNOWN GAPS this round could not move onto the
+     * body (the same DTO serves a path where the field is optional, or the
+     * controller fills it after binding), each in tasklist standing debt.
+     * Shrinks only.
+     */
+    private static final Map<String, String> CONDITIONALLY_REQUIRED = Map.ofEntries(
+        Map.entry("StaffPaymentRequestDTO.reference", "only for mobile money, insurance or transfer"),
+        Map.entry("DeathRecordRequestDTO.maternalDeathTiming", "only when the death is a maternal death"),
+        Map.entry("DeathRecordRequestDTO.perinatalType", "only when the death is a perinatal death"),
+        Map.entry("ObgynReferralCreateRequestDTO.attachments", "only for an urgent referral"),
+        Map.entry("RefillDecisionRequestDTO.providerNotes", "only to pause a refill"),
+        Map.entry("TransferOrderRequestDTO.isolationOverrideReason", "only when the destination breaks isolation"),
+        Map.entry("PatientBloodGroupRequestDTO.correctionReason", "only when a recorded group is corrected"),
+        Map.entry("LabTestDefinitionApprovalRequestDTO.rejectionReason", "only to reject"),
+        Map.entry("MedicalCertificateRequestDTO.days", "only for a sick-leave certificate"),
+        Map.entry("DispenseRequestDTO.verifiedBy", "only when the pharmacist verification blocks administration"),
+        Map.entry("StockTransactionRequestDTO.reason", "only for a movement that must be accounted for"),
+        Map.entry("CheckInRequestDTO.copayMethod", "only when a copay is taken"),
+        Map.entry("StaffRequestDTO.specialization", "only for a doctor or radiologist"),
+        Map.entry("StaffRequestDTO.startDate", "only for a nurse or radiologist"),
+        Map.entry("StaffRequestDTO.licenseNumber", "only for a radiologist"),
+        Map.entry("ImagingReportStatusUpdateRequestDTO.statusReason", "only for a status that needs a reason"),
+        Map.entry("CdsAcknowledgementRequestDTO.reason", "only when the card is overridden"),
+        Map.entry("SmartPhraseRequestDTO.hospitalId", "only for a hospital-scoped phrase"),
+        Map.entry("SmartPhraseRequestDTO.ownerUserId", "only for a personal phrase"),
+        Map.entry("InvoiceAdjustmentRequestDTO.invoiceItemId", "KNOWN GAP D1300: only for a line adjustment"),
+        Map.entry("AppointmentRequestDTO.patientId", "KNOWN GAP D1300: the patient's own booking omits it"),
+        Map.entry("AppointmentRequestDTO.staffId", "KNOWN GAP D1300: a staff edit only; the same DTO books"),
+        Map.entry("AppointmentRequestDTO.hospitalId", "KNOWN GAP D1300: a staff edit only; the same DTO books"),
+        Map.entry("AppointmentRequestDTO.appointmentDate", "KNOWN GAP D1300: shared with the slot booking path"),
+        Map.entry("BirthPlanRequestDTO.patientId", "KNOWN GAP D1300: a staff caller only; the patient's own omits it"),
+        Map.entry("BirthPlanRequestDTO.hospitalId", "KNOWN GAP D1300: a staff caller only; the patient's own omits it"),
+        Map.entry("DepartmentRequestDTO.hospitalId", "KNOWN GAP D1300: filled from the caller's scope when absent"),
+        Map.entry("HospitalRequestDTO.state", "KNOWN GAP D1300: the address rule depends on the country"),
+        Map.entry("HospitalRequestDTO.zipCode", "KNOWN GAP D1300: the address rule depends on the country"),
+        Map.entry("ImagingReportUpsertRequestDTO.imagingOrderId", "KNOWN GAP D1300: create only; the upsert body edits"),
+        Map.entry("LabSpecimenRequestDTO.labOrderId", "the controller sets it from the path after binding: never absent"),
+        Map.entry("LinkPatientInsuranceRequestDTO.payerCode", "KNOWN GAP D1300: one of the natural-key parts"),
+        Map.entry("LinkPatientInsuranceRequestDTO.policyNumber", "KNOWN GAP D1300: one of the natural-key parts"),
+        Map.entry("CheckInRequestDTO.appointmentId", "KNOWN GAP D1300: the DTO documents a walk-in with patientId instead"));
+
+    /** The field carries @NotNull / @NotBlank / @NotEmpty (any group), or a class-level @OneOf lists it. */
+    private static boolean constrainedPresent(Class<?> body, String field) {
+        for (Class<?> c = body; c != null && c != Object.class; c = c.getSuperclass()) {
+            for (com.example.hms.payload.dto.OneOf oneOf : c.getAnnotationsByType(com.example.hms.payload.dto.OneOf.class)) {
+                if (List.of(oneOf.fields()).contains(field)) {
+                    return true;
+                }
+            }
+        }
+        for (Field f : fields(body)) {
+            if (f.getName().equals(field)) {
+                return f.isAnnotationPresent(jakarta.validation.constraints.NotNull.class)
+                    || f.isAnnotationPresent(jakarta.validation.constraints.NotBlank.class)
+                    || f.isAnnotationPresent(jakarta.validation.constraints.NotEmpty.class);
+            }
+        }
+        return false;
+    }
+
+    private static final Pattern DUPLICATE_KEY = Pattern.compile(
+        "[dD]uplicate|[tT]aken|[nN]umberExists|[cC]odeExists|[aA]lreadyUsed|[nN]otUnique");
+
+    /** Duplicate-shaped keys that do not refuse a value the user typed, each with why. Shrinks only. */
+    private static final Map<String, String> NOT_A_TYPED_VALUE = Map.ofEntries(
+        Map.entry("lab.order.duplicate",
+            "the same test for the same patient at the same minute: the order as a whole, not a field"),
+        Map.entry("slot.justTaken",
+            "the slot was booked by someone else meanwhile: a state of the slot, not a typed value"),
+        Map.entry("transfer.r7.destinationTaken", "a pending transfer holds the destination bed: a state of the bed"),
+        Map.entry("immunization.r25.duplicateDose",
+            "the same dose (vaccine, dose number, date) is already recorded: the record as a whole"),
+        Map.entry("platform.releaseWindow.duplicate",
+            "a 409 conflict on the platform release calendar (super-admin), kept as a conflict"),
+        Map.entry("patient.r16.emailTaken",
+            "a 409 conflict the desk's demographics form keys on (ConflictException); standing debt D1301"),
+        Map.entry("lab.definition.duplicateCode",
+            "a 409 conflict (ConflictException) on the test catalogue; standing debt D1301"),
+        Map.entry("provider.licence.duplicate",
+            "a 409 conflict on provider verification (a licence held by another facility); standing debt D1301"),
+        Map.entry("provider.business.duplicate",
+            "a 409 conflict on provider verification (RCCM/IFU held by another facility); standing debt D1301"),
+        Map.entry("users.username.taken",
+            "AuthController#changeOwnUsername wraps it in its own MessageResponse; standing debt D1301"));
+
+    private static final Pattern IF_OPEN = Pattern.compile("\\bif\\s*+\\(");
+    /** A getter of a variable: {@code request.getReason()}. */
+    private static final Pattern GETTER = Pattern.compile("\\b(\\w++)\\.get(\\w++)\\(\\)");
+    /** Exceptions that are not a 400 refusal of the body (a missing record, a forbidden caller). */
+    private static final Set<String> NOT_A_REFUSAL_OF_THE_BODY = Set.of(
+        "ResourceNotFoundException", "AccessDeniedException", "UnauthorizedException", "UnauthorizedAccessException",
+        "ClientSafeAccessDeniedException", "ConflictException", "HospitalScopeRefusedException",
+        "NullPointerException", "UnsupportedOperationException", "CdsCriticalBlockException");
+
+    /**
+     * Refusals the scan reads that are not a request field the form shows,
+     * each with why ({@code Service#method:Getter}). Shrinks only.
+     */
+    private static final Map<String, String> CONTEXT_NOT_FIELD = Map.of();
+
+    private static final Pattern METHOD_HEADER = Pattern.compile("(?m)^    [a-zA-Z][^\\n(;=]*+\\(");
+    private static final Pattern LOCAL_INIT = Pattern.compile("\\b[A-Z]\\w*+\\s++(\\w++)\\s*+=([^;]++);");
+
+    /**
+     * QA D1299 (sweep): the same refusal one call away - a helper that
+     * refuses a blank PARAMETER with no field ({@code requireStatusReason(status,
+     * reason)}: {@code String trimmed = reason.trim(); if (trimmed.isEmpty()) throw ...}),
+     * called with a request-body getter ({@code request.getStatusReason()}).
+     */
+    private static List<String> helperRefusalsOfBodyValues(Map<String, Class<?>> bodies) throws IOException {
+        // Per file: a helper is called from its own class (private and static helpers alike).
+        Map<Path, Map<String, Set<Integer>>> helpersByFile = new HashMap<>();
+        Map<Path, String> sources = new LinkedHashMap<>();
+        for (Path file : serviceFiles()) {
+            String source = SourceScan.stripComments(Files.readString(file, StandardCharsets.UTF_8));
+            sources.put(file, source);
+            Matcher header = METHOD_HEADER.matcher(source);
+            while (header.find()) {
+                int open = header.end() - 1;
+                int close = SourceScan.closingParen(source, open);
+                int brace = skipBlanks(source, close + 1);
+                if (source.startsWith("throws", brace)) {
+                    brace = source.indexOf('{', brace);
+                }
+                if (brace < 0 || brace >= source.length() || source.charAt(brace) != '{') {
+                    continue;
+                }
+                String name = calledName(source, open);
+                List<String> params = parameterNames(source.substring(open + 1, close));
+                Set<Integer> refused = fieldlessParameterRefusals(
+                    source.substring(brace, SourceScan.closingBrace(source, brace) + 1), params);
+                if (name != null && !refused.isEmpty()) {
+                    helpersByFile.computeIfAbsent(file, k -> new HashMap<>())
+                        .computeIfAbsent(name, k -> new LinkedHashSet<>()).addAll(refused);
+                }
+            }
+        }
+        List<String> out = new ArrayList<>();
+        for (Map.Entry<Path, String> entry : sources.entrySet()) {
+            String source = entry.getValue();
+            for (Map.Entry<String, Set<Integer>> helper
+                    : helpersByFile.getOrDefault(entry.getKey(), Map.of()).entrySet()) {
+                Matcher call = Pattern.compile("[.\\s(!]" + Pattern.quote(helper.getKey()) + "\\(").matcher(source);
+                while (call.find()) {
+                    int open = call.end() - 1;
+                    int lineStart = source.lastIndexOf('\n', open) + 1;
+                    if (METHOD_HEADER.matcher(source.substring(lineStart, open + 1)).lookingAt()) {
+                        continue;
+                    }
+                    List<String> args = splitTopLevel(source.substring(open + 1, SourceScan.closingParen(source, open)));
+                    String method = methodAround(source, call.start());
+                    if (method == null) {
+                        continue;
+                    }
+                    for (int index : helper.getValue()) {
+                        Matcher getter = index < args.size()
+                            ? Pattern.compile("^(\\w++)\\.get(\\w++)\\(\\)$").matcher(args.get(index).trim()) : null;
+                        if (getter != null && getter.find() && parameterType(method, getter.group(1), bodies) != null) {
+                            out.add(entry.getKey().getFileName().toString().replace(".java", "") + "#" + methodName(method)
+                                + " -> " + helper.getKey() + "(" + getter.group(2) + ") (line "
+                                + SourceScan.lineOf(source, call.start()) + ", a helper refusing it with no field)");
+                        }
+                    }
+                }
+            }
+        }
+        return out;
+    }
+
+    /** The method whose body holds {@code index}, or null (a field initialiser). */
+    private static String methodAround(String source, int index) {
+        Matcher header = METHOD_HEADER.matcher(source);
+        String best = null;
+        while (header.find() && header.start() < index) {
+            int open = SourceScan.indexOfOutsideLiterals(source, '{', header.end());
+            int semi = SourceScan.indexOfOutsideLiterals(source, ';', header.end());
+            if (open < 0 || (semi >= 0 && semi < open)) {
+                continue;
+            }
+            int close = SourceScan.closingBrace(source, open);
+            if (close > index) {
+                best = source.substring(header.start(), close);
+            }
+        }
+        return best;
+    }
+
+    /** Indices of the parameters the body refuses, absent, with an exception naming no field. */
+    private static Set<Integer> fieldlessParameterRefusals(String body, List<String> params) {
+        Set<Integer> out = new LinkedHashSet<>();
+        Matcher m = IF_OPEN.matcher(body);
+        while (m.find()) {
+            int open = m.end() - 1;
+            int close = SourceScan.closingParen(body, open);
+            String thrown = thrownRightAfter(body, close + 1);
+            if (thrown == null || thrown.endsWith("FieldBusinessException")
+                    || NOT_A_REFUSAL_OF_THE_BODY.contains(thrown.substring(thrown.lastIndexOf('.') + 1))) {
+                continue;
+            }
+            String condition = body.substring(open + 1, close);
+            for (int i = 0; i < params.size(); i++) {
+                if (testsAbsent(condition, params.get(i)) || derivedLocalTestedAbsent(body, condition, params.get(i))) {
+                    out.add(i);
+                }
+            }
+        }
+        return out;
+    }
+
+    private static boolean derivedLocalTestedAbsent(String body, String condition, String param) {
+        Matcher local = LOCAL_INIT.matcher(body);
+        while (local.find()) {
+            if (Pattern.compile("\\b" + Pattern.quote(param) + "\\b").matcher(local.group(2)).find()
+                    && testsAbsent(condition, local.group(1))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** {@code name == null}, {@code name.isBlank()} / {@code isEmpty()}, {@code isBlank(name)}, {@code !hasText(name)}. */
+    private static boolean testsAbsent(String condition, String name) {
+        String n = Pattern.quote(name);
+        return Pattern.compile("(?<![.!\\w])" + n + "\\s*+==\\s*+null").matcher(condition).find()
+            || Pattern.compile("(?<![.!\\w])" + n + "(?:\\.trim\\(\\))?\\.(?:isBlank|isEmpty)\\(\\)").matcher(condition).find()
+            || Pattern.compile("(?<!!)\\s*+(?:\\w++\\.)?(?:isBlank|isEmpty|isNull)\\(\\s*+" + n + "\\s*+\\)").matcher(condition).find()
+            || Pattern.compile("!\\s*+(?:\\w++\\.)?(?:hasText|hasLength)\\(\\s*+" + n + "\\s*+\\)").matcher(condition).find();
+    }
+
+    private static List<String> parameterNames(String params) {
+        List<String> out = new ArrayList<>();
+        for (String param : splitTopLevel(params)) {
+            String[] words = param.trim().split("\\s++");
+            if (words.length >= 2) {
+                out.add(words[words.length - 1]);
+            }
+        }
+        return out;
+    }
+
+    private static List<String> splitTopLevel(String text) {
+        List<String> out = new ArrayList<>();
+        if (text.isBlank()) {
+            return out;
+        }
+        int depth = 0;
+        int start = 0;
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (c == '(' || c == '<' || c == '[' || c == '{') {
+                depth++;
+            } else if (c == ')' || c == '>' || c == ']' || c == '}') {
+                depth--;
+            } else if (c == ',' && depth == 0) {
+                out.add(text.substring(start, i));
+                start = i + 1;
+            }
+        }
+        out.add(text.substring(start));
+        return out;
+    }
+
+    /** The identifier right before offset {@code open} (a call's or a declaration's name), or null. */
+    private static String calledName(String source, int open) {
+        int start = open;
+        while (start > 0 && Character.isJavaIdentifierPart(source.charAt(start - 1))) {
+            start--;
+        }
+        return start == open ? null : source.substring(start, open);
+    }
+
+    /** The exception type a {@code throw} right after {@code from} (maybe inside a {@code {}) names, or null. */
+    private static String thrownRightAfter(String source, int from) {
+        int at = skipBlanks(source, from);
+        if (at < source.length() && source.charAt(at) == '{') {
+            at = skipBlanks(source, at + 1);
+        }
+        Matcher thrown = THROW_NEW.matcher(source);
+        thrown.region(at, source.length());
+        return thrown.lookingAt() ? thrown.group(1) : null;
+    }
+
+    /**
+     * The request-body getter the condition tests for absence (directly, or
+     * through a local the method initialised from one), or null.
+     */
+    private static String absentBodyValue(String condition, String method, Map<String, Class<?>> bodies) {
+        Matcher getter = GETTER.matcher(condition);
+        while (getter.find()) {
+            if (parameterType(method, getter.group(1), bodies) != null && testedAbsent(condition, getter)) {
+                return getter.group(2);
+            }
+        }
+        // A presence flag computed from the body and tested negated: if (!hasContent && ...).
+        Matcher negated = Pattern.compile("!\\s*+([a-z]\\w*+)\\b(?!\\s*+[.(])").matcher(condition);
+        while (negated.find()) {
+            Matcher local = Pattern.compile("\\bboolean\\s++" + Pattern.quote(negated.group(1))
+                + "\\s*+=([^;]++);").matcher(method);
+            if (!local.find()) {
+                continue;
+            }
+            Matcher inner = GETTER.matcher(local.group(1));
+            while (inner.find()) {
+                if (parameterType(method, inner.group(1), bodies) != null) {
+                    return inner.group(2);
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * The getter's value is tested for ABSENCE: {@code x.getY() == null},
+     * {@code x.getY().isBlank()} / {@code .isEmpty()} / {@code .trim().isEmpty()},
+     * {@code isBlank(x.getY())}, {@code !hasText(x.getY())}, {@code isNull(x.getY())}
+     * - not a presence test ({@code != null}, {@code hasText(...)}), not a
+     * comparison of a value that was given.
+     */
+    private static boolean testedAbsent(String condition, Matcher getter) {
+        String after = condition.substring(getter.end());
+        if (Pattern.compile("^\\s*+==\\s*+null").matcher(after).find()) {
+            return true;
+        }
+        if (Pattern.compile("^(?:\\.trim\\(\\))?\\.(?:isBlank|isEmpty)\\(\\)").matcher(after).find()) {
+            // !x.getY().isBlank() is a presence test.
+            int bang = getter.start() - 1;
+            return bang < 0 || condition.charAt(bang) != '!';
+        }
+        String before = condition.substring(0, getter.start());
+        Matcher wrapper = Pattern.compile("(!?)\\s*+(?:\\w++\\.)?(isBlank|isEmpty|hasText|hasLength|isNull)\\(\\s*+$")
+            .matcher(before);
+        if (!wrapper.find()) {
+            return false;
+        }
+        boolean negated = !wrapper.group(1).isEmpty();
+        boolean presence = wrapper.group(2).startsWith("has");
+        return presence == negated;
+    }
+
     private static int skipBlanks(String source, int from) {
         int i = from;
         while (i < source.length() && Character.isWhitespace(source.charAt(i))) {

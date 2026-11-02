@@ -16,6 +16,7 @@ import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVPrinter;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -159,7 +160,8 @@ public class ReportGenerationService {
                 definition.getHospital().getId(),
                 range.start().atStartOfDay(),
                 range.end().plusDays(1).atStartOfDay(),
-                PageRequest.of(page, PAGE_SIZE));
+                // QA D1295 class: pages of an unordered query can repeat or skip rows.
+                PageRequest.of(page, PAGE_SIZE, Sort.by("id")));
             current.forEach(encounter -> {
                 if (encounter.getEncounterDate() == null) return;
                 int[] counts = byDay.computeIfAbsent(

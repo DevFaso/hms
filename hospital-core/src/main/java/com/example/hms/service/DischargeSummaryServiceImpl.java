@@ -45,8 +45,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
 import com.example.hms.service.recordaccess.RecordAccessPolicy;
 
@@ -782,9 +780,8 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
      */
     private void populateMedicationsFromPrescriptions(DischargeSummary summary, Encounter enc) {
         try {
-            Pageable page = PageRequest.of(0, 100);
             List<Prescription> prescriptions = prescriptionRepository
-                    .findByEncounter_Id(enc.getId(), page)
+                    .findByEncounter_Id(enc.getId(), PrescriptionRepository.EVERY_ORDER_OF_THE_VISIT)
                     .getContent();
             for (Prescription rx : prescriptions) {
                 // QA D152: a DRAFT or unsigned order was never given to the

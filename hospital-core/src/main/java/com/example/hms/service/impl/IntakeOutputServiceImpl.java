@@ -46,12 +46,12 @@ public class IntakeOutputServiceImpl implements IntakeOutputService {
             throw new BusinessException("intakeOutput.hospitalRequired");
         }
         if (request == null || request.getRoute() == null) {
-            throw new BusinessException("intakeOutput.routeRequired");
+            throw new com.example.hms.exception.FieldBusinessException("route", "intakeOutput.routeRequired");
         }
         if (request.getVolumeMl() == null || request.getVolumeMl() <= 0) {
             // Belt over the bean-validation braces: the nurse-station path has
             // historically shipped DTOs with no validation annotations at all.
-            throw new BusinessException("intakeOutput.volumeRequired");
+            throw new com.example.hms.exception.FieldBusinessException("volumeMl", "intakeOutput.volumeRequired");
         }
         LocalDateTime observationTime =
             request.getObservationTime() != null ? request.getObservationTime() : LocalDateTime.now();

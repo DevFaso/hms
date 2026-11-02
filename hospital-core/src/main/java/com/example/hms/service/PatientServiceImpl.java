@@ -488,13 +488,13 @@ public class PatientServiceImpl implements PatientService {
 
     /** QA D926: the identity the desk corrects. A required field sent blank is refused rather than cleared. */
     private void patchIdentity(Patient patient, PatientProfileUpdateRequestDTO request) {
-        applyRequired(request.getFirstName(), patient::setFirstName, "patient.r16.firstNameRequired");
-        applyRequired(request.getLastName(), patient::setLastName, "patient.r16.lastNameRequired");
+        applyRequired(request.getFirstName(), patient::setFirstName, "patient.r16.firstNameRequired", "firstName");
+        applyRequired(request.getLastName(), patient::setLastName, "patient.r16.lastNameRequired", "lastName");
         applyNullable(request.getMiddleName(), patient::setMiddleName);
         if (request.getDateOfBirth() != null) {
             patient.setDateOfBirth(request.getDateOfBirth());
         }
-        applyRequired(request.getGender(), patient::setGender, "patient.r16.genderRequired");
+        applyRequired(request.getGender(), patient::setGender, "patient.r16.genderRequired", "gender");
         applyNullable(request.getEthnicity(), patient::setEthnicity);
         // QA D1036: the blood group is corrected here too (the entity upper-cases it).
         applyNullable(request.getBloodType(), patient::setBloodType);
@@ -589,13 +589,14 @@ public class PatientServiceImpl implements PatientService {
     }
 
     /** Sets a required text field when one was sent; a blank one is refused (QA D926). */
-    private boolean applyRequired(String value, Consumer<String> setter, String blankKey) {
+    private boolean applyRequired(String value, Consumer<String> setter, String blankKey, String field) {
         if (value == null) {
             return false;
         }
         String trimmed = trimToNull(value);
         if (trimmed == null) {
-            throw new BusinessException(blankKey);
+            // QA D1299: the blank field is named, so the form marks it.
+            throw new com.example.hms.exception.FieldBusinessException(field, blankKey);
         }
         setter.accept(trimmed);
         return true;
@@ -2050,7 +2051,7 @@ public class PatientServiceImpl implements PatientService {
     private String requireDiagnosisDisplay(String display) {
         String normalized = trimToNull(display);
         if (normalized == null) {
-            throw new BusinessException("patient.r7.diagnosisDisplayRequired");
+            throw new com.example.hms.exception.FieldBusinessException("problemDisplay", "patient.r7.diagnosisDisplayRequired");
         }
         return normalized;
     }

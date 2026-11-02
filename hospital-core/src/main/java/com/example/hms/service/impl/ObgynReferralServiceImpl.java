@@ -288,7 +288,7 @@ public class ObgynReferralServiceImpl implements ObgynReferralService {
         }
 
         if (CollectionUtils.isEmpty(request.getAttachments())) {
-            throw new BusinessException(ATTACHMENT_REQUIRED_FOR_HIGH_URGENCY);
+            throw new com.example.hms.exception.FieldBusinessException("attachments", ATTACHMENT_REQUIRED_FOR_HIGH_URGENCY);
         }
     }
 

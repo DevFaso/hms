@@ -296,7 +296,7 @@ public class ImagingReportServiceImpl implements ImagingReportService {
     @Override
     public ImagingReportResponseDTO updateReportStatus(UUID reportId, ImagingReportStatusUpdateRequestDTO request) {
         if (request == null || request.getStatus() == null) {
-            throw new BusinessException("imaging.report.statusRequired");
+            throw new com.example.hms.exception.FieldBusinessException("status", "imaging.report.statusRequired");
         }
         if (!ADMINISTRATIVE_STATUSES.contains(request.getStatus())) {
             throw new BusinessException("imaging.report.statusNotAdministrative");
@@ -304,7 +304,7 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         if (!StringUtils.hasText(request.getStatusReason())) {
             // Voiding a radiology report without saying why leaves the chart
             // with a hole and no account of it.
-            throw new BusinessException("imaging.report.statusReasonRequired");
+            throw new com.example.hms.exception.FieldBusinessException("statusReason", "imaging.report.statusReasonRequired");
         }
 
         ImagingReport report = loadReportScoped(reportId);
@@ -682,7 +682,7 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         imagingReportRepository.findByReportNumberAndHospital_Id(reportNumber, hospitalId)
             .filter(existing -> currentReportId == null || !Objects.equals(existing.getId(), currentReportId))
             .ifPresent(existing -> {
-                throw new BusinessException("imaging.report.numberExists", reportNumber);
+                throw new com.example.hms.exception.FieldBusinessException("reportNumber", "imaging.report.numberExists", reportNumber);
             });
     }
 

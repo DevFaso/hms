@@ -26,7 +26,8 @@ public class InvoiceItemRequestDTO {
 
     private UUID id;
 
-    /** Required on create; on update the line stays on its own invoice. */
+    /** Required on create; on update the line stays on its own invoice. QA D1300: named with the other fields. */
+    @NotNull(groups = com.example.hms.validation.OnCreate.class, message = "{invoiceitem.invoiceRequired}")
     private UUID billingInvoiceId;
 
     @NotBlank

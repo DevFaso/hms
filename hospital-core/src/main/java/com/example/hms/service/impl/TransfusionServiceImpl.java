@@ -130,7 +130,7 @@ public class TransfusionServiceImpl implements TransfusionService {
                 boolean groupChanged = current.getAboGroup() != request.getAboGroup()
                     || current.getRhFactor() != request.getRhFactor();
                 if (groupChanged && !StringUtils.hasText(request.getCorrectionReason())) {
-                    throw new BusinessException("transfusion.bloodGroup.changeNeedsReason",
+                    throw new com.example.hms.exception.FieldBusinessException("correctionReason", "transfusion.bloodGroup.changeNeedsReason",
                         groupLabel(current.getAboGroup(), current.getRhFactor()),
                         groupLabel(request.getAboGroup(), request.getRhFactor()));
                 }
@@ -186,7 +186,7 @@ public class TransfusionServiceImpl implements TransfusionService {
 
         unitRepository.findByHospital_IdAndUnitNumber(hospitalId, request.getUnitNumber())
             .ifPresent(existing -> {
-                throw new BusinessException("transfusion.unit.duplicate", request.getUnitNumber());
+                throw new com.example.hms.exception.FieldBusinessException("unitNumber", "transfusion.unit.duplicate", request.getUnitNumber());
             });
         LocalDate today = LocalDate.now(clock);
         if (request.getExpiresOn() != null && !request.getExpiresOn().isAfter(today)) {
@@ -434,8 +434,7 @@ public class TransfusionServiceImpl implements TransfusionService {
             boolean rhOnly = isPlateletRhOnlyMismatch(group, unit, transfusionRequest);
             boolean overridden = rhOnly && hasText(request.getIncompatibilityReason());
             if (!overridden) {
-                throw new BusinessException(
-                    rhOnly ? "transfusion.crossmatch.incompatibleRhOverridable" : "transfusion.crossmatch.incompatible",
+                throw new com.example.hms.exception.FieldBusinessException("incompatibilityReason", rhOnly ? "transfusion.crossmatch.incompatibleRhOverridable" : "transfusion.crossmatch.incompatible",
                     unit.getUnitNumber(),
                     groupLabel(unit.getAboGroup(), unit.getRhFactor()),
                     groupLabel(group.getAboGroup(), group.getRhFactor()),

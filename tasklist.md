@@ -6085,3 +6085,9 @@ ships*, not for building — and check the shipped surface before trusting a
   is warn-once-per-subject with suppression, which the same class already does for a
   missing principal (`isKnownMissingPrincipal` + "suppressing future warnings"):
   apply that shape to these four, then they can be WARN safely.
+
+## Standing debt — round 28 (fix/r28-backend)
+- [ ] D1300 KNOWN GAPS (`RequiredRequestIdGuardTest#everyServiceRequiredFieldIsAlsoABeanConstraint`): 15 fields the service refuses absent but the body cannot constrain yet, because the same DTO serves a path where the field is optional or the controller fills it after binding: `AppointmentRequestDTO` patientId / staffId / hospitalId / appointmentDate, `BirthPlanRequestDTO` patientId / hospitalId, `DepartmentRequestDTO.hospitalId`, `HospitalRequestDTO` state / zipCode, `ImagingReportUpsertRequestDTO.imagingOrderId`, `InvoiceAdjustmentRequestDTO.invoiceItemId`, `LinkPatientInsuranceRequestDTO` payerCode / policyNumber, `CheckInRequestDTO.appointmentId`. Split the DTOs (or add a group per path) so an empty body names them with the rest.
+- [ ] D1301 (409 conflicts): `patient.r16.emailTaken`, `lab.definition.duplicateCode`, `provider.licence.duplicate`, `provider.business.duplicate` answer 409 with no `fieldErrors`; a `ConflictException` that names its field would let the forms mark them without changing the status.
+- [ ] D1301 / D1299 (auth controller): `AuthController#changeOwnUsername` and `#completeAccountSetup` wrap service refusals in their own `MessageResponse`, so `users.username.taken` and every `badSetup(...)` reason carry no field.
+- [ ] D1310: the invoice search strips `_` and `%` from the term (QA D203) instead of escaping them, so an e-mail with an underscore is found only by the part before it.

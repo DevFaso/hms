@@ -189,9 +189,10 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(FieldBusinessException.class)
     public ResponseEntity<Object> handleFieldBusinessException(FieldBusinessException ex, WebRequest request) {
         Map<String, Object> body = errorBody(HttpStatus.BAD_REQUEST, ex.getMessage(), request);
-        if (ex.getField() != null && ex.getMessage() != null) {
+        // QA D1299 / D1300: every field the refusal names (RequiredFields), in the order checked.
+        if (ex.getField() != null && !ex.getFieldErrors().isEmpty()) {
             body.put(FIELD_FIELD, ex.getField());
-            body.put(FIELD_ERRORS, Map.of(ex.getField(), ex.getMessage()));
+            body.put(FIELD_ERRORS, ex.getFieldErrors());
         }
         return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
     }
@@ -327,8 +328,7 @@ public class GlobalExceptionHandler {
         String message = field == null
             ? localized("error.request.malformed",
                 "The request could not be read. Check the values entered and try again.")
-            : localized("error.request.invalidField",
-                "The value entered for \"{0}\" is not valid.", fieldLabel(field));
+            : invalidFieldReason(field);
         Map<String, Object> body = errorBody(HttpStatus.BAD_REQUEST, message, request);
         body.put(FIELD_CODE, CODE_MALFORMED_REQUEST);
         if (field != null) {
@@ -361,6 +361,23 @@ public class GlobalExceptionHandler {
         }
         String label = messageSource.getMessage("field.label." + leaf, null, null, LocaleContextHolder.getLocale());
         return label == null || label.isBlank() ? path : label;
+    }
+
+    /**
+     * QA D1312 (round 28): "La valeur saisie pour « copayMethod » n'est pas
+     * valide" - a field with no label put its raw property in the sentence.
+     * It is named by its label; a field with none gets the sentence without a
+     * name (the form still marks it from {@code fieldErrors}). Every parsed
+     * request field has a label ({@code FieldLabelCoverageTest}); this keeps a
+     * new one from ever printing its property.
+     */
+    private String invalidFieldReason(String field) {
+        String label = fieldLabel(field);
+        // Without a message source (a bare handler in a unit test) no label can be read: keep the path.
+        if (messageSource != null && (label == null || label.equals(field))) {
+            return localized("error.request.invalidUnlabelledField", "A value entered is not valid.");
+        }
+        return localized("error.request.invalidField", "The value entered for \"{0}\" is not valid.", label);
     }
 
     /** The JSON property path of the failure ("items[0].dose" style), or null when Jackson gave none. */
@@ -462,7 +479,7 @@ public class GlobalExceptionHandler {
     private String fieldReason(FieldError error) {
         String label = fieldLabel(error.getField());
         if (error.isBindingFailure()) {
-            return localized("error.request.invalidField", "The value entered for \"{0}\" is not valid.", label);
+            return invalidFieldReason(error.getField());
         }
         String message = error.getDefaultMessage();
         if (message == null || message.isBlank()) {

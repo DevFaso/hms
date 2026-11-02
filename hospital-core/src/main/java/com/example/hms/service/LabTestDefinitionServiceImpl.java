@@ -674,7 +674,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
                     LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL,
                     LabTestDefinitionApprovalStatus.APPROVED));
                 if (dto.getRejectionReason() == null || dto.getRejectionReason().isBlank()) {
-                    throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("lab.definition.rejectionReasonRequired"));
+                    throw new com.example.hms.exception.FieldBusinessException("rejectionReason", "lab.definition.rejectionReasonRequired");
                 }
                 definition.setApprovalStatus(LabTestDefinitionApprovalStatus.REJECTED);
                 definition.setRejectionReason(dto.getRejectionReason());

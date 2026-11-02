@@ -58,7 +58,9 @@ public class BillingInvoiceController {
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST','ROLE_ACCOUNTANT')")
     @Operation(summary = "Create Billing Invoice")
     public ResponseEntity<BillingInvoiceResponseDTO> createInvoice(
-        @Valid @RequestBody BillingInvoiceRequestDTO dto,
+        // QA D1300: the create-only patient is checked with the other fields, in one refusal.
+        @org.springframework.validation.annotation.Validated({jakarta.validation.groups.Default.class,
+            com.example.hms.validation.OnCreate.class}) @RequestBody BillingInvoiceRequestDTO dto,
         @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
         return new ResponseEntity<>(invoiceService.createInvoice(dto, locale), HttpStatus.CREATED);
     }

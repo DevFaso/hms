@@ -195,6 +195,43 @@ class MarDoseScheduleTest {
         assertThat(MarDoseSchedule.dosesPerDay(frequency)).as(frequency).isEqualTo(1440.0 / minutes);
     }
 
+    /**
+     * QA D1308 (round 28; D1291 NOT_FIXED): the D1263 / D1291 templates all
+     * put a word ("fois", "x", "times") between the count and the per-day
+     * slash, so the bare shorthand "2/j" - the usual Burkinabe way - was never
+     * tried and stayed unread. Every count one to twelve, written bare before
+     * every per-day slash in FR, ES and EN, with and without spaces, reads as
+     * that many doses a day; and "N x/j", "N x/día", "N x/day" too.
+     */
+    @Test
+    void d1308_everyBareCountBeforeAPerDaySlashIsRead() {
+        List<String> templates = List.of(
+            "%s/j", "%s/jour", "%s/jours", "%s / j", "%s /jour", "%s x/j", "%s x/jour",
+            "%s/día", "%s/dia", "%s/días", "%s x/día",
+            "%s/day", "%s/days", "%s/d", "%s x/day");
+        List<String> wrong = new ArrayList<>();
+        for (int n = 1; n <= 12; n++) {
+            for (String template : templates) {
+                String text = String.format(template, n);
+                MarDoseSchedule.Reading reading = MarDoseSchedule.read(text);
+                if (!reading.repeating() || reading.intervalMinutes() != 24 * 60 / n
+                    || !java.util.Objects.equals(MarDoseSchedule.dosesPerDay(text), (double) n)) {
+                    wrong.add(text + " -> " + reading);
+                }
+            }
+        }
+        assertThat(wrong).isEmpty();
+        assertThat(MarDoseSchedule.read("2/j").intervalMinutes()).isEqualTo(720);
+        assertThat(MarDoseSchedule.read("3/j").intervalMinutes()).isEqualTo(480);
+    }
+
+    /** QA D1308: a bare count that is not a day's doses stays unread (nothing guessed). */
+    @ParameterizedTest
+    @ValueSource(strings = {"0/j", "25/j", "1/2 j", "2/semaine", "500 mg/j", "24/24"})
+    void d1308_aBareCountThatIsNotADaysDosesStaysUnread(String frequency) {
+        assertThat(MarDoseSchedule.read(frequency).kind()).as(frequency).isEqualTo(MarDoseSchedule.Kind.UNREAD);
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"0-0-0", "1-0", "1-0-1-0-1", "10-0-10", "1-a-1", "2 fois/semaine", "/jour"})
     void d1291_anythingElseStaysUnread(String frequency) {
