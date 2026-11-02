@@ -93,13 +93,8 @@ export function refusedBlankUndeclared(ts, html) {
   return [...out];
 }
 
-/** `file id` → why the field is refused blank without declaring it. */
-const OTHER_BRANCH =
-  'QA D1296 class (round 28): billing.ts is owned by fix/r28-portal-focus this round; flagged in the hand-back';
-const REFUSED_UNDECLARED_ALLOWED = new Map([
-  ['billing/billing.html line-edit-qty', OTHER_BRANCH],
-  ['billing/billing.html line-edit-price', OTHER_BRANCH],
-]);
+/** `file id` → why the field is refused blank without declaring it (the billing pins went with fix/r28-billing-siblings). */
+const REFUSED_UNDECLARED_ALLOWED = new Map();
 
 test('QA D1296/D1302/D1303: a field refused when blank declares itself required', () => {
   const found = [];

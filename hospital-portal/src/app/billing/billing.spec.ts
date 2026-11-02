@@ -758,6 +758,80 @@ describe('BillingComponent', () => {
     });
   });
 
+  // QA D1306 / D1296 class (round 28): the payment form refused by toast only,
+  // one field per press, and the invoice line's quantity and price were
+  // refused blank without declaring themselves required.
+  describe('every refused field is marked at once, each with its reason (QA D1306 / D1296)', () => {
+    const msgOf = (id: string): string =>
+      (fixture.nativeElement as HTMLElement)
+        .querySelector(`#${id}-invalid-msg`)
+        ?.textContent?.trim() ?? '';
+    const field = (id: string): HTMLElement =>
+      (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>(`#${id}`)!;
+
+    beforeEach(() => fixture.detectChanges());
+
+    it('a zero amount and a missing reference: both fields marked, both named in the toast', () => {
+      component.openPayment(mockInvoice({ id: 'inv-1', status: 'SENT', balanceDue: 3000 }));
+      component.paymentMethod.set('MOBILE_MONEY');
+      fixture.detectChanges();
+      component.paymentAmount.set(0);
+      component.paymentReference.set('');
+      component.recordPayment();
+      expect(billingSpy.recordPayment).not.toHaveBeenCalled();
+      expect(field('payment-amount').getAttribute('aria-invalid')).toBe('true');
+      expect(field('payment-reference').getAttribute('aria-invalid')).toBe('true');
+      expect(msgOf('payment-amount')).toBe('BILLING.PAYMENT_AMOUNT_REQUIRED');
+      expect(msgOf('payment-reference')).toBe('BILLING.PAYMENT_REFERENCE_REQUIRED');
+      const toast = toastSpy.error.calls.mostRecent().args[0] as string;
+      expect(toast).toContain('BILLING.PAYMENT_AMOUNT_REQUIRED');
+      expect(toast).toContain('BILLING.PAYMENT_REFERENCE_REQUIRED');
+    });
+
+    it('an amount above the balance is refused under the amount, and cleared once fixed', () => {
+      component.openPayment(mockInvoice({ id: 'inv-1', status: 'SENT', balanceDue: 3000 }));
+      component.paymentMethod.set('CASH');
+      fixture.detectChanges();
+      component.paymentAmount.set(5000);
+      component.recordPayment();
+      expect(billingSpy.recordPayment).not.toHaveBeenCalled();
+      expect(field('payment-amount').getAttribute('aria-invalid')).toBe('true');
+      expect(msgOf('payment-amount')).toBe('BILLING.PAYMENT_EXCEEDS_BALANCE');
+      expect(field('payment-reference').hasAttribute('aria-invalid')).toBeFalse();
+    });
+
+    it('an invoice line with neither quantity nor price: both declared required, both marked', () => {
+      const line = {
+        id: 'line-9',
+        billingInvoiceId: 'inv-1',
+        itemDescription: 'Consultation',
+        itemCategory: 'SERVICE',
+        quantity: 1,
+        unitPrice: 0,
+        totalPrice: 0,
+      };
+      billingSpy.getInvoiceItems.and.returnValue(of([line]));
+      component.viewInvoice(mockInvoice({ status: 'DRAFT', totalAmount: 0, balanceDue: 0 }));
+      fixture.detectChanges();
+      component.startEditLine(line as any);
+      fixture.detectChanges();
+      for (const id of ['line-edit-qty', 'line-edit-price']) {
+        expect(field(id).hasAttribute('required')).withContext(id).toBeTrue();
+        const label = (fixture.nativeElement as HTMLElement).querySelector(`label[for="${id}"]`);
+        expect(label?.textContent).withContext(id).toContain('*');
+      }
+      component.editLineQuantity.set(null);
+      component.editLineUnitPrice.set(null);
+      component.saveLine(line as any);
+      expect(billingSpy.updateInvoiceItem).not.toHaveBeenCalled();
+      expect(field('line-edit-qty').getAttribute('aria-invalid')).toBe('true');
+      expect(field('line-edit-price').getAttribute('aria-invalid')).toBe('true');
+      expect(msgOf('line-edit-qty')).toBe('COMMON.FIELD_REQUIRED');
+      // The price says what is wrong with the price, not the quantity's "required".
+      expect(msgOf('line-edit-price')).toBe('BILLING.LINE_UNIT_PRICE_REQUIRED');
+    });
+  });
+
   describe('payment reference (QA D1007)', () => {
     it('is required for the methods the server refuses without one', () => {
       fixture.detectChanges();
