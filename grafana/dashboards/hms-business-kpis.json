@@ -26,7 +26,7 @@
       "fieldConfig": { "defaults": { "unit": "short", "decimals": 0 } },
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
       "targets": [
-        { "expr": "sum(increase(http_server_requests_seconds_count{application=\"$application\"}[24h]))" }
+        { "expr": "sum(increase(http_server_requests_seconds_count{application=\"$application\", uri!~\"$exclude_uri\"}[24h]))" }
       ]
     },
     {
@@ -126,7 +126,7 @@
         { "id": "organize", "options": { "excludeByName": { "Time": true, "__name__": true, "instance": true, "job": true, "application": true }, "renameByName": { "Value": "requests" } } }
       ],
       "targets": [
-        { "expr": "topk(10, sum(increase(http_server_requests_seconds_count{application=\"$application\"}[24h])) by (uri))", "format": "table", "instant": true }
+        { "expr": "topk(10, sum(increase(http_server_requests_seconds_count{application=\"$application\", uri!~\"$exclude_uri\"}[24h])) by (uri))", "format": "table", "instant": true }
       ]
     },
     {
@@ -218,7 +218,7 @@
         { "id": "organize", "options": { "excludeByName": { "Time": true, "__name__": true, "instance": true, "job": true, "application": true }, "renameByName": { "Value": "p99" } } }
       ],
       "targets": [
-        { "expr": "topk(15, histogram_quantile(0.99, sum(rate(http_server_requests_seconds_bucket{application=\"$application\"}[15m])) by (le, uri, method)))", "format": "table", "instant": true }
+        { "expr": "topk(15, histogram_quantile(0.99, sum(rate(http_server_requests_seconds_bucket{application=\"$application\", uri!~\"$exclude_uri\"}[15m])) by (le, uri, method)))", "format": "table", "instant": true }
       ]
     },
     {
@@ -245,6 +245,7 @@
   "tags": ["hms", "business-kpi", "loki"],
   "templating": {
     "list": [
+      { "name": "exclude_uri", "type": "textbox", "label": "Exclude URIs (regex)", "query": "(/api)?/ws-chat.*", "current": { "text": "(/api)?/ws-chat.*", "value": "(/api)?/ws-chat.*" }, "description": "Transport endpoints held open by design (SockJS/WebSocket). Their 25-50s lifetimes are not request latency and would dominate every percentile and top-N panel. Clear this box to include them." },
       {
         "name": "prometheus_ds",
         "type": "datasource",

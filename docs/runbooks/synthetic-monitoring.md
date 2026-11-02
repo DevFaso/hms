@@ -10,7 +10,7 @@ External HTTP probing of HMS public surfaces from multiple geographic vantage po
 
 - **Blackbox-exporter** added to `docker-compose.yml` under the existing `observability` profile (alongside postgres-exporter / redis-exporter / node-exporter). Exposes Prometheus-style probes on `:9115`.
 - **`grafana/blackbox.yml`** with four probe modules: `http_health_2xx`, `http_smart_2xx`, `http_fhir_metadata_2xx`, `http_cds_discovery_2xx`. Each is a `prober: http` module with explicit `valid_status_codes`, accept headers, and TLS verification (false for local, but kept on by default so a production drop-in just needs the cert chain to be valid).
-- **Four Prometheus scrape jobs** in `grafana/prometheus.yml` driving Blackbox against:
+- **Four Prometheus scrape jobs** in `grafana/prometheus.yml` driving Blackbox against (the first covers two targets):
   - `/api/actuator/health/liveness`
   - `/api/actuator/health/readiness`
   - `/api/fhir/metadata`
