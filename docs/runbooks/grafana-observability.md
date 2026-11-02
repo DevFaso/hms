@@ -316,9 +316,13 @@ alert that covers it.
    expiry will leave this alert silent and the per-URI panel empty. If clients
    report chat failing and the chat metrics look clean, that is the shape to
    suspect: check `WsTicketService` and `JwtAuthenticationFilter` logs directly.
-   Those loggers sit at INFO on dev (`LOG_LEVEL_SECURITY`) to keep Loki volume
-   down — raise them for a session with
-   `railway variables --set LOG_LEVEL_SECURITY=DEBUG --service hms-backend-dev`.
+   You do not need to raise a log level to see a rejection: every rejection path
+   in `JwtAuthenticationFilter` is WARN, including the blacklisted-token and
+   MFA-challenge cases. Those four loggers sit at INFO on dev
+   (`LOG_LEVEL_SECURITY`) only to suppress per-request DEBUG chatter. **Do not
+   raise it mid-incident** — a Railway variable change restarts the service, which
+   drops every SockJS connection and all in-memory ws tickets, destroying the state
+   you are trying to observe.
 4. The blind spots above are not hypothetical — if the alert is firing, the 5xx
    are real, but if clients complain and this alert is quiet, do not close the
    ticket on the strength of it.

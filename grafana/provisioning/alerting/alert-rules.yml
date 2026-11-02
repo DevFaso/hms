@@ -177,38 +177,32 @@ groups:
     interval: 1m
     rules:
       - uid: hms-ws-transport-errors
-        title: HMS chat transport failing
-        condition: C
+        title: HMS chat transport returning 5xx
+        condition: B
         data:
           - refId: A
             relativeTimeRange: {from: 600, to: 0}
             datasourceUid: hms-prometheus
             model:
               refId: A
-              expr: app:ws_transport_errors:ratio5m{application="hms"}
+              expr: app:ws_transport_5xx:rate5m{application="hms"}
               instant: true
               interval: ""
           - refId: B
-            relativeTimeRange: {from: 600, to: 0}
-            datasourceUid: hms-prometheus
-            model:
-              refId: B
-              expr: app:ws_transport_requests:rate5m{application="hms"}
-              instant: true
-              interval: ""
-          - refId: C
             datasourceUid: __expr__
             model:
-              refId: C
-              type: math
-              # Rate floor as well as ratio: a failure ratio over two requests in
-              # an idle window is noise, not an outage.
-              expression: "$A > 0.25 && $B > 0.1"
+              refId: B
+              type: threshold
+              expression: "$A"
+              conditions:
+                - evaluator: {type: gt, params: [0.05]}
+                  operator: {type: and}
+                  reducer: {type: last}
+                  type: query
         # OK, not NoData, and this one matters: every other rule here watches a series
-        # that always exists, but this ratio is absent whenever the transport has taken
-        # no traffic at all. With NoData on a page-severity rule, a quiet night — or any
-        # environment where nobody is using chat — raises a standing DatasourceNoData
-        # page. No data here means nothing is failing, which is the OK state.
+        # that always exists, but a 5xx rate is absent whenever the transport has had
+        # no server errors at all — which is the healthy state. With NoData on a
+        # page-severity rule, healthy chat raises a standing DatasourceNoData page.
         noDataState: OK
         execErrState: Error
         for: 5m
@@ -216,10 +210,11 @@ groups:
           severity: page
           service: hms-backend
         annotations:
-          summary: "HMS chat transport failing (>25% 5xx)"
+          summary: "HMS chat transport returning 5xx"
           description: >-
-            More than a quarter of /ws-chat requests that reached a handler
-            returned 5xx. Clinical chat is degraded for every connected client,
-            and this endpoint is excluded from the burn-rate SLO. Chat can also
-            be broken WITHOUT this firing — see the runbook.
+            Sustained server errors on /ws-chat — roughly 15 or more in five
+            minutes. Clinical chat is degraded for every connected client, and
+            this endpoint is excluded from the burn-rate SLO, so no other alert
+            covers it. Chat can also be broken WITHOUT this firing; see the
+            runbook.
           runbook_url: "https://github.com/DevFaso/hms/blob/main/docs/runbooks/grafana-observability.md#hmschattransporterrors"

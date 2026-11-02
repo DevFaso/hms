@@ -73,10 +73,11 @@ groups:
   # /ws-chat is excluded from the SLO burn-rate ratios (see recording.yml), so
   # without this a chat failure would raise nothing at all.
   #
-  # 5xx only. Not a negated 2xx/3xx class, which counts the HTTP 101 of every
-  # successful WebSocket upgrade as a failure, and not 4xx either: the
-  # handler-matched 4xx here are mostly SockJS's own xhr_send 404s against
-  # timed-out sessions, so one stale tab reconnecting would page on healthy chat.
+  # 5xx only, and an absolute rate rather than a ratio. A negated 2xx/3xx class
+  # counts the HTTP 101 of every successful WebSocket upgrade as a failure; 4xx
+  # counts SockJS's own xhr_send 404s against timed-out sessions, so one stale tab
+  # would page. And putting those same classes in a RATIO's denominator diluted
+  # real 500s below any usable threshold — see the recording rule for the numbers.
   #
   # What this alert covers is therefore narrow, and the boundary is worth stating
   # plainly rather than leaving someone to infer it during an incident. Micrometer
@@ -104,21 +105,19 @@ groups:
   - name: hms.ws.transport
     rules:
       - alert: HmsChatTransportErrors
-        expr: |
-          app:ws_transport_errors:ratio5m{application="hms"} > 0.25
-            and app:ws_transport_requests:rate5m{application="hms"} > 0.1
+        expr: app:ws_transport_5xx:rate5m{application="hms"} > 0.05
         for: 5m
         labels:
           severity: page
           service: hms-backend
         annotations:
-          summary: "HMS chat transport failing (>25% 5xx)"
-          description: |
-            More than a quarter of /ws-chat requests that reached a handler returned
-            5xx. Clinical chat is down or degraded for every connected client. This
-            endpoint is excluded from the availability SLO, so the burn-rate alerts
-            stay quiet for it. Note the converse: chat can be broken WITHOUT this
-            firing — see the runbook.
+          summary: "HMS chat transport returning 5xx"
+          description: >-
+            Sustained server errors on /ws-chat — roughly 15 or more in five
+            minutes. Clinical chat is down or degraded for every connected
+            client, and this endpoint is excluded from the burn-rate SLO, so no
+            other alert covers it. Chat can also be broken WITHOUT this firing;
+            see the runbook.
           runbook_url: "https://github.com/DevFaso/hms/blob/main/docs/runbooks/grafana-observability.md#hmschattransporterrors"
 
   # ── Instance / target health ───────────────────────────────────────

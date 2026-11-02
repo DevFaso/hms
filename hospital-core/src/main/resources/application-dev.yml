@@ -35,19 +35,29 @@ logging:
     # against a 50 GB/month allowance. The top six messages alone, each one a
     # log.debug, account for 1,124 lines.
     #
-    # What it does NOT silence, deliberately: the two WARN lines in
-    # JwtAuthenticationFilter ("Invalid or expired ticket", "Token provided but
-    # invalid") and WsTicketService's INFO eviction summary. A failing handshake
-    # should stay visible, and a reconnect storm after a ticket expiry would show
-    # up as those WARNs rather than as silence. Neither appeared in the measured
-    # window; if a storm ever makes them the dominant cost, they want their own
-    # treatment, not a blanket level change.
+    # What it does NOT silence, deliberately: every rejection path in
+    # JwtAuthenticationFilter is WARN ("Invalid or expired ticket", "Token provided
+    # but invalid", blacklisted jti, global revocation, idle window, blocked
+    # tenant, MFA challenge outside the MFA step), as is WsTicketService's refusal
+    # of a disabled account; WsTicketService's eviction summary is INFO. A failing
+    # handshake must stay visible, and a reconnect storm after a ticket expiry
+    # shows up as those WARNs rather than as silence.
+    #
+    # Two of those were DEBUG until this change and are promoted in the same commit
+    # — the blacklisted-jti and MFA-challenge rejections, which would otherwise have
+    # 401'd with no line at any enabled level, which is precisely the case the
+    # runbook sends the on-call to these logs for. They fire only on a rejection,
+    # so they add no per-request volume.
     #
     # Named one by one rather than demoting the com.example.hms.security package:
     # that package holds 40+ classes and 11 subpackages (tenant, oidc, permission,
     # audit, ...), and silencing the tenancy and authorization surface is exactly
     # what you do NOT want on dev. Only the four per-request loggers move.
-    # Raise them for a session without a redeploy:
+    # To raise them, note that this RESTARTS the service — Railway redeploys on a
+    # variable change unless --skip-deploys is passed, and --skip-deploys means the
+    # new value is not picked up until the next deploy anyway. Either way the
+    # process restarts, every SockJS connection drops and the in-memory ws tickets
+    # are lost, so this is not a thing to do mid-incident on a hunch:
     #   railway variables --set LOG_LEVEL_SECURITY=DEBUG --service hms-backend-dev
     '[com.example.hms.security.JwtAuthenticationFilter]': ${LOG_LEVEL_SECURITY:INFO}
     '[com.example.hms.security.JwtTokenProvider]': ${LOG_LEVEL_SECURITY:INFO}

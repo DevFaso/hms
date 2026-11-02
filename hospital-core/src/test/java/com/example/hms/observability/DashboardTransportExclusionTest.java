@@ -116,9 +116,14 @@ class DashboardTransportExclusionTest {
      * <p>Lookahead, lookbehind and backreferences are absent from RE2 by design (it guarantees
      * linear time), and nested repetition such as {@code **} is rejected as a bad operator. A
      * pattern using any of them compiles in this test and then fails in Prometheus.
+     *
+     * <p>Only a quantifier followed by {@code *} or {@code +} counts as nested. The lazy
+     * forms {@code .*?}, {@code .+?} and {@code ??} are perfectly valid RE2 — an earlier
+     * {@code [*+?]{2,}} rejected those too, failing a correct pattern with an explanation
+     * that did not apply to it.
      */
     private static final Pattern RE2_UNSUPPORTED =
-        Pattern.compile("\\(\\?[=!<]|\\\\[1-9]|[*+?]{2,}");
+        Pattern.compile("\\(\\?[=!<]|\\\\[1-9]|[*+?][*+]");
 
     /** Any negative uri matcher, so a near-miss such as $exclude_url cannot pass as "guarded". */
     private static final Pattern URI_EXCLUDE = Pattern.compile("uri\\s*!~");
@@ -129,6 +134,14 @@ class DashboardTransportExclusionTest {
      * per-URI breakdown and quietly exempts an aggregate from the whole guard.
      */
     private static final Pattern BY_GROUPING = Pattern.compile("\\bby\\s*\\(([^)]*)\\)");
+
+    /** A {@code by (...)} immediately after an aggregation's arguments — PromQL's trailing form. */
+    private static final Pattern TRAILING_GROUPING =
+        Pattern.compile("\\s*by\\s*\\(([^)]*)\\)");
+
+    /** An aggregation operator with its optional {@code by (...)} clause, for the mixed-level check. */
+    private static final Pattern AGGREGATION = Pattern.compile(
+        "\\b(sum|avg|count|min|max|stddev|stdvar|quantile)\\s*(?:by\\s*\\(([^)]*)\\)\\s*)?\\(");
 
     /**
      * A filter on 5xx, which makes a panel or rule a fault detector rather than a ranking.
@@ -379,6 +392,21 @@ class DashboardTransportExclusionTest {
         boolean errorFocused = ERROR_STATUS.matcher(expr).find();
         boolean ranking = TOPK.matcher(expr).find();
 
+        // An expression that aggregates BOTH ways gets no verdict, because neither verdict is
+        // right for it. `sum by (uri)(5xx) / scalar(sum(total))` has a per-URI numerator, which
+        // must keep the transport, and an application-wide denominator, which must drop it — so
+        // one per-expression classification exempts a half, and the numerator/denominator
+        // mismatch the first property exists to prevent walks back in. Rather than guess, the
+        // guard says it cannot judge this shape and asks for it to be split.
+        if (byUri && mixesAggregationLevels(expr)) {
+            out.add(new Finding(where,
+                "aggregates both by uri and across all uris in one expression, so no single "
+                    + "transport rule is correct for it: the per-URI half must keep the transport "
+                    + "and the aggregate half must drop it. Split it into two targets, or pin the "
+                    + "aggregate half's uri explicitly."));
+            return;
+        }
+
         // The distortion needs the transport to either MIX with other endpoints (an aggregate
         // percentile) or COMPETE with them (a top-N). A plain per-URI breakdown does neither: the
         // transport is one row, 50s is what it honestly takes, and nothing else is affected. So
@@ -464,6 +492,61 @@ class DashboardTransportExclusionTest {
             return true;
         }
         return false;
+    }
+
+    /**
+     * True when one expression contains both a by-uri aggregation and one that is not by uri.
+     *
+     * <p>Counts aggregation operators rather than {@code by} clauses, so a bare {@code sum(...)}
+     * or a {@code scalar(sum(...))} — which has no {@code by} at all and is therefore
+     * application-wide — is detected alongside a {@code sum by (uri)}.
+     */
+    private static boolean mixesAggregationLevels(String expr) {
+        Matcher aggregations = AGGREGATION.matcher(expr);
+        while (aggregations.find()) {
+            String grouping = aggregations.group(2) != null
+                ? aggregations.group(2)
+                : trailingGrouping(expr, expr.indexOf('(', aggregations.end() - 1));
+            boolean thisOneByUri = grouping != null && Stream.of(grouping.split(","))
+                .anyMatch(label -> "uri".equals(label.trim()));
+            if (!thisOneByUri) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * The {@code by (...)} clause that FOLLOWS an aggregation's arguments, if there is one.
+     *
+     * <p>PromQL accepts the modifier on either side — {@code sum by (uri) (rate(x))} and
+     * {@code sum(rate(x)) by (uri)} mean the same thing — and the dashboards here use the
+     * trailing form throughout, inside {@code topk} and {@code histogram_quantile}. Reading only
+     * the leading form made every one of those look like an un-grouped, application-wide
+     * aggregation, so the mixed-level check reported five panels that were perfectly fine. The
+     * scan is balanced rather than a regex because the argument list contains its own parentheses.
+     *
+     * @param open index of the aggregation's opening parenthesis
+     * @return the label list, or {@code null} if this aggregation has no trailing modifier
+     */
+    private static String trailingGrouping(String expr, int open) {
+        if (open < 0) {
+            return null;
+        }
+        int depth = 0;
+        for (int i = open; i < expr.length(); i++) {
+            char c = expr.charAt(i);
+            if (c == '(') {
+                depth++;
+            } else if (c == ')') {
+                depth--;
+                if (depth == 0) {
+                    Matcher trailing = TRAILING_GROUPING.matcher(expr.substring(i + 1));
+                    return trailing.lookingAt() ? trailing.group(1) : null;
+                }
+            }
+        }
+        return null;
     }
 
     /** True when the expression breaks results down by uri, via {@code by (...)} and not {@code without}. */

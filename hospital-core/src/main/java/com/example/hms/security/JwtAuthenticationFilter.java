@@ -207,7 +207,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         // Reject tokens that have been explicitly revoked (logout / refresh rotation)
         String jti = tokenProvider.getJtiFromToken(jwt);
         if (jti != null && tokenBlacklistService.isBlacklisted(jti)) {
-            log.debug("[JWT] Token jti={} is blacklisted, rejecting on path={}", jti, path);
+            // WARN, not DEBUG. This fires only on a rejection — a revoked token being
+            // presented again — so it is not per-request chatter, and it is the line an
+            // on-call engineer needs when a client reports being signed out. At DEBUG it
+            // vanished entirely once the per-request loggers in this class were demoted to
+            // INFO on dev, leaving a 401 with no explanation at any enabled level.
+            log.warn("[JWT] Token jti={} is blacklisted, rejecting on path={}", jti, path);
             respondUnauthorized(response, extractedSubject);
             return false;
         }
@@ -305,7 +310,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (MfaChallengeScope.admits(request)) {
             return false;
         }
-        log.debug("[JWT] MFA challenge token outside the MFA step on path={}; request left anonymous", path);
+        // WARN for the same reason as the blacklist rejection above: it fires only when a
+        // challenge-scoped token is used outside the MFA step, which is a rejection worth a
+        // line that survives the dev INFO demotion of this logger.
+        log.warn("[JWT] MFA challenge token outside the MFA step on path={}; request left anonymous", path);
         SecurityContextHolder.clearContext();
         HospitalContextHolder.clear();
         ImpersonationContextHolder.clear();

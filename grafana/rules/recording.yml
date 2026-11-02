@@ -113,35 +113,30 @@ groups:
       - record: app:ws_transport_requests:rate5m
         expr: sum by (application) (rate(http_server_requests_seconds_count{uri=~"(/api)?/ws-chat.*"}[5m]))
 
-      # 5xx only, and the status class is named rather than negated.
+      # An absolute 5xx rate, NOT a ratio of 5xx to all transport requests.
       #
-      # NOT "anything that is not 2xx/3xx", which is how this was first written:
-      # /ws-chat is .withSockJS() and SockJS prefers a native WebSocket, so every
-      # SUCCESSFUL upgrade is an HTTP 101. Those are the very 25-50s requests this
-      # whole change is about, so a negated class put the ratio near 1.0 on healthy,
-      # actively used chat and paged continuously.
+      # The ratio this replaces could not fire. Its denominator was every /ws-chat
+      # request, and those are dominated by traffic that is not a candidate for
+      # failure at all: the HTTP 101 of each successful WebSocket upgrade, plus
+      # SockJS's routine xhr_send 404s against timed-out sessions. Real 500s at
+      # ~0.3/s against ~2/s of polling gives a ratio of 0.13 — under a 0.25
+      # threshold — so a genuine chat outage scored as healthy while the burn-rate
+      # SLO was also excluding /ws-chat. That is zero coverage, which is worse than
+      # the over-sensitive version it was trying to fix.
       #
-      # And NOT 4xx either, which was the second attempt. The handler-matched 4xx on
-      # this endpoint are dominated by SockJS's own routine traffic: an xhr_send
-      # against a timed-out session answers 404, so a single stale browser tab
-      # reconnecting can clear both the 0.25 ratio and the 0.1 req/s floor and page
-      # on perfectly healthy chat. That was the same day-one false alarm this PR
-      # exists to remove, reintroduced one layer down.
+      # An absolute rate has no denominator to dilute, and needs no traffic floor —
+      # the floor was itself wrong, being requests-per-second over an endpoint whose
+      # HEALTHY requests last 25-50 seconds, so a few clients failing slowly sat at
+      # ~0.04/s and could never clear 0.1.
       #
-      # What is left is narrow, and honestly so: server-side failure on a request
-      # that reached the handler. Micrometer tags uri from the matched pattern, so a
-      # 401 written inside JwtAuthenticationFilter, or a path that no longer routes,
-      # is tagged "UNKNOWN"/"NOT_FOUND" and is invisible here by construction. There
-      # is no chat-specific signal for those; see the alert comment.
-      - record: app:ws_transport_errors:ratio5m
-        expr: |
-          (
-            sum by (application) (rate(http_server_requests_seconds_count{status=~"5..", uri=~"(/api)?/ws-chat.*"}[5m]))
-              or
-            app:ws_transport_requests:rate5m * 0
-          )
-            /
-          clamp_min(app:ws_transport_requests:rate5m, 0.0001)
+      # The threshold works with the retry behaviour rather than against it: a
+      # broken transport fails fast and SockJS reconnects immediately, so an outage
+      # produces far MORE requests per second than a healthy connection does. One
+      # client in a retry loop clears 0.05/s easily, while 0.05/s is 15 server
+      # errors in five minutes — not something to leave unlooked-at on a clinical
+      # chat path.
+      - record: app:ws_transport_5xx:rate5m
+        expr: sum by (application) (rate(http_server_requests_seconds_count{status=~"5..", uri=~"(/api)?/ws-chat.*"}[5m]))
 
   # ── JVM saturation (for USE method) ────────────────────────────────
   - name: hms.jvm.saturation
