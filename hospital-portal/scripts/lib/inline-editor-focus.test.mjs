@@ -24,11 +24,13 @@
 // The billing pin is gone: the line editor is an appInlineSubForm row.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { existsSync, readFileSync } from 'node:fs';
 import { relative, join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { templatesIn } from './inline-templates.mjs';
 import { tags } from './html-tags.mjs';
+import { closeIndexOf } from './dialog-scan.mjs';
 
 const appDir = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'src', 'app');
 
@@ -170,4 +172,160 @@ test('QA D1175 guard: the scan sees the inventory shape and accepts the fixed on
   assert.deepEqual(unfocusedRowEditors(fixed), []);
   const display = `@if (editingId() === member.id) { <span>{{ member.role }}</span> }`;
   assert.deepEqual(unfocusedRowEditors(display), []);
+});
+
+// ── QA D1307 (round 28; the D1175 sibling the ROW_EDITOR pattern cannot see) ──
+// The dispensing history's cancel button opened the reason form ABOVE the
+// table (`@if (cancelWitnessFor()) { <textarea> }`) and kept the focus on the
+// row: a keyboard or screen-reader user never reached the reason. The
+// round-21 rule only reads blocks keyed `=== row.id` in the row itself; a
+// panel opened BY a row action and rendered elsewhere is keyed on a plain
+// signal or property. Rule: every `@if (x())` / `@if (x)` block holding a
+// field, outside any dialog, whose condition is set by a handler bound to a
+// `(click)` inside an `@for` (directly, `x.set(…)` / `x = …`, or through a
+// component method that does it), takes the keyboard: its root is an
+// `appInlineSubForm`, a field carries `appFocusOnRender`, or it is a dialog.
+const FOR_BLOCK = /@for\s*\(/g;
+const PLAIN_IF = /@if\s*\(\s*(\w+)(?:\(\))?\s*(?:;\s*as\s+\w+\s*)?\)\s*\{/g;
+const TAKES_KEYBOARD = [
+  'appInlineSubForm',
+  'appFocusOnRender',
+  'appModalDialog',
+  'appDialogA11y',
+  'appDialogFocus',
+];
+const DIALOG_DIRECTIVE = ['appModalDialog', 'appDialogA11y', 'appDialogFocus'];
+
+/** QA D1307 pins: a row-opened panel that keeps focus in its list by design. */
+const ROW_PANEL_PINS = new Map([
+  [
+    'nurse-station/emar/emar.component.html activeTask',
+    'master-detail: choosing a task in the queue shows its detail beside the list; focus stays in the queue (the D1283 decision, re-tested FIXED in round 28)',
+  ],
+]);
+
+function isDialogTag(t) {
+  return (
+    t.name === 'dialog' ||
+    /dialog/.test(t.attrs.get('role') ?? '') ||
+    DIALOG_DIRECTIVE.some((a) => t.attrs.has(a))
+  );
+}
+
+/** Lines of `html` inside a dialog or an inline form (they own the keyboard): `[first, last]` pairs. */
+function keyboardOwnerLines(html) {
+  const tk = tags(html);
+  const out = [];
+  tk.forEach((t, i) => {
+    if (t.type === 'open' && (isDialogTag(t) || t.attrs.has('appInlineSubForm'))) {
+      out.push([t.line, tk[closeIndexOf(tk, i)].line]);
+    }
+  });
+  return out;
+}
+
+/** The names a row action sets: `x.set(` / `x =` in the binding or in the method it calls. */
+function namesSetByRowActions(html, ts) {
+  const names = new Set();
+  const calls = new Set();
+  for (const m of html.matchAll(FOR_BLOCK)) {
+    const open = html.indexOf('{', m.index);
+    const body = html.slice(open + 1, closeOfBrace(html, open));
+    for (const c of body.matchAll(/\(click\)="([^"]*)"/g)) {
+      for (const s of c[1].matchAll(/(\w+)(?:\.set\(|\s*=(?!=))/g)) names.add(s[1]);
+      for (const f of c[1].matchAll(/(?:^|[;\s(!])(\w+)\(/g)) calls.add(f[1]);
+    }
+  }
+  for (const fn of calls) {
+    const head = new RegExp(
+      String.raw`\n\s*(?:public |private |protected )?${fn}\([^)]*\)[^{;]*\{`,
+    );
+    const m = head.exec(ts);
+    if (!m) continue;
+    const open = m.index + m[0].length - 1;
+    const body = ts.slice(open, closeOfBrace(ts, open));
+    for (const s of body.matchAll(/this\.(\w+)(?:\.set\(|\s*=(?!=))/g)) names.add(s[1]);
+  }
+  return names;
+}
+
+/** QA D1307: the row-opened panels of `html` (with its component source `ts`) that leave focus behind. */
+export function rowPanelsWithoutFocus(html, ts) {
+  const opened = namesSetByRowActions(html, ts);
+  const inDialog = keyboardOwnerLines(html);
+  const out = [];
+  let reportedUntil = -1;
+  for (const m of html.matchAll(PLAIN_IF)) {
+    if (m.index < reportedUntil || !opened.has(m[1])) continue;
+    const line = html.slice(0, m.index).split('\n').length;
+    if (inDialog.some(([a, b]) => line >= a && line <= b)) continue;
+    const open = m.index + m[0].length - 1;
+    const end = closeOfBrace(html, open);
+    const bodyTags = tags(html.slice(open + 1, end)).filter((t) => t.type === 'open');
+    const field = bodyTags.some(
+      (t) =>
+        ['select', 'textarea'].includes(t.name) ||
+        (t.name === 'input' && !/hidden/.test(t.attrs.get('type') ?? '')),
+    );
+    if (!field) continue;
+    if (bodyTags.some((t) => isDialogTag(t) || TAKES_KEYBOARD.some((a) => t.attrs.has(a)))) {
+      continue;
+    }
+    reportedUntil = end;
+    out.push({ line, signal: m[1] });
+  }
+  return out;
+}
+
+function componentSourceOf(file) {
+  if (file.endsWith('.ts')) return readFileSync(file, 'utf8');
+  const ts = file.replace(/\.html$/, '.ts');
+  return existsSync(ts) ? readFileSync(ts, 'utf8') : '';
+}
+
+test('QA D1307: a form opened by a row action takes the keyboard', () => {
+  const found = new Map();
+  for (const { file, text, lineOffset } of templatesIn(appDir)) {
+    const rel = relative(appDir, file).replaceAll('\\', '/');
+    for (const f of rowPanelsWithoutFocus(text, componentSourceOf(file))) {
+      found.set(`${rel} ${f.signal}`, `${rel}:${f.line + (lineOffset ?? 0)} ${f.signal}`);
+    }
+  }
+  const unpinned = [...found.entries()].filter(([k]) => !ROW_PANEL_PINS.has(k)).map(([, v]) => v);
+  assert.deepEqual(
+    unpinned,
+    [],
+    'make the panel an appInlineSubForm (it takes the keyboard, keeps Escape, returns focus)',
+  );
+  const stale = [...ROW_PANEL_PINS.keys()].filter((k) => !found.has(k));
+  assert.deepEqual(stale, [], 'a pinned panel no longer offends: delete its pin');
+});
+
+test('QA D1307 guard: the scan sees the round-28 dispensing shape and accepts the fixed one', () => {
+  const ts = `\n  cancelDispense(id: string): void {\n    this.cancelWitnessFor.set(id);\n  }\n`;
+  const broken = `@if (cancelWitnessFor()) {
+      <div class="form-row"><textarea id="reason"></textarea></div>
+    }
+    @for (d of rows(); track d.id) {
+      <tr><td><button (click)="cancelDispense(d.id)">x</button></td></tr>
+    }`;
+  assert.deepEqual(
+    rowPanelsWithoutFocus(broken, ts).map((f) => f.signal),
+    ['cancelWitnessFor'],
+  );
+  const fixed = broken.replace('<div class="form-row">', '<div class="form-row" appInlineSubForm>');
+  assert.deepEqual(rowPanelsWithoutFocus(fixed, ts), []);
+  // Opened by a button outside any list: a disclosure, not a row action.
+  const toolbar = broken.replace(/@for[\s\S]*$/, '<button (click)="cancelDispense(1)">x</button>');
+  assert.deepEqual(rowPanelsWithoutFocus(toolbar, ts), []);
+  // Inline in the binding, and a plain property.
+  const inline = `@if (editing) { <select></select> }
+    @for (r of rows; track r.id) { <button (click)="editing = r">e</button> }`;
+  assert.deepEqual(
+    rowPanelsWithoutFocus(inline, '').map((f) => f.signal),
+    ['editing'],
+  );
+  // Inside a dialog: the dialog takes the keyboard.
+  const inDialog = `<div appModalDialog aria-label="x">${broken}</div>`;
+  assert.deepEqual(rowPanelsWithoutFocus(inDialog, ts), []);
 });

@@ -422,6 +422,42 @@ describe('DispensingComponent', () => {
     expect(reason!.getAttribute('aria-invalid')).toBe('true');
   });
 
+  // QA D1307 (round 28): the row's cancel button opened the reason form ABOVE
+  // the table and kept the focus; a keyboard user never reached the reason.
+  it('QA D1307: the cancel form takes the keyboard, and Escape on it gives focus back to the row', async () => {
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+    component.recentDispenses.set([
+      { id: 'd-1', medicationName: 'Paracétamol', status: 'COMPLETED', patientName: 'Awa' } as any,
+    ]);
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    document.body.appendChild(el);
+    try {
+      const rowButton = el
+        .querySelector('[data-testid="recent-dispense-patient"]')!
+        .closest('tr')!
+        .querySelector<HTMLButtonElement>('button.btn-action')!;
+      rowButton.focus();
+      rowButton.click();
+      fixture.detectChanges();
+      await settle();
+      await settle();
+      expect(document.activeElement).toBe(el.querySelector('#dispenseCancelReason'));
+
+      // Nothing typed: Escape closes the form and the row's button has the keyboard again.
+      document.activeElement!.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+      );
+      fixture.detectChanges();
+      await settle();
+      await settle();
+      expect(el.querySelector('[data-testid="cancel-witness"]')).toBeNull();
+      expect(document.activeElement).toBe(rowButton);
+    } finally {
+      el.remove();
+    }
+  });
+
   // ── QA D654: a controlled substance moves only in front of a witness ──
 
   function makeAmoxicillinControlled(): void {

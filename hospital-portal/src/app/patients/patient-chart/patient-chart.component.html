@@ -1,4 +1,7 @@
-<div class="chart-container">
+<!-- QA D1297 (round 28): a row action that leaves with its list (a diagnosis
+     deleted, an allergy deactivated) gives focus to the active tab, a named
+     control, not to this anonymous container. -->
+<div class="chart-container" data-focus-return="app-patient-chart .chart-tab.active">
   <!-- QA D1005: the ongoing pregnancy is read on every tab of the chart. -->
   @if (pregnancy(); as pg) {
     <p class="chart-pregnancy" data-testid="chart-pregnancy">

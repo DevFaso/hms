@@ -238,3 +238,240 @@ describe('focus after a successful dialog action (QA D1283 / D1284 class)', () =
     expect(document.activeElement).toBe(el.querySelector('#tab'));
   });
 });
+
+/**
+ * QA D1297 / D1298 (round 28; D1283 / D1004 NOT_FIXED again). Round 27 kept
+ * "the nearest surviving ancestor, as it is" as the stand-in, so focus rested
+ * on an anonymous `div.portal-page`, a bare `tbody`, the flow board's
+ * `col-body` or `div.chart-container` (D1297), and — with the billing detail
+ * dialog still open — on the page H1 behind it (D1298: the reversal dialog
+ * closed in the same pass that re-enabled its opener, so focus() hit a
+ * disabled button). This host is the billing shape: a detail dialog, its
+ * payments table, a row button disabled while the request runs, and a second
+ * dialog opened from that row.
+ */
+interface Payment {
+  id: string;
+  date: string;
+  method: string;
+  status: 'CONFIRMED' | 'REVERSED';
+}
+
+@Component({
+  selector: 'app-test-billing',
+  standalone: true,
+  imports: [DialogA11yDirective],
+  changeDetection: ChangeDetectionStrategy.Eager,
+  template: `
+    <div class="portal-page">
+      <h1 id="page-title">Facturation</h1>
+      <button id="view" (click)="detailOpen.set(true)">Voir le détail</button>
+      @if (detailOpen()) {
+        <div appDialogA11y aria-labelledby="detail-title" (dialogClose)="detailOpen.set(false)">
+          <h2 id="detail-title">Facture 132</h2>
+          <div class="payments-section">
+            <h3 id="payments-title">Paiements</h3>
+            <table>
+              <tbody>
+                @for (p of payments(); track p.id) {
+                  <tr>
+                    <td>{{ p.date }}</td>
+                    <td>{{ p.method }}</td>
+                    <td>
+                      @if (p.status === 'CONFIRMED') {
+                        <button
+                          class="reverse"
+                          [disabled]="busy() || holdDisabled()"
+                          (click)="reversing.set(p.id)"
+                        >
+                          Contre-passer
+                        </button>
+                      }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+      }
+      @if (reversing()) {
+        <div appDialogA11y aria-label="Contre-passer" (dialogClose)="reversing.set(null)">
+          <button id="confirm-reversal" [disabled]="busy()" (click)="busy.set(true)">
+            Confirmer
+          </button>
+        </div>
+      }
+    </div>
+  `,
+})
+class BillingHost {
+  readonly detailOpen = signal(false);
+  readonly busy = signal(false);
+  /** The opener stays disabled after the dialog closed (a slower flag). */
+  readonly holdDisabled = signal(false);
+  readonly reversing = signal<string | null>(null);
+  readonly payments = signal<Payment[]>([
+    { id: 'p1', date: '18/10', method: 'Espèces', status: 'CONFIRMED' },
+    { id: 'p2', date: '19/10', method: 'Mobile', status: 'CONFIRMED' },
+  ]);
+
+  /** billing.ts submitReversal's success path: busy cleared and the dialog closed in one pass. */
+  answered(): void {
+    this.busy.set(false);
+    this.reversing.set(null);
+  }
+
+  /** The payments reload: the reversed row keeps its place, its button is gone. */
+  reloaded(): void {
+    this.payments.update((rows) =>
+      rows.map((r) => (r.id === 'p1' ? { ...r, status: 'REVERSED' as const } : r)),
+    );
+  }
+}
+
+describe('focus after success: named stand-ins and open parent dialogs (QA D1297 / D1298)', () => {
+  let fixture: ComponentFixture<BillingHost>;
+  let host: BillingHost;
+  let el: HTMLElement;
+
+  const settle = async () => {
+    for (let i = 0; i < 3; i++) await new Promise((resolve) => setTimeout(resolve, 0));
+  };
+  const detail = () => el.querySelector<HTMLElement>('[aria-labelledby="detail-title"]')!;
+  const reverseIn = (date: string) =>
+    [...el.querySelectorAll('tr')]
+      .find((r) => r.cells[0]?.textContent?.trim() === date)
+      ?.querySelector<HTMLButtonElement>('button.reverse') ?? null;
+
+  async function openDetailAndReversal(): Promise<void> {
+    el.querySelector<HTMLButtonElement>('#view')!.click();
+    fixture.detectChanges();
+    await settle();
+    const reverse = reverseIn('18/10')!;
+    reverse.focus();
+    reverse.click();
+    fixture.detectChanges();
+    await settle();
+  }
+
+  async function reverseFirstPayment(): Promise<void> {
+    await openDetailAndReversal();
+    el.querySelector<HTMLButtonElement>('#confirm-reversal')!.click();
+    fixture.detectChanges();
+    await settle();
+    host.answered();
+    fixture.detectChanges();
+    await settle();
+  }
+
+  beforeEach(() => {
+    installFocusRescue(document);
+    fixture = TestBed.createComponent(BillingHost);
+    document.body.appendChild(fixture.nativeElement);
+    fixture.detectChanges();
+    host = fixture.componentInstance;
+    el = fixture.nativeElement as HTMLElement;
+  });
+
+  afterEach(() => {
+    fixture.destroy();
+    el.remove();
+    uninstallFocusRescue();
+  });
+
+  it('D1298: the reversal closes in the pass that re-enables its opener: focus goes back to it', async () => {
+    await reverseFirstPayment();
+    expect(document.activeElement).toBe(reverseIn('18/10'));
+    expect(detail().contains(document.activeElement)).toBeTrue();
+  });
+
+  it('D1298: the opener left its row on reload: focus stays in the open detail dialog, on its section', async () => {
+    await reverseFirstPayment();
+    host.reloaded();
+    fixture.detectChanges();
+    await settle();
+    expect(reverseIn('18/10')).toBeNull();
+    expect(document.activeElement).toBe(el.querySelector('#payments-title'));
+    expect(document.activeElement).not.toBe(el.querySelector('#page-title'));
+    expect(detail().contains(document.activeElement)).toBeTrue();
+  });
+
+  it('D1298: an opener still disabled: focus waits in the open dialog, then returns to it', async () => {
+    await openDetailAndReversal();
+    host.holdDisabled.set(true);
+    fixture.detectChanges();
+    host.answered();
+    fixture.detectChanges();
+    await settle();
+    // Never the page heading behind the dialog that is still open.
+    expect(document.activeElement).not.toBe(el.querySelector('#page-title'));
+    expect(detail().contains(document.activeElement)).toBeTrue();
+    host.holdDisabled.set(false);
+    fixture.detectChanges();
+    await settle();
+    expect(document.activeElement).toBe(reverseIn('18/10'));
+  });
+});
+
+describe('focus after success: the stand-in announces itself (QA D1297, DOM)', () => {
+  let page: HTMLElement;
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  beforeEach(() => {
+    page = document.createElement('div');
+    document.body.appendChild(page);
+    installFocusRescue(document);
+  });
+
+  afterEach(() => {
+    uninstallFocusRescue();
+    page.remove();
+  });
+
+  it('a page wrapper (div.portal-page) never stands in: its heading does', async () => {
+    page.innerHTML = `<app-my-documents><div class="portal-page" tabindex="-1">
+        <h1>Mes documents</h1>
+        <table><tbody><tr id="r1"><td>Ordonnance</td><td><button id="del">Supprimer</button></td></tr></tbody></table>
+      </div></app-my-documents>`;
+    page.querySelector<HTMLButtonElement>('#del')!.focus();
+    page.querySelector('#r1')!.remove();
+    await settle();
+    expect(document.activeElement).toBe(page.querySelector('h1'));
+  });
+
+  it('a removed card in a board column: the column title, not the anonymous card list', async () => {
+    page.innerHTML = `<main><h1>Accueil</h1><div class="flow-col">
+        <div class="col-header"><span role="heading" aria-level="2" id="arr">Arrivé</span></div>
+        <div class="col-body">
+          <div class="patient-card" role="button" tabindex="0"><div class="card-name">Awa</div></div>
+          <button id="lwbs">Clôturer sans consultation</button>
+        </div></div></main>`;
+    page.querySelector<HTMLButtonElement>('#lwbs')!.focus();
+    page.querySelector('.patient-card')!.remove();
+    page.querySelector('#lwbs')!.remove();
+    await settle();
+    expect(document.activeElement).toBe(page.querySelector('#arr'));
+  });
+
+  it('a heading inside a list item titles that item, not the list: it is skipped', async () => {
+    page.innerHTML = `<main><section><h2 id="sec">Accès</h2><ul>
+        <li><h3>Awa</h3><button>Révoquer</button></li>
+        <li id="gone"><h3>Ali</h3><button id="rev">Révoquer</button></li>
+      </ul></section></main>`;
+    page.querySelector<HTMLButtonElement>('#rev')!.focus();
+    page.querySelector('#gone')!.remove();
+    await settle();
+    expect(document.activeElement).toBe(page.querySelector('#sec'));
+  });
+
+  it('the row survived, its control did not: the row keeps the focus on its first action', async () => {
+    page.innerHTML = `<main><table><tbody><tr><td>Awa</td><td>
+        <a href="#x" id="chart">Dossier</a><button id="give">Donner</button>
+      </td></tr></tbody></table></main>`;
+    page.querySelector<HTMLButtonElement>('#give')!.focus();
+    page.querySelector('#give')!.remove();
+    await settle();
+    expect(document.activeElement).toBe(page.querySelector('#chart'));
+  });
+});

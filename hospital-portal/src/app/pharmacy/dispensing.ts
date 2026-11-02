@@ -1,4 +1,6 @@
 import { refusalReason } from '../shared/refusal-reason';
+import { InlineSubFormDirective } from '../shared/a11y/inline-sub-form.directive';
+import { InlineDiscardAskComponent } from '../shared/a11y/inline-discard-ask.component';
 import {
   Component,
   computed,
@@ -172,6 +174,8 @@ export function sameDispenseUnit(
     EnumLabelPipe,
     PrescriptionClarificationComponent,
     DialogFocusDirective,
+    InlineSubFormDirective,
+    InlineDiscardAskComponent,
   ],
   templateUrl: './dispensing.html',
   changeDetection: ChangeDetectionStrategy.Eager,

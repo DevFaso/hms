@@ -95,7 +95,14 @@ export function restoreFocus(opener: HTMLElement | null): void {
   }
   if (target?.isConnected && typeof target.focus === 'function') {
     target.focus();
-    return;
+    if (target.ownerDocument.activeElement === target) return;
+    // QA D1298 (round 28): the opener is on the page but cannot take focus
+    // yet. A dialog closes in the same change-detection pass that clears the
+    // screen's busy flag, BEFORE the opener's `[disabled]="busy()"` binding is
+    // refreshed (the billing reversal's "Contre-passer"): focus() did nothing
+    // and the rescue parked focus on the page H1 behind the still-open
+    // detail dialog. The rescue gives focus to the opener once it is enabled.
+    keys.push(keyOf.get(target) ?? focusKeyOf(target));
   }
   // QA D1283 / D1284: a successful action reloads the list the opener sat in
   // (it is destroyed with the table while the screen loads): the focus rescue

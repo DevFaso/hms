@@ -80,7 +80,14 @@
   }
 
   @if (formOpen()) {
-    <section class="edit-card" data-test="edit-card">
+    <!-- QA D1307 class (round 28): opened from a row action, this form takes the keyboard (its first field), keeps Escape to itself and gives focus back to the row on close. -->
+    <section
+      class="edit-card"
+      data-test="edit-card"
+      appInlineSubForm
+      #planForm="inlineSubForm"
+      (dismissed)="cancelEdit()"
+    >
       <h2>
         {{
           editing()
@@ -164,6 +171,7 @@
           {{ 'SUBSCRIPTIONS.CANCEL' | translate }}
         </button>
       </div>
+      <app-inline-discard-ask [form]="planForm" />
     </section>
   }
 </div>

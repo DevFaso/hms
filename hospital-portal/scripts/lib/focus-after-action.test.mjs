@@ -242,10 +242,75 @@ test('QA D1283: an opener gone with its list is awaited, and the page host never
   const rescue = read('shared/a11y/focus-rescue.ts');
   const fn = /export function rescueFocus\([\s\S]*?\n\}/.exec(rescue)?.[0] ?? '';
   assert.match(fn, /returnToTwin\(doc\)/, 'the twin is tried before any stand-in');
-  assert.match(fn, /focusPlace\(standInFor\(place\)\)/, 'a component host never stands in');
+  assert.match(fn, /standInFrom\(doc, places\)/, 'the stand-in is chosen by standInFrom');
   assert.ok(
-    fn.indexOf('returnToTwin(doc)') < fn.indexOf('focusPlace(standInFor(place))'),
+    fn.indexOf('returnToTwin(doc)') < fn.indexOf('standInFrom(doc, places)'),
     'the twin is tried first',
+  );
+});
+
+// ── QA D1297 / D1298 (round 28; D1283 / D1004 NOT_FIXED again) ──
+// Round 27 ruled out the page HOST as the stand-in but kept "the nearest
+// surviving ancestor, as it is": focus rested on an anonymous div.portal-page,
+// a bare TBODY, the flow board's col-body and the chart's div.chart-container
+// (D1297), and on the page H1 BEHIND the billing detail dialog that was still
+// open (D1298: the reversal dialog closed in the same change-detection pass
+// that re-enabled its opener, so `focus()` hit a disabled button). The pattern
+// the round-27 rule could see was "a component host"; the class is "any place
+// that announces nothing, or that sits behind an open dialog". So the rescue's
+// one stand-in chooser must only ever return: the surviving row's action, a
+// named place (isNamedPlace), a heading, or the open dialog on top — and
+// restoreFocus must notice a focus() that did not take. Behaviour:
+// shared/a11y/focus-after-success.spec.ts ("QA D1297 / D1298") drives a
+// removed row, an open parent dialog and a page wrapper.
+export function standInIsNamed(rescue) {
+  const fn = /function standInFrom\([\s\S]*?\n\}/.exec(rescue)?.[0] ?? '';
+  const returns = [...fn.matchAll(/return ([^;]+);/g)].map((m) => m[1].trim());
+  const allowed = [
+    /^action$/,
+    /^place$/,
+    /^heading$/,
+    /^headingOf\(top\) \?\? top$/,
+    /^headingOf\(main \?\? doc\.body\) \?\? main$/,
+  ];
+  return (
+    fn !== '' &&
+    /isNamedPlace\(place\)/.test(fn) &&
+    /if \(top && !top\.contains\(place\)\) break;/.test(fn) &&
+    returns.length > 0 &&
+    returns.every((r) => allowed.some((a) => a.test(r)))
+  );
+}
+
+export function restoreNoticesAFailedFocus(ret) {
+  const body = /export function restoreFocus\([\s\S]*?\n\}/.exec(ret)?.[0] ?? '';
+  return /activeElement === target\) return;/.test(body) && /keys\.push\(/.test(body);
+}
+
+test('QA D1297 / D1298: the stand-in is always named and never behind an open dialog', () => {
+  assert.ok(
+    standInIsNamed(read('shared/a11y/focus-rescue.ts')),
+    'standInFrom may return only a row action, a named place, a heading or the open dialog',
+  );
+  assert.ok(
+    restoreNoticesAFailedFocus(read('shared/a11y/focus-return.ts')),
+    'restoreFocus hands an opener that could not take focus (disabled) to the rescue',
+  );
+});
+
+test('QA D1297 guard: the scan sees the round-27 "nearest ancestor as is" chooser', () => {
+  const round27 = `function standInFrom(doc, places) {
+  const place = places[0];
+  if (isNamedPlace(place)) return place;
+  if (top && !top.contains(place)) break;
+  return places[0];
+}`;
+  assert.equal(standInIsNamed(round27), false);
+  assert.equal(
+    restoreNoticesAFailedFocus(
+      'export function restoreFocus(opener) {\n  if (target?.isConnected) { target.focus(); return; }\n}',
+    ),
+    false,
   );
 });
 

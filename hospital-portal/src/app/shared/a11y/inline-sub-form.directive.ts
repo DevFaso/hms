@@ -129,6 +129,11 @@ export class InlineSubFormDirective implements AfterViewInit, OnDestroy {
       } else if (opener?.isConnected && (!dialog || dialog.contains(opener))) {
         // Only an opener inside the dialog: focus never leaves a dialog still open.
         restoreFocus(opener);
+      } else if (opener && !dialog) {
+        // QA D1307 (round 28): a form on the page (not in a dialog) whose row
+        // is reloading after a success: the rescue gives focus back to the
+        // row's control when the list is back (focus-return.ts awaitReturn).
+        restoreFocus(opener);
       } else if (dialog?.isConnected) {
         // A stand-in: a row editor's own return (appFocusOnRender) may still
         // put the keyboard on the pencil after this.

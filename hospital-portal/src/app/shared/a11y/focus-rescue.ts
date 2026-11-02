@@ -59,6 +59,8 @@
  * not on the page as they close (focus-return.ts `restoreFocus`).
  */
 
+import { topLayerHost } from './overlay-stack';
+
 /** The ancestors of the focused element, nearest first, recorded while it is on the page. */
 let trail: HTMLElement[] = [];
 /** The element that had focus. */
@@ -244,10 +246,90 @@ function isComponentHost(el: HTMLElement): boolean {
   );
 }
 
-/** A component host is never a stand-in: its heading is (QA D1283). */
-function standInFor(place: HTMLElement): HTMLElement {
-  if (!isComponentHost(place)) return place;
-  return [...place.querySelectorAll('h1, h2')].find(usable) ?? place;
+const HEADING = 'h1, h2, h3, h4, h5, h6, [role="heading"]';
+/** An item of a list: a heading inside one titles that item, not the list around it. */
+const ITEM = `${ROW}, [role="listitem"], [role="option"], [role="button"], article`;
+/** Places announced by their role and name (a named dialog, landmark, region or table). */
+const NAMED_ROLE =
+  /^(?:dialog|alertdialog|region|navigation|complementary|form|search|table|grid|tabpanel)$/;
+const NAMED_TAG = new Set(['DIALOG', 'NAV', 'ASIDE', 'SECTION', 'FORM', 'TABLE']);
+/** An open dialog: focus never waits behind it while it is still on the page (QA D1298). */
+const OPEN_DIALOG =
+  '[role="dialog"][aria-modal="true"], [role="alertdialog"][aria-modal="true"], dialog[open]';
+
+function hasName(el: HTMLElement): boolean {
+  if (squash(el.getAttribute('aria-label')) !== '') return true;
+  const ids = (el.getAttribute('aria-labelledby') ?? '').split(' ').filter((id) => id !== '');
+  if (ids.some((id) => squash(el.ownerDocument.getElementById(id)?.textContent) !== ''))
+    return true;
+  return el.tagName === 'TABLE' && squash(el.querySelector('caption')?.textContent) !== '';
+}
+
+/** On the page, rendered (a `display: none` box has no client rects) and not hidden from assistive technology. */
+function shown(el: HTMLElement): boolean {
+  return (
+    usable(el) && el.closest('[aria-hidden="true"]') === null && el.getClientRects().length > 0
+  );
+}
+
+/**
+ * QA D1297: a place a screen reader announces when it takes focus: a heading
+ * with text, the page's main landmark, or a dialog, landmark, region or table
+ * with a name. A bare `div`, `tbody` or list announces nothing.
+ */
+export function isNamedPlace(el: HTMLElement): boolean {
+  if (el.matches(HEADING)) return squash(el.textContent) !== '';
+  const role = el.getAttribute('role') ?? '';
+  if (el.tagName === 'MAIN' || role === 'main') return true;
+  return (NAMED_ROLE.test(role) || NAMED_TAG.has(el.tagName)) && hasName(el);
+}
+
+/** The heading that titles `place`: its first heading with text, not one inside an item of it. */
+function headingOf(place: HTMLElement): HTMLElement | null {
+  return (
+    [...place.querySelectorAll<HTMLElement>(HEADING)].find((h) => {
+      if (!shown(h) || squash(h.textContent) === '') return false;
+      const item = h.parentElement?.closest(ITEM);
+      return !item || item === place || !place.contains(item);
+    }) ?? null
+  );
+}
+
+/** The dialog on top of the page, still open (the one the keyboard belongs to). */
+function topOpenDialog(doc: Document): HTMLElement | null {
+  const top = topLayerHost();
+  if (top && shown(top)) return top;
+  return [...doc.querySelectorAll<HTMLElement>(OPEN_DIALOG)].filter(shown).at(-1) ?? null;
+}
+
+/**
+ * QA D1297 / D1298 (round 28; the D1283 / D1004 sibling): where focus waits
+ * when the control that had it is gone. Round 27 ruled out the page host but
+ * still used the nearest surviving ancestor as it was, so focus rested on an
+ * anonymous `div.portal-page`, a `tbody`, a board column or the chart's
+ * container — and, with a detail dialog still open, on the page's H1 behind
+ * it. Now, nearest first: the row the control sat in, if it survived (its
+ * first action); then the nearest ancestor that is a named place, or that a
+ * heading titles; never a place outside the dialog still open on top (that
+ * dialog's own heading, else the dialog, instead); last, the page's heading
+ * or main landmark. A component host is never a stand-in: its heading is.
+ */
+function standInFrom(doc: Document, places: HTMLElement[]): HTMLElement | null {
+  const top = topOpenDialog(doc);
+  const row = places.find((el) => el.matches(ROW));
+  if (row && (!top || top.contains(row))) {
+    const action = [...row.querySelectorAll(FOCUSABLE)].find(usable);
+    if (action) return action;
+  }
+  for (const place of places) {
+    if (top && !top.contains(place)) break;
+    if (isNamedPlace(place) && !isComponentHost(place)) return place;
+    const heading = headingOf(place);
+    if (heading) return heading;
+  }
+  if (top) return headingOf(top) ?? top;
+  const main = doc.querySelector<HTMLElement>('main, [role="main"]');
+  return headingOf(main ?? doc.body) ?? main;
 }
 
 function onFocusIn(event: Event): void {
@@ -365,8 +447,9 @@ export function rescueFocus(doc: Document = document): void {
     focusPlace(named);
     return;
   }
-  const place = trail.find((el) => el.isConnected && !el.closest('[inert]'));
-  if (place) focusPlace(standInFor(place));
+  const places = trail.filter((el) => el.isConnected && !el.closest('[inert]'));
+  const place = standInFrom(doc, places);
+  if (place) focusPlace(place);
 }
 
 /** Installs the rescue on `doc` (once). */

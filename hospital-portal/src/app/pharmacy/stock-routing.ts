@@ -30,6 +30,8 @@ import { PrintLabelService } from '../services/print-label.service';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { refusalReason } from '../shared/refusal-reason';
+import { InlineSubFormDirective } from '../shared/a11y/inline-sub-form.directive';
+import { InlineDiscardAskComponent } from '../shared/a11y/inline-discard-ask.component';
 @Component({
   selector: 'app-stock-routing',
   standalone: true,
@@ -41,6 +43,8 @@ import { refusalReason } from '../shared/refusal-reason';
     TranslateModule,
     EnumLabelPipe,
     HospitalScopeHintComponent,
+    InlineSubFormDirective,
+    InlineDiscardAskComponent,
   ],
   templateUrl: './stock-routing.html',
   changeDetection: ChangeDetectionStrategy.Eager,

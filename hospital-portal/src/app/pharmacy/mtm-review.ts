@@ -20,6 +20,8 @@ import { RoleContextService } from '../core/role-context.service';
 import { finalize } from 'rxjs';
 import { localDateString } from '../shared/date-utils';
 import { refusalReason } from '../shared/refusal-reason';
+import { InlineSubFormDirective } from '../shared/a11y/inline-sub-form.directive';
+import { InlineDiscardAskComponent } from '../shared/a11y/inline-discard-ask.component';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 /**
@@ -39,6 +41,8 @@ import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
     TranslateModule,
     EnumLabelPipe,
     PatientPickerComponent,
+    InlineSubFormDirective,
+    InlineDiscardAskComponent,
   ],
   templateUrl: './mtm-review.html',
   changeDetection: ChangeDetectionStrategy.Eager,

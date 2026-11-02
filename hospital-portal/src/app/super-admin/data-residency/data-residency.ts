@@ -15,6 +15,8 @@ import { catchError, of } from 'rxjs';
 import { DataResidencyService } from '../../services/data-residency.service';
 import { OrganizationRegion, OrganizationRegionRow } from '../../services/data-residency.model';
 import { OrgTextPipe } from '../../shared/pipes/org-text.pipe';
+import { InlineSubFormDirective } from '../../shared/a11y/inline-sub-form.directive';
+import { InlineDiscardAskComponent } from '../../shared/a11y/inline-discard-ask.component';
 
 interface EditState {
   organizationId: string;
@@ -27,7 +29,14 @@ interface EditState {
 @Component({
   selector: 'app-super-admin-data-residency',
   standalone: true,
-  imports: [FormsModule, RouterLink, TranslateModule, OrgTextPipe],
+  imports: [
+    FormsModule,
+    RouterLink,
+    TranslateModule,
+    OrgTextPipe,
+    InlineSubFormDirective,
+    InlineDiscardAskComponent,
+  ],
   templateUrl: './data-residency.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './data-residency.scss',
