@@ -158,7 +158,8 @@ public class NurseTaskController {
         authUtils.requireAuth(auth);
         UUID nurseId = resolveAssignee(auth, assignee);
         UUID scopedHospital = ensureHospitalScope(auth, hospitalId);
-        int effectiveLimit = safeLimit(limit, 6, 20);
+        // QA D1255: the nurse's order queue is a worklist; without a limit it lists every order.
+        int effectiveLimit = limit == null ? NurseTaskService.NO_LIMIT : safeLimit(limit, 6, 20);
         return ResponseEntity.ok(nurseTaskService.getOrderTasks(nurseId, scopedHospital, status, effectiveLimit));
     }
 
@@ -177,7 +178,10 @@ public class NurseTaskController {
         // QA D785: the viewer is always the caller, whatever the list filter.
         UUID viewerId = authUtils.resolveUserId(auth).orElse(null);
         UUID scopedHospital = ensureHospitalScope(auth, hospitalId);
-        int effectiveLimit = safeLimit(limit, 6, 20);
+        // QA D1255: the pending handoffs are a worklist; without a limit they are all listed.
+        // The completed list is a history and keeps its default length.
+        boolean completed = status != null && "COMPLETED".equalsIgnoreCase(status.trim());
+        int effectiveLimit = limit == null && !completed ? NurseTaskService.NO_LIMIT : safeLimit(limit, 6, 20);
         return ResponseEntity.ok(nurseTaskService.getHandoffSummaries(nurseId, viewerId, scopedHospital,
             effectiveLimit, status));
     }

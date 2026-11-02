@@ -129,6 +129,9 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     private static final Duration DEFAULT_WINDOW = Duration.ofHours(2);
     private static final int DEFAULT_LIMIT = 6;
     private static final int MAX_LIMIT = 20;
+    /** QA D1255: the MAR list's order, soonest due first, a finished course last. */
+    private static final Comparator<NurseMedicationTaskResponseDTO> BY_DUE_TIME = Comparator.comparing(
+        NurseMedicationTaskResponseDTO::getDueTime, Comparator.nullsLast(Comparator.naturalOrder()));
 
     // The vitals-round type (vitalTaskType on the portal), not an order priority:
     // PRIORITY_ROUTINE below holds the same wire value for a different vocabulary.
@@ -251,8 +254,10 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             }
         }
 
+        // QA D1255 class: every admitted patient's round, soonest first; the
+        // list was cut at 20 rows for the whole hospital.
         tasks.sort(Comparator.comparing(NurseVitalTaskResponseDTO::getDueTime));
-        return tasks.stream().limit(MAX_LIMIT).toList();
+        return tasks;
     }
 
     /** The vitals round of one admitted patient, or {@code null} when none falls in the window. */
@@ -312,7 +317,11 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             tasks.addAll(buildMedicationTasksForPatient(ctx, hospitalId, statusFilter, now, admitted));
         }
 
-        return tasks.stream().limit(MAX_LIMIT).toList();
+        // QA D1255: every active order of the scope, soonest due first (a
+        // finished course, with no due time, last). The list was cut at 20 rows
+        // for the whole hospital, before any sort, so active orders vanished.
+        tasks.sort(BY_DUE_TIME);
+        return tasks;
     }
 
     /** Build medication tasks for a single patient from their real prescriptions. */
@@ -356,6 +365,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
                     .dueTime(dueTime)
                     .status(marStatus)
                     .frequencyUnread(due.frequencyUnread())
+                    .earlyDose(STATUS_DUE.equals(marStatus) && due.earlyAt(now))
                     .controlledSubstance(controlled)
                     .requiresPharmacistVerification(
                         pharmacistVerificationService.requiresVerification(rx, controlled))
@@ -847,7 +857,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         // can still fill it.
         return nurseHandoffRepository
             .findByHospital_IdAndStatusOrderByCreatedAtDesc(hospitalId, effectiveStatus,
-                PageRequest.of(0, HANDOFF_SCAN_PAGE))
+                // QA D1255: an uncapped list reads every handoff of that status.
+                effectiveLimit == NO_LIMIT ? Pageable.unpaged() : PageRequest.of(0, HANDOFF_SCAN_PAGE))
             .stream()
             // QA D776: a handoff addressed to me is mine whoever the patient's nurse is.
             .filter(h -> inScope(h.getPatient(), scope) || addressedTo(h, nurseUserId))
@@ -1199,7 +1210,12 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         return resolveMarStatus(nextDose(rx, now), now);
     }
 
-    private static String resolveMarStatus(MarNextDose.Due due, LocalDateTime now) {
+    /**
+     * The MAR status of a next dose at {@code now}: what every MAR screen keys
+     * on. Package-private for MarScreenServerAgreementTest (QA D1254), which
+     * proves it against the administer call's own rules.
+     */
+    static String resolveMarStatus(MarNextDose.Due due, LocalDateTime now) {
         LocalDateTime dueBy = due.dueTime();
         if (dueBy == null) return STATUS_COMPLETED;
         // QA D1237: an unread frequency keeps the course open; the row is
@@ -1208,8 +1224,10 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         // A dose may be given up to an hour either side of its slot (D154).
         if (dueBy.plus(EARLY_ADMINISTRATION_WINDOW).isBefore(now)) return STATUS_OVERDUE;
         // QA D949: a slot beyond the early window cannot be given yet (the
-        // administer call refuses it), so it is not "due". QA D1236: nor is
-        // one inside the minimum gap since the dose was really given.
+        // administer call refuses it), so it is not "due". QA D1236: nor is a
+        // missed backlog slot inside the minimum gap since the dose was really
+        // given. QA D1254: a dose inside its slot window but before the gap IS
+        // due (flagged earlyDose), so Give opens the early-dose reason dialog.
         if (due.notBefore() != null && now.isBefore(due.notBefore())) return STATUS_UPCOMING;
         return STATUS_DUE;
     }
@@ -1315,10 +1333,19 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         // minimum gap since the last real one is then refused by the interval
         // rule unless the nurse says why (QA D1210). The row fills the next
         // dose's slot (QA D1236), never a missed backlog slot.
-        if (due.scheduledSlot().isAfter(now.plus(EARLY_ADMINISTRATION_WINDOW))) {
+        if (!slotRuleAllows(due, now)) {
             throw new BusinessException("nurse.mar.doseNotYetDue");
         }
         return slot;
+    }
+
+    /**
+     * The slot rule (D154): a dose is never recorded more than the early window
+     * before the schedule's own slot. Package-private for
+     * MarScreenServerAgreementTest (QA D1254).
+     */
+    static boolean slotRuleAllows(MarNextDose.Due due, LocalDateTime now) {
+        return !due.scheduledSlot().isAfter(now.plus(EARLY_ADMINISTRATION_WINDOW));
     }
 
     private Optional<MedicationAdministrationRecord> findPendingForSlot(Prescription rx, LocalDateTime slot) {
@@ -1631,6 +1658,9 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     }
 
     private int clampLimit(Integer requested) {
+        if (requested != null && requested == NO_LIMIT) {
+            return NO_LIMIT;
+        }
         int value = requested == null ? DEFAULT_LIMIT : requested;
         return clampInt(value, 1, MAX_LIMIT);
     }

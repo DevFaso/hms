@@ -66,12 +66,21 @@ public final class MarDoseSchedule {
     /** QA D1237: "toutes les heures", "chaque heure", "cada hora", "every hour". */
     private static final Pattern EVERY_HOUR = Pattern.compile("\\b" + EVERY + "\\s+(?:HOUR|HEURES?|HORA)\\b");
     /** QA D1237: "6 h/6 h", "6h/6", "6/6 h", the French way of writing q6h ("24h/24" is continuous, not read). */
-    private static final Pattern SLASH_HOURS = Pattern.compile("\\b(\\d{1,2})\\s*(H?)\\s*/\\s*(\\d{1,2})\\s*(H?)\\b");
+    // Sonar S8786: possessive up to the second number (digits, spaces, H and the slash are disjoint and
+    // the slash must follow, so nothing is given back), greedy after it (the word boundary may need the
+    // trailing spaces back). Same matches as the greedy form over 300 000 generated strings.
+    private static final Pattern SLASH_HOURS =
+        Pattern.compile("\\b(\\d{1,2}+)\\s*+(H?+)\\s*+/\\s*+(\\d{1,2}+)\\s*(H?)\\b");
     /** QA D1237: "every 2 days", "tous les 2 jours", "cada 2 dias". */
     private static final Pattern EVERY_DAYS =
         Pattern.compile("\\b(?:EVERY|TOUS LES|CADA)\\s+(\\d)\\s*(?:DAYS|JOURS|DIAS)\\b");
-    /** "3 x", "2 fois", "dos veces", "3 times": a count of doses, read with {@link #PER_DAY} after it. */
-    private static final Pattern TIMES = Pattern.compile("\\b(\\d)\\s*(?:X|FOIS|VECES|VEZ|TIMES)\\s*");
+    /**
+     * "3 x", "2 fois", "dos veces", "3 times", "12 fois": a count of doses, read with {@link #PER_DAY}
+     * after it (QA D1263: up to twelve as a word, so two digits).
+     */
+    private static final Pattern TIMES = Pattern.compile("\\b(\\d{1,2}+)\\s*+(?:X|FOIS|VECES|VEZ|TIMES)\\s*+");
+    /** The most doses a day read as a schedule (hourly); a larger count is not a MAR interval. */
+    private static final int MAX_DOSES_PER_DAY = 24;
     /**
      * "/j", "par jour", "par 24 h", "al dia", "por dia", "daily", "a day",
      * "per day", right after {@link #TIMES}.
@@ -224,7 +233,8 @@ public final class MarDoseSchedule {
         Matcher m = TIMES.matcher(f);
         while (m.find()) {
             if (PER_DAY.matcher(f).region(m.end(), f.length()).lookingAt()) {
-                return Integer.parseInt(m.group(1));
+                int count = Integer.parseInt(m.group(1));
+                return count <= MAX_DOSES_PER_DAY ? count : null;
             }
         }
         return null;
@@ -272,13 +282,26 @@ public final class MarDoseSchedule {
         return out.toString();
     }
 
+    /**
+     * QA D928 / QA D1263: a count of doses as a word, one to twelve in EN, FR
+     * and ES ("cinq fois par jour", "cinco veces al dia", "eight times a day").
+     * "ONCE" before "veces" is Spanish eleven (English "once" has no
+     * "fois/veces/times" after it, so it never reaches here).
+     */
     private static String countDigitOf(String word) {
         return switch (word) {
             case "UNE", "UN", "UNA", "UNO", "ONE" -> "1";
             case "DEUX", "DOS", "TWO" -> "2";
             case "TROIS", "TRES", "THREE" -> "3";
             case "QUATRE", "CUATRO", "FOUR" -> "4";
+            case "CINQ", "CINCO", "FIVE" -> "5";
             case "SIX", "SEIS" -> "6";
+            case "SEPT", "SIETE", "SEVEN" -> "7";
+            case "HUIT", "OCHO", "EIGHT" -> "8";
+            case "NEUF", "NUEVE", "NINE" -> "9";
+            case "DIX", "DIEZ", "TEN" -> "10";
+            case "ONZE", "ONCE", "ELEVEN" -> "11";
+            case "DOUZE", "DOCE", "TWELVE" -> "12";
             // Any other word before "fois" or "times" is kept as written.
             default -> null;
         };

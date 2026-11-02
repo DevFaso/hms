@@ -4505,4 +4505,134 @@ class NurseTaskServiceImplTest {
         service.recordMedicationAdministration(rxId, nurseId, hospitalId, given);
         assertThat(saved.getValue().getReason()).isEqualTo("Prescriber confirmed: after each meal");
     }
+
+    /**
+     * QA D1255 (round 26): the MAR list was cut at 20 rows for the whole
+     * hospital, before any sort, so a controlled morphine order with a dose
+     * already given vanished. Every active order of the scope is listed,
+     * soonest due first, a finished course last.
+     */
+    @Test
+    void d1255_everyActiveOrderIsListedSoonestFirst() {
+        UUID nurseId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        List<PatientResponseDTO> patients = new java.util.ArrayList<>();
+        LocalDateTime base = LocalDateTime.now().minusHours(30);
+        for (int i = 0; i < 25; i++) {
+            Prescription rx = scheduledRx(hospitalId, "q12h");
+            rx.setStatus(PrescriptionStatus.SIGNED);
+            rx.setMedicationName("Order " + i);
+            // Later patients' orders start earlier, so the read order is not the due order.
+            rx.setCreatedAt(base.plusMinutes(60L * (25 - i)));
+            UUID patientId = rx.getPatient().getId();
+            patients.add(patient(patientId, "Patient " + i, "P", String.valueOf(i)));
+            when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
+                .thenReturn(List.of(rx));
+        }
+        when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null)).thenReturn(patients);
+
+        List<NurseMedicationTaskResponseDTO> tasks = service.getMedicationTasks(nurseId, hospitalId, null);
+
+        assertThat(tasks).hasSize(25);
+        assertThat(tasks).extracting(NurseMedicationTaskResponseDTO::getDueTime)
+            .isSortedAccordingTo(java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder()));
+        assertThat(tasks.get(0).getMedication()).isEqualTo("Order 24");
+    }
+
+    /**
+     * QA D1254 (round 26, regression of D1236): hourly morphine given on time
+     * five minutes ago. The next dose is inside its slot window but before the
+     * 30-minute gap: DUE (so Give is offered and the server's reason refusal
+     * opens the early-dose dialog), flagged earlyDose. Round 25 made it
+     * UPCOMING and the early-dose path unreachable.
+     */
+    @Test
+    void d1254_aDoseInsideItsSlotWindowButBeforeTheGapIsDueAndFlaggedEarly() {
+        UUID nurseId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "toutes les heures");
+        rx.setStatus(PrescriptionStatus.SIGNED);
+        LocalDateTime slot = LocalDateTime.now().minusMinutes(5);
+        rx.setSignedAt(slot);
+        UUID patientId = rx.getPatient().getId();
+        MedicationAdministrationRecord given = closedDose(rx, slot, MedicationAdministrationStatus.GIVEN);
+        given.setAdministeredAt(slot);
+        when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null))
+            .thenReturn(List.of(patient(patientId, "Rihanata Sankara", "Rihanata", "Sankara")));
+        when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId)).thenReturn(List.of(rx));
+        when(marRepository.findByPrescription_IdOrderByScheduledTimeDesc(rx.getId())).thenReturn(List.of(given));
+
+        List<NurseMedicationTaskResponseDTO> pending = service.getMedicationTasks(nurseId, hospitalId, "PENDING");
+
+        assertThat(pending).hasSize(1);
+        assertThat(pending.get(0).getStatus()).isEqualTo("DUE");
+        assertThat(pending.get(0).isEarlyDose()).isTrue();
+    }
+
+    /** QA D1254: once the gap has passed, the same order is DUE and not early. */
+    @Test
+    void d1254_afterTheGapTheDoseIsNoLongerEarly() {
+        UUID nurseId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "toutes les heures");
+        rx.setStatus(PrescriptionStatus.SIGNED);
+        LocalDateTime slot = LocalDateTime.now().minusMinutes(40);
+        rx.setSignedAt(slot);
+        UUID patientId = rx.getPatient().getId();
+        MedicationAdministrationRecord given = closedDose(rx, slot, MedicationAdministrationStatus.GIVEN);
+        given.setAdministeredAt(slot);
+        when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null))
+            .thenReturn(List.of(patient(patientId, "Rihanata Sankara", "Rihanata", "Sankara")));
+        when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId)).thenReturn(List.of(rx));
+        when(marRepository.findByPrescription_IdOrderByScheduledTimeDesc(rx.getId())).thenReturn(List.of(given));
+
+        NurseMedicationTaskResponseDTO row = service.getMedicationTasks(nurseId, hospitalId, null).get(0);
+
+        assertThat(row.getStatus()).isEqualTo("DUE");
+        assertThat(row.isEarlyDose()).isFalse();
+    }
+
+    /**
+     * QA D1262 (round 26): a REFUSED outcome recorded late on a missed backlog
+     * slot. The row moves to the schedule's first slot after the refusal; it
+     * is not OVERDUE on the next missed slot.
+     */
+    @Test
+    void d1262_aLateRefusalOnABacklogSlotIsNotOverdue() {
+        UUID nurseId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "trois fois par jour");
+        rx.setStatus(PrescriptionStatus.SIGNED);
+        LocalDateTime missed = LocalDateTime.now().minusHours(20);
+        rx.setSignedAt(missed);
+        UUID patientId = rx.getPatient().getId();
+        MedicationAdministrationRecord refused = closedDose(rx, missed, MedicationAdministrationStatus.REFUSED);
+        refused.setAdministeredAt(LocalDateTime.now().minusMinutes(1));
+        when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null))
+            .thenReturn(List.of(patient(patientId, "Aminatou Diallo", "Aminatou", "Diallo")));
+        when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId)).thenReturn(List.of(rx));
+        when(marRepository.findByPrescription_IdOrderByScheduledTimeDesc(rx.getId())).thenReturn(List.of(refused));
+
+        NurseMedicationTaskResponseDTO row = service.getMedicationTasks(nurseId, hospitalId, null).get(0);
+
+        assertThat(row.getStatus()).isEqualTo("UPCOMING");
+        assertThat(row.getDueTime()).isEqualTo(missed.plusHours(24));
+    }
+
+    /** QA D1255 class: an uncapped pending-handoff list reads every pending handoff, unpaged, and keeps them all. */
+    @Test
+    void d1255_anUncappedHandoffListReadsAndKeepsEveryPendingHandoff() {
+        UUID hospitalId = UUID.randomUUID();
+        Patient p = mock(Patient.class);
+        lenient().when(p.getId()).thenReturn(UUID.randomUUID());
+        List<NurseHandoff> many = new java.util.ArrayList<>();
+        for (int i = 0; i < 30; i++) {
+            many.add(NurseHandoff.builder().patient(p).direction("SHIFT_CHANGE").build());
+        }
+        when(nurseHandoffRepository.findByHospital_IdAndStatusOrderByCreatedAtDesc(
+            eq(hospitalId), eq("PENDING"), eq(Pageable.unpaged()))).thenReturn(many);
+
+        assertThat(service.getHandoffSummaries(null, null, hospitalId,
+            com.example.hms.service.NurseTaskService.NO_LIMIT, null)).hasSize(30);
+    }
 }

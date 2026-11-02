@@ -534,6 +534,73 @@ describe('NurseStationComponent — two-tier polling', () => {
       );
     });
 
+    // QA D1254 (round 26, regression of D1236): a dose inside its slot window
+    // but before the minimum interval is DUE and flagged earlyDose. The row
+    // keeps Give, Hold and Refuse, says it is early, and Give leads to the
+    // early-dose reason dialog when the server asks why (D1210).
+    it('QA D1254: an early dose keeps Give, is marked early, and its refusal opens the early-dose dialog', () => {
+      const early = rows.map((r) => (r.id === 'm3' ? { ...r, earlyDose: true } : r));
+      nurseServiceSpy.getMedicationMAR.and.returnValue(
+        of(early as unknown as NurseMedicationTask[]),
+      );
+      component.refresh();
+      component.activeSection.set('medications');
+      component['pendingLoads'].set(0);
+      fixture.detectChanges();
+      const el = fixture.nativeElement as HTMLElement;
+      const row = el.querySelector('[data-testid="med-early-dose-m3"]')!.closest('tr')!;
+      expect(row.querySelector('.action-give')).withContext('Give is offered').not.toBeNull();
+      expect(row.querySelector('.action-hold')).not.toBeNull();
+      expect(row.querySelector('.action-refuse')).not.toBeNull();
+      expect(
+        el.querySelector('[data-testid="med-early-dose-m3"] .sr-only')?.textContent?.trim(),
+      ).toBe('EMAR.EARLY_DOSE.CHIP_LABEL');
+      expect(el.querySelector('[data-testid="med-early-dose-m1"]')).toBeNull();
+
+      const why = 'Dose trop rapprochée : prochaine au plus tôt à 08:33 (toutes les 1 h).';
+      nurseServiceSpy.administerMedication.and.returnValue(
+        throwError(() => ({
+          status: 400,
+          error: { message: why, field: 'earlyDoseReason', fieldErrors: { earlyDoseReason: why } },
+        })),
+      );
+      (row.querySelector('.action-give') as HTMLButtonElement).click();
+      component.reasonText.set('Pas de scanner au chevet');
+      component.confirmHoldRefuse();
+      fixture.detectChanges();
+      expect(component.earlyDose()?.why).toBe(why);
+      expect(component.earlyDoseKeys().title).toBe('EMAR.EARLY_DOSE.TITLE');
+    });
+
+    // QA D1265 (round 26): an unreadable frequency is refused on the same
+    // field, but not for being early: its dialog has its own title.
+    it('QA D1265: the refusal of an unreadable frequency opens a dialog titled for it', () => {
+      const unread = rows.map((r) => (r.id === 'm3' ? { ...r, frequencyUnread: true } : r));
+      component.medications.set(unread as unknown as NurseMedicationTask[]);
+      const why = 'La fréquence « quand il veut » ne peut pas être lue comme un horaire.';
+      nurseServiceSpy.administerMedication.and.returnValue(
+        throwError(() => ({
+          status: 400,
+          error: { message: why, field: 'earlyDoseReason', fieldErrors: { earlyDoseReason: why } },
+        })),
+      );
+      component.administerMedication('m3');
+      component.reasonText.set('Pas de scanner au chevet');
+      component.confirmHoldRefuse();
+      expect(component.earlyDoseKeys()).toEqual({
+        title: 'EMAR.FREQUENCY_UNREAD_DIALOG.TITLE',
+        label: 'EMAR.FREQUENCY_UNREAD_DIALOG.REASON_LABEL',
+        confirm: 'EMAR.FREQUENCY_UNREAD_DIALOG.CONFIRM',
+      });
+      component.activeSection.set('medications');
+      component['pendingLoads'].set(0);
+      fixture.detectChanges();
+      const title = (fixture.nativeElement as HTMLElement)
+        .querySelector('app-reason-dialog h2')
+        ?.textContent?.trim();
+      expect(title).toBe('EMAR.FREQUENCY_UNREAD_DIALOG.TITLE');
+    });
+
     it('a controlled substance is marked on its row', () => {
       const el = render();
       expect(el.querySelector('[data-testid="med-controlled-m2"]')).toBeTruthy();

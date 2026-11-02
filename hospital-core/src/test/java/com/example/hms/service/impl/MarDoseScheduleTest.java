@@ -111,9 +111,8 @@ class MarDoseScheduleTest {
      * A new language, phrasing or number word the reader does not know fails
      * here instead of ending a course on the ward.
      */
-    @Test
-    void d1237_everyHourWordInEveryLanguageReadsAsItsNumber() {
-        Map<Integer, List<String>> words = Map.ofEntries(
+    /** Number words one to twelve (and 24) in FR, ES and EN: the input space of D1237 and D1263. */
+    private static final Map<Integer, List<String>> NUMBER_WORDS = Map.ofEntries(
             Map.entry(1, List.of("une", "una", "one")), Map.entry(2, List.of("deux", "dos", "two")),
             Map.entry(3, List.of("trois", "tres", "three")), Map.entry(4, List.of("quatre", "cuatro", "four")),
             Map.entry(5, List.of("cinq", "cinco", "five")), Map.entry(6, List.of("six", "seis", "six")),
@@ -121,6 +120,10 @@ class MarDoseScheduleTest {
             Map.entry(9, List.of("neuf", "nueve", "nine")), Map.entry(10, List.of("dix", "diez", "ten")),
             Map.entry(11, List.of("onze", "once", "eleven")), Map.entry(12, List.of("douze", "doce", "twelve")),
             Map.entry(24, List.of("vingt-quatre", "veinticuatro", "twenty-four")));
+
+    @Test
+    void d1237_everyHourWordInEveryLanguageReadsAsItsNumber() {
+        Map<Integer, List<String>> words = NUMBER_WORDS;
         List<String> templates = List.of("toutes les %s heures", "cada %s horas", "every %s hours");
         List<String> wrong = new ArrayList<>();
         int checked = 0;
@@ -135,6 +138,55 @@ class MarDoseScheduleTest {
         }
         assertThat(checked).isEqualTo(39);
         assertThat(wrong).isEmpty();
+    }
+
+    /**
+     * QA D1263 (round 26) guard: EVERY count of doses a day, one to twelve, as
+     * a word in FR, ES and EN and as digits, in each way the portal's users
+     * write "per day", reads as that many doses (an interval of 24 h / n).
+     * Round 25 read "5 fois par jour" but not "cinq fois par jour": the word
+     * list for counts was shorter than the one for hours. Both now come from
+     * {@link #NUMBER_WORDS}, so a word missing from either reader fails here.
+     */
+    @Test
+    void d1263_everyCountOfDosesADayInEveryLanguageAndFormIsRead() {
+        List<List<String>> templates = List.of(
+            List.of("%s fois par jour", "%s fois/j", "%s fois par 24 h"),
+            List.of("%s veces al día", "%s veces por día"),
+            List.of("%s times a day", "%s times daily", "%s times per day"));
+        List<String> wrong = new ArrayList<>();
+        int checked = 0;
+        for (int n = 1; n <= 12; n++) {
+            for (int lang = 0; lang < templates.size(); lang++) {
+                for (String template : templates.get(lang)) {
+                    for (String count : List.of(NUMBER_WORDS.get(n).get(lang), String.valueOf(n))) {
+                        String text = String.format(template, count);
+                        checked++;
+                        MarDoseSchedule.Reading reading = MarDoseSchedule.read(text);
+                        if (!reading.repeating() || reading.intervalMinutes() != 24 * 60 / n
+                            || !java.util.Objects.equals(MarDoseSchedule.dosesPerDay(text), (double) n)) {
+                            wrong.add(text + " -> " + reading);
+                        }
+                    }
+                }
+            }
+        }
+        assertThat(checked).isEqualTo(12 * 8 * 2);
+        assertThat(wrong).isEmpty();
+    }
+
+    /** QA D1263: "5 fois par jour" is still every 4 h 48, and a count over hourly is not a MAR schedule. */
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', value = {"5 fois par jour|288", "cinq fois par jour|288", "cinco veces al día|288",
+        "five times a day|288", "huit fois par jour|180", "eight times a day|180", "24 fois par jour|60"})
+    void d1263_countsReadAsTheirInterval(String frequency, int minutes) {
+        assertThat(MarDoseSchedule.read(frequency).intervalMinutes()).isEqualTo(minutes);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"25 fois par jour", "48 times a day", "100 fois par jour"})
+    void d1263_aCountOverHourlyIsNotASchedule(String frequency) {
+        assertThat(MarDoseSchedule.read(frequency).kind()).isEqualTo(MarDoseSchedule.Kind.UNREAD);
     }
 
     /** QA D1237: only a frequency that says so is a single dose or as-needed. */

@@ -27,6 +27,12 @@ import java.util.UUID;
 
 public interface NurseTaskService {
 
+    /**
+     * QA D1255: the limit that means "every item" for the worklists (the order
+     * queue, the pending handoffs); a worklist is never cut silently.
+     */
+    int NO_LIMIT = Integer.MAX_VALUE;
+
     List<NurseVitalTaskResponseDTO> getDueVitals(UUID nurseUserId, UUID hospitalId, Duration window);
 
     List<NurseMedicationTaskResponseDTO> getMedicationTasks(UUID nurseUserId, UUID hospitalId, String statusFilter);

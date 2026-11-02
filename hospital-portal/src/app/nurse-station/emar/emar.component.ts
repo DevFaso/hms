@@ -34,7 +34,7 @@ import { WitnessPickerComponent } from '../witness-picker/witness-picker.compone
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 import { ReasonDialogComponent } from '../../shared/reason-dialog/reason-dialog.component';
 import { MarDoseHistoryComponent } from '../mar-dose-history/mar-dose-history.component';
-import { earlyDoseRefusal } from '../early-dose';
+import { earlyDoseDialogKeys, earlyDoseRefusal } from '../early-dose';
 type LoadState = 'loading' | 'ready' | 'empty' | 'error';
 type ScanField = 'patient' | 'medication';
 
@@ -374,6 +374,11 @@ export class EmarComponent implements OnInit, OnDestroy {
     payload: MedicationAdministrationRequest;
     why: string;
   } | null>(null);
+
+  /** QA D1265: an unreadable frequency's refusal has its own title and question. */
+  protected readonly earlyDoseKeys = computed(() =>
+    earlyDoseDialogKeys(this.activeTask()?.frequencyUnread),
+  );
 
   /** QA D1210: the same dose again, with the nurse's reason for giving it early. */
   protected confirmEarlyDose(reason: string): void {
