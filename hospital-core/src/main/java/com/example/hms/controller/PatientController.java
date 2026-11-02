@@ -205,16 +205,14 @@ public class PatientController {
             // "+226 65 11 22 33") is searched as a number, folded like the
             // duplicate check; it used to be matched against names only, so
             // the appointment and walk-in pickers never found a patient by phone.
-            String term = search.trim();
-            PatientSearchCriteria.PatientSearchCriteriaBuilder criteria = PatientSearchCriteria.builder()
+            // QA D1274: the service reads the typed term (a phone number, a
+            // birth date, an e-mail or the start of one, else a name or MRN).
+            PatientSearchCriteria criteria = PatientSearchCriteria.builder()
+                .name(search.trim())
                 .hospitalId(resolvedHospitalId)
-                .includeInactive(true);
-            if (com.example.hms.utility.PatientMatchKeys.looksLikePhone(term)) {
-                criteria.phone(term);
-            } else {
-                criteria.name(term);
-            }
-            return ResponseEntity.ok(patientService.searchPatients(criteria.build(), 0, LIST_SEARCH_LIMIT, locale));
+                .includeInactive(true)
+                .build();
+            return ResponseEntity.ok(patientService.searchPatients(criteria, 0, LIST_SEARCH_LIMIT, locale));
         }
         return ResponseEntity.ok(patientService.getAllPatients(resolvedHospitalId, locale));
     }
@@ -393,14 +391,14 @@ public class PatientController {
     ) {
         Locale locale = parseLocale(lang);
         UUID resolvedHospitalId = authUtils.resolveHospitalScope(auth, hospitalId, false);
-        // QA D1019 (sibling): a number typed into the name box is a phone search.
-        boolean nameIsPhone = (phone == null || phone.isBlank())
-            && com.example.hms.utility.PatientMatchKeys.looksLikePhone(name);
+        // QA D1019 / D1274: a number, a birth date or an e-mail typed into the
+        // name box is searched as such by the service (each only when its own
+        // filter is not given); dob accepts yyyy-mm-dd, dd/mm/yyyy, dd-mm-yyyy.
         PatientSearchCriteria criteria = PatientSearchCriteria.builder()
             .mrn(mrn)
-            .name(nameIsPhone ? null : name)
+            .name(name)
             .dateOfBirth(dob)
-            .phone(nameIsPhone ? name : phone)
+            .phone(phone)
             .email(email)
             .hospitalId(resolvedHospitalId)
             .active(active)

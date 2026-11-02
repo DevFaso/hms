@@ -2,6 +2,7 @@ package com.example.hms.service;
 
 import com.example.hms.enums.InvoiceStatus;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.BillingInvoiceMapper;
 import com.example.hms.model.BillingInvoice;
@@ -330,7 +331,8 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             key = dto.getPatientEmail().trim();
             patient = patientByLegacyKey(dto.getPatientEmail().trim(), hospitalId);
         } else {
-            throw new BusinessException("billing.invoice.patientRequired");
+            // QA D1282: the refusal names the field, so the form can mark it.
+            throw new FieldBusinessException("patientId", "billing.invoice.patientRequired");
         }
         // A patient of another hospital gets the answer of an unknown one.
         if (patient == null || !registrationRepository.existsByPatientIdAndHospitalId(patient.getId(), hospitalId)) {

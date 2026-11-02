@@ -686,7 +686,8 @@ public class ReceptionServiceImpl implements ReceptionService {
             return List.of();
         }
         String namePattern = PatientMatchKeys.nameContainsPattern(name);
-        String dobValue = (dob != null && !dob.isBlank()) ? dob.trim() : null;
+        // QA D1274: a birth date in any accepted format, compared as yyyy-mm-dd.
+        String dobValue = PatientMatchKeys.birthDateKey(dob);
         Map<UUID, Patient> candidates = new java.util.LinkedHashMap<>();
         // The name is its own candidate source: a mistyped or transposed date
         // of birth must not hide a same-name record (the D924 class, one field

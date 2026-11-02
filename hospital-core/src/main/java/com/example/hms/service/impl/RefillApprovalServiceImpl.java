@@ -275,6 +275,19 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
         return NotificationText.of("refill.decision.denied", medicationName);
     }
 
+    /**
+     * QA D1276: the MRN of the hospital the prescription was written at, the
+     * hospital whose queue lists the refill (tenant-safe: never the MRN of
+     * another hospital the patient is registered at).
+     */
+    static String mrnAtPrescribingHospital(RefillRequest r) {
+        Prescription prescription = r.getPrescription();
+        if (r.getPatient() == null || prescription == null || prescription.getHospital() == null) {
+            return null;
+        }
+        return r.getPatient().getMrnForHospital(prescription.getHospital().getId());
+    }
+
     private MedicationRefillResponseDTO toResponseDTO(RefillRequest r) {
         String medName = null;
         if (r.getPrescription() != null && r.getPrescription().getMedicationName() != null) {
@@ -285,6 +298,8 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
                 .prescriptionId(r.getPrescription() != null ? r.getPrescription().getId() : null)
                 .medicationName(medName)
                 .patientId(r.getPatient() != null ? r.getPatient().getId() : null)
+                .patientName(r.getPatient() != null ? r.getPatient().getFullName() : null)
+                .patientMrn(mrnAtPrescribingHospital(r))
                 .status(r.getStatus() != null ? r.getStatus().name() : null)
                 .preferredPharmacy(r.getPreferredPharmacy())
                 .notes(r.getPatientNotes())

@@ -150,15 +150,23 @@ class PatientMatchKeysGuardTest {
     }
 
     /**
-     * QA D1019 (class guard): a free-text patient search sends a typed phone
-     * number to the phone match. {@code GET /patients?search=65112233} used to
-     * be matched against names only, so no picker found a patient by phone.
-     * Every method that builds a {@code PatientSearchCriteria} with a name
-     * must also decide, with {@code PatientMatchKeys.looksLikePhone}, whether
-     * the text is a number.
+     * QA D1019 + D1274 (class guard): a free-text patient search reads what
+     * was typed. {@code GET /patients?search=65112233} used to be matched
+     * against names only (D1019); in round 27 a birth date ("1993-11-03",
+     * "03/11/1993") was read as a phone number and an e-mail as a name, so no
+     * picker found a patient by either (D1274), because each endpoint routed
+     * the term itself and only knew phone-or-name.
+     * <ul>
+     *   <li>Every method that builds a {@code PatientSearchCriteria} with a
+     *       name hands it to the one router, {@code searchPatients(}, and no
+     *       longer routes the term itself.</li>
+     *   <li>That router (and the exact-identifier lookup) asks, in this
+     *       order, whether the text is a birth date, an e-mail and a phone
+     *       number.</li>
+     * </ul>
      */
     @Test
-    void everyFreeTextPatientSearchSendsANumberToThePhoneMatch() throws IOException {
+    void everyFreeTextPatientSearchReadsADateAnEmailAndANumber() throws IOException {
         int builders = 0;
         for (Path f : javaFiles()) {
             String src = com.example.hms.testsupport.SourceScan.stripComments(read(f));
@@ -169,11 +177,31 @@ class PatientMatchKeysGuardTest {
                     continue;
                 }
                 builders++;
-                assertThat(body).as(MAIN.relativize(f) + ": a name search that never asks whether the text is a "
-                        + "phone number (QA D1019)").contains("looksLikePhone(");
+                assertThat(body).as(MAIN.relativize(f) + ": a name search that is not read by the shared router "
+                        + "(QA D1019, D1274)").contains("searchPatients(")
+                    .doesNotContain("looksLikePhone(");
             }
         }
         assertThat(builders).as("free-text patient searches found").isGreaterThanOrEqualTo(2);
+
+        String service = com.example.hms.testsupport.SourceScan.stripComments(
+            read(MAIN.resolve("service/PatientServiceImpl.java")));
+        for (String method : List.of("public List<PatientResponseDTO> searchPatients(",
+                "public List<PatientResponseDTO> lookupPatients(")) {
+            int at = service.indexOf(method);
+            assertThat(at).as(method).isNotNegative();
+            String body = AppointmentSlotRulesGuardTest.enclosingMethod(service, service.indexOf('{', at));
+            int date = body.indexOf("PatientMatchKeys.birthDate(");
+            int phone = body.indexOf("looksLikePhone(");
+            assertThat(date).as(method + " never reads a typed birth date (QA D1274)").isNotNegative();
+            assertThat(phone).as(method + " never reads a typed phone number (QA D1019)").isNotNegative();
+            assertThat(date).as(method + " reads a phone number before a birth date (QA D1274)").isLessThan(phone);
+        }
+        String searchBody = AppointmentSlotRulesGuardTest.enclosingMethod(service,
+            service.indexOf('{', service.indexOf("public List<PatientResponseDTO> searchPatients(")));
+        assertThat(searchBody).as("searchPatients never reads a typed e-mail (QA D1274)")
+            .contains("PatientMatchKeys.looksLikeEmail(")
+            .contains("PatientMatchKeys.birthDateKey(");
     }
 
     /**

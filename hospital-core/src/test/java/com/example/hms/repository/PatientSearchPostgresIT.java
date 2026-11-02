@@ -201,15 +201,58 @@ class PatientSearchPostgresIT {
             null, null, null, hospitalId, true, PageRequest.of(0, 8)))).startsWith(other);
     }
 
+    /**
+     * QA D1274 (round 27): the values the service now sends for a birth date
+     * typed in each accepted format and for an e-mail (full, its start with
+     * the @, or its local part alone), with the hospital and the active flag
+     * each set or null - the picker (inactive included), the API default and
+     * the exact-identifier lookup.
+     */
+    @Test
+    @DisplayName("QA D1274: a typed birth date (any format) and an e-mail (full or partial) find the patient on PostgreSQL")
+    void theRoundTwentySevenBirthDateAndEmailSearches() {
+        List<String> failures = new ArrayList<>();
+        List<String> dobs = List.of("1993-11-03", "03/11/1993", "03-11-1993", "3/11/1993", "03.11.1993");
+        List<String> emails = List.of(EMAIL, "KADI.SORGHO@", "kadi.sorgho", "@example.com", "sorgho");
+        for (UUID hospital : java.util.Arrays.asList(hospitalId, null)) {
+            for (Boolean active : java.util.Arrays.asList(null, Boolean.TRUE)) {
+                for (String typed : dobs) {
+                    String key = PatientMatchKeys.birthDateKey(typed);
+                    List<UUID> found = ids(patientRepository.searchPatientsExtended(null, null, key, null, null,
+                        hospital, active, PageRequest.of(0, 8)));
+                    if (!found.equals(List.of(kadidiatou))) {
+                        failures.add("dob " + typed + " hospital=" + hospital + " active=" + active + " found " + found);
+                    }
+                }
+                for (String typed : emails) {
+                    String pattern = "%" + typed.toLowerCase(java.util.Locale.ROOT) + "%";
+                    List<UUID> found = ids(patientRepository.searchPatientsExtended(null, null, null, null, pattern,
+                        hospital, active, PageRequest.of(0, 8)));
+                    boolean shared = "@example.com".equals(typed);
+                    boolean ok = shared ? found.containsAll(List.of(kadidiatou, other)) : found.equals(List.of(kadidiatou));
+                    if (!ok) {
+                        failures.add("email " + typed + " hospital=" + hospital + " active=" + active + " found " + found);
+                    }
+                }
+            }
+        }
+        // a date that is not this patient's finds nobody; a non-date stays a filter that matches nothing
+        assertThat(patientRepository.searchPatientsExtended(null, null, PatientMatchKeys.birthDateKey("04/11/1993"),
+            null, null, hospitalId, null, PageRequest.of(0, 8)).getContent()).isEmpty();
+        assertThat(patientRepository.searchPatientsExtended(null, null, PatientMatchKeys.birthDateKey("hier"),
+            null, null, hospitalId, null, PageRequest.of(0, 8)).getContent()).isEmpty();
+        assertThat(failures).isEmpty();
+    }
+
     @Test
     @DisplayName("QA D1253: every filter combination of the short search runs on PostgreSQL")
     void everyCombinationOfTheShortSearchFindsThePatient() {
         List<String> failures = new ArrayList<>();
         for (int mask = 0; mask < 16; mask++) {
-            String name = (mask & 1) != 0 ? PatientMatchKeys.nameContainsPattern("Sorgho") : null;
-            String email = (mask & 2) != 0 ? "%kadi.sorgho%" : null;
-            UUID hospital = (mask & 4) != 0 ? hospitalId : null;
-            Boolean active = (mask & 8) != 0 ? Boolean.TRUE : null;
+            String name = (mask & 1) == 0 ? null : PatientMatchKeys.nameContainsPattern("Sorgho");
+            String email = (mask & 2) == 0 ? null : "%kadi.sorgho%";
+            UUID hospital = (mask & 4) == 0 ? null : hospitalId;
+            Boolean active = (mask & 8) == 0 ? null : Boolean.TRUE;
             try {
                 List<UUID> found = ids(patientRepository.searchPatients(name, email, hospital, active, PageRequest.of(0, 20)));
                 if (!found.contains(kadidiatou)) {

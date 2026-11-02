@@ -72,6 +72,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -1062,10 +1063,25 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
         Optional<User> holder = (e164 == null ? Optional.<User>empty() : userRepository.findByPhoneNumber(e164))
             .or(() -> userRepository.findByPhoneNumber(typed));
-        List<UserRoleHospitalAssignment> matching = holder
-            .map(user -> assignmentRepository.findByUserId(user.getId()))
-            .orElse(List.of())
-            .stream()
+        List<UserRoleHospitalAssignment> pending = new ArrayList<>();
+        holder.ifPresent(user -> pending.addAll(assignmentRepository.findByUserId(user.getId())));
+        // QA D1275 (round 27): a patient registered under a number another
+        // person already logs in with (a child on a parent's phone, D1061) has
+        // no login phone; the number is the contact on the patient record, and
+        // the code was sent to it. The code identifies the patient, not the
+        // phone: the pending PATIENT assignments of every patient record whose
+        // number is this one are candidates too. It used to look at the login
+        // holder only, so the right code was refused.
+        Set<UUID> seenUsers = new HashSet<>();
+        holder.ifPresent(user -> seenUsers.add(user.getId()));
+        for (UUID userId : patientUsersAtPhone(typed)) {
+            if (seenUsers.add(userId)) {
+                assignmentRepository.findByUserId(userId).stream()
+                    .filter(this::isPatientRole)
+                    .forEach(pending::add);
+            }
+        }
+        List<UserRoleHospitalAssignment> matching = pending.stream()
             .filter(a -> !(a.getConfirmationVerifiedAt() != null && Boolean.TRUE.equals(a.getActive())))
             .filter(a -> a.getConfirmationCode() != null && a.getConfirmationCode().equalsIgnoreCase(code))
             .toList();
@@ -1076,6 +1092,27 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         UserRoleAssignmentPublicViewDTO view = verifyAssignmentByCode(matching.get(0).getAssignmentCode(), code);
         phoneActivationFailures.remove(attemptsKey);
         return view;
+    }
+
+    /**
+     * QA D1275: the login accounts of the patient records whose contact number
+     * is the typed one (folded like every phone match: the eight subscriber
+     * digits narrow, the full number decides). Empty for a number too short
+     * to name a subscriber.
+     */
+    private List<UUID> patientUsersAtPhone(String typed) {
+        String key = com.example.hms.utility.PatientMatchKeys.phoneKey(typed);
+        if (!com.example.hms.utility.PatientMatchKeys.isSubscriberKey(key)) {
+            return List.of();
+        }
+        return patientRepository.findAllByPhoneSubscriber("%" + key,
+                org.springframework.data.domain.PageRequest.of(0, PatientRepository.PHONE_SUBSCRIBER_CAP)).stream()
+            .filter(p -> p.getUser() != null && p.getUser().getId() != null)
+            .filter(p -> com.example.hms.utility.PatientMatchKeys.samePhone(p.getPhoneNumberPrimary(), typed,
+                com.example.hms.utility.PhoneNumbers.DEFAULT_CALLING_CODE))
+            .map(p -> p.getUser().getId())
+            .distinct()
+            .toList();
     }
 
     private static final int PHONE_ACTIVATION_MAX_FAILURES = 5;

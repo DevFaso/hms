@@ -220,6 +220,83 @@ class ActivationSmsD1123Test {
         assertThat(assignment.getActive()).isFalse();
     }
 
+    /**
+     * QA D1275 (round 27): a child registered under a parent's number has no
+     * login phone (D1061); the number is the contact on the child's patient
+     * record and the code was sent to it. The code identifies the patient, so
+     * the right code activates the child's account, never the parent's.
+     */
+    @Test
+    void aPatientRegisteredUnderAnotherPersonsNumberActivatesWithTheirCode() {
+        User parent = new User();
+        parent.setId(UUID.randomUUID());
+        parent.setPhoneNumber("+22670003201");
+        UserRoleHospitalAssignment parentRole = new UserRoleHospitalAssignment();
+        parentRole.setId(UUID.randomUUID());
+        parentRole.setConfirmationCode("111111");
+        parentRole.setUser(parent);
+        parentRole.setRole(role("ROLE_PATIENT"));
+        parentRole.setActive(false);
+        patient.setPhoneNumber(null);
+        com.example.hms.model.Patient childRecord = new com.example.hms.model.Patient();
+        childRecord.setId(UUID.randomUUID());
+        childRecord.setUser(patient);
+        childRecord.setPhoneNumberPrimary("+226 70 00 32 01");
+        when(userRepository.findByPhoneNumber("+22670003201")).thenReturn(Optional.of(parent));
+        when(assignmentRepository.findByUserId(parent.getId())).thenReturn(List.of(parentRole));
+        when(patientRepository.findAllByPhoneSubscriber(org.mockito.ArgumentMatchers.eq("%70003201"),
+            org.mockito.ArgumentMatchers.any())).thenReturn(List.of(childRecord));
+        when(assignmentRepository.findByUserId(patient.getId())).thenReturn(List.of(assignment));
+        when(assignmentRepository.findByAssignmentCode("CHW-P-0042")).thenReturn(Optional.of(assignment));
+
+        service.verifyAssignmentByPhone("70 00 32 01", CODE);
+
+        assertThat(assignment.getActive()).isTrue();
+        assertThat(patient.isActive()).isTrue();
+        assertThat(parentRole.getActive()).as("the parent's account is not touched").isFalse();
+    }
+
+    @Test
+    void aStaffRoleOfAPatientRecordAtTheNumberIsNotActivatedByTheContactNumber() {
+        assignment.setRole(role("ROLE_NURSE"));
+        patient.setPhoneNumber(null);
+        com.example.hms.model.Patient record = new com.example.hms.model.Patient();
+        record.setId(UUID.randomUUID());
+        record.setUser(patient);
+        record.setPhoneNumberPrimary("+22670003201");
+        when(patientRepository.findAllByPhoneSubscriber(org.mockito.ArgumentMatchers.eq("%70003201"),
+            org.mockito.ArgumentMatchers.any())).thenReturn(List.of(record));
+        when(assignmentRepository.findByUserId(patient.getId())).thenReturn(List.of(assignment));
+
+        assertThatThrownBy(() -> service.verifyAssignmentByPhone("+22670003201", CODE))
+            .isInstanceOf(BusinessException.class);
+        assertThat(assignment.getActive()).isFalse();
+    }
+
+    /**
+     * QA D1275 (class guard): every activation entry point keyed on a phone
+     * number ({@code *ByPhone} on the assignment service) also reads the
+     * patient records whose contact number it is; the login holder alone
+     * misses everyone registered under a shared family number.
+     */
+    @Test
+    void everyPhoneKeyedActivationReadsThePatientContactNumbers() throws Exception {
+        String impl = java.nio.file.Files.readString(java.nio.file.Path.of(
+            "src/main/java/com/example/hms/service/UserRoleHospitalAssignmentServiceImpl.java"));
+        List<String> byPhone = java.util.Arrays.stream(UserRoleHospitalAssignmentService.class.getMethods())
+            .map(java.lang.reflect.Method::getName)
+            .filter(n -> n.startsWith("verify") && n.endsWith("ByPhone"))
+            .distinct().toList();
+        assertThat(byPhone).isNotEmpty();
+        for (String name : byPhone) {
+            int at = impl.indexOf("public UserRoleAssignmentPublicViewDTO " + name + "(");
+            assertThat(at).as(name).isNotNegative();
+            int end = impl.indexOf("\n    }", at);
+            assertThat(impl.substring(at, end)).as(name + " reads only the login holder (QA D1275)")
+                .contains("patientUsersAtPhone(");
+        }
+    }
+
     private static String messageOf(Runnable call) {
         try {
             call.run();
