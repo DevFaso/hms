@@ -1116,6 +1116,15 @@ describe('BillingComponent', () => {
       expect(toastSpy.error).not.toHaveBeenCalledWith('BILLING.PAYMENT_WHOLE_AMOUNT');
     });
 
+    it('QA D1278: a typed zero amount is refused under the amount (the guard sees a value)', () => {
+      component.adjustmentType.set('DISCOUNT');
+      component.adjustmentReason.set('Geste commercial');
+      component.adjustmentAmount.set(0);
+      component.submitAdjustment();
+      expect(billingSpy.addAdjustment).not.toHaveBeenCalled();
+      expect(toastSpy.error).toHaveBeenCalledWith('BILLING.ADJUSTMENT_AMOUNT_REQUIRED');
+    });
+
     it('a waiver with decimals is told about decimals', () => {
       component.adjustmentType.set('DISCOUNT');
       component.adjustmentReason.set('Geste commercial');

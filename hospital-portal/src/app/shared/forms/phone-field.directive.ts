@@ -121,19 +121,23 @@ export function invalidPhoneInputs(root: ParentNode | null | undefined): HTMLInp
  * own message appears only once the field is left, and the submit did not
  * look. Every phone field of `root` holding a refused number shows its message
  * now (the directive's own, as when it is left) and the first one takes the
- * focus. Returns whether any was refused. The submit guard calls it for every
+ * focus (unless `focus` is false). Returns whether any was refused. The submit guard calls it for every
  * guarded form; a form with its own submit handler calls it there.
  */
 export function refuseInvalidPhones(
   root: ParentNode | null | undefined,
   bad: readonly HTMLInputElement[] = invalidPhoneInputs(root),
+  focus = true,
 ): boolean {
   if (bad.length === 0) return false;
   // The directive renders its message on blur, the way a reader leaving the field sees it.
   for (const el of bad) el.dispatchEvent(new Event('blur'));
-  focusFirstInvalid(
-    root,
-    bad.map((el) => el.id),
-  );
+  // A form that also refuses blank fields focuses the first of those instead.
+  if (focus) {
+    focusFirstInvalid(
+      root,
+      bad.map((el) => el.id),
+    );
+  }
   return true;
 }

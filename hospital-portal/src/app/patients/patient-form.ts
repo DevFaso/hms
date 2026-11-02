@@ -490,8 +490,7 @@ export class PatientFormComponent implements OnInit {
         this.host.nativeElement,
         missing.map((f) => PATIENT_FORM_FIELD_IDS[f] ?? f),
       );
-      if (missing.length === 0) refuseInvalidPhones(this.host.nativeElement, badPhones);
-      else badPhones.forEach((el) => el.dispatchEvent(new Event('blur')));
+      refuseInvalidPhones(this.host.nativeElement, badPhones, missing.length === 0);
       const gap =
         missing.length > 0 || !this.form.hospitalId
           ? this.translate.instant(

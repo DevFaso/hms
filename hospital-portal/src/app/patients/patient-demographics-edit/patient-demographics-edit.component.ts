@@ -184,8 +184,7 @@ export class PatientDemographicsEditComponent implements OnInit {
     // field, in the same press as the missing fields.
     const badPhones = invalidPhoneInputs(this.host.nativeElement);
     if (missing.length > 0 || badPhones.length > 0) {
-      if (missing.length === 0) refuseInvalidPhones(this.host.nativeElement, badPhones);
-      else badPhones.forEach((el) => el.dispatchEvent(new Event('blur')));
+      refuseInvalidPhones(this.host.nativeElement, badPhones, missing.length === 0);
       this.error.set(
         joinReasons([
           missing.length > 0 && this.translate.instant('PATIENTS.EDIT_REQUIRED_MISSING'),

@@ -322,8 +322,9 @@ export class BillingComponent implements OnInit {
     // field at once (Montant, Motif, the credit note's line) and marks each;
     // this handler used to refuse them one press at a time, as toasts.
     const amountProblem = type === 'CREDIT_NOTE' ? null : cfaAmountProblem(amount);
-    if (!reason || (type === 'CREDIT_NOTE' && !line) || amountProblem === 'required') return;
-    // QA D1089: only a typed amount is checked for decimals.
+    const amountBlank = amount === null || amount === undefined || `${amount}`.trim() === '';
+    if (!reason || (type === 'CREDIT_NOTE' && !line) || (amountProblem && amountBlank)) return;
+    // QA D1089: a typed amount that is zero or has decimals is refused under the field.
     if (amountProblem) {
       const message = this.translate.instant(
         cfaAmountMessageKey(amountProblem, 'BILLING.ADJUSTMENT_AMOUNT_REQUIRED'),

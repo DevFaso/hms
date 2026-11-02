@@ -155,8 +155,9 @@ export class SubmitGuardDirective {
     const phones = invalidPhoneInputs(root).filter((el) => wholeForm || all.includes(el.id));
     const badPhones = phones.length > 0;
     if (!reason && !badPhones) {
-      // Every required field is filled now: an earlier refusal goes away.
-      if (this.marked.length > 0) this.clear();
+      // Every required field is filled now: an earlier refusal goes away (a
+      // phone-only refusal marked no listed field, but left its message).
+      this.clear();
       return;
     }
     event.preventDefault();
