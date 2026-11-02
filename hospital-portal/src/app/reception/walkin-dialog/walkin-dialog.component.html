@@ -136,7 +136,7 @@
           <button
             type="button"
             class="clear-btn"
-            (click)="selectedStaff.set(null); staffQuery.set('')"
+            (click)="onStaffQueryChange('')"
             [attr.aria-label]="'RECEPTION.CLEAR_PROVIDER' | translate"
           >
             <span class="material-symbols-outlined" aria-hidden="true">close</span>
