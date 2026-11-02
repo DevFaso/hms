@@ -197,10 +197,6 @@
       "count": 1,
       "why": "not a field: a server step-up refusal shown in the enrolment banner"
     },
-    "src/app/nurse-station/nurse-station.ts::toast-only-refusal::submitVitals::if(implausible)": {
-      "count": 1,
-      "why": "QA D1306 class (round 28): nurse-station.ts belongs to branch fix/r28-backend this round; flagged in the hand-back"
-    },
     "src/app/nurse-station/nurse-station.ts::unmarked-refusal::confirmHoldRefuse::NURSE.TOAST.REASON_REQUIRED": {
       "count": 1,
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
@@ -225,7 +221,7 @@
       "count": 1,
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
     },
-    "src/app/nurse-station/nurse-station.ts::unmarked-refusal::submitVitals::NURSE.TOAST.VITALS_REQUIRED": {
+    "src/app/nurse-station/nurse-station.ts::toast-only-refusal::submitVitals::NURSE.TOAST.VITALS_REQUIRED": {
       "count": 1,
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
     },

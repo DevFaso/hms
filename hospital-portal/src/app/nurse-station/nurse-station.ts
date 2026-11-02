@@ -15,6 +15,7 @@ import {
 import { isNeverSeenVisit } from '../core/encounter-start';
 import { VITAL_SIGN_LIMITS, VitalSignField } from '../shared/vital-sign-limits';
 import { refuseFields } from '../shared/forms/invalid-fields';
+import { joinReasons } from '../shared/required-fields';
 
 /** The vitals dialog's input of each bounded reading (nurse-station.html). */
 const VITAL_FIELD_IDS: Record<VitalSignField, string> = {
@@ -796,8 +797,8 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
     // Every implausible reading is marked at once, each with its own bounds.
     const refusals = this.implausibleVitals(form);
     if (refusals.length > 0) {
-      this.markVitalRefusals(refusals);
-      this.toast.error(refusals[0].message);
+      refuseFields(this.host.nativeElement, refusals, Object.values(VITAL_FIELD_IDS));
+      this.toast.error(joinReasons(refusals.map((r) => r.message)) ?? '');
       return;
     }
     this.markVitalRefusals([]);
