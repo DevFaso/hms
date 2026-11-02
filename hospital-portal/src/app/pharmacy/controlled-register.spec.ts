@@ -129,6 +129,33 @@ describe('ControlledRegisterComponent (QA D967)', () => {
     expect(el.querySelector('#register-to')?.hasAttribute('aria-invalid')).toBeFalse();
   });
 
+  it('QA D1337: a blank "Du" or "Au" is named as missing, not as "end before start"', () => {
+    const el: HTMLElement = fixture.nativeElement;
+    for (const [from, to, marked] of [
+      ['', '2026-10-27', ['register-from']],
+      ['2026-10-01', '', ['register-to']],
+      ['', '', ['register-from', 'register-to']],
+    ] as const) {
+      toast.error.calls.reset();
+      svc.getControlledRegister.calls.reset();
+      component.from = from;
+      component.to = to;
+      component.load();
+      expect(svc.getControlledRegister).not.toHaveBeenCalled();
+      expect(toast.error).toHaveBeenCalledWith('COMMON.MISSING_REQUIRED_FIELDS');
+      expect(toast.error).not.toHaveBeenCalledWith('PHARMACY.REGISTER_PERIOD_INVALID');
+      for (const id of ['register-from', 'register-to']) {
+        const wanted = (marked as readonly string[]).includes(id);
+        expect(el.querySelector(`#${id}`)?.getAttribute('aria-invalid') === 'true')
+          .withContext(`${from}→${to} ${id}`)
+          .toBe(wanted);
+        if (wanted) {
+          expect(el.querySelector(`#${id}-invalid-msg`)?.textContent).toBe('COMMON.FIELD_REQUIRED');
+        }
+      }
+    }
+  });
+
   it('exports the same register as CSV and PDF', () => {
     const blob = new Blob(['x']);
     svc.exportControlledRegister.and.returnValue(of(blob));

@@ -289,6 +289,15 @@ describe('AppointmentDetailComponent', () => {
       );
     });
 
+    it('QA D1326: the reason box is starred and declared required, like every reason field', () => {
+      click('.page-header .btn-danger');
+      const area = fixture.nativeElement.querySelector('#dropReason') as HTMLTextAreaElement;
+      expect(area.required).toBeTrue();
+      expect(area.getAttribute('aria-required')).toBe('true');
+      const label = fixture.nativeElement.querySelector('label[for="dropReason"]') as HTMLElement;
+      expect(label.textContent).toContain('*');
+    });
+
     it('the no-show button opens the same dialog and sends NO_SHOW with its reason', async () => {
       click('[data-testid="mark-no-show"]');
       expect(mockAppointmentService.updateStatus).not.toHaveBeenCalled();

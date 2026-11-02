@@ -8,8 +8,9 @@
 // 2. `key-label` (D1323): `'PREFIX.' + row.field | translate` prints the raw
 //    key for a value outside the dictionary ("RECEPTION.URGENTISSIME",
 //    "RECEPTION."); such labels go through `| keyLabel: 'PREFIX.'`.
-// 3. `date-medium` (D1340): `date: 'medium'` prints seconds; a date and time
-//    goes through `| dateTime`.
+// 3. (D1340 is guarded by fix/r29-portal-clinical's date-time-seconds.test.mjs
+//    and its shared `dateTime` pipe, which this branch uses; the self-test
+//    below only checks the pattern still parses.)
 // 4. `required-in-words` (D1326): a locale label that says "(obligatoire)" /
 //    "(required)" / "(obligatorio)" instead of a star and `required`.
 // 5. `gendered-family` (D1327, the D1311 class): a key family describing the
@@ -74,10 +75,6 @@ test('QA D1328: a missing value reads "—" through | dash, never `?? \'—\'`',
 
 test('QA D1323: a label built from a server value never prints its raw key', () => {
   assert.deepEqual(hits(KEY_LABEL_RE), [], "write {{ row.field | keyLabel: 'PREFIX.' }}");
-});
-
-test('QA D1340: a date and time never shows seconds', () => {
-  assert.deepEqual(hits(DATE_MEDIUM_RE), [], 'write {{ value | dateTime }}');
 });
 
 test('QA D1323 / D1328 / D1340 guard: the rules see the round-29 shapes', () => {

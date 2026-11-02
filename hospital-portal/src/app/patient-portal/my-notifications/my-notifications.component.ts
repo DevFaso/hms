@@ -1,5 +1,4 @@
 import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
-import { DatePipe } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { PatientPortalService, PortalNotification } from '../../services/patient-portal.service';
 import { ToastService } from '../../core/toast.service';
@@ -13,7 +12,7 @@ import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
   selector: 'app-my-notifications',
   standalone: true,
   imports: [
-    DateTimePipe,ServerTimePipe, DatePipe, TranslateModule, EnumLabelPipe],
+    DateTimePipe, ServerTimePipe, TranslateModule, EnumLabelPipe],
   templateUrl: './my-notifications.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['./my-notifications.component.scss', '../patient-portal-pages.scss'],

@@ -20,6 +20,7 @@ import {
   scopeOf,
   serverFieldErrorsInterceptor,
 } from '../shared/forms/server-field-errors';
+import { isBlank as isBlankControl } from '../shared/forms/submit-guard.directive';
 import { roleContextStub } from './role-context.stub';
 import { FORM_BEHAVIOUR_COMPONENTS } from './form-behaviour.registry';
 
@@ -182,21 +183,11 @@ function usable(el: HTMLElement): boolean {
 }
 
 function isBlank(el: HTMLElement): boolean {
-  if (el.getAttribute('data-submit-blank') === 'true') return true;
   // An Angular forms control whose model satisfies `required` holds an
   // answer the DOM cannot show (a synthetic value outside the select's
   // options, a timestamp in a date input): not blank.
   if (el.classList.contains('ng-valid') && el.hasAttribute('required')) return false;
-  if (el instanceof HTMLInputElement) {
-    if (el.type === 'checkbox' || el.type === 'radio') return !el.checked;
-    return el.value.trim() === '';
-  }
-  if (el instanceof HTMLSelectElement) {
-    const v = el.selectedIndex < 0 ? '' : el.value.trim();
-    return v === '' || /^\d+: (?:null|undefined)$/.test(v);
-  }
-  if (el instanceof HTMLTextAreaElement) return el.value.trim() === '';
-  return false;
+  return isBlankControl(el);
 }
 
 /** The visible label text of a control (label[for], wrapping label, aria-labelledby, legend, aria-label). */

@@ -6,7 +6,7 @@ import {
   signal,
   ChangeDetectionStrategy,
 } from '@angular/core';
-import { CommonModule, DatePipe } from '@angular/common';
+import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -59,7 +59,6 @@ function itemIds(instrument: ProInstrumentView, only?: readonly number[]): strin
     SubmitGuardDirective,
     ServerTimePipe,
     CommonModule,
-    DatePipe,
     FormsModule,
     TranslateModule,
     ProInstrumentFormComponent,

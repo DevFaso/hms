@@ -7,6 +7,7 @@ import { HttpResponse, provideHttpClient, withXhr } from '@angular/common/http';
 import { ReceptionService } from '../reception.service';
 import { ToastService } from '../../core/toast.service';
 import { of } from 'rxjs';
+import { amountStillDue, pendingDeclared } from '../../shared/payment-prefill';
 
 describe('PaymentPendingPanelComponent', () => {
   let component: PaymentPendingPanelComponent;
@@ -253,5 +254,52 @@ describe('PaymentPendingPanelComponent', () => {
         { id: 'b', paymentDate: '2026-10-29', createdAt: '2026-10-29T11:00:00' },
       ] as unknown as PaymentRow[])?.id,
     ).toBe('b');
+  });
+
+  describe('QA D1321 (round 29): a pending patient declaration', () => {
+    const invoice = {
+      id: 'inv-4',
+      invoiceNumber: 'CHWF6646-2026-000004',
+      totalAmount: 1250,
+      amountPaid: 0,
+      balanceDue: 1250,
+      status: 'SENT',
+      currency: 'XOF',
+    };
+
+    it('prefills only what is still due, says the declaration, and refuses more', () => {
+      const billing = TestBed.inject(BillingService);
+      spyOn(billing, 'listPayments').and.returnValue(
+        of([
+          { id: 'p1', status: 'PENDING', amount: 1200 },
+          { id: 'p0', status: 'CONFIRMED', amount: 100 },
+        ] as unknown as PaymentRow[]),
+      );
+      const record = spyOn(mockReceptionService, 'recordPayment').and.callThrough();
+      component.payingItem.set({ patientId: 'p1', patientName: 'Seydou' } as any);
+      component.openInvoices.set([invoice as any]);
+      component.selectInvoice('inv-4');
+      fixture.detectChanges();
+      expect(component.pending()).toBe(1200);
+      expect(component.payAmount()).toBe(50);
+      const host: HTMLElement = fixture.nativeElement;
+      expect(host.querySelector('[data-testid="desk-pay-pending"]')).not.toBeNull();
+      component.payAmount.set(1250);
+      component.submitPayment();
+      expect(record).not.toHaveBeenCalled();
+      expect(host.querySelector('#payAmt-invalid-msg')!.textContent).toBe(
+        'RECEPTION.PAYMENT_EXCEEDS_WITH_PENDING',
+      );
+    });
+
+    it('keeps the full balance when nothing is pending, and an amount the reader typed', () => {
+      const billing = TestBed.inject(BillingService);
+      spyOn(billing, 'listPayments').and.returnValue(of([] as PaymentRow[]));
+      component.openInvoices.set([invoice as any]);
+      component.selectInvoice('inv-4');
+      expect(component.payAmount()).toBe(1250);
+      expect(amountStillDue(1250, 1250)).toBeNull();
+      expect(pendingDeclared([{ status: 'PENDING', amount: 10 }, { status: 'REJECTED', amount: 5 }])).toBe(10);
+    });
   });
 });

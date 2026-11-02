@@ -112,23 +112,25 @@ export class CheckinDialogComponent {
   }
 
   submit(): void {
-    if (!this.queueItem?.appointmentId) {
-      this.toast.error(this.translate.instant('RECEPTION.NO_APPOINTMENT_SELECTED'));
-      return;
-    }
     // QA D1306 (round 28) / D1320 (round 29): the refused fields are marked,
     // not only a toast, and all of them on one press.
     const refusals = this.refusals();
     refuseFields(this.host.nativeElement, refusals, REFUSABLE_IDS);
-    if (refusals.length > 0) {
-      this.toast.error(joinReasons(refusals.map((r) => r.message)) ?? '');
+    const appointmentId = this.queueItem?.appointmentId;
+    if (!appointmentId || refusals.length > 0) {
+      this.toast.error(
+        joinReasons([
+          !appointmentId && this.translate.instant('RECEPTION.NO_APPOINTMENT_SELECTED'),
+          ...refusals.map((r) => r.message),
+        ]) ?? '',
+      );
       return;
     }
 
     this.saving.set(true);
 
     const request: CheckInRequest = {
-      appointmentId: this.queueItem.appointmentId,
+      appointmentId,
       chiefComplaint: this.chiefComplaint() || null,
       copayAmount: this.copayAmount(),
       ...((this.copayAmount() ?? 0) > 0

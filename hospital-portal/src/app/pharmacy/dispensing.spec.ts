@@ -458,6 +458,62 @@ describe('DispensingComponent', () => {
     }
   });
 
+  // QA D1335 (round 29): the queue's "Dispenser" opened the form above the
+  // queue and left focus on the row; Escape did nothing.
+  it('QA D1335: the dispense form takes the keyboard, Escape closes it, focus goes back to the row', async () => {
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+    const el: HTMLElement = fixture.nativeElement;
+    document.body.appendChild(el);
+    try {
+      fixture.detectChanges();
+      const row = el.querySelector<HTMLButtonElement>('[data-testid="rx-dispense-rx-1"]')!;
+      row.focus();
+      row.click();
+      fixture.detectChanges();
+      await settle();
+      await settle();
+      const form = el.querySelector('[data-testid="dispense-form"]')!;
+      expect(form).not.toBeNull();
+      expect(form.contains(document.activeElement)).withContext('focus is in the form').toBeTrue();
+      document.activeElement!.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+      );
+      fixture.detectChanges();
+      await settle();
+      await settle();
+      expect(el.querySelector('[data-testid="dispense-form"]')).toBeNull();
+      expect(document.activeElement?.getAttribute('data-testid')).toBe('rx-dispense-rx-1');
+    } finally {
+      el.remove();
+    }
+  });
+
+  // QA D1336 (round 29): after a cancel the history reloaded and focus went
+  // to another patient's claim button in the queue.
+  it('QA D1336: after a dispense cancel, focus is on the history heading, not a queue row', async () => {
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+    pharmacySvc.cancelDispense.and.returnValue(of({ data: { id: 'd-1' } } as any));
+    const el: HTMLElement = fixture.nativeElement;
+    document.body.appendChild(el);
+    try {
+      component.recentDispenses.set([
+        { id: 'd-1', medicationName: 'Paracétamol', status: 'COMPLETED', patientName: 'Awa' } as any,
+      ]);
+      fixture.detectChanges();
+      component.cancelDispense('d-1');
+      fixture.detectChanges();
+      await settle();
+      component.dispenseCancelReason = 'Mauvais patient';
+      component.confirmWitnessedCancel();
+      fixture.detectChanges();
+      await settle();
+      await settle();
+      expect(document.activeElement?.id).toBe('recent-dispenses-title');
+    } finally {
+      el.remove();
+    }
+  });
+
   // ── QA D654: a controlled substance moves only in front of a witness ──
 
   function makeAmoxicillinControlled(): void {
