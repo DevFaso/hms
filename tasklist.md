@@ -5726,9 +5726,12 @@ ships*, not for building — and check the shipped surface before trusting a
   `HmsRecentlyRestartedRepeatedly` — **do** have runbook sections but no
   `runbook_url` linking to them, so the link an engineer clicks from the alert is
   missing even though the prose exists. Several non-page alerts have the same gap.
-  Found while adding `HmsChatTransportErrors` (which does comply, in both alert
-  files). Not fixed in #1013 because it is an unrelated docs pass; worth doing
-  with a guard asserting the convention, so it stops drifting.
+  Found while adding `HmsChatTransportErrors`, which does comply in both alert
+  files — though it shipped one round without the explicit `<a id="...">` tag the
+  other 13 sections carry, which is the part no checklist mentioned and the review
+  caught; the checklist now names it. Not fixed in #1013 for the five pre-existing
+  alerts because it is an unrelated docs pass; worth doing with a guard asserting
+  the whole convention (url + section + anchor tag), so it stops drifting.
 - **No signal for a silent or unroutable chat transport (PR #1013):** `/ws-chat` is
   excluded from the burn-rate SLO and the aggregate latency rules (its held-open
   SockJS connections otherwise destroy every percentile), and the compensating

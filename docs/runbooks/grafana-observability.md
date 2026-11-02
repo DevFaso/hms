@@ -242,6 +242,8 @@ in 10 minutes — backend is in a crash loop.
 
 ---
 
+<a id="hmschattransporterrors"></a>
+
 ## HmsChatTransportErrors  (`severity: page`)
 
 **What it means.** More than 25% of `/ws-chat` requests *that reached a handler*
@@ -293,11 +295,13 @@ alert that covers it.
 
 1. Check whether it is chat or the whole backend. The "HTTP 5xx Error Rate by
    URI" panel on the Application Metrics dashboard deliberately does *not*
-   exclude the transport, so `/ws-chat/**` appears there as its own row — but it
-   filters `status=~"5.."`, so a **4xx-driven** alert leaves it empty. An empty
-   panel here is not "chat is fine"; drop the status filter, or query
+   exclude the transport, so `/ws-chat/**` appears there as its own row, and this
+   alert and that panel filter the same `status=~"5.."` — so the row you want is
+   there. For the full picture of what the transport is returning, including the
+   classes this alert ignores by design (101 upgrades, routine `xhr_send` 404s),
+   query
    `sum by (status) (rate(http_server_requests_seconds_count{uri=~"(/api)?/ws-chat.*"}[5m]))`
-   in Explore to see which class is actually failing before going further.
+   in Explore.
 2. Check the proxy and the path. A `curl` of `/api/ws-chat/info` answers **401**
    when healthy, not 200 — `/ws-chat/**` is `.authenticated()` and the handshake
    wants a `?ticket=` — so 401 is the good answer here and **404** is the broken
@@ -330,6 +334,12 @@ When you add an alert in `grafana/rules/alerts.yml`, also:
    so the rules in `alerts.yml` are evaluated and routed nowhere; Grafana's own
    unified alerting is what reaches a contact point.
 1. Set `annotations.runbook_url` to a `#anchor` in this file.
-2. Add a new section above using the same format
+2. Add an explicit `<a id="youralertname"></a>` tag above the new heading. Do not
+   rely on GitHub's generated slug: the headings here carry a `` (`severity: …`) ``
+   suffix, so the real slug for `## HmsErrorBudgetFastBurn  (`severity: page`)` is
+   `hmserrorbudgetfastburn--severity-page`, and a short `#hmserrorbudgetfastburn`
+   link silently lands the on-call at the top of this file instead. Every section
+   here has such a tag for that reason.
+3. Add a new section above using the same format
    (*What it means*, *First 5 minutes*, *Likely causes*, *Mitigation*).
 3. Keep the most-fired alerts at the top.

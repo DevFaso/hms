@@ -113,8 +113,6 @@ groups:
       - record: app:ws_transport_requests:rate5m
         expr: sum by (application) (rate(http_server_requests_seconds_count{uri=~"(/api)?/ws-chat.*"}[5m]))
 
-      # 4xx and 5xx, named positively.
-      #
       # 5xx only, and the status class is named rather than negated.
       #
       # NOT "anything that is not 2xx/3xx", which is how this was first written:
