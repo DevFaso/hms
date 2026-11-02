@@ -30,13 +30,16 @@ import static org.assertj.core.api.Assertions.assertThat;
  * that mistake. The rule the dashboards and rules actually follow, and that this test pins:
  *
  * <ul>
- *   <li><b>Duration</b> ({@code _bucket}) selectors always exclude it — the 50s samples are the
- *       defect, and they dominate a per-URI top-N just as badly as an application-wide p99.</li>
- *   <li><b>Count</b> selectors exclude it, with one exception: a breakdown <em>by</em> URI that
- *       filters on 5xx must keep it. That table is the first thing an engineer opens during an
- *       incident, and hiding a failing endpoint from it is a worse failure than the latency
- *       distortion this change set out to fix. A by-URI breakdown that only counts or times is a
- *       ranking, not a fault detector, and the transport wins any ranking trivially.</li>
+ *   <li><b>Mixing or competing.</b> The distortion needs the transport either to mix with other
+ *       endpoints, as in an application-wide percentile, or to compete with them, as in a
+ *       {@code topk}. Those must exclude it. A plain per-URI breakdown does neither — the
+ *       transport is one row, 50s is honestly what it takes, nothing else is affected — so the
+ *       guard deliberately declines to decide those, which is why the unfiltered per-URI
+ *       {@code app_uri:http_request_duration_seconds:p99_15m} rule is left alone.</li>
+ *   <li><b>Unless it would hide a failure.</b> A per-URI view filtered on 5xx must keep the
+ *       transport, top-10 of failing endpoints included. That table is the first thing an engineer
+ *       opens during an incident, and hiding a failing endpoint from it is a worse bug than the
+ *       latency distortion this change set out to fix.</li>
  * </ul>
  *
  * <p>Every property below has already been got wrong once in this change's own history:
@@ -256,12 +259,22 @@ class DashboardTransportExclusionTest {
     @Test
     @DisplayName("every recorded series an alert reads actually exists")
     void alertsReferenceRecordedSeries() throws IOException {
-        Path alerts = RECORDING_RULES.resolveSibling("alerts.yml");
-        assertThat(alerts).as("alert rules must be reachable").exists();
+        // BOTH alert files. grafana/rules/alerts.yml is the Prometheus-native one, whose
+        // Alertmanager is commented out in prometheus.yml — so it notifies nobody, and checking
+        // only it would have left the path that DOES page unguarded. The provisioned file is the
+        // sole consumer of the two new transport series, which is exactly the kind of reference a
+        // rename breaks silently.
+        List<Path> alertFiles = List.of(
+            RECORDING_RULES.resolveSibling("alerts.yml"),
+            RECORDING_RULES.getParent().resolveSibling("provisioning").resolve("alerting")
+                .resolve("alert-rules.yml"));
+        for (Path alerts : alertFiles) {
+            assertThat(alerts).as("alert rules must be reachable: %s", alerts).exists();
+        }
 
-        // Both files are flat enough to read with a line scanner, which keeps a YAML parser off
-        // the test classpath. `- record: x` declares a series; `app:...`/`app_uri:...` anywhere in
-        // alerts.yml reads one.
+        // The files are flat enough to read with a line scanner, which keeps a YAML parser off the
+        // test classpath. `- record: x` declares a series; `app:...`/`app_uri:...` in an alert
+        // file reads one.
         Set<String> recorded = Pattern.compile("- record:\\s*(\\S+)")
             .matcher(Files.readString(RECORDING_RULES))
             .results()
@@ -272,14 +285,15 @@ class DashboardTransportExclusionTest {
             .as("no recorded series parsed out of %s — this guard would be vacuous", RECORDING_RULES)
             .isNotEmpty();
 
-        Matcher references = Pattern.compile("\\b(app(?:_uri)?:[a-z0-9_:]+)")
-            .matcher(stripComments(Files.readString(alerts)));
-
         List<String> dangling = new ArrayList<>();
-        while (references.find()) {
-            String series = references.group(1);
-            if (!recorded.contains(series)) {
-                dangling.add(series);
+        for (Path alerts : alertFiles) {
+            Matcher references = Pattern.compile("\\b(app(?:_uri)?:[a-z0-9_:]+)")
+                .matcher(stripComments(Files.readString(alerts)));
+            while (references.find()) {
+                String series = references.group(1);
+                if (!recorded.contains(series)) {
+                    dangling.add(alerts.getFileName() + " -> " + series);
+                }
             }
         }
 
@@ -288,8 +302,8 @@ class DashboardTransportExclusionTest {
         // that misses one side is invisible: Prometheus evaluates the alert against a series that
         // does not exist, which is never > a threshold, so the alert simply never fires again.
         assertThat(dangling)
-            .as("these series are read by an alert in alerts.yml but recorded nowhere in "
-                + "recording.yml, so the alert can never fire")
+            .as("these series are read by an alert file but recorded nowhere in recording.yml, so "
+                + "that alert can never fire")
             .isEmpty();
     }
 

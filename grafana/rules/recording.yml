@@ -113,12 +113,24 @@ groups:
       - record: app:ws_transport_requests:rate5m
         expr: sum by (application) (rate(http_server_requests_seconds_count{uri=~"(/api)?/ws-chat.*"}[5m]))
 
-      # Everything that is not 2xx/3xx, not just 5xx. A normal SockJS session close
-      # is a 200, and a broken route answers 404 — which takes chat down exactly as
-      # completely as a 500 while leaving a 5xx-only ratio at zero.
+      # 4xx and 5xx, named positively.
+      #
+      # Not 5xx alone: a broken route or a stripped proxy path answers 404 and takes
+      # chat down exactly as completely as a 500, while leaving a 5xx-only ratio at
+      # zero. And emphatically NOT "anything that is not 2xx/3xx", which is how this
+      # was first written — /ws-chat is .withSockJS() and SockJS prefers a native
+      # WebSocket, so every SUCCESSFUL upgrade is an HTTP 101. Those are the very
+      # 25-50s requests this whole change is about, so on healthy, actively used chat
+      # the ratio would sit near 1.0, clear both the 0.25 threshold and the rate
+      # floor, and page continuously. A negated class silently swept them in; a
+      # positive one cannot.
       - record: app:ws_transport_errors:ratio5m
         expr: |
-          sum by (application) (rate(http_server_requests_seconds_count{status!~"2..|3..", uri=~"(/api)?/ws-chat.*"}[5m]))
+          (
+            sum by (application) (rate(http_server_requests_seconds_count{status=~"4..|5..", uri=~"(/api)?/ws-chat.*"}[5m]))
+              or
+            app:ws_transport_requests:rate5m * 0
+          )
             /
           clamp_min(app:ws_transport_requests:rate5m, 0.0001)
 

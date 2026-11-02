@@ -73,10 +73,11 @@ groups:
   # /ws-chat is excluded from the SLO burn-rate ratios (see recording.yml), so
   # without this a chat failure would raise nothing at all.
   #
-  # The ratio counts everything that is not 2xx/3xx, not just 5xx: a SockJS
-  # session ending normally is a 200, so the failure modes worth paging on are a
-  # 5xx storm AND a 404-shaped one — a broken route or a reverse-proxy
-  # misconfiguration takes chat down just as completely without a single 5xx.
+  # The ratio counts 4xx and 5xx: the failure modes worth paging on are a 5xx storm
+  # AND a 404-shaped one, since a broken route or a reverse-proxy misconfiguration
+  # takes chat down just as completely without a single 5xx. It deliberately names
+  # those classes rather than negating 2xx/3xx, which would count the HTTP 101 of
+  # every successful WebSocket upgrade as a failure.
   #
   # The traffic gate is what this alert cannot do, and it is a deliberate limit
   # rather than an oversight: a ratio over a handful of requests in an idle
@@ -95,7 +96,7 @@ groups:
           severity: page
           service: hms-backend
         annotations:
-          summary: "HMS chat transport failing (>25% non-2xx)"
+          summary: "HMS chat transport failing (>25% 4xx/5xx)"
           description: |
             More than a quarter of /ws-chat requests are failing. Clinical chat is
             down or degraded for every connected client. This endpoint is excluded

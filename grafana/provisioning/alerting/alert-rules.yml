@@ -204,13 +204,18 @@ groups:
               # Rate floor as well as ratio: a failure ratio over two requests in
               # an idle window is noise, not an outage.
               expression: "$A > 0.25 && $B > 0.1"
-        noDataState: NoData
+        # OK, not NoData, and this one matters: every other rule here watches a series
+        # that always exists, but this ratio is absent whenever the transport has taken
+        # no traffic at all. With NoData on a page-severity rule, a quiet night — or any
+        # environment where nobody is using chat — raises a standing DatasourceNoData
+        # page. No data here means nothing is failing, which is the OK state.
+        noDataState: OK
         execErrState: Error
         for: 5m
         labels:
           severity: page
           service: hms-backend
         annotations:
-          summary: "HMS chat transport failing (>25% non-2xx)"
+          summary: "HMS chat transport failing (>25% 4xx/5xx)"
           description: "More than a quarter of /ws-chat requests are failing. Clinical chat is degraded for every connected client, and this endpoint is excluded from the burn-rate SLO."
           runbook_url: "https://github.com/DevFaso/hms/blob/main/docs/runbooks/grafana-observability.md#hmschattransporterrors"
