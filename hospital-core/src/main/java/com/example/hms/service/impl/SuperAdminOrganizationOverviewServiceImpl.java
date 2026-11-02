@@ -58,7 +58,7 @@ import static java.util.function.Predicate.not;
 public class SuperAdminOrganizationOverviewServiceImpl implements SuperAdminOrganizationOverviewService {
 
     /** QA D1295 class: the capped staff and patient previews, oldest record first (stable across calls). */
-    private static final Sort OLDEST_FIRST = Sort.by("createdAt", "id");
+    public static final Sort OLDEST_FIRST = Sort.by("createdAt", "id");
     private static final int ALERT_DAYS_WARNING = 30;
     private static final int ALERT_DAYS_CRITICAL = 7;
     private static final String SEVERITY_CRITICAL = "critical";

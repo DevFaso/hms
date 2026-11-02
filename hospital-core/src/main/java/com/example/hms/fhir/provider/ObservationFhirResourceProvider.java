@@ -49,7 +49,7 @@ public class ObservationFhirResourceProvider implements IResourceProvider {
     private static final int MAX_VITALS_PER_PATIENT = 250;
     private static final int MAX_LAB_RESULTS_PER_PATIENT = 250;
     /** QA D1295 class: the capped page keeps the newest results, not whatever the database returns first. */
-    static final Sort LAB_NEWEST_FIRST = Sort.by(Sort.Direction.DESC, "resultDate", "id");
+    public static final Sort LAB_NEWEST_FIRST = Sort.by(Sort.Direction.DESC, "resultDate", "id");
     private static final String VITAL_PREFIX = "vital-";
     private static final int UUID_LENGTH = 36;
 

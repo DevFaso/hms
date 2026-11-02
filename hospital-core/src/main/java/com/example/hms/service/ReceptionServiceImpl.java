@@ -84,7 +84,7 @@ import java.util.stream.Collectors;
 public class ReceptionServiceImpl implements ReceptionService {
 
     /** QA D1295 class: a patient's invoices at one hospital, all of them, newest first. */
-    static final Pageable EVERY_INVOICE_NEWEST_FIRST =
+    public static final Pageable EVERY_INVOICE_NEWEST_FIRST =
         Pageable.unpaged(Sort.by(Sort.Direction.DESC, "invoiceDate", "id"));
     private static final String WAITLIST_ENTRY_NOT_FOUND_KEY = "waitlist.entry.notFound";
 

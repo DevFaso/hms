@@ -24,7 +24,7 @@ public class MedicationRequestFhirResourceProvider implements IResourceProvider 
 
     private static final int MAX_RESULTS = 200;
     /** QA D1295 class: the capped page keeps the newest orders, not whatever the database returns first. */
-    static final Sort NEWEST_FIRST = Sort.by(Sort.Direction.DESC, "createdAt", "id");
+    public static final Sort NEWEST_FIRST = Sort.by(Sort.Direction.DESC, "createdAt", "id");
 
     private final PrescriptionRepository repository;
     private final MedicationRequestFhirMapper mapper;
