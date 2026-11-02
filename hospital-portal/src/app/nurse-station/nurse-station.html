@@ -1456,8 +1456,6 @@
           data-testid="vitals-save"
           (click)="submitVitals()"
           [disabled]="vitalsCapturing()"
-          [appSubmitGuard]="vitalsBlockReason()"
-          [submitGuardFields]="vitalsGuardFieldIds()"
         >
           @if (vitalsCapturing()) {
             <span class="material-symbols-outlined">hourglass_empty</span>

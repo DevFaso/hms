@@ -182,10 +182,6 @@
       "count": 1,
       "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
     },
-    "src/app/billing/billing.html::empty-submit-untested::(click)=recordPayment": {
-      "count": 1,
-      "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
-    },
     "src/app/billing/billing.html::empty-submit-untested::(click)=submitForm": {
       "count": 1,
       "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
@@ -973,10 +969,6 @@
     "src/app/reception/checkin-dialog/checkin-dialog.component.html::empty-submit-untested::type=submit": {
       "count": 1,
       "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
-    },
-    "src/app/reception/checkin-dialog/checkin-dialog.component.html::server-field-errors-unmapped::component": {
-      "count": 1,
-      "why": "D1341 class (round 29): front-office form, mapped by the fix/r29-portal-front-office shared fieldErrors mapper"
     },
     "src/app/reception/close-unseen-dialog/close-unseen-dialog.component.html::empty-submit-untested::(click)=submit": {
       "count": 1,

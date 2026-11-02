@@ -83,26 +83,8 @@ export function secondsInSource(source) {
   return out;
 }
 
-/**
- * `file` → how many seconds-printing sites it may still hold, and why: the
- * front-office directories belong to fix/r29-portal-front-office, which owns
- * their D1340 sweep in round 29 (delete each pin when that branch lands).
- */
-const FRONT_OFFICE =
-  'D1340: front-office directory, swept by fix/r29-portal-front-office (round 29)';
+/** `file` → how many seconds-printing sites it may still hold, and why. */
 const PINNED = new Map([
-  ['appointments/appointment-detail.html', [2, FRONT_OFFICE]],
-  ['patient-portal/my-education/my-education.component.html', [1, FRONT_OFFICE]],
-  ['patient-portal/my-lab-results/my-lab-results.component.html', [1, FRONT_OFFICE]],
-  ['patient-portal/my-notifications/my-notifications.component.html', [1, FRONT_OFFICE]],
-  ['patient-portal/my-screenings/my-screenings.component.html', [1, FRONT_OFFICE]],
-  ['patient-portal/my-sharing/my-sharing.component.html', [1, FRONT_OFFICE]],
-  ['patients/chart-review/chart-review.component.html', [3, FRONT_OFFICE]],
-  ['patients/coverage-tab/coverage-tab.component.html', [1, FRONT_OFFICE]],
-  ['patients/documents-tab/documents-tab.component.html', [1, FRONT_OFFICE]],
-  ['patients/patient-chart/patient-chart.component.html', [1, FRONT_OFFICE]],
-  ['patients/patient-detail.html', [1, FRONT_OFFICE]],
-  ['pharmacy/stock-adjustment.html', [1, FRONT_OFFICE]],
   // Not a date: the decimal-separator probe `(1.5).toLocaleString(locale)`.
   [
     'shared/i18n/app-locale.ts',
