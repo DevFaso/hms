@@ -331,7 +331,7 @@ public class StockTransactionServiceImpl implements StockTransactionService {
                 throw new BusinessException(MessageUtil.resolve("stockTransaction.lot.wrongItem"));
             }
         } else if (stockLotRepository.existsByInventoryItemId(item.getId())) {
-            throw new BusinessException(MessageUtil.resolve("stockTransaction.lot.required"));
+            throw new com.example.hms.exception.FieldBusinessException("stockLotId", "stockTransaction.lot.required");
         }
     }
 

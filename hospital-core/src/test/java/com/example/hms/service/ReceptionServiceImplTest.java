@@ -1780,6 +1780,27 @@ class ReceptionServiceImplTest {
             assertThat(encounter.getValue().getId()).isEqualTo(response.getEncounterId());
         }
 
+        @org.junit.jupiter.params.ParameterizedTest
+        @org.junit.jupiter.params.provider.CsvSource({"-200, reception.checkin.copayNegative",
+            "1500.5, billing.payment.wholeAmountOnly"})
+        @DisplayName("QA D1320: a negative or fractional copay is refused on copayAmount, before anything is written")
+        void aWrongCopayAmountIsRefusedOnItsField_D1320(String amount, String key) {
+            CheckInRequestDTO request = CheckInRequestDTO.builder()
+                    .appointmentId(UUID.randomUUID())
+                    .copayAmount(new java.math.BigDecimal(amount))
+                    .copayMethod(com.example.hms.enums.PaymentMethod.CASH)
+                    .identityConfirmed(true)
+                    .build();
+
+            com.example.hms.exception.FieldBusinessException refused = org.junit.jupiter.api.Assertions.assertThrows(
+                com.example.hms.exception.FieldBusinessException.class,
+                () -> service.checkInPatient(request, hospitalId, "receptionist1"));
+
+            assertThat(refused.getField()).isEqualTo("copayAmount");
+            assertThat(refused.getMessageKey()).isEqualTo(key);
+            verify(appointmentRepo, never()).lockById(any());
+        }
+
         @Test
         @DisplayName("QA D1293: a copay with no method is refused with the field named, before anything is written")
         void aCopayWithNoMethodIsRefused_D1293() {

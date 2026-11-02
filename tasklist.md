@@ -6091,3 +6091,10 @@ ships*, not for building — and check the shipped surface before trusting a
 - [ ] D1301 (409 conflicts): `patient.r16.emailTaken`, `lab.definition.duplicateCode`, `provider.licence.duplicate`, `provider.business.duplicate` answer 409 with no `fieldErrors`; a `ConflictException` that names its field would let the forms mark them without changing the status.
 - [ ] D1301 / D1299 (auth controller): `AuthController#changeOwnUsername` and `#completeAccountSetup` wrap service refusals in their own `MessageResponse`, so `users.username.taken` and every `badSetup(...)` reason carry no field.
 - [ ] D1310: the invoice search strips `_` and `%` from the term (QA D203) instead of escaping them, so an e-mail with an underscore is found only by the part before it.
+
+## Standing debt — round 29 (fix/r29-backend)
+- [ ] Round 29 sweep: `FileUploadController` (multipart, outside the JSON sweep) answers refusals as `badRequest().body(new MessageResponse(...))` with no field (11 sites, some English); `AuthController#completeAccountSetup` / `badSetup` likewise. The sweep reads JSON bodies only.
+- [ ] Round 29 sweep: about 30 value refusals of a typed field are still plain `BusinessException` (`billing.invoice.cancelReasonTooLong`, `lab.order.invalidIcd10` on additional codes, `dispense.handOver.notesTooLong`, `pharmacy.fefo.reasonTooLong`, `nurse.handoff.recipient.invalid`, `nurse.mar.witness.invalid`, ...): each reached only on a found record, so the behavioural sweep cannot see them; the R29 guard covers the "required" shape only.
+- [ ] D1157 class: `PUT /roi-requests/{id}/cancel` note still optional (listed in the sweep's `NO_REQUIRED_FIELD` as KNOWN GAP).
+- [ ] D1301: `POST /security-policies` duplicate answers the generic integrity sentence with no field; `provider.licence.duplicate` / `provider.business.duplicate` 409s carry no `field:` prefix.
+- [ ] Map-bodied endpoints (`/pharmacy/claims/*`, `/assignments/public/*`, `/auth/resend-verification`, `/reception/encounters/{id}/status`) name their keys by hand; a typed DTO would let bean validation and the sweep read them.

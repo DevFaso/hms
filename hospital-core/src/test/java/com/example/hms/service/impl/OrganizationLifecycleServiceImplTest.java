@@ -120,11 +120,11 @@ class OrganizationLifecycleServiceImplTest {
 
     @Test
     void suspendRequiresAReason() {
-        when(organizationRepository.findById(orgId)).thenReturn(Optional.of(org));
-
+        // QA round 29 (assertion changed): refused on "reason" before the organization is read.
         TenantLifecycleActionRequestDTO blank = withReason("  ");
         assertThatThrownBy(() -> service.suspend(orgId, blank, null))
-            .isInstanceOf(BusinessRuleException.class)
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getField()).isEqualTo("reason"))
             .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("organization.r7.reasonRequired"));
         verify(organizationRepository, never()).save(any());
     }

@@ -60,7 +60,9 @@ class R29FieldNamedRefusalGuardTest {
     private static final Pattern EMPTY_400 = Pattern.compile("badRequest\\(\\)\\s*+\\.build\\(\\)");
 
     private static final Pattern REQUIRED_KEY_THROWN = Pattern.compile(
-        "new (?:com\\.example\\.hms\\.exception\\.)?(?:BusinessException|BusinessRuleException)\\(\\s*+\"([\\w.]++)\"");
+        "new (?:com\\.example\\.hms\\.exception\\.)?(?:BusinessException|BusinessRuleException)\\(\\s*+"
+            // the key itself, or the key resolved first (message(...), MessageUtil.resolve(...), getMessage(...))
+            + "(?:(?:\\w++\\.)*+(?:message|resolve|resolveOrRaw|getMessage|getLocalizedMessage)\\(\\s*+)?\"([\\w.]++)\"");
     private static final Pattern REQUIRED_SHAPE = Pattern.compile("(?i)required|missing");
     /** Required-shaped keys that are not a request field: a context, a whole body, a path id, the caller's role. */
     private static final Pattern NOT_A_FIELD_CATEGORY = Pattern.compile(
@@ -80,7 +82,11 @@ class R29FieldNamedRefusalGuardTest {
         Map.entry("audit.eventType.required", "a query parameter of the audit search"),
         Map.entry("lab.result.compareMissingData", "state: a comparison needs two results with values"),
         Map.entry("prescription.safeguard.COSIGN_REQUIRED.status", "state: the controlled order awaits its co-signature"),
-        Map.entry("prescription.safeguard.COSIGN_REQUIRED.dispense", "state: the controlled order awaits its co-signature"));
+        Map.entry("prescription.safeguard.COSIGN_REQUIRED.dispense", "state: the controlled order awaits its co-signature"),
+        Map.entry("staff.department.required", "state of the staff record: availability needs the staff's department"),
+        Map.entry("encounter.note.author.required", "the caller's staff identity, not a request field"),
+        Map.entry("auth.lab.required", "the caller's role (lab scientist or hospital admin)"),
+        Map.entry("auth.lab.staff.required", "the caller's role (lab staff or hospital admin)"));
 
     /** Units, clinical scores and external-system terms that are written in camel case on purpose. */
     private static final Set<String> CAMEL_CASE_WORDS = Set.of(

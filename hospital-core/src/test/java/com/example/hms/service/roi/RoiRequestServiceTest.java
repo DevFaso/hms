@@ -304,13 +304,15 @@ class RoiRequestServiceTest {
     @Test
     @DisplayName("deny needs a reason — it is the outcome the requester is told")
     void denyNeedsAReason() {
-        asClinicianAtHospital();
+        // QA round 29 (assertion changed): a translated refusal on "note", read before the scope.
         RoiDecisionDTO blank = RoiDecisionDTO.builder().note("  ").build();
         UUID requestId = UUID.randomUUID();
 
         assertThatThrownBy(() -> service.deny(requestId, blank))
-            .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("reason");
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class, ex -> {
+                assertThat(ex.getField()).isEqualTo("note");
+                assertThat(ex.getMessageKey()).isEqualTo("roi.deny.noteRequired");
+            });
         verify(roiRepository, never()).saveAndFlush(any());
     }
 

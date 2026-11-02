@@ -178,8 +178,9 @@ class LabQcEventServiceImplTest {
             .build();
 
         assertThatThrownBy(() -> service.recordQcEvent(request, Locale.ENGLISH))
-            .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("measuredValue");
+            // QA round 29 (assertion changed): named on its own field, not in the sentence.
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getFieldErrors()).containsOnlyKeys("measuredValue"));
     }
 
     @Test
@@ -191,8 +192,9 @@ class LabQcEventServiceImplTest {
             .build();
 
         assertThatThrownBy(() -> service.recordQcEvent(request, Locale.ENGLISH))
-            .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("expectedValue");
+            // QA round 29 (assertion changed): named on its own field, not in the sentence.
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getFieldErrors()).containsOnlyKeys("expectedValue"));
     }
 
     @Test

@@ -902,7 +902,7 @@ public class DispenseServiceImpl implements DispenseService {
         // fill with no lot used to be accepted as DISPENSED with no stock
         // movement at all, so the shelf and the ledger drifted apart.
         if (stockLot == null && inventoryItemRepository.existsByPharmacyIdAndActiveTrue(pharmacy.getId())) {
-            throw new BusinessException(MessageUtil.resolve("dispense.lot.required"));
+            throw new com.example.hms.exception.FieldBusinessException("stockLotId", "dispense.lot.required");
         }
         recordFefoOverride(dto, stockLot);
 
@@ -1075,7 +1075,7 @@ public class DispenseServiceImpl implements DispenseService {
             return;
         }
         if (actors.verifiedBy() == null) {
-            throw new BusinessException(MessageUtil.resolve("dispense.verification.required"));
+            throw new com.example.hms.exception.FieldBusinessException("verifiedBy", "dispense.verification.required");
         }
         // #922 review: the dispense endpoints also admit HOSPITAL_ADMIN, but
         // the verification is a pharmacist's attestation — the same roles

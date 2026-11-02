@@ -576,6 +576,8 @@ class LaborServiceImplTest {
 
         assertThatThrownBy(() -> service.recordDelivery(patientId, episodeId, recorderUserId, request))
             .isInstanceOf(BusinessException.class)
+            .satisfies(e -> assertThat(((com.example.hms.exception.FieldBusinessException) e).getField())
+                .as("QA D1339: marked on the override field").isEqualTo("recentDeliveryOverrideReason"))
             .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("labor.delivery.recentDelivery");
         verify(deliveryRecordRepository, never()).save(any());
         assertThat(episode.getStatus()).isEqualTo(LaborStatus.ACTIVE);
@@ -1010,6 +1012,8 @@ class LaborServiceImplTest {
 
         assertThatThrownBy(() -> service.startEpisode(patientId, recorderUserId, request))
             .isInstanceOf(BusinessException.class)
+            .satisfies(e -> assertThat(((com.example.hms.exception.FieldBusinessException) e).getField())
+                .as("QA D1339: marked on the override field").isEqualTo("recentDeliveryOverrideReason"))
             .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("labor.episode.recentDelivery");
         verify(episodeRepository, never()).save(any());
     }

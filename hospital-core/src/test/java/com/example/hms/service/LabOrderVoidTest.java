@@ -114,7 +114,8 @@ class LabOrderVoidTest {
     @NullAndEmptySource
     @ValueSource(strings = {"   "})
     void aVoidStatesWhy(String reason) {
-        when(roleValidator.isLabManager(managerId, ordering.getId())).thenReturn(true);
+        // QA round 29 (stub now lenient): the reason is read before the order and the caller's authority.
+        org.mockito.Mockito.lenient().when(roleValidator.isLabManager(managerId, ordering.getId())).thenReturn(true);
         UUID id = order.getId();
 
         assertThatThrownBy(() -> service.voidLabOrder(id, reason, Locale.ENGLISH))
@@ -127,7 +128,7 @@ class LabOrderVoidTest {
 
     @Test
     void anOverlongReasonIsRefused() {
-        when(roleValidator.isLabManager(managerId, ordering.getId())).thenReturn(true);
+        org.mockito.Mockito.lenient().when(roleValidator.isLabManager(managerId, ordering.getId())).thenReturn(true);
         UUID id = order.getId();
         String reason = "x".repeat(1001);
 

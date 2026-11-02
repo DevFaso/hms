@@ -320,7 +320,7 @@ public class OwnEmailChangeService {
     /** QA round 29 sweep: a refusal of one typed value is named on its field, so the form marks it. */
     private BusinessException refusedOn(String field, UUID userId, String reason, String messageKey) {
         audit(userId, "Own email change refused: " + reason, AuditStatus.FAILURE);
-        return new com.example.hms.exception.FieldBusinessException(field, messageKey);
+        return new com.example.hms.exception.FieldBusinessException(field, MessageUtil.resolve(messageKey));
     }
 
     private PendingChangeGoneException gone(UUID userId, String reason, String messageKey) {

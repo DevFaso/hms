@@ -328,7 +328,7 @@ class StaffServiceImplTest {
         dto.setUserEmail("");
         dto.setHospitalName("H");
         dto.setJobTitle("Doctor");
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Required");
+        // QA round 29 (stub removed): the required fields go through RequiredFields, not the service's messageSource.
 
         assertThatThrownBy(() -> staffService.createStaff(dto, locale))
                 .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
@@ -341,7 +341,7 @@ class StaffServiceImplTest {
         dto.setUserEmail("user@test.com");
         dto.setHospitalName("");
         dto.setJobTitle("Doctor");
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Required");
+        // QA round 29 (stub removed): the required fields go through RequiredFields, not the service's messageSource.
 
         assertThatThrownBy(() -> staffService.createStaff(dto, locale))
                 .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
@@ -354,7 +354,7 @@ class StaffServiceImplTest {
         dto.setUserEmail("user@test.com");
         dto.setHospitalName("Hospital");
         dto.setJobTitle("");
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Required");
+        // QA round 29 (stub removed): the required fields go through RequiredFields, not the service's messageSource.
 
         assertThatThrownBy(() -> staffService.createStaff(dto, locale))
                 .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);

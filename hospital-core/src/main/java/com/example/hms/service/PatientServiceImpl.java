@@ -520,7 +520,8 @@ public class PatientServiceImpl implements PatientService {
             // Only a new address is checked: resending one's own is never a conflict.
             if (email != null && !email.equals(patient.getEmail())
                     && patientRepository.existsEmailOnOtherPatient(email, patient.getId())) {
-                throw new ConflictException(MessageUtil.resolve("patient.r16.emailTaken"));
+                // QA D1301 (round 29): still a 409, now marked on the e-mail field.
+                throw new ConflictException("email:" + MessageUtil.resolve("patient.r16.emailTaken"));
             }
             patient.setEmail(email);
         }

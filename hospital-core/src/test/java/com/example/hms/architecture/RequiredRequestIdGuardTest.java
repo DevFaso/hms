@@ -387,16 +387,19 @@ class RequiredRequestIdGuardTest {
             while (constant.find()) {
                 constants.put(constant.group(1), constant.group(2));
             }
+            // QA D1338 (round 29): a 409 whose message starts "field:" carries fieldErrors for that field.
             Matcher thrown = Pattern.compile("throw\\s++new\\s++(" + QUALIFIED_TYPE + ")\\(\\s*+"
+                + "(\"[a-z]\\w*+:\"\\s*+\\+\\s*+)?"
                 + "(?:(?:com\\.example\\.hms\\.utility\\.)?MessageUtil\\.resolve(?:OrRaw)?\\(\\s*+)?"
                 + "(?:\"([\\w.]++)\"|([A-Z][A-Z0-9_]++)\\b)").matcher(source);
             while (thrown.find()) {
-                String key = thrown.group(2) != null ? thrown.group(2) : constants.get(thrown.group(3));
+                String key = thrown.group(3) != null ? thrown.group(3) : constants.get(thrown.group(4));
                 if (key == null || !DUPLICATE_KEY.matcher(key).find()) {
                     continue;
                 }
                 refusals++;
-                if (thrown.group(1).endsWith("FieldBusinessException")) {
+                if (thrown.group(1).endsWith("FieldBusinessException")
+                        || (thrown.group(2) != null && thrown.group(1).endsWith("ConflictException"))) {
                     continue;
                 }
                 if (NOT_A_TYPED_VALUE.containsKey(key)) {
@@ -494,7 +497,6 @@ class RequiredRequestIdGuardTest {
         Map.entry("DeathRecordRequestDTO.maternalDeathTiming", "only when the death is a maternal death"),
         Map.entry("DeathRecordRequestDTO.perinatalType", "only when the death is a perinatal death"),
         Map.entry("ObgynReferralCreateRequestDTO.attachments", "only for an urgent referral"),
-        Map.entry("RefillDecisionRequestDTO.providerNotes", "only to pause a refill"),
         Map.entry("TransferOrderRequestDTO.isolationOverrideReason", "only when the destination breaks isolation"),
         Map.entry("PatientBloodGroupRequestDTO.correctionReason", "only when a recorded group is corrected"),
         Map.entry("LabTestDefinitionApprovalRequestDTO.rejectionReason", "only to reject"),
@@ -510,10 +512,9 @@ class RequiredRequestIdGuardTest {
         Map.entry("SmartPhraseRequestDTO.hospitalId", "only for a hospital-scoped phrase"),
         Map.entry("SmartPhraseRequestDTO.ownerUserId", "only for a personal phrase"),
         Map.entry("InvoiceAdjustmentRequestDTO.invoiceItemId", "KNOWN GAP D1300: only for a line adjustment"),
-        Map.entry("AppointmentRequestDTO.patientId", "KNOWN GAP D1300: the patient's own booking omits it"),
-        Map.entry("AppointmentRequestDTO.staffId", "KNOWN GAP D1300: a staff edit only; the same DTO books"),
-        Map.entry("AppointmentRequestDTO.hospitalId", "KNOWN GAP D1300: a staff edit only; the same DTO books"),
-        Map.entry("AppointmentRequestDTO.appointmentDate", "KNOWN GAP D1300: shared with the slot booking path"),
+        Map.entry("AppointmentRequestDTO.patientId",
+            "only for a staff booking (a patient books for themselves): the body's isPatientNamedForStaffBooking"
+                + " rule names it with the rest (QA D1318)"),
         Map.entry("BirthPlanRequestDTO.patientId", "KNOWN GAP D1300: a staff caller only; the patient's own omits it"),
         Map.entry("BirthPlanRequestDTO.hospitalId", "KNOWN GAP D1300: a staff caller only; the patient's own omits it"),
         Map.entry("DepartmentRequestDTO.hospitalId", "KNOWN GAP D1300: filled from the caller's scope when absent"),
@@ -521,8 +522,6 @@ class RequiredRequestIdGuardTest {
         Map.entry("HospitalRequestDTO.zipCode", "KNOWN GAP D1300: the address rule depends on the country"),
         Map.entry("ImagingReportUpsertRequestDTO.imagingOrderId", "KNOWN GAP D1300: create only; the upsert body edits"),
         Map.entry("LabSpecimenRequestDTO.labOrderId", "the controller sets it from the path after binding: never absent"),
-        Map.entry("LinkPatientInsuranceRequestDTO.payerCode", "KNOWN GAP D1300: one of the natural-key parts"),
-        Map.entry("LinkPatientInsuranceRequestDTO.policyNumber", "KNOWN GAP D1300: one of the natural-key parts"),
         Map.entry("CheckInRequestDTO.appointmentId", "KNOWN GAP D1300: the DTO documents a walk-in with patientId instead"));
 
     /** The field carries @NotNull / @NotBlank / @NotEmpty (any group), or a class-level @OneOf lists it. */
@@ -558,10 +557,6 @@ class RequiredRequestIdGuardTest {
             "the same dose (vaccine, dose number, date) is already recorded: the record as a whole"),
         Map.entry("platform.releaseWindow.duplicate",
             "a 409 conflict on the platform release calendar (super-admin), kept as a conflict"),
-        Map.entry("patient.r16.emailTaken",
-            "a 409 conflict the desk's demographics form keys on (ConflictException); standing debt D1301"),
-        Map.entry("lab.definition.duplicateCode",
-            "a 409 conflict (ConflictException) on the test catalogue; standing debt D1301"),
         Map.entry("provider.licence.duplicate",
             "a 409 conflict on provider verification (a licence held by another facility); standing debt D1301"),
         Map.entry("provider.business.duplicate",

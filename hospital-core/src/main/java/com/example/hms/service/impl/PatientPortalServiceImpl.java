@@ -299,7 +299,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         if (dto.getPhoneNumberPrimary() != null) {
             String primary = selfServicePhone(patient, dto.getPhoneNumberPrimary(), "phoneNumberPrimary");
             if (primary == null) {
-                throw new BusinessException(MessageUtil.resolve("patient.phoneNumberPrimary.required"));
+                throw new com.example.hms.exception.FieldBusinessException("phoneNumberPrimary", "patient.phoneNumberPrimary.required");
             }
             UUID selfId = patient.getId();
             // Never single-result: two records may already share the number,
