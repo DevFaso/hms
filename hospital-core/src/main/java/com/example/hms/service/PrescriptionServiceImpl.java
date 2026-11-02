@@ -461,6 +461,11 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             throw new BusinessException("prescription.sign.ownCosign");
         }
 
+        // QA D1223 (round 24): an order whose typed name names another drug
+        // than its catalogue item (saved before the rule, or by a stale edit)
+        // is never signed: every check below would judge the item, not the
+        // drug written on the order.
+        refuseNameItemMismatch(prescription.getMedicationName(), linkedOrCodedItem(prescription));
         // Round 18: a controlled drug (the prescriber's tick OR the catalogue's
         // flag, D922) is signed only after the prescriber re-authenticates on
         // this very call (EPCS-style step-up). The proof is written on the
@@ -470,11 +475,6 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // absolute daily maximum (or with an override) is checked again at
         // the signature; a hard stop is never signed. Before the
         // re-authentication, so no code is spent on a refusal.
-        // QA D1223 (round 24): an order whose typed name names another drug
-        // than its catalogue item (saved before the rule, or by a stale edit)
-        // is never signed: every check below would judge the item, not the
-        // drug written on the order.
-        refuseNameItemMismatch(prescription.getMedicationName(), linkedOrCodedItem(prescription));
         List<CdsCard> signingCards = refuseHardStopAtSigning(prescription);
         // Round 19 (QA D1096): a dose the check could not judge is signed
         // only once a pharmacist or another physician recorded the review.

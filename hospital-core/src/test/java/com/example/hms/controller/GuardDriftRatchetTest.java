@@ -221,7 +221,6 @@ class GuardDriftRatchetTest {
         listed.put("ObgynReferralController.getReferralsForObgyn", OBGYNREFERRALCONTROLLER_REASON);
         listed.put("ObgynReferralController.startReferral", OBGYNREFERRALCONTROLLER_REASON);
         listed.put("PatientController.createPatientDiagnosis", PATIENTCONTROLLER_REASON);
-        listed.put("PatientController.deletePatientDiagnosis", PATIENTCONTROLLER_REASON);
         listed.put("PatientController.getDoctorRecord", PATIENTCONTROLLER_REASON);
         listed.put("PatientController.getDoctorTimeline", PATIENTCONTROLLER_REASON);
         listed.put("PatientController.updatePatientDiagnosis", PATIENTCONTROLLER_REASON);
