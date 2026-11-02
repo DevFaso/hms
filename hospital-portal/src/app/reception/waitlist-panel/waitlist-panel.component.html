@@ -42,7 +42,7 @@
       </thead>
       <tbody>
         @for (entry of entries(); track entry.id) {
-          <tr>
+          <tr [attr.data-entry-id]="entry.id">
             <td>
               <button class="patient-link" (click)="patientClicked.emit(entry.patientId)">
                 {{ entry.patientName }}
@@ -164,6 +164,8 @@
             [placeholder]="'RECEPTION.SEARCH_PATIENT_NAME' | translate"
             [ngModel]="patientQuery()"
             (ngModelChange)="onPatientQueryChange($event)"
+            [appListEscape]="patientResults().length > 0"
+            (listEscape)="patientResults.set([])"
             autocomplete="off"
           />
           @if (patientResults().length > 0) {
@@ -175,7 +177,8 @@
                     <span class="mrn-hint">· {{ sub }}</span>
                   }
                   @if (p.dateOfBirth) {
-                    <span class="dob-hint"
+                    {{ ' '
+                    }}<span class="dob-hint"
                       >({{ p.dateOfBirth | serverTime | date: 'mediumDate' }})</span
                     >
                   }

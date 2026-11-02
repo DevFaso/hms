@@ -21,6 +21,7 @@ import { SmartPhrase, SmartPhraseService } from '../../services/smart-phrase.ser
 import { toServerDateTime } from '../../shared/date-utils';
 import { refuseFields } from '../../shared/forms/invalid-fields';
 import { hasClinicalContent } from '../../shared/forms/clinical-content';
+import { stopEscapeAtOpenList } from '../../shared/a11y/list-escape.directive';
 
 type NoteFieldKey =
   | 'chiefComplaint'
@@ -219,7 +220,8 @@ export class EncounterNoteFormComponent implements OnInit, OnDestroy {
         this.acceptSuggestion(popup.highlightedIndex, event.target as HTMLTextAreaElement);
         return;
       case 'Escape':
-        event.preventDefault();
+        // QA D1259: the open popup takes the key; the dialog around it stays.
+        stopEscapeAtOpenList(event, true);
         this.popup.set(null);
         return;
       default:

@@ -19,14 +19,20 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
-import { relative, join, dirname } from 'node:path';
+import { relative, join, dirname, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { templatesIn } from './inline-templates.mjs';
 import { tags } from './html-tags.mjs';
 import { closeIndexOf } from './dialog-scan.mjs';
 import { memberBody } from './disabled-control-scan.mjs';
-import { isFieldGroup, requiredFieldFindings } from './required-field-scan.mjs';
+import {
+  isFieldGroup,
+  listedUndeclaredFindings,
+  partialGuardFindings,
+  requiredFieldFindings,
+  unstarredRequiredFindings,
+} from './required-field-scan.mjs';
 
 const appDir = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'src', 'app');
 
@@ -248,4 +254,222 @@ test('QA D1245: a template that uses the submit guard imports it', () => {
       missing.push(relative(appDir, tsFile).replaceAll('\\', '/'));
   }
   assert.deepEqual(missing, [], 'add SubmitGuardDirective to the component imports');
+});
+
+// ── QA D1256 / D1257 (D1089 / D1124 / D1245 NOT_FIXED again, round 26) ──────
+// The guard read the form's required controls only when its expression let
+// the click through, so an empty prescription named only the drug; and a
+// guard that tested the patient without listing it (Nouvelle consultation, the
+// lab order) named everything but the patient. The directive now reads every
+// field it is about on every refusal (submit-guard.directive.ts); this scan
+// makes sure every guard is about its whole form.
+
+test('QA D1256: every guarded submit reads every required field of its form', () => {
+  const found = [];
+  let guards = 0;
+  for (const { file, text, lineOffset } of templatesIn(appDir)) {
+    guards += (text.match(/\bappSubmitGuard\b/g) ?? []).length;
+    const rel = relative(appDir, file).replaceAll('\\', '/');
+    for (const f of partialGuardFindings(text))
+      found.push(`${rel}:${f.line + (lineOffset ?? 0)} leaves out ${f.missing.join(', ')}`);
+  }
+  assert.ok(guards >= 150, `every guarded submit must be read, saw ${guards}`);
+  assert.deepEqual(
+    found,
+    [],
+    'put submitGuardRequired on the button (or list every required id in [submitGuardFields]); ' +
+      'a secondary action with fields of its own sits in its own data-submit-scope',
+  );
+});
+
+test('QA D1256 guard: the scan sees the round-26 consultation dialog', () => {
+  const broken = `<div class="modal" role="dialog">
+      <label for="enc-patient">Patient *</label>
+      <input id="enc-patient" required data-submit-blank="true" />
+      <label for="enc-date">Date *</label>
+      <input id="enc-date" required />
+      <button class="btn-primary" (click)="submitForm()"
+        [appSubmitGuard]="!form.patientId || !form.date" [submitGuardFields]="['enc-date']">Créer</button>
+    </div>`;
+  assert.deepEqual(
+    partialGuardFindings(broken).map((f) => f.missing.join(',')),
+    ['enc-patient'],
+  );
+  const fixed = broken.replace(
+    '(click)="submitForm()"',
+    '(click)="submitForm()" submitGuardRequired',
+  );
+  assert.deepEqual(partialGuardFindings(fixed), []);
+  const listed = broken.replace("['enc-date']", "['enc-patient', 'enc-date']");
+  assert.deepEqual(partialGuardFindings(listed), []);
+  // A secondary action beside a submit that reads the whole form.
+  const secondary = `<form>
+      <input id="a" required /><input id="code" />
+      <button type="button" [appSubmitGuard]="!code && 'Code'" [submitGuardFields]="['code']">OK</button>
+      <button type="submit" appSubmitGuard submitGuardRequired>Créer</button>
+    </form>`;
+  assert.deepEqual(partialGuardFindings(secondary), []);
+  // Its own scope: the fields around it only.
+  const ownScope = `<div class="modal"><input id="a" required />
+      <div data-submit-scope><textarea id="m"></textarea>
+      <button [appSubmitGuard]="!m && 'Message'">Envoyer</button></div></div>`;
+  assert.deepEqual(partialGuardFindings(ownScope), []);
+  const sameScope = ownScope.replace('<div data-submit-scope>', '<div>');
+  assert.deepEqual(
+    partialGuardFindings(sameScope).map((f) => f.missing.join(',')),
+    ['a'],
+  );
+});
+
+// ── QA D1272 (round 26): a required field with no star ─────────────────────
+
+function translator(lang) {
+  const json = JSON.parse(
+    readFileSync(join(appDir, '..', 'assets', 'i18n', `${lang}.json`), 'utf8'),
+  );
+  return (key) => {
+    const v = key.split('.').reduce((o, p) => (o == null ? undefined : o[p]), json);
+    return typeof v === 'string' ? v : null;
+  };
+}
+
+test('QA D1272: every required field with a label shows the star, in every language', () => {
+  const found = new Set();
+  let templates = 0;
+  for (const lang of ['fr', 'en', 'es']) {
+    const tr = translator(lang);
+    for (const { file, text, lineOffset } of templatesIn(appDir)) {
+      if (lang === 'fr') templates++;
+      const rel = relative(appDir, file).replaceAll('\\', '/');
+      for (const f of unstarredRequiredFindings(text, tr))
+        found.add(`${rel}:${f.line + (lineOffset ?? 0)} ${f.id || '(no id)'}`);
+    }
+  }
+  assert.ok(templates > 200, `every template must be read, saw ${templates}`);
+  assert.deepEqual(
+    [...found].sort(),
+    [],
+    'write " *" after the label text (the guard names the field; the star tells the reader first)',
+  );
+});
+
+test('QA D1272 guard: the scan sees the round-26 lab test definition', () => {
+  const tr = (k) => ({ 'L.CODE': 'Code du test', 'L.TYPE': "Type d'étude *" })[k] ?? null;
+  const broken = `<div class="modal"><label for="defTestCode">{{ 'L.CODE' | translate }}</label>
+      <input id="defTestCode" required /></div>`;
+  assert.deepEqual(
+    unstarredRequiredFindings(broken, tr).map((f) => f.id),
+    ['defTestCode'],
+  );
+  assert.deepEqual(unstarredRequiredFindings(broken.replace('}}</label>', '}} *</label>'), tr), []);
+  // The star in the translation, a conditional star, a wrapping label.
+  assert.deepEqual(
+    unstarredRequiredFindings(
+      `<label for="t">{{ 'L.TYPE' | translate }}</label><input id="t" required />`,
+      tr,
+    ),
+    [],
+  );
+  assert.deepEqual(
+    unstarredRequiredFindings(
+      `<label for="r">Réf{{ need ? ' *' : '' }}</label><input id="r" [required]="need" />`,
+      tr,
+    ),
+    [],
+  );
+  assert.equal(
+    unstarredRequiredFindings(`<label>{{ 'L.CODE' | translate }} <input required /></label>`, tr)
+      .length,
+    1,
+  );
+  // Named only by aria-label: no label to carry the star.
+  assert.deepEqual(unstarredRequiredFindings('<input aria-label="Motif" required />', tr), []);
+});
+
+// QA D1272, the other half: a field a guard refuses blank (listed in its
+// `submitGuardFields`) that neither declares `required` nor shows a star. The
+// handoff's "Patient" and "Sens" were the reported pair. Each site below was
+// found by the first run of the rule; each is pinned with its owner and
+// reason, and a pin fails once its site is fixed, so the list only shrinks.
+// The mortality and transfusion patient pickers were fixed in this PR
+// (`required` on the shared picker).
+const MAR_BRANCH =
+  'D1272 — nurse-station / eMAR, owned by fix/r26-mar-schedule (handoff stars are its scope)';
+const CONDITIONAL =
+  'D1272 debt — shown only for one action of the dialog; required + star to add with a test of that action';
+const SECONDARY =
+  'D1272 debt — a secondary step of a larger form (OTP / verification code), not a form field';
+const CONSENT =
+  'D1272 debt — an attestation checkbox; its label is the consent sentence, star to add';
+const REASON = 'D1272 debt — the single reason field of a confirm dialog; required + star to add';
+const LISTED_UNDECLARED_ALLOWED = new Map([
+  ['admissions/admissions.html:adm-bed-select', CONDITIONAL],
+  ['bed-board/bed-board.html:precaution-reason', REASON],
+  ['bed-board/bed-board.html:transfer-destination', CONDITIONAL],
+  ['bed-board/bed-board.html:override-confirm', CONDITIONAL],
+  ['bed-board/bed-board.html:override-reason', CONDITIONAL],
+  ['bed-board/bed-board.html:transfer-reason', CONDITIONAL],
+  ['checkout/checkout-dialog/checkout-dialog.component.html:checkout-diagnoses', CONDITIONAL],
+  ['checkout/checkout-dialog/checkout-dialog.component.html:checkout-instructions', CONDITIONAL],
+  ['encounters/encounters.html:addendum-content', REASON],
+  ['lab/lab-approval-queue/lab-approval-queue.html:rejection-reason', REASON],
+  ['lab/lab-results/lab-results.html:readBackValue', CONDITIONAL],
+  ['lock-screen/lock-screen.html:unlock-password', REASON],
+  ['nurse-station/emar/emar.component.html:emar-hold-reason', MAR_BRANCH],
+  ['nurse-station/nurse-station.html:mar-reason-input', MAR_BRANCH],
+  ['nurse-station/nurse-station.html:tc-patient', MAR_BRANCH],
+  ['nurse-station/nurse-station.html:tc-category', MAR_BRANCH],
+  ['nurse-station/nurse-station.html:ho-patient', MAR_BRANCH],
+  ['nurse-station/nurse-station.html:ho-direction', MAR_BRANCH],
+  ['nurse-station/nurse-station.html:cn-narrative', MAR_BRANCH],
+  ['nurse-station/nursing-intake-form/nursing-intake-form.component.html:nursingNotes', MAR_BRANCH],
+  [
+    'patient-portal/my-appointments/pre-checkin-form/pre-checkin-form.component.html:preCheckinConsent',
+    CONSENT,
+  ],
+  ['patients/patient-form.html:otpCode', SECONDARY],
+  ['pharmacy/dispensing.html:verifyAttest', CONSENT],
+  ['profile/profile.html:editEmail', CONDITIONAL],
+  ['profile/profile.html:emailChangeCode', SECONDARY],
+  ['profile/profile.html:pwdCurrent', CONDITIONAL],
+  ['profile/profile.html:pwdNew', CONDITIONAL],
+  ['profile/profile.html:pwdConfirm', CONDITIONAL],
+  ['profile/profile.html:verification-code', SECONDARY],
+  ['reception/checkin-dialog/checkin-dialog.component.html:checkinIdentityConfirmed', CONSENT],
+]);
+
+test('QA D1272: a field its guard refuses blank declares itself required (pins shrink only)', () => {
+  const found = [];
+  const seen = new Set();
+  for (const { file, text } of templatesIn(appDir)) {
+    const rel = relative(appDir, file).split(sep).join('/');
+    for (const f of listedUndeclaredFindings(text)) {
+      const site = `${rel}:${f.id}`;
+      if (LISTED_UNDECLARED_ALLOWED.has(site)) seen.add(site);
+      else found.push(site);
+    }
+  }
+  assert.deepEqual(
+    found,
+    [],
+    'put `required` on the field (and " *" on its label): its guard already refuses it blank',
+  );
+  const stale = [...LISTED_UNDECLARED_ALLOWED.keys()].filter((s) => !seen.has(s));
+  assert.deepEqual(stale, [], 'the site was fixed: delete its line from LISTED_UNDECLARED_ALLOWED');
+});
+
+test('QA D1272 guard: the scan sees the round-26 handoff', () => {
+  const broken = `<div role="dialog">
+      <label for="ho-direction">Sens</label><select id="ho-direction"></select>
+      <button [appSubmitGuard]="!dir" [submitGuardFields]="['ho-direction']">OK</button></div>`;
+  assert.deepEqual(
+    listedUndeclaredFindings(broken).map((f) => f.id),
+    ['ho-direction'],
+  );
+  assert.deepEqual(
+    listedUndeclaredFindings(
+      broken.replace('<select id="ho-direction"', '<select id="ho-direction" required'),
+    ),
+    [],
+  );
 });

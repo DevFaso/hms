@@ -16,7 +16,7 @@ import { relative, join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { templatesIn } from './inline-templates.mjs';
-import { gluedBadges, gluedBefore } from './badge-spacing-scan.mjs';
+import { gluedBadges, gluedBefore, gluedHints } from './badge-spacing-scan.mjs';
 
 const appDir = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'src', 'app');
 
@@ -76,4 +76,51 @@ test('QA D1205 guard: the scan sees the round-22 row and the shapes that are spa
   // `} @else {`: the other branch never renders beside this one.
   const branches = `@if (a) { <span class="x">A</span> } @else { <span class="badge">B</span> }`;
   assert.equal(gluedBefore(branches, branches.indexOf('<span class="badge"')), false);
+});
+
+// QA D1271 (round 26): the MRN hint ran into the birth-date hint in the
+// waitlist and recall patient suggestions ("CHW7213(3 nov. 1993)"). The scan
+// now reads every hint / meta / sub-line element too (gluedHints). The 74
+// glued hints the first run found across 40 templates were spaced with
+// {{ ' ' }}. The one left is in the eMAR, owned by the MAR branch of round 26
+// (fix/r26-mar-schedule): pinned with its defect id, and the pin fails once
+// the site is spaced, so it cannot outlive the fix.
+const HINT_ALLOWED = new Map([
+  [
+    'nurse-station/emar/emar.component.html:52',
+    'D1271 — eMAR queue meta, MAR branch owns the file',
+  ],
+]);
+
+test('QA D1271: no hint, meta or sub-line runs into the text before it, in any template', () => {
+  const found = [];
+  const seen = new Set();
+  for (const { file, text, lineOffset } of templatesIn(appDir)) {
+    const rel = relative(appDir, file).replaceAll('\\', '/');
+    for (const g of gluedHints(text)) {
+      const site = `${rel}:${g.line + (lineOffset ?? 0)}`;
+      if (HINT_ALLOWED.has(site)) seen.add(site);
+      else found.push(`${site} ${g.tag}`);
+    }
+  }
+  assert.deepEqual(found, [], "separate it with {{ ' ' }}");
+  const stale = [...HINT_ALLOWED.keys()].filter((s) => !seen.has(s));
+  assert.deepEqual(stale, [], 'the site was fixed: delete its line from HINT_ALLOWED');
+});
+
+test('QA D1271 guard: the scan sees the round-26 suggestion row', () => {
+  const row = `<li>{{ p | personName }}
+      @if (p | patientSubline; as sub) {
+        <span class="mrn-hint">· {{ sub }}</span>
+      }
+      @if (p.dateOfBirth) {
+        <span class="dob-hint">({{ p.dateOfBirth | date }})</span>
+      }
+    </li>`;
+  assert.deepEqual(
+    gluedHints(row).map((g) => g.tag),
+    ['<span class="dob-hint"'],
+  );
+  const fixed = row.replace('<span class="dob-hint"', '{{ \' \' }}<span class="dob-hint"');
+  assert.deepEqual(gluedHints(fixed), []);
 });

@@ -106,7 +106,8 @@
               @if (item.body) {
                 <span class="item-body">{{ item.body }}</span>
               }
-              <span class="item-meta">
+              {{ ' '
+              }}<span class="item-meta">
                 @if (item.patientName) {
                   <span class="meta-patient">{{ item.patientName }}</span>
                 }

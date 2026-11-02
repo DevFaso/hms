@@ -287,7 +287,7 @@
                 <div class="name-stack">
                   <span class="name-primary">{{ patient | personName }}</span>
                   @if (patient.hospitalName) {
-                    <span class="name-sub">{{ patient.hospitalName }}</span>
+                    {{ ' ' }}<span class="name-sub">{{ patient.hospitalName }}</span>
                   }
                 </div>
               </td>

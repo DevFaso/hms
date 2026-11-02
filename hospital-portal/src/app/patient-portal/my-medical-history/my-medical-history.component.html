@@ -177,11 +177,13 @@
                   >{{ item.relationship
                   }}{{ item.relativeName ? ' — ' + item.relativeName : '' }}</span
                 >
-                <span class="pli-sub">{{
+                {{ ' '
+                }}<span class="pli-sub">{{
                   item.conditionDisplay || item.conditionCode || '-'
                 }}</span>
                 @if (item.ageAtOnset) {
-                  <span class="pli-meta"
+                  {{ ' '
+                  }}<span class="pli-meta"
                     >{{ 'PORTAL.MEDICAL_HISTORY.AGE_AT_ONSET' | translate
                     }}{{ 'COMMON.COLON' | translate }} {{ item.ageAtOnset }}</span
                   >

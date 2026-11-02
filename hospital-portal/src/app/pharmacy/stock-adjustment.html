@@ -141,7 +141,8 @@
             @if (earlierTransferLot(); as earlier) {
               <div class="field" data-testid="transfer-fefo-warning">
                 <label for="trFefo">{{ 'PHARMACY.FEFO_REASON' | translate }} *</label>
-                <small class="field-hint" role="alert">{{
+                {{ ' '
+                }}<small class="field-hint" role="alert">{{
                   'PHARMACY.FEFO_WARNING'
                     | translate
                       : {

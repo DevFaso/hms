@@ -395,6 +395,7 @@
         <div class="modal-body">
           <app-patient-picker
             inputId="tx-patientSearch"
+            required
             [selected]="selectedPatient()"
             (selectedChange)="onPatientPicked($event)"
           />

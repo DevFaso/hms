@@ -552,6 +552,8 @@
                   [value]="patientQuery()"
                   (input)="onPatientQueryChange($any($event.target).value)"
                   (blur)="patientDropdownOpen.set(false)"
+                  [appListEscape]="patientDropdownOpen()"
+                  (listEscape)="patientDropdownOpen.set(false)"
                   [placeholder]="'COMMON.SEARCH_PATIENT' | translate"
                   autocomplete="off"
                 />
@@ -569,7 +571,7 @@
                         <span class="opt-info">
                           <span class="opt-name">{{ p | personName }}</span>
                           @if (p | patientSubline; as sub) {
-                            <span class="opt-meta">{{ sub }}</span>
+                            {{ ' ' }}<span class="opt-meta">{{ sub }}</span>
                           }
                         </span>
                       </li>

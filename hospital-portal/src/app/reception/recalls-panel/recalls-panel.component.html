@@ -163,6 +163,8 @@
             [placeholder]="'RECEPTION.SEARCH_PATIENT_NAME' | translate"
             [ngModel]="patientQuery()"
             (ngModelChange)="onPatientQueryChange($event)"
+            [appListEscape]="patientResults().length > 0"
+            (listEscape)="patientResults.set([])"
             autocomplete="off"
           />
           @if (patientResults().length > 0) {
@@ -174,7 +176,8 @@
                     <span class="mrn-hint">· {{ sub }}</span>
                   }
                   @if (p.dateOfBirth) {
-                    <span class="dob-hint"
+                    {{ ' '
+                    }}<span class="dob-hint"
                       >({{ p.dateOfBirth | serverTime | date: 'mediumDate' }})</span
                     >
                   }

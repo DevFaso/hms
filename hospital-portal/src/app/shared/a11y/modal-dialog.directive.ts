@@ -58,7 +58,9 @@ export class ModalDialogDirective implements AfterViewInit, OnDestroy {
   /** QA D1209: one stack for every dialog directive (z-order and keyboard). */
   private readonly layer = new OverlayLayer(this.host.nativeElement as HTMLElement);
   /** QA D1125: the opener even when it had disabled itself (focus-return.ts). */
-  private readonly opener: HTMLElement | null = captureOpener();
+  private readonly opener: HTMLElement | null = captureOpener(
+    this.host.nativeElement as HTMLElement,
+  );
 
   private static readonly FOCUSABLE = [
     'a[href]',

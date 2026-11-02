@@ -44,6 +44,8 @@
           [placeholder]="'RECEPTION.SEARCH_PATIENT_PLACEHOLDER' | translate"
           [ngModel]="patientQuery()"
           (ngModelChange)="onPatientQueryChange($event)"
+          [appListEscape]="patientResults().length > 0 && !selectedPatient()"
+          (listEscape)="patientResults.set([])"
           autocomplete="off"
         />
         @if (searchingPatients()) {
@@ -61,7 +63,7 @@
             >
               <span class="result-name">{{ p | personName }}</span>
               @if (p | patientSubline; as sub) {
-                <span class="result-meta">{{ sub }}</span>
+                {{ ' ' }}<span class="result-meta">{{ sub }}</span>
               }
             </li>
           }
@@ -101,11 +103,13 @@
           class="form-control"
           [placeholder]="'RECEPTION.FILTER_PROVIDER' | translate"
           [ngModel]="staffQuery()"
-          (ngModelChange)="staffQuery.set($event); selectedStaff.set(null)"
+          (ngModelChange)="onStaffQueryChange($event)"
+          [appListEscape]="staffListShown()"
+          (listEscape)="staffListDismissed.set(true)"
           autocomplete="off"
         />
       </div>
-      @if (filteredStaff().length > 0 && !selectedStaff()) {
+      @if (staffListShown()) {
         <ul class="autocomplete-list">
           @for (s of filteredStaff().slice(0, 10); track s.id) {
             <li
@@ -116,7 +120,7 @@
             >
               <span class="result-name">{{ s.name }}</span>
               @if (s.departmentName) {
-                <span class="result-meta">{{ s.departmentName }}</span>
+                {{ ' ' }}<span class="result-meta">{{ s.departmentName }}</span>
               }
             </li>
           }
@@ -198,10 +202,9 @@
     <button
       class="btn-primary"
       [disabled]="saving()"
-      [appSubmitGuard]="
-        (!selectedPatient() || !selectedStaff()) &&
-        ('SUBMIT_GUARD.PATIENT_AND_CLINICIAN' | translate)
-      "
+      submitGuardRequired
+      [appSubmitGuard]="!selectedPatient() || !selectedStaff() || !departmentId()"
+      [submitGuardFields]="['patientSearch', 'staffSearch', 'walkinDept']"
       (click)="submit()"
     >
       @if (saving()) {

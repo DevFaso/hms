@@ -44,11 +44,13 @@
               <span class="pli-title">{{
                 inv.description || inv.facility || ('PORTAL.BILLING.MEDICAL_SERVICES' | translate)
               }}</span>
-              <span class="pli-sub"
+              {{ ' '
+              }}<span class="pli-sub"
                 >{{ 'PORTAL.BILLING.INVOICE' | translate }} #{{ inv.invoiceNumber }} ·
                 {{ inv.date | serverTime | date: 'mediumDate' }}</span
               >
-              <span class="pli-meta"
+              {{ ' '
+              }}<span class="pli-meta"
                 >{{ 'PORTAL.BILLING.DUE' | translate }}
                 {{ inv.dueDate | serverTime | date: 'mediumDate' }}</span
               >
@@ -59,13 +61,15 @@
                 inv.amount | cfa
               }}</span>
               @if (isPayable(inv)) {
-                <span class="pli-meta"
+                {{ ' '
+                }}<span class="pli-meta"
                   >{{ 'PORTAL.BILLING.BALANCE_DUE' | translate }} {{ inv.balance | cfa }}</span
                 >
               }
               @if (pendingOf(inv) > 0) {
                 <!-- QA D982: a declared payment shows on the card, not only inside "Pay now". -->
-                <span class="pli-meta pli-pending" [attr.data-testid]="'pending-' + inv.id"
+                {{ ' '
+                }}<span class="pli-meta pli-pending" [attr.data-testid]="'pending-' + inv.id"
                   >{{ 'PORTAL.BILLING.PENDING_DECLARED' | translate }}
                   {{ pendingOf(inv) | cfa }}</span
                 >
@@ -94,7 +98,8 @@
                   QA D814: the whole balance is already declared and waits for
                   the cashier, so there is nothing left to pay from here.
                 -->
-                <span class="pli-meta" [attr.data-testid]="'fully-declared-' + inv.id">{{
+                {{ ' '
+                }}<span class="pli-meta" [attr.data-testid]="'fully-declared-' + inv.id">{{
                   'PORTAL.BILLING.FULLY_DECLARED' | translate
                 }}</span>
               }

@@ -105,3 +105,81 @@ describe('focus-return (QA D1125): an opener that disables itself still gets foc
     expect(captureOpener()).toBe(opener);
   });
 });
+
+/**
+ * QA D1260 (round 26, D1004 sibling): the login page's "Nom d'utilisateur
+ * oublié ?" dialog has a "Réinitialiser le mot de passe" button that closes it
+ * and opens the reset dialog in the same click. The reset dialog's opener was
+ * that button, removed with the first dialog, so closing the reset dialog left
+ * focus on the page root. The reset dialog is written first in the template,
+ * as on the login page, so it is created while the first dialog still stands.
+ */
+@Component({
+  standalone: true,
+  imports: [ModalDialogDirective],
+  changeDetection: ChangeDetectionStrategy.Eager,
+  template: `
+    <a id="forgot-username" href="javascript:void(0)" (click)="shown.set('username')"
+      >Nom d'utilisateur oublié ?</a
+    >
+    @if (shown() === 'password') {
+      <div appModalDialog aria-label="Réinitialiser" (escaped)="shown.set(null)">
+        <button id="back" (click)="shown.set(null)">Retour à la connexion</button>
+      </div>
+    }
+    @if (shown() === 'username') {
+      <div appModalDialog aria-label="Nom d'utilisateur" (escaped)="shown.set(null)">
+        <button id="to-reset" (click)="shown.set('password')">Réinitialiser le mot de passe</button>
+      </div>
+    }
+  `,
+})
+class ChainedHostComponent {
+  readonly shown = signal<'username' | 'password' | null>(null);
+}
+
+describe('focus return across chained dialogs (QA D1260)', () => {
+  let fixture: ComponentFixture<ChainedHostComponent>;
+  let host: HTMLElement;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({ imports: [ChainedHostComponent] });
+    fixture = TestBed.createComponent(ChainedHostComponent);
+    host = fixture.nativeElement as HTMLElement;
+    document.body.appendChild(host);
+    fixture.detectChanges();
+  });
+
+  afterEach(() => host.remove());
+
+  function openChain(): void {
+    const link = host.querySelector<HTMLAnchorElement>('#forgot-username')!;
+    link.focus();
+    link.click();
+    fixture.detectChanges();
+    const toReset = host.querySelector<HTMLButtonElement>('#to-reset')!;
+    toReset.focus();
+    toReset.click();
+    fixture.detectChanges();
+    expect(host.querySelector('#to-reset')).toBeNull();
+    expect(host.querySelector('#back')).not.toBeNull();
+  }
+
+  it('closing the second dialog gives focus back to the link that opened the first', () => {
+    openChain();
+    host.querySelector<HTMLButtonElement>('#back')!.click();
+    fixture.detectChanges();
+    expect(document.activeElement?.id).toBe('forgot-username');
+  });
+
+  it('Escape on the second dialog does the same', () => {
+    openChain();
+    host
+      .querySelector('#back')!
+      .dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+      );
+    fixture.detectChanges();
+    expect(document.activeElement?.id).toBe('forgot-username');
+  });
+});

@@ -117,7 +117,7 @@
                       <div class="opt-info">
                         <span class="opt-name">{{ p | personName }}</span>
                         @if (p | patientSubline; as sub) {
-                          <span class="opt-meta">{{ sub }}</span>
+                          {{ ' ' }}<span class="opt-meta">{{ sub }}</span>
                         }
                       </div>
                     </li>
@@ -200,7 +200,8 @@
                       <div class="opt-avatar staff-avatar">{{ staffInitials(s) }}</div>
                       <div class="opt-info">
                         <span class="opt-name">{{ s.name }}</span>
-                        <span class="opt-meta"
+                        {{ ' '
+                        }}<span class="opt-meta"
                           >{{ s.jobTitle | enumLabel: 'jobTitle'
                           }}{{ s.hospitalName ? ' · ' + s.hospitalName : '' }}</span
                         >

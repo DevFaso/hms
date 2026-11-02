@@ -62,6 +62,7 @@ import { refuseFields } from '../shared/forms/invalid-fields';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { refusalReason } from '../shared/refusal-reason';
+import { ListEscapeDirective } from '../shared/a11y/list-escape.directive';
 /**
  * The prescriber's list tabs (gap G10).
  *
@@ -159,6 +160,7 @@ export const PRESCRIPTION_TABS: readonly { id: PrescriptionTab; labelKey: string
   selector: 'app-prescriptions',
   standalone: true,
   imports: [
+    ListEscapeDirective,
     SubmitGuardDirective,
     PersonNamePipe,
     ModalDialogDirective,

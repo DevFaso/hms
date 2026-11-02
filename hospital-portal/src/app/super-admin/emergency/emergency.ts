@@ -22,6 +22,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RoleLabelPipe } from '../../shared/pipes/role-label.pipe';
 import { isStepUpRefusal, stepUpRefusalKey } from '../../services/step-up';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { ListEscapeDirective } from '../../shared/a11y/list-escape.directive';
 
 interface PanelState {
   busy: boolean;
@@ -52,6 +53,7 @@ export const RESET_ALL_PHRASE = 'RESET ALL MFA';
   selector: 'app-super-admin-emergency',
   standalone: true,
   imports: [
+    ListEscapeDirective,
     ServerTimePipe,
     CommonModule,
     FormsModule,

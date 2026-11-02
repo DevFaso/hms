@@ -105,7 +105,7 @@ import { SubmitGuardDirective } from '../../../shared/forms/submit-guard.directi
       <form class="dhis2-mappings__add" (ngSubmit)="onAdd()" data-testid="dhis2-mapping-add-form">
         <h3>{{ 'DHIS2.MAPPINGS.ADD' | translate }}</h3>
         <label>
-          {{ 'DHIS2.MAPPINGS.COL_SYSTEM' | translate }}
+          {{ 'DHIS2.MAPPINGS.COL_SYSTEM' | translate }} *
           <input
             type="text"
             data-testid="dhis2-mapping-add-system"
@@ -115,7 +115,7 @@ import { SubmitGuardDirective } from '../../../shared/forms/submit-guard.directi
           />
         </label>
         <label>
-          {{ 'DHIS2.MAPPINGS.COL_CODE' | translate }}
+          {{ 'DHIS2.MAPPINGS.COL_CODE' | translate }} *
           <input
             type="text"
             data-testid="dhis2-mapping-add-code"
@@ -125,7 +125,7 @@ import { SubmitGuardDirective } from '../../../shared/forms/submit-guard.directi
           />
         </label>
         <label>
-          {{ 'DHIS2.MAPPINGS.COL_DATAELEMENT' | translate }}
+          {{ 'DHIS2.MAPPINGS.COL_DATAELEMENT' | translate }} *
           <input
             type="text"
             data-testid="dhis2-mapping-add-dataelement"

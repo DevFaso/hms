@@ -165,3 +165,18 @@ test('QA D1220: every late focus return asks focusFell(), never "is focus on the
     assert.match(read(rel), /focusFell\(\)/, `${rel} must ask focusFell()`);
   }
 });
+
+// QA D1260 (round 26, D1004 sibling): a dialog opened from inside another one
+// that closes in the same click (login: "Nom d'utilisateur oublié ?" then
+// "Réinitialiser le mot de passe") gave focus to the page root on close: its
+// opener had left with the first dialog. focus-return.ts now chains each
+// dialog's opener to the dialog it sat in — which works only if every dialog
+// directive registers itself when it captures its opener.
+test('QA D1260: every dialog directive registers its box with its opener', () => {
+  const missing = DIALOG_DIRECTIVES.filter(
+    (rel) => !/captureOpener\(\s*this\.host\.nativeElement/.test(read(rel)),
+  );
+  assert.deepEqual(missing, [], 'call captureOpener(this.host.nativeElement as HTMLElement)');
+  const focusReturn = read('shared/a11y/focus-return.ts');
+  assert.match(focusReturn, /fallbackOf\.get\(target\)/, 'restoreFocus walks the opener chain');
+});

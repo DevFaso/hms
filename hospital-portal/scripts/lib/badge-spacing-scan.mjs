@@ -102,3 +102,28 @@ export function gluedBadges(html) {
   }
   return out;
 }
+
+/**
+ * QA D1271 (round 26): the same glue on the secondary text of a row. A
+ * patient suggestion read "CHW7213(3 nov. 1993)": the MRN hint and the
+ * birth-date hint, each on its own line in the template, ran together. An
+ * element whose class names a hint, a meta line or a sub-line (`dob-hint`,
+ * `opt-meta`, `chip-sub`, `field-hint`) is read like a pill.
+ */
+export const HINT_OPEN =
+  /<(?:span|strong|small|em|b|mark|a)\b[^>]*?\bclass="(?=[^"]*\b[\w-]*(?:-hint|-meta|-sub|-subline)\b)[^"]*"/g;
+
+/** Every glued hint of a template: `{ line, tag, index }`. */
+export function gluedHints(html) {
+  const out = [];
+  for (const m of html.matchAll(HINT_OPEN)) {
+    if (gluedBefore(html, m.index)) {
+      out.push({
+        line: html.slice(0, m.index).split('\n').length,
+        tag: m[0].slice(0, 80),
+        index: m.index,
+      });
+    }
+  }
+  return out;
+}

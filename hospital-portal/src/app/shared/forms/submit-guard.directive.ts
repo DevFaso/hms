@@ -70,6 +70,16 @@ const BLOCKED_KEY = 'COMMON.SUBMIT_BLOCKED_REQUIRED';
  *   `data-submit-blank="true"` and counts as blank;
  * - a section that is neither a form nor a dialog carries `data-submit-scope`.
  *
+ * QA D1256 / D1257 (D1089 / D1124 / D1245 NOT_FIXED in round 26): every
+ * refusal reads every field the guard is about — the listed ones and, with
+ * `submitGuardRequired`, every rendered required control — and names each
+ * blank one, whatever made the expression truthy. Round 25 read the required
+ * controls only when the expression let the click through, so an empty
+ * prescription named only "Nom du médicament" and the lab order's blank
+ * patient (tested by the expression, never listed) fell to the generic
+ * sentence. A string reason is still said as given; the blank fields are
+ * marked under it, each with its own message.
+ *
  * `scripts/lib/required-form-submit.test.mjs` fails the build for a required
  * input (a `required` control, or one whose label shows `*`) that no submit of
  * its form, dialog or scope checks (lib/required-field-scan.mjs).
@@ -115,27 +125,33 @@ export class SubmitGuardDirective {
   }
 
   private onClick(event: Event): void {
+    const root = this.root();
+    // QA D1256 / D1257 (D1089 / D1124 / D1245 NOT_FIXED in round 26): every
+    // field the guard is about — the listed ones and, with
+    // `submitGuardRequired`, every rendered required control of the form — is
+    // read on EVERY refusal. Round 25 read the required controls only when the
+    // expression let the click through, so an empty form named only what the
+    // expression tested ("Nom du médicament"), and a blank the expression
+    // tested but did not list (the lab order's patient) fell to the generic
+    // sentence.
+    const all = this.guardedFieldIds(root);
+    const blank = all.filter((id) => isBlank(root.querySelector(`#${CSS.escape(id)}`)));
     let reason = this.appSubmitGuard();
-    let all = this.fieldIds();
-    if (!reason && this.listedRequiredBlank()) {
-      // QA D1245: a listed field that declares itself required is refused
-      // while blank, whatever the guard expression says.
+    if (!reason && blank.some((id) => this.requiredById(root, id))) {
+      // QA D1245 / D1193: a listed field that declares itself required, or any
+      // required control under `submitGuardRequired`, is refused while blank,
+      // whatever the expression says.
       reason = true;
-    } else if (!reason && this.submitGuardRequired()) {
-      const required = this.requiredFieldIds();
-      if (required.some((id) => isBlank(this.root().querySelector(`#${CSS.escape(id)}`)))) {
-        reason = true;
-        all = [...new Set([...all, ...required])];
-      } else if (this.marked.length > 0) {
-        // Every required field is filled now: the earlier refusal goes away.
-        this.clear();
-      }
     }
-    if (!reason) return;
+    if (!reason) {
+      // Every required field is filled now: an earlier refusal goes away.
+      if (this.marked.length > 0) this.clear();
+      return;
+    }
     event.preventDefault();
     event.stopImmediatePropagation();
-    const root = this.root();
-    const blank = all.filter((id) => isBlank(root.querySelector(`#${CSS.escape(id)}`)));
+    const stale = this.marked.filter((id) => !all.includes(id));
+    if (stale.length > 0) refuseFields(root, [], stale, '');
     this.marked = all;
     if (blank.length > 0) {
       refuseFields(root, blank, all, this.translate.instant(FIELD_KEY));
@@ -143,13 +159,31 @@ export class SubmitGuardDirective {
     this.showMessage(this.messageFor(reason, root, blank));
   }
 
+  /**
+   * The listed fields, then (with `submitGuardRequired`) every rendered
+   * required control of the form, in reading order, each once.
+   */
+  private guardedFieldIds(root: HTMLElement): string[] {
+    const listed = this.fieldIds();
+    if (!this.submitGuardRequired()) return listed;
+    const ids = [...new Set([...listed, ...this.requiredFieldIds()])];
+    const at = (id: string) => root.querySelector(`#${CSS.escape(id)}`);
+    return ids.sort((a, b) => documentOrder(at(a), at(b)));
+  }
+
+  /** Whether field `id` is a rendered control that declares itself required. */
+  private requiredById(root: HTMLElement, id: string): boolean {
+    const el = root.querySelector<HTMLElement>(`#${CSS.escape(id)}`);
+    return el !== null && isRequiredControl(el);
+  }
+
   private messageFor(reason: unknown, root: ParentNode, blank: readonly string[]): string {
+    // A reason that is not a field (a witness, an attestation) is said as
+    // given; the blank fields are still marked, each with its own message.
     if (typeof reason === 'string') return reason;
     const labels = blank.map((id) => labelOf(root, id)).filter((l) => l !== '');
     if (labels.length > 0) {
-      return this.translate.instant(MISSING_FIELDS_KEY, {
-        fields: labels.join(', '),
-      });
+      return this.translate.instant(MISSING_FIELDS_KEY, { fields: labels.join(', ') });
     }
     return this.translate.instant(BLOCKED_KEY);
   }
@@ -177,15 +211,6 @@ export class SubmitGuardDirective {
    */
   private fieldIds(): string[] {
     return [...(this.submitGuardFields() ?? [])];
-  }
-
-  /** Whether a field named in `submitGuardFields` declares itself required and is blank. */
-  private listedRequiredBlank(): boolean {
-    const root = this.root();
-    return this.fieldIds().some((id) => {
-      const el = root.querySelector<HTMLElement>(`#${CSS.escape(id)}`);
-      return el !== null && isRequiredControl(el) && isBlank(el);
-    });
   }
 
   /**
@@ -259,6 +284,14 @@ const REQUIRED_CONTROLS = [
   'select[aria-required="true"]',
   'textarea[aria-required="true"]',
 ].join(', ');
+
+/** Reading order of two fields (a missing one goes last). */
+function documentOrder(a: Element | null, b: Element | null): number {
+  if (a === b) return 0;
+  if (a === null) return 1;
+  if (b === null) return -1;
+  return a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
+}
 
 /** A rendered, enabled control that declares itself required. */
 function isRequiredControl(el: HTMLElement): boolean {

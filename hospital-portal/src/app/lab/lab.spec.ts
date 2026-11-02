@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 
 import { EncounterService, EncounterResponse } from '../services/encounter.service';
@@ -185,6 +185,28 @@ describe('LabComponent — performing laboratory', () => {
     component.openCreate();
     fixture.detectChanges();
     expect(renderPickerSublines(fixture, component)).toEqual(EXPECTED_PICKER_SUBLINES);
+  });
+
+  it('QA D1257 (round 26): an empty "Créer" names the patient with the other blank fields', async () => {
+    await setup(['ROLE_DOCTOR'], []);
+    const cmp = component;
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation(
+      'en',
+      { COMMON: { MISSING_REQUIRED_FIELDS: 'Missing: {{fields}}' } },
+      true,
+    );
+    translate.use('en');
+    cmp.openCreate();
+    fixture.detectChanges();
+    const create = fixture.nativeElement.querySelector(
+      '.modal-actions .btn-primary',
+    ) as HTMLButtonElement;
+    create.click();
+    fixture.detectChanges();
+    const reason = fixture.nativeElement.querySelector('[data-testid="submit-guard-reason"]');
+    expect(reason?.textContent).toContain('PATIENTS.PATIENT_NAME');
+    expect(reason?.textContent).toContain('LAB.LAB_TEST');
   });
 
   it('offers a provider the performing laboratories, defaulting to this hospital', async () => {

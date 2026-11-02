@@ -36,6 +36,7 @@ import { isBeforeToday } from '../../shared/forms/date-rules';
 import { PatientSublinePipe } from '../../shared/patient-picker/patient-subline';
 
 import { rankPeopleByName } from '../../shared/person-search';
+import { ListEscapeDirective } from '../../shared/a11y/list-escape.directive';
 type RecallFilter = 'ALL' | RecallStatus;
 
 /**
@@ -50,6 +51,7 @@ const RECALL_FIELDS = ['rc-patient', 'rc-due', 'rc-reason'];
   selector: 'app-recalls-panel',
   standalone: true,
   imports: [
+    ListEscapeDirective,
     ReasonDialogComponent,
     PersonNamePipe,
     DialogFocusDirective,

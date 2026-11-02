@@ -202,7 +202,8 @@
           </div>
           <div class="pli-body">
             <span class="pli-title">{{ entry.actor }}</span>
-            <span class="pli-sub">
+            {{ ' '
+            }}<span class="pli-sub">
               <span class="pli-category">{{ categoryLabelKey(entry) | translate }}</span>
               @if (entry.actorRole) {
                 · {{ entry.actorRole | enumLabel: 'role' }}
@@ -211,7 +212,8 @@
                 · {{ entry.hospitalName }}
               }
             </span>
-            <span class="pli-meta">{{ entry.timestamp | serverTime | date: 'medium' }}</span>
+            {{ ' '
+            }}<span class="pli-meta">{{ entry.timestamp | serverTime | date: 'medium' }}</span>
           </div>
         </div>
       }

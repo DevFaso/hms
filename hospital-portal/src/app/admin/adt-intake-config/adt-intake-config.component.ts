@@ -30,6 +30,7 @@ import { bareRole } from '../../core/role-token';
 import { refusalReason } from '../../shared/refusal-reason';
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 import { ConfirmService } from '../../shared/confirm-dialog/confirm.service';
+import { ListEscapeDirective } from '../../shared/a11y/list-escape.directive';
 
 interface HospitalOption {
   id: string;
@@ -120,7 +121,7 @@ const EMPTY_FORM: IntakeFormState = {
 @Component({
   selector: 'app-adt-intake-config',
   standalone: true,
-  imports: [FormsModule, TranslateModule, EnumLabelPipe, SubmitGuardDirective],
+  imports: [FormsModule, TranslateModule, EnumLabelPipe, SubmitGuardDirective, ListEscapeDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="adt-intake" data-testid="adt-intake-admin">
@@ -230,6 +231,8 @@ const EMPTY_FORM: IntakeFormState = {
             [placeholder]="'ADT_INTAKE.PLACEHOLDER.HOSPITAL_SEARCH' | translate"
             [ngModel]="hospitalSearchTerm()"
             (ngModelChange)="onHospitalSearchInput($event)"
+            [appListEscape]="hospitalOptions().length > 0"
+            (listEscape)="hospitalOptions.set([])"
             [disabled]="!!editingId()"
             data-testid="adt-intake-hospital-search"
           />
@@ -279,7 +282,7 @@ const EMPTY_FORM: IntakeFormState = {
         </div>
 
         <div class="form-row">
-          <label for="adt-provider">{{ 'ADT_INTAKE.FIELD.PROVIDER' | translate }}</label>
+          <label for="adt-provider">{{ 'ADT_INTAKE.FIELD.PROVIDER' | translate }} *</label>
           <select
             id="adt-provider"
             name="admittingProviderId"

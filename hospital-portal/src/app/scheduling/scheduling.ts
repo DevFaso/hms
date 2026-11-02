@@ -22,10 +22,12 @@ import { currentLocale, formatClockTime } from '../shared/i18n/app-locale';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { ListEscapeDirective } from '../shared/a11y/list-escape.directive';
 @Component({
   selector: 'app-scheduling',
   standalone: true,
   imports: [
+    ListEscapeDirective,
     SubmitGuardDirective,
     CommonModule,
     FormsModule,

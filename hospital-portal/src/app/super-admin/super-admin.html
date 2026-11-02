@@ -40,7 +40,8 @@
             <span class="stat-value">{{ stat.value }}</span>
             <span class="stat-label">{{ stat.labelKey | translate }}</span>
             @if (stat.sublabelKey) {
-              <span class="stat-sub">
+              {{ ' '
+              }}<span class="stat-sub">
                 <em>{{ stat.subvalue }}</em>
                 {{ stat.sublabelKey | translate }}
               </span>

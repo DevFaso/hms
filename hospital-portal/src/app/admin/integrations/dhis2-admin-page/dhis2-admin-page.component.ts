@@ -100,7 +100,7 @@ type Tab = 'config' | 'mappings' | 'exports';
           data-testid="dhis2-config-form"
         >
           <label>
-            {{ 'DHIS2.CONFIG.BASE_URL' | translate }}
+            {{ 'DHIS2.CONFIG.BASE_URL' | translate }} *
             <input
               type="url"
               data-testid="dhis2-config-base-url"
@@ -121,7 +121,7 @@ type Tab = 'config' | 'mappings' | 'exports';
             </select>
           </label>
           <label>
-            {{ 'DHIS2.CONFIG.AUTH_SECRET_ENV_VAR' | translate }}
+            {{ 'DHIS2.CONFIG.AUTH_SECRET_ENV_VAR' | translate }} *
             <input
               type="text"
               data-testid="dhis2-config-auth-env-var"

@@ -57,10 +57,12 @@ import {
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { focusWhenRendered } from '../shared/a11y/focus-when-rendered';
+import { ListEscapeDirective } from '../shared/a11y/list-escape.directive';
 @Component({
   selector: 'app-encounters',
   standalone: true,
   imports: [
+    ListEscapeDirective,
     SubmitGuardDirective,
     PersonNamePipe,
     ModalDialogDirective,

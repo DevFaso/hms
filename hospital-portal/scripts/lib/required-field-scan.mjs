@@ -228,3 +228,144 @@ export function isFieldGroup(html) {
   if (tokens.some((t) => t.name === 'button' || isScope(t))) return false;
   return tokens.some((t) => isControl(t) && declaresRequired(t));
 }
+
+function isGuarded(tag) {
+  return tag.attrs.has('[appSubmitGuard]') || tag.attrs.has('appSubmitGuard');
+}
+
+/**
+ * QA D1256 / D1257 (D1089 / D1124 / D1245 NOT_FIXED in round 26): a guarded
+ * submit that reads only part of its form. The guard names the fields it
+ * reads — its `submitGuardFields`, plus every rendered required control when
+ * it carries `submitGuardRequired`. A guarded button without
+ * `submitGuardRequired` whose scope holds a required control it does not list
+ * names only part of the blanks: Nouvelle consultation listed staff, date and
+ * department, and its blank patient (tested by the expression) went unnamed.
+ *
+ * Rule: such a button lists every required control of its own scope, or
+ * carries `submitGuardRequired`, or another submit of the same scope carries
+ * it (then this one is a secondary action: an OTP check inside the
+ * registration form). A secondary action with fields of its own sits in its
+ * own `data-submit-scope`.
+ *
+ * @returns {{ line: number, missing: string[] }[]}
+ */
+export function partialGuardFindings(html, subForms = NONE) {
+  const tokens = tags(html);
+  const parent = parents(tokens);
+  const out = [];
+  const wholeForm = new Map();
+  tokens.forEach((b, i) => {
+    if (b.type !== 'open' || !isGuarded(b) || b.attrs.has('submitGuardRequired')) return;
+    const scope = scopeOf(tokens, parent, i);
+    if (scope < 0) return;
+    const to = closeIndexOf(tokens, scope);
+    if (!wholeForm.has(scope)) {
+      wholeForm.set(
+        scope,
+        tokens
+          .slice(scope + 1, to)
+          .some(
+            (t, k) =>
+              t.type === 'open' &&
+              t.attrs.has('submitGuardRequired') &&
+              scopeOf(tokens, parent, scope + 1 + k) === scope,
+          ),
+      );
+    }
+    if (wholeForm.get(scope)) return;
+    const listed = listedFields(b);
+    const missing = [];
+    for (let k = scope + 1; k < to; k++) {
+      const t = tokens[k];
+      if (t.type !== 'open' || !isControl(t, subForms) || !declaresRequired(t, subForms)) continue;
+      if (scopeOf(tokens, parent, k) !== scope) continue;
+      const id = staticId(t);
+      if (!id || !listed.has(id)) missing.push(id || '(no id)');
+    }
+    if (missing.length > 0) out.push({ line: b.line, missing });
+  });
+  return out;
+}
+
+/** The words a label reads: its text with each `'KEY' | translate` replaced by the key's value. */
+function readLabel(raw, translate) {
+  return raw.replace(/<[^>]*>/g, ' ').replace(/\{\{([\s\S]*?)\}\}/g, (_, expr) =>
+    // A key reads as its value; any other literal (`cond ? ' *' : ''`) as itself.
+    [...expr.matchAll(/'([^']*)'/g)]
+      .map((m) =>
+        /^[A-Z][A-Z0-9_]*(?:\.[A-Z0-9_]+)+$/.test(m[1]) ? (translate(m[1]) ?? '') : m[1],
+      )
+      .join(' '),
+  );
+}
+
+/**
+ * QA D1272 (round 26): a required control whose label shows no star. "Code du
+ * test" and "Nom du test" carried `required` — the save refused them by name —
+ * but the reader saw nothing marking them before pressing it. The converse of
+ * `star-undeclared`: every control that declares itself required and has a
+ * visible label (`<label for>` or a wrapping `<label>`) shows the star in that
+ * label, written in the template or in the label's translation. A control
+ * named only by `aria-label` (a search box, a reason dialog's single field)
+ * has no label to carry it.
+ *
+ * @param translate key → the label's words in one language (null if unknown)
+ * @returns {{ line: number, id: string }[]}
+ */
+export function unstarredRequiredFindings(html, translate, subForms = NONE) {
+  const tokens = tags(html);
+  const labelFor = new Map();
+  const wrapped = new Map();
+  tokens.forEach((t, i) => {
+    if (t.type !== 'open' || t.name !== 'label') return;
+    const close = closeIndexOf(tokens, i);
+    if (close === i) return;
+    const text = readLabel(html.slice(t.end, tokens[close].start), translate);
+    const forId = unquote(t.attrs.get('for'));
+    if (forId) labelFor.set(forId, text);
+    for (let k = i + 1; k < close; k++) if (tokens[k].type === 'open') wrapped.set(k, text);
+  });
+  const out = [];
+  tokens.forEach((t, i) => {
+    if (t.type !== 'open' || !isControl(t, subForms) || subForms.has(t.name)) return;
+    if (!declaresRequired(t)) return;
+    const id = staticId(t);
+    const text = (id ? labelFor.get(id) : undefined) ?? wrapped.get(i);
+    if (text === undefined || text.includes('*')) return;
+    out.push({ line: t.line, id });
+  });
+  return out;
+}
+
+/**
+ * QA D1272 (round 26), the other half: a field a guard refuses blank but that
+ * does not declare itself required. The handoff's "Patient" and "Sens" are
+ * listed in the guard of "Enregistrer la transmission" — the guard names them
+ * when blank — yet carry neither `required` nor a star, so the reader learns
+ * they are required only from the refusal (and a screen reader never).
+ *
+ * @returns {{ line: number, id: string }[]}
+ */
+export function listedUndeclaredFindings(html) {
+  const tokens = tags(html);
+  const byId = new Map();
+  for (const t of tokens) {
+    if (t.type === 'open' && isControl(t)) {
+      const id = staticId(t);
+      if (id) byId.set(id, t);
+    }
+  }
+  const out = [];
+  const seen = new Set();
+  for (const b of tokens) {
+    if (b.type !== 'open' || !isGuarded(b)) continue;
+    for (const id of listedFields(b)) {
+      const control = byId.get(id);
+      if (!control || declaresRequired(control) || seen.has(id)) continue;
+      seen.add(id);
+      out.push({ line: control.line, id });
+    }
+  }
+  return out.sort((a, b) => a.line - b.line);
+}

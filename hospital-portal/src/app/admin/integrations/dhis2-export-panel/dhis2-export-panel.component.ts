@@ -47,7 +47,7 @@ import { SubmitGuardDirective } from '../../../shared/forms/submit-guard.directi
 
       <form class="dhis2-export__form" (ngSubmit)="onTrigger()" data-testid="dhis2-export-form">
         <label>
-          {{ 'DHIS2.PANEL.DATASET_UID' | translate }}
+          {{ 'DHIS2.PANEL.DATASET_UID' | translate }} *
           <input
             type="text"
             name="datasetUid"
@@ -69,7 +69,7 @@ import { SubmitGuardDirective } from '../../../shared/forms/submit-guard.directi
         </label>
 
         <label>
-          {{ 'DHIS2.PANEL.PERIOD_ISO' | translate }}
+          {{ 'DHIS2.PANEL.PERIOD_ISO' | translate }} *
           <input
             type="text"
             name="periodIso"

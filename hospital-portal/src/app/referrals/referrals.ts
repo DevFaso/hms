@@ -43,10 +43,12 @@ import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { ListEscapeDirective } from '../shared/a11y/list-escape.directive';
 @Component({
   selector: 'app-referrals',
   standalone: true,
   imports: [
+    ListEscapeDirective,
     SubmitGuardDirective,
     PersonNamePipe,
     ModalDialogDirective,

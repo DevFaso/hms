@@ -170,6 +170,23 @@ describe('WaitlistPanelComponent', () => {
       component.onStaffKeydown(key('Escape'));
       expect(component.staffListOpen()).toBeFalse();
     });
+
+    it('QA D1259: Escape over the open provider list never reaches the dialog', () => {
+      const el = fixture.nativeElement as HTMLElement;
+      const input = el.querySelector('#wl-staff')!;
+      const reachedDialog = jasmine.createSpy('dialog keydown');
+      input.parentElement!.addEventListener('keydown', reachedDialog);
+      input.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+      );
+      expect(component.staffListOpen()).toBeFalse();
+      expect(reachedDialog).not.toHaveBeenCalled();
+      // With the list closed, the next Escape goes on (the dialog closes as before).
+      input.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+      );
+      expect(reachedDialog).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('typing another name drops the patient picked before', () => {
@@ -221,6 +238,35 @@ describe('WaitlistPanelComponent', () => {
       expect(component.offerEntry()).toBeNull();
       expect(mockToastService.success).toHaveBeenCalled();
     });
+
+    it("QA D1270: after the offer, focus goes to the row's new first action", fakeAsync(() => {
+      const el = fixture.nativeElement as HTMLElement;
+      document.body.appendChild(el);
+      mockReceptionService.getWaitlist.and.returnValue(
+        of([entry({ status: 'OFFERED', offeredSlotId: 'slot-1' })]),
+      );
+      component.openOfferModal(entry());
+      component.selectedSlotId.set('slot-1');
+      component.submitOffer();
+      fixture.detectChanges();
+      tick();
+      const row = el.querySelector('tr[data-entry-id="w1"]')!;
+      expect(document.activeElement).toBe(row.querySelector('.actions-cell button'));
+      el.remove();
+    }));
+
+    it('QA D1270: a row that left the filtered list hands focus to the active filter', fakeAsync(() => {
+      const el = fixture.nativeElement as HTMLElement;
+      document.body.appendChild(el);
+      mockReceptionService.getWaitlist.and.returnValue(of([]));
+      component.openOfferModal(entry());
+      component.selectedSlotId.set('slot-1');
+      component.submitOffer();
+      fixture.detectChanges();
+      tick();
+      expect(document.activeElement?.classList.contains('filter-btn')).toBeTrue();
+      el.remove();
+    }));
 
     it('surfaces the backend refusal verbatim when the offer fails', () => {
       mockReceptionService.offerWaitlistSlot.and.returnValue(

@@ -701,7 +701,7 @@
           <input type="checkbox" [(ngModel)]="reportForm.criticalFinding" />
           {{ 'IMAGING.FLAG_CRITICAL' | translate }}
         </label>
-        <small class="field-hint">{{ 'IMAGING.FLAG_CRITICAL_HINT' | translate }}</small>
+        {{ ' ' }}<small class="field-hint">{{ 'IMAGING.FLAG_CRITICAL_HINT' | translate }}</small>
       </div>
       <div class="modal-actions">
         <button class="btn-secondary" (click)="closeReportModal()">

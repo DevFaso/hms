@@ -42,6 +42,7 @@ import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { refusalReason } from '../shared/refusal-reason';
 import { refuseFields } from '../shared/forms/invalid-fields';
+import { ListEscapeDirective } from '../shared/a11y/list-escape.directive';
 
 /** The bed-release reason's field (QA D1100), marked when it is refused. */
 const UNASSIGN_REASON_ID = 'admission-unassign-bed-reason';
@@ -60,6 +61,7 @@ const CANCELLABLE_STATUSES = new Set<string>(['PENDING', 'ACTIVE', 'ON_LEAVE']);
   selector: 'app-admissions',
   standalone: true,
   imports: [
+    ListEscapeDirective,
     SubmitGuardDirective,
     ModalDialogDirective,
     PersonNamePipe,

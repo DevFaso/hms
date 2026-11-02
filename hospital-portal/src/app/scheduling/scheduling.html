@@ -159,7 +159,8 @@
                           'SCHEDULING.SHIFT_CONTD' | translate
                         }}</span>
                       }
-                      <span class="shift-meta">
+                      {{ ' '
+                      }}<span class="shift-meta">
                         <span class="material-symbols-outlined">{{
                           shiftTypeIcon(shift.shiftType)
                         }}</span>
@@ -372,6 +373,8 @@
                 [value]="staffQuery()"
                 (input)="onStaffQueryChange($any($event.target).value)"
                 (blur)="closeSuggestions()"
+                [appListEscape]="staffSuggestionsOpen()"
+                (listEscape)="staffSuggestionsOpen.set(false)"
                 autocomplete="off"
               />
               @if (staffLoading()) {
@@ -387,7 +390,8 @@
                       <span class="sug-avatar">{{ staffInitials(s) }}</span>
                       <div class="sug-info">
                         <span class="sug-name">{{ s.name }}</span>
-                        <span class="sug-meta">
+                        {{ ' '
+                        }}<span class="sug-meta">
                           {{
                             (s.jobTitle | enumLabel: 'jobTitle') ||
                               (s.roleName | roleLabel) ||
@@ -426,7 +430,7 @@
                   selectedStaff()!.hospitalName ?? ('ENCOUNTERS.HOSPITAL' | translate)
                 }}</span>
                 <!-- QA D992 class: the hospital's name is above; its id is never shown. -->
-                <span class="locked-sub">{{ 'SCHEDULING.AUTO_MATCHED' | translate }}</span>
+                {{ ' ' }}<span class="locked-sub">{{ 'SCHEDULING.AUTO_MATCHED' | translate }}</span>
               </div>
             </div>
           } @else {
@@ -491,8 +495,8 @@
         <div class="form-group">
           <label class="form-label" for="bulk-endTime">
             <span class="material-symbols-outlined">schedule</span>
-            {{ 'SCHEDULING.END_TIME' | translate }} <span class="required">*</span>
-            <span class="form-hint">({{ 'SCHEDULING.CAN_BE_NEXT_DAY' | translate }})</span>
+            {{ 'SCHEDULING.END_TIME' | translate }} <span class="required">*</span> {{ ' '
+            }}<span class="form-hint">({{ 'SCHEDULING.CAN_BE_NEXT_DAY' | translate }})</span>
           </label>
           <input
             required

@@ -18,6 +18,7 @@ import { catchError, debounceTime, switchMap } from 'rxjs/operators';
 import { PatientService, PatientResponse } from '../../services/patient.service';
 import { patientSubline } from './patient-subline';
 import { rankPeopleByName } from '../person-search';
+import { ListEscapeDirective } from '../a11y/list-escape.directive';
 
 /** How many patients a search asks for, and how many the list shows (QA D1239). */
 const SEARCH_SIZE = 20;
@@ -32,7 +33,7 @@ const SHOWN = 8;
 @Component({
   selector: 'app-patient-picker',
   standalone: true,
-  imports: [PersonNamePipe, TranslateModule],
+  imports: [PersonNamePipe, TranslateModule, ListEscapeDirective],
   templateUrl: './patient-picker.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './patient-picker.component.scss',

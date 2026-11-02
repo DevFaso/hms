@@ -115,7 +115,7 @@
           <div class="ring-label">
             <!-- QA D1166: the sign from the formatter ("0 %" in FR/ES, "0%" in EN). -->
             <span class="ring-pct">{{ scheduleProgress() | measure: '%' : 0 }}</span>
-            <span class="ring-sub">{{ 'DASHBOARD.DONE' | translate }}</span>
+            {{ ' ' }}<span class="ring-sub">{{ 'DASHBOARD.DONE' | translate }}</span>
           </div>
         </div>
         <div class="ring-caption">
@@ -426,7 +426,8 @@
                   </div>
                   <div class="patient-info">
                     <span class="patient-name">{{ p | personName }}</span>
-                    <span class="patient-meta">
+                    {{ ' '
+                    }}<span class="patient-meta">
                       @if (p.mrn) {
                         <span class="mrn-tag">{{ p.mrn }}</span>
                       }
@@ -1443,7 +1444,8 @@
                   </div>
                   <div class="patient-info">
                     <span class="patient-name">{{ p | personName }}</span>
-                    <span class="patient-meta">
+                    {{ ' '
+                    }}<span class="patient-meta">
                       @if (p.mrn) {
                         <span class="mrn-tag">{{ p.mrn }}</span>
                       }
@@ -2018,7 +2020,8 @@
                   </div>
                   <div class="patient-info">
                     <span class="patient-name">{{ p | personName }}</span>
-                    <span class="patient-meta">
+                    {{ ' '
+                    }}<span class="patient-meta">
                       @if (p.mrn) {
                         <span class="mrn-tag">{{ p.mrn }}</span>
                       }

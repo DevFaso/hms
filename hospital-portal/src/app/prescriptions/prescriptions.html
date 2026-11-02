@@ -166,7 +166,8 @@
                      wave 1 and the row rendered only the status, so "sent to
                      partner" never said which partner. -->
                 @if (p.pharmacyName) {
-                  <span class="cell-sub" [attr.data-testid]="'rx-pharmacy-' + p.id">{{
+                  {{ ' '
+                  }}<span class="cell-sub" [attr.data-testid]="'rx-pharmacy-' + p.id">{{
                     'PRESCRIPTIONS.PHARMACY.AT' | translate: { pharmacy: p.pharmacyName }
                   }}</span>
                 }
@@ -731,13 +732,14 @@
                               >
                             }
                             @if (r.noShowReason) {
-                              <span class="cell-sub">{{ r.noShowReason }}</span>
+                              {{ ' ' }}<span class="cell-sub">{{ r.noShowReason }}</span>
                             }
                             @if (r.reason) {
                               <span>{{ r.reason }}</span>
                             }
                             @if (r.estimatedRestockDate) {
-                              <span class="cell-sub">{{
+                              {{ ' '
+                              }}<span class="cell-sub">{{
                                 'PRESCRIPTIONS.HISTORY.RESTOCK_ETA'
                                   | translate
                                     : {
@@ -868,6 +870,8 @@
                   [value]="patientQuery()"
                   (input)="onPatientQueryChange($any($event.target).value)"
                   (blur)="patientDropdownOpen.set(false)"
+                  [appListEscape]="patientDropdownOpen()"
+                  (listEscape)="patientDropdownOpen.set(false)"
                   autocomplete="off"
                 />
                 @if (patientSearchLoading()) {
@@ -884,7 +888,7 @@
                         <div class="opt-info">
                           <span class="opt-name">{{ p | personName }}</span>
                           @if (p | patientSubline; as sub) {
-                            <span class="opt-meta">{{ sub }}</span>
+                            {{ ' ' }}<span class="opt-meta">{{ sub }}</span>
                           }
                         </div>
                       </li>
@@ -1129,7 +1133,7 @@
                 </label>
                 @if (form.forceOverride) {
                   <label class="cds-override__label" for="cds-override-reason">
-                    {{ 'CDS.OVERRIDE_REASON' | translate }}
+                    {{ 'CDS.OVERRIDE_REASON' | translate }} *
                   </label>
                   <textarea
                     id="cds-override-reason"
@@ -1270,7 +1274,7 @@
           <strong>{{ dispatchTarget()?.medicationName }}</strong>
         </p>
         <label class="form-field">
-          <span>{{ 'PRESCRIPTIONS.DISPATCH_PHARMACY' | translate }}</span>
+          <span>{{ 'PRESCRIPTIONS.DISPATCH_PHARMACY' | translate }}</span> *
           <select
             id="rx-dispatch-pharmacy"
             [(ngModel)]="dispatchPharmacyId"
@@ -1570,12 +1574,15 @@
               }}
             </p>
             <div class="field">
-              <label for="rx-sign-reauth-secret">{{
-                (signReauthUsesCode()
-                  ? 'PRESCRIPTIONS.SIGN_REAUTH.CODE'
-                  : 'PRESCRIPTIONS.SIGN_REAUTH.PASSWORD'
-                ) | translate
-              }}</label>
+              <label for="rx-sign-reauth-secret"
+                >{{
+                  (signReauthUsesCode()
+                    ? 'PRESCRIPTIONS.SIGN_REAUTH.CODE'
+                    : 'PRESCRIPTIONS.SIGN_REAUTH.PASSWORD'
+                  ) | translate
+                }}
+                *</label
+              >
               <input
                 id="rx-sign-reauth-secret"
                 name="signReauthSecret"

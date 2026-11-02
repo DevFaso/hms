@@ -28,7 +28,9 @@
 
       <div class="form-row">
         <div class="field">
-          <label for="register-first-name">{{ 'PROVIDER.REGISTER.FIRST_NAME' | translate }}</label>
+          <label for="register-first-name"
+            >{{ 'PROVIDER.REGISTER.FIRST_NAME' | translate }} *</label
+          >
           <input
             id="register-first-name"
             type="text"
@@ -39,7 +41,7 @@
           />
         </div>
         <div class="field">
-          <label for="register-last-name">{{ 'PROVIDER.REGISTER.LAST_NAME' | translate }}</label>
+          <label for="register-last-name">{{ 'PROVIDER.REGISTER.LAST_NAME' | translate }} *</label>
           <input
             id="register-last-name"
             type="text"
@@ -52,7 +54,7 @@
       </div>
       <div class="form-row">
         <div class="field">
-          <label for="register-username">{{ 'PROVIDER.REGISTER.USERNAME' | translate }}</label>
+          <label for="register-username">{{ 'PROVIDER.REGISTER.USERNAME' | translate }} *</label>
           <input
             id="register-username"
             type="text"
@@ -63,7 +65,7 @@
           />
         </div>
         <div class="field">
-          <label for="register-role">{{ 'PROVIDER.REGISTER.ROLE' | translate }}</label>
+          <label for="register-role">{{ 'PROVIDER.REGISTER.ROLE' | translate }} *</label>
           <select id="register-role" required [ngModel]="role()" (ngModelChange)="role.set($event)">
             @for (option of roles(); track option) {
               <option [value]="option">{{ option | roleLabel }}</option>
@@ -73,7 +75,7 @@
       </div>
       <div class="form-row">
         <div class="field">
-          <label for="register-email">{{ 'PROVIDER.REGISTER.EMAIL' | translate }}</label>
+          <label for="register-email">{{ 'PROVIDER.REGISTER.EMAIL' | translate }} *</label>
           <input
             id="register-email"
             type="email"
@@ -84,7 +86,7 @@
           />
         </div>
         <div class="field">
-          <label for="register-phone">{{ 'PROVIDER.REGISTER.PHONE' | translate }}</label>
+          <label for="register-phone">{{ 'PROVIDER.REGISTER.PHONE' | translate }} *</label>
           <input
             id="register-phone"
             type="tel"
@@ -98,7 +100,7 @@
       </div>
       @if (needsLicence()) {
         <div class="field">
-          <label for="register-licence">{{ 'PROVIDER.REGISTER.LICENCE' | translate }}</label>
+          <label for="register-licence">{{ 'PROVIDER.REGISTER.LICENCE' | translate }} *</label>
           <input
             id="register-licence"
             type="text"
