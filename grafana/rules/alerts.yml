@@ -69,6 +69,29 @@ groups:
           summary: "HMS p99 latency > 2s for 10m"
           description: "Application-wide p99 has been above 2s. Check endpoint deep-dive."
 
+  # ── Chat transport ─────────────────────────────────────────────────
+  # /ws-chat is excluded from the SLO burn-rate ratios (see recording.yml), so
+  # without this a total chat outage would raise no alert at all. Scoped to the
+  # transport, with a threshold only a real failure reaches: a SockJS session
+  # ending normally is a 200, so a quarter of requests returning 5xx is broken.
+  - name: hms.ws.transport
+    rules:
+      - alert: HmsChatTransportErrors
+        expr: |
+          app:ws_transport_5xx:ratio5m{application="hms"} > 0.25
+            and app:ws_transport_requests:rate5m{application="hms"} > 0.1
+        for: 5m
+        labels:
+          severity: page
+          service: hms-backend
+        annotations:
+          summary: "HMS chat transport failing (>25% 5xx)"
+          description: |
+            More than a quarter of /ws-chat requests are returning 5xx. Clinical
+            chat is down or degraded for every connected client. This endpoint is
+            excluded from the availability SLO, so the burn-rate alerts will stay
+            quiet — this is the only alert that covers it.
+
   # ── Instance / target health ───────────────────────────────────────
   - name: hms.targets
     rules:
@@ -102,8 +125,8 @@ groups:
 
       - alert: HmsBackendNoTraffic
         expr: |
-          absent(app:http_requests:rate5m{application="hms"})
-            or app:http_requests:rate5m{application="hms"} == 0
+          absent(app:http_requests_all:rate5m{application="hms"})
+            or app:http_requests_all:rate5m{application="hms"} == 0
         for: 10m
         labels:
           severity: ticket

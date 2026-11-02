@@ -45,7 +45,7 @@
       },
       "options": { "colorMode": "background", "reduceOptions": { "calcs": ["lastNotNull"] } },
       "targets": [
-        { "expr": "1 - (sum(rate(http_server_requests_seconds_count{application=\"$application\", status=~\"5..\"}[1h])) / clamp_min(sum(rate(http_server_requests_seconds_count{application=\"$application\"}[1h])), 0.0001))" }
+        { "expr": "1 - (sum(rate(http_server_requests_seconds_count{application=\"$application\", uri!~\"$exclude_uri\", status=~\"5..\"}[1h])) / clamp_min(sum(rate(http_server_requests_seconds_count{application=\"$application\", uri!~\"$exclude_uri\"}[1h])), 0.0001))" }
       ]
     },
     {
@@ -63,7 +63,7 @@
       },
       "options": { "colorMode": "background", "reduceOptions": { "calcs": ["lastNotNull"] } },
       "targets": [
-        { "expr": "1 - (sum(rate(http_server_requests_seconds_count{application=\"$application\", status=~\"5..\"}[6h])) / clamp_min(sum(rate(http_server_requests_seconds_count{application=\"$application\"}[6h])), 0.0001))" }
+        { "expr": "1 - (sum(rate(http_server_requests_seconds_count{application=\"$application\", uri!~\"$exclude_uri\", status=~\"5..\"}[6h])) / clamp_min(sum(rate(http_server_requests_seconds_count{application=\"$application\", uri!~\"$exclude_uri\"}[6h])), 0.0001))" }
       ]
     },
     {
@@ -81,7 +81,7 @@
       },
       "options": { "colorMode": "background", "reduceOptions": { "calcs": ["lastNotNull"] } },
       "targets": [
-        { "expr": "1 - (sum(increase(http_server_requests_seconds_count{application=\"$application\", status=~\"5..\"}[30d])) / clamp_min(sum(increase(http_server_requests_seconds_count{application=\"$application\"}[30d])), 0.0001))" }
+        { "expr": "1 - (sum(increase(http_server_requests_seconds_count{application=\"$application\", uri!~\"$exclude_uri\", status=~\"5..\"}[30d])) / clamp_min(sum(increase(http_server_requests_seconds_count{application=\"$application\", uri!~\"$exclude_uri\"}[30d])), 0.0001))" }
       ]
     },
     {
@@ -100,7 +100,7 @@
       },
       "options": { "showThresholdLabels": false, "showThresholdMarkers": true, "reduceOptions": { "calcs": ["lastNotNull"] } },
       "targets": [
-        { "expr": "1 - ((1 - (sum(increase(http_server_requests_seconds_count{application=\"$application\", status=~\"5..\"}[30d])) / clamp_min(sum(increase(http_server_requests_seconds_count{application=\"$application\"}[30d])), 0.0001))) - $slo_target) / clamp_min(1 - $slo_target, 0.00001) * -1" }
+        { "expr": "1 - ((1 - (sum(increase(http_server_requests_seconds_count{application=\"$application\", uri!~\"$exclude_uri\", status=~\"5..\"}[30d])) / clamp_min(sum(increase(http_server_requests_seconds_count{application=\"$application\", uri!~\"$exclude_uri\"}[30d])), 0.0001))) - $slo_target) / clamp_min(1 - $slo_target, 0.00001) * -1" }
       ]
     },
     {
@@ -119,10 +119,10 @@
         ]
       },
       "targets": [
-        { "expr": "sum(rate(http_server_requests_seconds_count{application=\"$application\", status=~\"2..\"}[$__rate_interval]))", "legendFormat": "2xx" },
-        { "expr": "sum(rate(http_server_requests_seconds_count{application=\"$application\", status=~\"3..\"}[$__rate_interval]))", "legendFormat": "3xx" },
-        { "expr": "sum(rate(http_server_requests_seconds_count{application=\"$application\", status=~\"4..\"}[$__rate_interval]))", "legendFormat": "4xx" },
-        { "expr": "sum(rate(http_server_requests_seconds_count{application=\"$application\", status=~\"5..\"}[$__rate_interval]))", "legendFormat": "5xx" }
+        { "expr": "sum(rate(http_server_requests_seconds_count{application=\"$application\", uri!~\"$exclude_uri\", status=~\"2..\"}[$__rate_interval]))", "legendFormat": "2xx" },
+        { "expr": "sum(rate(http_server_requests_seconds_count{application=\"$application\", uri!~\"$exclude_uri\", status=~\"3..\"}[$__rate_interval]))", "legendFormat": "3xx" },
+        { "expr": "sum(rate(http_server_requests_seconds_count{application=\"$application\", uri!~\"$exclude_uri\", status=~\"4..\"}[$__rate_interval]))", "legendFormat": "4xx" },
+        { "expr": "sum(rate(http_server_requests_seconds_count{application=\"$application\", uri!~\"$exclude_uri\", status=~\"5..\"}[$__rate_interval]))", "legendFormat": "5xx" }
       ]
     },
     {
@@ -140,7 +140,7 @@
         }
       },
       "targets": [
-        { "expr": "sum(rate(http_server_requests_seconds_count{application=\"$application\", status=~\"5..\"}[$__rate_interval])) / clamp_min(sum(rate(http_server_requests_seconds_count{application=\"$application\"}[$__rate_interval])), 0.0001)", "legendFormat": "5xx ratio" },
+        { "expr": "sum(rate(http_server_requests_seconds_count{application=\"$application\", uri!~\"$exclude_uri\", status=~\"5..\"}[$__rate_interval])) / clamp_min(sum(rate(http_server_requests_seconds_count{application=\"$application\", uri!~\"$exclude_uri\"}[$__rate_interval])), 0.0001)", "legendFormat": "5xx ratio" },
         { "expr": "1 - $slo_target", "legendFormat": "SLO threshold" }
       ]
     },
@@ -152,9 +152,9 @@
       "datasource": { "type": "prometheus", "uid": "${prometheus_ds}" },
       "fieldConfig": { "defaults": { "unit": "s" } },
       "targets": [
-        { "expr": "histogram_quantile(0.50, sum(rate(http_server_requests_seconds_bucket{application=\"$application\"}[$__rate_interval])) by (le))", "legendFormat": "p50" },
-        { "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{application=\"$application\"}[$__rate_interval])) by (le))", "legendFormat": "p95" },
-        { "expr": "histogram_quantile(0.99, sum(rate(http_server_requests_seconds_bucket{application=\"$application\"}[$__rate_interval])) by (le))", "legendFormat": "p99" },
+        { "expr": "histogram_quantile(0.50, sum(rate(http_server_requests_seconds_bucket{application=\"$application\", uri!~\"$exclude_uri\"}[$__rate_interval])) by (le))", "legendFormat": "p50" },
+        { "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{application=\"$application\", uri!~\"$exclude_uri\"}[$__rate_interval])) by (le))", "legendFormat": "p95" },
+        { "expr": "histogram_quantile(0.99, sum(rate(http_server_requests_seconds_bucket{application=\"$application\", uri!~\"$exclude_uri\"}[$__rate_interval])) by (le))", "legendFormat": "p99" },
         { "expr": "$latency_target", "legendFormat": "Latency target" }
       ]
     },
@@ -172,9 +172,9 @@
         }
       },
       "targets": [
-        { "expr": "(sum(rate(http_server_requests_seconds_count{application=\"$application\", status=~\"5..\"}[5m])) / clamp_min(sum(rate(http_server_requests_seconds_count{application=\"$application\"}[5m])), 0.0001)) / clamp_min(1 - $slo_target, 0.00001)", "legendFormat": "5m burn" },
-        { "expr": "(sum(rate(http_server_requests_seconds_count{application=\"$application\", status=~\"5..\"}[1h])) / clamp_min(sum(rate(http_server_requests_seconds_count{application=\"$application\"}[1h])), 0.0001)) / clamp_min(1 - $slo_target, 0.00001)", "legendFormat": "1h burn" },
-        { "expr": "(sum(rate(http_server_requests_seconds_count{application=\"$application\", status=~\"5..\"}[6h])) / clamp_min(sum(rate(http_server_requests_seconds_count{application=\"$application\"}[6h])), 0.0001)) / clamp_min(1 - $slo_target, 0.00001)", "legendFormat": "6h burn" }
+        { "expr": "(sum(rate(http_server_requests_seconds_count{application=\"$application\", uri!~\"$exclude_uri\", status=~\"5..\"}[5m])) / clamp_min(sum(rate(http_server_requests_seconds_count{application=\"$application\", uri!~\"$exclude_uri\"}[5m])), 0.0001)) / clamp_min(1 - $slo_target, 0.00001)", "legendFormat": "5m burn" },
+        { "expr": "(sum(rate(http_server_requests_seconds_count{application=\"$application\", uri!~\"$exclude_uri\", status=~\"5..\"}[1h])) / clamp_min(sum(rate(http_server_requests_seconds_count{application=\"$application\", uri!~\"$exclude_uri\"}[1h])), 0.0001)) / clamp_min(1 - $slo_target, 0.00001)", "legendFormat": "1h burn" },
+        { "expr": "(sum(rate(http_server_requests_seconds_count{application=\"$application\", uri!~\"$exclude_uri\", status=~\"5..\"}[6h])) / clamp_min(sum(rate(http_server_requests_seconds_count{application=\"$application\", uri!~\"$exclude_uri\"}[6h])), 0.0001)) / clamp_min(1 - $slo_target, 0.00001)", "legendFormat": "6h burn" }
       ]
     },
     {
@@ -191,8 +191,8 @@
         }
       },
       "targets": [
-        { "expr": "sum(rate(http_server_requests_seconds_bucket{application=\"$application\", le=\"+Inf\"}[$__rate_interval]))", "hide": true, "refId": "TOTAL" },
-        { "expr": "(sum(rate(http_server_requests_seconds_bucket{application=\"$application\", le=\"$latency_target\"}[$__rate_interval]))) / clamp_min(sum(rate(http_server_requests_seconds_count{application=\"$application\"}[$__rate_interval])), 0.0001)", "legendFormat": "% under ${latency_target}s" }
+        { "expr": "sum(rate(http_server_requests_seconds_bucket{application=\"$application\", uri!~\"$exclude_uri\", le=\"+Inf\"}[$__rate_interval]))", "hide": true, "refId": "TOTAL" },
+        { "expr": "(sum(rate(http_server_requests_seconds_bucket{application=\"$application\", uri!~\"$exclude_uri\", le=\"$latency_target\"}[$__rate_interval]))) / clamp_min(sum(rate(http_server_requests_seconds_count{application=\"$application\", uri!~\"$exclude_uri\"}[$__rate_interval])), 0.0001)", "legendFormat": "% under ${latency_target}s" }
       ]
     },
     {
@@ -304,7 +304,7 @@
         { "id": "organize", "options": { "excludeByName": { "Time": true, "__name__": true, "instance": true, "job": true, "application": true }, "renameByName": { "Value": "p99" } } }
       ],
       "targets": [
-        { "expr": "topk(10, histogram_quantile(0.99, sum(rate(http_server_requests_seconds_bucket{application=\"$application\"}[15m])) by (le, uri, method)))", "format": "table", "instant": true }
+        { "expr": "topk(10, histogram_quantile(0.99, sum(rate(http_server_requests_seconds_bucket{application=\"$application\", uri!~\"$exclude_uri\"}[15m])) by (le, uri, method)))", "format": "table", "instant": true }
       ]
     }
   ],
@@ -313,6 +313,7 @@
   "tags": ["hms", "slo", "sli", "overview", "golden-signals"],
   "templating": {
     "list": [
+      { "name": "exclude_uri", "type": "textbox", "label": "Exclude URIs (regex)", "query": "(/api)?/ws-chat.*", "current": { "text": "(/api)?/ws-chat.*", "value": "(/api)?/ws-chat.*" }, "description": "Transport endpoints held open by design (SockJS/WebSocket). Their 25-50s lifetimes are not request latency and would dominate every percentile and top-N panel. Clear this box to include them." },
       { "name": "prometheus_ds", "type": "datasource", "label": "Prometheus", "query": "prometheus", "current": { "text": "Prometheus", "value": "hms-prometheus" } },
       { "name": "loki_ds", "type": "datasource", "label": "Loki", "query": "loki", "current": { "text": "Loki", "value": "hms-loki" } },
       {

@@ -12,16 +12,28 @@ groups:
     interval: 30s
     rules:
       - record: app:http_requests:rate1m
-        expr: sum by (application) (rate(http_server_requests_seconds_count[1m]))
+        expr: sum by (application) (rate(http_server_requests_seconds_count{uri!~"(/api)?/ws-chat.*"}[1m]))
 
       - record: app:http_requests:rate5m
+        expr: sum by (application) (rate(http_server_requests_seconds_count{uri!~"(/api)?/ws-chat.*"}[5m]))
+
+      # Deliberately UNFILTERED, and the only rule here that is.
+      #
+      # HmsBackendNoTraffic treats this as a heartbeat: "no requests for 10
+      # minutes means the gateway is down or the scrape is broken". Every other
+      # rule in this group drops the SockJS transport, and reusing one of those
+      # for liveness would make the alert fire on a perfectly healthy backend
+      # that nobody happens to be calling — an idle dev environment with one
+      # browser tab open is exactly that. A transport poll is not user traffic,
+      # but it is proof the process is up and serving, which is all this asks.
+      - record: app:http_requests_all:rate5m
         expr: sum by (application) (rate(http_server_requests_seconds_count[5m]))
 
       - record: app:http_5xx:rate1m
-        expr: sum by (application) (rate(http_server_requests_seconds_count{status=~"5.."}[1m]))
+        expr: sum by (application) (rate(http_server_requests_seconds_count{status=~"5..", uri!~"(/api)?/ws-chat.*"}[1m]))
 
       - record: app:http_5xx:rate5m
-        expr: sum by (application) (rate(http_server_requests_seconds_count{status=~"5.."}[5m]))
+        expr: sum by (application) (rate(http_server_requests_seconds_count{status=~"5..", uri!~"(/api)?/ws-chat.*"}[5m]))
 
       - record: app:http_5xx:ratio5m
         expr: |
@@ -32,13 +44,13 @@ groups:
       - record: app:http_request_duration_seconds:p95_5m
         expr: |
           histogram_quantile(0.95,
-            sum by (application, le) (rate(http_server_requests_seconds_bucket[5m]))
+            sum by (application, le) (rate(http_server_requests_seconds_bucket{uri!~"(/api)?/ws-chat.*"}[5m]))
           )
 
       - record: app:http_request_duration_seconds:p99_5m
         expr: |
           histogram_quantile(0.99,
-            sum by (application, le) (rate(http_server_requests_seconds_bucket[5m]))
+            sum by (application, le) (rate(http_server_requests_seconds_bucket{uri!~"(/api)?/ws-chat.*"}[5m]))
           )
 
   # ── HTTP RED per URI (used by API endpoint dashboard + alerts) ─────
@@ -63,27 +75,49 @@ groups:
     rules:
       - record: app:slo_error_ratio:5m
         expr: |
-          sum by (application) (rate(http_server_requests_seconds_count{status=~"5.."}[5m]))
+          sum by (application) (rate(http_server_requests_seconds_count{status=~"5..", uri!~"(/api)?/ws-chat.*"}[5m]))
             /
-          clamp_min(sum by (application) (rate(http_server_requests_seconds_count[5m])), 0.0001)
+          clamp_min(sum by (application) (rate(http_server_requests_seconds_count{uri!~"(/api)?/ws-chat.*"}[5m])), 0.0001)
 
       - record: app:slo_error_ratio:30m
         expr: |
-          sum by (application) (rate(http_server_requests_seconds_count{status=~"5.."}[30m]))
+          sum by (application) (rate(http_server_requests_seconds_count{status=~"5..", uri!~"(/api)?/ws-chat.*"}[30m]))
             /
-          clamp_min(sum by (application) (rate(http_server_requests_seconds_count[30m])), 0.0001)
+          clamp_min(sum by (application) (rate(http_server_requests_seconds_count{uri!~"(/api)?/ws-chat.*"}[30m])), 0.0001)
 
       - record: app:slo_error_ratio:1h
         expr: |
-          sum by (application) (rate(http_server_requests_seconds_count{status=~"5.."}[1h]))
+          sum by (application) (rate(http_server_requests_seconds_count{status=~"5..", uri!~"(/api)?/ws-chat.*"}[1h]))
             /
-          clamp_min(sum by (application) (rate(http_server_requests_seconds_count[1h])), 0.0001)
+          clamp_min(sum by (application) (rate(http_server_requests_seconds_count{uri!~"(/api)?/ws-chat.*"}[1h])), 0.0001)
 
       - record: app:slo_error_ratio:6h
         expr: |
-          sum by (application) (rate(http_server_requests_seconds_count{status=~"5.."}[6h]))
+          sum by (application) (rate(http_server_requests_seconds_count{status=~"5..", uri!~"(/api)?/ws-chat.*"}[6h]))
             /
-          clamp_min(sum by (application) (rate(http_server_requests_seconds_count[6h])), 0.0001)
+          clamp_min(sum by (application) (rate(http_server_requests_seconds_count{uri!~"(/api)?/ws-chat.*"}[6h])), 0.0001)
+
+  # ── Chat transport health ──────────────────────────────────────────
+  # The SLO ratios above exclude /ws-chat from BOTH halves, which is right for an
+  # availability SLO over real API calls — transport polls are not user requests,
+  # and at several per second per open client they would dilute a genuine API
+  # outage below the 1.44% fast-burn threshold.
+  #
+  # But excluding it from the numerator too means a chat outage pages nobody:
+  # before the exclusion a 5xx storm on the transport pushed the global ratio up
+  # and did page. Nothing in alerts.yml reads the app_uri:* rules, so this group
+  # exists to keep that coverage, scoped to the endpoint it belongs to.
+  - name: hms.ws.transport
+    interval: 30s
+    rules:
+      - record: app:ws_transport_requests:rate5m
+        expr: sum by (application) (rate(http_server_requests_seconds_count{uri=~"(/api)?/ws-chat.*"}[5m]))
+
+      - record: app:ws_transport_5xx:ratio5m
+        expr: |
+          sum by (application) (rate(http_server_requests_seconds_count{status=~"5..", uri=~"(/api)?/ws-chat.*"}[5m]))
+            /
+          clamp_min(app:ws_transport_requests:rate5m, 0.0001)
 
   # ── JVM saturation (for USE method) ────────────────────────────────
   - name: hms.jvm.saturation
