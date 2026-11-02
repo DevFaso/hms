@@ -246,29 +246,42 @@ in 10 minutes — backend is in a crash loop.
 
 ## HmsChatTransportErrors  (`severity: page`)
 
-**What it means.** More than 25% of `/ws-chat` requests *that reached a handler*
-returned 5xx for 5 minutes, with the endpoint taking real traffic. Clinical chat
-is down or degraded for every connected client.
+**What it means.** `/ws-chat` returned 5xx at more than **0.05/s for 5 minutes**
+— roughly 15 or more server errors in five minutes, on requests that reached a
+handler. Clinical chat is down or degraded for every connected client.
 
-**5xx only, and that is deliberate twice over.** A successful WebSocket upgrade
-is an HTTP **101**, so a "not 2xx/3xx" ratio reads near 1.0 on perfectly healthy
-chat. And the handler-matched 4xx on this endpoint are mostly SockJS's own
-`xhr_send` 404s against timed-out sessions, so counting 4xx lets one stale
-browser tab page the on-call engineer.
+**An absolute rate, not a ratio, and 5xx only.** Both choices exist because the
+obvious alternatives were tried and did not work:
+
+- A **ratio** cannot fire here. Its denominator would be every `/ws-chat`
+  request, and those are dominated by traffic that cannot fail: the HTTP **101**
+  of each successful WebSocket upgrade, plus routine `xhr_send` 404s against
+  timed-out sessions. Real 500s at ~0.3/s against ~2/s of polling is a ratio of
+  0.13 — under any usable threshold.
+- A **traffic floor** is equally wrong: requests-per-second on an endpoint whose
+  *healthy* requests last 25–50 s, so a few clients failing slowly sit at
+  ~0.04/s.
+- Counting **4xx** lets one stale browser tab page you; counting
+  **anything-not-2xx/3xx** counts every successful upgrade as a failure.
+
+The threshold works with SockJS's retry behaviour: a broken transport fails fast
+and reconnects immediately, so an outage produces *more* requests per second than
+a healthy connection does.
 
 **What this alert cannot see** — read this before concluding chat is fine:
 
 - **Ticket/auth failures.** `respondUnauthorized` is written inside
   `JwtAuthenticationFilter`, before any `HandlerMapping` runs, so those 401s
-  carry `uri="UNKNOWN"` and never reach this ratio. A fleet-wide ticket expiry
-  leaves this alert silent.
+  carry `uri="UNKNOWN"` and never reach this rate. A fleet-wide ticket expiry
+  leaves this alert silent — but it is loud in the logs: every ticket refusal is
+  WARN (see step 3).
 - **A path that stopped routing.** Tagged `uri="NOT_FOUND"`, attributable to no
   endpoint. A blackbox probe cannot cover this either: `SecurityConfig` ends in
   `anyRequest().authenticated()`, so authorization answers 401 on the path
   pattern before a handler is resolved — a deleted SockJS mapping answers 401
   exactly like a healthy one, so a probe stays green either way.
-- **A silent transport.** The rate floor that stops this firing on an idle window
-  also means no traffic, no alert.
+- **A silent transport.** No requests means no 5xx, so a transport nobody can
+  reach looks exactly like a transport nobody is using.
 
 **Nothing covers those three automatically, and it is worth being blunt about it.**
 `HmsBackendNoTraffic` watches an application-wide unfiltered total, so a dead
@@ -316,9 +329,12 @@ alert that covers it.
    expiry will leave this alert silent and the per-URI panel empty. If clients
    report chat failing and the chat metrics look clean, that is the shape to
    suspect: check `WsTicketService` and `JwtAuthenticationFilter` logs directly.
-   You do not need to raise a log level to see a rejection: every rejection path
-   in `JwtAuthenticationFilter` is WARN, including the blacklisted-token and
-   MFA-challenge cases. Those four loggers sit at INFO on dev
+   You do not need to raise a log level to see a rejection: every 401 these
+   classes produce is announced at WARN, including the blacklisted-token,
+   MFA-challenge and unknown/expired-ticket cases. (Two DEBUG lines stay quiet by
+   design — the cached-missing-principal short-circuit, which is the suppressed
+   repeat of a WARN that already fired, and the token parse detail behind the
+   "Token provided but invalid" WARN.) Those four loggers sit at INFO on dev
    (`LOG_LEVEL_SECURITY`) only to suppress per-request DEBUG chatter. **Do not
    raise it mid-incident** — a Railway variable change restarts the service, which
    drops every SockJS connection and all in-memory ws tickets, destroying the state

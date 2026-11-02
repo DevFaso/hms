@@ -444,7 +444,13 @@ class DashboardTransportExclusionTest {
     private static void judge(boolean excludes, boolean duration, boolean mustExclude,
                               boolean mustShowTransport, boolean wrongExclusion, String required,
                               String where, String shape, List<Finding> out) {
-        if (mustShowTransport && !duration) {
+        // `duration` is used only to word the finding: it no longer changes any verdict.
+        // Not gated on !duration. The rule is about hiding a failure, and a per-URI top-10 of
+        // p99 among 5xx responses is as much a fault detector as a count is — more so, since a
+        // failing transport request returns fast and will not dominate a latency ranking the way
+        // a healthy held-open connection does. Gating this on !duration forced that panel to
+        // exclude the transport, contradicting the rule this class documents.
+        if (mustShowTransport) {
             if (excludes) {
                 out.add(new Finding(where,
                     "is a per-URI error breakdown but hides the transport -> " + shape

@@ -76,12 +76,17 @@ public class WsTicketService {
         }
         TicketEntry entry = tickets.get(ticket);
         if (entry == null) {
-            log.debug("[WS-TICKET] Unknown ticket");
+            // WARN, like the disabled-account refusal below: a refused handshake is the
+            // diagnostic for a chat outage, and these two lines are the only per-user detail
+            // behind it. At DEBUG they disappeared under the dev INFO demotion of this logger,
+            // leaving a fleet-wide ticket expiry with no trace. They fire only on a refusal —
+            // zero occurrences in the 14.7-minute window the demotion was measured against.
+            log.warn("[WS-TICKET] Unknown ticket");
             return null;
         }
         if (System.currentTimeMillis() > entry.expiresAt()) {
             tickets.remove(ticket, entry);
-            log.debug("[WS-TICKET] Expired ticket for user='{}'", entry.username());
+            log.warn("[WS-TICKET] Expired ticket for user='{}'", entry.username());
             return null;
         }
         log.debug("[WS-TICKET] Redeemed ticket for user='{}'", entry.username());

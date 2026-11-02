@@ -5747,3 +5747,14 @@ ships*, not for building — and check the shipped surface before trusting a
   reports. Documented under `HmsChatTransportErrors` in
   `docs/runbooks/grafana-observability.md` so the on-call does not read the
   alert's silence as health.
+- **Seven recording rules nobody reads (PR #1013):** `grafana/rules/recording.yml`
+  records `app:http_5xx:rate1m`, `app:http_5xx:ratio5m`, `app:http_requests:rate1m`,
+  `app:http_request_duration_seconds:p95_5m`, `app_uri:http_requests:rate5m`,
+  `app_uri:http_5xx:rate5m` and `app_uri:http_request_duration_seconds:p99_15m`,
+  and none is referenced by either alert file or by any dashboard (checked by grep
+  over `grafana/`). Each is evaluated every 30s and billed against the same
+  10,000-series free-tier budget the Grafana work keeps running into. Found while
+  removing `app:ws_transport_requests:rate5m`, which #1013 itself had orphaned.
+  Not removed there because these predate it and may be queried ad hoc in Explore —
+  worth confirming with whoever uses the SLO dashboards, then deleting or wiring
+  them into a panel.

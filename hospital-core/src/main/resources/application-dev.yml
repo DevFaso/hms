@@ -35,19 +35,26 @@ logging:
     # against a 50 GB/month allowance. The top six messages alone, each one a
     # log.debug, account for 1,124 lines.
     #
-    # What it does NOT silence, deliberately: every rejection path in
-    # JwtAuthenticationFilter is WARN ("Invalid or expired ticket", "Token provided
-    # but invalid", blacklisted jti, global revocation, idle window, blocked
-    # tenant, MFA challenge outside the MFA step), as is WsTicketService's refusal
-    # of a disabled account; WsTicketService's eviction summary is INFO. A failing
-    # handshake must stay visible, and a reconnect storm after a ticket expiry
-    # shows up as those WARNs rather than as silence.
+    # What it does NOT silence: the rejection paths. Every 401 these classes produce
+    # is announced at WARN — invalid token, blacklisted jti, global revocation, idle
+    # window, blocked tenant, MFA challenge outside the MFA step, pre-password-change
+    # token, refresh presented as access, disabled principal — plus WsTicketService's
+    # unknown/expired/disabled-account ticket refusals. The eviction summary is INFO.
     #
-    # Two of those were DEBUG until this change and are promoted in the same commit
-    # — the blacklisted-jti and MFA-challenge rejections, which would otherwise have
-    # 401'd with no line at any enabled level, which is precisely the case the
-    # runbook sends the on-call to these logs for. They fire only on a rejection,
-    # so they add no per-request volume.
+    # Four of those were DEBUG until this change and are promoted in the same commit:
+    # the blacklisted-jti and MFA-challenge rejections in the filter, and the two
+    # ticket refusals in WsTicketService. All four would otherwise have 401'd with no
+    # line at any enabled level, which is exactly the case the runbook sends the
+    # on-call to these logs for. They fire only on a refusal, so they add no
+    # per-request volume: none of them occurred at all in the measured window.
+    #
+    # Two DEBUG lines in the filter do stay silenced, on purpose. The
+    # cached-missing-principal short-circuit is the deliberate follow-up to
+    # "Ignoring token for a missing user (suppressing future warnings)" — the first
+    # occurrence warns and the repeats are the thing being suppressed — and the
+    # subject-extraction failure is detail behind the "Token provided but invalid"
+    # WARN that is emitted anyway. In both cases the rejection is visible; only the
+    # per-repeat detail is not.
     #
     # Named one by one rather than demoting the com.example.hms.security package:
     # that package holds 40+ classes and 11 subpackages (tenant, oidc, permission,

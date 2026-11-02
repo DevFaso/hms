@@ -107,12 +107,21 @@ groups:
   # before the exclusion a 5xx storm on the transport pushed the global ratio up
   # and did page. Nothing in alerts.yml reads the app_uri:* rules, so this group
   # exists to keep that coverage, scoped to the endpoint it belongs to.
+  #
+  # One rule, not two. A companion app:ws_transport_requests:rate5m was recorded
+  # here as the denominator of a ratio, and removing the ratio left it read by
+  # nothing — a dead series billed against the same 10,000-series free-tier budget
+  # this change flags as contended. For the "is chat taking traffic at all"
+  # question it answered, the runbook gives an ad-hoc by-status query instead.
+  #
+  # Seven OLDER rules in this file are in the same position — read by no alert and
+  # by no dashboard (app:http_5xx:rate1m, app:http_5xx:ratio5m, app:http_requests:rate1m,
+  # app:http_request_duration_seconds:p95_5m and the three app_uri:* rules). That
+  # predates this change and is left alone here; it is recorded in tasklist.md,
+  # because deleting a recorded series someone queries ad hoc deserves its own look.
   - name: hms.ws.transport
     interval: 30s
     rules:
-      - record: app:ws_transport_requests:rate5m
-        expr: sum by (application) (rate(http_server_requests_seconds_count{uri=~"(/api)?/ws-chat.*"}[5m]))
-
       # An absolute 5xx rate, NOT a ratio of 5xx to all transport requests.
       #
       # The ratio this replaces could not fire. Its denominator was every /ws-chat
