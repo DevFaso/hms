@@ -17,6 +17,7 @@ import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 /**
  * Drug-interaction KB curation page (P2 #14).
  *
@@ -29,7 +30,7 @@ import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 @Component({
   selector: 'app-drug-interactions',
   standalone: true,
-  imports: [ModalDialogDirective, FormsModule, TranslateModule],
+  imports: [SubmitGuardDirective, ModalDialogDirective, FormsModule, TranslateModule],
   templateUrl: './drug-interactions.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './drug-interactions.scss',

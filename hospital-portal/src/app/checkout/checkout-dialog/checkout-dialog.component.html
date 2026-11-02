@@ -139,7 +139,8 @@
             type="submit"
             class="btn btn-primary"
             [disabled]="saving()"
-            [appSubmitGuard]="!encounter && ('SUBMIT_GUARD.ENCOUNTER' | translate)"
+            [appSubmitGuard]="checkoutBlockReason()"
+            [submitGuardFields]="['checkout-diagnoses', 'checkout-instructions']"
           >
             @if (saving()) {
               <span>{{ 'CHECKOUT.CHECKING_OUT' | translate }}</span>

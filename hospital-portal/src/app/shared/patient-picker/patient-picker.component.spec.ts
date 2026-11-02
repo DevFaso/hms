@@ -39,7 +39,7 @@ describe('PatientPickerComponent', () => {
       expect(patientSpy.search).toHaveBeenCalledWith({
         name: 'do',
         hospitalId: 'h1',
-        size: 8,
+        size: 20,
         includeInactive: true,
       });
       expect(patientSpy.lookup).not.toHaveBeenCalled();
@@ -207,5 +207,43 @@ describe('PatientPickerComponent', () => {
     component.onQueryChange('a');
     expect(component.suggestions()).toEqual([]);
     expect(component.dropdownOpen()).toBeFalse();
+  });
+  it('ranks a name that starts with the query before eight that only contain it (QA D1239)', (done) => {
+    const sawadogos = Array.from({ length: 12 }, (_, i) => ({
+      id: `s${i}`,
+      firstName: `Prénom${i}`,
+      lastName: 'Sawadogo',
+      active: true,
+    })) as PatientResponse[];
+    const awa = {
+      id: 'awa',
+      firstName: 'Awa',
+      lastName: 'Kaboré',
+      active: true,
+    } as PatientResponse;
+    patientSpy.search.and.returnValue(of([...sawadogos, awa]));
+    component.ngOnInit();
+    component.onQueryChange('Awa');
+    setTimeout(() => {
+      expect(component.suggestions().length).toBe(8);
+      expect(component.suggestions()[0].id).toBe('awa');
+      done();
+    }, 400);
+  });
+
+  it('a required picker marks its input required and blank while no patient is picked (QA D1245)', () => {
+    const fixture = TestBed.createComponent(PatientPickerComponent);
+    fixture.componentRef.setInput('required', true);
+    fixture.componentRef.setInput('inputId', 'rx-patient');
+    fixture.detectChanges();
+    const input = (fixture.nativeElement as HTMLElement).querySelector(
+      '#rx-patient',
+    ) as HTMLInputElement;
+    expect(input.required).toBeTrue();
+    expect(input.getAttribute('aria-required')).toBe('true');
+    expect(input.getAttribute('data-submit-blank')).toBe('true');
+    fixture.componentRef.setInput('selected', mockPatient('p1', 'Anna'));
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).querySelector('#rx-patient')).toBeNull();
   });
 });

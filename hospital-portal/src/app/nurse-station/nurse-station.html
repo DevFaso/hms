@@ -320,6 +320,21 @@
                           >{{ 'NURSE.CONTROLLED_SUBSTANCE' | translate }}</span
                         >
                       }
+                      <!-- QA D1237: a frequency the MAR cannot schedule. -->
+                      @if (m.frequencyUnread) {
+                        {{ ' '
+                        }}<span
+                          class="status-badge status-advisory"
+                          [attr.data-testid]="'med-frequency-unread-' + m.id"
+                          [title]="'EMAR.FREQUENCY_UNREAD_LABEL' | translate"
+                          ><span aria-hidden="true">{{
+                            'EMAR.FREQUENCY_UNREAD_CHIP' | translate
+                          }}</span
+                          ><span class="sr-only">{{
+                            'EMAR.FREQUENCY_UNREAD_LABEL' | translate
+                          }}</span></span
+                        >
+                      }
                       @if (m.cdsAdvisories?.length) {
                         {{ ' '
                         }}<span
@@ -1676,6 +1691,7 @@
           {{ 'COMMON.CANCEL' | translate }}
         </button>
         <button
+          submitGuardRequired
           class="modal-btn modal-confirm"
           (click)="submitCreateHandoff()"
           [disabled]="handoffCreating()"

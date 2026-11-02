@@ -143,7 +143,7 @@
         <form (ngSubmit)="submit()">
           <label for="oncall-staff"
             >{{ 'ON_CALL.STAFF' | translate }} *
-            <select id="oncall-staff" [(ngModel)]="form.staffId" name="staffId">
+            <select required id="oncall-staff" [(ngModel)]="form.staffId" name="staffId">
               <option value="">{{ 'ON_CALL.SELECT_STAFF' | translate }}</option>
               @for (s of staffOptions(); track s.id) {
                 <option [value]="s.id">
@@ -165,6 +165,7 @@
             <label for="oncall-start"
               >{{ 'ON_CALL.START' | translate }} *
               <input
+                required
                 id="oncall-start"
                 type="datetime-local"
                 [(ngModel)]="form.startLocal"
@@ -174,6 +175,7 @@
             <label for="oncall-end"
               >{{ 'ON_CALL.END' | translate }} *
               <input
+                required
                 id="oncall-end"
                 type="datetime-local"
                 [(ngModel)]="form.endLocal"
@@ -197,6 +199,8 @@
               {{ 'COMMON.CANCEL' | translate }}
             </button>
             <button
+              appSubmitGuard
+              submitGuardRequired
               type="submit"
               class="btn-primary"
               [disabled]="saving()"

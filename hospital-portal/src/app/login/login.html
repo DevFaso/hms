@@ -55,6 +55,7 @@
                 />
               </svg>
               <input
+                required
                 id="bs-firstName"
                 type="text"
                 [(ngModel)]="bootstrap.firstName"
@@ -79,6 +80,7 @@
                 />
               </svg>
               <input
+                required
                 id="bs-lastName"
                 type="text"
                 [(ngModel)]="bootstrap.lastName"
@@ -99,6 +101,7 @@
               />
             </svg>
             <input
+              required
               id="bs-username"
               type="text"
               [(ngModel)]="bootstrap.username"
@@ -119,6 +122,7 @@
               />
             </svg>
             <input
+              required
               id="bs-email"
               type="email"
               [(ngModel)]="bootstrap.email"
@@ -173,6 +177,7 @@
               />
             </svg>
             <input
+              required
               id="bs-password"
               [type]="showBootstrapPassword ? 'text' : 'password'"
               [(ngModel)]="bootstrap.password"
@@ -218,6 +223,7 @@
               />
             </svg>
             <input
+              required
               id="bs-confirm"
               type="password"
               [(ngModel)]="bootstrap.confirmPassword"

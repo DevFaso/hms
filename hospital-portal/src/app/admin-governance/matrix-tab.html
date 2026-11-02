@@ -257,7 +257,11 @@
         <div class="form-row">
           <label class="form-field">
             <span>{{ 'ADMIN_GOV.ENVIRONMENT' | translate }} *</span>
-            <select [ngModel]="createEnvironment()" (ngModelChange)="createEnvironment.set($event)">
+            <select
+              required
+              [ngModel]="createEnvironment()"
+              (ngModelChange)="createEnvironment.set($event)"
+            >
               @for (env of environments; track env) {
                 <option [value]="env">{{ 'ADMIN_GOV.ENV_' + env | translate }}</option>
               }
@@ -323,7 +327,14 @@
           <button type="button" class="btn-secondary" (click)="closeCreate()">
             {{ 'COMMON.CANCEL' | translate }}
           </button>
-          <button type="button" class="btn-primary" [disabled]="saving()" (click)="submitCreate()">
+          <button
+            appSubmitGuard
+            submitGuardRequired
+            type="button"
+            class="btn-primary"
+            [disabled]="saving()"
+            (click)="submitCreate()"
+          >
             {{ 'ADMIN_GOV.PUBLISH_SNAPSHOT' | translate }}
           </button>
         </div>

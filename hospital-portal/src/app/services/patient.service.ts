@@ -153,6 +153,9 @@ export interface PatientAllergy {
   lastOccurrenceDate?: string;
   recordedDate?: string;
   active?: boolean;
+  /** QA D1242: why and when the entry was deactivated (kept, shown on the inactive row). */
+  deactivationReason?: string | null;
+  deactivatedAt?: string | null;
   recordedBy?: string;
   createdAt?: string;
   updatedAt?: string;

@@ -23,6 +23,9 @@
     <input
       [attr.aria-label]="'COMMON.SEARCH_PATIENT' | translate"
       [id]="inputId"
+      [required]="required"
+      [attr.aria-required]="required ? 'true' : null"
+      data-submit-blank="true"
       class="picker-input"
       data-escape-discards
       type="text"

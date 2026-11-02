@@ -23,17 +23,35 @@ import { ConfirmService } from '../../shared/confirm-dialog/confirm.service';
  */
 export const MAX_PATIENT_DOCUMENT_BYTES = 10 * 1024 * 1024;
 
-const DOCUMENT_TYPES: { value: PatientDocumentType; labelKey: string }[] = [
-  { value: 'LAB_RESULT', labelKey: 'PORTAL.DOCUMENTS.TYPE_LAB_RESULT' },
-  { value: 'IMAGING_REPORT', labelKey: 'PORTAL.DOCUMENTS.TYPE_IMAGING_REPORT' },
-  { value: 'DISCHARGE_SUMMARY', labelKey: 'PORTAL.DOCUMENTS.TYPE_DISCHARGE_SUMMARY' },
-  { value: 'REFERRAL_LETTER', labelKey: 'PORTAL.DOCUMENTS.TYPE_REFERRAL_LETTER' },
-  { value: 'PRESCRIPTION', labelKey: 'PORTAL.DOCUMENTS.TYPE_PRESCRIPTION' },
-  { value: 'INSURANCE_DOCUMENT', labelKey: 'PORTAL.DOCUMENTS.TYPE_INSURANCE_DOCUMENT' },
-  { value: 'INVOICE', labelKey: 'PORTAL.DOCUMENTS.TYPE_INVOICE' },
-  { value: 'IMMUNIZATION_RECORD', labelKey: 'PORTAL.DOCUMENTS.TYPE_IMMUNIZATION_RECORD' },
-  { value: 'OTHER', labelKey: 'PORTAL.DOCUMENTS.TYPE_OTHER' },
-];
+/**
+ * QA D1252: the label of EVERY document type the server can list. A Record
+ * over the union, so a type added to PatientDocumentType without a label
+ * does not compile; `scripts/lib/document-type-filter.test.mjs` checks the
+ * union against the server's enum.
+ */
+const DOCUMENT_TYPE_LABELS: Readonly<Record<PatientDocumentType, string>> = {
+  LAB_RESULT: 'PORTAL.DOCUMENTS.TYPE_LAB_RESULT',
+  IMAGING_REPORT: 'PORTAL.DOCUMENTS.TYPE_IMAGING_REPORT',
+  DISCHARGE_SUMMARY: 'PORTAL.DOCUMENTS.TYPE_DISCHARGE_SUMMARY',
+  REFERRAL_LETTER: 'PORTAL.DOCUMENTS.TYPE_REFERRAL_LETTER',
+  PRESCRIPTION: 'PORTAL.DOCUMENTS.TYPE_PRESCRIPTION',
+  INSURANCE_DOCUMENT: 'PORTAL.DOCUMENTS.TYPE_INSURANCE_DOCUMENT',
+  INVOICE: 'PORTAL.DOCUMENTS.TYPE_INVOICE',
+  IMMUNIZATION_RECORD: 'PORTAL.DOCUMENTS.TYPE_IMMUNIZATION_RECORD',
+  MEDICAL_CERTIFICATE: 'PORTAL.DOCUMENTS.TYPE_MEDICAL_CERTIFICATE',
+  OTHER: 'PORTAL.DOCUMENTS.TYPE_OTHER',
+};
+
+/** Types a doctor issues and a patient never uploads (QA D961). */
+const ISSUED_ONLY: ReadonlySet<PatientDocumentType> = new Set(['MEDICAL_CERTIFICATE']);
+
+const ALL_TYPES = (Object.keys(DOCUMENT_TYPE_LABELS) as PatientDocumentType[]).map((value) => ({
+  value,
+  labelKey: DOCUMENT_TYPE_LABELS[value],
+}));
+
+/** What a patient may upload. */
+const DOCUMENT_TYPES = ALL_TYPES.filter((t) => !ISSUED_ONLY.has(t.value));
 
 @Component({
   selector: 'app-my-documents',
@@ -57,14 +75,18 @@ export class MyDocumentsComponent implements OnInit {
   /** QA D1229: the in-app confirmation, never the browser's. */
   private readonly confirmService = inject(ConfirmService);
 
+  /** The upload form's choices. */
   readonly documentTypes = DOCUMENT_TYPES;
+  /**
+   * QA D1252: the "Filtrer par type" choices are every type the list can
+   * hold; it reused the upload list, so a doctor's certificate vanished under
+   * every filter.
+   */
+  readonly filterTypes = ALL_TYPES;
 
   /** The translation key of a document type; the raw enum is never shown (QA D344/D434). */
   typeLabelKey(type: PatientDocumentType): string {
-    // QA D961: a certificate the doctor issued is listed with its own label
-    // (it is not an upload choice, so it is not in DOCUMENT_TYPES).
-    if (type === 'MEDICAL_CERTIFICATE') return 'PORTAL.DOCUMENTS.TYPE_MEDICAL_CERTIFICATE';
-    return DOCUMENT_TYPES.find((t) => t.value === type)?.labelKey ?? 'PORTAL.DOCUMENTS.TYPE_OTHER';
+    return DOCUMENT_TYPE_LABELS[type] ?? DOCUMENT_TYPE_LABELS.OTHER;
   }
 
   documents = signal<PatientDocumentResponse[]>([]);

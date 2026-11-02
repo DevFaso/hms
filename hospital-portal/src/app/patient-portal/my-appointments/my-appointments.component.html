@@ -72,6 +72,7 @@
                 <span class="required">*</span></label
               >
               <select
+                required
                 id="hospital"
                 [(ngModel)]="selectedHospitalId"
                 (ngModelChange)="onHospitalChange()"
@@ -91,6 +92,7 @@
                 <span class="required">*</span></label
               >
               <select
+                required
                 id="department"
                 [(ngModel)]="selectedDepartmentId"
                 (ngModelChange)="onDepartmentChange()"
@@ -136,6 +138,7 @@
                   <span class="required">*</span></label
                 >
                 <input
+                  required
                   type="date"
                   id="apptDate"
                   [(ngModel)]="selectedDate"
@@ -149,7 +152,12 @@
                   <span class="required">*</span></label
                 >
                 <!-- QA D1093: a published, free slot is picked, never a typed time. -->
-                <select id="apptTime" [(ngModel)]="selectedTime" data-testid="booking-slot">
+                <select
+                  required
+                  id="apptTime"
+                  [(ngModel)]="selectedTime"
+                  data-testid="booking-slot"
+                >
                   <option value="">{{ 'PORTAL.APPOINTMENTS.CHOOSE_SLOT' | translate }}</option>
                   @for (s of openSlots(); track s.slotId) {
                     <option [value]="s.startTime">
@@ -585,6 +593,7 @@
                 <span class="required">*</span></label
               >
               <input
+                required
                 type="date"
                 id="reschedDate"
                 [(ngModel)]="rescheduleDate"
@@ -599,6 +608,7 @@
               >
               <!-- QA D1093: the visit moves to a published, free slot of its clinician. -->
               <select
+                required
                 id="reschedStart"
                 [(ngModel)]="rescheduleStartTime"
                 data-testid="reschedule-slot"

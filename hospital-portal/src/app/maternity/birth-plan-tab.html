@@ -323,6 +323,7 @@
           <div class="field">
             <label for="bp-patient">{{ 'MATERNITY.PATIENT' | translate }} *</label>
             <app-patient-picker
+              required
               inputId="bp-patient"
               [selected]="planPatient()"
               (selectedChange)="onPlanPatientPicked($event)"
@@ -333,11 +334,21 @@
         <div class="form-row">
           <div class="field">
             <label for="bp-name">{{ 'BIRTH_PLAN.PATIENT_NAME' | translate }} *</label>
-            <input id="bp-name" type="text" [(ngModel)]="planForm.introduction.patientName" />
+            <input
+              required
+              id="bp-name"
+              type="text"
+              [(ngModel)]="planForm.introduction.patientName"
+            />
           </div>
           <div class="field">
             <label for="bp-edd">{{ 'MATERNITY.EDD' | translate }} *</label>
-            <input id="bp-edd" type="date" [(ngModel)]="planForm.introduction.expectedDueDate" />
+            <input
+              required
+              id="bp-edd"
+              type="date"
+              [(ngModel)]="planForm.introduction.expectedDueDate"
+            />
           </div>
         </div>
         <div class="form-row">
@@ -458,6 +469,7 @@
         <div class="field checkbox-field">
           <label>
             <input
+              required
               id="bp-flexibility"
               type="checkbox"
               [(ngModel)]="planForm.flexibilityAcknowledgment"
@@ -475,6 +487,7 @@
           {{ 'COMMON.CANCEL' | translate }}
         </button>
         <button
+          submitGuardRequired
           class="btn-primary"
           [disabled]="planSaving()"
           [appSubmitGuard]="!planForm.patientId || !planForm.flexibilityAcknowledgment"
@@ -520,7 +533,7 @@
         <p class="muted">{{ plan.introduction?.patientName }}</p>
         <div class="field">
           <label for="bp-signature">{{ 'BIRTH_PLAN.SIGNATURE' | translate }} *</label>
-          <input id="bp-signature" type="text" [(ngModel)]="reviewSignature" />
+          <input required id="bp-signature" type="text" [(ngModel)]="reviewSignature" />
         </div>
         <div class="field">
           <label for="bp-comments">{{ 'BIRTH_PLAN.COMMENTS' | translate }}</label>
@@ -546,49 +559,22 @@
 }
 
 <!-- ══ Delete confirm ══ -->
+<!-- QA D1241: removing a birth plan asks why. A reviewed plan, or a draft
+     someone else wrote, is withdrawn (kept for the record); only the author's
+     own unreviewed draft is deleted. -->
 @if (showDeleteConfirm() && deleteTarget(); as plan) {
-  <div
-    class="modal-backdrop"
-    tabindex="-1"
-    (click)="closeDelete()"
-    (keydown.escape)="closeDelete()"
+  <app-reason-dialog
+    titleKey="BIRTH_PLAN.REMOVE_TITLE"
+    [messageKey]="
+      isReviewed(plan) ? 'BIRTH_PLAN.WITHDRAW_REVIEWED_MESSAGE' : 'BIRTH_PLAN.REMOVE_DRAFT_MESSAGE'
+    "
+    confirmKey="BIRTH_PLAN.REMOVE_CONFIRM"
+    [busy]="deleteBusy()"
+    (confirmed)="submitDelete($event)"
+    (cancelled)="closeDelete()"
   >
-    <div
-      class="modal"
-      aria-labelledby="birth-plan-tab-dialog-4-title"
-      role="dialog"
-      aria-modal="true"
-      tabindex="-1"
-      (click)="$event.stopPropagation()"
-      (keydown.escape)="closeDelete(); $event.stopPropagation()"
-      appModalDialog
-    >
-      <div class="modal-header">
-        <h2 id="birth-plan-tab-dialog-4-title">{{ 'BIRTH_PLAN.DELETE_TITLE' | translate }}</h2>
-        <button
-          class="modal-close"
-          (click)="closeDelete()"
-          [attr.aria-label]="'COMMON.CLOSE' | translate"
-        >
-          <span class="material-symbols-outlined" aria-hidden="true">close</span>
-        </button>
-      </div>
-      <div class="modal-body">
-        <!-- D1138 class: the whole question is translated, so French spaces its "?". -->
-        <p>
-          {{
-            'BIRTH_PLAN.DELETE_CONFIRM' | translate: { name: plan.introduction?.patientName || '—' }
-          }}
-        </p>
-      </div>
-      <div class="modal-actions">
-        <button class="btn-secondary" (click)="closeDelete()">
-          {{ 'COMMON.CANCEL' | translate }}
-        </button>
-        <button class="btn-danger" [disabled]="deleteBusy()" (click)="submitDelete()">
-          {{ 'COMMON.DELETE' | translate }}
-        </button>
-      </div>
-    </div>
-  </div>
+    <p data-testid="birth-plan-remove-subject">
+      {{ 'BIRTH_PLAN.REMOVE_SUBJECT' | translate: { name: plan.introduction?.patientName || '—' } }}
+    </p>
+  </app-reason-dialog>
 }

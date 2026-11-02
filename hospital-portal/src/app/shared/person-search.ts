@@ -103,3 +103,50 @@ export function exactIdentifierFirst<R>(
   const exact = rows.filter((r) => foldSearchText(identifierOf(r)) === needle);
   return exact.length === 0 ? [...rows] : [...exact, ...rows.filter((r) => !exact.includes(r))];
 }
+
+/** How well a person's names answer `term`: lower is better (QA D1239). */
+function nameRank(
+  parts: { firstName?: string | null; middleName?: string | null; lastName?: string | null },
+  identifier: string,
+  needle: string,
+): number {
+  const names = [parts.firstName, parts.middleName, parts.lastName].map((n) => foldSearchText(n));
+  const first = names[0];
+  const last = names[2];
+  const fulls = [`${first} ${last}`, `${last} ${first}`].map((f) => f.trim());
+  if (identifier === needle || fulls.includes(needle)) return 0;
+  if (names.includes(needle)) return 1;
+  if (
+    names.some((n) => n !== '' && n.startsWith(needle)) ||
+    fulls.some((f) => f.startsWith(needle))
+  )
+    return 2;
+  const words = names.join(' ').split(' ').filter(Boolean);
+  if (words.some((w) => w.startsWith(needle))) return 3;
+  return 4;
+}
+
+/**
+ * QA D1239 (D1218 class, round 25): a patient typeahead shows the people whose
+ * name STARTS with what was typed before the ones that merely contain it. "Awa"
+ * filled the eight places with Sawadogos and never offered Awa Kaboré; the
+ * list is now ranked, then cut. Exact identifier or full name first, then a
+ * name equal to the term, then a name that starts with it, then a word inside
+ * a name, then the rest;
+ * the order of equals is kept (the server's).
+ */
+export function rankPeopleByName<
+  R extends {
+    firstName?: string | null;
+    middleName?: string | null;
+    lastName?: string | null;
+    mrn?: string | null;
+  },
+>(rows: readonly R[], term: string | null | undefined): R[] {
+  const needle = foldSearchText(term);
+  if (needle === '') return [...rows];
+  return rows
+    .map((row, index) => ({ row, index, rank: nameRank(row, foldSearchText(row.mrn), needle) }))
+    .sort((a, b) => a.rank - b.rank || a.index - b.index)
+    .map((r) => r.row);
+}

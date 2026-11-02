@@ -232,7 +232,8 @@ describe('StockAdjustmentComponent (D82 / D108)', () => {
     c.openForm();
     c.onTypeChange('ADJUSTMENT');
     c.onItemChange('item-1');
-    c.form.quantity = 5;
+    // QA D1243: the first reason is DAMAGE, a write-off: it takes stock off.
+    c.form.quantity = -5;
     c.adjustmentReasonCode = c.adjustmentReasonCodes[0];
     c.adjustmentNotes = 'count';
 
@@ -240,6 +241,46 @@ describe('StockAdjustmentComponent (D82 / D108)', () => {
 
     expect(toast.error).toHaveBeenCalledWith('PHARMACY.LOT_REQUIRED_FOR_MOVEMENT');
     expect(svc.recordTransaction).not.toHaveBeenCalled();
+  });
+
+  describe('QA D1243: a write-off reason only takes stock off', () => {
+    for (const code of ['DAMAGE', 'EXPIRY_WRITE_OFF']) {
+      it(`refuses a positive ${code} adjustment and sends nothing`, () => {
+        const c = create();
+        c.openForm();
+        c.onTypeChange('ADJUSTMENT');
+        c.onItemChange('item-1');
+        c.form.stockLotId = 'lot-1';
+        c.form.quantity = 2;
+        c.adjustmentReasonCode = code;
+        c.adjustmentNotes = 'Flacon cassé';
+        expect(c.writeOffReason()).toBeTrue();
+
+        c.submitForm();
+
+        expect(toast.error).toHaveBeenCalledWith('PHARMACY.WRITE_OFF_REMOVES_ONLY');
+        expect(svc.recordTransaction).not.toHaveBeenCalled();
+      });
+    }
+
+    it('sends a negative DAMAGE adjustment, and a count variance either way', () => {
+      const c = create();
+      svc.recordTransaction.and.returnValue(of({}) as never);
+      svc.listTransactionsByPharmacy.and.returnValue(of({}) as never);
+      svc.listInventoryByPharmacy.and.returnValue(of({}) as never);
+      c.openForm();
+      c.onTypeChange('ADJUSTMENT');
+      c.onItemChange('item-1');
+      c.form.stockLotId = 'lot-1';
+      c.form.quantity = -2;
+      c.adjustmentReasonCode = 'CYCLE_COUNT_VARIANCE';
+      expect(c.writeOffReason()).toBeFalse();
+      c.adjustmentReasonCode = 'DAMAGE';
+      c.adjustmentNotes = 'Flacon cassé';
+      c.submitForm();
+      expect(toast.error).not.toHaveBeenCalled();
+      expect(svc.recordTransaction).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('QA D932: a return is booked against its dispense', () => {

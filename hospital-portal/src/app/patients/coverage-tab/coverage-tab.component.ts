@@ -1,6 +1,14 @@
 import { refusalReason } from '../../shared/refusal-reason';
 import { DialogFocusDirective } from '../../shared/a11y/dialog-focus.directive';
-import { ChangeDetectionStrategy, Component, Input, OnInit, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  Input,
+  OnInit,
+  inject,
+  signal,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -25,6 +33,8 @@ import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 import { PhoneFieldDirective } from '../../shared/forms/phone-field.directive';
+import { ReasonDialogComponent } from '../../shared/reason-dialog/reason-dialog.component';
+import { focusWhenRendered } from '../../shared/a11y/focus-when-rendered';
 /**
  * Coverage tab on patient detail (Phase 3 task 17): insurance policies and
  * hospital registrations for one patient. Insurance roles are HOSPITAL_ADMIN/
@@ -39,6 +49,7 @@ import { PhoneFieldDirective } from '../../shared/forms/phone-field.directive';
   imports: [
     PhoneFieldDirective,
     SubmitGuardDirective,
+    ReasonDialogComponent,
     DialogFocusDirective,
     ServerTimePipe,
     CommonModule,
@@ -57,6 +68,7 @@ export class CoverageTabComponent implements OnInit {
   private readonly roleContext = inject(RoleContextService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   readonly canEdit = this.roleContext.hasAnyActiveRole([
     'ROLE_HOSPITAL_ADMIN',
@@ -93,6 +105,9 @@ export class CoverageTabComponent implements OnInit {
   guarantorSaving = signal(false);
   editingGuarantor = signal<Guarantor | null>(null);
   guarantorForm: GuarantorRequest = { fullName: '' };
+  /** QA D1247: the guarantor whose deactivation is being confirmed (a reason is asked). */
+  deactivatingGuarantor = signal<Guarantor | null>(null);
+  guarantorToggleBusy = signal(false);
 
   consents = signal<TreatmentConsent[]>([]);
   consentsLoading = signal(false);
@@ -114,12 +129,18 @@ export class CoverageTabComponent implements OnInit {
     this.loadConsents();
   }
 
-  loadGuarantors(): void {
-    this.guarantorsLoading.set(true);
+  /**
+   * QA D1247: a reload after a change keeps the table on screen (the spinner
+   * replaced it and took the focused row control with it, so focus fell to
+   * the page); `focusAfter` then puts focus back on the row's control.
+   */
+  loadGuarantors(focusAfter?: string): void {
+    this.guarantorsLoading.set(this.guarantors().length === 0);
     this.extrasService.listGuarantors(this.patientId).subscribe({
       next: (guarantors) => {
         this.guarantors.set(guarantors ?? []);
         this.guarantorsLoading.set(false);
+        if (focusAfter) focusWhenRendered(this.host.nativeElement, focusAfter);
       },
       error: () => {
         this.guarantors.set([]);
@@ -175,11 +196,13 @@ export class CoverageTabComponent implements OnInit {
       ? this.extrasService.updateGuarantor(this.patientId, existing.id, this.guarantorForm)
       : this.extrasService.addGuarantor(this.patientId, this.guarantorForm);
     call.subscribe({
-      next: () => {
+      next: (saved) => {
         this.guarantorSaving.set(false);
         this.showGuarantorModal.set(false);
         this.toast.success(this.translate.instant('COVERAGE.GUARANTOR_SAVED'));
-        this.loadGuarantors();
+        // QA D1247: after an edit, focus returns to that row's pencil.
+        const id = existing?.id ?? saved?.id;
+        this.loadGuarantors(id ? guarantorControl(id, 'edit-guarantor') : undefined);
       },
       error: (err) => {
         this.guarantorSaving.set(false);
@@ -190,13 +213,48 @@ export class CoverageTabComponent implements OnInit {
     });
   }
 
+  /**
+   * QA D1247: "Désactiver" acted on one click with an empty body, no toast,
+   * and focus fell to the page. Deactivating now asks for a reason in a
+   * confirmation (the server requires and audits it); reactivating acts at
+   * once. Both say what happened and put focus back on the row's button.
+   */
   toggleGuarantorActive(guarantor: Guarantor): void {
-    const call = guarantor.active
-      ? this.extrasService.deactivateGuarantor(this.patientId, guarantor.id)
-      : this.extrasService.reactivateGuarantor(this.patientId, guarantor.id);
+    if (guarantor.active) {
+      this.deactivatingGuarantor.set(guarantor);
+      return;
+    }
+    this.runGuarantorToggle(
+      guarantor,
+      this.extrasService.reactivateGuarantor(this.patientId, guarantor.id),
+      'COVERAGE.GUARANTOR_REACTIVATED',
+    );
+  }
+
+  confirmDeactivateGuarantor(guarantor: Guarantor, reason: string): void {
+    this.runGuarantorToggle(
+      guarantor,
+      this.extrasService.deactivateGuarantor(this.patientId, guarantor.id, reason),
+      'COVERAGE.GUARANTOR_DEACTIVATED',
+    );
+  }
+
+  private runGuarantorToggle(
+    guarantor: Guarantor,
+    call: ReturnType<RegistrationExtrasService['reactivateGuarantor']>,
+    doneKey: string,
+  ): void {
+    if (this.guarantorToggleBusy()) return;
+    this.guarantorToggleBusy.set(true);
     call.subscribe({
-      next: () => this.loadGuarantors(),
+      next: () => {
+        this.guarantorToggleBusy.set(false);
+        this.deactivatingGuarantor.set(null);
+        this.toast.success(this.translate.instant(doneKey, { name: guarantor.fullName }));
+        this.loadGuarantors(guarantorControl(guarantor.id, 'toggle-guarantor'));
+      },
       error: (err) => {
+        this.guarantorToggleBusy.set(false);
         this.toast.error(
           refusalReason(err) ?? this.translate.instant('COVERAGE.GUARANTOR_SAVE_ERROR'),
         );
@@ -419,4 +477,9 @@ export class CoverageTabComponent implements OnInit {
       },
     });
   }
+}
+
+/** The selector of one guarantor row's button (QA D1247: focus goes back to it). */
+function guarantorControl(id: string, testId: 'edit-guarantor' | 'toggle-guarantor'): string {
+  return `[data-guarantor-id="${CSS.escape(id)}"] [data-testid="${testId}"]`;
 }

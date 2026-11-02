@@ -131,6 +131,26 @@ describe('PatientChartComponent — allergy actions (QA D527)', () => {
     expect(el.querySelectorAll('tbody .action-link').length).toBe(2);
   });
 
+  it('QA D1242: an inactive allergy shows when and why it was deactivated', () => {
+    const inactive = {
+      ...allergy(HOSPITAL_A),
+      active: false,
+      deactivationReason: 'Saisie en double',
+      deactivatedAt: '2026-11-02T04:03:00',
+    } as PatientAllergy;
+    const { fixture } = setup({
+      role: 'ROLE_DOCTOR',
+      hospitalId: HOSPITAL_A,
+      registrations: [{ id: 'r1', hospitalId: HOSPITAL_A, active: true }],
+      allergies: [inactive, allergy(HOSPITAL_B)],
+    });
+    const el = fixture.nativeElement as HTMLElement;
+    const note = el.querySelector(`[data-testid="allergy-deactivation-${inactive.id}"]`);
+    expect(note?.textContent).toContain('CHART.DEACTIVATION_REASON');
+    expect(note?.textContent).toContain('Saisie en double');
+    expect(el.querySelector('[data-testid="allergy-deactivation-al-hosp-b"]')).toBeNull();
+  });
+
   it('a pharmacist (who cannot read registrations) keeps the role gate alone', () => {
     const { fixture, registrationService } = setup({
       role: 'ROLE_PHARMACIST',

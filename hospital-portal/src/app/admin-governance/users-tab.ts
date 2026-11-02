@@ -17,11 +17,12 @@ import {
 import { ToastService } from '../core/toast.service';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 /** User governance: CSV import, forced password resets, rotation health. */
 @Component({
   selector: 'app-gov-users-tab',
   standalone: true,
-  imports: [ModalDialogDirective, FormsModule, TranslateModule],
+  imports: [SubmitGuardDirective, ModalDialogDirective, FormsModule, TranslateModule],
   templateUrl: './users-tab.html',
   styleUrl: './admin-governance.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

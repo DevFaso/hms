@@ -317,7 +317,7 @@
       <div class="modal-body">
         <div class="field">
           <label for="edu-title">{{ 'EDUCATION.RESOURCE_TITLE' | translate }} *</label>
-          <input id="edu-title" type="text" [(ngModel)]="resourceForm.title" />
+          <input required id="edu-title" type="text" [(ngModel)]="resourceForm.title" />
         </div>
         <div class="field">
           <label for="edu-description">{{ 'EDUCATION.DESCRIPTION' | translate }}</label>
@@ -327,7 +327,7 @@
         <div class="form-row">
           <div class="field">
             <label for="edu-category">{{ 'EDUCATION.CATEGORY' | translate }} *</label>
-            <select id="edu-category" [(ngModel)]="resourceForm.category">
+            <select required id="edu-category" [(ngModel)]="resourceForm.category">
               @for (c of categories; track c) {
                 <option [value]="c">{{ 'EDUCATION.CAT_' + c | translate }}</option>
               }
@@ -335,7 +335,7 @@
           </div>
           <div class="field">
             <label for="edu-type">{{ 'EDUCATION.TYPE' | translate }} *</label>
-            <select id="edu-type" [(ngModel)]="resourceForm.resourceType">
+            <select required id="edu-type" [(ngModel)]="resourceForm.resourceType">
               @for (t of resourceTypes; track t) {
                 <option [value]="t">{{ 'EDUCATION.TYPE_' + t | translate }}</option>
               }
@@ -401,6 +401,7 @@
           {{ 'COMMON.CANCEL' | translate }}
         </button>
         <button
+          submitGuardRequired
           type="button"
           class="btn-primary"
           [disabled]="resourceSaving()"
@@ -447,7 +448,7 @@
       <div class="modal-body">
         <div class="field">
           <label for="edu-assign-resource">{{ 'EDUCATION.RESOURCE' | translate }} *</label>
-          <select id="edu-assign-resource" [(ngModel)]="assignResourceId">
+          <select required id="edu-assign-resource" [(ngModel)]="assignResourceId">
             <option value="">—</option>
             @for (r of resources(); track r.id) {
               <option [value]="r.id">{{ r.title }}</option>

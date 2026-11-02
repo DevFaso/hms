@@ -579,7 +579,13 @@
         <button class="btn-secondary" (click)="closeStatusUpdate()">
           {{ 'COMMON.CANCEL' | translate }}
         </button>
-        <button class="btn-primary" (click)="submitStatusUpdate()" [disabled]="statusSubmitting()">
+        <button
+          appSubmitGuard
+          submitGuardRequired
+          class="btn-primary"
+          (click)="submitStatusUpdate()"
+          [disabled]="statusSubmitting()"
+        >
           {{ 'COMMON.SAVE' | translate }}
         </button>
       </div>
@@ -663,7 +669,12 @@
         </div>
         <div class="field">
           <label for="rep-impression">{{ 'IMAGING.IMPRESSION' | translate }} *</label>
-          <textarea id="rep-impression" rows="4" [(ngModel)]="reportForm.impression"></textarea>
+          <textarea
+            required
+            id="rep-impression"
+            rows="4"
+            [(ngModel)]="reportForm.impression"
+          ></textarea>
           <small class="field-hint">{{ 'IMAGING.IMPRESSION_HINT' | translate }}</small>
         </div>
         <div class="field">
@@ -696,7 +707,13 @@
         <button class="btn-secondary" (click)="closeReportModal()">
           {{ 'COMMON.CANCEL' | translate }}
         </button>
-        <button class="btn-primary" (click)="submitReport()" [disabled]="reportSubmitting()">
+        <button
+          appSubmitGuard
+          submitGuardRequired
+          class="btn-primary"
+          (click)="submitReport()"
+          [disabled]="reportSubmitting()"
+        >
           {{ 'COMMON.SAVE' | translate }}
         </button>
       </div>
@@ -872,6 +889,7 @@
           <div class="field">
             <label for="img-patientSearch">{{ 'PATIENTS.PATIENT_NAME' | translate }} *</label>
             <app-patient-picker
+              required
               inputId="img-patientSearch"
               [selected]="selectedPatient()"
               (selectedChange)="onPatientPicked($event)"
@@ -887,6 +905,7 @@
               <input type="hidden" [(ngModel)]="form.hospitalId" name="hospitalId" />
             } @else {
               <select
+                required
                 id="img-hospitalId"
                 [(ngModel)]="form.hospitalId"
                 [title]="'ENCOUNTERS.HOSPITAL' | translate"
@@ -929,6 +948,7 @@
           <div class="field">
             <label for="img-studyType">{{ 'IMAGING.STUDY_TYPE' | translate }} *</label>
             <input
+              required
               id="img-studyType"
               type="text"
               [(ngModel)]="form.studyType"

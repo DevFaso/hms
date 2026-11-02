@@ -8879,7 +8879,8 @@
     "REFERRAL_PLACEHOLDER": "ex. Suivi en cardiologie",
     "INSTRUCTIONS_PLACEHOLDER": "ex. Revenir à la clinique si les symptômes s'aggravent",
     "EDUCATION_PLACEHOLDER": "ex. Fiche de gestion des médicaments",
-    "FOLLOWUP_REASON_PLACEHOLDER": "ex. Contrôle dans 2 semaines"
+    "FOLLOWUP_REASON_PLACEHOLDER": "ex. Contrôle dans 2 semaines",
+    "SUMMARY_REQUIRED": "Saisissez un diagnostic de sortie ou des consignes pour le patient : le résumé de visite ne peut pas être vide."
   },
   "inBasket": {
     "acknowledge": "Accuser réception",
@@ -9178,7 +9179,8 @@
     "LAB_STATUS_NOT_INTERPRETED": "Non interprété : aucun intervalle de référence",
     "CODE_PLACEHOLDER": "ex. B54 (paludisme)",
     "PREGNANCY": "Grossesse en cours : {{weeks}} SA + {{days}} j",
-    "TIMELINE_TRANSCRIBED_AT": "Transcrit à {{hospital}}"
+    "TIMELINE_TRANSCRIBED_AT": "Transcrit à {{hospital}}",
+    "DEACTIVATION_REASON": "Motif"
   },
   "PHARMACY": {
     "QUEUE_CLAIM": {
@@ -9680,7 +9682,9 @@
     },
     "ALERT_OVERRIDDEN": "Alerte outrepassée par le prescripteur : voir le motif sur l’ordonnance",
     "LOTS_OTHER_FORM": "{{count}} lot(s) de ce médicament sous une autre forme ne sont pas proposés : l'ordonnance est rédigée en « {{unit}} ».",
-    "SAVE_PRICE": "Enregistrer le prix"
+    "SAVE_PRICE": "Enregistrer le prix",
+    "WRITE_OFF_REMOVES_ONLY": "La détérioration et la péremption ne font que retirer du stock : saisissez une quantité négative.",
+    "WRITE_OFF_SIGN_HINT": "Ce motif retire du stock : saisissez une quantité négative (par exemple −2)."
   },
   "LAB_QC": {
     "TITLE": "Tableau de bord du contrôle qualité",
@@ -10080,7 +10084,12 @@
     "REVOKE_CONSENT": "Révoquer le consentement",
     "CONSENT_REVOKE_HINT": "L'enregistrement est conservé et marqué révoqué — il n'est jamais supprimé.",
     "CONSENT_REVOKE_REASON": "Motif de révocation",
-    "CONSENT_REVOKE_REASON_REQUIRED": "Un motif de révocation est requis."
+    "CONSENT_REVOKE_REASON_REQUIRED": "Un motif de révocation est requis.",
+    "DEACTIVATE_GUARANTOR_TITLE": "Désactiver ce garant ?",
+    "DEACTIVATE_GUARANTOR_MESSAGE": "Le garant reste au dossier, marqué inactif. Indiquez pourquoi ; le motif est conservé dans la piste d’audit.",
+    "GUARANTOR_DEACTIVATED": "{{name}} n’est plus un garant actif.",
+    "GUARANTOR_REACTIVATED": "{{name}} est de nouveau un garant actif.",
+    "DEACTIVATION_REASON": "Motif"
   },
   "PATIENT_DOCUMENTS": {
     "TAB": "Documents",
@@ -10546,7 +10555,14 @@
     "DELETE_TITLE": "Supprimer le plan de naissance",
     "DELETE_CONFIRM": "Supprimer le plan de naissance de {{name}} ?",
     "DELETED": "Plan de naissance supprimé",
-    "DELETE_ERROR": "Échec de la suppression du plan"
+    "DELETE_ERROR": "Échec de la suppression du plan",
+    "REMOVE_TITLE": "Retirer le plan de naissance",
+    "REMOVE_SUBJECT": "Plan de naissance de {{name}}",
+    "REMOVE_CONFIRM": "Retirer",
+    "WITHDRAW_REVIEWED_MESSAGE": "Un soignant a relu ce plan : il sera retiré, pas supprimé. Il reste au dossier avec votre motif et disparaît des listes.",
+    "REMOVE_DRAFT_MESSAGE": "Votre propre brouillon non relu est supprimé. Un brouillon rédigé par quelqu’un d’autre est retiré : il reste au dossier avec votre motif. Indiquez pourquoi.",
+    "WITHDRAWN": "Plan de naissance retiré : conservé au dossier avec le motif.",
+    "REMOVED": "Plan de naissance retiré."
   },
   "PRENATAL": {
     "GENERATE_TITLE": "Générer le calendrier des visites prénatales",
@@ -11926,7 +11942,9 @@
       "TITLE": "Dose avant l’intervalle minimal",
       "REASON_LABEL": "Pourquoi donner cette dose avant l’intervalle minimal ?",
       "CONFIRM": "Administrer en avance"
-    }
+    },
+    "FREQUENCY_UNREAD_CHIP": "Fréquence non reconnue",
+    "FREQUENCY_UNREAD_LABEL": "Fréquence non reconnue — vérifier l’ordonnance. L’heure de la prochaine dose est inconnue : une dose donnée maintenant demande un motif."
   },
   "CREDENTIALING": {
     "CURRENT_EXPIRY": "Expiration actuelle",

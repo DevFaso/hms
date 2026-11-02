@@ -575,6 +575,7 @@
                 <div class="field">
                   <label for="line-desc">{{ 'BILLING.LINE_DESCRIPTION' | translate }} *</label>
                   <input
+                    required
                     id="line-desc"
                     type="text"
                     maxlength="255"
@@ -597,6 +598,7 @@
                 <div class="field">
                   <label for="line-qty">{{ 'BILLING.LINE_QUANTITY' | translate }} *</label>
                   <input
+                    required
                     id="line-qty"
                     type="number"
                     min="1"
@@ -608,6 +610,7 @@
                 <div class="field">
                   <label for="line-price">{{ 'BILLING.LINE_UNIT_PRICE' | translate }} *</label>
                   <input
+                    required
                     id="line-price"
                     type="number"
                     min="0"
@@ -866,6 +869,7 @@
               <p class="field-hint">{{ 'BILLING.PATIENT_LOCKED_ISSUED' | translate }}</p>
             } @else {
               <app-patient-picker
+                required
                 inputId="bill-patient"
                 [selected]="formPatient()"
                 (selectedChange)="onPatientPicked($event)"
@@ -1108,6 +1112,7 @@
         <div class="field">
           <label for="email-to">{{ 'BILLING.EMAIL_TO' | translate }} *</label>
           <input
+            required
             id="email-to"
             type="text"
             inputmode="email"
@@ -1204,6 +1209,7 @@
         <div class="field">
           <label for="payment-amount">{{ 'BILLING.PAYMENT_AMOUNT' | translate }} *</label>
           <input
+            required
             id="payment-amount"
             type="number"
             min="1"
@@ -1216,6 +1222,7 @@
         <div class="field">
           <label for="payment-method">{{ 'BILLING.PAYMENT_METHOD' | translate }} *</label>
           <select
+            required
             id="payment-method"
             [ngModel]="paymentMethod()"
             (ngModelChange)="paymentMethod.set($event)"
@@ -1248,7 +1255,13 @@
         <button class="btn-secondary" (click)="closePayment()">
           {{ 'COMMON.CANCEL' | translate }}
         </button>
-        <button class="btn-primary" (click)="recordPayment()" [disabled]="paymentSaving()">
+        <button
+          appSubmitGuard
+          submitGuardRequired
+          class="btn-primary"
+          (click)="recordPayment()"
+          [disabled]="paymentSaving()"
+        >
           {{
             paymentSaving() ? ('COMMON.SAVING' | translate) : ('BILLING.RECORD_PAYMENT' | translate)
           }}
@@ -1295,6 +1308,7 @@
             >{{ 'BILLING.ADJUSTMENT_REVERSAL_REASON' | translate }} *</label
           >
           <textarea
+            required
             id="adj-reversal-reason"
             rows="3"
             maxlength="500"
@@ -1358,6 +1372,7 @@
         <div class="field">
           <label for="reversal-reason">{{ 'BILLING.REVERSAL_REASON' | translate }} *</label>
           <textarea
+            required
             id="reversal-reason"
             rows="3"
             maxlength="500"

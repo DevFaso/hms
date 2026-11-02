@@ -26,6 +26,7 @@ import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
 import { comboboxKey } from '../shared/a11y/combobox-keys';
 import { labelledRefusalReason } from '../shared/refusal-reason';
 
+import { rankPeopleByName } from '../shared/person-search';
 /** QA D984: the label each refused field is reported under. */
 const APPOINTMENT_FIELD_LABELS: Readonly<Record<string, string>> = {
   appointmentDate: 'APPOINTMENTS.DATE',
@@ -226,7 +227,8 @@ export class AppointmentFormComponent implements OnInit {
       )
       .subscribe({
         next: (list) => {
-          this.patientSuggestions.set(list.slice(0, 8));
+          // QA D1239: ranked by how the name answers the query, then cut.
+          this.patientSuggestions.set(rankPeopleByName(list, this.patientQuery()).slice(0, 8));
           // QA D947: a new list has no active option; Tab must not pick whoever
           // now sits where the old highlight was (review round 11).
           this.patientActive.set(-1);

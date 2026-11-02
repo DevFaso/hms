@@ -39,6 +39,8 @@ import { endsBeforeStart, isBeforeToday } from '../../shared/forms/date-rules';
 import { PatientSublinePipe } from '../../shared/patient-picker/patient-subline';
 
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+import { rankPeopleByName } from '../../shared/person-search';
+import { comboboxKey } from '../../shared/a11y/combobox-keys';
 type WaitlistStatus = 'ALL' | 'WAITING' | 'OFFERED' | 'CLOSED';
 
 /** Every field the add form may refuse, so a corrected one loses its mark. */
@@ -100,6 +102,21 @@ export class WaitlistPanelComponent implements OnInit {
   });
   staffQuery = signal('');
   selectedStaff = signal<StaffResponse | null>(null);
+  /** QA D1251: the active suggestion of the provider combobox (-1: none). */
+  staffActive = signal(-1);
+  /**
+   * QA D1251: the provider suggestions stayed open after a pick and covered
+   * the date fields. They show only while a name is being typed and nothing
+   * is picked; Escape closes them.
+   */
+  private readonly staffListDismissed = signal(false);
+  readonly staffListOpen = computed(
+    () =>
+      this.staffQuery().length > 0 &&
+      !this.selectedStaff() &&
+      !this.staffListDismissed() &&
+      this.filteredStaff().length > 0,
+  );
 
   /* ── Form fields ─────────── */
   selectedDeptId = signal('');
@@ -152,7 +169,11 @@ export class WaitlistPanelComponent implements OnInit {
           return this.patientService.list(hospitalId, q).pipe(catchError(() => of([])));
         }),
       )
-      .subscribe((results) => this.patientResults.set(results as PatientResponse[]));
+      .subscribe((results) =>
+        this.patientResults.set(
+          rankPeopleByName(results as PatientResponse[], this.patientQuery()),
+        ),
+      );
 
     this.loadEntries();
   }
@@ -174,6 +195,11 @@ export class WaitlistPanelComponent implements OnInit {
 
   onPatientQueryChange(value: string): void {
     this.patientQuery.set(value);
+    // Typing another name drops the patient picked before: the entry must
+    // never go to someone the field no longer names.
+    if (this.selectedPatient() && value !== personName(this.selectedPatient()!)) {
+      this.selectedPatient.set(null);
+    }
     this.patientSearch$.next(value);
   }
 
@@ -181,6 +207,36 @@ export class WaitlistPanelComponent implements OnInit {
     this.selectedPatient.set(p);
     this.patientQuery.set(personName(p));
     this.patientResults.set([]);
+    // QA D1251: the picked option leaves the page; focus goes on to the next field.
+    focusWhenRendered(this.host.nativeElement, '#wl-dept');
+  }
+
+  /** QA D1251: typing a provider name reopens the list and drops an earlier pick. */
+  onStaffQueryChange(value: string): void {
+    this.staffQuery.set(value);
+    this.selectedStaff.set(null);
+    this.staffListDismissed.set(false);
+    this.staffActive.set(-1);
+  }
+
+  /** QA D1251: a pick closes the list and moves on to the date range. */
+  pickStaff(s: StaffResponse): void {
+    this.selectedStaff.set(s);
+    this.staffQuery.set(s.name);
+    this.staffActive.set(-1);
+    focusWhenRendered(this.host.nativeElement, '#wl-from');
+  }
+
+  /** QA D1251 (D947 pattern): ArrowDown/ArrowUp/Enter/Tab/Escape on the provider field. */
+  onStaffKeydown(event: KeyboardEvent): void {
+    const options = this.staffListOpen() ? this.filteredStaff() : [];
+    const step = comboboxKey(event, options.length, this.staffActive());
+    if (step.pick) {
+      this.pickStaff(options[step.active]);
+      return;
+    }
+    if (step.close) this.staffListDismissed.set(true);
+    this.staffActive.set(step.close ? -1 : step.active);
   }
 
   openAddForm(): void {

@@ -35,6 +35,7 @@ import { localDateString } from '../../shared/date-utils';
 import { isBeforeToday } from '../../shared/forms/date-rules';
 import { PatientSublinePipe } from '../../shared/patient-picker/patient-subline';
 
+import { rankPeopleByName } from '../../shared/person-search';
 type RecallFilter = 'ALL' | RecallStatus;
 
 /**
@@ -124,7 +125,11 @@ export class RecallsPanelComponent implements OnInit {
           return this.patientService.list(hospitalId, q).pipe(catchError(() => of([])));
         }),
       )
-      .subscribe((results) => this.patientResults.set(results as PatientResponse[]));
+      .subscribe((results) =>
+        this.patientResults.set(
+          rankPeopleByName(results as PatientResponse[], this.patientQuery()),
+        ),
+      );
 
     this.loadRecalls();
   }

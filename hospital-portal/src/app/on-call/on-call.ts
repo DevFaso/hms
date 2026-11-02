@@ -27,6 +27,7 @@ import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { nowLocalDatetime } from '../shared/date-utils';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 /** Form model: datetime-local strings, converted to ISO with offset on submit. */
 interface OnCallFormModel {
   staffId: string;
@@ -77,6 +78,7 @@ export function isRosterable(staff: StaffResponse): boolean {
   selector: 'app-on-call',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
     ModalDialogDirective,
     ServerTimePipe,
     CommonModule,

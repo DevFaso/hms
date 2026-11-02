@@ -48,7 +48,9 @@ const SERVER_GUARD = join(
   'CancelVoidReasonGuardTest.java',
 );
 
-const TERMINAL = /\/(?:cancel|close|void|revoke|discontinue|withdraw|reject)\b/;
+// QA D1247 (round 25): `deactivate` too — a guarantor was switched off on one
+// click with an empty body.
+const TERMINAL = /\/(?:cancel|close|void|revoke|discontinue|withdraw|reject|deactivate)\b/;
 
 /** Sites that end a record legitimately without a reason, each with why. */
 const PINS = new Map([
@@ -71,6 +73,30 @@ const PINS = new Map([
   [
     'services/patient-portal.service.ts::/me/patient/refills/{}/cancel',
     'the patient withdrawing their own refill request before anyone acted on it ("OWN REASON" in CancelVoidReasonGuardTest); seen since round 22, when the scan learned chained `this.http\\n  .put(` calls',
+  ],
+  [
+    'reports/reports.service.ts::/reports/{}/deactivate',
+    'a scheduled report definition switched off by its owner (it can be switched back on), not a patient record (QA D1247 widening)',
+  ],
+  [
+    'services/assignment-admin.service.ts::/assignments/{}/deactivate',
+    'a staff role assignment switched off by an administrator: access management, not a patient record (QA D1247 widening)',
+  ],
+  [
+    'services/drug-interaction.service.ts::/drug-interactions/{}/deactivate',
+    'a knowledge-base interaction rule retired by a pharmacist administrator, not a patient record (QA D1247 widening)',
+  ],
+  [
+    'services/provider-portal.service.ts::/provider/staff/{}/deactivate',
+    "a partner provider's staff account switched off by its manager, not a patient record (QA D1247 widening)",
+  ],
+  [
+    'services/slot-inventory.service.ts::/visit-types/{}/deactivate',
+    'a scheduling configuration (visit type) retired by an administrator, not a patient record (QA D1247 widening)',
+  ],
+  [
+    'services/slot-inventory.service.ts::/session-templates/{}/deactivate',
+    'a scheduling configuration (session template) retired by an administrator, not a patient record (QA D1247 widening)',
   ],
   [
     'services/staff-scheduling.service.ts::/staff/scheduling/leaves/{}/cancel',
@@ -183,8 +209,11 @@ export function httpCalls(source) {
     const args = topLevelArgs(balanced(source, open));
     if (args.length === 0) continue;
     const verb = m[1].toUpperCase();
-    const body = verb === 'DELETE' ? '' : (args[1] ?? '');
     const options = verb === 'DELETE' ? (args[1] ?? '') : (args[2] ?? '');
+    // QA D1241 / D1242 (round 25): a DELETE carries its body in the options
+    // (`{ body: { reason } }`); it was read as empty, so a reason-requiring
+    // delete could not be checked at all.
+    const body = verb === 'DELETE' ? deleteBody(options) : (args[1] ?? '');
     out.push({
       verb,
       url: resolveUrl(urlPattern(args[0]), source),
@@ -197,6 +226,17 @@ export function httpCalls(source) {
   return out;
 }
 
+/** The `body` property of a DELETE's options object literal (`{ body: { reason } }`), or ''. */
+export function deleteBody(options) {
+  const text = options.trim();
+  if (!text.startsWith('{')) return '';
+  for (const prop of topLevelArgs(`(${text.slice(1, -1)})`)) {
+    const m = /^body\s*(?::\s*([\s\S]*))?$/.exec(prop);
+    if (m) return (m[1] ?? 'body').trim();
+  }
+  return '';
+}
+
 /** Whether a body argument sends nothing. */
 export function isEmptyBody(body) {
   return /^(?:\{\s*\}|null|undefined|)$/.test(body.trim());
@@ -205,13 +245,13 @@ export function isEmptyBody(body) {
 /**
  * The handlers hospital-core requires a reason for, with where it reads it:
  * `{ verb, path, kind: 'body' | 'param', field }`, parsed from
- * CancelVoidReasonGuardTest's HANDLERS and CLINICAL_HANDLERS maps (an entry
+ * CancelVoidReasonGuardTest's HANDLERS, CLINICAL_HANDLERS and DELETE_PROOFS maps (an entry
  * whose value names a proof with ` -> `; "NOT A …", "OWN REASON" and
  * "KNOWN GAP" entries need none).
  */
 export function serverReasonContracts(java) {
   const entry =
-    /(?:CLINICAL_)?HANDLERS\.put\(\s*"([A-Z]+) ([^"]+)",\s*("(?:[^"\\]|\\.)*"(?:\s*\+\s*"(?:[^"\\]|\\.)*")*)\s*\)/g;
+    /(?:(?:CLINICAL_)?HANDLERS|DELETE_PROOFS)\.put\(\s*"([A-Z]+) ([^"]+)",\s*("(?:[^"\\]|\\.)*"(?:\s*\+\s*"(?:[^"\\]|\\.)*")*)\s*\)/g;
   const out = [];
   for (const m of java.matchAll(entry)) {
     const value = [...m[3].matchAll(/"((?:[^"\\]|\\.)*)"/g)].map((s) => s[1]).join('');
@@ -223,6 +263,9 @@ export function serverReasonContracts(java) {
       continue;
     }
     const field = /^\w+\.(\w+)/.exec(source);
+    // DELETE_PROOFS (#1019) also lists conditional proofs ("correctionReason
+    // (once final)"); only a reason read from a named DTO field is a contract.
+    if (m[1] === 'DELETE' && !field) continue;
     out.push({ verb: m[1], path: m[2], kind: 'body', field: field ? field[1] : null });
   }
   return out;
@@ -355,6 +398,47 @@ test('QA D1180 guard: the scan sees the regression and the shapes a reason trave
     '{?}/{}/cancel',
   );
   assert.equal(urlMatches('{?}/{}/cancel', '/recalls/{id}/cancel'), false);
+});
+
+test('QA D1241 guard: a reason sent on a DELETE is seen, in the body option or the query', () => {
+  const java = `
+    DELETE_PROOFS.put("DELETE /birth-plans/{id}",
+        "@RequestParam reason -> service/BirthPlanServiceImplTest#aDeleteWithoutAReasonIsRefused_D1241");
+    DELETE_PROOFS.put("DELETE /patients/{id}/allergies/{allergyId}",
+        "PatientAllergyDeactivateRequestDTO.reason (@NotBlank) -> VALIDATED");
+    DELETE_PROOFS.put("DELETE /micro-cultures/{cultureId}/isolates/{isolateId}",
+        "correctionReason (once final) -> service/impl/MicroCultureServiceImplTest#x");
+    DELETE_PROOFS.put("DELETE /beds/{bedId}", "NOT A CLINICAL RECORD: ward configuration");`;
+  const contracts = serverReasonContracts(java);
+  assert.deepEqual(contracts, [
+    { verb: 'DELETE', path: '/birth-plans/{id}', kind: 'param', field: 'reason' },
+    { verb: 'DELETE', path: '/patients/{id}/allergies/{allergyId}', kind: 'body', field: 'reason' },
+  ]);
+  const [plan, allergy] = contracts;
+  const lines = (...l) => l.join(String.fromCharCode(10));
+  const before = lines(
+    '  delete(id: string) {',
+    '    return this.http.delete<void>(`/birth-plans/${id}`);',
+    '  }',
+  );
+  assert.match(missingReason(httpCalls(before)[0], plan), /no 'reason' query parameter/);
+  const after = lines(
+    '  delete(id: string, reason: string) {',
+    '    return this.http.delete<void>(`/birth-plans/${id}`, { params: { reason } });',
+    '  }',
+  );
+  assert.equal(missingReason(httpCalls(after)[0], plan), null);
+  const bodied = lines(
+    'return this.http.delete<M>(`/patients/${p}/allergies/${a}`, {',
+    '  body: { reason },',
+    '});',
+  );
+  assert.equal(httpCalls(bodied)[0].body, '{ reason }');
+  assert.equal(missingReason(httpCalls(bodied)[0], allergy), null);
+  const bare = 'return this.http.delete<M>(`/patients/${p}/allergies/${a}`);';
+  assert.match(missingReason(httpCalls(bare)[0], allergy), /empty body/);
+  const wrong = 'return this.http.delete<M>(`/patients/${p}/allergies/${a}`, { body: { note } });';
+  assert.match(missingReason(httpCalls(wrong)[0], allergy), /does not carry 'reason'/);
 });
 
 test('QA D1180 guard: the server list is parsed with its reason source', () => {

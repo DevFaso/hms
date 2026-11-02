@@ -215,12 +215,13 @@
       <div class="modal-body">
         <div class="form-row">
           <label for="ward-name">{{ 'BEDS.WARD_NAME' | translate }} *</label>
-          <input id="ward-name" type="text" [(ngModel)]="wardForm.name" />
+          <input required id="ward-name" type="text" [(ngModel)]="wardForm.name" />
         </div>
         <div class="form-row-inline">
           <div class="form-row">
             <label for="ward-code">{{ 'BEDS.WARD_CODE' | translate }} *</label>
             <input
+              required
               id="ward-code"
               type="text"
               maxlength="20"
@@ -230,7 +231,7 @@
           </div>
           <div class="form-row">
             <label for="ward-type">{{ 'BEDS.WARD_TYPE' | translate }} *</label>
-            <select id="ward-type" [(ngModel)]="wardForm.wardType">
+            <select required id="ward-type" [(ngModel)]="wardForm.wardType">
               @for (t of wardTypes; track t) {
                 <option [value]="t">{{ t | enumLabel: 'wardType' }}</option>
               }
@@ -267,7 +268,13 @@
         <button class="modal-btn modal-cancel" (click)="closeWardModal()" [disabled]="saving()">
           {{ 'COMMON.CANCEL' | translate }}
         </button>
-        <button class="modal-btn modal-confirm" (click)="submitWard()" [disabled]="saving()">
+        <button
+          appSubmitGuard
+          submitGuardRequired
+          class="modal-btn modal-confirm"
+          (click)="submitWard()"
+          [disabled]="saving()"
+        >
           {{ 'COMMON.SAVE' | translate }}
         </button>
       </div>
@@ -310,7 +317,13 @@
         <div class="form-row-inline">
           <div class="form-row">
             <label for="bed-number">{{ 'BEDS.BED_NUMBER' | translate }} *</label>
-            <input id="bed-number" type="text" maxlength="20" [(ngModel)]="bedForm.bedNumber" />
+            <input
+              required
+              id="bed-number"
+              type="text"
+              maxlength="20"
+              [(ngModel)]="bedForm.bedNumber"
+            />
           </div>
           <div class="form-row">
             <label for="bed-room">{{ 'BEDS.ROOM_NUMBER' | translate }}</label>
@@ -344,7 +357,13 @@
         <button class="modal-btn modal-cancel" (click)="closeBedModal()" [disabled]="saving()">
           {{ 'COMMON.CANCEL' | translate }}
         </button>
-        <button class="modal-btn modal-confirm" (click)="submitBed()" [disabled]="saving()">
+        <button
+          appSubmitGuard
+          submitGuardRequired
+          class="modal-btn modal-confirm"
+          (click)="submitBed()"
+          [disabled]="saving()"
+        >
           {{ 'COMMON.SAVE' | translate }}
         </button>
       </div>

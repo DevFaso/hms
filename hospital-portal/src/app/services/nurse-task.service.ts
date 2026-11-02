@@ -64,6 +64,13 @@ export interface NurseMedicationTask {
   /** QA D922: a controlled substance (prescriber's tick or the catalogue's flag). */
   controlledSubstance?: boolean;
   /**
+   * QA D1237: the order's frequency is written but cannot be read as a
+   * schedule. The course stays open (status DUE) and every later dose asks for
+   * a reason (the server's `earlyDoseReason` refusal); the prescriber should
+   * restate the frequency.
+   */
+  frequencyUnread?: boolean;
+  /**
    * Pharmacist verification (Tier 2 item 33). Both flags come from the server
    * on the task itself rather than being derived in the UI, so a nurse sees
    * WHY a dose is blocked before pressing the button rather than after.

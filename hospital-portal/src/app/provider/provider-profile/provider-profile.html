@@ -26,7 +26,7 @@
       </button>
     </div>
   } @else if (profile(); as p) {
-    <section class="detail-card" aria-labelledby="profile-contact-title">
+    <section class="detail-card" aria-labelledby="profile-contact-title" data-submit-scope>
       <h2 id="profile-contact-title" class="card-title">
         {{ 'PROVIDER.PROFILE.CONTACT_TITLE' | translate }}
       </h2>
@@ -79,6 +79,7 @@
             data-test="save"
             [disabled]="saving() || loading()"
             [appSubmitGuard]="!canSave()"
+            submitGuardRequired
             (click)="save()"
           >
             @if (saving()) {

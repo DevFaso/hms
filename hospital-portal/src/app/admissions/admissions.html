@@ -409,8 +409,10 @@
               <div class="patient-picker-wrap">
                 <span class="material-symbols-outlined picker-search-icon">person_search</span>
                 <input
+                  required
                   data-escape-discards
                   id="adm-patientSearch"
+                  [attr.data-submit-blank]="form.patientId ? 'false' : 'true'"
                   class="picker-input"
                   type="text"
                   [placeholder]="'COMMON.SEARCH_PATIENT' | translate"
@@ -575,6 +577,7 @@
           {{ 'COMMON.CANCEL' | translate }}
         </button>
         <button
+          submitGuardRequired
           class="btn-primary"
           (click)="submitForm()"
           [disabled]="saving()"
@@ -757,6 +760,7 @@
               >{{ 'ADMISSIONS.DISCHARGE_DISPOSITION' | translate }} *</label
             >
             <select
+              required
               id="discharge-disposition"
               [(ngModel)]="dischargeForm.dischargeDisposition"
               class="form-select"
@@ -771,6 +775,7 @@
               >{{ 'ADMISSIONS.DISCHARGING_PROVIDER' | translate }} *</label
             >
             <select
+              required
               id="discharge-provider"
               [(ngModel)]="dischargeForm.dischargingProviderId"
               class="form-select"
@@ -788,6 +793,7 @@
             >{{ 'ADMISSIONS.DISCHARGE_DIAGNOSIS' | translate }} *</label
           >
           <textarea
+            required
             id="discharge-diagnosis"
             maxlength="2000"
             [(ngModel)]="dischargeForm.dischargeDiagnosis"
@@ -800,6 +806,7 @@
         <div class="field">
           <label for="discharge-summary">{{ 'ADMISSIONS.DISCHARGE_SUMMARY' | translate }} *</label>
           <textarea
+            required
             id="discharge-summary"
             [(ngModel)]="dischargeForm.dischargeSummary"
             class="form-textarea"

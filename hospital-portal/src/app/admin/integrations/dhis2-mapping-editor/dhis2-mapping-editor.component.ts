@@ -165,6 +165,7 @@ import { SubmitGuardDirective } from '../../../shared/forms/submit-guard.directi
           data-testid="dhis2-mapping-add-submit"
           [disabled]="saving()"
           [appSubmitGuard]="!canAdd()"
+          submitGuardRequired
         >
           {{ 'COMMON.ADD' | translate }}
         </button>

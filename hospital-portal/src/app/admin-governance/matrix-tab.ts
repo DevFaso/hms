@@ -16,6 +16,7 @@ import { ToastService } from '../core/toast.service';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 interface EditableRow {
   domain: string;
   actions: string;
@@ -26,7 +27,14 @@ interface EditableRow {
 @Component({
   selector: 'app-gov-matrix-tab',
   standalone: true,
-  imports: [ModalDialogDirective, ServerTimePipe, CommonModule, FormsModule, TranslateModule],
+  imports: [
+    SubmitGuardDirective,
+    ModalDialogDirective,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+  ],
   templateUrl: './matrix-tab.html',
   styleUrl: './admin-governance.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

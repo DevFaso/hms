@@ -627,6 +627,7 @@
           <div class="field">
             <label for="history-patient">{{ 'MATERNITY.PATIENT' | translate }} *</label>
             <app-patient-picker
+              required
               inputId="history-patient"
               [selected]="selectedPatient()"
               (selectedChange)="onHistoryPatientPicked($event)"
@@ -650,6 +651,7 @@
           <div class="field">
             <label for="history-recorded">{{ 'MATERNITY.RECORDED' | translate }} *</label>
             <input
+              required
               id="history-recorded"
               type="datetime-local"
               [(ngModel)]="historyForm.recordedDate"
@@ -952,6 +954,7 @@
           {{ 'COMMON.CANCEL' | translate }}
         </button>
         <button
+          submitGuardRequired
           class="btn-primary"
           [disabled]="historySaving()"
           [appSubmitGuard]="historyBlockReason()"
@@ -997,6 +1000,7 @@
         <div class="field">
           <label for="referral-patient">{{ 'MATERNITY.PATIENT' | translate }} *</label>
           <app-patient-picker
+            required
             inputId="referral-patient"
             [selected]="referralFormPatient()"
             (selectedChange)="onReferralFormPatientPicked($event)"
@@ -1005,7 +1009,7 @@
         <div class="form-row">
           <div class="field">
             <label for="referral-context">{{ 'MATERNITY.CARE_CONTEXT' | translate }} *</label>
-            <select id="referral-context" [(ngModel)]="referralForm.careContext">
+            <select required id="referral-context" [(ngModel)]="referralForm.careContext">
               @for (c of careContexts; track c) {
                 <option [value]="c">{{ 'MATERNITY.CONTEXT_' + c | translate }}</option>
               }
@@ -1013,7 +1017,7 @@
           </div>
           <div class="field">
             <label for="referral-urgency">{{ 'MATERNITY.URGENCY' | translate }} *</label>
-            <select id="referral-urgency" [(ngModel)]="referralForm.urgency">
+            <select required id="referral-urgency" [(ngModel)]="referralForm.urgency">
               @for (u of urgencies; track u) {
                 <option [value]="u">{{ 'MATERNITY.URGENCY_' + u | translate }}</option>
               }
@@ -1028,7 +1032,7 @@
         <div class="form-row">
           <div class="field">
             <label for="referral-transfer">{{ 'MATERNITY.TRANSFER_TYPE' | translate }} *</label>
-            <select id="referral-transfer" [(ngModel)]="referralForm.transferType">
+            <select required id="referral-transfer" [(ngModel)]="referralForm.transferType">
               @for (t of transferTypes; track t) {
                 <option [value]="t">{{ 'MATERNITY.TRANSFER_' + t | translate }}</option>
               }
@@ -1048,6 +1052,7 @@
         <div class="field">
           <label for="referral-reason">{{ 'MATERNITY.REFERRAL_REASON' | translate }} *</label>
           <textarea
+            required
             id="referral-reason"
             rows="3"
             [(ngModel)]="referralForm.referralReason"
@@ -1087,6 +1092,7 @@
           {{ 'COMMON.CANCEL' | translate }}
         </button>
         <button
+          submitGuardRequired
           class="btn-primary"
           [disabled]="referralSaving()"
           [appSubmitGuard]="!referralForm.patientId || !referralForm.referralReason"
@@ -1215,6 +1221,7 @@
                 *
               </label>
               <textarea
+                required
                 id="referral-action-text"
                 rows="3"
                 [(ngModel)]="referralActionText"

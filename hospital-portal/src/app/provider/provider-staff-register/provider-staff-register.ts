@@ -17,6 +17,7 @@ import { RoleLabelPipe } from '../../shared/pipes/role-label.pipe';
 import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
 import { PhoneFieldDirective } from '../../shared/forms/phone-field.directive';
 
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 /** The roles whose registration needs a licence number (the backend's LicenseRequiredForMedicalRoles). */
 const LICENSED_ROLES: readonly string[] = ['PHARMACIST', 'LAB_SCIENTIST'];
 
@@ -34,7 +35,14 @@ const LICENSED_ROLES: readonly string[] = ['PHARMACIST', 'LAB_SCIENTIST'];
 @Component({
   selector: 'app-provider-staff-register',
   standalone: true,
-  imports: [PhoneFieldDirective, FormsModule, TranslateModule, RoleLabelPipe, ModalDialogDirective],
+  imports: [
+    SubmitGuardDirective,
+    PhoneFieldDirective,
+    FormsModule,
+    TranslateModule,
+    RoleLabelPipe,
+    ModalDialogDirective,
+  ],
   templateUrl: './provider-staff-register.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './provider-staff-register.scss',

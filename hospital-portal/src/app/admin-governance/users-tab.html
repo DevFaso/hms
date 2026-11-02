@@ -103,7 +103,7 @@
           <p class="form-hint">{{ 'ADMIN_GOV.IMPORT_USERS_HINT' | translate }}</p>
           <label class="form-field">
             <span>{{ 'ASSIGN_ADMIN.CSV_FILE' | translate }} *</span>
-            <input type="file" accept=".csv,text/csv" (change)="onImportFile($event)" />
+            <input required type="file" accept=".csv,text/csv" (change)="onImportFile($event)" />
             @if (importFileName()) {
               <span class="file-name">{{ importFileName() }}</span>
             }
@@ -152,6 +152,8 @@
               {{ 'COMMON.CANCEL' | translate }}
             </button>
             <button
+              appSubmitGuard
+              submitGuardRequired
               type="button"
               class="btn-primary"
               [disabled]="saving()"
@@ -240,6 +242,7 @@
           <label class="form-field">
             <span>{{ 'ADMIN_GOV.RESET_IDENTIFIERS' | translate }} *</span>
             <textarea
+              required
               rows="4"
               [ngModel]="resetIdentifiers()"
               (ngModelChange)="resetIdentifiers.set($event)"
@@ -267,7 +270,14 @@
             <button type="button" class="btn-secondary" (click)="closeReset()">
               {{ 'COMMON.CANCEL' | translate }}
             </button>
-            <button type="button" class="btn-primary" [disabled]="saving()" (click)="submitReset()">
+            <button
+              appSubmitGuard
+              submitGuardRequired
+              type="button"
+              class="btn-primary"
+              [disabled]="saving()"
+              (click)="submitReset()"
+            >
               {{ 'ADMIN_GOV.FORCE_RESET' | translate }}
             </button>
           </div>

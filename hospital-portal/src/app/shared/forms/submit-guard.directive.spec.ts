@@ -128,9 +128,31 @@ describe('SubmitGuardDirective (QA D1124 / D1089)', () => {
     expect(button().hasAttribute('aria-describedby')).toBeFalse();
     expect((el.querySelector('#med') as HTMLInputElement).hasAttribute('aria-invalid')).toBeFalse();
 
+    // QA D1245: the listed field declares `required`, so it is filled first.
+    (el.querySelector('#med') as HTMLInputElement).value = 'Amoxicilline';
     button().click();
     expect(host.clicked).toBe(1);
     expect(host.submitted).toBe(1);
+  });
+
+  it('QA D1245: a listed required field that is blank is refused even when the expression lets it through', () => {
+    host.guard.set(false);
+    fixture.detectChanges();
+    button().click();
+    expect(host.clicked).toBe(0);
+    expect(host.submitted).toBe(0);
+    expect(reason()?.textContent).toBe('Champs obligatoires manquants : Médicament');
+    expect((el.querySelector('#med') as HTMLInputElement).getAttribute('aria-invalid')).toBe(
+      'true',
+    );
+  });
+
+  it('QA D1245: a listed field that is not required follows the expression', () => {
+    host.guard.set(false);
+    host.fields.set(['ack']);
+    fixture.detectChanges();
+    button().click();
+    expect(host.clicked).toBe(1);
   });
 
   it('only a request in flight disables the button', () => {
@@ -219,5 +241,109 @@ describe('SubmitGuardDirective submitGuardRequired (QA D1193)', () => {
     expect(fixture.componentInstance.submitted).toBe(1);
     expect(el.querySelector('[data-testid="submit-guard-reason"]')).toBeNull();
     expect(name.getAttribute('aria-invalid')).toBeNull();
+  }));
+});
+
+/**
+ * QA D1245 (D1089 / D1124 NOT_FIXED in round 25): the prescription dialog is
+ * not a form; its patient search input held the typed query but no pick, and
+ * its "Créer" let `patientId: ''` through.
+ */
+@Component({
+  standalone: true,
+  imports: [FormsModule, SubmitGuardDirective],
+  template: `
+    <div class="modal">
+      <label for="rx-patient">Nom du patient *</label>
+      <input
+        id="rx-patient"
+        required
+        [attr.data-submit-blank]="patientId() ? 'false' : 'true'"
+        [value]="query"
+      />
+      <label for="rx-reason">Motif *</label>
+      <textarea id="rx-reason" aria-required="true" [(ngModel)]="reason"></textarea>
+      <button id="rx-create" [appSubmitGuard]="!med" submitGuardRequired (click)="sent = sent + 1">
+        Créer
+      </button>
+    </div>
+    <section data-submit-scope>
+      <div>
+        <div>
+          <span><input id="far" required [(ngModel)]="far" /></span>
+        </div>
+      </div>
+      <div class="actions">
+        <span
+          ><button id="far-save" appSubmitGuard submitGuardRequired (click)="farSent = farSent + 1">
+            OK
+          </button></span
+        >
+      </div>
+    </section>
+  `,
+})
+class DialogHostComponent {
+  readonly patientId = signal('');
+  query = 'Awa';
+  reason = '';
+  med = 'Paracétamol';
+  sent = 0;
+  far = '';
+  farSent = 0;
+}
+
+describe('SubmitGuardDirective outside a form (QA D1245)', () => {
+  let fixture: ComponentFixture<DialogHostComponent>;
+  let el: HTMLElement;
+  const msg = () => el.querySelector('#rx-create + [data-testid="submit-guard-reason"]');
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({ imports: [DialogHostComponent, TranslateModule.forRoot()] });
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', {
+      COMMON: {
+        FIELD_REQUIRED: 'Ce champ est obligatoire.',
+        MISSING_REQUIRED_FIELDS: 'Champs obligatoires manquants : {{fields}}',
+      },
+    });
+    translate.use('fr');
+    fixture = TestBed.createComponent(DialogHostComponent);
+    fixture.detectChanges();
+    el = fixture.nativeElement as HTMLElement;
+  });
+
+  it('a typed query with no patient picked is blank: the dialog names the patient and sends nothing', fakeAsync(() => {
+    el.querySelector<HTMLButtonElement>('#rx-create')!.click();
+    fixture.detectChanges();
+    tick();
+    expect(fixture.componentInstance.sent).toBe(0);
+    expect(msg()?.textContent).toBe('Champs obligatoires manquants : Nom du patient, Motif');
+    expect(el.querySelector('#rx-patient')?.getAttribute('aria-invalid')).toBe('true');
+  }));
+
+  it('aria-required counts as required, and a picked patient lets the click through', fakeAsync(() => {
+    const app = fixture.componentInstance;
+    app.patientId.set('p-1');
+    fixture.detectChanges();
+    el.querySelector<HTMLButtonElement>('#rx-create')!.click();
+    tick();
+    expect(app.sent).toBe(0);
+    expect(msg()?.textContent).toBe('Champs obligatoires manquants : Motif');
+    const reason = el.querySelector<HTMLTextAreaElement>('#rx-reason')!;
+    reason.value = 'Douleur';
+    reason.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    el.querySelector<HTMLButtonElement>('#rx-create')!.click();
+    tick();
+    expect(app.sent).toBe(1);
+  }));
+
+  it('a data-submit-scope section is where the fields are read, however deep the button sits', fakeAsync(() => {
+    el.querySelector<HTMLButtonElement>('#far-save')!.click();
+    fixture.detectChanges();
+    tick();
+    expect(fixture.componentInstance.farSent).toBe(0);
+    expect(el.querySelector('#far')?.getAttribute('aria-invalid')).toBe('true');
   }));
 });

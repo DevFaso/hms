@@ -37,7 +37,7 @@
 
   <!-- ══ Start episode form ══ -->
   @if (startFormOpen()) {
-    <div class="view-section action-form">
+    <div class="view-section action-form" data-submit-scope>
       <h3 class="section-heading">{{ 'LABOR.START_EPISODE' | translate }}</h3>
       <div class="form-row">
         <div class="field">
@@ -107,6 +107,7 @@
           (click)="submitStart()"
           [disabled]="saving()"
           [appSubmitGuard]="!startForm.laborOnsetAt"
+          submitGuardRequired
           [submitGuardFields]="['labor-onset']"
         >
           {{ 'LABOR.START_EPISODE' | translate }}
@@ -581,7 +582,7 @@
           </div>
           <div class="field">
             <label for="dl-mode">{{ 'LABOR.DELIVERY_MODE' | translate }} *</label>
-            <select id="dl-mode" [(ngModel)]="deliveryForm.deliveryMode">
+            <select required id="dl-mode" [(ngModel)]="deliveryForm.deliveryMode">
               <option [ngValue]="undefined">—</option>
               @for (mode of deliveryModes; track mode) {
                 <option [ngValue]="mode">{{ 'LABOR.MODE_' + mode | translate }}</option>
@@ -711,7 +712,13 @@
         <button class="btn-secondary" (click)="cancelDelivery()" [disabled]="saving()">
           {{ 'COMMON.CANCEL' | translate }}
         </button>
-        <button class="btn-primary" (click)="submitDelivery()" [disabled]="saving()">
+        <button
+          appSubmitGuard
+          submitGuardRequired
+          class="btn-primary"
+          (click)="submitDelivery()"
+          [disabled]="saving()"
+        >
           {{ 'LABOR.SAVE_DELIVERY' | translate }}
         </button>
       </div>

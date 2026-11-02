@@ -31,10 +31,17 @@ import { serverInstant, toServerDateTime } from '../shared/date-utils';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { refusalReason } from '../shared/refusal-reason';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 @Component({
   selector: 'app-digital-signatures',
   standalone: true,
-  imports: [ModalDialogDirective, FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [
+    SubmitGuardDirective,
+    ModalDialogDirective,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+  ],
   templateUrl: './digital-signatures.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './digital-signatures.scss',

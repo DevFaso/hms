@@ -87,6 +87,7 @@ let nextId = 0;
             [disabled]="busy()"
             [appSubmitGuard]="!reason.trim()"
             [submitGuardFields]="[fieldId]"
+            submitGuardRequired
             (click)="confirm()"
           >
             {{ confirmKey() | translate }}

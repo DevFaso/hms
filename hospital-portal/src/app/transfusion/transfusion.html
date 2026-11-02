@@ -456,7 +456,12 @@
           }
           <div class="field">
             <label for="tx-indication">{{ 'TRANSFUSION.INDICATION' | translate }} *</label>
-            <textarea id="tx-indication" rows="2" [(ngModel)]="requestForm.indication"></textarea>
+            <textarea
+              required
+              id="tx-indication"
+              rows="2"
+              [(ngModel)]="requestForm.indication"
+            ></textarea>
           </div>
           <div class="field">
             <label for="tx-notes">{{ 'COMMON.NOTES' | translate }}</label>
@@ -571,7 +576,7 @@
         <div class="modal-body">
           <div class="field">
             <label for="u-number">{{ 'TRANSFUSION.UNIT_NUMBER' | translate }} *</label>
-            <input id="u-number" type="text" [(ngModel)]="unitForm.unitNumber" />
+            <input required id="u-number" type="text" [(ngModel)]="unitForm.unitNumber" />
           </div>
           <div class="field-row">
             <div class="field">
@@ -621,7 +626,7 @@
             </div>
             <div class="field">
               <label for="u-expires">{{ 'TRANSFUSION.EXPIRES' | translate }} *</label>
-              <input id="u-expires" type="date" [(ngModel)]="unitForm.expiresOn" />
+              <input required id="u-expires" type="date" [(ngModel)]="unitForm.expiresOn" />
             </div>
           </div>
           <div class="field">
@@ -669,7 +674,7 @@
           <p class="modal-hint">{{ 'TRANSFUSION.CROSSMATCH_HINT' | translate }}</p>
           <div class="field">
             <label for="xm-unit">{{ 'TRANSFUSION.UNIT_NUMBER' | translate }} *</label>
-            <select id="xm-unit" [(ngModel)]="crossmatchForm.bloodUnitId">
+            <select required id="xm-unit" [(ngModel)]="crossmatchForm.bloodUnitId">
               <option value="">{{ 'COMMON.SELECT' | translate }}</option>
               @for (u of assignableUnits(); track u.id) {
                 <option [value]="u.id">
@@ -740,7 +745,12 @@
           <p class="modal-hint">{{ 'TRANSFUSION.HANG_HINT' | translate }}</p>
           <div class="field">
             <label for="hang-verifier">{{ 'TRANSFUSION.VERIFIER' | translate }} *</label>
-            <input id="hang-verifier" type="text" [(ngModel)]="hangForm.verifiedByStaffId" />
+            <input
+              required
+              id="hang-verifier"
+              type="text"
+              [(ngModel)]="hangForm.verifiedByStaffId"
+            />
             <small class="field-hint">{{ 'TRANSFUSION.VERIFIER_HINT' | translate }}</small>
           </div>
           <div class="field">
@@ -807,6 +817,7 @@
           <div class="field">
             <label for="rx-onset">{{ 'TRANSFUSION.ONSET' | translate }} *</label>
             <input
+              required
               id="rx-onset"
               type="datetime-local"
               [max]="maxOnsetAt"
@@ -815,7 +826,12 @@
           </div>
           <div class="field">
             <label for="rx-signs">{{ 'TRANSFUSION.SIGNS' | translate }} *</label>
-            <textarea id="rx-signs" rows="3" [(ngModel)]="reactionForm.signsSymptoms"></textarea>
+            <textarea
+              required
+              id="rx-signs"
+              rows="3"
+              [(ngModel)]="reactionForm.signsSymptoms"
+            ></textarea>
           </div>
           <div class="field">
             <label for="rx-actions">{{ 'TRANSFUSION.ACTIONS_TAKEN' | translate }}</label>

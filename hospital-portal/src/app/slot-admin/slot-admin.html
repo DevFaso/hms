@@ -403,6 +403,7 @@
             <label for="vt-code"
               >{{ 'SLOT_ADMIN.VT_CODE' | translate }} *
               <input
+                required
                 id="vt-code"
                 type="text"
                 [(ngModel)]="vtForm.code"
@@ -413,6 +414,7 @@
             <label for="vt-duration"
               >{{ 'SLOT_ADMIN.VT_DURATION' | translate }} *
               <input
+                required
                 id="vt-duration"
                 type="number"
                 min="1"
@@ -423,7 +425,14 @@
           </div>
           <label for="vt-name"
             >{{ 'SLOT_ADMIN.VT_NAME' | translate }} *
-            <input id="vt-name" type="text" [(ngModel)]="vtForm.name" name="name" maxlength="150" />
+            <input
+              required
+              id="vt-name"
+              type="text"
+              [(ngModel)]="vtForm.name"
+              name="name"
+              maxlength="150"
+            />
           </label>
           <label for="vt-department"
             >{{ 'SLOT_ADMIN.DEPARTMENT' | translate }}
@@ -453,7 +462,14 @@
             <button type="button" class="btn-secondary" (click)="closeVisitTypeModal()">
               {{ 'COMMON.CANCEL' | translate }}
             </button>
-            <button type="submit" class="btn-primary" [disabled]="vtSaving()" data-testid="vt-save">
+            <button
+              appSubmitGuard
+              submitGuardRequired
+              type="submit"
+              class="btn-primary"
+              [disabled]="vtSaving()"
+              data-testid="vt-save"
+            >
               {{ 'COMMON.SAVE' | translate }}
             </button>
           </div>
@@ -489,7 +505,7 @@
           <div class="form-row">
             <label for="tpl-staff"
               >{{ 'SLOT_ADMIN.STAFF' | translate }} *
-              <select id="tpl-staff" [(ngModel)]="tplForm.staffId" name="staffId">
+              <select required id="tpl-staff" [(ngModel)]="tplForm.staffId" name="staffId">
                 <option value="">{{ 'SLOT_ADMIN.SELECT_STAFF' | translate }}</option>
                 @for (s of staffOptions(); track s.id) {
                   <option [value]="s.id">{{ s.name }}</option>
@@ -498,7 +514,12 @@
             </label>
             <label for="tpl-department"
               >{{ 'SLOT_ADMIN.DEPARTMENT' | translate }} *
-              <select id="tpl-department" [(ngModel)]="tplForm.departmentId" name="departmentId">
+              <select
+                required
+                id="tpl-department"
+                [(ngModel)]="tplForm.departmentId"
+                name="departmentId"
+              >
                 <option value="">{{ 'SLOT_ADMIN.SELECT_DEPARTMENT' | translate }}</option>
                 @for (d of departments(); track d.id) {
                   <option [value]="d.id">{{ d.name }}</option>
@@ -520,7 +541,7 @@
             </label>
             <label for="tpl-day"
               >{{ 'SLOT_ADMIN.TPL_DAY' | translate }} *
-              <select id="tpl-day" [(ngModel)]="tplForm.dayOfWeek" name="dayOfWeek">
+              <select required id="tpl-day" [(ngModel)]="tplForm.dayOfWeek" name="dayOfWeek">
                 @for (d of days; track d) {
                   <option [ngValue]="d">{{ dayLabel(d) }}</option>
                 }
@@ -530,17 +551,30 @@
           <div class="form-row">
             <label for="tpl-start"
               >{{ 'SLOT_ADMIN.TPL_START' | translate }} *
-              <input id="tpl-start" type="time" [(ngModel)]="tplForm.startTime" name="startTime" />
+              <input
+                required
+                id="tpl-start"
+                type="time"
+                [(ngModel)]="tplForm.startTime"
+                name="startTime"
+              />
             </label>
             <label for="tpl-end"
               >{{ 'SLOT_ADMIN.TPL_END' | translate }} *
-              <input id="tpl-end" type="time" [(ngModel)]="tplForm.endTime" name="endTime" />
+              <input
+                required
+                id="tpl-end"
+                type="time"
+                [(ngModel)]="tplForm.endTime"
+                name="endTime"
+              />
             </label>
           </div>
           <div class="form-row">
             <label for="tpl-slot-minutes"
               >{{ 'SLOT_ADMIN.TPL_SLOT_LENGTH' | translate }} *
               <input
+                required
                 id="tpl-slot-minutes"
                 type="number"
                 min="1"
@@ -554,6 +588,7 @@
             <label for="tpl-effective-from"
               >{{ 'SLOT_ADMIN.TPL_EFFECTIVE_FROM' | translate }} *
               <input
+                required
                 id="tpl-effective-from"
                 type="date"
                 [(ngModel)]="tplForm.effectiveFrom"
@@ -586,6 +621,8 @@
               {{ 'COMMON.CANCEL' | translate }}
             </button>
             <button
+              appSubmitGuard
+              submitGuardRequired
               type="submit"
               class="btn-primary"
               [disabled]="tplSaving()"

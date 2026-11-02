@@ -14,6 +14,7 @@ import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { refusalReason } from '../shared/refusal-reason';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 /**
  * QA D855: the address shape the server accepts (EmailAddresses.isDeliverable),
  * so a typo is caught on the field before the round trip.
@@ -29,7 +30,14 @@ const DELIVERABLE_EMAIL = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 @Component({
   selector: 'app-reports',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule, ModalDialogDirective],
+  imports: [
+    SubmitGuardDirective,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    ModalDialogDirective,
+  ],
   templateUrl: './reports.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './reports.scss',

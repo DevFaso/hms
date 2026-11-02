@@ -19,12 +19,14 @@ import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { refusalReason } from '../shared/refusal-reason';
+import { ReasonDialogComponent } from '../shared/reason-dialog/reason-dialog.component';
 type BirthPlanFilter = 'all' | 'pending-review' | 'reviewed';
 
 @Component({
   selector: 'app-birth-plan-tab',
   standalone: true,
   imports: [
+    ReasonDialogComponent,
     SubmitGuardDirective,
     ModalDialogDirective,
     ServerTimePipe,
@@ -337,21 +339,45 @@ export class BirthPlanTabComponent implements OnInit {
     this.deleteTarget.set(null);
   }
 
-  submitDelete(): void {
+  /** QA D1241: a provider reviewed or signed the plan: it is withdrawn, never deleted. */
+  isReviewed(plan: BirthPlanResponse): boolean {
+    return !!plan.providerReviewed || !!plan.providerSignatureDate;
+  }
+
+  /**
+   * QA D1241: the plan is removed with the reason given. The answer (204)
+   * does not say whether it was deleted or withdrawn, so the plan is read
+   * back: a withdrawn plan is still there with its withdrawal date, a deleted
+   * one is gone (404). The toast says which.
+   */
+  submitDelete(reason: string): void {
     const plan = this.deleteTarget();
     if (!plan) return;
     this.deleteBusy.set(true);
-    this.birthPlanService.delete(plan.id).subscribe({
+    this.birthPlanService.delete(plan.id, reason).subscribe({
       next: () => {
-        this.toast.success(this.translate.instant('BIRTH_PLAN.DELETED'));
-        this.deleteBusy.set(false);
-        this.closeDelete();
-        this.load();
+        this.birthPlanService.getById(plan.id).subscribe({
+          next: (kept) =>
+            this.afterRemove(kept?.withdrawnAt ? 'BIRTH_PLAN.WITHDRAWN' : 'BIRTH_PLAN.REMOVED'),
+          error: (err: unknown) =>
+            this.afterRemove(
+              (err as { status?: number } | null)?.status === 404
+                ? 'BIRTH_PLAN.DELETED'
+                : 'BIRTH_PLAN.REMOVED',
+            ),
+        });
       },
       error: (err: unknown) => {
         this.toast.error(refusalReason(err) ?? this.translate.instant('BIRTH_PLAN.DELETE_ERROR'));
         this.deleteBusy.set(false);
       },
     });
+  }
+
+  private afterRemove(key: string): void {
+    this.toast.success(this.translate.instant(key));
+    this.deleteBusy.set(false);
+    this.closeDelete();
+    this.load();
   }
 }

@@ -603,7 +603,12 @@
         <div class="form-row">
           <div class="field">
             <label for="fh-relationship">{{ 'MED_HISTORY.RELATIONSHIP' | translate }} *</label>
-            <input id="fh-relationship" type="text" [(ngModel)]="familyForm.relationship" />
+            <input
+              required
+              id="fh-relationship"
+              type="text"
+              [(ngModel)]="familyForm.relationship"
+            />
           </div>
           <div class="field">
             <label for="fh-side">{{ 'MED_HISTORY.SIDE' | translate }}</label>
@@ -613,7 +618,12 @@
         <div class="form-row">
           <div class="field">
             <label for="fh-condition">{{ 'MED_HISTORY.CONDITION' | translate }} *</label>
-            <input id="fh-condition" type="text" [(ngModel)]="familyForm.conditionDisplay" />
+            <input
+              required
+              id="fh-condition"
+              type="text"
+              [(ngModel)]="familyForm.conditionDisplay"
+            />
           </div>
           <div class="field">
             <label for="fh-category">{{ 'MED_HISTORY.CATEGORY' | translate }}</label>
@@ -726,6 +736,7 @@
           <div class="field">
             <label for="im-display">{{ 'MED_HISTORY.VACCINE' | translate }} *</label>
             <input
+              required
               id="im-display"
               type="text"
               list="im-pev-vaccines"
@@ -758,6 +769,7 @@
           <div class="field">
             <label for="im-date">{{ 'MED_HISTORY.ADMINISTERED' | translate }} *</label>
             <input
+              required
               id="im-date"
               type="date"
               [ngModel]="immunizationForm.administrationDate"
@@ -767,6 +779,7 @@
           <div class="field">
             <label for="im-source">{{ 'MED_HISTORY.SOURCE_OF_RECORD' | translate }} *</label>
             <select
+              required
               id="im-source"
               [ngModel]="immunizationForm.sourceOfRecord"
               (ngModelChange)="onImmunizationSourceChange($event)"
@@ -781,7 +794,7 @@
           </div>
           <div class="field">
             <label for="im-status">{{ 'COMMON.STATUS' | translate }} *</label>
-            <select id="im-status" [(ngModel)]="immunizationForm.status">
+            <select required id="im-status" [(ngModel)]="immunizationForm.status">
               <option value="COMPLETED">{{ 'COMPLETED' | enumLabel: 'immunizationStatus' }}</option>
               <option value="NOT_DONE">{{ 'NOT_DONE' | enumLabel: 'immunizationStatus' }}</option>
               <option value="REFUSED">{{ 'REFUSED' | enumLabel: 'immunizationStatus' }}</option>
@@ -864,6 +877,7 @@
           {{ 'COMMON.CANCEL' | translate }}
         </button>
         <button
+          submitGuardRequired
           type="button"
           class="btn-primary"
           [disabled]="immunizationSaving()"

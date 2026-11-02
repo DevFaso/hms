@@ -193,6 +193,7 @@
         <label class="form-field">
           <span>{{ 'ADMIN_GOV.BASELINE_TITLE' | translate }} *</span>
           <input
+            required
             type="text"
             maxlength="160"
             [ngModel]="bTitle()"
@@ -233,6 +234,8 @@
             {{ 'COMMON.CANCEL' | translate }}
           </button>
           <button
+            appSubmitGuard
+            submitGuardRequired
             type="button"
             class="btn-primary"
             [disabled]="saving()"
@@ -270,6 +273,7 @@
           <label class="form-field">
             <span>{{ 'ADMIN_GOV.SCENARIO' | translate }} *</span>
             <input
+              required
               type="text"
               maxlength="120"
               [ngModel]="simScenario()"
@@ -285,6 +289,8 @@
               {{ 'COMMON.CANCEL' | translate }}
             </button>
             <button
+              appSubmitGuard
+              submitGuardRequired
               type="button"
               class="btn-primary"
               [disabled]="saving()"

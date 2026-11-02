@@ -140,6 +140,7 @@
       <span>{{ 'ROI.PATIENT' | translate }} *</span>
     </label>
     <app-patient-picker
+      required
       inputId="roi-patient-picker"
       [hospitalId]="pickerHospitalId()"
       [selected]="selectedPatient()"
@@ -149,6 +150,7 @@
     <label class="field">
       <span>{{ 'ROI.REQUESTER_TYPE' | translate }} *</span>
       <select
+        required
         name="roiRequesterType"
         [ngModel]="formRequesterType()"
         (ngModelChange)="formRequesterType.set($event)"
@@ -184,6 +186,7 @@
     <label class="field">
       <span>{{ 'ROI.PURPOSE' | translate }} *</span>
       <textarea
+        required
         name="roiPurpose"
         rows="2"
         maxlength="500"
@@ -195,6 +198,7 @@
     <label class="field">
       <span>{{ 'ROI.SCOPE' | translate }} *</span>
       <input
+        required
         type="text"
         name="roiScope"
         maxlength="500"
@@ -219,6 +223,7 @@
         {{ 'COMMON.CANCEL' | translate }}
       </button>
       <button
+        submitGuardRequired
         type="button"
         class="btn-primary"
         data-testid="submit-intake"
@@ -288,6 +293,7 @@
       </span>
       <textarea
         name="roiDecisionNote"
+        [required]="d.kind === 'deny'"
         rows="3"
         maxlength="500"
         [ngModel]="decisionNote()"
@@ -299,6 +305,7 @@
         {{ 'COMMON.CANCEL' | translate }}
       </button>
       <button
+        submitGuardRequired
         type="button"
         class="btn-primary"
         [class.danger]="d.kind === 'deny'"

@@ -17,6 +17,7 @@ import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { refusalReason } from '../shared/refusal-reason';
 import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 /**
  * Org security policies + rules via the flat CRUD controllers
  * (/security-policies, /security-rules) — the only pair supporting true field
@@ -26,7 +27,7 @@ import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 @Component({
   selector: 'app-gov-policies-tab',
   standalone: true,
-  imports: [ModalDialogDirective, FormsModule, TranslateModule, OrgTextPipe],
+  imports: [SubmitGuardDirective, ModalDialogDirective, FormsModule, TranslateModule, OrgTextPipe],
   templateUrl: './policies-tab.html',
   styleUrl: './admin-governance.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
