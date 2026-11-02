@@ -158,3 +158,13 @@ def observabilityConfigTest = tasks.register('observabilityConfigTest', Test) {
 tasks.named('check') {
     dependsOn observabilityConfigTest
 }
+
+// And on `test`, which is what both the local gate and CI's three Tests (shard N) jobs actually
+// run. Wiring it only to `check` meant a grafana-only edit could be verified green by
+// :hospital-core:test with the guard never executing — `test` stays UP-TO-DATE, because the files
+// it reads are outside the module — and only the merge job's `build -x test` would catch it. The
+// task costs about a second and has its own inputs, so this adds no meaningful time and reruns
+// exactly when grafana/ changes.
+tasks.named('test') {
+    dependsOn observabilityConfigTest
+}
