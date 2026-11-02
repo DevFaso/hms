@@ -26,7 +26,7 @@ class MessageKeyAssertionGuardTest {
     private static final Path TESTS = Path.of("src/test/java");
     private static final Pattern KEY_IN_MESSAGE =
         Pattern.compile("hasMessageContaining\\(\"[a-z][a-zA-Z0-9]*+(?:\\.[a-zA-Z0-9]++)++\"\\)");
-    private static final int BASELINE = 61;
+    private static final int BASELINE = 59;
 
     @Test
     void noNewAssertionReadsAMessageKeyOutOfTheResolvedMessage() throws IOException {
