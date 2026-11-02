@@ -206,30 +206,37 @@ public class MedicationAllergyCdsService implements CdsHookService {
 
     /**
      * The catalogue items behind the proposed medication at the patient's
-     * hospital: the item its code names, else the items its name names (the
+     * hospital: the item its code names AND the items its name names (the
      * dispense and prescription name rule) in this hospital's catalogue and the
-     * national list (V95). Empty without a catalogue.
+     * national list (V95). QA D1223 (round 24): never the coded item alone - a
+     * code for another drug than the name must not hide the name; the identity
+     * checks the coded item without letting it resolve a name it does not
+     * name. Empty without a catalogue.
      */
     private List<com.example.hms.model.medication.MedicationCatalogItem> catalogItemsFor(
             String medText, String code, UUID hospitalId) {
         if (catalogRepository == null || hospitalId == null) {
             return List.of();
         }
+        List<com.example.hms.model.medication.MedicationCatalogItem> items = new ArrayList<>();
         if (code != null && !code.isBlank()) {
-            java.util.Optional<com.example.hms.model.medication.MedicationCatalogItem> coded =
-                catalogRepository.findByHospitalIdAndCode(hospitalId, code.trim());
-            if (coded.isPresent()) {
-                return List.of(coded.get());
-            }
+            catalogRepository.findByHospitalIdAndCode(hospitalId, code.trim()).ifPresent(items::add);
         }
         org.springframework.data.domain.Page<com.example.hms.model.medication.MedicationCatalogItem> page =
             catalogRepository.findActivePage(hospitalId, org.springframework.data.domain.Pageable.unpaged());
         if (page == null) {
-            return List.of();
+            return items;
         }
-        return page.getContent().stream()
+        page.getContent().stream()
+            .filter(item -> items.stream().noneMatch(known -> sameItem(known, item)))
             .filter(item -> com.example.hms.service.pharmacy.DispenseVerificationService.namesCatalogItem(medText, item))
-            .toList();
+            .forEach(items::add);
+        return items;
+    }
+
+    private static boolean sameItem(com.example.hms.model.medication.MedicationCatalogItem a,
+                                    com.example.hms.model.medication.MedicationCatalogItem b) {
+        return a == b || (a.getId() != null && a.getId().equals(b.getId()));
     }
 
     /**

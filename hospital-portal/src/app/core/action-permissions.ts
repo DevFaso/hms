@@ -213,15 +213,21 @@ export const ACTION_PERMISSIONS = {
   },
   allergyCreate: {
     endpoint: 'PatientController#createPatientAllergy',
-    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_PHARMACIST'],
+    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_PHARMACIST'],
   },
   allergyUpdate: {
     endpoint: 'PatientController#updatePatientAllergy',
-    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_PHARMACIST'],
+    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_PHARMACIST'],
   },
   allergyDeactivate: {
     endpoint: 'PatientController#deactivatePatientAllergy',
-    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_PHARMACIST'],
+    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_PHARMACIST'],
+  },
+  // QA D1224: a diagnosis entered in error is removed (with a reason) by a
+  // doctor, nurse or midwife; recording or recoding one stays the doctor's.
+  diagnosisRemove: {
+    endpoint: 'PatientController#deletePatientDiagnosis',
+    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
   },
   // QA D965: sending the reorder alerts is the store's act, not the pharmacist's.
   inventoryReorderTrigger: {

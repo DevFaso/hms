@@ -170,6 +170,11 @@ export class PatientChartComponent implements OnInit, OnChanges {
   readonly canEditProblems = computed(() =>
     this.roleContext.hasAnyActiveRole([...CHART_ROLES.editProblems]),
   );
+  /** QA D1224: removing a diagnosis (with a reason) is wider than recording one. */
+  readonly canRemoveProblems = computed(() =>
+    this.roleContext.hasAnyActiveRole(actionRoles('diagnosisRemove')),
+  );
+  readonly showProblemActions = computed(() => this.canEditProblems() || this.canRemoveProblems());
   readonly canViewUpdates = computed(() =>
     this.roleContext.hasAnyActiveRole([...CHART_ROLES.viewUpdates]),
   );

@@ -130,6 +130,24 @@ public class PatientController {
      * this only the chart-owning roles and the pharmacist could read it.
      * Writes stay with the roles that record allergies.
      */
+    /**
+     * QA D1224 (round 24), as in real hospitals: the clinicians of the
+     * patient's hospital who chart - doctor, nurse, midwife, and the pharmacist
+     * for allergies - record, revise and deactivate an allergy (deactivation
+     * with a reason, audited; never a hard delete).
+     */
+    private static final String ALLERGY_WRITE_ROLES =
+        "hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_PHARMACIST')";
+
+    /**
+     * QA D1224 (round 24): a diagnosis entered in error is removed (set
+     * INACTIVE with a reason, audited in its history) by a clinician of the
+     * patient's hospital - doctor, nurse or midwife. Recording or recoding a
+     * diagnosis stays the doctor's.
+     */
+    private static final String DIAGNOSIS_REMOVE_ROLES =
+        "hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')";
+
     private static final String ALLERGY_READ_ROLES = "hasAnyAuthority("
         + "'ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_PHARMACIST',"
         + CONSULTING_CLINICIANS_AUTHORITIES + ")";
@@ -583,7 +601,7 @@ public class PatientController {
         security = @SecurityRequirement(name = "bearerAuth")
     )
     @PostMapping("/{id}/allergies")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_PHARMACIST')")
+    @PreAuthorize(ALLERGY_WRITE_ROLES)
     public ResponseEntity<PatientAllergyResponseDTO> createPatientAllergy(
         @PathVariable UUID id,
         @Valid @RequestBody PatientAllergyRequestDTO request,
@@ -609,7 +627,7 @@ public class PatientController {
         security = @SecurityRequirement(name = "bearerAuth")
     )
     @PutMapping("/{id}/allergies/{allergyId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_PHARMACIST')")
+    @PreAuthorize(ALLERGY_WRITE_ROLES)
     public ResponseEntity<PatientAllergyResponseDTO> updatePatientAllergy(
         @PathVariable UUID id,
         @PathVariable UUID allergyId,
@@ -636,7 +654,7 @@ public class PatientController {
         security = @SecurityRequirement(name = "bearerAuth")
     )
     @DeleteMapping("/{id}/allergies/{allergyId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_PHARMACIST')")
+    @PreAuthorize(ALLERGY_WRITE_ROLES)
     public ResponseEntity<MessageResponse> deactivatePatientAllergy(
         @PathVariable UUID id,
         @PathVariable UUID allergyId,
@@ -744,7 +762,7 @@ public class PatientController {
         security = @SecurityRequirement(name = "bearerAuth")
     )
     @DeleteMapping("/{id}/diagnoses/{diagnosisId}")
-    @PreAuthorize("hasAuthority('ROLE_DOCTOR')")
+    @PreAuthorize(DIAGNOSIS_REMOVE_ROLES)
     public ResponseEntity<MessageResponse> deletePatientDiagnosis(
         @PathVariable UUID id,
         @PathVariable UUID diagnosisId,
