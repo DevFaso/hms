@@ -22,7 +22,7 @@ public interface StockLotRepository extends JpaRepository<StockLot, UUID> {
 
     /** QA D315: whether this lot number was already received for the item with another expiry. */
     @Query("SELECT (COUNT(s) > 0) FROM StockLot s WHERE s.inventoryItem.id = :inventoryItemId "
-         + "AND UPPER(s.lotNumber) = UPPER(:lotNumber) AND s.expiryDate <> :expiryDate")
+         + "AND UPPER(s.lotNumber) = UPPER(CAST(:lotNumber AS string)) AND s.expiryDate <> :expiryDate")
     boolean existsOtherExpiryForLot(@Param("inventoryItemId") UUID inventoryItemId,
                                     @Param("lotNumber") String lotNumber,
                                     @Param("expiryDate") LocalDate expiryDate);
@@ -32,7 +32,7 @@ public interface StockLotRepository extends JpaRepository<StockLot, UUID> {
      * expiry; a second delivery of the same batch adds to it.
      */
     @Query("SELECT s FROM StockLot s WHERE s.inventoryItem.id = :inventoryItemId "
-         + "AND UPPER(s.lotNumber) = UPPER(:lotNumber) AND s.expiryDate = :expiryDate")
+         + "AND UPPER(s.lotNumber) = UPPER(CAST(:lotNumber AS string)) AND s.expiryDate = :expiryDate")
     List<StockLot> findSameLot(@Param("inventoryItemId") UUID inventoryItemId,
                                @Param("lotNumber") String lotNumber,
                                @Param("expiryDate") LocalDate expiryDate);

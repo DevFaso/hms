@@ -40,21 +40,21 @@ public interface BillingInvoiceRepository extends JpaRepository<BillingInvoice, 
     Page<BillingInvoice> findByHospital_Id(UUID hospitalId, Pageable pageable);
     
         // Find invoices by patient email
-        @Query("SELECT bi FROM BillingInvoice bi WHERE LOWER(bi.patient.email) = LOWER(:email)")
+        @Query("SELECT bi FROM BillingInvoice bi WHERE LOWER(bi.patient.email) = LOWER(CAST(:email AS string))")
         List<BillingInvoice> findByPatientEmail(@Param("email") String email);
     
         // Find invoices by patient name
         // QA D1103: the middle name is part of the name a clerk types.
-        @Query("SELECT bi FROM BillingInvoice bi WHERE LOWER(bi.patient.firstName) LIKE LOWER(CONCAT('%', :name, '%')) OR LOWER(bi.patient.lastName) LIKE LOWER(CONCAT('%', :name, '%'))"
-            + " OR LOWER(bi.patient.middleName) LIKE LOWER(CONCAT('%', :name, '%'))")
+        @Query("SELECT bi FROM BillingInvoice bi WHERE LOWER(bi.patient.firstName) LIKE LOWER(CONCAT('%', CAST(:name AS string), '%')) OR LOWER(bi.patient.lastName) LIKE LOWER(CONCAT('%', CAST(:name AS string), '%'))"
+            + " OR LOWER(bi.patient.middleName) LIKE LOWER(CONCAT('%', CAST(:name AS string), '%'))")
         List<BillingInvoice> findByPatientName(@Param("name") String name);
     
         // Find invoices by hospital name
-        @Query("SELECT bi FROM BillingInvoice bi WHERE LOWER(bi.hospital.name) = LOWER(:hospitalName)")
+        @Query("SELECT bi FROM BillingInvoice bi WHERE LOWER(bi.hospital.name) = LOWER(CAST(:hospitalName AS string))")
         List<BillingInvoice> findByHospitalName(@Param("hospitalName") String hospitalName);
     
         // Find invoices by hospital email
-        @Query("SELECT bi FROM BillingInvoice bi WHERE LOWER(bi.hospital.email) = LOWER(:email)")
+        @Query("SELECT bi FROM BillingInvoice bi WHERE LOWER(bi.hospital.email) = LOWER(CAST(:email AS string))")
         List<BillingInvoice> findByHospitalEmail(@Param("email") String email);
 
     // Only overdue if dueDate < reference and status in (SENT, PARTIALLY_PAID)

@@ -45,7 +45,7 @@ public interface ImagingOrderRepository extends JpaRepository<ImagingOrder, UUID
     @Query("SELECT o FROM ImagingOrder o " +
         "WHERE o.patient.id = :patientId " +
         "AND o.modality = :modality " +
-        "AND (:bodyRegion IS NULL OR LOWER(o.bodyRegion) = LOWER(:bodyRegion)) " +
+        "AND (:bodyRegion IS NULL OR LOWER(o.bodyRegion) = LOWER(CAST(:bodyRegion AS string))) " +
         "AND o.status <> com.example.hms.enums.ImagingOrderStatus.CANCELLED " +
         "AND o.orderedAt >= :orderedAfter " +
         "ORDER BY o.orderedAt DESC")

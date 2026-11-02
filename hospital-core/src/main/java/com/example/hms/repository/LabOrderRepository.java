@@ -3,8 +3,6 @@ package com.example.hms.repository;
 import com.example.hms.enums.LabOrderStatus;
 import com.example.hms.model.LabOrder;
 import jakarta.validation.constraints.NotNull;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -123,21 +121,6 @@ public interface LabOrderRepository extends JpaRepository<LabOrder, UUID>, LabOr
     List<LabOrder> findByOrderingStaff_IdAndHospital_Id(UUID staffId, UUID hospitalId);
     List<LabOrder> findByStatusAndHospital_Id(LabOrderStatus status, UUID hospitalId);
     List<LabOrder> findByHospital_IdAndStatusIn(UUID hospitalId, java.util.Collection<LabOrderStatus> statuses);
-
-    @Query(value = """
-    SELECT * FROM lab_orders l
-    WHERE (:patientId IS NULL OR l.patient_id = CAST(:patientId AS uuid))
-      AND (CAST(:startDate AS LocalDateTime) IS NULL OR l.order_datetime >= CAST(:startDate AS timestamp))
-      AND (CAST(:endDate AS LocalDateTime) IS NULL OR l.order_datetime <= CAST(:endDate AS timestamp))
-    """,
-            countQuery = "SELECT count(*) FROM lab_orders l WHERE (:patientId IS NULL OR l.patient_id = CAST(:patientId AS uuid)) AND (CAST(:startDate AS LocalDateTime) IS NULL OR l.order_datetime >= CAST(:startDate AS timestamp)) AND (CAST(:endDate AS LocalDateTime) IS NULL OR l.order_datetime <= CAST(:endDate AS timestamp))",
-            nativeQuery = true)
-    Page<LabOrder> searchNative(
-            @Param("patientId") UUID patientId,
-            @Param("startDate") LocalDateTime startDate,
-            @Param("endDate") LocalDateTime endDate,
-            Pageable pageable
-    );
 
     boolean existsByPatient_IdAndLabTestDefinition_IdAndOrderDatetime(UUID id, UUID id1, @NotNull LocalDateTime orderDatetime);
 

@@ -124,7 +124,7 @@ public interface DepartmentRepository extends JpaRepository<Department, UUID>, J
     @Query("""
         SELECT d
         FROM Department d
-        WHERE LOWER(d.name) LIKE LOWER(CONCAT('%', :query, '%'))
+        WHERE LOWER(d.name) LIKE LOWER(CONCAT('%', CAST(:query AS string), '%'))
     """)
     Page<Department> search(@Param("query") String query, Pageable pageable);
 
