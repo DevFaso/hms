@@ -59,10 +59,6 @@ const AGGREGATES = /\bmissingRequiredMessage\(|\bjoinReasons\(/;
  */
 export const ALLOWED = new Map([
   [
-    'patients/fluid-balance/fluid-balance-tab.component.html::submit',
-    'D1279: owned by fix/r27-portal-markers-focus (branch 3) in round 27; the coordinator drops this entry when that branch merges',
-  ],
-  [
     'login/login.html::submit',
     'CREDENTIALS_REQUIRED names both fields at once; TOKEN_MISSING is a server answer, not a field',
   ],
