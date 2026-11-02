@@ -20,6 +20,7 @@ import com.example.hms.service.ReceptionService;
 import com.example.hms.utility.RoleValidator;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
@@ -60,7 +61,7 @@ public class ReceptionController {
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_ADMIN','ROLE_RECEPTIONIST')")
     @Operation(summary = "Check in a patient for their scheduled appointment. Creates an ARRIVED encounter.")
     public ResponseEntity<CheckInResponseDTO> checkInPatient(
-            @RequestBody CheckInRequestDTO request,
+            @Valid @RequestBody CheckInRequestDTO request,
             @AuthenticationPrincipal UserDetails principal) {
         UUID hospitalId = resolveHospitalId();
         String actor = principal != null ? principal.getUsername() : SYSTEM_ACTOR;
@@ -169,7 +170,7 @@ public class ReceptionController {
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_ADMIN','ROLE_RECEPTIONIST')")
     @Operation(summary = "Add a patient to the appointment waitlist")
     public ResponseEntity<WaitlistEntryResponseDTO> addToWaitlist(
-            @RequestBody WaitlistEntryRequestDTO request,
+            @Valid @RequestBody WaitlistEntryRequestDTO request,
             @AuthenticationPrincipal UserDetails principal) {
         UUID hospitalId = resolveHospitalId();
         String actor = principal != null ? principal.getUsername() : SYSTEM_ACTOR;

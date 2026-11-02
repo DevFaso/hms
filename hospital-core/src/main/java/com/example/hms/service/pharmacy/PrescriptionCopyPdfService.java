@@ -101,8 +101,6 @@ public class PrescriptionCopyPdfService {
                 : FillAccounting.remaining(rx, dispenseRepository.sumQuantityDispensedForPrescription(
                         rx.getId(), DispenseRepository.NOT_A_FILL));
         DateTimeFormatter date = DateTimeFormatter.ofLocalizedDate(FormatStyle.LONG).withLocale(locale);
-        DateTimeFormatter dateTime = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT)
-                .withLocale(locale);
         try (PharmacyPdfWriter pdf = new PharmacyPdfWriter(false)) {
             pdf.paragraph(PharmacyPdfWriter.BOLD, 16f, label(locale, "pdf.rxcopy.title"));
             pdf.paragraph(PharmacyPdfWriter.REGULAR, 10f, rx.getHospital() != null
@@ -120,7 +118,8 @@ public class PrescriptionCopyPdfService {
                     ? print.getDecidedAt() : LocalDateTime.now(ZoneId.systemDefault());
             pdf.paragraph(PharmacyPdfWriter.REGULAR, 9f, label(locale, "pdf.rxcopy.printedBy",
                     print != null ? userName(print.getDecidedByUser()) : "-",
-                    dateTime.format(com.example.hms.utility.HospitalTime.at(printedAt, rx.getHospital()))));
+                    com.example.hms.utility.DisplayDates.dateTime(
+                            com.example.hms.utility.HospitalTime.at(printedAt, rx.getHospital()), locale)));
             pdf.paragraph(PharmacyPdfWriter.REGULAR, 9f, label(locale, "pdf.rxcopy.footer"));
             pdf.paragraph(PharmacyPdfWriter.REGULAR, 8f, label(locale, "pdf.rxcopy.reference", rx.getId()));
             return pdf.finish();

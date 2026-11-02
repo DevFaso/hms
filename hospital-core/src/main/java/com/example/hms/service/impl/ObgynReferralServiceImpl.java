@@ -3,6 +3,7 @@ package com.example.hms.service.impl;
 import com.example.hms.enums.ObgynReferralStatus;
 import com.example.hms.enums.ObgynReferralUrgency;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.ObgynReferralMapper;
 import com.example.hms.model.Hospital;
@@ -167,7 +168,7 @@ public class ObgynReferralServiceImpl implements ObgynReferralService {
         ObgynReferral referral = findReferral(referralId);
 
         if (request.getObgynUserId() == null) {
-            throw new BusinessException("obgynReferral.acknowledge.obgynRequired");
+            throw new FieldBusinessException("obgynUserId", "obgynReferral.acknowledge.obgynRequired");
         }
 
         User assignedObgyn = userRepository.findByIdWithRolesAndProfiles(request.getObgynUserId())

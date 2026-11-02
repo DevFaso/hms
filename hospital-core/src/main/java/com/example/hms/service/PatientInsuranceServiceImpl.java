@@ -5,6 +5,7 @@ import com.example.hms.security.ActingContext;
 import com.example.hms.security.tenant.ActingScope;
 import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.PatientInsuranceMapper;
 import com.example.hms.model.Patient;
@@ -65,7 +66,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
     @Transactional
     public PatientInsuranceResponseDTO addInsuranceToPatient(PatientInsuranceRequestDTO dto, Locale locale) {
         if (dto.getPatientId() == null) {
-            throw new BusinessException(
+            throw new FieldBusinessException("patientId",
                 messageSource.getMessage(PATIENT_REQUIRED_KEY,
                     null, PATIENT_REQUIRED_MSG, locale));
         }
@@ -124,7 +125,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
             : existing.getPatient();
 
         if (targetPatient == null) {
-            throw new BusinessException(
+            throw new FieldBusinessException("patientId",
                 messageSource.getMessage(PATIENT_REQUIRED_KEY,
                     null, PATIENT_REQUIRED_MSG, locale));
         }
@@ -260,7 +261,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         PatientInsurance insurance = getInsuranceOrThrow(insuranceId);
 
         if (req.getPatientId() == null) {
-            throw new BusinessException(messageSource.getMessage(
+            throw new FieldBusinessException("patientId", messageSource.getMessage(
                 PATIENT_REQUIRED_KEY, null, PATIENT_REQUIRED_MSG, locale));
         }
         Patient patient = getPatientOrThrow(req.getPatientId());
@@ -403,7 +404,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
 
     private void validateNaturalKeyParts(LinkPatientInsuranceRequestDTO req, Locale locale) {
         if (req == null || req.getPatientId() == null) {
-            throw new BusinessException(messageSource.getMessage(
+            throw new FieldBusinessException("patientId", messageSource.getMessage(
                 PATIENT_REQUIRED_KEY, null, PATIENT_REQUIRED_MSG, locale));
         }
         if (req.getPayerCode() == null || req.getPayerCode().isBlank()) {

@@ -1,6 +1,7 @@
 package com.example.hms.service;
 
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.InvoiceItemMapper;
 import com.example.hms.model.BillingInvoice;
@@ -50,7 +51,7 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
     @Transactional
     public InvoiceItemResponseDTO createInvoiceItem(InvoiceItemRequestDTO dto, Locale locale) {
         if (dto.getBillingInvoiceId() == null) {
-            throw new BusinessException("invoiceitem.invoiceRequired");
+            throw new FieldBusinessException("billingInvoiceId", "invoiceitem.invoiceRequired");
         }
         requireWholePrice(dto.getUnitPrice());
         requireLineTotalInRange(dto.getUnitPrice(), dto.getQuantity());

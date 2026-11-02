@@ -35,13 +35,36 @@ public final class DisplayDates {
         return dateTime(wallClock, DisplayNumbers.requestLocale());
     }
 
-    /** A date and a time in {@code locale}: the medium date with the short time. */
+    /**
+     * A date and a time in {@code locale}: the medium date, a comma, the short
+     * time ("2 nov. 2026, 07:28", "Nov 2, 2026, 7:28 AM", "2 nov 2026, 7:28").
+     *
+     * <p>QA D1266 (round 26): the JDK's French date-time pattern glues the two
+     * with a bare space ("2 nov. 2026 07:28") where English and Spanish put a
+     * comma, so a French refusal or card read the time as part of the year. The
+     * two halves are joined here, the same way in every language; English and
+     * Spanish read exactly as before.
+     */
     public static String dateTime(@Nullable LocalDateTime wallClock, Locale locale) {
+        return joined(wallClock, FormatStyle.MEDIUM, locale);
+    }
+
+    /** A date and a time in the request's language, the date written short ("02/11/2026, 07:28"). */
+    public static String shortDateTime(@Nullable LocalDateTime wallClock) {
+        return shortDateTime(wallClock, DisplayNumbers.requestLocale());
+    }
+
+    /** A date and a time in {@code locale}, the date written short: a register row, a PDF stamp. */
+    public static String shortDateTime(@Nullable LocalDateTime wallClock, Locale locale) {
+        return joined(wallClock, FormatStyle.SHORT, locale);
+    }
+
+    private static String joined(@Nullable LocalDateTime wallClock, FormatStyle dateStyle, Locale locale) {
         if (wallClock == null) {
             return NONE;
         }
-        return wallClock.format(DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT)
-            .withLocale(locale));
+        return wallClock.format(DateTimeFormatter.ofLocalizedDate(dateStyle).withLocale(locale)) + ", "
+            + wallClock.format(DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT).withLocale(locale));
     }
 
     /** A calendar day in the request's language. */

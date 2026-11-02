@@ -4,6 +4,7 @@ package com.example.hms.service;
 import com.example.hms.enums.AppointmentStatus;
 import com.example.hms.enums.platform.WebhookEventType;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.AppointmentMapper;
 import com.example.hms.model.Appointment;
@@ -288,13 +289,13 @@ public class AppointmentServiceImpl implements AppointmentService {
     /** The ids, date and times a staff edit must carry. */
     private static void requireCompleteEdit(AppointmentRequestDTO request) {
         if (request.getPatientId() == null) {
-            throw new BusinessException("appointment.patient.required");
+            throw new FieldBusinessException("patientId", "appointment.patient.required");
         }
         if (request.getStaffId() == null) {
-            throw new BusinessException("appointment.staff.required");
+            throw new FieldBusinessException("staffId", "appointment.staff.required");
         }
         if (request.getHospitalId() == null) {
-            throw new BusinessException("appointment.hospital.required");
+            throw new FieldBusinessException("hospitalId", "appointment.hospital.required");
         }
         if (request.getAppointmentDate() == null) {
             throw new BusinessException("appointment.date.required");
@@ -664,7 +665,7 @@ public class AppointmentServiceImpl implements AppointmentService {
      */
     private Patient resolvePatientForStaffBooking(AppointmentRequestDTO request) {
         if (request.getPatientId() == null) {
-            throw new BusinessException("appointment.patient.required");
+            throw new FieldBusinessException("patientId", "appointment.patient.required");
         }
         return resolvePatient(request.getPatientId());
     }
@@ -715,7 +716,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         // caller's own record -- for a patient only. Any other caller that
         // reaches here (a role outside the staff list) names its patient.
         if (!hasRole(currentUser, ROLE_PATIENT_CODE)) {
-            throw new BusinessException("appointment.patient.required");
+            throw new FieldBusinessException("patientId", "appointment.patient.required");
         }
         return ownPatientRecord(currentUser, currentUser.getUsername());
     }
@@ -742,7 +743,7 @@ public class AppointmentServiceImpl implements AppointmentService {
             return hospitalRepository.findClinicalByNameIgnoreCase(request.getHospitalName())
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFoundByIdentifier", request.getHospitalName()));
         }
-        throw new BusinessException("appointment.hospital.required");
+        throw new FieldBusinessException("hospitalId", "appointment.hospital.required");
     }
 
     private Staff resolveStaff(AppointmentRequestDTO request) {
@@ -762,7 +763,7 @@ public class AppointmentServiceImpl implements AppointmentService {
             return staffRepository.findByUserId(userId).stream().findFirst()
                 .orElseThrow(() -> new ResourceNotFoundException("staff.notFoundByIdentifier", request.getStaffUsername()));
         }
-        throw new BusinessException("appointment.staff.required");
+        throw new FieldBusinessException("staffId", "appointment.staff.required");
     }
 
     private Department resolveDepartment(AppointmentRequestDTO request, Hospital hospital, Staff staff) {

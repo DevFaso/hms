@@ -11,6 +11,7 @@ import com.example.hms.enums.EncounterType;
 import com.example.hms.enums.InvoiceStatus;
 import com.example.hms.enums.SlotStatus;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.CheckInRequestDTO;
@@ -1106,7 +1107,7 @@ public class ReceptionServiceImpl implements ReceptionService {
 
         // 1. Resolve appointment (required — walk-in handled by separate endpoint)
         if (request.getAppointmentId() == null) {
-            throw new BusinessException("reception.checkin.appointmentRequired");
+            throw new FieldBusinessException("appointmentId", "reception.checkin.appointmentRequired");
         }
         // QA D149: a copay is money taken at the desk; it is validated before
         // anything is written, and recorded below (it used to be dropped).

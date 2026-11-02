@@ -2,6 +2,7 @@ package com.example.hms.service;
 
 import com.example.hms.enums.LabQcEventLevel;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.LabQcEventMapper;
 import com.example.hms.model.LabQcEvent;
@@ -164,8 +165,8 @@ class LabQcEventServiceImplTest {
             .build();
 
         assertThatThrownBy(() -> service.recordQcEvent(request, Locale.ENGLISH))
-            .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("hospitalId");
+            .isInstanceOf(FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "hospitalId");
     }
 
     @Test

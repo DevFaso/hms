@@ -1,6 +1,7 @@
 package com.example.hms.service;
 
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.BirthPlanMapper;
 import com.example.hms.model.BirthPlan;
@@ -39,6 +40,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -229,6 +231,31 @@ class BirthPlanServiceImplTest {
         assertNotNull(result);
         verify(patientRepository).findById(patient.getId());
         verify(hospitalRepository).findClinicalById(hospital.getId());
+    }
+
+    @Test
+    void aStaffPlanWithNoPatientNamesTheField_beforeAnyLookup_D1258() {
+        when(userRepository.findByUsername(doctorUser.getUsername())).thenReturn(Optional.of(doctorUser));
+        requestDTO.setPatientId(null);
+
+        FieldBusinessException refused = assertThrows(FieldBusinessException.class,
+            () -> birthPlanService.createBirthPlan(requestDTO, doctorUser.getUsername()));
+
+        assertEquals("patientId", refused.getField());
+        assertEquals("birthPlan.patient.required", refused.getMessageKey());
+        verifyNoInteractions(patientRepository, hospitalRepository, birthPlanRepository);
+    }
+
+    @Test
+    void aStaffPlanWithNoHospitalNamesTheField_beforeAnyLookup_D1258() {
+        when(userRepository.findByUsername(doctorUser.getUsername())).thenReturn(Optional.of(doctorUser));
+        requestDTO.setHospitalId(null);
+
+        FieldBusinessException refused = assertThrows(FieldBusinessException.class,
+            () -> birthPlanService.createBirthPlan(requestDTO, doctorUser.getUsername()));
+
+        assertEquals("hospitalId", refused.getField());
+        verifyNoInteractions(patientRepository, hospitalRepository, birthPlanRepository);
     }
 
     @Test

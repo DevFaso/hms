@@ -138,7 +138,7 @@ public class PrescriptionController {
             + "prescription clears the verification and it must be repeated.")
     public ResponseEntity<PrescriptionResponseDTO> pharmacistVerify(
         @PathVariable UUID id,
-        @RequestBody(required = false) PharmacistVerificationRequestDTO request,
+        @Valid @RequestBody(required = false) PharmacistVerificationRequestDTO request,
         Locale locale) {
         String note = request != null ? request.getNote() : null;
         pharmacistVerificationService.verify(id, note);
@@ -161,7 +161,7 @@ public class PrescriptionController {
             + "Any later edit of the order clears the review.")
     public ResponseEntity<PrescriptionResponseDTO> pediatricDoseReview(
         @PathVariable UUID id,
-        @RequestBody(required = false) com.example.hms.payload.dto.PediatricDoseReviewRequestDTO request,
+        @Valid @RequestBody(required = false) com.example.hms.payload.dto.PediatricDoseReviewRequestDTO request,
         Locale locale) {
         String reason = request != null ? request.getReason() : null;
         return ResponseEntity.ok(prescriptionService.recordPediatricDoseReview(id, reason, locale));
