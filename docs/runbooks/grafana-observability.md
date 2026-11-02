@@ -329,17 +329,17 @@ alert that covers it.
 
 When you add an alert in `grafana/rules/alerts.yml`, also:
 
-0. Add it to `grafana/provisioning/alerting/alert-rules.yml` as well, or it will
+1. Add it to `grafana/provisioning/alerting/alert-rules.yml` as well, or it will
    never notify anyone. Alertmanager is commented out in `grafana/prometheus.yml`,
    so the rules in `alerts.yml` are evaluated and routed nowhere; Grafana's own
    unified alerting is what reaches a contact point.
-1. Set `annotations.runbook_url` to a `#anchor` in this file.
-2. Add an explicit `<a id="youralertname"></a>` tag above the new heading. Do not
+2. Set `annotations.runbook_url` to a `#anchor` in this file.
+3. Add an explicit `<a id="youralertname"></a>` tag above the new heading. Do not
    rely on GitHub's generated slug: the headings here carry a `` (`severity: …`) ``
-   suffix, so the real slug for `## HmsErrorBudgetFastBurn  (`severity: page`)` is
-   `hmserrorbudgetfastburn--severity-page`, and a short `#hmserrorbudgetfastburn`
-   link silently lands the on-call at the top of this file instead. Every section
-   here has such a tag for that reason.
-3. Add a new section above using the same format
+   suffix, so the real slug for ``## HmsErrorBudgetFastBurn  (`severity: page`)``
+   is `hmserrorbudgetfastburn--severity-page`, and a short
+   `#hmserrorbudgetfastburn` link silently lands the on-call at the top of this
+   file instead. Every section here has such a tag for that reason.
+4. Add a new section above using the same format
    (*What it means*, *First 5 minutes*, *Likely causes*, *Mitigation*).
-3. Keep the most-fired alerts at the top.
+5. Keep the most-fired alerts at the top.

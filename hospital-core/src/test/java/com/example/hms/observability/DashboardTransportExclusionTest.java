@@ -363,6 +363,8 @@ class DashboardTransportExclusionTest {
      *                 literal in a recording rule
      */
     private static void check(String expr, String where, String required, List<Finding> out) {
+        // Recording rules carry no template variables, so nothing there can interpolate to a
+        // match-all and every uri=~ in them is a literal pin. Dashboards pass their own set.
         check(expr, where, required, Set.of(), out);
     }
 
@@ -477,20 +479,47 @@ class DashboardTransportExclusionTest {
         return false;
     }
 
-    /** YAML comments explain the rules; they must not be read as part of them. */
+    /**
+     * Strips YAML comments, which explain the rules and must not be read as part of them.
+     *
+     * <p>Quote-aware, because a {@code #} inside a quoted scalar is data, not a comment. The
+     * runbook_url values in both alert files are exactly that — every one ends in
+     * {@code .md#anchor} — so a naive cut at the first {@code #} truncates the line there.
+     * Harmless for a URL, but {@link #alertsReferenceRecordedSeries} scans this output, so a
+     * one-line alert whose expression followed a quoted {@code #} would lose its series
+     * reference and the dangling-series check would pass on nothing at all.
+     */
     private static String stripComments(String block) {
-        return block.lines()
-            .map(line -> {
-                int hash = line.indexOf('#');
-                return hash < 0 ? line : line.substring(0, hash);
-            })
-            .reduce("", (a, b) -> a + "\n" + b);
+        StringBuilder out = new StringBuilder();
+        for (String line : block.split("\n", -1)) {
+            char quote = 0;
+            int cut = line.length();
+            for (int i = 0; i < line.length(); i++) {
+                char c = line.charAt(i);
+                if (quote != 0) {
+                    if (c == quote) {
+                        quote = 0;
+                    }
+                } else if (c == '"' || c == '\'') {
+                    quote = c;
+                } else if (c == '#') {
+                    cut = i;
+                    break;
+                }
+            }
+            out.append(line, 0, cut).append('\n');
+        }
+        return out.toString();
     }
 
-    private static void collect(JsonNode node, String file, String title, List<Finding> out) {
-        collect(node, file, title, Set.of(), out);
-    }
-
+    /**
+     * Walks a dashboard's panels.
+     *
+     * <p>There is deliberately no convenience overload defaulting {@code wildcardVariables} to
+     * empty. An empty set makes every {@code uri=~"$var"} read as a real pin, which is exactly
+     * the "aggregate wearing a pin" hole {@link #URI_PIN} exists to close — so the set is a
+     * required argument, and a caller has to think about where it comes from.
+     */
     private static void collect(JsonNode node, String file, String title,
                                 Set<String> wildcardVariables, List<Finding> out) {
         if (node.isObject()) {
