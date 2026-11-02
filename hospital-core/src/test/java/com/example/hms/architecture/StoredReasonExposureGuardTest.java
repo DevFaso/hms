@@ -52,7 +52,9 @@ class StoredReasonExposureGuardTest {
     private static final Pattern ENTITY = Pattern.compile("@Entity\\b");
     private static final Pattern REASON_FIELD = Pattern.compile(
         "private\\s+String\\s+(reason|\\w+Reason|reasonFor\\w+)\\s*;");
-    private static final Pattern ANY_FIELD = Pattern.compile("private\\s+[\\w.<>, ?]+\\s+(\\w+)\\s*[;=]");
+    private static final Pattern ANY_FIELD = Pattern.compile(
+        "private\\s++(?:(?:static|final|transient|volatile)\\s++)*+"
+            + "(?:[\\w.<>?]|,\\s*+|\\s++(?:extends|super)\\s++)++\\s++(\\w++)\\s*+[;=]");
     private static final Pattern WRITE_PAYLOAD = Pattern.compile("(Request|Update|Create|Command)(DTO|Dto)?$");
 
     private static final String NEVER_READ = "QA D1225 hunt (round 24): stored, reaches no read model — standing debt";

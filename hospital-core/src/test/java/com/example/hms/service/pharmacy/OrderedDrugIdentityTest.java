@@ -32,7 +32,6 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -128,7 +127,7 @@ class OrderedDrugIdentityTest {
         MedicationCatalogItemRepository catalog = mock(MedicationCatalogItemRepository.class);
         PARACETAMOL.setCode("PARA500");
         MedicationCatalogItem amoxicillin = item("Amoxicilline", "Amoxicilline", null);
-        when(catalog.findByHospitalIdAndCode(eq(hospitalId), eq("PARA500"))).thenReturn(Optional.of(PARACETAMOL));
+        when(catalog.findByHospitalIdAndCode(hospitalId, "PARA500")).thenReturn(Optional.of(PARACETAMOL));
         when(catalog.findActivePage(any(), any())).thenReturn(new PageImpl<>(List.of(PARACETAMOL, amoxicillin)));
         MedicationAllergyCdsService service = new MedicationAllergyCdsService(mock(PatientAllergyRepository.class),
             mock(PatientRepository.class), mock(CdsRuleEngine.class), mock(DrugDrugInteractionRule.class));

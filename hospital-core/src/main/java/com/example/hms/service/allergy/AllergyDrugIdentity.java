@@ -6,6 +6,7 @@ import com.example.hms.model.medication.MedicationCatalogItem;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -53,20 +54,19 @@ public final class AllergyDrugIdentity {
      * empty for a free-text order).
      */
     public static AllergyDrugIdentity of(String typedName, Collection<MedicationCatalogItem> items) {
-        StringBuilder raw = new StringBuilder(typedName == null ? "" : typedName);
-        StringBuilder resolving = new StringBuilder(typedName == null ? "" : typedName);
+        String typed = Objects.toString(typedName, "");
+        StringBuilder raw = new StringBuilder(typed);
+        StringBuilder resolving = new StringBuilder(typed);
         List<String> atc = new ArrayList<>();
         boolean catalogued = false;
-        boolean typedBlank = typedName == null || typedName.isBlank();
+        boolean typedBlank = typed.isBlank();
         if (items != null) {
             for (MedicationCatalogItem item : items) {
                 if (item == null) {
                     continue;
                 }
                 appendNames(raw, item);
-                if (item.getAtcCode() != null && !item.getAtcCode().isBlank()) {
-                    atc.add(item.getAtcCode().trim());
-                }
+                appendIfPresent(atc, item.getAtcCode());
                 // QA D1223 (round 24): an item the typed name does not name
                 // (a mismatched or stale catalogue id, a code for another
                 // drug) is still CHECKED - its names and ATC class are matched
@@ -90,6 +90,12 @@ public final class AllergyDrugIdentity {
         appendIfPresent(out, item.getGenericName());
         appendIfPresent(out, item.getBrandName());
         appendIfPresent(out, item.getNameFr());
+    }
+
+    private static void appendIfPresent(List<String> out, String value) {
+        if (value != null && !value.isBlank()) {
+            out.add(value.trim());
+        }
     }
 
     private static void appendIfPresent(StringBuilder out, String value) {

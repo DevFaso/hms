@@ -72,13 +72,7 @@ import static org.mockito.Mockito.when;
 class MortalityServiceImplTest {
 
     // QA D1232 (round 24): the refusals are message keys now; the assertions
-    // read them in English through the real bundles.
-    @org.junit.jupiter.api.BeforeEach
-    void readRefusalsInEnglish() {
-        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
-        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.ENGLISH);
-    }
-
+    // read them in English through the real bundles (set up in setUp).
     @org.junit.jupiter.api.AfterEach
     void resetRefusalLocale() {
         com.example.hms.utility.MessageUtil.setMessageSource(null);
@@ -111,6 +105,8 @@ class MortalityServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.ENGLISH);
         hospitalId = UUID.randomUUID();
         patientId = UUID.randomUUID();
         callerUserId = UUID.randomUUID();

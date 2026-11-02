@@ -64,7 +64,7 @@ class SwallowedNestedTransactionGuardTest {
 
     /** {@code @Transactional}, not {@code @TransactionalEventListener} (which runs after the commit). */
     private static final Pattern DECLARES_TRANSACTIONAL = Pattern.compile("@Transactional(?!\\w)");
-    private static final Pattern CLASS_DECL = Pattern.compile("\\b(?:class|interface)\\s+(\\w+)([^{;]*)\\{");
+    private static final Pattern CLASS_DECL = Pattern.compile("\\b(?:class|interface)\\s++(\\w++)([^{;]*+)\\{");
     private static final Pattern FIELD = Pattern.compile("private\\s+(?:final\\s+)?([\\w.]+)\\s+(\\w+)\\s*;");
     private static final Pattern TRY = Pattern.compile("\\btry\\s*\\{");
     private static final Pattern CATCH = Pattern.compile("\\A\\s*catch\\s*\\(([^)]*)\\)\\s*\\{");

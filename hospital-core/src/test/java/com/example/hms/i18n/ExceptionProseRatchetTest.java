@@ -497,8 +497,14 @@ class ExceptionProseRatchetTest {
     @Test
     @DisplayName("QA D1232: the thrower scan sees a literal and a constant handed to a throwing helper, not a key")
     void throwerScanRecognisesProse() {
-        String helper = "private String normalizeRequiredText(String value, String errorMessage) {\n"
-            + "    if (value == null) {\n        throw new BusinessException(errorMessage);\n    }\n    return value;\n}\n";
+        String helper = """
+            private String normalizeRequiredText(String value, String errorMessage) {
+                if (value == null) {
+                    throw new BusinessException(errorMessage);
+                }
+                return value;
+            }
+            """;
         assertThat(countThrowerProse(helper
             + "void a() { normalizeRequiredText(x, \"Clinical indication is required for lab orders.\"); }\n"))
             .isEqualTo(1);
@@ -506,8 +512,12 @@ class ExceptionProseRatchetTest {
             + "void a() { normalizeRequiredText(x, DENIED); }\n")).isEqualTo(1);
         assertThat(countThrowerProse(helper
             + "void a() { normalizeRequiredText(x, \"labOrder.clinicalIndication.required\"); }\n")).isZero();
-        assertThat(countThrowerProse("private void note(String text) {\n    logger.info(text);\n}\n"
-            + "void a() { note(\"Something happened here\"); }\n")).isZero();
+        assertThat(countThrowerProse("""
+            private void note(String text) {
+                logger.info(text);
+            }
+            void a() { note("Something happened here"); }
+            """)).isZero();
     }
 
     /** A method declaration: its name and its parameter list. */

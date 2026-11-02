@@ -57,17 +57,12 @@ import static org.mockito.Mockito.when;
 class TreatmentPlanServiceImplTest {
 
     // QA D1232 (round 24): the refusals are message keys now; the assertions
-    // read them in English through the real bundles.
-    @org.junit.jupiter.api.BeforeEach
-    void readRefusalsInEnglish() {
-        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
-        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.ENGLISH);
-    }
-
+    // read them in English through the real bundles (set up in setUp).
     @org.junit.jupiter.api.AfterEach
     void resetRefusalLocale() {
         com.example.hms.utility.MessageUtil.setMessageSource(null);
         org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+        com.example.hms.security.CallerIdentityTestSupport.clear();
     }
 
     @Mock
@@ -98,6 +93,8 @@ class TreatmentPlanServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.ENGLISH);
         patientId = UUID.randomUUID();
         hospitalId = UUID.randomUUID();
         encounterId = UUID.randomUUID();
@@ -173,11 +170,6 @@ class TreatmentPlanServiceImplTest {
     }
 
     // ---- create ----
-
-    @org.junit.jupiter.api.AfterEach
-    void clearCallerIdentity() {
-        com.example.hms.security.CallerIdentityTestSupport.clear();
-    }
 
     @Test
     void create_success() {
