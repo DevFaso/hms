@@ -69,6 +69,57 @@ groups:
           summary: "HMS p99 latency > 2s for 10m"
           description: "Application-wide p99 has been above 2s. Check endpoint deep-dive."
 
+  # ── Chat transport ─────────────────────────────────────────────────
+  # /ws-chat is excluded from the SLO burn-rate ratios (see recording.yml), so
+  # without this a chat failure would raise nothing at all.
+  #
+  # 5xx only, and an absolute rate rather than a ratio. A negated 2xx/3xx class
+  # counts the HTTP 101 of every successful WebSocket upgrade as a failure; 4xx
+  # counts SockJS's own xhr_send 404s against timed-out sessions, so one stale tab
+  # would page. And putting those same classes in a RATIO's denominator diluted
+  # real 500s below any usable threshold — see the recording rule for the numbers.
+  #
+  # What this alert covers is therefore narrow, and the boundary is worth stating
+  # plainly rather than leaving someone to infer it during an incident. Micrometer
+  # tags uri from the matched handler pattern, so only requests that reached the
+  # DispatcherServlet carry uri=/ws-chat/**. Anything rejected earlier is tagged
+  # "UNKNOWN", or "NOT_FOUND" when nothing routed, and is attributable to no
+  # endpoint at all — which includes every 401 from JwtAuthenticationFilter, since
+  # respondUnauthorized writes the response inside the filter before any
+  # HandlerMapping runs.
+  #
+  # So: a fleet-wide ticket expiry is NOT visible here, and neither is a /ws-chat
+  # mapping that stopped routing. There is no chat-specific signal for either, and
+  # a blackbox probe cannot supply one: SecurityConfig ends in
+  # anyRequest().authenticated(), so authorization answers 401 on a path pattern
+  # before any handler is resolved — a deleted SockJS mapping would answer 401 too,
+  # exactly like a healthy one. Those failures surface through HmsBackendNoTraffic,
+  # HmsTargetDown and client reports; see the runbook.
+  #
+  # The traffic gate is what this alert cannot do, and it is a deliberate limit
+  # rather than an oversight: a ratio over a handful of requests in an idle
+  # five-minute window is noise, so a rate floor is required to make the alert
+  # usable. The cost is that a transport which stops receiving requests entirely
+  # — DNS gone, listener dead — looks exactly like a quiet night, and is covered
+  # by HmsBackendNoTraffic and HmsTargetDown instead, not here.
+  - name: hms.ws.transport
+    rules:
+      - alert: HmsChatTransportErrors
+        expr: app:ws_transport_5xx:rate5m{application="hms"} > 0.05
+        for: 5m
+        labels:
+          severity: page
+          service: hms-backend
+        annotations:
+          summary: "HMS chat transport returning 5xx"
+          description: >-
+            Sustained server errors on /ws-chat — roughly 15 or more in five
+            minutes. Clinical chat is down or degraded for every connected
+            client, and this endpoint is excluded from the burn-rate SLO, so no
+            other alert covers it. Chat can also be broken WITHOUT this firing;
+            see the runbook.
+          runbook_url: "https://github.com/DevFaso/hms/blob/main/docs/runbooks/grafana-observability.md#hmschattransporterrors"
+
   # ── Instance / target health ───────────────────────────────────────
   - name: hms.targets
     rules:
@@ -102,8 +153,8 @@ groups:
 
       - alert: HmsBackendNoTraffic
         expr: |
-          absent(app:http_requests:rate5m{application="hms"})
-            or app:http_requests:rate5m{application="hms"} == 0
+          absent(app:http_requests_all:rate5m{application="hms"})
+            or app:http_requests_all:rate5m{application="hms"} == 0
         for: 10m
         labels:
           severity: ticket

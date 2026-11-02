@@ -5718,3 +5718,56 @@ ships*, not for building — and check the shipped surface before trusting a
   rather than repointing the targets again. Flagged in PR #1007 round 10; not
   fixed there because the fix would have been a guess against a measurement that
   contradicted it.
+- **`severity: page` alerts without a runbook (PR #1013 round 3):** the convention
+  in `docs/runbooks/grafana-observability.md` ("Adding a new runbook entry") makes
+  `annotations.runbook_url` plus a matching section mandatory for every alert.
+  Five pre-existing page alerts in `grafana/rules/alerts.yml` — `HmsTargetDown`,
+  `HmsDbPoolSaturated`, `HmsDbPoolPendingHigh`, `PostgresDown` and
+  `HmsRecentlyRestartedRepeatedly` — **do** have runbook sections but no
+  `runbook_url` linking to them, so the link an engineer clicks from the alert is
+  missing even though the prose exists. Several non-page alerts have the same gap.
+  Found while adding `HmsChatTransportErrors`, which does comply in both alert
+  files — though it shipped one round without the explicit `<a id="...">` tag the
+  other 13 sections carry, which is the part no checklist mentioned and the review
+  caught; the checklist now names it. Not fixed in #1013 for the five pre-existing
+  alerts because it is an unrelated docs pass; worth doing with a guard asserting
+  the whole convention (url + section + anchor tag), so it stops drifting.
+- **No signal for a silent or unroutable chat transport (PR #1013):** `/ws-chat` is
+  excluded from the burn-rate SLO and the aggregate latency rules (its held-open
+  SockJS connections otherwise destroy every percentile), and the compensating
+  `HmsChatTransportErrors` can only see 5xx on requests that reached a handler.
+  Three failure modes therefore have no automatic signal: a fleet-wide ticket
+  expiry (401s are written inside `JwtAuthenticationFilter` and carry
+  `uri="UNKNOWN"`), a mapping that stopped routing (`uri="NOT_FOUND"`), and a
+  silent transport under the alert's rate floor. A blackbox probe cannot close
+  this — `SecurityConfig` ends in `anyRequest().authenticated()`, so a deleted
+  SockJS mapping answers 401 exactly like a healthy one (a 200-or-401 probe was
+  written and then removed in #1013 for precisely that reason). A real fix needs
+  either a probe that can mint a ws ticket, or a client-side heartbeat the portal
+  reports. Documented under `HmsChatTransportErrors` in
+  `docs/runbooks/grafana-observability.md` so the on-call does not read the
+  alert's silence as health.
+- **Seven recording rules nobody reads (PR #1013):** `grafana/rules/recording.yml`
+  records `app:http_5xx:rate1m`, `app:http_5xx:ratio5m`, `app:http_requests:rate1m`,
+  `app:http_request_duration_seconds:p95_5m`, `app_uri:http_requests:rate5m`,
+  `app_uri:http_5xx:rate5m` and `app_uri:http_request_duration_seconds:p99_15m`,
+  and none is referenced by either alert file or by any dashboard (checked by grep
+  over `grafana/`). Each is evaluated every 30s and billed against the same
+  10,000-series free-tier budget the Grafana work keeps running into. Found while
+  removing `app:ws_transport_requests:rate5m`, which #1013 itself had orphaned.
+  Not removed there because these predate it and may be queried ad hoc in Explore —
+  worth confirming with whoever uses the SLO dashboards, then deleting or wiring
+  them into a panel.
+- **Four auth-rejection lines are invisible on dev (PR #1013):** `JwtAuthenticationFilter`'s
+  blacklisted-jti and MFA-challenge rejections, and `WsTicketService`'s unknown- and
+  expired-ticket refusals, are all `log.debug`, and #1013 demotes those loggers to
+  INFO on dev — so a revoked token or a fleet-wide ws-ticket expiry 401s with no
+  line at any enabled level. Promoting them to WARN was tried in #1013 and reverted:
+  `redeem()` is reached from the filter **before authentication** for any request to
+  `/api/ws-chat` with a `?ticket=`, so a blanket WARN hands any unauthenticated
+  caller a log-volume lever, fires once per request rather than once per incident
+  (a stale polling tab is thousands of lines a day), and the expiry line carries a
+  username that prod — which already runs at INFO — has never logged. The right fix
+  is warn-once-per-subject with suppression, which the same class already does for a
+  missing principal (`isKnownMissingPrincipal` + "suppressing future warnings"):
+  apply that shape to these four, then they can be WARN safely.

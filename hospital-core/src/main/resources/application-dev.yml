@@ -21,7 +21,52 @@ spring:
 
 logging:
   level:
-    '[com.example.hms]': DEBUG
+    '[com.example.hms]': ${LOG_LEVEL_HMS:DEBUG}
+    # Per-request security chatter, demoted out of DEBUG.
+    #
+    # JwtAuthenticationFilter, JwtTokenProvider, CustomUserDetailsService and
+    # WsTicketService each log on EVERY authenticated request, and the SockJS
+    # transport polls several times a second per open client. Every line carries a
+    # username or principal into a third-party store for no diagnostic gain.
+    #
+    # Measured, not estimated. In a 14.7-minute window of real dev traffic
+    # (1,410 Loki records), 1,181 came from these four loggers, and 1,178 of those
+    # are log.debug calls this demotion silences — 83.5% of everything dev shipped,
+    # against a 50 GB/month allowance. The top six messages alone, each one a
+    # log.debug, account for 1,124 lines.
+    #
+    # What it does NOT silence: most rejection paths are already WARN and stay
+    # visible — invalid token, global session revocation, idle window, blocked
+    # tenant, pre-password-change token, refresh presented as access, disabled
+    # principal, and WsTicketService's refusal of a disabled account. The ticket
+    # eviction summary is INFO.
+    #
+    # Four rejection lines ARE silenced on dev by this change, and that is accepted
+    # rather than fixed here: the blacklisted-jti and MFA-challenge rejections in the
+    # filter, and WsTicketService's unknown/expired ticket refusals. Promoting them
+    # to WARN was tried in this PR and reverted — every one of them is reached on a
+    # client-controlled path (ticket redemption runs BEFORE authentication) and fires
+    # once per REQUEST rather than once per incident, so a stale polling tab produces
+    # thousands of lines a day, and the expiry line carries a username that prod —
+    # which runs at INFO — has never logged. That would have clawed back a slice of
+    # the reduction above and put a username into a third-party store, which is half
+    # of why this change exists. The real fix is warn-once-per-subject, like
+    # isKnownMissingPrincipal already does; it is recorded in tasklist.md.
+    #
+    # Named one by one rather than demoting the com.example.hms.security package:
+    # that package holds 40+ classes and 11 subpackages (tenant, oidc, permission,
+    # audit, ...), and silencing the tenancy and authorization surface is exactly
+    # what you do NOT want on dev. Only the four per-request loggers move.
+    # To raise them, note that this RESTARTS the service — Railway redeploys on a
+    # variable change unless --skip-deploys is passed, and --skip-deploys means the
+    # new value is not picked up until the next deploy anyway. Either way the
+    # process restarts, every SockJS connection drops and the in-memory ws tickets
+    # are lost, so this is not a thing to do mid-incident on a hunch:
+    #   railway variables --set LOG_LEVEL_SECURITY=DEBUG --service hms-backend-dev
+    '[com.example.hms.security.JwtAuthenticationFilter]': ${LOG_LEVEL_SECURITY:INFO}
+    '[com.example.hms.security.JwtTokenProvider]': ${LOG_LEVEL_SECURITY:INFO}
+    '[com.example.hms.security.CustomUserDetailsService]': ${LOG_LEVEL_SECURITY:INFO}
+    '[com.example.hms.security.WsTicketService]': ${LOG_LEVEL_SECURITY:INFO}
     '[org.springframework.web]': INFO
 
 # ===================== Seed Data =====================

@@ -16,7 +16,7 @@
       "datasource": { "type": "prometheus", "uid": "${prometheus_ds}" },
       "options": { "textMode": "name", "reduceOptions": { "calcs": ["lastNotNull"] } },
       "targets": [
-        { "expr": "sum(rate(http_server_requests_seconds_count{application=\"$application\", uri=~\"$uri\", method=~\"$method\"}[$__rate_interval]))", "legendFormat": "$method $uri" }
+        { "expr": "sum(rate(http_server_requests_seconds_count{application=\"$application\", uri=\"$uri\", method=~\"$method\"}[$__rate_interval]))", "legendFormat": "$method $uri" }
       ]
     },
     {
@@ -28,7 +28,7 @@
       "fieldConfig": { "defaults": { "unit": "reqps", "decimals": 2 } },
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
       "targets": [
-        { "expr": "sum(rate(http_server_requests_seconds_count{application=\"$application\", uri=~\"$uri\", method=~\"$method\"}[5m]))" }
+        { "expr": "sum(rate(http_server_requests_seconds_count{application=\"$application\", uri=\"$uri\", method=~\"$method\"}[5m]))" }
       ]
     },
     {
@@ -46,7 +46,7 @@
       },
       "options": { "colorMode": "background", "reduceOptions": { "calcs": ["lastNotNull"] } },
       "targets": [
-        { "expr": "sum(rate(http_server_requests_seconds_count{application=\"$application\", uri=~\"$uri\", method=~\"$method\", status=~\"5..\"}[5m])) / clamp_min(sum(rate(http_server_requests_seconds_count{application=\"$application\", uri=~\"$uri\", method=~\"$method\"}[5m])), 0.0001)" }
+        { "expr": "sum(rate(http_server_requests_seconds_count{application=\"$application\", uri=\"$uri\", method=~\"$method\", status=~\"5..\"}[5m])) / clamp_min(sum(rate(http_server_requests_seconds_count{application=\"$application\", uri=\"$uri\", method=~\"$method\"}[5m])), 0.0001)" }
       ]
     },
     {
@@ -58,7 +58,7 @@
       "fieldConfig": { "defaults": { "unit": "s", "decimals": 3 } },
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
       "targets": [
-        { "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{application=\"$application\", uri=~\"$uri\", method=~\"$method\"}[5m])) by (le))" }
+        { "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{application=\"$application\", uri=\"$uri\", method=~\"$method\"}[5m])) by (le))" }
       ]
     },
     {
@@ -70,7 +70,7 @@
       "fieldConfig": { "defaults": { "unit": "s", "decimals": 3 } },
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
       "targets": [
-        { "expr": "histogram_quantile(0.99, sum(rate(http_server_requests_seconds_bucket{application=\"$application\", uri=~\"$uri\", method=~\"$method\"}[5m])) by (le))" }
+        { "expr": "histogram_quantile(0.99, sum(rate(http_server_requests_seconds_bucket{application=\"$application\", uri=\"$uri\", method=~\"$method\"}[5m])) by (le))" }
       ]
     },
     {
@@ -81,7 +81,7 @@
       "datasource": { "type": "prometheus", "uid": "${prometheus_ds}" },
       "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "stacking": { "mode": "normal" }, "fillOpacity": 10 } } },
       "targets": [
-        { "expr": "sum(rate(http_server_requests_seconds_count{application=\"$application\", uri=~\"$uri\", method=~\"$method\"}[$__rate_interval])) by (status)", "legendFormat": "{{status}}" }
+        { "expr": "sum(rate(http_server_requests_seconds_count{application=\"$application\", uri=\"$uri\", method=~\"$method\"}[$__rate_interval])) by (status)", "legendFormat": "{{status}}" }
       ]
     },
     {
@@ -92,9 +92,9 @@
       "datasource": { "type": "prometheus", "uid": "${prometheus_ds}" },
       "fieldConfig": { "defaults": { "unit": "s" } },
       "targets": [
-        { "expr": "histogram_quantile(0.50, sum(rate(http_server_requests_seconds_bucket{application=\"$application\", uri=~\"$uri\", method=~\"$method\"}[$__rate_interval])) by (le))", "legendFormat": "p50" },
-        { "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{application=\"$application\", uri=~\"$uri\", method=~\"$method\"}[$__rate_interval])) by (le))", "legendFormat": "p95" },
-        { "expr": "histogram_quantile(0.99, sum(rate(http_server_requests_seconds_bucket{application=\"$application\", uri=~\"$uri\", method=~\"$method\"}[$__rate_interval])) by (le))", "legendFormat": "p99" }
+        { "expr": "histogram_quantile(0.50, sum(rate(http_server_requests_seconds_bucket{application=\"$application\", uri=\"$uri\", method=~\"$method\"}[$__rate_interval])) by (le))", "legendFormat": "p50" },
+        { "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{application=\"$application\", uri=\"$uri\", method=~\"$method\"}[$__rate_interval])) by (le))", "legendFormat": "p95" },
+        { "expr": "histogram_quantile(0.99, sum(rate(http_server_requests_seconds_bucket{application=\"$application\", uri=\"$uri\", method=~\"$method\"}[$__rate_interval])) by (le))", "legendFormat": "p99" }
       ]
     },
     {
@@ -109,7 +109,7 @@
         "color": { "mode": "scheme", "scheme": "Spectral", "fill": "dark-orange", "exponent": 0.5, "steps": 64, "reverse": true }
       },
       "targets": [
-        { "expr": "sum(rate(http_server_requests_seconds_bucket{application=\"$application\", uri=~\"$uri\", method=~\"$method\"}[$__rate_interval])) by (le)", "format": "heatmap", "legendFormat": "{{le}}" }
+        { "expr": "sum(rate(http_server_requests_seconds_bucket{application=\"$application\", uri=\"$uri\", method=~\"$method\"}[$__rate_interval])) by (le)", "format": "heatmap", "legendFormat": "{{le}}" }
       ]
     },
     {
@@ -127,7 +127,7 @@
         }
       },
       "targets": [
-        { "expr": "(sum(rate(http_server_requests_seconds_bucket{application=\"$application\", uri=~\"$uri\", method=~\"$method\", le=\"$apdex_target\"}[$__rate_interval])) + sum(rate(http_server_requests_seconds_bucket{application=\"$application\", uri=~\"$uri\", method=~\"$method\", le=\"${apdex_tolerable}\"}[$__rate_interval]))) / 2 / clamp_min(sum(rate(http_server_requests_seconds_count{application=\"$application\", uri=~\"$uri\", method=~\"$method\"}[$__rate_interval])), 0.0001)", "legendFormat": "apdex" }
+        { "expr": "(sum(rate(http_server_requests_seconds_bucket{application=\"$application\", uri=\"$uri\", method=~\"$method\", le=\"$apdex_target\"}[$__rate_interval])) + sum(rate(http_server_requests_seconds_bucket{application=\"$application\", uri=\"$uri\", method=~\"$method\", le=\"${apdex_tolerable}\"}[$__rate_interval]))) / 2 / clamp_min(sum(rate(http_server_requests_seconds_count{application=\"$application\", uri=\"$uri\", method=~\"$method\"}[$__rate_interval])), 0.0001)", "legendFormat": "apdex" }
       ]
     },
     {
@@ -141,7 +141,7 @@
         { "id": "organize", "options": { "excludeByName": { "Time": true, "__name__": true, "instance": true, "job": true, "application": true }, "renameByName": { "Value": "requests" } } }
       ],
       "targets": [
-        { "expr": "sum(increase(http_server_requests_seconds_count{application=\"$application\", uri=~\"$uri\", method=~\"$method\"}[1h])) by (status, exception)", "format": "table", "instant": true }
+        { "expr": "sum(increase(http_server_requests_seconds_count{application=\"$application\", uri=\"$uri\", method=~\"$method\"}[1h])) by (status, exception)", "format": "table", "instant": true }
       ]
     },
     {
@@ -179,12 +179,13 @@
         "name": "uri", "type": "query", "label": "URI",
         "datasource": { "type": "prometheus", "uid": "${prometheus_ds}" },
         "query": { "qryType": 1, "query": "label_values(http_server_requests_seconds_count{application=\"$application\"}, uri)" },
-        "refresh": 2, "current": { "text": "All", "value": ".*" }, "includeAll": true, "allValue": ".*", "multi": false, "sort": 1
+        "refresh": 2, "current": { "text": "", "value": "" }, "includeAll": false, "multi": false, "sort": 1,
+        "description": "One endpoint at a time, deliberately. This dashboard is exempt from the $exclude_uri transport filter the other dashboards apply, because picking any URI is its whole purpose and /ws-chat is a legitimate choice. An All option would turn that exemption into an application-wide aggregate that includes the 25-50s SockJS samples, giving a default view with a p99 near 50s and an Apdex near 0. RE2 has no negative lookahead, so an allValue cannot say 'everything except /ws-chat'; the aggregate view lives on the SLO and Application Metrics dashboards, which filter it properly. current is left unset on purpose: refresh=2 resolves the option list on dashboard load as well as on time-range change, and Grafana then selects the first endpoint, so no value has to be hardcoded here and go stale. Until metrics arrive the list is empty and every panel on every dashboard is blank anyway. The panels match this with uri=\"$uri\" rather than uri=~\"$uri\": these values come from label_values and are Spring patterns, so the regex form would hand PromQL /ws-chat/** or /** verbatim and ** is a bad repetition operator in RE2 — a 400 on every panel. An exact match is also simply what is meant when picking one endpoint from a list."
       },
       {
         "name": "method", "type": "query", "label": "HTTP method",
         "datasource": { "type": "prometheus", "uid": "${prometheus_ds}" },
-        "query": { "qryType": 1, "query": "label_values(http_server_requests_seconds_count{application=\"$application\", uri=~\"$uri\"}, method)" },
+        "query": { "qryType": 1, "query": "label_values(http_server_requests_seconds_count{application=\"$application\", uri=\"$uri\"}, method)" },
         "refresh": 2, "current": { "text": "All", "value": ".*" }, "includeAll": true, "allValue": ".*", "multi": true, "sort": 1
       },
       {

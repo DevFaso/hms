@@ -207,6 +207,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         // Reject tokens that have been explicitly revoked (logout / refresh rotation)
         String jti = tokenProvider.getJtiFromToken(jwt);
         if (jti != null && tokenBlacklistService.isBlacklisted(jti)) {
+            // DEBUG, not WARN. "Fires only on a rejection" is not the same as "fires rarely":
+            // a stale browser tab polling with a revoked token hits this once per REQUEST, which
+            // on a SockJS poll cycle is thousands of lines a day from one client. Making it WARN
+            // would have clawed back a slice of the volume reduction this change exists for, and
+            // the trigger is client-controlled. The gap this leaves on dev — a blacklist
+            // rejection with no line at INFO — is real and recorded in tasklist.md; the fix is a
+            // warn-once-per-jti path like isKnownMissingPrincipal's, not a blanket level change.
             log.debug("[JWT] Token jti={} is blacklisted, rejecting on path={}", jti, path);
             respondUnauthorized(response, extractedSubject);
             return false;
@@ -305,6 +312,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (MfaChallengeScope.admits(request)) {
             return false;
         }
+        // DEBUG for the same reason as the blacklist rejection above: a client holding a
+        // challenge-scoped token can repeat this on every request.
         log.debug("[JWT] MFA challenge token outside the MFA step on path={}; request left anonymous", path);
         SecurityContextHolder.clearContext();
         HospitalContextHolder.clear();
