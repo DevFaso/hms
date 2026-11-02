@@ -53,7 +53,8 @@ public class ControlledAdministrationWitness {
             return null;
         }
         if (witnessUserId == null) {
-            throw new BusinessException("nurse.mar.witness.required",
+            // QA D1282: named, so the dose dialog marks the witness picker.
+            throw new com.example.hms.exception.FieldBusinessException("witnessUserId", "nurse.mar.witness.required",
                 prescription.getMedicationName() != null ? prescription.getMedicationName() : "-");
         }
         if (witnessUserId.equals(administeringUserId)) {

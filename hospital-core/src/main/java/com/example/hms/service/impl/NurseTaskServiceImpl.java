@@ -901,7 +901,9 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         // hospital who can take the patient, never the author.
         UUID recipientId = request.getRecipientUserId();
         if (recipientId == null) {
-            throw new BusinessException("nurse.handoff.recipient.required");
+            // QA D1282: named, so the handoff form marks the recipient picker.
+            throw new com.example.hms.exception.FieldBusinessException("recipientUserId",
+                "nurse.handoff.recipient.required");
         }
         if (recipientId.equals(nurseUserId)) {
             throw new BusinessException("nurse.handoff.recipient.notSelf");

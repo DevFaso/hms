@@ -69,12 +69,19 @@ class RequiredRequestIdGuardTest {
      */
     private static final Pattern LOOKUP = Pattern.compile(
         "\\b(\\w++)\\(\\s*+(\\w++)\\.get(\\w++)\\(\\)\\s*+\\)");
+    /** A type name, maybe package-qualified (lower-case segments first). */
+    private static final String QUALIFIED_TYPE = "(?:[a-z]\\w*+\\.)*+[A-Z]\\w*+";
     /** An id the service branches on: {@code if (x.getYId() != null ...}, the head of an id-or-alternative chain. */
     private static final Pattern OPTIONAL_ID_BRANCH = Pattern.compile(
         "\\bif\\s*+\\(\\s*+(\\w++)\\.get(\\w++)\\(\\)\\s*+!=\\s*+null\\b");
-    private static final Pattern THROW_NEW = Pattern.compile("throw\\s++new\\s++(\\w++)\\(");
+    /** {@code throw new X(} or {@code throw new com.example...X(}: the exception type, maybe qualified. */
+    private static final Pattern THROW_NEW = Pattern.compile("throw\\s++new\\s++(" + QUALIFIED_TYPE + ")\\(");
+    /** {@code UUID copy = request.getXxx();}: a local copy of a request getter. */
+    private static final Pattern ID_COPY = Pattern.compile(
+        "\\bUUID\\s++(\\w++)\\s*+=\\s*+(\\w++)\\.get(\\w++)\\(\\)\\s*+;");
     private static final Pattern FIELDLESS_NULL_REFUSAL = Pattern.compile(
-        "if\\s*+\\(\\s*+(\\w+)\\.get(\\w+Id)\\(\\)\\s*+==\\s*+null\\s*+\\)\\s*+\\{?\\s*+throw\\s++new\\s++(\\w+)\\(");
+        "if\\s*+\\(\\s*+(\\w+)\\.get(\\w+Id)\\(\\)\\s*+==\\s*+null\\s*+\\)\\s*+\\{?\\s*+throw\\s++new\\s++("
+            + QUALIFIED_TYPE + ")\\(");
 
     /**
      * Lookups the scan reads that are not a request id reaching a lookup unchecked, each with its reason.
@@ -171,7 +178,7 @@ class RequiredRequestIdGuardTest {
                     continue;
                 }
                 refusals++;
-                if (!"FieldBusinessException".equals(m.group(3))) {
+                if (!m.group(3).endsWith("FieldBusinessException")) {
                     fieldless.add(file.getFileName() + ":" + SourceScan.lineOf(source, m.start()) + " "
                         + m.group(1) + ".get" + m.group(2) + "() == null -> " + m.group(3));
                 }
@@ -215,13 +222,53 @@ class RequiredRequestIdGuardTest {
                     continue;
                 }
                 chains++;
-                if (!"FieldBusinessException".equals(refusal)) {
+                if (!refusal.endsWith("FieldBusinessException")) {
                     fieldless.add(file.getFileName() + ":" + SourceScan.lineOf(source, m.start()) + " "
                         + m.group(1) + ".get" + m.group(2) + "() missing -> " + refusal);
                 }
             }
         }
         assertThat(chains).as("id-or-alternative chains read").isPositive();
+        assertThat(fieldless)
+            .as("the 400 names no field, so the form cannot mark it (QA D1282)" + SourceScan.MANDATE)
+            .isEmpty();
+    }
+
+    /**
+     * QA D1282 (sweep): the same refusal through a local copy of the id -
+     * {@code UUID recipientId = request.getRecipientUserId(); if (recipientId == null) throw ...}
+     * (the handoff recipient answered 400 with no field). The copy is followed
+     * to its null test in the same method.
+     */
+    @Test
+    @DisplayName("a missing request id refused through a local copy names the field")
+    void everyMissingRequestIdRefusedThroughACopyNamesItsField() throws IOException {
+        Map<String, Class<?>> bodies = requestBodyTypes();
+        List<String> fieldless = new ArrayList<>();
+        int copies = 0;
+        for (Path file : serviceFiles()) {
+            String source = SourceScan.stripComments(Files.readString(file, StandardCharsets.UTF_8));
+            Matcher m = ID_COPY.matcher(source);
+            while (m.find()) {
+                if (!m.group(3).endsWith("Id")) {
+                    continue;
+                }
+                String method = AppointmentSlotRulesGuardTest.enclosingMethod(source, m.start());
+                if (parameterType(method, m.group(2), bodies) == null) {
+                    continue;
+                }
+                Matcher refusal = Pattern.compile("if\\s*+\\(\\s*+" + Pattern.quote(m.group(1))
+                    + "\\s*+==\\s*+null\\s*+\\)\\s*+\\{?\\s*+throw\\s++new\\s++(" + QUALIFIED_TYPE + ")\\(").matcher(method);
+                if (refusal.find()) {
+                    copies++;
+                    if (!refusal.group(1).endsWith("FieldBusinessException")) {
+                        fieldless.add(file.getFileName() + ":" + SourceScan.lineOf(source, m.start()) + " "
+                            + m.group(1) + " = " + m.group(2) + ".get" + m.group(3) + "() missing -> " + refusal.group(1));
+                    }
+                }
+            }
+        }
+        assertThat(copies).as("null-id refusals through a copy read").isPositive();
         assertThat(fieldless)
             .as("the 400 names no field, so the form cannot mark it (QA D1282)" + SourceScan.MANDATE)
             .isEmpty();
@@ -388,7 +435,7 @@ class RequiredRequestIdGuardTest {
     private static Map<String, String> fieldNamedNullChecks(String source) {
         Map<String, String> out = new LinkedHashMap<>();
         Matcher check = Pattern.compile(
-            "if\\s*+\\(\\s*+\\w+\\.get(\\w+Id)\\(\\)\\s*+==\\s*+null\\s*+\\)\\s*+\\{?\\s*+throw\\s++new\\s++FieldBusinessException\\(")
+            "if\\s*+\\(\\s*+\\w+\\.get(\\w+Id)\\(\\)\\s*+==\\s*+null\\s*+\\)\\s*+\\{?\\s*+throw\\s++new\\s++(?:[a-z]\\w*+\\.)*+FieldBusinessException\\(")
             .matcher(source);
         while (check.find()) {
             String method = AppointmentSlotRulesGuardTest.enclosingMethod(source, check.start());

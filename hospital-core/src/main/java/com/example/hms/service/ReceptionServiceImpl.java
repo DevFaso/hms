@@ -1121,6 +1121,10 @@ public class ReceptionServiceImpl implements ReceptionService {
             if (copay.stripTrailingZeros().scale() > 0) {
                 throw new com.example.hms.exception.BusinessException("billing.payment.wholeAmountOnly");
             }
+            // QA D1293: a copay taken needs its method, refused before anything is written.
+            if (copay.signum() > 0 && request.getCopayMethod() == null) {
+                throw new FieldBusinessException("copayMethod", "billing.payment.methodRequired");
+            }
         }
 
         // QA D936: two check-ins of one appointment (double click, retry) are

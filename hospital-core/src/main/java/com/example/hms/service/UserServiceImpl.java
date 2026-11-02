@@ -1091,7 +1091,8 @@ public class UserServiceImpl implements UserService {
 
         UUID provided = request.getHospitalId();
         if (provided == null) {
-            throw new BusinessException("users.hospital.requiredForStaff");
+            // QA D1282 (sweep): named, so the form marks the field.
+            throw new com.example.hms.exception.FieldBusinessException("hospitalId", "users.hospital.requiredForStaff");
         }
         return hospitalRepository.findById(provided)
                 .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, provided))

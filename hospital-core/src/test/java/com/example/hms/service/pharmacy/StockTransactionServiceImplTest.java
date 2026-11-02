@@ -615,7 +615,9 @@ class StockTransactionServiceImplTest {
 
             assertThatThrownBy(() -> service.recordTransaction(dto))
                     .isInstanceOf(BusinessException.class)
-                    .matches(e -> e.getMessage().contains("stockTransaction.witness.required") || e.getMessage().contains("witness"));
+                    .matches(e -> e.getMessage().contains("stockTransaction.witness.required") || e.getMessage().contains("witness"))
+                    // QA D1282: the refusal names the request's field, so the form marks the witness picker.
+                    .hasFieldOrPropertyWithValue("field", "witnessedBy");
             verify(stockTransactionRepository, never()).save(any());
             assertThat(stockLot.getRemainingQuantity()).isEqualByComparingTo(new BigDecimal("50.00"));
         }

@@ -47,7 +47,8 @@ public class ControlledStockWitness {
             return null;
         }
         if (witnessId == null) {
-            throw new BusinessException(MessageUtil.resolve("stockTransaction.witness.required"));
+            // QA D1282: every caller's body names it witnessedBy; the form marks that picker.
+            throw new com.example.hms.exception.FieldBusinessException("witnessedBy", "stockTransaction.witness.required");
         }
         if (performer != null && witnessId.equals(performer.getId())) {
             throw new BusinessException(MessageUtil.resolve("stockTransaction.witness.notSelf"));

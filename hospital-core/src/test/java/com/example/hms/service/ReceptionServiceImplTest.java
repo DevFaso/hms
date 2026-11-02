@@ -1764,9 +1764,11 @@ class ReceptionServiceImplTest {
         @DisplayName("QA D149: the copay entered at check-in is recorded on the encounter, not dropped")
         void copayIsRecordedOnTheEncounter_D149() {
             Appointment appointment = scheduledAppointment();
+            // QA D1293: the desk sends the method it chose (the dialog's default is cash).
             CheckInRequestDTO request = CheckInRequestDTO.builder()
                     .appointmentId(appointment.getId())
                     .copayAmount(new java.math.BigDecimal("2000"))
+                    .copayMethod(com.example.hms.enums.PaymentMethod.CASH)
                     .identityConfirmed(true)
                     .build();
 
@@ -1776,6 +1778,25 @@ class ReceptionServiceImplTest {
             verify(billingInvoiceService).recordCheckInCopay(encounter.capture(),
                 eq(new java.math.BigDecimal("2000")), any(), any(), any());
             assertThat(encounter.getValue().getId()).isEqualTo(response.getEncounterId());
+        }
+
+        @Test
+        @DisplayName("QA D1293: a copay with no method is refused with the field named, before anything is written")
+        void aCopayWithNoMethodIsRefused_D1293() {
+            CheckInRequestDTO request = CheckInRequestDTO.builder()
+                    .appointmentId(UUID.randomUUID())
+                    .copayAmount(new java.math.BigDecimal("2000"))
+                    .identityConfirmed(true)
+                    .build();
+
+            com.example.hms.exception.FieldBusinessException refused = org.junit.jupiter.api.Assertions.assertThrows(
+                com.example.hms.exception.FieldBusinessException.class,
+                () -> service.checkInPatient(request, hospitalId, "receptionist1"));
+
+            assertThat(refused.getField()).isEqualTo("copayMethod");
+            assertThat(refused.getMessageKey()).isEqualTo("billing.payment.methodRequired");
+            verify(appointmentRepo, never()).lockById(any());
+            org.mockito.Mockito.verifyNoInteractions(billingInvoiceService);
         }
 
         @Test

@@ -386,7 +386,8 @@ public class CriticalValueNotificationService {
         result.setCriticalReadBackByUserId(byUserId);
         result.setCriticalReadBackByDisplay(byDisplay);
 
-        if (!readBackMatches(result.getResultValue(), result.getResultUnit(), repeatedValue)) {
+        // QA D1095: the unit as shown (the test definition's when none was typed).
+        if (!readBackMatches(result.getResultValue(), LabResultMapper.unitOf(result), repeatedValue)) {
             // Copy the mismatch onto a fresh row loaded inside the inner
             // transaction rather than saving the caller's managed entity: the
             // outer session still owns `result`, and committing it here while

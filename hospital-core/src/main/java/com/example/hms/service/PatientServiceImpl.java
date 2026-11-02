@@ -883,7 +883,8 @@ public class PatientServiceImpl implements PatientService {
     public PatientResponseDTO createPatientByStaff(PatientRequestDTO dto, Locale locale) {
         UUID hospitalId = dto.getHospitalId();
         if (hospitalId == null) {
-            throw new BusinessException("patient.r7.staffCreateNeedsHospital");
+            // QA D1282 (sweep): named, so the form marks the field.
+            throw new FieldBusinessException("hospitalId", "patient.r7.staffCreateNeedsHospital");
         }
         Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, hospitalId));

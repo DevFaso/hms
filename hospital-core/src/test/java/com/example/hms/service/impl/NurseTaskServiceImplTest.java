@@ -634,7 +634,9 @@ class NurseTaskServiceImplTest {
         UUID actor = UUID.randomUUID();
         assertThatThrownBy(() -> service.createHandoff(actor, hospitalId, request))
             .isInstanceOf(BusinessException.class)
-            .hasFieldOrPropertyWithValue("messageKey", "nurse.handoff.recipient.required");
+            .hasFieldOrPropertyWithValue("messageKey", "nurse.handoff.recipient.required")
+            // QA D1282: the refusal names the field, so the handoff form marks the recipient picker.
+            .hasFieldOrPropertyWithValue("field", "recipientUserId");
         verify(nurseHandoffRepository, never()).save(any());
     }
 

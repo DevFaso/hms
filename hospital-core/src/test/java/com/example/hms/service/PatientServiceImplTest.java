@@ -924,7 +924,9 @@ class PatientServiceImplTest {
 
         assertThatThrownBy(() -> patientService.createPatientByStaff(request, Locale.ENGLISH))
             .isInstanceOf(BusinessException.class)
-            .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("patient.r7.staffCreateNeedsHospital"));
+            .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("patient.r7.staffCreateNeedsHospital"))
+            // QA D1282 (sweep): the refusal names the field.
+            .hasFieldOrPropertyWithValue("field", "hospitalId");
     }
 
     @Test
