@@ -197,6 +197,8 @@ describe('CoverageTabComponent (P3 #21 additions)', () => {
       '[data-testid="guarantor-deactivation-g1"]',
     );
     expect(note?.textContent).toContain('Plus solvable');
+    // QA D1288: the time and the reason are not glued ("12:27Motif").
+    expect(note?.textContent?.replaceAll(/\s+/g, ' ')).toContain(' · COVERAGE.DEACTIVATION_REASON');
   });
 
   it('QA D1247: reactivating acts at once and says so', () => {

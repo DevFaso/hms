@@ -9,7 +9,9 @@
  *
  * Rule `unmarked-refusal`: a component method that shows a "required /
  * missing / validation" message — `instant('…REQUIRED…')`,
- * `instant('…MISSING…')`, `instant('…VALIDATION_ERROR…')` — and does not call
+ * `instant('…MISSING…')`, `instant('…VALIDATION_ERROR…')`, and since round 27
+ * (QA D1281: the portal's blank question refused with QUESTION_TOO_SHORT)
+ * `instant('…TOO_SHORT…')` — and does not call
  * `refuseFields(` or `focusFirstInvalid(` in the same method body. The anchor
  * is `method::KEY`, so a pin survives the lines around it moving.
  *
@@ -21,7 +23,7 @@ import { balanced, endOfLiteralOrComment } from './js-scan.mjs';
 import { lineOf } from './html-tags.mjs';
 
 const REFUSAL =
-  /\.instant\(\s*'([A-Z0-9_]+(?:\.[A-Z0-9_]+)*\.[A-Z0-9_]*(?:REQUIRED|MISSING|VALIDATION_ERROR)[A-Z0-9_]*)'\s*\)/g;
+  /\.instant\(\s*'([A-Z0-9_]+(?:\.[A-Z0-9_]+)*\.[A-Z0-9_]*(?:REQUIRED|MISSING|VALIDATION_ERROR|TOO_SHORT)[A-Z0-9_]*)'\s*\)/g;
 const HELPERS = ['refuseFields(', 'focusFirstInvalid('];
 // A class member's header at two-space indent: `  name(`, `  private name(`,
 // `  async name(`, `  get name(` … followed (after the parameters and an

@@ -127,3 +127,32 @@ export function gluedHints(html) {
   }
   return out;
 }
+
+/**
+ * QA D1288 (D1271 NOT_FIXED in round 27): the inactive-guarantor note read
+ * "02/11/2026 12:27Motif : …" and the inactive-allergy note the same — the
+ * time and the reason, each in its own `<span>` on its own line, ran together
+ * (the whitespace between two elements is dropped). The hint rule above reads
+ * elements by class name; these spans have none. So every inline element that
+ * shows part of a lifecycle note — a reason (`deactivationReason`,
+ * `cancellationReason`, `suspensionReason` …) or the time a record was closed
+ * (`deactivatedAt`, `revokedAt`, `suspendedAt` …) — is read like a hint.
+ */
+const INLINE_OPEN = /<(?:span|small|strong|em|b|time)\b[^>]*>/g;
+const LIFECYCLE_FIELD =
+  /\{\{[^}]*\b\w*(?:Reason|(?:deactivated|withdrawn|revoked|discontinued|cancelled|canceled|voided|lifted|resolved|inactivated|suspended|stopped|amended|archived|closed)At)\b[^}]*\}\}/;
+
+/** Every inline lifecycle-note element of a template glued to the text before it: `{ line, tag }`. */
+export function gluedLifecycleNotes(html) {
+  const out = [];
+  for (const m of html.matchAll(INLINE_OPEN)) {
+    const start = m.index + m[0].length;
+    const close = html.indexOf('</', start);
+    const body = html.slice(start, close < 0 ? html.length : close);
+    if (!LIFECYCLE_FIELD.test(body)) continue;
+    if (gluedBefore(html, m.index)) {
+      out.push({ line: html.slice(0, m.index).split('\n').length, tag: m[0].slice(0, 80) });
+    }
+  }
+  return out;
+}

@@ -1053,9 +1053,10 @@
           clinician copy it back, which defeats the entire check.
         -->
         <div class="field">
-          <label for="readBackValue">{{ 'LAB_RESULTS.READ_BACK_VALUE' | translate }}</label>
+          <label for="readBackValue">{{ 'LAB_RESULTS.READ_BACK_VALUE' | translate }} *</label>
           <input
             id="readBackValue"
+            required
             type="text"
             data-testid="read-back-input"
             [value]="readBackValue()"

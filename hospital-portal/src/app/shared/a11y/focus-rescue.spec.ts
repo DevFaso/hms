@@ -69,6 +69,34 @@ describe('focus rescue (QA D1202 class)', () => {
     expect(document.activeElement).toBe(document.body);
   });
 
+  // QA D1283 (round 27): the rescue now waits for a removed control to come
+  // back. A control that never comes back must not pull focus to a button
+  // elsewhere on the page that only shares its name.
+  it('a removed control is not replaced by a same-named button already on the page', async () => {
+    const other = document.createElement('button');
+    other.id = 'elsewhere';
+    other.textContent = 'Enregistrer';
+    page.appendChild(other);
+    const save = page.querySelector<HTMLButtonElement>('#save')!;
+    save.removeAttribute('id');
+    save.focus();
+    save.remove();
+    await settle();
+    expect(document.activeElement).not.toBe(other);
+    expect(document.activeElement).toBe(page.querySelector('main'));
+  });
+
+  it('a row re-rendered with the same patient gets its button back', async () => {
+    page.querySelector<HTMLButtonElement>('#close-1')!.focus();
+    const list = page.querySelector('ul')!;
+    list.innerHTML = '';
+    await settle();
+    list.innerHTML = '<li><span>Abdoul Nana</span><button>Fermer</button></li>';
+    await settle();
+    expect(document.activeElement?.textContent).toBe('Fermer');
+    expect(document.activeElement?.closest('li')?.textContent).toContain('Abdoul Nana');
+  });
+
   it('leaves alone a focus a screen already moved somewhere else', async () => {
     page.querySelector<HTMLButtonElement>('#close-1')!.focus();
     page.querySelector('#row-1')!.remove();

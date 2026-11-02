@@ -110,8 +110,14 @@ describe('AdmissionsComponent submit buttons say why they refuse (QA D1124)', ()
     expect(host.querySelector('#adm-bed-select')?.getAttribute('aria-invalid')).toBe('true');
     expect(dialog.querySelector('[data-testid="submit-guard-reason"]')).not.toBeNull();
 
-    fixture.componentInstance.selectedBedId.set('b1');
+    // QA D1280 (round 27): the picker now declares `required`, so the guard
+    // reads its DOM value; the bed is chosen the way the nurse does, in the
+    // picker (setting the signal alone left the select showing "—").
+    const picker = host.querySelector<HTMLSelectElement>('#adm-bed-select')!;
+    picker.value = 'b1';
+    picker.dispatchEvent(new Event('change'));
     fixture.detectChanges();
+    expect(fixture.componentInstance.selectedBedId()).toBe('b1');
     assign.click();
     expect(admissions.assignBed).toHaveBeenCalledTimes(1);
   });

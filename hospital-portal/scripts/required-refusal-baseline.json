@@ -297,19 +297,7 @@
       "count": 1,
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
     },
-    "src/app/patient-portal/my-documents/my-documents.component.ts::unmarked-refusal::uploadDocument::PORTAL.DOCUMENTS.FILE_REQUIRED": {
-      "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
-    },
-    "src/app/patient-portal/my-family-access/my-family-access.component.ts::unmarked-refusal::grantAccess::PORTAL.FAMILY.REQUIRED_FIELDS": {
-      "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
-    },
     "src/app/patients/bpa-panel/bpa-panel.component.ts::unmarked-refusal::override::BPA.OVERRIDE_REASON_REQUIRED": {
-      "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
-    },
-    "src/app/patients/break-glass-banner/break-glass-banner.component.ts::unmarked-refusal::submit::BREAK_GLASS.MISSING_CONTEXT": {
       "count": 1,
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
     },
@@ -326,14 +314,6 @@
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
     },
     "src/app/patients/coverage-tab/coverage-tab.component.ts::unmarked-refusal::submitRevoke::COVERAGE.CONSENT_REVOKE_REASON_REQUIRED": {
-      "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
-    },
-    "src/app/patients/fluid-balance/fluid-balance-tab.component.ts::unmarked-refusal::submit::FLUID_BALANCE.ROUTE_REQUIRED": {
-      "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
-    },
-    "src/app/patients/fluid-balance/fluid-balance-tab.component.ts::unmarked-refusal::submit::FLUID_BALANCE.VOLUME_REQUIRED": {
       "count": 1,
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
     },
@@ -372,6 +352,10 @@
     "src/app/patients/patient-detail.ts::unmarked-refusal::setChartRestriction::PATIENTS.CHART_RESTRICTION_REASON_REQUIRED": {
       "count": 1,
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/patients/patient-form.ts::unmarked-refusal::sendPhoneVerification::PATIENTS.PHONE_TOO_SHORT": {
+      "count": 1,
+      "why": "QA D1281 class (round 27 widened the rule to TOO_SHORT refusals): the registration phone check; patients/patient-form.ts is owned by fix/r27-portal-search-forms (D1289, the phone field), which marks it and deletes this pin"
     },
     "src/app/pharmacy/drug-interactions.ts::unmarked-refusal::submit::DRUG_INTERACTIONS.NAMES_REQUIRED": {
       "count": 1,

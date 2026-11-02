@@ -264,7 +264,8 @@
               @if (selectedSignature()!.revocationReason) {
                 <div class="detail-item full">
                   <span class="detail-label">{{ 'SIGNATURES.REVOCATION_REASON' | translate }}</span>
-                  <span class="revocation-text">{{ selectedSignature()!.revocationReason }}</span>
+                  {{ ' '
+                  }}<span class="revocation-text">{{ selectedSignature()!.revocationReason }}</span>
                 </div>
               }
             </div>

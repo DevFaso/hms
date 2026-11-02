@@ -180,3 +180,87 @@ test('QA D1260: every dialog directive registers its box with its opener', () =>
   const focusReturn = read('shared/a11y/focus-return.ts');
   assert.match(focusReturn, /fallbackOf\.get\(target\)/, 'restoreFocus walks the opener chain');
 });
+
+// ── QA D1283 / D1284 (round 27; D1004 / D1260 NOT_FIXED, the D1270 sibling) ──
+// After a SUCCESSFUL dialog action the screen reloaded its list under a
+// loading flag; the row button that opened the dialog left with the table and
+// focus ended on the page component (APP-NURSE-STATION, APP-LAB, the eMAR
+// SECTION). Escape passed because a cancel reloads nothing. One choke point
+// for every dialog of the portal: each dialog goes through one of the three
+// dialog directives; each gives focus back through focus-return.ts
+// `restoreFocus`; an opener that is not on the page is handed to the focus
+// rescue (`awaitReturn`), which gives focus to its twin when the list is back
+// and never stands in on a component host. Behaviour:
+// shared/a11y/focus-after-success.spec.ts (each directive) and the nurse
+// station, eMAR and lab specs (the reported screens).
+const DIALOG_ROLE = /^(?:dialog|alertdialog)$/;
+
+/** The dialogs of a template that do not go through one of the three directives: `[line]`. */
+export function dialogsOutsideTheDirectives(html) {
+  const out = [];
+  for (const t of tags(html)) {
+    if (t.type !== 'open') continue;
+    const role = (t.attrs.get('role') ?? '').replaceAll(/["']/g, '');
+    const isDialog =
+      t.name === 'dialog' || DIALOG_ROLE.test(role) || DIALOG_ATTRS.some((d) => t.attrs.has(d));
+    if (isDialog && !DIALOG_ATTRS.some((d) => t.attrs.has(d))) out.push(t.line);
+  }
+  return out;
+}
+
+export function restoresThroughTheChokePoint(directive) {
+  return /ngOnDestroy\(\)[^{]*\{[\s\S]*?restoreFocus\(/.test(directive);
+}
+
+test('QA D1283: every dialog of the portal goes through a directive that restores focus', () => {
+  const outside = [];
+  let dialogs = 0;
+  for (const { file, text, lineOffset } of templatesIn(appDir)) {
+    const rel = relative(appDir, file).split(sep).join('/');
+    dialogs += tags(text).filter(
+      (t) =>
+        t.type === 'open' &&
+        (t.name === 'dialog' ||
+          DIALOG_ROLE.test((t.attrs.get('role') ?? '').replaceAll(/["']/g, '')) ||
+          DIALOG_ATTRS.some((d) => t.attrs.has(d))),
+    ).length;
+    for (const line of dialogsOutsideTheDirectives(text))
+      outside.push(`${rel}:${line + (lineOffset ?? 0)}`);
+  }
+  assert.ok(dialogs >= 250, `every dialog must be read, saw ${dialogs}`);
+  assert.deepEqual(outside, [], 'put appModalDialog (or appDialogA11y / appDialogFocus) on it');
+  for (const rel of DIALOG_DIRECTIVES) {
+    assert.ok(restoresThroughTheChokePoint(read(rel)), `${rel} must restoreFocus on destroy`);
+  }
+});
+
+test('QA D1283: an opener gone with its list is awaited, and the page host never stands in', () => {
+  const ret = read('shared/a11y/focus-return.ts');
+  const body = /export function restoreFocus\([\s\S]*?\n\}/.exec(ret)?.[0] ?? '';
+  assert.match(body, /awaitReturn\(/, 'restoreFocus hands an absent opener to the rescue');
+  assert.match(ret, /keyOf\.set\(opener, focusKeyOf\(opener\)\)/, 'the key is taken on open');
+  const rescue = read('shared/a11y/focus-rescue.ts');
+  const fn = /export function rescueFocus\([\s\S]*?\n\}/.exec(rescue)?.[0] ?? '';
+  assert.match(fn, /returnToTwin\(doc\)/, 'the twin is tried before any stand-in');
+  assert.match(fn, /focusPlace\(standInFor\(place\)\)/, 'a component host never stands in');
+  assert.ok(
+    fn.indexOf('returnToTwin(doc)') < fn.indexOf('focusPlace(standInFor(place))'),
+    'the twin is tried first',
+  );
+});
+
+test('QA D1283 guard: the scans see a dialog outside the directives and a bare destroy', () => {
+  assert.deepEqual(dialogsOutsideTheDirectives('<div role="dialog" aria-label="x"></div>'), [1]);
+  assert.deepEqual(
+    dialogsOutsideTheDirectives('<div role="dialog" appModalDialog aria-label="x"></div>'),
+    [],
+  );
+  assert.equal(
+    restoresThroughTheChokePoint('ngOnDestroy(): void { this.opener?.focus(); }'),
+    false,
+  );
+  assert.equal(
+    restoresThroughTheChokePoint('ngOnDestroy(): void { this.x(); restoreFocus(this.opener); }'),
+    true,
+  );
+});

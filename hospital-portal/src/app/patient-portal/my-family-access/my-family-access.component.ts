@@ -1,4 +1,11 @@
-import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  OnInit,
+  inject,
+  signal,
+} from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
@@ -14,12 +21,20 @@ import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { localDateString, toServerDateTime } from '../../shared/date-utils';
 import { ConfirmDialogComponent } from '../../shared/confirm-dialog/confirm-dialog.component';
 import { refusalReason } from '../../shared/refusal-reason';
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+import { blankFields, refuseFields } from '../../shared/forms/invalid-fields';
+
+/** QA D1281: the grant form's required fields, in reading order. */
+const GRANT_USERNAME_ID = 'family-proxy-username';
+const GRANT_RELATIONSHIP_ID = 'family-relationship';
+const GRANT_FIELDS = [GRANT_USERNAME_ID, GRANT_RELATIONSHIP_ID];
 
 @Component({
   selector: 'app-my-family-access',
   standalone: true,
   imports: [
     ConfirmDialogComponent,
+    SubmitGuardDirective,
     ServerTimePipe,
     CommonModule,
     DatePipe,
@@ -36,6 +51,7 @@ export class MyFamilyAccessComponent implements OnInit {
   private readonly portalService = inject(PatientPortalService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   proxies = signal<ProxyResponse[]>([]);
   proxyAccess = signal<ProxyResponse[]>([]);
@@ -99,8 +115,30 @@ export class MyFamilyAccessComponent implements OnInit {
   }
 
   grantAccess(): void {
-    if (!this.form.proxyUsername || !this.form.relationship) {
-      this.toast.error(this.translate.instant('PORTAL.FAMILY.REQUIRED_FIELDS'));
+    // QA D1281: only the blank fields are named and marked (the static
+    // "username and relationship are required" showed with the username typed).
+    const blank = blankFields(
+      {
+        [GRANT_USERNAME_ID]: this.form.proxyUsername,
+        [GRANT_RELATIONSHIP_ID]: this.form.relationship,
+      },
+      GRANT_FIELDS,
+    );
+    if (blank.length > 0) {
+      refuseFields(
+        this.host.nativeElement,
+        blank,
+        GRANT_FIELDS,
+        this.translate.instant('COMMON.FIELD_REQUIRED'),
+      );
+      const labels = blank.map((id) =>
+        this.translate.instant(
+          id === GRANT_USERNAME_ID ? 'PORTAL.FAMILY.USERNAME' : 'PORTAL.FAMILY.RELATIONSHIP',
+        ),
+      );
+      this.toast.error(
+        this.translate.instant('COMMON.MISSING_REQUIRED_FIELDS', { fields: labels.join(', ') }),
+      );
       return;
     }
     // #948 review: the end of the reader's day, on the server's UTC clock

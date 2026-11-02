@@ -52,7 +52,7 @@
               <span class="lifecycle-label">{{
                 'TENANT_LIFECYCLE.FIELD.SUSPENDED_AT' | translate
               }}</span>
-              <span>{{ lc.suspendedAt | serverTime | date: 'medium' }}</span>
+              {{ ' ' }}<span>{{ lc.suspendedAt | serverTime | date: 'medium' }}</span>
             </div>
           }
           @if (lc.suspensionReason) {
@@ -60,7 +60,7 @@
               <span class="lifecycle-label">{{
                 'TENANT_LIFECYCLE.FIELD.SUSPENSION_REASON' | translate
               }}</span>
-              <span>{{ lc.suspensionReason }}</span>
+              {{ ' ' }}<span>{{ lc.suspensionReason }}</span>
             </div>
           }
           @if (lc.archivedAt) {
@@ -68,7 +68,7 @@
               <span class="lifecycle-label">{{
                 'TENANT_LIFECYCLE.FIELD.ARCHIVED_AT' | translate
               }}</span>
-              <span>{{ lc.archivedAt | serverTime | date: 'medium' }}</span>
+              {{ ' ' }}<span>{{ lc.archivedAt | serverTime | date: 'medium' }}</span>
             </div>
           }
           @if (lc.archiveReason) {
@@ -76,7 +76,7 @@
               <span class="lifecycle-label">{{
                 'TENANT_LIFECYCLE.FIELD.ARCHIVE_REASON' | translate
               }}</span>
-              <span>{{ lc.archiveReason }}</span>
+              {{ ' ' }}<span>{{ lc.archiveReason }}</span>
             </div>
           }
           @if (lc.purgeScheduledFor) {
@@ -92,7 +92,7 @@
               <span class="lifecycle-label">{{
                 'TENANT_LIFECYCLE.FIELD.PURGE_REASON' | translate
               }}</span>
-              <span>{{ lc.purgeReason }}</span>
+              {{ ' ' }}<span>{{ lc.purgeReason }}</span>
             </div>
           }
           @if (lc.purgedAt) {

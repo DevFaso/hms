@@ -356,9 +356,11 @@
       }
 
       <div class="form-row">
-        <label for="precaution-reason">{{ 'BED_BOARD.REASON' | translate }}</label>
+        <!-- QA D1280: every field the guard refuses blank shows the star and declares it. -->
+        <label for="precaution-reason">{{ 'BED_BOARD.REASON' | translate }} *</label>
         <input
           id="precaution-reason"
+          required
           type="text"
           [(ngModel)]="precautionForm.reason"
           name="reason"
@@ -425,8 +427,14 @@
 
     <div class="modal-body">
       <div class="form-row">
-        <label for="transfer-destination">{{ 'BED_BOARD.DESTINATION' | translate }}</label>
-        <select id="transfer-destination" [(ngModel)]="transferForm.toBedId" name="destination">
+        <!-- QA D1280: every field the guard refuses blank shows the star and declares it. -->
+        <label for="transfer-destination">{{ 'BED_BOARD.DESTINATION' | translate }} *</label>
+        <select
+          id="transfer-destination"
+          required
+          [(ngModel)]="transferForm.toBedId"
+          name="destination"
+        >
           <option value="">{{ 'BED_BOARD.CHOOSE_BED' | translate }}</option>
           @for (o of destinationOptions(); track o.bedId) {
             <option [value]="o.bedId">
@@ -449,16 +457,18 @@
             <input
               id="override-confirm"
               type="checkbox"
+              required
               [(ngModel)]="transferForm.isolationOverride"
               name="override"
             />
-            {{ 'BED_BOARD.OVERRIDE_CONFIRM' | translate }}
+            {{ 'BED_BOARD.OVERRIDE_CONFIRM' | translate }} *
           </label>
           @if (transferForm.isolationOverride) {
             <div class="form-row">
-              <label for="override-reason">{{ 'BED_BOARD.OVERRIDE_REASON' | translate }}</label>
+              <label for="override-reason">{{ 'BED_BOARD.OVERRIDE_REASON' | translate }} *</label>
               <input
                 id="override-reason"
+                required
                 type="text"
                 [(ngModel)]="transferForm.isolationOverrideReason"
                 name="overrideReason"
@@ -470,9 +480,10 @@
       }
 
       <div class="form-row">
-        <label for="transfer-reason">{{ 'BED_BOARD.REASON' | translate }}</label>
+        <label for="transfer-reason">{{ 'BED_BOARD.REASON' | translate }} *</label>
         <input
           id="transfer-reason"
+          required
           type="text"
           [(ngModel)]="transferForm.reason"
           name="transferReason"

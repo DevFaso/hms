@@ -611,10 +611,11 @@
                     {{ 'PROFILE.CHANGE_PASSWORD_DESC' | translate }}
                   </p>
                   <div class="form-group">
-                    <label for="pwdCurrent">{{ 'PROFILE.CURRENT_PASSWORD' | translate }}</label>
+                    <label for="pwdCurrent">{{ 'PROFILE.CURRENT_PASSWORD' | translate }} *</label>
                     <input
                       type="password"
                       id="pwdCurrent"
+                      required
                       name="pwdCurrent"
                       autocomplete="current-password"
                       class="form-control"
@@ -623,10 +624,11 @@
                     />
                   </div>
                   <div class="form-group">
-                    <label for="pwdNew">{{ 'PROFILE.NEW_PASSWORD' | translate }}</label>
+                    <label for="pwdNew">{{ 'PROFILE.NEW_PASSWORD' | translate }} *</label>
                     <input
                       type="password"
                       id="pwdNew"
+                      required
                       name="pwdNew"
                       autocomplete="new-password"
                       minlength="8"
@@ -636,10 +638,11 @@
                     />
                   </div>
                   <div class="form-group">
-                    <label for="pwdConfirm">{{ 'PROFILE.CONFIRM_PASSWORD' | translate }}</label>
+                    <label for="pwdConfirm">{{ 'PROFILE.CONFIRM_PASSWORD' | translate }} *</label>
                     <input
                       type="password"
                       id="pwdConfirm"
+                      required
                       name="pwdConfirm"
                       autocomplete="new-password"
                       class="form-control"

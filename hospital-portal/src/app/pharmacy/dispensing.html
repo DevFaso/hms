@@ -260,12 +260,13 @@
               <input
                 id="verifyAttest"
                 type="checkbox"
+                required
                 data-testid="verify-attest"
                 [ngModel]="verifyAttested()"
                 (ngModelChange)="verifyAttested.set($event)"
                 name="verifyAttested"
               />
-              {{ 'PHARMACY.VERIFY_ATTEST' | translate }}
+              {{ 'PHARMACY.VERIFY_ATTEST' | translate }} *
             </label>
           </div>
         </div>

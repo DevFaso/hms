@@ -1,4 +1,11 @@
-import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  OnInit,
+  inject,
+  signal,
+} from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -15,6 +22,7 @@ import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive'
 import { blobRefusalReason } from '../../shared/blob-refusal';
 import { refusalReason } from '../../shared/refusal-reason';
 import { ConfirmService } from '../../shared/confirm-dialog/confirm.service';
+import { refuseFields } from '../../shared/forms/invalid-fields';
 /**
  * The largest file the upload endpoint accepts: spring.servlet.multipart
  * max-file-size is 10MB (the backend is being aligned on this one number).
@@ -22,6 +30,9 @@ import { ConfirmService } from '../../shared/confirm-dialog/confirm.service';
  * rejected upload.
  */
 export const MAX_PATIENT_DOCUMENT_BYTES = 10 * 1024 * 1024;
+
+/** QA D1281: the upload form's required file input. */
+const DOCUMENT_FILE_ID = 'portal-document-file';
 
 /**
  * QA D1252: the label of EVERY document type the server can list. A Record
@@ -72,6 +83,7 @@ export class MyDocumentsComponent implements OnInit {
   private readonly portalService = inject(PatientPortalService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   /** QA D1229: the in-app confirmation, never the browser's. */
   private readonly confirmService = inject(ConfirmService);
 
@@ -148,7 +160,10 @@ export class MyDocumentsComponent implements OnInit {
   uploadDocument(): void {
     const file = this.selectedFile();
     if (!file) {
-      this.toast.error(this.translate.instant('PORTAL.DOCUMENTS.FILE_REQUIRED'));
+      // QA D1281: the missing file is marked where it is chosen.
+      const message = this.translate.instant('PORTAL.DOCUMENTS.FILE_REQUIRED');
+      refuseFields(this.host.nativeElement, [DOCUMENT_FILE_ID], [DOCUMENT_FILE_ID], message);
+      this.toast.error(message);
       return;
     }
     if (file.size > MAX_PATIENT_DOCUMENT_BYTES) {

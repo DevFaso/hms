@@ -16,13 +16,16 @@
 
   <!-- Upload Form -->
   @if (showUploadForm()) {
-    <div class="portal-card upload-form">
+    <!-- QA D1281: the file is required: star, required, marked when missing. -->
+    <div class="portal-card upload-form" data-submit-scope>
       <h3>{{ 'PORTAL.DOCUMENTS.UPLOAD' | translate }}</h3>
       <div class="form-grid">
         <label class="file-label">
-          {{ 'PORTAL.DOCUMENTS.SELECT_FILE' | translate }}
+          {{ 'PORTAL.DOCUMENTS.SELECT_FILE' | translate }} *
           <input
+            id="portal-document-file"
             type="file"
+            required
             (change)="onFileSelected($event)"
             accept=".pdf,.jpg,.jpeg,.png,.gif,.bmp,.tiff,.txt,.rtf,.doc,.docx"
           />
@@ -69,6 +72,7 @@
         (click)="uploadDocument()"
         [disabled]="uploading()"
         [appSubmitGuard]="!selectedFile() && ('SUBMIT_GUARD.FILE' | translate)"
+        [submitGuardFields]="['portal-document-file']"
       >
         {{
           uploading()

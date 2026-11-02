@@ -180,7 +180,8 @@
         @if (culture.status === 'CORRECTED' && culture.correctionReason) {
           <div class="correction-banner" data-testid="correction-banner">
             <span class="material-symbols-outlined">history_edu</span>
-            <span>
+            {{ ' '
+            }}<span>
               {{ 'MICRO.CORRECTED_AT' | translate }}
               {{ culture.correctedAt | serverTime | date: 'short' }} —
               {{ culture.correctionReason }}

@@ -52,11 +52,13 @@
       <h3 id="break-glass-banner-dialog-1-title">{{ 'BREAK_GLASS.MODAL_TITLE' | translate }}</h3>
       <p class="bg-modal__warn">{{ 'BREAK_GLASS.MODAL_WARN' | translate }}</p>
 
+      <!-- QA D1281 class (round 27): the justification is required: star, required, marked. -->
       <label class="bg-modal__label" for="bgReason">
-        {{ 'BREAK_GLASS.REASON_LABEL' | translate }}
+        {{ 'BREAK_GLASS.REASON_LABEL' | translate }} *
       </label>
       <textarea
         id="bgReason"
+        required
         class="bg-modal__input"
         rows="4"
         [ngModel]="reason()"

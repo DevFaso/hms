@@ -147,10 +147,12 @@
         <h3 id="fluid-balance-tab-dialog-1-title">{{ 'FLUID_BALANCE.MODAL_TITLE' | translate }}</h3>
 
         <div class="form-field">
-          <label for="io-route">{{ 'FLUID_BALANCE.FIELD_ROUTE' | translate }}</label>
+          <!-- QA D1279: the two required fields carry the star and declare it. -->
+          <label for="io-route">{{ 'FLUID_BALANCE.FIELD_ROUTE' | translate }} *</label>
           <select
             id="io-route"
             data-testid="io-route"
+            required
             [ngModel]="formRoute()"
             (ngModelChange)="formRoute.set($event)"
           >
@@ -169,10 +171,11 @@
         </div>
 
         <div class="form-field">
-          <label for="io-volume">{{ 'FLUID_BALANCE.FIELD_VOLUME' | translate }} (ml)</label>
+          <label for="io-volume">{{ 'FLUID_BALANCE.FIELD_VOLUME' | translate }} (ml) *</label>
           <input
             id="io-volume"
             data-testid="io-volume"
+            required
             type="number"
             min="1"
             max="10000"
@@ -215,6 +218,8 @@
             data-testid="io-save"
             (click)="submit()"
             [disabled]="saving()"
+            [appSubmitGuard]="volumeRefusal()"
+            submitGuardRequired
           >
             {{ (saving() ? 'FLUID_BALANCE.SAVING' : 'FLUID_BALANCE.SAVE') | translate }}
           </button>

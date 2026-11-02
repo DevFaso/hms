@@ -49,7 +49,8 @@
                     >{{ 'NURSE.CONTROLLED_SUBSTANCE' | translate }}</span
                   >
                 }
-                <span class="emar__queue-meta">
+                {{ ' '
+                }}<span class="emar__queue-meta">
                   {{ task.dose }} · {{ task.route | medicationRoute }} ·
                   {{
                     task.dueTime | serverTime | date: (isDueToday(task.dueTime) ? 'HH:mm' : 'short')
@@ -104,7 +105,13 @@
         </ul>
 
         @if (activeTask(); as task) {
-          <article class="emar__detail" data-testid="emar-detail">
+          <!-- QA D1283: a dose recorded closes this panel and reloads the queue;
+               focus comes back to the task in the queue, or the queue's first task. -->
+          <article
+            class="emar__detail"
+            data-testid="emar-detail"
+            [attr.data-focus-return]="focusReturnFor(task)"
+          >
             <header class="emar__detail-header">
               <div>
                 <h2>{{ task.patientName }}</h2>

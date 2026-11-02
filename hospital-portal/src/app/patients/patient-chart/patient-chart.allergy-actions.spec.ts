@@ -148,6 +148,8 @@ describe('PatientChartComponent — allergy actions (QA D527)', () => {
     const note = el.querySelector(`[data-testid="allergy-deactivation-${inactive.id}"]`);
     expect(note?.textContent).toContain('CHART.DEACTIVATION_REASON');
     expect(note?.textContent).toContain('Saisie en double');
+    // QA D1288: the time and the reason are not glued ("04:03Motif").
+    expect(note?.textContent?.replaceAll(/\s+/g, ' ')).toContain(' · CHART.DEACTIVATION_REASON');
     expect(el.querySelector('[data-testid="allergy-deactivation-al-hosp-b"]')).toBeNull();
   });
 

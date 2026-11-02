@@ -87,3 +87,23 @@ export class F {
     ['onSubmit::TRIAGE.VITAL_REQUIRED'],
   );
 });
+
+test('QA D1281 (round 27): a "too short" refusal is a field refusal too', () => {
+  // The portal's "Poser une question" refused a blank question with
+  // QUESTION_TOO_SHORT and marked nothing; the rule read only REQUIRED,
+  // MISSING and VALIDATION_ERROR keys.
+  const src = `
+export class F {
+  submitQuestion(): void {
+    if (this.askText.trim().length < 5) {
+      this.toast.error(this.translate.instant('PORTAL.EDUCATION.QUESTION_TOO_SHORT'));
+      return;
+    }
+  }
+}
+`;
+  assert.deepEqual(
+    requiredRefusalFindings(src).map((f) => f.anchor),
+    ['submitQuestion::PORTAL.EDUCATION.QUESTION_TOO_SHORT'],
+  );
+});

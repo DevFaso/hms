@@ -2,6 +2,7 @@ import { DialogFocusDirective } from '../shared/a11y/dialog-focus.directive';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
   Component,
+  ElementRef,
   computed,
   inject,
   OnDestroy,
@@ -9,6 +10,7 @@ import {
   signal,
   ChangeDetectionStrategy,
 } from '@angular/core';
+import { refuseFields } from '../shared/forms/invalid-fields';
 
 import { FormsModule } from '@angular/forms';
 import { Subject, takeUntil } from 'rxjs';
@@ -121,6 +123,7 @@ const SPECIALIZATIONS = [
 })
 export class UserListComponent implements OnInit, OnDestroy {
   private readonly userService = inject(UserService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly roleService = inject(RoleService);
   private readonly hospitalService = inject(HospitalService);
   private readonly toast = inject(ToastService);
@@ -706,7 +709,15 @@ export class UserListComponent implements OnInit, OnDestroy {
     const target = this.impersonateTarget();
     const reason = this.impersonateReason.trim();
     if (!target || reason.length < 5) {
-      this.impersonateError.set(this.translate.instant('USERS.TOAST.IMPERSONATE_REASON_TOO_SHORT'));
+      // QA D1281 class: the short reason is marked where it is typed.
+      const message = this.translate.instant('USERS.TOAST.IMPERSONATE_REASON_TOO_SHORT');
+      refuseFields(
+        this.host.nativeElement,
+        ['impersonate-reason'],
+        ['impersonate-reason'],
+        message,
+      );
+      this.impersonateError.set(message);
       return;
     }
     this.impersonating.set(true);

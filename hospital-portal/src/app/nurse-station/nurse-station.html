@@ -119,7 +119,7 @@
   }
 
   <!-- ── Section Tabs ──────────────────────────────── -->
-  <div class="section-tabs">
+  <div class="section-tabs" data-focus-place="nurse-sections">
     <button
       class="tab-btn"
       [class.active]="activeSection() === 'vitals'"
@@ -283,7 +283,12 @@
           </div>
         }
         @if (medications().length > 0) {
-          <div class="data-table">
+          <!-- QA D1283: a dose recorded reloads this table; focus comes back to the
+               row's action, or to the MAR tab when the row is gone. -->
+          <div
+            class="data-table"
+            data-focus-return="[data-focus-place=nurse-sections] .tab-btn.active"
+          >
             <table>
               <thead>
                 <tr>
@@ -392,7 +397,8 @@
                         >
                       }
                       @if (m.lastReason) {
-                        <span class="last-reason" [attr.data-testid]="'med-last-reason-' + m.id"
+                        {{ ' '
+                        }}<span class="last-reason" [attr.data-testid]="'med-last-reason-' + m.id"
                           >{{ 'MAR_HISTORY.REASON' | translate }} {{ m.lastReason }}</span
                         >
                       }

@@ -1,5 +1,6 @@
 import {
   Component,
+  ElementRef,
   OnInit,
   computed,
   inject,
@@ -19,6 +20,11 @@ import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { DialogA11yDirective } from '../../shared/a11y/dialog-a11y.directive';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { refusalReason } from '../../shared/refusal-reason';
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+import { refuseFields } from '../../shared/forms/invalid-fields';
+
+/** QA D1281: the ask-a-question dialog's required field. */
+const ASK_TEXT_ID = 'askText';
 
 type EducationTab = 'assigned' | 'completed' | 'questions';
 
@@ -33,6 +39,7 @@ type EducationTab = 'assigned' | 'completed' | 'questions';
     EnumLabelPipe,
     TranslateModule,
     DialogA11yDirective,
+    SubmitGuardDirective,
   ],
   templateUrl: './my-education.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -42,6 +49,7 @@ export class MyEducationComponent implements OnInit {
   private readonly portal = inject(PatientPortalService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   items = signal<PatientEducationItem[]>([]);
   questions = signal<PatientEducationQuestion[]>([]);
@@ -173,10 +181,18 @@ export class MyEducationComponent implements OnInit {
     this.askText = '';
   }
 
+  /** QA D1281: why the question cannot be sent yet (the guard marks the field), or null. */
+  questionRefusal(): string | null {
+    if (this.askText.trim().length >= 5) return null;
+    return this.translate.instant('PORTAL.EDUCATION.QUESTION_TOO_SHORT');
+  }
+
   submitQuestion(): void {
     const text = this.askText.trim();
     if (text.length < 5) {
-      this.toast.error(this.translate.instant('PORTAL.EDUCATION.QUESTION_TOO_SHORT'));
+      const message = this.translate.instant('PORTAL.EDUCATION.QUESTION_TOO_SHORT');
+      refuseFields(this.host.nativeElement, [ASK_TEXT_ID], [ASK_TEXT_ID], message);
+      this.toast.error(message);
       return;
     }
     this.askSubmitting.set(true);
