@@ -275,7 +275,7 @@
         { "id": "organize", "options": { "excludeByName": { "Time": true, "__name__": true, "instance": true, "job": true, "application": true }, "renameByName": { "Value": "5xx_rps" } } }
       ],
       "targets": [
-        { "expr": "topk(10, sum(rate(http_server_requests_seconds_count{application=\"$application\", uri!~\"$exclude_uri\", status=~\"5..\"}[1h])) by (uri, method))", "format": "table", "instant": true }
+        { "expr": "topk(10, sum(rate(http_server_requests_seconds_count{application=\"$application\", status=~\"5..\"}[1h])) by (uri, method))", "format": "table", "instant": true }
       ]
     },
     {

@@ -114,3 +114,21 @@ dependencies {
     testImplementation 'org.testcontainers:testcontainers-postgresql'
     testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
 }
+
+// DashboardTransportExclusionTest asserts over files OUTSIDE this module —
+// grafana/dashboards/*.json and grafana/rules/*.yml. Gradle has no way to know that, so
+// editing a dashboard on its own leaves :hospital-core:test UP-TO-DATE and the guard never
+// runs: precisely the state in which a bad selector reaches main with a green build.
+//
+// Found by falsifying the guard. Three deliberately broken dashboards all "passed", not
+// because the assertions were weak but because the task was skipped entirely. Declaring the
+// files as inputs makes a change to any of them re-run the task.
+tasks.named('test') {
+    inputs.files(fileTree(rootProject.file('grafana')) {
+        include 'dashboards/*.json'
+        include 'rules/*.yml'
+    })
+        .withPropertyName('grafanaObservabilityConfig')
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+        .optional()
+}
