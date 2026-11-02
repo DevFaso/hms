@@ -56,18 +56,12 @@ const OTHER_BRANCH = [
   'lab/lab-approval-queue/lab-approval-queue.html study-date',
   'lab/lab-approval-queue/lab-approval-queue.html rejection-reason',
   'lab/lab-results/lab-results.html readBackValue',
-  'lab/lab-test-config/lab-test-config.html defTestCode',
-  'lab/lab-test-config/lab-test-config.html defTestName',
-  'maternity/labor-tab.html labor-onset',
-  'prescriptions/prescriptions.html cds-override-reason',
-  'prescriptions/prescriptions.html rx-sign-reauth-secret',
   'profile/profile.html editEmail',
   'profile/profile.html emailChangeCode',
   'profile/profile.html pwdCurrent',
   'profile/profile.html pwdNew',
   'profile/profile.html pwdConfirm',
   'profile/profile.html verification-code',
-  'super-admin/providers/provider-detail/provider-detail.html decision-reason',
 ];
 for (const key of OTHER_BRANCH) PINNED.set(key, 'D1272 class, fix/r26-portal-forms');
 

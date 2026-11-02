@@ -416,11 +416,6 @@ const LISTED_UNDECLARED_ALLOWED = new Map([
   ['lab/lab-results/lab-results.html:readBackValue', CONDITIONAL],
   ['lock-screen/lock-screen.html:unlock-password', REASON],
   ['nurse-station/emar/emar.component.html:emar-hold-reason', MAR_BRANCH],
-  ['nurse-station/nurse-station.html:mar-reason-input', MAR_BRANCH],
-  ['nurse-station/nurse-station.html:tc-patient', MAR_BRANCH],
-  ['nurse-station/nurse-station.html:tc-category', MAR_BRANCH],
-  ['nurse-station/nurse-station.html:ho-patient', MAR_BRANCH],
-  ['nurse-station/nurse-station.html:ho-direction', MAR_BRANCH],
   ['nurse-station/nurse-station.html:cn-narrative', MAR_BRANCH],
   ['nurse-station/nursing-intake-form/nursing-intake-form.component.html:nursingNotes', MAR_BRANCH],
   [

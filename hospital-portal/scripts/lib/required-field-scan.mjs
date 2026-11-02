@@ -319,6 +319,9 @@ export function unstarredRequiredFindings(html, translate, subForms = NONE) {
   const wrapped = new Map();
   tokens.forEach((t, i) => {
     if (t.type !== 'open' || t.name !== 'label') return;
+    // A visually hidden label shows no text to star; the control declares
+    // aria-required for assistive technology instead (nurse-station reason box).
+    if (/\bsr-only\b/.test(unquote(t.attrs.get('class')))) return;
     const close = closeIndexOf(tokens, i);
     if (close === i) return;
     const text = readLabel(html.slice(t.end, tokens[close].start), translate);
