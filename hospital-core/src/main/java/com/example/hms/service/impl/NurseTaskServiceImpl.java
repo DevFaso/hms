@@ -148,8 +148,10 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     private static final String ORDER_TYPE_LAB = "LAB";
     private static final String ORDER_TYPE_IMAGING = "IMAGING";
     private static final String ORDER_TYPE_PROCEDURE = "PROCEDURE";
-    /** QA D235: the handoff types the nurse station offers. */
-    /** The handoff types: one list, the request's (QA D1371: refused at the edge with the other fields). */
+    /**
+     * QA D235: the handoff types the nurse station offers: one list, the
+     * request's (QA D1371: refused at the edge with the other fields).
+     */
     static final Set<String> HANDOFF_DIRECTIONS = NurseHandoffCreateRequestDTO.DIRECTIONS;
     private static final String STATUS_OVERDUE = "OVERDUE";
     private static final String STATUS_DUE = "DUE";
