@@ -39,7 +39,7 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, UUID> 
                AND (CASE WHEN m.sender_id < m.recipient_id THEN m.recipient_id ELSE m.sender_id END) = latest.u2
                AND m.sent_at = latest.max_sent
         WHERE m.sender_id = :userId OR m.recipient_id = :userId
-        ORDER BY m.sent_at DESC
+        ORDER BY m.sent_at DESC, m.id DESC
         LIMIT :limit OFFSET :offset
     """, nativeQuery = true)
     List<Object[]> findLatestMessagesForUserNative(
@@ -70,7 +70,7 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, UUID> 
             (sender_id = :user2Id AND recipient_id = :user1Id)
         )
         AND content ILIKE CONCAT('%', CAST(:keyword AS text), '%')
-        ORDER BY sent_at DESC
+        ORDER BY sent_at DESC, id DESC
     """,
             countQuery = """
         SELECT COUNT(*) FROM support.chat_messages
@@ -120,7 +120,7 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, UUID> 
            AND (CASE WHEN m.sender_id < m.recipient_id THEN m.recipient_id ELSE m.sender_id END) = latest.u2
            AND m.sent_at = latest.max_sent
     WHERE m.sender_id = :userId OR m.recipient_id = :userId
-    ORDER BY m.sent_at DESC
+    ORDER BY m.sent_at DESC, m.id DESC
     LIMIT :limit OFFSET :offset
 """, nativeQuery = true)
     List<Object[]> findLatestConversations(

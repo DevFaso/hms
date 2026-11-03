@@ -297,9 +297,12 @@ describe('LabService', () => {
       let qc = 0;
       service.listAllResults().subscribe((r) => (results = r.total));
       service.getQcEventsByDefinition('def-1').subscribe((r) => (qc = r.length));
-      httpMock
-        .expectOne((r) => r.url === '/lab-results' && r.params.get('page') === '0')
-        .flush({ data: { content: [{ id: 'a' }], totalElements: 2, totalPages: 2, number: 0 } });
+      const first = httpMock.expectOne(
+        (r) => r.url === '/lab-results' && r.params.get('page') === '0',
+      );
+      // QA D1361: every page is cut from one total order (newest result, then id).
+      expect(first.request.params.getAll('sort')).toEqual(['resultDate,desc', 'id,desc']);
+      first.flush({ data: { content: [{ id: 'a' }], totalElements: 2, totalPages: 2, number: 0 } });
       httpMock
         .expectOne((r) => r.url === '/lab-results' && r.params.get('page') === '1')
         .flush({ data: { content: [{ id: 'b' }], totalElements: 2, totalPages: 2, number: 1 } });

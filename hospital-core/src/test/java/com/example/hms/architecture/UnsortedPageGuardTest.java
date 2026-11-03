@@ -118,6 +118,47 @@ class UnsortedPageGuardTest {
             .containsExactlyInAnyOrderElementsOf(HARMLESS.keySet());
     }
 
+    /**
+     * QA D1361 (round 31): {@code StablePageOrderConfig} closes the order of
+     * every {@code Pageable} a repository receives, but a native query that
+     * pages by hand ({@code LIMIT :limit OFFSET :offset}) takes no
+     * {@code Pageable}, so its own ORDER BY must end on an id (the chat
+     * conversation lists ordered on {@code sent_at} alone, which two messages
+     * can share).
+     */
+    @Test
+    @DisplayName("D1361: a native query that pages by hand ends its ORDER BY on an id")
+    void everyHandPagedQueryEndsOnId() throws IOException {
+        Pattern offset = Pattern.compile("\\boffset\\s*+[:?]");
+        Pattern endsOnId = Pattern.compile(
+            "order\\s++by\\s++[^;]*?\\bid(?:\\s++(?:asc|desc))?\\s++(?:limit|offset)\\b");
+        List<String> handPaged = new ArrayList<>();
+        List<String> partial = new ArrayList<>();
+        for (Path file : filesUnder(MAIN.resolve("repository"))) {
+            Class<?> type = load(file);
+            if (type == null || !type.isInterface()) {
+                continue;
+            }
+            for (Method method : type.getDeclaredMethods()) {
+                Query query = method.getAnnotation(Query.class);
+                String sql = query == null ? "" : query.value().toLowerCase(Locale.ROOT);
+                if (!offset.matcher(sql).find()) {
+                    continue;
+                }
+                String site = type.getSimpleName() + "#" + method.getName();
+                handPaged.add(site);
+                if (!endsOnId.matcher(sql).find()) {
+                    partial.add(site);
+                }
+            }
+        }
+        assertThat(handPaged).as("hand-paged queries found (the chat lists)").isNotEmpty();
+        assertThat(partial)
+            .as("a query that pages by OFFSET on an order that is not total repeats and skips rows (QA D1361);"
+                + " end its ORDER BY with the id" + SourceScan.MANDATE)
+            .isEmpty();
+    }
+
     /** A repository call: the method's name (with the service hop, if any) and whether its result is ordered. */
     private record Call(String method, boolean ordered) {
     }

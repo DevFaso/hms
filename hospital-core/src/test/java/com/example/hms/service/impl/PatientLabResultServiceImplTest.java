@@ -416,6 +416,16 @@ class PatientLabResultServiceImplTest {
         assertThat(service.getLabResultsForPatientPortal(patientId, 50, 10)).isEmpty();
     }
 
+    /** QA D1362 (round 31): the portal's total counts the current results, every one, not a window. */
+    @Test void d1362_theTotalCountsEveryCurrentResult() {
+        a2Results();
+
+        assertThat(service.countLabResultsForPatientPortal(patientId))
+            .as("21 rows, two corrected away: 19 current, the rows the paged list reaches")
+            .isEqualTo(19);
+        verify(patientChartAccess).requireOwnRecord(patientId);
+    }
+
     /** The staff record is the record: both rows stay, each labelled. */
     @Test void staffView_keepsBothRowsOfAPreliminaryFinalPair() {
         LabOrder order = new LabOrder();

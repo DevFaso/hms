@@ -736,6 +736,11 @@ public class LabResultServiceImpl implements LabResultService {
                                                           boolean includeUnreleased) {
         // QA D781: the labOrderId filter was ignored and every result of the hospital came back.
         boolean anyOrder = labOrderId == null;
+        // QA D1361: the portal reads every page of this list with no sort, and
+        // the query has no ORDER BY - PostgreSQL broke the order differently for
+        // each OFFSET (16 of 202 results twice, 16 never). Newest result first;
+        // StablePageOrderConfig closes any order with the unique id.
+        Pageable ordered = newestResultFirst(pageable);
         UUID orderParam = anyOrder ? NO_HOSPITAL : labOrderId;
         UUID hospitalId = listScopeOrVerifiedGlobalView();
         if (hospitalId == null) {
@@ -743,14 +748,23 @@ public class LabResultServiceImpl implements LabResultService {
             // branch applied neither the patientId filter nor released-only.
             return currentForReader(labResultRepository.findAllForReader(!includeUnreleased, patientId == null,
                     patientId == null ? NO_HOSPITAL : patientId, anyOrder, orderParam,
-                    com.example.hms.utility.PageBounds.atMost(pageable, MAX_RESULT_PAGE_SIZE)), includeUnreleased)
+                    com.example.hms.utility.PageBounds.atMost(ordered, MAX_RESULT_PAGE_SIZE)), includeUnreleased)
                 .map(labResultMapper::toResponseDTO);
         }
         Page<LabResult> page = currentForReader(labResultRepository.findHandledByHospitalForReader(hospitalId,
             !includeUnreleased, patientId == null, patientId == null ? NO_HOSPITAL : patientId, anyOrder, orderParam,
-            com.example.hms.utility.PageBounds.atMost(pageable, MAX_RESULT_PAGE_SIZE)), includeUnreleased);
+            com.example.hms.utility.PageBounds.atMost(ordered, MAX_RESULT_PAGE_SIZE)), includeUnreleased);
         recordPerformedHereReach(page.getContent());
         return page.map(labResultMapper::toResponseDTO);
+    }
+
+    /** QA D1361: the caller's sort, or newest result first when it sent none. */
+    static Pageable newestResultFirst(Pageable pageable) {
+        if (pageable == null || pageable.isUnpaged() || pageable.getSort().isSorted()) {
+            return pageable;
+        }
+        return org.springframework.data.domain.PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
+            org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "resultDate"));
     }
 
     /** QA D741: released, and current against every row of its order. */

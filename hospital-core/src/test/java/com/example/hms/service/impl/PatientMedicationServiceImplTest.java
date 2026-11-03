@@ -409,6 +409,26 @@ class PatientMedicationServiceImplTest {
         assertThat(result.get(1).getReadyForCollectionPharmacyName()).isNull();
     }
 
+    /** QA D1362 (round 31): the portal's total is every issued prescription, never a draft. */
+    @Test
+    void d1362_theTotalCountsEveryIssuedPrescription() {
+        java.util.List<Prescription> rows = new java.util.ArrayList<>();
+        for (com.example.hms.enums.PrescriptionStatus status : java.util.List.of(
+                com.example.hms.enums.PrescriptionStatus.SIGNED, com.example.hms.enums.PrescriptionStatus.DRAFT,
+                com.example.hms.enums.PrescriptionStatus.SIGNED, com.example.hms.enums.PrescriptionStatus.DISCONTINUED)) {
+            Prescription p = new Prescription();
+            p.setId(UUID.randomUUID());
+            p.setStatus(status);
+            rows.add(p);
+        }
+        when(patientChartAccess.requireOwnRecord(patientId)).thenReturn(patient);
+        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(rows));
+        long expected = rows.stream().filter(p -> PatientMedicationServiceImpl.isIssued(p.getStatus())).count();
+
+        assertThat(service.countMedicationsForPatientPortal(patientId)).isEqualTo(expected).isLessThan(rows.size());
+    }
+
     @Test
     void staffRead_carriesReadinessToo() {
         // G15 AC-12: the staff medication list shows the same fact.

@@ -423,6 +423,10 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .activeDiagnoses(activeDiagnosesOf(patientId))
                 .allergies(splitToList(patient.getAllergies()))
                 .chronicConditions(splitToList(patient.getChronicConditions()))
+                .labResultTotal(safeCount("health summary lab result total",
+                    () -> labResultService.countLabResultsForPatientPortal(patientId)))
+                .medicationTotal(safeCount("health summary medication total",
+                    () -> medicationService.countMedicationsForPatientPortal(patientId)))
                 .build();
     }
 
@@ -1445,6 +1449,17 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         return out.get();
     }
 
+    /**
+     * QA D1362: a total for a card, read like the cards themselves (its own
+     * transaction, partial availability); null when it cannot be read, so the
+     * page falls back to what it holds rather than showing a wrong number.
+     */
+    private Long safeCount(String what, java.util.function.LongSupplier count) {
+        java.util.concurrent.atomic.AtomicReference<Long> out = new java.util.concurrent.atomic.AtomicReference<>();
+        isolatedReads.attempt(what, () -> out.set(count.getAsLong()));
+        return out.get();
+    }
+
     private List<PatientVitalSignResponseDTO> safeVitals(UUID patientId) {
         java.util.concurrent.atomic.AtomicReference<List<PatientVitalSignResponseDTO>> out =
             new java.util.concurrent.atomic.AtomicReference<>(Collections.emptyList());
@@ -1899,6 +1914,10 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .immunizations(safeImmunizations(patient.getId()))
                 .allergies(splitToList(patient.getAllergies()))
                 .chronicConditions(splitToList(patient.getChronicConditions()))
+                .labResultTotal(safeCount("proxy records lab result total",
+                    () -> labResultService.countLabResultsForPatientPortal(patient.getId())))
+                .medicationTotal(safeCount("proxy records medication total",
+                    () -> medicationService.countMedicationsForPatientPortal(patient.getId())))
                 .build();
     }
 
