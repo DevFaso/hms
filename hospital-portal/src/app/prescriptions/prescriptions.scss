@@ -637,3 +637,11 @@
     box-sizing: border-box;
   }
 }
+
+/* QA D1345: the form's fields, locked once the order is created (no fieldset chrome). */
+.rx-form-fields {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}

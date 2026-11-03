@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 
 import {
   anchorOf,
+  createStaysArmed,
   drivenSelectors,
   formBehaviourFindings,
   isSubmitControl,
@@ -77,4 +78,39 @@ test('a guarded form whose component never maps fieldErrors is a finding', () =>
   // An unguarded type=submit form (no required-field refusal of its own) is not held to the mapping.
   const plain = '<form><button type="submit" data-testid="s">x</button></form>';
   assert.deepEqual(formBehaviourFindings(plain, '', 'src/app/x/x.html', driven), []);
+});
+
+// QA D1345 (round 30): the new-prescription dialog closed only when the server
+// sent no advisory; on the other branch it stayed in create mode and a second
+// press posted the same order again.
+test('create-stays-armed: a success that closes only on a condition must lock the dialog', () => {
+  const armed = `
+    op.subscribe({
+      next: (saved) => {
+        const advisories = saved?.cdsAdvisories ?? [];
+        if (advisories.length === 0) {
+          this.closeModal();
+        }
+      },
+    });`;
+  assert.deepEqual(
+    createStaysArmed(armed).map((f) => f.handler),
+    ['next: (saved) => {'],
+  );
+  const locked = armed.replace(
+    'this.closeModal();\n        }',
+    'this.closeModal();\n        } else { this.createdWithAdvisories.set(true); }',
+  );
+  assert.deepEqual(createStaysArmed(locked), []);
+  // An unconditional close, and a handler that closes nothing, are not findings.
+  assert.deepEqual(
+    createStaysArmed('x.subscribe({ next: () => { this.toast.ok(); this.closeModal(); } })'),
+    [],
+  );
+  assert.deepEqual(createStaysArmed('x.subscribe({ next: (r) => { this.rows.set(r); } })'), []);
+  const html = '<button data-testid="s">x</button>';
+  assert.deepEqual(
+    formBehaviourFindings(html, armed, 'src/app/x/x.html', noSpecs).map((f) => f.rule),
+    ['create-stays-armed'],
+  );
 });

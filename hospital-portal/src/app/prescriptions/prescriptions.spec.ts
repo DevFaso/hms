@@ -1040,6 +1040,125 @@ describe('PrescriptionsComponent — signing', () => {
     );
   });
 
+  // QA D1345 (round 30): a create the server accepted with an advisory
+  // ("Doublon possible") left the dialog in create mode, so a second press of
+  // Créer posted a duplicate order. The dialog now stays to show the cards,
+  // locked, with Close as its only action.
+  it('QA D1345: after a create with an advisory the dialog cannot create the order again', async () => {
+    const duplicate = {
+      summary: 'Doublon possible',
+      indicator: 'warning',
+      source: { label: 'HMS' },
+    };
+    prescriptionService.create.and.returnValue(
+      of({ ...rx('rx-dup', 'DRAFT'), cdsAdvisories: [duplicate] } as PrescriptionResponse),
+    );
+    component.openCreate();
+    component.form = {
+      ...component.form,
+      medicationName: 'Paracétamol 500 mg',
+      quantity: 9,
+    } as never;
+    component.submitForm();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(component.createdWithAdvisories()).toBeTrue();
+    expect(host.querySelector('[data-testid="cds-advisories"]')?.textContent).toContain(
+      'Doublon possible',
+    );
+    expect(host.querySelector('[data-testid="rx-created-hint"]')).not.toBeNull();
+    const fields = host.querySelector<HTMLFieldSetElement>('[data-testid="rx-form-fields"]')!;
+    expect(fields.disabled).withContext('every field is locked').toBeTrue();
+    const buttons = Array.from(host.querySelectorAll<HTMLButtonElement>('.modal-actions button'));
+    expect(buttons.map((b) => b.getAttribute('data-testid'))).toEqual(['rx-created-close']);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(document.activeElement?.getAttribute('data-testid')).toBe('rx-created-close');
+
+    // A second submit (a double press, Enter) never posts again.
+    component.submitForm();
+    expect(prescriptionService.create).toHaveBeenCalledTimes(1);
+
+    buttons[0].click();
+    fixture.detectChanges();
+    expect(component.showModal()).toBeFalse();
+    expect(component.createdWithAdvisories()).toBeFalse();
+    component.openCreate();
+    expect(component.createdWithAdvisories())
+      .withContext('a new form is a create form again')
+      .toBeFalse();
+  });
+
+  it('QA D1345: an edit with an advisory keeps its own Update (not a create, nothing to duplicate)', () => {
+    const card = { summary: 'Interaction', indicator: 'info', source: { label: 'HMS' } };
+    prescriptionService.update.and.returnValue(
+      of({ ...rx('rx-1', 'DRAFT'), cdsAdvisories: [card] } as PrescriptionResponse),
+    );
+    component.openEdit(rx('rx-1', 'DRAFT'));
+    component.form.quantity = 5;
+    component.submitForm();
+    expect(component.createdWithAdvisories()).toBeFalse();
+  });
+
+  // QA round 30 (user decision 2026-11-02): an as-needed order states the
+  // minimum interval between two doses; the field shows exactly when the
+  // server will ask for it, is refused on itself when blank, and is never sent
+  // with a fixed schedule.
+  describe('QA round 30: the PRN minimum interval', () => {
+    const field = () =>
+      (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>(
+        '#rx-prnMinIntervalHours',
+      );
+
+    it('is asked of a "si besoin" order, refused blank, and sent', () => {
+      prescriptionService.create.and.returnValue(of(rx('rx-prn', 'DRAFT')));
+      component.openCreate();
+      component.form = { ...component.form, medicationName: 'Paracétamol', quantity: 10 } as never;
+      fixture.detectChanges();
+      expect(field()).withContext('no field for a blank frequency').toBeNull();
+      component.onFrequencyChange('si besoin');
+      fixture.detectChanges();
+      expect(field()).not.toBeNull();
+
+      component.submitForm();
+      fixture.detectChanges();
+      expect(prescriptionService.create).not.toHaveBeenCalled();
+      expect(field()!.getAttribute('aria-invalid')).toBe('true');
+
+      component.form.prnMinIntervalHours = 0;
+      component.submitForm();
+      expect(prescriptionService.create).not.toHaveBeenCalled();
+
+      component.form.prnMinIntervalHours = 4;
+      component.submitForm();
+      expect(prescriptionService.create).toHaveBeenCalledTimes(1);
+      expect(prescriptionService.create.calls.mostRecent().args[0]).toEqual(
+        jasmine.objectContaining({ frequency: 'si besoin', prnMinIntervalHours: 4 }),
+      );
+    });
+
+    it('a fixed schedule hides the field and sends no interval', () => {
+      prescriptionService.create.and.returnValue(of(rx('rx-tid', 'DRAFT')));
+      component.openCreate();
+      component.form = { ...component.form, medicationName: 'Amoxicilline', quantity: 21 } as never;
+      component.onFrequencyChange('PRN');
+      component.form.prnMinIntervalHours = 6;
+      component.onFrequencyChange('3 fois par jour');
+      fixture.detectChanges();
+      expect(field()).toBeNull();
+      component.submitForm();
+      expect(prescriptionService.create.calls.mostRecent().args[0].prnMinIntervalHours).toBeNull();
+    });
+
+    it('an edit opens with the interval the order carries', () => {
+      component.openEdit({ ...rx('rx-1', 'DRAFT'), frequency: 'PRN', prnMinIntervalHours: 8 });
+      expect(component.form.prnMinIntervalHours).toBe(8);
+      expect(component.prnIntervalShown()).toBeTrue();
+    });
+  });
+
   it('a non-403 failure without a body falls back to the generic sign failure', () => {
     const translate = TestBed.inject(TranslateService);
     spyOn(translate, 'instant').and.callFake(((key: string) => `t:${key}`) as never);

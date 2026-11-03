@@ -55,6 +55,7 @@ import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { serverInstant } from '../shared/date-utils';
 import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
 import { canonicalRoute } from '../shared/pipes/medication-route.pipe';
+import { PRN_MAX_INTERVAL_HOURS, isAsNeededFrequency } from '../shared/as-needed-frequency';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { isStepUpRefusal } from '../services/step-up';
 import { MfaService } from '../auth/mfa.service';
@@ -159,6 +160,8 @@ export const PRESCRIPTION_TABS: readonly { id: PrescriptionTab; labelKey: string
 
 /** The prescribed quantity, refused when blank or not positive (QA D1306). */
 const RX_QUANTITY_IDS = ['rx-quantity'];
+/** QA round 30: the as-needed order's minimum interval (server key prnMinIntervalHours). */
+const RX_PRN_INTERVAL_IDS = ['rx-prnMinIntervalHours'];
 
 @Component({
   selector: 'app-prescriptions',
@@ -320,6 +323,16 @@ export class PrescriptionsComponent implements OnInit {
   saving = signal(false);
   editingId = signal<string | null>(null);
   form: PrescriptionRequest = this.emptyForm();
+  /**
+   * QA D1345 (round 30): a create that the server accepted with advisories
+   * ("Doublon possible") keeps the dialog open so the cards can be read, but
+   * the dialog is no longer a create form: its fields are locked, the Create
+   * button is gone and a second press can never post the same order again.
+   * Only Close remains (focused). Reset when a form is opened or closed.
+   */
+  readonly createdWithAdvisories = signal(false);
+  /** QA round 30: the longest minimum interval the form accepts, in hours. */
+  protected readonly prnMaxIntervalHours = PRN_MAX_INTERVAL_HOURS;
 
   showDeleteConfirm = signal(false);
   deletingRx = signal<PrescriptionResponse | null>(null);
@@ -482,6 +495,7 @@ export class PrescriptionsComponent implements OnInit {
       medicationName: '',
       dosage: '',
       frequency: '',
+      prnMinIntervalHours: null,
       route: 'PO',
       duration: '',
       quantity: null,
@@ -641,6 +655,7 @@ export class PrescriptionsComponent implements OnInit {
 
   openCreate(): void {
     this.form = this.emptyForm();
+    this.createdWithAdvisories.set(false);
     this.resetCatalogPick();
     // QA D123: a clinician prescribing opens the form with THEMSELVES as the
     // prescriber, instead of an empty choice in a list of colleagues.
@@ -661,6 +676,7 @@ export class PrescriptionsComponent implements OnInit {
     // refuses any edit of it, so no form is opened on one.
     if (isWithdrawnStatus(p.status)) return;
     this.resetCatalogPick();
+    this.createdWithAdvisories.set(false);
     this.form = {
       patientId: p.patientId ?? '',
       staffId: p.staffId ?? '',
@@ -668,6 +684,8 @@ export class PrescriptionsComponent implements OnInit {
       medicationName: p.medicationName ?? '',
       dosage: p.dosage ?? '',
       frequency: p.frequency ?? '',
+      // QA round 30: the as-needed order's minimum interval, as written.
+      prnMinIntervalHours: p.prnMinIntervalHours ?? null,
       // QA D950: a stored "ORAL" opens on the form's own PO option.
       route: canonicalRoute(p.route) ?? p.route ?? '',
       duration: p.duration ?? '',
@@ -729,6 +747,7 @@ export class PrescriptionsComponent implements OnInit {
 
   closeModal(): void {
     this.showModal.set(false);
+    this.createdWithAdvisories.set(false);
     this.formError.set('');
     this.resetCdsState();
     this.resetCatalogPick();
@@ -751,7 +770,31 @@ export class PrescriptionsComponent implements OnInit {
    */
   protected readonly formError = signal('');
 
+  /**
+   * QA round 30 (user decision 2026-11-02): the minimum interval is asked of
+   * an as-needed order only, exactly when the server will require it.
+   */
+  prnIntervalShown(): boolean {
+    return isAsNeededFrequency(this.form.frequency);
+  }
+
+  /** QA round 30: a frequency that is no longer as-needed carries no interval (the server refuses one). */
+  onFrequencyChange(value: string): void {
+    this.form.frequency = value;
+    if (!isAsNeededFrequency(value)) {
+      this.form.prnMinIntervalHours = null;
+    }
+  }
+
+  /** QA round 30: a whole number of hours from 1 to the maximum. */
+  private prnIntervalValid(): boolean {
+    const hours = Number(this.form.prnMinIntervalHours);
+    return Number.isInteger(hours) && hours >= 1 && hours <= PRN_MAX_INTERVAL_HOURS;
+  }
+
   submitForm(): void {
+    // QA D1345: a created order is never posted again from the same dialog.
+    if (this.createdWithAdvisories()) return;
     this.formError.set('');
     // QA D706: a new prescription states the quantity to hand over; the
     // pharmacy caps the dispense at it (the server refuses it too).
@@ -764,10 +807,23 @@ export class PrescriptionsComponent implements OnInit {
       return;
     }
     refuseFields(this.host.nativeElement, [], RX_QUANTITY_IDS, '');
+    // QA round 30: an as-needed order states its minimum interval (a signed
+    // order only accepts its withdrawal, so it is not asked there).
+    if (!this.editingSigned() && this.prnIntervalShown() && !this.prnIntervalValid()) {
+      const message = this.translate.instant('PRESCRIPTIONS.PRN_MIN_INTERVAL_REQUIRED');
+      refuseFields(this.host.nativeElement, RX_PRN_INTERVAL_IDS, RX_PRN_INTERVAL_IDS, message);
+      this.formError.set(message);
+      return;
+    }
+    refuseFields(this.host.nativeElement, [], RX_PRN_INTERVAL_IDS, '');
     this.saving.set(true);
+    const body: PrescriptionRequest = {
+      ...this.form,
+      prnMinIntervalHours: this.prnIntervalShown() ? this.form.prnMinIntervalHours : null,
+    };
     const op = this.editing()
-      ? this.prescriptionService.update(this.editingId()!, this.form)
-      : this.prescriptionService.create(this.form);
+      ? this.prescriptionService.update(this.editingId()!, body)
+      : this.prescriptionService.create(body);
     op.subscribe({
       next: (saved) => {
         const advisories = saved?.cdsAdvisories ?? [];
@@ -785,6 +841,12 @@ export class PrescriptionsComponent implements OnInit {
         // warning/info cards we just attached.
         if (advisories.length === 0) {
           this.closeModal();
+        } else if (!this.editing()) {
+          // QA D1345: the order exists now. The dialog stays to show the
+          // cards, locked, with Close focused: a second press of Create
+          // posted a duplicate order.
+          this.createdWithAdvisories.set(true);
+          this.focusCreatedClose();
         }
       },
       error: (err) => {
@@ -812,6 +874,15 @@ export class PrescriptionsComponent implements OnInit {
         this.saving.set(false);
       },
     });
+  }
+
+  /** QA D1345: focus moves to the dialog's Close once the order is created (after the view shows it). */
+  private focusCreatedClose(): void {
+    setTimeout(() => {
+      this.host.nativeElement
+        .querySelector<HTMLElement>('[data-testid="rx-created-close"]')
+        ?.focus();
+    }, 0);
   }
 
   /** Cleared when the modal closes so a stale advisory does not leak between rxes. */

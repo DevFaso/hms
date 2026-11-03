@@ -340,6 +340,12 @@
                           }}</span></span
                         >
                       }
+                      <!-- QA round 30: an as-needed order and the prescriber's minimum interval. -->
+                      @if (m.prnLabel) {
+                        <span class="cell-sub" [attr.data-testid]="'med-prn-' + m.id">{{
+                          m.prnLabel
+                        }}</span>
+                      }
                       @if (m.cdsAdvisories?.length) {
                         {{ ' '
                         }}<span

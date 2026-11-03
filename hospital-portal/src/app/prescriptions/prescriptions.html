@@ -155,7 +155,16 @@
                 <strong>{{ p.medicationDisplayName || p.medicationName }}</strong>
               </td>
               <td>{{ p.dosage || '—' }}</td>
-              <td>{{ p.frequency || '—' }}</td>
+              <td>
+                {{ p.frequency || '—' }}
+                @if (p.prnMinIntervalHours) {
+                  <!-- QA round 30: the as-needed order's minimum interval. -->
+                  <span class="cell-sub" data-testid="rx-row-prn-interval">{{
+                    'PRESCRIPTIONS.PRN_MIN_INTERVAL_VALUE'
+                      | translate: { hours: p.prnMinIntervalHours }
+                  }}</span>
+                }
+              </td>
               <td>{{ p.duration || '—' }}</td>
               <td>{{ p.staffFullName || '—' }}</td>
               <td>
@@ -328,6 +337,16 @@
               <span class="field-label">{{ 'PRESCRIPTIONS.FREQUENCY' | translate }}</span
               ><span class="field-value">{{ rx.frequency || '—' }}</span>
             </div>
+            @if (rx.prnMinIntervalHours) {
+              <!-- QA round 30: the as-needed order's minimum interval, as the prescriber wrote it. -->
+              <div class="detail-field" data-testid="rx-detail-prn-interval">
+                <span class="field-label">{{ 'PRESCRIPTIONS.PRN_MIN_INTERVAL' | translate }}</span
+                ><span class="field-value">{{
+                  'PRESCRIPTIONS.PRN_MIN_INTERVAL_VALUE'
+                    | translate: { hours: rx.prnMinIntervalHours }
+                }}</span>
+              </div>
+            }
             <div class="detail-field">
               <span class="field-label">{{ 'PRESCRIPTIONS.DURATION' | translate }}</span
               ><span class="field-value">{{ rx.duration || '—' }}</span>
@@ -832,284 +851,325 @@
             {{ 'PRESCRIPTIONS.SIGNED_EDIT_HINT' | translate }}
           </p>
         }
-        <div class="form-row">
-          <div class="field">
-            <label for="rx-patientSearch">{{ 'PATIENTS.PATIENT_NAME' | translate }} *</label>
-            @if (selectedPatient()) {
-              <div class="picker-chip">
-                <div class="chip-avatar">{{ patientInitials(selectedPatient()!) }}</div>
-                <div class="chip-info">
-                  <span class="chip-name">{{ selectedPatient() | personName }}</span>
-                  @if (selectedPatient() | patientSubline; as sub) {
-                    {{ ' ' }}<span class="chip-sub">{{ sub }}</span>
+        @if (createdWithAdvisories()) {
+          <!-- QA D1345: the order is created; the form is locked, only Close remains. -->
+          <p class="form-hint" role="status" data-testid="rx-created-hint">
+            {{ 'PRESCRIPTIONS.CREATED_WITH_ADVISORIES' | translate }}
+          </p>
+        }
+        <!-- QA D1345: locked once the order is created (a second Create posted a duplicate). -->
+        <fieldset
+          class="rx-form-fields"
+          data-testid="rx-form-fields"
+          [disabled]="createdWithAdvisories()"
+        >
+          <div class="form-row">
+            <div class="field">
+              <label for="rx-patientSearch">{{ 'PATIENTS.PATIENT_NAME' | translate }} *</label>
+              @if (selectedPatient()) {
+                <div class="picker-chip">
+                  <div class="chip-avatar">{{ patientInitials(selectedPatient()!) }}</div>
+                  <div class="chip-info">
+                    <span class="chip-name">{{ selectedPatient() | personName }}</span>
+                    @if (selectedPatient() | patientSubline; as sub) {
+                      {{ ' ' }}<span class="chip-sub">{{ sub }}</span>
+                    }
+                  </div>
+                  @if (!editingSigned()) {
+                    <button
+                      type="button"
+                      class="chip-clear"
+                      (click)="clearPatient()"
+                      [title]="'COMMON.CHANGE_PATIENT' | translate"
+                      [attr.aria-label]="'COMMON.CHANGE_PATIENT' | translate"
+                    >
+                      <span class="material-symbols-outlined">close</span>
+                    </button>
                   }
                 </div>
-                @if (!editingSigned()) {
-                  <button
-                    type="button"
-                    class="chip-clear"
-                    (click)="clearPatient()"
-                    [title]="'COMMON.CHANGE_PATIENT' | translate"
-                    [attr.aria-label]="'COMMON.CHANGE_PATIENT' | translate"
-                  >
-                    <span class="material-symbols-outlined">close</span>
-                  </button>
-                }
-              </div>
-            } @else {
-              <div class="patient-picker-wrap">
-                <span class="material-symbols-outlined picker-search-icon">person_search</span>
-                <input
-                  required
-                  data-escape-discards
-                  id="rx-patientSearch"
-                  [attr.data-submit-blank]="form.patientId ? 'false' : 'true'"
-                  class="picker-input"
-                  type="text"
-                  [placeholder]="'COMMON.SEARCH_PATIENT' | translate"
-                  [value]="patientQuery()"
-                  (input)="onPatientQueryChange($any($event.target).value)"
-                  (blur)="patientDropdownOpen.set(false)"
-                  [appListEscape]="patientDropdownOpen()"
-                  (listEscape)="patientDropdownOpen.set(false)"
-                  autocomplete="off"
-                />
-                @if (patientSearchLoading()) {
-                  <div class="picker-spinner"></div>
-                }
-                @if (patientDropdownOpen()) {
-                  <ul
-                    class="picker-dropdown"
-                    [attr.aria-label]="'APPOINTMENTS.PATIENT_SUGGESTIONS' | translate"
-                  >
-                    @for (p of patientSuggestions(); track p.id) {
-                      <li class="picker-option" (mousedown)="selectPatient(p)">
-                        <div class="opt-avatar">{{ patientInitials(p) }}</div>
-                        <div class="opt-info">
-                          <span class="opt-name">{{ p | personName }}</span>
-                          @if (p | patientSubline; as sub) {
-                            {{ ' ' }}<span class="opt-meta">{{ sub }}</span>
-                          }
-                        </div>
-                      </li>
-                    }
-                  </ul>
-                }
-              </div>
-            }
+              } @else {
+                <div class="patient-picker-wrap">
+                  <span class="material-symbols-outlined picker-search-icon">person_search</span>
+                  <input
+                    required
+                    data-escape-discards
+                    id="rx-patientSearch"
+                    [attr.data-submit-blank]="form.patientId ? 'false' : 'true'"
+                    class="picker-input"
+                    type="text"
+                    [placeholder]="'COMMON.SEARCH_PATIENT' | translate"
+                    [value]="patientQuery()"
+                    (input)="onPatientQueryChange($any($event.target).value)"
+                    (blur)="patientDropdownOpen.set(false)"
+                    [appListEscape]="patientDropdownOpen()"
+                    (listEscape)="patientDropdownOpen.set(false)"
+                    autocomplete="off"
+                  />
+                  @if (patientSearchLoading()) {
+                    <div class="picker-spinner"></div>
+                  }
+                  @if (patientDropdownOpen()) {
+                    <ul
+                      class="picker-dropdown"
+                      [attr.aria-label]="'APPOINTMENTS.PATIENT_SUGGESTIONS' | translate"
+                    >
+                      @for (p of patientSuggestions(); track p.id) {
+                        <li class="picker-option" (mousedown)="selectPatient(p)">
+                          <div class="opt-avatar">{{ patientInitials(p) }}</div>
+                          <div class="opt-info">
+                            <span class="opt-name">{{ p | personName }}</span>
+                            @if (p | patientSubline; as sub) {
+                              {{ ' ' }}<span class="opt-meta">{{ sub }}</span>
+                            }
+                          </div>
+                        </li>
+                      }
+                    </ul>
+                  }
+                </div>
+              }
+            </div>
+            <div class="field">
+              <label for="rx-staffId">{{ 'PRESCRIPTIONS.PRESCRIBER' | translate }}</label>
+              @if (editingSigned() || (editing() && editingPrescriberName())) {
+                <!-- QA D670/D677: the order's own prescriber, never the caller's name. -->
+                <input id="rx-staffId" type="text" [value]="editingPrescriberName()" readonly />
+              } @else {
+                <select id="rx-staffId" [(ngModel)]="form.staffId">
+                  <option value="">{{ 'PRESCRIPTIONS.SELECT_PRESCRIBER' | translate }}</option>
+                  @for (s of staffMembers(); track s.id) {
+                    <option [value]="s.id">{{ s.name }}</option>
+                  }
+                </select>
+              }
+            </div>
           </div>
           <div class="field">
-            <label for="rx-staffId">{{ 'PRESCRIPTIONS.PRESCRIBER' | translate }}</label>
-            @if (editingSigned() || (editing() && editingPrescriberName())) {
-              <!-- QA D670/D677: the order's own prescriber, never the caller's name. -->
-              <input id="rx-staffId" type="text" [value]="editingPrescriberName()" readonly />
-            } @else {
-              <select id="rx-staffId" [(ngModel)]="form.staffId">
-                <option value="">{{ 'PRESCRIPTIONS.SELECT_PRESCRIBER' | translate }}</option>
-                @for (s of staffMembers(); track s.id) {
-                  <option [value]="s.id">{{ s.name }}</option>
+            <label for="rx-medName">{{ 'PRESCRIPTIONS.MEDICATION_NAME' | translate }} *</label>
+            <!-- QA D922/D935: picking a catalogue item sends its id, so the
+               catalogue's controlled flag and paediatric ceiling apply. -->
+            <input
+              id="rx-medName"
+              type="text"
+              list="rx-med-catalog"
+              autocomplete="off"
+              [ngModel]="form.medicationName"
+              (ngModelChange)="onMedicationNameChange($event)"
+              [readonly]="editingSigned()"
+              [placeholder]="'PRESCRIPTIONS.MEDICATION_PLACEHOLDER' | translate"
+              required
+            />
+            <datalist id="rx-med-catalog">
+              @for (item of catalogOptions(); track item.id) {
+                <option [value]="catalogLabel(item)"></option>
+              }
+            </datalist>
+            @if (pickedCatalogItem()?.controlled) {
+              <p
+                class="field-hint field-hint-controlled"
+                data-testid="rx-controlled-hint"
+                role="status"
+              >
+                {{ 'PRESCRIPTIONS.CONTROLLED_PICKED_HINT' | translate }}
+              </p>
+            }
+          </div>
+          <div class="form-row">
+            <div class="field">
+              <label for="rx-dosage">{{ 'PRESCRIPTIONS.DOSAGE' | translate }}</label>
+              <input
+                id="rx-dosage"
+                type="text"
+                [(ngModel)]="form.dosage"
+                [readonly]="editingSigned()"
+                [placeholder]="'PRESCRIPTIONS.DOSAGE_PLACEHOLDER' | translate"
+              />
+            </div>
+            <div class="field">
+              <label for="rx-frequency">{{ 'PRESCRIPTIONS.FREQUENCY' | translate }}</label>
+              <input
+                id="rx-frequency"
+                type="text"
+                [ngModel]="form.frequency"
+                (ngModelChange)="onFrequencyChange($event)"
+                [readonly]="editingSigned()"
+                [placeholder]="'PRESCRIPTIONS.FREQUENCY_PLACEHOLDER' | translate"
+              />
+            </div>
+            <div class="field">
+              <label for="rx-route">{{ 'PRESCRIPTIONS.ROUTE' | translate }}</label>
+              <select id="rx-route" [(ngModel)]="form.route" [disabled]="editingSigned()">
+                @if (!form.route) {
+                  <option value="">{{ 'PRESCRIPTIONS.ROUTE_NOT_RECORDED' | translate }}</option>
+                }
+                @for (r of routes; track r) {
+                  <option [value]="r">{{ 'PRESCRIPTIONS.ROUTES.' + r | translate }}</option>
                 }
               </select>
-            }
+            </div>
           </div>
-        </div>
-        <div class="field">
-          <label for="rx-medName">{{ 'PRESCRIPTIONS.MEDICATION_NAME' | translate }} *</label>
-          <!-- QA D922/D935: picking a catalogue item sends its id, so the
-               catalogue's controlled flag and paediatric ceiling apply. -->
-          <input
-            id="rx-medName"
-            type="text"
-            list="rx-med-catalog"
-            autocomplete="off"
-            [ngModel]="form.medicationName"
-            (ngModelChange)="onMedicationNameChange($event)"
-            [readonly]="editingSigned()"
-            [placeholder]="'PRESCRIPTIONS.MEDICATION_PLACEHOLDER' | translate"
-            required
-          />
-          <datalist id="rx-med-catalog">
-            @for (item of catalogOptions(); track item.id) {
-              <option [value]="catalogLabel(item)"></option>
-            }
-          </datalist>
-          @if (pickedCatalogItem()?.controlled) {
-            <p
-              class="field-hint field-hint-controlled"
-              data-testid="rx-controlled-hint"
-              role="status"
-            >
-              {{ 'PRESCRIPTIONS.CONTROLLED_PICKED_HINT' | translate }}
-            </p>
+          @if (prnIntervalShown()) {
+            <!-- QA round 30 (user decision 2026-11-02): an as-needed order states the
+               minimum interval between two doses; the MAR offers the next dose once
+               it has passed since the last one given. -->
+            <div class="form-row">
+              <div class="field">
+                <label for="rx-prnMinIntervalHours"
+                  >{{ 'PRESCRIPTIONS.PRN_MIN_INTERVAL' | translate }} *</label
+                >
+                <input
+                  id="rx-prnMinIntervalHours"
+                  data-server-field="prnMinIntervalHours"
+                  data-testid="rx-prn-interval"
+                  type="number"
+                  min="1"
+                  [max]="prnMaxIntervalHours"
+                  step="1"
+                  required
+                  [(ngModel)]="form.prnMinIntervalHours"
+                  [readonly]="editingSigned()"
+                />
+                <p class="field-hint">{{ 'PRESCRIPTIONS.PRN_MIN_INTERVAL_HINT' | translate }}</p>
+              </div>
+            </div>
           }
-        </div>
-        <div class="form-row">
-          <div class="field">
-            <label for="rx-dosage">{{ 'PRESCRIPTIONS.DOSAGE' | translate }}</label>
-            <input
-              id="rx-dosage"
-              type="text"
-              [(ngModel)]="form.dosage"
-              [readonly]="editingSigned()"
-              [placeholder]="'PRESCRIPTIONS.DOSAGE_PLACEHOLDER' | translate"
-            />
+          <div class="form-row">
+            <div class="field">
+              <label for="rx-quantity"
+                >{{ 'PRESCRIPTIONS.PRESCRIBED_QUANTITY' | translate }} *</label
+              >
+              <input
+                id="rx-quantity"
+                type="number"
+                min="0.01"
+                step="any"
+                required
+                [(ngModel)]="form.quantity"
+                [readonly]="editingSigned()"
+                [placeholder]="'PRESCRIPTIONS.PRESCRIBED_QUANTITY_PLACEHOLDER' | translate"
+              />
+            </div>
+            <div class="field">
+              <label for="rx-quantity-unit">{{
+                'PRESCRIPTIONS.PRESCRIBED_QUANTITY_UNIT' | translate
+              }}</label>
+              <input
+                id="rx-quantity-unit"
+                type="text"
+                maxlength="60"
+                [(ngModel)]="form.quantityUnit"
+                [readonly]="editingSigned()"
+                [placeholder]="'PRESCRIPTIONS.PRESCRIBED_QUANTITY_UNIT_PLACEHOLDER' | translate"
+              />
+            </div>
           </div>
-          <div class="field">
-            <label for="rx-frequency">{{ 'PRESCRIPTIONS.FREQUENCY' | translate }}</label>
-            <input
-              id="rx-frequency"
-              type="text"
-              [(ngModel)]="form.frequency"
-              [readonly]="editingSigned()"
-              [placeholder]="'PRESCRIPTIONS.FREQUENCY_PLACEHOLDER' | translate"
-            />
-          </div>
-          <div class="field">
-            <label for="rx-route">{{ 'PRESCRIPTIONS.ROUTE' | translate }}</label>
-            <select id="rx-route" [(ngModel)]="form.route" [disabled]="editingSigned()">
-              @if (!form.route) {
-                <option value="">{{ 'PRESCRIPTIONS.ROUTE_NOT_RECORDED' | translate }}</option>
-              }
-              @for (r of routes; track r) {
-                <option [value]="r">{{ 'PRESCRIPTIONS.ROUTES.' + r | translate }}</option>
-              }
-            </select>
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="field">
-            <label for="rx-quantity">{{ 'PRESCRIPTIONS.PRESCRIBED_QUANTITY' | translate }} *</label>
-            <input
-              id="rx-quantity"
-              type="number"
-              min="0.01"
-              step="any"
-              required
-              [(ngModel)]="form.quantity"
-              [readonly]="editingSigned()"
-              [placeholder]="'PRESCRIPTIONS.PRESCRIBED_QUANTITY_PLACEHOLDER' | translate"
-            />
-          </div>
-          <div class="field">
-            <label for="rx-quantity-unit">{{
-              'PRESCRIPTIONS.PRESCRIBED_QUANTITY_UNIT' | translate
-            }}</label>
-            <input
-              id="rx-quantity-unit"
-              type="text"
-              maxlength="60"
-              [(ngModel)]="form.quantityUnit"
-              [readonly]="editingSigned()"
-              [placeholder]="'PRESCRIPTIONS.PRESCRIBED_QUANTITY_UNIT_PLACEHOLDER' | translate"
-            />
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="field">
-            <label for="rx-duration">{{ 'PRESCRIPTIONS.DURATION' | translate }}</label>
-            <input
-              id="rx-duration"
-              type="text"
-              [(ngModel)]="form.duration"
-              [readonly]="editingSigned()"
-              [placeholder]="'PRESCRIPTIONS.DURATION_PLACEHOLDER' | translate"
-            />
-          </div>
-          <div class="field">
-            <label for="rx-status">{{ 'COMMON.STATUS' | translate }}</label>
-            <select id="rx-status" [(ngModel)]="form.status">
-              @if (editingSigned()) {
-                <option [ngValue]="undefined" disabled>
-                  {{ 'PRESCRIPTIONS.CHOOSE_WITHDRAWAL' | translate }}
-                </option>
-              }
-              @for (s of statusOptions(); track s.value) {
-                <option [value]="s.value">{{ s.labelKey | translate }}</option>
-              }
-            </select>
-          </div>
-          <div class="field">
-            <label for="rx-cosign" class="checkbox-label">
-              <!-- Set-only: the backend refuses withdrawing a declared
+          <div class="form-row">
+            <div class="field">
+              <label for="rx-duration">{{ 'PRESCRIPTIONS.DURATION' | translate }}</label>
+              <input
+                id="rx-duration"
+                type="text"
+                [(ngModel)]="form.duration"
+                [readonly]="editingSigned()"
+                [placeholder]="'PRESCRIPTIONS.DURATION_PLACEHOLDER' | translate"
+              />
+            </div>
+            <div class="field">
+              <label for="rx-status">{{ 'COMMON.STATUS' | translate }}</label>
+              <select id="rx-status" [(ngModel)]="form.status">
+                @if (editingSigned()) {
+                  <option [ngValue]="undefined" disabled>
+                    {{ 'PRESCRIPTIONS.CHOOSE_WITHDRAWAL' | translate }}
+                  </option>
+                }
+                @for (s of statusOptions(); track s.value) {
+                  <option [value]="s.value">{{ s.labelKey | translate }}</option>
+                }
+              </select>
+            </div>
+            <div class="field">
+              <label for="rx-cosign" class="checkbox-label">
+                <!-- Set-only: the backend refuses withdrawing a declared
                    safeguard by edit. controlledSubstance is deliberately not
                    offered — the two-factor transport is an open decision, so
                    flagging it would make the prescription unsignable. -->
-              <input
-                id="rx-cosign"
-                type="checkbox"
-                [(ngModel)]="form.requiresCosign"
-                [disabled]="editingSigned()"
-              />
-              {{ 'PRESCRIPTIONS.REQUIRES_COSIGN' | translate }}
-            </label>
-          </div>
-          <div class="field">
-            <!-- QA D757: only an order marked for home outlives the stay; every
+                <input
+                  id="rx-cosign"
+                  type="checkbox"
+                  [(ngModel)]="form.requiresCosign"
+                  [disabled]="editingSigned()"
+                />
+                {{ 'PRESCRIPTIONS.REQUIRES_COSIGN' | translate }}
+              </label>
+            </div>
+            <div class="field">
+              <!-- QA D757: only an order marked for home outlives the stay; every
                  other order of a stay is discontinued at discharge. -->
-            <label for="rx-take-home" class="checkbox-label">
-              <input
-                id="rx-take-home"
-                type="checkbox"
-                [(ngModel)]="form.takeHome"
-                [disabled]="editingSigned()"
-              />
-              {{ 'PRESCRIPTIONS.TAKE_HOME' | translate }}
-            </label>
+              <label for="rx-take-home" class="checkbox-label">
+                <input
+                  id="rx-take-home"
+                  type="checkbox"
+                  [(ngModel)]="form.takeHome"
+                  [disabled]="editingSigned()"
+                />
+                {{ 'PRESCRIPTIONS.TAKE_HOME' | translate }}
+              </label>
+            </div>
           </div>
-        </div>
-        <div class="form-row">
-          <div class="field">
-            <label for="rx-encounterId">{{ 'PRESCRIPTIONS.ENCOUNTER_ID' | translate }}</label>
-            <!-- QA D177: pick one of the patient's encounters, never type its id. -->
-            <select
-              id="rx-encounterId"
-              [(ngModel)]="form.encounterId"
-              name="encounterId"
-              [disabled]="!form.patientId || editingSigned()"
-            >
-              <option [ngValue]="undefined">{{ 'LAB.NO_ENCOUNTER_OPTION' | translate }}</option>
-              @if (form.encounterId && !hasEncounterOption(form.encounterId)) {
-                <option [ngValue]="form.encounterId">
-                  {{ 'PRESCRIPTIONS.LINKED_ENCOUNTER' | translate }}
-                </option>
-              }
-              @for (e of patientEncounters(); track e.id) {
-                <option [ngValue]="e.id">
-                  {{ encounterLabel(e)
-                  }}{{
-                    e.encounterType ? ' · ' + (e.encounterType | enumLabel: 'encounterType') : ''
-                  }}
-                </option>
-              }
-            </select>
+          <div class="form-row">
+            <div class="field">
+              <label for="rx-encounterId">{{ 'PRESCRIPTIONS.ENCOUNTER_ID' | translate }}</label>
+              <!-- QA D177: pick one of the patient's encounters, never type its id. -->
+              <select
+                id="rx-encounterId"
+                [(ngModel)]="form.encounterId"
+                name="encounterId"
+                [disabled]="!form.patientId || editingSigned()"
+              >
+                <option [ngValue]="undefined">{{ 'LAB.NO_ENCOUNTER_OPTION' | translate }}</option>
+                @if (form.encounterId && !hasEncounterOption(form.encounterId)) {
+                  <option [ngValue]="form.encounterId">
+                    {{ 'PRESCRIPTIONS.LINKED_ENCOUNTER' | translate }}
+                  </option>
+                }
+                @for (e of patientEncounters(); track e.id) {
+                  <option [ngValue]="e.id">
+                    {{ encounterLabel(e)
+                    }}{{
+                      e.encounterType ? ' · ' + (e.encounterType | enumLabel: 'encounterType') : ''
+                    }}
+                  </option>
+                }
+              </select>
+            </div>
           </div>
-        </div>
-        <div class="field">
-          <label for="rx-notes">{{ 'COMMON.NOTES' | translate }}</label>
-          <textarea
-            id="rx-notes"
-            [(ngModel)]="form.notes"
-            [readonly]="editingSigned()"
-            rows="3"
-            [placeholder]="'PRESCRIPTIONS.NOTES_PLACEHOLDER' | translate"
-          ></textarea>
-        </div>
-
-        @if (withdrawalReasonShown()) {
           <div class="field">
-            <label for="rx-withdrawalReason"
-              >{{ 'PRESCRIPTIONS.WITHDRAWAL_REASON' | translate }} *</label
-            >
+            <label for="rx-notes">{{ 'COMMON.NOTES' | translate }}</label>
             <textarea
-              id="rx-withdrawalReason"
-              data-testid="rx-withdrawal-reason"
-              [(ngModel)]="form.withdrawalReason"
-              rows="2"
-              maxlength="1000"
-              required
+              id="rx-notes"
+              [(ngModel)]="form.notes"
+              [readonly]="editingSigned()"
+              rows="3"
+              [placeholder]="'PRESCRIPTIONS.NOTES_PLACEHOLDER' | translate"
             ></textarea>
           </div>
-        }
+
+          @if (withdrawalReasonShown()) {
+            <div class="field">
+              <label for="rx-withdrawalReason"
+                >{{ 'PRESCRIPTIONS.WITHDRAWAL_REASON' | translate }} *</label
+              >
+              <textarea
+                id="rx-withdrawalReason"
+                data-testid="rx-withdrawal-reason"
+                [(ngModel)]="form.withdrawalReason"
+                rows="2"
+                maxlength="1000"
+                required
+              ></textarea>
+            </div>
+          }
+        </fieldset>
 
         @if (cdsAdvisories().length > 0) {
           <div class="field cds-advisories" data-testid="cds-advisories">
@@ -1146,7 +1206,7 @@
                   ></textarea>
                 }
               </div>
-            } @else {
+            } @else if (!createdWithAdvisories()) {
               <div class="cds-override">
                 <button
                   type="button"
@@ -1165,29 +1225,41 @@
         <p class="form-error" role="alert" data-testid="rx-form-error">{{ formError() }}</p>
       }
       <div class="modal-actions">
-        <button class="btn-secondary" (click)="closeModal()">
-          {{ 'COMMON.CANCEL' | translate }}
-        </button>
-        <button
-          submitGuardRequired
-          class="btn-primary"
-          (click)="submitForm()"
-          [disabled]="saving()"
-          [appSubmitGuard]="
-            !form.medicationName ||
-            (form.forceOverride && !form.overrideReason?.trim()) ||
-            signedWithdrawalIncomplete()
-          "
-          [submitGuardFields]="['rx-medName', 'cds-override-reason', 'rx-withdrawalReason']"
-        >
-          {{
-            saving()
-              ? ('COMMON.SAVING' | translate)
-              : editing()
-                ? ('COMMON.UPDATE' | translate)
-                : ('COMMON.CREATE' | translate)
-          }}
-        </button>
+        @if (createdWithAdvisories()) {
+          <!-- QA D1345: the only action once the order is created. -->
+          <button
+            type="button"
+            class="btn-primary"
+            data-testid="rx-created-close"
+            (click)="closeModal()"
+          >
+            {{ 'COMMON.CLOSE' | translate }}
+          </button>
+        } @else {
+          <button class="btn-secondary" (click)="closeModal()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+          <button
+            submitGuardRequired
+            class="btn-primary"
+            (click)="submitForm()"
+            [disabled]="saving()"
+            [appSubmitGuard]="
+              !form.medicationName ||
+              (form.forceOverride && !form.overrideReason?.trim()) ||
+              signedWithdrawalIncomplete()
+            "
+            [submitGuardFields]="['rx-medName', 'cds-override-reason', 'rx-withdrawalReason']"
+          >
+            {{
+              saving()
+                ? ('COMMON.SAVING' | translate)
+                : editing()
+                  ? ('COMMON.UPDATE' | translate)
+                  : ('COMMON.CREATE' | translate)
+            }}
+          </button>
+        }
       </div>
     </div>
   </div>

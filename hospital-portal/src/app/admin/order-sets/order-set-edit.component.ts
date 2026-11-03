@@ -117,6 +117,7 @@ import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { refusalReason } from '../../shared/refusal-reason';
 import { joinReasons } from '../../shared/required-fields';
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+import { PRN_MAX_INTERVAL_HOURS, isAsNeededFrequency } from '../../shared/as-needed-frequency';
 
 @Component({
   selector: 'app-order-set-edit',
@@ -152,6 +153,13 @@ export class OrderSetEditComponent implements OnInit {
    */
   protected readonly nameMissing = signal(false);
   protected readonly itemsMissingName = signal<number[]>([]);
+  /**
+   * QA round 30 (user decision 2026-11-02): an as-needed (PRN) item states
+   * the minimum interval between two doses; the order it creates needs it
+   * (an item without one is not applied). The items that lack it.
+   */
+  protected readonly itemsMissingPrnInterval = signal<number[]>([]);
+  protected readonly prnMaxIntervalHours = PRN_MAX_INTERVAL_HOURS;
 
   protected form: {
     name: string;
@@ -213,6 +221,20 @@ export class OrderSetEditComponent implements OnInit {
     return this.itemsMissingName().includes(index);
   }
 
+  /** QA round 30: the item is an as-needed medication, so it states its minimum interval. */
+  protected prnIntervalShown(it: OrderSetItem): boolean {
+    return this.isMedicationLike(it.orderType) && isAsNeededFrequency(it.frequency);
+  }
+
+  protected itemMissingPrnInterval(index: number): boolean {
+    return this.itemsMissingPrnInterval().includes(index);
+  }
+
+  private static validPrnInterval(value: unknown): boolean {
+    const hours = Number(value);
+    return Number.isInteger(hours) && hours >= 1 && hours <= PRN_MAX_INTERVAL_HOURS;
+  }
+
   /** What an option reads as: its translation, or the symbol itself. */
   protected choiceLabel(choice: Choice): string {
     return choice.labelKey ? this.translate.instant(choice.labelKey) : choice.value;
@@ -228,8 +250,16 @@ export class OrderSetEditComponent implements OnInit {
     const unnamed = itemsOut
       .map((it, i) => (this.itemDisplayName(it).trim() ? -1 : i))
       .filter((i) => i !== -1);
+    const noInterval = itemsOut
+      .map((it, i) =>
+        this.prnIntervalShown(it) && !OrderSetEditComponent.validPrnInterval(it.prnMinIntervalHours)
+          ? i
+          : -1,
+      )
+      .filter((i) => i !== -1);
     this.nameMissing.set(nameMissing);
     this.itemsMissingName.set(unnamed);
+    this.itemsMissingPrnInterval.set(noInterval);
     // QA D1256 class (round 27): every gap on the first press — the name, an
     // empty list, each unnamed item — instead of one per press.
     const gaps = joinReasons([
@@ -238,6 +268,7 @@ export class OrderSetEditComponent implements OnInit {
       ...unnamed.map((i) =>
         this.translate.instant('ORDER_SETS.ITEM_NAME_MISSING', { position: i + 1 }),
       ),
+      noInterval.length > 0 && this.translate.instant('PRESCRIPTIONS.PRN_MIN_INTERVAL_REQUIRED'),
     ]);
     if (gaps) {
       // QA D1306 (round 28): focus the first marked field, not only a toast.
@@ -245,6 +276,7 @@ export class OrderSetEditComponent implements OnInit {
         ...(nameMissing ? ['order-set-name'] : []),
         ...(itemsOut.length === 0 ? ['order-set-item-add'] : []),
         ...unnamed.map((i) => `order-set-item-name-${i}`),
+        ...noInterval.map((i) => `order-set-item-prn-${i}`),
       ];
       focusFirstInvalid(this.host.nativeElement, refused);
       this.toast.error(gaps);
@@ -355,6 +387,12 @@ export class OrderSetEditComponent implements OnInit {
     }
     if (out.doseRangeMax === undefined || (out.doseRangeMax as unknown) === null) {
       delete out.doseRangeMax;
+    }
+    // QA round 30: the interval belongs to an as-needed item only.
+    if (this.prnIntervalShown(out)) {
+      out.prnMinIntervalHours = Number(out.prnMinIntervalHours);
+    } else {
+      delete out.prnMinIntervalHours;
     }
     return out;
   }

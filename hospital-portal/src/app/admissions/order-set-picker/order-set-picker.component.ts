@@ -126,7 +126,7 @@ type State = 'idle' | 'searching' | 'ready' | 'applying' | 'applied' | 'error';
             type="button"
             class="btn-primary"
             data-testid="order-set-picker-apply"
-            [disabled]="applying()"
+            [disabled]="applying() || appliedSummary() !== null"
             (click)="apply(sel)"
           >
             {{ 'ORDER_SETS.APPLY' | translate }}
@@ -278,6 +278,10 @@ export class OrderSetPickerComponent implements OnChanges, OnDestroy {
   }
 
   protected apply(os: OrderSetSummary): void {
+    // QA D1345 class (round 30): an applied set is never applied again from
+    // the same preview (a second press created every order a second time);
+    // picking a set again starts a new preview.
+    if (this.appliedSummary() !== null || this.applying()) return;
     this.applySub?.unsubscribe();
     this.state.set('applying');
     this.applySub = this.orderSetService

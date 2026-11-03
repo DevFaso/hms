@@ -517,6 +517,20 @@ describe('NurseStationComponent — two-tier polling', () => {
       expect(text).not.toContain('INTRAVENOUS');
     });
 
+    it('QA round 30: an as-needed order shows its rule and interval under the drug, as the server wrote it', () => {
+      const el = render();
+      expect(el.querySelector('[data-testid="med-prn-m3"]')).toBeNull();
+      const label = 'Si besoin : au moins 4 h entre deux doses';
+      const prn = rows.map((r) =>
+        r.id === 'm3' ? { ...r, asNeeded: true, prnMinIntervalHours: 4, prnLabel: label } : r,
+      );
+      nurseServiceSpy.getMedicationMAR.and.returnValue(of(prn as unknown as NurseMedicationTask[]));
+      component.refresh();
+      component['pendingLoads'].set(0);
+      fixture.detectChanges();
+      expect(el.querySelector('[data-testid="med-prn-m3"]')?.textContent?.trim()).toBe(label);
+    });
+
     it('QA D1237: a frequency the MAR cannot read is marked on its row, with a label', () => {
       const el = render();
       expect(el.querySelector('[data-testid="med-frequency-unread-m3"]')).toBeNull();

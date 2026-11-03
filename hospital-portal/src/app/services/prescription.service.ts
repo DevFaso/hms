@@ -48,6 +48,8 @@ export interface PrescriptionResponse {
   medicationDisplayName: string;
   dosage: string;
   frequency: string;
+  /** QA round 30: the minimum hours between two doses of an as-needed order, or null. */
+  prnMinIntervalHours?: number | null;
   /** Administration route code (PO, IV, ...); null on orders that never recorded one. */
   route?: string | null;
   duration: string;
@@ -219,6 +221,12 @@ export interface PrescriptionRequest {
   medicationName: string;
   dosage?: string;
   frequency?: string;
+  /**
+   * QA round 30 (user decision 2026-11-02): the minimum hours between two
+   * doses of an as-needed (PRN, "si besoin") order; required on one, refused
+   * on any other (fieldErrors.prnMinIntervalHours).
+   */
+  prnMinIntervalHours?: number | null;
   /** D109: the route the MAR five-rights check compares the bedside entry with. */
   route?: string;
   duration?: string;

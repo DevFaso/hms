@@ -130,6 +130,49 @@ describe('OrderSetEditComponent', () => {
     expect(navigateSpy).toHaveBeenCalledWith(['/admin/order-sets']);
   });
 
+  // QA round 30 (user decision 2026-11-02): an as-needed (PRN) item states the
+  // minimum interval between two doses; the order it creates requires it.
+  it('QA round 30: a PRN item asks for its minimum interval, marks it, and saves it', async () => {
+    await configure('new');
+    spyOn(TestBed.inject(Router), 'navigate').and.resolveTo(true);
+    fixture = TestBed.createComponent(OrderSetEditComponent);
+    fixture.detectChanges();
+    const cmp = fixture.componentInstance as unknown as { save(): void };
+    fixture.componentInstance['form'].name = 'Douleur';
+    const items = fixture.componentInstance['items']();
+    items[0].medicationName = 'Paracétamol';
+    items[0].frequency = 'PRN';
+    fixture.componentInstance['items'].set([...items]);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    const field = () =>
+      host.querySelector<HTMLInputElement>('[data-testid="order-set-item-prn-0"]');
+    expect(field()).not.toBeNull();
+
+    cmp.save();
+    fixture.detectChanges();
+    expect(svc.create).not.toHaveBeenCalled();
+    expect(field()!.getAttribute('aria-invalid')).toBe('true');
+    expect(toast.error.calls.mostRecent().args[0] as string).toContain(
+      'PRESCRIPTIONS.PRN_MIN_INTERVAL_REQUIRED',
+    );
+
+    items[0].prnMinIntervalHours = 6;
+    fixture.componentInstance['items'].set([...items]);
+    cmp.save();
+    expect(svc.create.calls.mostRecent().args[0].orderItems[0].prnMinIntervalHours).toBe(6);
+
+    // A fixed schedule carries no interval.
+    items[0].frequency = 'Q6H';
+    fixture.componentInstance['items'].set([...items]);
+    fixture.detectChanges();
+    expect(field()).toBeNull();
+    cmp.save();
+    expect(
+      'prnMinIntervalHours' in svc.create.calls.mostRecent().args[0].orderItems[0],
+    ).toBeFalse();
+  });
+
   it('errors when an item is missing a name', async () => {
     await configure('new');
     fixture = TestBed.createComponent(OrderSetEditComponent);

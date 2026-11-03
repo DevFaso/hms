@@ -43,6 +43,8 @@ export interface OrderSetItem {
   doseRangeMin?: number;
   doseRangeMax?: number;
   doseUnit?: string;
+  /** QA round 30: the minimum hours between two doses of an as-needed (PRN) item. */
+  prnMinIntervalHours?: number | null;
   notes?: string;
   [key: string]: unknown;
 }
