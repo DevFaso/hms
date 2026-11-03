@@ -92,6 +92,20 @@ class ControlledFlagResponseGuardTest {
         String after = before.replace(".status(status.name())",
             ".status(status.name()).controlledSubstance(verification.isControlledSubstance(rx))");
         assertThat(buildersWithoutFlag(after, flagged)).isEmpty();
+        // QA D1375: handed to a helper that sets the flag counts; to one that does not, does not.
+        String helper = """
+            private NurseMedicationTaskResponseDTO withOrderReading(NurseMedicationTaskResponseDTO task, Prescription rx) {
+                task.setControlledSubstance(verification.isControlledSubstance(rx));
+                return task;
+            }
+            private NurseMedicationTaskResponseDTO decorate(NurseMedicationTaskResponseDTO task) {
+                return task;
+            }
+            """;
+        assertThat(buildersWithoutFlag(helper + "return withOrderReading(" + before.substring(7).replace(";", ", rx);"),
+            flagged)).isEmpty();
+        assertThat(buildersWithoutFlag(helper + "return decorate(" + before.substring(7).replace(";", ");"),
+            flagged)).hasSize(1);
         assertThat(flaggedResponseTypes("public class PrescriptionRequestDTO { private Boolean controlledSubstance; }"))
             .as("a request DTO carries the prescriber's tick, not an answer").isEmpty();
     }
@@ -116,6 +130,40 @@ class ControlledFlagResponseGuardTest {
         return out;
     }
 
+    private static final Pattern CALL_BEFORE = Pattern.compile("(\\w++)\\(\\s*+$");
+
+    /**
+     * QA D1375 (round 31): the MAR row is built in one shape - the builder is
+     * handed to a helper of the same class ({@code withOrderReading},
+     * {@code answerAfterDose}) that sets the flag from the resolver
+     * ({@code setControlledSubstance(}), directly or through one more such
+     * helper. That counts as setting it; a helper that does not set it does not.
+     */
+    static boolean passedToAFlagSetter(String source, int builderAt, int depth) {
+        Matcher call = CALL_BEFORE.matcher(source.substring(Math.max(0, builderAt - 80), builderAt));
+        return call.find() && setsTheFlag(source, call.group(1), depth);
+    }
+
+    private static boolean setsTheFlag(String source, String method, int depth) {
+        Matcher header = Pattern.compile("\\b" + Pattern.quote(method) + "\\([^)]*+\\)\\s*+\\{").matcher(source);
+        while (header.find()) {
+            int open = header.end() - 1;
+            String body = source.substring(open, SourceScan.closingBrace(source, open) + 1);
+            if (body.contains(".setControlledSubstance(")) {
+                return true;
+            }
+            if (depth < 1) {
+                Matcher inner = Pattern.compile("\\b(\\w++)\\(\\s*+task\\b").matcher(body);
+                while (inner.find()) {
+                    if (!inner.group(1).equals(method) && setsTheFlag(source, inner.group(1), depth + 1)) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
     static List<String> buildersWithoutFlag(String source, Set<String> flagged) {
         List<String> out = new ArrayList<>();
         for (String type : flagged) {
@@ -123,7 +171,7 @@ class ControlledFlagResponseGuardTest {
             while (m.find()) {
                 int build = source.indexOf(".build()", m.end());
                 String chain = build < 0 ? source.substring(m.end()) : source.substring(m.end(), build);
-                if (!chain.contains(".controlledSubstance(")) {
+                if (!chain.contains(".controlledSubstance(") && !passedToAFlagSetter(source, m.start(), 0)) {
                     out.add(type + " at line " + SourceScan.lineOf(source, m.start()));
                 }
             }
