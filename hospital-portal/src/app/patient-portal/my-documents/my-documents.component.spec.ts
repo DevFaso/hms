@@ -133,7 +133,7 @@ describe('MyDocumentsComponent', () => {
     portalService.listDocuments.calls.reset();
     component.filterType.set('LAB_RESULT');
     component.onFilterChange();
-    expect(portalService.listDocuments).toHaveBeenCalledWith('LAB_RESULT', 0, 50);
+    expect(portalService.listDocuments).toHaveBeenCalledWith('LAB_RESULT', 0, 200); // QA D1347: every page
   });
 
   it('fileSizeKb should format correctly', () => {

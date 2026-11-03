@@ -65,7 +65,7 @@ describe('Dhis2MappingEditorComponent', () => {
     (component as any).filterDatasetUid = 'DS00000DEFK';
     (component as any).onFilterChange();
 
-    expect(dhis2.listMappings).toHaveBeenCalledWith('h1', 'DS00000DEFK');
+    expect(dhis2.listMappings).toHaveBeenCalledWith('h1', 'DS00000DEFK', 0, 200); // QA D1347
   });
 
   it('REGRESSION: onFilterChange syncs newRow.datasetUid (Copilot bug #1)', () => {

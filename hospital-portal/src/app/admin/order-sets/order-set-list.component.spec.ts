@@ -86,7 +86,7 @@ describe('OrderSetListComponent', () => {
     fixture.detectChanges();
     setTimeout(() => {
       fixture.detectChanges();
-      expect(svc.list).toHaveBeenCalledWith('h1', '');
+      expect(svc.list).toHaveBeenCalledWith('h1', '', 0, 200); // QA D1347
       expect(fixture.nativeElement.querySelectorAll('[data-os-id="os-1"]').length).toBe(1);
       done();
     }, DEBOUNCE_WAIT_MS);

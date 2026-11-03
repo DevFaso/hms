@@ -87,7 +87,7 @@ describe('RefillApprovalListComponent', () => {
 
   it('loads the pending queue on init', () => {
     fixture.detectChanges();
-    expect(service.list).toHaveBeenCalledWith('REQUESTED', 0, 50);
+    expect(service.list).toHaveBeenCalledWith('REQUESTED', 0, 200); // QA D1347
   });
 
   // QA D1276 (round 27): three "Paracétamol" cards could not be told apart.
@@ -125,13 +125,13 @@ describe('RefillApprovalListComponent', () => {
   it('sends no status param for the ALL filter', () => {
     fixture.detectChanges();
     api().setFilter('ALL');
-    expect(service.list).toHaveBeenCalledWith(undefined, 0, 50);
+    expect(service.list).toHaveBeenCalledWith(undefined, 0, 200); // QA D1347
   });
 
   it('offers a PAUSED filter so held requests stay findable', () => {
     fixture.detectChanges();
     api().setFilter('PAUSED');
-    expect(service.list).toHaveBeenCalledWith('PAUSED', 0, 50);
+    expect(service.list).toHaveBeenCalledWith('PAUSED', 0, 200); // QA D1347
   });
 
   // ── The decision actions ────────────────────────────────────

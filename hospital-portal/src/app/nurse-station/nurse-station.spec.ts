@@ -323,8 +323,8 @@ describe('NurseStationComponent — two-tier polling', () => {
       expect(new Date(`${sent.fromDate}Z`).getTime())
         .withContext('fromDate is local midnight read as UTC')
         .toBe(localMidnight.getTime());
-      expect(encounterSpy.list).toHaveBeenCalledWith({ status: 'ARRIVED', fromDate, size: 100 });
-      expect(encounterSpy.list).toHaveBeenCalledWith({ status: 'TRIAGE', fromDate, size: 100 });
+      expect(encounterSpy.list).toHaveBeenCalledWith({ status: 'ARRIVED', fromDate }); // QA D1347: list() reads every page
+      expect(encounterSpy.list).toHaveBeenCalledWith({ status: 'TRIAGE', fromDate });
       expect(component.awaitingTriage().map((e) => e.id)).toEqual(['e1']);
 
       component.activeSection.set('workboard');

@@ -126,7 +126,7 @@ describe('MyNotificationsComponent', () => {
     portalService.getMyNotifications.calls.reset();
     component.switchTab('unread');
     expect(component.activeTab()).toBe('unread');
-    expect(portalService.getMyNotifications).toHaveBeenCalledWith(false, 0, 50);
+    expect(portalService.getMyNotifications).toHaveBeenCalledWith(false, 0, 200); // QA D1347: every page
   });
 
   it('should mark a notification as read and decrement unread count', () => {

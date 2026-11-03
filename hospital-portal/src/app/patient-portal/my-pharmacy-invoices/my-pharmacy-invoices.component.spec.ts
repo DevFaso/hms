@@ -89,8 +89,8 @@ describe('MyPharmacyInvoicesComponent', () => {
         }),
     );
 
-    expect(pharmacyServiceSpy.listMyPharmacyPayments).toHaveBeenCalledWith(0, 50);
-    expect(pharmacyServiceSpy.listMyPharmacyClaims).toHaveBeenCalledWith(0, 50);
+    expect(pharmacyServiceSpy.listMyPharmacyPayments).toHaveBeenCalledWith(0, 200); // QA D1347
+    expect(pharmacyServiceSpy.listMyPharmacyClaims).toHaveBeenCalledWith(0, 200); // QA D1347
     expect(component.payments().length).toBe(2);
     expect(component.claims().length).toBe(1);
     expect(component.totalPaid()).toBe(2000);

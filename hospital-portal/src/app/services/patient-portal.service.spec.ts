@@ -405,24 +405,29 @@ describe('PatientPortalService invoices', () => {
   it('maps the wire invoice to the amounts, balance and hospital the page shows', () => {
     let received: PortalInvoice[] = [];
     service.getMyInvoices().subscribe((r) => (received = r));
-    httpMock.expectOne('/me/patient/billing/invoices').flush({
-      success: true,
-      data: {
-        content: [
-          {
-            id: 'i1',
-            invoiceNumber: 'HA-2026-000013',
-            invoiceDate: '2026-10-01',
-            dueDate: '2026-10-31',
-            totalAmount: 2500,
-            amountPaid: 1000,
-            balanceDue: 1500,
-            status: 'PARTIALLY_PAID',
-            hospitalName: 'Hôpital A',
-          },
-        ],
-      },
-    });
+    // QA D1347: every page is read (here the only one).
+    httpMock
+      .expectOne((r) => r.url === '/me/patient/billing/invoices')
+      .flush({
+        success: true,
+        data: {
+          totalPages: 1,
+          number: 0,
+          content: [
+            {
+              id: 'i1',
+              invoiceNumber: 'HA-2026-000013',
+              invoiceDate: '2026-10-01',
+              dueDate: '2026-10-31',
+              totalAmount: 2500,
+              amountPaid: 1000,
+              balanceDue: 1500,
+              status: 'PARTIALLY_PAID',
+              hospitalName: 'Hôpital A',
+            },
+          ],
+        },
+      });
     expect(received.length).toBe(1);
     expect(received[0].amount).toBe(2500);
     expect(received[0].paid).toBe(1000);

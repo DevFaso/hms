@@ -67,7 +67,7 @@ describe('OrderSetPickerComponent', () => {
     fixture.detectChanges();
     setTimeout(() => {
       fixture.detectChanges();
-      expect(svc.list).toHaveBeenCalledWith('h1', '');
+      expect(svc.list).toHaveBeenCalledWith('h1', '', 0, 200); // QA D1347
       const items = fixture.nativeElement.querySelectorAll('[data-testid="order-set-picker-item"]');
       expect(items.length).toBe(1);
       expect(items[0].textContent).toContain('Sepsis bundle');
@@ -85,7 +85,7 @@ describe('OrderSetPickerComponent', () => {
       input.dispatchEvent(new Event('input'));
       setTimeout(() => {
         fixture.detectChanges();
-        expect(svc.list).toHaveBeenCalledWith('h1', 'sepsis');
+        expect(svc.list).toHaveBeenCalledWith('h1', 'sepsis', 0, 200); // QA D1347
         done();
       }, DEBOUNCE_WAIT_MS);
     }, DEBOUNCE_WAIT_MS);

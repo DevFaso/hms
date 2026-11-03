@@ -142,9 +142,13 @@ describe('AdvanceDirectivesTabComponent', () => {
     expect(toast.error).toHaveBeenCalledWith(backendMessage);
   });
 
-  it('QA D1148: one click on Save records nothing — type, status and date are named, the DNR needs its physician', () => {
+  it('QA D1148: one click on Save records nothing — type, status and date are named, the DNR needs its physician', async () => {
     setup([]);
     component.openCreate();
+    fixture.detectChanges();
+    // The form as the reader sees it: ngModel has written the blank choices
+    // (round 30: the save button's submit guard reads the DOM).
+    await fixture.whenStable();
     fixture.detectChanges();
     const host = fixture.nativeElement as HTMLElement;
     // A submit button submits only a form that is in the document.
@@ -174,9 +178,11 @@ describe('AdvanceDirectivesTabComponent', () => {
     host.remove();
   });
 
-  it('QA D1357: an empty save names the blank fields once, never one sentence repeated under each', () => {
+  it('QA D1357: an empty save names the blank fields once, never one sentence repeated under each', async () => {
     setup([]);
     component.openCreate();
+    fixture.detectChanges();
+    await fixture.whenStable();
     fixture.detectChanges();
     const host = fixture.nativeElement as HTMLElement;
     document.body.appendChild(host);
@@ -196,16 +202,21 @@ describe('AdvanceDirectivesTabComponent', () => {
     expect(directiveService.create).not.toHaveBeenCalled();
   });
 
-  it('round-29 behaviour: the empty save marks every blank required field and sends nothing', () => {
+  it('round-29 behaviour: the empty save marks every blank required field and sends nothing', async () => {
     setup([]);
     component.openCreate();
     fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
     const host = fixture.nativeElement as HTMLElement;
     document.body.appendChild(host);
-    expectEmptySubmitRefusal(fixture, {
+    const marked = expectEmptySubmitRefusal(fixture, {
       button: '[data-testid="directive-save"]',
       sent: directiveService.create,
     });
+    expect(marked).toEqual(
+      jasmine.arrayContaining(['directive-type', 'directive-status', 'directive-effective']),
+    );
     host.remove();
   });
 
