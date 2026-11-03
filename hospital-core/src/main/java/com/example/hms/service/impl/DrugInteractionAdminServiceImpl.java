@@ -1,7 +1,6 @@
 package com.example.hms.service.impl;
 
 import com.example.hms.enums.InteractionSeverity;
-import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.DrugInteractionMapper;
 import com.example.hms.model.medication.DrugInteraction;
@@ -60,7 +59,7 @@ public class DrugInteractionAdminServiceImpl implements DrugInteractionAdminServ
         // as a new row would leave two rows for one pair.
         repository.findAnyInteractionBetween(request.getDrug1Code(), request.getDrug2Code())
             .ifPresent(existing -> {
-                throw new BusinessException(existing.isActive()
+                throw new com.example.hms.exception.FieldBusinessException("drug1Code", existing.isActive()
                     ? "An interaction between these two drugs already exists; update it instead."
                     : "An interaction between these two drugs exists but was retired; "
                         + "reactivate it instead of re-creating it.");

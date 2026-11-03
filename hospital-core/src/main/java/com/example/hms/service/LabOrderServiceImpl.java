@@ -309,7 +309,7 @@ public class LabOrderServiceImpl implements LabOrderService {
 
         Hospital hospital = encounter != null ? encounter.getHospital() : null;
         if (hospital != null && requestedHospitalId != null && !hospital.getId().equals(requestedHospitalId)) {
-            throw new BusinessException("lab.order.encounterHospitalMismatch");
+            throw new com.example.hms.exception.FieldBusinessException("hospitalId", "lab.order.encounterHospitalMismatch");
         }
         requireOrderableEncounter(encounter, patient, base);
 
@@ -403,7 +403,7 @@ public class LabOrderServiceImpl implements LabOrderService {
         }
         if (encounter.getPatient() == null || patient == null
                 || !java.util.Objects.equals(encounter.getPatient().getId(), patient.getId())) {
-            throw new BusinessException("lab.order.encounterPatientMismatch");
+            throw new com.example.hms.exception.FieldBusinessException("patientId", "lab.order.encounterPatientMismatch");
         }
         boolean sameVisitAsBefore = base != null && base.getEncounter() != null
             && java.util.Objects.equals(base.getEncounter().getId(), encounter.getId());
@@ -472,7 +472,7 @@ public class LabOrderServiceImpl implements LabOrderService {
             throw new ResourceNotFoundException("labtestdefinition.notfound");
         }
         if (!definition.isOrderable()) {
-            throw new BusinessException(com.example.hms.utility.MessageUtil.resolve("labtestdefinition.notOrderable"));
+            throw new com.example.hms.exception.FieldBusinessException("labTestDefinitionId", com.example.hms.utility.MessageUtil.resolve("labtestdefinition.notOrderable"));
         }
     }
 
@@ -667,7 +667,7 @@ public class LabOrderServiceImpl implements LabOrderService {
                 // caller can already see, so "staff not found" only misled. Say
                 // what is wrong; a row elsewhere still reads as unknown.
                 if (named.getHospital() != null && hospital.getId().equals(named.getHospital().getId())) {
-                    throw new BusinessException("labOrder.orderingStaff.notCaller");
+                    throw new com.example.hms.exception.FieldBusinessException("orderingStaffId", "labOrder.orderingStaff.notCaller");
                 }
                 throw new ResourceNotFoundException(STAFF_NOT_FOUND, requestedStaffId);
             }
@@ -1163,7 +1163,7 @@ public class LabOrderServiceImpl implements LabOrderService {
         }
         normalized = normalized.toUpperCase(Locale.ROOT);
         if (!DiagnosisCodeValidator.isValidIcd10(normalized)) {
-            throw new BusinessException("lab.order.invalidIcd10", normalized);
+            throw new com.example.hms.exception.FieldBusinessException("primaryDiagnosisCode", "lab.order.invalidIcd10", normalized);
         }
         return normalized;
     }
@@ -1231,10 +1231,10 @@ public class LabOrderServiceImpl implements LabOrderService {
             return null;
         }
         if (!resolved.matches("\\d{10}")) {
-            throw new BusinessException("lab.order.npiFormat");
+            throw new com.example.hms.exception.FieldBusinessException("orderingProviderNpi", "lab.order.npiFormat");
         }
         if (staffNpi != null && requestNpi != null && !staffNpi.equals(requestNpi)) {
-            throw new BusinessException("lab.order.npiMismatch");
+            throw new com.example.hms.exception.FieldBusinessException("orderingProviderNpi", "lab.order.npiMismatch");
         }
         return resolved;
     }
@@ -1368,7 +1368,7 @@ public class LabOrderServiceImpl implements LabOrderService {
             reviewIntervalDays = base.getStandingOrderReviewIntervalDays();
         }
         if (reviewIntervalDays == null || reviewIntervalDays <= 0) {
-            throw new BusinessException("lab.order.standingReviewInterval");
+            throw new com.example.hms.exception.FieldBusinessException("standingOrderReviewIntervalDays", "lab.order.standingReviewInterval");
         }
         return reviewIntervalDays;
     }

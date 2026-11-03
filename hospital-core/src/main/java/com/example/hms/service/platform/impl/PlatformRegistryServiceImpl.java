@@ -4,7 +4,6 @@ import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.enums.platform.PlatformRegistryEventType;
 import com.example.hms.enums.platform.PlatformServiceStatus;
-import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.BusinessRuleException;
 import com.example.hms.exception.ConflictException;
 import com.example.hms.exception.ResourceNotFoundException;
@@ -129,7 +128,7 @@ public class PlatformRegistryServiceImpl implements PlatformRegistryService {
                                                                 Locale locale) {
         if (request != null && Boolean.TRUE.equals(request.getClearApiKeyReference())
             && request.getApiKeyReference() != null && !request.getApiKeyReference().isBlank()) {
-            throw new BusinessException("platform.service.apiKey.setAndClear");
+            throw new com.example.hms.exception.FieldBusinessException("clearApiKeyReference", "platform.service.apiKey.setAndClear");
         }
         OrganizationPlatformService service = loadServiceForOrganization(organizationId, serviceId);
         platformServiceMapper.updateOrganizationServiceFromDto(request, service);

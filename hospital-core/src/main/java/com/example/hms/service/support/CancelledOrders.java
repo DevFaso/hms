@@ -34,10 +34,16 @@ public final class CancelledOrders {
      * QA D1098 (round 19): every cancellation states why. A resulted imaging
      * order was cancelled with {@code cancellationReason} null. Returns the
      * trimmed reason to store.
+     *
+     * <p>QA D1353 (round 30): refused on {@code field} - the request property
+     * the caller read the reason from ({@code cancellationReason} on imaging,
+     * procedure, ultrasound and consultation; {@code reason} on referrals and
+     * discharge requests) - so the 400 carries {@code fieldErrors} and the
+     * form marks it, as {@link #requireReason} already did.</p>
      */
-    public static String requireCancelReason(String reason) {
+    public static String requireCancelReason(String reason, String field) {
         if (reason == null || reason.isBlank()) {
-            throw new BusinessException(CANCEL_REASON_REQUIRED);
+            throw new FieldBusinessException(field, CANCEL_REASON_REQUIRED);
         }
         return reason.trim();
     }
@@ -72,7 +78,7 @@ public final class CancelledOrders {
             return;
         }
         if (resultedStates.indexOf(target) < from) {
-            throw new BusinessException(RESULTED_LOCKED);
+            throw new com.example.hms.exception.FieldBusinessException("status", RESULTED_LOCKED);
         }
     }
 }

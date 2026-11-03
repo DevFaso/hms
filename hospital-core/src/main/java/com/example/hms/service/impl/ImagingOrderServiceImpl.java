@@ -220,7 +220,7 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
             requireCancelAuthor(order);
         }
         String cancellationReason = cancelling
-            ? com.example.hms.service.support.CancelledOrders.requireCancelReason(request.getCancellationReason())
+            ? com.example.hms.service.support.CancelledOrders.requireCancelReason(request.getCancellationReason(), "cancellationReason")
             : null;
 
         requireNotInThePast(request.getScheduledDate(), order.getScheduledDate());
@@ -339,7 +339,7 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
 
     static void requireNotInThePast(java.time.LocalDate requested, java.time.LocalDate current) {
         if (requested != null && !requested.equals(current) && requested.isBefore(java.time.LocalDate.now())) {
-            throw new com.example.hms.exception.BusinessException("imaging.scheduledDate.past");
+            throw new com.example.hms.exception.FieldBusinessException("scheduledDate", "imaging.scheduledDate.past");
         }
     }
 

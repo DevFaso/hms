@@ -1,6 +1,5 @@
 package com.example.hms.service.pharmacy;
 
-import com.example.hms.exception.BusinessException;
 import com.example.hms.model.User;
 import com.example.hms.model.medication.MedicationCatalogItem;
 import com.example.hms.model.pharmacy.InventoryItem;
@@ -24,6 +23,9 @@ import java.util.UUID;
 @Component
 @RequiredArgsConstructor
 public class ControlledStockWitness {
+    /** Request properties a refusal names (QA D1352 class, round 30). */
+    private static final String FIELD_WITNESSED_BY = "witnessedBy";
+
 
     /** Roles whose holder may witness a controlled-substance movement (QA D157). */
     public static final Set<String> WITNESS_ROLE_CODES =
@@ -48,18 +50,18 @@ public class ControlledStockWitness {
         }
         if (witnessId == null) {
             // QA D1282: every caller's body names it witnessedBy; the form marks that picker.
-            throw new com.example.hms.exception.FieldBusinessException("witnessedBy", "stockTransaction.witness.required");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_WITNESSED_BY, "stockTransaction.witness.required");
         }
         if (performer != null && witnessId.equals(performer.getId())) {
-            throw new BusinessException(MessageUtil.resolve("stockTransaction.witness.notSelf"));
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_WITNESSED_BY, MessageUtil.resolve("stockTransaction.witness.notSelf"));
         }
         UUID hospitalId = item.getPharmacy() != null && item.getPharmacy().getHospital() != null
                 ? item.getPharmacy().getHospital().getId() : null;
         if (hospitalId == null || !assignmentRepository.existsActiveWitness(
                 witnessId, hospitalId, WITNESS_ROLE_CODES)) {
-            throw new BusinessException(MessageUtil.resolve("stockTransaction.witness.invalid"));
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_WITNESSED_BY, MessageUtil.resolve("stockTransaction.witness.invalid"));
         }
         return userRepository.findById(witnessId)
-                .orElseThrow(() -> new BusinessException(MessageUtil.resolve("stockTransaction.witness.invalid")));
+                .orElseThrow(() -> new com.example.hms.exception.FieldBusinessException(FIELD_WITNESSED_BY, MessageUtil.resolve("stockTransaction.witness.invalid")));
     }
 }

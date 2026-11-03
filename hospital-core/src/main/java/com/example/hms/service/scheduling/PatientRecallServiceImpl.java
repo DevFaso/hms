@@ -77,7 +77,7 @@ public class PatientRecallServiceImpl implements PatientRecallService {
         Patient patient = patientRepository.findById(request.getPatientId())
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));
         if (!patient.isRegisteredInHospital(hospitalId)) {
-            throw new BusinessException("recall.patient.notRegistered");
+            throw new com.example.hms.exception.FieldBusinessException("patientId", "recall.patient.notRegistered");
         }
         requireRecentDueDate(request.getDueDate(), com.example.hms.utility.HospitalCalendar.today(hospital, clock));
 

@@ -1,7 +1,6 @@
 package com.example.hms.service;
 
 import com.example.hms.enums.AppointmentStatus;
-import com.example.hms.exception.BusinessException;
 import com.example.hms.model.Appointment;
 
 import java.time.LocalDateTime;
@@ -28,6 +27,12 @@ public final class AppointmentSlotRules {
 
     /** QA D978: the latest end a patient may book for themselves. */
     public static final LocalTime PATIENT_DAY_END = LocalTime.of(19, 0);
+
+    /**
+     * QA D1352 class (round 30): the request property a patient's booked time
+     * is refused on, so the booking form marks the time it offered.
+     */
+    public static final String BOOKED_TIME_FIELD = "startTime";
 
     private AppointmentSlotRules() {
     }
@@ -76,11 +81,11 @@ public final class AppointmentSlotRules {
      */
     public static void requirePatientBookable(LocalDateTime start, LocalDateTime end, LocalDateTime now) {
         if (!start.isAfter(now)) {
-            throw new BusinessException("portal.booking.pastTime");
+            throw new com.example.hms.exception.FieldBusinessException(BOOKED_TIME_FIELD, "portal.booking.pastTime");
         }
         if (!withinPatientDay(start, end)) {
             // QA D1234 class: the hours on the reader's clock (07:00 in French, 7:00 AM in English).
-            throw new BusinessException("portal.booking.outsideHours",
+            throw new com.example.hms.exception.FieldBusinessException(BOOKED_TIME_FIELD, "portal.booking.outsideHours",
                 com.example.hms.utility.DisplayDates.time(PATIENT_DAY_START),
                 com.example.hms.utility.DisplayDates.time(PATIENT_DAY_END));
         }

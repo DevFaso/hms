@@ -1,6 +1,5 @@
 package com.example.hms.service.impl;
 
-import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ConflictException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.MaternalHistoryMapper;
@@ -147,7 +146,7 @@ public class MaternalHistoryServiceImpl implements MaternalHistoryService {
         
         // Ensure patient ID matches
         if (!existingHistory.getPatient().getId().equals(request.getPatientId())) {
-            throw new BusinessException("maternalHistory.patientChange");
+            throw new com.example.hms.exception.FieldBusinessException("patientId", "maternalHistory.patientChange");
         }
         
         // Get next version number

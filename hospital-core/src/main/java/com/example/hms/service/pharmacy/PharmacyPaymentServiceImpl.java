@@ -39,6 +39,9 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Slf4j
 public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
+    /** Request properties a refusal names (QA D1352 class, round 30). */
+    private static final String FIELD_AMOUNT = "amount";
+
 
     private static final String AUDIT_ENTITY = "PHARMACY_PAYMENT";
 
@@ -68,7 +71,7 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
                 .orElseThrow(() -> new ResourceNotFoundException("dispense.notfound"));
         if (dispense.getPatient() == null
                 || !dispense.getPatient().getId().equals(dto.getPatientId())) {
-            throw new BusinessException("pharmacy.payment.patientMismatch");
+            throw new com.example.hms.exception.FieldBusinessException("patientId", "pharmacy.payment.patientMismatch");
         }
         if (dispense.getPharmacy() == null
                 || dispense.getPharmacy().getHospital() == null
@@ -77,7 +80,7 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
         }
         // QA D404: a cancelled dispense has nothing left to pay for.
         if (dispense.getStatus() == com.example.hms.enums.DispenseStatus.CANCELLED) {
-            throw new BusinessException("pharmacy.payment.dispenseCancelled");
+            throw new com.example.hms.exception.FieldBusinessException("dispenseId", "pharmacy.payment.dispenseCancelled");
         }
         return dispense;
     }
@@ -123,7 +126,7 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
         }
         String phone = patient.getPhoneNumberPrimary();
         if (phone == null || phone.isBlank()) {
-            throw new BusinessException("pharmacy.payment.noMobileMoneyPhone");
+            throw new com.example.hms.exception.FieldBusinessException("patientId", "pharmacy.payment.noMobileMoneyPhone");
         }
         try {
             MobileMoneyGateway.MobileMoneyCharge charge = mobileMoneyGateway.charge(
@@ -167,7 +170,7 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
             throw new BusinessException("pharmacy.currentUserUnknown");
         }
         if (dto.getReceivedBy() != null && !currentUserId.equals(dto.getReceivedBy())) {
-            throw new BusinessException("pharmacy.payment.receivedByMismatch");
+            throw new com.example.hms.exception.FieldBusinessException("receivedBy", "pharmacy.payment.receivedByMismatch");
         }
         User receivedBy = userRepository.findById(currentUserId)
                 .orElseThrow(() -> new ResourceNotFoundException("user.current.notfound"));
@@ -297,7 +300,7 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
         if (charge.compareTo(amount) != 0) {
             // QA D828: the number itself (grouped in the caller's language) and the
             // bundle writes "F CFA" after it, never a bare figure or the raw XOF code.
-            throw new BusinessException("pharmacy.payment.amountMismatch", charge);
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_AMOUNT, "pharmacy.payment.amountMismatch", charge);
         }
     }
 
@@ -306,11 +309,11 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
             throw new BusinessException("pharmacy.payment.requestRequired");
         }
         if (dto.getAmount() == null || dto.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
-            throw new com.example.hms.exception.FieldBusinessException("amount", "pharmacy.payment.amountPositive");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_AMOUNT, "pharmacy.payment.amountPositive");
         }
         // QA D204 (D184): the franc CFA has no minor unit.
         if (dto.getAmount().stripTrailingZeros().scale() > 0) {
-            throw new com.example.hms.exception.FieldBusinessException("amount", "billing.payment.wholeAmountOnly");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_AMOUNT, "billing.payment.wholeAmountOnly");
         }
         if (dto.getPaymentMethod() == null) {
             throw new com.example.hms.exception.FieldBusinessException("paymentMethod", "pharmacy.payment.methodRequired");
@@ -320,7 +323,7 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
             throw new BusinessException("pharmacy.payment.hospitalRequired");
         }
         if (!hospitalId.equals(dto.getHospitalId())) {
-            throw new BusinessException("pharmacy.payment.hospitalMismatch");
+            throw new com.example.hms.exception.FieldBusinessException("hospitalId", "pharmacy.payment.hospitalMismatch");
         }
     }
 }

@@ -118,7 +118,7 @@ public class MortalityServiceImpl implements MortalityService {
         Patient patient = patientChartAccess.require(request.getPatientId(), hospitalId);
 
         if (deathRecordRepository.existsByPatient_Id(patient.getId())) {
-            throw new BusinessException("mortality.alreadyRecorded");
+            throw new com.example.hms.exception.FieldBusinessException("patientId", "mortality.alreadyRecorded");
         }
         if (request.getDiedAt().isAfter(LocalDateTime.now(clock))) {
             throw new com.example.hms.exception.FieldBusinessException("diedAt", "mortality.timeInFuture");

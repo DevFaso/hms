@@ -30,6 +30,9 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class LabSpecimenServiceImpl implements LabSpecimenService {
+    /** Request properties a refusal names (QA D1352 class, round 30). */
+    private static final String FIELD_LAB_ORDER_ID = "labOrderId";
+
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyyMMdd");
     private static final java.security.SecureRandom SECURE_RNG = new java.security.SecureRandom();
@@ -63,7 +66,7 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
     @Transactional
     public LabSpecimenResponseDTO createSpecimen(LabSpecimenRequestDTO request, Locale locale) {
         if (request.getLabOrderId() == null) {
-            throw new FieldBusinessException("labOrderId", "lab.specimen.order.required");
+            throw new FieldBusinessException(FIELD_LAB_ORDER_ID, "lab.specimen.order.required");
         }
         LabOrder labOrder = labOrderRepository.findById(request.getLabOrderId())
             .orElseThrow(() -> new ResourceNotFoundException("laborder.notfound"));
@@ -74,12 +77,12 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
         }
         // QA D820: an order voided as entered in error takes nothing further.
         if (labOrder.getStatus() == LabOrderStatus.ENTERED_IN_ERROR) {
-            throw new BusinessException("lab.order.enteredInError");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_LAB_ORDER_ID, "lab.order.enteredInError");
         }
         // QA D1109: nor does an order already answered (a result exists) or
         // cancelled: the collection left a dangling tube on a released order.
         if (!com.example.hms.service.lab.LabOrderLifecycle.acceptsNewSpecimen(labOrder.getStatus())) {
-            throw new BusinessException("lab.specimen.orderClosed");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_LAB_ORDER_ID, "lab.specimen.orderClosed");
         }
 
         // QA D637: a specimen cannot be collected before the test was ordered
@@ -271,7 +274,7 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
         // after the caller's status check is seen here. Refusing rolls back
         // the specimen write, and the receipt's outbox row is never queued.
         if (committedStatus == LabOrderStatus.ENTERED_IN_ERROR) {
-            throw new BusinessException("lab.order.enteredInError");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_LAB_ORDER_ID, "lab.order.enteredInError");
         }
         LabOrderStatus moveTo = LabOrderLifecycle.statusAfterForwardStep(committedStatus, target);
         if (moveTo == null) {

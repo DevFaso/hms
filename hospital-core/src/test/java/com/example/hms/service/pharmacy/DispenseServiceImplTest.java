@@ -754,7 +754,10 @@ class DispenseServiceImplTest {
             assertThatThrownBy(() -> service.createDispense(dto))
                     .isInstanceOf(BusinessException.class)
                     .matches(e -> "pharmacy.dispense.exceedsPrescribed".equals(((BusinessException) e).getMessageKey())
-                            && e.getMessage().contains("4"));
+                            && e.getMessage().contains("4"))
+                    // QA D1354 (round 30): on the quantity dispensed, so the form marks it.
+                    .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                    .hasFieldOrPropertyWithValue("field", "quantityDispensed");
         }
 
         @Test

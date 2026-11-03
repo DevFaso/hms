@@ -226,7 +226,7 @@ public class BedManagementServiceImpl implements BedManagementService {
                 bed.getWard().getCode());
         }
         if (Boolean.FALSE.equals(request.getActive()) && bed.getStatus() == BedStatus.OCCUPIED) {
-            throw new BusinessException("bed.occupied.cannotRetire");
+            throw new com.example.hms.exception.FieldBusinessException("active", "bed.occupied.cannotRetire");
         }
 
         bed.setBedNumber(bedNumber);
@@ -248,7 +248,7 @@ public class BedManagementServiceImpl implements BedManagementService {
             .orElseThrow(() -> new ResourceNotFoundException(BED_NOT_FOUND_KEY, bedId));
 
         if (request.getStatus() == BedStatus.OCCUPIED) {
-            throw new BusinessException("bed.occupied.manualStatus");
+            throw new com.example.hms.exception.FieldBusinessException("status", "bed.occupied.manualStatus");
         }
         if (bed.getStatus() == BedStatus.OCCUPIED) {
             throw new BusinessException("bed.occupied.unassignFirst");

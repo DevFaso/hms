@@ -384,7 +384,7 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
         requireSendingSide(referral);
         requireCallerIsReferrer(referral, "generalReferral.cancel.referrerOnly");
         // QA D1098: a blank reason passed the required request parameter.
-        String cancelReason = com.example.hms.service.support.CancelledOrders.requireCancelReason(reason);
+        String cancelReason = com.example.hms.service.support.CancelledOrders.requireCancelReason(reason, "reason");
         ReferralStatus before = referral.getStatus();
         referral.cancel(cancelReason);
         referral = referralRepository.save(referral);

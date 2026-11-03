@@ -92,7 +92,7 @@ public class ProviderOnboardingServiceImpl implements ProviderOnboardingService 
         requireVerifiedSuperAdmin();
         FacilityType type = request.getFacilityType();
         if (type == null || !PROVIDER_TYPES.contains(type)) {
-            throw new BusinessException(MSG_TYPE_INVALID);
+            throw new com.example.hms.exception.FieldBusinessException("facilityType", MSG_TYPE_INVALID);
         }
         String code = request.getCode().trim().toUpperCase(Locale.ROOT);
         if (hospitalRepository.findByCodeIgnoreCase(code).isPresent()) {

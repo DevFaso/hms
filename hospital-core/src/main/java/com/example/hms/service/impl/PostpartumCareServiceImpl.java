@@ -245,7 +245,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
             PatientHospitalRegistration registration = registrationRepository.findById(registrationId)
                 .orElseThrow(() -> new ResourceNotFoundException("registration.notFound", registrationId));
             if (!registration.getPatient().getId().equals(patient.getId())) {
-                throw new BusinessException("maternity.registration.otherPatient");
+                throw new com.example.hms.exception.FieldBusinessException("registrationId", "maternity.registration.otherPatient");
             }
             return registration;
         }
@@ -280,7 +280,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
                 .orElseThrow(() -> new ResourceNotFoundException("staff.not.found.or.inactive", staffId));
             if (hospital != null && staff.getHospital() != null
                 && !hospital.getId().equals(staff.getHospital().getId())) {
-                throw new BusinessException("maternity.recorder.hospitalMismatch");
+                throw new com.example.hms.exception.FieldBusinessException("recordedByStaffId", "maternity.recorder.hospitalMismatch");
             }
             // QA D503 class: the recorder is the caller, not a colleague named in the body.
             com.example.hms.security.CallerIdentity.requireCallerUnlessSuperAdmin(staff);
@@ -378,13 +378,13 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
     private static void requireNotInFuture(PostpartumObservationRequestDTO request) {
         LocalDateTime limit = LocalDateTime.now(java.time.ZoneId.systemDefault()).plus(CLOCK_SKEW);
         if (request.getObservationTime() != null && request.getObservationTime().isAfter(limit)) {
-            throw new BusinessException("maternity.postpartum.observationTime.future");
+            throw new com.example.hms.exception.FieldBusinessException("observationTime", "maternity.postpartum.observationTime.future");
         }
         if (request.getDeliveryOccurredAt() != null && request.getDeliveryOccurredAt().isAfter(limit)) {
-            throw new BusinessException("maternity.postpartum.deliveryTime.future");
+            throw new com.example.hms.exception.FieldBusinessException("deliveryOccurredAt", "maternity.postpartum.deliveryTime.future");
         }
         if (request.getOriginalEntryTime() != null && request.getOriginalEntryTime().isAfter(limit)) {
-            throw new BusinessException("maternity.postpartum.observationTime.future");
+            throw new com.example.hms.exception.FieldBusinessException("originalEntryTime", "maternity.postpartum.observationTime.future");
         }
     }
 

@@ -849,7 +849,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
                 continue;
             }
             if (!range.isReferenceRangeOrdered()) {
-                throw new BusinessException("lab.referenceRange.inverted");
+                throw new com.example.hms.exception.FieldBusinessException(REFERENCE_RANGES_FIELD, "lab.referenceRange.inverted");
             }
             List<LabTestReferenceRangeDTO.CriticalLimitProblem> problems = range.criticalLimitProblems();
             if (!problems.isEmpty()) {
@@ -858,7 +858,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
                     listField + "[" + i + "]." + first.field(), first.messageKey());
             }
             if (!range.isAgeRangeOrdered()) {
-                throw new BusinessException("lab.referenceRange.ageInverted");
+                throw new com.example.hms.exception.FieldBusinessException(REFERENCE_RANGES_FIELD, "lab.referenceRange.ageInverted");
             }
         }
     }

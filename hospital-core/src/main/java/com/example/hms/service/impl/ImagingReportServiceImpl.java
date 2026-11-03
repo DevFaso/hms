@@ -186,7 +186,7 @@ public class ImagingReportServiceImpl implements ImagingReportService {
             && !Objects.equals(imagingOrder.getId(), request.getImagingOrderId())) {
             // Re-pointing a report at a different order would move it between
             // patients. A report belongs to the study it interprets.
-            throw new BusinessException("imaging.report.orderCannotMove");
+            throw new com.example.hms.exception.FieldBusinessException("imagingOrderId", "imaging.report.orderCannotMove");
         }
 
         if (request.getDepartmentId() != null) {
@@ -513,7 +513,7 @@ public class ImagingReportServiceImpl implements ImagingReportService {
             return;
         }
         if (!AUTHORABLE_STATUSES.contains(requested)) {
-            throw new BusinessException(
+            throw new com.example.hms.exception.FieldBusinessException("reportStatus", 
                 ("%s cannot be set by authoring a report. FINAL is reached only by signing; "
                     + "CANCELLED and ERROR only through the status endpoint, which records a reason.")
                     .formatted(requested));
@@ -521,7 +521,7 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         if (creating
             && !REVISION_STATUSES.contains(requested)
             && hasSignedReport(imagingOrder.getId())) {
-            throw new BusinessException("imaging.report.studyAlreadySigned");
+            throw new com.example.hms.exception.FieldBusinessException("reportStatus", "imaging.report.studyAlreadySigned");
         }
         report.setReportStatus(requested);
     }
@@ -581,12 +581,13 @@ public class ImagingReportServiceImpl implements ImagingReportService {
             .orElseThrow(() -> new ResourceNotFoundException("department.notFound", departmentId));
         if (hospital != null && department.getHospital() != null
             && !Objects.equals(department.getHospital().getId(), hospital.getId())) {
-            throw new BusinessException("imaging.report.departmentOtherHospital");
+            throw new com.example.hms.exception.FieldBusinessException("departmentId", "imaging.report.departmentOtherHospital");
         }
         return department;
     }
 
-    private Staff resolveStaff(UUID staffId, Hospital hospital) {
+    /** QA D1352 class (round 30): a staff of another hospital is refused on {@code field}. */
+    private Staff resolveStaff(UUID staffId, Hospital hospital, String field) {
         if (staffId == null) {
             return null;
         }
@@ -594,7 +595,7 @@ public class ImagingReportServiceImpl implements ImagingReportService {
             .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", staffId));
         if (hospital != null && staff.getHospital() != null
             && !Objects.equals(staff.getHospital().getId(), hospital.getId())) {
-            throw new BusinessException("imaging.report.staffOtherHospital");
+            throw new com.example.hms.exception.FieldBusinessException(field, "imaging.report.staffOtherHospital");
         }
         return staff;
     }
@@ -609,10 +610,10 @@ public class ImagingReportServiceImpl implements ImagingReportService {
                                         ImagingReportUpsertRequestDTO request,
                                         Hospital hospital) {
         if (request.getPerformedByStaffId() != null) {
-            report.setPerformedBy(resolveStaff(request.getPerformedByStaffId(), hospital));
+            report.setPerformedBy(resolveStaff(request.getPerformedByStaffId(), hospital, "performedByStaffId"));
         }
         if (request.getInterpretingProviderId() != null) {
-            report.setInterpretingProvider(resolveStaff(request.getInterpretingProviderId(), hospital));
+            report.setInterpretingProvider(resolveStaff(request.getInterpretingProviderId(), hospital, "interpretingProviderId"));
         } else if (report.getInterpretingProvider() == null) {
             report.setInterpretingProvider(currentStaff(hospital));
         }

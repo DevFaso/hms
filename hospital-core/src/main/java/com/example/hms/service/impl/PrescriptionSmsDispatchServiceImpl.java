@@ -65,6 +65,9 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispatchService {
+    /** Request properties a refusal names (QA D1352 class, round 30). */
+    private static final String FIELD_PHARMACY_ID = "pharmacyId";
+
 
     private static final String CHANNEL_SMS = "SMS";
     private static final String ROLE_SUPER_ADMIN = "ROLE_SUPER_ADMIN";
@@ -250,10 +253,10 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
 
     private void validateScope(Prescription rx, Pharmacy pharmacy) {
         if (pharmacy.getPharmacyType() == PharmacyType.HOSPITAL_DISPENSARY) {
-            throw new BusinessException("prescription.dispatch.inHouseDispensary");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_PHARMACY_ID, "prescription.dispatch.inHouseDispensary");
         }
         if (!pharmacy.isActive()) {
-            throw new BusinessException("prescription.dispatch.pharmacyInactive");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_PHARMACY_ID, "prescription.dispatch.pharmacyInactive");
         }
         UUID rxHospitalId = rx.getHospital() != null ? rx.getHospital().getId() : null;
         UUID pharmHospitalId = pharmacy.getHospital() != null ? pharmacy.getHospital().getId() : null;
@@ -359,7 +362,7 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
     private String requirePharmacyPhone(Pharmacy pharmacy) {
         String phone = pharmacy.getPhoneNumber();
         if (phone == null || phone.isBlank()) {
-            throw new BusinessException("prescription.dispatch.pharmacyNoPhone");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_PHARMACY_ID, "prescription.dispatch.pharmacyNoPhone");
         }
         return phone;
     }

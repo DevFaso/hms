@@ -93,6 +93,9 @@ import com.example.hms.security.provider.FacilityAssignmentGuard;
 @Slf4j
 @Transactional
 public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAssignmentService {
+    /** Request properties a refusal names (QA D1352 class, round 30). */
+    private static final String FIELD_ACTIVE = "active";
+
     private static final String UNKNOWN_ROLE = "UNKNOWN_ROLE";
     private static final String UNKNOWN_USER = "unknown user";
     private static final String AUDIT_ENTITY_ASSIGNMENT = "USER_ROLE_ASSIGNMENT";
@@ -377,7 +380,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         if (isRoleCode(roleCode, ROLE_PATIENT)) {
             // Patient assignments start inactive — activated after email verification
             if (Boolean.TRUE.equals(dto.getActive())) {
-                throw new BusinessException("assignment.patient.mustStartInactive");
+                throw new com.example.hms.exception.FieldBusinessException(FIELD_ACTIVE, "assignment.patient.mustStartInactive");
             }
             if (dto.getActive() == null) {
                 dto.setActive(Boolean.FALSE);
@@ -402,7 +405,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         if (dto.getHospitalId() != null
             || (dto.getHospitalCode() != null && !dto.getHospitalCode().isBlank())
             || (dto.getHospitalName() != null && !dto.getHospitalName().isBlank())) {
-            throw new BusinessException(DEFAULT_SUPER_ADMIN_SCOPE_MESSAGE);
+            throw new com.example.hms.exception.FieldBusinessException("hospitalId", DEFAULT_SUPER_ADMIN_SCOPE_MESSAGE);
         }
         boolean verifiedSuperAdmin = adminRequest && roleValidator.isSuperAdminFromJwtClaim();
         if (dto.getActive() == null || (adminRequest && !verifiedSuperAdmin)) {
@@ -553,7 +556,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                                               UserRoleHospitalAssignment target) {
         if (Boolean.TRUE.equals(dto.getActive()) && !Boolean.TRUE.equals(target.getActive())
                 && !roleValidator.isSuperAdminFromJwtClaim()) {
-            throw new BusinessException(DEFAULT_ACTIVATION_THROUGH_CODE);
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_ACTIVE, DEFAULT_ACTIVATION_THROUGH_CODE);
         }
     }
 
@@ -590,7 +593,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         }
         // Patient assignments must remain inactive until email verification activates them
         if (Boolean.TRUE.equals(dto.getActive())) {
-            throw new BusinessException("assignment.patient.cannotActivate");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_ACTIVE, "assignment.patient.cannotActivate");
         }
         if (dto.getActive() == null) {
             dto.setActive(target.getActive());
@@ -1290,7 +1293,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         Objects.requireNonNull(requestDTO, "Request must not be null");
         String csvContent = requestDTO.getCsvContent();
         if (csvContent == null || csvContent.isBlank()) {
-            throw new BusinessException(DEFAULT_PROCESSING_ERROR);
+            throw new com.example.hms.exception.FieldBusinessException("csvContent", DEFAULT_PROCESSING_ERROR);
         }
 
         String delimiter = (requestDTO.getDelimiter() != null && !requestDTO.getDelimiter().isBlank())
@@ -2046,7 +2049,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                                       String[] tokens,
                                       Map<String, Integer> headerIndex,
                                       UserRoleAssignmentBulkImportRequestDTO options) {
-        Boolean active = parseBoolean(getColumnValue(tokens, headerIndex, "active", "is_active"), options.getDefaultActive());
+        Boolean active = parseBoolean(getColumnValue(tokens, headerIndex, FIELD_ACTIVE, "is_active"), options.getDefaultActive());
         if (active != null) {
             builder.active(active);
         }

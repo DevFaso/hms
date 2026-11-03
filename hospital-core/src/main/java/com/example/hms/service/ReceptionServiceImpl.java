@@ -1156,7 +1156,7 @@ public class ReceptionServiceImpl implements ReceptionService {
         // appointment was checked in on 23 Oct and opened an encounter dated
         // the 23rd. Another day's appointment is rescheduled, not checked in.
         if (appointment.getAppointmentDate() != null && !appointment.getAppointmentDate().equals(now.toLocalDate())) {
-            throw new BusinessException("reception.checkin.notToday", DisplayDates.date(appointment.getAppointmentDate()));
+            throw new com.example.hms.exception.FieldBusinessException("appointmentId", "reception.checkin.notToday", DisplayDates.date(appointment.getAppointmentDate()));
         }
 
         // 2. Transition appointment to CHECKED_IN

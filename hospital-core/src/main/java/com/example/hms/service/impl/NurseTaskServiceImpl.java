@@ -118,6 +118,9 @@ import jakarta.persistence.EntityNotFoundException;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class NurseTaskServiceImpl implements NurseTaskService {
+    /** Request properties a refusal names (QA D1352 class, round 30). */
+    private static final String FIELD_RECIPIENT_USER_ID = "recipientUserId";
+
     private static final String HOSPITAL_NOT_FOUND_KEY = "hospital.notFound";
     private static final String PATIENT_NOT_FOUND_KEY = "patient.notFound";
     /** QA D1225: how many closed doses a MAR row carries back to the nurse. */
@@ -692,7 +695,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         }
 
         if (overrideReason == null || overrideReason.isBlank()) {
-            throw new BusinessException("nurse.mar.fiveRightsFailedOverrideRequired",
+            throw new com.example.hms.exception.FieldBusinessException("overrideReason", "nurse.mar.fiveRightsFailedOverrideRequired",
                 check.failedChecks().stream().map(Enum::name).toList().toString());
         }
         mar.setFiveRightsStatus(FiveRightsStatus.OVERRIDDEN);
@@ -888,35 +891,30 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_KEY, request.getPatientId()));
 
         if (!patient.isRegisteredInHospital(hospitalId)) {
-            throw new BusinessException("nurse.patient.notRegisteredHere");
+            throw new com.example.hms.exception.FieldBusinessException("patientId", "nurse.patient.notRegisteredHere");
         }
 
         // QA D235: a handoff type from the fixed list, not free text.
         String direction = request.getDirection() == null ? ""
             : request.getDirection().trim().toUpperCase(Locale.ROOT);
-        if (!HANDOFF_DIRECTIONS.contains(direction)) {
-            throw new com.example.hms.exception.FieldBusinessException("direction", "nurse.handoff.direction.invalid");
-        }
-
         // QA D331: an SBAR handoff with no Situation tells the next nurse
         // nothing about why the patient is being handed over.
-        if (trimToNull(request.getSituation()) == null) {
-            throw new com.example.hms.exception.FieldBusinessException("situation", "nurse.handoff.situation.required");
-        }
-
         // QA D776: a handoff is handed TO someone: a colleague at this
         // hospital who can take the patient, never the author.
+        // QA D1282: the recipient is named, so the handoff form marks its picker.
+        // QA D1355 class (round 30): the type, the situation and the recipient
+        // are named in one refusal, not one per press.
         UUID recipientId = request.getRecipientUserId();
-        if (recipientId == null) {
-            // QA D1282: named, so the handoff form marks the recipient picker.
-            throw new com.example.hms.exception.FieldBusinessException("recipientUserId",
-                "nurse.handoff.recipient.required");
-        }
+        com.example.hms.exception.RequiredFields.check()
+            .require(HANDOFF_DIRECTIONS.contains(direction), "direction", "nurse.handoff.direction.invalid")
+            .requireValue(trimToNull(request.getSituation()), "situation", "nurse.handoff.situation.required")
+            .requireValue(recipientId, FIELD_RECIPIENT_USER_ID, "nurse.handoff.recipient.required")
+            .orThrow();
         if (recipientId.equals(nurseUserId)) {
-            throw new BusinessException("nurse.handoff.recipient.notSelf");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_RECIPIENT_USER_ID, "nurse.handoff.recipient.notSelf");
         }
         if (!assignmentRepository.existsActiveWitness(recipientId, hospitalId, HANDOFF_RECIPIENT_ROLE_CODES)) {
-            throw new BusinessException("nurse.handoff.recipient.invalid");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_RECIPIENT_USER_ID, "nurse.handoff.recipient.invalid");
         }
 
         NurseHandoff handoff = NurseHandoff.builder()
@@ -2129,7 +2127,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_KEY, request.getPatientId()));
 
         if (!patient.isRegisteredInHospital(hospitalId)) {
-            throw new BusinessException("nurse.patient.notRegisteredHere");
+            throw new com.example.hms.exception.FieldBusinessException("patientId", "nurse.patient.notRegisteredHere");
         }
         // QA D525: a ward task for a patient who went home sat in the list.
         requireNotDischargedWithoutVisit(patient.getId(), hospitalId, "nurse.task.patientDischarged");
@@ -2138,7 +2136,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         // A task is for this shift onward; a little back-dating is allowed.
         if (request.getDueAt() != null
             && request.getDueAt().isBefore(LocalDateTime.now(java.time.ZoneId.systemDefault()).minus(TASK_DUE_BACKDATE_LIMIT))) {
-            throw new BusinessException("nurse.task.dueAt.past");
+            throw new com.example.hms.exception.FieldBusinessException("dueAt", "nurse.task.dueAt.past");
         }
 
         String createdByName = resolveNurseName(nurseUserId);

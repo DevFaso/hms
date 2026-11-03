@@ -1,7 +1,6 @@
 package com.example.hms.service.emar;
 
 import com.example.hms.enums.MedicationAdministrationStatus;
-import com.example.hms.exception.BusinessException;
 import com.example.hms.model.Prescription;
 import com.example.hms.model.User;
 import com.example.hms.repository.UserRepository;
@@ -30,6 +29,9 @@ import java.util.UUID;
 @Component
 @RequiredArgsConstructor
 public class ControlledAdministrationWitness {
+    /** Request properties a refusal names (QA D1352 class, round 30). */
+    private static final String FIELD_WITNESS_USER_ID = "witnessUserId";
+
 
     /** Who may witness a dose: a second nurse, midwife or doctor of the hospital. */
     public static final Set<String> WITNESS_ROLE_CODES = Set.of("ROLE_NURSE", "ROLE_MIDWIFE", "ROLE_DOCTOR");
@@ -54,18 +56,18 @@ public class ControlledAdministrationWitness {
         }
         if (witnessUserId == null) {
             // QA D1282: named, so the dose dialog marks the witness picker.
-            throw new com.example.hms.exception.FieldBusinessException("witnessUserId", "nurse.mar.witness.required",
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_WITNESS_USER_ID, "nurse.mar.witness.required",
                 prescription.getMedicationName() != null ? prescription.getMedicationName() : "-");
         }
         if (witnessUserId.equals(administeringUserId)) {
-            throw new BusinessException("nurse.mar.witness.notSelf");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_WITNESS_USER_ID, "nurse.mar.witness.notSelf");
         }
         UUID hospitalId = prescription.getHospital() != null ? prescription.getHospital().getId() : null;
         if (hospitalId == null
                 || !assignmentRepository.existsActiveWitness(witnessUserId, hospitalId, WITNESS_ROLE_CODES)) {
-            throw new BusinessException("nurse.mar.witness.invalid");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_WITNESS_USER_ID, "nurse.mar.witness.invalid");
         }
         return userRepository.findById(witnessUserId)
-            .orElseThrow(() -> new BusinessException("nurse.mar.witness.invalid"));
+            .orElseThrow(() -> new com.example.hms.exception.FieldBusinessException(FIELD_WITNESS_USER_ID, "nurse.mar.witness.invalid"));
     }
 }

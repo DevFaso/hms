@@ -223,7 +223,7 @@ public class SmartPhraseServiceImpl implements SmartPhraseService {
         }
         if (request.getScope() == SmartPhraseScope.GLOBAL
             && (request.getHospitalId() != null || request.getOwnerUserId() != null)) {
-            throw new BusinessException("GLOBAL SmartPhrase must not carry hospitalId or ownerUserId");
+            throw new com.example.hms.exception.FieldBusinessException("scope", "GLOBAL SmartPhrase must not carry hospitalId or ownerUserId");
         }
         if (request.getScope() == SmartPhraseScope.HOSPITAL && request.getHospitalId() == null) {
             throw new com.example.hms.exception.FieldBusinessException("hospitalId", "HOSPITAL SmartPhrase requires hospitalId");

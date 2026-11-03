@@ -56,6 +56,9 @@ import com.example.hms.service.recordaccess.RecordAccessPolicy;
 @Service
 @RequiredArgsConstructor
 public class DischargeSummaryServiceImpl implements DischargeSummaryService {
+    /** Request properties a refusal names (QA D1352 class, round 30). */
+    private static final String FIELD_ENCOUNTER_ID = "encounterId";
+
     private static final String DISCHARGE_SUMMARY_NOT_FOUND_KEY = "dischargeSummary.notFound";
 
 
@@ -100,7 +103,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
 
         // Check if discharge summary already exists for this encounter
         if (dischargeSummaryRepository.existsByEncounter_Id(request.getEncounterId())) {
-            throw new BusinessException("dischargeSummary.alreadyExists");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_ENCOUNTER_ID, "dischargeSummary.alreadyExists");
         }
 
         // Fetch required entities
@@ -124,7 +127,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         // still waiting for its physician (or one that ended unseen) has no
         // course, diagnosis or disposition to summarise yet.
         if (encounter.getStatus() != null && NOT_SEEN.contains(encounter.getStatus())) {
-            throw new BusinessException("dischargeSummary.encounter.notSeen");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_ENCOUNTER_ID, "dischargeSummary.encounter.notSeen");
         }
 
         Staff dischargingProvider = staffRepository.findById(request.getDischargingProviderId())
@@ -873,7 +876,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         // visit assigned to another physician is that physician's to sum up.
         UUID hospitalId = encounter.getHospital() != null ? encounter.getHospital().getId() : null;
         if (treating.getUser() != null && isPhysician(treating.getUser().getId(), hospitalId)) {
-            throw new BusinessException("dischargeSummary.encounter.notTreatingClinician");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_ENCOUNTER_ID, "dischargeSummary.encounter.notTreatingClinician");
         }
     }
 

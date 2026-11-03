@@ -277,7 +277,10 @@ class TransferServiceImplTest {
 
         assertThatThrownBy(() -> service.requestTransfer(request))
             .isInstanceOf(BusinessException.class)
-            .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("transfer.r7.alreadyInBed"));
+            .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("transfer.r7.alreadyInBed"))
+            // QA D1352 (round 30): on the destination bed the form offers.
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "toBedId");
     }
 
     @Test

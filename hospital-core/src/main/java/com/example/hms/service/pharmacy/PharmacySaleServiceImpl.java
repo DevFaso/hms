@@ -73,7 +73,7 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
     public PharmacySaleResponseDTO createSale(PharmacySaleRequestDTO dto) {
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         if (!activeHospitalId.equals(dto.getHospitalId())) {
-            throw new BusinessException("pharmacy.sale.hospitalMismatch");
+            throw new com.example.hms.exception.FieldBusinessException("hospitalId", "pharmacy.sale.hospitalMismatch");
         }
         if (dto.getLines() == null || dto.getLines().isEmpty()) {
             throw new com.example.hms.exception.FieldBusinessException("lines", "pharmacy.sale.linesRequired");
@@ -160,7 +160,7 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
             // FEFO credit for stock that is not there.
             BigDecimal taken = takenByLot.getOrDefault(lot.getId(), lineDto.getQuantity());
             if (lot.getRemainingQuantity() != null && taken.compareTo(lot.getRemainingQuantity()) > 0) {
-                throw new BusinessException("stock.lot.insufficient", lot.getLotNumber(),
+                throw new com.example.hms.exception.FieldBusinessException("stockLotId", "stock.lot.insufficient", lot.getLotNumber(),
                         com.example.hms.utility.DisplayNumbers.quantity(taken));
             }
         }
@@ -188,7 +188,7 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
         if (lot.getInventoryItem() == null
                 || lot.getInventoryItem().getPharmacy() == null
                 || !pharmacy.getId().equals(lot.getInventoryItem().getPharmacy().getId())) {
-            throw new BusinessException("pharmacy.sale.lotOtherPharmacy");
+            throw new com.example.hms.exception.FieldBusinessException("stockLotId", "pharmacy.sale.lotOtherPharmacy");
         }
         // QA D779: a counter sale from a lot is the same movement as a
         // fill: half a tablet of a counted item is refused here too.

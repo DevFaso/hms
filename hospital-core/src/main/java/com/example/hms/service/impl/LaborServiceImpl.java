@@ -70,6 +70,9 @@ import com.example.hms.utility.ObstetricEligibility;
 @RequiredArgsConstructor
 @Transactional
 public class LaborServiceImpl implements LaborService {
+    /** Request properties a refusal names (QA D1352 class, round 30). */
+    private static final String FIELD_HOSPITAL_ID = "hospitalId";
+
 
     /** QA D714: tolerated clock skew between the charting device and the server. */
     static final long PARTOGRAPH_FUTURE_SKEW_MINUTES = 10;
@@ -189,7 +192,7 @@ public class LaborServiceImpl implements LaborService {
             throw new com.example.hms.exception.FieldBusinessException("laborOnsetAt", "maternity.labor.onset.required");
         }
         if (request.getLaborOnsetAt().isAfter(LocalDateTime.now(java.time.ZoneId.systemDefault()).plusMinutes(5))) {
-            throw new BusinessException("maternity.labor.onset.future");
+            throw new com.example.hms.exception.FieldBusinessException("laborOnsetAt", "maternity.labor.onset.future");
         }
         // QA D809: the typed counts are checked before an unbooked labour
         // opens a pregnancy record from them.
@@ -205,7 +208,7 @@ public class LaborServiceImpl implements LaborService {
         patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
 
         if (episodeRepository.existsByPatient_IdAndHospital_IdAndStatus(patientId, hospital.getId(), LaborStatus.ACTIVE)) {
-            throw new BusinessException("maternity.labor.alreadyActive");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, "maternity.labor.alreadyActive");
         }
 
         String riskNotes = resolveRecentDeliveryOverride(patientId, request);
@@ -322,7 +325,7 @@ public class LaborServiceImpl implements LaborService {
             throw new com.example.hms.exception.FieldBusinessException("gestationalAgeWeeks", "maternity.labor.pregnancyRequired");
         }
         if (weeks < MIN_LABOUR_GESTATIONAL_WEEKS || weeks > MAX_LABOUR_GESTATIONAL_WEEKS) {
-            throw new BusinessException("maternity.labor.gestationalAgeRange",
+            throw new com.example.hms.exception.FieldBusinessException("gestationalAgeWeeks", "maternity.labor.gestationalAgeRange",
                 MIN_LABOUR_GESTATIONAL_WEEKS, MAX_LABOUR_GESTATIONAL_WEEKS);
         }
         LocalDate today = LocalDate.now(java.time.ZoneId.systemDefault());
@@ -409,7 +412,7 @@ public class LaborServiceImpl implements LaborService {
         }
         LaborEpisode episode = loadEpisode(patientId, episodeId, request.getHospitalId());
         if (episode.getStatus() != LaborStatus.ACTIVE) {
-            throw new BusinessException("maternity.partograph.laborNotActive");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, "maternity.partograph.laborNotActive");
         }
 
         // QA D714: an observation cannot be charted in the future. A small
@@ -417,7 +420,7 @@ public class LaborServiceImpl implements LaborService {
         // before it can raise an alert or be drawn on the partograph.
         if (request.getObservationTime() != null
                 && request.getObservationTime().isAfter(LocalDateTime.now(java.time.ZoneId.systemDefault()).plusMinutes(PARTOGRAPH_FUTURE_SKEW_MINUTES))) {
-            throw new BusinessException("maternity.partograph.futureTime");
+            throw new com.example.hms.exception.FieldBusinessException("observationTime", "maternity.partograph.futureTime");
         }
         // QA D745: nor before the labour it charts began.
         if (request.getObservationTime() != null && episode.getLaborOnsetAt() != null
@@ -504,10 +507,10 @@ public class LaborServiceImpl implements LaborService {
         }
         LaborEpisode episode = loadEpisode(patientId, episodeId, request.getHospitalId());
         if (episode.getStatus() != LaborStatus.ACTIVE) {
-            throw new BusinessException("maternity.delivery.laborNotActive");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, "maternity.delivery.laborNotActive");
         }
         if (deliveryRecordRepository.existsByEpisode_Id(episode.getId())) {
-            throw new BusinessException("maternity.delivery.alreadyRecorded");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, "maternity.delivery.alreadyRecorded");
         }
 
         LocalDateTime birthAt = request.getBirthDateTime() != null ? request.getBirthDateTime() : LocalDateTime.now();
@@ -880,7 +883,7 @@ public class LaborServiceImpl implements LaborService {
             .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", staffId));
         if (hospital != null && staff.getHospital() != null
             && !hospital.getId().equals(staff.getHospital().getId())) {
-            throw new BusinessException("maternity.recorder.hospitalMismatch");
+            throw new com.example.hms.exception.FieldBusinessException("recordedByStaffId", "maternity.recorder.hospitalMismatch");
         }
         return staff;
     }

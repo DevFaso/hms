@@ -99,16 +99,16 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
         // QA D164: an LMP 93 weeks ago (or in the future) cannot date a current
         // pregnancy, and a pregnancy already delivered needs no antenatal visits.
         if (!GestationalDating.isPlausibleCurrentLmp(lmp, today)) {
-            throw new BusinessException("prenatal.lmp.implausible");
+            throw new com.example.hms.exception.FieldBusinessException("lastMenstrualPeriodDate", "prenatal.lmp.implausible");
         }
         if (deliveryRecordRepository.existsByPatient_IdAndBirthDateTimeGreaterThanEqual(
                 patient.getId(), lmp.atStartOfDay())) {
-            throw new BusinessException("prenatal.pregnancy.delivered");
+            throw new com.example.hms.exception.FieldBusinessException("patientId", "prenatal.pregnancy.delivered");
         }
         // QA D796: a calendar at 14 weeks was planned next to an open labour
         // episode, so the chart showed the same woman in labour and at 14 weeks.
         if (laborEpisodeRepository.existsByPatient_IdAndStatus(patient.getId(), LaborStatus.ACTIVE)) {
-            throw new BusinessException("prenatal.pregnancy.inLabour");
+            throw new com.example.hms.exception.FieldBusinessException("patientId", "prenatal.pregnancy.inLabour");
         }
         LocalDate dueDate = resolveDueDate(request, lmp);
         int currentWeek = Math.max(0, (int) ChronoUnit.WEEKS.between(lmp, today));
@@ -217,7 +217,7 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
 
         LocalDate today = LocalDate.now(clock);
         if (appointment.getAppointmentDate().isBefore(today)) {
-            throw new BusinessException("maternity.reminder.appointmentInPast");
+            throw new com.example.hms.exception.FieldBusinessException("appointmentId", "maternity.reminder.appointmentInPast");
         }
 
         String patientUsername = Optional.ofNullable(appointment.getPatient())
@@ -265,7 +265,7 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
         Staff staff = staffRepository.findById(staffId)
             .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", staffId));
         if (!staff.getHospital().getId().equals(hospitalId)) {
-            throw new BusinessException("maternity.schedule.staffNotInHospital");
+            throw new com.example.hms.exception.FieldBusinessException("staffId", "maternity.schedule.staffNotInHospital");
         }
         return staff;
     }
@@ -599,7 +599,7 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
             Staff staff = staffRepository.findById(request.getNewStaffId())
                 .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", request.getNewStaffId()));
             if (!appointment.getHospital().getId().equals(staff.getHospital().getId())) {
-                throw new BusinessException("maternity.schedule.staffNotInAppointmentHospital");
+                throw new com.example.hms.exception.FieldBusinessException("newStaffId", "maternity.schedule.staffNotInAppointmentHospital");
             }
             return staff.getId();
         }

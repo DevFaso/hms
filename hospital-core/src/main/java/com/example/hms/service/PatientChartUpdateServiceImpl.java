@@ -41,6 +41,9 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Slf4j
 public class PatientChartUpdateServiceImpl implements PatientChartUpdateService {
+    /** Request properties a refusal names (QA D1352 class, round 30). */
+    private static final String FIELD_HOSPITAL_ID = "hospitalId";
+
 
     private final PatientRepository patientRepository;
     private final HospitalRepository hospitalRepository;
@@ -93,18 +96,20 @@ public class PatientChartUpdateServiceImpl implements PatientChartUpdateService 
         if (request == null) {
             throw new BusinessException("chartUpdate.payloadRequired");
         }
-        if (request.getHospitalId() == null && hospitalId == null) {
-            throw new com.example.hms.exception.FieldBusinessException("hospitalId", "chartUpdate.hospitalRequired");
-        }
         UUID effectiveHospitalId = hospitalId != null ? hospitalId : request.getHospitalId();
-        if (effectiveHospitalId == null) {
-            throw new BusinessException("chartUpdate.hospitalUnresolved");
-        }
+        // QA D1355 class (round 30): the hospital and the reason are named in one
+        // refusal; the reason used to be refused only after every lookup passed.
+        String updateReason = trim(request.getUpdateReason());
+        com.example.hms.exception.RequiredFields.check()
+            .require(request.getHospitalId() != null || hospitalId != null, FIELD_HOSPITAL_ID, "chartUpdate.hospitalRequired")
+            .requireValue(effectiveHospitalId, FIELD_HOSPITAL_ID, "chartUpdate.hospitalUnresolved")
+            .requireValue(updateReason, "updateReason", "chartUpdate.reasonRequired")
+            .orThrow();
         validatePatientHospitalContext(patientId, effectiveHospitalId);
 
         if (assignment == null || assignment.getHospital() == null
             || !Objects.equals(assignment.getHospital().getId(), effectiveHospitalId)) {
-            throw new BusinessException("chartUpdate.assignmentMismatch");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, "chartUpdate.assignmentMismatch");
         }
 
         Patient patient = patientRepository.findById(patientId)
@@ -115,10 +120,6 @@ public class PatientChartUpdateServiceImpl implements PatientChartUpdateService 
         Staff staff = staffRepository.findByUserIdAndHospitalId(requesterUserId, effectiveHospitalId)
             .orElseThrow(() -> new BusinessException("chartUpdate.staffNotFound"));
 
-        String updateReason = trim(request.getUpdateReason());
-        if (updateReason == null) {
-            throw new com.example.hms.exception.FieldBusinessException("updateReason", "chartUpdate.reasonRequired");
-        }
 
         int nextVersion = patientChartUpdateRepository
             .findTopByPatient_IdAndHospital_IdOrderByVersionNumberDesc(patientId, effectiveHospitalId)
@@ -150,13 +151,13 @@ public class PatientChartUpdateServiceImpl implements PatientChartUpdateService 
             throw new BusinessException("chartUpdate.patientRequired");
         }
         if (hospitalId == null) {
-            throw new BusinessException("chartUpdate.hospitalIdRequired");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, "chartUpdate.hospitalIdRequired");
         }
         if (!patientRepository.existsById(patientId)) {
             throw new ResourceNotFoundException("patient.notFound", patientId);
         }
         if (!registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)) {
-            throw new BusinessException("chartUpdate.patientNotRegistered");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, "chartUpdate.patientNotRegistered");
         }
     }
 

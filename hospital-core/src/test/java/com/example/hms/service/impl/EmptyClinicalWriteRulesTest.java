@@ -121,8 +121,15 @@ class EmptyClinicalWriteRulesTest {
         AdvanceDirective dnr = new AdvanceDirective();
         dnr.setDirectiveType(AdvanceDirectiveType.DO_NOT_RESUSCITATE);
         dnr.setStatus(AdvanceDirectiveStatus.ACTIVE);
+        // QA D1355 (round 30): both missing fields are named in one refusal.
+        assertThatThrownBy(() -> AdvanceDirectiveServiceImpl.requireOrderDetails(dnr))
+            .isInstanceOf(FieldBusinessException.class)
+            .satisfies(e -> org.assertj.core.api.Assertions.assertThat(((FieldBusinessException) e).getFieldErrors())
+                .containsOnlyKeys("physicianName", "effectiveDate"));
+        dnr.setEffectiveDate(LocalDate.of(2026, 10, 31));
         assertThatThrownBy(() -> AdvanceDirectiveServiceImpl.requireOrderDetails(dnr))
             .extracting("messageKey").isEqualTo("advanceDirective.physician.required");
+        dnr.setEffectiveDate(null);
         dnr.setPhysicianName("Dr Ouédraogo");
         assertThatThrownBy(() -> AdvanceDirectiveServiceImpl.requireOrderDetails(dnr))
             .extracting("messageKey").isEqualTo("advanceDirective.effectiveDate.required");

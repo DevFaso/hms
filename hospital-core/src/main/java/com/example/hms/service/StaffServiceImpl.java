@@ -532,12 +532,12 @@ public class StaffServiceImpl implements StaffService {
     }
 
     private void validateNurseFields(StaffRequestDTO dto, Locale locale) {
-        if (dto.getEmploymentType() == null) {
-            throw new com.example.hms.exception.FieldBusinessException("employmentType", getLocalizedMessage("staff.nurse.employmentTypeRequired", null, locale));
-        }
-        if (dto.getStartDate() == null) {
-            throw new com.example.hms.exception.FieldBusinessException("startDate", getLocalizedMessage("staff.nurse.startDateRequired", null, locale));
-        }
+        // QA D1355 class (round 30): both named in one refusal.
+        com.example.hms.exception.RequiredFields.check()
+            .requireValue(dto.getEmploymentType(), "employmentType",
+                getLocalizedMessage("staff.nurse.employmentTypeRequired", null, locale))
+            .requireValue(dto.getStartDate(), "startDate", getLocalizedMessage("staff.nurse.startDateRequired", null, locale))
+            .orThrow();
         if (dto.getEndDate() != null && dto.getEndDate().isBefore(dto.getStartDate())) {
             throw new BusinessRuleException(
                 getLocalizedMessage("staff.nurse.endDateAfterStart", null, locale)
@@ -546,20 +546,21 @@ public class StaffServiceImpl implements StaffService {
     }
 
     private void validateRadiologistFields(StaffRequestDTO dto, Locale locale) {
-        if (dto.getLicenseNumber() == null || dto.getLicenseNumber().isBlank()) {
-            throw new com.example.hms.exception.FieldBusinessException("licenseNumber", getLocalizedMessage("staff.radiologist.licenseRequired", null, locale));
-        }
-        if (dto.getStartDate() == null) {
-            throw new com.example.hms.exception.FieldBusinessException("startDate", getLocalizedMessage("staff.radiologist.startDateRequired", null, locale));
-        }
+        // QA D1355 class (round 30): the licence, the start date and the
+        // specialization named in one refusal (the specialization used to be
+        // named only after the dates passed).
+        com.example.hms.exception.RequiredFields.check()
+            .requireValue(dto.getLicenseNumber(), "licenseNumber",
+                getLocalizedMessage("staff.radiologist.licenseRequired", null, locale))
+            .requireValue(dto.getStartDate(), "startDate",
+                getLocalizedMessage("staff.radiologist.startDateRequired", null, locale))
+            .requireValue(dto.getSpecialization(), "specialization",
+                getLocalizedMessage("staff.radiologist.specializationRequired", null, locale))
+            .orThrow();
         if (dto.getEndDate() != null && dto.getEndDate().isBefore(dto.getStartDate())) {
             throw new BusinessRuleException(
                 getLocalizedMessage("staff.radiologist.endDateAfterStart", null, locale)
             );
-        }
-
-        if (dto.getSpecialization() == null) {
-            throw new com.example.hms.exception.FieldBusinessException("specialization", getLocalizedMessage("staff.radiologist.specializationRequired", null, locale));
         }
     }
 

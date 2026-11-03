@@ -1,6 +1,5 @@
 package com.example.hms.service.pharmacy;
 
-import com.example.hms.exception.BusinessException;
 
 import java.text.Normalizer;
 import java.util.Locale;
@@ -86,7 +85,7 @@ public final class DispenseUnitForms {
             return;
         }
         if (!compatible(fillUnit, lotUnit)) {
-            throw new BusinessException("pharmacy.dispense.unitMismatch", fillUnit.trim(), lotUnit.trim());
+            throw new com.example.hms.exception.FieldBusinessException("unit", "pharmacy.dispense.unitMismatch", fillUnit.trim(), lotUnit.trim());
         }
     }
 

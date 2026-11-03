@@ -63,7 +63,7 @@ public class IsolationServiceImpl implements IsolationService {
         }
         precautionRepository.findActiveOfType(patient.getId(), request.getPrecautionType())
             .ifPresent(existing -> {
-                throw new BusinessException("isolation.precaution.alreadyActive",
+                throw new com.example.hms.exception.FieldBusinessException("precautionType", "isolation.precaution.alreadyActive",
                     com.example.hms.utility.MessageUtil.resolve("isolation.type." + request.getPrecautionType().name()));
             });
 
