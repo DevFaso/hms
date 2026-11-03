@@ -58,6 +58,8 @@ public class LabOrderRequestDTO {
 
     @jakarta.validation.constraints.Pattern(regexp = com.example.hms.enums.ClinicalPriority.CODES,
         flags = jakarta.validation.constraints.Pattern.Flag.CASE_INSENSITIVE, message = "{lab.order.priority.invalid}")
+    /** QA D1387 (round 32): within its column, refused by name (not a generic constraint 400). */
+    @jakarta.validation.constraints.Size(max = 20)
     private String priority;
 
     @NotBlank(message = "{labOrder.clinicalIndication.required}")
@@ -68,10 +70,14 @@ public class LabOrderRequestDTO {
     @Size(max = 2048, message = "{labOrder.medicalNecessityNote.size}")
     private String medicalNecessityNote;
 
+    /** QA D1387 (round 32): within its column, refused by name (not a generic constraint 400). */
+    @jakarta.validation.constraints.Size(max = 2048)
     private String notes;
 
     @NotBlank(message = "{labOrder.primaryDiagnosisCode.required}")
     @Schema(description = "Primary ICD-10 diagnosis code supporting medical necessity")
+    /** QA D1387 (round 32): within its column, refused by name (not a generic constraint 400). */
+    @jakarta.validation.constraints.Size(max = 20)
     private String primaryDiagnosisCode;
 
     @Builder.Default
@@ -85,6 +91,8 @@ public class LabOrderRequestDTO {
     private String orderChannel;
 
     @Schema(description = "Free-text descriptor when orderChannel is OTHER")
+    /** QA D1387 (round 32): within its column, refused by name (not a generic constraint 400). */
+    @jakarta.validation.constraints.Size(max = 120)
     private String orderChannelOther;
 
     @Schema(description = "Whether identical documentation was shared with the destination laboratory. "
@@ -92,10 +100,14 @@ public class LabOrderRequestDTO {
     private Boolean documentationSharedWithLab;
 
     @Schema(description = "Reference or tracking identifier for the documentation shared with the lab")
+    /** QA D1387 (round 32): within its column, refused by name (not a generic constraint 400). */
+    @jakarta.validation.constraints.Size(max = 255)
     private String documentationReference;
 
     @Schema(description = "Ordering provider NPI override if it differs from the staff profile")
     @Pattern(regexp = "\\d{10}", message = "{labOrder.orderingProviderNpi.pattern}")
+    /** QA D1387 (round 32): within its column, refused by name (not a generic constraint 400). */
+    @jakarta.validation.constraints.Size(max = 20)
     private String orderingProviderNpi;
 
     @Schema(description = "Electronic signature attestation payload from the ordering provider")
@@ -115,6 +127,8 @@ public class LabOrderRequestDTO {
 
     private Integer standingOrderReviewIntervalDays;
 
+    /** QA D1387 (round 32): within its column, refused by name (not a generic constraint 400). */
+    @jakarta.validation.constraints.Size(max = 2048)
     private String standingOrderReviewNotes;
 
     private LocalDateTime orderDatetime;

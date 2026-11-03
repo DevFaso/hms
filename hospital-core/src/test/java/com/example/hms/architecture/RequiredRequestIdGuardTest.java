@@ -1209,8 +1209,27 @@ class RequiredRequestIdGuardTest {
         while (present.find()) {
             out.add(new int[] {SourceScan.statementStart(source, present.start()), present.start(), present.end()});
         }
+        // QA D1386 (round 32): "catch (NumberFormatException e) { throw ... }" refuses what its
+        // try block parsed - LabResultValueRules refused a non-numeric result with no field.
+        Matcher caught = CATCH_OPEN.matcher(source);
+        while (caught.find()) {
+            int open = caught.end() - 1;
+            int close = SourceScan.closingParen(source, open);
+            int tryAt = source.lastIndexOf("try", caught.start());
+            // Only a value that failed to PARSE is the user's value; a lost race
+            // (DataIntegrityViolation) or an I/O error is not about one field.
+            boolean parseFailure = PARSE_FAILURES.stream().anyMatch(source.substring(open, close)::contains);
+            if (tryAt < 0 || !parseFailure || thrownRightAfter(source, close + 1) == null) {
+                continue;
+            }
+            out.add(new int[] {tryAt, caught.start(), source.indexOf("throw", close)});
+        }
         return out;
     }
+
+    private static final Pattern CATCH_OPEN = Pattern.compile("\\bcatch\\s*+\\(");
+    private static final List<String> PARSE_FAILURES =
+        List.of("NumberFormatException", "DateTimeParseException", "IllegalArgumentException");
 
     /**
      * The request-body getter the guard reads - directly, or through a local
@@ -1267,7 +1286,10 @@ class RequiredRequestIdGuardTest {
                 if (name == null || brace < 0 || brace >= source.length() || source.charAt(brace) != '{') {
                     continue;
                 }
-                boolean shared = source.substring(header.start(), header.end()).contains("public ");
+                // QA D1386: a package-private static rule (LabResultValueRules#requireValidValue)
+                // is reached from the other services of its package too.
+                String header0 = source.substring(header.start(), header.end());
+                boolean shared = header0.contains("public ") || header0.contains("static ") && !header0.contains("private ");
                 List<String> params = parameterNames(source.substring(open + 1, close));
                 String body = source.substring(brace, SourceScan.closingBrace(source, brace) + 1);
                 for (int[] guard : guardsOfThrows(body)) {

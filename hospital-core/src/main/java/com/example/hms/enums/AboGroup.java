@@ -60,6 +60,17 @@ public enum AboGroup {
     AB,
     O;
 
+    /**
+     * QA D1383 (round 32): the edge check of a patient's blood type, a String
+     * field - one of these groups followed by its Rhesus sign ({@link RhFactor}:
+     * + or -), in any case, or blank (left to the field's own rule; the patient
+     * entity upper-cases it). PUT and POST {@code /patients} stored "ZZ", "B"
+     * and "Q-" while PATCH refused them: every request field named
+     * {@code bloodType} carries this one pattern
+     * ({@code FreeTextStatusRequestFieldGuardTest}).
+     */
+    public static final String BLOOD_TYPE_CODES = "\\s*+(?:(?:AB|A|B|O)[+-])?\\s*+";
+
     /** Donor groups whose RED CELLS this group may receive. */
     public Set<AboGroup> compatibleRedCellDonors() {
         return switch (this) {

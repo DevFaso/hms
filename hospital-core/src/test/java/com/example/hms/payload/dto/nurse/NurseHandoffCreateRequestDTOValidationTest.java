@@ -64,7 +64,9 @@ class NurseHandoffCreateRequestDTOValidationTest {
     @Test
     void d1371_thePatternAcceptsExactlyTheTypes() {
         Pattern edge = Pattern.compile(NurseHandoffCreateRequestDTO.DIRECTION_PATTERN, Pattern.CASE_INSENSITIVE);
-        assertThat(NurseHandoffCreateRequestDTO.DIRECTIONS).allMatch(code -> edge.matcher(code).matches());
+        for (String code : NurseHandoffCreateRequestDTO.DIRECTIONS) {
+            assertThat(edge.matcher(code).matches()).as(code).isTrue();
+        }
         String pattern = NurseHandoffCreateRequestDTO.DIRECTION_PATTERN;
         String alternatives = pattern.substring(pattern.indexOf("(?:") + 3, pattern.indexOf(')'));
         assertThat(Set.of(alternatives.split("\\|"))).isEqualTo(NurseHandoffCreateRequestDTO.DIRECTIONS);

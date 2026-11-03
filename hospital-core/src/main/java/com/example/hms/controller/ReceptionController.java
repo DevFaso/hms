@@ -47,6 +47,25 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ReceptionController {
 
+    /**
+     * QA D1385: the statuses a queue row can carry - the appointment's own,
+     * and the front-desk statuses ReceptionServiceImpl computes from the
+     * visit - plus ALL. {@code ReceptionControllerTest} keeps it complete.
+     */
+    static final java.util.Set<String> QUEUE_STATUSES = queueStatuses();
+
+    /** QA D1385: the waitlist entry statuses (AppointmentWaitlist.status), plus ALL. */
+    static final java.util.Set<String> WAITLIST_STATUSES = java.util.Set.of("WAITING", "OFFERED", "CLOSED", "ALL");
+
+    private static java.util.Set<String> queueStatuses() {
+        java.util.Set<String> out = new java.util.TreeSet<>(java.util.List.of(
+            "ALL", "ARRIVED", "WALK_IN", "IN_PROGRESS", "COMPLETED", "CANCELLED", "LEFT_WITHOUT_BEING_SEEN", "NO_SHOW"));
+        for (com.example.hms.enums.AppointmentStatus value : com.example.hms.enums.AppointmentStatus.values()) {
+            out.add(value.name());
+        }
+        return java.util.Collections.unmodifiableSet(out);
+    }
+
     private static final String SYSTEM_ACTOR = "system";
 
     private final ReceptionService receptionService;
@@ -89,9 +108,12 @@ public class ReceptionController {
             @RequestParam(defaultValue = "ALL") String status,
             @RequestParam(required = false) UUID departmentId,
             @RequestParam(required = false) UUID providerId) {
+        // QA D1385 (round 32): an unknown status is refused by name, any case accepted.
+        String filter = com.example.hms.controller.support.QueryParameterValues.oneOf("status", status, QUEUE_STATUSES);
         UUID hospitalId = resolveHospitalId();
         LocalDate effectiveDate = date != null ? date : LocalDate.now();
-        return ResponseEntity.ok(receptionService.getQueue(effectiveDate, hospitalId, status, departmentId, providerId));
+        return ResponseEntity.ok(receptionService.getQueue(effectiveDate, hospitalId,
+            filter == null ? "ALL" : filter, departmentId, providerId));
     }
 
     // ── MVP 9: Patient Snapshot ───────────────────────────────────────────────
@@ -184,9 +206,11 @@ public class ReceptionController {
     public ResponseEntity<List<WaitlistEntryResponseDTO>> getWaitlist(
             @RequestParam(required = false) UUID departmentId,
             @RequestParam(required = false, defaultValue = "WAITING") String status) {
+        // QA D1385 (round 32): an unknown status is refused by name (it listed nobody), any case accepted.
+        String code = com.example.hms.controller.support.QueryParameterValues.oneOf("status", status, WAITLIST_STATUSES);
         UUID hospitalId = resolveHospitalId();
         // QA D1324 (round 29): "Tous" lists every entry; ALL (any case) reads as no status filter.
-        String effective = status != null && "ALL".equalsIgnoreCase(status.trim()) ? null : status;
+        String effective = code == null || "ALL".equals(code) ? null : code;
         return ResponseEntity.ok(receptionService.getWaitlist(hospitalId, departmentId, effective));
     }
 

@@ -36,6 +36,8 @@ import java.util.stream.Collectors;
 @ControllerAdvice
 public class GlobalExceptionHandler {
 
+    /** The prefix of a query parameter's own label, read before {@code field.label.<name>} (QA D1377). */
+    public static final String PARAMETER_LABEL_PREFIX = "field.label.param.";
     private static final String FIELD_ERRORS = "fieldErrors";
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
@@ -468,6 +470,26 @@ public class GlobalExceptionHandler {
         return messageSource == null ? path : existingLabel(path);
     }
 
+    /**
+     * The label a query-parameter refusal names its parameter by: its own
+     * {@code field.label.param.<name>} first, then the shared field label.
+     *
+     * <p>QA D1377 (round 32, regression of D1374): one key served two meanings.
+     * {@code ?to=} is the end of a period and the invoice e-mail body's
+     * {@code to} is the recipient; relabelling {@code field.label.to} for the
+     * parameter made the recipient read "fin de la période". A parameter whose
+     * name a request body also uses with another meaning carries its own key,
+     * so neither can rename the other ({@code FieldLabelMeaningTest}).
+     */
+    private String parameterLabelOrNull(String name) {
+        if (messageSource == null || name == null) {
+            return name;
+        }
+        String own = messageSource.getMessage(PARAMETER_LABEL_PREFIX + name, null, null,
+            LocaleContextHolder.getLocale());
+        return own == null || own.isBlank() ? existingLabel(name) : own;
+    }
+
     /** The JSON property path of the failure ("items[0].dose" style), or null when Jackson gave none. */
     private static String resolveJacksonField(HttpMessageNotReadableException ex) {
         // QA D1245 (round 25): an unreadable date reached here with the
@@ -740,7 +762,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Object> handleMissingParameter(
             org.springframework.web.bind.MissingServletRequestParameterException ex, WebRequest request) {
         // QA D1350 (round 30): a parameter with no label is not named by its raw name.
-        String label = labelOrNull(ex.getParameterName());
+        String label = parameterLabelOrNull(ex.getParameterName());
         String message = label == null
             ? localized("error.request.missingUnlabelledParameter", "A required value is missing.")
             : localized("error.request.missingParameter", "A required value is missing: \"{0}\".", label);
@@ -768,7 +790,25 @@ public class GlobalExceptionHandler {
                 request.getDescription(false), ex.getName(),
                 ex.getRequiredType() != null ? ex.getRequiredType().getSimpleName() : "value");
         }
-        String label = labelOrNull(ex.getName());
+        return invalidParameterResponse(ex.getName(), request);
+    }
+
+    /**
+     * QA D1385 (round 32): a String filter parameter outside its closed list
+     * ({@code ?status=BOGUS}) is refused like an unparsable enum parameter,
+     * not answered with an empty list.
+     */
+    @ExceptionHandler(InvalidQueryParameterException.class)
+    public ResponseEntity<Object> handleInvalidQueryParameter(InvalidQueryParameterException ex, WebRequest request) {
+        if (log.isWarnEnabled()) {
+            log.warn("Unknown query parameter value at path {}: parameter {}",
+                request.getDescription(false), ex.getParameter());
+        }
+        return invalidParameterResponse(ex.getParameter(), request);
+    }
+
+    private ResponseEntity<Object> invalidParameterResponse(String parameter, WebRequest request) {
+        String label = parameterLabelOrNull(parameter);
         String message = label == null
             ? localized("error.request.invalidUnlabelledParameter", "A value supplied is not valid.")
             : localized("error.request.invalidParameter",
@@ -776,8 +816,8 @@ public class GlobalExceptionHandler {
         Map<String, Object> body = errorBody(HttpStatus.BAD_REQUEST, message, request);
         body.put(FIELD_CODE, CODE_INVALID_PARAMETER);
         // QA D1245 (round 25): a blank or unparsable UUID / enum / date parameter is named.
-        body.put(FIELD_FIELD, ex.getName());
-        body.put(FIELD_ERRORS, Map.of(ex.getName(), message));
+        body.put(FIELD_FIELD, parameter);
+        body.put(FIELD_ERRORS, Map.of(parameter, message));
         return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
     }
 

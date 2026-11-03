@@ -667,7 +667,10 @@
                         {{ a.reversedAt | serverTime | date: 'short' }}
                       </span>
                       @if (a.reversalReason) {
-                        {{ ' ' }}<span class="field-hint">{{ a.reversalReason }}</span>
+                        {{ ' '
+                        }}<span class="field-hint">{{
+                          'COMMON.REASON_VALUE' | translate: { reason: a.reversalReason }
+                        }}</span>
                       }
                     } @else if (canReverseAdjustment(inv, a)) {
                       <button
@@ -791,7 +794,9 @@
                       <td>
                         {{ p.status | keyLabel: 'BILLING.PAYMENT_STATUSES.' }}
                         @if (p.reversalReason) {
-                          <div class="cell-secondary">{{ p.reversalReason }}</div>
+                          <div class="cell-secondary">
+                            {{ 'COMMON.REASON_VALUE' | translate: { reason: p.reversalReason } }}
+                          </div>
                         }
                       </td>
                       <td>

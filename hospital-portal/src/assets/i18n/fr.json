@@ -2390,7 +2390,8 @@
     "FIELD_REQUIRED": "Ce champ est obligatoire.",
     "QUESTION_MARK": " ?",
     "EXCLAMATION_MARK": " !",
-    "SUBMIT_BLOCKED_REQUIRED": "Complétez d’abord les champs obligatoires (marqués *)."
+    "SUBMIT_BLOCKED_REQUIRED": "Complétez d’abord les champs obligatoires (marqués *).",
+    "REASON_VALUE": "Motif : {{reason}}"
   },
   "CONSULTATIONS": {
     "ACKNOWLEDGE": "Accuser réception",

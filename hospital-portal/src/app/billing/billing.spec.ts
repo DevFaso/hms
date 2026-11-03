@@ -1429,6 +1429,11 @@ describe('BillingComponent', () => {
     });
 
     it('a reversed adjustment shows its reason and no second undo', () => {
+      // QA D1389 (round 32): the undo reason carries its label ("Motif : …"), so it
+      // cannot be read as the adjustment's own reason.
+      const translate = TestBed.inject(TranslateService);
+      translate.setTranslation('fr', { COMMON: { REASON_VALUE: 'Motif : {{reason}}' } }, true);
+      translate.use('fr');
       billingSpy.listAdjustments.and.returnValue(
         of([{ ...waiver, reversedAt: '2026-10-31T09:00:00', reversalReason: 'Erreur' }]),
       );
@@ -1437,7 +1442,7 @@ describe('BillingComponent', () => {
       const host: HTMLElement = fixture.nativeElement;
       expect(host.querySelector('[data-testid="adjustment-reversed-adj-1"]')).not.toBeNull();
       expect(host.querySelector('[data-testid="adjustment-reverse-adj-1"]')).toBeNull();
-      expect(host.textContent).toContain('Erreur');
+      expect(host.textContent).toContain('Motif : Erreur');
     });
   });
 

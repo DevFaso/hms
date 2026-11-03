@@ -21,6 +21,15 @@ import org.springframework.data.repository.core.support.RepositoryFactoryBeanSup
 @Configuration(proxyBeanMethods = false)
 public class StablePageOrderConfig {
 
+    /**
+     * Only a static bean method (a BeanPostProcessor is declared static so it
+     * does not instantiate this class early). With {@code proxyBeanMethods =
+     * false} there is no CGLIB subclass, and Spring instantiates a
+     * configuration class through a private constructor (Sonar S1118).
+     */
+    private StablePageOrderConfig() {
+    }
+
     @Bean
     static BeanPostProcessor stablePageOrderRepositories() {
         return new BeanPostProcessor() {

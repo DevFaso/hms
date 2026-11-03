@@ -33,6 +33,8 @@ public class SignupRequest extends BaseUserDTO {
     @NotBlank
     private String emergencyContactRelationship;
 
+    @jakarta.validation.constraints.Pattern(regexp = com.example.hms.enums.AboGroup.BLOOD_TYPE_CODES,
+        flags = jakarta.validation.constraints.Pattern.Flag.CASE_INSENSITIVE, message = "{patient.bloodType.invalid}")
     private String bloodType;
     private String allergies;
     private String medicalHistorySummary;

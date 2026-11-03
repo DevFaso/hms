@@ -1,10 +1,12 @@
 package com.example.hms.architecture;
 
+import com.example.hms.enums.AboGroup;
 import com.example.hms.enums.ClinicalPriority;
 import com.example.hms.enums.LabOrderChannel;
 import com.example.hms.enums.LabOrderStatus;
 import com.example.hms.enums.PatientGender;
 import com.example.hms.enums.PaymentMethod;
+import com.example.hms.enums.RhFactor;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -64,8 +66,10 @@ class FreeTextStatusRequestFieldGuardTest {
      * exact names, and the endings of a camel-case one ({@code relativeGender}).
      */
     private static final Set<String> VOCABULARY_NAMES = Set.of(
-        "status", "gender", "sex", "priority", "paymentMethod", "method", "channel", "orderChannel", "direction");
-    private static final List<String> VOCABULARY_ENDINGS = List.of("Gender", "Sex");
+        "status", "gender", "sex", "priority", "paymentMethod", "method", "channel", "orderChannel", "direction",
+        "bloodType", "bloodGroup");
+    /** QA D1383 (round 32): PUT/POST /patients stored any blood type; the name list had no blood type. */
+    private static final List<String> VOCABULARY_ENDINGS = List.of("Gender", "Sex", "BloodType", "BloodGroup");
 
     /** "Class#field" of a String vocabulary checked in code (with where), or read by no rule (with why). */
     private static final Map<String, String> CHECKED_IN_CODE = Map.ofEntries(
@@ -169,6 +173,78 @@ class FreeTextStatusRequestFieldGuardTest {
                 .as(type.getSimpleName() + ": one alternative per code")
                 .isEqualTo(type.getEnumConstants().length - 1L + (type == PatientGender.class ? PatientGender.ALIASES.size() : 0));
         });
+    }
+
+    /**
+     * QA D1383 (round 32): PATCH refused "ZZ" with its own pattern while PUT
+     * and POST {@code /patients} carried only {@code @Size(max = 5)} - two
+     * spellings of one vocabulary drift apart. Every request field named
+     * {@code bloodType} / {@code bloodGroup} (nested types too) carries the
+     * one edge check {@link AboGroup#BLOOD_TYPE_CODES}, case-insensitive, and
+     * that check accepts exactly every ABO group with each Rhesus sign.
+     */
+    @Test
+    @DisplayName("D1383: every blood-type request field carries AboGroup.BLOOD_TYPE_CODES, which is exactly ABO x Rh")
+    void everyBloodTypeFieldUsesTheAboRhVocabulary() throws IOException {
+        Set<String> drifted = new TreeSet<>();
+        Set<String> found = new TreeSet<>();
+        Set<Class<?>> seen = new LinkedHashSet<>();
+        for (Class<?> body : requestBodies()) {
+            collectBloodTypes(body, seen, found, drifted);
+        }
+        for (Class<?> other : List.of(com.example.hms.payload.dto.SignupRequest.class)) {
+            collectBloodTypes(other, seen, found, drifted);
+        }
+        assertThat(found).as("blood-type request fields found")
+            .contains("PatientRequestDTO#bloodType", "PatientProfileUpdateRequestDTO#bloodType");
+        assertThat(drifted).as("a blood-type field whose edge check is not AboGroup.BLOOD_TYPE_CODES (QA D1383)")
+            .isEmpty();
+
+        Pattern edge = Pattern.compile(AboGroup.BLOOD_TYPE_CODES, Pattern.CASE_INSENSITIVE);
+        for (AboGroup group : AboGroup.values()) {
+            for (RhFactor rh : RhFactor.values()) {
+                String code = group.name() + (rh == RhFactor.POSITIVE ? "+" : "-");
+                assertThat(edge.matcher(code).matches()).as(code).isTrue();
+                assertThat(edge.matcher(code.toLowerCase(Locale.ROOT)).matches()).as("any case: " + code).isTrue();
+                assertThat(edge.matcher(" " + code + " ").matches()).as("surrounding spaces: " + code).isTrue();
+            }
+        }
+        assertThat(edge.matcher("").matches()).as("blank is left to the field's own rule").isTrue();
+        for (String bad : List.of("ZZ", "B", "Q-", "O", "AB", "A+-", "C+", "0+", "A pos", "AB++")) {
+            assertThat(edge.matcher(bad).matches()).as("refuses " + bad).isFalse();
+        }
+    }
+
+    private static void collectBloodTypes(Class<?> type, Set<Class<?>> seen, Set<String> found, Set<String> drifted) {
+        if (!type.getName().startsWith("com.example.hms.") || type.isEnum() || type.isInterface() || !seen.add(type)) {
+            return;
+        }
+        for (Class<?> c = type; c != null && c != Object.class; c = c.getSuperclass()) {
+            for (Field f : c.getDeclaredFields()) {
+                if (Modifier.isStatic(f.getModifiers())) {
+                    continue;
+                }
+                String lower = f.getName().toLowerCase(Locale.ROOT);
+                if (f.getType() == String.class && (lower.endsWith("bloodtype") || lower.endsWith("bloodgroup"))) {
+                    found.add(c.getSimpleName() + "#" + f.getName());
+                    jakarta.validation.constraints.Pattern p =
+                        f.getAnnotation(jakarta.validation.constraints.Pattern.class);
+                    boolean shared = p != null && AboGroup.BLOOD_TYPE_CODES.equals(p.regexp())
+                        && List.of(p.flags()).contains(jakarta.validation.constraints.Pattern.Flag.CASE_INSENSITIVE);
+                    if (!shared) {
+                        drifted.add(c.getSimpleName() + "#" + f.getName());
+                    }
+                }
+                collectBloodTypes(f.getType(), seen, found, drifted);
+                if (f.getGenericType() instanceof ParameterizedType pt) {
+                    for (Type argument : pt.getActualTypeArguments()) {
+                        if (argument instanceof Class<?> element) {
+                            collectBloodTypes(element, seen, found, drifted);
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private static Set<Class<?>> requestBodies() throws IOException {

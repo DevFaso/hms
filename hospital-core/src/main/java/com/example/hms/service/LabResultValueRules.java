@@ -1,7 +1,7 @@
 package com.example.hms.service;
 
 import com.example.hms.enums.AbnormalFlag;
-import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.model.LabTestDefinition;
 import com.example.hms.model.LabTestReferenceRange;
 
@@ -40,6 +40,9 @@ public final class LabResultValueRules {
     /** The comparator of a censored value, "<", ">", "<=", ">=" or their single-character forms, and the spaces after it. */
     private static final Pattern CENSOR_PREFIX = Pattern.compile("^(<=|>=|<|>|\u2264|\u2265)\\s*");
 
+    /** The request field both callers read the value from (LabResultRequestDTO#resultValue). */
+    private static final String RESULT_VALUE = "resultValue";
+
     private LabResultValueRules() {
     }
 
@@ -63,7 +66,11 @@ public final class LabResultValueRules {
         return prefix + m.group(2) + "." + m.group(3);
     }
 
-    /** Refuses a value a numeric test cannot hold; does nothing for a test with no numeric limits. */
+    /**
+     * Refuses a value a numeric test cannot hold; does nothing for a test with no numeric limits.
+     * QA D1386 (round 32): the refusal names {@code resultValue}, so the dialog marks the field
+     * instead of showing only a toast.
+     */
     static void requireValidValue(String rawValue, LabTestDefinition definition) {
         if (rawValue == null || rawValue.isBlank() || definition == null) {
             return;
@@ -78,13 +85,13 @@ public final class LabResultValueRules {
             // comparator: the analyzer's or the method's limit of detection.
             value = Double.parseDouble(CENSOR_PREFIX.matcher(rawValue.trim()).replaceFirst(""));
         } catch (NumberFormatException ex) {
-            throw new BusinessException("lab.result.value.notNumeric");
+            throw new FieldBusinessException(RESULT_VALUE, "lab.result.value.notNumeric");
         }
         if (Double.isNaN(value) || Double.isInfinite(value)) {
-            throw new BusinessException("lab.result.value.notNumeric");
+            throw new FieldBusinessException(RESULT_VALUE, "lab.result.value.notNumeric");
         }
         if (value < 0 && ranges.stream().noneMatch(LabResultValueRules::hasNegativeLimit)) {
-            throw new BusinessException("lab.result.value.negative");
+            throw new FieldBusinessException(RESULT_VALUE, "lab.result.value.negative");
         }
     }
 

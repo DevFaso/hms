@@ -35,13 +35,13 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class BedAssignmentService {
 
-    /** Admission states that can hold a bed. */
     /** The assign-bed request's bed field (QA D1366: a refused bed is named on it). */
     public static final String FIELD_BED_ID = "bedId";
 
     /** The transfer request's destination bed field (QA D1366). */
     public static final String FIELD_TO_BED_ID = "toBedId";
 
+    /** Admission states that can hold a bed. */
     private static final Set<AdmissionStatus> BED_HOLDING_STATUSES = Set.of(
         AdmissionStatus.PENDING, AdmissionStatus.ACTIVE,
         AdmissionStatus.ON_LEAVE, AdmissionStatus.AWAITING_DISCHARGE);

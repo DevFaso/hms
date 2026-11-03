@@ -631,6 +631,7 @@
             <input
               id="lr-resultValue"
               type="text"
+              maxlength="2048"
               [(ngModel)]="form.resultValue"
               [placeholder]="'LAB_RESULTS.VALUE_PLACEHOLDER' | translate"
               required
@@ -643,6 +644,7 @@
             <input
               id="lr-resultUnit"
               type="text"
+              maxlength="50"
               [(ngModel)]="form.resultUnit"
               [placeholder]="selectedTestUnit() || ('LAB_RESULTS.UNIT_PLACEHOLDER' | translate)"
               [required]="!!selectedTestUnit()"
@@ -671,6 +673,7 @@
           <label for="lr-notes">{{ 'COMMON.NOTES' | translate }}</label>
           <textarea
             id="lr-notes"
+            maxlength="2048"
             [(ngModel)]="form.notes"
             rows="3"
             [placeholder]="'COMMON.ADDITIONAL_NOTES' | translate"

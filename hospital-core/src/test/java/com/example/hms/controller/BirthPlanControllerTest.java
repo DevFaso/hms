@@ -267,20 +267,14 @@ class BirthPlanControllerTest {
         }
 
         @Test
-        @DisplayName("non-ASC direction string treated as DESC")
+        @DisplayName("QA D1385 (round 32): an unknown direction is refused by name, no longer sorted DESC")
         void searchNonAsc() {
-            when(authentication.getName()).thenReturn("user1");
-            Page<BirthPlanResponseDTO> page = new PageImpl<>(List.of());
-
-            when(birthPlanService.searchBirthPlans(
-                isNull(), isNull(), isNull(), isNull(), isNull(), any(Pageable.class), eq("user1")
-            )).thenReturn(page);
-
-            ResponseEntity<Page<BirthPlanResponseDTO>> result = controller.searchBirthPlans(
-                null, null, null, null, null, 0, 10, "createdAt", "random", authentication
-            );
-
-            assertEquals(HttpStatus.OK, result.getStatusCode());
+            com.example.hms.exception.InvalidQueryParameterException refused = org.junit.jupiter.api.Assertions.assertThrows(
+                com.example.hms.exception.InvalidQueryParameterException.class,
+                () -> controller.searchBirthPlans(null, null, null, null, null, 0, 10, "createdAt", "random",
+                    authentication));
+            assertEquals("direction", refused.getParameter());
+            org.mockito.Mockito.verifyNoInteractions(birthPlanService);
         }
 
         @Test

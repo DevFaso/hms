@@ -647,6 +647,33 @@ class FrontDeskRoundTripIT extends BaseIT {
     }
 
     @Test
+    @DisplayName("D1383: PUT /patients/{id} refuses a blood type outside ABO x Rh by name, as PATCH does; a valid one is stored")
+    void aPatientPutRefusesAFreeTextBloodType() throws Exception {
+        String body = """
+            {"firstName":"Aïcha","lastName":"Kaboré","dateOfBirth":"1991-07-22","gender":"F",
+             "phoneNumberPrimary":"70 16 10 99","city":"Koudougou","country":"Burkina Faso",
+             "emergencyContactName":"Adjaratou Kaboré","emergencyContactRelationship":"Mère",
+             "bloodType":"%s","userId":"%s","hospitalId":"%s"}
+            """;
+        for (String bad : List.of("ZZ", "B", "Q-")) {
+            mockMvc.perform(put(API + "/patients/{id}", aicha.getId()).contextPath(API)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(body.formatted(bad, aicha.getUser().getId(), hospital.getId()))
+                    .with(asReceptionist()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors.bloodType").exists());
+            assertThat(patientRepository.findById(aicha.getId()).orElseThrow().getBloodType()).as(bad)
+                .isNotEqualTo(bad);
+        }
+        mockMvc.perform(put(API + "/patients/{id}", aicha.getId()).contextPath(API)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body.formatted("ab-", aicha.getUser().getId(), hospital.getId()))
+                .with(asReceptionist()))
+            .andExpect(status().isOk());
+        assertThat(patientRepository.findById(aicha.getId()).orElseThrow().getBloodType()).isEqualTo("AB-");
+    }
+
+    @Test
     @DisplayName("PUT /patient-insurances/{id} and /{id}/link round trips: the edit and the primary flag are stored")
     void insuranceEditsPersist() throws Exception {
         mockMvc.perform(put(API + "/patient-insurances/link").contextPath(API)

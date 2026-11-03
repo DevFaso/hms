@@ -130,8 +130,6 @@ class ControlledFlagResponseGuardTest {
         return out;
     }
 
-    private static final Pattern CALL_BEFORE = Pattern.compile("(\\w++)\\(\\s*+$");
-
     /**
      * QA D1375 (round 31): the MAR row is built in one shape - the builder is
      * handed to a helper of the same class ({@code withOrderReading},
@@ -140,8 +138,39 @@ class ControlledFlagResponseGuardTest {
      * helper. That counts as setting it; a helper that does not set it does not.
      */
     static boolean passedToAFlagSetter(String source, int builderAt, int depth) {
-        Matcher call = CALL_BEFORE.matcher(source.substring(Math.max(0, builderAt - 80), builderAt));
-        return call.find() && setsTheFlag(source, call.group(1), depth);
+        String method = calledJustBefore(source.substring(Math.max(0, builderAt - 80), builderAt));
+        return method != null && setsTheFlag(source, method, depth);
+    }
+
+    /**
+     * The name of the call whose open parenthesis ends {@code text} (blanks
+     * after it allowed): "withOrderReading(" gives withOrderReading, anything
+     * else null. A linear scan giving the same answer the former end-anchored
+     * regex {@code (\w++)\(\s*+$} gave under {@code find()} (Sonar S8786).
+     */
+    static String calledJustBefore(String text) {
+        int end = text.length();
+        while (end > 0 && isRegexSpace(text.charAt(end - 1))) {
+            end--;
+        }
+        if (end == 0 || text.charAt(end - 1) != '(') {
+            return null;
+        }
+        int start = end - 1;
+        while (start > 0 && isWordChar(text.charAt(start - 1))) {
+            start--;
+        }
+        return start == end - 1 ? null : text.substring(start, end - 1);
+    }
+
+    /** {@code \s} of java.util.regex without UNICODE_CHARACTER_CLASS. */
+    private static boolean isRegexSpace(char c) {
+        return c == ' ' || c == '\t' || c == '\n' || c == '\u000B' || c == '\f' || c == '\r';
+    }
+
+    /** {@code \w} of java.util.regex without UNICODE_CHARACTER_CLASS. */
+    private static boolean isWordChar(char c) {
+        return c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9');
     }
 
     private static boolean setsTheFlag(String source, String method, int depth) {
