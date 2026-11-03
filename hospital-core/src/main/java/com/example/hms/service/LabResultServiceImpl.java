@@ -764,7 +764,7 @@ public class LabResultServiceImpl implements LabResultService {
             return pageable;
         }
         return org.springframework.data.domain.PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
-            org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "resultDate"));
+            org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, FIELD_RESULT_DATE));
     }
 
     /** QA D741: released, and current against every row of its order. */

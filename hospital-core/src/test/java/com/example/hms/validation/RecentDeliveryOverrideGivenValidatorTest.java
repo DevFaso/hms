@@ -108,9 +108,9 @@ class RecentDeliveryOverrideGivenValidatorTest {
     @DisplayName("a delivery within twenty weeks of another names the override, on the path's episode")
     void aDeliveryNamesTheOverride() {
         LocalDateTime birthAt = LocalDateTime.now().minusHours(1);
-        when(deliveries.existsByPatient_IdAndEpisode_IdNotAndBirthDateTimeBetween(eq(patientId), eq(episodeId),
-            eq(birthAt.minusDays(RecentDeliveryOverrideGivenValidator.MIN_DAYS_BETWEEN_DELIVERIES)),
-            eq(birthAt.plusDays(RecentDeliveryOverrideGivenValidator.MIN_DAYS_BETWEEN_DELIVERIES)))).thenReturn(true);
+        when(deliveries.existsByPatient_IdAndEpisode_IdNotAndBirthDateTimeBetween(patientId, episodeId,
+            birthAt.minusDays(RecentDeliveryOverrideGivenValidator.MIN_DAYS_BETWEEN_DELIVERIES),
+            birthAt.plusDays(RecentDeliveryOverrideGivenValidator.MIN_DAYS_BETWEEN_DELIVERIES))).thenReturn(true);
         DeliveryRecordRequestDTO delivery = new DeliveryRecordRequestDTO();
         delivery.setBirthDateTime(birthAt);
         assertThat(fields(delivery)).contains("recentDeliveryOverrideReason");
