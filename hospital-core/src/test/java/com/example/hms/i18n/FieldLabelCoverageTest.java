@@ -89,7 +89,8 @@ class FieldLabelCoverageTest {
         for (String suffix : LOCALES) {
             Properties labels = labels(suffix);
             for (String name : names) {
-                String label = labels.getProperty("field.label." + name);
+                // QA D1377: a parameter's own key is read first.
+                String label = labels.getProperty("field.label.param." + name, labels.getProperty("field.label." + name));
                 if (label == null || label.isBlank()) {
                     missing.computeIfAbsent(name, k -> new ArrayList<>()).add(suffix.substring(1));
                 }
@@ -158,11 +159,17 @@ class FieldLabelCoverageTest {
      * {@code ?to=xyz} as « destinataire » - a preposition, and a word borrowed
      * from a chat recipient - so the reader could not tell which field was
      * wrong. A label names a field: never a bare preposition or article; and
-     * {@code to}, only ever a period's end (no request body has a recipient
-     * called {@code to}), never reads as a recipient.
+     * the query parameter {@code ?to=}, a period's end, never reads as a
+     * recipient.
+     *
+     * <p>QA D1377 (round 32): this test said "no request body has a recipient
+     * called {@code to}" and asserted {@code field.label.to} never read as one
+     * - false: the invoice e-mail body's {@code to} IS its recipient, and the
+     * assertion locked the regression in. The parameter now has its own key
+     * ({@code field.label.param.to}); the body field keeps "recipient".
      */
     @Test
-    @DisplayName("D1374: no label is a bare preposition, and to is the end of a period, not a recipient")
+    @DisplayName("D1374/D1377: no label is a bare preposition; ?to= is a period's end, the e-mail body's to its recipient")
     void labelsNameAField() throws IOException {
         Set<String> notAName = Set.of("du", "de", "des", "la", "le", "les", "au", "à", "a", "en", "par", "pour",
             "from", "to", "by", "of", "the", "for", "since", "until", "depuis", "desde", "hasta", "del", "el", "los", "las", "para", "por");
@@ -175,8 +182,10 @@ class FieldLabelCoverageTest {
                     bare.add(suffix + ": " + key + "=" + labels.getProperty(key));
                 }
             }
-            assertThat(labels.getProperty("field.label.to")).as(suffix + " to")
+            assertThat(labels.getProperty("field.label.param.to")).as(suffix + " ?to=")
                 .doesNotContain("destinat", "recipient");
+            assertThat(labels.getProperty("field.label.to")).as(suffix + " EmailInvoiceRequest.to")
+                .containsAnyOf("destinat", "recipient");
         }
         assertThat(bare).as("a label that names no field (QA D1374)").isEmpty();
     }
