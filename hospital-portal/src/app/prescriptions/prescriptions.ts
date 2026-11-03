@@ -15,7 +15,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
-import { forkJoin, of, Subject } from 'rxjs';
+import { forkJoin, of, Subject, Subscription } from 'rxjs';
 import { catchError, debounceTime, map, switchMap } from 'rxjs/operators';
 import {
   PrescriptionService,
@@ -39,6 +39,7 @@ import {
   isClosedEncounterStatus,
 } from '../services/encounter.service';
 import { encounterOptionLabel } from '../shared/encounter-option-label';
+import { allPages, allRows } from '../shared/all-pages';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { expandRoleEquivalents, roleSatisfies } from '../core/role-equivalence';
@@ -1348,23 +1349,6 @@ export class PrescriptionsComponent implements OnInit {
     this.loadPrescribers();
   }
 
-  /**
-   * Gap G12 — the statuses that make up "Needs attention", as the backend
-   * `status` filter understands them. Derived from {@link ATTENTION_REASONS}
-   * rather than re-listed, for the same reason {@link TAB_BY_STATUS} is: a
-   * status flagged in one place and not the other is the only failure mode
-   * that matters here.
-   */
-  private static readonly ATTENTION_STATUSES = ATTENTION_REASONS.map((r) => r.status);
-
-  /**
-   * How many rows the UNFILTERED page returned. Tracked separately from
-   * `prescriptions()` because the attention rows are merged into that signal
-   * and would otherwise push it past the page size and make every load look
-   * truncated.
-   */
-  private readonly pageRowCount = signal(0);
-
   /** Re-reads one order and puts it back in place (the rest of the page is untouched). */
   private refreshRow(id: string): void {
     this.prescriptionService
@@ -1381,70 +1365,36 @@ export class PrescriptionsComponent implements OnInit {
       });
   }
 
+  /** The list read in flight, so a newer `load` supersedes it (see `load`). */
+  private listLoad: Subscription | null = null;
+
   load(): void {
     this.loading.set(true);
-    // Two requests, because they answer different questions. The first is the
-    // page: the newest 200 prescriptions, whatever their status, which is what
-    // five of the six tabs list. The second is the newest 200 in an ATTENTION
-    // status, because that is the tab the clinical inbox sends a prescriber
-    // to — an inbox saying "3 orders await clarification" over a page holding
-    // none of them is the defect this fixes, and no page size makes it go away
-    // on a busy tenant.
-    //
-    // It makes the bucket much more complete, NOT provably complete, and the
-    // page deliberately does not claim otherwise: the filtered query has the
-    // same 200-row ceiling, and `tabForStatus` also files any status this
-    // build has never heard of under "Needs attention", which no status
-    // filter can ask for. The truncation banner therefore goes on saying the
-    // counts are a minimum.
-    forkJoin({
-      page: this.prescriptionService.list().pipe(
-        map((rows) => ({ rows, failed: false })),
-        catchError(() => of({ rows: [] as PrescriptionResponse[], failed: true })),
-      ),
-      attention: this.prescriptionService
-        .list({ statuses: PrescriptionsComponent.ATTENTION_STATUSES })
-        .pipe(
-          map((rows) => ({ rows, failed: false })),
-          catchError(() => of({ rows: [] as PrescriptionResponse[], failed: true })),
-        ),
-    })
+    // A read is now several requests long, so a reload (a scope switch, a
+    // dispatch) can overtake the one before it. The older read is cancelled:
+    // finishing last, it would put the previous hospital's or a stale list
+    // back on screen.
+    this.listLoad?.unsubscribe();
+    // QA D1347 (round 30): EVERY prescription, all pages. The list used to
+    // read the newest 200 (plus the newest 200 in an attention status) and
+    // the tabs counted that, so "Needs attention" was a minimum on a busy
+    // tenant. Every count on the tab bar is now a count of the whole list. A
+    // read that fails — including one past the paging helper's ceiling — is
+    // said out loud and leaves the list as it was: never a partial list.
+    this.listLoad = this.prescriptionService
+      .list()
       .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((res) => {
-        this.loading.set(false);
-        if (res.page.failed) {
-          // Nothing is rendered as empty: the list keeps whatever it held and
-          // the failure is said out loud, as before.
+      .subscribe({
+        next: (rows) => {
+          this.loading.set(false);
+          this.prescriptions.set(Array.isArray(rows) ? rows : []);
+          this.applyFilter();
+        },
+        error: () => {
+          this.loading.set(false);
           this.toast.error(this.translate.instant('PRESCRIPTIONS.TOAST.LOAD_FAILED'));
-          return;
-        }
-        const page = Array.isArray(res.page.rows) ? res.page.rows : [];
-        this.pageRowCount.set(page.length);
-        this.prescriptions.set(this.mergeById(page, res.attention.rows));
-        this.applyFilter();
+        },
       });
-  }
-
-  /**
-   * The page plus the attention rows it did not reach, newest first.
-   *
-   * <p>De-duplicated on id — the two queries overlap by design, since a
-   * recent PENDING_CLARIFICATION is on both — and re-sorted, because
-   * appending the second result would otherwise break the `createdAt,desc`
-   * order the page was fetched in. A row with no `createdAt` sorts last
-   * rather than to the top, where a missing timestamp would read as "just
-   * now".
-   */
-  private mergeById(
-    page: PrescriptionResponse[],
-    extra: PrescriptionResponse[],
-  ): PrescriptionResponse[] {
-    const byId = new Map<string, PrescriptionResponse>();
-    for (const row of page) byId.set(row.id, row);
-    for (const row of extra ?? []) byId.set(row.id, row);
-    return [...byId.values()].sort(
-      (a, b) => eventTime(b.createdAt, null) - eventTime(a.createdAt, null),
-    );
   }
 
   setTab(tab: PrescriptionTab): void {
@@ -1491,16 +1441,6 @@ export class PrescriptionsComponent implements OnInit {
   countInTab(tab: PrescriptionTab): number {
     return this.tabCounts()[tab];
   }
-
-  /**
-   * True when the list came back full, so there may be prescriptions this
-   * page has never seen — and every count on the tab bar is a lower bound
-   * rather than a total. Said out loud, because a silently truncated
-   * "Needs attention 0" is worse than no count at all.
-   */
-  readonly listTruncated = computed(
-    () => this.pageRowCount() >= PrescriptionService.LIST_PAGE_SIZE,
-  );
 
   /** True while the prescriber, not the pharmacy, is the one holding this up. */
   needsAttention(p: PrescriptionResponse): boolean {
@@ -1818,11 +1758,12 @@ export class PrescriptionsComponent implements OnInit {
    * <p>Two ways they cannot, and both make the live balance wrong rather than
    * merely imprecise, so both send it back to the routing snapshot.
    *
-   * <p>The list is PAGED — `initPharmacyHistory` asks for the 20 most recent
-   * fills. On an order with more than that, summing what arrived understates
-   * what has been dispensed and therefore overstates what is owed, and unlike
-   * the snapshot this figure reads as an authoritative balance.
-   * `dispensesTruncated` is set from the server's `totalElements`.
+   * <p>The list is PAGED. `initPharmacyHistory` reads every page (QA D1347,
+   * round 30), but if the server counts more fills than it served, summing
+   * what arrived understates what has been dispensed and therefore overstates
+   * what is owed, and unlike the snapshot this figure reads as an
+   * authoritative balance. `dispensesTruncated` compares the server's
+   * `totalElements` with the rows read.
    *
    * <p>And a fill records its OWN unit. A 200 ml syrup dispensed as 2 bottles
    * would be subtracted as "200 − 2 = 198", then labelled "ml". The backend
@@ -1910,27 +1851,39 @@ export class PrescriptionsComponent implements OnInit {
           forkJoin({
             // Each arm collapses its own failure to null so the other still
             // arrives; forkJoin is otherwise all-or-nothing.
-            dispenses: this.pharmacyService
-              .listDispensesByPrescription(prescriptionId, 0, 20, 'dispensedAt,desc')
-              .pipe(catchError(() => of(null))),
-            routings: this.pharmacyService
-              .listRoutingDecisionsByPrescription(prescriptionId, 0, 20, 'decidedAt,desc')
-              .pipe(catchError(() => of(null))),
+            //
+            // QA D1347 (round 30): EVERY fill and EVERY routing decision, all
+            // pages. Past the paging helper's ceiling the arm FAILS (null), so
+            // the half says it did not load — never a partial fill list summed
+            // into a balance.
+            dispenses: allPages<DispenseResponse>((page, size) =>
+              this.pharmacyService
+                .listDispensesByPrescription(prescriptionId, page, size, 'dispensedAt,desc')
+                .pipe(map((res) => res?.data)),
+            ).pipe(catchError(() => of(null))),
+            routings: allRows<RoutingDecisionResponse>((page, size) =>
+              this.pharmacyService
+                .listRoutingDecisionsByPrescription(prescriptionId, page, size, [
+                  'decidedAt,desc',
+                  'id,desc',
+                ])
+                .pipe(map((res) => res?.data)),
+            ).pipe(catchError(() => of(null))),
           }).pipe(
             map((res) => ({
               prescriptionId,
               dispenseFailed: res.dispenses === null,
               routingFailed: res.routings === null,
-              // The fills are paged; the remainder may only be computed from
-              // them when the page IS the whole list.
-              dispensesTruncated:
-                (res.dispenses?.data?.totalElements ?? 0) >
-                (res.dispenses?.data?.content?.length ?? 0),
-              dispenses: [...(res.dispenses?.data?.content ?? [])].sort(
+              // Every page is read, so this is false unless the server counted
+              // more fills than it served (one recorded between two page
+              // reads): the remainder is then taken from the routing snapshot
+              // rather than summed from a list known to be short.
+              dispensesTruncated: (res.dispenses?.total ?? 0) > (res.dispenses?.rows.length ?? 0),
+              dispenses: [...(res.dispenses?.rows ?? [])].sort(
                 (a, b) =>
                   eventTime(b.dispensedAt, b.createdAt) - eventTime(a.dispensedAt, a.createdAt),
               ),
-              routings: [...(res.routings?.data?.content ?? [])].sort(
+              routings: [...(res.routings ?? [])].sort(
                 (a, b) => eventTime(b.decidedAt, b.createdAt) - eventTime(a.decidedAt, a.createdAt),
               ),
             })),

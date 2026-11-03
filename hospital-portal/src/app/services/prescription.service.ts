@@ -25,6 +25,7 @@ export interface SignPrescriptionBody extends SignReauthentication {
 import { Injectable, inject } from '@angular/core';
 import { Observable, map } from 'rxjs';
 import { CdsCard } from '../shared/cds-card/cds-card.model';
+import { ALL_PAGES_SIZE, PageSlice, allRows } from '../shared/all-pages';
 
 export interface PrescriptionResponse {
   id: string;
@@ -264,18 +265,22 @@ export class PrescriptionService {
   private readonly baseUrl = '/prescriptions';
 
   /**
-   * How many rows the prescriber's list asks for.
+   * The transfer size of one page of the prescriber's list.
    *
-   * <p>`GET /prescriptions` declares no `@PageableDefault`, so it was serving
-   * Spring's default page 0 of 20 from an UNORDERED derived query — an
-   * arbitrary twenty rows out of the tenant. That was survivable while the
-   * page only listed what it had; it stopped being survivable when the tabs
-   * started counting, because a "Needs attention 0" is a confident claim that
-   * nothing is waiting. The page still has a ceiling, and the UI says so when
-   * it is reached rather than pretending otherwise.
+   * <p>`GET /prescriptions` declares no `@PageableDefault`, so without an
+   * explicit size and sort it served Spring's default page 0 of 20 from an
+   * UNORDERED derived query. QA D1347 (round 30): the list then read ONE page
+   * of 200 and the tabs counted that page, so on a busy tenant "Needs
+   * attention" could miss an order the clinical inbox pointed at. `list` now
+   * reads EVERY page; this is only how many rows each request carries.
    */
-  static readonly LIST_PAGE_SIZE = 200;
+  static readonly LIST_PAGE_SIZE = ALL_PAGES_SIZE;
 
+  /**
+   * Every prescription the filters select, newest first. Reads every page
+   * (`allRows`); past the helper's page ceiling the stream FAILS rather than
+   * returning a partial list, and the caller says the load failed.
+   */
   list(filters?: {
     patientId?: string;
     staffId?: string;
@@ -283,35 +288,38 @@ export class PrescriptionService {
     /** One visit's prescriptions (used without patientId, which the server reads first). */
     encounterId?: string;
     /**
-     * Gap G12 — restrict the page to these `PrescriptionStatus` values. One
+     * Gap G12 — restrict the list to these `PrescriptionStatus` values. One
      * repeated `status` query parameter per value. Omitted or empty means
      * every status, which is what the endpoint did before the filter existed.
      */
     statuses?: string[];
   }): Observable<PrescriptionResponse[]> {
-    // An explicit size and sort. Without them the derived query's order is
-    // arbitrary, so "the first page" is not even the newest prescriptions:
-    // a prescriber told by the clinical inbox that N orders await
-    // clarification could find none of them here. Sorting by updatedAt was
-    // tried and dropped — it reorders the page for everyone and still loses
-    // the row on a busy day, because every sign, edit and fill bumps that
-    // column. The size and sort make the page deterministic; `statuses`
-    // makes a bucket COMPLETE, which is what the counts actually need.
-    let params = new HttpParams()
-      .set('size', PrescriptionService.LIST_PAGE_SIZE)
-      .set('sort', 'createdAt,desc');
+    // An explicit sort, with `id` as the tiebreak: rows sharing a `createdAt`
+    // would otherwise have no stable order between two page reads, and a row
+    // could be served on both pages or on neither. Sorting by updatedAt was
+    // tried and dropped — every sign, edit and fill bumps that column, so the
+    // rows would move between the pages of one read.
+    let filterParams = new HttpParams();
     if (filters) {
-      if (filters.patientId) params = params.set('patientId', filters.patientId);
-      if (filters.staffId) params = params.set('staffId', filters.staffId);
-      if (filters.hospitalId) params = params.set('hospitalId', filters.hospitalId);
-      if (filters.encounterId) params = params.set('encounterId', filters.encounterId);
+      if (filters.patientId) filterParams = filterParams.set('patientId', filters.patientId);
+      if (filters.staffId) filterParams = filterParams.set('staffId', filters.staffId);
+      if (filters.hospitalId) filterParams = filterParams.set('hospitalId', filters.hospitalId);
+      if (filters.encounterId) filterParams = filterParams.set('encounterId', filters.encounterId);
       for (const status of filters.statuses ?? []) {
-        params = params.append('status', status);
+        filterParams = filterParams.append('status', status);
       }
     }
-    return this.http
-      .get<{ content: PrescriptionResponse[] }>(this.baseUrl, { params })
-      .pipe(map((res) => res?.content ?? []));
+    return allRows<PrescriptionResponse>(
+      (page, size) =>
+        this.http.get<PageSlice<PrescriptionResponse>>(this.baseUrl, {
+          params: filterParams
+            .set('page', page)
+            .set('size', size)
+            .append('sort', 'createdAt,desc')
+            .append('sort', 'id,desc'),
+        }),
+      PrescriptionService.LIST_PAGE_SIZE,
+    );
   }
 
   getById(id: string): Observable<PrescriptionResponse> {
