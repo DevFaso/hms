@@ -47,6 +47,7 @@ import { actionRoles } from '../../core/action-permissions';
 import { RegistrationService } from '../../services/registration.service';
 import { LabService, LabOrderResponse } from '../../services/lab.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
+import { RangePagerComponent } from '../../shared/range-pager/range-pager.component';
 import { RestrictedRowsComponent } from '../restricted-rows/restricted-rows.component';
 import { shortOrderCode } from '../../shared/lab/order-code';
 import { DialogFocusDirective } from '../../shared/a11y/dialog-focus.directive';
@@ -84,6 +85,7 @@ const UNSCOPED_KEY = 'UNSCOPED';
     RestrictedRowsComponent,
     DialogFocusDirective,
     LabCorrectionBadgeComponent,
+    RangePagerComponent,
   ],
   templateUrl: './patient-chart.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -1143,9 +1145,15 @@ export class PatientChartComponent implements OnInit, OnChanges {
     this.loadTimeline(this.timelineReason.trim());
   }
 
-  private loadTimeline(reason: string): void {
+  /** QA D1380: another page of the timeline, read with the reason already stated. */
+  loadTimelinePage(page: number): void {
+    const reason = this.timeline()?.accessReason?.trim();
+    if (reason) this.loadTimeline(reason, page);
+  }
+
+  private loadTimeline(reason: string, page = 0): void {
     this.timelineLoading.set(true);
-    this.patientService.getDoctorTimeline(this.patientId, reason).subscribe({
+    this.patientService.getDoctorTimeline(this.patientId, reason, page).subscribe({
       next: (timeline) => {
         this.timeline.set(timeline);
         this.timelineLoading.set(false);

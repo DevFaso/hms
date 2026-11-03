@@ -60,6 +60,7 @@ GET /me/patient/social-history
 GET /me/patient/surgical-history
 GET /me/patient/treatment-plans
 GET /me/patient/vitals
+GET /me/patient/vitals/history
 GET /patients/{patientId}/record-sharing/opt-out
 POST /me/patient/appointments
 POST /me/patient/appointments/{appointmentId}/pre-checkin

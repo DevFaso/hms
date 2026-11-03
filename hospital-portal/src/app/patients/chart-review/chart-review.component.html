@@ -524,6 +524,23 @@
           }
         </div>
       }
+      <!-- QA D1380: every row of the tab is reachable, counted by the server. -->
+      @if (tabFailed()) {
+        <p class="chart-review__status chart-review__status--error" role="alert">
+          <span class="material-symbols-outlined" aria-hidden="true">error</span>
+          {{ 'CHART_REVIEW.ERROR' | translate }}
+        </p>
+      }
+      <app-range-pager
+        testId="chart-review-pager"
+        [label]="'CHART_REVIEW.TABS.' + activeTab() | uppercase | translate"
+        [page]="tabPage()[activeTab()]"
+        [size]="c.limit"
+        [total]="counts()[activeTab()]"
+        [shown]="rowsOnPage(activeTab())"
+        [disabled]="tabLoading()"
+        (pageChange)="loadTabPage($event)"
+      />
     }
   </section>
 }

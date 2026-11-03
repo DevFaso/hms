@@ -70,6 +70,19 @@ export interface HealthSummaryDTO {
 export const LAB_RESULTS_PAGE_SIZE = 20;
 
 /** One page of lab results, and whether an older one exists. */
+/** QA D1379: records per `/my-vitals` page. */
+export const VITALS_PAGE_SIZE = 10;
+
+/** QA D1379: one page of vital-sign records, flattened, with the server's total of RECORDS. */
+export interface VitalsPage {
+  items: VitalSignSummary[];
+  /** Records on this page (each is one group of readings). */
+  records: number;
+  total: number;
+  page: number;
+  size: number;
+}
+
 export interface LabResultPage {
   items: LabResultSummary[];
   hasMore: boolean;
@@ -1303,12 +1316,29 @@ export class PatientPortalService {
       .pipe(map((r) => toLabResultPage(r.data, size)));
   }
 
-  getMyVitals(limit = 10): Observable<VitalSignSummary[]> {
+  /**
+   * QA D1379 (D1347 class): one page of my vital-sign records, newest first,
+   * with the server's total. `/my-vitals` used to read `/vitals?limit=10`
+   * and show those 10 records as the whole history (45 existed). Errors reach
+   * the page, which says the load failed rather than "no readings".
+   */
+  getMyVitalsPage(page: number, size = VITALS_PAGE_SIZE): Observable<VitalsPage> {
     return this.http
-      .get<ApiWrapper<PatientVitalSignRaw[]>>(`${this.base}/vitals`, { params: { limit } })
+      .get<ApiWrapper<PageSlice<PatientVitalSignRaw>>>(`${this.base}/vitals/history`, {
+        params: { page, size },
+      })
       .pipe(
-        map((r) => flattenVitals(r.data ?? [])),
-        catchError(() => of([])),
+        map((r) => {
+          const slice = r.data ?? {};
+          const records = slice.content ?? [];
+          return {
+            items: flattenVitals(records),
+            records: records.length,
+            total: slice.totalElements ?? records.length,
+            page: slice.number ?? page,
+            size: slice.size ?? size,
+          };
+        }),
       );
   }
 
@@ -1831,17 +1861,6 @@ export class PatientPortalService {
         params: { limit },
       })
       .pipe(map((r) => r.data ?? []));
-  }
-
-  getProxyLabResults(patientId: string, limit = 50): Observable<LabResultSummary[]> {
-    return this.http
-      .get<ApiWrapper<LabResultApiResponse[]>>(
-        `${this.base}/proxy-access/${patientId}/lab-results`,
-        {
-          params: { limit },
-        },
-      )
-      .pipe(map((r) => (r.data ?? []).map(mapLabResult)));
   }
 
   /**

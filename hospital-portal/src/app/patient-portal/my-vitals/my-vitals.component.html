@@ -11,7 +11,15 @@
       <div class="portal-spinner"></div>
       <p>{{ 'PORTAL.VITALS.LOADING' | translate }}</p>
     </div>
-  } @else if (vitals().length === 0) {
+  } @else if (loadFailed()) {
+    <div class="portal-empty" role="alert" data-testid="vitals-load-failed">
+      <span class="material-symbols-outlined">error</span>
+      <p>{{ 'PATIENTS.VITALS_LOAD_FAILED' | translate }}</p>
+      <button type="button" class="btn-secondary" (click)="loadPage(page())">
+        {{ 'COMMON.RETRY' | translate }}
+      </button>
+    </div>
+  } @else if (vitals().length === 0 && total() === 0) {
     <div class="portal-empty">
       <span class="material-symbols-outlined">monitor_heart</span>
       <h3>{{ 'PORTAL.VITALS.EMPTY_TITLE' | translate }}</h3>
@@ -94,6 +102,16 @@
           </article>
         }
       </div>
+      <!-- QA D1379: every record is reachable, counted by the server. -->
+      <app-range-pager
+        testId="vitals-pager"
+        [label]="'PORTAL.VITALS.TITLE' | translate"
+        [page]="page()"
+        [size]="pageSize()"
+        [total]="total()"
+        [shown]="recordsOnPage()"
+        (pageChange)="loadPage($event)"
+      />
     </section>
   }
 </div>

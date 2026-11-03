@@ -102,7 +102,7 @@ class PatientRecordPdfServiceTest {
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
         when(storyboardService.getStoryboard(patientId, hospitalId)).thenReturn(storyboard());
-        when(chartReviewService.getChartReview(patientId, hospitalId, PatientRecordPdfService.CHART_LIMIT))
+        when(chartReviewService.getCompleteChartReview(patientId, hospitalId))
             .thenReturn(chart());
         echoKeys();
     }
@@ -161,7 +161,7 @@ class PatientRecordPdfServiceTest {
             e.setChiefComplaint("Visit " + i + " " + "x".repeat(140));
             return e;
         }).toList());
-        when(chartReviewService.getChartReview(patientId, hospitalId, PatientRecordPdfService.CHART_LIMIT))
+        when(chartReviewService.getCompleteChartReview(patientId, hospitalId))
             .thenReturn(chart);
         echoKeys();
 
@@ -258,7 +258,7 @@ class PatientRecordPdfServiceTest {
                 .procedureName("Paracentesis").procedureCategory("THERAPEUTIC")
                 .urgency("URGENT").status("ORDERED").orderingProviderName("DoctorBF DoctorBL")
                 .consentObtained(false).build()));
-        when(chartReviewService.getChartReview(patientId, hospitalId, PatientRecordPdfService.CHART_LIMIT))
+        when(chartReviewService.getCompleteChartReview(patientId, hospitalId))
             .thenReturn(chart);
 
         String text = textOf(service.render(patientId));
@@ -286,7 +286,7 @@ class PatientRecordPdfServiceTest {
         PatientStoryboardDTO board = storyboard();
         board.getActiveEncounter().setChiefComplaint("Fièvre depuis trois jours");
         when(storyboardService.getStoryboard(patientId, hospitalId)).thenReturn(board);
-        when(chartReviewService.getChartReview(patientId, hospitalId, PatientRecordPdfService.CHART_LIMIT))
+        when(chartReviewService.getCompleteChartReview(patientId, hospitalId))
             .thenReturn(chart());
 
         assertThat(textOf(service.render(patientId)))

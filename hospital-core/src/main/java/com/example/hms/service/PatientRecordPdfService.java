@@ -59,8 +59,6 @@ import java.util.function.Function;
 @Slf4j
 public class PatientRecordPdfService {
 
-    /** Chart-review row cap per section; the screen's default is far lower. */
-    static final int CHART_LIMIT = 200;
     private static final String AUDIT_ENTITY_TYPE = "PATIENT";
     private static final String NOT_FOUND_KEY = "patient.notFound";
     private static final String SEPARATOR = " - ";
@@ -87,7 +85,9 @@ public class PatientRecordPdfService {
             throw new ResourceNotFoundException(NOT_FOUND_KEY, patientId);
         }
         PatientStoryboardDTO storyboard = storyboardService.getStoryboard(patientId, hospitalId);
-        ChartReviewDTO chart = chartReviewService.getChartReview(patientId, hospitalId, CHART_LIMIT);
+        // QA D1380: the printed record carries every row of every section. It
+        // asked for 200 per section and the chart review silently cut it at 100.
+        ChartReviewDTO chart = chartReviewService.getCompleteChartReview(patientId, hospitalId);
 
         byte[] pdf = write(storyboard, chart, patient.getAllergies(), labels);
         emitAudit(patient, hospitalId, chart);

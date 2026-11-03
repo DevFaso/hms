@@ -366,21 +366,25 @@ export class WaitlistPanelComponent implements OnInit {
     this.selectedSlotId.set('');
     this.offerHours.set(48);
     this.offerSlotsLoading.set(true);
+    // QA D1390 (D1347 class): every open slot of the entry's window, all
+    // pages read; the picker showed the earliest 50 of a list cut at 200.
     this.slotInventoryService
-      .searchOpen({
+      .searchAllOpen({
         departmentId: entry.departmentId,
         staffId: entry.preferredProviderId ?? undefined,
         from: entry.requestedDateFrom ?? undefined,
         to: entry.requestedDateTo ?? undefined,
-        limit: 50,
       })
       .subscribe({
-        next: (slots) => {
-          this.offerSlots.set(slots);
+        next: ({ rows }) => {
+          this.offerSlots.set(rows);
           this.offerSlotsLoading.set(false);
         },
-        error: () => {
-          this.toast.error(this.translate.instant('RECEPTION.LOAD_SLOTS_FAILED'));
+        error: (err: unknown) => {
+          // A window longer than the server reads is refused in words (slot.search.tooLong).
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('RECEPTION.LOAD_SLOTS_FAILED'),
+          );
           this.offerSlotsLoading.set(false);
         },
       });

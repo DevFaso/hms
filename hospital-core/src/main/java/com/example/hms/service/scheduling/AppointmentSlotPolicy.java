@@ -149,9 +149,12 @@ public class AppointmentSlotPolicy {
      * {@code notBefore} (the hospital's wall clock), earliest first.
      */
     public java.util.List<AppointmentSlot> openOn(UUID hospitalId, UUID departmentId, UUID staffId,
-                                                  LocalDate date, LocalDateTime notBefore, int limit) {
+                                                  LocalDate date, LocalDateTime notBefore) {
+        // QA D1390 (D1347 class): the whole day. A cut at 200 BEFORE the
+        // caller's filters (clinician booked over, patient booking window)
+        // could hide bookable slots behind unbookable ones.
         return slotRepository.searchOpen(hospitalId, departmentId, staffId, null, date, date,
-            notBefore, LocalDateTime.now(clock), org.springframework.data.domain.PageRequest.of(0, limit));
+            notBefore, LocalDateTime.now(clock), org.springframework.data.domain.Pageable.unpaged());
     }
 
     /**

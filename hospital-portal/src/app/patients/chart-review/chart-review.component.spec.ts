@@ -54,6 +54,74 @@ describe('ChartReviewComponent', () => {
     ).not.toBeNull();
   });
 
+  describe('every row of a tab is reachable (QA D1380)', () => {
+    function pagedChart(): ChartReview {
+      const c = populatedChart();
+      return {
+        ...c,
+        limit: 20,
+        totals: {
+          timeline: 700,
+          encounters: 5,
+          notes: 1,
+          results: 42,
+          medications: 667,
+          imaging: 27,
+          procedures: 1,
+        },
+      };
+    }
+
+    it('badges each tab with the server total, not the page length', () => {
+      chartSpy.getChartReview.and.returnValue(of(pagedChart()));
+      setPatient('p-1');
+      const badge = (tab: string) =>
+        (
+          fixture.nativeElement.querySelector(
+            `[data-testid="chart-review-tab-${tab}"] .chart-review__tab-count`,
+          ) as HTMLElement
+        ).textContent?.trim();
+      expect(badge('medications')).toBe('667');
+      expect(badge('timeline')).toBe('700');
+      expect(badge('results')).toBe('42');
+    });
+
+    it('reads the next page of the active tab only, and puts it in place', () => {
+      chartSpy.getChartReview.and.returnValue(of(pagedChart()));
+      setPatient('p-1');
+      (
+        fixture.nativeElement.querySelector(
+          '[data-testid="chart-review-tab-medications"]',
+        ) as HTMLButtonElement
+      ).click();
+      fixture.detectChanges();
+
+      const next = { ...pagedChart(), page: 1, section: 'MEDICATIONS' as const };
+      next.medications = [{ ...populatedChart().medications[0], id: 'm-page-2' }];
+      chartSpy.getChartReview.and.returnValue(of(next));
+      (
+        fixture.nativeElement.querySelector(
+          '[data-testid="chart-review-pager-next"]',
+        ) as HTMLButtonElement
+      ).click();
+      fixture.detectChanges();
+
+      expect(chartSpy.getChartReview).toHaveBeenCalledWith('p-1', undefined, 20, 'MEDICATIONS', 1);
+      expect(
+        fixture.nativeElement.querySelector('[data-testid="chart-review-pager"]'),
+      ).not.toBeNull();
+      expect(
+        (fixture.componentInstance as unknown as { chart: () => ChartReview }).chart()
+          .medications[0].id,
+      ).toBe('m-page-2');
+      // The other tabs keep their first page.
+      expect(
+        (fixture.componentInstance as unknown as { chart: () => ChartReview }).chart().encounters
+          .length,
+      ).toBe(populatedChart().encounters.length);
+    });
+  });
+
   it('forwards the hospital scope when supplied', () => {
     chartSpy.getChartReview.and.returnValue(of(emptyChart()));
     setPatient('p-2', 'h-77');

@@ -18,6 +18,7 @@ import {
   SessionTemplateRequest,
   SessionTemplateResponse,
   SlotGenerationResult,
+  SLOT_PAGE_SIZE,
   SlotInventoryService,
   VisitTypeRequest,
   VisitTypeResponse,
@@ -33,6 +34,7 @@ import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { refuseFields } from '../shared/forms/invalid-fields';
 import { DateTimePipe } from '../shared/pipes/date-time.pipe';
+import { RangePagerComponent } from '../shared/range-pager/range-pager.component';
 type AdminSection = 'visit-types' | 'templates' | 'slots';
 
 /** QA D1306 (round 28): the fields each form may refuse, so a fixed one loses its mark. */
@@ -66,6 +68,7 @@ const TPL_FIELD_IDS = [
     CommonModule,
     FormsModule,
     TranslateModule,
+    RangePagerComponent,
   ],
   templateUrl: './slot-admin.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -113,6 +116,10 @@ export class SlotAdminComponent implements OnInit {
 
   slots = signal<AppointmentSlotResponse[]>([]);
   slotsLoading = signal(false);
+  /** QA D1390: the server's paging of the window's open slots. */
+  slotPage = signal(0);
+  slotPageSize = signal(SLOT_PAGE_SIZE);
+  slotTotal = signal(0);
   slotFilterStaffId = '';
   slotFilterDepartmentId = '';
   slotFrom = '';
@@ -432,23 +439,40 @@ export class SlotAdminComponent implements OnInit {
     });
   }
 
-  searchSlots(): void {
+  /**
+   * QA D1390 (D1347 class): one page of the window's open slots, with the
+   * server's total on screen; the search button reads the first page again.
+   */
+  searchSlots(page = 0): void {
     this.slotsLoading.set(true);
     this.slotService
-      .searchOpen({
-        staffId: this.slotFilterStaffId || undefined,
-        departmentId: this.slotFilterDepartmentId || undefined,
-        from: this.slotFrom || undefined,
-        to: this.slotTo || undefined,
-        limit: 200,
-      })
+      .searchOpenPage(
+        {
+          staffId: this.slotFilterStaffId || undefined,
+          departmentId: this.slotFilterDepartmentId || undefined,
+          from: this.slotFrom || undefined,
+          to: this.slotTo || undefined,
+        },
+        page,
+        this.slotPageSize(),
+      )
       .pipe(
         takeUntilDestroyed(this.destroyRef),
         finalize(() => this.slotsLoading.set(false)),
       )
       .subscribe({
-        next: (rows) => {
+        next: (slice) => {
+          const rows = slice?.content ?? [];
+          const total = slice?.totalElements ?? rows.length;
+          if (rows.length === 0 && page > 0 && total > 0) {
+            // The last page emptied (a slot was blocked): read the new last page.
+            this.searchSlots(Math.max(0, Math.ceil(total / this.slotPageSize()) - 1));
+            return;
+          }
           this.slots.set(rows);
+          this.slotTotal.set(total);
+          this.slotPage.set(slice?.number ?? page);
+          this.slotPageSize.set(slice?.size ?? this.slotPageSize());
           this.loadedSections.add('slots');
           this.slotsLoading.set(false);
           this.ensureFormOptions();
@@ -482,7 +506,7 @@ export class SlotAdminComponent implements OnInit {
         this.toast.success(this.translate.instant('SLOT_ADMIN.BLOCKED'));
         this.blocking.set(false);
         this.blockTarget.set(null);
-        this.searchSlots();
+        this.searchSlots(this.slotPage());
       },
       error: (err) => {
         this.toast.error(err?.error?.message ?? this.translate.instant('SLOT_ADMIN.BLOCK_ERROR'));
@@ -500,7 +524,7 @@ export class SlotAdminComponent implements OnInit {
       next: () => {
         this.toast.success(this.translate.instant('SLOT_ADMIN.RELEASED'));
         this.releasingId.set(null);
-        this.searchSlots();
+        this.searchSlots(this.slotPage());
       },
       error: (err) => {
         this.toast.error(err?.error?.message ?? this.translate.instant('SLOT_ADMIN.RELEASE_ERROR'));

@@ -96,6 +96,9 @@ public interface PatientPortalService {
     // ── Vital signs ──────────────────────────────────────────────────────
     List<PatientVitalSignResponseDTO> getMyVitals(Authentication auth, int limit);
 
+    /** QA D1379: every vital-sign record of mine, one page at a time with the total. */
+    org.springframework.data.domain.Page<PatientVitalSignResponseDTO> getMyVitalsPage(Authentication auth, int page, int size);
+
     // ── Encounters / visit history ───────────────────────────────────────
     List<EncounterResponseDTO> getMyEncounters(Authentication auth, Locale locale);
 

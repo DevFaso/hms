@@ -213,6 +213,22 @@ public class PatientPortalController {
         return ResponseEntity.ok(ApiResponseWrapper.success(vitals));
     }
 
+    /**
+     * QA D1379 (D1347 class): {@code /my-vitals} read {@code /vitals?limit=10}
+     * and showed those 10 of 45 records with no way to the rest. This read
+     * pages the whole history newest first and answers the total; the list
+     * read above stays as it is for the dashboard and the mobile apps.
+     */
+    @Operation(summary = "My vital-sign history, one page at a time with the total (QA D1379)")
+    @GetMapping("/vitals/history")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<Page<PatientVitalSignResponseDTO>>> getMyVitalsHistory(
+            Authentication auth,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(portalService.getMyVitalsPage(auth, page, size)));
+    }
+
     // ── Encounters (visit history) ───────────────────────────────────────
 
     @Operation(summary = "View my visit history")

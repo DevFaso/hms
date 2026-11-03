@@ -1422,6 +1422,47 @@ class PatientServiceImplTest {
     }
 
     @Test
+    void getDoctorTimelinePagesEveryEntryWithTheTotal_D1380() {
+        // QA D1380 (D1347 class): the chart read "50 evenements" for the newest
+        // 50 entries and offered nothing more. totalEntries counts every entry
+        // and page reads the rest, each entry exactly once.
+        UserRoleHospitalAssignment assignment = new UserRoleHospitalAssignment();
+        assignment.setId(UUID.randomUUID());
+        assignment.setHospital(hospital);
+        java.util.List<Encounter> visits = new java.util.ArrayList<>();
+        for (int i = 0; i < 7; i++) {
+            Encounter visit = Encounter.builder()
+                .patient(patient)
+                .hospital(hospital)
+                .encounterDate(LocalDateTime.now().minusDays(i + 1L))
+                .encounterType(EncounterType.CONSULTATION)
+                .build();
+            visit.setId(UUID.randomUUID());
+            visits.add(visit);
+        }
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
+        when(encounterRepository.findByPatient_Id(patientId)).thenReturn(visits);
+
+        java.util.List<String> seen = new java.util.ArrayList<>();
+        for (int page = 0; page < 3; page++) {
+            PatientTimelineResponseDTO response = patientService.getDoctorTimeline(patientId, hospitalId,
+                UUID.randomUUID(), assignment, PatientTimelineAccessRequestDTO.builder()
+                    .accessReason("Care coordination")
+                    .maxEvents(3)
+                    .page(page)
+                    .categories(List.of("ENCOUNTER"))
+                    .build());
+            assertThat(response.getTotalEntries()).isEqualTo(7);
+            assertThat(response.getPage()).isEqualTo(page);
+            assertThat(response.getPageSize()).isEqualTo(3);
+            assertThat(response.getEntries()).hasSize(page < 2 ? 3 : 1);
+            response.getEntries().forEach(entry -> seen.add(entry.getEntryId()));
+        }
+        assertThat(seen).doesNotHaveDuplicates().hasSize(7);
+    }
+
+    @Test
     void getDoctorTimelineReportsTheRowsItWithheld() {
         // E9 #64 — a foreign encounter in a sensitive department is withheld
         // (D3) AND counted, so the chart can render "Dossier restreint

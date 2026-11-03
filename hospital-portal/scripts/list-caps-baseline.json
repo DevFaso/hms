@@ -62,9 +62,53 @@
       "count": 1,
       "why": "preview: the section is titled PROFILE.RECENT_ACTIVITY (the user's newest audit events)"
     },
-    "src/app/reception/waitlist-panel/waitlist-panel.component.ts::fixed-size::openOfferModal:searchOpen:limit=50": {
+    "src/app/services/announcement.service.ts::default-limit::list:limit=50": {
       "count": 1,
-      "why": "D1347 open: GET /slots/search answers a bare list capped server-side at 200 (SlotInventoryServiceImpl.MAX_SEARCH_RESULTS) with no total; the offer picker shows the earliest 50 of the entry's window. Needs a paged endpoint (round-30 setup note); flagged in the hand-back"
+      "why": "open D1347 sibling found by the round-32 default-limit rule (D1379 class), flagged in the fix/r32-list-caps hand-back: /announcements shows the 50 newest announcements and GET /announcements answers a bare list with no total"
+    },
+    "src/app/services/chat.service.ts::default-limit::getConversations:size=20": {
+      "count": 1,
+      "why": "open D1347 sibling found by the round-32 default-limit rule (D1379 class), flagged in the fix/r32-list-caps hand-back: the chat conversation list reads page 0 of 20 and /chat/conversations answers a bare list with no total"
+    },
+    "src/app/services/chat.service.ts::default-limit::getHistory:size=50": {
+      "count": 1,
+      "why": "open D1347 sibling found by the round-32 default-limit rule (D1379 class), flagged in the fix/r32-list-caps hand-back: a chat thread shows its 50 newest messages and offers no older-message control"
+    },
+    "src/app/services/dashboard.service.ts::default-limit::getRecentAdmissions:limit=10": {
+      "count": 1,
+      "why": "preview: the super-admin Recent activity tabs show the N newest of each feed (getRecentActivity(10) pinned in super-admin.ts); each feed has its own full page"
+    },
+    "src/app/services/dashboard.service.ts::default-limit::getRecentConsultations:limit=10": {
+      "count": 1,
+      "why": "preview: the super-admin Recent activity tabs show the N newest of each feed (getRecentActivity(10) pinned in super-admin.ts); each feed has its own full page"
+    },
+    "src/app/services/dashboard.service.ts::default-limit::getRecentLabOrders:limit=10": {
+      "count": 1,
+      "why": "preview: the super-admin Recent activity tabs show the N newest of each feed (getRecentActivity(10) pinned in super-admin.ts); each feed has its own full page"
+    },
+    "src/app/services/dashboard.service.ts::default-limit::getRecentLabResults:limit=10": {
+      "count": 1,
+      "why": "preview: the super-admin Recent activity tabs show the N newest of each feed (getRecentActivity(10) pinned in super-admin.ts); each feed has its own full page"
+    },
+    "src/app/services/dashboard.service.ts::default-limit::getRecentLabTestDefinitions:limit=10": {
+      "count": 1,
+      "why": "preview: the super-admin Recent activity tabs show the N newest of each feed (getRecentActivity(10) pinned in super-admin.ts); each feed has its own full page"
+    },
+    "src/app/services/dashboard.service.ts::default-limit::getRecentPrescriptions:limit=10": {
+      "count": 1,
+      "why": "preview: the super-admin Recent activity tabs show the N newest of each feed (getRecentActivity(10) pinned in super-admin.ts); each feed has its own full page"
+    },
+    "src/app/services/dashboard.service.ts::default-limit::getRecentReferrals:limit=10": {
+      "count": 1,
+      "why": "preview: the super-admin Recent activity tabs show the N newest of each feed (getRecentActivity(10) pinned in super-admin.ts); each feed has its own full page"
+    },
+    "src/app/services/dashboard.service.ts::default-limit::getRecentTreatmentPlans:limit=10": {
+      "count": 1,
+      "why": "preview: the super-admin Recent activity tabs show the N newest of each feed (getRecentActivity(10) pinned in super-admin.ts); each feed has its own full page"
+    },
+    "src/app/services/dashboard.service.ts::default-limit::getSuperAdminRecent:limit=10": {
+      "count": 1,
+      "why": "preview: the super-admin Recent activity tabs show the N newest of each feed (getRecentActivity(10) pinned in super-admin.ts); each feed has its own full page"
     },
     "src/app/services/department-lookup.service.ts::page-content::res:res": {
       "count": 1,
@@ -74,13 +118,49 @@
       "count": 1,
       "why": "lookup of the ONE active registration of a patient at a hospital (a patient has at most one per hospital)"
     },
+    "src/app/services/hospital.service.ts::default-limit::searchHospitals:limit=20": {
+      "count": 1,
+      "why": "typeahead: the 20 best hospital matches for the typed text (both callers pass their own limit); typing more narrows it"
+    },
     "src/app/services/lab.service.ts::page-flattened::listOrders:content": {
       "count": 1,
       "why": "the explicit-page branch: a caller that passes page asked for that page (the chart's lab tab says 'latest N'); without page listOrders reads every page"
     },
+    "src/app/services/labor.service.ts::default-limit::episodes:limit=10": {
+      "count": 1,
+      "why": "open D1347 sibling found by the round-32 default-limit rule (D1379 class), flagged in the fix/r32-list-caps hand-back: the labor tab reads the patient's 10 newest labor episodes with no total"
+    },
+    "src/app/services/nursing-note.service.ts::default-limit::listRecent:limit=20": {
+      "count": 1,
+      "why": "open D1347 sibling found by the round-32 default-limit rule (D1379 class), flagged in the fix/r32-list-caps hand-back: the encounter's nursing-notes panel shows the 20 newest notes (50 on a closed visit) with no total"
+    },
+    "src/app/services/patient-portal.service.ts::default-limit::getMyLabResults:limit=20": {
+      "count": 1,
+      "why": "the default is never used: every caller passes its own number (the dashboard preview 5, the my-records card counted from the server's labResultTotal, QA D1362)"
+    },
+    "src/app/services/patient-portal.service.ts::default-limit::getProxyMedications:limit=50": {
+      "count": 1,
+      "why": "open D1347 sibling found by the round-32 default-limit rule (D1379 class), flagged in the fix/r32-list-caps hand-back: the same contract as /medications (QA D1346: every ACTIVE course whatever the limit), but the history after them is cut at 50 with no total on the proxy viewer"
+    },
+    "src/app/services/postpartum.service.ts::default-limit::recentNewbornAssessments:limit=10": {
+      "count": 1,
+      "why": "open D1347 sibling found by the round-32 default-limit rule (D1379 class), flagged in the fix/r32-list-caps hand-back: the postpartum tab reads the 20 newest newborn assessments (it passes 20) with no total"
+    },
+    "src/app/services/postpartum.service.ts::default-limit::recentObservations:limit=10": {
+      "count": 1,
+      "why": "open D1347 sibling found by the round-32 default-limit rule (D1379 class), flagged in the fix/r32-list-caps hand-back: the postpartum tab reads the 20 newest observations (it passes 20) with no total"
+    },
+    "src/app/services/pro-screening.service.ts::default-limit::history:limit=20": {
+      "count": 1,
+      "why": "open D1347 sibling found by the round-32 default-limit rule (D1379 class), flagged in the fix/r32-list-caps hand-back: the postpartum screening history reads the 20 newest responses with no total"
+    },
     "src/app/services/treatment-plan.service.ts::page-flattened::listPlans:content": {
       "count": 1,
       "why": "the explicit-page branch: a caller that passes page asked for that page; without page listPlans reads every page"
+    },
+    "src/app/services/user.service.ts::default-limit::chatRecipients:size=200": {
+      "count": 1,
+      "why": "open D1347 sibling found by the round-32 default-limit rule (D1379 class), flagged in the fix/r32-list-caps hand-back: the chat recipient picker lists 200 users with no total and no search past them"
     },
     "src/app/shell/shell.ts::fixed-size::loadNotifications:getNotifications:size=1": {
       "count": 1,
@@ -89,10 +169,6 @@
     "src/app/shell/shell.ts::fixed-size::loadNotifications:getNotifications:size=10": {
       "count": 1,
       "why": "preview: the bell drop-down shows the 10 newest, with a link to /notifications for every one"
-    },
-    "src/app/slot-admin/slot-admin.ts::fixed-size::searchSlots:searchOpen:limit=200": {
-      "count": 1,
-      "why": "D1347 open: GET /slots/search is capped server-side at 200 (SlotInventoryServiceImpl.MAX_SEARCH_RESULTS) and answers a bare list with no total (round-30 setup note); needs a paged endpoint in hospital-core, flagged in the hand-back"
     },
     "src/app/super-admin/emergency/emergency.ts::fixed-size::constructor:search:page0x10": {
       "count": 1,

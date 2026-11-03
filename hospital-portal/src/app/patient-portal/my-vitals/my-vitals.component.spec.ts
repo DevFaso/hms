@@ -1,7 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { resetStoredLangForTests } from '../../shared/i18n/app-locale';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 import { MyVitalsComponent } from './my-vitals.component';
 import { PatientPortalService } from '../../services/patient-portal.service';
 
@@ -9,11 +9,13 @@ describe('MyVitalsComponent', () => {
   let component: MyVitalsComponent;
   let fixture: ComponentFixture<MyVitalsComponent>;
 
+  const emptyPage = { items: [], records: 0, total: 0, page: 0, size: 10 };
   const mockPortalService = {
-    getMyVitals: () => of([]),
+    getMyVitalsPage: jasmine.createSpy('getMyVitalsPage').and.returnValue(of(emptyPage)),
   };
 
   beforeEach(async () => {
+    mockPortalService.getMyVitalsPage.and.returnValue(of(emptyPage));
     await TestBed.configureTestingModule({
       imports: [MyVitalsComponent, TranslateModule.forRoot()],
       providers: [{ provide: PatientPortalService, useValue: mockPortalService }],
@@ -26,6 +28,50 @@ describe('MyVitalsComponent', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  describe('every record is reachable (QA D1379)', () => {
+    const vital = (record: number) =>
+      ({
+        id: `r${record}-heart_rate`,
+        groupId: `r${record}`,
+        type: 'HEART_RATE',
+        value: '72',
+        unit: 'bpm',
+        recordedAt: `2026-10-${String(10 + record).padStart(2, '0')}T08:00:00`,
+        source: 'NURSE_STATION',
+      }) as never;
+
+    it('shows the server total and pages to the older records', () => {
+      mockPortalService.getMyVitalsPage.calls.reset();
+      mockPortalService.getMyVitalsPage.and.callFake((page: number) =>
+        of({
+          items: page === 0 ? [vital(9), vital(8)] : [vital(1)],
+          records: page === 0 ? 2 : 1,
+          total: 45,
+          page,
+          size: 10,
+        }),
+      );
+      component.loadPage(0);
+      fixture.detectChanges();
+      const el: HTMLElement = fixture.nativeElement;
+      expect(el.querySelector('[data-testid="vitals-pager"]')).not.toBeNull();
+      expect(component.total()).toBe(45);
+      (el.querySelector('[data-testid="vitals-pager-next"]') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      expect(mockPortalService.getMyVitalsPage).toHaveBeenCalledWith(1, 10);
+      expect(component.page()).toBe(1);
+      expect(component.groupedVitals().length).toBe(1);
+    });
+
+    it('says the load failed instead of "no readings"', () => {
+      mockPortalService.getMyVitalsPage.and.returnValue(throwError(() => new Error('down')));
+      component.loadPage(0);
+      fixture.detectChanges();
+      const el: HTMLElement = fixture.nativeElement;
+      expect(el.querySelector('[data-testid="vitals-load-failed"]')).not.toBeNull();
+    });
   });
 
   describe('out-of-range readings (QA D980)', () => {

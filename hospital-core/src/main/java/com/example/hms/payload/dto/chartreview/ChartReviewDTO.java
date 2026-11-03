@@ -18,9 +18,12 @@ import java.util.UUID;
  * Imaging / Procedures with a unified timeline). All sections are sourced
  * from existing clinical tables; no schema changes are introduced.
  *
- * <p>Each section is capped (default 20, configurable via the
+ * <p>Each section answers one page (default 20 rows, configurable via the
  * {@code limit} query parameter) so the response stays small on the
- * metered 3G/4G links typical of the West-Africa deployments.
+ * metered 3G/4G links typical of the West-Africa deployments. QA D1380
+ * (D1347 class): the page is never presented as the whole section —
+ * {@link #totals} carries the server's count of every row of each section,
+ * and {@code page} / {@code section} read the rest.
  */
 @Getter
 @Setter
@@ -35,8 +38,24 @@ public class ChartReviewDTO {
     private UUID hospitalId;
     private String hospitalName;
 
-    /** Maximum rows requested per section (echo of the request, after clamping). */
+    /** Rows per section page (echo of the request, after clamping). */
     private int limit;
+
+    /** QA D1380: the 0-based page of each section returned. */
+    private int page;
+
+    /** QA D1380: the one section asked for, or {@code null} when every section's page is returned. */
+    private String section;
+
+    /** QA D1380: the server's count of every row of each section (never the page's length). */
+    private Totals totals;
+
+    /**
+     * QA D1380: the encounter, note and imaging rows the timeline page names,
+     * so a timeline page past the first labels its rows from them (QA D829)
+     * even when they are not on the current page of their own tab.
+     */
+    private TimelineRefs timelineRefs;
 
     private List<EncounterEntryDTO> encounters;
     private List<NoteEntryDTO> notes;
@@ -46,8 +65,8 @@ public class ChartReviewDTO {
     private List<ProcedureEntryDTO> procedures;
 
     /**
-     * Unified timeline merged across all six sections, sorted most-recent-first
-     * and capped at {@code limit}. Lets the UI render a chronological view
+     * Unified timeline merged across all six sections, sorted most-recent-first;
+     * one page of {@code limit} events ({@link Totals#getTimeline()} counts them all). Lets the UI render a chronological view
      * without re-merging on the client.
      */
     private List<TimelineEventDTO> timeline;
@@ -55,6 +74,35 @@ public class ChartReviewDTO {
     private LocalDateTime generatedAt;
 
     /* ------------------------------------------------------------------ */
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    @Schema(description = "QA D1380: the count of every row of each chart-review section.")
+    public static class Totals {
+        private int timeline;
+        private int encounters;
+        private int notes;
+        private int results;
+        private int medications;
+        private int imaging;
+        private int procedures;
+    }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    @Schema(description = "QA D1380: the rows the timeline page refers to, for its labels.")
+    public static class TimelineRefs {
+        private List<EncounterEntryDTO> encounters;
+        private List<NoteEntryDTO> notes;
+        private List<ImagingEntryDTO> imaging;
+    }
 
     @Getter
     @Setter

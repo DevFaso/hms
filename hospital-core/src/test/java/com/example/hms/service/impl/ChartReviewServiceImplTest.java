@@ -260,27 +260,113 @@ class ChartReviewServiceImplTest {
             });
     }
 
+    /**
+     * QA D1380 (D1347 class), replacing {@code capsEachSectionToTheRequestedLimit}:
+     * a section is no longer READ capped at the limit (the database answered 7
+     * rows and the tab said 7); every row is read, counted in {@code totals},
+     * and the limit is the size of the page returned.
+     */
     @Test
-    void capsEachSectionToTheRequestedLimit() {
+    void pagesEachSectionAndCountsEveryRow() {
         LocalDateTime base = LocalDateTime.now().minusDays(1);
         java.util.List<Encounter> manyEnc = new java.util.ArrayList<>();
         for (int i = 0; i < 30; i++) {
             manyEnc.add(encounter(EncounterStatus.COMPLETED, base.minusHours(i)));
         }
-        // Simulate the DB returning the page-size we asked for (pageable filters in SQL).
-        when(encounterRepo.findVisitsByPatientIdAndHospitalIdIn(
-            any(UUID.class), any(), any(Pageable.class)))
-            .thenAnswer(inv -> {
-                Pageable p = inv.getArgument(2);
-                return new PageImpl<>(manyEnc.subList(0, Math.min(p.getPageSize(), manyEnc.size())));
-            });
+        org.mockito.ArgumentCaptor<Pageable> read = org.mockito.ArgumentCaptor.forClass(Pageable.class);
+        when(encounterRepo.findVisitsByPatientIdAndHospitalIdIn(any(UUID.class), any(), read.capture()))
+            .thenReturn(new PageImpl<>(manyEnc));
 
-        ChartReviewDTO dto = service.getChartReview(PATIENT_ID, HOSPITAL_ID, 7);
+        ChartReviewDTO first = service.getChartReview(PATIENT_ID, HOSPITAL_ID, 7);
 
-        assertThat(dto)
-            .returns(7, ChartReviewDTO::getLimit);
-        assertThat(dto.getEncounters()).hasSize(7);
-        assertThat(dto.getTimeline()).hasSize(7);
+        assertThat(read.getValue().isUnpaged()).as("the section is read whole, then cut").isTrue();
+        assertThat(first).returns(7, ChartReviewDTO::getLimit).returns(0, ChartReviewDTO::getPage);
+        assertThat(first.getEncounters()).hasSize(7);
+        assertThat(first.getTimeline()).hasSize(7);
+        assertThat(first.getTotals().getEncounters()).isEqualTo(30);
+        assertThat(first.getTotals().getTimeline()).isEqualTo(30);
+
+        // Every page of the one tab, read in turn, returns each visit exactly once.
+        java.util.List<UUID> seen = new java.util.ArrayList<>();
+        for (int page = 0; page < 5; page++) {
+            ChartReviewDTO dto = service.getChartReview(PATIENT_ID, HOSPITAL_ID, 7,
+                com.example.hms.service.ChartReviewService.ChartReviewSection.ENCOUNTERS, page);
+            assertThat(dto.getSection()).isEqualTo("ENCOUNTERS");
+            assertThat(dto.getTimeline()).as("only the tab asked for").isEmpty();
+            assertThat(dto.getTotals().getEncounters()).isEqualTo(30);
+            dto.getEncounters().forEach(e -> seen.add(e.getId()));
+        }
+        assertThat(seen).doesNotHaveDuplicates()
+            .containsExactlyInAnyOrderElementsOf(manyEnc.stream().map(Encounter::getId).toList());
+    }
+
+    @Test
+    void aTimelinePagePastTheFirstCarriesTheRowsItNames() {
+        // QA D1380 + D829: the timeline's encounter rows are labelled from their
+        // encounter entry, which a later timeline page may not have on the
+        // Encounters tab's current page.
+        LocalDateTime base = LocalDateTime.now().minusDays(1);
+        java.util.List<Encounter> manyEnc = new java.util.ArrayList<>();
+        for (int i = 0; i < 12; i++) {
+            manyEnc.add(encounter(EncounterStatus.COMPLETED, base.minusHours(i)));
+        }
+        when(encounterRepo.findVisitsByPatientIdAndHospitalIdIn(any(UUID.class), any(), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(manyEnc));
+
+        ChartReviewDTO second = service.getChartReview(PATIENT_ID, HOSPITAL_ID, 5,
+            com.example.hms.service.ChartReviewService.ChartReviewSection.TIMELINE, 1);
+
+        assertThat(second.getTimeline()).hasSize(5);
+        assertThat(second.getEncounters()).isEmpty();
+        assertThat(second.getTimelineRefs().getEncounters())
+            .extracting(ChartReviewDTO.EncounterEntryDTO::getId)
+            .containsExactlyElementsOf(second.getTimeline().stream().map(ChartReviewDTO.TimelineEventDTO::getId).toList());
+    }
+
+    @Test
+    void accountsOnlyTheForeignRowsOnThePageReturned() {
+        // QA D1380: every row is read to be counted, but only the rows a page
+        // SHOWS are surfaced; a foreign visit on page 2 is not accounted on page 1.
+        UUID otherHospitalId = UUID.randomUUID();
+        Hospital other = Hospital.builder().name("CHU Yalgado").build();
+        other.setId(otherHospitalId);
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(PATIENT_ID), eq(HOSPITAL_ID)))
+            .thenReturn(Set.of(HOSPITAL_ID, otherHospitalId));
+        LocalDateTime base = LocalDateTime.now().minusDays(1);
+        java.util.List<Encounter> visits = new java.util.ArrayList<>();
+        for (int i = 0; i < 6; i++) {
+            Encounter e = encounter(EncounterStatus.COMPLETED, base.minusHours(i));
+            e.setHospital(i < 5 ? hospital : other);
+            visits.add(e);
+        }
+        when(encounterRepo.findVisitsByPatientIdAndHospitalIdIn(any(UUID.class), any(), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(visits));
+
+        service.getChartReview(PATIENT_ID, HOSPITAL_ID, 5);
+        verify(reachRecorder, never()).recordReach(eq(PATIENT_ID), eq(HOSPITAL_ID), any(), isNull(),
+            eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
+
+        service.getChartReview(PATIENT_ID, HOSPITAL_ID, 5,
+            com.example.hms.service.ChartReviewService.ChartReviewSection.ENCOUNTERS, 1);
+        verify(reachRecorder).recordReach(eq(PATIENT_ID), eq(HOSPITAL_ID), any(), isNull(),
+            eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
+    }
+
+    @Test
+    void theCompleteReviewForThePrintedRecordIsNotCut() {
+        // QA D1380 sibling: the record PDF asked for 200 per section and was cut at 100.
+        LocalDateTime base = LocalDateTime.now().minusDays(1);
+        java.util.List<Encounter> manyEnc = new java.util.ArrayList<>();
+        for (int i = 0; i < 150; i++) {
+            manyEnc.add(encounter(EncounterStatus.COMPLETED, base.minusHours(i)));
+        }
+        when(encounterRepo.findVisitsByPatientIdAndHospitalIdIn(any(UUID.class), any(), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(manyEnc));
+
+        ChartReviewDTO complete = service.getCompleteChartReview(PATIENT_ID, HOSPITAL_ID);
+
+        assertThat(complete.getEncounters()).hasSize(150);
+        assertThat(complete.getTimeline()).hasSize(150);
     }
 
     @Test
@@ -562,8 +648,9 @@ class ChartReviewServiceImplTest {
     void globalViewReadsResultsThroughTheFlaggedQueryPagedAtTheDatabase() {
         // A verified super-admin in global view (PatientChartAccess refuses a
         // null scope to anyone else) reads every hospital's results through
-        // findAllPatientResults, one page at the database, newest first with
-        // id breaking ties. There is no patient-only finder to fall back to.
+        // findAllPatientResults, newest first with id breaking ties. There is
+        // no patient-only finder to fall back to. QA D1380: read whole (the
+        // tab counts them all), the page is cut afterwards.
         LabResult labResult = labResult(LocalDateTime.now().minusDays(1), AbnormalFlag.NORMAL, "Glucose", "2345-7");
         org.mockito.ArgumentCaptor<Pageable> page = org.mockito.ArgumentCaptor.forClass(Pageable.class);
         when(labResultRepo.findAllPatientResults(eq(PATIENT_ID), page.capture()))
@@ -572,7 +659,7 @@ class ChartReviewServiceImplTest {
         ChartReviewDTO dto = service.getChartReview(PATIENT_ID, null, 7);
 
         assertThat(dto.getResults()).hasSize(1);
-        assertThat(page.getValue().getPageSize()).isEqualTo(7);
+        assertThat(page.getValue().isUnpaged()).isTrue();
         assertThat(page.getValue().getSort()).containsExactly(
             org.springframework.data.domain.Sort.Order.desc("resultDate"),
             org.springframework.data.domain.Sort.Order.desc("id"));
@@ -782,7 +869,7 @@ class ChartReviewServiceImplTest {
         note.setDataAssessment("Douleur 3/10 après antalgique");
         note.setDocumentedAt(LocalDateTime.now().minusHours(1));
         note.setSignedAt(LocalDateTime.now().minusHours(1));
-        when(nursingNoteRepo.findTop50ByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(eq(PATIENT_ID), any()))
+        when(nursingNoteRepo.findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(eq(PATIENT_ID), any()))
             .thenReturn(List.of(note));
 
         ChartReviewDTO dto = service.getChartReview(PATIENT_ID, HOSPITAL_ID, null);
@@ -801,7 +888,7 @@ class ChartReviewServiceImplTest {
     @Test
     void d1076_theGlobalViewReadsNursingNotesPatientWide() {
         service.getChartReview(PATIENT_ID, null, null);
-        verify(nursingNoteRepo).findTop50ByPatient_IdOrderByCreatedAtDesc(PATIENT_ID);
+        verify(nursingNoteRepo).findByPatient_IdOrderByCreatedAtDesc(PATIENT_ID);
     }
 
     @Test

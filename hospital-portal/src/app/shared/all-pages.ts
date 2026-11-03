@@ -29,6 +29,8 @@ export interface PageSlice<T> {
   totalElements?: number | null;
   totalPages?: number | null;
   number?: number | null;
+  /** The page size the server answered with (it may lower the one asked for). */
+  size?: number | null;
   last?: boolean | null;
 }
 

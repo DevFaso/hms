@@ -32,6 +32,16 @@ public interface PatientVitalSignService {
     List<PatientVitalSignResponseDTO> getRecentVitalsForPatientPortal(UUID patientId, int limit);
 
     /**
+     * QA D1379: the patient's OWN vitals, newest first, one page of
+     * {@code size} records (at most {@link #PORTAL_PAGE_MAX}) with the total.
+     */
+    org.springframework.data.domain.Page<PatientVitalSignResponseDTO> getVitalsPageForPatientPortal(UUID patientId,
+                                                                                                   int page, int size);
+
+    /** QA D1379: the largest page {@link #getVitalsPageForPatientPortal} answers; a larger ask is lowered, and the total says so. */
+    int PORTAL_PAGE_MAX = 100;
+
+    /**
      * STAFF read, from {@code GET /patients/{patientId}/vitals}: the chart
      * gate, the caller's hospital only, and a {@code null} {@code hospitalId}
      * refused like {@link #getRecentVitals}.

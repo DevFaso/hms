@@ -39,7 +39,7 @@ import org.springframework.data.domain.Sort;
 import java.util.LinkedHashMap;
 import java.util.function.Function;
 import com.example.hms.enums.PatientDocumentType;
-import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import com.example.hms.utility.MessageUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -91,8 +91,6 @@ public class VisitTimelineRows {
     /** A microbiology culture writes no LabResult: its released report is its own row. */
     public static final String CATEGORY_MICRO_CULTURE = "MICRO_CULTURE";
     private static final String IMMUNIZATION_VOID = "ENTERED_IN_ERROR";
-    /** The most rows of one of these kinds the chronology reads at once. */
-    private static final int DOCUMENT_ROWS_MAX = 200;
 
     private static final String META_STATUS = "status";
     private static final String META_URGENCY = "urgency";
@@ -284,7 +282,8 @@ public class VisitTimelineRows {
     }
 
     private List<PatientTimelineEntryDTO> nursingNoteRows(Scope s) {
-        return nursingNoteRepository.findTop50ByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(s.patientId(),
+        // QA D1380: every nursing note of the acting hospital (was the 50 newest).
+        return nursingNoteRepository.findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(s.patientId(),
                 Set.of(s.acting())).stream()
             .map(note -> nursingNoteRow(note, s.acting()))
             .toList();
@@ -341,8 +340,13 @@ public class VisitTimelineRows {
             provenance(metadata, culture.getHospital(), acting));
     }
 
-    private static PageRequest newestFirst(String property) {
-        return PageRequest.of(0, DOCUMENT_ROWS_MAX, Sort.by(Sort.Direction.DESC, property));
+    /**
+     * QA D1380 (D1347 class): every row of the kind, newest first. The
+     * chronology read 200 at most and counted those, so a long stay lost its
+     * oldest treatment plans, certificates and referrals from the total.
+     */
+    private static Pageable newestFirst(String property) {
+        return Pageable.unpaged(Sort.by(Sort.Direction.DESC, property));
     }
 
     private PatientTimelineEntryDTO transfusionRow(TransfusionRequest request, UUID acting) {

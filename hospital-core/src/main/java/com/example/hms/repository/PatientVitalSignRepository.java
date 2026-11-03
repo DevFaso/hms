@@ -55,6 +55,14 @@ public interface PatientVitalSignRepository extends JpaRepository<PatientVitalSi
 
     List<PatientVitalSign> findByPatient_IdOrderByRecordedAtDesc(UUID patientId, Pageable pageable);
 
+    /**
+     * QA D1379 (D1347 class): the patient's whole vital-sign history, one page
+     * at a time WITH its total, so {@code /my-vitals} reaches every reading
+     * (the list read above answers only the newest {@code limit}).
+     */
+    org.springframework.data.domain.Page<PatientVitalSign> findPageByPatient_IdOrderByRecordedAtDesc(UUID patientId,
+                                                                                                    Pageable pageable);
+
     List<PatientVitalSign> findByPatient_IdAndHospital_IdOrderByRecordedAtDesc(UUID patientId, UUID hospitalId, Pageable pageable);
 
     /** E9 #60 — vitals across the readable hospitals ({@code RecordAccessPolicy.readableHospitalIds}). */
