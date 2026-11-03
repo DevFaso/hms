@@ -108,7 +108,9 @@ export class ControlledRegisterComponent implements OnInit {
     if (!this.selectedPharmacyId) return;
     // QA D1347: every inventory item (all pages), not the first 500.
     allRows((page, size) =>
-      this.svc.listInventoryByPharmacy(this.selectedPharmacyId, page, size).pipe(map((r) => r?.data)),
+      this.svc
+        .listInventoryByPharmacy(this.selectedPharmacyId, page, size)
+        .pipe(map((r) => r?.data)),
     ).subscribe({
       next: (items) => this.controlledItems.set(items.filter((item) => !!item.controlled)),
       error: () => this.controlledItems.set([]),

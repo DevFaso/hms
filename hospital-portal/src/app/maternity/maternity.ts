@@ -64,6 +64,7 @@ import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { focusWhenRendered } from '../shared/a11y/focus-when-rendered';
 import { refuseFields } from '../shared/forms/invalid-fields';
 import { DateTimePipe } from '../shared/pipes/date-time.pipe';
+import { missingRequiredMessage } from '../shared/required-fields';
 /** The history form's fields the server names under `fieldErrors`. */
 const HISTORY_LABELS: Record<string, string> = {
   recordedDate: 'MATERNITY.RECORDED',
@@ -677,12 +678,22 @@ export class MaternityComponent implements OnInit {
     if (!this.editingHistoryId() && this.historyHeldElsewhere()) return;
     const form = this.historyForm;
     if (!form.patientId || !form.recordedDate) {
-      const message = this.translate.instant('MATERNITY.HISTORY_REQUIRED_FIELDS');
+      // QA D1358: name the blank fields, not a fixed list.
+      const message =
+        missingRequiredMessage(this.translate, [
+          { labelKey: 'MATERNITY.PATIENT', value: form.patientId },
+          { labelKey: 'MATERNITY.RECORDED', value: form.recordedDate },
+        ]) ?? this.translate.instant('COMMON.SUBMIT_BLOCKED_REQUIRED');
       const blank = [
         form.patientId ? null : HISTORY_PATIENT_ID,
         form.recordedDate ? null : HISTORY_RECORDED_ID,
       ].filter((id): id is string => id !== null);
-      refuseFields(this.hostEl.nativeElement, blank, HISTORY_FIELD_IDS, message);
+      refuseFields(
+        this.hostEl.nativeElement,
+        blank,
+        HISTORY_FIELD_IDS,
+        this.translate.instant('COMMON.FIELD_REQUIRED'),
+      );
       this.toast.error(message);
       return;
     }
@@ -887,7 +898,13 @@ export class MaternityComponent implements OnInit {
     if (!this.hospitalId) return;
     const form = this.referralForm;
     if (!form.patientId || !form.referralReason.trim()) {
-      this.toast.error(this.translate.instant('MATERNITY.REFERRAL_REQUIRED_FIELDS'));
+      // QA D1358: name the blank fields, not a fixed list.
+      this.toast.error(
+        missingRequiredMessage(this.translate, [
+          { labelKey: 'MATERNITY.PATIENT', value: form.patientId },
+          { labelKey: 'MATERNITY.REFERRAL_REASON', value: form.referralReason.trim() },
+        ]) ?? this.translate.instant('COMMON.SUBMIT_BLOCKED_REQUIRED'),
+      );
       return;
     }
     // The backend rejects PRIORITY/URGENT referrals without at least one

@@ -59,7 +59,8 @@ function calleeBefore(text, offset) {
 
 const FIXED_SIZE_OBJECT = /(?<![-\w$])(size|limit)\s*:\s*(\d+)(?![\w.%])/g;
 const FIXED_SIZE_PARAM = /\.(?:set|append)\(\s*['"](size|limit)['"]\s*,\s*['"]?(\d+)['"]?\s*\)/g;
-const FIXED_SIZE_POSITIONAL = /\.((?:list|search|get|find)[\w$]*)\(([^()]*?,\s*)?0\s*,\s*(\d+)\s*[,)]/g;
+const FIXED_SIZE_POSITIONAL =
+  /\.((?:list|search|get|find)[\w$]*)\(([^()]*?,\s*)?0\s*,\s*(\d+)\s*[,)]/g;
 const PAGE_FLATTENED =
   /map\(\s*\(?\s*([\w$]+)\s*\)?\s*=>\s*\(?\s*\1\??\.(?:data\??\.|body\??\.)?content\s*\?\?\s*\[\]/g;
 const PAGE_CONTENT =

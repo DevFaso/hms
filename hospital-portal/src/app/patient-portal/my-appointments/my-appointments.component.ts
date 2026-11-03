@@ -29,6 +29,7 @@ import { currentLocale } from '../../shared/i18n/app-locale';
 import { PreCheckinFormComponent } from './pre-checkin-form/pre-checkin-form.component';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { ClockTimePipe } from '../../shared/pipes/clock-time.pipe';
+import { missingRequiredMessage } from '../../shared/required-fields';
 
 /** Sort key of a visit: its wire date and 24 h start time (QA D642). */
 function visitKey(a: PortalAppointment): string {
@@ -354,8 +355,12 @@ export class MyAppointmentsComponent implements OnInit {
         RESCHEDULE_FIELD_IDS,
         this.translate.instant('COMMON.FIELD_REQUIRED'),
       );
+      // QA D1358: name the blank fields, not a fixed list.
       this.rescheduleError.set(
-        this.translate.instant('PORTAL.APPOINTMENTS.RESCHEDULE.MISSING_FIELDS'),
+        missingRequiredMessage(this.translate, [
+          { labelKey: 'PORTAL.APPOINTMENTS.RESCHEDULE.NEW_DATE', value: this.rescheduleDate },
+          { labelKey: 'PORTAL.APPOINTMENTS.RESCHEDULE.NEW_START', value: this.rescheduleStartTime },
+        ]) ?? this.translate.instant('COMMON.SUBMIT_BLOCKED_REQUIRED'),
       );
       return;
     }

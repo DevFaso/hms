@@ -34,6 +34,7 @@ import { serverInstant } from '../shared/date-utils';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { DashPipe } from '../shared/pipes/dash.pipe';
 import { DateTimePipe } from '../shared/pipes/date-time.pipe';
+import { missingRequiredMessage } from '../shared/required-fields';
 /** QA D1051: a fill reference as stored: an optional lot (older rows: "lot X"), then the minute. */
 const RETURN_FILL_REF = /^(?:lot\s+)?(?:(\S+)\s+)?(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2})$/i;
 
@@ -218,7 +219,9 @@ export class StockAdjustmentComponent implements OnInit {
   private loadInventoryItems(): void {
     // QA D1347: every inventory item of the pharmacy (all pages), not the first 200.
     allRows((page, size) =>
-      this.svc.listInventoryByPharmacy(this.selectedPharmacyId, page, size).pipe(map((r) => r?.data)),
+      this.svc
+        .listInventoryByPharmacy(this.selectedPharmacyId, page, size)
+        .pipe(map((r) => r?.data)),
     ).subscribe({
       next: (items) => {
         this.inventoryItems.set(items);
@@ -445,8 +448,13 @@ export class StockAdjustmentComponent implements OnInit {
       'txItem',
     ]);
     if (blank.length > 0) {
-      const message = this.translate.instant('PHARMACY.TX_REQUIRED_FIELDS');
-      refuseFields(root, blank, TX_FIELD_IDS, message);
+      // QA D1358: name the blank fields, not a fixed list.
+      const message =
+        missingRequiredMessage(this.translate, [
+          { labelKey: 'PHARMACY.TRANSACTION_TYPE', value: this.txType() },
+          { labelKey: 'PHARMACY.INVENTORY_ITEM', value: this.form.inventoryItemId },
+        ]) ?? this.translate.instant('COMMON.SUBMIT_BLOCKED_REQUIRED');
+      refuseFields(root, blank, TX_FIELD_IDS, this.translate.instant('COMMON.FIELD_REQUIRED'));
       this.toast.error(message);
       return;
     }

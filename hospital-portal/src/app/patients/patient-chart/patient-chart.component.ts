@@ -874,16 +874,16 @@ export class PatientChartComponent implements OnInit, OnChanges {
     this.updatesLoading.set(true);
     // QA D1347: every version (all pages), not the 20 newest.
     this.allChartUpdates(this.hospitalId() || undefined).subscribe({
-        next: (result) => {
-          this.updates.set(result?.items ?? []);
-          this.updatesWithheld.set(result?.withheld ?? false);
-          this.updatesLoading.set(false);
-        },
-        error: () => {
-          this.toast.error(this.translate.instant('CHART.UPDATES_LOAD_ERROR'));
-          this.updatesLoading.set(false);
-        },
-      });
+      next: (result) => {
+        this.updates.set(result?.items ?? []);
+        this.updatesWithheld.set(result?.withheld ?? false);
+        this.updatesLoading.set(false);
+      },
+      error: () => {
+        this.toast.error(this.translate.instant('CHART.UPDATES_LOAD_ERROR'));
+        this.updatesLoading.set(false);
+      },
+    });
   }
 
   /** Every chart update (all pages), withheld when any page says so (QA D1347). */

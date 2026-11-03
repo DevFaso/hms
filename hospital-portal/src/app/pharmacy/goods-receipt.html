@@ -82,6 +82,7 @@
             <label for="grQty">{{ 'PHARMACY.QUANTITY_RECEIVED' | translate }} *</label>
             <input
               id="grQty"
+              data-server-field="initialQuantity remainingQuantity"
               type="number"
               [(ngModel)]="form.initialQuantity"
               name="initialQuantity"
@@ -95,7 +96,13 @@
           <div class="form-row">
             <div class="field">
               <label for="grWitness">{{ 'PHARMACY.WITNESS' | translate }} *</label>
-              <select id="grWitness" [(ngModel)]="form.witnessedBy" name="grWitness" required>
+              <select
+                id="grWitness"
+                data-server-field="witnessedBy"
+                [(ngModel)]="form.witnessedBy"
+                name="grWitness"
+                required
+              >
                 <option [ngValue]="undefined">
                   {{ 'PHARMACY.SELECT_WITNESS_OPTION' | translate }}
                 </option>

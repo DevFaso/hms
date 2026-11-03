@@ -1597,7 +1597,11 @@ export class PatientPortalService {
                 throw new Error('empty disclosure accounting response');
               }
               if (page === 0) first = d;
-              return { content: d.entries ?? [], totalPages: d.totalPages ?? 1, number: d.page ?? page };
+              return {
+                content: d.entries ?? [],
+                totalPages: d.totalPages ?? 1,
+                number: d.page ?? page,
+              };
             }),
           );
       return allRows(fetchPage).pipe(

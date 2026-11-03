@@ -8,6 +8,11 @@ import {
   AdvanceDirectiveService,
 } from '../../services/advance-directive.service';
 import { ToastService } from '../../core/toast.service';
+import {
+  expectEmptySubmitRefusal,
+  expectFieldsMarked,
+  fieldErrorsResponse,
+} from '../../testing/form-refusal-behaviour';
 
 /**
  * Advance-directives tab (P2 #13) — the first write surface for a table that
@@ -189,6 +194,45 @@ describe('AdvanceDirectivesTabComponent', () => {
     component.submit();
     expect(toast.error).toHaveBeenCalledWith('COMMON.MISSING_REQUIRED_FIELDS');
     expect(directiveService.create).not.toHaveBeenCalled();
+  });
+
+  it('round-29 behaviour: the empty save marks every blank required field and sends nothing', () => {
+    setup([]);
+    component.openCreate();
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    document.body.appendChild(host);
+    expectEmptySubmitRefusal(fixture, {
+      button: '[data-testid="directive-save"]',
+      sent: directiveService.create,
+    });
+    host.remove();
+  });
+
+  it('QA D1355: every field the server names under fieldErrors is marked with its reason', () => {
+    setup([]);
+    component.openCreate();
+    fixture.detectChanges();
+    directiveService.create.and.returnValue(
+      throwError(() =>
+        fieldErrorsResponse({
+          physicianName: 'Le médecin est obligatoire.',
+          effectiveDate: "La date d'effet est obligatoire.",
+        }),
+      ),
+    );
+    component.form = {
+      directiveType: 'DO_NOT_RESUSCITATE',
+      status: 'ACTIVE',
+      effectiveDate: '2026-11-02',
+      physicianName: 'Dr K',
+    };
+    component.submit();
+    fixture.detectChanges();
+    expectFieldsMarked(fixture, {
+      'directive-physician': 'Le médecin est obligatoire.',
+      'directive-effective': "La date d'effet est obligatoire.",
+    });
   });
 
   it('revokes through the revoke endpoint after confirmation, then reloads', () => {

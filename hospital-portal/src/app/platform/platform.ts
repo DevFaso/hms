@@ -39,6 +39,7 @@ import { blankFields, refuseFields } from '../shared/forms/invalid-fields';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { refusalReason } from '../shared/refusal-reason';
 import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
+import { missingRequiredMessage } from '../shared/required-fields';
 
 /* ── View state types ── */
 
@@ -131,7 +132,6 @@ const STATUS_OPTIONS: PlatformServiceStatus[] = [
   'PENDING',
   'DECOMMISSIONED',
 ];
-
 
 /**
  * Hosts that only ever appear in seeded or example data. A catalog entry
@@ -913,8 +913,15 @@ export class PlatformComponent implements OnInit {
     );
     if (blank.length > 0) {
       // QA D1306 (round 28): every blank field is marked, not only a toast.
-      const message = this.translate.instant('PLATFORM.TOAST.RELEASE_REQUIRED_FIELDS');
-      refuseFields(root, blank, RELEASE_FIELD_IDS, message);
+      // QA D1358: name the blank fields, not a fixed list.
+      const message =
+        missingRequiredMessage(this.translate, [
+          { labelKey: 'COMMON.NAME', value: f.name },
+          { labelKey: 'PLATFORM.ENVIRONMENT', value: f.environment },
+          { labelKey: 'PLATFORM.STARTS_AT', value: f.startsAt },
+          { labelKey: 'PLATFORM.ENDS_AT', value: f.endsAt },
+        ]) ?? this.translate.instant('COMMON.SUBMIT_BLOCKED_REQUIRED');
+      refuseFields(root, blank, RELEASE_FIELD_IDS, this.translate.instant('COMMON.FIELD_REQUIRED'));
       this.toast.error(message);
       return;
     }

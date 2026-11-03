@@ -670,10 +670,6 @@
       "count": 1,
       "why": "D1341 class (round 29): front-office form, mapped by the fix/r29-portal-front-office shared fieldErrors mapper"
     },
-    "src/app/patients/advance-directives/advance-directives-tab.component.html::empty-submit-untested::data-testid=directive-save": {
-      "count": 1,
-      "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
-    },
     "src/app/patients/break-glass-banner/break-glass-banner.component.html::empty-submit-untested::(click)=openModal": {
       "count": 1,
       "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"

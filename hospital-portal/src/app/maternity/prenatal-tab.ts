@@ -31,6 +31,7 @@ import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { ClockTimePipe } from '../shared/pipes/clock-time.pipe';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { missingRequiredMessage } from '../shared/required-fields';
 /**
  * QA D1273 (round 26): the statuses a prenatal visit can be moved from — the
  * ones the server's state machine lets a reschedule leave
@@ -130,7 +131,14 @@ export class PrenatalTabComponent implements OnInit {
   generate(): void {
     const patient = this.patient();
     if (!patient || !this.lmpDate || !this.hospitalId) {
-      this.toast.error(this.translate.instant('PRENATAL.REQUIRED_FIELDS'));
+      // QA D1358: name the blank fields, not a fixed list. With both filled,
+      // the refusal can only be the missing hospital context.
+      this.toast.error(
+        missingRequiredMessage(this.translate, [
+          { labelKey: 'MATERNITY.PATIENT', value: patient },
+          { labelKey: 'MATERNITY.LMP', value: this.lmpDate },
+        ]) ?? this.translate.instant('COMMON.NO_HOSPITAL_ASSIGNED'),
+      );
       return;
     }
     const weeks = this.supplementalWeeks

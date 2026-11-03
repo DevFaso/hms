@@ -116,16 +116,16 @@ export class RegistrationsComponent implements OnInit {
         size,
       }),
     ).subscribe({
-        next: (registrations) => {
-          this.registrations.set(registrations ?? []);
-          this.loading.set(false);
-        },
-        error: () => {
-          this.loadError.set(true);
-          this.loading.set(false);
-          this.toast.error(this.translate.instant('REGISTRATIONS.LOAD_ERROR'));
-        },
-      });
+      next: (registrations) => {
+        this.registrations.set(registrations ?? []);
+        this.loading.set(false);
+      },
+      error: () => {
+        this.loadError.set(true);
+        this.loading.set(false);
+        this.toast.error(this.translate.instant('REGISTRATIONS.LOAD_ERROR'));
+      },
+    });
   }
 
   toggleMultiHospital(): void {

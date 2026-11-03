@@ -97,9 +97,9 @@
       "count": 1,
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
     },
-    "src/app/departments/department-list.ts::unmarked-refusal::submitForm::DEPARTMENTS.TOAST.REQUIRED_FIELDS": {
+    "src/app/departments/department-list.ts::unmarked-refusal::submitForm::COMMON.SUBMIT_BLOCKED_REQUIRED": {
       "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only (key re-pinned by D1358: the toast now names the blank fields; the fallback key is what the scan reads)"
     },
     "src/app/digital-signatures/digital-signatures.ts::unmarked-refusal::doRevoke::SIGNATURES.REVOKE_REASON_REQUIRED": {
       "count": 1,
@@ -129,9 +129,9 @@
       "count": 1,
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
     },
-    "src/app/discharge/discharge.ts::unmarked-refusal::submitSummary::DISCHARGE.SUMMARY_REQUIRED_FIELDS": {
+    "src/app/discharge/discharge.ts::unmarked-refusal::submitSummary::COMMON.SUBMIT_BLOCKED_REQUIRED": {
       "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only (key re-pinned by D1358: the toast now names the blank fields; the fallback key is what the scan reads)"
     },
     "src/app/encounters/eligibility-check-dialog/eligibility-check-dialog.component.ts::unmarked-refusal::run::ENCOUNTERS.ELIGIBILITY.MISSING_CONTEXT": {
       "count": 1,
@@ -141,9 +141,9 @@
       "count": 1,
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
     },
-    "src/app/hospitals/hospital-list.ts::unmarked-refusal::submitForm::HOSPITALS.REQUIRED_FIELDS": {
+    "src/app/hospitals/hospital-list.ts::unmarked-refusal::submitForm::COMMON.SUBMIT_BLOCKED_REQUIRED": {
       "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only (key re-pinned by D1358: the toast now names the blank fields; the fallback key is what the scan reads)"
     },
     "src/app/imaging/imaging.ts::unmarked-refusal::submitStatusUpdate::IMAGING.VOID_REASON_REQUIRED": {
       "count": 1,
@@ -165,23 +165,19 @@
       "count": 1,
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
     },
-    "src/app/maternity/birth-plan-tab.ts::unmarked-refusal::submitPlan::BIRTH_PLAN.REQUIRED_FIELDS": {
+    "src/app/maternity/birth-plan-tab.ts::unmarked-refusal::submitPlan::COMMON.SUBMIT_BLOCKED_REQUIRED": {
       "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only (key re-pinned by D1358: the toast now names the blank fields; the fallback key is what the scan reads)"
     },
     "src/app/maternity/birth-plan-tab.ts::unmarked-refusal::submitReview::BIRTH_PLAN.SIGNATURE_REQUIRED": {
       "count": 1,
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
     },
-    "src/app/maternity/maternity.ts::unmarked-refusal::submitReferral::MATERNITY.REFERRAL_REQUIRED_FIELDS": {
+    "src/app/maternity/maternity.ts::unmarked-refusal::submitReferral::COMMON.SUBMIT_BLOCKED_REQUIRED": {
       "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only (key re-pinned by D1358: the toast now names the blank fields; the fallback key is what the scan reads)"
     },
     "src/app/maternity/maternity.ts::unmarked-refusal::submitReferral::MATERNITY.URGENCY_ATTACHMENT_REQUIRED": {
-      "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
-    },
-    "src/app/maternity/prenatal-tab.ts::unmarked-refusal::generate::PRENATAL.REQUIRED_FIELDS": {
       "count": 1,
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
     },
@@ -189,9 +185,9 @@
       "count": 1,
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
     },
-    "src/app/medication-history/medication-history.ts::unmarked-refusal::submitFill::MED_TIMELINE.FILL_REQUIRED_FIELDS": {
+    "src/app/medication-history/medication-history.ts::unmarked-refusal::submitFill::COMMON.SUBMIT_BLOCKED_REQUIRED": {
       "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only (key re-pinned by D1358: the toast now names the blank fields; the fallback key is what the scan reads)"
     },
     "src/app/mfa/mfa-enroll.ts::toast-only-refusal::showError::if(typeof code === 'string' && code.startsWith('mfa.stepup.'))": {
       "count": 1,
@@ -225,9 +221,9 @@
       "count": 1,
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
     },
-    "src/app/organizations/organization-list.ts::unmarked-refusal::submitCreate::ORGANIZATIONS.REQUIRED_FIELDS": {
+    "src/app/organizations/organization-list.ts::unmarked-refusal::submitCreate::COMMON.SUBMIT_BLOCKED_REQUIRED": {
       "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only (key re-pinned by D1358: the toast now names the blank fields; the fallback key is what the scan reads)"
     },
     "src/app/patient-education/patient-education.ts::unmarked-refusal::submitResource::EDUCATION.TITLE_REQUIRED": {
       "count": 1,
@@ -237,29 +233,29 @@
       "count": 1,
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
     },
-    "src/app/patients/coverage-tab/coverage-tab.component.ts::unmarked-refusal::submitEdit::COVERAGE.EDIT_REQUIRED_FIELDS": {
+    "src/app/patients/coverage-tab/coverage-tab.component.ts::unmarked-refusal::submitEdit::COMMON.SUBMIT_BLOCKED_REQUIRED": {
       "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only (key re-pinned by D1358: the toast now names the blank fields; the fallback key is what the scan reads)"
     },
     "src/app/patients/coverage-tab/coverage-tab.component.ts::unmarked-refusal::submitGuarantor::COVERAGE.GUARANTOR_NAME_REQUIRED": {
       "count": 1,
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
     },
-    "src/app/patients/coverage-tab/coverage-tab.component.ts::unmarked-refusal::submitLink::COVERAGE.LINK_REQUIRED_FIELDS": {
+    "src/app/patients/coverage-tab/coverage-tab.component.ts::unmarked-refusal::submitLink::COMMON.SUBMIT_BLOCKED_REQUIRED": {
       "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only (key re-pinned by D1358: the toast now names the blank fields; the fallback key is what the scan reads)"
     },
     "src/app/patients/coverage-tab/coverage-tab.component.ts::unmarked-refusal::submitRevoke::COVERAGE.CONSENT_REVOKE_REASON_REQUIRED": {
       "count": 1,
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
     },
-    "src/app/patients/medical-history-tab/medical-history-tab.component.ts::unmarked-refusal::submitFamily::MED_HISTORY.FAMILY_REQUIRED_FIELDS": {
+    "src/app/patients/medical-history-tab/medical-history-tab.component.ts::unmarked-refusal::submitFamily::COMMON.SUBMIT_BLOCKED_REQUIRED": {
       "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only (key re-pinned by D1358: the toast now names the blank fields; the fallback key is what the scan reads)"
     },
-    "src/app/patients/medical-history-tab/medical-history-tab.component.ts::unmarked-refusal::submitImmunization::MED_HISTORY.IMMUNIZATION_REQUIRED_FIELDS": {
+    "src/app/patients/medical-history-tab/medical-history-tab.component.ts::unmarked-refusal::submitImmunization::COMMON.SUBMIT_BLOCKED_REQUIRED": {
       "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only (key re-pinned by D1358: the toast now names the blank fields; the fallback key is what the scan reads)"
     },
     "src/app/patients/patient-chart/patient-chart.component.ts::unmarked-refusal::submitAllergy::CHART.ALLERGEN_REQUIRED": {
       "count": 1,

@@ -19,6 +19,7 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { blankFields, refuseFields } from '../shared/forms/invalid-fields';
 import { PhoneFieldDirective } from '../shared/forms/phone-field.directive';
+import { missingRequiredMessage } from '../shared/required-fields';
 
 /** The required fields of the pharmacy form (QA D1306). */
 const REG_IDS = ['pHospital', 'pName'];
@@ -177,8 +178,13 @@ export class PharmacyRegistryComponent implements OnInit {
     const blank = blankFields({ pHospital: this.form.hospitalId, pName: this.form.name }, REG_IDS);
     if (blank.length > 0) {
       // QA D1306 (round 28): every blank field is marked, not only a toast.
-      const message = this.translate.instant('PHARMACY.TOAST.REQUIRED_FIELDS');
-      refuseFields(root, blank, REG_IDS, message);
+      // QA D1358: name the blank fields, not a fixed list.
+      const message =
+        missingRequiredMessage(this.translate, [
+          { labelKey: 'ENCOUNTERS.HOSPITAL', value: this.form.hospitalId },
+          { labelKey: 'PHARMACY.PHARMACY_NAME', value: this.form.name },
+        ]) ?? this.translate.instant('COMMON.SUBMIT_BLOCKED_REQUIRED');
+      refuseFields(root, blank, REG_IDS, this.translate.instant('COMMON.FIELD_REQUIRED'));
       this.toast.error(message);
       return;
     }

@@ -138,23 +138,23 @@ export class PaymentPendingPanelComponent {
           .append('sort', 'id,desc'),
       }),
     ).subscribe({
-        next: (invoices) => {
-          const open = invoices.filter(
-            (inv) =>
-              inv.status !== 'PAID' &&
-              inv.status !== 'CANCELLED' &&
-              inv.status !== 'DRAFT' &&
-              (inv.balanceDue ?? inv.totalAmount - (inv.amountPaid ?? 0)) > 0,
-          );
-          this.openInvoices.set(open);
-          if (open.length === 1) this.selectInvoice(open[0].id);
-          this.loadingInvoices.set(false);
-        },
-        error: () => {
-          this.toast.error(this.translate.instant('RECEPTION.LOAD_INVOICES_FAILED'));
-          this.loadingInvoices.set(false);
-        },
-      });
+      next: (invoices) => {
+        const open = invoices.filter(
+          (inv) =>
+            inv.status !== 'PAID' &&
+            inv.status !== 'CANCELLED' &&
+            inv.status !== 'DRAFT' &&
+            (inv.balanceDue ?? inv.totalAmount - (inv.amountPaid ?? 0)) > 0,
+        );
+        this.openInvoices.set(open);
+        if (open.length === 1) this.selectInvoice(open[0].id);
+        this.loadingInvoices.set(false);
+      },
+      error: () => {
+        this.toast.error(this.translate.instant('RECEPTION.LOAD_INVOICES_FAILED'));
+        this.loadingInvoices.set(false);
+      },
+    });
   }
 
   /** The amount still due on an invoice. */

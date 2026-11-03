@@ -709,7 +709,6 @@ export class LabService {
     );
   }
 
-
   getQcSummary(): Observable<LabQcSummary[]> {
     return this.http
       .get<ApiWrapper<LabQcSummary[]>>('/lab-qc-events/summary')

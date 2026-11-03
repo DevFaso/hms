@@ -338,14 +338,17 @@ export class UltrasoundTabComponent implements OnInit {
   submitOrder(): void {
     if (!this.hospitalId || !this.orderForm.patientId) {
       // QA D1156 class: the missing patient is marked where it is asked for.
+      // QA D1358: name the blank fields, not a fixed list — the field itself says
+      // it is required, and with the patient chosen the refusal can only be the
+      // missing hospital context.
       refuseFields(
         this.host.nativeElement,
         this.orderForm.patientId ? [] : ['us-patient'],
         ['us-patient'],
-        this.translate.instant('ULTRASOUND.ORDER_REQUIRED_FIELDS'),
+        this.translate.instant('COMMON.FIELD_REQUIRED'),
       );
       if (this.orderForm.patientId) {
-        this.toast.error(this.translate.instant('ULTRASOUND.ORDER_REQUIRED_FIELDS'));
+        this.toast.error(this.translate.instant('COMMON.NO_HOSPITAL_ASSIGNED'));
       }
       return;
     }
@@ -544,11 +547,13 @@ export class UltrasoundTabComponent implements OnInit {
       ['rep-date', 'rep-category'],
     );
     if (missing.length > 0) {
+      // QA D1358: name the blank fields, not a fixed list — each blank field
+      // says it is required, not the sentence about both.
       refuseFields(
         this.host.nativeElement,
         missing,
         REPORT_FIELD_IDS,
-        this.translate.instant('ULTRASOUND.REPORT_REQUIRED_FIELDS'),
+        this.translate.instant('COMMON.FIELD_REQUIRED'),
       );
       return;
     }

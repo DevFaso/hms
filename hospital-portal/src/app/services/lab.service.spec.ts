@@ -257,16 +257,27 @@ describe('LabService', () => {
     const order = (i: number) => ({ id: `o${i}`, labOrderCode: `LAB-${i}` });
     const flushPage = (page: number, content: unknown[], total: number, totalPages: number) =>
       httpMock
-        .expectOne(
-          (r) => r.url === '/lab-orders' && r.params.get('page') === String(page),
-        )
-        .flush({ data: { content, totalElements: total, totalPages, number: page }, success: true });
+        .expectOne((r) => r.url === '/lab-orders' && r.params.get('page') === String(page))
+        .flush({
+          data: { content, totalElements: total, totalPages, number: page },
+          success: true,
+        });
 
     it('reads page after page until the last: 216 orders, not the 200 newest', () => {
       let got: { id: string }[] = [];
       service.listOrders().subscribe((list) => (got = list as { id: string }[]));
-      flushPage(0, Array.from({ length: 200 }, (_, i) => order(i)), 216, 2);
-      flushPage(1, Array.from({ length: 16 }, (_, i) => order(200 + i)), 216, 2);
+      flushPage(
+        0,
+        Array.from({ length: 200 }, (_, i) => order(i)),
+        216,
+        2,
+      );
+      flushPage(
+        1,
+        Array.from({ length: 16 }, (_, i) => order(200 + i)),
+        216,
+        2,
+      );
       expect(got.length).toBe(216);
       expect(got[215].id).toBe('o215');
     });

@@ -25,6 +25,7 @@ import {
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { blankFields, focusFirstInvalid, refuseFields } from '../shared/forms/invalid-fields';
 import { DashPipe } from '../shared/pipes/dash.pipe';
+import { missingRequiredMessage } from '../shared/required-fields';
 
 /** The required fields of the medication form (QA D1306). */
 const MED_REQUIRED_IDS = ['nameFr', 'genericName'];
@@ -230,8 +231,13 @@ export class MedicationCatalogComponent implements OnInit {
       MED_REQUIRED_IDS,
     );
     if (blank.length > 0) {
-      const message = this.translate.instant('PHARMACY.MED_REQUIRED_FIELDS');
-      refuseFields(root, blank, MED_REQUIRED_IDS, message);
+      // QA D1358: name the blank fields, not a fixed list.
+      const message =
+        missingRequiredMessage(this.translate, [
+          { labelKey: 'PHARMACY.NAME_FR', value: this.form.nameFr },
+          { labelKey: 'PHARMACY.GENERIC_NAME', value: this.form.genericName },
+        ]) ?? this.translate.instant('COMMON.SUBMIT_BLOCKED_REQUIRED');
+      refuseFields(root, blank, MED_REQUIRED_IDS, this.translate.instant('COMMON.FIELD_REQUIRED'));
       this.toast.error(message);
       return;
     }

@@ -223,8 +223,20 @@ describe('HospitalListComponent (QA D36)', () => {
 
       expect(hospitalService.create).not.toHaveBeenCalled();
       const message = toastError.calls.mostRecent().args[0] as string;
-      expect(message).toBe(fr.HOSPITALS.REQUIRED_FIELDS);
-      expect(message).toContain('adresse');
+      // QA D1358: the toast names the blank fields themselves, in form order.
+      expect(message).toBe(
+        fr.COMMON.MISSING_REQUIRED_FIELDS.replace(
+          '{{fields}}',
+          [
+            fr.DEPARTMENTS.NAME,
+            fr.PATIENTS.PHONE,
+            fr.HOSPITALS.COUNTRY,
+            fr.HOSPITALS.CITY,
+            fr.HOSPITALS.ADDRESS,
+          ].join(', '),
+        ),
+      );
+      expect(message).toContain(fr.HOSPITALS.ADDRESS);
       expect(message).not.toContain('boîte postale');
       for (const id of REQUIRED) {
         expect(input(el, id).classList).withContext(id).toContain('invalid');
@@ -260,12 +272,16 @@ describe('HospitalListComponent (QA D36)', () => {
     });
 
     it('edit: a legacy hospital with no street is marked on save, and saves once it has one', () => {
-      const { fixture, cmp, hospitalService } = setup();
+      const { fixture, cmp, hospitalService, toastError } = setup();
       cmp.openEdit({ ...hospital, phoneNumber: '+22625441122', address: '' });
       cmp.submitForm();
       fixture.detectChanges();
       expect(hospitalService.update).not.toHaveBeenCalled();
       expect(cmp.missingFields()).toEqual(['address']);
+      // QA D1358: only the street is named, not the whole required list.
+      expect(toastError.calls.mostRecent().args[0]).toBe(
+        fr.COMMON.MISSING_REQUIRED_FIELDS.replace('{{fields}}', fr.HOSPITALS.ADDRESS),
+      );
       cmp.form.address = 'Avenue Yalgado';
       cmp.submitForm();
       expect(hospitalService.update).toHaveBeenCalled();

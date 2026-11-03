@@ -601,7 +601,9 @@ export class DispensingComponent implements OnInit, OnDestroy {
     if (!this.selectedPharmacyId) return;
     // QA D1347: every inventory item of the pharmacy (all pages), not the first 200.
     allRows((page, size) =>
-      this.svc.listInventoryByPharmacy(this.selectedPharmacyId, page, size).pipe(map((r) => r?.data)),
+      this.svc
+        .listInventoryByPharmacy(this.selectedPharmacyId, page, size)
+        .pipe(map((r) => r?.data)),
     ).subscribe({
       next: (items) => {
         this.inventoryItems.set(items);

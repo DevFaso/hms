@@ -66,7 +66,8 @@ describe('SubscriptionsComponent', () => {
     cmp.startCreate();
     cmp.submit();
 
-    expect(cmp.formError()).toBe('SUBSCRIPTIONS.ERROR.REQUIRED_FIELDS');
+    // QA D1358: the refusal names the blank fields (it was a fixed sentence).
+    expect(cmp.formError()).toBe('COMMON.MISSING_REQUIRED_FIELDS');
   });
 
   it('submit error path stores a translation key, not a raw English string', () => {

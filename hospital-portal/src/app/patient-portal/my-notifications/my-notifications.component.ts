@@ -72,7 +72,9 @@ export class MyNotificationsComponent implements OnInit {
     this.loading.set(true);
     const readFilter = this.activeTab() === 'unread' ? false : undefined;
     // QA D1347: every notification (all pages), not the 50 newest.
-    allPages((page, size) => this.portalService.getMyNotifications(readFilter, page, size)).subscribe({
+    allPages((page, size) =>
+      this.portalService.getMyNotifications(readFilter, page, size),
+    ).subscribe({
       next: (result) => {
         this.notifications.set(result.rows);
         this.totalElements.set(result.total);

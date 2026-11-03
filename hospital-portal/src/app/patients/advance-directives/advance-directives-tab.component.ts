@@ -21,7 +21,7 @@ import {
 } from '../../services/advance-directive.service';
 import { ToastService } from '../../core/toast.service';
 import { blankFields, refuseFields } from '../../shared/forms/invalid-fields';
-import { refusalReason } from '../../shared/refusal-reason';
+import { refusalReason, refusedFieldReasons } from '../../shared/refusal-reason';
 import { missingRequiredMessage } from '../../shared/required-fields';
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 import { PatientChartChanges } from '../../interceptors/patient-chart-change.interceptor';
@@ -61,6 +61,15 @@ const DIRECTIVE_FIELD_IDS = [
   'directive-physician',
   'directive-expiration',
 ];
+
+/** The form control of each field the server may name under fieldErrors. */
+const DIRECTIVE_ID_BY_FIELD: Readonly<Record<string, string>> = {
+  directiveType: 'directive-type',
+  status: 'directive-status',
+  effectiveDate: 'directive-effective',
+  expirationDate: 'directive-expiration',
+  physicianName: 'directive-physician',
+};
 
 /** The label each required field is shown under, to name it when it is blank (QA D1357). */
 const DIRECTIVE_LABEL_KEYS: Readonly<Record<string, string>> = {
@@ -253,6 +262,15 @@ export class AdvanceDirectivesTabComponent implements OnInit {
         // The backend refusals are actionable ("cannot expire before it takes
         // effect", foreign patient reads as not-found) — surface them verbatim.
         this.toast.error(refusalReason(err) ?? this.translate.instant('DIRECTIVES.SAVE_ERROR'));
+        // QA D1355 / D1357: every field the server names is marked with its reason.
+        const refused = refusedFieldReasons(err, DIRECTIVE_ID_BY_FIELD);
+        if (refused.length > 0) {
+          refuseFields(
+            this.host.nativeElement,
+            refused.map(([id, message]) => ({ id, message })),
+            DIRECTIVE_FIELD_IDS,
+          );
+        }
         this.saving.set(false);
       },
     });

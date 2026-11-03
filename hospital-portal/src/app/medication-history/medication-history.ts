@@ -32,6 +32,7 @@ import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { refusalReason } from '../shared/refusal-reason';
 import { PhoneFieldDirective } from '../shared/forms/phone-field.directive';
+import { missingRequiredMessage } from '../shared/required-fields';
 /**
  * Medication-history workspace (Phase 3 task 15): the /medication-history
  * timeline (prescriptions + external pharmacy fills with overlap/interaction
@@ -236,7 +237,13 @@ export class MedicationHistoryComponent implements OnInit {
   submitFill(): void {
     const form = this.fillForm;
     if (!form.medicationName.trim() || !form.fillDate) {
-      this.toast.error(this.translate.instant('MED_TIMELINE.FILL_REQUIRED_FIELDS'));
+      // QA D1358: name the blank fields, not a fixed list.
+      this.toast.error(
+        missingRequiredMessage(this.translate, [
+          { labelKey: 'MED_TIMELINE.MEDICATION', value: form.medicationName.trim() },
+          { labelKey: 'MED_TIMELINE.FILL_DATE', value: form.fillDate },
+        ]) ?? this.translate.instant('COMMON.SUBMIT_BLOCKED_REQUIRED'),
+      );
       return;
     }
     this.fillSaving.set(true);

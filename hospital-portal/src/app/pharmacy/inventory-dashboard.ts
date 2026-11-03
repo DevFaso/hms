@@ -32,6 +32,7 @@ import { serverDateOrInstant } from '../shared/date-utils';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { refuseFields } from '../shared/forms/invalid-fields';
 import { DashPipe } from '../shared/pipes/dash.pipe';
+import { missingRequiredMessage } from '../shared/required-fields';
 
 /** The add-item field the form may refuse (QA D1306). */
 const CI_FIELD_IDS = ['ciMed'];
@@ -233,9 +234,14 @@ export class InventoryDashboardComponent implements OnInit {
     const root = this.host.nativeElement;
     if (!this.createForm.pharmacyId || !this.createForm.medicationCatalogItemId) {
       // QA D1306 (round 28): the blank medication is marked, not only a toast.
-      const message = this.translate.instant('PHARMACY.ITEM_REQUIRED_FIELDS');
+      // QA D1358: name the blank fields, not a fixed list.
+      const message =
+        missingRequiredMessage(this.translate, [
+          { labelKey: 'PHARMACY.SELECT_PHARMACY', value: this.createForm.pharmacyId },
+          { labelKey: 'PHARMACY.MEDICATION', value: this.createForm.medicationCatalogItemId },
+        ]) ?? this.translate.instant('COMMON.SUBMIT_BLOCKED_REQUIRED');
       const blank = this.createForm.medicationCatalogItemId ? [] : CI_FIELD_IDS;
-      refuseFields(root, blank, CI_FIELD_IDS, message);
+      refuseFields(root, blank, CI_FIELD_IDS, this.translate.instant('COMMON.FIELD_REQUIRED'));
       this.toast.error(message);
       return;
     }

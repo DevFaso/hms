@@ -103,12 +103,13 @@ describe('PrenatalTabComponent', () => {
         SCHEDULED: 'Planifiée',
         UNSCHEDULED: 'Non planifiée',
         EXISTING: 'Rendez-vous existants',
-        REQUIRED_FIELDS: 'La patiente et la date des dernières règles sont requises',
         GENERATE_ERROR: 'Échec de la génération du calendrier',
         RESCHEDULED: 'Rendez-vous reprogrammé',
         BOOK: 'Planifier',
         BOOK_REASON: 'Consultation prénatale (CPN) — {{week}} SA',
       },
+      MATERNITY: { PATIENT: 'Patiente', LMP: 'Date des dernières règles' },
+      COMMON: { MISSING_REQUIRED_FIELDS: 'Champs obligatoires manquants : {{fields}}' },
     });
 
     fixture = TestBed.createComponent(PrenatalTabComponent);
@@ -125,8 +126,18 @@ describe('PrenatalTabComponent', () => {
   it('refuses to generate without a patient and an LMP, in French', () => {
     component.generate();
     expect(service.schedule).not.toHaveBeenCalled();
+    // QA D1358: the toast names the blank fields, not a fixed sentence.
     expect(toast.error).toHaveBeenCalledWith(
-      'La patiente et la date des dernières règles sont requises',
+      'Champs obligatoires manquants : Patiente, Date des dernières règles',
+    );
+  });
+
+  it('QA D1358: names only the LMP when the patient is chosen', () => {
+    component.onPatientPicked({ id: 'p-1' } as PatientResponse);
+    component.generate();
+    expect(service.schedule).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith(
+      'Champs obligatoires manquants : Date des dernières règles',
     );
   });
 

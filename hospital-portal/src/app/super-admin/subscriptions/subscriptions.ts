@@ -9,7 +9,8 @@ import {
 
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { missingRequiredMessage } from '../../shared/required-fields';
 import { catchError, of } from 'rxjs';
 import { HttpErrorResponse } from '@angular/common/http';
 
@@ -57,6 +58,7 @@ const FRESH_REQUEST: SubscriptionPlanRequest = {
 })
 export class SubscriptionsComponent implements OnInit {
   private readonly service = inject(SubscriptionService);
+  private readonly translate = inject(TranslateService);
 
   readonly loading = signal(true);
   readonly errored = signal(false);
@@ -151,8 +153,14 @@ export class SubscriptionsComponent implements OnInit {
 
   submit(): void {
     const body = this.form();
-    if (!body.name?.trim() || !body.tierCode?.trim()) {
-      this.formError.set('SUBSCRIPTIONS.ERROR.REQUIRED_FIELDS');
+    // QA D1358: name the blank fields, not a fixed list (the text passes the
+    // template's translate pipe unchanged).
+    const missing = missingRequiredMessage(this.translate, [
+      { labelKey: 'SUBSCRIPTIONS.FORM.NAME', value: body.name },
+      { labelKey: 'SUBSCRIPTIONS.FORM.TIER_CODE', value: body.tierCode },
+    ]);
+    if (missing) {
+      this.formError.set(missing);
       return;
     }
     if (this.fractionDigits(body.currency) === 0 && body.monthlyPriceCents % HUNDREDTHS !== 0) {
