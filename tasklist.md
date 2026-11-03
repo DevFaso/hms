@@ -6098,3 +6098,12 @@ ships*, not for building — and check the shipped surface before trusting a
 - [ ] D1157 class: `PUT /roi-requests/{id}/cancel` note still optional (listed in the sweep's `NO_REQUIRED_FIELD` as KNOWN GAP).
 - [ ] D1301: `POST /security-policies` duplicate answers the generic integrity sentence with no field; `provider.licence.duplicate` / `provider.business.duplicate` 409s carry no `field:` prefix.
 - [ ] Map-bodied endpoints (`/pharmacy/claims/*`, `/assignments/public/*`, `/auth/resend-verification`, `/reception/encounters/{id}/status`) name their keys by hand; a typed DTO would let bean validation and the sweep read them.
+
+## Standing debt — round 30 (fix/r30-portal-forms)
+
+- [ ] D1347 sibling (hospital-core, no branch owned it): `GET /slots/search` answers a bare list capped at 200 (`SlotInventoryServiceImpl.MAX_SEARCH_RESULTS`) with no total; slot-admin and the waitlist offer picker cannot reach the rest. Needs a paged endpoint with a total. Pinned in `scripts/list-caps-baseline.json`.
+- [ ] D1347 siblings in prescription files (fix/r30-prn-interval owned them this round): `PrescriptionService.list` keeps the first page (the attention list), and the prescription pharmacy history reads 20 dispenses / 20 routing decisions. Pinned.
+- [ ] D1347 follow-up: the lists that now read every page (encounters, lab orders/results, notifications, webhook deliveries) should move to server-side paging and search with a total as they grow; until then they load whole.
+- [ ] D1347 follow-up: endpoints read page by page whose server query has no total order (pharmacy lists, notifications, refills) rely on the id de-duplication; a server ORDER BY with an id tie-break would make every page read exact (UnsortedPageGuardTest covers `PageRequest.of`, not controller `Pageable`s).
+- [ ] D1352 portal half: nurse-station.html `#ho-recipient` needs `data-server-field="recipientUserId"` (MAR branch owned the template this round).
+- [ ] Dead i18n keys after D1357/D1358 (no reader left): DIRECTIVES.REQUIRED_FIELDS, PATIENTS.EDIT_REQUIRED_MISSING and the 25 fixed `…REQUIRED_FIELDS` sentences listed in the PR; remove in an i18n cleanup PR.
