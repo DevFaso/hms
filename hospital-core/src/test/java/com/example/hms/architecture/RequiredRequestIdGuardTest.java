@@ -98,21 +98,29 @@ class RequiredRequestIdGuardTest {
      * Bodies bound without {@code @Valid} although they declare constraints, each with its reason.
      */
     private static final Map<String, String> UNVALIDATED_ALLOWED = Map.of(
-        "StaffController#create",
-        "standing debt: StaffRequestDTO puts @NotBlank / @Size on enum fields, which bean validation cannot apply"
-            + " (UnexpectedTypeException, a 500); its ids are names the service resolves itself",
-        "StaffController#update", "same body as StaffController#create");
+        // QA D1349 (round 30): StaffController#create validates the OnCreate group
+        // (its three required names), so its entry is gone.
+        "StaffController#update",
+        "a partial edit: a field left out keeps its stored value, so the body's constraints (the employment"
+            + " type, the three create-only names) do not apply; its ids are names the service resolves itself");
 
     @Test
     @DisplayName("a request body that declares constraints is bound with @Valid")
     void everyConstrainedRequestBodyIsValidated() {
         List<String> unvalidated = new ArrayList<>();
+        Set<String> stillUnvalidated = new java.util.TreeSet<>();
         for (Handler handler : handlers()) {
+            if (!handler.validated()) {
+                stillUnvalidated.add(handler.where());
+            }
             if (!handler.validated() && declaresConstraints(handler.body(), new LinkedHashSet<>())
                     && !UNVALIDATED_ALLOWED.containsKey(handler.where())) {
                 unvalidated.add(handler.where() + " binds " + handler.body().getSimpleName() + " without @Valid");
             }
         }
+        Set<String> stale = new java.util.TreeSet<>(UNVALIDATED_ALLOWED.keySet());
+        stale.removeAll(stillUnvalidated);
+        assertThat(stale).as("allowlist entries that are now validated or gone (remove them)").isEmpty();
         assertThat(unvalidated)
             .as("its @NotNull / @Size never run, so a missing id reaches the service (QA D1258)" + SourceScan.MANDATE)
             .isEmpty();
@@ -840,14 +848,60 @@ class RequiredRequestIdGuardTest {
             return bang < 0 || condition.charAt(bang) != '!';
         }
         String before = condition.substring(0, getter.start());
-        Matcher wrapper = Pattern.compile("(!?+)\\s*+(?:\\w++\\.)?+(isBlank|isEmpty|hasText|hasLength|isNull)\\(\\s*+$")
-            .matcher(before);
-        if (!wrapper.find()) {
+        String wrapper = trailingWrapper(before);
+        if (wrapper == null) {
             return false;
         }
-        boolean negated = !wrapper.group(1).isEmpty();
-        boolean presence = wrapper.group(2).startsWith("has");
+        boolean negated = wrapper.startsWith("!");
+        boolean presence = wrapper.contains("has");
         return presence == negated;
+    }
+
+    private static final List<String> WRAPPERS = List.of("isBlank", "isEmpty", "hasText", "hasLength", "isNull");
+
+    /**
+     * The absence/presence call that {@code before} ends in, as "name" or
+     * "!name" when negated ({@code !StringUtils.hasText(}, {@code isBlank( }),
+     * or null. Sonar S8786 (round 30): it was the regex
+     * {@code (!?+)\s*+(?:\w++\.)?+(isBlank|isEmpty|hasText|hasLength|isNull)\(\s*+$}
+     * run with {@code find()} from every character; this reads backwards from
+     * the end once and answers what that regex answered (checked on ten
+     * million generated inputs when it was replaced).
+     */
+    static String trailingWrapper(String before) {
+        int end = before.length();
+        while (end > 0 && AppointmentSlotRulesGuardTest.isRegexSpace(before.charAt(end - 1))) {
+            end--;
+        }
+        if (end == 0 || before.charAt(end - 1) != '(') {
+            return null;
+        }
+        int nameEnd = end - 1;
+        String name = WRAPPERS.stream()
+            .filter(w -> nameEnd >= w.length() && before.startsWith(w, nameEnd - w.length()))
+            .findFirst().orElse(null);
+        if (name == null) {
+            return null;
+        }
+        int i = nameEnd - name.length();
+        if (i > 0 && AppointmentSlotRulesGuardTest.isWordChar(before.charAt(i - 1))) {
+            // The end of a longer word: matched from the name itself, not negated.
+            return name;
+        }
+        if (i > 0 && before.charAt(i - 1) == '.') {
+            int q = i - 1;
+            while (q > 0 && AppointmentSlotRulesGuardTest.isWordChar(before.charAt(q - 1))) {
+                q--;
+            }
+            if (q == i - 1) {
+                return name;
+            }
+            i = q;
+        }
+        while (i > 0 && AppointmentSlotRulesGuardTest.isRegexSpace(before.charAt(i - 1))) {
+            i--;
+        }
+        return i > 0 && before.charAt(i - 1) == '!' ? "!" + name : name;
     }
 
     private static int skipBlanks(String source, int from) {
@@ -1430,8 +1484,8 @@ class RequiredRequestIdGuardTest {
     }
 
     private static String methodName(String method) {
-        Matcher name = Pattern.compile("(\\w++)\\s*+\\(").matcher(method);
-        return name.find() ? name.group(1) : "?";
+        // Sonar S8786 (round 30): a linear scan, the same answer as the regex it replaced.
+        return AppointmentSlotRulesGuardTest.firstCalledName(method);
     }
 
     /** Method name to the getters it refuses null with a FieldBusinessException, joined. */

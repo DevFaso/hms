@@ -317,8 +317,8 @@ public final class AppointmentSpecification {
         jakarta.persistence.criteria.Root<com.example.hms.model.PatientHospitalRegistration> r =
             registration.from(com.example.hms.model.PatientHospitalRegistration.class);
         registration.select(cb.literal(1)).where(
-            cb.equal(r.get("patient"), patient),
-            cb.equal(r.get("hospital"), root.get("hospital")),
+            cb.equal(r.get(PATIENT), patient),
+            cb.equal(r.get(HOSPITAL), root.get(HOSPITAL)),
             cb.like(cb.lower(r.get("mrn")), localLike));
         return cb.exists(registration);
     }

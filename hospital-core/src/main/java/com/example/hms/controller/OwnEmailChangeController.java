@@ -132,8 +132,10 @@ public class OwnEmailChangeController {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new MessageResponse("Not authenticated."));
     }
 
-    /** Request body of step 1; checked, and every refusal audited, by the service. */
-    /** QA round 29 sweep: both are required, named at once before the service is reached. */
+    /**
+     * Request body of step 1; checked, and every refusal audited, by the service.
+     * QA round 29 sweep: both are required, named at once before the service is reached.
+     */
     public record ChangeEmailRequest(@jakarta.validation.constraints.NotBlank String currentPassword,
                                      @jakarta.validation.constraints.NotBlank String newEmail) {}
 

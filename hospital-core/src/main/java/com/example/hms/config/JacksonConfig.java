@@ -73,7 +73,10 @@ public class JacksonConfig {
             } catch (DateTimeParseException ignored) {
                 // fall through
             }
-            return ctxt.reportInputMismatch(LocalTime.class, "Cannot parse LocalTime from: %s. Expected HH:mm, HH:mm:ss, or h:mm AM/PM", text);
+            // QA D1349 (round 30): through the problem handler, so a request body
+            // collects this field with every other malformed one (RequestBodyDefaultsModule).
+            return (LocalTime) ctxt.handleWeirdStringValue(LocalTime.class, text,
+                "Expected HH:mm, HH:mm:ss, or h:mm AM/PM");
         }
     }
 }

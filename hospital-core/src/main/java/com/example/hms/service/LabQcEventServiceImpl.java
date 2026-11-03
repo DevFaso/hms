@@ -1,7 +1,6 @@
 package com.example.hms.service;
 
 import com.example.hms.enums.LabQcEventLevel;
-import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.LabQcEventMapper;

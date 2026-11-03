@@ -111,7 +111,7 @@ public class ImmunizationMapper {
                 .expirationDate(dto.getExpirationDate())
                 .ndcCode(dto.getNdcCode())
                 // Status
-                .status(dto.getStatus())
+                .status(dto.getStatus() == null ? null : dto.getStatus().name())
                 .statusReason(dto.getStatusReason())
                 .verified(dto.getVerified())
                 .sourceOfRecord(dto.getSourceOfRecord())
@@ -167,7 +167,7 @@ public class ImmunizationMapper {
         entity.setExpirationDate(dto.getExpirationDate());
         entity.setNdcCode(dto.getNdcCode());
         // Status
-        entity.setStatus(dto.getStatus());
+        entity.setStatus(dto.getStatus() == null ? null : dto.getStatus().name());
         entity.setStatusReason(dto.getStatusReason());
         entity.setVerified(dto.getVerified());
         entity.setSourceOfRecord(dto.getSourceOfRecord());

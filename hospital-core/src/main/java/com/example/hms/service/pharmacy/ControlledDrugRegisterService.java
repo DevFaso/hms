@@ -90,10 +90,14 @@ public class ControlledDrugRegisterService {
     private ControlledRegisterDTO buildRegister(UUID pharmacyId, UUID inventoryItemId, LocalDate from, LocalDate to) {
         // QA D1337 (round 29): a blank start or end is named as missing, both at
         // once; it read "the end is before the start".
-        com.example.hms.exception.RequiredFields.check()
-            .requireValue(from, "from", "pharmacy.register.fromRequired")
-            .requireValue(to, "to", "pharmacy.register.toRequired")
-            .orThrow();
+        // Sonar S2259 (round 30): the refusal is thrown here, so no path reaches
+        // the period checks below with a null end.
+        if (from == null || to == null) {
+            throw com.example.hms.exception.RequiredFields.check()
+                .requireValue(from, "from", "pharmacy.register.fromRequired")
+                .requireValue(to, "to", "pharmacy.register.toRequired")
+                .failure();
+        }
         if (to.isBefore(from)) {
             throw new com.example.hms.exception.FieldBusinessException("to", "pharmacy.register.periodInvalid");
         }

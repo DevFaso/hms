@@ -1,5 +1,6 @@
 package com.example.hms.payload.dto.medicalhistory;
 
+import com.example.hms.enums.ImmunizationStatus;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
@@ -102,10 +103,11 @@ public class ImmunizationRequestDTO {
     private String ndcCode;
 
     // Status
-    @NotBlank(message = "{immunization.status.required}")
-    @Size(max = 50)
+    // QA D1348 (round 30): one of the vocabulary the series, overdue and
+    // export queries key on; free text ("FAIT") is refused with fieldErrors.status.
+    @NotNull(message = "{immunization.status.required}")
     @Schema(description = "Status", requiredMode = Schema.RequiredMode.REQUIRED)
-    private String status;
+    private ImmunizationStatus status;
 
     @Size(max = 500)
     @Schema(description = "Status reason")

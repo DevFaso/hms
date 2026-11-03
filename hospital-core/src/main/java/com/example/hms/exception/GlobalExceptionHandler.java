@@ -329,18 +329,76 @@ public class GlobalExceptionHandler {
             log.warn("Unreadable request body at path {}: {}",
                 request.getDescription(false), ex.getMostSpecificCause().getClass().getSimpleName());
         }
+        // QA D1349 (round 30): the values the read already recorded as
+        // malformed before it failed for good are named with the failing one.
+        java.util.List<String> fields = new java.util.ArrayList<>(RequestBodyProblems.finish());
         String field = resolveJacksonField(ex);
-        String message = field == null
-            ? localized("error.request.malformed",
-                "The request could not be read. Check the values entered and try again.")
-            : invalidFieldReason(field);
+        if (field != null && !fields.contains(field)) {
+            fields.add(field);
+        }
+        if (fields.isEmpty()) {
+            Map<String, Object> body = errorBody(HttpStatus.BAD_REQUEST, localized("error.request.malformed",
+                "The request could not be read. Check the values entered and try again."), request);
+            body.put(FIELD_CODE, CODE_MALFORMED_REQUEST);
+            return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
+        }
+        Map<String, String> fieldErrors = new LinkedHashMap<>();
+        for (String path : fields) {
+            fieldErrors.put(path, invalidFieldReason(path));
+        }
+        return malformedBodyResponse(fieldErrors, java.util.List.of(), request);
+    }
+
+    /**
+     * QA D1349 (round 30): a body with several malformed values, or a
+     * malformed value beside blank required fields, named only the first one
+     * (Jackson stopped there and bean validation never ran). The read now
+     * collects every malformed value ({@link RequestBodyProblems}) and
+     * {@link MalformedRequestBodyAdvice} validates the rest of the body: one
+     * 400 names every malformed value, then every field validation refuses.
+     */
+    @ExceptionHandler(MalformedRequestBodyException.class)
+    public ResponseEntity<Object> handleMalformedRequestBody(MalformedRequestBodyException ex, WebRequest request) {
+        if (log.isWarnEnabled()) {
+            log.warn("Malformed request body at path {}: {} value(s)",
+                request.getDescription(false), ex.getMalformedPaths().size());
+        }
+        Map<String, String> fieldErrors = new LinkedHashMap<>();
+        for (String path : ex.getMalformedPaths()) {
+            fieldErrors.putIfAbsent(path, invalidFieldReason(path));
+        }
+        java.util.List<String> globalReasons = new java.util.ArrayList<>();
+        for (MalformedRequestBodyException.BodyViolation item : ex.getViolations()) {
+            jakarta.validation.ConstraintViolation<?> violation = item.violation();
+            String property = violation.getPropertyPath().toString();
+            if (property.isEmpty() && item.prefix().isEmpty()) {
+                globalReasons.add(violation.getMessage());
+            } else {
+                String path = joinPath(item.prefix(), RequestFieldPaths.toJson(item.beanType(), property));
+                fieldErrors.putIfAbsent(path,
+                    constraintReason(violation.getMessage(), violation.getMessageTemplate(), path));
+            }
+        }
+        return malformedBodyResponse(fieldErrors, globalReasons, request);
+    }
+
+    /**
+     * The 400 of an unreadable body: {@code code=MALFORMED_REQUEST}, {@code field}
+     * = the first field named, {@code fieldErrors} = every field. One reason is
+     * the message as it stands (the round-25 shape); several are joined.
+     */
+    private ResponseEntity<Object> malformedBodyResponse(Map<String, String> fieldErrors,
+                                                         java.util.List<String> globalReasons, WebRequest request) {
+        java.util.List<String> reasons = new java.util.ArrayList<>(fieldErrors.values());
+        reasons.addAll(globalReasons);
+        String message = reasons.size() == 1 ? reasons.get(0) : joinReasons(reasons.stream());
         Map<String, Object> body = errorBody(HttpStatus.BAD_REQUEST, message, request);
         body.put(FIELD_CODE, CODE_MALFORMED_REQUEST);
-        if (field != null) {
-            body.put(FIELD_FIELD, field);
+        if (!fieldErrors.isEmpty()) {
+            body.put(FIELD_FIELD, fieldErrors.keySet().iterator().next());
             // QA D1245 (round 25): an unparsable UUID, enum or date names its
             // field in fieldErrors too, the shape every form marks a field from.
-            body.put(FIELD_ERRORS, Map.of(field, message));
+            body.put(FIELD_ERRORS, fieldErrors);
         }
         return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
     }
@@ -393,12 +451,21 @@ public class GlobalExceptionHandler {
      * message exists.
      */
     private String invalidFieldReason(String field) {
-        // Without a message source (a bare handler in a unit test) no label can be read: keep the path.
-        String label = messageSource == null ? field : existingLabel(field);
+        String label = labelOrNull(field);
         if (label == null) {
             return localized("error.request.invalidUnlabelledField", "A value entered is not valid.");
         }
         return localized("error.request.invalidField", "The value entered for \"{0}\" is not valid.", label);
+    }
+
+    /**
+     * The label a sentence names a field or parameter by, or null when it has
+     * none (the sentence then names nothing rather than the raw property).
+     * Without a message source (a bare handler in a unit test) no label can be
+     * read: the path is kept.
+     */
+    private String labelOrNull(String path) {
+        return messageSource == null ? path : existingLabel(path);
     }
 
     /** The JSON property path of the failure ("items[0].dose" style), or null when Jackson gave none. */
@@ -503,19 +570,27 @@ public class GlobalExceptionHandler {
      * label; a reason written for the field passes unchanged.
      */
     private String fieldReason(FieldError error, String path) {
-        String label = fieldLabel(path);
         if (error.isBindingFailure()) {
             return invalidFieldReason(path);
         }
-        String message = error.getDefaultMessage();
+        String template = error.contains(jakarta.validation.ConstraintViolation.class)
+            ? error.unwrap(jakarta.validation.ConstraintViolation.class).getMessageTemplate()
+            : null;
+        return constraintReason(error.getDefaultMessage(), template, path);
+    }
+
+    /**
+     * A constraint's reason naming its field: one left on bean validation's
+     * default template is prefixed with the field's label, one written for the
+     * field passes unchanged.
+     */
+    private String constraintReason(String message, String template, String path) {
+        String label = fieldLabel(path);
         if (message == null || message.isBlank()) {
             return localized("error.validation.fieldInvalid", "{0}: invalid value", label);
         }
-        if (error.contains(jakarta.validation.ConstraintViolation.class)) {
-            String template = error.unwrap(jakarta.validation.ConstraintViolation.class).getMessageTemplate();
-            if (template != null && DEFAULT_TEMPLATE_PREFIXES.stream().anyMatch(template::startsWith)) {
-                return localized("error.validation.namedField", "{0}: {1}", label, message);
-            }
+        if (template != null && DEFAULT_TEMPLATE_PREFIXES.stream().anyMatch(template::startsWith)) {
+            return localized("error.validation.namedField", "{0}: {1}", label, message);
         }
         return message;
     }
@@ -543,8 +618,10 @@ public class GlobalExceptionHandler {
                 // property ("[0].testName", not the Java "[0].name").
                 Class<?> elementType = elementTypeOf(result);
                 for (FieldError error : errors.getFieldErrors()) {
-                    fieldErrors.putIfAbsent(joinPath(prefix, RequestFieldPaths.toJson(elementType, error.getField())),
-                        error.getDefaultMessage());
+                    // QA D1350 (round 30): "[0].notificationType" left on the
+                    // default template read "must not be null" with no name.
+                    String path = joinPath(prefix, RequestFieldPaths.toJson(elementType, error.getField()));
+                    fieldErrors.putIfAbsent(path, fieldReason(error, path));
                 }
                 for (org.springframework.validation.ObjectError error : errors.getGlobalErrors()) {
                     fieldErrors.putIfAbsent(prefix, error.getDefaultMessage());
@@ -555,12 +632,10 @@ public class GlobalExceptionHandler {
                 }
             }
         }
-        String first = fieldErrors.values().stream()
-            .filter(message -> message != null && !message.isBlank())
-            .findFirst()
-            .orElse(null);
+        // QA D1349 (round 30): every reason in the message, as a body refusal says them.
+        String reasons = joinReasons(fieldErrors.values().stream());
         Map<String, Object> body = errorBody(HttpStatus.BAD_REQUEST,
-            first != null ? first : localized("error.validation.request", "Validation errors in request"), request);
+            !reasons.isEmpty() ? reasons : localized("error.validation.request", "Validation errors in request"), request);
         body.put(FIELD_ERRORS, fieldErrors);
         return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
     }
@@ -664,8 +739,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(org.springframework.web.bind.MissingServletRequestParameterException.class)
     public ResponseEntity<Object> handleMissingParameter(
             org.springframework.web.bind.MissingServletRequestParameterException ex, WebRequest request) {
-        String message = localized("error.request.missingParameter",
-            "A required value is missing: \"{0}\".", fieldLabel(ex.getParameterName()));
+        // QA D1350 (round 30): a parameter with no label is not named by its raw name.
+        String label = labelOrNull(ex.getParameterName());
+        String message = label == null
+            ? localized("error.request.missingUnlabelledParameter", "A required value is missing.")
+            : localized("error.request.missingParameter", "A required value is missing: \"{0}\".", label);
         Map<String, Object> body = errorBody(HttpStatus.BAD_REQUEST, message, request);
         body.put(FIELD_CODE, CODE_MALFORMED_REQUEST);
         body.put(FIELD_FIELD, ex.getParameterName());
@@ -690,8 +768,11 @@ public class GlobalExceptionHandler {
                 request.getDescription(false), ex.getName(),
                 ex.getRequiredType() != null ? ex.getRequiredType().getSimpleName() : "value");
         }
-        String message = localized("error.request.invalidParameter",
-            "The value supplied for the parameter \"{0}\" is not valid.", fieldLabel(ex.getName()));
+        String label = labelOrNull(ex.getName());
+        String message = label == null
+            ? localized("error.request.invalidUnlabelledParameter", "A value supplied is not valid.")
+            : localized("error.request.invalidParameter",
+                "The value supplied for the parameter \"{0}\" is not valid.", label);
         Map<String, Object> body = errorBody(HttpStatus.BAD_REQUEST, message, request);
         body.put(FIELD_CODE, CODE_INVALID_PARAMETER);
         // QA D1245 (round 25): a blank or unparsable UUID / enum / date parameter is named.

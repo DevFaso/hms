@@ -38,6 +38,20 @@ public class StaffAvailabilityServiceImpl implements StaffAvailabilityService {
     private final MessageSource messageSource;
     private final DepartmentRepository departmentRepository;
 
+    /** A working day has its hours, the end after the start; a day off has none (Sonar S3776, round 30). */
+    private static void requireWorkingHours(StaffAvailabilityRequestDTO dto) {
+        if (dto.dayOff()) {
+            return;
+        }
+        if (dto.availableFrom() == null || dto.availableTo() == null) {
+            throw new com.example.hms.exception.FieldBusinessException(
+                dto.availableFrom() == null ? "availableFrom" : "availableTo", "availability.time.required");
+        }
+        if (!dto.availableTo().isAfter(dto.availableFrom())) {
+            throw new com.example.hms.exception.FieldBusinessException("availableTo", "availability.time.range.invalid");
+        }
+    }
+
     @Override
     @Transactional
     public StaffAvailabilityResponseDTO create(StaffAvailabilityRequestDTO dto, Locale locale) {
@@ -75,14 +89,7 @@ public class StaffAvailabilityServiceImpl implements StaffAvailabilityService {
                 getLocalizedMessage("availability.exists", new Object[]{DisplayDates.date(dto.date(), locale)}, locale));
         }
 
-        if (!dto.dayOff()) {
-            if (dto.availableFrom() == null || dto.availableTo() == null) {
-                throw new com.example.hms.exception.FieldBusinessException(dto.availableFrom() == null ? "availableFrom" : "availableTo", "availability.time.required");
-            }
-            if (!dto.availableTo().isAfter(dto.availableFrom())) {
-                throw new com.example.hms.exception.FieldBusinessException("availableTo", "availability.time.range.invalid");
-            }
-        }
+        requireWorkingHours(dto);
 
         if (dto.date().isBefore(LocalDate.now())) {
             throw new BusinessRuleException(getLocalizedMessage("availability.date.past", null, locale));

@@ -27,9 +27,11 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 /**
@@ -131,8 +133,8 @@ class R29FieldRefusalsTest {
         controller.getWaitlist(null, "all");
         controller.getWaitlist(null, "WAITING");
 
-        verify(service, org.mockito.Mockito.times(2)).getWaitlist(org.mockito.ArgumentMatchers.any(), isNull(), isNull());
-        verify(service).getWaitlist(org.mockito.ArgumentMatchers.any(), isNull(), eq("WAITING"));
+        verify(service, times(2)).getWaitlist(any(), isNull(), isNull());
+        verify(service).getWaitlist(any(), isNull(), eq("WAITING"));
     }
 
     @Test

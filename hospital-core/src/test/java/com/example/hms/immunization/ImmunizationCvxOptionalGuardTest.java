@@ -92,7 +92,7 @@ class ImmunizationCvxOptionalGuardTest {
             .hospitalId(java.util.UUID.randomUUID())
             .vaccineDisplay("Méningite A (MenAfriVac)")
             .administrationDate(LocalDate.of(2021, 3, 1))
-            .status("COMPLETED")
+            .status(com.example.hms.enums.ImmunizationStatus.COMPLETED)
             .build();
 
         assertThat(validator.validate(dto))
@@ -109,7 +109,7 @@ class ImmunizationCvxOptionalGuardTest {
             .vaccineCode(code)
             .vaccineDisplay("VAA (fièvre jaune)")
             .administrationDate(LocalDate.of(2024, 1, 10))
-            .status("COMPLETED")
+            .status(com.example.hms.enums.ImmunizationStatus.COMPLETED)
             .build();
 
         PatientImmunization created = mapper.toEntity(dto, null, null, null, null);

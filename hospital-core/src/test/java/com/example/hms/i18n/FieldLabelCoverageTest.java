@@ -73,6 +73,68 @@ class FieldLabelCoverageTest {
             .isEmpty();
     }
 
+    /**
+     * QA D1350 (round 30): "Une valeur obligatoire est manquante : « slotId »",
+     * "« accepted »", "« from »": a query parameter is named by the missing-value
+     * and invalid-value refusals, and those printed its raw name when no label
+     * existed. Every {@code @RequestParam} a refusal can name - a required one
+     * (missing) and a parsed one (unparsable) - has a label in every language.
+     */
+    @Test
+    @DisplayName("D1350: each query parameter a refusal can name has field.label.<name> in every language")
+    void everyNameableParameterHasALabel() throws IOException {
+        Set<String> names = nameableParameters();
+        assertThat(names).as("nameable query parameters found").hasSizeGreaterThan(50);
+        Map<String, List<String>> missing = new TreeMap<>();
+        for (String suffix : LOCALES) {
+            Properties labels = labels(suffix);
+            for (String name : names) {
+                String label = labels.getProperty("field.label." + name);
+                if (label == null || label.isBlank()) {
+                    missing.computeIfAbsent(name, k -> new ArrayList<>()).add(suffix.substring(1));
+                }
+            }
+        }
+        assertThat(missing)
+            .as("a missing or unparsable query parameter with no label is refused naming nothing;"
+                + " add field.label.<name> to messages-common (QA D1350)")
+            .isEmpty();
+    }
+
+    /** The names of every {@code @RequestParam} that is required or parsed. */
+    static Set<String> nameableParameters() throws IOException {
+        Set<String> out = new TreeSet<>();
+        for (Method m : controllerMethods()) {
+            for (Parameter p : m.getParameters()) {
+                org.springframework.web.bind.annotation.RequestParam rp =
+                    p.getAnnotation(org.springframework.web.bind.annotation.RequestParam.class);
+                if (rp == null || java.util.Map.class.isAssignableFrom(p.getType())
+                        || org.springframework.web.multipart.MultipartFile.class.isAssignableFrom(p.getType())) {
+                    continue;
+                }
+                boolean required = rp.required()
+                    && org.springframework.web.bind.annotation.ValueConstants.DEFAULT_NONE.equals(rp.defaultValue())
+                    && p.getType() != java.util.Optional.class;
+                Class<?> type = elementOf(p);
+                if (required || isParsed(type)) {
+                    String name = !rp.name().isEmpty() ? rp.name() : rp.value();
+                    out.add(name.isEmpty() ? p.getName() : name);
+                }
+            }
+        }
+        return out;
+    }
+
+    /** The parameter's type, or the element type of a list / optional parameter. */
+    private static Class<?> elementOf(Parameter p) {
+        if ((java.util.Collection.class.isAssignableFrom(p.getType()) || p.getType() == java.util.Optional.class)
+                && p.getParameterizedType() instanceof ParameterizedType pt
+                && pt.getActualTypeArguments()[0] instanceof Class<?> element) {
+            return element;
+        }
+        return p.getType();
+    }
+
     @Test
     @DisplayName("no French or Spanish label is the camel-case property name itself")
     void labelsAreTranslated() throws IOException {
@@ -175,16 +237,13 @@ class FieldLabelCoverageTest {
 
     /**
      * A type Jackson parses from what a form sends (a select's enum, a
-     * picker's UUID, a typed date or number), so a malformed value is refused
-     * with the field's label. A flag is not: a checkbox sends true or false,
-     * and a malformed one from the API gets the handler's generic sentence,
-     * which never prints the raw property ({@code GlobalExceptionHandler#fieldLabel}).
+     * picker's UUID, a typed date or number, a flag), so a malformed value is
+     * refused with the field's label. QA D1350 (round 30): flags were left out
+     * ("a checkbox sends true or false"), and a malformed {@code highRisk} or
+     * {@code flexibilityAcknowledgment} was refused naming no field at all.
      */
     static boolean isParsed(Class<?> type) {
-        if (type == boolean.class || type == Boolean.class) {
-            return false;
-        }
-        return type.isEnum() || type.isPrimitive() || Number.class.isAssignableFrom(type)
+        return type.isEnum() || type.isPrimitive() || type == Boolean.class || Number.class.isAssignableFrom(type)
             || type == java.util.UUID.class || java.time.temporal.Temporal.class.isAssignableFrom(type);
     }
 
@@ -212,21 +271,35 @@ class FieldLabelCoverageTest {
         return p != null && !p.value().isEmpty() ? p.value() : field.getName();
     }
 
-    private static Set<Class<?>> requestBodies() throws IOException {
-        Set<Class<?>> out = new LinkedHashSet<>();
+    private static List<Method> controllerMethods() throws IOException {
+        List<Method> out = new ArrayList<>();
         try (Stream<Path> files = Files.walk(CONTROLLERS)) {
             for (Path f : files.filter(p -> p.toString().endsWith(".java")).toList()) {
                 String rel = Paths.get("src/main/java").relativize(f).toString().replace('\\', '/').replace(".java", "");
-                Class<?> controller;
                 try {
-                    controller = Class.forName(rel.replace('/', '.'));
+                    out.addAll(List.of(Class.forName(rel.replace('/', '.')).getDeclaredMethods()));
                 } catch (ClassNotFoundException e) {
+                    // not a top-level class of that name
+                }
+            }
+        }
+        return out;
+    }
+
+    private static Set<Class<?>> requestBodies() throws IOException {
+        Set<Class<?>> out = new LinkedHashSet<>();
+        for (Method m : controllerMethods()) {
+            for (Parameter p : m.getParameters()) {
+                if (!p.isAnnotationPresent(RequestBody.class)) {
                     continue;
                 }
-                for (Method m : controller.getDeclaredMethods()) {
-                    for (Parameter p : m.getParameters()) {
-                        if (p.isAnnotationPresent(RequestBody.class)) {
-                            out.add(p.getType());
+                out.add(p.getType());
+                // QA D1350 (round 30): the element of a list body
+                // (notification preferences) was never read.
+                if (p.getParameterizedType() instanceof ParameterizedType pt) {
+                    for (Type argument : pt.getActualTypeArguments()) {
+                        if (argument instanceof Class<?> element) {
+                            out.add(element);
                         }
                     }
                 }

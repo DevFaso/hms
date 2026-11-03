@@ -61,16 +61,31 @@ public final class RequiredFields {
 
     /** Throws one refusal naming every recorded field; does nothing when all were given. */
     public void orThrow() {
+        if (!missing.isEmpty()) {
+            throw failure();
+        }
+    }
+
+    /**
+     * The refusal naming every recorded field, for a caller that throws it
+     * itself ({@code if (a == null || b == null) throw ...failure();}) so the
+     * compiler and static analysis see that the path ends there.
+     *
+     * @throws IllegalStateException when nothing was refused (a caller bug)
+     */
+    public FieldBusinessException failure() {
+        if (missing.isEmpty()) {
+            // A caller bug (it calls failure() only when a value is missing), never shown to a user.
+            throw new IllegalStateException();
+        }
         if (missing.size() == 1) {
             // One field: the usual single-field refusal, with its message key.
             Map.Entry<String, Object[]> only = keys.entrySet().iterator().next();
             Object[] keyAndArgs = only.getValue();
-            throw new FieldBusinessException(only.getKey(), (String) keyAndArgs[0],
+            return new FieldBusinessException(only.getKey(), (String) keyAndArgs[0],
                 java.util.Arrays.copyOfRange(keyAndArgs, 1, keyAndArgs.length));
         }
-        if (!missing.isEmpty()) {
-            throw new FieldBusinessException(missing);
-        }
+        return new FieldBusinessException(missing);
     }
 
     static boolean isGiven(Object value) {
