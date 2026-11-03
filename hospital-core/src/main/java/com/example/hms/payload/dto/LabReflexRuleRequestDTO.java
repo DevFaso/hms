@@ -36,5 +36,7 @@ public class LabReflexRuleRequestDTO {
     private boolean active = true;
 
     /** Human-readable description of this rule. */
+    /** QA D1387 (round 32): within its column, refused by name (not a generic constraint 400). */
+    @jakarta.validation.constraints.Size(max = 512)
     private String description;
 }
