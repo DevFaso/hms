@@ -29,6 +29,7 @@ public interface PharmacyRepository extends JpaRepository<Pharmacy, UUID> {
         SELECT p FROM Pharmacy p
         WHERE p.active = true
           AND (:hospitalId IS NULL OR p.hospital.id = :hospitalId)
+        ORDER BY LOWER(p.name)
         """, countQuery = """
         SELECT COUNT(p) FROM Pharmacy p
         WHERE p.active = true
@@ -42,7 +43,7 @@ public interface PharmacyRepository extends JpaRepository<Pharmacy, UUID> {
 
     @Query("SELECT p FROM Pharmacy p WHERE p.hospital.id = :hospitalId AND p.active = true " +
            "AND (LOWER(p.name) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')) " +
-           "OR LOWER(p.city) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')))")
+           "OR LOWER(p.city) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%'))) ORDER BY LOWER(p.name)")
     Page<Pharmacy> searchByHospital(
             @Param("hospitalId") UUID hospitalId,
             @Param("search") String search,
@@ -51,7 +52,7 @@ public interface PharmacyRepository extends JpaRepository<Pharmacy, UUID> {
     /** Review of #975: the super-admin's global-view search, every tenant's active pharmacies. */
     @Query("SELECT p FROM Pharmacy p WHERE p.active = true " +
            "AND (LOWER(p.name) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')) " +
-           "OR LOWER(p.city) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')))")
+           "OR LOWER(p.city) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%'))) ORDER BY LOWER(p.name)")
     Page<Pharmacy> searchAllActive(@Param("search") String search, Pageable pageable);
 
     Optional<Pharmacy> findByIdAndHospital_Id(UUID id, UUID hospitalId);
