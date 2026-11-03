@@ -257,7 +257,7 @@ public class ProResponseService {
         LocalDateTime now = LocalDateTime.now(clock);
         LocalDateTime administeredAt = request.getAdministeredAt() != null ? request.getAdministeredAt() : now;
         if (administeredAt.isAfter(now.plusMinutes(5))) {
-            throw new BusinessException("The administration time cannot be in the future.");
+            throw new com.example.hms.exception.FieldBusinessException("administeredAt", "The administration time cannot be in the future.");
         }
 
         ProResponse response = ProResponse.builder()

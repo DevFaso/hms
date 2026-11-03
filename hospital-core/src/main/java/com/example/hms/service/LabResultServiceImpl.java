@@ -58,6 +58,10 @@ import com.example.hms.service.lab.LabOrderLifecycle;
 @Service
 @RequiredArgsConstructor
 public class LabResultServiceImpl implements LabResultService {
+    /** Request properties a refusal names (QA D1352 class, round 30). */
+    private static final String FIELD_RESULT_DATE = "resultDate";
+    private static final String FIELD_SUPERSEDES_RESULT_ID = "supersedesResultId";
+
     private static final String ROLE_SUPER_ADMIN = "ROLE_SUPER_ADMIN";
     private static final String ROLE_LAB_DIRECTOR = "ROLE_LAB_DIRECTOR";
     private static final String UNKNOWN_CLINICIAN = "Unknown clinician";
@@ -211,7 +215,7 @@ public class LabResultServiceImpl implements LabResultService {
         // QA D820: an order voided as entered in error takes no result: it
         // would be saved and then never load (LabResult's restriction).
         if (labOrder.getStatus() == LabOrderStatus.ENTERED_IN_ERROR) {
-            throw new BusinessException("lab.order.enteredInError");
+            throw new com.example.hms.exception.FieldBusinessException("labOrderId", "lab.order.enteredInError");
         }
 
         Hospital hospital = extractHospitalFromLabOrder(labOrder);
@@ -920,11 +924,11 @@ public class LabResultServiceImpl implements LabResultService {
         }
         LocalDateTime now = LocalDateTime.now();
         if (resultDate.isAfter(now.plus(RESULT_DATE_SKEW))) {
-            throw new BusinessException(com.example.hms.utility.MessageUtil.resolve("labresult.resultDate.future"));
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_RESULT_DATE, com.example.hms.utility.MessageUtil.resolve("labresult.resultDate.future"));
         }
         LocalDateTime orderedAt = labOrder.getOrderDatetime();
         if (orderedAt != null && resultDate.isBefore(orderedAt.minus(RESULT_DATE_SKEW))) {
-            throw new BusinessException(com.example.hms.utility.MessageUtil.resolve("labresult.resultDate.beforeOrder"));
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_RESULT_DATE, com.example.hms.utility.MessageUtil.resolve("labresult.resultDate.beforeOrder"));
         }
         LocalDateTime collectedAt = labOrder.getId() == null ? null
             : labSpecimenRepository.findByLabOrder_Id(labOrder.getId()).stream()
@@ -933,7 +937,7 @@ public class LabResultServiceImpl implements LabResultService {
                 .min(java.util.Comparator.naturalOrder())
                 .orElse(null);
         if (collectedAt != null && resultDate.isBefore(collectedAt.minus(RESULT_DATE_SKEW))) {
-            throw new BusinessException(com.example.hms.utility.MessageUtil.resolve("labresult.resultDate.beforeCollection"));
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_RESULT_DATE, com.example.hms.utility.MessageUtil.resolve("labresult.resultDate.beforeCollection"));
         }
         LocalDateTime floor = orderedAt;
         if (collectedAt != null && (floor == null || collectedAt.isAfter(floor))) {
@@ -984,7 +988,7 @@ public class LabResultServiceImpl implements LabResultService {
     private static void requireOrderPatient(UUID requestedPatientId, LabOrder labOrder) {
         if (requestedPatientId != null && labOrder.getPatient() != null
             && !requestedPatientId.equals(labOrder.getPatient().getId())) {
-            throw new BusinessException("labresult.patientMismatch");
+            throw new com.example.hms.exception.FieldBusinessException("patientId", "labresult.patientMismatch");
         }
     }
 
@@ -1000,13 +1004,13 @@ public class LabResultServiceImpl implements LabResultService {
         LabResult target = labResultRepository.findById(supersedesResultId)
             .orElseThrow(() -> new ResourceNotFoundException(LAB_RESULT_NOT_FOUND));
         if (target.getLabOrder() == null || !lockedOrder.getId().equals(target.getLabOrder().getId())) {
-            throw new BusinessException(com.example.hms.utility.MessageUtil.resolve("labresult.correction.otherOrder"));
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_SUPERSEDES_RESULT_ID, com.example.hms.utility.MessageUtil.resolve("labresult.correction.otherOrder"));
         }
         if (!target.isReleased()) {
-            throw new BusinessException(com.example.hms.utility.MessageUtil.resolve("labresult.correction.notReleased"));
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_SUPERSEDES_RESULT_ID, com.example.hms.utility.MessageUtil.resolve("labresult.correction.notReleased"));
         }
         if (isSupersededByLiveResult(target)) {
-            throw new BusinessException(com.example.hms.utility.MessageUtil.resolve("labresult.correction.alreadySuperseded"));
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_SUPERSEDES_RESULT_ID, com.example.hms.utility.MessageUtil.resolve("labresult.correction.alreadySuperseded"));
         }
         return target;
     }

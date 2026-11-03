@@ -270,7 +270,7 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
             requireCancelAuthor(procedureOrder);
         }
         String cancellationReason = cancelling
-            ? com.example.hms.service.support.CancelledOrders.requireCancelReason(updateDTO.getCancellationReason())
+            ? com.example.hms.service.support.CancelledOrders.requireCancelReason(updateDTO.getCancellationReason(), "cancellationReason")
             : null;
 
         requireRescheduleNotInPast(updateDTO, procedureOrder);
@@ -321,7 +321,7 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
             throw new BusinessException("procedureOrder.alreadyCancelled");
         }
         // QA D1098: a blank reason passed the required request parameter.
-        String reason = com.example.hms.service.support.CancelledOrders.requireCancelReason(cancellationReason);
+        String reason = com.example.hms.service.support.CancelledOrders.requireCancelReason(cancellationReason, "cancellationReason");
 
         procedureOrder.setStatus(ProcedureOrderStatus.CANCELLED);
         procedureOrder.setCancelledAt(LocalDateTime.now());
@@ -355,7 +355,7 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
     private static void requireNotInPast(LocalDateTime scheduledDatetime) {
         if (scheduledDatetime != null
                 && scheduledDatetime.isBefore(LocalDateTime.now().minusMinutes(SCHEDULE_PAST_TOLERANCE_MINUTES))) {
-            throw new BusinessException("procedureOrder.scheduledInPast");
+            throw new com.example.hms.exception.FieldBusinessException("scheduledDatetime", "procedureOrder.scheduledInPast");
         }
     }
 

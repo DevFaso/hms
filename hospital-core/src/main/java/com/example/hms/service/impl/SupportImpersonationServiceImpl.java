@@ -104,7 +104,7 @@ public class SupportImpersonationServiceImpl implements SupportImpersonationServ
                 "user.notFound", request.getTargetUserId().toString()));
 
         if (actor.getId().equals(target.getId())) {
-            throw new BusinessException("Cannot impersonate yourself");
+            throw new com.example.hms.exception.FieldBusinessException("targetUserId", "Cannot impersonate yourself");
         }
 
         // Defence in depth — also block if the actor already has an active

@@ -166,11 +166,11 @@ public class TreatmentConsentServiceImpl implements TreatmentConsentService {
             .orElseThrow(() -> new ResourceNotFoundException("appointment.notFound", appointmentId));
         if (appointment.getPatient() == null
             || !Objects.equals(appointment.getPatient().getId(), patientId)) {
-            throw new BusinessException("consent.appointmentOtherPatient");
+            throw new com.example.hms.exception.FieldBusinessException("appointmentId", "consent.appointmentOtherPatient");
         }
         if (appointment.getHospital() != null
             && !Objects.equals(appointment.getHospital().getId(), hospitalId)) {
-            throw new BusinessException("consent.appointmentOtherHospital");
+            throw new com.example.hms.exception.FieldBusinessException("appointmentId", "consent.appointmentOtherHospital");
         }
         return appointment;
     }
@@ -183,11 +183,11 @@ public class TreatmentConsentServiceImpl implements TreatmentConsentService {
             .orElseThrow(() -> new ResourceNotFoundException("encounter.notfound", encounterId));
         if (encounter.getPatient() == null
             || !Objects.equals(encounter.getPatient().getId(), patientId)) {
-            throw new BusinessException("consent.encounterOtherPatient");
+            throw new com.example.hms.exception.FieldBusinessException("encounterId", "consent.encounterOtherPatient");
         }
         if (encounter.getHospital() != null
             && !Objects.equals(encounter.getHospital().getId(), hospitalId)) {
-            throw new BusinessException("consent.encounterOtherHospital");
+            throw new com.example.hms.exception.FieldBusinessException("encounterId", "consent.encounterOtherHospital");
         }
         return encounter;
     }

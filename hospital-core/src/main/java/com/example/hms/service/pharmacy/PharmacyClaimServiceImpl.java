@@ -63,14 +63,14 @@ public class PharmacyClaimServiceImpl implements PharmacyClaimService {
             throw new BusinessException("pharmacy.claim.hospitalRequired");
         }
         if (!hospitalId.equals(dto.getHospitalId())) {
-            throw new BusinessException("pharmacy.claim.hospitalMismatch");
+            throw new com.example.hms.exception.FieldBusinessException("hospitalId", "pharmacy.claim.hospitalMismatch");
         }
 
         Dispense dispense = dispenseRepository.findById(dto.getDispenseId())
                 .orElseThrow(() -> new ResourceNotFoundException("dispense.notfound"));
         if (dispense.getPatient() == null
                 || !dispense.getPatient().getId().equals(dto.getPatientId())) {
-            throw new BusinessException("pharmacy.claim.patientMismatch");
+            throw new com.example.hms.exception.FieldBusinessException("patientId", "pharmacy.claim.patientMismatch");
         }
         if (dispense.getPharmacy() == null
                 || dispense.getPharmacy().getHospital() == null

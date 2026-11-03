@@ -91,12 +91,12 @@ public class TransferServiceImpl implements TransferService {
         Admission admission = loadAdmissionScoped(request.getAdmissionId(), hospitalId);
 
         if (!TRANSFERABLE_STATUSES.contains(admission.getStatus())) {
-            throw new BusinessException(
+            throw new com.example.hms.exception.FieldBusinessException("admissionId", 
                 "transfer.r7.noBedHeld");
         }
         transferOrderRepository.findPendingForAdmission(admission.getId())
             .ifPresent(existing -> {
-                throw new BusinessException("transfer.r7.alreadyPending");
+                throw new com.example.hms.exception.FieldBusinessException("admissionId", "transfer.r7.alreadyPending");
             });
 
         Bed destination = bedRepository.findByIdAndWard_Hospital_Id(request.getToBedId(), hospitalId)
@@ -104,7 +104,7 @@ public class TransferServiceImpl implements TransferService {
 
         Bed origin = admission.getBed();
         if (origin != null && Objects.equals(origin.getId(), destination.getId())) {
-            throw new BusinessException("transfer.r7.alreadyInBed");
+            throw new com.example.hms.exception.FieldBusinessException("toBedId", "transfer.r7.alreadyInBed");
         }
         // QA D609: the same sex and age rule bed assignment applies, checked when
         // the transfer is ORDERED. It was only checked on completion, so a

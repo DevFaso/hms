@@ -184,6 +184,18 @@ class RequiredRequestIdGuardTest {
                 }
             }
         }
+        // QA D1355 class (round 30): ids collected in RequiredFields name their field too.
+        for (Path file : serviceFiles()) {
+            String source = SourceScan.stripComments(Files.readString(file, StandardCharsets.UTF_8));
+            Matcher collected = REQUIRE_VALUE_GETTER.matcher(source);
+            while (collected.find()) {
+                String method = methodAround(source, collected.start());
+                if (collected.group(2).endsWith("Id") && method != null
+                        && parameterType(method, collected.group(1), bodies) != null) {
+                    refusals++;
+                }
+            }
+        }
         assertThat(refusals).as("null-id refusals read").isGreaterThan(10);
         assertThat(fieldless)
             .as("the 400 names no field, so the form cannot mark it (QA D1258)" + SourceScan.MANDATE)
@@ -473,6 +485,26 @@ class RequiredRequestIdGuardTest {
                         oneAtATime.add(site + " (" + file.getFileName() + ":" + SourceScan.lineOf(source, m.start()) + ")");
                     }
                     break;
+                }
+            }
+            // QA D1355 class (round 30): a field collected in RequiredFields (.requireValue(x.getY(), ...)).
+            Matcher collected = REQUIRE_VALUE_GETTER.matcher(source);
+            while (collected.find()) {
+                String method = methodAround(source, collected.start());
+                Class<?> body = method == null ? null : parameterType(method, collected.group(1), bodies);
+                if (body == null || !declaresConstraints(body, new LinkedHashSet<>())) {
+                    continue;
+                }
+                String field = Character.toLowerCase(collected.group(2).charAt(0)) + collected.group(2).substring(1);
+                if (constrainedPresent(body, field)) {
+                    continue;
+                }
+                String site = body.getSimpleName() + "." + field;
+                if (CONDITIONALLY_REQUIRED.containsKey(site)) {
+                    excused.add(site);
+                } else {
+                    oneAtATime.add(site + " (" + file.getFileName() + ":" + SourceScan.lineOf(source, collected.start())
+                        + ")");
                 }
             }
         }
@@ -826,6 +858,465 @@ class RequiredRequestIdGuardTest {
         return i;
     }
 
+    /**
+     * QA D1352 / D1354 (round 30; the round-29 sweep's standing debt "about 30
+     * value refusals of a typed field are still plain BusinessException"): a
+     * duplicate isolation precaution, a transfer to the patient's own bed, a
+     * handoff to oneself, a dispense above the prescribed quantity and a stock
+     * adjustment above the lot all refused a value the user GAVE with a toast
+     * and no {@code fieldErrors}. The D1299 rule reads only refusals of an
+     * ABSENT value. The class is any plain {@code BusinessException} whose guard
+     * reads a request-body value - an {@code if} condition, or the statement an
+     * {@code .ifPresent(x -> throw)} hangs on - directly
+     * ({@code request.getQuantity()}) or through a local the method initialised
+     * from one ({@code Bed destination = find(request.getToBedId())}). Each
+     * throws a {@link com.example.hms.exception.FieldBusinessException}, or is
+     * listed in {@link #REFUSAL_OF_THE_RECORD} with why.
+     */
+    @Test
+    @DisplayName("a refusal of a request value the user gave names its field")
+    void everyRefusalOfAGivenRequestValueNamesItsField() throws IOException {
+        Map<String, Class<?>> bodies = requestBodyTypes();
+        List<String> fieldless = new ArrayList<>();
+        Set<String> excused = new LinkedHashSet<>();
+        int refusals = 0;
+        for (Path file : serviceFiles()) {
+            String source = SourceScan.stripComments(Files.readString(file, StandardCharsets.UTF_8));
+            for (int[] guard : guardsOfThrows(source)) {
+                String method = methodAround(source, guard[0]);
+                if (method == null) {
+                    continue;
+                }
+                String getter = bodyValueRead(source.substring(guard[0], guard[1]), method, bodies);
+                if (getter == null) {
+                    continue;
+                }
+                refusals++;
+                Matcher thrown = THROWN_WITH_KEY.matcher(source);
+                thrown.region(guard[2], source.length());
+                if (!thrown.lookingAt() || !"BusinessException".equals(simpleName(thrown.group(1)))) {
+                    continue;
+                }
+                String site = file.getFileName().toString().replace(".java", "") + "#" + methodName(method) + ":"
+                    + getter + ":" + (thrown.group(2) == null ? "?" : thrown.group(2));
+                if (REFUSAL_OF_THE_RECORD.containsKey(site)) {
+                    excused.add(site);
+                    continue;
+                }
+                fieldless.add(site + " (line " + SourceScan.lineOf(source, guard[2]) + ")");
+            }
+        }
+        assertThat(refusals).as("refusals guarded by a request value read").isGreaterThan(40);
+        for (String site : helperRefusalsOfGivenBodyValues(bodies)) {
+            if (REFUSAL_OF_THE_RECORD.containsKey(site.substring(0, site.indexOf(" <- ")))) {
+                excused.add(site.substring(0, site.indexOf(" <- ")));
+            } else {
+                fieldless.add(site);
+            }
+        }
+        assertThat(fieldless)
+            .as("a value the user gave is refused with no fieldErrors, so the form cannot mark the field; throw a"
+                + " FieldBusinessException naming it (QA D1352 / D1354)" + SourceScan.MANDATE)
+            .isEmpty();
+        assertThat(excused).as("an excused site that disappeared: delete its entry")
+            .containsExactlyInAnyOrderElementsOf(REFUSAL_OF_THE_RECORD.keySet());
+    }
+
+    /**
+     * QA D1353 (round 30): {@code CancelledOrders.requireCancelReason(reason)}
+     * refused a blank reason with no field, from eight order services - the
+     * D1299 helper rule read only helpers called from their own class. A shared
+     * {@code public static} helper of the services that refuses a blank or
+     * absent PARAMETER is reached from request values in other classes, so it
+     * names a field itself (or takes the field from its caller).
+     */
+    @Test
+    @DisplayName("a shared helper that refuses a missing parameter names a field")
+    void everySharedHelperRefusalOfAMissingParameterNamesAField() throws IOException {
+        List<String> fieldless = new ArrayList<>();
+        int helpers = 0;
+        for (Path file : serviceFiles()) {
+            String source = SourceScan.stripComments(Files.readString(file, StandardCharsets.UTF_8));
+            Matcher header = METHOD_HEADER.matcher(source);
+            while (header.find()) {
+                if (!source.substring(header.start(), header.end()).contains("public static ")) {
+                    continue;
+                }
+                int open = header.end() - 1;
+                int close = SourceScan.closingParen(source, open);
+                int brace = skipBlanks(source, close + 1);
+                if (brace >= source.length() || source.charAt(brace) != '{') {
+                    continue;
+                }
+                helpers++;
+                List<String> params = parameterNames(source.substring(open + 1, close));
+                Set<Integer> refused = fieldlessParameterRefusals(
+                    source.substring(brace, SourceScan.closingBrace(source, brace) + 1), params);
+                if (!refused.isEmpty()) {
+                    fieldless.add(file.getFileName() + "#" + calledName(source, open) + " (line "
+                        + SourceScan.lineOf(source, header.start()) + ")");
+                }
+            }
+        }
+        assertThat(helpers).as("public static service helpers read").isGreaterThan(20);
+        fieldless.removeIf(site -> SHARED_HELPER_KNOWN.keySet().stream().anyMatch(site::startsWith));
+        assertThat(fieldless)
+            .as("a shared helper refuses a blank parameter with no field; take the field from the caller"
+                + " (CancelledOrders.requireReason(reason, field, key)) (QA D1353)" + SourceScan.MANDATE)
+            .isEmpty();
+    }
+
+    /**
+     * QA D1355 (round 30): {@code POST /advance-directives} for an active DNR
+     * named the physician, then the effective date one press later - two
+     * {@code requirePresent} calls, each throwing. The D1299 rule asks every
+     * missing-value refusal to name its field; this asks a method that refuses
+     * TWO or more missing values to name them in one refusal
+     * ({@link com.example.hms.exception.RequiredFields}). Read per method: each
+     * {@code if} testing absence ({@code == null}, {@code isBlank()},
+     * {@code isEmpty()}, {@code !hasText(}) that throws a
+     * {@code FieldBusinessException} directly, and each
+     * {@code ClinicalContent.requirePresent(} call.
+     */
+    @Test
+    @DisplayName("a method that refuses several missing fields names them in one refusal")
+    void everyMethodNamesAllItsMissingFieldsInOneRefusal() throws IOException {
+        List<String> oneAtATime = new ArrayList<>();
+        Set<String> excused = new LinkedHashSet<>();
+        for (Path file : serviceFiles()) {
+            String source = SourceScan.stripComments(Files.readString(file, StandardCharsets.UTF_8));
+            Matcher header = METHOD_HEADER.matcher(source);
+            while (header.find()) {
+                int open = header.end() - 1;
+                int close = SourceScan.closingParen(source, open);
+                int brace = skipBlanks(source, close + 1);
+                if (source.startsWith("throws", brace)) {
+                    brace = source.indexOf('{', brace);
+                }
+                if (brace < 0 || brace >= source.length() || source.charAt(brace) != '{') {
+                    continue;
+                }
+                String body = source.substring(brace, SourceScan.closingBrace(source, brace) + 1);
+                int refusals = countMatches(REQUIRE_PRESENT, body);
+                Matcher m = IF_OPEN.matcher(body);
+                while (m.find()) {
+                    int condOpen = m.end() - 1;
+                    int condClose = SourceScan.closingParen(body, condOpen);
+                    String thrown = thrownRightAfter(body, condClose + 1);
+                    if (thrown != null && thrown.endsWith("FieldBusinessException")
+                            && onlyTestsAbsence(body.substring(condOpen + 1, condClose))) {
+                        refusals++;
+                    }
+                }
+                if (refusals < 2) {
+                    continue;
+                }
+                String site = file.getFileName().toString().replace(".java", "") + "#" + calledName(source, open);
+                if (ONE_AT_A_TIME_KNOWN.containsKey(site)) {
+                    excused.add(site);
+                } else {
+                    oneAtATime.add(site + " (" + refusals + " refusals, line " + SourceScan.lineOf(source, header.start())
+                        + ")");
+                }
+            }
+        }
+        assertThat(oneAtATime)
+            .as("each missing field is refused on its own, so the form marks one per press; collect them in"
+                + " RequiredFields.check()...orThrow() (QA D1355)" + SourceScan.MANDATE)
+            .isEmpty();
+        assertThat(excused).as("an excused method that disappeared: delete its entry")
+            .containsExactlyInAnyOrderElementsOf(ONE_AT_A_TIME_KNOWN.keySet());
+    }
+
+    /** {@code .requireValue(x.getY(), ...)} or {@code .requireValue(x == null ? null : x.getY(), ...)} in RequiredFields. */
+    private static final Pattern REQUIRE_VALUE_GETTER = Pattern.compile(
+        "\\.requireValue\\(\\s*+(?:\\w++\\s*+==\\s*+null\\s*+\\?\\s*+null\\s*+:\\s*+)?(\\w++)\\.get(\\w++)\\(\\)");
+    private static final Pattern REQUIRE_PRESENT = Pattern.compile("\\bClinicalContent\\.requirePresent\\(");
+    /** One operand that tests a value for absence: {@code x == null}, {@code x.isBlank()}, {@code !hasText(x)}. */
+    private static final Pattern ABSENCE_OPERAND = Pattern.compile(
+        "^[\\w.()]++\\s*+==\\s*+null$|^[\\w.()]++\\.(?:isBlank|isEmpty)\\(\\)$"
+            + "|^!\\s*+(?:\\w++\\.)?hasText\\([\\w.()]++\\)$|^(?:\\w++\\.)?(?:isBlank|isEmpty)\\([\\w.()]++\\)$");
+
+    /**
+     * The condition only asks whether something is missing ({@code a == null || a.getB() == null},
+     * {@code x == null || x.isBlank()}): no {@code &&} context, no value comparison.
+     */
+    private static boolean onlyTestsAbsence(String condition) {
+        if (condition.contains("&&")) {
+            return false;
+        }
+        for (String operand : condition.split("\\|\\|")) {
+            if (!ABSENCE_OPERAND.matcher(operand.trim()).find()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static int countMatches(Pattern pattern, String text) {
+        Matcher m = pattern.matcher(text);
+        int n = 0;
+        while (m.find()) {
+            n++;
+        }
+        return n;
+    }
+
+    /**
+     * Methods that refuse several missing values one at a time, each with why.
+     * Shrinks only: every entry is round-30 D1355-class standing debt
+     * (tasklist.md) unless its reason says the refusals cannot meet.
+     */
+    private static final Map<String, String> ONE_AT_A_TIME_KNOWN = Map.ofEntries(
+        Map.entry("MedicalCertificateServiceImpl#describe",
+            "the days (sick leave) and the remarks (general certificate) are refused in different arms of the"
+                + " type switch: never both in one request"),
+        Map.entry("TreatmentConsentServiceImpl#record",
+            "KNOWN GAP D1355 class (round 30): the capture method, then the signer of a manual consent;"
+                + " EmptyClinicalWriteGuardTest reads the signer check as ClinicalContent.requirePresent, so the"
+                + " two stay apart until that guard reads a RequiredFields chain"),
+        Map.entry("PatientServiceImpl#getDoctorRecord",
+            "the second refusal is the caller's own assignment (server context), not a request field"));
+
+    /** Shared helpers that refuse a missing parameter that is not a form field, each with why. Shrinks only. */
+    private static final Map<String, String> SHARED_HELPER_KNOWN = Map.of(
+        "PeriodResolver.java#resolve",
+        "the DHIS2 export period of a super-admin integration job (IllegalArgumentException), not a form field");
+
+    /** {@code throw new X("key"} - the type, and the literal key when there is one. */
+    private static final Pattern THROWN_WITH_KEY = Pattern.compile(
+        "throw\\s++new\\s++(" + QUALIFIED_TYPE + ")\\(\\s*+(?:\"([\\w.]++)\")?");
+    private static final Pattern IF_PRESENT_THROW = Pattern.compile(
+        "\\.ifPresent\\(\\s*+\\w++\\s*+->\\s*+\\{?\\s*+(?=throw\\s)");
+
+    /**
+     * Each throw guarded by a condition: start and end of the guard text, and
+     * the offset of the {@code throw}. An {@code if (...) throw} gives its
+     * condition; an {@code .ifPresent(x -> throw)} gives its statement up to
+     * the call.
+     */
+    private static List<int[]> guardsOfThrows(String source) {
+        List<int[]> out = new ArrayList<>();
+        Matcher m = IF_OPEN.matcher(source);
+        while (m.find()) {
+            int open = m.end() - 1;
+            int close = SourceScan.closingParen(source, open);
+            if (thrownRightAfter(source, close + 1) == null) {
+                continue;
+            }
+            out.add(new int[] {open + 1, close, source.indexOf("throw", close)});
+        }
+        Matcher present = IF_PRESENT_THROW.matcher(source);
+        while (present.find()) {
+            out.add(new int[] {SourceScan.statementStart(source, present.start()), present.start(), present.end()});
+        }
+        return out;
+    }
+
+    /**
+     * The request-body getter the guard reads - directly, or through a local
+     * the method initialised from one - or null.
+     */
+    private static String bodyValueRead(String guard, String method, Map<String, Class<?>> bodies) {
+        Matcher getter = GETTER.matcher(guard);
+        while (getter.find()) {
+            if (parameterType(method, getter.group(1), bodies) != null) {
+                return getter.group(2);
+            }
+        }
+        Matcher local = LOCAL_INIT.matcher(method);
+        while (local.find()) {
+            if (!Pattern.compile("(?<![.\\w])" + Pattern.quote(local.group(1)) + "\\b").matcher(guard).find()) {
+                continue;
+            }
+            Matcher inner = GETTER.matcher(local.group(2));
+            while (inner.find()) {
+                if (parameterType(method, inner.group(1), bodies) != null) {
+                    return inner.group(2);
+                }
+            }
+        }
+        return null;
+    }
+
+    private record HelperRefusal(Path file, int index, String key, boolean shared) {
+    }
+
+    /**
+     * The same refusal one call away (QA D1354: {@code requireAtMost(requested, …)},
+     * {@code ControlledStockWitness.resolve(dto.getWitnessedBy(), …)}): a method
+     * whose plain {@code BusinessException} is guarded by one of its parameters,
+     * called with a request-body getter (or a local initialised from one) in that
+     * position - from its own class, or from another service when it is public.
+     * Each entry reads {@code Helper#method:Getter:key <- Caller#method (line n)}.
+     */
+    private static List<String> helperRefusalsOfGivenBodyValues(Map<String, Class<?>> bodies) throws IOException {
+        Map<String, List<HelperRefusal>> helpers = new HashMap<>();
+        Map<Path, String> sources = new LinkedHashMap<>();
+        for (Path file : serviceFiles()) {
+            String source = SourceScan.stripComments(Files.readString(file, StandardCharsets.UTF_8));
+            sources.put(file, source);
+            Matcher header = METHOD_HEADER.matcher(source);
+            while (header.find()) {
+                int open = header.end() - 1;
+                int close = SourceScan.closingParen(source, open);
+                int brace = skipBlanks(source, close + 1);
+                if (source.startsWith("throws", brace)) {
+                    brace = source.indexOf('{', brace);
+                }
+                String name = calledName(source, open);
+                if (name == null || brace < 0 || brace >= source.length() || source.charAt(brace) != '{') {
+                    continue;
+                }
+                boolean shared = source.substring(header.start(), header.end()).contains("public ");
+                List<String> params = parameterNames(source.substring(open + 1, close));
+                String body = source.substring(brace, SourceScan.closingBrace(source, brace) + 1);
+                for (int[] guard : guardsOfThrows(body)) {
+                    Matcher thrown = THROWN_WITH_KEY.matcher(body);
+                    thrown.region(guard[2], body.length());
+                    if (!thrown.lookingAt() || !"BusinessException".equals(simpleName(thrown.group(1)))) {
+                        continue;
+                    }
+                    String guardText = body.substring(guard[0], guard[1]);
+                    for (int i = 0; i < params.size(); i++) {
+                        if (readsName(guardText, params.get(i)) || derivedLocalRead(body, guardText, params.get(i))) {
+                            helpers.computeIfAbsent(name, k -> new ArrayList<>()).add(new HelperRefusal(file, i,
+                                thrown.group(2) == null ? "?" : thrown.group(2), shared));
+                        }
+                    }
+                }
+            }
+        }
+        Set<String> out = new LinkedHashSet<>();
+        for (Map.Entry<Path, String> entry : sources.entrySet()) {
+            String source = entry.getValue();
+            for (Map.Entry<String, List<HelperRefusal>> helper : helpers.entrySet()) {
+                Matcher call = Pattern.compile("[.\\s(!]" + Pattern.quote(helper.getKey()) + "\\(").matcher(source);
+                while (call.find()) {
+                    int open = call.end() - 1;
+                    int lineStart = source.lastIndexOf('\n', open) + 1;
+                    String method = methodAround(source, call.start());
+                    if (method == null || METHOD_HEADER.matcher(source.substring(lineStart, open + 1)).lookingAt()) {
+                        continue;
+                    }
+                    List<String> args = splitTopLevel(source.substring(open + 1, SourceScan.closingParen(source, open)));
+                    for (HelperRefusal refusal : helper.getValue()) {
+                        boolean reachable = refusal.file().equals(entry.getKey())
+                            || (refusal.shared() && callsInto(source, call.start(), refusal.file()));
+                        String getter = reachable && refusal.index() < args.size()
+                            ? bodyValueOfArgument(args.get(refusal.index()).trim(), method, bodies) : null;
+                        if (getter != null) {
+                            out.add(refusal.file().getFileName().toString().replace(".java", "") + "#" + helper.getKey()
+                                + ":" + getter + ":" + refusal.key() + " <- "
+                                + entry.getKey().getFileName().toString().replace(".java", "") + "#" + methodName(method)
+                                + " (line " + SourceScan.lineOf(source, call.start()) + ")");
+                        }
+                    }
+                }
+            }
+        }
+        return new ArrayList<>(out);
+    }
+
+    /**
+     * The call at {@code dot} ({@code receiver.method(}) goes into {@code helperFile}'s
+     * class: the receiver is that class (a static call) or a field or local
+     * declared with that type. A shared name ({@code resolve}, {@code add}) in
+     * another class is not that helper.
+     */
+    private static boolean callsInto(String source, int dot, Path helperFile) {
+        if (source.charAt(dot) != '.') {
+            return false;
+        }
+        String receiver = calledName(source, dot);
+        String type = helperFile.getFileName().toString().replace(".java", "");
+        return receiver != null && (receiver.equals(type)
+            || Pattern.compile("\\b" + Pattern.quote(type) + "\\s++" + Pattern.quote(receiver) + "\\s*+[;=,)]")
+                .matcher(source).find());
+    }
+
+    /** {@code name} read as a variable (not as a member {@code x.name}). */
+    private static boolean readsName(String text, String name) {
+        return Pattern.compile("(?<![.\\w])" + Pattern.quote(name) + "\\b(?!\\s*+\\()").matcher(text).find();
+    }
+
+    private static boolean derivedLocalRead(String body, String guard, String param) {
+        Matcher local = LOCAL_INIT.matcher(body);
+        while (local.find()) {
+            if (readsName(local.group(2), param) && readsName(guard, local.group(1))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** The body getter an argument is ({@code dto.getX()}), or a local initialised from one is; or null. */
+    private static String bodyValueOfArgument(String argument, String method, Map<String, Class<?>> bodies) {
+        Matcher direct = Pattern.compile("^(\\w++)\\.get(\\w++)\\(\\)$").matcher(argument);
+        if (direct.find()) {
+            return parameterType(method, direct.group(1), bodies) != null ? direct.group(2) : null;
+        }
+        if (!argument.matches("[a-z]\\w*+")) {
+            return null;
+        }
+        Matcher local = LOCAL_INIT.matcher(method);
+        while (local.find()) {
+            if (!local.group(1).equals(argument)) {
+                continue;
+            }
+            Matcher inner = GETTER.matcher(local.group(2));
+            while (inner.find()) {
+                if (parameterType(method, inner.group(1), bodies) != null) {
+                    return inner.group(2);
+                }
+            }
+        }
+        return null;
+    }
+
+    private static String simpleName(String type) {
+        return type.substring(type.lastIndexOf('.') + 1);
+    }
+
+    /**
+     * Refusals guarded by a request value that refuse the RECORD or its state,
+     * not the value (site {@code Service#method:Getter:key}), each with why.
+     * Shrinks only.
+     */
+    private static final String RX_FILE_OWNED_ELSEWHERE = "KNOWN GAP D1354 (round 30): PrescriptionServiceImpl belongs to fix/r30-prn-interval this round (file split);"
+            + " a refusal of the prescription's own value, to name its field there";
+
+    private static final Map<String, String> REFUSAL_OF_THE_RECORD = Map.ofEntries(
+        Map.entry("ControlledSubstanceGuard#requireDispensable:PrescriptionId:prescription.safeguard.CONTROLLED_SUBSTANCE.dispense",
+            "a safeguard the prescription still awaits (2FA, co-signature, paediatric review): a state of the order"
+                + " (the round-29 rule reads COSIGN_REQUIRED the same way)"),
+        Map.entry("ControlledSubstanceGuard#requireDispensable:PrescriptionId:prescription.safeguard.COSIGN_REQUIRED.dispense",
+            "a safeguard the prescription still awaits (2FA, co-signature, paediatric review): a state of the order"
+                + " (the round-29 rule reads COSIGN_REQUIRED the same way)"),
+        Map.entry("ControlledSubstanceGuard#requireDispensable:PrescriptionId:prescription.safeguard.PEDIATRIC_DOSE_REVIEW.dispense",
+            "a safeguard the prescription still awaits (2FA, co-signature, paediatric review): a state of the order"
+                + " (the round-29 rule reads COSIGN_REQUIRED the same way)"),
+        Map.entry("TransferServiceImpl#requestTransfer:ToBedId:transfer.r7.destinationTaken",
+            "a pending transfer holds the destination bed: a state of the bed (the D1301 rule excuses the same key)"),
+        Map.entry("LabOrderServiceImpl#buildLabOrder:OrderDatetime:lab.order.duplicate",
+            "the same test for the same patient at the same minute: the order as a whole (the D1301 rule excuses the same key)"),
+        Map.entry("PrescriptionServiceImpl#rejectClientAssertedWorkflowStatus:Status:prescription.status.notAssertable",
+            RX_FILE_OWNED_ELSEWHERE),
+        Map.entry("PrescriptionServiceImpl#rejectSafeguardWithdrawal:ControlledSubstance:prescription.controlled.flagLocked",
+            RX_FILE_OWNED_ELSEWHERE),
+        Map.entry("PrescriptionServiceImpl#rejectSafeguardWithdrawal:RequiresCosign:prescription.cosign.flagLocked",
+            RX_FILE_OWNED_ELSEWHERE),
+        Map.entry("PrescriptionServiceImpl#withdrawSignedPrescription:Status:prescription.signed.onlyWithdrawal",
+            RX_FILE_OWNED_ELSEWHERE),
+        Map.entry("PrescriptionServiceImpl#resolveEncounterContext:EncounterId:prescription.encounter.stayClosed",
+            RX_FILE_OWNED_ELSEWHERE),
+        Map.entry("PrescriptionServiceImpl#resolveEncounterContext:EncounterId:prescription.encounter.closed",
+            RX_FILE_OWNED_ELSEWHERE),
+        Map.entry("PrescriptionServiceImpl#refuseNameItemMismatch:MedicationName:prescription.catalog.nameMismatch",
+            RX_FILE_OWNED_ELSEWHERE),
+        Map.entry("PrescriptionServiceImpl#rejectReopeningWithdrawn:Status:prescription.withdrawn.final",
+            RX_FILE_OWNED_ELSEWHERE));
+
     // ── helpers ──
 
     private record Handler(String where, Class<?> body, boolean validated) {
@@ -946,12 +1437,14 @@ class RequiredRequestIdGuardTest {
     /** Method name to the getters it refuses null with a FieldBusinessException, joined. */
     private static Map<String, String> fieldNamedNullChecks(String source) {
         Map<String, String> out = new LinkedHashMap<>();
+        // QA D1355 class (round 30): a RequiredFields check (.requireValue(x.getYId(), "y", ...)) refuses it too.
         Matcher check = Pattern.compile(
-            "if\\s*+\\(\\s*+\\w+\\.get(\\w+Id)\\(\\)\\s*+==\\s*+null\\s*+\\)\\s*+\\{?\\s*+throw\\s++new\\s++(?:[a-z]\\w*+\\.)*+FieldBusinessException\\(")
+            "if\\s*+\\(\\s*+\\w+\\.get(\\w+Id)\\(\\)\\s*+==\\s*+null\\s*+\\)\\s*+\\{?\\s*+throw\\s++new\\s++(?:[a-z]\\w*+\\.)*+FieldBusinessException\\("
+                + "|\\.requireValue\\(\\s*+\\w+\\.get(\\w+Id)\\(\\)\\s*+,")
             .matcher(source);
         while (check.find()) {
             String method = AppointmentSlotRulesGuardTest.enclosingMethod(source, check.start());
-            out.merge(methodName(method), check.group(1), (a, b) -> a + "," + b);
+            out.merge(methodName(method), check.group(1) != null ? check.group(1) : check.group(2), (a, b) -> a + "," + b);
         }
         return out;
     }

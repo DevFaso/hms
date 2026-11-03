@@ -49,6 +49,9 @@ import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 @RequiredArgsConstructor
 @Slf4j
 public class StockTransactionServiceImpl implements StockTransactionService {
+    /** Request properties a refusal names (QA D1352 class, round 30). */
+    private static final String FIELD_QUANTITY = "quantity";
+
 
     private final StockTransactionRepository stockTransactionRepository;
     private final InventoryItemRepository inventoryItemRepository;
@@ -302,7 +305,7 @@ public class StockTransactionServiceImpl implements StockTransactionService {
     private void requireMovementIsAccountable(StockTransactionRequestDTO dto, InventoryItem item, StockLot lot) {
         StockTransactionType type = dto.getTransactionType();
         if (type == StockTransactionType.DISPENSE) {
-            throw new BusinessException(MessageUtil.resolve("stockTransaction.dispense.viaWorkflow"));
+            throw new com.example.hms.exception.FieldBusinessException("transactionType", MessageUtil.resolve("stockTransaction.dispense.viaWorkflow"));
         }
         // QA D615: a receipt here created no lot row, so an expired lot, a
         // lot number re-used with another expiry and an item total above its
@@ -310,13 +313,13 @@ public class StockTransactionServiceImpl implements StockTransactionService {
         // (POST /pharmacy/inventory/lots), which owns those rules; the portal
         // already uses it.
         if (type == StockTransactionType.RECEIPT) {
-            throw new BusinessException(MessageUtil.resolve("stockTransaction.receipt.viaLots"));
+            throw new com.example.hms.exception.FieldBusinessException("transactionType", MessageUtil.resolve("stockTransaction.receipt.viaLots"));
         }
         BigDecimal quantity = dto.getQuantity();
         boolean quantityValid = quantity != null
                 && (type == StockTransactionType.ADJUSTMENT ? quantity.signum() != 0 : quantity.signum() > 0);
         if (!quantityValid) {
-            throw new BusinessException(MessageUtil.resolve("stockTransaction.quantity.invalid"));
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_QUANTITY, MessageUtil.resolve("stockTransaction.quantity.invalid"));
         }
         if (dto.getReason() == null || dto.getReason().isBlank()) {
             throw new com.example.hms.exception.FieldBusinessException("reason", "stockTransaction.reason.required");
@@ -324,11 +327,11 @@ public class StockTransactionServiceImpl implements StockTransactionService {
         // QA D1243: a write-off reason (damage, expiry, loss) only removes stock.
         if (type == StockTransactionType.ADJUSTMENT && quantity.signum() > 0
                 && StockWriteOffReason.isWriteOff(dto.getReason())) {
-            throw new com.example.hms.exception.FieldBusinessException("quantity", StockWriteOffReason.MUST_REMOVE_KEY);
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_QUANTITY, StockWriteOffReason.MUST_REMOVE_KEY);
         }
         if (lot != null) {
             if (lot.getInventoryItem() == null || !item.getId().equals(lot.getInventoryItem().getId())) {
-                throw new BusinessException(MessageUtil.resolve("stockTransaction.lot.wrongItem"));
+                throw new com.example.hms.exception.FieldBusinessException("stockLotId", MessageUtil.resolve("stockTransaction.lot.wrongItem"));
             }
         } else if (stockLotRepository.existsByInventoryItemId(item.getId())) {
             throw new com.example.hms.exception.FieldBusinessException("stockLotId", "stockTransaction.lot.required");
@@ -349,7 +352,7 @@ public class StockTransactionServiceImpl implements StockTransactionService {
         if (reason != null) {
             String combined = dto.getReason().trim() + FEFO_LEDGER_SEPARATOR + reason;
             if (combined.length() > 500) {
-                throw new BusinessException("pharmacy.fefo.reasonTooLong",
+                throw new com.example.hms.exception.FieldBusinessException("reason", "pharmacy.fefo.reasonTooLong",
                         String.valueOf(Math.max(0, 500 - dto.getReason().trim().length()
                                 - FEFO_LEDGER_SEPARATOR.length())));
             }
@@ -386,7 +389,7 @@ public class StockTransactionServiceImpl implements StockTransactionService {
         }
         BigDecimal returnable = nz(issued).subtract(nz(returned));
         if (quantity.compareTo(returnable) > 0) {
-            throw new com.example.hms.exception.FieldBusinessException("quantity", "stockTransaction.return.exceedsIssued",
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_QUANTITY, "stockTransaction.return.exceedsIssued",
                     com.example.hms.utility.DisplayNumbers.quantity(returnable.max(BigDecimal.ZERO)));
         }
     }
@@ -416,7 +419,7 @@ public class StockTransactionServiceImpl implements StockTransactionService {
         }
         if (dispense.getStatus() != com.example.hms.enums.DispenseStatus.COMPLETED
                 && dispense.getStatus() != com.example.hms.enums.DispenseStatus.PARTIAL) {
-            throw new BusinessException(MessageUtil.resolve("stockTransaction.return.dispenseNotReturnable"));
+            throw new com.example.hms.exception.FieldBusinessException("referenceId", MessageUtil.resolve("stockTransaction.return.dispenseNotReturnable"));
         }
         StockLot dispensedLot = dispense.getStockLot();
         boolean sameStock = dispensedLot != null
@@ -430,7 +433,7 @@ public class StockTransactionServiceImpl implements StockTransactionService {
         BigDecimal returnable = nz(dispense.getQuantityDispensed()).subtract(nz(
                 stockTransactionRepository.sumQuantityForReference(dispense.getId(), RETURNED_TYPES)));
         if (dto.getQuantity().compareTo(returnable) > 0) {
-            throw new com.example.hms.exception.FieldBusinessException("quantity", "stockTransaction.return.exceedsDispensed",
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_QUANTITY, "stockTransaction.return.exceedsDispensed",
                     com.example.hms.utility.DisplayNumbers.quantity(returnable.max(BigDecimal.ZERO)));
         }
     }
@@ -456,7 +459,7 @@ public class StockTransactionServiceImpl implements StockTransactionService {
         BigDecimal returnable = nz(transfer.getQuantity()).subtract(nz(
                 stockTransactionRepository.sumQuantityForReference(transfer.getId(), RETURNED_TYPES)));
         if (dto.getQuantity().compareTo(returnable) > 0) {
-            throw new com.example.hms.exception.FieldBusinessException("quantity", "stockTransaction.return.exceedsDispensed",
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_QUANTITY, "stockTransaction.return.exceedsDispensed",
                     com.example.hms.utility.DisplayNumbers.quantity(returnable.max(BigDecimal.ZERO)));
         }
     }
@@ -480,7 +483,7 @@ public class StockTransactionServiceImpl implements StockTransactionService {
             returned = stockTransactionRepository.sumUnreferencedQuantityForItem(item.getId(), RETURNED_TYPES);
         }
         if (dto.getQuantity().compareTo(nz(transferred).subtract(nz(returned))) > 0) {
-            throw new BusinessException("stockTransaction.return.dispenseRequired");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_QUANTITY, "stockTransaction.return.dispenseRequired");
         }
     }
 
@@ -538,13 +541,13 @@ public class StockTransactionServiceImpl implements StockTransactionService {
     private User resolvePerformer(UUID performedBy) {
         UUID userId = roleValidator.getCurrentUserId();
         if (userId == null) {
-            throw new BusinessException("stock.user.performingUnknown");
+            throw new com.example.hms.exception.FieldBusinessException("performedBy", "stock.user.performingUnknown");
         }
         // D82: the movement is recorded against the signed-in user. A
         // caller-supplied performer let one user book a movement in a
         // colleague's name.
         if (performedBy != null && !performedBy.equals(userId)) {
-            throw new BusinessException(MessageUtil.resolve("stockTransaction.performer.notSelf"));
+            throw new com.example.hms.exception.FieldBusinessException("performedBy", MessageUtil.resolve("stockTransaction.performer.notSelf"));
         }
         return userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("user.current.notfound"));
@@ -609,7 +612,8 @@ public class StockTransactionServiceImpl implements StockTransactionService {
      */
     private void putOnWithinReceived(InventoryItem item, StockLot lot, BigDecimal quantity, LocalDateTime now) {
         if (lot != null && stockLotRepository.incrementRemainingWithinReceived(lot.getId(), quantity, now) == 0) {
-            throw new BusinessException(MessageUtil.resolve("stockLot.quantity.aboveReceived"));
+            // QA D1354 (round 30): the adjustment's quantity is what the lot cannot take.
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_QUANTITY, MessageUtil.resolve("stockLot.quantity.aboveReceived"));
         }
         inventoryItemRepository.incrementOnHand(item.getId(), quantity, now);
     }

@@ -74,6 +74,9 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Transactional
 public class TransfusionServiceImpl implements TransfusionService {
+    /** Request properties a refusal names (QA D1352 class, round 30). */
+    private static final String FIELD_BLOOD_UNIT_ID = "bloodUnitId";
+
 
     private static final String MSG_REQUEST_NOT_FOUND = "transfusion.request.notFound";
     private static final String MSG_UNIT_NOT_FOUND = "transfusion.unit.notFound";
@@ -190,7 +193,7 @@ public class TransfusionServiceImpl implements TransfusionService {
             });
         LocalDate today = LocalDate.now(clock);
         if (request.getExpiresOn() != null && !request.getExpiresOn().isAfter(today)) {
-            throw new BusinessException("transfusion.unit.expiredOnReceipt", request.getUnitNumber());
+            throw new com.example.hms.exception.FieldBusinessException("expiresOn", "transfusion.unit.expiredOnReceipt", request.getUnitNumber());
         }
         // QA D883: a bag collected in 2027 was received into stock. A donation
         // date after today, or after the bag's own expiry, is a typing error.
@@ -273,7 +276,7 @@ public class TransfusionServiceImpl implements TransfusionService {
         // is the whole point of emergency release, and refusing it would block a
         // resuscitation. Anything else needs the patient typed first.
         if (group == null && urgency != TransfusionUrgency.EMERGENCY) {
-            throw new BusinessException("transfusion.request.noTypeAndScreen");
+            throw new com.example.hms.exception.FieldBusinessException("urgency", "transfusion.request.noTypeAndScreen");
         }
 
         Encounter encounter = null;
@@ -385,14 +388,14 @@ public class TransfusionServiceImpl implements TransfusionService {
 
         BloodUnit unit = loadUnitScoped(request.getBloodUnitId());
         if (unit.isExpiredOn(LocalDate.now(clock))) {
-            throw new BusinessException("transfusion.unit.expired", unit.getUnitNumber(),
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_BLOOD_UNIT_ID, "transfusion.unit.expired", unit.getUnitNumber(),
                 DisplayDates.date(unit.getExpiresOn()));
         }
         if (unit.isTerminal()) {
-            throw new BusinessException("transfusion.unit.noLongerUsable", unit.getUnitNumber());
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_BLOOD_UNIT_ID, "transfusion.unit.noLongerUsable", unit.getUnitNumber());
         }
         if (unit.getProductType() != transfusionRequest.getProductType()) {
-            throw new BusinessException("transfusion.unit.productMismatch", unit.getUnitNumber(),
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_BLOOD_UNIT_ID, "transfusion.unit.productMismatch", unit.getUnitNumber(),
                 productLabel(unit.getProductType()), productLabel(transfusionRequest.getProductType()));
         }
         requireInFuture(request.getExpiresAt());
@@ -550,14 +553,14 @@ public class TransfusionServiceImpl implements TransfusionService {
         BloodUnit unit = loadUnitScoped(request.getBloodUnitId());
 
         if (unit.getStatus() != BloodUnitStatus.ISSUED) {
-            throw new BusinessException("transfusion.unit.notIssued", unit.getUnitNumber());
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_BLOOD_UNIT_ID, "transfusion.unit.notIssued", unit.getUnitNumber());
         }
         if (unit.isExpiredOn(LocalDate.now(clock))) {
-            throw new BusinessException("transfusion.unit.expired", unit.getUnitNumber(),
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_BLOOD_UNIT_ID, "transfusion.unit.expired", unit.getUnitNumber(),
                 DisplayDates.date(unit.getExpiresOn()));
         }
         administrationRepository.findByBloodUnit_Id(unit.getId()).ifPresent(existing -> {
-            throw new BusinessException("transfusion.unit.alreadyHung", unit.getUnitNumber());
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_BLOOD_UNIT_ID, "transfusion.unit.alreadyHung", unit.getUnitNumber());
         });
 
         Staff administering = currentStaff(hospitalId);
@@ -751,7 +754,7 @@ public class TransfusionServiceImpl implements TransfusionService {
     /** A screen or a reservation that has already lapsed when recorded protects nobody. */
     private void requireInFuture(LocalDateTime expiresAt) {
         if (expiresAt != null && !expiresAt.isAfter(LocalDateTime.now(clock))) {
-            throw new BusinessException("transfusion.expiryInPast");
+            throw new com.example.hms.exception.FieldBusinessException("expiresAt", "transfusion.expiryInPast");
         }
     }
 

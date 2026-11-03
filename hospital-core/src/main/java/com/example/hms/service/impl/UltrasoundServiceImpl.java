@@ -41,6 +41,9 @@ import com.example.hms.utility.RoleValidator;
 @RequiredArgsConstructor
 @Transactional
 public class UltrasoundServiceImpl implements UltrasoundService {
+    /** Request properties a refusal names (QA D1352 class, round 30). */
+    private static final String FIELD_GESTATIONAL_AGE_AT_ORDER = "gestationalAgeAtOrder";
+
     private static final String ULTRASOUND_ORDER_NOT_FOUND_KEY = "ultrasound.order.notFound";
     private static final String ULTRASOUND_REPORT_NOT_FOUND_KEY = "ultrasound.report.notFound";
 
@@ -150,7 +153,7 @@ public class UltrasoundServiceImpl implements UltrasoundService {
             throw new BusinessException("ultrasound.order.completedNoCancel");
         }
         // QA D1098: every cancel states why (the endpoint's reason was optional).
-        String reason = com.example.hms.service.support.CancelledOrders.requireCancelReason(cancellationReason);
+        String reason = com.example.hms.service.support.CancelledOrders.requireCancelReason(cancellationReason, "cancellationReason");
 
         order.setStatus(UltrasoundOrderStatus.CANCELLED);
         order.setCancellationReason(reason);
@@ -601,17 +604,17 @@ public class UltrasoundServiceImpl implements UltrasoundService {
         switch (scanType) {
             case NUCHAL_TRANSLUCENCY:
                 if (gestationalAgeWeeks < 11 || gestationalAgeWeeks > 14) {
-                    throw new BusinessException("ultrasound.ga.NUCHAL_TRANSLUCENCY", gestationalAgeWeeks);
+                    throw new com.example.hms.exception.FieldBusinessException(FIELD_GESTATIONAL_AGE_AT_ORDER, "ultrasound.ga.NUCHAL_TRANSLUCENCY", gestationalAgeWeeks);
                 }
                 break;
             case ANATOMY_SCAN:
                 if (gestationalAgeWeeks < 18 || gestationalAgeWeeks > 22) {
-                    throw new BusinessException("ultrasound.ga.ANATOMY_SCAN", gestationalAgeWeeks);
+                    throw new com.example.hms.exception.FieldBusinessException(FIELD_GESTATIONAL_AGE_AT_ORDER, "ultrasound.ga.ANATOMY_SCAN", gestationalAgeWeeks);
                 }
                 break;
             case GROWTH_SCAN:
                 if (gestationalAgeWeeks < 24) {
-                    throw new BusinessException("ultrasound.ga.GROWTH_SCAN", gestationalAgeWeeks);
+                    throw new com.example.hms.exception.FieldBusinessException(FIELD_GESTATIONAL_AGE_AT_ORDER, "ultrasound.ga.GROWTH_SCAN", gestationalAgeWeeks);
                 }
                 break;
             default:

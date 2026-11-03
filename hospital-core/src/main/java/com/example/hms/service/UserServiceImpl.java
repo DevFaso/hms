@@ -76,6 +76,10 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Slf4j
 public class UserServiceImpl implements UserService {
+    /** Request properties a refusal names (QA D1352 class, round 30). */
+    private static final String FIELD_EMAIL = "email";
+    private static final String FIELD_USERNAME = "username";
+
 
     /** QA D790: the chat picker's page, wide enough for a hospital's staff and bounded. */
     private static final int MAX_CHAT_RECIPIENTS = 500;
@@ -347,12 +351,12 @@ public class UserServiceImpl implements UserService {
             // button in the user list are the way out.
             if (username != null) {
                 userRepository.findByUsername(username).ifPresent(existing -> {
-                    throw conflictFor("username", username, existing);
+                    throw conflictFor(FIELD_USERNAME, username, existing);
                 });
             }
             if (email != null) {
                 userRepository.findByEmail(email).ifPresent(existing -> {
-                    throw conflictFor("email", email, existing);
+                    throw conflictFor(FIELD_EMAIL, email, existing);
                 });
             }
             if (phone != null && !phone.isBlank()) {
@@ -1869,16 +1873,16 @@ public class UserServiceImpl implements UserService {
      */
     private static void requireSelfServiceChangesOnly(User user, UpdateUserRequestDTO dto) {
         if (dto.getActive() != null && !dto.getActive().equals(user.isActive())) {
-            throw new BusinessException(MessageUtil.resolve("user.update.self.active"));
+            throw new com.example.hms.exception.FieldBusinessException("active", MessageUtil.resolve("user.update.self.active"));
         }
         if (hasText(dto.getPassword())) {
-            throw new BusinessException(MessageUtil.resolve("user.update.self.password"));
+            throw new com.example.hms.exception.FieldBusinessException("password", MessageUtil.resolve("user.update.self.password"));
         }
         if (hasText(dto.getUsername()) && !dto.getUsername().equals(user.getUsername())) {
-            throw new BusinessException(MessageUtil.resolve("user.update.self.username"));
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_USERNAME, MessageUtil.resolve("user.update.self.username"));
         }
         if (hasText(dto.getEmail()) && !dto.getEmail().equals(user.getEmail())) {
-            throw new BusinessException(MessageUtil.resolve("user.update.self.email"));
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_EMAIL, MessageUtil.resolve("user.update.self.email"));
         }
     }
 
@@ -1928,11 +1932,11 @@ public class UserServiceImpl implements UserService {
     private void requireIdentifiersFree(User user, UpdateUserRequestDTO dto) {
         if (hasText(dto.getUsername()) && !dto.getUsername().equals(user.getUsername())
                 && userRepository.existsUsernameOnOtherAccount(dto.getUsername(), user.getId())) {
-            throw new com.example.hms.exception.FieldBusinessException("username", "user.update.username.taken");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_USERNAME, "user.update.username.taken");
         }
         if (hasText(dto.getEmail()) && !dto.getEmail().equals(user.getEmail())
                 && userRepository.existsEmailOnOtherAccount(dto.getEmail(), user.getId())) {
-            throw new com.example.hms.exception.FieldBusinessException("email", "user.update.email.taken");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_EMAIL, "user.update.email.taken");
         }
     }
 
@@ -2256,7 +2260,7 @@ public class UserServiceImpl implements UserService {
             // Any letter case, deleted accounts included: the same rule as an
             // administrator's rename (requireIdentifiersFree).
             if (userRepository.existsUsernameOnOtherAccount(newUsername, userId)) {
-                throw new com.example.hms.exception.FieldBusinessException("username", "account.setup.username.taken");
+                throw new com.example.hms.exception.FieldBusinessException(FIELD_USERNAME, "account.setup.username.taken");
             }
             user.setUsername(newUsername);
             user.setForceUsernameChange(false);

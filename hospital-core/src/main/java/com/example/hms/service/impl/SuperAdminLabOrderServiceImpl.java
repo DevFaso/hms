@@ -87,7 +87,7 @@ public class SuperAdminLabOrderServiceImpl implements SuperAdminLabOrderService 
                 assignmentRole = normalize(assignment.getRole().getName());
             }
             if (assignmentRole == null || !assignmentRole.equalsIgnoreCase(requestedRole)) {
-                throw new BusinessException("lab.order.orderingStaffRoleMissing");
+                throw new com.example.hms.exception.FieldBusinessException("orderingStaffRole", "lab.order.orderingStaffRoleMissing");
             }
         }
 

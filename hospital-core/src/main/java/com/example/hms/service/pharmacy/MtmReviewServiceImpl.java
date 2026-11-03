@@ -80,7 +80,7 @@ public class MtmReviewServiceImpl implements MtmReviewService {
     public MtmReviewResponseDTO startReview(MtmReviewRequestDTO dto) {
         UUID activeHospitalId = requireHospital();
         if (!activeHospitalId.equals(dto.getHospitalId())) {
-            throw new BusinessException("mtm.review.hospitalMismatch");
+            throw new com.example.hms.exception.FieldBusinessException("hospitalId", "mtm.review.hospitalMismatch");
         }
 
         Patient patient = patientRepository.findById(dto.getPatientId())
@@ -230,10 +230,10 @@ public class MtmReviewServiceImpl implements MtmReviewService {
         MtmReviewStatus current = existing.getStatus();
         MtmReviewStatus next = dto.getStatus() != null ? dto.getStatus() : current;
         if (current == MtmReviewStatus.COMPLETED && !isNoOp(existing, dto, next)) {
-            throw new BusinessException("mtm.review.completedIsClosed");
+            throw new com.example.hms.exception.FieldBusinessException("status", "mtm.review.completedIsClosed");
         }
         if (current == MtmReviewStatus.REFERRED && next == MtmReviewStatus.DRAFT) {
-            throw new BusinessException("mtm.review.referredCannotReturnToDraft");
+            throw new com.example.hms.exception.FieldBusinessException("status", "mtm.review.referredCannotReturnToDraft");
         }
         requireFollowUpNotInPast(dto.getFollowUpDate(), existing.getFollowUpDate(), existing.getHospital());
     }
@@ -260,7 +260,7 @@ public class MtmReviewServiceImpl implements MtmReviewService {
     private static void requireFollowUpNotInPast(LocalDate followUp, LocalDate stored, Hospital hospital) {
         if (followUp != null && !followUp.equals(stored)
                 && followUp.isBefore(com.example.hms.utility.HospitalCalendar.today(hospital))) {
-            throw new BusinessException("mtm.review.followUpInPast");
+            throw new com.example.hms.exception.FieldBusinessException("followUpDate", "mtm.review.followUpInPast");
         }
     }
 

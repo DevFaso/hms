@@ -91,7 +91,7 @@ public class ProgramEnrollmentService {
         enrollmentRepository.findByPatientIdAndHospitalIdAndProgramAndStatus(
                 patientId, hospitalId, request.getProgram(), ProgramEnrollmentStatus.ACTIVE)
             .ifPresent(existing -> {
-                throw new BusinessException("program.enrollment.alreadyActive");
+                throw new com.example.hms.exception.FieldBusinessException("program", "program.enrollment.alreadyActive");
             });
 
         LocalDate enrolledOn = request.getEnrolledOn() != null
@@ -129,7 +129,7 @@ public class ProgramEnrollmentService {
         ProgramEnrollmentStatus previous = enrollment.getStatus();
         ProgramEnrollmentStatus target = request.getStatus();
         if (previous == target) {
-            throw new BusinessException("program.enrollment.sameStatus");
+            throw new com.example.hms.exception.FieldBusinessException("status", "program.enrollment.sameStatus");
         }
 
         String reason = trimToNull(request.getReason());
@@ -138,7 +138,7 @@ public class ProgramEnrollmentService {
             // refused rather than ignored: text supplied here would vanish
             // silently, and the caller deserves to know it has nowhere to go.
             if (reason != null) {
-                throw new BusinessException("program.enrollment.reopenNoReason");
+                throw new com.example.hms.exception.FieldBusinessException("reason", "program.enrollment.reopenNoReason");
             }
             enrollmentRepository.findByPatientIdAndHospitalIdAndProgramAndStatus(
                     patientId, hospitalId, enrollment.getProgram(), ProgramEnrollmentStatus.ACTIVE)

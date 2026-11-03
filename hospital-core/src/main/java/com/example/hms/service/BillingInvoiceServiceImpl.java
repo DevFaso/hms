@@ -43,6 +43,11 @@ import java.util.UUID;
 
 @Service
 public class BillingInvoiceServiceImpl implements BillingInvoiceService {
+    /** Request properties a refusal names (QA D1352 class, round 30). */
+    private static final String FIELD_AMOUNT = "amount";
+    private static final String FIELD_INVOICE_ITEM_ID = "invoiceItemId";
+    private static final String FIELD_STATUS = "status";
+
 
     private static final String BILLING_INVOICE_NOT_FOUND = "billinginvoice.notfound";
     /** QA D1293: a payment without a method. */
@@ -169,7 +174,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         // server will write is refused, not silently rewritten.
         rejectHospitalMismatch(dto, hospital);
         if (dto.getInvoiceNumber() != null && !dto.getInvoiceNumber().isBlank()) {
-            throw new BusinessException("billing.invoice.numberAssignedByServer");
+            throw new com.example.hms.exception.FieldBusinessException("invoiceNumber", "billing.invoice.numberAssignedByServer");
         }
         // QA D307: a typed total is whole francs, like the payments that settle it.
         requireWholeAmount(dto.getTotalAmount());
@@ -297,7 +302,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         // QA D230: a hospital id in the body is a claim; one that is not the
         // acting hospital is refused, never rewritten.
         if (dto.getHospitalId() != null && !dto.getHospitalId().equals(hospital.getId())) {
-            throw new BusinessException("billing.invoice.hospitalMismatch");
+            throw new com.example.hms.exception.FieldBusinessException("hospitalId", "billing.invoice.hospitalMismatch");
         }
         String named = dto.getHospitalName();
         if (named == null || named.isBlank()) {
@@ -305,7 +310,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         }
         String actual = hospital.getName();
         if (actual == null || !actual.trim().equalsIgnoreCase(named.trim())) {
-            throw new BusinessException("billing.invoice.hospitalMismatch");
+            throw new com.example.hms.exception.FieldBusinessException("hospitalName", "billing.invoice.hospitalMismatch");
         }
     }
 
@@ -415,7 +420,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             .orElseThrow(() -> new BusinessException("billing.invoice.encounterNotFound"));
         // QA D70: an encounter code is a claim; one of another hospital is refused, not dropped.
         if (!hospitalId.equals(encounter.getHospital().getId())) {
-            throw new BusinessException("billing.encounter.otherHospital");
+            throw new com.example.hms.exception.FieldBusinessException("encounterReference", "billing.encounter.otherHospital");
         }
         return encounter;
     }
@@ -427,7 +432,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
      */
     private static void requireIssuableTotal(InvoiceStatus status, BigDecimal total) {
         if (status == InvoiceStatus.SENT && (total == null || total.signum() <= 0)) {
-            throw new BusinessException("billing.invoice.zeroTotal");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_STATUS, "billing.invoice.zeroTotal");
         }
     }
 
@@ -521,7 +526,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         }
         boolean creditNote = request.getType() == com.example.hms.enums.InvoiceAdjustmentType.CREDIT_NOTE;
         if (creditNote && request.getInvoiceItemId() == null) {
-            throw new com.example.hms.exception.FieldBusinessException("invoiceItemId", "billing.adjustment.lineRequired");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_INVOICE_ITEM_ID, "billing.adjustment.lineRequired");
         }
         BigDecimal total = nz(invoice.getTotalAmount());
         BigDecimal paid = nz(invoice.getAmountPaid());
@@ -533,12 +538,12 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             ? amountAgainstLine(line, request.getAmount(), creditNote, total.subtract(paid).subtract(pending), locale)
             : request.getAmount();
         if (amount == null || amount.signum() <= 0) {
-            throw new com.example.hms.exception.FieldBusinessException("amount", "billing.adjustment.amountPositive");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_AMOUNT, "billing.adjustment.amountPositive");
         }
         requireWholeAmount(amount);
         // Earlier discounts may already have lowered the total under the line.
         if (amount.compareTo(total) > 0) {
-            throw new BusinessException("billing.adjustment.moreThanTotal", formatFrancs(total, locale));
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_AMOUNT, "billing.adjustment.moreThanTotal", formatFrancs(total, locale));
         }
         BigDecimal newTotal = total.subtract(amount);
         requireRoomUnderPayments(newTotal, paid, pending);
@@ -585,18 +590,18 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
                                          BigDecimal room, Locale locale) {
         BigDecimal left = nz(line.getTotalPrice()).subtract(nz(adjustmentRepository.sumByInvoiceItemId(line.getId())));
         if (left.signum() <= 0) {
-            throw new BusinessException("billing.adjustment.lineFullyCredited");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_INVOICE_ITEM_ID, "billing.adjustment.lineFullyCredited");
         }
         BigDecimal amount = requested;
         if (amount == null && creditNote) {
             if (left.compareTo(room) > 0) {
-                throw new BusinessException("billing.adjustment.creditBeyondUnpaid",
+                throw new com.example.hms.exception.FieldBusinessException(FIELD_INVOICE_ITEM_ID, "billing.adjustment.creditBeyondUnpaid",
                     formatFrancs(room.max(BigDecimal.ZERO), locale));
             }
             amount = left;
         }
         if (amount != null && amount.compareTo(left) > 0) {
-            throw new BusinessException("billing.adjustment.moreThanLine", formatFrancs(left, locale));
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_AMOUNT, "billing.adjustment.moreThanLine", formatFrancs(left, locale));
         }
         return amount;
     }
@@ -935,7 +940,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     private static void rejectNumberChange(BillingInvoiceRequestDTO dto, BillingInvoice invoice) {
         if (dto.getInvoiceNumber() != null && !dto.getInvoiceNumber().isBlank()
                 && !dto.getInvoiceNumber().trim().equals(invoice.getInvoiceNumber())) {
-            throw new BusinessException("billing.invoice.numberAssignedByServer");
+            throw new com.example.hms.exception.FieldBusinessException("invoiceNumber", "billing.invoice.numberAssignedByServer");
         }
     }
 
@@ -944,7 +949,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         if (dto.getTotalAmount() != null && !invoiceRepository.hasItems(id)) {
             requireWholeAmount(dto.getTotalAmount()); // QA D307
             if (dto.getTotalAmount().compareTo(paid) < 0) {
-                throw new BusinessException("billing.invoice.totalBelowPaid");
+                throw new com.example.hms.exception.FieldBusinessException("totalAmount", "billing.invoice.totalBelowPaid");
             }
             invoice.setTotalAmount(dto.getTotalAmount());
         }
@@ -966,7 +971,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
                 wasDraft ? "billing.invoice.cancelReasonRequiredAll" : "billing.invoice.cancelReasonRequired");
         }
         if (why.length() > CANCEL_REASON_MAX) {
-            throw new BusinessException("billing.invoice.cancelReasonTooLong", String.valueOf(CANCEL_REASON_MAX));
+            throw new com.example.hms.exception.FieldBusinessException("cancelReason", "billing.invoice.cancelReasonTooLong", String.valueOf(CANCEL_REASON_MAX));
         }
         invoice.setCancelReason(why.isEmpty() ? null : why);
         invoice.setCancelledAt(java.time.LocalDateTime.now(java.time.ZoneId.systemDefault()));
@@ -1111,13 +1116,13 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             return current;
         }
         if (requested == InvoiceStatus.PAID || requested == InvoiceStatus.PARTIALLY_PAID) {
-            throw new BusinessException("billing.invoice.statusFollowsPayments");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_STATUS, "billing.invoice.statusFollowsPayments");
         }
         // QA D613/D614 (#926 review): an issued invoice holds its number and
         // its patient; going back to DRAFT would reopen both (delete, patient
         // swap). Once out of DRAFT it only moves on, or to CANCELLED.
         if (requested == InvoiceStatus.DRAFT) {
-            throw new BusinessException("billing.invoice.noReturnToDraft");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_STATUS, "billing.invoice.noReturnToDraft");
         }
         // QA D142: a paid or partly paid invoice is cancelled or re-drafted
         // only once its payments are reversed; the message says so.
@@ -1125,12 +1130,12 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         // cancelled (and re-issued) when the waiver was a mistake.
         if (current == InvoiceStatus.PAID && !hasPayments) {
             if (requested != InvoiceStatus.CANCELLED) {
-                throw new BusinessException("billing.invoice.statusLockedByPayments");
+                throw new com.example.hms.exception.FieldBusinessException(FIELD_STATUS, "billing.invoice.statusLockedByPayments");
             }
             return requested;
         }
         if (hasPayments || current == InvoiceStatus.PARTIALLY_PAID) {
-            throw new BusinessException("billing.invoice.statusLockedByPayments");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_STATUS, "billing.invoice.statusLockedByPayments");
         }
         return requested;
     }
@@ -1330,7 +1335,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             // QA D230: another hospital named in the body is refused, not rewritten.
             // QA D1011: with a search message, not the invoice-create one.
             if (effectiveHospitalId != null && !effectiveHospitalId.equals(activeHospitalId)) {
-                throw new BusinessException("billing.search.otherHospital");
+                throw new com.example.hms.exception.FieldBusinessException("hospitalId", "billing.search.otherHospital");
             }
             effectiveHospitalId = activeHospitalId;
         }
@@ -1640,7 +1645,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             BigDecimal balanceDue = invoice.getTotalAmount()
                 .subtract(invoice.getAmountPaid() != null ? invoice.getAmountPaid() : BigDecimal.ZERO);
             if (declared.compareTo(balanceDue) > 0) {
-                throw new com.example.hms.exception.FieldBusinessException("amount", "billing.payment.exceedsWithPending", payment.getAmount(), open,
+                throw new com.example.hms.exception.FieldBusinessException(FIELD_AMOUNT, "billing.payment.exceedsWithPending", payment.getAmount(), open,
                     balanceDue.subtract(open).max(BigDecimal.ZERO));
             }
         }
@@ -1702,7 +1707,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
      */
     private static void requireWholeAmount(BigDecimal amount) {
         if (amount != null && amount.stripTrailingZeros().scale() > 0) {
-            throw new com.example.hms.exception.FieldBusinessException("amount", "billing.payment.wholeAmountOnly");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_AMOUNT, "billing.payment.wholeAmountOnly");
         }
     }
 
@@ -1759,7 +1764,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         BigDecimal balanceDue = invoice.getTotalAmount().subtract(currentPaid);
 
         if (amount.compareTo(balanceDue) > 0) {
-            throw new com.example.hms.exception.FieldBusinessException("amount", "billing.payment.exceedsBalance", amount, balanceDue);
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_AMOUNT, "billing.payment.exceedsBalance", amount, balanceDue);
         }
         return invoice;
     }
@@ -1826,7 +1831,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         BigDecimal balanceDue = invoice.getTotalAmount()
             .subtract(invoice.getAmountPaid() != null ? invoice.getAmountPaid() : BigDecimal.ZERO);
         if (amount.add(pending).compareTo(balanceDue) > 0) {
-            throw new com.example.hms.exception.FieldBusinessException("amount", "billing.payment.staffExceedsWithPending", amount, pending,
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_AMOUNT, "billing.payment.staffExceedsWithPending", amount, pending,
                 balanceDue.subtract(pending).max(BigDecimal.ZERO));
         }
     }

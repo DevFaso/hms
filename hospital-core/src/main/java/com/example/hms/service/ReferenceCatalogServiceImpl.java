@@ -39,6 +39,9 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class ReferenceCatalogServiceImpl implements ReferenceCatalogService {
+    /** Request properties a refusal names (QA D1352 class, round 30). */
+    private static final String FIELD_CODE = "code";
+
 
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {
     };
@@ -61,11 +64,11 @@ public class ReferenceCatalogServiceImpl implements ReferenceCatalogService {
     public ReferenceCatalogResponseDTO createCatalog(CreateReferenceCatalogRequestDTO requestDTO) {
         String code = normalizeCode(requestDTO.getCode());
         if (code == null) {
-            throw new BusinessException("Catalog code cannot be blank");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_CODE, "Catalog code cannot be blank");
         }
         catalogRepository.findByCodeIgnoreCase(code)
             .ifPresent(existing -> {
-                throw new BusinessException("Catalog with code '" + code + "' already exists");
+                throw new com.example.hms.exception.FieldBusinessException(FIELD_CODE, "Catalog with code '" + code + "' already exists");
             });
 
         ReferenceCatalog catalog = ReferenceCatalog.builder()
@@ -242,7 +245,7 @@ public class ReferenceCatalogServiceImpl implements ReferenceCatalogService {
     }
 
     private CatalogImportStats processCsvRow(ReferenceCatalog catalog, CSVRecord csvRow) {
-        String rawCode = value(csvRow, "code");
+        String rawCode = value(csvRow, FIELD_CODE);
         if (!StringUtils.hasText(rawCode)) {
             return CatalogImportStats.skippedAction();
         }

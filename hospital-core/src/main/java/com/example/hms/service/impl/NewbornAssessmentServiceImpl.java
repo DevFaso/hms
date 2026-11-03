@@ -513,11 +513,11 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
 
         if (hospital != null && delivery.getHospital() != null
             && !hospital.getId().equals(delivery.getHospital().getId())) {
-            throw new BusinessException("maternity.newborn.deliveryOtherHospital");
+            throw new com.example.hms.exception.FieldBusinessException("deliveryRecordId", "maternity.newborn.deliveryOtherHospital");
         }
         if (mother != null && delivery.getPatient() != null
             && !mother.getId().equals(delivery.getPatient().getId())) {
-            throw new BusinessException("newborn.delivery.otherMother");
+            throw new com.example.hms.exception.FieldBusinessException("deliveryRecordId", "newborn.delivery.otherMother");
         }
         return delivery;
     }
@@ -538,7 +538,7 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
             PatientHospitalRegistration registration = registrationRepository.findById(registrationId)
                 .orElseThrow(() -> new ResourceNotFoundException("registration.notFound", registrationId));
             if (!registration.getPatient().getId().equals(patient.getId())) {
-                throw new BusinessException("maternity.registration.otherPatient");
+                throw new com.example.hms.exception.FieldBusinessException("registrationId", "maternity.registration.otherPatient");
             }
             // QA r5 tenancy sweep: a registration of another hospital answers as unknown.
             if (hospitalId != null && (registration.getHospital() == null
@@ -580,7 +580,7 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
                 .orElseThrow(() -> new ResourceNotFoundException("staff.not.found.or.inactive", staffId));
             if (hospital != null && staff.getHospital() != null
                 && !hospital.getId().equals(staff.getHospital().getId())) {
-                throw new BusinessException("maternity.recorder.hospitalMismatch");
+                throw new com.example.hms.exception.FieldBusinessException("recordedByStaffId", "maternity.recorder.hospitalMismatch");
             }
             // QA D503 class: the recorder is the caller, not a colleague named in the body.
             com.example.hms.security.CallerIdentity.requireCallerUnlessSuperAdmin(staff);

@@ -481,7 +481,10 @@ class StockTransactionServiceImplTest {
 
             assertThatThrownBy(() -> service.recordTransaction(dto))
                     .isInstanceOf(BusinessException.class)
-                    .matches(e -> e.getMessage().toLowerCase(java.util.Locale.ROOT).contains("received"));
+                    .matches(e -> e.getMessage().toLowerCase(java.util.Locale.ROOT).contains("received"))
+                    // QA D1354 (round 30): on the adjustment's quantity, so the form marks it.
+                    .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                    .hasFieldOrPropertyWithValue("field", "quantity");
             assertThat(stockLot.getRemainingQuantity()).isEqualByComparingTo(new BigDecimal("50.00"));
             assertThat(inventoryItem.getQuantityOnHand()).isEqualByComparingTo(new BigDecimal("100.00"));
             verify(inventoryItemRepository, never()).incrementOnHand(any(), any(), any());
@@ -632,7 +635,10 @@ class StockTransactionServiceImplTest {
 
             assertThatThrownBy(() -> service.recordTransaction(dto))
                     .isInstanceOf(BusinessException.class)
-                    .matches(e -> e.getMessage().contains("stockTransaction.witness.notSelf") || e.getMessage().contains("someone other"));
+                    .matches(e -> e.getMessage().contains("stockTransaction.witness.notSelf") || e.getMessage().contains("someone other"))
+                    // QA D1354 (round 30): on the witness picker.
+                    .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                    .hasFieldOrPropertyWithValue("field", "witnessedBy");
             verify(stockTransactionRepository, never()).save(any());
         }
 
@@ -648,7 +654,10 @@ class StockTransactionServiceImplTest {
 
             assertThatThrownBy(() -> service.recordTransaction(dto))
                     .isInstanceOf(BusinessException.class)
-                    .matches(e -> e.getMessage().contains("stockTransaction.witness.invalid") || e.getMessage().contains("of this hospital"));
+                    .matches(e -> e.getMessage().contains("stockTransaction.witness.invalid") || e.getMessage().contains("of this hospital"))
+                    // QA D1354 (round 30): on the witness picker.
+                    .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                    .hasFieldOrPropertyWithValue("field", "witnessedBy");
             verify(stockTransactionRepository, never()).save(any());
         }
 

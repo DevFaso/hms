@@ -34,6 +34,9 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Slf4j
 public class DischargeApprovalServiceImpl implements DischargeApprovalService {
+    /** Request properties a refusal names (QA D1352 class, round 30). */
+    private static final String FIELD_REGISTRATION_ID = "registrationId";
+
     private static final String ROLE_ASSIGNMENT_NOT_FOUND_KEY = "roleAssignment.notFound";
     /** QA D1112: the requesting nurse withdraws her own discharge request. */
     private static final String CANCEL_REQUESTER_ONLY = "dischargeApproval.cancel.requesterOnly";
@@ -65,26 +68,26 @@ public class DischargeApprovalServiceImpl implements DischargeApprovalService {
         // QA r5 tenancy sweep: only the registration's own hospital requests its discharge.
         com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(registration.getHospital(), "registration.notFound", request.getRegistrationId());
         if (!registration.isActive()) {
-            throw new BusinessException("dischargeApproval.registrationInactive");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_REGISTRATION_ID, "dischargeApproval.registrationInactive");
         }
         if (registration.getStayStatus() == PatientStayStatus.DISCHARGED) {
-            throw new BusinessException("dischargeApproval.alreadyDischarged");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_REGISTRATION_ID, "dischargeApproval.alreadyDischarged");
         }
         ensureNoActiveRequest(registration.getId());
         // QA D1065: a discharge ends a hospital stay. A walk-in who left without
         // being seen, or any patient merely registered here, has none to end.
         if (admissionRepository.findByPatient_IdAndHospital_IdAndStatusIn(registration.getPatient().getId(),
                 registration.getHospital().getId(), OPEN_ADMISSION_STATUSES).isEmpty()) {
-            throw new BusinessException("discharge.request.notAdmitted");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_REGISTRATION_ID, "discharge.request.notAdmitted");
         }
 
         Staff nurse = staffRepository.findByIdAndActiveTrue(request.getNurseStaffId())
             .orElseThrow(() -> new ResourceNotFoundException("staff.nurse.notFoundOrInactive", request.getNurseStaffId()));
-        validateStaffHospitalMatch(nurse, registration);
+        validateStaffHospitalMatch(nurse, registration, "nurseStaffId");
 
         UserRoleHospitalAssignment nurseAssignment = assignmentRepository.findById(request.getNurseAssignmentId())
             .orElseThrow(() -> new ResourceNotFoundException(ROLE_ASSIGNMENT_NOT_FOUND_KEY, request.getNurseAssignmentId()));
-        validateAssignment(nurseAssignment, nurse, registration.getHospital().getId());
+        validateAssignment(nurseAssignment, nurse, registration.getHospital().getId(), "nurseAssignmentId");
         requireCallerUnlessSuperAdmin(nurse);
 
         registration.markReadyForDischarge(nurse.getId(), request.getNurseSummary());
@@ -114,11 +117,11 @@ public class DischargeApprovalServiceImpl implements DischargeApprovalService {
 
         Staff doctor = staffRepository.findByIdAndActiveTrue(decision.getDoctorStaffId())
             .orElseThrow(() -> new ResourceNotFoundException("staff.doctor.notFoundOrInactive", decision.getDoctorStaffId()));
-        validateStaffHospitalMatch(doctor, approval.getRegistration());
+        validateStaffHospitalMatch(doctor, approval.getRegistration(), "doctorStaffId");
 
         UserRoleHospitalAssignment doctorAssignment = assignmentRepository.findById(decision.getDoctorAssignmentId())
             .orElseThrow(() -> new ResourceNotFoundException(ROLE_ASSIGNMENT_NOT_FOUND_KEY, decision.getDoctorAssignmentId()));
-        validateAssignment(doctorAssignment, doctor, approval.getHospital().getId());
+        validateAssignment(doctorAssignment, doctor, approval.getHospital().getId(), "doctorAssignmentId");
         requireCallerUnlessSuperAdmin(doctor);
 
         approval.setDoctor(doctor);
@@ -177,11 +180,11 @@ public class DischargeApprovalServiceImpl implements DischargeApprovalService {
 
         Staff doctor = staffRepository.findByIdAndActiveTrue(decision.getDoctorStaffId())
             .orElseThrow(() -> new ResourceNotFoundException("staff.doctor.notFoundOrInactive", decision.getDoctorStaffId()));
-        validateStaffHospitalMatch(doctor, approval.getRegistration());
+        validateStaffHospitalMatch(doctor, approval.getRegistration(), "doctorStaffId");
 
         UserRoleHospitalAssignment doctorAssignment = assignmentRepository.findById(decision.getDoctorAssignmentId())
             .orElseThrow(() -> new ResourceNotFoundException(ROLE_ASSIGNMENT_NOT_FOUND_KEY, decision.getDoctorAssignmentId()));
-        validateAssignment(doctorAssignment, doctor, approval.getHospital().getId());
+        validateAssignment(doctorAssignment, doctor, approval.getHospital().getId(), "doctorAssignmentId");
         requireCallerUnlessSuperAdmin(doctor);
 
         approval.setDoctor(doctor);
@@ -208,7 +211,7 @@ public class DischargeApprovalServiceImpl implements DischargeApprovalService {
         ensurePending(approval);
         // QA D1160 (round 21): a withdrawn discharge request says why; a blank
         // reason was accepted (200) and nothing recorded the decision.
-        String cancelReason = com.example.hms.service.support.CancelledOrders.requireCancelReason(reason);
+        String cancelReason = com.example.hms.service.support.CancelledOrders.requireCancelReason(reason, "reason");
 
         if (approval.getNurse() == null) {
             throw new BusinessException("dischargeApproval.cancel.noRequester");
@@ -290,24 +293,27 @@ public class DischargeApprovalServiceImpl implements DischargeApprovalService {
         return approval;
     }
 
-    private void validateStaffHospitalMatch(Staff staff, PatientHospitalRegistration registration) {
+    /** QA D1352 class (round 30): refused on {@code staffField}, the request property that named the staff. */
+    private void validateStaffHospitalMatch(Staff staff, PatientHospitalRegistration registration, String staffField) {
         if (staff.getHospital() == null || registration.getHospital() == null) {
-            throw new BusinessException("dischargeApproval.noHospitalContext");
+            throw new com.example.hms.exception.FieldBusinessException(staffField, "dischargeApproval.noHospitalContext");
         }
         if (!Objects.equals(staff.getHospital().getId(), registration.getHospital().getId())) {
-            throw new BusinessException("dischargeApproval.hospitalMismatch");
+            throw new com.example.hms.exception.FieldBusinessException(staffField, "dischargeApproval.hospitalMismatch");
         }
     }
 
-    private void validateAssignment(UserRoleHospitalAssignment assignment, Staff staff, UUID hospitalId) {
+    /** QA D1352 class (round 30): refused on {@code assignmentField}, the request property that named it. */
+    private void validateAssignment(UserRoleHospitalAssignment assignment, Staff staff, UUID hospitalId,
+                                    String assignmentField) {
         if (assignment.getHospital() == null || !Objects.equals(assignment.getHospital().getId(), hospitalId)) {
-            throw new BusinessException("dischargeApproval.assignmentHospitalMismatch");
+            throw new com.example.hms.exception.FieldBusinessException(assignmentField, "dischargeApproval.assignmentHospitalMismatch");
         }
         if (assignment.getRole() == null || assignment.getRole().getCode() == null) {
-            throw new BusinessException("dischargeApproval.assignmentNoRole");
+            throw new com.example.hms.exception.FieldBusinessException(assignmentField, "dischargeApproval.assignmentNoRole");
         }
         if (staff.getAssignment() == null || !Objects.equals(staff.getAssignment().getId(), assignment.getId())) {
-            throw new BusinessException("dischargeApproval.staffAssignmentMismatch");
+            throw new com.example.hms.exception.FieldBusinessException(assignmentField, "dischargeApproval.staffAssignmentMismatch");
         }
     }
 

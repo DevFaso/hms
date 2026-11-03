@@ -124,6 +124,12 @@ import com.example.hms.utility.RoleNames;
 @RequiredArgsConstructor
 @Slf4j
 public class PatientPortalServiceImpl implements PatientPortalService {
+    /** Request properties a refusal names (QA D1352 class, round 30). */
+    private static final String FIELD_APPOINTMENT_ID = "appointmentId";
+    private static final String FIELD_DATE = "date";
+    private static final String FIELD_HOSPITAL_ID = "hospitalId";
+    private static final String FIELD_PRESCRIPTION_ID = "prescriptionId";
+
 
     private static final String PROXY_VIEW_LAB_RESULTS = "VIEW_LAB_RESULTS";
     private static final String APPOINTMENT_NOT_FOUND_KEY = "appointment.notFound";
@@ -647,7 +653,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         Department department = departmentRepository.findById(dto.getDepartmentId())
                 .orElseThrow(() -> new ResourceNotFoundException("department.notFound", dto.getDepartmentId()));
         if (!department.getHospital().getId().equals(dto.getHospitalId())) {
-            throw new BusinessException(MessageUtil.resolve("portal.booking.departmentOtherHospital"));
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, MessageUtil.resolve("portal.booking.departmentOtherHospital"));
         }
 
         // Resolve staff — explicit pick or first available in department
@@ -656,7 +662,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
             staff = staffRepository.findByIdAndActiveTrue(dto.getStaffId())
                     .orElseThrow(() -> new ResourceNotFoundException("provider.notFound", dto.getStaffId()));
             if (!staff.getHospital().getId().equals(dto.getHospitalId())) {
-                throw new BusinessException(MessageUtil.resolve("portal.booking.providerOtherHospital"));
+                throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, MessageUtil.resolve("portal.booking.providerOtherHospital"));
             }
         } else {
             List<Staff> available = staffRepository.findActiveProvidersByHospitalAndDepartment(
@@ -687,7 +693,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
 
         // Staff availability check
         if (!staffAvailabilityService.isStaffAvailable(staff.getId(), requestedStart)) {
-            throw new BusinessException(MessageUtil.resolve(PROVIDER_UNAVAILABLE_KEY));
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_DATE, MessageUtil.resolve(PROVIDER_UNAVAILABLE_KEY));
         }
 
         // QA D1063: a slot held for a waitlist offer is not given to anyone else.
@@ -769,7 +775,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                                                    java.time.LocalDate date, UUID movingAppointmentId,
                                                    java.time.LocalDateTime hospitalNow) {
         if (date == null) {
-            throw new com.example.hms.exception.FieldBusinessException("date", "portal.booking.dateRequired");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_DATE, "portal.booking.dateRequired");
         }
         java.util.Set<UUID> bookable = staffId != null ? null
                 : staffRepository.findActiveProvidersByHospitalAndDepartment(hospitalId, departmentId).stream()
@@ -789,7 +795,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                     m.put("slotId", s.getId());
                     m.put("staffId", s.getStaff().getId());
                     m.put("staffName", s.getStaff().getName());
-                    m.put("date", s.getSlotDate());
+                    m.put(FIELD_DATE, s.getSlotDate());
                     m.put("startTime", s.getStartAt().toLocalTime());
                     m.put("endTime", s.getEndAt().toLocalTime());
                     return m;
@@ -914,17 +920,17 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         requirePatientOwnership(appointment, patientId);
 
         if (appointment.getStatus() == AppointmentStatus.CANCELLED) {
-            throw new BusinessException("appointment.alreadyCancelled");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_APPOINTMENT_ID, "appointment.alreadyCancelled");
         }
         if (appointment.getStatus() == AppointmentStatus.COMPLETED) {
-            throw new BusinessException("appointment.cancel.completed");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_APPOINTMENT_ID, "appointment.cancel.completed");
         }
         // QA D717: once the patient has arrived (CHECKED_IN / IN_PROGRESS) or
         // the visit is closed out (NO_SHOW, FAILED), the portal must not cancel:
         // the encounter is already open at the desk. Only a not-yet-started
         // booking is the patient's to cancel.
         if (!PATIENT_CHANGEABLE_STATUSES.contains(appointment.getStatus())) {
-            throw new BusinessException("appointment.patient.notChangeable");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_APPOINTMENT_ID, "appointment.patient.notChangeable");
         }
 
         appointment.setStatus(AppointmentStatus.CANCELLED);
@@ -986,13 +992,13 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     /** A completed, cancelled or already-arrived visit is not moved by the patient (QA D717 sibling). */
     private static void requirePatientReschedulable(Appointment appointment) {
         if (appointment.getStatus() == AppointmentStatus.COMPLETED) {
-            throw new BusinessException("appointment.reschedule.completed");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_APPOINTMENT_ID, "appointment.reschedule.completed");
         }
         if (appointment.getStatus() == AppointmentStatus.CANCELLED) {
-            throw new BusinessException("appointment.reschedule.cancelled");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_APPOINTMENT_ID, "appointment.reschedule.cancelled");
         }
         if (!PATIENT_CHANGEABLE_STATUSES.contains(appointment.getStatus())) {
-            throw new BusinessException("appointment.patient.notChangeable");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_APPOINTMENT_ID, "appointment.patient.notChangeable");
         }
     }
 
@@ -1001,12 +1007,12 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                                             java.time.LocalDateTime newEnd) {
         UUID staffId = appointment.getStaff().getId();
         if (!staffAvailabilityService.isStaffAvailable(staffId, newStart)) {
-            throw new BusinessException(MessageUtil.resolve(PROVIDER_UNAVAILABLE_KEY));
+            throw new com.example.hms.exception.FieldBusinessException("newDate", MessageUtil.resolve(PROVIDER_UNAVAILABLE_KEY));
         }
         if (com.example.hms.service.AppointmentSlotRules.overlapsHeldSlot(
                 appointmentRepository.findByStaff_IdAndAppointmentDate(staffId, newStart.toLocalDate()),
                 appointment.getId(), newStart, newEnd)) {
-            throw new BusinessException(MessageUtil.resolve("portal.booking.providerBusy"));
+            throw new com.example.hms.exception.FieldBusinessException("newDate", MessageUtil.resolve("portal.booking.providerBusy"));
         }
     }
 
@@ -1127,10 +1133,10 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         // QA D813: a controlled medicine says so. It used to share the "no renewals left"
         // message, which told a patient with renewals on paper the wrong reason.
         if (controlledResolver.isControlled(prescription)) {
-            throw new BusinessException("patient.refill.controlled");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_PRESCRIPTION_ID, "patient.refill.controlled");
         }
         if (!prescription.allowsRefill()) {
-            throw new BusinessException("patient.refill.notRefillable");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_PRESCRIPTION_ID, "patient.refill.notRefillable");
         }
 
         // One open request per prescription. There was no guard at all, so a
@@ -1141,7 +1147,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                         prescription.getId(), patient.getId(), OPEN_REFILL_STATUSES)
                 .ifPresent(open -> {
                     // QA D743: localised (the French portal showed English).
-                    throw new BusinessException(
+                    throw new com.example.hms.exception.FieldBusinessException(FIELD_PRESCRIPTION_ID, 
                             open.getStatus() == RefillStatus.PAUSED
                                     ? "patient.refill.onHold"
                                     : "patient.refill.alreadyPending");
@@ -1297,7 +1303,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     private UUID writeHospitalFor(Patient patient, UUID requestedHospitalId) {
         if (requestedHospitalId != null) {
             if (!isRegisteredAt(patient.getId(), requestedHospitalId)) {
-                throw new BusinessException(portalMessage("patientPortal.request.hospitalNotRegistered"));
+                throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, portalMessage("patientPortal.request.hospitalNotRegistered"));
             }
             return requestedHospitalId;
         }
@@ -1312,7 +1318,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         if (patient.getHospitalId() != null && active.contains(patient.getHospitalId())) {
             return patient.getHospitalId();
         }
-        throw new BusinessException(portalMessage(active.isEmpty()
+        throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, portalMessage(active.isEmpty()
                 ? "patientPortal.request.noHospitalRegistration"
                 : "patientPortal.request.chooseHospital"));
     }
@@ -1428,12 +1434,13 @@ public class PatientPortalServiceImpl implements PatientPortalService {
             new java.util.concurrent.atomic.AtomicReference<>(Collections.emptyList());
         // QA D720: the summary's "current medications" (health summary and
         // the proxy view) are the courses still running, never a completed
-        // or discontinued one. Filtered before the cap so ten current ones
-        // are not crowded out by finished ones.
+        // or discontinued one. QA D1346 (round 30): and every one of them -
+        // the list returns every active course first whatever its limit
+        // (the limit bounds only the history), and the summary no longer cuts
+        // the running courses at ten.
         isolatedReads.attempt("health summary medications",
             () -> out.set(medicationService.getMedicationsForPatientPortal(patientId, hospitalId, 100).stream()
                 .filter(m -> "ACTIVE".equals(m.getStatus()))
-                .limit(10)
                 .toList()));
         return out.get();
     }
@@ -1477,7 +1484,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     /** QA D128: the booking's own refusal, in the patient's language (it used the consent text). */
     private void requireBookingRegistration(UUID patientId, UUID hospitalId) {
         if (!isRegisteredAt(patientId, hospitalId)) {
-            throw new BusinessException(MessageUtil.resolve("portal.booking.notRegistered"));
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, MessageUtil.resolve("portal.booking.notRegistered"));
         }
     }
 
@@ -2262,7 +2269,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         if (appointment.getStatus() != com.example.hms.enums.AppointmentStatus.SCHEDULED
                 && appointment.getStatus() != com.example.hms.enums.AppointmentStatus.CONFIRMED) {
             // QA D940: in the patient's language, not a hard-coded English string.
-            throw new BusinessException("portal.precheckin.status");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_APPOINTMENT_ID, "portal.precheckin.status");
         }
 
         // Validate timing: from 7 days before the appointment to the day itself

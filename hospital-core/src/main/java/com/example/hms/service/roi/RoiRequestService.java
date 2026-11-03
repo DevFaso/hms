@@ -81,7 +81,7 @@ public class RoiRequestService {
         Patient patient = requirePatientInTenant(patientId, hospitalId);
         if (request.getRequesterType() == RoiRequesterType.THIRD_PARTY
                 && trimToNull(request.getRequesterName()) == null) {
-            throw new BusinessException(
+            throw new com.example.hms.exception.FieldBusinessException("requesterType", 
                 "A third-party request needs the requester's name - a release to an "
                     + "unnamed outside party cannot be accounted for.");
         }
@@ -97,7 +97,7 @@ public class RoiRequestService {
     public RoiRequestResponseDTO createForSelf(Patient patient, UUID hospitalId,
                                                RoiSelfRequestCreateDTO request) {
         if (patient == null || hospitalId == null) {
-            throw new BusinessException("A registered hospital is required to file a request.");
+            throw new com.example.hms.exception.FieldBusinessException("hospitalId", "A registered hospital is required to file a request.");
         }
         return persistRequest(patient, hospitalId, RoiRequestCreateDTO.builder()
             .requesterType(RoiRequesterType.PATIENT)
@@ -114,7 +114,7 @@ public class RoiRequestService {
         LocalDate today = LocalDate.now(clock);
         LocalDate requestedOn = request.getRequestedOn() != null ? request.getRequestedOn() : today;
         if (requestedOn.isAfter(today)) {
-            throw new BusinessException("The request date cannot be in the future.");
+            throw new com.example.hms.exception.FieldBusinessException("requestedOn", "The request date cannot be in the future.");
         }
         Hospital hospital = hospitalRepository.getReferenceById(hospitalId);
         RoiRequest saved = roiRepository.save(RoiRequest.builder()

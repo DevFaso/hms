@@ -1,7 +1,6 @@
 package com.example.hms.service;
 
 import com.example.hms.exception.BusinessException;
-import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.BirthPlanMapper;
 import com.example.hms.model.BirthPlan;
@@ -81,12 +80,11 @@ public class BirthPlanServiceImpl implements BirthPlanService {
             checkProviderAccess(user);
             // QA D1258: a staff caller names the patient and the hospital; a
             // missing one is a 400 naming the field, never "Patient ... ID : null".
-            if (request.getPatientId() == null) {
-                throw new FieldBusinessException("patientId", "birthPlan.patient.required");
-            }
-            if (request.getHospitalId() == null) {
-                throw new FieldBusinessException("hospitalId", "birthPlan.hospital.required");
-            }
+            // QA D1355 class (round 30): both named in one refusal.
+            com.example.hms.exception.RequiredFields.check()
+                .requireValue(request.getPatientId(), "patientId", "birthPlan.patient.required")
+                .requireValue(request.getHospitalId(), "hospitalId", "birthPlan.hospital.required")
+                .orThrow();
             patient = getPatientByIdOrThrow(request.getPatientId());
             hospital = getHospitalByIdOrThrow(request.getHospitalId());
             patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());

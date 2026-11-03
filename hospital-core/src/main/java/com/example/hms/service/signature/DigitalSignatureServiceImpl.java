@@ -96,7 +96,7 @@ public class DigitalSignatureServiceImpl implements DigitalSignatureService {
         // QA D627: a type with no record store can never be signed; say so
         // instead of a 404 that reads as "wrong id".
         if (request.getReportType() != null && !SignableReportLocator.SIGNABLE.contains(request.getReportType())) {
-            throw new BusinessException(text("signature.reportType.notSignable", LocaleContextHolder.getLocale()));
+            throw new com.example.hms.exception.FieldBusinessException("reportType", text("signature.reportType.notSignable", LocaleContextHolder.getLocale()));
         }
         UUID reportHospitalId = reportLocator.owningHospitalId(request.getReportType(), request.getReportId())
             .orElseThrow(() -> new ResourceNotFoundException("signature.report.notFound", request.getReportId()));
@@ -105,7 +105,7 @@ public class DigitalSignatureServiceImpl implements DigitalSignatureService {
             throw new ResourceNotFoundException("signature.report.notFound", request.getReportId());
         }
         if (!namesMatch(request.getSignatureValue(), staff.getFullName())) {
-            throw new BusinessException(text("signature.value.mustMatchSigner", LocaleContextHolder.getLocale()));
+            throw new com.example.hms.exception.FieldBusinessException("signatureValue", text("signature.value.mustMatchSigner", LocaleContextHolder.getLocale()));
         }
 
         Hospital hospital = hospitalRepository.findClinicalById(activeHospitalId)

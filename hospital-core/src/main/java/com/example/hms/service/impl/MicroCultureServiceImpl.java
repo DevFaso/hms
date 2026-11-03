@@ -61,6 +61,9 @@ import org.springframework.context.MessageSource;
 @RequiredArgsConstructor
 @Transactional
 public class MicroCultureServiceImpl implements MicroCultureService {
+    /** Request properties a refusal names (QA D1352 class, round 30). */
+    private static final String FIELD_LAB_ORDER_ID = "labOrderId";
+
 
     private static final String POSITIVE_CULTURE_TYPE = "POSITIVE_CULTURE_RESULT";
 
@@ -89,11 +92,11 @@ public class MicroCultureServiceImpl implements MicroCultureService {
             throw new ResourceNotFoundException("labOrder.notFound", request.getLabOrderId());
         }
         if (order.getStatus() == LabOrderStatus.CANCELLED) {
-            throw new BusinessException("micro.culture.orderCancelled");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_LAB_ORDER_ID, "micro.culture.orderCancelled");
         }
         // QA D820: nor can one voided as entered in error.
         if (order.getStatus() == LabOrderStatus.ENTERED_IN_ERROR) {
-            throw new BusinessException("lab.order.enteredInError");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_LAB_ORDER_ID, "lab.order.enteredInError");
         }
         Patient patient = order.getPatient();
         if (patient == null) {
@@ -106,7 +109,7 @@ public class MicroCultureServiceImpl implements MicroCultureService {
                 .orElseThrow(() -> new ResourceNotFoundException("labspecimen.notfound", request.getSpecimenId()));
             if (specimen.getLabOrder() == null
                 || !Objects.equals(specimen.getLabOrder().getId(), order.getId())) {
-                throw new BusinessException("micro.culture.specimenOtherOrder");
+                throw new com.example.hms.exception.FieldBusinessException(FIELD_LAB_ORDER_ID, "micro.culture.specimenOtherOrder");
             }
         }
 
@@ -166,7 +169,7 @@ public class MicroCultureServiceImpl implements MicroCultureService {
         if (request.getGrowthResult() != null
             && request.getGrowthResult() == MicroGrowthResult.NO_GROWTH
             && isolateRepository.countByCultureResult_Id(culture.getId()) > 0) {
-            throw new BusinessException("micro.culture.isolatesBlockNoGrowth");
+            throw new com.example.hms.exception.FieldBusinessException("growthResult", "micro.culture.isolatesBlockNoGrowth");
         }
 
         // Null request fields are left unchanged — corrections rewrite values,

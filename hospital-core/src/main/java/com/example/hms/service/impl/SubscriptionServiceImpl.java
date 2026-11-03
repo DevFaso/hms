@@ -180,7 +180,7 @@ public class SubscriptionServiceImpl implements SubscriptionService {
         // controller summary advertises that deactivated plans "reject new
         // assignments", which only holds if we enforce it here.
         if (!plan.isActive()) {
-            throw new BusinessException("subscription.plan.inactive", plan.getTierCode());
+            throw new com.example.hms.exception.FieldBusinessException("planId", "subscription.plan.inactive", plan.getTierCode());
         }
 
         // Cancel any existing ACTIVE subscription so the partial unique index

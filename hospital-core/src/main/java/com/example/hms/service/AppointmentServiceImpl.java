@@ -66,6 +66,9 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class AppointmentServiceImpl implements AppointmentService {
+    /** Request properties a refusal names (QA D1352 class, round 30). */
+    private static final String FIELD_STAFF_ID = "staffId";
+
     private static final String USER_NOT_FOUND_BY_USERNAME_KEY = "user.notFoundByUsername";
     private static final String PATIENT_NOT_FOUND_FOR_USER_KEY = "patient.notFoundForUser";
     private static final String APPOINTMENT_NOT_FOUND_KEY = "appointment.notFound";
@@ -286,7 +289,7 @@ public class AppointmentServiceImpl implements AppointmentService {
                                           Hospital hospital) {
         if (REQUIRES_APPOINTMENT_STARTED.contains(status)
                 && com.example.hms.utility.HospitalCalendar.now(hospital).isBefore(appointmentStart)) {
-            throw new BusinessException("appointment.status.notStartedYet",
+            throw new com.example.hms.exception.FieldBusinessException("status", "appointment.status.notStartedYet",
                 AppointmentStatus.labelOf(status),
                 DisplayDates.dateTime(appointmentStart));
         }
@@ -300,22 +303,16 @@ public class AppointmentServiceImpl implements AppointmentService {
 
     /** The ids, date and times a staff edit must carry. */
     private static void requireCompleteEdit(AppointmentRequestDTO request) {
-        if (request.getPatientId() == null) {
-            throw new FieldBusinessException("patientId", "appointment.patient.required");
-        }
-        if (request.getStaffId() == null) {
-            throw new FieldBusinessException("staffId", "appointment.staff.required");
-        }
-        if (request.getHospitalId() == null) {
-            throw new FieldBusinessException("hospitalId", "appointment.hospital.required");
-        }
-        if (request.getAppointmentDate() == null) {
-            throw new com.example.hms.exception.FieldBusinessException("appointmentDate", "appointment.date.required");
-        }
+        // QA D1355 class (round 30): every missing field named in one refusal,
+        // not the patient first and the clinician one press later.
         // QA D1060: the end time is the slot rules', never the caller's, so only the start is required.
-        if (request.getStartTime() == null) {
-            throw new com.example.hms.exception.FieldBusinessException("startTime", "appointment.timeRange.invalid");
-        }
+        com.example.hms.exception.RequiredFields.check()
+            .requireValue(request.getPatientId(), "patientId", "appointment.patient.required")
+            .requireValue(request.getStaffId(), FIELD_STAFF_ID, "appointment.staff.required")
+            .requireValue(request.getHospitalId(), "hospitalId", "appointment.hospital.required")
+            .requireValue(request.getAppointmentDate(), "appointmentDate", "appointment.date.required")
+            .requireValue(request.getStartTime(), "startTime", "appointment.timeRange.invalid")
+            .orThrow();
     }
 
     /**
@@ -392,7 +389,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         requireNotCheckedInForCancel(current, requested);
         Set<AppointmentStatus> allowed = VALID_TRANSITIONS.getOrDefault(current, Set.of());
         if (!allowed.contains(requested)) {
-            throw new BusinessException(INVALID_TRANSITION_KEY,
+            throw new com.example.hms.exception.FieldBusinessException("status", INVALID_TRANSITION_KEY,
                 AppointmentStatus.labelOf(current), AppointmentStatus.labelOf(requested));
         }
     }
@@ -558,7 +555,7 @@ public class AppointmentServiceImpl implements AppointmentService {
 
         // schedule check
         if (!staffAvailabilityService.isStaffAvailable(staff.getId(), requestedStart)) {
-            throw new BusinessException(messageSource.getMessage(
+            throw new com.example.hms.exception.FieldBusinessException("appointmentDate", messageSource.getMessage(
                 "appointment.staff.unavailable.schedule",
                 new Object[]{staff.getId(), DisplayDates.date(request.getAppointmentDate(), locale),
                     DisplayDates.time(request.getStartTime(), locale)},
@@ -775,7 +772,7 @@ public class AppointmentServiceImpl implements AppointmentService {
             return staffRepository.findByUserId(userId).stream().findFirst()
                 .orElseThrow(() -> new ResourceNotFoundException("staff.notFoundByIdentifier", request.getStaffUsername()));
         }
-        throw new FieldBusinessException("staffId", "appointment.staff.required");
+        throw new FieldBusinessException(FIELD_STAFF_ID, "appointment.staff.required");
     }
 
     private Department resolveDepartment(AppointmentRequestDTO request, Hospital hospital, Staff staff) {
@@ -978,7 +975,7 @@ public class AppointmentServiceImpl implements AppointmentService {
     private void requireStaffScheduledForEdit(Staff staff, AppointmentRequestDTO request,
                                               LocalDateTime requestedStart, Locale locale) {
         if (!staffAvailabilityService.isStaffAvailable(staff.getId(), requestedStart)) {
-            throw new BusinessException(messageSource.getMessage(
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_STAFF_ID, messageSource.getMessage(
                 "appointment.staff.unavailable.schedule",
                 new Object[]{staff.getId(), DisplayDates.date(request.getAppointmentDate(), locale),
                     DisplayDates.time(request.getStartTime(), locale)},

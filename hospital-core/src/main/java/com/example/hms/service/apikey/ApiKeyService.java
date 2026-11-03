@@ -77,7 +77,7 @@ public class ApiKeyService {
         UUID hospitalId = requireHospital();
         if (request.getExpiresOn() != null
                 && !request.getExpiresOn().isAfter(LocalDate.now(clock))) {
-            throw new BusinessException("An expiry date must be in the future.");
+            throw new com.example.hms.exception.FieldBusinessException("expiresOn", "An expiry date must be in the future.");
         }
         Hospital hospital = hospitalRepository.getReferenceById(hospitalId);
         String rawKey = generateRawKey();

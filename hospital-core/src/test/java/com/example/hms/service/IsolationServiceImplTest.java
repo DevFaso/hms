@@ -154,7 +154,10 @@ class IsolationServiceImplTest {
             .isInstanceOf(BusinessException.class)
             // QA D1232 (round 24): the type is named in words, in the reader's
             // language, not by its code ("already on CONTACT").
-            .hasMessageContaining("already on contact precautions");
+            .hasMessageContaining("already on contact precautions")
+            // QA D1352 (round 30): on the Type field, so the form marks it.
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "precautionType");
         verify(precautionRepository, never()).save(any());
     }
 

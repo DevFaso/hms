@@ -1,7 +1,6 @@
 package com.example.hms.service;
 
 import com.example.hms.enums.TreatmentPlanStatus;
-import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.TreatmentPlanMapper;
 import com.example.hms.model.Encounter;
@@ -317,7 +316,7 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
                                           com.example.hms.enums.TreatmentPlanStatus requested) {
         if (requested == com.example.hms.enums.TreatmentPlanStatus.APPROVED
                 && current != com.example.hms.enums.TreatmentPlanStatus.APPROVED) {
-            throw new com.example.hms.exception.BusinessException("treatmentPlan.approve.byReviewOnly");
+            throw new com.example.hms.exception.FieldBusinessException("status", "treatmentPlan.approve.byReviewOnly");
         }
     }
 
@@ -435,7 +434,7 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
                                          Staff signOff) {
         UUID hospitalId = hospital.getId();
         if (assignment.getHospital() == null || !hospitalId.equals(assignment.getHospital().getId())) {
-            throw new BusinessException("treatmentPlan.assignmentOtherHospital");
+            throw new com.example.hms.exception.FieldBusinessException("assignmentId", "treatmentPlan.assignmentOtherHospital");
         }
         ensureStaffInHospital(author, hospitalId, AUTHOR_LABEL);
         if (supervising != null) {
@@ -457,10 +456,10 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
             return;
         }
         if (encounter.getHospital() == null || !hospital.getId().equals(encounter.getHospital().getId())) {
-            throw new BusinessException("treatmentPlan.encounterOtherHospital");
+            throw new com.example.hms.exception.FieldBusinessException("encounterId", "treatmentPlan.encounterOtherHospital");
         }
         if (encounter.getPatient() == null || !patient.getId().equals(encounter.getPatient().getId())) {
-            throw new BusinessException("treatmentPlan.encounterOtherPatient");
+            throw new com.example.hms.exception.FieldBusinessException("encounterId", "treatmentPlan.encounterOtherPatient");
         }
     }
 }

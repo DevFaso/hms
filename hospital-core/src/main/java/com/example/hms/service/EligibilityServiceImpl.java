@@ -104,7 +104,7 @@ public class EligibilityServiceImpl implements EligibilityService {
                 .orElseThrow(() -> new ResourceNotFoundException("patientinsurance.notfound", request.getPatientInsuranceId()));
             if (insurance.getPatient() != null
                 && !insurance.getPatient().getId().equals(patient.getId())) {
-                throw new BusinessException("eligibility.insurance.otherPatient");
+                throw new com.example.hms.exception.FieldBusinessException("patientId", "eligibility.insurance.otherPatient");
             }
         }
         EligibilityProvider provider = providers.stream()

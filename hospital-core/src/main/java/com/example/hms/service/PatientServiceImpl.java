@@ -136,6 +136,9 @@ import com.example.hms.service.recordaccess.BreakGlassGate;
 @RequiredArgsConstructor
 @Slf4j
 public class PatientServiceImpl implements PatientService {
+    /** Request properties a refusal names (QA D1352 class, round 30). */
+    private static final String FIELD_HOSPITAL_ID = "hospitalId";
+
 
     private static final String FIELD_PHONE_PRIMARY = "phoneNumberPrimary";
     private static final String FIELD_PHONE_SECONDARY = "phoneNumberSecondary";
@@ -887,7 +890,7 @@ public class PatientServiceImpl implements PatientService {
         UUID hospitalId = dto.getHospitalId();
         if (hospitalId == null) {
             // QA D1282 (sweep): named, so the form marks the field.
-            throw new FieldBusinessException("hospitalId", "patient.r7.staffCreateNeedsHospital");
+            throw new FieldBusinessException(FIELD_HOSPITAL_ID, "patient.r7.staffCreateNeedsHospital");
         }
         Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, hospitalId));
@@ -1322,16 +1325,16 @@ public class PatientServiceImpl implements PatientService {
 
         UUID resolvedHospitalId = hospitalId != null ? hospitalId : request.getHospitalId();
         if (resolvedHospitalId == null) {
-            throw new BusinessException("patient.r7.doctorRecordHospitalRequired");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, "patient.r7.doctorRecordHospitalRequired");
         }
         if (request.getHospitalId() != null && !Objects.equals(request.getHospitalId(), resolvedHospitalId)) {
-            throw new BusinessException("patient.r7.requestHospitalMismatch");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, "patient.r7.requestHospitalMismatch");
         }
         if (assignment == null || assignment.getId() == null) {
             throw new BusinessException("patient.r7.assignmentRequired");
         }
         if (assignment.getHospital() == null || !Objects.equals(assignment.getHospital().getId(), resolvedHospitalId)) {
-            throw new BusinessException("patient.r7.assignmentHospitalMismatch");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, "patient.r7.assignmentHospitalMismatch");
         }
 
         String reason = normalizeAccessReason(request.getAccessReason());
@@ -1343,7 +1346,7 @@ public class PatientServiceImpl implements PatientService {
             .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId));
 
         if (!registrationRepository.isPatientRegisteredInHospitalFixed(patientId, resolvedHospitalId)) {
-            throw new BusinessException("patient.notRegisteredInHospital");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, "patient.notRegisteredInHospital");
         }
 
         boolean includeSensitive = Boolean.TRUE.equals(request.getIncludeSensitiveData());
@@ -1526,7 +1529,7 @@ public class PatientServiceImpl implements PatientService {
         }
         UUID effectiveHospitalId = request.getHospitalId() != null ? request.getHospitalId() : hospitalId;
         if (effectiveHospitalId == null) {
-            throw new BusinessException("patient.r7.allergyAddHospitalRequired");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, "patient.r7.allergyAddHospitalRequired");
         }
 
         Patient patient = fetchPatient(patientId);
@@ -1568,7 +1571,7 @@ public class PatientServiceImpl implements PatientService {
         }
         UUID effectiveHospitalId = request.getHospitalId() != null ? request.getHospitalId() : hospitalId;
         if (effectiveHospitalId == null) {
-            throw new BusinessException("patient.r7.allergyUpdateHospitalRequired");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, "patient.r7.allergyUpdateHospitalRequired");
         }
         PatientAllergy allergy = loadPatientAllergy(patientId, effectiveHospitalId, allergyId);
         Staff staff = resolveStaffContext(requesterUserId, effectiveHospitalId);
@@ -1703,7 +1706,7 @@ public class PatientServiceImpl implements PatientService {
         }
         UUID targetHospitalId = request.getHospitalId() != null ? request.getHospitalId() : hospitalId;
         if (targetHospitalId == null) {
-            throw new BusinessException("patient.r7.diagnosisAddHospitalRequired");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, "patient.r7.diagnosisAddHospitalRequired");
         }
 
         Patient patient = fetchPatient(patientId);
@@ -1769,7 +1772,7 @@ public class PatientServiceImpl implements PatientService {
         }
         UUID targetHospitalId = request.getHospitalId() != null ? request.getHospitalId() : hospitalId;
         if (targetHospitalId == null) {
-            throw new BusinessException("patient.r7.diagnosisUpdateHospitalRequired");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, "patient.r7.diagnosisUpdateHospitalRequired");
         }
 
         PatientProblem problem = loadPatientProblem(patientId, targetHospitalId, diagnosisId);
@@ -1985,7 +1988,7 @@ public class PatientServiceImpl implements PatientService {
 
     private Hospital fetchHospital(UUID hospitalId) {
         if (hospitalId == null) {
-            throw new BusinessException("patient.r7.hospitalRequired");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, "patient.r7.hospitalRequired");
         }
         return hospitalRepository.findClinicalById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, hospitalId));
@@ -1993,7 +1996,7 @@ public class PatientServiceImpl implements PatientService {
 
     private void ensurePatientRegistered(UUID patientId, UUID hospitalId) {
         if (!registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)) {
-            throw new BusinessException("patient.notRegisteredInHospital");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, "patient.notRegisteredInHospital");
         }
     }
 
@@ -2002,7 +2005,7 @@ public class PatientServiceImpl implements PatientService {
             throw new BusinessException("patient.r7.diagnosisPatientRequired");
         }
         if (hospitalId == null) {
-            throw new BusinessException("patient.r7.diagnosisHospitalRequired");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, "patient.r7.diagnosisHospitalRequired");
         }
         if (diagnosisId == null) {
             throw new BusinessException("patient.r7.diagnosisIdRequired");
@@ -2013,7 +2016,7 @@ public class PatientServiceImpl implements PatientService {
             || !problem.getPatient().getId().equals(patientId)
             || problem.getHospital() == null || problem.getHospital().getId() == null
             || !problem.getHospital().getId().equals(hospitalId)) {
-            throw new BusinessException("patient.r7.diagnosisNotInScope");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, "patient.r7.diagnosisNotInScope");
         }
         ensurePatientRegistered(patientId, hospitalId);
         return problem;
@@ -2024,7 +2027,7 @@ public class PatientServiceImpl implements PatientService {
             throw new BusinessException("patient.r7.allergyPatientRequired");
         }
         if (hospitalId == null) {
-            throw new BusinessException("patient.r7.allergyHospitalRequired");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, "patient.r7.allergyHospitalRequired");
         }
         if (allergyId == null) {
             throw new BusinessException("patient.r7.allergyIdRequired");
@@ -2065,10 +2068,10 @@ public class PatientServiceImpl implements PatientService {
         }
         IcdValidation validation = pickIcdValidation(icdVersion);
         if (validation == IcdValidation.ICD10 && !DiagnosisCodeValidator.isValidIcd10(normalized)) {
-            throw new BusinessException("patient.r7.diagnosisIcd10Invalid");
+            throw new com.example.hms.exception.FieldBusinessException("problemCode", "patient.r7.diagnosisIcd10Invalid");
         }
         if (validation == IcdValidation.ICD11 && !DiagnosisCodeValidator.isValidIcd11(normalized)) {
-            throw new BusinessException("patient.r7.diagnosisIcd11Invalid");
+            throw new com.example.hms.exception.FieldBusinessException("problemCode", "patient.r7.diagnosisIcd11Invalid");
         }
         return normalized;
     }

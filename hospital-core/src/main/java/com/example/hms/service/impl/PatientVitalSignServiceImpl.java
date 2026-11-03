@@ -86,11 +86,11 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
 
         if (assignment != null && assignment.getHospital() != null && hospital != null
             && !assignment.getHospital().getId().equals(hospital.getId())) {
-            throw new BusinessException("vitals.recorderAssignmentOtherHospital");
+            throw new com.example.hms.exception.FieldBusinessException("hospitalId", "vitals.recorderAssignmentOtherHospital");
         }
         if (staff != null && hospital != null && staff.getHospital() != null
             && !staff.getHospital().getId().equals(hospital.getId())) {
-            throw new BusinessException("vitals.recorderStaffOtherHospital");
+            throw new com.example.hms.exception.FieldBusinessException("hospitalId", "vitals.recorderStaffOtherHospital");
         }
 
         PatientVitalSign entity = PatientVitalSign.builder()
@@ -226,7 +226,7 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
         PatientHospitalRegistration registration = registrationRepository.findById(registrationId)
             .orElseThrow(() -> new ResourceNotFoundException("registration.notFound", registrationId));
         if (!registration.getPatient().getId().equals(patient.getId())) {
-            throw new BusinessException("vitals.registrationOtherPatient");
+            throw new com.example.hms.exception.FieldBusinessException("registrationId", "vitals.registrationOtherPatient");
         }
         return registration;
     }
@@ -270,7 +270,7 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
             UserRoleHospitalAssignment assignment = assignmentRepository.findById(assignmentId)
                 .orElseThrow(() -> new ResourceNotFoundException("roleAssignment.notFound", assignmentId));
             if (!Boolean.TRUE.equals(assignment.getActive())) {
-                throw new BusinessException("vitals.assignmentInactive");
+                throw new com.example.hms.exception.FieldBusinessException("recordedByAssignmentId", "vitals.assignmentInactive");
             }
             return assignment;
         }

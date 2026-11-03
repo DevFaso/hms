@@ -76,6 +76,11 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Slf4j
 public class DispenseServiceImpl implements DispenseService {
+    /** Request properties a refusal names (QA D1352 class, round 30). */
+    private static final String FIELD_QUANTITY_DISPENSED = "quantityDispensed";
+    private static final String FIELD_REASON = "reason";
+    private static final String FIELD_VERIFIED_BY = "verifiedBy";
+
 
     private final DispenseRepository dispenseRepository;
     private final PrescriptionRepository prescriptionRepository;
@@ -446,7 +451,7 @@ public class DispenseServiceImpl implements DispenseService {
     public DispenseResponseDTO markReadyForCollectionTransactionally(DispenseRequestDTO dto) {
         requireReadyForCollectionEnabled();
         if (dto.getStatus() != null) {
-            throw new BusinessException("dispense.status.notAssertable");
+            throw new com.example.hms.exception.FieldBusinessException("status", "dispense.status.notAssertable");
         }
         // Nobody stands at the counter yet: the wristband is checked at hand-over.
         dto.setPatientScanValue(null);
@@ -572,7 +577,7 @@ public class DispenseServiceImpl implements DispenseService {
     public DispenseResponseDTO cancelReady(UUID dispenseId, CancelReadyRequestDTO request) {
         ReadyCancelReason reason = request != null ? request.getReason() : null;
         if (reason == null || !reason.isPharmacistChoice()) {
-            throw new BusinessException("dispense.ready.cancelReason.invalid");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_REASON, "dispense.ready.cancelReason.invalid");
         }
         LockedPreparedFill locked = lockPreparedFill(dispenseId);
         if (locked.dispense().getStatus() != DispenseStatus.PENDING) {
@@ -674,7 +679,7 @@ public class DispenseServiceImpl implements DispenseService {
         String existing = trimToNull(dispense.getNotes());
         int remaining = existing == null ? NOTES_MAX : NOTES_MAX - existing.length() - 1;
         if (notes.length() > remaining) {
-            throw new BusinessException("dispense.handOver.notesTooLong", String.valueOf(Math.max(remaining, 0)));
+            throw new com.example.hms.exception.FieldBusinessException("notes", "dispense.handOver.notesTooLong", String.valueOf(Math.max(remaining, 0)));
         }
     }
 
@@ -803,7 +808,7 @@ public class DispenseServiceImpl implements DispenseService {
 
     private static void requireAtMost(BigDecimal requested, BigDecimal remaining, BigDecimal stated) {
         if (requested != null && remaining != null && requested.compareTo(remaining) > 0) {
-            throw new BusinessException("pharmacy.dispense.exceedsPrescribed",
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_QUANTITY_DISPENSED, "pharmacy.dispense.exceedsPrescribed",
                     com.example.hms.utility.DisplayNumbers.quantity(stated));
         }
     }
@@ -1007,19 +1012,19 @@ public class DispenseServiceImpl implements DispenseService {
         }
 
         if (!DISPENSABLE_STATUSES.contains(prescription.getStatus())) {
-            throw new BusinessException("pharmacy.dispense.notDispensable", prescription.getStatus() == null ? "" : prescription.getStatus().localizedLabel());
+            throw new com.example.hms.exception.FieldBusinessException("prescriptionId", "pharmacy.dispense.notDispensable", prescription.getStatus() == null ? "" : prescription.getStatus().localizedLabel());
         }
         // QA D757: a ward order of a stay that has ended is not handed over,
         // even when it is still SIGNED (written before discharge closed its
         // orders, or a row older than that rule). A take-home order is.
         if (endedStayOrders.endedWithAStay(prescription)) {
-            throw new BusinessException("pharmacy.prescription.stayEnded");
+            throw new com.example.hms.exception.FieldBusinessException("prescriptionId", "pharmacy.prescription.stayEnded");
         }
 
         // The patient must match the prescription's patient — do not trust DTO in isolation
         if (prescription.getPatient() == null
                 || !prescription.getPatient().getId().equals(dto.getPatientId())) {
-            throw new BusinessException("pharmacy.dispense.patientMismatch");
+            throw new com.example.hms.exception.FieldBusinessException("patientId", "pharmacy.dispense.patientMismatch");
         }
 
         controlledSubstanceGuard.requireDispensable(prescription);
@@ -1037,7 +1042,7 @@ public class DispenseServiceImpl implements DispenseService {
         if (pharmacistVerificationService != null
                 && pharmacistVerificationService.blocksAdministration(prescription)
                 && dto.getVerifiedBy() == null) {
-            throw new com.example.hms.exception.FieldBusinessException("verifiedBy", "dispense.verification.required");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_VERIFIED_BY, "dispense.verification.required");
         }
         return prescription;
     }
@@ -1045,7 +1050,7 @@ public class DispenseServiceImpl implements DispenseService {
     private static void requireAssertableStatus(DispenseRequestDTO dto) {
         DispenseStatus status = dto.getStatus();
         if (status == DispenseStatus.PENDING || status == DispenseStatus.CANCELLED) {
-            throw new BusinessException("dispense.status.notAssertable");
+            throw new com.example.hms.exception.FieldBusinessException("status", "dispense.status.notAssertable");
         }
     }
 
@@ -1075,7 +1080,7 @@ public class DispenseServiceImpl implements DispenseService {
             return;
         }
         if (actors.verifiedBy() == null) {
-            throw new com.example.hms.exception.FieldBusinessException("verifiedBy", "dispense.verification.required");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_VERIFIED_BY, "dispense.verification.required");
         }
         // #922 review: the dispense endpoints also admit HOSPITAL_ADMIN, but
         // the verification is a pharmacist's attestation — the same roles
@@ -1097,7 +1102,7 @@ public class DispenseServiceImpl implements DispenseService {
         // If the client supplies dispensedBy, it must match the authenticated user.
         // This prevents one staff member from recording a dispense under another's identity.
         if (dto.getDispensedBy() != null && !currentUserId.equals(dto.getDispensedBy())) {
-            throw new BusinessException("pharmacy.dispense.dispensedByMismatch");
+            throw new com.example.hms.exception.FieldBusinessException("dispensedBy", "pharmacy.dispense.dispensedByMismatch");
         }
 
         User dispensedByUser = userRepository.findById(currentUserId)
@@ -1107,7 +1112,7 @@ public class DispenseServiceImpl implements DispenseService {
         User verifiedByUser = null;
         if (dto.getVerifiedBy() != null) {
             if (!currentUserId.equals(dto.getVerifiedBy())) {
-                throw new BusinessException("pharmacy.dispense.verifiedByMismatch");
+                throw new com.example.hms.exception.FieldBusinessException(FIELD_VERIFIED_BY, "pharmacy.dispense.verifiedByMismatch");
             }
             verifiedByUser = dispensedByUser;
         }
@@ -1160,7 +1165,7 @@ public class DispenseServiceImpl implements DispenseService {
         if (inventoryItem == null
                 || inventoryItem.getPharmacy() == null
                 || !pharmacy.getId().equals(inventoryItem.getPharmacy().getId())) {
-            throw new BusinessException("pharmacy.dispense.lotOtherPharmacy");
+            throw new com.example.hms.exception.FieldBusinessException("pharmacyId", "pharmacy.dispense.lotOtherPharmacy");
         }
         return stockLot;
     }
@@ -1184,10 +1189,10 @@ public class DispenseServiceImpl implements DispenseService {
         if (stockLotRepository.decrementRemaining(stockLot.getId(), requested, now) == 0) {
             // No figure for what remains: the managed copy was read before the
             // atomic UPDATE and can be stale under concurrency.
-            throw new BusinessException("pharmacy.dispense.lotInsufficient", String.valueOf(requested));
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_QUANTITY_DISPENSED, "pharmacy.dispense.lotInsufficient", String.valueOf(requested));
         }
         if (inventoryItemRepository.decrementOnHand(inventoryItem.getId(), requested, now) == 0) {
-            throw new BusinessException("pharmacy.dispense.stockInsufficient");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_QUANTITY_DISPENSED, "pharmacy.dispense.stockInsufficient");
         }
         refreshIfManaged(stockLot);
         refreshIfManaged(inventoryItem);
@@ -1442,10 +1447,10 @@ public class DispenseServiceImpl implements DispenseService {
         String why = reason == null ? "" : reason.trim();
         // QA D1333 (round 29): named under fieldErrors.reason, so the form marks it.
         if (why.isEmpty()) {
-            throw new com.example.hms.exception.FieldBusinessException("reason", "pharmacy.dispense.cancelReasonRequired");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_REASON, "pharmacy.dispense.cancelReasonRequired");
         }
         if (why.length() > CANCEL_NOTE_MAX) {
-            throw new com.example.hms.exception.FieldBusinessException("reason", "pharmacy.dispense.cancelReasonTooLong",
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_REASON, "pharmacy.dispense.cancelReasonTooLong",
                 CANCEL_NOTE_MAX);
         }
         Dispense dispense = dispenseRepository.findById(id)
@@ -1798,10 +1803,10 @@ public class DispenseServiceImpl implements DispenseService {
             throw new com.example.hms.exception.FieldBusinessException("quantityRequested", "pharmacy.dispense.requestedPositive");
         }
         if (dispensed == null || dispensed.signum() <= 0) {
-            throw new com.example.hms.exception.FieldBusinessException("quantityDispensed", "pharmacy.dispense.dispensedPositive");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_QUANTITY_DISPENSED, "pharmacy.dispense.dispensedPositive");
         }
         if (dispensed.compareTo(requested) > 0) {
-            throw new com.example.hms.exception.FieldBusinessException("quantityDispensed", "pharmacy.dispense.exceedsRequested");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_QUANTITY_DISPENSED, "pharmacy.dispense.exceedsRequested");
         }
     }
 
@@ -2111,7 +2116,7 @@ public class DispenseServiceImpl implements DispenseService {
      */
     private static void requireDispensary(Pharmacy pharmacy) {
         if (pharmacy.getPharmacyType() != PharmacyType.HOSPITAL_DISPENSARY) {
-            throw new BusinessException("pharmacy.dispense.notDispensary", String.valueOf(pharmacy.getPharmacyType()));
+            throw new com.example.hms.exception.FieldBusinessException("pharmacyId", "pharmacy.dispense.notDispensary", String.valueOf(pharmacy.getPharmacyType()));
         }
     }
 

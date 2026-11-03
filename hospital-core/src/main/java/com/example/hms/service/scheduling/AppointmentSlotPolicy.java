@@ -56,14 +56,14 @@ public class AppointmentSlotPolicy {
      */
     public LocalTime endFor(UUID staffId, LocalDate date, LocalTime start) {
         if (start == null) {
-            throw new com.example.hms.exception.FieldBusinessException("startTime", "appointment.timeRange.invalid");
+            throw new com.example.hms.exception.FieldBusinessException(com.example.hms.service.AppointmentSlotRules.BOOKED_TIME_FIELD, "appointment.timeRange.invalid");
         }
         int minutes = minutesFor(staffId, date, start);
         LocalTime end = start.plusMinutes(minutes);
         LocalTime capped = end.isAfter(start) ? end : LocalTime.of(23, 59);
         if (!capped.isAfter(start)) {
             // A visit starting at 23:59 would last no time at all.
-            throw new com.example.hms.exception.FieldBusinessException("startTime", "appointment.timeRange.invalid");
+            throw new com.example.hms.exception.FieldBusinessException(com.example.hms.service.AppointmentSlotRules.BOOKED_TIME_FIELD, "appointment.timeRange.invalid");
         }
         return capped;
     }
@@ -112,10 +112,10 @@ public class AppointmentSlotPolicy {
         AppointmentSlot slot = staffId == null || start == null ? null
             : slotRepository.findFirstByStaff_IdAndStartAt(staffId, start).orElse(null);
         if (slot == null || !isOf(slot, hospitalId, departmentId)) {
-            throw new com.example.hms.exception.FieldBusinessException("startTime", "portal.booking.notAPublishedSlot");
+            throw new com.example.hms.exception.FieldBusinessException(com.example.hms.service.AppointmentSlotRules.BOOKED_TIME_FIELD, "portal.booking.notAPublishedSlot");
         }
         if (!slot.isOfferable(LocalDateTime.now(clock))) {
-            throw new BusinessException("portal.booking.slotNotFree");
+            throw new com.example.hms.exception.FieldBusinessException(com.example.hms.service.AppointmentSlotRules.BOOKED_TIME_FIELD, "portal.booking.slotNotFree");
         }
         return slot;
     }

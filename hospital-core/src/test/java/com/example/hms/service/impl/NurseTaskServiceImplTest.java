@@ -648,7 +648,10 @@ class NurseTaskServiceImplTest {
         NurseHandoffCreateRequestDTO request = validHandoff(patientId, actor);
         assertThatThrownBy(() -> service.createHandoff(actor, hospitalId, request))
             .isInstanceOf(BusinessException.class)
-            .hasFieldOrPropertyWithValue("messageKey", "nurse.handoff.recipient.notSelf");
+            .hasFieldOrPropertyWithValue("messageKey", "nurse.handoff.recipient.notSelf")
+            // QA D1352 (round 30): on the recipient picker.
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "recipientUserId");
         verify(nurseHandoffRepository, never()).save(any());
     }
 

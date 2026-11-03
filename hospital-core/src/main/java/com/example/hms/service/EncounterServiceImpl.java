@@ -94,6 +94,9 @@ import com.example.hms.service.i18n.PatientLocaleResolver;
 @Service
 @RequiredArgsConstructor
 public class EncounterServiceImpl implements EncounterService {
+    /** Request properties a refusal names (QA D1352 class, round 30). */
+    private static final String FIELD_SIGNED_AT = "signedAt";
+
     private static final String NOTE_NOT_FOUND_KEY = "encounter.note.notfound";
 
 
@@ -435,7 +438,7 @@ public class EncounterServiceImpl implements EncounterService {
         // visit); with no status, defaultInitialStatus decides (QA D990).
         // Anything later is reached through its workflow step.
         if (request.getStatus() != null && !INITIAL_STATUSES.contains(request.getStatus())) {
-            throw new BusinessException(messageSource.getMessage("encounter.status.initialInvalid",
+            throw new com.example.hms.exception.FieldBusinessException("status", messageSource.getMessage("encounter.status.initialInvalid",
                 new Object[] {request.getStatus().localizedLabel(locale)}, locale));
         }
 
@@ -1350,7 +1353,7 @@ public class EncounterServiceImpl implements EncounterService {
         if (request.getSignedAt() != null
             || trimToNull(request.getSignedByName()) != null
             || trimToNull(request.getSignedByCredentials()) != null) {
-            throw new BusinessException("encounter.note.signatureViaEndpoint");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_SIGNED_AT, "encounter.note.signatureViaEndpoint");
         }
         // Set-only, the prescription idiom: declaring the co-sign requirement
         // is documentation; withdrawing it would be an attestation decision no
@@ -1536,7 +1539,7 @@ public class EncounterServiceImpl implements EncounterService {
         entry.put("content", addendum.getContent());
         entry.put("eventOccurredAt", addendum.getEventOccurredAt() != null ? addendum.getEventOccurredAt().toString() : null);
         entry.put("documentedAt", addendum.getDocumentedAt() != null ? addendum.getDocumentedAt().toString() : null);
-        entry.put("signedAt", addendum.getSignedAt() != null ? addendum.getSignedAt().toString() : null);
+        entry.put(FIELD_SIGNED_AT, addendum.getSignedAt() != null ? addendum.getSignedAt().toString() : null);
         return entry;
     }
 
@@ -1562,7 +1565,7 @@ public class EncounterServiceImpl implements EncounterService {
         snapshot.put("attestAccuracy", note.isAttestAccuracy());
         snapshot.put("attestNoAbbreviations", note.isAttestNoAbbreviations());
         snapshot.put("attestSpellCheck", note.isAttestSpellCheck());
-        snapshot.put("signedAt", note.getSignedAt());
+        snapshot.put(FIELD_SIGNED_AT, note.getSignedAt());
         snapshot.put("signedByName", note.getSignedByName());
         snapshot.put("signedByCredentials", note.getSignedByCredentials());
         snapshot.put("signatureValue", note.getSignatureValue());

@@ -554,4 +554,47 @@ class PatientMedicationServiceImplTest {
 
         verify(patientChartAccess, never()).requireOwnRecord(any());
     }
+
+    /**
+     * QA D1346 (round 30): PATIENT_A2 had three running medicines older than
+     * twenty cancelled orders; the portal asked for 20 and got the twenty
+     * cancelled ones. Every active course comes first, whatever the limit;
+     * the limit bounds only the history after it.
+     */
+    @Test
+    void d1346_everyActiveCourseIsListedFirst_whateverTheLimitAndTheCancelledOrders() {
+        LocalDateTime start = LocalDateTime.now().minusDays(3);
+        List<Prescription> rows = new java.util.ArrayList<>();
+        List<UUID> running = new java.util.ArrayList<>();
+        for (int i = 0; i < 3; i++) {
+            Prescription p = rx("Amoxicilline " + i, PrescriptionStatus.SIGNED, start.plusMinutes(i));
+            rows.add(p);
+            running.add(p.getId());
+        }
+        for (int i = 0; i < 25; i++) {
+            rows.add(rx("Paracétamol " + i, PrescriptionStatus.CANCELLED, start.plusHours(1).plusMinutes(i)));
+        }
+        when(patientChartAccess.requireOwnRecord(patientId)).thenReturn(patient);
+        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(rows));
+
+        List<PatientMedicationResponseDTO> result = service.getMedicationsForPatientPortal(patientId, null, 20);
+
+        assertThat(result).hasSize(23);
+        assertThat(result.subList(0, 3)).extracting(PatientMedicationResponseDTO::getId)
+            .containsExactly(running.get(2), running.get(1), running.get(0));
+        assertThat(result.subList(0, 3)).extracting(PatientMedicationResponseDTO::getStatus).containsOnly("ACTIVE");
+        assertThat(result.subList(3, 23)).extracting(PatientMedicationResponseDTO::getStatus)
+            .containsOnly("DISCONTINUED");
+        assertThat(service.getMedicationsForPatientPortal(patientId, null, 1)).hasSize(4);
+    }
+
+    private static Prescription rx(String name, PrescriptionStatus status, LocalDateTime createdAt) {
+        Prescription p = new Prescription();
+        p.setId(UUID.randomUUID());
+        p.setMedicationName(name);
+        p.setStatus(status);
+        p.setCreatedAt(createdAt);
+        return p;
+    }
 }

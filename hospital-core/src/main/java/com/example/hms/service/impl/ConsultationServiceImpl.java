@@ -63,6 +63,9 @@ import com.example.hms.service.recordaccess.BreakGlassGate;
 @RequiredArgsConstructor
 @Transactional
 public class ConsultationServiceImpl implements ConsultationService {
+    /** Request properties a refusal names (QA D1352 class, round 30). */
+    private static final String FIELD_CONSULTANT_ID = "consultantId";
+
     private static final String CONSULTATION_CONSULTANT_NOT_FOUND_KEY = "consultation.consultant.notFound";
 
 
@@ -519,7 +522,7 @@ public class ConsultationServiceImpl implements ConsultationService {
         }
         requireRequesterOrSuperAdmin(consultation);
         // QA D1098: the request DTO's @NotBlank holds at the edge; any other caller states why too.
-        String reason = com.example.hms.service.support.CancelledOrders.requireCancelReason(cancellationReason);
+        String reason = com.example.hms.service.support.CancelledOrders.requireCancelReason(cancellationReason, "cancellationReason");
 
         consultation.setStatus(ConsultationStatus.CANCELLED);
         consultation.setCancelledAt(LocalDateTime.now(clock));
@@ -828,7 +831,7 @@ public class ConsultationServiceImpl implements ConsultationService {
         requireConsultantAtHospital(consultant, consultation.getHospital() != null ? consultation.getHospital().getId() : null);
         // QA D955 class: a consult asks a colleague; the requester is never its consultant.
         if (com.example.hms.security.CallerIdentity.sameUser(consultation.getRequestingProvider(), consultant)) {
-            throw new BusinessException("consultation.consultant.notRequester");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_CONSULTANT_ID, "consultation.consultant.notRequester");
         }
     }
 
@@ -836,13 +839,13 @@ public class ConsultationServiceImpl implements ConsultationService {
         UUID userId = consultant.getUser() != null ? consultant.getUser().getId() : null;
         if (hospitalId == null || userId == null
                 || assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(userId, hospitalId).isEmpty()) {
-            throw new BusinessException("consultation.consultant.notAtHospital");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_CONSULTANT_ID, "consultation.consultant.notAtHospital");
         }
         // QA D715: an assignment of ANY role used to pass, so a consult could be
         // addressed to a nurse, who never sees it in a consultant worklist. The
         // consultant answers a medical question: a doctor at that hospital.
         if (!isPhysicianAt(userId, hospitalId)) {
-            throw new BusinessException("consultation.consultant.notPhysician");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_CONSULTANT_ID, "consultation.consultant.notPhysician");
         }
     }
 

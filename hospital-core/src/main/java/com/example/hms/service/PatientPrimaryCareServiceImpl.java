@@ -58,7 +58,7 @@ public class PatientPrimaryCareServiceImpl implements PatientPrimaryCareService 
 
         // Validate: assignment hospital must match requested hospital
         if (!assignment.getHospital().getId().equals(hospital.getId())) {
-            throw new BusinessException("Assignment hospital mismatch");
+            throw new com.example.hms.exception.FieldBusinessException("hospitalId", "Assignment hospital mismatch");
         }
 
         // Validate role: must be a doctor (or allowed set)
@@ -99,7 +99,7 @@ public class PatientPrimaryCareServiceImpl implements PatientPrimaryCareService 
                 .orElseThrow(() -> new ResourceNotFoundException("roleAssignment.notFound", req.getAssignmentId()));
             // validate reassignment
             if (!a.getHospital().getId().equals(entity.getHospital().getId())) {
-                throw new BusinessException("Assignment hospital mismatch");
+                throw new com.example.hms.exception.FieldBusinessException("assignmentId", "Assignment hospital mismatch");
             }
             roleValidator.validateRoleOrThrow(a.getId(), entity.getHospital().getId(), "ROLE_DOCTOR", Locale.getDefault(), messageSource);
             entity.setAssignment(a);

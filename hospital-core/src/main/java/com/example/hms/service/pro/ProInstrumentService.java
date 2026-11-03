@@ -220,7 +220,7 @@ public class ProInstrumentService {
         String current = existing.getVersion();
         String proposed = trimToNull(definition.getVersion());
         if (proposed == null || proposed.equals(current)) {
-            throw new BusinessException("Instrument " + existing.getCode() + " has recorded responses"
+            throw new com.example.hms.exception.FieldBusinessException("version", "Instrument " + existing.getCode() + " has recorded responses"
                 + " under version " + (current == null ? "(none)" : current)
                 + "; changing its items, option scores, threshold or critical item needs a new version.");
         }
@@ -278,12 +278,12 @@ public class ProInstrumentService {
         }
         int maxScore = maxScoreOf(definition);
         if (definition.getPositiveThreshold() != null && definition.getPositiveThreshold() > maxScore) {
-            throw new BusinessException("Positive threshold " + definition.getPositiveThreshold()
+            throw new com.example.hms.exception.FieldBusinessException("positiveThreshold", "Positive threshold " + definition.getPositiveThreshold()
                 + " exceeds the instrument's maximum score " + maxScore + "; it could never screen positive.");
         }
         Integer critical = definition.getCriticalItemNo();
         if (critical != null && !optionCounts.containsKey(critical)) {
-            throw new BusinessException("Critical item " + critical + " is not one of the instrument's items.");
+            throw new com.example.hms.exception.FieldBusinessException("criticalItemNo", "Critical item " + critical + " is not one of the instrument's items.");
         }
         Set<String> languages = new HashSet<>();
         for (ProInstrumentDefinitionDTO.Translation translation : definition.getTexts()) {

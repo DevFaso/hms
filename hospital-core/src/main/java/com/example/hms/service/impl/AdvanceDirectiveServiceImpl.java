@@ -30,6 +30,9 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Slf4j
 public class AdvanceDirectiveServiceImpl implements AdvanceDirectiveService {
+    /** Request properties a refusal names (QA D1352 class, round 30). */
+    private static final String FIELD_STATUS = "status";
+
 
     private final AdvanceDirectiveRepository directiveRepository;
     private final PatientRepository patientRepository;
@@ -87,12 +90,12 @@ public class AdvanceDirectiveServiceImpl implements AdvanceDirectiveService {
         // QA D1148 (round 21, user decision): a directive is never recorded
         // from defaults. The clinician states its status; it used to default
         // to ACTIVE, so one click recorded an active DNR.
-        com.example.hms.service.support.ClinicalContent.requirePresent(request.getStatus(), "status",
+        com.example.hms.service.support.ClinicalContent.requirePresent(request.getStatus(), FIELD_STATUS,
             "advanceDirective.status.required");
         // QA D1186 class (round 22, review round 2): a revocation is recorded
         // only by revoke(), with its reason - not created already revoked.
         if (request.getStatus() == AdvanceDirectiveStatus.REVOKED) {
-            throw new BusinessException("advanceDirective.revoke.useRevoke");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_STATUS, "advanceDirective.revoke.useRevoke");
         }
         directive.setStatus(request.getStatus());
         applyEditableFields(directive, request);
@@ -114,7 +117,7 @@ public class AdvanceDirectiveServiceImpl implements AdvanceDirectiveService {
             // revocation is a new directive, as in real hospitals.
             boolean revoked = directive.getStatus() == AdvanceDirectiveStatus.REVOKED;
             if (revoked != (request.getStatus() == AdvanceDirectiveStatus.REVOKED)) {
-                throw new BusinessException(revoked
+                throw new com.example.hms.exception.FieldBusinessException(FIELD_STATUS, revoked
                     ? "advanceDirective.revoked.locked" : "advanceDirective.revoke.useRevoke");
             }
             directive.setStatus(request.getStatus());
@@ -137,10 +140,12 @@ public class AdvanceDirectiveServiceImpl implements AdvanceDirectiveService {
         if (!resuscitationOrder || directive.getStatus() != AdvanceDirectiveStatus.ACTIVE) {
             return;
         }
-        com.example.hms.service.support.ClinicalContent.requirePresent(directive.getPhysicianName(),
-            "physicianName", "advanceDirective.physician.required");
-        com.example.hms.service.support.ClinicalContent.requirePresent(directive.getEffectiveDate(),
-            "effectiveDate", "advanceDirective.effectiveDate.required");
+        // QA D1355 (round 30): both named in one refusal - each check threw on
+        // its own, so the physician was named first and the date one press later.
+        com.example.hms.exception.RequiredFields.check()
+            .requireValue(directive.getPhysicianName(), "physicianName", "advanceDirective.physician.required")
+            .requireValue(directive.getEffectiveDate(), "effectiveDate", "advanceDirective.effectiveDate.required")
+            .orThrow();
     }
 
     @Override
