@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 import { PatientDemographicsEditComponent } from './patient-demographics-edit.component';
 import { PatientResponse, PatientService } from '../../services/patient.service';
@@ -110,7 +110,26 @@ describe('PatientDemographicsEditComponent (QA D926)', () => {
     c.form.dateOfBirth = '';
     c.submit();
     expect(patients.patchDemographics).not.toHaveBeenCalled();
-    expect(c.error()).toBe('PATIENTS.EDIT_REQUIRED_MISSING');
+    // QA D1358: the refusal names the blank field (it was a fixed sentence).
+    expect(c.error()).toBe('COMMON.MISSING_REQUIRED_FIELDS');
+  });
+
+  it('QA D1358: the refusal names exactly the blank fields, the date of birth included', () => {
+    const fixture = create();
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', {
+      COMMON: { MISSING_REQUIRED_FIELDS: 'Champs obligatoires manquants : {{fields}}' },
+      PATIENTS: { FIRST_NAME: 'Prénom', DOB: 'Date de naissance', PHONE: 'Téléphone' },
+    });
+    translate.use('fr');
+    const c = fixture.componentInstance;
+    c.form.dateOfBirth = '';
+    c.submit();
+    expect(c.error()).toBe('Champs obligatoires manquants : Date de naissance');
+    c.form.firstName = ' ';
+    c.submit();
+    expect(c.error()).toBe('Champs obligatoires manquants : Prénom, Date de naissance');
+    expect(patients.patchDemographics).not.toHaveBeenCalled();
   });
 
   it('review round 8: a legacy composed address sends only its street, never the city and country again', () => {

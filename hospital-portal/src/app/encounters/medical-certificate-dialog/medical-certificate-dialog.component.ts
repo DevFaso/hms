@@ -51,9 +51,16 @@ export class MedicalCertificateDialogComponent implements OnInit {
   readonly types: MedicalCertificateType[] = ['SICK_LEAVE', 'ATTENDANCE', 'GENERAL'];
   readonly languages: ('fr' | 'en' | 'es')[] = ['fr', 'en', 'es'];
 
-  type: MedicalCertificateType = 'SICK_LEAVE';
+  /**
+   * QA D1356: what the certificate attests starts EMPTY. It opened as a
+   * one-day sick leave, so "Établir et signer" pressed on an untouched form
+   * signed a certificate the doctor never wrote. The doctor chooses the type
+   * and, for a sick leave, enters the days; only the first day is proposed
+   * (the visit's day), shown once a sick leave is chosen.
+   */
+  type: MedicalCertificateType | '' = '';
   startDate = '';
-  days: number | null = 1;
+  days: number | null = null;
   remarks = '';
   /** '' = the patient's language (the server resolves it); otherwise the doctor's pick. */
   language: '' | 'fr' | 'en' | 'es' = '';
@@ -70,6 +77,7 @@ export class MedicalCertificateDialogComponent implements OnInit {
 
   /** What the form still needs before it can be sent, as a message key, or null. */
   missing(): string | null {
+    if (!this.type) return 'MEDICAL_CERTIFICATE.TYPE_REQUIRED';
     if (this.type === 'SICK_LEAVE' && (!this.days || this.days < 1 || this.days > 365)) {
       return 'MEDICAL_CERTIFICATE.DAYS_REQUIRED';
     }
@@ -80,12 +88,13 @@ export class MedicalCertificateDialogComponent implements OnInit {
   }
 
   submit(): void {
-    if (this.saving() || this.missing()) return;
+    const type = this.type;
+    if (this.saving() || this.missing() || !type) return;
     this.saving.set(true);
     this.error.set(null);
     this.service
       .issue(this.encounter.id, {
-        type: this.type,
+        type,
         startDate: this.type === 'SICK_LEAVE' && this.startDate ? this.startDate : undefined,
         days: this.type === 'SICK_LEAVE' ? (this.days ?? undefined) : undefined,
         remarks: this.remarks.trim() || undefined,

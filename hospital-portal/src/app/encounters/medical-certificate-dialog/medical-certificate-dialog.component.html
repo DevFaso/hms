@@ -44,6 +44,7 @@
         <div class="field">
           <label for="mc-type">{{ 'MEDICAL_CERTIFICATE.TYPE' | translate }} *</label>
           <select required id="mc-type" name="type" [(ngModel)]="type">
+            <option value="" disabled>{{ 'MEDICAL_CERTIFICATE.TYPE_CHOOSE' | translate }}</option>
             @for (t of types; track t) {
               <option [value]="t">{{ 'MEDICAL_CERTIFICATE.TYPE_' + t | translate }}</option>
             }

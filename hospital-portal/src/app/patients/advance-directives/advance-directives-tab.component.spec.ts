@@ -169,6 +169,28 @@ describe('AdvanceDirectivesTabComponent', () => {
     host.remove();
   });
 
+  it('QA D1357: an empty save names the blank fields once, never one sentence repeated under each', () => {
+    setup([]);
+    component.openCreate();
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    document.body.appendChild(host);
+    host.querySelector<HTMLButtonElement>('[data-testid="directive-save"]')!.click();
+    fixture.detectChanges();
+    expect(directiveService.create).not.toHaveBeenCalled();
+    const alerts = [...host.querySelectorAll('[role="alert"]')].map((a) => a.textContent?.trim());
+    expect(alerts).not.toContain('DIRECTIVES.REQUIRED_FIELDS');
+    // The one summary that names the fields (the submit guard, under the button).
+    expect(alerts.filter((t) => t?.includes('COMMON.MISSING_REQUIRED_FIELDS')).length).toBe(1);
+    host.remove();
+
+    // The component's own check (a path the guard cannot see) names them too.
+    component.form = { directiveType: '', status: '', effectiveDate: '' };
+    component.submit();
+    expect(toast.error).toHaveBeenCalledWith('COMMON.MISSING_REQUIRED_FIELDS');
+    expect(directiveService.create).not.toHaveBeenCalled();
+  });
+
   it('revokes through the revoke endpoint after confirmation, then reloads', () => {
     const row = directive({ id: 'd-1' });
     setup([row]);

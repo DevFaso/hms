@@ -22,6 +22,8 @@ import {
 import { ToastService } from '../../core/toast.service';
 import { blankFields, refuseFields } from '../../shared/forms/invalid-fields';
 import { refusalReason } from '../../shared/refusal-reason';
+import { missingRequiredMessage } from '../../shared/required-fields';
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 import { PatientChartChanges } from '../../interceptors/patient-chart-change.interceptor';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
@@ -60,10 +62,19 @@ const DIRECTIVE_FIELD_IDS = [
   'directive-expiration',
 ];
 
+/** The label each required field is shown under, to name it when it is blank (QA D1357). */
+const DIRECTIVE_LABEL_KEYS: Readonly<Record<string, string>> = {
+  'directive-type': 'DIRECTIVES.TYPE',
+  'directive-status': 'DIRECTIVES.STATUS',
+  'directive-effective': 'DIRECTIVES.EFFECTIVE_DATE',
+  'directive-physician': 'DIRECTIVES.PHYSICIAN',
+};
+
 @Component({
   selector: 'app-advance-directives-tab',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
     ModalDialogDirective,
     ReasonDialogComponent,
     ServerTimePipe,
@@ -188,12 +199,22 @@ export class AdvanceDirectivesTabComponent implements OnInit {
       required,
     );
     if (missing.length > 0) {
-      // QA D1148: each missing field is named where it is asked for.
+      // QA D1148: each missing field is marked where it is asked for.
+      // QA D1357: and the refusal NAMES them, once ("Champs obligatoires
+      // manquants : Type, Statut, Date d'effet"); it repeated one sentence
+      // under every field and named none. The save button's submit guard
+      // refuses first with the same words; this is the path it cannot see.
       refuseFields(
         this.host.nativeElement,
         missing,
         DIRECTIVE_FIELD_IDS,
-        this.translate.instant('DIRECTIVES.REQUIRED_FIELDS'),
+        this.translate.instant('COMMON.FIELD_REQUIRED'),
+      );
+      this.toast.error(
+        missingRequiredMessage(
+          this.translate,
+          missing.map((id) => ({ labelKey: DIRECTIVE_LABEL_KEYS[id], value: '' })),
+        ) ?? this.translate.instant('COMMON.SUBMIT_BLOCKED_REQUIRED'),
       );
       return;
     }
