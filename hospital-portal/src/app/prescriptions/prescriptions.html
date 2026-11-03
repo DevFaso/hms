@@ -851,16 +851,24 @@
             {{ 'PRESCRIPTIONS.SIGNED_EDIT_HINT' | translate }}
           </p>
         }
-        @if (createdWithAdvisories()) {
-          <!-- QA D1345: the order is created; the form is locked, only Close remains. -->
-          <p class="form-hint" role="status" data-testid="rx-created-hint">
+        <!-- QA D1345: the order is created; the form is locked, only Close remains.
+             Always rendered (hidden until then): the locked fields point at it. -->
+        <p
+          class="form-hint"
+          role="status"
+          id="rx-created-hint"
+          data-testid="rx-created-hint"
+          [hidden]="!createdWithAdvisories()"
+        >
+          @if (createdWithAdvisories()) {
             {{ 'PRESCRIPTIONS.CREATED_WITH_ADVISORIES' | translate }}
-          </p>
-        }
+          }
+        </p>
         <!-- QA D1345: locked once the order is created (a second Create posted a duplicate). -->
         <fieldset
           class="rx-form-fields"
           data-testid="rx-form-fields"
+          aria-describedby="rx-created-hint"
           [disabled]="createdWithAdvisories()"
         >
           <div class="form-row">

@@ -122,15 +122,19 @@ type State = 'idle' | 'searching' | 'ready' | 'applying' | 'applied' | 'error';
               </li>
             }
           </ul>
-          <button
-            type="button"
-            class="btn-primary"
-            data-testid="order-set-picker-apply"
-            [disabled]="applying() || appliedSummary() !== null"
-            (click)="apply(sel)"
-          >
-            {{ 'ORDER_SETS.APPLY' | translate }}
-          </button>
+          <!-- QA D1345 class (round 30): once applied, the preview offers no Apply
+               (a second press created every order again); the result shows below. -->
+          @if (appliedSummary() === null) {
+            <button
+              type="button"
+              class="btn-primary"
+              data-testid="order-set-picker-apply"
+              [disabled]="applying()"
+              (click)="apply(sel)"
+            >
+              {{ 'ORDER_SETS.APPLY' | translate }}
+            </button>
+          }
         </section>
       }
 

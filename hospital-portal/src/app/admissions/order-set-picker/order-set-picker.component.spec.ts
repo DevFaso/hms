@@ -120,8 +120,9 @@ describe('OrderSetPickerComponent', () => {
         fixture.nativeElement.querySelector('[data-testid="order-set-picker-applied"]'),
       ).not.toBeNull();
       // QA D1345 class: once applied, the same preview cannot apply the set again.
-      expect(applyBtn.disabled).toBeTrue();
-      applyBtn.click();
+      expect(
+        fixture.nativeElement.querySelector('[data-testid="order-set-picker-apply"]'),
+      ).toBeNull();
       (fixture.componentInstance as unknown as { apply(os: unknown): void }).apply({ id: 'os-1' });
       expect(svc.apply).toHaveBeenCalledTimes(1);
       done();
