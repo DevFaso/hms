@@ -62,8 +62,8 @@ export interface HealthSummaryDTO {
    * that shows a few rows counts the rest from these, never from the rows it
    * loaded. Null when the server could not count.
    */
-  labResultTotal: number | null;
-  medicationTotal: number | null;
+  labResultTotal?: number | null;
+  medicationTotal?: number | null;
 }
 
 /** QA D1213: how many lab results a portal page shows at a time. */
