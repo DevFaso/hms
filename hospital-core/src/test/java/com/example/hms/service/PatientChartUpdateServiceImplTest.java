@@ -206,14 +206,11 @@ class PatientChartUpdateServiceImplTest {
         DoctorPatientChartUpdateRequestDTO request = new DoctorPatientChartUpdateRequestDTO();
         request.setHospitalId(hospitalId);
 
-        when(patientRepository.existsById(patientId)).thenReturn(true);
-        when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(staffRepository.findByUserIdAndHospitalId(staffUserId, hospitalId)).thenReturn(Optional.of(staff));
-
+        // QA D1355 class (round 30): the reason is refused with the hospital, before any lookup.
         assertThatThrownBy(() -> service.createPatientChartUpdate(patientId, hospitalId, staffUserId, assignment, request))
-            .isInstanceOf(BusinessException.class);
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "updateReason");
+        org.mockito.Mockito.verifyNoInteractions(patientRepository, staffRepository);
     }
 
     @Test

@@ -90,7 +90,7 @@ public class PanelService {
             if (previous.getAssignedOn() != null && assignedOn.isBefore(previous.getAssignedOn())) {
                 throw new com.example.hms.exception.FieldBusinessException("assignedOn", 
                     "The empanelment date is before the current owner's start ("
-                        + previous.getAssignedOn() + ") — end that assignment first if the "
+                        + com.example.hms.utility.DisplayDates.date(previous.getAssignedOn()) + ") — end that assignment first if the "
                         + "history really needs rewriting.");
             }
             previous.setStatus(PanelAssignmentStatus.ENDED);
