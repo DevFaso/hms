@@ -210,7 +210,9 @@ public class BirthPlanController {
             
             Authentication authentication) {
         
-        Sort.Direction sortDirection = "ASC".equalsIgnoreCase(direction) ? Sort.Direction.ASC : Sort.Direction.DESC;
+        // QA D1385 class (round 32): anything but ASC silently sorted DESC; an unknown direction is refused by name.
+        Sort.Direction sortDirection = "ASC".equals(com.example.hms.controller.support.QueryParameterValues.oneOf(
+            "direction", direction, java.util.Set.of("ASC", "DESC"))) ? Sort.Direction.ASC : Sort.Direction.DESC;
         Pageable pageable = PageRequest.of(page, size, Sort.by(sortDirection, sort));
         
         Page<BirthPlanResponseDTO> response = birthPlanService.searchBirthPlans(

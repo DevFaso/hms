@@ -93,6 +93,17 @@ class GlobalExceptionHandlerTest {
         }
 
         @Test
+        @DisplayName("QA D1385: a filter value outside its list is a 400 naming the parameter, in French")
+        void anUnknownFilterValueNamesTheParameter_D1385() {
+            Map<String, Object> body = bodyOf(inFrench(() -> handler.handleInvalidQueryParameter(
+                new InvalidQueryParameterException("status"), request)));
+            assertThat(body).containsEntry("status", 400).containsEntry("code", "INVALID_PARAMETER")
+                .containsEntry("field", "status");
+            assertThat((String) body.get("message")).contains("statut").doesNotContain("BOGUS");
+            assertThat(((Map<?, ?>) body.get("fieldErrors")).get("status")).isEqualTo(body.get("message"));
+        }
+
+        @Test
         @DisplayName("a keyed UnauthorizedAccessException answers 403 in French, not a 500")
         void keyedRefusalIsA403InFrench() {
             ResponseEntity<Object> response = inFrench(() -> handler.handleUnauthorizedAccess(

@@ -137,7 +137,12 @@ public class MaternalHistoryController {
     ) {
         String username = authentication.getName();
         Page<MaternalHistoryResponseDTO> response = maternalHistoryService.searchMaternalHistory(
-            hospitalId, patientId, riskCategory, dataComplete, reviewedByProvider,
+            hospitalId, patientId,
+            // QA D1385 class (round 32): MaternalHistoryServiceImpl#calculateRiskScore writes only these;
+            // an unknown or lower-case value matched nothing and listed nobody.
+            com.example.hms.controller.support.QueryParameterValues.oneOf("riskCategory", riskCategory,
+                java.util.Set.of("LOW", "MODERATE", "HIGH")),
+            dataComplete, reviewedByProvider,
             dateFrom, dateTo, pageable, username
         );
         return ResponseEntity.ok(response);

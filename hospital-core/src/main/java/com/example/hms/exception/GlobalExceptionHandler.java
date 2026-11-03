@@ -790,7 +790,25 @@ public class GlobalExceptionHandler {
                 request.getDescription(false), ex.getName(),
                 ex.getRequiredType() != null ? ex.getRequiredType().getSimpleName() : "value");
         }
-        String label = parameterLabelOrNull(ex.getName());
+        return invalidParameterResponse(ex.getName(), request);
+    }
+
+    /**
+     * QA D1385 (round 32): a String filter parameter outside its closed list
+     * ({@code ?status=BOGUS}) is refused like an unparsable enum parameter,
+     * not answered with an empty list.
+     */
+    @ExceptionHandler(InvalidQueryParameterException.class)
+    public ResponseEntity<Object> handleInvalidQueryParameter(InvalidQueryParameterException ex, WebRequest request) {
+        if (log.isWarnEnabled()) {
+            log.warn("Unknown query parameter value at path {}: parameter {}",
+                request.getDescription(false), ex.getParameter());
+        }
+        return invalidParameterResponse(ex.getParameter(), request);
+    }
+
+    private ResponseEntity<Object> invalidParameterResponse(String parameter, WebRequest request) {
+        String label = parameterLabelOrNull(parameter);
         String message = label == null
             ? localized("error.request.invalidUnlabelledParameter", "A value supplied is not valid.")
             : localized("error.request.invalidParameter",
@@ -798,8 +816,8 @@ public class GlobalExceptionHandler {
         Map<String, Object> body = errorBody(HttpStatus.BAD_REQUEST, message, request);
         body.put(FIELD_CODE, CODE_INVALID_PARAMETER);
         // QA D1245 (round 25): a blank or unparsable UUID / enum / date parameter is named.
-        body.put(FIELD_FIELD, ex.getName());
-        body.put(FIELD_ERRORS, Map.of(ex.getName(), message));
+        body.put(FIELD_FIELD, parameter);
+        body.put(FIELD_ERRORS, Map.of(parameter, message));
         return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
     }
 
