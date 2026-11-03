@@ -224,6 +224,17 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
             .toList();
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public long countLabResultsForPatientPortal(UUID patientId) {
+        Patient patient = patientChartAccess.requireOwnRecord(patientId);
+        // Every row of the patient, filtered as the paged read filters them:
+        // a total that counted superseded rows would promise results the list
+        // never shows.
+        List<LabResult> rows = fetchRows(patient, null, Integer.MAX_VALUE / 2, true);
+        return ClinicalLabResultView.current(resolvePairs(rows, true)).size();
+    }
+
     private static List<LabResult> currentFor(boolean clinicalReader, List<LabResult> rows) {
         return clinicalReader ? ClinicalLabResultView.current(rows) : rows;
     }

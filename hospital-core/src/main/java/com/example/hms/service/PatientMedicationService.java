@@ -21,4 +21,11 @@ public interface PatientMedicationService {
      * because every row belongs to the patient.
      */
     List<PatientMedicationResponseDTO> getMedicationsForPatientPortal(UUID patientId, UUID hospitalId, int limit);
+
+    /**
+     * QA D1362 (round 31): how many medications the patient has in all - every
+     * issued prescription, at every hospital, whatever its course status (the
+     * rows the portal list draws from; drafts are not medications).
+     */
+    long countMedicationsForPatientPortal(UUID patientId);
 }

@@ -64,3 +64,32 @@ test('D1352/D1354: each refused field of these screens answers to the key the se
   }
   assert.deepEqual(missing, []);
 });
+
+/**
+ * QA D1376 (round 31): the profile's e-mail change was refused with
+ * `fieldErrors.newEmail` and only a toast showed — the input is
+ * `#editEmail` / `name="email"`. The profile's own-account writes
+ * (POST /auth/me/change-email {currentPassword, newEmail}, its confirm
+ * {code}, POST /auth/me/change-password {currentPassword, newPassword},
+ * PUT /users/{id} {firstName, lastName, phoneNumber, username}) each name a
+ * control here.
+ */
+const PROFILE_EXPECTED = [
+  ['profile/profile.html', 'editEmail', 'newEmail'],
+  ['profile/profile.html', 'editEmailPassword', 'currentPassword'],
+  ['profile/profile.html', 'emailChangeCode', 'code'],
+  ['profile/profile.html', 'pwdCurrent', 'currentPassword'],
+  ['profile/profile.html', 'pwdNew', 'newPassword'],
+  ['profile/profile.html', 'editPhone', 'phoneNumber'],
+];
+
+test('D1376: each own-account field of the profile answers to the key the server names', () => {
+  const missing = [];
+  for (const [file, id, key] of PROFILE_EXPECTED) {
+    const tag = controlTag(readFileSync(resolve(SRC_DIR, file), 'utf8'), id);
+    if (!tag) missing.push(`${file}: no control #${id}`);
+    else if (!answersTo(tag, key))
+      missing.push(`${file}: #${id} does not answer to fieldErrors.${key}`);
+  }
+  assert.deepEqual(missing, []);
+});

@@ -37,4 +37,11 @@ public interface PatientLabResultService {
      * caller asks for limit + 1 to know whether there is more.
      */
     List<PatientLabResultResponseDTO> getLabResultsForPatientPortal(UUID patientId, int offset, int limit);
+
+    /**
+     * QA D1362 (round 31): how many current results the patient has - the
+     * rows {@link #getLabResultsForPatientPortal(UUID, int, int)} pages
+     * through, counted after the same superseded / corrected-away filter.
+     */
+    long countLabResultsForPatientPortal(UUID patientId);
 }

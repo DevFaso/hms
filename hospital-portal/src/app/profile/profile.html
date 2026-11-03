@@ -412,6 +412,7 @@
                       <input
                         type="email"
                         id="editEmail"
+                        data-server-field="newEmail email"
                         [ngModel]="editForm().email"
                         (ngModelChange)="updateField('email', $event)"
                         name="email"
@@ -449,6 +450,7 @@
                       <input
                         type="password"
                         id="editEmailPassword"
+                        data-server-field="currentPassword"
                         autocomplete="current-password"
                         [ngModel]="emailChangePassword()"
                         (ngModelChange)="emailChangePassword.set($event)"
@@ -534,6 +536,7 @@
                       }}</label>
                       <input
                         id="emailChangeCode"
+                        data-server-field="code"
                         class="verification-input"
                         type="text"
                         inputmode="numeric"
@@ -615,6 +618,7 @@
                     <input
                       type="password"
                       id="pwdCurrent"
+                      data-server-field="currentPassword"
                       required
                       name="pwdCurrent"
                       autocomplete="current-password"
@@ -628,6 +632,7 @@
                     <input
                       type="password"
                       id="pwdNew"
+                      data-server-field="newPassword"
                       required
                       name="pwdNew"
                       autocomplete="new-password"

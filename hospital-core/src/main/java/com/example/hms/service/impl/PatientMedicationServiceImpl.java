@@ -68,6 +68,14 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
         return getMedications(patientId, hospitalId, limit, true);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public long countMedicationsForPatientPortal(UUID patientId) {
+        Patient patient = patientChartAccess.requireOwnRecord(patientId);
+        return prescriptionRepository.findByPatient_Id(patient.getId(), Pageable.unpaged()).getContent()
+            .stream().filter(p -> isIssued(p.getStatus())).count();
+    }
+
     private List<PatientMedicationResponseDTO> getMedications(UUID patientId, UUID hospitalId, int limit,
                                                               boolean portalView) {
         log.info("Fetching medications for patient {} in hospital {}", patientId, hospitalId);

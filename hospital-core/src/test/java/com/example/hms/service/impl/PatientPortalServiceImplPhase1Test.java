@@ -466,6 +466,31 @@ class PatientPortalServiceImplPhase1Test {
             assertThat(result.getChronicConditions()).containsExactly("Hypertension", "Diabetes");
         }
 
+        /** QA D1362 (round 31): the summary carries the server's totals, so a card counts every row. */
+        @Test
+        void getHealthSummary_carriesTheTotals() {
+            stubPatientResolution();
+            when(labResultService.countLabResultsForPatientPortal(patientId)).thenReturn(125L);
+            when(medicationService.countMedicationsForPatientPortal(patientId)).thenReturn(444L);
+
+            HealthSummaryDTO result = service.getHealthSummary(auth, Locale.FRENCH);
+
+            assertThat(result.getLabResultTotal()).isEqualTo(125L);
+            assertThat(result.getMedicationTotal()).isEqualTo(444L);
+        }
+
+        /** QA D1362: a total that cannot be read is absent (the page then shows no count), never a broken summary. */
+        @Test
+        void getHealthSummary_aTotalThatFailsIsAbsent() {
+            stubPatientResolution();
+            when(labResultService.countLabResultsForPatientPortal(patientId)).thenThrow(new IllegalStateException("db"));
+
+            HealthSummaryDTO result = service.getHealthSummary(auth, Locale.FRENCH);
+
+            assertThat(result.getLabResultTotal()).isNull();
+            assertThat(result.getProfile()).isNotNull();
+        }
+
         /**
          * QA D1214 (round 23): "Pathologies actives" was empty for every
          * patient - the summary never set activeDiagnoses. The doctor's

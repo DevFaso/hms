@@ -19,15 +19,19 @@
  */
 import { resolve } from 'node:path';
 
-import { listCapFindings } from './lib/list-cap-scan.mjs';
-import { PORTAL_DIR } from './lib/template-gate.mjs';
+import { listCapFindings, sliceCountFindings } from './lib/list-cap-scan.mjs';
+import { PORTAL_DIR, scanTemplates } from './lib/template-gate.mjs';
 import { scanComponents } from './lib/component-sources.mjs';
 import { runGate, isMain } from './lib/baseline.mjs';
 
 export const gate = {
   name: 'list caps',
   baselinePath: resolve(PORTAL_DIR, 'scripts', 'list-caps-baseline.json'),
-  findings: (ctx) => scanComponents((source, file) => listCapFindings(source, file), ctx),
+  // QA D1362: a "+ N more" counted in a template from the rows on hand.
+  findings: (ctx) => [
+    ...scanComponents((source, file) => listCapFindings(source, file), ctx),
+    ...scanTemplates((html) => sliceCountFindings(html), {}, ctx),
+  ],
   comment: [
     'Fixed-size list reads, as they stand today (QA D1347).',
     'Each key is "file::rule::member:detail"; "why" says why the site is not a silent cap, or its defect id.',

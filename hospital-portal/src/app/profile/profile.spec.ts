@@ -16,6 +16,7 @@ import {
 } from '../services/profile.service';
 import { PatientPortalService, PatientProfileDTO } from '../services/patient-portal.service';
 import { isSubmitBlocked } from '../shared/forms/submit-guard.testing';
+import { fieldControlFor, markServerFieldErrors } from '../shared/forms/server-field-errors';
 
 const profile = (email: string, firstName = 'Awa'): UserProfile => ({
   id: 'u1',
@@ -259,6 +260,31 @@ describe('ProfileComponent — editing the profile', () => {
     fixture.detectChanges();
     expect(component.emailChanged()).toBeTrue();
     expect(byId('editEmailPassword')).not.toBeNull();
+  });
+
+  it('QA D1376: the server refusing the new e-mail marks the e-mail field, with its reason', () => {
+    component.updateField('email', 'pas-une-adresse');
+    component.emailChangePassword.set('Current-Pass-1');
+    fixture.detectChanges();
+    const form = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('.edit-form')!;
+    const refusal = {
+      status: 400,
+      error: {
+        message: 'Adresse e-mail invalide.',
+        fieldErrors: {
+          newEmail: 'Adresse e-mail invalide.',
+          currentPassword: 'Mot de passe requis.',
+        },
+      },
+    };
+
+    // The interceptor (app.config.ts) marks what this lookup finds in the form acted in.
+    expect(fieldControlFor(form, 'newEmail')?.id).toBe('editEmail');
+    expect(fieldControlFor(form, 'currentPassword')?.id).toBe('editEmailPassword');
+    expect(markServerFieldErrors(form, refusal)).toEqual(['editEmail', 'editEmailPassword']);
+    fixture.detectChanges();
+    expect(byId('editEmail')?.getAttribute('aria-invalid')).toBe('true');
+    expect(form.textContent).toContain('Adresse e-mail invalide.');
   });
 
   it('a blank email field saves the rest and never sends an empty email', () => {

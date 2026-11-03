@@ -39,6 +39,7 @@ public interface MedicationCatalogItemRepository extends JpaRepository<Medicatio
           AND (:hospitalId IS NULL
                OR m.hospital IS NULL
                OR m.hospital.id = :hospitalId)
+        ORDER BY LOWER(m.nameFr)
         """, countQuery = """
         SELECT COUNT(m) FROM MedicationCatalogItem m
         WHERE m.active = true
@@ -52,7 +53,7 @@ public interface MedicationCatalogItemRepository extends JpaRepository<Medicatio
            "AND (LOWER(m.nameFr) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')) " +
            "OR LOWER(m.genericName) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')) " +
            "OR LOWER(m.brandName) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')) " +
-           "OR LOWER(m.atcCode) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')))")
+           "OR LOWER(m.atcCode) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%'))) ORDER BY LOWER(m.nameFr)")
     Page<MedicationCatalogItem> searchByHospital(
             @Param("hospitalId") UUID hospitalId,
             @Param("search") String search,
@@ -63,7 +64,7 @@ public interface MedicationCatalogItemRepository extends JpaRepository<Medicatio
            "AND (LOWER(m.nameFr) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')) " +
            "OR LOWER(m.genericName) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')) " +
            "OR LOWER(m.brandName) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')) " +
-           "OR LOWER(m.atcCode) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')))")
+           "OR LOWER(m.atcCode) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%'))) ORDER BY LOWER(m.nameFr)")
     Page<MedicationCatalogItem> searchAllActive(@Param("search") String search, Pageable pageable);
 
     Page<MedicationCatalogItem> findByHospital_IdAndCategoryAndActiveTrue(UUID hospitalId, String category, Pageable pageable);

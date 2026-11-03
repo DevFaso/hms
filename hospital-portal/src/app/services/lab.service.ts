@@ -488,12 +488,22 @@ export class LabService {
       .pipe(map((res) => res.data));
   }
 
-  /** Every lab result in scope and the server's own count (QA D1347: was one page of 200). */
+  /**
+   * Every lab result in scope and the server's own count (QA D1347: was one page of 200).
+   * QA D1361: read page by page, so the pages must share one total order -
+   * newest result first, then the id, which no two results share. (The
+   * server closes any order with the id too; the sort is sent so the order
+   * does not hang on the endpoint's default.)
+   */
   listAllResults(): Observable<AllRows<LabResultResponse>> {
     return allPages((page, size) =>
       this.http
         .get<ApiWrapper<PageResponse<LabResultResponse>>>('/lab-results', {
-          params: new HttpParams().set('page', String(page)).set('size', String(size)),
+          params: new HttpParams()
+            .set('page', String(page))
+            .set('size', String(size))
+            .append('sort', 'resultDate,desc')
+            .append('sort', 'id,desc'),
         })
         .pipe(map((res) => res?.data)),
     );

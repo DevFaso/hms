@@ -19,6 +19,14 @@
  *  - `page-content`: a page's rows read (`page.content`, `res?.data?.content`)
  *    in a file that reads neither `totalElements`, `totalPages` nor `last` —
  *    nothing on that screen can say there is more.
+ *  - `fixed-limit` (QA D1362, round 31): a read called with ONE literal
+ *    number — `getMyLabResults(50)` — the positional spelling of a limit the
+ *    `fixed-size` rule could not see. The "Mon dossier médical" card read 50
+ *    results and counted those.
+ *  - `slice-count` (QA D1362, templates — {@link sliceCountFindings}): a
+ *    "+ N more" computed in a template from the rows on hand
+ *    (`labs().length - 4`). The count is the server's total less the rows
+ *    shown: `moreCount(total, shown)` in src/app/shared/more-count.ts.
  *
  * Not findings: `font-size: 64px` and other CSS in inline styles (a unit
  * follows), `slice(0, 8)` / `substring(0, 50)` (not a read), `size = 20`
@@ -61,6 +69,7 @@ const FIXED_SIZE_OBJECT = /(?<![-\w$])(size|limit)\s*:\s*(\d+)(?![\w.%])/g;
 const FIXED_SIZE_PARAM = /\.(?:set|append)\(\s*['"](size|limit)['"]\s*,\s*['"]?(\d+)['"]?\s*\)/g;
 const FIXED_SIZE_POSITIONAL =
   /\.((?:list|search|get|find)[\w$]*)\(([^()]*?,\s*)?0\s*,\s*(\d+)\s*[,)]/g;
+const FIXED_LIMIT_POSITIONAL = /\.((?:list|search|get|find)[\w$]*)\(\s*(\d+)\s*\)/g;
 const PAGE_FLATTENED =
   /map\(\s*\(?\s*([\w$]+)\s*\)?\s*=>\s*\(?\s*\1\??\.(?:data\??\.|body\??\.)?content\s*\?\?\s*\[\]/g;
 const PAGE_CONTENT =
@@ -105,6 +114,14 @@ export function listCapFindings(source, relFile) {
       `${m[1]}(…, 0, ${m[3]}) reads ONE page of a list (QA D1347): read every page (allRows) or show the server's total`,
     );
   }
+  for (const m of code.matchAll(FIXED_LIMIT_POSITIONAL)) {
+    push(
+      m.index,
+      'fixed-limit',
+      `${m[1]}:${m[2]}`,
+      `${m[1]}(${m[2]}) reads at most ${m[2]} rows (QA D1362): read every page, or count from the server's total`,
+    );
+  }
   for (const m of code.matchAll(PAGE_FLATTENED)) {
     push(
       m.index,
@@ -126,6 +143,36 @@ export function listCapFindings(source, relFile) {
         "a page's rows read with nothing on the screen saying there is more (QA D1347)",
       );
     }
+  }
+  return out;
+}
+
+/** `x.length - 4` inside an interpolation, a binding or a control-flow expression: rows on hand less rows shown. */
+const SLICE_COUNT = /([\w$.()!?\]]+?)\.length\s*-\s*(\d+)\b/g;
+
+/**
+ * QA D1362 (round 31): a "+ N more" counted in a template from the rows the
+ * page loaded. An index into the list (`list[list.length - 1]`) is not a
+ * count and is not reported.
+ *
+ * @param {string} html the template
+ * @returns {{line:number, rule:string, anchor:string, message:string}[]}
+ */
+export function sliceCountFindings(html) {
+  const out = [];
+  const code = html.replace(/<!--[\s\S]*?-->/g, (m) => m.replace(/[^\n]/g, ' '));
+  for (const m of code.matchAll(SLICE_COUNT)) {
+    const before = code.slice(Math.max(0, m.index - 1), m.index);
+    const after = code.slice(m.index + m[0].length).trimStart();
+    if (before === '[' || after.startsWith(']')) continue;
+    out.push({
+      line: lineOf(code, m.index),
+      rule: 'slice-count',
+      anchor: `${m[1]}:${m[2]}`,
+      message:
+        `${m[1]}.length - ${m[2]} counts "more" from the rows on hand (QA D1362): ` +
+        'use moreCount(serverTotal, shown) (src/app/shared/more-count.ts)',
+    });
   }
   return out;
 }

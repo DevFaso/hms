@@ -1,9 +1,11 @@
 package com.example.hms.repository;
 
+import com.example.hms.config.StablePageOrderConfig;
 import com.example.hms.fhir.provider.MedicationRequestFhirResourceProvider;
 import com.example.hms.fhir.provider.ObservationFhirResourceProvider;
 import com.example.hms.model.Notification;
 import com.example.hms.payload.dto.PermissionFilterDTO;
+import com.example.hms.security.tenant.TenantContextAccessor;
 import com.example.hms.service.ReceptionServiceImpl;
 import com.example.hms.service.impl.NurseTaskServiceImpl;
 import com.example.hms.service.impl.SuperAdminOrganizationOverviewServiceImpl;
@@ -12,11 +14,17 @@ import com.example.hms.specification.UserRoleHospitalAssignmentSpecification;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.hibernate.resource.jdbc.spi.StatementInspector;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.annotation.Import;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.data.repository.Repository;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -26,7 +34,26 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -48,6 +75,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
+@Import({StablePageOrderConfig.class, TenantContextAccessor.class})
 @DisplayName("D1295: the ordered pages run on PostgreSQL")
 class SortedPagePostgresIT {
 
@@ -68,6 +96,8 @@ class SortedPagePostgresIT {
         registry.add("spring.jpa.hibernate.ddl-auto", () -> "none");
         registry.add("spring.liquibase.enabled", () -> "true");
         registry.add("spring.sql.init.mode", () -> "never");
+        registry.add("spring.jpa.properties.hibernate.session_factory.statement_inspector",
+            CapturedSql.class::getName);
     }
 
     @Autowired private NotificationRepository notifications;
@@ -80,6 +110,8 @@ class SortedPagePostgresIT {
     @Autowired private UserRoleHospitalAssignmentRepository assignments;
     @Autowired private PermissionRepository permissions;
     @Autowired private LabOrderRepository labOrders;
+    @Autowired private ApplicationContext context;
+    @Autowired private ChatMessageRepository chatMessages;
 
     private final List<UUID> savedNotifications = new ArrayList<>();
 
@@ -171,6 +203,254 @@ class SortedPagePostgresIT {
             invoices.findByPatient_Id(any, newestInvoice);
             // StaffService.list(hospitalId) sends sort=id.
             staff.findByHospitalIdAndActiveTrueExcludingDeletedUsers(any, PageRequest.of(1, 200, Sort.by("id")));
+        }).doesNotThrowAnyException();
+    }
+
+    /**
+     * Entities whose primary key is not called {@code id}: their pages end on
+     * the WHOLE key instead (an {@code @IdClass} or {@code @EmbeddedId}, or a
+     * natural key), which is just as total. Each entry is the ORDER BY its
+     * SQL must carry ({@code Repository#method}); shrinks only.
+     */
+    private static final Map<String, String> ENDED_ON_ANOTHER_KEY = Map.of(
+        "ImagingReportAttachmentRepository#findAll",
+        "order by ira1_0.created_at desc,ira1_0.report_id desc,ira1_0.position desc offset",
+        "RegionPolicyRepository#findAll", "order by rp1_0.region offset",
+        "UserRoleRepository#findAll", "order by ur1_0.role_id,ur1_0.user_id offset");
+
+    private static final Pattern LAST_KEY_IS_ID = Pattern.compile(
+        "\\border by\\b(?:(?!\\border by\\b).)*[.\\s,]id(?: asc| desc)?(?: nulls (?:first|last))?\\s*+(?:offset|fetch|limit)\\b");
+
+    /**
+     * QA D1361 (round 31, the D1347 class): {@code GET /lab-results} paged a
+     * query with no order, so a page-by-page read repeated 16 of 202 results
+     * and never returned 16 others. Every Spring Data repository now runs its
+     * paged reads through {@code StablePageOrderConfig}; this drives EVERY
+     * repository method that takes a {@code Pageable} - derived, JPQL,
+     * Specification, inherited and custom - on PostgreSQL with a second page
+     * and no sort (the D1361 call), then with a sort that does not name
+     * {@code id}, and requires the SQL each one sends to end its ORDER BY on
+     * an {@code id}. A new paged query that is not totally ordered, or a
+     * repository that escapes the choke point, fails here.
+     */
+    @Test
+    @DisplayName("QA D1361: every paged repository read, every repository, ends its order on the unique id")
+    void everyPagedRepositoryReadEndsOnId() {
+        Map<String, String> failures = new TreeMap<>();
+        Set<String> excused = new java.util.LinkedHashSet<>();
+        int methods = 0;
+        for (Object bean : context.getBeansOfType(Repository.class).values()) {
+            for (Class<?> type : bean.getClass().getInterfaces()) {
+                if (!type.getName().startsWith("com.example.hms.repository")) {
+                    continue;
+                }
+                for (Method method : type.getMethods()) {
+                    Object[] arguments = arguments(method);
+                    if (arguments.length == 0) {
+                        continue;
+                    }
+                    methods++;
+                    String site = type.getSimpleName() + "#" + method.getName();
+                    String problem = runPaged(bean, method, arguments);
+                    if (problem == null) {
+                        continue;
+                    }
+                    if (ENDED_ON_ANOTHER_KEY.containsKey(site) && problem.contains(ENDED_ON_ANOTHER_KEY.get(site))) {
+                        excused.add(site);
+                    } else {
+                        failures.merge(site, problem, (a, b) -> a);
+                    }
+                }
+            }
+        }
+        assertThat(methods).as("paged repository methods driven").isGreaterThan(200);
+        assertThat(failures)
+            .as("a paged read whose order does not end on the unique id repeats rows across pages and skips"
+                + " others (QA D1361, GET /lab-results); every repository goes through StablePageOrderConfig")
+            .isEmpty();
+        assertThat(excused).as("an entry that no longer pages on its whole key: delete or fix it")
+            .containsExactlyInAnyOrderElementsOf(ENDED_ON_ANOTHER_KEY.keySet());
+    }
+
+    /** Null when every paged statement the call sends ends its order on an id, else what went wrong. */
+    private static String runPaged(Object bean, Method method, Object[] arguments) {
+        for (Pageable page : new Pageable[]{PageRequest.of(1, 5), PageRequest.of(1, 5, Sort.by(Sort.Direction.DESC, "createdAt"))}) {
+            // The sorted run is for the methods whose root is the repository's
+            // entity for certain (derived, Specification, inherited); a query's
+            // own select list is its author's, and createdAt may not be in it.
+            if (page.getSort().isSorted()
+                && (method.isAnnotationPresent(org.springframework.data.jpa.repository.Query.class) || !hasCreatedAt(method))) {
+                continue;
+            }
+            for (int i = 0; i < arguments.length; i++) {
+                if (arguments[i] instanceof Pageable) {
+                    arguments[i] = page;
+                }
+            }
+            CapturedSql.clear();
+            try {
+                method.invoke(bean, arguments);
+            } catch (InvocationTargetException e) {
+                Throwable cause = e.getCause();
+                while (cause.getCause() != null) {
+                    cause = cause.getCause();
+                }
+                return "threw " + cause.getClass().getSimpleName() + ": " + cause.getMessage();
+            } catch (IllegalAccessException e) {
+                return "not callable: " + e.getMessage();
+            }
+            List<String> paged = CapturedSql.statements().stream()
+                .map(sql -> String.join(" ", sql.toLowerCase(Locale.ROOT).strip().split("\\s++")))
+                .filter(sql -> sql.startsWith("select") && sql.contains(" offset "))
+                .toList();
+            if (paged.isEmpty()) {
+                return "sent no paged statement (" + page + ")";
+            }
+            for (String sql : paged) {
+                Matcher last = LAST_KEY_IS_ID.matcher(sql);
+                if (!last.find()) {
+                    return "order does not end on an id (" + page + "): " + sql.substring(Math.max(0, sql.indexOf(" from ")));
+                }
+            }
+        }
+        return null;
+    }
+
+    /** The repository's entity has a {@code createdAt} to sort on (the second, sorted, run). */
+    private static boolean hasCreatedAt(Method method) {
+        for (Type generic : method.getDeclaringClass().getGenericInterfaces()) {
+            if (generic instanceof ParameterizedType parameterized
+                && parameterized.getActualTypeArguments()[0] instanceof Class<?> entity) {
+                for (Class<?> c = entity; c != null; c = c.getSuperclass()) {
+                    for (java.lang.reflect.Field field : c.getDeclaredFields()) {
+                        if ("createdAt".equals(field.getName())) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Arguments to call a paged method with: a real value for each simple
+     * parameter, null for an entity. Empty when the method takes no
+     * {@code Pageable}, or takes a parameter this cannot build (a query by
+     * example, a projection class).
+     */
+    private static Object[] arguments(Method method) {
+        Class<?>[] types = method.getParameterTypes();
+        if (!List.of(types).contains(Pageable.class)) {
+            return new Object[0];
+        }
+        Type[] generics = method.getGenericParameterTypes();
+        Object[] out = new Object[types.length];
+        for (int i = 0; i < types.length; i++) {
+            if (types[i] == org.springframework.data.domain.Example.class || types[i] == Class.class) {
+                return new Object[0];
+            }
+            out[i] = types[i] == Pageable.class ? PageRequest.of(1, 5) : sample(types[i], generics[i]);
+        }
+        return out;
+    }
+
+    private static final LocalDateTime SAMPLE_TIME = LocalDateTime.of(2026, 1, 1, 8, 0);
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static Object sample(Class<?> type, Type generic) {
+        Map<Class<?>, Object> simple = Map.ofEntries(
+            Map.entry(UUID.class, UUID.fromString("00000000-0000-0000-0000-000000001361")),
+            Map.entry(String.class, "d1361"),
+            Map.entry(boolean.class, false), Map.entry(Boolean.class, false),
+            Map.entry(int.class, 1), Map.entry(Integer.class, 1),
+            Map.entry(long.class, 1L), Map.entry(Long.class, 1L),
+            Map.entry(short.class, (short) 1), Map.entry(Short.class, (short) 1),
+            Map.entry(double.class, 1d), Map.entry(Double.class, 1d),
+            Map.entry(BigDecimal.class, BigDecimal.ONE),
+            Map.entry(LocalDate.class, SAMPLE_TIME.toLocalDate()),
+            Map.entry(LocalDateTime.class, SAMPLE_TIME),
+            Map.entry(LocalTime.class, SAMPLE_TIME.toLocalTime()),
+            Map.entry(Instant.class, SAMPLE_TIME.toInstant(ZoneOffset.UTC)),
+            Map.entry(OffsetDateTime.class, SAMPLE_TIME.atOffset(ZoneOffset.UTC)),
+            Map.entry(ZonedDateTime.class, SAMPLE_TIME.atZone(ZoneOffset.UTC)));
+        if (simple.containsKey(type)) {
+            return simple.get(type);
+        }
+        if (type.isEnum()) {
+            return type.getEnumConstants()[0];
+        }
+        if (type == Specification.class) {
+            return Specification.unrestricted();
+        }
+        if (Collection.class.isAssignableFrom(type)) {
+            Object element = generic instanceof ParameterizedType parameterized
+                && parameterized.getActualTypeArguments()[0] instanceof Class<?> elementType
+                ? sample(elementType, elementType) : null;
+            List list = element == null ? Collections.emptyList() : List.of(element);
+            return Set.class.isAssignableFrom(type) ? new java.util.HashSet<>(list) : new ArrayList<>(list);
+        }
+        return null;
+    }
+
+    /** Every SQL statement Hibernate prepares, kept for the D1361 check. */
+    public static final class CapturedSql implements StatementInspector {
+
+        private static final List<String> STATEMENTS = Collections.synchronizedList(new ArrayList<>());
+
+        @Override
+        public String inspect(String sql) {
+            STATEMENTS.add(sql);
+            return sql;
+        }
+
+        static void clear() {
+            STATEMENTS.clear();
+        }
+
+        static List<String> statements() {
+            synchronized (STATEMENTS) {
+                return new ArrayList<>(STATEMENTS);
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("QA D1361: GET /lab-results pages newest result first, closed by id, for every filter combination")
+    void labResultListPagesOnATotalOrder() {
+        UUID any = UUID.randomUUID();
+        UUID none = new UUID(0L, 0L);
+        // LabResultServiceImpl.readLabResultsPage with no caller sort.
+        PageRequest page = PageRequest.of(1, 200, Sort.by(Sort.Direction.DESC, "resultDate"));
+        assertThatCode(() -> {
+            for (boolean releasedOnly : new boolean[]{false, true}) {
+                for (UUID patient : new UUID[]{null, any}) {
+                    for (UUID order : new UUID[]{null, any}) {
+                        CapturedSql.clear();
+                        labResults.findHandledByHospitalForReader(any, releasedOnly, patient == null,
+                            patient == null ? none : patient, order == null, order == null ? none : order, page);
+                        labResults.findAllForReader(releasedOnly, patient == null,
+                            patient == null ? none : patient, order == null, order == null ? none : order, page);
+                        assertThat(CapturedSql.statements().stream()
+                            .map(sql -> String.join(" ", sql.toLowerCase(Locale.ROOT).strip().split("\\s++")))
+                            .filter(sql -> sql.contains(" offset ")))
+                            .hasSize(2)
+                            .allMatch(sql -> sql.contains("result_date desc,") && LAST_KEY_IS_ID.matcher(sql).find());
+                    }
+                }
+            }
+        }).doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("QA D1361: the chat queries that page by hand (LIMIT/OFFSET) run with their id tiebreak")
+    void handPagedChatQueriesRun() {
+        UUID any = UUID.randomUUID();
+        assertThatCode(() -> {
+            assertThat(chatMessages.findLatestMessagesForUserNative(any, 5, 5)).isEmpty();
+            assertThat(chatMessages.findLatestConversations(any, 5, 5)).isEmpty();
+            assertThat(chatMessages.searchMessagesBetweenUsers(any, any, "d1361",
+                PageRequest.of(1, 5, Sort.by("timestamp").descending())).getContent()).isEmpty();
         }).doesNotThrowAnyException();
     }
 

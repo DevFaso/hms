@@ -56,6 +56,14 @@ export interface HealthSummaryDTO {
   immunizations: ImmunizationSummary[];
   allergies: string[];
   activeDiagnoses: string[];
+  /**
+   * QA D1362 (round 31): the server's own count of the patient's current lab
+   * results and of their medications (every issued prescription). A card
+   * that shows a few rows counts the rest from these, never from the rows it
+   * loaded. Null when the server could not count.
+   */
+  labResultTotal?: number | null;
+  medicationTotal?: number | null;
 }
 
 /** QA D1213: how many lab results a portal page shows at a time. */
@@ -209,6 +217,9 @@ interface HealthSummaryRaw {
    */
   activeDiagnoses: (string | PortalDiagnosisRaw)[] | null;
   chronicConditions: (string | PortalDiagnosisRaw)[] | null;
+  /** QA D1362: the server's totals (null when it could not count). */
+  labResultTotal?: number | null;
+  medicationTotal?: number | null;
 }
 
 /** One problem when the backend sends an object rather than a display string. */
@@ -474,6 +485,8 @@ function mapHealthSummary(d: HealthSummaryRaw | null | undefined): HealthSummary
     })),
     allergies: d?.allergies ?? [],
     activeDiagnoses: mergeDiagnoses(d?.activeDiagnoses, d?.chronicConditions),
+    labResultTotal: d?.labResultTotal ?? null,
+    medicationTotal: d?.medicationTotal ?? null,
   };
 }
 

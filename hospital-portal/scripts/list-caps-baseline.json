@@ -6,6 +6,14 @@
     "or page on screen with the server's total, then delete its pin."
   ],
   "pinned": {
+    "src/app/analytics/analytics.ts::fixed-limit::ngOnInit:getAnalytics:14": {
+      "count": 1,
+      "why": "not a row cap: 14 is the trend window in DAYS (getAnalytics(trendDays)); every day of it is drawn"
+    },
+    "src/app/dashboard/dashboard.ts::fixed-limit::loadDashboardData:getMyLabResults:5": {
+      "count": 1,
+      "why": "preview card (QA D1362 checked): the newest results with a View all link to /my-lab-results, and no count shown"
+    },
     "src/app/dashboard/dashboard.ts::fixed-size::loadDashboardData:getDispenseWorkQueue:page0x1": {
       "count": 1,
       "why": "count probe: one row asked for, only totalElements is read (the tile's number)"
@@ -93,6 +101,14 @@
     "src/app/super-admin/emergency/emergency.ts::page-content::constructor:page": {
       "count": 1,
       "why": "typeahead: the 10 best user matches for the typed name; typing more narrows it"
+    },
+    "src/app/super-admin/super-admin.ts::fixed-limit::loadAll:getRecentActivity:10": {
+      "count": 1,
+      "why": "preview: the 10 newest items per feed in the Recent activity tabs; each feed has its own full page"
+    },
+    "src/app/super-admin/super-admin.ts::fixed-limit::loadAll:getSummary:10": {
+      "count": 1,
+      "why": "preview: the 10 newest audit events (auditLimit) in a Recent activity strip; the audit pages page the whole log"
     }
   }
 }
