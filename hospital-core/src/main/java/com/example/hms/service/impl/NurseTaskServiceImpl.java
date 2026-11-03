@@ -1315,7 +1315,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     private NurseMedicationTaskResponseDTO answerAfterDose(NurseMedicationTaskResponseDTO task, Prescription rx) {
         List<MedicationAdministrationRecord> rows = doseRows(rx);
         if (rx != null) {
-            LocalDateTime now = LocalDateTime.now();
+            // The same server clock the list reads (Sonar: the zone made explicit).
+            LocalDateTime now = LocalDateTime.now(java.time.ZoneId.systemDefault());
             withOrderReading(task, rx, MarNextDose.of(rx, now, rows, EARLY_ADMINISTRATION_WINDOW), now);
             task.setCdsAdvisories(allergyAdvisoriesFor(rx.getMedicationName(), rx.getPatient()));
         }
