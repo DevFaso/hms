@@ -186,7 +186,9 @@ class MarDoseIntervalTest {
     @Test
     void prn_anOlderOrderWithoutAnIntervalAsksForAReasonAfterTheFirstDose() {
         Optional<LocalDateTime> last = Optional.of(NOW.minusHours(12));
-        assertThatThrownBy(() -> MarDoseInterval.requireIntervalOrReason(rx("PRN"),
+        // Sonar S5778: only the call under test inside the lambda.
+        Prescription legacy = rx("PRN");
+        assertThatThrownBy(() -> MarDoseInterval.requireIntervalOrReason(legacy,
                 MedicationAdministrationStatus.GIVEN, last, NOW, WINDOW, null))
             .isInstanceOf(FieldBusinessException.class)
             .hasFieldOrPropertyWithValue("messageKey", MarDoseInterval.PRN_INTERVAL_MISSING_KEY)
