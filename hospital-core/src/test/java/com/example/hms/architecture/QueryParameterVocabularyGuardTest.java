@@ -51,16 +51,15 @@ class QueryParameterVocabularyGuardTest {
         "gender");
     private static final List<String> VOCABULARY_ENDINGS = List.of("Status", "Type", "Category", "Priority");
 
-    private static final String D1384 = "D1384 (branch fix/r32-prn-explicit owns this file): ";
+    private static final String D1384 = "D1384 (#1043, round 32): checked by EnumQueryParam.refusal, fieldErrors.<param>, in ";
     private static final String NO_FIELD = "refused, but without a field (D1350 class, standing debt): ";
 
     /** "Controller#parameter" of a closed-list parameter checked elsewhere (where), or not a closed list (why). */
     private static final Map<String, String> CHECKED_ELSEWHERE = Map.ofEntries(
-        Map.entry("AdmissionController#status", D1384 + "AdmissionServiceImpl AdmissionStatus.valueOf, raw text"),
-        Map.entry("AdmissionController#admissionType", D1384 + "AdmissionServiceImpl AdmissionType.valueOf, raw text"),
-        Map.entry("NurseTaskController#status", D1384 + "MAR / order queue / task board filters match nothing for an"
-            + " unknown value; the handoff one refuses without a field (NurseTaskServiceImpl)"),
-        Map.entry("NurseTaskController#assignee", D1384 + "NurseTaskController#resolveAssignee, refused without a field"),
+        Map.entry("AdmissionController#status", D1384 + "AdmissionServiceImpl.admissionStatusParam"),
+        Map.entry("AdmissionController#admissionType", D1384 + "AdmissionServiceImpl.getOrderSetsByHospital"),
+        Map.entry("NurseTaskController#status", D1384 + "NurseTaskServiceImpl.getHandoffSummaries"),
+        Map.entry("NurseTaskController#assignee", D1384 + "NurseTaskController.resolveAssignee"),
         Map.entry("AppointmentController#action", "AppointmentServiceImpl: FieldBusinessException(action, appointment.invalidAction)"),
         Map.entry("AuditEventLogController#status", NO_FIELD + "audit.status.invalid in AuditEventLogController"),
         Map.entry("AuditEventLogController#entityType", "an open set: the entity names audit emitters wrote, paired with resourceId"),

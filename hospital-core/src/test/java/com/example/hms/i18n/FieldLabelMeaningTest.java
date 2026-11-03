@@ -65,7 +65,8 @@ class FieldLabelMeaningTest {
     private static final Map<String, String> SAME_MEANING = Map.of(
         "alcoholUse", "a yes/no answer in the social history, a free-text answer in the lifestyle factors - both alcohol use",
         "occupationalHazards", "a yes/no answer in the lifestyle factors, a free-text answer in the social history - both hazards",
-        "priority", "a rule's evaluation order and an order's clinical priority both read 'priority'");
+        "priority", "a rule's evaluation order and an order's clinical priority both read 'priority'",
+        "page", "a zero-based page number everywhere; ProviderAdminController reads it as text and parses it itself");
 
     private final MessageSource source = TestMessageSources.bundles();
 
