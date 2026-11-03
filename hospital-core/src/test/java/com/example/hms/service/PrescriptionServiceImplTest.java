@@ -735,6 +735,43 @@ class PrescriptionServiceImplTest {
         assertThat(mappedEntity.getPrnMinIntervalHours()).isEqualTo(6);
     }
 
+    /**
+     * QA D1359: an edit names a known route or echoes the order's own; a new
+     * unknown route is refused on the field and nothing is saved.
+     */
+    @Test
+    void d1359_anEditToAnUnknownRouteIsRefusedButTheOrdersOwnRouteIsEchoed() {
+        UUID prescriptionId = UUID.randomUUID();
+        PrescriptionRequestDTO request = buildRequest();
+        request.setRoute("BOGUS");
+        Prescription existing = new Prescription();
+        existing.setId(prescriptionId);
+        existing.setRoute("PO");
+        UserRoleHospitalAssignment staffAssignment = new UserRoleHospitalAssignment();
+        staffAssignment.setId(UUID.randomUUID());
+        staffAssignment.setHospital(encounter.getHospital());
+        staff.setAssignment(staffAssignment);
+        UUID currentUser = staff.getUser().getId();
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(existing));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(authService.getCurrentUserId()).thenReturn(currentUser);
+        when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
+
+        assertThatThrownBy(() -> prescriptionService.updatePrescription(prescriptionId, request, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "route");
+        verify(prescriptionRepository, never()).save(any());
+
+        existing.setRoute("BOGUS");
+        when(prescriptionRepository.save(existing)).thenReturn(existing);
+        when(prescriptionMapper.toResponseDTO(existing))
+            .thenReturn(PrescriptionResponseDTO.builder().id(prescriptionId).build());
+        prescriptionService.updatePrescription(prescriptionId, request, Locale.ENGLISH);
+        verify(prescriptionRepository).save(existing);
+    }
+
     /** QA round 30: an edit of an as-needed order's content keeps or names its interval; nothing saved without it. */
     @Test
     void prn_anEditOfAnAsNeededOrderWithoutAnIntervalIsRefused() {

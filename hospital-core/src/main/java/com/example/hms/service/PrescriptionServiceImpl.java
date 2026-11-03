@@ -1391,6 +1391,22 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         }
     }
 
+    /**
+     * QA D1359 (round 30): an edit of an order's content names a route the
+     * route reading knows ({@code MedicationRoute} holds a new order at the
+     * edge), or echoes the route the order already carries, so an older order
+     * whose route was stored as typed is still edited and withdrawn.
+     */
+    private static void requireKnownRouteOnEdit(Prescription existing, PrescriptionRequestDTO request) {
+        String route = request.getRoute();
+        if (route == null || route.isBlank()
+            || com.example.hms.service.emar.MedicationRoutes.canonical(route) != null
+            || com.example.hms.service.emar.MedicationRoutes.sameRoute(existing.getRoute(), route)) {
+            return;
+        }
+        throw new com.example.hms.exception.FieldBusinessException("route", "prescription.route.unknown");
+    }
+
     @Override
     @Transactional
     public PrescriptionResponseDTO updatePrescription(UUID id, PrescriptionRequestDTO request, Locale locale) {
@@ -1476,6 +1492,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
         PrescriptionStatus statusBefore = existing.getStatus();
         String overrideBefore = existing.isAllergiesReviewed() ? existing.getOverrideReason() : null;
+        // QA D1359: an edit names a known route, or echoes the order's own.
+        requireKnownRouteOnEdit(existing, request);
         prescriptionMapper.updateEntity(existing, request, patient, staff, encounter);
         existing.setAssignment(prescriberAssignment);
         // QA round 30: an edit of an as-needed order keeps (or names) its

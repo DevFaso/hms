@@ -80,10 +80,13 @@ public class PrescriptionRequestDTO {
      * order looked oral and an IV dose always failed the route right.
      * QA D1359 (round 30): a route the shared reading
      * ({@link com.example.hms.service.emar.MedicationRoutes}) does not know is
-     * refused by name; it was stored as typed ("BOGUS").
+     * refused by name; it was stored as typed ("BOGUS"). On create here, with
+     * every other refusal; on an edit of the order's content in the service
+     * ({@code PrescriptionServiceImpl}), so a withdrawal that echoes an older
+     * order's stored route is never refused for it.
      */
     @Size(max = 80)
-    @com.example.hms.validation.MedicationRoute
+    @com.example.hms.validation.MedicationRoute(groups = com.example.hms.validation.OnCreate.class)
     private String route;
 
     @Size(max = 100)

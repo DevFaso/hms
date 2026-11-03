@@ -110,12 +110,15 @@ class PrnMinIntervalTest {
         PrescriptionRequestDTO request = request("TID");
         for (String unknown : new String[] {"BOGUS", "par la bouche", "xyz"}) {
             request.setRoute(unknown);
-            assertThat(paths(request, Default.class)).as(unknown).contains("route");
+            assertThat(paths(request, Default.class, OnCreate.class)).as(unknown).contains("route");
+            // An edit is judged by the service against the order's own route (a withdrawal may echo it).
+            assertThat(paths(request, Default.class)).as(unknown).doesNotContain("route");
         }
         for (String known : new String[] {"PO", "IV", "Intraveineuse (IV)", "oral", "Sous-cutanée", "nebulisation",
             "", null}) {
             request.setRoute(known);
-            assertThat(paths(request, Default.class)).as(String.valueOf(known)).doesNotContain("route");
+            assertThat(paths(request, Default.class, OnCreate.class)).as(String.valueOf(known))
+                .doesNotContain("route");
         }
     }
 

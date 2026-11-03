@@ -1069,7 +1069,9 @@ describe('PrescriptionsComponent — signing', () => {
     expect(host.querySelector('[data-testid="cds-advisories"]')?.textContent).toContain(
       'Doublon possible',
     );
-    expect(host.querySelector('[data-testid="rx-created-hint"]')).not.toBeNull();
+    const hint = host.querySelector<HTMLElement>('[data-testid="rx-created-hint"]')!;
+    expect(hint.hidden).withContext('the locked form says why').toBeFalse();
+    expect(hint.textContent).toContain('PRESCRIPTIONS.CREATED_WITH_ADVISORIES');
     const fields = host.querySelector<HTMLFieldSetElement>('[data-testid="rx-form-fields"]')!;
     expect(fields.disabled).withContext('every field is locked').toBeTrue();
     const buttons = Array.from(host.querySelectorAll<HTMLButtonElement>('.modal-actions button'));
