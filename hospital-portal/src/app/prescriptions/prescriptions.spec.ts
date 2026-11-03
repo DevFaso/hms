@@ -254,9 +254,9 @@ describe('PrescriptionsComponent — SMS dispatch modal', () => {
       .withContext(
         'without a reload the row keeps its pre-dispatch status and its SMS button, and a second click supersedes the decision just made',
       )
-      // Two calls per reload since G12: the unfiltered page and the
-      // status-filtered "Needs attention" bucket.
-      .toBe(listCallsBefore + 2);
+      // One call per reload since QA D1347: `list` reads every page itself,
+      // so the separate "Needs attention" bucket (G12) is gone.
+      .toBe(listCallsBefore + 1);
     expect(component.dispatching()).toBeFalse();
   });
 
@@ -272,7 +272,7 @@ describe('PrescriptionsComponent — SMS dispatch modal', () => {
 
     expect(prescriptionService.list.calls.count())
       .withContext('the backend committed TRANSMISSION_FAILED; a stale row would still read SIGNED')
-      .toBe(listCallsBefore + 2);
+      .toBe(listCallsBefore + 1);
     expect(component.dispatching()).toBeFalse();
     expect(component.dispatchTarget())
       .withContext('the modal stays open for a retry or another pharmacy')
@@ -1639,12 +1639,8 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
 
   interface SetupOptions {
     list?: PrescriptionResponse[];
-    /**
-     * G12 — what the status-filtered "Needs attention" request returns.
-     * Defaults to an empty page; pass a throwing observable to exercise the
-     * fallback.
-     */
-    attention?: Observable<PrescriptionResponse[]>;
+    /** The whole list read, when it must fail or arrive late; overrides `list`. */
+    list$?: Observable<PrescriptionResponse[]>;
     roles?: string[];
     superAdmin?: boolean;
     globalView?: boolean;
@@ -1658,11 +1654,9 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
     const prescriptionService = jasmine.createSpyObj<PrescriptionService>('PrescriptionService', [
       'list',
     ]);
-    // G12: the page and the status-filtered attention bucket are two calls
-    // against the same method, told apart by the `statuses` filter.
-    prescriptionService.list.and.callFake((filters?: { statuses?: string[] }) =>
-      filters?.statuses ? (opts.attention ?? of([])) : of(opts.list ?? []),
-    );
+    // QA D1347: `list` reads EVERY page (its own spec proves that), so the
+    // page asks for it once, unfiltered.
+    prescriptionService.list.and.callFake(() => opts.list$ ?? of(opts.list ?? []));
 
     prescriptionServiceSpy = prescriptionService;
 
@@ -2287,68 +2281,47 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
 
   /* ── G12: the status filter ───────────────────────────────────────── */
 
-  it('asks the backend for the whole attention bucket, by status', async () => {
+  it('QA D1347: reads the whole list once, unfiltered, instead of a page plus an attention bucket', async () => {
     await setup();
 
-    const statuses = prescriptionServiceSpy.list.calls
-      .allArgs()
-      .map((args) => (args[0] as { statuses?: string[] } | undefined)?.statuses)
-      .find((s) => !!s);
-
-    expect(statuses)
-      .withContext('the page is a slice of the tenant; the attention tab must not be')
-      .toEqual(ATTENTION_REASONS.map((r) => r.status));
+    expect(prescriptionServiceSpy.list).toHaveBeenCalledTimes(1);
+    expect(prescriptionServiceSpy.list).toHaveBeenCalledWith();
   });
 
-  it('merges an attention row the page never reached and counts it', async () => {
-    // The defect: the clinical inbox says an order awaits clarification and
-    // the page, being the newest 200 rows, does not contain it.
-    const onPage = makeRx({ id: 'rx-page', status: 'SIGNED', createdAt: '2026-09-20T08:00:00' });
-    const older = makeRx({
-      id: 'rx-old',
-      status: 'PENDING_CLARIFICATION',
-      createdAt: '2026-01-02T08:00:00',
-    });
-    await setup({ list: [onPage], attention: of([older]) });
+  it('QA D1347: counts every prescription of a list longer than one page, with no "minimum" banner', async () => {
+    // The defect: the tabs counted the newest 200, so an older order waiting
+    // on the prescriber was neither listed nor counted.
+    const rows = Array.from({ length: 450 }, (_, i) =>
+      makeRx({ id: 'rx-' + i, status: 'SIGNED', createdAt: '2026-09-20T08:00:00' }),
+    );
+    rows.push(
+      makeRx({ id: 'rx-old', status: 'PENDING_CLARIFICATION', createdAt: '2026-01-02T08:00:00' }),
+    );
+    await setup({ list: rows });
 
-    expect(component.prescriptions().map((p) => p.id)).toEqual(['rx-page', 'rx-old']);
+    expect(component.countInTab('all')).toBe(451);
     expect(component.countInTab('attention')).toBe(1);
-
     component.setTab('attention');
     expect(component.filtered().map((p) => p.id)).toEqual(['rx-old']);
+    expect(el('[data-testid="rx-list-truncated"]')).toBeNull();
   });
 
-  it('does not double-count a row both queries returned', async () => {
-    const shared = makeRx({ id: 'rx-1', status: 'PENDING_CLARIFICATION' });
-    await setup({ list: [shared], attention: of([shared]) });
-
-    expect(component.prescriptions().length).toBe(1);
-    expect(component.countInTab('attention')).toBe(1);
-  });
-
-  it('keeps the page when the attention query fails', async () => {
-    await setup({
-      list: [makeRx({ id: 'rx-1', status: 'SIGNED' })],
-      attention: throwError(() => new Error('boom')),
-    });
-
-    // Nothing is swallowed as empty data: the page is still there, and the
-    // truncation banner goes on saying the counts are a lower bound — which
-    // is what this page did before the filter existed.
+  it('QA D1347: says the load failed and keeps the list when the read fails (never a partial list)', async () => {
+    const list$ = new Subject<PrescriptionResponse[]>();
+    await setup({ list$ });
+    list$.next([makeRx({ id: 'rx-1', status: 'SIGNED' })]);
+    list$.complete();
     expect(component.prescriptions().map((p) => p.id)).toEqual(['rx-1']);
-  });
 
-  it('does not let the merged attention rows make an untruncated page look truncated', async () => {
-    const page200 = Array.from({ length: PrescriptionService.LIST_PAGE_SIZE - 1 }, (_, i) =>
-      makeRx({ id: 'rx-' + i, status: 'SIGNED' }),
-    );
-    await setup({
-      list: page200,
-      attention: of([makeRx({ id: 'rx-old', status: 'PENDING_CLARIFICATION' })]),
-    });
+    // A reload past the paging helper's ceiling fails: the toast says so and
+    // nothing already listed is replaced by a part of the list.
+    prescriptionServiceSpy.list.and.returnValue(throwError(() => new Error('more than 200 pages')));
+    component.load();
 
-    expect(component.prescriptions().length).toBe(PrescriptionService.LIST_PAGE_SIZE);
-    expect(component.listTruncated()).toBeFalse();
+    const toast = TestBed.inject(ToastService) as jasmine.SpyObj<ToastService>;
+    expect(toast.error).toHaveBeenCalledWith('PRESCRIPTIONS.TOAST.LOAD_FAILED');
+    expect(component.prescriptions().map((p) => p.id)).toEqual(['rx-1']);
+    expect(component.loading()).toBeFalse();
   });
 
   it('drops a routing remainder that a later fill has made stale', async () => {
@@ -2379,18 +2352,112 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
 
     component.viewDetail(rx);
 
+    // QA D1347: page 0 of an every-page read (transfer size 200), and the
+    // routing decisions carry an id tiebreak so no row moves between pages.
     expect(pharmacyService.listDispensesByPrescription).toHaveBeenCalledWith(
       'rx-1',
       0,
-      20,
+      200,
       'dispensedAt,desc',
     );
     expect(pharmacyService.listRoutingDecisionsByPrescription).toHaveBeenCalledWith(
       'rx-1',
       0,
-      20,
-      'decidedAt,desc',
+      200,
+      ['decidedAt,desc', 'id,desc'],
     );
+  });
+
+  /** Page `number` of `totalPages`, as the Spring endpoint answers it. */
+  function pageOf<T>(
+    content: T[],
+    number: number,
+    totalPages: number,
+    totalElements: number,
+  ): ApiResponse<Page<T>> {
+    return { data: { content, totalElements, totalPages, size: 200, number } };
+  }
+
+  it('QA D1347: reads EVERY page of the fills and sums them all into the balance', async () => {
+    // 30 ordered; 10 on the first page and 15 on the second. One page read
+    // would report 20 owed; the whole list says 5.
+    const rx = makeRx({ status: 'PARTIALLY_FILLED', quantity: 30, quantityUnit: 'tablets' });
+    await setup({ list: [rx] });
+    pharmacyService.listDispensesByPrescription.and.callFake((_id: string, pageIndex = 0) =>
+      of(
+        pageIndex === 0
+          ? pageOf([makeDispense({ id: 'd-1', quantityDispensed: 10 })], 0, 2, 2)
+          : pageOf(
+              [
+                makeDispense({
+                  id: 'd-2',
+                  quantityDispensed: 15,
+                  dispensedAt: '2026-09-01T09:00:00',
+                }),
+              ],
+              1,
+              2,
+              2,
+            ),
+      ),
+    );
+
+    component.viewDetail(rx);
+    fixture.detectChanges();
+
+    expect(pharmacyService.listDispensesByPrescription.calls.allArgs().map((a) => a[1])).toEqual([
+      0, 1,
+    ]);
+    expect(component.dispenseHistory().map((d) => d.id)).toEqual(['d-1', 'd-2']);
+    expect(component.dispenseError()).toBeFalse();
+    expect(component.outstandingQuantity()).withContext('30 − 10 − 15').toBe(5);
+  });
+
+  it('QA D1347: reads EVERY page of the routing decisions', async () => {
+    const rx = makeRx({ status: 'DISPENSED' });
+    await setup({ list: [rx] });
+    pharmacyService.listRoutingDecisionsByPrescription.and.callFake((_id: string, pageIndex = 0) =>
+      of(
+        pageIndex === 0
+          ? pageOf([makeRouting({ id: 'rd-new', decidedAt: '2026-09-03T08:00:00' })], 0, 2, 2)
+          : pageOf([makeRouting({ id: 'rd-old', decidedAt: '2026-09-01T08:00:00' })], 1, 2, 2),
+      ),
+    );
+
+    component.viewDetail(rx);
+    fixture.detectChanges();
+
+    expect(
+      pharmacyService.listRoutingDecisionsByPrescription.calls.allArgs().map((a) => a[1]),
+    ).toEqual([0, 1]);
+    expect(component.routingHistory().map((r) => r.id)).toEqual(['rd-new', 'rd-old']);
+    expect(component.routingError()).toBeFalse();
+  });
+
+  it('QA D1347: past the paging ceiling the fills say they failed to load — no partial balance', async () => {
+    // A server that always claims another page: the helper fails rather than
+    // return the part it read, and the panel says the fills did not load.
+    const rx = makeRx({ status: 'PARTIALLY_FILLED', quantity: 30, quantityUnit: 'tablets' });
+    await setup({ list: [rx] });
+    pharmacyService.listDispensesByPrescription.and.callFake((_id: string, pageIndex = 0) =>
+      of(
+        pageOf(
+          [makeDispense({ id: 'd-' + pageIndex, quantityDispensed: 1 })],
+          pageIndex,
+          100000,
+          100000,
+        ),
+      ),
+    );
+
+    component.viewDetail(rx);
+    fixture.detectChanges();
+
+    expect(component.dispenseError()).toBeTrue();
+    expect(component.dispenseHistory()).toEqual([]);
+    expect(component.outstandingQuantity())
+      .withContext('no snapshot, and never 30 minus the fills read so far')
+      .toBeNull();
   });
 
   it('cancels the in-flight history when another prescription is opened', async () => {
@@ -2788,23 +2855,6 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
     expect(labels).not.toContain('PRESCRIPTIONS.PHARMACY.LAST_DISPATCHED_AT');
   });
 
-  it('says so when the list is capped, instead of letting a count lie', async () => {
-    const full = Array.from({ length: PrescriptionService.LIST_PAGE_SIZE }, (_, i) =>
-      makeRx({ id: 'rx-' + i, status: 'SIGNED' }),
-    );
-    await setup({ list: full });
-
-    expect(component.listTruncated()).toBeTrue();
-    expect(el('[data-testid="rx-list-truncated"]')).not.toBeNull();
-  });
-
-  it('says nothing about a cap when the list came back short of one', async () => {
-    await setup({ list: [makeRx({ status: 'SIGNED' })] });
-
-    expect(component.listTruncated()).toBeFalse();
-    expect(el('[data-testid="rx-list-truncated"]')).toBeNull();
-  });
-
   it('treats a dispatch older than the latest re-route as past, not current', async () => {
     // routeToPartner sets the pharmacy columns to the NEW partner and never
     // touches the dispatch ones, so "Held by B / Dispatched T1 / SMS Sent"
@@ -2909,13 +2959,63 @@ describe('PrescriptionService — list paging', () => {
 
   afterEach(() => httpMock.verify());
 
-  it('asks for a real page of the newest prescriptions, not an arbitrary twenty', () => {
+  it('asks for a real page of the newest prescriptions, with an id tiebreak', () => {
     service.list().subscribe();
 
     const req = httpMock.expectOne((r) => r.url === '/prescriptions');
     expect(req.request.params.get('size')).toBe(String(PrescriptionService.LIST_PAGE_SIZE));
-    expect(req.request.params.get('sort')).toBe('createdAt,desc');
+    expect(req.request.params.get('page')).toBe('0');
+    expect(req.request.params.getAll('sort')).toEqual(['createdAt,desc', 'id,desc']);
     req.flush({ content: [] });
+  });
+
+  it('QA D1347: reads EVERY page, keeping the filters on each, and returns every row', () => {
+    let rows: PrescriptionResponse[] | undefined;
+    service
+      .list({ patientId: 'p-1', statuses: ['SIGNED', 'PENDING_CLARIFICATION'] })
+      .subscribe((r) => (rows = r));
+
+    const first = httpMock.expectOne((r) => r.url === '/prescriptions');
+    expect(first.request.params.get('page')).toBe('0');
+    first.flush({
+      content: [{ id: 'rx-1' }, { id: 'rx-2' }],
+      totalElements: 3,
+      totalPages: 2,
+      number: 0,
+      last: false,
+    });
+    expect(rows).withContext('not the first page alone').toBeUndefined();
+
+    const second = httpMock.expectOne((r) => r.url === '/prescriptions');
+    expect(second.request.params.get('page')).toBe('1');
+    expect(second.request.params.get('patientId')).toBe('p-1');
+    expect(second.request.params.getAll('status')).toEqual(['SIGNED', 'PENDING_CLARIFICATION']);
+    expect(second.request.params.getAll('sort')).toEqual(['createdAt,desc', 'id,desc']);
+    second.flush({
+      content: [{ id: 'rx-3' }],
+      totalElements: 3,
+      totalPages: 2,
+      number: 1,
+      last: true,
+    });
+
+    expect(rows!.map((r) => r.id)).toEqual(['rx-1', 'rx-2', 'rx-3']);
+  });
+
+  it('QA D1347: fails instead of returning a partial list when one page fails', () => {
+    let failed = false;
+    let rows: PrescriptionResponse[] | undefined;
+    service.list().subscribe({ next: (r) => (rows = r), error: () => (failed = true) });
+
+    httpMock
+      .expectOne((r) => r.url === '/prescriptions')
+      .flush({ content: [{ id: 'rx-1' }], totalElements: 2, totalPages: 2, number: 0 });
+    httpMock
+      .expectOne((r) => r.url === '/prescriptions')
+      .flush('boom', { status: 500, statusText: 'Server Error' });
+
+    expect(failed).toBeTrue();
+    expect(rows).toBeUndefined();
   });
 });
 

@@ -50,14 +50,6 @@
       "count": 1,
       "why": "typeahead: the 15 best catalogue matches for the typed text; typing more narrows it"
     },
-    "src/app/prescriptions/prescriptions.ts::fixed-size::initPharmacyHistory:listDispensesByPrescription:page0x20": {
-      "count": 1,
-      "why": "D1347 open: a prescription's pharmacy history reads its 20 newest dispenses; prescriptions.* belongs to fix/r30-prn-interval this round (flagged in the round-30 hand-back)"
-    },
-    "src/app/prescriptions/prescriptions.ts::fixed-size::initPharmacyHistory:listRoutingDecisionsByPrescription:page0x20": {
-      "count": 1,
-      "why": "D1347 open: a prescription's routing history reads its 20 newest decisions; prescriptions.* belongs to fix/r30-prn-interval this round (flagged in the round-30 hand-back)"
-    },
     "src/app/profile/profile.ts::page-content::loadActivity:res": {
       "count": 1,
       "why": "preview: the section is titled PROFILE.RECENT_ACTIVITY (the user's newest audit events)"
@@ -77,10 +69,6 @@
     "src/app/services/lab.service.ts::page-flattened::listOrders:content": {
       "count": 1,
       "why": "the explicit-page branch: a caller that passes page asked for that page (the chart's lab tab says 'latest N'); without page listOrders reads every page"
-    },
-    "src/app/services/prescription.service.ts::page-flattened::list:content": {
-      "count": 1,
-      "why": "D1347 open: PrescriptionService.list keeps the server's first page (20) and the prescriptions attention list reads it; prescription files belong to fix/r30-prn-interval this round (flagged in the round-30 hand-back)"
     },
     "src/app/services/treatment-plan.service.ts::page-flattened::listPlans:content": {
       "count": 1,
