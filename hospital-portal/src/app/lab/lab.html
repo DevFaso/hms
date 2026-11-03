@@ -51,7 +51,7 @@
       (click)="setTab('all')"
       [title]="'LAB.ALL_ORDERS' | translate"
     >
-      {{ 'COMMON.ALL' | translate }} ({{ orders().length }})
+      {{ 'COMMON.ALL' | translate }} ({{ stats().total }})
     </button>
     <button
       class="tab"

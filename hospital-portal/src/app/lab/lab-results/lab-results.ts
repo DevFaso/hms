@@ -327,7 +327,8 @@ export class LabResultsComponent implements OnInit {
     this.loadResults();
     // QA D645: an order whose test definition no longer resolves has nothing a
     // result can be entered against; it is not offered ("— — —" in the picker).
-    this.labService.listOrders({ size: 500 }).subscribe((list) => {
+    // QA D1347: every order in scope (all pages), not the 500 newest.
+    this.labService.listOrders().subscribe((list) => {
       // QA D645/D648: an order whose test definition was deleted carries a
       // "deleted test" label but cannot take a result; it stays out of the picker.
       this.resultableOrders = list.filter(
@@ -605,8 +606,10 @@ export class LabResultsComponent implements OnInit {
 
   loadResults(): void {
     this.loading.set(true);
-    this.labService.listResults({ size: 200 }).subscribe({
-      next: (list) => {
+    // QA D1347: every result in scope (all pages), not the 200 newest, so the
+    // counters and the search reach every one.
+    this.labService.listAllResults().subscribe({
+      next: ({ rows: list }) => {
         this.results.set(list);
         this.computeStats(list);
         this.applyFilter();

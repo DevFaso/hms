@@ -1,3 +1,4 @@
+import { allRowsOfArrays } from '../shared/all-pages';
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
@@ -106,13 +107,15 @@ export class RegistrationsComponent implements OnInit {
     this.loading.set(true);
     this.loadError.set(false);
     const filter = this.activeFilter();
-    this.registrationService
-      .list({
+    // QA D1347: every registration of the desk (all pages), not the first 200.
+    allRowsOfArrays((page, size) =>
+      this.registrationService.list({
         hospitalId: this.hospitalId ?? undefined,
         active: filter === 'all' ? undefined : filter === 'active',
-        size: 200,
-      })
-      .subscribe({
+        page,
+        size,
+      }),
+    ).subscribe({
         next: (registrations) => {
           this.registrations.set(registrations ?? []);
           this.loading.set(false);

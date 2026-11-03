@@ -1,3 +1,4 @@
+import { allRows } from '../shared/all-pages';
 import {
   Component,
   DestroyRef,
@@ -156,19 +157,19 @@ export class MicrobiologyComponent implements OnInit {
     this.loading.set(true);
     this.error.set('');
     const status = this.statusFilter();
-    this.microService
-      .list({ status: status || undefined, size: 100 })
+    // QA D1347: every culture the filter matches (all pages), not the 100 newest.
+    allRows((page, size) => this.microService.list({ status: status || undefined, page, size }))
       .pipe(
         takeUntilDestroyed(this.destroyRef),
         finalize(() => this.loading.set(false)),
       )
       .subscribe({
-        next: (page) => {
-          this.cultures.set(page.content);
+        next: (cultures) => {
+          this.cultures.set(cultures);
           this.loading.set(false);
           const current = this.selected();
           if (current) {
-            this.selected.set(page.content.find((c) => c.id === current.id) ?? null);
+            this.selected.set(cultures.find((c) => c.id === current.id) ?? null);
           }
         },
         error: (err) => {
@@ -230,7 +231,8 @@ export class MicrobiologyComponent implements OnInit {
     this.formNotes.set('');
     this.showCreateModal.set(true);
     this.ordersLoading.set(true);
-    this.labService.listOrders({ size: 100 }).subscribe({
+    // QA D1347: every order in scope, not the 100 newest.
+    this.labService.listOrders().subscribe({
       next: (orders) => {
         this.orders.set(orders);
         this.ordersLoading.set(false);

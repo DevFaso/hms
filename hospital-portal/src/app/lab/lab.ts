@@ -631,7 +631,9 @@ export class LabComponent implements OnInit {
 
   loadOrders(): void {
     this.loading.set(true);
-    this.labService.listOrders({ size: 200 }).subscribe({
+    // QA D1347: every order in scope (listOrders without a page reads every
+    // page), not the 200 newest; the counters count every order the server has.
+    this.labService.listOrders().subscribe({
       next: (list) => {
         this.orders.set(list);
         this.computeStats(list);

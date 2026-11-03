@@ -1,3 +1,4 @@
+import { allRows } from '../shared/all-pages';
 import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 import { isCriticalNotification, notificationIcon } from '../core/notification-icon';
 import { CommonModule } from '@angular/common';
@@ -34,9 +35,9 @@ export class NotificationListComponent implements OnInit {
 
   load(): void {
     this.loading.set(true);
-    this.notifService.getNotifications({ page: 0, size: 100 }).subscribe({
-      next: (page) => {
-        const list = page?.content ?? [];
+    // QA D1347: every notification (all pages), not the 100 newest.
+    allRows((page, size) => this.notifService.getNotifications({ page, size })).subscribe({
+      next: (list) => {
         this.notifications.set(list);
         this.applyFilter();
         this.loading.set(false);

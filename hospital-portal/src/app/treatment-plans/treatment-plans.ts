@@ -407,7 +407,8 @@ export class TreatmentPlansComponent implements OnInit {
 
   load(): void {
     this.loading.set(true);
-    this.tpService.getAll({ size: 200 }).subscribe({
+    // QA D1347: every plan (all pages), not the 200 newest.
+    this.tpService.getAll().subscribe({
       next: (list) => {
         this.plans.set(list ?? []);
         this.applyFilter();

@@ -1,7 +1,8 @@
 import { Injectable, inject } from '@angular/core';
 import { currentLocale } from '../shared/i18n/app-locale';
 import { HttpClient, HttpResponse } from '@angular/common/http';
-import { Observable, map, catchError, of } from 'rxjs';
+import { Observable, map, catchError, of, defer } from 'rxjs';
+import { allRows, PageSlice } from '../shared/all-pages';
 
 /* ── DTOs matching backend PatientPortalController ── */
 
@@ -1322,13 +1323,24 @@ export class PatientPortalService {
     );
   }
 
+  /** Every invoice of mine (QA D1347: was the server's first page). */
   getMyInvoices(): Observable<PortalInvoice[]> {
-    return this.http
-      .get<ApiWrapper<{ content: InvoiceApiResponse[] }>>(`${this.base}/billing/invoices`)
-      .pipe(
-        map((r) => (r.data?.content ?? []).map(mapPortalInvoice)),
-        catchError(() => of([])),
-      );
+    return this.allPortalRows<InvoiceApiResponse>(`${this.base}/billing/invoices`).pipe(
+      map((rows) => rows.map(mapPortalInvoice)),
+      catchError(() => of([])),
+    );
+  }
+
+  /**
+   * QA D1347: every row of a paged portal endpoint (`ApiWrapper<Page>`), all
+   * pages read — never only its first page.
+   */
+  private allPortalRows<T>(url: string): Observable<T[]> {
+    return allRows((page, size) =>
+      this.http
+        .get<ApiWrapper<PageSlice<T>>>(url, { params: { page, size } })
+        .pipe(map((r) => r.data)),
+    );
   }
 
   /** QA D982: one of my invoices with its lines and every payment. */
@@ -1565,22 +1577,33 @@ export class PatientPortalService {
    * makes.
    */
   getMyDisclosures(): Observable<DisclosureAccounting> {
-    return this.http
-      .get<ApiWrapper<DisclosureAccounting>>(`${this.base}/disclosures`, {
-        params: { page: 0, size: 50 },
-      })
-      .pipe(
-        // actorRole arrives bare, or null for an unresolvable role:
-        // DisclosureAccountingServiceImpl.toEntry normalises every row,
-        // legacy spellings included, so the portal no longer maps it.
-        map((r) => {
-          const d = r.data;
-          if (!d) {
-            throw new Error('empty disclosure accounting response');
-          }
-          return { ...d, entries: d.entries ?? [] };
-        }),
+    // QA D1347: every entry (all pages), not the 50 newest with nothing to
+    // say the older ones exist; the counts are the first page's (they cover
+    // the whole window whatever the page).
+    return defer(() => {
+      let first: DisclosureAccounting | null = null;
+      const fetchPage = (page: number, size: number) =>
+        this.http
+          .get<ApiWrapper<DisclosureAccounting>>(`${this.base}/disclosures`, {
+            params: { page, size },
+          })
+          .pipe(
+            // actorRole arrives bare, or null for an unresolvable role:
+            // DisclosureAccountingServiceImpl.toEntry normalises every row,
+            // legacy spellings included, so the portal no longer maps it.
+            map((r) => {
+              const d = r.data;
+              if (!d) {
+                throw new Error('empty disclosure accounting response');
+              }
+              if (page === 0) first = d;
+              return { content: d.entries ?? [], totalPages: d.totalPages ?? 1, number: d.page ?? page };
+            }),
+          );
+      return allRows(fetchPage).pipe(
+        map((entries) => ({ ...(first as DisclosureAccounting), entries, page: 0 })),
       );
+    });
   }
 
   // ── Appointment Actions ────────────────────────────────────────────
@@ -1684,15 +1707,11 @@ export class PatientPortalService {
       .pipe(map((r) => r.data));
   }
 
+  /** Every refill request of mine (QA D1347: was the 50 newest). */
   getMyRefills(): Observable<MedicationRefill[]> {
-    return this.http
-      .get<ApiWrapper<PageWrapper<MedicationRefill>>>(`${this.base}/refills`, {
-        params: { page: 0, size: 50 },
-      })
-      .pipe(
-        map((r) => r.data?.content ?? []),
-        catchError(() => of([])),
-      );
+    return this.allPortalRows<MedicationRefill>(`${this.base}/refills`).pipe(
+      catchError(() => of([])),
+    );
   }
 
   cancelRefill(refillId: string): Observable<MedicationRefill> {
@@ -1826,15 +1845,11 @@ export class PatientPortalService {
       .pipe(map((r) => toLabResultPage(r.data, size)));
   }
 
+  /** Every invoice of the grantor (QA D1347: was the 20 newest). */
   getProxyBilling(patientId: string): Observable<PortalInvoice[]> {
-    return this.http
-      .get<ApiWrapper<{ content: InvoiceApiResponse[] }>>(
-        `${this.base}/proxy-access/${patientId}/billing`,
-        {
-          params: { page: 0, size: 20 },
-        },
-      )
-      .pipe(map((r) => (r.data?.content ?? []).map(mapPortalInvoice)));
+    return this.allPortalRows<InvoiceApiResponse>(
+      `${this.base}/proxy-access/${patientId}/billing`,
+    ).pipe(map((rows) => rows.map(mapPortalInvoice)));
   }
 
   getProxyRecords(patientId: string): Observable<HealthSummaryDTO> {

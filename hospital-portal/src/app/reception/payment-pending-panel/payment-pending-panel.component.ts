@@ -1,3 +1,4 @@
+import { allRows, PageSlice } from '../../shared/all-pages';
 import { refusalReason } from '../../shared/refusal-reason';
 import {
   Component,
@@ -126,12 +127,19 @@ export class PaymentPendingPanelComponent {
 
   private loadInvoices(patientId: string): void {
     this.loadingInvoices.set(true);
-    const params = new HttpParams().set('size', '20');
-    this.http
-      .get<{ content: OpenInvoice[] }>(`/billing-invoices/patient/${patientId}`, { params })
-      .subscribe({
-        next: (res) => {
-          const open = (res.content ?? []).filter(
+    // QA D1347: every invoice of the patient (all pages), not the 20 newest —
+    // an older open invoice was never offered for payment.
+    allRows((page, size) =>
+      this.http.get<PageSlice<OpenInvoice>>(`/billing-invoices/patient/${patientId}`, {
+        params: new HttpParams()
+          .set('page', page)
+          .set('size', size)
+          .append('sort', 'createdAt,desc')
+          .append('sort', 'id,desc'),
+      }),
+    ).subscribe({
+        next: (invoices) => {
+          const open = invoices.filter(
             (inv) =>
               inv.status !== 'PAID' &&
               inv.status !== 'CANCELLED' &&
