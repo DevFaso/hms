@@ -113,6 +113,7 @@ public class PrescriptionMapper {
 
             .dosage(p.getDosage())
             .frequency(p.getFrequency())
+            .prnMinIntervalHours(p.getPrnMinIntervalHours())
             .duration(p.getDuration())
             .route(p.getRoute())
             .instructions(p.getInstructions())
@@ -219,6 +220,8 @@ public class PrescriptionMapper {
 
         e.setDosage(dto.getDosage());
         e.setFrequency(dto.getFrequency());
+        // QA round 30: the as-needed interval (PrnMinInterval.applyTo checks it).
+        e.setPrnMinIntervalHours(dto.getPrnMinIntervalHours());
         e.setRoute(normalizeRoute(dto.getRoute()));
         e.setDuration(dto.getDuration());
         e.setNotes(dto.getNotes());
@@ -275,6 +278,11 @@ public class PrescriptionMapper {
 
         target.setDosage(dto.getDosage());
         target.setFrequency(dto.getFrequency());
+        // QA round 30: null keeps the stored interval; PrnMinInterval.applyTo
+        // clears it when the edited frequency is no longer as-needed.
+        if (dto.getPrnMinIntervalHours() != null) {
+            target.setPrnMinIntervalHours(dto.getPrnMinIntervalHours());
+        }
         if (dto.getRoute() != null) {
             target.setRoute(normalizeRoute(dto.getRoute()));
         }

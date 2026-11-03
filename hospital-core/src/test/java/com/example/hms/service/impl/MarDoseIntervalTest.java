@@ -67,9 +67,12 @@ class MarDoseIntervalTest {
         // A held dose is not a dose given.
         assertThat(MarDoseInterval.requireIntervalOrReason(rx("q4h"), MedicationAdministrationStatus.HELD,
             Optional.of(NOW.minusMinutes(1)), NOW, WINDOW, null)).isNull();
-        // PRN: no fixed interval (the MAR gives it one dose).
-        assertThat(MarDoseInterval.requireIntervalOrReason(rx("PRN"), MedicationAdministrationStatus.GIVEN,
-            Optional.of(NOW.minusMinutes(1)), NOW, WINDOW, null)).isNull();
+        // QA round 30 (changed assertion): a PRN order now measures from the last
+        // dose with the prescriber's interval; past it, no reason is asked. Round 23
+        // asserted any PRN dose a minute after the last passed (the MAR then gave a
+        // PRN order one dose only, so a second never came).
+        assertThat(MarDoseInterval.requireIntervalOrReason(prn("PRN", 4), MedicationAdministrationStatus.GIVEN,
+            Optional.of(NOW.minusHours(4)), NOW, WINDOW, null)).isNull();
         // Nothing given yet.
         assertThat(MarDoseInterval.requireIntervalOrReason(rx("q4h"), MedicationAdministrationStatus.GIVEN,
             Optional.empty(), NOW, WINDOW, null)).isNull();
@@ -149,6 +152,53 @@ class MarDoseIntervalTest {
         // The first dose of an unread order needs no reason.
         assertThat(MarDoseInterval.requireIntervalOrReason(rx("après les repas"),
             MedicationAdministrationStatus.GIVEN, Optional.empty(), NOW, WINDOW, null)).isNull();
+    }
+
+    /**
+     * QA round 30 (user decision 2026-11-02): a PRN dose inside the
+     * prescriber's minimum interval is refused on the reason field with the
+     * same message as a scheduled one (the interval taken exactly, no early
+     * window off it); with a reason it goes through.
+     */
+    @Test
+    void prn_aDoseInsideThePrescribersIntervalNeedsAReason() {
+        Prescription paracetamol = prn("si besoin", 6);
+        Optional<LocalDateTime> last = Optional.of(NOW.minusHours(5).minusMinutes(59));
+        FieldBusinessException refusal = org.junit.jupiter.api.Assertions.assertThrows(FieldBusinessException.class,
+            () -> MarDoseInterval.requireIntervalOrReason(paracetamol, MedicationAdministrationStatus.GIVEN,
+                last, NOW, WINDOW, null));
+        assertThat(refusal.getMessageKey()).isEqualTo(MarDoseInterval.TOO_SOON_KEY);
+        assertThat(refusal.getField()).isEqualTo(MarDoseInterval.REASON_FIELD);
+        assertThat(refusal.getArgs()[2]).isEqualTo("6");
+        assertThat(MarDoseInterval.requireIntervalOrReason(paracetamol, MedicationAdministrationStatus.GIVEN,
+            last, NOW, WINDOW, " douleur 8/10 ")).isEqualTo("douleur 8/10");
+        // Exactly at the interval: on time.
+        assertThat(MarDoseInterval.requireIntervalOrReason(paracetamol, MedicationAdministrationStatus.GIVEN,
+            Optional.of(NOW.minusHours(6)), NOW, WINDOW, null)).isNull();
+        // The first dose, and a held one, need nothing.
+        assertThat(MarDoseInterval.requireIntervalOrReason(paracetamol, MedicationAdministrationStatus.GIVEN,
+            Optional.empty(), NOW, WINDOW, null)).isNull();
+        assertThat(MarDoseInterval.requireIntervalOrReason(paracetamol, MedicationAdministrationStatus.HELD,
+            last, NOW, WINDOW, null)).isNull();
+    }
+
+    /** QA round 30: an older PRN order written without an interval asks why for every later dose. */
+    @Test
+    void prn_anOlderOrderWithoutAnIntervalAsksForAReasonAfterTheFirstDose() {
+        Optional<LocalDateTime> last = Optional.of(NOW.minusHours(12));
+        assertThatThrownBy(() -> MarDoseInterval.requireIntervalOrReason(rx("PRN"),
+                MedicationAdministrationStatus.GIVEN, last, NOW, WINDOW, null))
+            .isInstanceOf(FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", MarDoseInterval.PRN_INTERVAL_MISSING_KEY)
+            .hasFieldOrPropertyWithValue("field", MarDoseInterval.REASON_FIELD);
+        assertThat(MarDoseInterval.requireIntervalOrReason(rx("PRN"), MedicationAdministrationStatus.GIVEN,
+            last, NOW, WINDOW, "asked by the patient")).isEqualTo("asked by the patient");
+    }
+
+    private static Prescription prn(String frequency, int hours) {
+        Prescription rx = rx(frequency);
+        rx.setPrnMinIntervalHours(hours);
+        return rx;
     }
 
     private static Prescription rx(String frequency) {

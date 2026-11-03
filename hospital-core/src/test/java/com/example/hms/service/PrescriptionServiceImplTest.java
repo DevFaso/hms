@@ -698,6 +698,70 @@ class PrescriptionServiceImplTest {
         verify(prescriptionRepository).save(existing);
     }
 
+    /**
+     * QA round 30 (user decision 2026-11-02): an as-needed order names its
+     * minimum interval on every path that writes it - here the service, which
+     * order sets reach without the request constraints. Nothing is saved.
+     */
+    @Test
+    void prn_createOfAnAsNeededOrderWithoutItsIntervalIsRefusedOnTheField() {
+        PrescriptionRequestDTO request = buildRequest();
+        UserRoleHospitalAssignment encounterAssignment = new UserRoleHospitalAssignment();
+        encounterAssignment.setId(UUID.randomUUID());
+        encounterAssignment.setHospital(encounter.getHospital());
+        encounter.setAssignment(encounterAssignment);
+        UUID currentUser = staff.getUser().getId();
+        Prescription mappedEntity = new Prescription();
+        mappedEntity.setFrequency("si besoin");
+
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(authService.getCurrentUserId()).thenReturn(currentUser);
+        when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
+        when(prescriptionMapper.toEntity(request, patient, staff, encounter)).thenReturn(mappedEntity);
+
+        assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "prnMinIntervalHours");
+        verify(prescriptionRepository, never()).save(any());
+
+        mappedEntity.setPrnMinIntervalHours(6);
+        when(prescriptionRepository.save(mappedEntity)).thenReturn(mappedEntity);
+        when(prescriptionMapper.toResponseDTO(mappedEntity))
+            .thenReturn(PrescriptionResponseDTO.builder().id(UUID.randomUUID()).build());
+        prescriptionService.createPrescription(request, Locale.ENGLISH);
+        verify(prescriptionRepository).save(mappedEntity);
+        assertThat(mappedEntity.getPrnMinIntervalHours()).isEqualTo(6);
+    }
+
+    /** QA round 30: an edit of an as-needed order's content keeps or names its interval; nothing saved without it. */
+    @Test
+    void prn_anEditOfAnAsNeededOrderWithoutAnIntervalIsRefused() {
+        UUID prescriptionId = UUID.randomUUID();
+        PrescriptionRequestDTO request = buildRequest();
+        Prescription existing = new Prescription();
+        existing.setId(prescriptionId);
+        existing.setFrequency("PRN");
+        UserRoleHospitalAssignment staffAssignment = new UserRoleHospitalAssignment();
+        staffAssignment.setId(UUID.randomUUID());
+        staffAssignment.setHospital(encounter.getHospital());
+        staff.setAssignment(staffAssignment);
+        UUID currentUser = staff.getUser().getId();
+
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(existing));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(authService.getCurrentUserId()).thenReturn(currentUser);
+        when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
+
+        assertThatThrownBy(() -> prescriptionService.updatePrescription(prescriptionId, request, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "prnMinIntervalHours");
+        verify(prescriptionRepository, never()).save(any());
+    }
+
     @Test
     void d739_anEditKeepingTheOrdersOwnCompletedEncounterIsAccepted() {
         UUID prescriptionId = UUID.randomUUID();

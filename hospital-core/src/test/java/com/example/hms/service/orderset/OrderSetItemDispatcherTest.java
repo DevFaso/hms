@@ -102,6 +102,39 @@ class OrderSetItemDispatcherTest {
         assertThat(sent.getNotes()).contains("Sepsis bundle");
     }
 
+    /**
+     * QA round 30: an as-needed item carries its author's minimum interval to
+     * the order; one without it is not applied (counted as skipped), and no
+     * interval is invented. A scheduled item sends none.
+     */
+    @Test
+    void prn_anAsNeededItemCarriesItsIntervalOrIsSkipped() {
+        PrescriptionResponseDTO resp = new PrescriptionResponseDTO();
+        resp.setId(UUID.randomUUID());
+        resp.setCdsAdvisories(List.of());
+        when(prescriptionService.createPrescription(any(), any(Locale.class))).thenReturn(resp);
+
+        DispatchResult skipped = dispatcher.dispatch(Map.of(
+            "orderType", "MEDICATION", "medicationName", "Paracetamol", "frequency", "PRN"), ctx(), Locale.ENGLISH);
+        assertThat(skipped.type()).isEqualTo(DispatchResult.Type.SKIPPED);
+        verifyNoInteractions(prescriptionService);
+
+        for (Object hours : new Object[] {6, "6", 6L}) {
+            DispatchResult applied = dispatcher.dispatch(Map.of(
+                "orderType", "MEDICATION", "medicationName", "Paracetamol", "frequency", "si besoin",
+                "prnMinIntervalHours", hours), ctx(), Locale.ENGLISH);
+            assertThat(applied.type()).as(String.valueOf(hours)).isEqualTo(DispatchResult.Type.MEDICATION);
+        }
+        ArgumentCaptor<PrescriptionRequestDTO> captor = ArgumentCaptor.forClass(PrescriptionRequestDTO.class);
+        verify(prescriptionService, org.mockito.Mockito.times(3)).createPrescription(captor.capture(), eq(Locale.ENGLISH));
+        assertThat(captor.getAllValues()).allSatisfy(r -> assertThat(r.getPrnMinIntervalHours()).isEqualTo(6));
+
+        dispatcher.dispatch(Map.of("orderType", "MEDICATION", "medicationName", "Amoxicillin", "frequency", "TID",
+            "prnMinIntervalHours", 6), ctx(), Locale.ENGLISH);
+        verify(prescriptionService, org.mockito.Mockito.times(4)).createPrescription(captor.capture(), eq(Locale.ENGLISH));
+        assertThat(captor.getValue().getPrnMinIntervalHours()).isNull();
+    }
+
     @Test
     void medicationCdsAdvisoriesArePropagated() {
         CdsCard card = new CdsCard("Mild interaction", null, CdsCard.Indicator.INFO,

@@ -370,6 +370,10 @@ public class NurseTaskServiceImpl implements NurseTaskService {
                     .dueTime(dueTime)
                     .status(marStatus)
                     .frequencyUnread(due.frequencyUnread())
+                    // QA round 30: an as-needed order, with the prescriber's minimum interval.
+                    .asNeeded(due.asNeeded())
+                    .prnMinIntervalHours(due.asNeeded() ? rx.getPrnMinIntervalHours() : null)
+                    .prnLabel(MarPrnLabel.of(rx, due, now))
                     .earlyDose(STATUS_DUE.equals(marStatus) && due.earlyAt(now))
                     .controlledSubstance(controlled)
                     .requiresPharmacistVerification(
@@ -1197,7 +1201,10 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             Admission stay = admitted.get(ctx.patientId());
             for (Prescription rx : prescriptions) {
                 if (!onWardMar(rx, closedStays, stay)) continue;
-                String marStatus = resolveMarStatus(rx, now);
+                MarNextDose.Due next = nextDose(rx, now);
+                // QA round 30: an as-needed order is not a dose waiting to be given.
+                if (next.asNeeded()) continue;
+                String marStatus = resolveMarStatus(next, now);
                 switch (marStatus) {
                     case STATUS_DUE -> due++;
                     case STATUS_OVERDUE -> overdue++;
@@ -1212,9 +1219,14 @@ public class NurseTaskServiceImpl implements NurseTaskService {
        Private helpers — MAR
        ═══════════════════════════════════════════════════════════════════ */
 
-    /** The MAR status of a prescription's next dose ({@link MarNextDose}). */
-    private String resolveMarStatus(Prescription rx, LocalDateTime now) {
-        return resolveMarStatus(nextDose(rx, now), now);
+    /**
+     * A dose waiting to be given (DUE or OVERDUE, QA D949): what the workboard
+     * counts. QA round 30: an as-needed order is offered on demand, never
+     * waiting, so it is not counted.
+     */
+    private boolean isPendingDose(Prescription rx, LocalDateTime now) {
+        MarNextDose.Due next = nextDose(rx, now);
+        return !next.asNeeded() && isDueStatus(resolveMarStatus(next, now));
     }
 
     /**
@@ -1225,6 +1237,9 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     static String resolveMarStatus(MarNextDose.Due due, LocalDateTime now) {
         LocalDateTime dueBy = due.dueTime();
         if (dueBy == null) return STATUS_COMPLETED;
+        // QA round 30: an as-needed dose is given on demand: always offered,
+        // never late (earlyDose flags one inside the minimum interval).
+        if (due.asNeeded()) return STATUS_DUE;
         // QA D1237: an unread frequency keeps the course open; the row is
         // flagged (frequencyUnread) and each later dose asks for a reason.
         if (due.frequencyUnread()) return STATUS_DUE;
@@ -1798,7 +1813,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .stream()
             .filter(rx -> ACTIVE_RX_STATUSES.contains(rx.getStatus()))
             // QA D949: due means DUE or OVERDUE, never a later slot or a finished course.
-            .filter(rx -> isDueStatus(resolveMarStatus(rx, now)))
+            .filter(rx -> isPendingDose(rx, now))
             .count();
 
         Department department = JpaProxyUtils.safeInit(

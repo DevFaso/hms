@@ -179,6 +179,9 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
         Prescription entity = prescriptionMapper.toEntity(request, patient, staff, encounter);
         entity.setAssignment(prescriberAssignment);
+        // QA round 30: an as-needed order names its minimum interval (order
+        // sets reach here without the request constraints).
+        com.example.hms.service.impl.PrnMinInterval.applyTo(entity);
         requirePrescribedQuantityForControlled(entity, catalogItem);
         recordAllergyOverride(entity, allergyOverride);
         String cdsOverride = cdsOverrideReason(request, advisories);
@@ -1475,6 +1478,9 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         String overrideBefore = existing.isAllergiesReviewed() ? existing.getOverrideReason() : null;
         prescriptionMapper.updateEntity(existing, request, patient, staff, encounter);
         existing.setAssignment(prescriberAssignment);
+        // QA round 30: an edit of an as-needed order keeps (or names) its
+        // minimum interval; an edit to a fixed schedule drops it.
+        com.example.hms.service.impl.PrnMinInterval.applyTo(existing);
         // QA D706: no quantity check on an edit - a legacy controlled row must
         // stay withdrawable; the dispense refuses it until a quantity is set.
         applyAllergyOverrideOnUpdate(existing, allergyOverride, overrideBefore, currentUserId);
@@ -1739,6 +1745,9 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             !isBlank(request.getMedicationCode()) && textDiffers(request.getMedicationCode(), existing.getMedicationCode()),
             textDiffers(request.getDosage(), existing.getDosage()),
             textDiffers(request.getFrequency(), existing.getFrequency()),
+            // QA round 30: the as-needed interval is order content (null echoes nothing).
+            request.getPrnMinIntervalHours() != null
+                && !request.getPrnMinIntervalHours().equals(existing.getPrnMinIntervalHours()),
             // QA D950: "IV" echoed over a stored "INTRAVENOUS" is the same route.
             !isBlank(request.getRoute())
                 && !com.example.hms.service.emar.MedicationRoutes.sameRoute(existing.getRoute(), request.getRoute()),

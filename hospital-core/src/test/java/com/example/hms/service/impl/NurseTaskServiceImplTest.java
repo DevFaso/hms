@@ -1694,6 +1694,43 @@ class NurseTaskServiceImplTest {
         }
     }
 
+    /**
+     * QA round 30: an as-needed order is given on demand, not waiting: the
+     * dashboard counts it neither due nor overdue (a PRN never given read
+     * OVERDUE an hour after it was signed, and counted).
+     */
+    @Test
+    void prn_anAsNeededOrderIsNotCountedDueOrOverdue() {
+        UUID nurseId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID patientId = UUID.randomUUID();
+        LocalDateTime fixedNow = LocalDateTime.of(2025, 10, 30, 10, 0);
+        when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null))
+            .thenReturn(List.of(patient(patientId, "Prn Pat", "Prn", "Pat")));
+        when(vitalSignRepository.findLatestObservationSet(patientId, hospitalId)).thenReturn(Optional.empty());
+        Patient mockPatient = mock(Patient.class);
+        lenient().when(mockPatient.getId()).thenReturn(patientId);
+        Hospital mockHospital = mock(Hospital.class);
+        lenient().when(mockHospital.getId()).thenReturn(hospitalId);
+        Prescription prn = mock(Prescription.class);
+        lenient().when(prn.getId()).thenReturn(UUID.randomUUID());
+        lenient().when(prn.getPatient()).thenReturn(mockPatient);
+        lenient().when(prn.getHospital()).thenReturn(mockHospital);
+        when(prn.getStatus()).thenReturn(PrescriptionStatus.SIGNED);
+        lenient().when(prn.getCreatedAt()).thenReturn(fixedNow.minusHours(8));
+        when(prn.getFrequency()).thenReturn("si besoin");
+        lenient().when(prn.getPrnMinIntervalHours()).thenReturn(6);
+        when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId)).thenReturn(List.of(prn));
+        when(announcementRepository.countByHospital_Id(hospitalId)).thenReturn(0L);
+
+        try (MockedStatic<LocalDateTime> mockedNow = mockStatic(LocalDateTime.class)) {
+            mockedNow.when(LocalDateTime::now).thenReturn(fixedNow);
+            NurseDashboardSummaryDTO summary = service.getDashboardSummary(nurseId, hospitalId);
+            assertThat(summary.getMedicationsDue()).isZero();
+            assertThat(summary.getMedicationsOverdue()).isZero();
+        }
+    }
+
     /* ════════════════════════════════════════════════════════════════════
        Edge case: resolveNurseStaff with null values
        ════════════════════════════════════════════════════════════════════ */
@@ -4572,6 +4609,63 @@ class NurseTaskServiceImplTest {
         given.setEarlyDoseReason("Prescriber confirmed: after each meal");
         service.recordMedicationAdministration(rxId, nurseId, hospitalId, given);
         assertThat(saved.getValue().getReason()).isEqualTo("Prescriber confirmed: after each meal");
+    }
+
+    /**
+     * QA round 30 (user decision 2026-11-02): a PRN order is no longer ended
+     * after its first dose. A minute after a dose it is still offered (DUE),
+     * flagged early, with the prescriber's interval on the row; it never
+     * reads OVERDUE.
+     */
+    @Test
+    void prn_staysOfferedAfterADoseFlaggedEarlyWithTheInterval() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "si besoin");
+        rx.setStatus(PrescriptionStatus.SIGNED);
+        rx.setPrnMinIntervalHours(6);
+        LocalDateTime given = LocalDateTime.now().minusMinutes(1);
+        UUID nurseId = UUID.randomUUID();
+
+        List<NurseMedicationTaskResponseDTO> tasks = marFor(nurseId, hospitalId, rx, null,
+            givenAt(rx, given, given));
+
+        assertThat(tasks).hasSize(1);
+        assertThat(tasks.get(0).getStatus()).isEqualTo("DUE");
+        assertThat(tasks.get(0).isAsNeeded()).isTrue();
+        assertThat(tasks.get(0).isEarlyDose()).isTrue();
+        assertThat(tasks.get(0).getPrnMinIntervalHours()).isEqualTo(6);
+        assertThat(tasks.get(0).getPrnLabel()).isNotBlank();
+        assertThat(service.getMedicationTasks(nurseId, hospitalId, "OVERDUE")).isEmpty();
+    }
+
+    /** QA round 30: a second PRN dose inside the interval is accepted only with a reason, kept on the row. */
+    @Test
+    void prn_aSecondDoseInsideTheIntervalAsksWhy() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "PRN");
+        rx.setPrnMinIntervalHours(4);
+        LocalDateTime given = LocalDateTime.now().minusHours(1);
+        when(prescriptionRepository.findByIdForUpdate(rx.getId())).thenReturn(Optional.of(rx));
+        when(marRepository.findByPrescription_IdOrderByScheduledTimeDesc(rx.getId()))
+            .thenReturn(List.of(givenAt(rx, given, given)));
+        UUID rxId = rx.getId();
+        UUID nurseId = UUID.randomUUID();
+        NurseMedicationAdministrationRequestDTO dose = givenRequest();
+
+        assertThatThrownBy(() -> service.recordMedicationAdministration(rxId, nurseId, hospitalId, dose))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", MarDoseInterval.TOO_SOON_KEY)
+            .hasFieldOrPropertyWithValue("field", "earlyDoseReason");
+        verify(marRepository, never()).save(any(MedicationAdministrationRecord.class));
+
+        ArgumentCaptor<MedicationAdministrationRecord> saved = ArgumentCaptor.forClass(MedicationAdministrationRecord.class);
+        when(marRepository.save(saved.capture())).thenAnswer(i -> i.getArgument(0));
+        dose.setEarlyDoseReason("Douleur 8/10, médecin prévenu");
+        service.recordMedicationAdministration(rxId, nurseId, hospitalId, dose);
+        assertThat(saved.getValue().getReason()).isEqualTo("Douleur 8/10, médecin prévenu");
+        // The dose fills a slot of now (the TIME right reads it), never the end of the interval.
+        assertThat(saved.getValue().getScheduledTime()).isAfter(given.plusMinutes(30));
+        assertThat(saved.getValue().getScheduledTime()).isBefore(given.plusHours(2));
     }
 
     /**

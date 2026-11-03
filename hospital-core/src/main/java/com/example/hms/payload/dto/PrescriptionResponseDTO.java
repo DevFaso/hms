@@ -47,6 +47,8 @@ public class PrescriptionResponseDTO {
 
     private String dosage;
     private String frequency;
+    /** QA round 30: the minimum hours between two doses of an as-needed order, or null. */
+    private Integer prnMinIntervalHours;
     private String duration;
     private String route;
     private String instructions;

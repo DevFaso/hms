@@ -34,15 +34,21 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   <li>QA D1236 / D1262: right after an outcome is recorded (given, held,
  *       refused or missed, however late), the row is never OVERDUE: a missed
  *       backlog slot is not offered again.</li>
+ *   <li>QA round 30: an as-needed order, with or without the prescriber's
+ *       interval, under the same rules.</li>
  * </ul>
  */
 class MarScreenServerAgreementTest {
 
     private static final Duration WINDOW = NurseTaskServiceImpl.EARLY_ADMINISTRATION_WINDOW;
     private static final LocalDateTime START = LocalDateTime.of(2026, 11, 1, 8, 0);
+    /** An as-needed order written before V261, with no minimum interval. */
+    private static final String LEGACY_PRN = "si besoin (sans intervalle)";
     private static final List<String> FREQUENCIES = List.of(
         "toutes les heures", "q2h", "q4h", "toutes les six heures", "trois fois par jour", "5 fois par jour",
-        "q12h", "une fois par jour", "cinq fois par jour", "après les repas");
+        "q12h", "une fois par jour", "cinq fois par jour", "après les repas",
+        // QA round 30: as-needed orders, with the prescriber's interval and (an older order) without one.
+        "si besoin", "PRN", LEGACY_PRN);
     private static final String OVERDUE = "OVERDUE";
     private static final String DUE = "DUE";
     /** "Right after" an outcome: the next slot is at least an hour away for every frequency read. */
@@ -86,6 +92,9 @@ class MarScreenServerAgreementTest {
         rx.setId(UUID.randomUUID());
         rx.setFrequency(frequency);
         rx.setSignedAt(START);
+        if (PrnMinInterval.asNeeded(frequency) && !LEGACY_PRN.equals(frequency)) {
+            rx.setPrnMinIntervalHours(4);
+        }
         LocalDateTime recordedAt = START.plusMinutes(lateMinutes);
         MedicationAdministrationRecord row = MedicationAdministrationRecord.builder()
             .status(outcome).scheduledTime(START).administeredAt(recordedAt).build();

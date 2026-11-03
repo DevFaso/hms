@@ -29,8 +29,9 @@ import java.util.Optional;
  * <p>QA D1237 (round 25): an order whose frequency is written but not read
  * ({@link MarDoseSchedule.Kind#UNREAD}) is never ended after its first dose:
  * it stays open (due now, flagged), and each later dose needs a reason
- * ({@link MarDoseInterval#FREQUENCY_UNREAD_KEY}). Only a one-off or as-needed
- * order ends after its first recorded outcome.
+ * ({@link MarDoseInterval#FREQUENCY_UNREAD_KEY}). Only a one-off order ends
+ * after its first recorded outcome (an as-needed order no longer does, QA
+ * round 30, below).
  *
  * <p>QA D1254 (round 26, a regression of the D1236 fix): a dose inside its
  * slot window but before the minimum gap was made UPCOMING, so the nurse
@@ -47,6 +48,16 @@ import java.util.Optional;
  * dose is not a dose given, so there is no minimum gap; the schedule moves to
  * its first slot after the moment the outcome was recorded, and the slots
  * missed in between are never offered again.
+ *
+ * <p>QA round 30 (user decision 2026-11-02, option a): an as-needed order
+ * (PRN, "si besoin") is no longer ended after its first dose. It is always
+ * offered (a dose given on demand is never late, so never OVERDUE); the next
+ * dose is due once the prescriber's minimum interval
+ * ({@code Prescription.prnMinIntervalHours}) has passed since the last dose
+ * really given, and a dose before that is flagged early and needs a reason
+ * ({@link MarDoseInterval}, the D1210 path). An older as-needed order written
+ * without an interval stays open and is flagged like an unread frequency:
+ * every later dose says why (no interval is ever invented).
  *
  * <p>Pure: the caller passes the clock reading and the order's rows.
  */
@@ -71,14 +82,23 @@ public final class MarNextDose {
      *                         QA D1262): the administer call's slot rule (D154)
      *                         measures from it, so a dose inside the minimum gap is
      *                         still accepted WITH a reason (QA D1210)
-     * @param frequencyUnread  the frequency is written but not readable: the course
-     *                         is open and every later dose asks why it is given now
+     * @param frequencyUnread  the frequency is written but not readable (or an older
+     *                         as-needed order has no interval): the course is open and
+     *                         every later dose asks why it is given now
+     * @param asNeeded         QA round 30: an as-needed (PRN) order, given on demand:
+     *                         always offered, never OVERDUE, not a pending task
      */
     public record Due(LocalDateTime dueTime, LocalDateTime notBefore, LocalDateTime reasonUntil,
-                      LocalDateTime scheduledSlot, boolean frequencyUnread) {
+                      LocalDateTime scheduledSlot, boolean frequencyUnread, boolean asNeeded) {
 
         static Due none() {
-            return new Due(null, null, null, null, false);
+            return new Due(null, null, null, null, false, false);
+        }
+
+        /** A scheduled (not as-needed) next dose. */
+        static Due scheduled(LocalDateTime dueTime, LocalDateTime notBefore, LocalDateTime reasonUntil,
+                             LocalDateTime scheduledSlot, boolean frequencyUnread) {
+            return new Due(dueTime, notBefore, reasonUntil, scheduledSlot, frequencyUnread, false);
         }
 
         /** Nothing more to give: the course is finished. */
@@ -104,17 +124,20 @@ public final class MarNextDose {
         // signature (or, failing that, its creation), not four hours later.
         LocalDateTime start = rx.getSignedAt() != null ? rx.getSignedAt() : rx.getCreatedAt();
         LocalDateTime first = start != null ? start : now.plusHours(1);
+        MarDoseSchedule.Reading reading = MarDoseSchedule.read(rx.getFrequency());
+        if (reading.kind() == MarDoseSchedule.Kind.AS_NEEDED) {
+            return asNeeded(rx, now, rows, earlyWindow);
+        }
         Optional<MedicationAdministrationRecord> lastClosed = lastClosed(rows);
         if (rx.getId() == null || lastClosed.isEmpty()) {
-            return new Due(first, first.minus(earlyWindow), null, first, false);
+            return Due.scheduled(first, first.minus(earlyWindow), null, first, false);
         }
-        MarDoseSchedule.Reading reading = MarDoseSchedule.read(rx.getFrequency());
         if (reading.kind() == MarDoseSchedule.Kind.UNREAD) {
             // The slot an unread order fills: its open (PENDING) row if the
             // bedside verify already made one, else now to the minute.
             LocalDateTime slot = openSlotAfter(rows, lastClosed.get().getScheduledTime())
                 .orElse(now.truncatedTo(ChronoUnit.MINUTES));
-            return new Due(slot, null, null, slot, true);
+            return Due.scheduled(slot, null, null, slot, true);
         }
         if (!reading.repeating()) {
             return Due.none();
@@ -128,7 +151,7 @@ public final class MarNextDose {
         }
         LocalDateTime scheduled = afterLateOutcome(last, lastSlot, interval, earlyWindow);
         if (lastGiven.isEmpty()) {
-            return new Due(scheduled, scheduled.minus(earlyWindow), null, scheduled, false);
+            return Due.scheduled(scheduled, scheduled.minus(earlyWindow), null, scheduled, false);
         }
         LocalDateTime earliest = MarDoseInterval.earliestNext(lastGiven.get(), interval, earlyWindow);
         LocalDateTime slot = earliest.isAfter(scheduled) ? earliest : scheduled;
@@ -138,7 +161,37 @@ public final class MarNextDose {
         // from its early window, with a reason until the gap has passed.
         boolean backlog = scheduled.plus(earlyWindow).isBefore(lastGiven.get());
         LocalDateTime notBefore = backlog ? earliest : scheduled.minus(earlyWindow);
-        return new Due(slot, notBefore, earliest, scheduled, false);
+        return Due.scheduled(slot, notBefore, earliest, scheduled, false);
+    }
+
+    /**
+     * QA round 30: an as-needed order's next dose. Offered now, in a slot that
+     * is the moment it is asked for (the open PENDING row the bedside verify
+     * made, while it is inside the time window, else now to the minute), so
+     * the five-rights TIME right and the slot rule (D154) never refuse a dose
+     * given on demand. Before the minimum interval has passed since the last
+     * dose really given, the dose is early ({@link Due#reasonUntil()}) and
+     * needs a reason ({@link MarDoseInterval}). A held or refused dose is not
+     * a dose given, so it starts no interval. Without an interval (an order
+     * written before V261) every later dose is flagged and needs a reason.
+     */
+    private static Due asNeeded(Prescription rx, LocalDateTime now, List<MedicationAdministrationRecord> rows,
+                                Duration earlyWindow) {
+        List<MedicationAdministrationRecord> doses = rows == null ? List.of() : rows;
+        LocalDateTime openNow = now.truncatedTo(ChronoUnit.MINUTES);
+        LocalDateTime closedSlot = lastClosed(doses).map(MedicationAdministrationRecord::getScheduledTime).orElse(null);
+        LocalDateTime slot = openSlotAfter(doses, closedSlot)
+            .filter(open -> !open.isBefore(openNow.minus(earlyWindow)))
+            .orElse(openNow);
+        Optional<LocalDateTime> lastGiven = MarDoseInterval.lastGivenAt(doses, null);
+        if (lastGiven.isEmpty()) {
+            return new Due(slot, null, null, slot, false, true);
+        }
+        Integer hours = rx.getPrnMinIntervalHours();
+        if (hours == null) {
+            return new Due(slot, null, null, slot, true, true);
+        }
+        return new Due(slot, null, lastGiven.get().plusHours(hours), slot, false, true);
     }
 
     /**
