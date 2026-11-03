@@ -76,7 +76,9 @@
             }
           </div>
           @if (c.rejectionReason) {
-            <p class="notes">{{ c.rejectionReason }}</p>
+            <p class="notes">
+              {{ 'COMMON.REASON_VALUE' | translate: { reason: c.rejectionReason } }}
+            </p>
           }
           @if (c.notes) {
             <p class="notes">{{ c.notes }}</p>

@@ -216,7 +216,7 @@
               }}<span>
                 {{ 'MORTALITY.AMENDED_ON' | translate }}
                 {{ rec.amendedAt | serverTime | date: 'short' }} —
-                {{ rec.amendmentReason }}
+                {{ 'COMMON.REASON_VALUE' | translate: { reason: rec.amendmentReason } }}
               </span>
             </div>
           }

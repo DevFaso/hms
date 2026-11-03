@@ -184,7 +184,7 @@
             }}<span>
               {{ 'MICRO.CORRECTED_AT' | translate }}
               {{ culture.correctedAt | serverTime | date: 'short' }} —
-              {{ culture.correctionReason }}
+              {{ 'COMMON.REASON_VALUE' | translate: { reason: culture.correctionReason } }}
             </span>
           </div>
         }

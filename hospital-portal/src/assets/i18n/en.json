@@ -2390,7 +2390,8 @@
     "FIELD_REQUIRED": "This field is required.",
     "QUESTION_MARK": "?",
     "EXCLAMATION_MARK": "!",
-    "SUBMIT_BLOCKED_REQUIRED": "Complete the required fields (marked *) first."
+    "SUBMIT_BLOCKED_REQUIRED": "Complete the required fields (marked *) first.",
+    "REASON_VALUE": "Reason: {{reason}}"
   },
   "CONSULTATIONS": {
     "ACKNOWLEDGE": "Acknowledge",

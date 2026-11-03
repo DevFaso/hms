@@ -2390,7 +2390,8 @@
     "FIELD_REQUIRED": "Este campo es obligatorio.",
     "QUESTION_MARK": "?",
     "EXCLAMATION_MARK": "!",
-    "SUBMIT_BLOCKED_REQUIRED": "Complete primero los campos obligatorios (marcados con *)."
+    "SUBMIT_BLOCKED_REQUIRED": "Complete primero los campos obligatorios (marcados con *).",
+    "REASON_VALUE": "Motivo: {{reason}}"
   },
   "CONSULTATIONS": {
     "ACKNOWLEDGE": "Acusar recibo",
