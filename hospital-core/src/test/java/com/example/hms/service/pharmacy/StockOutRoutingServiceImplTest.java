@@ -748,7 +748,8 @@ class StockOutRoutingServiceImplTest {
 
         assertThatThrownBy(() -> service.routeToPartner(prescriptionId, request))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("PARTNER_PHARMACY");
+                // QA D1371 class (changed assertion): the message names the choices, not raw codes.
+                .hasMessageContaining("partner pharmacy");
     }
 
     @Test

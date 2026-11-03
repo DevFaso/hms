@@ -311,6 +311,7 @@
             <textarea
               required
               id="decision-diagnosis"
+              data-server-field="dischargeDiagnosis"
               rows="2"
               maxlength="2000"
               [(ngModel)]="decisionDiagnosis"
@@ -331,6 +332,7 @@
           </label>
           <textarea
             id="decision-note"
+            data-server-field="rejectionReason doctorNote"
             rows="4"
             [required]="decisionMode() === 'reject'"
             [(ngModel)]="decisionNote"

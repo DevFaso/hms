@@ -4641,6 +4641,107 @@ class NurseTaskServiceImplTest {
         assertThat(service.getMedicationTasks(nurseId, hospitalId, "OVERDUE")).isEmpty();
     }
 
+    /**
+     * QA D1375 replay (prn31.log give1): the answer to an early PRN dose said
+     * asNeeded=false, no interval, no label, earlyDose=false, while the next
+     * GET of the MAR said otherwise. Guard: every field of the answer equals
+     * the list row read right after, except the fields of the dose itself.
+     * A new field on the row that an administer answer does not carry fails here.
+     */
+    @Test
+    void d1375_theAdministerAnswerOfAPrnOrderSaysWhatTheListSays() throws Exception {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "au besoin");
+        rx.setStatus(PrescriptionStatus.SIGNED);
+        rx.setPrnMinIntervalHours(6);
+        LocalDateTime earlier = LocalDateTime.now().minusHours(1);
+        List<MedicationAdministrationRecord> rows = new java.util.ArrayList<>(List.of(givenAt(rx, earlier, earlier)));
+        when(prescriptionRepository.findByIdForUpdate(rx.getId())).thenReturn(Optional.of(rx));
+        lenient().when(marRepository.findByPrescription_IdOrderByScheduledTimeDesc(rx.getId()))
+            .thenAnswer(i -> List.copyOf(rows));
+        when(marRepository.save(any(MedicationAdministrationRecord.class))).thenAnswer(i -> {
+            MedicationAdministrationRecord saved = i.getArgument(0);
+            saved.setId(UUID.randomUUID());
+            rows.add(0, saved);
+            return saved;
+        });
+        UUID nurseId = UUID.randomUUID();
+        NurseMedicationAdministrationRequestDTO dose = givenRequest();
+        dose.setEarlyDoseReason("Douleur 8/10, médecin prévenu");
+
+        NurseMedicationTaskResponseDTO answer = service.recordMedicationAdministration(rx.getId(), nurseId,
+            hospitalId, dose);
+
+        assertThat(answer.getStatus()).isEqualTo("GIVEN");
+        assertThat(answer.isAsNeeded()).isTrue();
+        assertThat(answer.getPrnMinIntervalHours()).isEqualTo(6);
+        assertThat(answer.getPrnLabel()).isNotBlank();
+        assertThat(answer.isEarlyDose()).isTrue();
+
+        UUID patientId = rx.getPatient().getId();
+        when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null))
+            .thenReturn(List.of(patient(patientId, rx.getPatient().getFullName(), "Awa", "Kabore")));
+        when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId)).thenReturn(List.of(rx));
+        NurseMedicationTaskResponseDTO row = service.getMedicationTasks(nurseId, hospitalId, null).get(0);
+
+        // The dose itself: its own row id, the outcome recorded, its slot, its witness.
+        java.util.Set<String> ofTheDose = java.util.Set.of("id", "status", "dueTime", "witnessName");
+        List<String> differ = new java.util.ArrayList<>();
+        int compared = 0;
+        for (java.lang.reflect.Field field : NurseMedicationTaskResponseDTO.class.getDeclaredFields()) {
+            if (java.lang.reflect.Modifier.isStatic(field.getModifiers()) || ofTheDose.contains(field.getName())) {
+                continue;
+            }
+            field.setAccessible(true);
+            compared++;
+            if (!java.util.Objects.equals(field.get(answer), field.get(row))) {
+                differ.add(field.getName() + ": answer=" + field.get(answer) + " list=" + field.get(row));
+            }
+        }
+        assertThat(compared).isGreaterThanOrEqualTo(20);
+        assertThat(differ).isEmpty();
+    }
+
+    /**
+     * QA D1375 guard (source scan): a MAR row is built in ONE shape. Every
+     * NurseMedicationTaskResponseDTO built in main code goes through
+     * withOrderReading (the list) or answerAfterDose (every administer
+     * answer), or is a whole-row copy (toBuilder), and only
+     * NurseTaskServiceImpl builds one.
+     */
+    @Test
+    void d1375_everyMarRowIsBuiltThroughTheOrderReading() throws Exception {
+        java.nio.file.Path main = java.nio.file.Path.of("src", "main", "java");
+        List<String> builders;
+        try (var files = java.nio.file.Files.walk(main)) {
+            builders = files.filter(f -> f.toString().endsWith(".java"))
+                .filter(f -> {
+                    try {
+                        return java.nio.file.Files.readString(f).contains("NurseMedicationTaskResponseDTO.builder()");
+                    } catch (java.io.IOException e) {
+                        throw new java.io.UncheckedIOException(e);
+                    }
+                })
+                .map(f -> f.getFileName().toString())
+                .toList();
+        }
+        assertThat(builders).containsExactly("NurseTaskServiceImpl.java");
+        String source = java.nio.file.Files.readString(
+            main.resolve("com/example/hms/service/impl/NurseTaskServiceImpl.java"));
+        List<String> unwrapped = new java.util.ArrayList<>();
+        int found = 0;
+        for (int at = source.indexOf("NurseMedicationTaskResponseDTO.builder()"); at >= 0;
+             at = source.indexOf("NurseMedicationTaskResponseDTO.builder()", at + 1)) {
+            found++;
+            String before = source.substring(Math.max(0, at - 60), at);
+            if (!before.contains("withOrderReading(") && !before.contains("answerAfterDose(")) {
+                unwrapped.add(before.trim());
+            }
+        }
+        assertThat(found).isGreaterThanOrEqualTo(4);
+        assertThat(unwrapped).isEmpty();
+    }
+
     /** QA round 30: a second PRN dose inside the interval is accepted only with a reason, kept on the row. */
     @Test
     void prn_aSecondDoseInsideTheIntervalAsksWhy() {

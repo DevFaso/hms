@@ -189,6 +189,44 @@ class StatusRefusalLabelGuardTest {
         assertThat(offenders).isEmpty();
     }
 
+    /**
+     * QA D1371 (round 31): the handoff refusal read "Utilisez SHIFT_CHANGE,
+     * WARD_TRANSFER, PROCEDURE ou BREAK_COVER": the allowed values listed as
+     * their raw codes. Widened past statuses to every vocabulary: no message,
+     * in any bundle and locale, lists two or more codes (UPPER_SNAKE words);
+     * it names the choices as the screen does. 0 allowed (5 messages reworded:
+     * the handoff type, the lab role, the QC level, the cancel reason of a
+     * ready dispense and the partner-routing target).
+     */
+    @Test
+    @DisplayName("no message in any bundle lists its allowed values as raw codes (QA D1371)")
+    void noMessageListsRawCodes() throws IOException {
+        Pattern code = Pattern.compile("\\b[A-Z][A-Z0-9]*+_[A-Z0-9_]++\\b");
+        List<String> offenders = new ArrayList<>();
+        int read = 0;
+        try (java.util.stream.Stream<java.nio.file.Path> files = Files.list(Paths.get("src/main/resources/i18n"))) {
+            for (java.nio.file.Path file : files.filter(f -> f.toString().endsWith(".properties")).toList()) {
+                Properties bundle = new Properties();
+                try (Reader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
+                    bundle.load(reader);
+                }
+                for (String key : bundle.stringPropertyNames()) {
+                    read++;
+                    Set<String> codes = new TreeSet<>();
+                    Matcher m = code.matcher(bundle.getProperty(key));
+                    while (m.find()) {
+                        codes.add(m.group());
+                    }
+                    if (codes.size() >= 2) {
+                        offenders.add(file.getFileName() + ": " + key + " lists " + codes);
+                    }
+                }
+            }
+        }
+        assertThat(read).isGreaterThan(1000);
+        assertThat(offenders).isEmpty();
+    }
+
     private static Properties bundle(String area, String suffix) throws IOException {
         Properties properties = new Properties();
         try (Reader reader = Files.newBufferedReader(

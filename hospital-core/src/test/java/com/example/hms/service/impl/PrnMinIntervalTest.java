@@ -13,6 +13,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.math.BigDecimal;
@@ -57,6 +58,46 @@ class PrnMinIntervalTest {
         rx.setPrnMinIntervalHours(4);
         PrnMinInterval.applyTo(rx);
         assertThat(rx.getPrnMinIntervalHours()).isEqualTo(4);
+    }
+
+    /**
+     * QA D1360: a controlled morphine PRN order written with ANY wording of the
+     * shared as-needed fixture ("au besoin", "à la demande", "si nécessaire",
+     * "si douleur", ...) is refused without its minimum interval, at the edge
+     * (named with the other refusals) and in the service (every write path).
+     */
+    @ParameterizedTest
+    @MethodSource("com.example.hms.service.impl.MarDoseScheduleTest#asNeededCases")
+    void d1360_aMorphinePrnOrderInAnyWordingNeedsItsInterval(String frequency) {
+        PrescriptionRequestDTO request = morphine(frequency);
+        assertThat(paths(request, Default.class, OnCreate.class)).as(frequency).contains(PrnMinInterval.FIELD);
+        request.setPrnMinIntervalHours(4);
+        assertThat(paths(request, Default.class, OnCreate.class)).as(frequency).doesNotContain(PrnMinInterval.FIELD);
+
+        Prescription rx = new Prescription();
+        rx.setMedicationName(request.getMedicationName());
+        rx.setControlledSubstance(true);
+        rx.setFrequency(frequency);
+        assertThatThrownBy(() -> PrnMinInterval.applyTo(rx)).as(frequency)
+            .isInstanceOf(FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", PrnMinInterval.FIELD)
+            .hasFieldOrPropertyWithValue("messageKey", PrnMinInterval.REQUIRED_KEY);
+    }
+
+    /** QA D1360: a frequency the fixture says is not as-needed is never asked for (nor allowed) an interval. */
+    @ParameterizedTest
+    @MethodSource("com.example.hms.service.impl.MarDoseScheduleTest#notAsNeededCases")
+    void d1360_aNonAsNeededFrequencyIsNotAskedForAnInterval(String frequency) {
+        assertThat(paths(morphine(frequency), Default.class, OnCreate.class)).as(frequency)
+            .doesNotContain(PrnMinInterval.FIELD);
+    }
+
+    private static PrescriptionRequestDTO morphine(String frequency) {
+        PrescriptionRequestDTO r = request(frequency);
+        r.setMedicationName("Morphine 2 mg");
+        r.setRoute("IV");
+        r.setControlledSubstance(true);
+        return r;
     }
 
     @Test

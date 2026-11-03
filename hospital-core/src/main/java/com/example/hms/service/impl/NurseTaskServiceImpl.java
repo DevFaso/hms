@@ -148,8 +148,11 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     private static final String ORDER_TYPE_LAB = "LAB";
     private static final String ORDER_TYPE_IMAGING = "IMAGING";
     private static final String ORDER_TYPE_PROCEDURE = "PROCEDURE";
-    /** QA D235: the handoff types the nurse station offers. */
-    static final Set<String> HANDOFF_DIRECTIONS = Set.of("SHIFT_CHANGE", "WARD_TRANSFER", ORDER_TYPE_PROCEDURE, "BREAK_COVER");
+    /**
+     * QA D235: the handoff types the nurse station offers: one list, the
+     * request's (QA D1371: refused at the edge with the other fields).
+     */
+    static final Set<String> HANDOFF_DIRECTIONS = NurseHandoffCreateRequestDTO.DIRECTIONS;
     private static final String STATUS_OVERDUE = "OVERDUE";
     private static final String STATUS_DUE = "DUE";
     /**
@@ -361,8 +364,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
                 if (allergies == null) {
                     allergies = patientAllergyRepository.findByPatient_Id(ctx.patientId());
                 }
-                boolean controlled = pharmacistVerificationService.isControlledSubstance(rx);
-                result.add(withDoseHistory(NurseMedicationTaskResponseDTO.builder()
+                result.add(withDoseHistory(withOrderReading(NurseMedicationTaskResponseDTO.builder()
                     .id(rx.getId())
                     .patientId(ctx.patientId())
                     .patientName(ctx.displayName())
@@ -372,18 +374,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
                     .routeCode(com.example.hms.service.emar.MedicationRoutes.canonical(rx.getRoute()))
                     .dueTime(dueTime)
                     .status(marStatus)
-                    .frequencyUnread(due.frequencyUnread())
-                    // QA round 30: an as-needed order, with the prescriber's minimum interval.
-                    .asNeeded(due.asNeeded())
-                    .prnMinIntervalHours(due.asNeeded() ? rx.getPrnMinIntervalHours() : null)
-                    .prnLabel(MarPrnLabel.of(rx, due, now))
-                    .earlyDose(STATUS_DUE.equals(marStatus) && due.earlyAt(now))
-                    .controlledSubstance(controlled)
-                    .requiresPharmacistVerification(
-                        pharmacistVerificationService.requiresVerification(rx, controlled))
-                    .pharmacistVerified(pharmacistVerificationService.isVerified(rx))
                     .cdsAdvisories(allergyAdvisories(rx.getMedicationName(), allergies))
-                    .build(), closed));
+                    .build(), rx, due, now), closed));
             }
         }
         return result;
@@ -536,7 +528,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             marRepository.save(marRecord);
 
             Patient patient = marRecord.getPatient();
-            return withDoseHistory(NurseMedicationTaskResponseDTO.builder()
+            return answerAfterDose(NurseMedicationTaskResponseDTO.builder()
                 .id(marRecord.getId())
                 .patientId(patient.getId())
                 .patientName(patient.getFullName())
@@ -547,9 +539,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
                 .dueTime(marRecord.getScheduledTime())
                 .status(normalizedStatus)
                 .witnessName(witnessName(marRecord.getWitnessUser()))
-                // QA D1080: the same catalogue-or-tick answer the GET gives (#978 rule).
-                .controlledSubstance(pharmacistVerificationService.isControlledSubstance(marRecord.getPrescription()))
-                .build(), closedDoses(doseRows(marRecord.getPrescription())));
+                .build(), marRecord.getPrescription());
         }
 
         // Last resort: work with synthetic task list (backward-compatible)
@@ -712,22 +702,15 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         }
     }
 
-    /** Convert an existing task DTO to an administered-status copy. */
-    private NurseMedicationTaskResponseDTO toAdministeredTask(
+    /**
+     * Convert an existing task DTO to an administered-status copy. QA D1375:
+     * a copy of the WHOLE row (the PRN fields, the verification flags, the
+     * advisories and the history), never a hand-picked subset of it.
+     */
+    private static NurseMedicationTaskResponseDTO toAdministeredTask(
         NurseMedicationTaskResponseDTO task, String status
     ) {
-        return NurseMedicationTaskResponseDTO.builder()
-            .id(task.getId())
-            .patientId(task.getPatientId())
-            .patientName(task.getPatientName())
-            .medication(task.getMedication())
-            .dose(task.getDose())
-            .route(task.getRoute())
-            .routeCode(task.getRouteCode())
-            .dueTime(task.getDueTime())
-            .status(status)
-            .controlledSubstance(task.isControlledSubstance())
-            .build();
+        return task.toBuilder().status(status).build();
     }
 
     /* ═══════════════════════════════════════════════════════════════════
@@ -1198,19 +1181,31 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             List<Admission> closedStays = closedStaysFor(ctx.patientId(), hospitalId, prescriptions);
             Admission stay = admitted.get(ctx.patientId());
             for (Prescription rx : prescriptions) {
-                if (!onWardMar(rx, closedStays, stay)) continue;
-                MarNextDose.Due next = nextDose(rx, now);
-                // QA round 30: an as-needed order is not a dose waiting to be given.
-                if (next.asNeeded()) continue;
-                String marStatus = resolveMarStatus(next, now);
-                switch (marStatus) {
-                    case STATUS_DUE -> due++;
-                    case STATUS_OVERDUE -> overdue++;
-                    default -> { /* COMPLETED or UPCOMING — not counted (QA D949) */ }
+                String counted = countedMarStatus(rx, closedStays, stay, now);
+                if (STATUS_DUE.equals(counted)) {
+                    due++;
+                } else if (STATUS_OVERDUE.equals(counted)) {
+                    overdue++;
                 }
+                // COMPLETED, UPCOMING or not counted at all (QA D949).
             }
         }
         return new long[]{due, overdue};
+    }
+
+    /**
+     * The MAR status an order counts as on the workboard, or {@code null}
+     * when it is not counted: not on this ward's MAR, or (QA round 30) an
+     * as-needed order, which is not a dose waiting to be given. Sonar S135:
+     * one exit per order instead of two {@code continue}s in the loop.
+     */
+    private String countedMarStatus(Prescription rx, List<Admission> closedStays, Admission stay,
+                                    LocalDateTime now) {
+        if (!onWardMar(rx, closedStays, stay)) {
+            return null;
+        }
+        MarNextDose.Due next = nextDose(rx, now);
+        return next.asNeeded() ? null : resolveMarStatus(next, now);
     }
 
     /* ═══════════════════════════════════════════════════════════════════
@@ -1288,6 +1283,46 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             task.setLastGivenEarly(last.isGivenEarly());
         }
         return task;
+    }
+
+    /**
+     * QA D1375: the order-level reading of a MAR row (the as-needed rule, the
+     * prescriber's minimum interval and its label, the early flag, an unread
+     * frequency, the controlled and pharmacist-verification flags), set in
+     * ONE place for the list row and every administer answer. The answer used
+     * to rebuild a subset by hand, so a PRN order came back asNeeded=false.
+     */
+    private NurseMedicationTaskResponseDTO withOrderReading(NurseMedicationTaskResponseDTO task, Prescription rx,
+                                                             MarNextDose.Due due, LocalDateTime now) {
+        boolean controlled = pharmacistVerificationService.isControlledSubstance(rx);
+        task.setFrequencyUnread(due.frequencyUnread());
+        // QA round 30: an as-needed order, with the prescriber's minimum interval.
+        task.setAsNeeded(due.asNeeded());
+        task.setPrnMinIntervalHours(due.asNeeded() ? rx.getPrnMinIntervalHours() : null);
+        task.setPrnLabel(MarPrnLabel.of(rx, due, now));
+        task.setEarlyDose(STATUS_DUE.equals(resolveMarStatus(due, now)) && due.earlyAt(now));
+        // QA D1080: the same catalogue-or-tick answer everywhere (#978 rule).
+        task.setControlledSubstance(controlled);
+        task.setRequiresPharmacistVerification(pharmacistVerificationService.requiresVerification(rx, controlled));
+        task.setPharmacistVerified(pharmacistVerificationService.isVerified(rx));
+        return task;
+    }
+
+    /**
+     * QA D1375: the answer to a recorded dose reads the order again with that
+     * dose in its history, so it says what the next GET of the MAR says (the
+     * PRN fields, the early flag, the allergy advisories) instead of a partial
+     * copy.
+     */
+    private NurseMedicationTaskResponseDTO answerAfterDose(NurseMedicationTaskResponseDTO task, Prescription rx) {
+        List<MedicationAdministrationRecord> rows = doseRows(rx);
+        if (rx != null) {
+            // The same server clock the list reads (Sonar: the zone made explicit).
+            LocalDateTime now = LocalDateTime.now(java.time.ZoneId.systemDefault());
+            withOrderReading(task, rx, MarNextDose.of(rx, now, rows, EARLY_ADMINISTRATION_WINDOW), now);
+            task.setCdsAdvisories(allergyAdvisoriesFor(rx.getMedicationName(), rx.getPatient()));
+        }
+        return withDoseHistory(task, closedDoses(rows));
     }
 
     private MarDoseHistoryDTO toDoseHistory(MedicationAdministrationRecord dose) {
@@ -1538,9 +1573,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         log.info("MAR recorded: prescriptionId={}, status={}, fiveRights={}, nurse={}",
             rx.getId(), status, marRecord.getFiveRightsStatus(), nurseUserId);
 
-        return withDoseHistory(NurseMedicationTaskResponseDTO.builder()
-            .requiresPharmacistVerification(pharmacistVerificationService.requiresVerification(rx))
-            .pharmacistVerified(pharmacistVerificationService.isVerified(rx))
+        return answerAfterDose(NurseMedicationTaskResponseDTO.builder()
             .id(saved.getId())
             .patientId(rx.getPatient().getId())
             .patientName(rx.getPatient().getFullName())
@@ -1551,9 +1584,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .dueTime(saved.getScheduledTime())
             .status(status.name())
             .witnessName(witnessName(saved.getWitnessUser()))
-            // QA D1080: the same catalogue-or-tick answer the GET gives (#978 rule).
-            .controlledSubstance(pharmacistVerificationService.isControlledSubstance(rx))
-            .build(), closedDoses(doseRows(rx)));
+            .build(), rx);
     }
 
     /**
@@ -1589,9 +1620,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         resolveNurseStaff(nurseUserId, hospitalId).ifPresent(marRecord::setAdministeredByStaff);
         recordOverrideOnAdminister(marRecord, status, overrideReason);
         MedicationAdministrationRecord saved = marRepository.save(marRecord);
-        return withDoseHistory(NurseMedicationTaskResponseDTO.builder()
-            .requiresPharmacistVerification(pharmacistVerificationService.requiresVerification(rx))
-            .pharmacistVerified(pharmacistVerificationService.isVerified(rx))
+        return answerAfterDose(NurseMedicationTaskResponseDTO.builder()
             .id(saved.getId())
             .patientId(rx.getPatient().getId())
             .patientName(rx.getPatient().getFullName())
@@ -1602,9 +1631,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .dueTime(saved.getScheduledTime())
             .status(status.name())
             .witnessName(witnessName(saved.getWitnessUser()))
-            // QA D1080: the same catalogue-or-tick answer the GET gives (#978 rule).
-            .controlledSubstance(pharmacistVerificationService.isControlledSubstance(rx))
-            .build(), closedDoses(doseRows(rx)));
+            .build(), rx);
     }
 
     /**

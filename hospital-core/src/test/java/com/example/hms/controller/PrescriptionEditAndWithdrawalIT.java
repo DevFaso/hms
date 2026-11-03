@@ -263,6 +263,31 @@ class PrescriptionEditAndWithdrawalIT extends BaseIT {
     }
 
     /**
+     * QA D1360 over HTTP (prn31.js): a controlled morphine order written "au
+     * besoin", "à la demande", "si nécessaire" or "si douleur" without its
+     * minimum interval was created (201). Each is now refused on the field.
+     */
+    @Test
+    @DisplayName("QA D1360: a morphine PRN order in the usual French wordings needs its minimum interval")
+    void d1360_morphinePrnInFrenchWordingsNeedsItsInterval() throws Exception {
+        long before = prescriptionRepository.count();
+        for (String wording : new String[] {"au besoin", "à la demande", "si nécessaire", "si douleur"}) {
+            String body = "{\"patientId\":\"" + patient.getId() + "\",\"staffId\":\"" + authorStaff.getId()
+                + "\",\"encounterId\":\"" + encounter.getId() + "\",\"medicationName\":\"Morphine 2 mg\","
+                + "\"dosage\":\"2 mg\",\"frequency\":\"" + wording + "\",\"route\":\"IV\",\"quantity\":10,"
+                + "\"controlledSubstance\":true}";
+            mockMvc.perform(post(API_CONTEXT + "/prescriptions")
+                    .contextPath(API_CONTEXT)
+                    .with(as(authorUser))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors.prnMinIntervalHours").exists());
+        }
+        assertThat(prescriptionRepository.count()).isEqualTo(before);
+    }
+
+    /**
      * QA round 30: an older PRN order, written before the interval existed,
      * is still withdrawn by its author without one (no new requirement on a
      * withdrawal), while an edit of its content names the interval.
