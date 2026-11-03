@@ -1,6 +1,7 @@
 package com.example.hms.service.impl;
 
 import java.text.Normalizer;
+import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -117,6 +118,26 @@ public final class MarDoseSchedule {
     /** QA D1237: a number of hours written as a word ("toutes les six heures", "cada ocho horas"). */
     private static final Pattern HOUR_WORD = Pattern.compile("\\b([A-Z]+(?:-[A-Z]+)?)(?=\\s*" + HOUR_UNIT + "\\b)");
 
+    /**
+     * QA D1360: the ways a prescriber writes "as needed" in English, French and
+     * Spanish, upper case without accents, words separated by one space. The
+     * portal's {@code shared/as-needed-frequency.ts} holds the same list
+     * (scripts/lib/as-needed-frequency.test.mjs holds the two equal) and both
+     * sides read the shared fixture {@code shared/as-needed-frequency.cases.json}.
+     * A phrase matches where a word starts, anywhere in the frequency, so
+     * "si douleurs" and "q4h PRN" read as needed and "para demanda" does not.
+     */
+    static final List<String> AS_NEEDED_PHRASES = List.of(
+        "PRN", "AS NEEDED", "AS REQUIRED", "WHEN NEEDED", "WHEN REQUIRED", "IF NEEDED", "IF REQUIRED",
+        "IF NECESSARY", "ON DEMAND", "IF PAIN", "IF FEVER",
+        "SI BESOIN", "AU BESOIN", "SELON BESOIN", "SELON LES BESOINS", "EN CAS DE BESOIN", "A LA DEMANDE",
+        "SI NECESSAIRE", "SI DOULEUR", "SI FIEVRE", "EN CAS DE DOULEUR", "EN CAS DE FIEVRE",
+        "SI NECESARIO", "SI ES NECESARIO", "EN CASO NECESARIO", "SEGUN NECESIDAD", "A DEMANDA",
+        "SI DOLOR", "SI FIEBRE", "EN CASO DE DOLOR", "EN CASO DE FIEBRE");
+
+    /** Any run of characters that is not a letter or a digit (one class, no backtracking). */
+    private static final Pattern NOT_ALPHANUMERIC = Pattern.compile("[^A-Z0-9]+");
+
     /** Frequencies (accents and spaces removed, counts as digits) that mean a single dose, in EN, FR and ES. */
     private static final Set<String> ONE_OFF_WORDS = Set.of(
         "ONCE", "ONCEONLY", "ONETIME", "SINGLEDOSE", "IMMEDIATELY", "NOW", "1X", "1FOIS",
@@ -139,7 +160,7 @@ public final class MarDoseSchedule {
         if (upper.contains("STAT")) {
             return Reading.ONE_OFF;
         }
-        if (isAsNeeded(upper)) {
+        if (isAsNeeded(frequency)) {
             return Reading.AS_NEEDED;
         }
         Integer minutes = intervalMinutesOf(frequency);
@@ -156,7 +177,7 @@ public final class MarDoseSchedule {
      * interval longer than a day gives a fraction ("q48h" = 0.5).
      */
     public static Double dosesPerDay(String frequency) {
-        if (frequency == null || frequency.isBlank() || isAsNeeded(normalize(frequency))) {
+        if (frequency == null || frequency.isBlank() || isAsNeeded(frequency)) {
             return null;
         }
         Integer perDay = timesPerDay(normalize(frequency));
@@ -196,10 +217,10 @@ public final class MarDoseSchedule {
         if (frequency.isBlank()) {
             return null;
         }
-        String f = normalize(frequency);
-        if (isAsNeeded(f)) {
+        if (isAsNeeded(frequency)) {
             return null;
         }
+        String f = normalize(frequency);
         Integer hours = hoursOf(f);
         if (hours != null) {
             return hours * MINUTES_PER_HOUR;
@@ -294,17 +315,43 @@ public final class MarDoseSchedule {
 
     /** Upper case, accents removed, separators read as spaces, number words read as digits. */
     private static String normalize(String frequency) {
-        String plain = Normalizer.normalize(frequency.trim(), Normalizer.Form.NFD)
-            .replaceAll("\\p{M}", "")
-            .toUpperCase(Locale.ROOT)
+        String plain = accentlessUpper(frequency.trim())
             .replace('_', ' ').replace('.', ' ').replace(',', ' ');
         return wordsAsDigits(wordsAsDigits(plain, COUNT_WORD, false), HOUR_WORD, true);
     }
 
-    /** PRN and "as needed" in English, French and Spanish: never a fixed repeat. */
-    private static boolean isAsNeeded(String upper) {
-        return upper.contains("PRN") || upper.contains("AS NEEDED")
-            || upper.contains("SI BESOIN") || upper.contains("SI NECESARIO") || upper.contains("SI ES NECESARIO");
+    /**
+     * PRN and "as needed" in English, French and Spanish: never a fixed repeat.
+     * Reads the frequency as written (accents and case ignored, punctuation
+     * read as a space), not the count-as-digits form {@link #normalize} gives.
+     */
+    private static boolean isAsNeeded(String frequency) {
+        String words = NOT_ALPHANUMERIC.matcher(accentlessUpper(frequency)).replaceAll(" ").trim();
+        for (String phrase : AS_NEEDED_PHRASES) {
+            if (startsAWord(words, phrase)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Upper case with the accents removed. */
+    private static String accentlessUpper(String text) {
+        return Normalizer.normalize(text, Normalizer.Form.NFD)
+            .replaceAll("\\p{M}", "")
+            .toUpperCase(Locale.ROOT);
+    }
+
+    /** Whether {@code phrase} occurs in {@code words} where a word starts (after a space, a digit or nothing). */
+    private static boolean startsAWord(String words, String phrase) {
+        int at = words.indexOf(phrase);
+        while (at >= 0) {
+            if (at == 0 || !Character.isLetter(words.charAt(at - 1))) {
+                return true;
+            }
+            at = words.indexOf(phrase, at + 1);
+        }
+        return false;
     }
 
     private static String wordsAsDigits(String upper, Pattern pattern, boolean hours) {

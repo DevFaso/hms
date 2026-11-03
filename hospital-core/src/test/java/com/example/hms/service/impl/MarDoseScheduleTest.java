@@ -6,13 +6,16 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -250,6 +253,55 @@ class MarDoseScheduleTest {
     @ValueSource(strings = {"25 fois par jour", "48 times a day", "100 fois par jour"})
     void d1263_aCountOverHourlyIsNotASchedule(String frequency) {
         assertThat(MarDoseSchedule.read(frequency).kind()).isEqualTo(MarDoseSchedule.Kind.UNREAD);
+    }
+
+    /** The shared as-needed fixture the portal spec runs too (QA D1360). */
+    static final Path AS_NEEDED_CASES =
+        Path.of("..", "hospital-portal", "src", "app", "shared", "as-needed-frequency.cases.json");
+
+    static List<String> asNeededCases() throws Exception {
+        return fixtureList("asNeeded");
+    }
+
+    static List<String> notAsNeededCases() throws Exception {
+        return fixtureList("notAsNeeded");
+    }
+
+    private static List<String> fixtureList(String key) throws Exception {
+        List<String> out = new ArrayList<>();
+        new ObjectMapper().readTree(Files.readString(AS_NEEDED_CASES)).path(key).forEach(n -> out.add(n.asText()));
+        assertThat(out).as("fixture list " + key).isNotEmpty();
+        return out;
+    }
+
+    /**
+     * QA D1360 replay (prn31.js, prnword.js): "au besoin", "à la demande",
+     * "si nécessaire" and "si douleur" read as a written frequency the MAR
+     * could not schedule, so a PRN order (morphine included) was created with
+     * no minimum interval. Every wording of the shared fixture is as-needed;
+     * no repeat, no doses per day.
+     */
+    @ParameterizedTest
+    @MethodSource("asNeededCases")
+    void d1360_everySharedAsNeededWordingReadsAsNeeded(String frequency) {
+        assertThat(MarDoseSchedule.read(frequency).kind()).isEqualTo(MarDoseSchedule.Kind.AS_NEEDED);
+        assertThat(MarDoseSchedule.intervalHours(frequency)).isNull();
+        assertThat(MarDoseSchedule.dosesPerDay(frequency)).isNull();
+    }
+
+    @ParameterizedTest
+    @MethodSource("notAsNeededCases")
+    void d1360_theSharedNonAsNeededCasesAreNot(String frequency) {
+        assertThat(MarDoseSchedule.read(frequency).kind()).isNotEqualTo(MarDoseSchedule.Kind.AS_NEEDED);
+    }
+
+    /** QA D1360 guard: every phrase of the vocabulary has a case in the shared fixture, in its own words. */
+    @Test
+    void d1360_everyAsNeededPhraseIsInTheSharedFixture() throws Exception {
+        String cases = String.join("|", asNeededCases()).toUpperCase(Locale.ROOT);
+        String folded = Normalizer.normalize(cases, Normalizer.Form.NFD).replaceAll("\\p{M}", "");
+        assertThat(MarDoseSchedule.AS_NEEDED_PHRASES).hasSizeGreaterThanOrEqualTo(18)
+            .allSatisfy(phrase -> assertThat(folded).as(phrase).contains(phrase));
     }
 
     /** QA D1237: only a frequency that says so is a single dose or as-needed. */
