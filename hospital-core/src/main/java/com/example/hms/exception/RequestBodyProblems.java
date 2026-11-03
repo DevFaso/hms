@@ -45,8 +45,11 @@ public final class RequestBodyProblems {
         return current() != null;
     }
 
-    /** Records a malformed value; false when no request body is being read (the caller keeps the strict failure). */
-    public static boolean record(String path) {
+    /**
+     * Records a malformed value; false when no request body is being read (the caller keeps the strict failure).
+     * Sonar S6213 (round 31): not named {@code record}, a restricted identifier.
+     */
+    public static boolean recordMalformed(String path) {
         Collector collector = current();
         if (collector == null) {
             return false;

@@ -412,7 +412,8 @@ public class LabOrderServiceImpl implements LabOrderService {
         }
     }
 
-    private static final java.util.Set<String> LAB_PRIORITIES = java.util.Set.of("ROUTINE", "URGENT", "STAT");
+    private static final java.util.Set<String> LAB_PRIORITIES = java.util.Arrays.stream(
+        com.example.hms.enums.ClinicalPriority.values()).map(Enum::name).collect(java.util.stream.Collectors.toUnmodifiableSet());
 
     /**
      * D266: the requested priority was never copied onto the entity, so URGENT
@@ -728,7 +729,9 @@ public class LabOrderServiceImpl implements LabOrderService {
         try {
             requested = LabOrderStatus.valueOf(requestedStatus.trim().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException ex) {
-            throw new BusinessException("lab.order.unknownStatus", String.valueOf(requestedStatus));
+            // QA D1370 (round 31): named, so the form marks the field (the edge check refuses it first).
+            throw new com.example.hms.exception.FieldBusinessException("status", "lab.order.unknownStatus",
+                String.valueOf(requestedStatus));
         }
         if (isNew) {
             if (!CREATABLE_STATUSES.contains(requested)) {
@@ -1189,7 +1192,8 @@ public class LabOrderServiceImpl implements LabOrderService {
             try {
                 return LabOrderChannel.fromCode(requestedChannel);
             } catch (IllegalArgumentException ex) {
-                throw new BusinessException(ex.getMessage());
+                // QA D1370 (round 31): translated and named, never the enum's English text.
+                throw new com.example.hms.exception.FieldBusinessException("orderChannel", "lab.order.orderChannel.invalid");
             }
         }
         if (base != null && base.getOrderChannel() != null) {

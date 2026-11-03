@@ -321,7 +321,8 @@ public class ImmunizationServiceImpl implements ImmunizationService {
             .filter(other -> !"ENTERED_IN_ERROR".equalsIgnoreCase(other.getStatus()))
             .anyMatch(other -> sameDose(candidate, other));
         if (duplicate) {
-            throw new com.example.hms.exception.BusinessException("immunization.r25.duplicateDose");
+            // QA D1365 (round 31): named on the date, so the dialog marks the field.
+            throw new com.example.hms.exception.FieldBusinessException("administrationDate", "immunization.r25.duplicateDose");
         }
     }
 

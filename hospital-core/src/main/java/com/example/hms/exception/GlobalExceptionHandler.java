@@ -635,7 +635,7 @@ public class GlobalExceptionHandler {
         // QA D1349 (round 30): every reason in the message, as a body refusal says them.
         String reasons = joinReasons(fieldErrors.values().stream());
         Map<String, Object> body = errorBody(HttpStatus.BAD_REQUEST,
-            !reasons.isEmpty() ? reasons : localized("error.validation.request", "Validation errors in request"), request);
+            reasons.isEmpty() ? localized("error.validation.request", "Validation errors in request") : reasons, request);
         body.put(FIELD_ERRORS, fieldErrors);
         return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
     }

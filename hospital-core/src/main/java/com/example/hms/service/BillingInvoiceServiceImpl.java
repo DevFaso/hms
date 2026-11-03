@@ -405,7 +405,8 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             return;
         }
         if (!java.util.Objects.equals(encounter.getPatient().getId(), patient.getId())) {
-            throw new BusinessException("billing.encounter.otherPatient");
+            // QA D1367 class (round 31): the visit given is named, so the form marks it.
+            throw new com.example.hms.exception.FieldBusinessException("encounterReference", "billing.encounter.otherPatient");
         }
     }
 

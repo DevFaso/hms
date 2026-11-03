@@ -4112,7 +4112,9 @@ class PrescriptionServiceImplTest {
         when(prescriptionRepository.findByIdForUpdate(rxId)).thenReturn(Optional.of(existing));
 
         assertThatThrownBy(() -> prescriptionService.updatePrescription(rxId, request, Locale.ENGLISH))
-            .isInstanceOf(BusinessException.class)
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .satisfies(e -> assertThat(((com.example.hms.exception.FieldBusinessException) e).getField())
+                .as("QA D1368: the request's own key").isEqualTo("withdrawalReason"))
             .extracting(e -> ((BusinessException) e).getMessageKey())
             .isEqualTo("prescription.signed.withdrawalReason.required");
         assertThat(existing.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.PENDING_CLARIFICATION);
@@ -5230,7 +5232,9 @@ class PrescriptionServiceImplTest {
         request.setWithdrawalReason("   ");
 
         assertThatThrownBy(() -> prescriptionService.updatePrescription(id, request, Locale.FRENCH))
-            .isInstanceOf(BusinessException.class)
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .satisfies(e -> assertThat(((com.example.hms.exception.FieldBusinessException) e).getField())
+                .as("QA D1368: the request's own key").isEqualTo("withdrawalReason"))
             .extracting("messageKey").isEqualTo("prescription.signed.withdrawalReason.required");
         verify(prescriptionRepository, never()).save(any());
     }

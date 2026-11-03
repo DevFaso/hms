@@ -39,8 +39,13 @@ public class SuperAdminLabOrderCreateRequestDTO {
     private String labTestIdentifier;
 
     @NotBlank(message = "{superAdmin.labOrder.status.required}")
+    // QA D1370 (round 31): the same edge checks as LabOrderRequestDTO, which this is copied into.
+    @jakarta.validation.constraints.Pattern(regexp = com.example.hms.enums.LabOrderStatus.CODES,
+        flags = jakarta.validation.constraints.Pattern.Flag.CASE_INSENSITIVE, message = "{lab.order.status.invalid}")
     private String status;
 
+    @jakarta.validation.constraints.Pattern(regexp = com.example.hms.enums.ClinicalPriority.CODES,
+        flags = jakarta.validation.constraints.Pattern.Flag.CASE_INSENSITIVE, message = "{lab.order.priority.invalid}")
     private String priority;
 
     private String notes;
@@ -65,6 +70,8 @@ public class SuperAdminLabOrderCreateRequestDTO {
     private List<String> additionalDiagnosisCodes = new ArrayList<>();
 
     @NotBlank(message = "{superAdmin.labOrder.orderChannel.required}")
+    @jakarta.validation.constraints.Pattern(regexp = com.example.hms.enums.LabOrderChannel.CODES,
+        flags = jakarta.validation.constraints.Pattern.Flag.CASE_INSENSITIVE, message = "{lab.order.orderChannel.invalid}")
     private String orderChannel;
 
     private String orderChannelOther;

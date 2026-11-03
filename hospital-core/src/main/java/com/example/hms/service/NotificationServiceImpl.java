@@ -261,7 +261,7 @@ public class NotificationServiceImpl implements NotificationService {
                         .user(user)
                         .notificationType(u.getNotificationType())
                         .channel(u.getChannel())
-                        .enabled(u.isEnabled())
+                        .enabled(Boolean.TRUE.equals(u.getEnabled()))
                         .build()
         ).toList();
 

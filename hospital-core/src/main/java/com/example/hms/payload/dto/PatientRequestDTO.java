@@ -37,8 +37,11 @@ public class PatientRequestDTO {
     @NotNull(message = "{patient.dateOfBirth.required}")
     private LocalDate dateOfBirth;
 
+    /** QA D1373: one of {@link com.example.hms.enums.PatientGender}, refused by name otherwise. */
     @NotBlank(message = "{patient.gender.required}")
     @Size(max = 10, message = "{patient.gender.size}")
+    @jakarta.validation.constraints.Pattern(regexp = com.example.hms.enums.PatientGender.CODES,
+        flags = jakarta.validation.constraints.Pattern.Flag.CASE_INSENSITIVE, message = "{patient.gender.invalid}")
     private String gender;
 
     @Size(max = 255, message = "{patient.address.size}")

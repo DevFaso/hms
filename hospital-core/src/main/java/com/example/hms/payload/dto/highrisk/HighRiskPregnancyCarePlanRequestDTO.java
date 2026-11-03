@@ -27,6 +27,7 @@ import java.util.UUID;
     message = "{highRiskPlan.contentRequired}", groups = com.example.hms.validation.OnCreate.class)
 @com.example.hms.validation.AnyAnswer(metadata = {"patientId", "hospitalId"}, reportedOn = "riskProfile",
     message = "{highRiskPlan.contentRequired}")
+// QA D1369 class (round 31): every list of nested rows is validated with the plan (List<@Valid ...>).
 public class HighRiskPregnancyCarePlanRequestDTO {
 
     @NotNull
@@ -81,7 +82,7 @@ public class HighRiskPregnancyCarePlanRequestDTO {
         @Size(max = 2000)
         private String medicationPlan;
         private LocalDate lastSpecialistReview;
-        private List<MilestoneDTO> milestones;
+        private List<@Valid MilestoneDTO> milestones;
     }
 
     @Data
@@ -112,7 +113,7 @@ public class HighRiskPregnancyCarePlanRequestDTO {
     public static class EducationPlanDTO {
         private List<String> preventiveGuidance;
         private List<String> emergencySymptoms;
-        private List<EducationTopicDTO> topics;
+        private List<@Valid EducationTopicDTO> topics;
     }
 
     @Data
@@ -133,8 +134,8 @@ public class HighRiskPregnancyCarePlanRequestDTO {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class CareCoordinationDTO {
-        private List<CareTeamMemberDTO> careTeam;
-        private List<CareTeamNoteDTO> communications;
+        private List<@Valid CareTeamMemberDTO> careTeam;
+        private List<@Valid CareTeamNoteDTO> communications;
         @Size(max = 500)
         private String coordinationNotes;
         @Size(max = 4000)
@@ -178,7 +179,7 @@ public class HighRiskPregnancyCarePlanRequestDTO {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class SupportPlanDTO {
-        private List<SupportResourceDTO> resources;
+        private List<@Valid SupportResourceDTO> resources;
     }
 
     @Data

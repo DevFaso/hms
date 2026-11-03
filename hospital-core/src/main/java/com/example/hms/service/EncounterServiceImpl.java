@@ -1204,7 +1204,9 @@ public class EncounterServiceImpl implements EncounterService {
             : encounterRepository.existsByHospital_IdAndPatient_IdAndEncounterDate(
                 ctx.hospitalId(), ctx.patient().getId(), encounterDate);
         if (exists) {
-            throw new BusinessException(messageSource.getMessage("encounter.duplicate", null, locale));
+            // QA D1367 class (round 31): the date already holding a visit is named.
+            throw new com.example.hms.exception.FieldBusinessException("encounterDate",
+                messageSource.getMessage("encounter.duplicate", null, locale));
         }
     }
 

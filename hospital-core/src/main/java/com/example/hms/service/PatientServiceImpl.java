@@ -498,7 +498,8 @@ public class PatientServiceImpl implements PatientService {
         if (request.getDateOfBirth() != null) {
             patient.setDateOfBirth(request.getDateOfBirth());
         }
-        applyRequired(request.getGender(), patient::setGender, "patient.r16.genderRequired", "gender");
+        applyRequired(com.example.hms.enums.PatientGender.normalize(request.getGender()), patient::setGender,
+            "patient.r16.genderRequired", "gender");
         applyNullable(request.getEthnicity(), patient::setEthnicity);
         // QA D1036: the blood group is corrected here too (the entity upper-cases it).
         applyNullable(request.getBloodType(), patient::setBloodType);

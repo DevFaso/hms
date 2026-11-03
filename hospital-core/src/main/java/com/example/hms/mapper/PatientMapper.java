@@ -264,7 +264,7 @@ public class PatientMapper {
         patient.setLastName(dto.getLastName());
         patient.setMiddleName(dto.getMiddleName());
         patient.setDateOfBirth(dto.getDateOfBirth());
-        patient.setGender(dto.getGender());
+        patient.setGender(com.example.hms.enums.PatientGender.normalize(dto.getGender()));
         patient.setAddress(dto.getAddress());
     patient.setAddressLine1(dto.getAddressLine1());
     patient.setAddressLine2(dto.getAddressLine2());

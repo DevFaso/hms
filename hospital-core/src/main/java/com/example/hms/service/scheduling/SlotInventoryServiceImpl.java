@@ -189,7 +189,9 @@ public class SlotInventoryServiceImpl implements SlotInventoryService {
     /** QA D1013: refuses a slot whose clinician is already booked over its time, in the desk's words. */
     private void requireClinicianFree(AppointmentSlot slot) {
         if (clinicianBookedOver(slot, new HashMap<>())) {
-            throw new BusinessException("appointment.staff.unavailable", slot.getStaff().getId(),
+            // QA D1367 class (round 31): the slot is named, as every other slot refusal is about it.
+            throw new com.example.hms.exception.FieldBusinessException("slotId", "appointment.staff.unavailable",
+                slot.getStaff().getId(),
                 DisplayDates.date(slot.getSlotDate()), DisplayDates.time(slot.getStartAt().toLocalTime()),
                 DisplayDates.time(slot.getEndAt().toLocalTime()));
         }
