@@ -518,6 +518,14 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         return vitalSignService.getRecentVitalsForPatientPortal(patientId, limit);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<PatientVitalSignResponseDTO> getMyVitalsPage(Authentication auth,
+                                                                                            int page, int size) {
+        UUID patientId = resolvePatientId(auth);
+        return vitalSignService.getVitalsPageForPatientPortal(patientId, page, size);
+    }
+
     // ── Encounters / visit history ───────────────────────────────────────
 
     @Override
@@ -764,9 +772,6 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .orElseThrow(() -> new com.example.hms.exception.FieldBusinessException("startTime", "portal.booking.notAPublishedSlot"));
     }
 
-    /** At most this many slots are offered for one day: a list of times, not an export. */
-    private static final int MAX_OPEN_SLOTS = 200;
-
     /**
      * QA D1093: the published slots a patient may take on {@code date}:
      * generated, free now, in the future at the hospital's clock, within the
@@ -785,7 +790,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 : staffRepository.findActiveProvidersByHospitalAndDepartment(hospitalId, departmentId).stream()
                         .map(Staff::getId).collect(java.util.stream.Collectors.toSet());
         Map<UUID, List<Appointment>> booked = new java.util.HashMap<>();
-        return slotPolicy.openOn(hospitalId, departmentId, staffId, date, hospitalNow, MAX_OPEN_SLOTS)
+        return slotPolicy.openOn(hospitalId, departmentId, staffId, date, hospitalNow)
                 .stream()
                 .filter(s -> s.getStaff() != null && (bookable == null || bookable.contains(s.getStaff().getId())))
                 .filter(s -> com.example.hms.service.AppointmentSlotRules.isPatientBookable(

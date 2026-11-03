@@ -131,9 +131,11 @@ describe('PatientChartComponent — restricted rows', () => {
     component.ngOnChanges({ refreshToken: new SimpleChange(0, 1, false) });
 
     expect(patientService.getDoctorTimeline).toHaveBeenCalledTimes(2);
+    // QA D1380: the reload reads the first page again (the page index is now sent).
     expect(patientService.getDoctorTimeline.calls.mostRecent().args).toEqual([
       'p-1',
       'Urgence vitale',
+      0,
     ]);
   });
 

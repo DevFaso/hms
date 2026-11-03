@@ -299,6 +299,26 @@ class PatientPortalControllerPhase2Test {
     // ══════════════════════════════════════════════════════════════════════
 
     @Nested
+    @DisplayName("GET /me/patient/vitals/history (QA D1379)")
+    class MyVitalsHistory {
+
+        @Test
+        @DisplayName("answers one page of the history with the total of every record")
+        void pagesTheHistoryWithTheTotal() throws Exception {
+            com.example.hms.payload.dto.PatientVitalSignResponseDTO record =
+                com.example.hms.payload.dto.PatientVitalSignResponseDTO.builder().id(UUID.randomUUID()).build();
+            when(portalService.getMyVitalsPage(any(Authentication.class), eq(2), eq(10)))
+                .thenReturn(new PageImpl<>(List.of(record), org.springframework.data.domain.PageRequest.of(2, 10), 45));
+
+            mockMvc.perform(get("/me/patient/vitals/history").param("page", "2").param("size", "10").principal(auth))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalElements").value(45))
+                .andExpect(jsonPath("$.data.number").value(2))
+                .andExpect(jsonPath("$.data.content", hasSize(1)));
+        }
+    }
+
+    @Nested
     @DisplayName("POST /me/patient/refills")
     class RequestMedicationRefill {
 

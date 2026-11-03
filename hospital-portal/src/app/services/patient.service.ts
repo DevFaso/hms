@@ -353,12 +353,20 @@ export interface PatientLabResult {
   hospitalName?: string;
 }
 
+/** QA D1380: entries per page of the audited doctor timeline. */
+export const DOCTOR_TIMELINE_PAGE_SIZE = 50;
+
 export interface PatientTimeline {
   patientId: string;
   patientName: string;
   accessReason: string;
   entries: TimelineEntry[];
+  /** QA D1380: every entry the filters keep, across every page (never the page's length). */
   totalEntries: number;
+  /** QA D1380: the 0-based page of entries returned. */
+  page?: number | null;
+  /** QA D1380: entries per page. */
+  pageSize?: number | null;
   generatedAt: string;
   /** E9 #64 — empty in-hospital and under a live break-the-glass session. */
   restrictedRows?: RestrictedRows[];
@@ -769,14 +777,20 @@ export class PatientService {
 
   /* ── Doctor timeline (audited access) ── */
 
+  /**
+   * One page of the audited timeline (QA D1380): `totalEntries` counts every
+   * entry, `page` reads the next ones with the same stated reason.
+   */
   getDoctorTimeline(
     patientId: string,
     accessReason: string,
-    maxEvents = 50,
+    page = 0,
+    maxEvents: number = DOCTOR_TIMELINE_PAGE_SIZE,
   ): Observable<PatientTimeline> {
     return this.http.post<PatientTimeline>(`/patients/${patientId}/doctor-timeline`, {
       accessReason,
       maxEvents,
+      page,
     });
   }
 

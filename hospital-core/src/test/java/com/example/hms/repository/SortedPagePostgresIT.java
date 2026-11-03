@@ -112,6 +112,14 @@ class SortedPagePostgresIT {
     @Autowired private LabOrderRepository labOrders;
     @Autowired private ApplicationContext context;
     @Autowired private ChatMessageRepository chatMessages;
+    // QA D1379 / D1380 / D1390: the reads behind the screens that now page on the server.
+    @Autowired private PatientVitalSignRepository vitals;
+    @Autowired private ImagingOrderRepository imagingOrders;
+    @Autowired private NursingNoteRepository nursingNotes;
+    @Autowired private com.example.hms.repository.scheduling.AppointmentSlotRepository slots;
+    @Autowired private TreatmentPlanRepository treatmentPlans;
+    @Autowired private PatientUploadedDocumentRepository documents;
+    @Autowired private ObgynReferralRepository obgynReferrals;
 
     private final List<UUID> savedNotifications = new ArrayList<>();
 
@@ -451,6 +459,75 @@ class SortedPagePostgresIT {
             assertThat(chatMessages.findLatestConversations(any, 5, 5)).isEmpty();
             assertThat(chatMessages.searchMessagesBetweenUsers(any, any, "d1361",
                 PageRequest.of(1, 5, Sort.by("timestamp").descending())).getContent()).isEmpty();
+        }).doesNotThrowAnyException();
+    }
+
+    /**
+     * QA D1379 / D1380 / D1390 (the D1347 class): the chart review, the doctor
+     * timeline and the slot search now read every row WHOLE (unpaged, the
+     * same filters) and count it before they cut a page, and /my-vitals pages
+     * the patient's history with a total. Each read runs here on PostgreSQL
+     * for every parameter combination its callers use, nulls included, and
+     * the whole reads send no OFFSET/LIMIT (nothing cut at the database).
+     */
+    @Test
+    @DisplayName("QA D1379/D1380/D1390: the whole reads behind the server-paged screens run on PostgreSQL, uncut")
+    void wholeReadsBehindTheServerPagedScreensRun() {
+        UUID any = UUID.randomUUID();
+        Set<UUID> readable = Set.of(any, UUID.randomUUID());
+        LocalDate day = LocalDate.of(2026, 11, 3);
+        LocalDateTime now = day.atTime(8, 0);
+        Sort newestResult = Sort.by(Sort.Direction.DESC, "resultDate", "id");
+        Sort newestCreated = Sort.by(Sort.Direction.DESC, "createdAt");
+        assertThatCode(() -> {
+            CapturedSql.clear();
+            // ChartReviewServiceImpl: acting hospital (readable set) and the super-admin global view.
+            assertThat(encounters.findVisitsByPatientIdAndHospitalIdIn(any, readable, Pageable.unpaged()).getContent()).isEmpty();
+            assertThat(encounters.findVisitsByPatientId(any, Pageable.unpaged()).getContent()).isEmpty();
+            for (UUID acting : new UUID[]{null, any}) {
+                assertThat(labResults.findPatientResultsReadableAt(any, readable, acting, false,
+                    Pageable.unpaged(newestResult))).isEmpty();
+            }
+            assertThat(labResults.findAllPatientResults(any, Pageable.unpaged(newestResult))).isEmpty();
+            assertThat(prescriptions.findByPatient_IdAndHospital_IdIn(any, readable, Pageable.unpaged(newestCreated))
+                .getContent()).isEmpty();
+            assertThat(prescriptions.findByPatient_Id(any, Pageable.unpaged(newestCreated)).getContent()).isEmpty();
+            assertThat(imagingOrders.findByPatient_IdAndHospital_IdInOrderByOrderedAtDesc(any, readable, Pageable.unpaged())
+                .getContent()).isEmpty();
+            assertThat(imagingOrders.findByPatient_IdOrderByOrderedAtDesc(any, Pageable.unpaged()).getContent()).isEmpty();
+            assertThat(nursingNotes.findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(any, readable)).isEmpty();
+            assertThat(nursingNotes.findByPatient_IdOrderByCreatedAtDesc(any)).isEmpty();
+            // VisitTimelineRows (the doctor timeline): every row of the kind, newest first.
+            assertThat(treatmentPlans.findAllByPatientIdAndHospitalId(any, any, Pageable.unpaged(newestCreated))
+                .getContent()).isEmpty();
+            assertThat(documents.findForStaffByType(any, any,
+                com.example.hms.enums.PatientDocumentType.MEDICAL_CERTIFICATE, Pageable.unpaged(newestCreated))
+                .getContent()).isEmpty();
+            assertThat(obgynReferrals.findByPatient_IdAndHospital_IdIn(any, Set.of(any), Pageable.unpaged(newestCreated))
+                .getContent()).isEmpty();
+            // SlotInventoryServiceImpl.openSlots / AppointmentSlotPolicy.openOn: every filter combination.
+            for (UUID department : new UUID[]{null, any}) {
+                for (UUID clinician : new UUID[]{null, any}) {
+                    for (UUID visitType : new UUID[]{null, any}) {
+                        assertThat(slots.searchOpen(any, department, clinician, visitType, day, day.plusWeeks(2),
+                            now, now, Pageable.unpaged())).isEmpty();
+                    }
+                }
+            }
+            assertThat(CapturedSql.statements().stream()
+                .map(sql -> sql.toLowerCase(Locale.ROOT))
+                .filter(sql -> sql.contains(" offset ") || sql.contains(" fetch first ") || sql.contains(" limit ")))
+                .as("a whole read is never cut at the database")
+                .isEmpty();
+            // /my-vitals: a page of the patient's history WITH its total, closed by id.
+            CapturedSql.clear();
+            assertThat(vitals.findPageByPatient_IdOrderByRecordedAtDesc(any, PageRequest.of(1, 10)).getTotalElements())
+                .isZero();
+            assertThat(CapturedSql.statements().stream()
+                .map(sql -> String.join(" ", sql.toLowerCase(Locale.ROOT).strip().split("\\s++")))
+                .filter(sql -> sql.contains(" offset ")))
+                .isNotEmpty()
+                .allMatch(sql -> sql.contains("recorded_at desc") && LAST_KEY_IS_ID.matcher(sql).find());
         }).doesNotThrowAnyException();
     }
 

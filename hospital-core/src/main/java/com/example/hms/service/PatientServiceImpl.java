@@ -1267,12 +1267,20 @@ public class PatientServiceImpl implements PatientService {
         recordCrossHospitalDisclosure(patientId, hospitalId, requesterUserId, assignment, aggregatedEntries,
             performedHereLabEntryIds);
 
-        List<PatientTimelineEntryDTO> entries = aggregatedEntries.stream()
+        // QA D1380 (D1347 class): every entry is counted and paged on a total
+        // order (time, then category, then entry id), so a page neither
+        // repeats nor skips one; the newest 50 used to be the "total".
+        List<PatientTimelineEntryDTO> matching = aggregatedEntries.stream()
             .filter(entry -> includeSensitive || !entry.isSensitive())
             .sorted(Comparator.comparing(
-                PatientTimelineEntryDTO::getOccurredAt,
-                Comparator.nullsLast(Comparator.reverseOrder())
-            ))
+                    PatientTimelineEntryDTO::getOccurredAt,
+                    Comparator.nullsLast(Comparator.reverseOrder()))
+                .thenComparing(PatientTimelineEntryDTO::getCategory, Comparator.nullsLast(Comparator.naturalOrder()))
+                .thenComparing(PatientTimelineEntryDTO::getEntryId, Comparator.nullsLast(Comparator.naturalOrder())))
+            .toList();
+        int page = request.getPage() == null ? 0 : Math.max(0, request.getPage());
+        List<PatientTimelineEntryDTO> entries = matching.stream()
+            .skip((long) page * limit)
             .limit(limit)
             .toList();
 
@@ -1298,12 +1306,15 @@ public class PatientServiceImpl implements PatientService {
                     patientAllergyRepository, recordAccessPolicy, currentPrincipalUserId(), patientId, hospitalId))
             // QA D504: every other category is narrowed the same way; say so too.
             .recordsWithheld(recordAccessPolicy.foreignRowsWithheld(currentPrincipalUserId(), patientId, hospitalId))
-            .totalEntries(entries.size())
+            .totalEntries(matching.size())
+            .page(page)
+            .pageSize(limit)
             .restrictedRows(withheld.summaries())
             .generatedAt(LocalDateTime.now())
             .build();
 
-        logTimelineAudit(patient, requesterUserId, assignment, reason, includeSensitive, response.getTotalEntries());
+        // The audit counts the entries this read SHOWED (the page), as before.
+        logTimelineAudit(patient, requesterUserId, assignment, reason, includeSensitive, entries.size());
         return response;
     }
 

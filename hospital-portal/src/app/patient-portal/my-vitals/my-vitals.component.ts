@@ -9,7 +9,12 @@ import {
 import { CommonModule, DatePipe } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { localizeDecimals } from '../../shared/i18n/app-locale';
-import { PatientPortalService, VitalSignSummary } from '../../services/patient-portal.service';
+import {
+  PatientPortalService,
+  VITALS_PAGE_SIZE,
+  VitalSignSummary,
+} from '../../services/patient-portal.service';
+import { RangePagerComponent } from '../../shared/range-pager/range-pager.component';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { serverInstant } from '../../shared/date-utils';
@@ -24,7 +29,14 @@ interface VitalGroup {
 @Component({
   selector: 'app-my-vitals',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, DatePipe, EnumLabelPipe, TranslateModule],
+  imports: [
+    ServerTimePipe,
+    CommonModule,
+    DatePipe,
+    EnumLabelPipe,
+    TranslateModule,
+    RangePagerComponent,
+  ],
   templateUrl: './my-vitals.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['./my-vitals.component.scss', '../patient-portal-pages.scss'],
@@ -34,6 +46,13 @@ export class MyVitalsComponent implements OnInit {
   private readonly translate = inject(TranslateService);
   vitals = signal<VitalSignSummary[]>([]);
   loading = signal(true);
+  /** QA D1379: the page could not be read (never shown as "no readings"). */
+  loadFailed = signal(false);
+  /** QA D1379: the server's paging of the records — every one is reachable. */
+  page = signal(0);
+  pageSize = signal(VITALS_PAGE_SIZE);
+  total = signal(0);
+  recordsOnPage = signal(0);
   expandedGroupId = signal<string | null>(null);
 
   private readonly vitalTypeOrder: Record<string, number> = {
@@ -79,14 +98,28 @@ export class MyVitalsComponent implements OnInit {
   });
 
   ngOnInit() {
-    this.portal.getMyVitals().subscribe({
-      next: (v) => {
-        this.vitals.set(v);
+    this.loadPage(0);
+  }
+
+  /** QA D1379: reads one page of records with the server's total. */
+  loadPage(page: number): void {
+    this.loading.set(true);
+    this.loadFailed.set(false);
+    this.portal.getMyVitalsPage(page, this.pageSize()).subscribe({
+      next: (p) => {
+        this.vitals.set(p.items);
+        this.page.set(p.page);
+        this.pageSize.set(p.size);
+        this.total.set(p.total);
+        this.recordsOnPage.set(p.records);
         const firstGroup = this.groupedVitals()[0];
         this.expandedGroupId.set(firstGroup?.id ?? null);
         this.loading.set(false);
       },
-      error: () => this.loading.set(false),
+      error: () => {
+        this.loadFailed.set(true);
+        this.loading.set(false);
+      },
     });
   }
 

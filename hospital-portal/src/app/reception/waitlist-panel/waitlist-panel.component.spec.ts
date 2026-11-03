@@ -51,7 +51,7 @@ describe('WaitlistPanelComponent', () => {
     declineWaitlistOffer: jasmine.Spy;
     closeWaitlistEntry: jasmine.Spy;
   };
-  let mockSlotInventoryService: { searchOpen: jasmine.Spy };
+  let mockSlotInventoryService: { searchAllOpen: jasmine.Spy };
   let mockToastService: { success: jasmine.Spy; error: jasmine.Spy };
 
   const mockPatientService = { list: () => of([]) };
@@ -69,7 +69,7 @@ describe('WaitlistPanelComponent', () => {
       closeWaitlistEntry: jasmine.createSpy('closeWaitlistEntry').and.returnValue(of(undefined)),
     };
     mockSlotInventoryService = {
-      searchOpen: jasmine.createSpy('searchOpen').and.returnValue(of([])),
+      searchAllOpen: jasmine.createSpy('searchAllOpen').and.returnValue(of({ rows: [], total: 0 })),
     };
     mockToastService = {
       success: jasmine.createSpy('success'),
@@ -210,12 +210,12 @@ describe('WaitlistPanelComponent', () => {
       component.openOfferModal(waiting);
 
       expect(component.offerEntry()).toEqual(waiting);
-      expect(mockSlotInventoryService.searchOpen).toHaveBeenCalledWith({
+      // QA D1390: every open slot of the window (all pages), not the earliest 50.
+      expect(mockSlotInventoryService.searchAllOpen).toHaveBeenCalledWith({
         departmentId: 'd1',
         staffId: 's1',
         from: '2026-09-01',
         to: undefined,
-        limit: 50,
       });
     });
 
@@ -468,8 +468,11 @@ describe('WaitlistPanelComponent', () => {
     it('QA D1325: offering with no slot picked marks the slot group and moves focus to it', fakeAsync(() => {
       document.body.appendChild(page());
       try {
-        mockSlotInventoryService.searchOpen.and.returnValue(
-          of([{ id: 'slot-1', startAt: '2026-11-05T09:00:00', staffName: 'Dr X' }]),
+        mockSlotInventoryService.searchAllOpen.and.returnValue(
+          of({
+            rows: [{ id: 'slot-1', startAt: '2026-11-05T09:00:00', staffName: 'Dr X' }],
+            total: 1,
+          }),
         );
         component.openOfferModal(entry());
         fixture.detectChanges();

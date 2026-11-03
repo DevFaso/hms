@@ -597,4 +597,74 @@ class SlotInventoryServiceImplTest {
         verify(appointmentRepository, times(1))
             .findByStaff_IdAndAppointmentDate(staff.getId(), taken.getSlotDate());
     }
+
+    /* ── QA D1390 (D1347 class): the search is cut AFTER the booked-over filter, and paged with a total ── */
+
+    private List<AppointmentSlot> slotsInARow(int count) {
+        List<AppointmentSlot> out = new java.util.ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            java.time.LocalDateTime start = NOW.plusDays(1).plusMinutes(15L * i);
+            AppointmentSlot slot = AppointmentSlot.builder()
+                .hospital(hospital).staff(staff)
+                .slotDate(start.toLocalDate()).startAt(start).endAt(start.plusMinutes(15))
+                .status(SlotStatus.OPEN).build();
+            slot.setId(UUID.randomUUID());
+            out.add(slot);
+        }
+        return out;
+    }
+
+    @Test
+    void everyOpenSlotOfTheWindowIsReachedPageByPage_D1390() {
+        List<AppointmentSlot> window = slotsInARow(23);
+        deskBookingOver(window.get(0), AppointmentStatus.SCHEDULED);
+        org.mockito.ArgumentCaptor<org.springframework.data.domain.Pageable> read =
+            org.mockito.ArgumentCaptor.forClass(org.springframework.data.domain.Pageable.class);
+        when(slotRepository.searchOpen(any(), any(), any(), any(), any(), any(), any(), any(), read.capture()))
+            .thenReturn(window);
+
+        List<UUID> seen = new java.util.ArrayList<>();
+        long total = -1;
+        for (int page = 0; page < 3; page++) {
+            org.springframework.data.domain.Page<AppointmentSlotDTO> slots =
+                service.searchOpenPage(null, null, null, null, null, page, 10);
+            total = slots.getTotalElements();
+            slots.getContent().forEach(dto -> seen.add(dto.getId()));
+        }
+
+        assertThat(read.getValue().isUnpaged()).as("never cut at the database before the filter").isTrue();
+        assertThat(total).as("the booked-over slot is not counted").isEqualTo(22);
+        assertThat(seen).doesNotHaveDuplicates().hasSize(22).doesNotContain(window.get(0).getId());
+    }
+
+    @Test
+    void aLimitedSearchAnswersTheLimitInOpenSlotsWhenThatManyExist_D1390() {
+        List<AppointmentSlot> window = slotsInARow(12);
+        deskBookingOver(window.get(0), AppointmentStatus.SCHEDULED);
+        when(slotRepository.searchOpen(any(), any(), any(), any(), any(), any(), any(), any(), any()))
+            .thenReturn(window);
+
+        assertThat(service.searchOpen(null, null, null, null, null, 10)).hasSize(10)
+            .extracting(AppointmentSlotDTO::getId).doesNotContain(window.get(0).getId());
+    }
+
+    @Test
+    void aPagedSearchLongerThanTheHorizonIsRefusedNotCut_D1390() {
+        java.time.LocalDate from = NOW.toLocalDate();
+        java.time.LocalDate to = from.plusDays(SlotInventoryService.MAX_SEARCH_DAYS + 1L);
+        assertThatThrownBy(() -> service.searchOpenPage(null, null, null, from, to, 0, 50))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "to")
+            .hasFieldOrPropertyWithValue("messageKey", "slot.search.tooLong");
+    }
+
+    @Test
+    void theLimitedSearchBoundsItsWholeWindowTheSameWay_D1390() {
+        java.time.LocalDate from = NOW.toLocalDate();
+        java.time.LocalDate to = from.plusDays(SlotInventoryService.MAX_SEARCH_DAYS + 1L);
+        assertThatThrownBy(() -> service.searchOpen(null, null, null, from, to, 50))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "slot.search.tooLong");
+        verify(slotRepository, never()).searchOpen(any(), any(), any(), any(), any(), any(), any(), any(), any());
+    }
 }

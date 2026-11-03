@@ -99,6 +99,35 @@ describe('PatientChartComponent — timeline provenance', () => {
     component.patientId = 'p-1';
   }
 
+  it('QA D1380: the timeline shows the server total and pages with the stated reason', () => {
+    setup([entry({ category: 'NOTE' })]);
+    const service = TestBed.inject(PatientService) as jasmine.SpyObj<PatientService>;
+    service.getDoctorTimeline.and.callFake((_id: string, reason: string, page = 0) =>
+      of({
+        patientId: 'p-1',
+        patientName: 'Awa Traoré',
+        accessReason: reason,
+        entries: [entry({ category: 'NOTE' })],
+        totalEntries: 120,
+        page,
+        pageSize: 50,
+        generatedAt: '2026-03-12T10:00:00Z',
+      }),
+    );
+    fixture.detectChanges();
+    component.section.set('timeline');
+    component.timelineReason = 'Suivi clinique';
+    component.submitTimelineReason();
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('[data-testid="timeline-pager"]')).not.toBeNull();
+    (el.querySelector('[data-testid="timeline-pager-next"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    expect(service.getDoctorTimeline).toHaveBeenCalledWith('p-1', 'Suivi clinique', 1);
+    expect(component.timeline()?.page).toBe(1);
+  });
+
   it('QA D996: a visit row is labelled by its own type, not "Consultation" for every one', () => {
     setup([]);
     expect(component.timelineKind(entry({ metadata: { encounterType: 'INPATIENT' } }))).toEqual({

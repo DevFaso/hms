@@ -25,7 +25,10 @@ import com.example.hms.utility.DisplayDates;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,6 +36,7 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -147,23 +151,66 @@ public class SlotInventoryServiceImpl implements SlotInventoryService {
     @Transactional(readOnly = true)
     public List<AppointmentSlotDTO> searchOpen(UUID departmentId, UUID staffId, UUID visitTypeId,
                                                LocalDate from, LocalDate to, int limit) {
-        UUID hospitalId = requireHospital();
-        LocalDateTime now = LocalDateTime.now(clock);
         LocalDate start = from != null ? from : LocalDate.now(clock);
         LocalDate end = to != null ? to : start.plusWeeks(2);
         int capped = limit <= 0 ? 50 : Math.min(limit, MAX_SEARCH_RESULTS);
+        // The window is now read whole before the cut, so it is bounded the
+        // same way as the paged search (refused, never cut).
+        requireSearchWindow(start, end);
+        // QA D1390: the limit is applied AFTER the booked-over filter, so a
+        // search for 200 answers 200 open slots when that many exist (it cut
+        // 200 rows first and filtered 18 of them away).
+        return openSlots(departmentId, staffId, visitTypeId, start, end).stream()
+            .limit(capped)
+            .map(this::toDto)
+            .toList();
+    }
 
-        // QA D1013: a desk, portal or referral booking takes the clinician's
-        // time without touching the slot rows, so a slot the clinician is
-        // already booked over is not offered (one read per clinician and day).
+    @Override
+    @Transactional(readOnly = true)
+    public Page<AppointmentSlotDTO> searchOpenPage(UUID departmentId, UUID staffId, UUID visitTypeId,
+                                                   LocalDate from, LocalDate to, int page, int size) {
+        LocalDate start = from != null ? from : LocalDate.now(clock);
+        LocalDate end = to != null ? to : start.plusWeeks(2);
+        requireSearchWindow(start, end);
+        PageRequest pageable = PageRequest.of(Math.max(page, 0), Math.clamp(size, 1, SEARCH_PAGE_MAX));
+        List<AppointmentSlot> open = openSlots(departmentId, staffId, visitTypeId, start, end);
+        List<AppointmentSlotDTO> rows = open.stream()
+            .skip(pageable.getOffset())
+            .limit(pageable.getPageSize())
+            .map(this::toDto)
+            .toList();
+        return new PageImpl<>(rows, pageable, open.size());
+    }
+
+    /** QA D1390: a search reads its whole window, so the window is bounded; refused, never cut. */
+    private static void requireSearchWindow(LocalDate start, LocalDate end) {
+        if (start.plusDays(MAX_SEARCH_DAYS).isBefore(end)) {
+            throw new FieldBusinessException("to", "slot.search.tooLong", MAX_SEARCH_DAYS);
+        }
+    }
+
+    /**
+     * Every slot of the window that can be offered now, earliest first (id
+     * breaks ties, so a page boundary is the same on every read). QA D1013:
+     * a desk, portal or referral booking takes the clinician's time without
+     * touching the slot rows, so a slot the clinician is already booked over
+     * is not offered (one read per clinician and day). QA D1390: read whole
+     * and filtered BEFORE any cut, so a count or a page covers every row.
+     */
+    private List<AppointmentSlot> openSlots(UUID departmentId, UUID staffId, UUID visitTypeId,
+                                            LocalDate start, LocalDate end) {
+        UUID hospitalId = requireHospital();
+        LocalDateTime now = LocalDateTime.now(clock);
         Map<String, List<Appointment>> booked = new HashMap<>();
         return slotRepository.searchOpen(
                 hospitalId, departmentId, staffId, visitTypeId, start, end,
                 // Never offer a slot in the past, even on today's date.
-                now, now, PageRequest.of(0, capped))
+                now, now, Pageable.unpaged())
             .stream()
             .filter(slot -> !clinicianBookedOver(slot, booked))
-            .map(this::toDto)
+            .sorted(Comparator.comparing(AppointmentSlot::getStartAt, Comparator.nullsLast(Comparator.naturalOrder()))
+                .thenComparing(AppointmentSlot::getId, Comparator.nullsLast(Comparator.naturalOrder())))
             .toList();
     }
 

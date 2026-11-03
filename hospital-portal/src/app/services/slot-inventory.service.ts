@@ -2,6 +2,19 @@ import { unwrapDepartmentList } from './department-lookup.service';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable, map } from 'rxjs';
+import { AllRows, PageSlice, allPages } from '../shared/all-pages';
+
+/** QA D1390: open slots per page of the slot admin list. */
+export const SLOT_PAGE_SIZE = 50;
+
+/** QA D1390: the open-slot search filter (the window defaults to two weeks on the server). */
+export interface OpenSlotFilter {
+  departmentId?: string;
+  staffId?: string;
+  visitTypeId?: string;
+  from?: string;
+  to?: string;
+}
 
 /**
  * Slot inventory (P2 #11): visit types → session templates → generated slots.
@@ -159,21 +172,28 @@ export class SlotInventoryService {
     return this.http.post<SlotGenerationResult>('/slots/generate', null, { params });
   }
 
-  searchOpen(filter: {
-    departmentId?: string;
-    staffId?: string;
-    visitTypeId?: string;
-    from?: string;
-    to?: string;
-    limit?: number;
-  }): Observable<AppointmentSlotResponse[]> {
-    let params = new HttpParams();
+  /**
+   * QA D1390 (D1347 class): one page of the open slots of the window WITH the
+   * total. `/slots/search` answers a bare list capped at 200 (the slot admin
+   * list showed 182 of about 285 and said nothing).
+   */
+  searchOpenPage(
+    filter: OpenSlotFilter,
+    page: number,
+    size: number = SLOT_PAGE_SIZE,
+  ): Observable<PageSlice<AppointmentSlotResponse>> {
+    let params = new HttpParams().set('page', page).set('size', size);
     for (const [key, value] of Object.entries(filter)) {
       if (value !== undefined && value !== null && value !== '') {
         params = params.set(key, value);
       }
     }
-    return this.http.get<AppointmentSlotResponse[]>('/slots/search', { params });
+    return this.http.get<PageSlice<AppointmentSlotResponse>>('/slots/search/page', { params });
+  }
+
+  /** QA D1390: every open slot of the window (all pages), for a picker that lists them all. */
+  searchAllOpen(filter: OpenSlotFilter): Observable<AllRows<AppointmentSlotResponse>> {
+    return allPages((page, size) => this.searchOpenPage(filter, page, size));
   }
 
   block(slotId: string, reason?: string): Observable<AppointmentSlotResponse> {

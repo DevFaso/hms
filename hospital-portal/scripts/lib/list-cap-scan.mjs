@@ -27,6 +27,17 @@
  *    "+ N more" computed in a template from the rows on hand
  *    (`labs().length - 4`). The count is the server's total less the rows
  *    shown: `moreCount(total, shown)` in src/app/shared/more-count.ts.
+ *  - `default-limit` (QA D1379, round 32): a read method whose row limit is a
+ *    DEFAULTED parameter and that answers a bare array —
+ *    `getMyVitals(limit = 10): Observable<VitalSignSummary[]>`. The call site
+ *    `getMyVitals()` passes no number, so `fixed-limit` cannot see it, and the
+ *    array carries no total: `/my-vitals` showed 10 of 45 records. A method
+ *    that answers a page (with its total) is not reported.
+ *  - `payload-length-count` (QA D1380, round 32): a count or total read from
+ *    the length of a list in a server payload (`c?.medications?.length ?? 0`
+ *    in a member named like a count). The chart review badges said
+ *    MÉDICAMENTS 20 for 667 prescriptions: the payload held one page. A
+ *    count is the server's total (`totals`, `totalElements`).
  *
  * Not findings: `font-size: 64px` and other CSS in inline styles (a unit
  * follows), `slice(0, 8)` / `substring(0, 50)` (not a read), `size = 20`
@@ -70,6 +81,12 @@ const FIXED_SIZE_PARAM = /\.(?:set|append)\(\s*['"](size|limit)['"]\s*,\s*['"]?(
 const FIXED_SIZE_POSITIONAL =
   /\.((?:list|search|get|find)[\w$]*)\(([^()]*?,\s*)?0\s*,\s*(\d+)\s*[,)]/g;
 const FIXED_LIMIT_POSITIONAL = /\.((?:list|search|get|find)[\w$]*)\(\s*(\d+)\s*\)/g;
+/** A method signature (parameters on one or more lines) up to its `: Observable<…> {`. */
+const METHOD_SIGNATURE =
+  /\n {2}(?:(?:private|public|protected|readonly|static|async|override)\s+)*([\w$]+)\s*\(([^()]*(?:\([^()]*\)[^()]*)*)\)\s*:\s*Observable<([^{;]*?)>\s*\{/g;
+const DEFAULTED_LIMIT = /\b(limit|size|pageSize|max[A-Z][\w$]*)\s*(?::\s*number\s*)?=\s*(\d+)\b/;
+/** `x?.y?.length ?? 0`: the length of an optional payload list. */
+const PAYLOAD_LENGTH = /([\w$]+)\?\.([\w$]+)\?\.length\s*\?\?\s*0/g;
 const PAGE_FLATTENED =
   /map\(\s*\(?\s*([\w$]+)\s*\)?\s*=>\s*\(?\s*\1\??\.(?:data\??\.|body\??\.)?content\s*\?\?\s*\[\]/g;
 const PAGE_CONTENT =
@@ -120,6 +137,32 @@ export function listCapFindings(source, relFile) {
       'fixed-limit',
       `${m[1]}:${m[2]}`,
       `${m[1]}(${m[2]}) reads at most ${m[2]} rows (QA D1362): read every page, or count from the server's total`,
+    );
+  }
+  for (const m of code.matchAll(METHOD_SIGNATURE)) {
+    const limit = DEFAULTED_LIMIT.exec(m[2]);
+    if (!limit || !/\[\]\s*$/.test(m[3].trim())) continue;
+    // Anchored on the method itself (the match starts on the line before it).
+    const offset = m.index + 1;
+    const line = lineOf(code, offset);
+    out.push({
+      line,
+      rule: 'default-limit',
+      anchor: `${m[1]}:${limit[1]}=${limit[2]}`,
+      message:
+        `${m[1]}(${limit[1]} = ${limit[2]}) answers at most ${limit[2]} rows and no total, and a call ` +
+        'without the argument cannot be seen (QA D1379): answer a page with its total, or read every page',
+    });
+  }
+  for (const m of code.matchAll(PAYLOAD_LENGTH)) {
+    const line = lineOf(code, m.index);
+    const member = memberAt(lines, line - 1);
+    if (!/count|total/i.test(member)) continue;
+    push(
+      m.index,
+      'payload-length-count',
+      `${m[1]}.${m[2]}`,
+      `${m[1]}?.${m[2]}?.length counts the rows a payload carries, not every row (QA D1380): use the server's total`,
     );
   }
   for (const m of code.matchAll(PAGE_FLATTENED)) {

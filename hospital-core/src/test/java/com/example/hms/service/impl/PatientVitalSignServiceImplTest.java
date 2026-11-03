@@ -535,6 +535,41 @@ class PatientVitalSignServiceImplTest {
     }
 
     @Test
+    void getVitalsPageForPatientPortal_pagesTheWholeHistoryWithItsTotal_D1379() {
+        // QA D1379 (D1347 class): /my-vitals showed the 10 newest of 45 records.
+        UUID patientId = UUID.randomUUID();
+        PatientVitalSign vitalSign = PatientVitalSign.builder()
+            .patient(minimalPatient(patientId))
+            .recordedAt(LocalDateTime.now())
+            .build();
+        vitalSign.setId(UUID.randomUUID());
+        when(patientChartAccess.requireOwnRecord(patientId)).thenReturn(minimalPatient(patientId));
+        when(vitalSignRepository.findPageByPatient_IdOrderByRecordedAtDesc(patientId, PageRequest.of(4, 10)))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(vitalSign), PageRequest.of(4, 10), 41));
+
+        org.springframework.data.domain.Page<PatientVitalSignResponseDTO> page =
+            service.getVitalsPageForPatientPortal(patientId, 4, 10);
+
+        assertThat(page.getTotalElements()).isEqualTo(41);
+        assertThat(page.getContent()).singleElement()
+            .extracting(PatientVitalSignResponseDTO::getPatientId).isEqualTo(patientId);
+        verify(patientChartAccess, never()).require(any(), any());
+    }
+
+    @Test
+    void getVitalsPageForPatientPortal_lowersAnOversizedPageAndANegativeIndex_D1379() {
+        UUID patientId = UUID.randomUUID();
+        when(patientChartAccess.requireOwnRecord(patientId)).thenReturn(minimalPatient(patientId));
+        when(vitalSignRepository.findPageByPatient_IdOrderByRecordedAtDesc(any(), any()))
+            .thenReturn(org.springframework.data.domain.Page.empty());
+
+        service.getVitalsPageForPatientPortal(patientId, -3, 5000);
+
+        verify(vitalSignRepository).findPageByPatient_IdOrderByRecordedAtDesc(patientId,
+            PageRequest.of(0, com.example.hms.service.PatientVitalSignService.PORTAL_PAGE_MAX));
+    }
+
+    @Test
     void getVitals_staffWithNoHospitalScope_refusesBeforeTheRangeQuery() {
         UUID patientId = UUID.randomUUID();
         when(patientChartAccess.require(patientId, null)).thenReturn(minimalPatient(patientId));

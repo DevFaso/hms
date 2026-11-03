@@ -373,6 +373,17 @@
             </tbody>
           </table>
         </div>
+        <!-- QA D1390: every open slot of the window is reachable, counted by the server. -->
+        <app-range-pager
+          testId="slot-pager"
+          [label]="'SLOT_ADMIN.SEARCH' | translate"
+          [page]="slotPage()"
+          [size]="slotPageSize()"
+          [total]="slotTotal()"
+          [shown]="slots().length"
+          [disabled]="slotsLoading()"
+          (pageChange)="searchSlots($event)"
+        />
       }
     </section>
   }

@@ -26,8 +26,15 @@ public class PatientTimelineAccessRequestDTO {
     @Schema(description = "Reason for accessing the patient's longitudinal record.", example = "Pre-op review of vitals")
     private String accessReason;
 
-    @Schema(description = "Maximum number of timeline entries to return (1-200). Defaults to 50 when not provided.", example = "75")
+    @Schema(description = "Entries per page (1-200). Defaults to 50 when not provided.", example = "75")
     private Integer maxEvents;
+
+    /**
+     * QA D1380 (D1347 class): the 0-based page of {@code maxEvents} entries.
+     * The timeline used to answer only the newest 50 and call that the total.
+     */
+    @Schema(description = "0-based page of maxEvents entries; totalEntries counts every entry. Defaults to 0.", example = "0")
+    private Integer page;
 
     @Schema(description = "Whether the doctor explicitly requested sensitive data segments.", defaultValue = "false")
     private Boolean includeSensitiveData;

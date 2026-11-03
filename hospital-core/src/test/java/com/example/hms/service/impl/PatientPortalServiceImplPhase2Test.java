@@ -1997,7 +1997,7 @@ class PatientPortalServiceImplPhase2Test {
             com.example.hms.model.scheduling.AppointmentSlot early = at.apply(6, 0);    // before the patient day
             com.example.hms.model.scheduling.AppointmentSlot free = at.apply(10, 0);
             com.example.hms.model.scheduling.AppointmentSlot bookedOver = at.apply(10, 20);
-            when(slotPolicy.openOn(eq(hospitalId), eq(departmentId), eq(null), eq(BOOKING_DATE), any(), any(Integer.class)))
+            when(slotPolicy.openOn(eq(hospitalId), eq(departmentId), eq(null), eq(BOOKING_DATE), any()))
                     .thenReturn(List.of(early, free, bookedOver));
             Appointment desk = new Appointment();
             desk.setAppointmentDate(BOOKING_DATE);

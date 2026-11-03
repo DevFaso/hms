@@ -116,11 +116,39 @@ export interface ChartReviewTimelineEvent {
   corrected?: boolean;
 }
 
+/** QA D1380: the server's count of every row of each section (never a page's length). */
+export interface ChartReviewTotals {
+  timeline: number;
+  encounters: number;
+  notes: number;
+  results: number;
+  medications: number;
+  imaging: number;
+  procedures: number;
+}
+
+/** QA D1380: the tab a page is asked for. */
+export type ChartReviewSection =
+  'TIMELINE' | 'ENCOUNTERS' | 'NOTES' | 'RESULTS' | 'MEDICATIONS' | 'IMAGING' | 'PROCEDURES';
+
 export interface ChartReview {
   patientId: string;
   hospitalId?: string | null;
   hospitalName?: string | null;
+  /** Rows per section page. */
   limit: number;
+  /** QA D1380: the 0-based page of the sections returned. */
+  page?: number | null;
+  /** QA D1380: the one section asked for, or null when every section's page came back. */
+  section?: ChartReviewSection | null;
+  /** QA D1380: every row of each section, counted by the server. */
+  totals?: ChartReviewTotals | null;
+  /** QA D1380: the entries a timeline page names, for its labels on any page. */
+  timelineRefs?: {
+    encounters?: ChartReviewEncounter[] | null;
+    notes?: ChartReviewNote[] | null;
+    imaging?: ChartReviewImaging[] | null;
+  } | null;
   encounters: ChartReviewEncounter[];
   notes: ChartReviewNote[];
   results: ChartReviewResult[];
@@ -139,10 +167,16 @@ export interface ChartReview {
 export class ChartReviewService {
   private readonly http = inject(HttpClient);
 
+  /**
+   * The first page of every section, with the server's totals; `section` and
+   * `page` read a further page of one tab (QA D1380).
+   */
   getChartReview(
     patientId: string,
     hospitalId?: string | null,
     limit?: number | null,
+    section?: ChartReviewSection | null,
+    page?: number | null,
   ): Observable<ChartReview> {
     let params = new HttpParams();
     if (hospitalId) {
@@ -150,6 +184,12 @@ export class ChartReviewService {
     }
     if (limit !== null && limit !== undefined && limit > 0) {
       params = params.set('limit', String(limit));
+    }
+    if (section) {
+      params = params.set('section', section);
+    }
+    if (page !== null && page !== undefined && page > 0) {
+      params = params.set('page', String(page));
     }
     return this.http.get<ChartReview>(`/patients/${patientId}/chart-review`, { params });
   }

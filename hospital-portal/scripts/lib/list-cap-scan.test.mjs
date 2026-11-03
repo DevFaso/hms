@@ -119,3 +119,49 @@ test('D1362: the server-total count, an index into a list and a comment are not 
 <!-- labs().length - 4 was the D1362 count -->`;
   assert.deepEqual(sliceCountFindings(html), []);
 });
+
+test('D1379: a read whose limit is a defaulted parameter and that answers a bare array is found', () => {
+  const ts = `export class PatientPortalService {
+  getMyVitals(limit = 10): Observable<VitalSignSummary[]> {
+    return this.http.get<X>('/vitals', { params: { limit } });
+  }
+
+  getMyVitalsPage(page: number, size = VITALS_PAGE_SIZE): Observable<VitalsPage> {
+    return this.http.get<X>('/vitals/history', { params: { page, size } });
+  }
+
+  searchInvoices(filters: F, page = 0, size = 20): Observable<InvoicePage> {
+    return this.http.get<InvoicePage>('/invoices');
+  }
+
+  listRecent(
+    patientId: string,
+    hospitalId?: string,
+    limit: number = 20,
+  ): Observable<NursingNote[]> {
+    return this.http.get<NursingNote[]>('/notes');
+  }
+}`;
+  assert.deepEqual(rules(ts), [
+    'default-limit:getMyVitals:limit=10',
+    'default-limit:listRecent:limit=20',
+  ]);
+});
+
+test('D1380: a count read from the length of a payload list is found; the server total is not', () => {
+  const ts = `export class ChartReview {
+  protected readonly counts = computed(() => {
+    const c = this.chart();
+    return {
+      medications: c?.medications?.length ?? 0,
+      results: c?.totals?.results ?? 0,
+    };
+  });
+
+  protected readonly encountersById = computed(() => {
+    const n = this.chart()?.encounters?.length ?? 0;
+    return n;
+  });
+}`;
+  assert.deepEqual(rules(ts), ['payload-length-count:counts:c.medications']);
+});

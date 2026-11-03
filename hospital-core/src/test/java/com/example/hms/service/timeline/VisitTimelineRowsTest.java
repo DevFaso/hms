@@ -419,7 +419,7 @@ class VisitTimelineRowsTest {
         note.setTemplate(com.example.hms.model.NursingNoteTemplate.DAR);
         note.setDataAssessment("Patient calme");
         note.setDocumentedAt(LocalDateTime.now().minusHours(1));
-        when(nursingNotes.findTop50ByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(patientId, Set.of(here.getId())))
+        when(nursingNotes.findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(patientId, Set.of(here.getId())))
             .thenReturn(List.of(note));
 
         com.example.hms.model.PatientImmunization dose = new com.example.hms.model.PatientImmunization();
@@ -555,7 +555,7 @@ class VisitTimelineRowsTest {
         note.setTitle("Réévaluation douleur");
         note.setDataAssessment("Patient calme");
         note.setDocumentedAt(LocalDateTime.now().minusHours(1));
-        when(nursingNotes.findTop50ByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(patientId, Set.of(here.getId())))
+        when(nursingNotes.findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(patientId, Set.of(here.getId())))
             .thenReturn(List.of(note));
 
         assertThat(rows.collect(patientId, here.getId(), Set.of("NURSING_NOTE")))

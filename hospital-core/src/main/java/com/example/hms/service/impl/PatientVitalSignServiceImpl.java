@@ -165,6 +165,18 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
             .toList();
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<PatientVitalSignResponseDTO> getVitalsPageForPatientPortal(UUID patientId,
+                                                                                                          int page,
+                                                                                                          int size) {
+        Patient patient = patientChartAccess.requireOwnRecord(patientId);
+        int pageSize = Math.clamp(size, 1, PORTAL_PAGE_MAX);
+        return vitalSignRepository.findPageByPatient_IdOrderByRecordedAtDesc(patient.getId(),
+                PageRequest.of(Math.max(page, 0), pageSize))
+            .map(vitalSignMapper::toResponse);
+    }
+
     /**
      * Staff history read, behind the same controller as {@link #getRecentVitals}
      * and with the same hole: {@code findWithinRange} drops the hospital
