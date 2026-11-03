@@ -538,7 +538,7 @@
         [size]="c.limit"
         [total]="counts()[activeTab()]"
         [shown]="rowsOnPage(activeTab())"
-        [disabled]="tabLoading()"
+        [busy]="tabLoading()"
         (pageChange)="loadTabPage($event)"
       />
     }

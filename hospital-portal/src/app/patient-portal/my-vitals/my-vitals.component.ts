@@ -9,6 +9,7 @@ import {
 import { CommonModule, DatePipe } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { localizeDecimals } from '../../shared/i18n/app-locale';
+import { refusalReason } from '../../shared/refusal-reason';
 import {
   PatientPortalService,
   VITALS_PAGE_SIZE,
@@ -48,6 +49,8 @@ export class MyVitalsComponent implements OnInit {
   loading = signal(true);
   /** QA D1379: the page could not be read (never shown as "no readings"). */
   loadFailed = signal(false);
+  /** The server's reason for a failed load, when it gave one. */
+  loadFailedReason = signal<string | null>(null);
   /** QA D1379: the server's paging of the records — every one is reachable. */
   page = signal(0);
   pageSize = signal(VITALS_PAGE_SIZE);
@@ -116,7 +119,8 @@ export class MyVitalsComponent implements OnInit {
         this.expandedGroupId.set(firstGroup?.id ?? null);
         this.loading.set(false);
       },
-      error: () => {
+      error: (err: unknown) => {
+        this.loadFailedReason.set(refusalReason(err));
         this.loadFailed.set(true);
         this.loading.set(false);
       },

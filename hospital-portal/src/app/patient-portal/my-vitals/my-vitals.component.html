@@ -14,7 +14,7 @@
   } @else if (loadFailed()) {
     <div class="portal-empty" role="alert" data-testid="vitals-load-failed">
       <span class="material-symbols-outlined">error</span>
-      <p>{{ 'PATIENTS.VITALS_LOAD_FAILED' | translate }}</p>
+      <p>{{ loadFailedReason() ?? ('PATIENTS.VITALS_LOAD_FAILED' | translate) }}</p>
       <button type="button" class="btn-secondary" (click)="loadPage(page())">
         {{ 'COMMON.RETRY' | translate }}
       </button>

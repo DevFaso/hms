@@ -685,7 +685,7 @@
         [size]="tl.pageSize ?? tl.entries.length"
         [total]="tl.totalEntries"
         [shown]="tl.entries.length"
-        [disabled]="timelineLoading()"
+        [busy]="timelineLoading()"
         (pageChange)="loadTimelinePage($event)"
       />
       <app-restricted-rows

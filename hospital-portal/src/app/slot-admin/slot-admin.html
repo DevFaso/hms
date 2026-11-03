@@ -381,7 +381,7 @@
           [size]="slotPageSize()"
           [total]="slotTotal()"
           [shown]="slots().length"
-          [disabled]="slotsLoading()"
+          [busy]="slotsLoading()"
           (pageChange)="searchSlots($event)"
         />
       }

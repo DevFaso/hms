@@ -21,12 +21,12 @@ import { TranslateModule } from '@ngx-translate/core';
         <span class="range-pager__info" aria-live="polite">
           {{ 'COMMON.SHOWING_RANGE' | translate: { from: from(), to: to(), total: total() } }}
         </span>
-        @if (pages() > 1) {
+        @if (totalPages() > 1) {
           <span class="range-pager__controls">
             <button
               type="button"
               class="range-pager__btn"
-              [disabled]="disabled() || page() <= 0"
+              [disabled]="busy() || page() <= 0"
               (click)="go(page() - 1)"
               [attr.data-testid]="testId() + '-prev'"
             >
@@ -36,7 +36,7 @@ import { TranslateModule } from '@ngx-translate/core';
             <button
               type="button"
               class="range-pager__btn"
-              [disabled]="disabled() || page() + 1 >= pages()"
+              [disabled]="busy() || page() + 1 >= totalPages()"
               (click)="go(page() + 1)"
               [attr.data-testid]="testId() + '-next'"
             >
@@ -102,13 +102,14 @@ export class RangePagerComponent {
   readonly total = input.required<number>();
   /** Rows actually on this page (the last page is shorter). */
   readonly shown = input<number | null>(null);
-  readonly disabled = input(false);
+  /** A page request is in flight. */
+  readonly busy = input(false);
   readonly label = input<string>('');
   readonly testId = input<string>('range-pager');
 
   readonly pageChange = output<number>();
 
-  protected readonly pages = computed(() => {
+  protected readonly totalPages = computed(() => {
     const size = Math.max(1, this.size());
     return Math.max(1, Math.ceil(Math.max(0, this.total()) / size));
   });
@@ -125,7 +126,7 @@ export class RangePagerComponent {
   });
 
   protected go(target: number): void {
-    if (target < 0 || target >= this.pages() || target === this.page()) return;
+    if (target < 0 || target >= this.totalPages() || target === this.page()) return;
     this.pageChange.emit(target);
   }
 }
