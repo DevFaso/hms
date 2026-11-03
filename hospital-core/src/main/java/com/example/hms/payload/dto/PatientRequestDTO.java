@@ -87,7 +87,10 @@ public class PatientRequestDTO {
     private String emergencyContactPhone;
     private String emergencyContactRelationship;
 
+    /** QA D1383: A, B, AB or O with its Rhesus sign, as PATCH requires (one vocabulary: AboGroup). */
     @Size(max = 5, message = "{patient.bloodType.size}")
+    @jakarta.validation.constraints.Pattern(regexp = com.example.hms.enums.AboGroup.BLOOD_TYPE_CODES,
+        flags = jakarta.validation.constraints.Pattern.Flag.CASE_INSENSITIVE, message = "{patient.bloodType.invalid}")
     private String bloodType;
 
     @Size(max = 255, message = "{patient.allergies.size}")

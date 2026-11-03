@@ -73,10 +73,10 @@ public class PatientProfileUpdateRequestDTO {
     /**
      * QA D1036: the blood group captured at registration, correctable like the
      * rest of the demographics: A, B, AB or O with its Rhesus sign. Blank
-     * clears it.
+     * clears it. QA D1383: the same pattern as PUT and POST (AboGroup).
      */
-    @jakarta.validation.constraints.Pattern(regexp = "(?i)^$|^(A|B|AB|O)[+-]$",
-        message = "{patient.bloodType.invalid}")
+    @jakarta.validation.constraints.Pattern(regexp = com.example.hms.enums.AboGroup.BLOOD_TYPE_CODES,
+        flags = jakarta.validation.constraints.Pattern.Flag.CASE_INSENSITIVE, message = "{patient.bloodType.invalid}")
     private String bloodType;
 
     /** Self-reported free text — optional (Tier 2 item 38). */
