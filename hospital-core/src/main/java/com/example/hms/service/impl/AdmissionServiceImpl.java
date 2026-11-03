@@ -321,7 +321,18 @@ public class AdmissionServiceImpl implements AdmissionService {
 
     @Override
     @Transactional
-    public void cancelAdmission(UUID admissionId) {
+    public void cancelAdmission(UUID admissionId, String reason) {
+        // QA D1381 (round 32): a stay is cancelled with its reason, as real
+        // hospitals record why any stay is voided; it is kept on the row with
+        // who and when (the DELETE is audited by the WriteAuditInterceptor).
+        String cancelReason = reason == null ? "" : reason.trim();
+        if (cancelReason.isEmpty()) {
+            throw new com.example.hms.exception.FieldBusinessException("reason", "admission.cancel.reasonRequired");
+        }
+        if (cancelReason.length() > MAX_CANCEL_REASON) {
+            throw new com.example.hms.exception.FieldBusinessException("reason", "admission.cancel.reasonTooLong",
+                MAX_CANCEL_REASON);
+        }
         // QA D262: a write loads under the same tenant guard as the read.
         Admission admission = loadTenantScopedAdmission(admissionId);
         // QA D603: a discharged, finalized and PAID stay was cancelled by a DELETE,
@@ -334,7 +345,8 @@ public class AdmissionServiceImpl implements AdmissionService {
                 com.example.hms.enums.InvoiceStatus.CANCELLED)) {
             throw new ConflictException("admission.cancel.billed");
         }
-        admission.cancel();
+        admission.cancel(cancelReason, com.example.hms.security.CallerIdentity.currentUserId(),
+            LocalDateTime.now(java.time.ZoneId.systemDefault()));
         // A cancelled admission must not keep its bed occupied
         bedAssignmentService.releaseBed(admission);
         admissionRepository.save(admission);
@@ -392,6 +404,24 @@ public class AdmissionServiceImpl implements AdmissionService {
         }
         return admissionMapper.toResponseDTO(admission);
     }
+
+    /**
+     * QA D1384 (round 32): the {@code status} filter of the admission lists.
+     * An unknown value answered "No enum constant ...AdmissionStatus.BOGUS"
+     * (raw Java text) in every language; it is now refused on {@code status},
+     * in the reader's language ({@code EnumQueryParam}). Case is ignored, as
+     * before.
+     */
+    static AdmissionStatus admissionStatusParam(String status) {
+        try {
+            return AdmissionStatus.valueOf(status.trim().toUpperCase(java.util.Locale.ROOT));
+        } catch (IllegalArgumentException ex) {
+            throw com.example.hms.utility.EnumQueryParam.refusal("status");
+        }
+    }
+
+    /** QA D1381: the longest cancellation reason kept (admissions.cancellation_reason, V260). */
+    private static final int MAX_CANCEL_REASON = 1000;
 
     /** QA D1100: the audit trail's only record of why the bed was freed (no column holds it). */
     private static final int MAX_BED_RELEASE_REASON = 500;
@@ -533,7 +563,7 @@ public class AdmissionServiceImpl implements AdmissionService {
     @Transactional(readOnly = true)
     public List<AdmissionResponseDTO> getAdmissionsByHospital(UUID hospitalId, String status, LocalDateTime startDate, LocalDateTime endDate) {
         if (status != null && !status.isEmpty()) {
-            AdmissionStatus admissionStatus = AdmissionStatus.valueOf(status.toUpperCase());
+            AdmissionStatus admissionStatus = admissionStatusParam(status);
             return admissionRepository.findByHospitalIdAndStatusOrderByAdmissionDateTimeDesc(hospitalId, admissionStatus)
                 .stream()
                 .filter(a -> admittedWithin(a, startDate, endDate))
@@ -570,7 +600,7 @@ public class AdmissionServiceImpl implements AdmissionService {
     private List<AdmissionResponseDTO> admissionsOfPatient(UUID patientId, UUID activeHospitalId, String status,
                                                            LocalDateTime startDate, LocalDateTime endDate) {
         AdmissionStatus wanted = status != null && !status.isEmpty()
-            ? AdmissionStatus.valueOf(status.toUpperCase()) : null;
+            ? admissionStatusParam(status) : null;
         List<Admission> stays = activeHospitalId != null
             ? admissionRepository.findByPatient_IdAndHospital_IdInOrderByAdmissionDateTimeDesc(
                 patientId, java.util.Set.of(activeHospitalId))
@@ -597,7 +627,7 @@ public class AdmissionServiceImpl implements AdmissionService {
             return self.getAdmissionsByHospital(activeHospitalId, status, startDate, endDate);
         }
         if (status != null && !status.isEmpty()) {
-            AdmissionStatus admissionStatus = AdmissionStatus.valueOf(status.toUpperCase());
+            AdmissionStatus admissionStatus = admissionStatusParam(status);
             return admissionRepository.findByStatusOrderByAdmissionDateTimeDesc(admissionStatus)
                 .stream()
                 .filter(a -> admittedWithin(a, startDate, endDate))
@@ -647,6 +677,8 @@ public class AdmissionServiceImpl implements AdmissionService {
 
         Staff createdBy = staffRepository.findById(request.getCreatedByStaffId())
             .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", request.getCreatedByStaffId()));
+        // QA D1382 / D1378: the second order-set writer is held to the same item rule.
+        com.example.hms.service.orderset.OrderSetItemPrnRules.requireValid(request.getOrderItems());
 
         AdmissionOrderSet orderSet = new AdmissionOrderSet();
         orderSet.setName(request.getName());
@@ -678,7 +710,13 @@ public class AdmissionServiceImpl implements AdmissionService {
     public List<AdmissionOrderSetResponseDTO> getOrderSetsByHospital(UUID hospitalId, String admissionType) {
         List<AdmissionOrderSet> orderSets;
         if (admissionType != null && !admissionType.isEmpty()) {
-            AdmissionType type = AdmissionType.valueOf(admissionType.toUpperCase());
+            AdmissionType type;
+            try {
+                type = AdmissionType.valueOf(admissionType.trim().toUpperCase(java.util.Locale.ROOT));
+            } catch (IllegalArgumentException ex) {
+                // QA D1384: the refusal names the parameter, never raw Java text.
+                throw com.example.hms.utility.EnumQueryParam.refusal("admissionType");
+            }
             orderSets = orderSetRepository.findByHospitalIdAndAdmissionTypeAndActiveOrderByNameAsc(hospitalId, type, true);
         } else {
             orderSets = orderSetRepository.findByHospitalIdAndActiveOrderByNameAsc(hospitalId, true);

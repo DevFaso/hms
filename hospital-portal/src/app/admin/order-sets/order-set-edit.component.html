@@ -165,7 +165,8 @@
                 <label>
                   <span>{{ 'ORDER_SETS.FIELD_FREQUENCY' | translate }}</span>
                   <select
-                    [(ngModel)]="item.frequency"
+                    [ngModel]="item.frequency"
+                    (ngModelChange)="onFrequencyChange(item, $event)"
                     [name]="'frequency-' + i"
                     [attr.data-testid]="'order-set-item-frequency-' + i"
                   >
@@ -174,6 +175,21 @@
                       <option [value]="f.value">{{ choiceLabel(f) }}</option>
                     }
                   </select>
+                </label>
+                <!-- QA D1378 / D1382 (round 32): as-needed is the author's explicit tick;
+                   the server refuses a conditional frequency without it, and a ticked
+                   item without its interval, on the item's own field. -->
+                <label class="checkbox-label">
+                  <input
+                    type="checkbox"
+                    [ngModel]="item.asNeeded === true"
+                    (ngModelChange)="onAsNeededChange(item, $event)"
+                    [name]="'asNeeded-' + i"
+                    [id]="'order-set-item-as-needed-' + i"
+                    [attr.data-testid]="'order-set-item-as-needed-' + i"
+                    [attr.data-server-field]="'orderItems[' + i + '].asNeeded'"
+                  />
+                  <span>{{ 'ORDER_SETS.FREQUENCY.PRN' | translate }}</span>
                 </label>
                 @if (prnIntervalShown(item)) {
                   <!-- QA round 30: an as-needed item states the minimum interval between doses. -->
@@ -189,6 +205,7 @@
                       [name]="'prnMinIntervalHours-' + i"
                       [id]="'order-set-item-prn-' + i"
                       [attr.data-testid]="'order-set-item-prn-' + i"
+                      [attr.data-server-field]="'orderItems[' + i + '].prnMinIntervalHours'"
                       [attr.aria-invalid]="itemMissingPrnInterval(i) ? 'true' : null"
                     />
                     @if (itemMissingPrnInterval(i)) {

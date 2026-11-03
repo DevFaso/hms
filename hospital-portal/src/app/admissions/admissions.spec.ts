@@ -441,10 +441,13 @@ describe('AdmissionsComponent', () => {
       component.confirmDelete(adm());
       expect(component.showDeleteConfirm()).toBeTrue();
       admissionService.delete.and.returnValue(of(undefined as unknown as void));
+      component.deleteReason.set('Admission en double');
       component.executeDelete();
+      expect(admissionService.delete).toHaveBeenCalledWith('a1', 'Admission en double');
       expect(toast.success).toHaveBeenCalledWith('ADMISSIONS.DELETED');
       expect(component.deletingAdm()).toBeNull();
       component.confirmDelete(adm());
+      component.deleteReason.set('Erreur de saisie');
       admissionService.delete.and.returnValue(throwError(() => new Error('x')));
       component.executeDelete();
       expect(toast.error).toHaveBeenCalledWith('ADMISSIONS.DELETE_FAILED');
@@ -558,7 +561,10 @@ describe('AdmissionsComponent row actions (rendered, D527)', () => {
     admissionDateTime?: string,
     superAdmin = false,
   ): ComponentFixture<AdmissionsComponent> {
-    const admissions = jasmine.createSpyObj<AdmissionService>('AdmissionService', ['getAll']);
+    const admissions = jasmine.createSpyObj<AdmissionService>('AdmissionService', [
+      'getAll',
+      'delete',
+    ]);
     admissions.getAll.and.returnValue(
       of([
         {
@@ -624,6 +630,34 @@ describe('AdmissionsComponent row actions (rendered, D527)', () => {
   }
 
   const newButton = (el: HTMLElement) => el.querySelector('.page-actions .btn-primary');
+
+  /**
+   * QA D1381 (round 32): the delete dialog asks for the reason, refuses a
+   * blank one on the field, and sends nothing. QA D1388: the patient's name is
+   * followed by a space, never glued to "Cette action est irréversible."
+   */
+  it('QA D1381 / D1388: the delete dialog asks the reason and reads cleanly', () => {
+    const fixture = mount(['ROLE_DOCTOR']);
+    const service = TestBed.inject(AdmissionService) as unknown as { delete: jasmine.Spy };
+    fixture.componentInstance.confirmDelete({
+      id: 'a1',
+      hospitalId: 'h1',
+      patientId: 'p1',
+      patientName: 'Fatimata Zongo',
+      status: 'ACTIVE',
+    } as AdmissionResponse);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const reason = el.querySelector<HTMLTextAreaElement>('#admission-cancel-reason');
+    expect(reason).withContext('the reason field').not.toBeNull();
+    expect(reason!.getAttribute('data-server-field')).toBe('reason');
+    fixture.componentInstance.executeDelete();
+    fixture.detectChanges();
+    expect(service.delete).not.toHaveBeenCalled();
+    expect(reason!.getAttribute('aria-invalid')).toBe('true');
+    const warning = el.querySelector('.delete-warning')!;
+    expect(warning.textContent!.replace(/\s+/g, ' ')).not.toMatch(/Zongo\S/);
+  });
 
   // QA D903/D912: the chip showed the email, or an empty line for a phone-only
   // patient, and the option led with the email; both now name the MRN.

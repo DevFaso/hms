@@ -197,7 +197,7 @@ class MarNextDoseTest {
     @ParameterizedTest
     @ValueSource(strings = {"PRN", "si besoin", "Paracetamol prn", "as needed", "si es necesario"})
     void prn_staysOpenAfterADoseAndIsEarlyInsideTheInterval(String frequency) {
-        Prescription rx = rx(frequency, NOW.minusDays(1));
+        Prescription rx = prn(frequency, NOW.minusDays(1));
         rx.setPrnMinIntervalHours(4);
         LocalDateTime given = NOW.minusHours(1);
         MarNextDose.Due due = MarNextDose.of(rx, NOW,
@@ -215,7 +215,7 @@ class MarNextDoseTest {
 
     @Test
     void prn_pastTheIntervalIsOfferedWithoutAReasonAndNeverOverdue() {
-        Prescription rx = rx("si besoin", NOW.minusDays(2));
+        Prescription rx = prn("si besoin", NOW.minusDays(2));
         rx.setPrnMinIntervalHours(6);
         LocalDateTime given = NOW.minusHours(30);
         MarNextDose.Due due = MarNextDose.of(rx, NOW,
@@ -227,7 +227,7 @@ class MarNextDoseTest {
 
     @Test
     void prn_neverGivenIsOfferedAndAHeldDoseStartsNoInterval() {
-        Prescription rx = rx("PRN", NOW.minusDays(1));
+        Prescription rx = prn("PRN", NOW.minusDays(1));
         rx.setPrnMinIntervalHours(4);
         MarNextDose.Due fresh = MarNextDose.of(rx, NOW, List.of(), WINDOW);
         assertThat(fresh.asNeeded()).isTrue();
@@ -243,7 +243,7 @@ class MarNextDoseTest {
     /** The bedside verify's open row is the slot the administer call fills, while it is inside the time window. */
     @Test
     void prn_theOpenVerifiedRowIsTheSlotWhileItIsFresh() {
-        Prescription rx = rx("PRN", NOW.minusDays(1));
+        Prescription rx = prn("PRN", NOW.minusDays(1));
         rx.setPrnMinIntervalHours(4);
         LocalDateTime given = NOW.minusHours(5);
         LocalDateTime verified = NOW.minusMinutes(20);
@@ -261,12 +261,47 @@ class MarNextDoseTest {
     @Test
     void prn_anOlderOrderWithoutAnIntervalStaysOpenAndFlagged() {
         LocalDateTime given = NOW.minusHours(2);
-        MarNextDose.Due due = MarNextDose.of(rx("PRN", NOW.minusDays(1)), NOW,
+        MarNextDose.Due due = MarNextDose.of(prn("PRN", NOW.minusDays(1)), NOW,
             List.of(row(MedicationAdministrationStatus.GIVEN, given, given)), WINDOW);
         assertThat(due.finished()).isFalse();
         assertThat(due.asNeeded()).isTrue();
         assertThat(due.frequencyUnread()).isTrue();
         assertThat(due.reasonUntil()).isNull();
+    }
+
+    /**
+     * QA D1378 (round 32): as-needed is the prescriber's tick, whatever the
+     * words: a ticked "q4h" order is on demand within its interval, and an
+     * unticked "SOS" order (an older one the round-31 list did not read) is
+     * open and flagged, never a one-dose course and never as-needed.
+     */
+    @Test
+    void d1378_theTickDecidesNotTheText() {
+        LocalDateTime given = NOW.minusHours(1);
+        Prescription ticked = prn("q4h", NOW.minusDays(1));
+        ticked.setPrnMinIntervalHours(6);
+        MarNextDose.Due prnDue = MarNextDose.of(ticked, NOW,
+            List.of(row(MedicationAdministrationStatus.GIVEN, given, given)), WINDOW);
+        assertThat(prnDue.asNeeded()).isTrue();
+        assertThat(prnDue.reasonUntil()).isEqualTo(given.plusHours(6));
+
+        MarNextDose.Due sos = MarNextDose.of(rx("SOS", NOW.minusDays(1)), NOW,
+            List.of(row(MedicationAdministrationStatus.GIVEN, given, given)), WINDOW);
+        assertThat(sos.asNeeded()).isFalse();
+        assertThat(sos.finished()).isFalse();
+        assertThat(sos.frequencyUnread()).isTrue();
+
+        MarNextDose.Due unticked = MarNextDose.of(rx("si besoin", NOW.minusDays(1)), NOW,
+            List.of(row(MedicationAdministrationStatus.GIVEN, given, given)), WINDOW);
+        assertThat(unticked.asNeeded()).isFalse();
+        assertThat(unticked.frequencyUnread()).isTrue();
+    }
+
+    /** QA D1378: an order the prescriber ticked as needed (PRN). */
+    private static Prescription prn(String frequency, LocalDateTime start) {
+        Prescription rx = rx(frequency, start);
+        rx.setAsNeeded(true);
+        return rx;
     }
 
     private static Prescription rx(String frequency, LocalDateTime start) {

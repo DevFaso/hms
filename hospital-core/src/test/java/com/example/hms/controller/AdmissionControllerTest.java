@@ -329,12 +329,15 @@ class AdmissionControllerTest {
         @DisplayName("returns 204 NO CONTENT")
         void cancelAdmission_noContent() throws Exception {
             UUID id = UUID.randomUUID();
-            doNothing().when(admissionService).cancelAdmission(id);
+            doNothing().when(admissionService).cancelAdmission(id, "Erreur de saisie");
 
-            mockMvc.perform(delete(BASE + "/{admissionId}", id))
+            // QA D1381: the reason travels in the body.
+            mockMvc.perform(delete(BASE + "/{admissionId}", id)
+                    .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                    .content("{\"reason\":\"Erreur de saisie\"}"))
                 .andExpect(status().isNoContent());
 
-            verify(admissionService).cancelAdmission(id);
+            verify(admissionService).cancelAdmission(id, "Erreur de saisie");
         }
 
         @Test

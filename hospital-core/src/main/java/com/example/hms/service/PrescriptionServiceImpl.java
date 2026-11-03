@@ -1774,6 +1774,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             // QA round 30: the as-needed interval is order content (null echoes nothing).
             request.getPrnMinIntervalHours() != null
                 && !request.getPrnMinIntervalHours().equals(existing.getPrnMinIntervalHours()),
+            // QA D1378: the prescriber's "as needed" tick is order content too.
+            flagDiffers(request.getAsNeeded(), existing.isAsNeeded()),
             // QA D950: "IV" echoed over a stored "INTRAVENOUS" is the same route.
             !isBlank(request.getRoute())
                 && !com.example.hms.service.emar.MedicationRoutes.sameRoute(existing.getRoute(), request.getRoute()),

@@ -240,10 +240,21 @@ class PrescriptionEditAndWithdrawalIT extends BaseIT {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(refused))
             .andExpect(status().isBadRequest())
+            // QA D1378: not ticked, the as-needed wording is refused on the tick (the safety net).
+            .andExpect(jsonPath("$.fieldErrors.asNeeded").exists())
+            .andExpect(jsonPath("$.fieldErrors.route").exists());
+
+        String ticked = refused.replace("\"quantity\":10", "\"quantity\":10,\"asNeeded\":true");
+        mockMvc.perform(post(API_CONTEXT + "/prescriptions")
+                .contextPath(API_CONTEXT)
+                .with(as(authorUser))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(ticked))
+            .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.fieldErrors.prnMinIntervalHours").exists())
             .andExpect(jsonPath("$.fieldErrors.route").exists());
 
-        String accepted = refused.replace("\"route\":\"BOGUS\"", "\"route\":\"PO\",\"prnMinIntervalHours\":6");
+        String accepted = ticked.replace("\"route\":\"BOGUS\"", "\"route\":\"PO\",\"prnMinIntervalHours\":6");
         String answer = mockMvc.perform(post(API_CONTEXT + "/prescriptions")
                 .contextPath(API_CONTEXT)
                 .with(as(authorUser))
@@ -251,10 +262,12 @@ class PrescriptionEditAndWithdrawalIT extends BaseIT {
                 .content(accepted))
             .andExpect(status().isCreated())
             .andExpect(jsonPath("$.prnMinIntervalHours").value(6))
+            .andExpect(jsonPath("$.asNeeded").value(true))
             .andReturn().getResponse().getContentAsString();
         UUID created = UUID.fromString(com.jayway.jsonpath.JsonPath.read(answer, "$.id"));
         try {
             assertThat(prescriptionRepository.findById(created).orElseThrow().getPrnMinIntervalHours()).isEqualTo(6);
+            assertThat(prescriptionRepository.findById(created).orElseThrow().isAsNeeded()).isTrue();
         } finally {
             auditEventLogRepository.deleteAllInBatch(auditEventLogRepository.findAll().stream()
                 .filter(row -> created.toString().equals(row.getResourceId())).toList());
@@ -268,10 +281,12 @@ class PrescriptionEditAndWithdrawalIT extends BaseIT {
      * minimum interval was created (201). Each is now refused on the field.
      */
     @Test
-    @DisplayName("QA D1360: a morphine PRN order in the usual French wordings needs its minimum interval")
+    @DisplayName("QA D1360 / D1378: a morphine order in any as-needed wording is confirmed, then needs its interval")
     void d1360_morphinePrnInFrenchWordingsNeedsItsInterval() throws Exception {
         long before = prescriptionRepository.count();
-        for (String wording : new String[] {"au besoin", "à la demande", "si nécessaire", "si douleur"}) {
+        // QA D1378 (round 32): the round-31 wordings and the round-32 ones a word list had missed.
+        for (String wording : new String[] {"au besoin", "à la demande", "si nécessaire", "si douleur", "SOS",
+            "p.r.n.", "sur demande", "si EVA > 4", "si precisa", "s/p", "when necessary", "for pain"}) {
             String body = "{\"patientId\":\"" + patient.getId() + "\",\"staffId\":\"" + authorStaff.getId()
                 + "\",\"encounterId\":\"" + encounter.getId() + "\",\"medicationName\":\"Morphine 2 mg\","
                 + "\"dosage\":\"2 mg\",\"frequency\":\"" + wording + "\",\"route\":\"IV\",\"quantity\":10,"
@@ -281,6 +296,13 @@ class PrescriptionEditAndWithdrawalIT extends BaseIT {
                     .with(as(authorUser))
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors.asNeeded").exists());
+            mockMvc.perform(post(API_CONTEXT + "/prescriptions")
+                    .contextPath(API_CONTEXT)
+                    .with(as(authorUser))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(body.replace("\"controlledSubstance\":true", "\"controlledSubstance\":true,\"asNeeded\":true")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.fieldErrors.prnMinIntervalHours").exists());
         }
@@ -296,6 +318,8 @@ class PrescriptionEditAndWithdrawalIT extends BaseIT {
     @DisplayName("QA round 30: an older PRN order is withdrawn without an interval; an edit of its content needs one")
     void anOlderPrnOrderIsWithdrawnWithoutAnIntervalButAnEditNeedsOne() throws Exception {
         prescription.setFrequency("PRN");
+        // V260 ticked the older orders the round-31 list read ("PRN").
+        prescription.setAsNeeded(true);
         prescription = prescriptionRepository.save(prescription);
 
         mockMvc.perform(put(API_CONTEXT + UPDATE_PATH, prescription.getId())
@@ -314,6 +338,38 @@ class PrescriptionEditAndWithdrawalIT extends BaseIT {
                 .with(as(authorUser))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body("Amoxicilline 500 mg", "DISCONTINUED", "Traitement terminé").replace("3x/day", "PRN")))
+            .andExpect(status().isOk());
+        assertThat(prescriptionRepository.findById(prescription.getId()).orElseThrow().getStatus())
+            .isEqualTo(PrescriptionStatus.DISCONTINUED);
+    }
+
+    /**
+     * QA D1378 (round 32): an older order the round-31 list did not read
+     * ("SOS", left unticked by V260) asks its author to confirm when its
+     * content is edited; its withdrawal is never refused for it.
+     */
+    @Test
+    @DisplayName("QA D1378: an older unticked SOS order is confirmed on edit, withdrawn without question")
+    void d1378_anOlderUntickedOrderIsConfirmedOnEditButWithdrawnFreely() throws Exception {
+        prescription.setFrequency("SOS");
+        prescription = prescriptionRepository.save(prescription);
+
+        mockMvc.perform(put(API_CONTEXT + UPDATE_PATH, prescription.getId())
+                .contextPath(API_CONTEXT)
+                .with(as(authorUser))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body("Amoxicilline 500 mg", null, null).replace("3x/day", "SOS")
+                    .replace("\"dosage\":\"500 mg\"", "\"dosage\":\"1 g\"")))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.fieldErrors.asNeeded").exists());
+
+        prescription.setStatus(PrescriptionStatus.SIGNED);
+        prescription = prescriptionRepository.save(prescription);
+        mockMvc.perform(put(API_CONTEXT + UPDATE_PATH, prescription.getId())
+                .contextPath(API_CONTEXT)
+                .with(as(authorUser))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body("Amoxicilline 500 mg", "DISCONTINUED", "Traitement terminé").replace("3x/day", "SOS")))
             .andExpect(status().isOk());
         assertThat(prescriptionRepository.findById(prescription.getId()).orElseThrow().getStatus())
             .isEqualTo(PrescriptionStatus.DISCONTINUED);

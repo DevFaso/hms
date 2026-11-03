@@ -16,6 +16,10 @@ import java.lang.annotation.Target;
  * older as-needed order, written before the field existed, is never refused
  * for it (the service rule {@code PrnMinInterval.applyTo} decides an edit of
  * the order's content).
+ *
+ * <p>QA D1378 (round 32): as-needed is the prescriber's explicit tick
+ * ({@code asNeeded}); the frequency text only feeds the safety net, refused on
+ * {@code asNeeded} when it looks conditional on an order not ticked.
  */
 @Target(ElementType.TYPE)
 @Retention(RetentionPolicy.RUNTIME)

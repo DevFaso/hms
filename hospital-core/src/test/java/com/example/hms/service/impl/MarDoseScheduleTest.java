@@ -255,7 +255,7 @@ class MarDoseScheduleTest {
         assertThat(MarDoseSchedule.read(frequency).kind()).isEqualTo(MarDoseSchedule.Kind.UNREAD);
     }
 
-    /** The shared as-needed fixture the portal spec runs too (QA D1360). */
+    /** The shared as-needed fixture (QA D1360 / D1378; PrnAsNeededBackfillMigrationIT reads it too). */
     static final Path AS_NEEDED_CASES =
         Path.of("..", "hospital-portal", "src", "app", "shared", "as-needed-frequency.cases.json");
 
@@ -267,7 +267,15 @@ class MarDoseScheduleTest {
         return fixtureList("notAsNeeded");
     }
 
-    private static List<String> fixtureList(String key) throws Exception {
+    static List<String> conditionalCases() throws Exception {
+        return fixtureList("conditional");
+    }
+
+    static List<String> fixedScheduleCases() throws Exception {
+        return fixtureList("fixedSchedule");
+    }
+
+    static List<String> fixtureList(String key) throws Exception {
         List<String> out = new ArrayList<>();
         new ObjectMapper().readTree(Files.readString(AS_NEEDED_CASES)).path(key).forEach(n -> out.add(n.asText()));
         assertThat(out).as("fixture list " + key).isNotEmpty();
@@ -275,24 +283,78 @@ class MarDoseScheduleTest {
     }
 
     /**
-     * QA D1360 replay (prn31.js, prnword.js): "au besoin", "à la demande",
-     * "si nécessaire" and "si douleur" read as a written frequency the MAR
-     * could not schedule, so a PRN order (morphine included) was created with
-     * no minimum interval. Every wording of the shared fixture is as-needed;
-     * no repeat, no doses per day.
+     * QA D1360 replay (prn31.js, prnword.js), QA D1378 (round 32): the frozen
+     * round-31 phrases are never a schedule (no repeat, no doses per day), and
+     * the text alone never makes an order as-needed any more: on an order the
+     * prescriber did not tick, the MAR keeps the course open and flagged
+     * (UNREAD); ticked, it is AS_NEEDED whatever the words.
      */
     @ParameterizedTest
     @MethodSource("asNeededCases")
-    void d1360_everySharedAsNeededWordingReadsAsNeeded(String frequency) {
-        assertThat(MarDoseSchedule.read(frequency).kind()).isEqualTo(MarDoseSchedule.Kind.AS_NEEDED);
+    void d1378_aRound31AsNeededWordingIsNeverASchedule(String frequency) {
+        assertThat(MarDoseSchedule.read(frequency).kind()).isEqualTo(MarDoseSchedule.Kind.UNREAD);
         assertThat(MarDoseSchedule.intervalHours(frequency)).isNull();
         assertThat(MarDoseSchedule.dosesPerDay(frequency)).isNull();
+        com.example.hms.model.Prescription ticked = new com.example.hms.model.Prescription();
+        ticked.setFrequency(frequency);
+        ticked.setAsNeeded(true);
+        assertThat(MarDoseSchedule.read(ticked).kind()).isEqualTo(MarDoseSchedule.Kind.AS_NEEDED);
+        ticked.setAsNeeded(false);
+        assertThat(MarDoseSchedule.read(ticked).kind()).isEqualTo(MarDoseSchedule.Kind.UNREAD);
     }
 
     @ParameterizedTest
     @MethodSource("notAsNeededCases")
     void d1360_theSharedNonAsNeededCasesAreNot(String frequency) {
         assertThat(MarDoseSchedule.read(frequency).kind()).isNotEqualTo(MarDoseSchedule.Kind.AS_NEEDED);
+    }
+
+    /**
+     * QA D1378 (round 32): NO frequency text is read as AS_NEEDED, however it
+     * is written; only the prescriber's tick is (MarAsNeededFlagGuardTest
+     * keeps every reader on the tick).
+     */
+    @ParameterizedTest
+    @MethodSource({"asNeededCases", "notAsNeededCases", "conditionalCases", "fixedScheduleCases"})
+    void d1378_theTextAloneIsNeverAsNeeded(String frequency) {
+        assertThat(MarDoseSchedule.read(frequency).kind()).isNotEqualTo(MarDoseSchedule.Kind.AS_NEEDED);
+    }
+
+    /**
+     * QA D1378 replay (prn32*.js, prnw32.js, prnsweep32.log, rxprn32.js): the
+     * SAFETY NET catches every round-31 and round-32 as-needed wording - SOS,
+     * p.r.n., sur demande, si precisa, s/p, when necessary, for pain, si EVA > 4
+     * ... - and every frozen round-31 phrase case.
+     */
+    @ParameterizedTest
+    @MethodSource({"conditionalCases", "asNeededCases"})
+    void d1378_theSafetyNetCatchesEveryAsNeededWording(String frequency) {
+        assertThat(MarDoseSchedule.looksAsNeeded(frequency)).as(frequency).isTrue();
+    }
+
+    /** QA D1378: a fixed schedule, a single dose or nothing written is never asked to confirm. */
+    @ParameterizedTest
+    @MethodSource("fixedScheduleCases")
+    @NullAndEmptySource
+    void d1378_theSafetyNetLeavesAFixedScheduleAlone(String frequency) {
+        assertThat(MarDoseSchedule.looksAsNeeded(frequency)).as(frequency).isFalse();
+    }
+
+    /** QA D1378: the fixture holds every wording QA filed under D1378 and D1360, word for word. */
+    @Test
+    void d1378_theFixtureHoldsEveryFiledWording() throws Exception {
+        List<String> conditional = conditionalCases();
+        assertThat(conditional).contains(
+            "au besoin", "à la demande", "si nécessaire", "si douleur",
+            "SOS", "en SOS", "si SOS", "S.O.S.", "p.r.n.", "P.R.N", "P.R.N.", "pro re nata", "sur demande",
+            "s'il y a besoin", "si nécessité", "en cas de nécessité", "selon nécessité", "quand nécessaire",
+            "si mal", "si nausées", "si vomissements", "si agitation", "si insomnie", "si céphalées", "si crise",
+            "en cas de crise", "selon douleur", "s'il y a douleur", "si EVA > 4", "si T° > 38,5",
+            "si température > 38",
+            "si precisa", "s/p", "según sea necesario", "cuando sea necesario", "cuando se necesite",
+            "cuando lo necesite", "en caso de necesidad", "a necesidad", "si fuera necesario", "si hay dolor",
+            "si náuseas",
+            "when necessary", "as necessary", "for pain", "if nauseous", "if nausea", "if nauseated");
     }
 
     /** QA D1360 guard: every phrase of the vocabulary has a case in the shared fixture, in its own words. */
@@ -304,12 +366,13 @@ class MarDoseScheduleTest {
             .allSatisfy(phrase -> assertThat(folded).as(phrase).contains(phrase));
     }
 
-    /** QA D1237: only a frequency that says so is a single dose or as-needed. */
+    /** QA D1237: only a frequency that says so is a single dose (QA D1378: as-needed is the tick). */
     @ParameterizedTest
     @CsvSource(delimiter = '|', value = {
         "once|ONE_OFF", "STAT|ONE_OFF", "une seule fois|ONE_OFF", "Une fois|ONE_OFF", "dose unique|ONE_OFF",
         "una vez|ONE_OFF", "dosis única|ONE_OFF", "single dose|ONE_OFF",
-        "PRN|AS_NEEDED", "si besoin|AS_NEEDED", "q4h PRN|AS_NEEDED", "cada 6 horas si es necesario|AS_NEEDED",
+        // QA D1378: the text alone is never AS_NEEDED; an unticked as-needed wording stays open (UNREAD).
+        "PRN|UNREAD", "si besoin|UNREAD", "q4h PRN|UNREAD", "cada 6 horas si es necesario|UNREAD",
         "after meals|UNREAD", "après les repas|UNREAD", "une fois par semaine|UNREAD", "q0h|UNREAD",
         "24h/24|UNREAD", "2 fois|UNREAD", "toutes les 30 minutes|UNREAD"
     })

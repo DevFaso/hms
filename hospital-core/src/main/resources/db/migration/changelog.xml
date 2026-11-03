@@ -3337,4 +3337,18 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- V260 (QA round 32, D1378 / D1360, coordinator decision 2026-11-03): an
+         as-needed (PRN) prescription is an explicit flag on the order, never
+         guessed from the frequency text. NOT NULL default false; backfilled
+         true only where the round-31 phrase list already read the frequency
+         as as-needed (prescriptions and order-set MEDICATION items). D1381:
+         the admission cancellation reason, time and author. Plain
+         statements, no DO block. Idempotent. -->
+    <changeSet id="V260-r32-prescription-as-needed-flag" author="hms-team" runOnChange="false">
+        <sqlFile path="V260__r32_prescription_as_needed_flag.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

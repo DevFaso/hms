@@ -430,9 +430,11 @@ public class NurseTaskController {
         }
         if ("me".equalsIgnoreCase(assignee.trim())) {
             return authUtils.resolveUserId(auth)
-                .orElseThrow(() -> new BusinessException("nurse.assignee.meUnresolved"));
+                .orElseThrow(() -> new com.example.hms.exception.FieldBusinessException("assignee",
+                    "nurse.assignee.meUnresolved"));
         }
-        throw new BusinessException("nurse.assignee.invalid", assignee);
+        // QA D1384 (round 32): the refusal names the parameter, so the filter is marked.
+        throw new com.example.hms.exception.FieldBusinessException("assignee", "nurse.assignee.invalid", assignee);
     }
 
     private Duration parseWindow(String raw) {

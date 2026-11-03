@@ -342,6 +342,15 @@ class NurseTaskServiceImplTest {
             .isEqualTo("LAB");
     }
 
+    /** QA D1384 (round 32): an unknown handoff status filter is refused on "status" (fieldErrors), translated. */
+    @Test
+    void d1384_anUnknownHandoffStatusIsRefusedOnTheParameter() {
+        UUID hospitalId = UUID.randomUUID();
+        assertThatThrownBy(() -> service.getHandoffSummaries(null, null, hospitalId, 10, "BOGUS"))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getField()).isEqualTo("status"));
+    }
+
     @Test
     void getHandoffSummariesReadsPendingRowsAndClampsLimit() {
         UUID hospitalId = UUID.randomUUID();
@@ -1721,7 +1730,9 @@ class NurseTaskServiceImplTest {
         lenient().when(prn.getHospital()).thenReturn(mockHospital);
         when(prn.getStatus()).thenReturn(PrescriptionStatus.SIGNED);
         lenient().when(prn.getCreatedAt()).thenReturn(fixedNow.minusHours(8));
-        when(prn.getFrequency()).thenReturn("si besoin");
+        lenient().when(prn.getFrequency()).thenReturn("si besoin");
+        // QA D1378: as-needed is the prescriber's tick.
+        when(prn.isAsNeeded()).thenReturn(true);
         lenient().when(prn.getPrnMinIntervalHours()).thenReturn(6);
         when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId)).thenReturn(List.of(prn));
         when(announcementRepository.countByHospital_Id(hospitalId)).thenReturn(0L);
@@ -4624,6 +4635,7 @@ class NurseTaskServiceImplTest {
     void prn_staysOfferedAfterADoseFlaggedEarlyWithTheInterval() {
         UUID hospitalId = UUID.randomUUID();
         Prescription rx = scheduledRx(hospitalId, "si besoin");
+        rx.setAsNeeded(true);
         rx.setStatus(PrescriptionStatus.SIGNED);
         rx.setPrnMinIntervalHours(6);
         LocalDateTime given = LocalDateTime.now().minusMinutes(1);
@@ -4652,6 +4664,7 @@ class NurseTaskServiceImplTest {
     void d1375_theAdministerAnswerOfAPrnOrderSaysWhatTheListSays() throws Exception {
         UUID hospitalId = UUID.randomUUID();
         Prescription rx = scheduledRx(hospitalId, "au besoin");
+        rx.setAsNeeded(true);
         rx.setStatus(PrescriptionStatus.SIGNED);
         rx.setPrnMinIntervalHours(6);
         LocalDateTime earlier = LocalDateTime.now().minusHours(1);
@@ -4747,6 +4760,7 @@ class NurseTaskServiceImplTest {
     void prn_aSecondDoseInsideTheIntervalAsksWhy() {
         UUID hospitalId = UUID.randomUUID();
         Prescription rx = scheduledRx(hospitalId, "PRN");
+        rx.setAsNeeded(true);
         rx.setPrnMinIntervalHours(4);
         LocalDateTime given = LocalDateTime.now().minusHours(1);
         when(prescriptionRepository.findByIdForUpdate(rx.getId())).thenReturn(Optional.of(rx));

@@ -721,6 +721,16 @@ class PrescriptionServiceImplTest {
         when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
         when(prescriptionMapper.toEntity(request, patient, staff, encounter)).thenReturn(mappedEntity);
 
+        // QA D1378 (round 32): not ticked, the as-needed wording is refused on the tick (safety net).
+        assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "asNeeded");
+        mappedEntity.setFrequency("SOS");
+        assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "asNeeded");
+        // Ticked, the interval is required.
+        mappedEntity.setAsNeeded(true);
         assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
             .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
             .hasFieldOrPropertyWithValue("field", "prnMinIntervalHours");
@@ -780,6 +790,7 @@ class PrescriptionServiceImplTest {
         Prescription existing = new Prescription();
         existing.setId(prescriptionId);
         existing.setFrequency("PRN");
+        existing.setAsNeeded(true);
         UserRoleHospitalAssignment staffAssignment = new UserRoleHospitalAssignment();
         staffAssignment.setId(UUID.randomUUID());
         staffAssignment.setHospital(encounter.getHospital());

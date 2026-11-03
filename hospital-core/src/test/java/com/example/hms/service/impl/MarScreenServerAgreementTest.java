@@ -48,7 +48,11 @@ class MarScreenServerAgreementTest {
         "toutes les heures", "q2h", "q4h", "toutes les six heures", "trois fois par jour", "5 fois par jour",
         "q12h", "une fois par jour", "cinq fois par jour", "après les repas",
         // QA round 30: as-needed orders, with the prescriber's interval and (an older order) without one.
-        "si besoin", "PRN", LEGACY_PRN);
+        "si besoin", "PRN", LEGACY_PRN,
+        // QA D1378 (round 32): an older order the round-31 list did not read and V260 left unticked.
+        "SOS");
+    /** QA D1378: the orders ticked as needed (as-needed is the prescriber's tick, not the text). */
+    private static final java.util.Set<String> TICKED = java.util.Set.of("si besoin", "PRN", LEGACY_PRN);
     private static final String OVERDUE = "OVERDUE";
     private static final String DUE = "DUE";
     /** "Right after" an outcome: the next slot is at least an hour away for every frequency read. */
@@ -92,7 +96,8 @@ class MarScreenServerAgreementTest {
         rx.setId(UUID.randomUUID());
         rx.setFrequency(frequency);
         rx.setSignedAt(START);
-        if (PrnMinInterval.asNeeded(frequency) && !LEGACY_PRN.equals(frequency)) {
+        rx.setAsNeeded(TICKED.contains(frequency));
+        if (rx.isAsNeeded() && !LEGACY_PRN.equals(frequency)) {
             rx.setPrnMinIntervalHours(4);
         }
         LocalDateTime recordedAt = START.plusMinutes(lateMinutes);

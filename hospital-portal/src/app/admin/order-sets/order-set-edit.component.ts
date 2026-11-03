@@ -78,6 +78,9 @@ const DOSE_UNITS: Choice[] = [
   { value: 'drop', labelKey: 'ORDER_SETS.DOSE_UNIT.DROP' },
   { value: 'unit', labelKey: 'ORDER_SETS.DOSE_UNIT.UNIT' },
 ];
+/** QA D1378: the coded as-needed frequency preset; picking it ticks the item as needed. */
+const PRN_PRESET = 'PRN';
+
 const FREQUENCY_PRESETS: Choice[] = [
   { value: 'QD', labelKey: 'ORDER_SETS.FREQUENCY.QD' },
   { value: 'BID', labelKey: 'ORDER_SETS.FREQUENCY.BID' },
@@ -86,7 +89,7 @@ const FREQUENCY_PRESETS: Choice[] = [
   { value: 'Q4H', labelKey: 'ORDER_SETS.FREQUENCY.Q4H' },
   { value: 'Q6H', labelKey: 'ORDER_SETS.FREQUENCY.Q6H' },
   { value: 'Q8H', labelKey: 'ORDER_SETS.FREQUENCY.Q8H' },
-  { value: 'PRN', labelKey: 'ORDER_SETS.FREQUENCY.PRN' },
+  { value: PRN_PRESET, labelKey: 'ORDER_SETS.FREQUENCY.PRN' },
 ];
 const ROUTES: Choice[] = [
   { value: 'PO', labelKey: 'ORDER_SETS.ROUTE.PO' },
@@ -117,7 +120,7 @@ import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { refusalReason } from '../../shared/refusal-reason';
 import { joinReasons } from '../../shared/required-fields';
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
-import { PRN_MAX_INTERVAL_HOURS, isAsNeededFrequency } from '../../shared/as-needed-frequency';
+import { PRN_MAX_INTERVAL_HOURS } from '../../shared/as-needed-frequency';
 
 @Component({
   selector: 'app-order-set-edit',
@@ -221,9 +224,35 @@ export class OrderSetEditComponent implements OnInit {
     return this.itemsMissingName().includes(index);
   }
 
-  /** QA round 30: the item is an as-needed medication, so it states its minimum interval. */
+  /**
+   * QA round 30 / QA D1378 / D1382 (round 32): a medication item its author
+   * TICKS as needed states its minimum interval. Never read from the
+   * frequency: the server refuses a conditional frequency without the tick
+   * (`orderItems[i].asNeeded`) and a ticked item without its interval, at
+   * save, so an order set never applies a PRN item without one.
+   */
   protected prnIntervalShown(it: OrderSetItem): boolean {
-    return this.isMedicationLike(it.orderType) && isAsNeededFrequency(it.frequency);
+    return this.isMedicationLike(it.orderType) && it.asNeeded === true;
+  }
+
+  /** QA D1378: unticking "as needed" drops the item's interval. */
+  protected onAsNeededChange(it: EditableItem, checked: boolean): void {
+    it.asNeeded = checked;
+    if (!checked) {
+      it.prnMinIntervalHours = null;
+    }
+  }
+
+  /**
+   * QA D1378: picking the coded "As needed (PRN)" frequency preset ticks the
+   * item as needed (a choice the author made, not a reading of free text);
+   * it is never unticked by another pick.
+   */
+  protected onFrequencyChange(it: EditableItem, value: string): void {
+    it.frequency = value;
+    if (value === PRN_PRESET) {
+      it.asNeeded = true;
+    }
   }
 
   protected itemMissingPrnInterval(index: number): boolean {
@@ -388,10 +417,12 @@ export class OrderSetEditComponent implements OnInit {
     if (out.doseRangeMax === undefined || (out.doseRangeMax as unknown) === null) {
       delete out.doseRangeMax;
     }
-    // QA round 30: the interval belongs to an as-needed item only.
+    // QA round 30 / QA D1378: the tick and the interval belong to an as-needed item only.
     if (this.prnIntervalShown(out)) {
+      out.asNeeded = true;
       out.prnMinIntervalHours = Number(out.prnMinIntervalHours);
     } else {
+      delete out.asNeeded;
       delete out.prnMinIntervalHours;
     }
     return out;

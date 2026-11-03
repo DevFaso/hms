@@ -114,6 +114,9 @@ public class AdmissionMapper {
         dto.setAdmissionDateTime(admission.getAdmissionDateTime());
         dto.setExpectedDischargeDateTime(admission.getExpectedDischargeDateTime());
         dto.setActualDischargeDateTime(admission.getActualDischargeDateTime());
+        // QA D1381: the stay's cancellation reason and time.
+        dto.setCancellationReason(admission.getCancellationReason());
+        dto.setCancelledAt(admission.getCancelledAt());
 
         dto.setChiefComplaint(admission.getChiefComplaint());
         dto.setPrimaryDiagnosisCode(admission.getPrimaryDiagnosisCode());

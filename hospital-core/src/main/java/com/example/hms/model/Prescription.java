@@ -140,6 +140,19 @@ public class Prescription extends BaseEntity {
     @Column(name = "prn_min_interval_hours")
     private Integer prnMinIntervalHours;
 
+    /**
+     * QA D1378 / D1360 (round 32, coordinator decision 2026-11-03): an
+     * as-needed (PRN) order is the prescriber's explicit choice, ticked on the
+     * order (V260), never guessed from the frequency text. True requires
+     * {@link #prnMinIntervalHours}; false refuses one. The MAR, the nurse
+     * counts, the early-dose rule and order sets read this flag
+     * ({@code PrnMinInterval.isAsNeeded}); the frequency text only feeds the
+     * safety net that asks the prescriber to confirm.
+     */
+    @Builder.Default
+    @Column(name = "as_needed", nullable = false)
+    private boolean asNeeded = false;
+
     @Size(max = 100)
     @Column(name = "duration", length = 100)
     private String duration;

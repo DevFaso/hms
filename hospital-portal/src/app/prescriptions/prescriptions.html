@@ -993,8 +993,7 @@
               <input
                 id="rx-frequency"
                 type="text"
-                [ngModel]="form.frequency"
-                (ngModelChange)="onFrequencyChange($event)"
+                [(ngModel)]="form.frequency"
                 [readonly]="editingSigned()"
                 [placeholder]="'PRESCRIPTIONS.FREQUENCY_PLACEHOLDER' | translate"
               />
@@ -1009,6 +1008,25 @@
                   <option [value]="r">{{ 'PRESCRIPTIONS.ROUTES.' + r | translate }}</option>
                 }
               </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="field">
+              <!-- QA D1378 / D1360 (round 32): as-needed (PRN) is the prescriber's explicit
+                 choice, never read from the frequency text. The server refuses a conditional
+                 frequency without it on asNeeded, marked here by the shared interceptor. -->
+              <label for="rx-asNeeded" class="checkbox-label">
+                <input
+                  id="rx-asNeeded"
+                  data-server-field="asNeeded"
+                  data-testid="rx-as-needed"
+                  type="checkbox"
+                  [ngModel]="form.asNeeded"
+                  (ngModelChange)="onAsNeededChange($event)"
+                  [disabled]="editingSigned()"
+                />
+                {{ 'ORDER_SETS.FREQUENCY.PRN' | translate }}
+              </label>
             </div>
           </div>
           @if (prnIntervalShown()) {
@@ -1299,8 +1317,8 @@
       <div class="modal-body">
         <p class="delete-warning">
           {{ 'PRESCRIPTIONS.DELETE_CONFIRM' | translate }}
-          <strong>{{ deletingRx()?.medicationName }}</strong
-          >{{ 'COMMON.CANNOT_UNDO' | translate }}
+          <strong>{{ deletingRx()?.medicationName }}</strong>
+          {{ 'COMMON.CANNOT_UNDO' | translate }}
         </p>
       </div>
       <div class="modal-actions">

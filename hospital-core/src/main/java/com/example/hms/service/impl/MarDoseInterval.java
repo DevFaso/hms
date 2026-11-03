@@ -107,7 +107,7 @@ public final class MarDoseInterval {
         if (status != MedicationAdministrationStatus.GIVEN || rx == null || lastGiven.isEmpty() || now == null) {
             return null;
         }
-        MarDoseSchedule.Reading reading = MarDoseSchedule.read(rx.getFrequency());
+        MarDoseSchedule.Reading reading = MarDoseSchedule.read(rx);
         if (reading.kind() == MarDoseSchedule.Kind.UNREAD) {
             // QA D1237: the course stays open, but the MAR cannot say when the
             // next dose is due, so every later dose says why it is given now.
