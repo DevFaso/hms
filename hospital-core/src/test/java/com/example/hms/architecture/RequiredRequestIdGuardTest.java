@@ -1544,9 +1544,30 @@ class RequiredRequestIdGuardTest {
             .isEmpty();
     }
 
-    /** The request-body class whose getter the guard reads, or null. */
+    /**
+     * The request-body class whose getter the guard reads - directly, or through
+     * a local the method initialised from one ({@code String reason =
+     * request.getWithdrawalReason() ...; if (reason == null) throw}) - or null.
+     */
     private static Class<?> bodyClassRead(String guard, String method, Map<String, Class<?>> bodies) {
-        Matcher getter = GETTER.matcher(guard);
+        Class<?> direct = getterOwner(guard, method, bodies);
+        if (direct != null) {
+            return direct;
+        }
+        Matcher local = LOCAL_INIT.matcher(method);
+        while (local.find()) {
+            if (Pattern.compile("(?<![.\\w])" + Pattern.quote(local.group(1)) + "\\b").matcher(guard).find()) {
+                Class<?> type = getterOwner(local.group(2), method, bodies);
+                if (type != null) {
+                    return type;
+                }
+            }
+        }
+        return null;
+    }
+
+    private static Class<?> getterOwner(String text, String method, Map<String, Class<?>> bodies) {
+        Matcher getter = GETTER.matcher(text);
         while (getter.find()) {
             Class<?> type = parameterType(method, getter.group(1), bodies);
             if (type != null) {
