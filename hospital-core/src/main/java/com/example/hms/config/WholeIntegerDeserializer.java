@@ -4,7 +4,6 @@ import tools.jackson.core.JsonParser;
 import tools.jackson.core.JsonToken;
 import tools.jackson.databind.DeserializationContext;
 import tools.jackson.databind.deser.std.StdDeserializer;
-import tools.jackson.databind.exc.InvalidFormatException;
 
 import java.math.BigDecimal;
 
@@ -29,7 +28,9 @@ public class WholeIntegerDeserializer extends StdDeserializer<Integer> {
         try {
             return value.stripTrailingZeros().intValueExact();
         } catch (ArithmeticException notWhole) {
-            throw InvalidFormatException.from(p, "Not a whole number", value, Integer.class);
+            // QA D1349 (round 30): through the problem handler, so a request body
+            // collects this field with every other malformed one (RequestBodyDefaultsModule).
+            return (Integer) ctxt.handleWeirdNumberValue(Integer.class, value, "Not a whole number");
         }
     }
 }

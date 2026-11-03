@@ -335,9 +335,8 @@ class UnsortedPageGuardTest {
     }
 
     private static String methodName(String source, int at) {
-        String method = AppointmentSlotRulesGuardTest.enclosingMethod(source, at);
-        Matcher name = Pattern.compile("(\\w++)\\s*+\\(").matcher(method);
-        return name.find() ? name.group(1) : "?";
+        // Sonar S8786 (round 30): a linear scan, the same answer as the regex it replaced.
+        return AppointmentSlotRulesGuardTest.firstCalledName(AppointmentSlotRulesGuardTest.enclosingMethod(source, at));
     }
 
     /**

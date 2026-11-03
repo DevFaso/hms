@@ -12,6 +12,10 @@ import java.util.UUID;
 public class LabReflexRuleRequestDTO {
 
     /** Test definition whose result triggers this rule. */
+    // QA D1349 (round 30): required on create, declared so they are named at the
+    // edge with any malformed value (the update is a partial edit, not validated).
+    @jakarta.validation.constraints.NotNull(groups = com.example.hms.validation.OnCreate.class,
+        message = "{lab.reflex.trigger.required}")
     private UUID triggerTestDefinitionId;
 
     /**
@@ -19,9 +23,13 @@ public class LabReflexRuleRequestDTO {
      * {"severityFlag":"ABNORMAL"}
      * {"thresholdOperator":"GT","thresholdValue":11.0}
      */
+    @jakarta.validation.constraints.NotBlank(groups = com.example.hms.validation.OnCreate.class,
+        message = "{lab.reflex.conditionRequired}")
     private String condition;
 
     /** Test definition to auto-order when condition fires. */
+    @jakarta.validation.constraints.NotNull(groups = com.example.hms.validation.OnCreate.class,
+        message = "{lab.reflex.reflex.required}")
     private UUID reflexTestDefinitionId;
 
     @Builder.Default

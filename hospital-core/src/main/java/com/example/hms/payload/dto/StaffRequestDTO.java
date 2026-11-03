@@ -26,18 +26,21 @@ import java.time.LocalDate;
 @Schema(name = "StaffRequestDTO", description = "Payload to create or update a staff member")
 public class StaffRequestDTO {
 
-    @NotBlank(message = "{staff.user.required}")
+    // QA D1349 (round 30): the create handler validates the OnCreate group only, so
+    // these three are named at the edge with a malformed value (the other
+    // constraints here stay unapplied, as before: see RequiredRequestIdGuardTest).
+    @NotBlank(groups = com.example.hms.validation.OnCreate.class, message = "{staff.user.required}")
     @Schema(requiredMode = Schema.RequiredMode.REQUIRED, description = "User email linked to this staff profile")
     private String userEmail;
 
-    @NotBlank(message = "{staff.hospital.required}")
+    @NotBlank(groups = com.example.hms.validation.OnCreate.class, message = "{staff.hospital.required}")
     @Schema(requiredMode = Schema.RequiredMode.REQUIRED, description = "Hospital name where staff is registered")
     private String hospitalName;
 
     @Schema(description = "Department name (optional)")
     private String departmentName;
 
-    @NotBlank(message = "{staff.jobTitle.blank}")
+    @NotBlank(groups = com.example.hms.validation.OnCreate.class, message = "{staff.jobTitle.required}")
     @Size(max = 100, message = "{staff.jobTitle.size}")
     @Schema(requiredMode = Schema.RequiredMode.REQUIRED, description = "Job title for the staff")
     private String jobTitle;

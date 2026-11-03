@@ -34,30 +34,31 @@ final class RequestFieldPaths {
             int bracket = segment.indexOf('[');
             String name = bracket >= 0 ? segment.substring(0, bracket) : segment;
             String index = bracket >= 0 ? segment.substring(bracket) : "";
-            String mapped = name;
-            Class<?> next = null;
-            if (current != null && !name.isEmpty()) {
-                Field field = findField(current, name);
-                if (field != null) {
-                    JsonProperty json = field.getAnnotation(JsonProperty.class);
-                    if (json != null && !json.value().isEmpty()) {
-                        mapped = json.value();
-                    }
-                    next = valueType(field, !index.isEmpty());
-                } else {
-                    ReportedOn reportedOn = findRule(current, name);
-                    if (reportedOn != null) {
-                        mapped = reportedOn.value();
-                    }
-                }
-            }
+            Field field = current != null && !name.isEmpty() ? findField(current, name) : null;
             if (!out.isEmpty()) {
                 out.append('.');
             }
-            out.append(mapped).append(index);
-            current = next;
+            out.append(jsonSegment(current, name, field)).append(index);
+            current = field != null ? valueType(field, !index.isEmpty()) : null;
         }
         return out.toString();
+    }
+
+    /**
+     * The JSON name of one segment on its class: a field's {@code @JsonProperty},
+     * a rule's {@link ReportedOn} target, else the name unchanged (Sonar S3776,
+     * round 30: split out of {@link #toJson}).
+     */
+    private static String jsonSegment(Class<?> owner, String name, Field field) {
+        if (field != null) {
+            JsonProperty json = field.getAnnotation(JsonProperty.class);
+            return json != null && !json.value().isEmpty() ? json.value() : name;
+        }
+        if (owner == null || name.isEmpty()) {
+            return name;
+        }
+        ReportedOn reportedOn = findRule(owner, name);
+        return reportedOn != null ? reportedOn.value() : name;
     }
 
     private static Field findField(Class<?> type, String name) {

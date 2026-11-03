@@ -415,6 +415,46 @@ class AppointmentSlotRulesGuardTest {
     }
 
     /** The body of the method (4-space indented member) around {@code index}. */
+    /**
+     * The first identifier of {@code text} followed by a "(" (spaces allowed),
+     * or "?". Sonar S8786 (round 30): the regex {@code (\w++)\s*+\(} run with
+     * {@code find()} retried from every character of a long word; this scan
+     * reads each character once and returns exactly what that regex found (the
+     * leftmost match always starts at the start of a word).
+     */
+    static String firstCalledName(String text) {
+        int i = 0;
+        int n = text.length();
+        while (i < n) {
+            if (!isWordChar(text.charAt(i))) {
+                i++;
+                continue;
+            }
+            int start = i;
+            while (i < n && isWordChar(text.charAt(i))) {
+                i++;
+            }
+            int j = i;
+            while (j < n && isRegexSpace(text.charAt(j))) {
+                j++;
+            }
+            if (j < n && text.charAt(j) == '(') {
+                return text.substring(start, i);
+            }
+        }
+        return "?";
+    }
+
+    /** Java regex {@code \w}: an ASCII letter, digit or underscore. */
+    static boolean isWordChar(char c) {
+        return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_';
+    }
+
+    /** Java regex {@code \s}: space, tab, newline, vertical tab, form feed, carriage return. */
+    static boolean isRegexSpace(char c) {
+        return c == ' ' || c == 0x09 || c == 0x0A || c == 0x0B || c == 0x0C || c == 0x0D;
+    }
+
     static String enclosingMethod(String src, int index) {
         java.util.regex.Matcher header = java.util.regex.Pattern.compile(
             "(?m)^    [a-zA-Z][^\\n(]*\\(")

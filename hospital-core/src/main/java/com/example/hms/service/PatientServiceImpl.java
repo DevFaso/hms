@@ -506,7 +506,7 @@ public class PatientServiceImpl implements PatientService {
         if (request.getPhoneNumberPrimary() != null) {
             String phone = normalizePhone(request.getPhoneNumberPrimary(), country, FIELD_PHONE_PRIMARY);
             if (phone == null) {
-                throw new com.example.hms.exception.FieldBusinessException("phoneNumberPrimary", "patient.r16.phoneRequired");
+                throw new com.example.hms.exception.FieldBusinessException(FIELD_PHONE_PRIMARY, "patient.r16.phoneRequired");
             }
             // A number is not unique to one record: a child is registered with
             // the mother's phone (the database has no unique constraint on it).

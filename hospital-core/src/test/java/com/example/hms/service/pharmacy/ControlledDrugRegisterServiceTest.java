@@ -197,6 +197,24 @@ class ControlledDrugRegisterServiceTest {
         assertThat(service.register(pharmacy.getId(), null, from, day366).drugs()).isNotEmpty();
     }
 
+    /**
+     * Sonar S2259 (round 30): a missing start or end ends at the refusal, named
+     * by field, before the period checks read either end.
+     */
+    @Test
+    void aMissingEndOfThePeriodIsRefusedByFieldBeforeAnyPeriodCheck() {
+        UUID pharmacyId = pharmacy.getId();
+        assertThatThrownBy(() -> service.register(pharmacyId, null, from, null))
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                .extracting("messageKey").isEqualTo("pharmacy.register.toRequired");
+        assertThatThrownBy(() -> service.register(pharmacyId, null, null, to))
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                .extracting("messageKey").isEqualTo("pharmacy.register.fromRequired");
+        assertThatThrownBy(() -> service.register(pharmacyId, null, null, null))
+                .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                    e -> assertThat(e.getFieldErrors()).containsOnlyKeys("from", "to"));
+    }
+
     @Test
     void aBackwardsOrOverlongPeriodIsRefused() {
         UUID pharmacyId = pharmacy.getId();

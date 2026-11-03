@@ -122,7 +122,7 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
         if (dto.endTime().equals(dto.startTime())) {
             throw new com.example.hms.exception.FieldBusinessException("endTime", SHIFT_TIME_RANGE_INVALID_KEY);
         }
-        ensureCrossMidnightAllowed(dto.shiftType(), dto.startTime(), dto.endTime(), effectiveLocale);
+        ensureCrossMidnightAllowed(dto.shiftType(), dto.startTime(), dto.endTime());
 
         Staff staff = findStaff(dto.staffId(), effectiveLocale);
         Hospital hospital = findHospital(dto.hospitalId(), effectiveLocale);
@@ -556,7 +556,7 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
         if (dto.endTime().equals(dto.startTime())) {
             throw new com.example.hms.exception.FieldBusinessException("endTime", SHIFT_TIME_RANGE_INVALID_KEY);
         }
-        ensureCrossMidnightAllowed(dto.shiftType(), dto.startTime(), dto.endTime(), locale);
+        ensureCrossMidnightAllowed(dto.shiftType(), dto.startTime(), dto.endTime());
         // QA D282: two concurrent submits both passed the check below and both
         // saved. Serialise on the staff row first; the lock lasts to commit.
         staffRepository.findLockedById(staff.getId());
@@ -639,7 +639,7 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
      * QA D635: only shift types that can run past midnight may end before they
      * start. A MORNING shift from 16:00 to 08:00 is a typo, not a night shift.
      */
-    private void ensureCrossMidnightAllowed(StaffShiftType type, LocalTime start, LocalTime end, Locale locale) {
+    private static void ensureCrossMidnightAllowed(StaffShiftType type, LocalTime start, LocalTime end) {
         if (isCrossMidnight(start, end) && type != null && !CROSS_MIDNIGHT_TYPES.contains(type)) {
             throw new com.example.hms.exception.FieldBusinessException("endTime", SHIFT_TIME_RANGE_INVALID_KEY);
         }

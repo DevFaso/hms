@@ -55,7 +55,9 @@ public class LabTestDefinitionController {
     @PreAuthorize(MANAGE_ROLES)
     @Operation(summary = "Create multiple Lab Test Definitions")
     public ResponseEntity<ApiResponseWrapper<List<LabTestDefinitionResponseDTO>>> createBatch(
-        @RequestBody List<LabTestDefinitionRequestDTO> dtoList) {
+        // QA D1349 (round 30): validated at the edge, so a malformed value and
+        // the missing names of every row are refused in one answer, keyed [i].field.
+        @jakarta.validation.Valid @RequestBody List<LabTestDefinitionRequestDTO> dtoList) {
         // QA D667: every element is validated as the single POST validates its
         // body, all before the first create, so an incomplete row is a 400 and
         // nothing is half-created.

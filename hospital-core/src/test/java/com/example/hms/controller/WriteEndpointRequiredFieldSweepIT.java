@@ -106,6 +106,15 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  *   <li><b>Blank typed</b>: every UUID, enum, date, time and number field sent
  *       {@code ""} at once. Never a 5xx; every such field the empty body named
  *       is named again in ONE answer (D1316: the parser stopped at the first).</li>
+ *   <li><b>Malformed typed</b> (QA D1349, round 30): every UUID, enum, date,
+ *       time, number and flag field sent a value it cannot read, all at once,
+ *       the rest of the body left out. Never a 5xx, never a 2xx; ONE 400 names
+ *       every malformed field AND every field the empty body named (the parser
+ *       stopped at the first malformed value and bean validation never ran).</li>
+ *   <li><b>Blank text</b> (QA D1351, round 30): from the filled body, every
+ *       named text field sent {@code "   "} at once. Never a 2xx; every one of
+ *       them is named in that answer (a {@code @NotNull String} let a blank
+ *       through to a service check that named it one request later).</li>
  * </ol>
  */
 @AutoConfigureMockMvc(addFilters = false)
@@ -248,6 +257,12 @@ class WriteEndpointRequiredFieldSweepIT extends BaseIT {
      * field (a state, the caller's role, a sample value the sweep cannot make
      * real), each with why. Stale entries fail.
      */
+    /**
+     * "METHOD /pattern field" of a required text field a blank value legitimately
+     * satisfies (phase 6). Each with why; none so far.
+     */
+    private static final Set<String> BLANK_TEXT_ACCEPTED = Set.of();
+
     private static final Map<String, String> NOT_A_FIELD_ONCE_FILLED = Map.ofEntries(
         Map.entry("POST /auth/me/complete-setup", "state: the account has no pending username or password change"),
         Map.entry("POST /high-risk-care-plans", "role: the sweep's caller is not obstetric clinical staff"),
@@ -355,6 +370,8 @@ class WriteEndpointRequiredFieldSweepIT extends BaseIT {
         fillAndResend(endpoint, empty, filled, failures, allowedSeen);
         missingOneAtATime(endpoint, filled, failures);
         blankTyped(endpoint, empty, failures);
+        malformedTyped(endpoint, empty, failures);
+        blankText(endpoint, filled, failures);
     }
 
     /** Phase 1: {@code {}}. True when it was refused by name and the next phases apply. */
@@ -459,6 +476,87 @@ class WriteEndpointRequiredFieldSweepIT extends BaseIT {
         if (!unnamed.isEmpty() && fourth.status == 400) {
             fail(failures, "blank typed required field not named (only the first is)",
                 key + " -> named " + fourth.fieldErrors.keySet() + ", not " + unnamed);
+        }
+    }
+
+    /**
+     * Phase 5 (QA D1349): every typed field malformed at once; one 400 names each
+     * of them and every field the empty body named.
+     */
+    private void malformedTyped(Endpoint endpoint, Answer empty, Map<String, List<String>> failures)
+            throws Exception {
+        Map<String, Object> malformed = endpoint.malformedTypedBody();
+        if (malformed.isEmpty()) {
+            return;
+        }
+        String key = endpoint.key();
+        Answer fifth = call(endpoint, endpoint.wrap(malformed));
+        if (fifth.status >= 500) {
+            fail(failures, "5xx on malformed typed fields", key + " -> " + fifth.status + " " + fifth.brief());
+            return;
+        }
+        if (fifth.status < 300) {
+            fail(failures, "2xx with every typed field malformed", key + " -> " + fifth.status);
+            return;
+        }
+        if (fifth.status != 400) {
+            // Refused before the body is read (a 403 / 404 at the door): nothing parsed to name.
+            return;
+        }
+        String prefix = endpoint.elementType() != null ? "[0]." : "";
+        List<String> unnamed = new ArrayList<>();
+        for (String sent : malformed.keySet()) {
+            if (!fifth.fieldErrors.containsKey(prefix + sent)) {
+                unnamed.add(sent);
+            }
+        }
+        for (String named : empty.fieldErrors.keySet()) {
+            if (!malformed.containsKey(Endpoint.topLevel(named)) && !fifth.fieldErrors.containsKey(named)) {
+                unnamed.add(named + " (required)");
+            }
+        }
+        if (!unnamed.isEmpty()) {
+            fail(failures, "malformed value or required field not named with the others (D1349)",
+                key + " -> named " + fifth.fieldErrors.keySet() + ", not " + unnamed);
+        }
+    }
+
+    /**
+     * Phase 6 (QA D1351): every named text field sent blank at once; each is named
+     * in that one answer.
+     */
+    private void blankText(Endpoint endpoint, Map<String, Object> filled, Map<String, List<String>> failures)
+            throws Exception {
+        Map<String, Field> props = endpoint.properties();
+        Map<String, Object> blank = new LinkedHashMap<>(filled);
+        List<String> texts = new ArrayList<>();
+        for (String name : filled.keySet()) {
+            Field f = props.get(name);
+            if (f != null && f.getType() == String.class) {
+                blank.put(name, "   ");
+                texts.add(name);
+            }
+        }
+        if (texts.isEmpty()) {
+            return;
+        }
+        String key = endpoint.key();
+        Answer sixth = call(endpoint, endpoint.wrap(blank));
+        if (sixth.status >= 500) {
+            fail(failures, "5xx on blank text fields", key + " -> " + sixth.status + " " + sixth.brief());
+            return;
+        }
+        String prefix = endpoint.elementType() != null ? "[0]." : "";
+        List<String> unnamed = new ArrayList<>();
+        for (String text : texts) {
+            if (!sixth.fieldErrors.containsKey(prefix + text)
+                    && !BLANK_TEXT_ACCEPTED.contains(key + " " + text)) {
+                unnamed.add(text);
+            }
+        }
+        if (!unnamed.isEmpty() && (sixth.status < 300 || sixth.status == 400)) {
+            fail(failures, "required text field accepted blank or not named with the others (D1351)",
+                key + " -> " + sixth.status + " named " + sixth.fieldErrors.keySet() + ", not " + unnamed);
         }
     }
 
@@ -660,7 +758,16 @@ class WriteEndpointRequiredFieldSweepIT extends BaseIT {
         static String jsonName(Field f) {
             com.fasterxml.jackson.annotation.JsonProperty p =
                 f.getAnnotation(com.fasterxml.jackson.annotation.JsonProperty.class);
-            return p != null && !p.value().isEmpty() ? p.value() : f.getName();
+            if (p != null && !p.value().isEmpty()) {
+                return p.value();
+            }
+            String name = f.getName();
+            // Lombok's primitive "boolean isActive" is read and written as "active".
+            if (f.getType() == boolean.class && name.length() > 2 && name.startsWith("is")
+                    && Character.isUpperCase(name.charAt(2))) {
+                return Character.toLowerCase(name.charAt(2)) + name.substring(3);
+            }
+            return name;
         }
 
         static String topLevel(String key) {
@@ -711,6 +818,19 @@ class WriteEndpointRequiredFieldSweepIT extends BaseIT {
             properties().forEach((name, f) -> {
                 if (isTyped(f.getType())) {
                     out.put(name, "");
+                }
+            });
+            return out;
+        }
+
+        /** Every typed field (a flag too) with a value it cannot read. */
+        Map<String, Object> malformedTypedBody() {
+            Map<String, Object> out = new LinkedHashMap<>();
+            properties().forEach((name, f) -> {
+                Class<?> t = f.getType();
+                if (isTyped(t) || t == Boolean.class || t == boolean.class
+                        || (t.isPrimitive() && t != char.class)) {
+                    out.put(name, "zz-malformed");
                 }
             });
             return out;
