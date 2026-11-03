@@ -38,6 +38,21 @@ public class NurseMedicationTaskResponseDTO {
      */
     private boolean frequencyUnread;
     /**
+     * QA round 30: an as-needed (PRN, "si besoin") order. It is always offered
+     * (status DUE, never OVERDUE, not counted as a dose waiting), in a slot of
+     * now; a dose before the prescriber's minimum interval has passed since
+     * the last dose given is flagged {@link #earlyDose} (Give asks why), and
+     * {@link #prnLabel} says from when the next one needs no reason.
+     */
+    private boolean asNeeded;
+    /** QA round 30: the prescriber's minimum hours between two doses of an as-needed order, or null. */
+    private Integer prnMinIntervalHours;
+    /**
+     * QA round 30: the as-needed rule in the reader's language ("Si besoin :
+     * au moins 4 h entre deux doses"), or null on a scheduled order.
+     */
+    private String prnLabel;
+    /**
      * QA D1254: the dose is offered now (status DUE) but falls inside the
      * minimum interval since the last dose really given, so giving it asks
      * for a reason (QA D1210). False on every other row.

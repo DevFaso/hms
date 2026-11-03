@@ -71,6 +71,16 @@ export interface NurseMedicationTask {
    */
   frequencyUnread?: boolean;
   /**
+   * QA round 30 (user decision 2026-11-02): an as-needed (PRN) order, given on
+   * demand: always offered (DUE, never OVERDUE); `earlyDose` flags a dose
+   * inside the prescriber's minimum interval since the last one given.
+   */
+  asNeeded?: boolean;
+  /** QA round 30: the prescriber's minimum hours between two doses, or null. */
+  prnMinIntervalHours?: number | null;
+  /** QA round 30: the as-needed rule in the reader's language, composed by the server. */
+  prnLabel?: string | null;
+  /**
    * QA D1254 (round 26): the dose is offered now (status DUE) but falls inside
    * the minimum interval since the last dose given: Give asks for a reason
    * (the server's `earlyDoseReason` refusal opens the early-dose dialog).

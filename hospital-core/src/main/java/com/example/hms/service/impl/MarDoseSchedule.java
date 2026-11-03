@@ -17,8 +17,10 @@ import java.util.regex.Pattern;
  * "cada hora" and "every hour" were not read, and anything not read was
  * treated as a single dose, so the MAR ended the course after its first
  * outcome. A frequency now reads as one of four {@link Kind}s. Only a
- * frequency that says so ({@link Kind#ONE_OFF}: STAT, once, "dose unique";
- * {@link Kind#AS_NEEDED}: PRN, "si besoin") gives one dose. A frequency the
+ * frequency that says so ({@link Kind#ONE_OFF}: STAT, once, "dose unique")
+ * gives one dose; {@link Kind#AS_NEEDED} (PRN, "si besoin") is given on
+ * demand within the prescriber's minimum interval (QA round 30,
+ * {@code PrnMinInterval}, {@code MarNextDose}). A frequency the
  * reader cannot place is {@link Kind#UNREAD}: the MAR keeps that course open
  * and flags it, it never ends it.
  */
@@ -30,7 +32,7 @@ public final class MarDoseSchedule {
         REPEATING,
         /** A single dose (STAT, once, "dose unique", or no frequency written). */
         ONE_OFF,
-        /** PRN, "si besoin", "as needed": no fixed repeat. */
+        /** PRN, "si besoin", "as needed": no fixed repeat; given on demand within the order's minimum interval. */
         AS_NEEDED,
         /** Written, but not readable as a schedule: never read as a single dose (D1237). */
         UNREAD

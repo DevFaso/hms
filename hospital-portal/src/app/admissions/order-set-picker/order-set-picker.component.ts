@@ -123,15 +123,19 @@ type State = 'idle' | 'searching' | 'ready' | 'applying' | 'applied' | 'error';
               </li>
             }
           </ul>
-          <button
-            type="button"
-            class="btn-primary"
-            data-testid="order-set-picker-apply"
-            [disabled]="applying()"
-            (click)="apply(sel)"
-          >
-            {{ 'ORDER_SETS.APPLY' | translate }}
-          </button>
+          <!-- QA D1345 class (round 30): once applied, the preview offers no Apply
+               (a second press created every order again); the result shows below. -->
+          @if (appliedSummary() === null) {
+            <button
+              type="button"
+              class="btn-primary"
+              data-testid="order-set-picker-apply"
+              [disabled]="applying()"
+              (click)="apply(sel)"
+            >
+              {{ 'ORDER_SETS.APPLY' | translate }}
+            </button>
+          }
         </section>
       }
 
@@ -280,6 +284,10 @@ export class OrderSetPickerComponent implements OnChanges, OnDestroy {
   }
 
   protected apply(os: OrderSetSummary): void {
+    // QA D1345 class (round 30): an applied set is never applied again from
+    // the same preview (a second press created every order a second time);
+    // picking a set again starts a new preview.
+    if (this.appliedSummary() !== null || this.applying()) return;
     this.applySub?.unsubscribe();
     this.state.set('applying');
     this.applySub = this.orderSetService

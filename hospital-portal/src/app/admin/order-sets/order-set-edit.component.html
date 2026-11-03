@@ -175,6 +175,29 @@
                     }
                   </select>
                 </label>
+                @if (prnIntervalShown(item)) {
+                  <!-- QA round 30: an as-needed item states the minimum interval between doses. -->
+                  <label>
+                    <span>{{ 'PRESCRIPTIONS.PRN_MIN_INTERVAL' | translate }}</span> *
+                    <input
+                      type="number"
+                      min="1"
+                      [max]="prnMaxIntervalHours"
+                      step="1"
+                      required
+                      [(ngModel)]="item.prnMinIntervalHours"
+                      [name]="'prnMinIntervalHours-' + i"
+                      [id]="'order-set-item-prn-' + i"
+                      [attr.data-testid]="'order-set-item-prn-' + i"
+                      [attr.aria-invalid]="itemMissingPrnInterval(i) ? 'true' : null"
+                    />
+                    @if (itemMissingPrnInterval(i)) {
+                      <span class="field-error" role="alert">{{
+                        'PRESCRIPTIONS.PRN_MIN_INTERVAL_REQUIRED' | translate
+                      }}</span>
+                    }
+                  </label>
+                }
               </div>
             }
             <label class="order-set-item__notes">

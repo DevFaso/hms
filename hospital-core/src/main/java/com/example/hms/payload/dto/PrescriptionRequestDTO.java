@@ -20,6 +20,8 @@ import java.util.UUID;
 @Builder
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @OneOf(fields = {"patientId", "patientIdentifier"}, message = "{prescription.patientId.required}")
+@com.example.hms.validation.PrnMinIntervalRequired(groups = com.example.hms.validation.OnCreate.class)
+@com.example.hms.validation.PrnMinIntervalOnlyWhenAsNeeded
 public class PrescriptionRequestDTO {
 
     private UUID id; // ignored on create
@@ -60,11 +62,31 @@ public class PrescriptionRequestDTO {
     private String frequency;
 
     /**
+     * QA round 30 (user decision 2026-11-02): the minimum hours between two
+     * doses of an as-needed (PRN, "si besoin") order, written by the
+     * prescriber. Required to create an as-needed order
+     * ({@link com.example.hms.validation.PrnMinIntervalRequired}), refused on
+     * any other ({@link com.example.hms.validation.PrnMinIntervalOnlyWhenAsNeeded});
+     * on update, null keeps the stored value.
+     */
+    @jakarta.validation.constraints.Min(value = 1, message = "{prescription.prnMinInterval.range}")
+    @jakarta.validation.constraints.Max(value = com.example.hms.service.impl.PrnMinInterval.MAX_HOURS,
+        message = "{prescription.prnMinInterval.range}")
+    private Integer prnMinIntervalHours;
+
+    /**
      * Administration route (PO, IV, IM, SC, ...). The MAR five-rights route
      * check compares the bedside scan with this value; without it every
      * order looked oral and an IV dose always failed the route right.
+     * QA D1359 (round 30): a route the shared reading
+     * ({@link com.example.hms.service.emar.MedicationRoutes}) does not know is
+     * refused by name; it was stored as typed ("BOGUS"). On create here, with
+     * every other refusal; on an edit of the order's content in the service
+     * ({@code PrescriptionServiceImpl}), so a withdrawal that echoes an older
+     * order's stored route is never refused for it.
      */
     @Size(max = 80)
+    @com.example.hms.validation.MedicationRoute(groups = com.example.hms.validation.OnCreate.class)
     private String route;
 
     @Size(max = 100)

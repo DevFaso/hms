@@ -130,6 +130,16 @@ public class Prescription extends BaseEntity {
     @Column(name = "frequency", length = 100)
     private String frequency;
 
+    /**
+     * QA round 30 (user decision 2026-11-02): the minimum time, in hours,
+     * between two doses of an as-needed (PRN, "si besoin") order, as the
+     * prescriber wrote it (V261). Required on a new as-needed order, null on
+     * any other; never defaulted per drug. The MAR offers the next dose once
+     * it has passed since the last dose given ({@code MarNextDose}).
+     */
+    @Column(name = "prn_min_interval_hours")
+    private Integer prnMinIntervalHours;
+
     @Size(max = 100)
     @Column(name = "duration", length = 100)
     private String duration;

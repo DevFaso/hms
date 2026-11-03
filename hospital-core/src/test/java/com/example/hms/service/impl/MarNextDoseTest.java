@@ -173,14 +173,100 @@ class MarNextDoseTest {
         assertThat(due.dueTime()).isEqualTo(verified);
     }
 
-    /** Only a frequency that says so ends the course after its first recorded outcome. */
+    /**
+     * Only a frequency that says so ends the course after its first recorded
+     * outcome. QA round 30 (changed assertion): "PRN" and "si besoin" are no
+     * longer in this list (an as-needed order stays open, see the prn_ tests);
+     * round 25 ended them after one dose.
+     */
     @ParameterizedTest
-    @ValueSource(strings = {"once", "STAT", "une seule fois", "PRN", "si besoin"})
-    void aOneOffOrAsNeededOrderEndsAfterItsFirstOutcome(String frequency) {
+    @ValueSource(strings = {"once", "STAT", "une seule fois"})
+    void aOneOffOrderEndsAfterItsFirstOutcome(String frequency) {
         LocalDateTime slot = NOW.minusHours(1);
         MarNextDose.Due due = MarNextDose.of(rx(frequency, slot), NOW,
             List.of(row(MedicationAdministrationStatus.GIVEN, slot, slot)), WINDOW);
         assertThat(due.finished()).isTrue();
+    }
+
+    /**
+     * QA round 30 (user decision 2026-11-02): a PRN order is not ended after
+     * its first dose. It stays offered, in a slot that is now (so the TIME
+     * right and the slot rule pass a dose given on demand), and a dose inside
+     * the prescriber's interval since the last one given is early.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"PRN", "si besoin", "Paracetamol prn", "as needed", "si es necesario"})
+    void prn_staysOpenAfterADoseAndIsEarlyInsideTheInterval(String frequency) {
+        Prescription rx = rx(frequency, NOW.minusDays(1));
+        rx.setPrnMinIntervalHours(4);
+        LocalDateTime given = NOW.minusHours(1);
+        MarNextDose.Due due = MarNextDose.of(rx, NOW,
+            List.of(row(MedicationAdministrationStatus.GIVEN, given, given)), WINDOW);
+        assertThat(due.finished()).isFalse();
+        assertThat(due.asNeeded()).isTrue();
+        assertThat(due.frequencyUnread()).isFalse();
+        assertThat(due.dueTime()).isEqualTo(NOW);
+        assertThat(due.scheduledSlot()).isEqualTo(NOW);
+        assertThat(due.notBefore()).isNull();
+        assertThat(due.reasonUntil()).isEqualTo(given.plusHours(4));
+        assertThat(due.earlyAt(NOW)).isTrue();
+        assertThat(due.earlyAt(given.plusHours(4))).isFalse();
+    }
+
+    @Test
+    void prn_pastTheIntervalIsOfferedWithoutAReasonAndNeverOverdue() {
+        Prescription rx = rx("si besoin", NOW.minusDays(2));
+        rx.setPrnMinIntervalHours(6);
+        LocalDateTime given = NOW.minusHours(30);
+        MarNextDose.Due due = MarNextDose.of(rx, NOW,
+            List.of(row(MedicationAdministrationStatus.GIVEN, given, given)), WINDOW);
+        assertThat(due.earlyAt(NOW)).isFalse();
+        assertThat(NurseTaskServiceImpl.resolveMarStatus(due, NOW)).isEqualTo("DUE");
+        assertThat(NurseTaskServiceImpl.slotRuleAllows(due, NOW)).isTrue();
+    }
+
+    @Test
+    void prn_neverGivenIsOfferedAndAHeldDoseStartsNoInterval() {
+        Prescription rx = rx("PRN", NOW.minusDays(1));
+        rx.setPrnMinIntervalHours(4);
+        MarNextDose.Due fresh = MarNextDose.of(rx, NOW, List.of(), WINDOW);
+        assertThat(fresh.asNeeded()).isTrue();
+        assertThat(NurseTaskServiceImpl.resolveMarStatus(fresh, NOW)).isEqualTo("DUE");
+        assertThat(fresh.earlyAt(NOW)).isFalse();
+        LocalDateTime held = NOW.minusMinutes(10);
+        MarNextDose.Due afterHeld = MarNextDose.of(rx, NOW,
+            List.of(row(MedicationAdministrationStatus.HELD, held, held)), WINDOW);
+        assertThat(afterHeld.earlyAt(NOW)).isFalse();
+        assertThat(afterHeld.finished()).isFalse();
+    }
+
+    /** The bedside verify's open row is the slot the administer call fills, while it is inside the time window. */
+    @Test
+    void prn_theOpenVerifiedRowIsTheSlotWhileItIsFresh() {
+        Prescription rx = rx("PRN", NOW.minusDays(1));
+        rx.setPrnMinIntervalHours(4);
+        LocalDateTime given = NOW.minusHours(5);
+        LocalDateTime verified = NOW.minusMinutes(20);
+        MarNextDose.Due due = MarNextDose.of(rx, NOW,
+            List.of(row(MedicationAdministrationStatus.PENDING, verified, null),
+                row(MedicationAdministrationStatus.GIVEN, given, given)), WINDOW);
+        assertThat(due.dueTime()).isEqualTo(verified);
+        MarNextDose.Due stale = MarNextDose.of(rx, NOW,
+            List.of(row(MedicationAdministrationStatus.PENDING, NOW.minusHours(3), null),
+                row(MedicationAdministrationStatus.GIVEN, given, given)), WINDOW);
+        assertThat(stale.dueTime()).isEqualTo(NOW);
+    }
+
+    /** An older PRN order without an interval: open, flagged like an unread frequency, never invented. */
+    @Test
+    void prn_anOlderOrderWithoutAnIntervalStaysOpenAndFlagged() {
+        LocalDateTime given = NOW.minusHours(2);
+        MarNextDose.Due due = MarNextDose.of(rx("PRN", NOW.minusDays(1)), NOW,
+            List.of(row(MedicationAdministrationStatus.GIVEN, given, given)), WINDOW);
+        assertThat(due.finished()).isFalse();
+        assertThat(due.asNeeded()).isTrue();
+        assertThat(due.frequencyUnread()).isTrue();
+        assertThat(due.reasonUntil()).isNull();
     }
 
     private static Prescription rx(String frequency, LocalDateTime start) {

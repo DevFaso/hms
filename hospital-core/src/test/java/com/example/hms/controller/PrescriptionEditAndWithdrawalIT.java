@@ -59,7 +59,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -218,6 +220,78 @@ class PrescriptionEditAndWithdrawalIT extends BaseIT {
         assertThat(rows).hasSize(1);
         assertThat(String.valueOf(rows.get(0).getDetails())).contains("\"byPrescriber\":false")
             .doesNotContain("Allergie");
+    }
+
+    /**
+     * QA round 30 over HTTP (user decision 2026-11-02, and D1359): a new PRN
+     * order without its minimum interval and with an unknown route is refused
+     * with BOTH fields named in one answer; with them it is created and the
+     * interval is stored as written.
+     */
+    @Test
+    @DisplayName("QA round 30 / D1359: a PRN order names its interval, a route is a known route, in one answer")
+    void aPrnOrderNamesItsIntervalAndTheRouteIsKnown() throws Exception {
+        String refused = "{\"patientId\":\"" + patient.getId() + "\",\"staffId\":\"" + authorStaff.getId()
+            + "\",\"encounterId\":\"" + encounter.getId() + "\",\"medicationName\":\"Paracétamol 500 mg\","
+            + "\"dosage\":\"1 cp\",\"frequency\":\"si besoin\",\"route\":\"BOGUS\",\"quantity\":10}";
+        mockMvc.perform(post(API_CONTEXT + "/prescriptions")
+                .contextPath(API_CONTEXT)
+                .with(as(authorUser))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(refused))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.fieldErrors.prnMinIntervalHours").exists())
+            .andExpect(jsonPath("$.fieldErrors.route").exists());
+
+        String accepted = refused.replace("\"route\":\"BOGUS\"", "\"route\":\"PO\",\"prnMinIntervalHours\":6");
+        String answer = mockMvc.perform(post(API_CONTEXT + "/prescriptions")
+                .contextPath(API_CONTEXT)
+                .with(as(authorUser))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(accepted))
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.prnMinIntervalHours").value(6))
+            .andReturn().getResponse().getContentAsString();
+        UUID created = UUID.fromString(com.jayway.jsonpath.JsonPath.read(answer, "$.id"));
+        try {
+            assertThat(prescriptionRepository.findById(created).orElseThrow().getPrnMinIntervalHours()).isEqualTo(6);
+        } finally {
+            auditEventLogRepository.deleteAllInBatch(auditEventLogRepository.findAll().stream()
+                .filter(row -> created.toString().equals(row.getResourceId())).toList());
+            prescriptionRepository.deleteById(created);
+        }
+    }
+
+    /**
+     * QA round 30: an older PRN order, written before the interval existed,
+     * is still withdrawn by its author without one (no new requirement on a
+     * withdrawal), while an edit of its content names the interval.
+     */
+    @Test
+    @DisplayName("QA round 30: an older PRN order is withdrawn without an interval; an edit of its content needs one")
+    void anOlderPrnOrderIsWithdrawnWithoutAnIntervalButAnEditNeedsOne() throws Exception {
+        prescription.setFrequency("PRN");
+        prescription = prescriptionRepository.save(prescription);
+
+        mockMvc.perform(put(API_CONTEXT + UPDATE_PATH, prescription.getId())
+                .contextPath(API_CONTEXT)
+                .with(as(authorUser))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body("Amoxicilline 500 mg", null, null).replace("3x/day", "PRN")
+                    .replace("\"dosage\":\"500 mg\"", "\"dosage\":\"1 g\"")))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.fieldErrors.prnMinIntervalHours").exists());
+
+        prescription.setStatus(PrescriptionStatus.SIGNED);
+        prescription = prescriptionRepository.save(prescription);
+        mockMvc.perform(put(API_CONTEXT + UPDATE_PATH, prescription.getId())
+                .contextPath(API_CONTEXT)
+                .with(as(authorUser))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body("Amoxicilline 500 mg", "DISCONTINUED", "Traitement terminé").replace("3x/day", "PRN")))
+            .andExpect(status().isOk());
+        assertThat(prescriptionRepository.findById(prescription.getId()).orElseThrow().getStatus())
+            .isEqualTo(PrescriptionStatus.DISCONTINUED);
     }
 
     private String body(String medicationName, String status, String withdrawalReason) {

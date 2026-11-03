@@ -24,6 +24,13 @@
  *   (`refusedFieldReasons(` of shared/refusal-reason.ts, or a component's own
  *   `fieldErrorsOf(`): a 400 naming a field is then a toast with nothing
  *   marked (D1341, D1338). Driven by `expectFieldsMarked(` in the spec.
+ * - rule `create-stays-armed` (QA D1345, round 30): a write's success handler
+ *   that closes its dialog only on a condition ("close unless the server sent
+ *   advisories") leaves the dialog in create mode on the other branch, and a
+ *   second press posted the same prescription again. Such a handler must
+ *   also lock the dialog: set a `created` / `applied` / `saved` / `locked`
+ *   signal to true in the same handler (the dialog then hides or disables
+ *   its submit on it), so the branch that stays open can never post again.
  *
  * Today's sites are pinned in scripts/form-behaviour-baseline.json with the
  * defect id; the pins only shrink.
@@ -114,6 +121,40 @@ export function mapsFieldErrors(componentSource) {
   return /\b(?:refusedFieldReasons|fieldErrorsOf)\(/.test(componentSource);
 }
 
+/** The body of the block opening at `open` (a `{`), or '' when unbalanced. */
+function blockAt(src, open) {
+  let depth = 0;
+  for (let i = open; i < src.length; i++) {
+    if (src[i] === '{') depth++;
+    else if (src[i] === '}' && --depth === 0) return src.slice(open, i + 1);
+  }
+  return '';
+}
+
+/** A dialog closed only under a condition: `if (...) { this.closeX(); }` / `if (...) this.dismissX();`. */
+const CONDITIONAL_CLOSE = /\bif\s*\([^)]*\)\s*\{?\s*(?:this\.)?(?:close|dismiss)\w*\(\s*\)/;
+/** The lock the stay-open branch sets: `this.createdWithAdvisories.set(true)`, `applied.set(true)`... */
+const CREATE_LOCK = /(?:created|applied|saved|locked)\w*\s*\.\s*set\(\s*true\s*\)/i;
+
+/**
+ * QA D1345: the `next:` handlers of `componentSource` that close their dialog
+ * only on a condition and never lock it, as `{ line, handler }` (line in the
+ * component source).
+ */
+export function createStaysArmed(componentSource) {
+  const out = [];
+  for (const m of componentSource.matchAll(/\bnext\s*:\s*(?:\([^)]*\)|\w+)\s*=>\s*\{/g)) {
+    const body = blockAt(componentSource, m.index + m[0].length - 1);
+    if (CONDITIONAL_CLOSE.test(body) && !CREATE_LOCK.test(body)) {
+      out.push({
+        line: componentSource.slice(0, m.index).split('\n').length,
+        handler: m[0].trim(),
+      });
+    }
+  }
+  return out;
+}
+
 /**
  * @param {string} html the template
  * @param {string} componentSource the template plus its `.ts`
@@ -136,6 +177,16 @@ export function formBehaviourFindings(html, componentSource, relFile, specs = sp
       message: nameable
         ? `submit ${anchor} is not driven empty by a spec (expectEmptySubmitRefusal in this directory)`
         : `submit ${anchor} has no data-testid a spec can name; give it one and drive it with expectEmptySubmitRefusal`,
+    });
+  }
+  for (const armed of createStaysArmed(componentSource)) {
+    out.push({
+      line: armed.line,
+      rule: 'create-stays-armed',
+      anchor: `next@${armed.line}`,
+      message:
+        'a write whose success closes the dialog only on a condition leaves it in create mode: ' +
+        'lock it on the other branch (a created/applied/saved signal set to true, and the submit hidden on it)',
     });
   }
   if (guardedLine > 0 && !mapsFieldErrors(componentSource)) {

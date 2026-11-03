@@ -3326,4 +3326,15 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- V261 (QA round 30, user decision 2026-11-02): the minimum interval
+         between two doses of an as-needed (PRN) prescription, written by the
+         prescriber. Nullable: existing orders keep no invented default.
+         Plain statement, no DO block. Idempotent. -->
+    <changeSet id="V261-r30-prescription-prn-min-interval" author="hms-team" runOnChange="false">
+        <sqlFile path="V261__r30_prescription_prn_min_interval.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

@@ -34,9 +34,14 @@ import java.util.UUID;
  * default for an interval the window would erase: q1h, q2h). So q4h needs 3
  * hours, q6h 5, q8h 7, q12h 11, q24h 23, q2h 1 and q1h 30 minutes.
  *
- * <p>An order without a fixed interval (PRN, STAT, once, prose) is not
- * scheduled: the MAR gives it one dose and nothing after it, so no interval
- * applies here. A controlled drug keeps its witness requirement as well
+ * <p>An order without a fixed interval (STAT, once) is not scheduled: the MAR
+ * gives it one dose and nothing after it, so no interval applies here. QA
+ * round 30 (user decision 2026-11-02): an as-needed (PRN) order measures from
+ * the last dose given with the prescriber's own minimum interval
+ * ({@code Prescription.prnMinIntervalHours}), exactly, with no early window
+ * taken off (it is already the shortest safe gap); an older as-needed order
+ * without one asks a reason for every later dose ({@link #PRN_INTERVAL_MISSING_KEY}).
+ * A controlled drug keeps its witness requirement as well
  * ({@code ControlledAdministrationWitness}). Pure functions; the caller passes
  * the clock reading and the order's rows.
  */
@@ -56,6 +61,9 @@ public final class MarDoseInterval {
 
     /** The refusal's message key when the frequency cannot be read as a schedule (QA D1237). */
     public static final String FREQUENCY_UNREAD_KEY = "nurse.mar.frequencyUnread";
+
+    /** QA round 30: an older as-needed order with no minimum interval written on it. */
+    public static final String PRN_INTERVAL_MISSING_KEY = "nurse.mar.prnIntervalMissing";
 
     /** The shortest time between two GIVEN doses of an order given every {@code intervalHours}. */
     public static Duration minimumGap(int intervalHours, Duration earlyWindow) {
@@ -105,6 +113,9 @@ public final class MarDoseInterval {
             // next dose is due, so every later dose says why it is given now.
             return requireReason(reason, FREQUENCY_UNREAD_KEY, rx.getFrequency().trim());
         }
+        if (reading.kind() == MarDoseSchedule.Kind.AS_NEEDED) {
+            return requireAsNeededIntervalOrReason(rx, lastGiven.get(), now, reason);
+        }
         if (!reading.repeating()) {
             return null;
         }
@@ -120,6 +131,28 @@ public final class MarDoseInterval {
             DisplayDates.dateTime(com.example.hms.utility.HospitalTime.at(lastGiven.get(), hospital)),
             DisplayDates.dateTime(com.example.hms.utility.HospitalTime.at(earliest, hospital)),
             hoursLabel(interval));
+    }
+
+    /**
+     * QA round 30: an as-needed dose before the prescriber's minimum interval
+     * since the last dose given needs a reason; so does every later dose of an
+     * older as-needed order written without an interval.
+     */
+    private static String requireAsNeededIntervalOrReason(Prescription rx, LocalDateTime lastGiven,
+                                                          LocalDateTime now, String reason) {
+        Integer hours = rx.getPrnMinIntervalHours();
+        if (hours == null) {
+            return requireReason(reason, PRN_INTERVAL_MISSING_KEY);
+        }
+        LocalDateTime earliest = lastGiven.plusHours(hours);
+        if (!now.isBefore(earliest)) {
+            return null;
+        }
+        Hospital hospital = rx.getHospital();
+        return requireReason(reason, TOO_SOON_KEY,
+            DisplayDates.dateTime(com.example.hms.utility.HospitalTime.at(lastGiven, hospital)),
+            DisplayDates.dateTime(com.example.hms.utility.HospitalTime.at(earliest, hospital)),
+            String.valueOf(hours));
     }
 
     /**

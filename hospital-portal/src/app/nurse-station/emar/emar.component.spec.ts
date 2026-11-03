@@ -531,6 +531,26 @@ describe('EmarComponent (P1 #8 — five-rights barcode-scan loop)', () => {
   // QA D1237 (round 25): an order whose frequency the MAR cannot schedule
   // stays open; the row says so, and a later dose is refused on
   // earlyDoseReason (nurse.mar.frequencyUnread) like a dose given too soon.
+  it('QA round 30: an as-needed order shows its rule in the queue and the detail', () => {
+    const label = 'Si besoin : au moins 6 h entre deux doses';
+    const prn: NurseMedicationTask = {
+      ...sampleTask,
+      id: 'task-prn',
+      asNeeded: true,
+      prnMinIntervalHours: 6,
+      prnLabel: label,
+    };
+    nurseSpy.getMedicationMAR.and.returnValue(of([prn, sampleTask]));
+    fixture.detectChanges();
+    expect(
+      root().querySelector('[data-testid="emar-prn-chip-task-prn"]')?.textContent?.trim(),
+    ).toBe(label);
+    expect(root().querySelector(`[data-testid="emar-prn-chip-${sampleTask.id}"]`)).toBeNull();
+    component['selectTask'](prn);
+    fixture.detectChanges();
+    expect(root().querySelector('[data-testid="emar-prn"]')?.textContent?.trim()).toBe(label);
+  });
+
   it('QA D1237: a frequency the MAR cannot read is shown on the row and its refusal opens the reason dialog', () => {
     const unread: NurseMedicationTask = { ...sampleTask, id: 'task-unread', frequencyUnread: true };
     const unreadRefusal = throwError(
