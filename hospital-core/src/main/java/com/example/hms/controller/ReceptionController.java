@@ -50,7 +50,7 @@ public class ReceptionController {
     /**
      * QA D1385: the statuses a queue row can carry - the appointment's own,
      * and the front-desk statuses ReceptionServiceImpl computes from the
-     * visit - plus ALL. {@code ReceptionStatusFilterTest} keeps it complete.
+     * visit - plus ALL. {@code ReceptionControllerTest} keeps it complete.
      */
     static final java.util.Set<String> QUEUE_STATUSES = queueStatuses();
 
