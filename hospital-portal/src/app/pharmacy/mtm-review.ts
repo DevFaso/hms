@@ -1,3 +1,4 @@
+import { allRows } from '../shared/all-pages';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import {
   Component,
@@ -95,15 +96,15 @@ export class MtmReviewComponent implements OnInit {
       return;
     }
     this.loading.set(true);
-    this.svc
-      .listMtmReviewsByHospital(hospitalId, 0, 50)
+    // QA D1347: every review (all pages), not the 50 newest.
+    allRows((page, size) => this.svc.listMtmReviewsByHospital(hospitalId, page, size))
       .pipe(
         takeUntilDestroyed(this.destroyRef),
         finalize(() => this.loading.set(false)),
       )
       .subscribe({
-        next: (page) => {
-          this.reviews.set(page?.content ?? []);
+        next: (reviews) => {
+          this.reviews.set(reviews);
           this.loading.set(false);
         },
         error: () => {

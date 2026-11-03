@@ -1,3 +1,4 @@
+import { allRows } from '../shared/all-pages';
 import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
@@ -77,8 +78,9 @@ export class HospitalListComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadHospitals();
-    this.orgService.list(0, 100, true).subscribe({
-      next: (page) => this.organizations.set(page.content),
+    // QA D1347: every active organization (all pages), not the first 100.
+    allRows((page, size) => this.orgService.list(page, size, true)).subscribe({
+      next: (list) => this.organizations.set(list),
     });
   }
 

@@ -1,3 +1,4 @@
+import { allRows } from '../../../shared/all-pages';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -261,9 +262,10 @@ export class Dhis2ExportPanelComponent implements OnInit, OnDestroy {
     this.loading.set(true);
     this.error.set(false);
     this.listSub?.unsubscribe();
-    this.listSub = this.dhis2.listRuns(hospitalId).subscribe({
-      next: (page) => {
-        this.runs.set(page.content);
+    // QA D1347: every export run (all pages), not the 20 newest.
+    this.listSub = allRows((page, size) => this.dhis2.listRuns(hospitalId, page, size)).subscribe({
+      next: (runs) => {
+        this.runs.set(runs);
         this.loading.set(false);
       },
       error: () => {

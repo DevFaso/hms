@@ -251,4 +251,52 @@ describe('LabService', () => {
       req.flush({ data: { id: 'rule-1' }, success: true });
     });
   });
+  // ── QA D1347: the worklists read every page ─────────────────────────
+
+  describe('QA D1347: listOrders without a page is every order', () => {
+    const order = (i: number) => ({ id: `o${i}`, labOrderCode: `LAB-${i}` });
+    const flushPage = (page: number, content: unknown[], total: number, totalPages: number) =>
+      httpMock
+        .expectOne(
+          (r) => r.url === '/lab-orders' && r.params.get('page') === String(page),
+        )
+        .flush({ data: { content, totalElements: total, totalPages, number: page }, success: true });
+
+    it('reads page after page until the last: 216 orders, not the 200 newest', () => {
+      let got: { id: string }[] = [];
+      service.listOrders().subscribe((list) => (got = list as { id: string }[]));
+      flushPage(0, Array.from({ length: 200 }, (_, i) => order(i)), 216, 2);
+      flushPage(1, Array.from({ length: 16 }, (_, i) => order(200 + i)), 216, 2);
+      expect(got.length).toBe(216);
+      expect(got[215].id).toBe('o215');
+    });
+
+    it('a caller that asks for one page gets that page only', () => {
+      let got: unknown[] = [];
+      service.listOrders({ patientId: 'p-1', page: 0, size: 25 }).subscribe((l) => (got = l));
+      const req = httpMock.expectOne((r) => r.url === '/lab-orders');
+      expect(req.request.params.get('size')).toBe('25');
+      expect(req.request.params.get('patientId')).toBe('p-1');
+      req.flush({ data: { content: [order(1)], totalElements: 90, totalPages: 4, number: 0 } });
+      expect(got.length).toBe(1);
+    });
+
+    it('lab results and QC events read every page too', () => {
+      let results = 0;
+      let qc = 0;
+      service.listAllResults().subscribe((r) => (results = r.total));
+      service.getQcEventsByDefinition('def-1').subscribe((r) => (qc = r.length));
+      httpMock
+        .expectOne((r) => r.url === '/lab-results' && r.params.get('page') === '0')
+        .flush({ data: { content: [{ id: 'a' }], totalElements: 2, totalPages: 2, number: 0 } });
+      httpMock
+        .expectOne((r) => r.url === '/lab-results' && r.params.get('page') === '1')
+        .flush({ data: { content: [{ id: 'b' }], totalElements: 2, totalPages: 2, number: 1 } });
+      const qcReq = httpMock.expectOne((r) => r.url === '/lab-qc-events');
+      expect(qcReq.request.params.get('sort')).toBe('recordedAt,asc');
+      qcReq.flush({ data: { content: [{ id: 'q' }], totalElements: 1, totalPages: 1, number: 0 } });
+      expect(results).toBe(2);
+      expect(qc).toBe(1);
+    });
+  });
 });

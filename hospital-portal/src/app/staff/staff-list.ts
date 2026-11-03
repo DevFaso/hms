@@ -1,3 +1,4 @@
+import { allRows } from '../shared/all-pages';
 import {
   Component,
   computed,
@@ -217,9 +218,10 @@ export class StaffListComponent implements OnInit {
     // QA D790: the account picker of the create form reads the administrators'
     // directory; the staff page's readers (reception, lab managers) never open it.
     if (this.canManageStaff) {
-      this.userService.list(0, 500).subscribe({
+      // QA D1347: every user (all pages), not the first 500.
+      allRows((page, size) => this.userService.list(page, size)).subscribe({
         // QA D122: a patient account is never offered as a new staff member.
-        next: (page) => this.users.set((page.content ?? []).filter((u) => !isPatientOnlyUser(u))),
+        next: (list) => this.users.set(list.filter((u) => !isPatientOnlyUser(u))),
       });
     }
   }

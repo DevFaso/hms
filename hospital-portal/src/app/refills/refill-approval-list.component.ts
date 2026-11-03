@@ -1,3 +1,4 @@
+import { allRows } from '../shared/all-pages';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -74,9 +75,10 @@ export class RefillApprovalListComponent implements OnInit {
     this.loadError.set(false);
     const status = this.activeFilter();
     const apiStatus: RefillStatus | undefined = status === 'ALL' ? undefined : status;
-    this.service.list(apiStatus, 0, 50).subscribe({
-      next: (page) => {
-        this.refills.set(page.content ?? []);
+    // QA D1347: every refill request (all pages), not the 50 newest.
+    allRows((page, size) => this.service.list(apiStatus, page, size)).subscribe({
+      next: (list) => {
+        this.refills.set(list);
         this.loading.set(false);
       },
       error: () => {

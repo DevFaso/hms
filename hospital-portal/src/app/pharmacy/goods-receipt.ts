@@ -1,3 +1,5 @@
+import { map } from 'rxjs';
+import { allRows } from '../shared/all-pages';
 import { refusalReason } from '../shared/refusal-reason';
 import {
   Component,
@@ -87,9 +89,9 @@ export class GoodsReceiptComponent implements OnInit {
   }
 
   private loadPharmacies(): void {
-    this.svc.listPharmacies(0, 100).subscribe({
-      next: (page) => {
-        const list = page?.content ?? [];
+    // QA D1347: every pharmacy (all pages), not the first 100.
+    allRows((page, size) => this.svc.listPharmacies(page, size)).subscribe({
+      next: (list) => {
         this.pharmacies.set(list);
         this.pharmaciesLoaded.set(true);
         if (list.length > 0) {
@@ -107,9 +109,12 @@ export class GoodsReceiptComponent implements OnInit {
   }
 
   private loadInventoryItems(): void {
-    this.svc.listInventoryByPharmacy(this.selectedPharmacyId, 0, 200).subscribe({
-      next: (res) => {
-        this.inventoryItems.set(res?.data?.content ?? []);
+    // QA D1347: every inventory item of the pharmacy (all pages), not the first 200.
+    allRows((page, size) =>
+      this.svc.listInventoryByPharmacy(this.selectedPharmacyId, page, size).pipe(map((r) => r?.data)),
+    ).subscribe({
+      next: (items) => {
+        this.inventoryItems.set(items);
       },
     });
   }

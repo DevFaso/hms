@@ -1,3 +1,4 @@
+import { allRows } from '../shared/all-pages';
 import { InlineDiscardAskComponent } from '../shared/a11y/inline-discard-ask.component';
 import { InlineSubFormDirective } from '../shared/a11y/inline-sub-form.directive';
 import { Subscription } from 'rxjs';
@@ -131,8 +132,6 @@ const STATUS_OPTIONS: PlatformServiceStatus[] = [
   'DECOMMISSIONED',
 ];
 
-/** Organizations offered in the org pickers (services toolbar, provision target). */
-const ORG_PAGE_SIZE = 50;
 
 /**
  * Hosts that only ever appear in seeded or example data. A catalog entry
@@ -406,16 +405,17 @@ export class PlatformComponent implements OnInit {
    */
   loadOrganizations(): void {
     this.servicesLoading.set(true);
-    this.orgSvc.list(0, ORG_PAGE_SIZE).subscribe({
-      next: (page) => {
-        this.organizations.set(page.content);
+    // QA D1347: every organization (all pages), not the first 50.
+    allRows((page, size) => this.orgSvc.list(page, size)).subscribe({
+      next: (orgs) => {
+        this.organizations.set(orgs);
         this.organizationsLoaded.set(true);
         this.servicesLoading.set(false);
         const current = this.selectedOrgId();
-        if (current && page.content.some((o) => o.id === current)) {
+        if (current && orgs.some((o) => o.id === current)) {
           this.loadOrgServices(current);
-        } else if (page.content.length > 0) {
-          this.selectOrg(page.content[0].id);
+        } else if (orgs.length > 0) {
+          this.selectOrg(orgs[0].id);
         } else {
           this.selectedOrgId.set(null);
           this.orgServices.set([]);
@@ -431,9 +431,9 @@ export class PlatformComponent implements OnInit {
   /** The provision picker needs the organizations; it never selects one (D1). */
   private ensureOrganizations(): void {
     if (this.organizationsLoaded()) return;
-    this.orgSvc.list(0, ORG_PAGE_SIZE).subscribe({
-      next: (page) => {
-        this.organizations.set(page.content);
+    allRows((page, size) => this.orgSvc.list(page, size)).subscribe({
+      next: (orgs) => {
+        this.organizations.set(orgs);
         this.organizationsLoaded.set(true);
       },
       error: () => this.toast.error(this.translate.instant('PLATFORM.TOAST.ORGS_LOAD_FAILED')),

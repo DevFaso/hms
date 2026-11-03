@@ -1,3 +1,4 @@
+import { allPages } from '../../shared/all-pages';
 import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { PatientPortalService, PortalNotification } from '../../services/patient-portal.service';
@@ -70,10 +71,11 @@ export class MyNotificationsComponent implements OnInit {
   loadNotifications(): void {
     this.loading.set(true);
     const readFilter = this.activeTab() === 'unread' ? false : undefined;
-    this.portalService.getMyNotifications(readFilter, 0, 50).subscribe({
+    // QA D1347: every notification (all pages), not the 50 newest.
+    allPages((page, size) => this.portalService.getMyNotifications(readFilter, page, size)).subscribe({
       next: (result) => {
-        this.notifications.set(result.content);
-        this.totalElements.set(result.totalElements);
+        this.notifications.set(result.rows);
+        this.totalElements.set(result.total);
         this.loading.set(false);
       },
       error: (err: unknown) => {

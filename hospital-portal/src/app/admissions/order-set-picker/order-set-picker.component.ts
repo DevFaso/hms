@@ -1,3 +1,4 @@
+import { allRows } from '../../shared/all-pages';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -238,12 +239,13 @@ export class OrderSetPickerComponent implements OnChanges, OnDestroy {
             return [];
           }
           this.state.set('searching');
-          return this.orderSetService.list(hid, term);
+          // QA D1347: every order set the search matches (all pages), not the first 20.
+          return allRows((page, size) => this.orderSetService.list(hid, term, page, size));
         }),
       )
       .subscribe({
-        next: (page) => {
-          this.results.set(page.content ?? []);
+        next: (rows) => {
+          this.results.set(rows);
           this.state.set('ready');
         },
         error: () => {

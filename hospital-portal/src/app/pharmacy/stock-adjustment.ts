@@ -1,3 +1,4 @@
+import { allRows } from '../shared/all-pages';
 import { refusalReason } from '../shared/refusal-reason';
 import { blankFields, refuseFields } from '../shared/forms/invalid-fields';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
@@ -12,7 +13,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Observable } from 'rxjs';
+import { Observable, map } from 'rxjs';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { earlierLotWithStock, fefoFirstLot } from './fefo-lots';
 import { ToastService } from '../core/toast.service';
@@ -195,9 +196,9 @@ export class StockAdjustmentComponent implements OnInit {
   }
 
   private loadPharmacies(): void {
-    this.svc.listPharmacies(0, 100).subscribe({
-      next: (page) => {
-        const list = page?.content ?? [];
+    // QA D1347: every pharmacy (all pages), not the first 100.
+    allRows((page, size) => this.svc.listPharmacies(page, size)).subscribe({
+      next: (list) => {
         this.pharmacies.set(list);
         this.pharmaciesLoaded.set(true);
         if (list.length > 0) {
@@ -215,23 +216,29 @@ export class StockAdjustmentComponent implements OnInit {
   }
 
   private loadInventoryItems(): void {
-    this.svc.listInventoryByPharmacy(this.selectedPharmacyId, 0, 200).subscribe({
-      next: (res) => {
-        this.inventoryItems.set(res?.data?.content ?? []);
+    // QA D1347: every inventory item of the pharmacy (all pages), not the first 200.
+    allRows((page, size) =>
+      this.svc.listInventoryByPharmacy(this.selectedPharmacyId, page, size).pipe(map((r) => r?.data)),
+    ).subscribe({
+      next: (items) => {
+        this.inventoryItems.set(items);
       },
     });
   }
 
   loadTransactions(): void {
     this.txLoading.set(true);
-    const obs = this.filterType
-      ? this.svc.listTransactionsByType(this.selectedPharmacyId, this.filterType)
-      : this.svc.listTransactionsByPharmacy(this.selectedPharmacyId);
-
-    obs.subscribe({
-      next: (res) => {
-        const page = res?.data;
-        this.transactions.set(page?.content ?? []);
+    const pharmacyId = this.selectedPharmacyId;
+    const type = this.filterType;
+    // QA D1347: every transaction (all pages), not the server's first 20.
+    allRows((page, size) =>
+      (type
+        ? this.svc.listTransactionsByType(pharmacyId, type, page, size)
+        : this.svc.listTransactionsByPharmacy(pharmacyId, page, size)
+      ).pipe(map((r) => r?.data)),
+    ).subscribe({
+      next: (transactions) => {
+        this.transactions.set(transactions);
         this.txLoading.set(false);
       },
       error: () => {
@@ -308,9 +315,12 @@ export class StockAdjustmentComponent implements OnInit {
     this.returnDispenseId = '';
     this.returnableDispenses.set([]);
     if (!itemId) return;
-    this.svc.listLotsByInventoryItem(itemId, 0, 100).subscribe({
-      next: (res) => {
-        this.itemLots.set(res?.data?.content ?? []);
+    // QA D1347: every lot of the item (all pages), not the first 100.
+    allRows((page, size) =>
+      this.svc.listLotsByInventoryItem(itemId, page, size).pipe(map((r) => r?.data)),
+    ).subscribe({
+      next: (lots) => {
+        this.itemLots.set(lots);
         this.preselectTransferLot();
         this.loadReturnableDispenses();
       },
