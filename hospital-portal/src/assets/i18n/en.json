@@ -7411,7 +7411,12 @@
     "SIGN_ALLERGY": {
       "TITLE": "Allergy warning: sign anyway?",
       "REASON": "Reason for signing despite the allergy warning"
-    }
+    },
+    "CREATED_WITH_ADVISORIES": "Prescription created. Read the alerts below, then close.",
+    "PRN_MIN_INTERVAL": "Minimum interval between doses (hours)",
+    "PRN_MIN_INTERVAL_HINT": "Required for an as-needed (PRN) order: the MAR offers the next dose once this time has passed since the last one.",
+    "PRN_MIN_INTERVAL_REQUIRED": "Enter the minimum interval between two doses (1 to 72 hours).",
+    "PRN_MIN_INTERVAL_VALUE": "At least {{hours}} h between doses"
   },
   "PROFILE": {
     "ACCOUNT_AGE": "Account Age",

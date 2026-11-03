@@ -7411,7 +7411,12 @@
     "SIGN_ALLERGY": {
       "TITLE": "Alerte allergie : signer malgré tout ?",
       "REASON": "Motif de la signature malgré l’alerte allergie"
-    }
+    },
+    "CREATED_WITH_ADVISORIES": "Ordonnance créée. Lisez les alertes ci-dessous, puis fermez.",
+    "PRN_MIN_INTERVAL": "Intervalle minimum entre deux doses (heures)",
+    "PRN_MIN_INTERVAL_HINT": "Obligatoire pour une prescription « si besoin » : le registre propose la dose suivante une fois ce délai écoulé depuis la précédente.",
+    "PRN_MIN_INTERVAL_REQUIRED": "Indiquez l’intervalle minimum entre deux doses (de 1 à 72 heures).",
+    "PRN_MIN_INTERVAL_VALUE": "Au moins {{hours}} h entre deux doses"
   },
   "PROFILE": {
     "ACCOUNT_AGE": "Ancienneté du compte",
