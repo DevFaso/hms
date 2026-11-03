@@ -657,4 +657,14 @@ class SlotInventoryServiceImplTest {
             .hasFieldOrPropertyWithValue("field", "to")
             .hasFieldOrPropertyWithValue("messageKey", "slot.search.tooLong");
     }
+
+    @Test
+    void theLimitedSearchBoundsItsWholeWindowTheSameWay_D1390() {
+        java.time.LocalDate from = NOW.toLocalDate();
+        java.time.LocalDate to = from.plusDays(SlotInventoryService.MAX_SEARCH_DAYS + 1L);
+        assertThatThrownBy(() -> service.searchOpen(null, null, null, from, to, 50))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "slot.search.tooLong");
+        verify(slotRepository, never()).searchOpen(any(), any(), any(), any(), any(), any(), any(), any(), any());
+    }
 }

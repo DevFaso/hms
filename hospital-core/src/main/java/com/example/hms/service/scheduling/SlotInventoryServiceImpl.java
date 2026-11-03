@@ -154,6 +154,9 @@ public class SlotInventoryServiceImpl implements SlotInventoryService {
         LocalDate start = from != null ? from : LocalDate.now(clock);
         LocalDate end = to != null ? to : start.plusWeeks(2);
         int capped = limit <= 0 ? 50 : Math.min(limit, MAX_SEARCH_RESULTS);
+        // The window is now read whole before the cut, so it is bounded the
+        // same way as the paged search (refused, never cut).
+        requireSearchWindow(start, end);
         // QA D1390: the limit is applied AFTER the booked-over filter, so a
         // search for 200 answers 200 open slots when that many exist (it cut
         // 200 rows first and filtered 18 of them away).
@@ -169,10 +172,7 @@ public class SlotInventoryServiceImpl implements SlotInventoryService {
                                                    LocalDate from, LocalDate to, int page, int size) {
         LocalDate start = from != null ? from : LocalDate.now(clock);
         LocalDate end = to != null ? to : start.plusWeeks(2);
-        if (start.plusDays(MAX_SEARCH_DAYS).isBefore(end)) {
-            // Refused, never cut: the admin narrows the window and sees all of it.
-            throw new FieldBusinessException("to", "slot.search.tooLong", MAX_SEARCH_DAYS);
-        }
+        requireSearchWindow(start, end);
         PageRequest pageable = PageRequest.of(Math.max(page, 0), Math.clamp(size, 1, SEARCH_PAGE_MAX));
         List<AppointmentSlot> open = openSlots(departmentId, staffId, visitTypeId, start, end);
         List<AppointmentSlotDTO> rows = open.stream()
@@ -181,6 +181,13 @@ public class SlotInventoryServiceImpl implements SlotInventoryService {
             .map(this::toDto)
             .toList();
         return new PageImpl<>(rows, pageable, open.size());
+    }
+
+    /** QA D1390: a search reads its whole window, so the window is bounded; refused, never cut. */
+    private static void requireSearchWindow(LocalDate start, LocalDate end) {
+        if (start.plusDays(MAX_SEARCH_DAYS).isBefore(end)) {
+            throw new FieldBusinessException("to", "slot.search.tooLong", MAX_SEARCH_DAYS);
+        }
     }
 
     /**
