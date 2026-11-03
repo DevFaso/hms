@@ -775,7 +775,8 @@ describe('LaborTabComponent recent-delivery override (rendered, QA D1339 / D1340
     );
     const fixture = render([delivered('e0', 200)]);
     const text = ((fixture.nativeElement as HTMLElement).textContent ?? '').replace(/\s+/g, ' ');
-    expect(text).toMatch(/2026, \d{2}:\d{2}/);
+    // The time reads in the runner's locale ("15:00" in FR, "3:00 PM" in CI's EN).
+    expect(text).toMatch(/2026, \d{1,2}:\d{2}/);
     expect(text).not.toMatch(/\d{1,2}:\d{2}:\d{2}/);
   });
 });

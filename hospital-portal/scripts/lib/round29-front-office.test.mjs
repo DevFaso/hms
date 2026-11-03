@@ -179,7 +179,7 @@ test('QA D1327: every word that describes the patient agrees with the sex its ke
   for (const { file, text, lineOffset } of templatesIn(appDir)) {
     for (const base of bases) {
       const re = new RegExp(
-        `'${base.replace(/\./g, '\\.')}(?:_FEMALE|_MALE)?'\\s*\\|\\s*translate`,
+        `'${base.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:_FEMALE|_MALE)?'\\s*\\|\\s*translate`,
         'g',
       );
       for (const m of text.matchAll(re))
