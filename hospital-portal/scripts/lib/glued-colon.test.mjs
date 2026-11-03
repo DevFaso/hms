@@ -196,3 +196,62 @@ test('QA D1138: COMMON.QUESTION_MARK and EXCLAMATION_MARK are the language rule'
     assert.equal(common(lang).EXCLAMATION_MARK, '!');
   }
 });
+
+// QA D1388 (round 32, the D1079 class): "…Fatimata ZongoCette action est
+// irréversible." - a translated sentence placed right after a closing inline
+// element (`</strong\n>{{ 'COMMON.CANNOT_UNDO' | translate }}`) with no
+// space, its translation starting with a letter. A key whose value starts with
+// a space or punctuation (COMMON.QUESTION_MARK, COMMON.COLON) is the language
+// rule and passes.
+const GLUED_SENTENCE =
+  /<\/(?:strong|b|em|span|a)\s*>\{\{\s*'([A-Z0-9_.]+)'\s*\|\s*translate\s*\}\}/g;
+
+function i18nValue(tree, key) {
+  return key.split('.').reduce((node, part) => (node == null ? undefined : node[part]), tree);
+}
+
+export function gluedSentenceSites(html, locales) {
+  const sites = [];
+  for (const m of html.matchAll(GLUED_SENTENCE)) {
+    // An empty element (a legend swatch, `<span class="swatch"></span>`) has no text to glue to.
+    if (html.slice(0, m.index).trimEnd().endsWith('>')) continue;
+    const starts = locales
+      .map((tree) => i18nValue(tree, m[1]))
+      .filter((v) => typeof v === 'string');
+    if (starts.some((v) => /^[\p{L}\p{N}]/u.test(v))) sites.push({ offset: m.index, key: m[1] });
+  }
+  return sites;
+}
+
+test('QA D1388: no translated sentence is glued to the element before it', () => {
+  const locales = ['en', 'fr', 'es'].map((l) =>
+    JSON.parse(readFileSync(join(i18nDir, `${l}.json`), 'utf8')),
+  );
+  const glued = [];
+  for (const { file, text, lineOffset } of templatesIn(appDir)) {
+    for (const s of gluedSentenceSites(text, locales)) {
+      glued.push(
+        `${rel(file)}:${text.slice(0, s.offset).split('\n').length + lineOffset} ${s.key}`,
+      );
+    }
+  }
+  assert.deepEqual(glued, []);
+});
+
+test('QA D1388 guard: the scan sees the shape it guards', () => {
+  const locales = [
+    { COMMON: { CANNOT_UNDO: 'Cette action est irréversible.', QUESTION_MARK: ' ?' } },
+  ];
+  const glued = `<strong>{{ n }}</strong
+          >{{ 'COMMON.CANNOT_UNDO' | translate }}`;
+  assert.equal(gluedSentenceSites(glued, locales).length, 1);
+  const spaced = `<strong>{{ n }}</strong>
+          {{ 'COMMON.CANNOT_UNDO' | translate }}`;
+  assert.equal(gluedSentenceSites(spaced, locales).length, 0);
+  const punctuation = `<strong>{{ n }}</strong
+          >{{ 'COMMON.QUESTION_MARK' | translate }}`;
+  assert.equal(gluedSentenceSites(punctuation, locales).length, 0);
+  const swatch = `<span class="swatch"></span
+          >{{ 'COMMON.CANNOT_UNDO' | translate }}`;
+  assert.equal(gluedSentenceSites(swatch, locales).length, 0);
+});

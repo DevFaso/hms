@@ -187,20 +187,37 @@ class MarDoseIntervalTest {
     void prn_anOlderOrderWithoutAnIntervalAsksForAReasonAfterTheFirstDose() {
         Optional<LocalDateTime> last = Optional.of(NOW.minusHours(12));
         // Sonar S5778: only the call under test inside the lambda.
-        Prescription legacy = rx("PRN");
+        Prescription legacy = ticked("PRN");
         assertThatThrownBy(() -> MarDoseInterval.requireIntervalOrReason(legacy,
                 MedicationAdministrationStatus.GIVEN, last, NOW, WINDOW, null))
             .isInstanceOf(FieldBusinessException.class)
             .hasFieldOrPropertyWithValue("messageKey", MarDoseInterval.PRN_INTERVAL_MISSING_KEY)
             .hasFieldOrPropertyWithValue("field", MarDoseInterval.REASON_FIELD);
-        assertThat(MarDoseInterval.requireIntervalOrReason(rx("PRN"), MedicationAdministrationStatus.GIVEN,
+        assertThat(MarDoseInterval.requireIntervalOrReason(ticked("PRN"), MedicationAdministrationStatus.GIVEN,
             last, NOW, WINDOW, "asked by the patient")).isEqualTo("asked by the patient");
     }
 
     private static Prescription prn(String frequency, int hours) {
-        Prescription rx = rx(frequency);
+        Prescription rx = ticked(frequency);
         rx.setPrnMinIntervalHours(hours);
         return rx;
+    }
+
+    /** QA D1378: an order the prescriber ticked as needed (the text no longer makes it PRN). */
+    private static Prescription ticked(String frequency) {
+        Prescription rx = rx(frequency);
+        rx.setAsNeeded(true);
+        return rx;
+    }
+
+    /** QA D1378: an unticked "PRN" wording is open and asks why every later dose, never PRN. */
+    @Test
+    void d1378_anUntickedAsNeededWordingIsReadAsUnread() {
+        Optional<LocalDateTime> last = Optional.of(NOW.minusHours(12));
+        Prescription unticked = rx("SOS");
+        assertThatThrownBy(() -> MarDoseInterval.requireIntervalOrReason(unticked,
+                MedicationAdministrationStatus.GIVEN, last, NOW, WINDOW, null))
+            .hasFieldOrPropertyWithValue("messageKey", MarDoseInterval.FREQUENCY_UNREAD_KEY);
     }
 
     private static Prescription rx(String frequency) {

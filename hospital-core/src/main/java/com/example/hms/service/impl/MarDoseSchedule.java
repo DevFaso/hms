@@ -172,7 +172,7 @@ public final class MarDoseSchedule {
 
     /** QA D1378: phrases that make a frequency conditional (words separated by one space). */
     private static final List<String> CONDITIONAL_PHRASES = List.of(
-        "PRO RE NATA", "S IL", "SIL Y A", "EN CAS", "EN CASO", "ON REQUEST", "AU CAS");
+        "PRO RE NATA", "S IL", "SIL YA", "EN CAS", "EN CASO", "ON REQUEST", "AU CAS");
 
     /** QA D1378: what may follow "for" without making it conditional: a count or a duration. */
     private static final Set<String> NOT_A_SYMPTOM = Set.of(

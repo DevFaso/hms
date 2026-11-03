@@ -35,6 +35,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   <li>the frequency text bears on as-needed ONLY through the safety net:
  *       {@code looksAsNeeded(} is called only by {@code PrnMinInterval.safetyNet},
  *       and the frozen phrase list is read only inside {@code MarDoseSchedule}.</li>
+ *   <li>QA D1382: every writer of order-set items (from a request) holds them to
+ *       the prescription rule with {@code OrderSetItemPrnRules.requireValid}.</li>
  * </ol>
  * The portal half is {@code scripts/lib/as-needed-frequency.test.mjs}: no
  * screen reads the frequency for PRN, the forms show the interval from the
@@ -56,6 +58,8 @@ class MarAsNeededFlagGuardTest {
     private static final Pattern READ_CALL = Pattern.compile("MarDoseSchedule\\.read\\(([^()]*+(?:\\(\\))?+)\\)");
     private static final Pattern AS_NEEDED_READING = Pattern.compile("Reading\\.AS_NEEDED\\b");
     private static final Pattern NET_CALL = Pattern.compile("\\blooksAsNeeded\\(");
+    /** Rule 5 (QA D1382): an order-set writer stores the request's items. */
+    private static final Pattern WRITES_ORDER_ITEMS = Pattern.compile("\\.setOrderItems\\([^;]*request\\.getOrderItems\\(\\)");
 
     @Test
     void noReaderDecidesPrnFromTheFrequencyText() throws IOException {
@@ -98,6 +102,9 @@ class MarAsNeededFlagGuardTest {
         if (NET_CALL.matcher(src).find() && !rel.equals(HELPER) && !rel.equals(SCHEDULE)) {
             found.put(rel + " #4", "calls the safety net's detector itself: use PrnMinInterval.safetyNet");
         }
+        if (WRITES_ORDER_ITEMS.matcher(src).find() && !src.contains("OrderSetItemPrnRules.requireValid(")) {
+            found.put(rel + " #5", "writes order-set items without OrderSetItemPrnRules.requireValid (QA D1382)");
+        }
     }
 
     /** Rule 3: inside MarDoseSchedule, the AS_NEEDED reading is returned by read(Prescription) only. */
@@ -123,9 +130,11 @@ class MarAsNeededFlagGuardTest {
         Map<String, String> found = new TreeMap<>();
         check("service/impl/Example.java",
             "if (MarDoseSchedule.read(rx.getFrequency()).kind() == K) {} boolean b = rx.isAsNeeded();"
-                + " x = MarDoseSchedule.looksAsNeeded(f); y = Reading.AS_NEEDED;", found);
+                + " x = MarDoseSchedule.looksAsNeeded(f); y = Reading.AS_NEEDED;"
+                + " next.setOrderItems(request.getOrderItems() == null ? List.of() : request.getOrderItems());",
+            found);
         assertThat(found).containsKeys("service/impl/Example.java #1", "service/impl/Example.java #2",
-            "service/impl/Example.java #3", "service/impl/Example.java #4");
+            "service/impl/Example.java #3", "service/impl/Example.java #4", "service/impl/Example.java #5");
         Map<String, String> clean = new TreeMap<>();
         check("service/impl/Example.java", "MarDoseSchedule.read(rx); PrnMinInterval.isAsNeeded(rx);", clean);
         assertThat(clean).isEmpty();

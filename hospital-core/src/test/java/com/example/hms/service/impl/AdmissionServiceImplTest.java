@@ -363,6 +363,24 @@ class AdmissionServiceImplTest {
         verify(admissionRepository, never()).save(any());
     }
 
+    /** QA D1382 (round 32): the second order-set writer (POST /admissions/order-sets) holds items to the PRN rule. */
+    @Test
+    void d1382_theAdmissionOrderSetWriterRefusesAPrnItemWithoutItsInterval() {
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        com.example.hms.payload.dto.AdmissionOrderSetRequestDTO request =
+            new com.example.hms.payload.dto.AdmissionOrderSetRequestDTO();
+        request.setName("Douleur");
+        request.setHospitalId(hospitalId);
+        request.setCreatedByStaffId(staffId);
+        request.setOrderItems(java.util.List.of(java.util.Map.of("orderType", "MEDICATION",
+            "medicationName", "Morphine 2 mg", "frequency", "SOS")));
+        assertThatThrownBy(() -> service.createOrderSet(request))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getField()).isEqualTo("orderItems[0].asNeeded"));
+        verify(orderSetRepository, never()).save(any());
+    }
+
     /** QA D1384 (round 32): an unknown status filter is refused on "status", never raw Java text. */
     @Test
     void d1384_anUnknownStatusFilterIsRefusedOnItsName() {

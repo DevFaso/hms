@@ -154,7 +154,9 @@
     "every 4 hours as needed",
     "when required for pain",
     "as required",
-    "PRN STAT"
+    "PRN STAT",
+    "sil y a douleur",
+    "1 cp s/p dolor"
   ],
   "fixedSchedule": [
     "3 fois par jour",

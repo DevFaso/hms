@@ -677,6 +677,8 @@ public class AdmissionServiceImpl implements AdmissionService {
 
         Staff createdBy = staffRepository.findById(request.getCreatedByStaffId())
             .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", request.getCreatedByStaffId()));
+        // QA D1382 / D1378: the second order-set writer is held to the same item rule.
+        com.example.hms.service.orderset.OrderSetItemPrnRules.requireValid(request.getOrderItems());
 
         AdmissionOrderSet orderSet = new AdmissionOrderSet();
         orderSet.setName(request.getName());
