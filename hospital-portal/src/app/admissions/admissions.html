@@ -326,6 +326,7 @@
               <label for="adm-bed-select">{{ 'ADMISSIONS.SELECT_BED' | translate }} *</label>
               <select
                 id="adm-bed-select"
+                data-server-field="bedId"
                 required
                 [ngModel]="selectedBedId()"
                 (ngModelChange)="selectedBedId.set($event)"

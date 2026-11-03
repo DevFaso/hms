@@ -11,9 +11,9 @@
  * key the server sends, so a renamed control cannot silently go back to a
  * toast alone.
  *
- * The handoff recipient (recipientUserId, nurse-station.html #ho-recipient)
- * is not here: that template belongs to the MAR branch this round
- * (fix/r30-prn-interval); flagged in the round-30 hand-back.
+ * Round 31 adds the assign-bed picker (bedId), the handoff type and recipient
+ * (direction, recipientUserId) and the discharge decision's diagnosis and
+ * rejection reason.
  *
  * Run: npm run test:scripts
  */
@@ -52,6 +52,13 @@ const EXPECTED = [
   ['pharmacy/goods-receipt.html', 'grWitness', 'witnessedBy'],
   ['pharmacy/stock-adjustment.html', 'txQty', 'quantity'],
   ['pharmacy/stock-adjustment.html', 'txWitness', 'witnessedBy'],
+  // QA D1366 / D1371 / D1372 (round 31): the occupied bed, the handoff type and the
+  // discharge decision's own required field are named by the server now.
+  ['admissions/admissions.html', 'adm-bed-select', 'bedId'],
+  ['nurse-station/nurse-station.html', 'ho-direction', 'direction'],
+  ['nurse-station/nurse-station.html', 'ho-recipient', 'recipientUserId'],
+  ['discharge/discharge.html', 'decision-diagnosis', 'dischargeDiagnosis'],
+  ['discharge/discharge.html', 'decision-note', 'rejectionReason'],
 ];
 
 test('D1352/D1354: each refused field of these screens answers to the key the server names', () => {
