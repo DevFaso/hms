@@ -149,7 +149,9 @@ class FieldLabelMeaningTest {
         Map<String, String> recipient = Map.of("en", "recipient", "fr", "destinataire", "es", "destinatario");
         List<com.example.hms.payload.dto.EmailInvoiceRequest> bodies = List.of(
             new com.example.hms.payload.dto.EmailInvoiceRequest(List.of(), null, null, null, null, false),
-            new com.example.hms.payload.dto.EmailInvoiceRequest(List.of(" "), null, null, null, null, false));
+            // {to:['']}: only @NotBlank refuses an empty address (@Email accepts an empty string), so the
+            // reason is deterministic; a blank " " also trips @Email, and which one a Set yields first varies.
+            new com.example.hms.payload.dto.EmailInvoiceRequest(List.of(""), null, null, null, null, false));
         for (String lang : LANGUAGES) {
             LocaleContextHolder.setLocale(Locale.forLanguageTag(lang));
             for (com.example.hms.payload.dto.EmailInvoiceRequest target : bodies) {
