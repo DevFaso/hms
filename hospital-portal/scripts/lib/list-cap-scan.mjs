@@ -171,7 +171,7 @@ export function sliceCountFindings(html) {
       anchor: `${m[1]}:${m[2]}`,
       message:
         `${m[1]}.length - ${m[2]} counts "more" from the rows on hand (QA D1362): ` +
-        "use moreCount(serverTotal, shown) (src/app/shared/more-count.ts)",
+        'use moreCount(serverTotal, shown) (src/app/shared/more-count.ts)',
     });
   }
   return out;

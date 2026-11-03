@@ -271,7 +271,10 @@ describe('ProfileComponent — editing the profile', () => {
       status: 400,
       error: {
         message: 'Adresse e-mail invalide.',
-        fieldErrors: { newEmail: 'Adresse e-mail invalide.', currentPassword: 'Mot de passe requis.' },
+        fieldErrors: {
+          newEmail: 'Adresse e-mail invalide.',
+          currentPassword: 'Mot de passe requis.',
+        },
       },
     };
 
