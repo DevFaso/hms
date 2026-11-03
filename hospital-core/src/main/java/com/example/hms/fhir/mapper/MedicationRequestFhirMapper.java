@@ -92,6 +92,10 @@ public class MedicationRequestFhirMapper {
             d.setPatientInstruction(src.getInstructions());
         }
         addStructuredDose(d, src);
+        // QA D1378: the prescriber's explicit "as needed" tick, never read from the text.
+        if (com.example.hms.service.impl.PrnMinInterval.isAsNeeded(src)) {
+            d.setAsNeeded(new org.hl7.fhir.r4.model.BooleanType(true));
+        }
         return d;
     }
 

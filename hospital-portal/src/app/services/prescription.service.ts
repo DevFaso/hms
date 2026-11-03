@@ -51,6 +51,8 @@ export interface PrescriptionResponse {
   frequency: string;
   /** QA round 30: the minimum hours between two doses of an as-needed order, or null. */
   prnMinIntervalHours?: number | null;
+  /** QA D1378 (round 32): the order is as-needed (PRN), as the prescriber ticked it. */
+  asNeeded?: boolean;
   /** Administration route code (PO, IV, ...); null on orders that never recorded one. */
   route?: string | null;
   duration: string;
@@ -228,6 +230,11 @@ export interface PrescriptionRequest {
    * on any other (fieldErrors.prnMinIntervalHours).
    */
   prnMinIntervalHours?: number | null;
+  /**
+   * QA D1378 (round 32): the prescriber's explicit "as needed (PRN)" tick. A
+   * conditional frequency sent without it is refused (fieldErrors.asNeeded).
+   */
+  asNeeded?: boolean;
   /** D109: the route the MAR five-rights check compares the bedside entry with. */
   route?: string;
   duration?: string;

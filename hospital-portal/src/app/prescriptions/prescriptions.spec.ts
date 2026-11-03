@@ -1104,23 +1104,29 @@ describe('PrescriptionsComponent — signing', () => {
     expect(component.createdWithAdvisories()).toBeFalse();
   });
 
-  // QA round 30 (user decision 2026-11-02): an as-needed order states the
-  // minimum interval between two doses; the field shows exactly when the
-  // server will ask for it, is refused on itself when blank, and is never sent
-  // with a fixed schedule.
-  describe('QA round 30: the PRN minimum interval', () => {
-    const field = () =>
-      (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>(
-        '#rx-prnMinIntervalHours',
-      );
+  // QA round 30 (user decision 2026-11-02) / QA D1378 (round 32): an order
+  // the prescriber TICKS as needed states the minimum interval between two
+  // doses; the field shows from the tick (never from the frequency text), is
+  // refused on itself when blank, and is never sent on an order not ticked.
+  describe('QA round 30 / D1378: the PRN tick and its minimum interval', () => {
+    const host = () => fixture.nativeElement as HTMLElement;
+    const field = () => host().querySelector<HTMLInputElement>('#rx-prnMinIntervalHours');
+    const tick = () => host().querySelector<HTMLInputElement>('#rx-asNeeded');
 
-    it('is asked of a "si besoin" order, refused blank, and sent', () => {
+    it('is asked of an order ticked as needed, refused blank, and sent with the tick', () => {
       prescriptionService.create.and.returnValue(of(rx('rx-prn', 'DRAFT')));
       component.openCreate();
-      component.form = { ...component.form, medicationName: 'Paracétamol', quantity: 10 } as never;
+      component.form = {
+        ...component.form,
+        medicationName: 'Paracétamol',
+        quantity: 10,
+        frequency: 'SOS',
+      } as never;
       fixture.detectChanges();
-      expect(field()).withContext('no field for a blank frequency').toBeNull();
-      component.onFrequencyChange('si besoin');
+      expect(tick()).withContext('the explicit tick').not.toBeNull();
+      expect(tick()!.getAttribute('data-server-field')).toBe('asNeeded');
+      expect(field()).withContext('no field from the text alone, even "SOS"').toBeNull();
+      component.onAsNeededChange(true);
       fixture.detectChanges();
       expect(field()).not.toBeNull();
 
@@ -1137,27 +1143,43 @@ describe('PrescriptionsComponent — signing', () => {
       component.submitForm();
       expect(prescriptionService.create).toHaveBeenCalledTimes(1);
       expect(prescriptionService.create.calls.mostRecent().args[0]).toEqual(
-        jasmine.objectContaining({ frequency: 'si besoin', prnMinIntervalHours: 4 }),
+        jasmine.objectContaining({ frequency: 'SOS', asNeeded: true, prnMinIntervalHours: 4 }),
       );
     });
 
-    it('a fixed schedule hides the field and sends no interval', () => {
+    it('unticking hides the field and sends no interval, the tick false', () => {
       prescriptionService.create.and.returnValue(of(rx('rx-tid', 'DRAFT')));
       component.openCreate();
-      component.form = { ...component.form, medicationName: 'Amoxicilline', quantity: 21 } as never;
-      component.onFrequencyChange('PRN');
+      component.form = {
+        ...component.form,
+        medicationName: 'Amoxicilline',
+        quantity: 21,
+        frequency: '3 fois par jour',
+      } as never;
+      component.onAsNeededChange(true);
       component.form.prnMinIntervalHours = 6;
-      component.onFrequencyChange('3 fois par jour');
+      component.onAsNeededChange(false);
       fixture.detectChanges();
       expect(field()).toBeNull();
       component.submitForm();
-      expect(prescriptionService.create.calls.mostRecent().args[0].prnMinIntervalHours).toBeNull();
+      const sent = prescriptionService.create.calls.mostRecent().args[0];
+      expect(sent.prnMinIntervalHours).toBeNull();
+      expect(sent.asNeeded).toBeFalse();
     });
 
-    it('an edit opens with the interval the order carries', () => {
-      component.openEdit({ ...rx('rx-1', 'DRAFT'), frequency: 'PRN', prnMinIntervalHours: 8 });
+    it('an edit opens with the tick and the interval the order carries', () => {
+      component.openEdit({
+        ...rx('rx-1', 'DRAFT'),
+        frequency: 'PRN',
+        asNeeded: true,
+        prnMinIntervalHours: 8,
+      });
       expect(component.form.prnMinIntervalHours).toBe(8);
+      expect(component.form.asNeeded).toBeTrue();
       expect(component.prnIntervalShown()).toBeTrue();
+      component.openEdit({ ...rx('rx-2', 'DRAFT'), frequency: 'SOS' });
+      expect(component.form.asNeeded).toBeFalse();
+      expect(component.prnIntervalShown()).toBeFalse();
     });
   });
 

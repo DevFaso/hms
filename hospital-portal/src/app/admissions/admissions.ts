@@ -46,6 +46,8 @@ import { ListEscapeDirective } from '../shared/a11y/list-escape.directive';
 
 /** The bed-release reason's field (QA D1100), marked when it is refused. */
 const UNASSIGN_REASON_ID = 'admission-unassign-bed-reason';
+/** QA D1381: the stay's cancellation reason (server key `reason`). */
+const CANCEL_REASON_ID = 'admission-cancel-reason';
 
 interface OrderSetPickerCtx {
   hospitalId: string;
@@ -573,7 +575,11 @@ export class AdmissionsComponent implements OnInit {
     return CANCELLABLE_STATUSES.has(a.status);
   }
 
+  /** QA D1381 (round 32): why the stay is cancelled (required; kept on the admission). */
+  readonly deleteReason = signal('');
+
   confirmDelete(a: AdmissionResponse): void {
+    this.deleteReason.set('');
     this.deletingAdm.set(a);
     this.showDeleteConfirm.set(true);
   }
@@ -582,8 +588,16 @@ export class AdmissionsComponent implements OnInit {
     this.deletingAdm.set(null);
   }
   executeDelete(): void {
+    const reason = this.deleteReason().trim();
+    if (!reason) {
+      // QA D1381: the blank reason is marked where it is, as the server refuses it.
+      const message = this.translate.instant('ORDER_LIFECYCLE.CANCEL_REASON_REQUIRED');
+      refuseFields(this.doc, [CANCEL_REASON_ID], [CANCEL_REASON_ID], message);
+      return;
+    }
+    refuseFields(this.doc, [], [CANCEL_REASON_ID], '');
     this.deleting.set(true);
-    this.admissionService.delete(this.deletingAdm()!.id).subscribe({
+    this.admissionService.delete(this.deletingAdm()!.id, reason).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('ADMISSIONS.DELETED'));
         this.cancelDelete();

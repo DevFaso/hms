@@ -124,7 +124,7 @@ public final class MarNextDose {
         // signature (or, failing that, its creation), not four hours later.
         LocalDateTime start = rx.getSignedAt() != null ? rx.getSignedAt() : rx.getCreatedAt();
         LocalDateTime first = start != null ? start : now.plusHours(1);
-        MarDoseSchedule.Reading reading = MarDoseSchedule.read(rx.getFrequency());
+        MarDoseSchedule.Reading reading = MarDoseSchedule.read(rx);
         if (reading.kind() == MarDoseSchedule.Kind.AS_NEEDED) {
             return asNeeded(rx, now, rows, earlyWindow);
         }

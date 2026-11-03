@@ -104,35 +104,37 @@ class OrderSetItemDispatcherTest {
     }
 
     /**
-     * QA round 30: an as-needed item carries its author's minimum interval to
-     * the order; one without it is not applied (counted as skipped), and no
-     * interval is invented. A scheduled item sends none.
+     * QA round 30 / QA D1378 / D1382 (round 32): an item ticked as needed
+     * carries its author's tick and minimum interval to the order (a number,
+     * digits or a long); an item not ticked sends neither, whatever its
+     * frequency says - the order rule (PrnMinInterval, in createPrescription)
+     * and the apply's item check (OrderSetItemPrnRules) refuse what is wrong,
+     * the dispatcher never skips a medication item for it any more.
      */
     @Test
-    void prn_anAsNeededItemCarriesItsIntervalOrIsSkipped() {
+    void prn_theItemsTickAndIntervalReachTheOrder() {
         PrescriptionResponseDTO resp = new PrescriptionResponseDTO();
         resp.setId(UUID.randomUUID());
         resp.setCdsAdvisories(List.of());
         when(prescriptionService.createPrescription(any(), any(Locale.class))).thenReturn(resp);
 
-        DispatchResult skipped = dispatcher.dispatch(Map.of(
-            "orderType", "MEDICATION", "medicationName", "Paracetamol", "frequency", "PRN"), ctx(), Locale.ENGLISH);
-        assertThat(skipped.type()).isEqualTo(DispatchResult.Type.SKIPPED);
-        verifyNoInteractions(prescriptionService);
-
         for (Object hours : new Object[] {6, "6", 6L}) {
             DispatchResult applied = dispatcher.dispatch(Map.of(
-                "orderType", "MEDICATION", "medicationName", "Paracetamol", "frequency", "si besoin",
-                "prnMinIntervalHours", hours), ctx(), Locale.ENGLISH);
+                "orderType", "MEDICATION", "medicationName", "Paracetamol", "frequency", "SOS",
+                "asNeeded", true, "prnMinIntervalHours", hours), ctx(), Locale.ENGLISH);
             assertThat(applied.type()).as(String.valueOf(hours)).isEqualTo(DispatchResult.Type.MEDICATION);
         }
         ArgumentCaptor<PrescriptionRequestDTO> captor = ArgumentCaptor.forClass(PrescriptionRequestDTO.class);
         verify(prescriptionService, times(3)).createPrescription(captor.capture(), eq(Locale.ENGLISH));
-        assertThat(captor.getAllValues()).allSatisfy(r -> assertThat(r.getPrnMinIntervalHours()).isEqualTo(6));
+        assertThat(captor.getAllValues()).allSatisfy(r -> {
+            assertThat(r.getAsNeeded()).isTrue();
+            assertThat(r.getPrnMinIntervalHours()).isEqualTo(6);
+        });
 
         dispatcher.dispatch(Map.of("orderType", "MEDICATION", "medicationName", "Amoxicillin", "frequency", "TID",
             "prnMinIntervalHours", 6), ctx(), Locale.ENGLISH);
         verify(prescriptionService, times(4)).createPrescription(captor.capture(), eq(Locale.ENGLISH));
+        assertThat(captor.getValue().getAsNeeded()).isFalse();
         assertThat(captor.getValue().getPrnMinIntervalHours()).isNull();
     }
 

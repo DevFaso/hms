@@ -643,11 +643,28 @@
         </button>
       </div>
       <div class="modal-body">
+        <!-- QA D1388 (round 32): a space after the name; it ran into the next sentence. -->
         <p class="delete-warning">
           {{ 'ADMISSIONS.DELETE_CONFIRM' | translate }}
-          <strong>{{ deletingAdm()?.patientName }}</strong
-          >{{ 'COMMON.CANNOT_UNDO' | translate }}
+          <strong>{{ deletingAdm()?.patientName }}</strong>
+          {{ 'COMMON.CANNOT_UNDO' | translate }}
         </p>
+        <!-- QA D1381 (round 32): a stay is cancelled with its reason, kept on the admission. -->
+        <div class="form-group">
+          <label for="admission-cancel-reason"
+            >{{ 'ORDER_LIFECYCLE.CANCEL_REASON_LABEL' | translate }} *</label
+          >
+          <textarea
+            id="admission-cancel-reason"
+            data-server-field="reason"
+            rows="3"
+            maxlength="1000"
+            required
+            aria-required="true"
+            [ngModel]="deleteReason()"
+            (ngModelChange)="deleteReason.set($event)"
+          ></textarea>
+        </div>
       </div>
       <div class="modal-actions">
         <button class="btn-secondary" (click)="cancelDelete()">

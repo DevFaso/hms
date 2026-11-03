@@ -574,5 +574,9 @@ class NurseTaskControllerTest {
         assertThatThrownBy(() -> controller.getDueVitals(null, "nurse123", null, auth))
             .isInstanceOf(BusinessException.class)
             .extracting("messageKey").isEqualTo("nurse.assignee.invalid");
+        // QA D1384 (round 32): the refusal names the parameter, so fieldErrors.assignee is set.
+        assertThatThrownBy(() -> controller.getDueVitals(null, "tous", null, auth))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getField()).isEqualTo("assignee"));
     }
 }

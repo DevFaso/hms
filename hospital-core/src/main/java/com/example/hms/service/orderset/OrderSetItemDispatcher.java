@@ -5,7 +5,6 @@ import com.example.hms.enums.ImagingOrderPriority;
 import com.example.hms.model.LabTestDefinition;
 import com.example.hms.payload.dto.LabOrderRequestDTO;
 import com.example.hms.payload.dto.PrescriptionRequestDTO;
-import com.example.hms.service.impl.PrnMinInterval;
 import com.example.hms.payload.dto.PrescriptionResponseDTO;
 import com.example.hms.payload.dto.imaging.ImagingOrderRequestDTO;
 import com.example.hms.payload.dto.imaging.ImagingOrderResponseDTO;
@@ -65,9 +64,6 @@ public class OrderSetItemDispatcher {
     /** Lab order channel for system-applied order sets. */
     private static final String DEFAULT_ORDER_CHANNEL = "ELECTRONIC";
 
-    /** A count written as digits in the order-set JSON (the as-needed interval). */
-    private static final java.util.regex.Pattern WHOLE_NUMBER = java.util.regex.Pattern.compile("\\d{1,4}");
-
     private final PrescriptionService prescriptionService;
     private final LabOrderService labOrderService;
     private final ImagingOrderService imagingOrderService;
@@ -126,14 +122,15 @@ public class OrderSetItemDispatcher {
         req.setMedicationCode(string(item.get("medicationCode")));
         req.setDosage(combineDose(item));
         req.setFrequency(string(item.get("frequency")));
-        // QA round 30: an as-needed item carries the minimum interval its
-        // author wrote; one without it is not applied (no interval is invented).
-        if (PrnMinInterval.asNeeded(req.getFrequency())) {
-            Integer prnHours = wholeNumber(item.get(PrnMinInterval.FIELD));
-            if (prnHours == null) {
-                return DispatchResult.skipped("as-needed medication without a minimum interval");
-            }
-            req.setPrnMinIntervalHours(prnHours);
+        // QA D1378 / D1382 (round 32): the item is as-needed because its
+        // author ticked it, and the order carries the item's interval. The
+        // apply checked every item first (OrderSetItemPrnRules), so an
+        // as-needed item without its interval is refused by name, never
+        // skipped, and createPrescription holds the order to the same rule.
+        boolean asNeeded = OrderSetItemPrnRules.asNeeded(item);
+        req.setAsNeeded(asNeeded);
+        if (asNeeded) {
+            req.setPrnMinIntervalHours(OrderSetItemPrnRules.intervalHours(item));
         }
         req.setDuration(string(item.get("duration")));
         req.setNotes(NARRATIVE_PREFIX + ctx.orderSetName());
@@ -225,14 +222,6 @@ public class OrderSetItemDispatcher {
 
     private static String string(Object value) {
         return value instanceof String s && !s.isBlank() ? s : null;
-    }
-
-    /** A whole number written in the order-set JSON (a number, or digits), else {@code null}. */
-    private static Integer wholeNumber(Object value) {
-        if (value instanceof Integer i) return i;
-        if (value instanceof Long l && l <= PrnMinInterval.MAX_HOURS && l >= 0) return l.intValue();
-        if (value instanceof String s && WHOLE_NUMBER.matcher(s.strip()).matches()) return Integer.valueOf(s.strip());
-        return null;
     }
 
     private static String firstNonBlank(String a, String b) {

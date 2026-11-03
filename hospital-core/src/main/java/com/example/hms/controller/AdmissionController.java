@@ -127,9 +127,13 @@ public class AdmissionController {
 
     @DeleteMapping("/{admissionId}")
     @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR')")
-    @Operation(summary = "Cancel admission", description = "Cancel a pending or active admission")
-    public ResponseEntity<Void> cancelAdmission(@PathVariable UUID admissionId) {
-        admissionService.cancelAdmission(admissionId);
+    @Operation(summary = "Cancel admission",
+        description = "Cancel a pending or active admission. A reason is required and kept on the admission (QA D1381).")
+    public ResponseEntity<Void> cancelAdmission(
+        @PathVariable UUID admissionId,
+        @RequestBody(required = false) com.example.hms.payload.dto.AdmissionCancelRequestDTO request
+    ) {
+        admissionService.cancelAdmission(admissionId, request != null ? request.reason() : null);
         return ResponseEntity.noContent().build();
     }
 

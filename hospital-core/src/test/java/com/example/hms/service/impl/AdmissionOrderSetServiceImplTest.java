@@ -241,6 +241,70 @@ class AdmissionOrderSetServiceImplTest {
         assertThat(summary.skippedItemCount()).isZero();
     }
 
+    /**
+     * QA D1382 (round 32): an order set accepted a PRN medication item with no
+     * interval (201) and the apply then skipped it silently. Every save (a new
+     * set and every new version) now holds each MEDICATION item to the
+     * prescription rule, named on the item's own field; nothing is saved.
+     */
+    @Test
+    void d1382_aPrnItemBreakingThePrescriptionRuleIsRefusedAtSave() {
+        when(hospitalRepo.findClinicalById(HOSPITAL_ID)).thenReturn(Optional.of(hospital()));
+        when(staffRepo.findById(STAFF_ID)).thenReturn(Optional.of(staff()));
+        when(orderSetRepo.findById(ORDER_SET_ID)).thenReturn(Optional.of(existing()));
+        Map<String, Map<String, Object>> refusedOn = new java.util.LinkedHashMap<>();
+        refusedOn.put("orderItems[1].prnMinIntervalHours",
+            Map.of("orderType", "MEDICATION", "medicationName", "Paracetamol 1 g", "frequency", "au besoin",
+                "asNeeded", true));
+        refusedOn.put("orderItems[1].asNeeded",
+            Map.of("orderType", "MEDICATION", "medicationName", "Paracetamol 1 g", "frequency", "sur demande"));
+        refusedOn.put("orderItems[1].prnMinIntervalHours ",
+            Map.of("orderType", "medication", "medicationName", "Paracetamol 1 g", "frequency", "SOS",
+                "asNeeded", true, "prnMinIntervalHours", 2.5));
+        for (Map.Entry<String, Map<String, Object>> e : refusedOn.entrySet()) {
+            AdmissionOrderSetRequestDTO request = sampleRequest();
+            request.setOrderItems(List.of(Map.of("orderType", "LAB", "orderName", "Lactate"), e.getValue()));
+            assertThatThrownBy(() -> service.create(request)).as(e.getKey())
+                .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                    ex -> assertThat(ex.getField()).isEqualTo(e.getKey().strip()));
+            assertThatThrownBy(() -> service.update(ORDER_SET_ID, request)).as(e.getKey())
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
+        }
+        verify(orderSetRepo, org.mockito.Mockito.never()).save(any());
+
+        when(orderSetRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        AdmissionOrderSetRequestDTO ok = sampleRequest();
+        ok.setOrderItems(List.of(Map.of("orderType", "MEDICATION", "medicationName", "Paracetamol 1 g",
+            "frequency", "SOS", "asNeeded", true, "prnMinIntervalHours", 4)));
+        assertThat(service.create(ok).getVersion()).isEqualTo(1);
+    }
+
+    /**
+     * QA D1382 (round 32): a set saved before the item rule, with a PRN item
+     * that has no interval, is refused by name at apply before any order is
+     * created - never applied with the item silently skipped.
+     */
+    @Test
+    void d1382_aStoredPrnItemWithoutAnIntervalIsRefusedAtApplyNeverSkipped() {
+        AdmissionOrderSet os = existing();
+        os.setOrderItems(List.of(
+            Map.of("orderType", "LAB", "orderName", "Lactate"),
+            Map.of("orderType", "MEDICATION", "medicationName", "Paracetamol 1 g", "frequency", "si douleur",
+                "asNeeded", true)));
+        when(orderSetRepo.findById(ORDER_SET_ID)).thenReturn(Optional.of(os));
+        Admission admission = new Admission();
+        admission.setId(ADMISSION_ID);
+        admission.setHospital(hospital());
+        when(admissionRepo.findById(ADMISSION_ID)).thenReturn(Optional.of(admission));
+
+        ApplyOrderSetRequestDTO req = new ApplyOrderSetRequestDTO(UUID.randomUUID(), STAFF_ID, false);
+        assertThatThrownBy(() -> service.applyToAdmission(ADMISSION_ID, ORDER_SET_ID, req, Locale.ENGLISH))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getField()).isEqualTo("orderItems[1].prnMinIntervalHours"));
+        org.mockito.Mockito.verifyNoInteractions(dispatcher);
+        verify(admissionRepo, org.mockito.Mockito.never()).save(any());
+    }
+
     @Test
     void applyRefusesDeactivatedOrderSet() {
         AdmissionOrderSet os = existing();

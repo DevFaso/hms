@@ -20,6 +20,7 @@ import com.example.hms.service.AdmissionOrderSetService;
 import com.example.hms.service.orderset.DispatchResult;
 import com.example.hms.service.orderset.OrderSetApplicationContext;
 import com.example.hms.service.orderset.OrderSetItemDispatcher;
+import com.example.hms.service.orderset.OrderSetItemPrnRules;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
@@ -114,6 +115,8 @@ public class AdmissionOrderSetServiceImpl implements AdmissionOrderSetService {
             }
         Staff createdBy = staffRepository.findById(request.getCreatedByStaffId())
             .orElseThrow(() -> new ResourceNotFoundException(STAFF_NOT_FOUND_KEY, request.getCreatedByStaffId()));
+        // QA D1382 / D1378: an as-needed medication item names its interval at save.
+        OrderSetItemPrnRules.requireValid(request.getOrderItems());
 
         AdmissionOrderSet entity = new AdmissionOrderSet();
         entity.setName(request.getName());
@@ -147,6 +150,8 @@ public class AdmissionOrderSetServiceImpl implements AdmissionOrderSetService {
         }
         Staff modifiedBy = staffRepository.findById(request.getCreatedByStaffId())
             .orElseThrow(() -> new ResourceNotFoundException(STAFF_NOT_FOUND_KEY, request.getCreatedByStaffId()));
+        // QA D1382 / D1378: every new version is held to the item rule too.
+        OrderSetItemPrnRules.requireValid(request.getOrderItems());
         Department department = request.getDepartmentId() == null ? null
             : departmentRepository.findById(request.getDepartmentId())
                 .orElseThrow(() -> new ResourceNotFoundException(DEPARTMENT_NOT_FOUND_KEY, request.getDepartmentId()));
@@ -239,6 +244,9 @@ public class AdmissionOrderSetServiceImpl implements AdmissionOrderSetService {
 
         List<Map<String, Object>> items = orderSet.getOrderItems() == null
             ? List.of() : orderSet.getOrderItems();
+        // QA D1382 / D1378: a set saved before the item rule is refused by
+        // name before any order is created, never applied with an item skipped.
+        OrderSetItemPrnRules.requireValid(items);
         for (Map<String, Object> item : items) {
             // CdsCriticalBlockException propagates and rolls back the whole
             // transaction; non-blocking advisories are accumulated.

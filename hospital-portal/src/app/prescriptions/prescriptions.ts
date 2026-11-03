@@ -56,7 +56,7 @@ import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { serverInstant } from '../shared/date-utils';
 import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
 import { canonicalRoute } from '../shared/pipes/medication-route.pipe';
-import { PRN_MAX_INTERVAL_HOURS, isAsNeededFrequency } from '../shared/as-needed-frequency';
+import { PRN_MAX_INTERVAL_HOURS } from '../shared/as-needed-frequency';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { isStepUpRefusal } from '../services/step-up';
 import { MfaService } from '../auth/mfa.service';
@@ -496,6 +496,7 @@ export class PrescriptionsComponent implements OnInit {
       medicationName: '',
       dosage: '',
       frequency: '',
+      asNeeded: false,
       prnMinIntervalHours: null,
       route: 'PO',
       duration: '',
@@ -685,7 +686,8 @@ export class PrescriptionsComponent implements OnInit {
       medicationName: p.medicationName ?? '',
       dosage: p.dosage ?? '',
       frequency: p.frequency ?? '',
-      // QA round 30: the as-needed order's minimum interval, as written.
+      // QA D1378: the prescriber's explicit "as needed" tick, and its minimum interval.
+      asNeeded: !!p.asNeeded,
       prnMinIntervalHours: p.prnMinIntervalHours ?? null,
       // QA D950: a stored "ORAL" opens on the form's own PO option.
       route: canonicalRoute(p.route) ?? p.route ?? '',
@@ -772,17 +774,20 @@ export class PrescriptionsComponent implements OnInit {
   protected readonly formError = signal('');
 
   /**
-   * QA round 30 (user decision 2026-11-02): the minimum interval is asked of
-   * an as-needed order only, exactly when the server will require it.
+   * QA round 30 / QA D1378 (round 32): the minimum interval is asked of an
+   * order the prescriber TICKS as needed, never guessed from the frequency
+   * text (round 32 found ~45 wordings a word list missed). A conditional
+   * frequency written without the tick is refused by the server on
+   * `asNeeded` (its safety net), and the shared interceptor marks the box.
    */
   prnIntervalShown(): boolean {
-    return isAsNeededFrequency(this.form.frequency);
+    return !!this.form.asNeeded;
   }
 
-  /** QA round 30: a frequency that is no longer as-needed carries no interval (the server refuses one). */
-  onFrequencyChange(value: string): void {
-    this.form.frequency = value;
-    if (!isAsNeededFrequency(value)) {
+  /** QA D1378: unticking "as needed" drops the interval (the server refuses one on an order not ticked). */
+  onAsNeededChange(checked: boolean): void {
+    this.form.asNeeded = checked;
+    if (!checked) {
       this.form.prnMinIntervalHours = null;
     }
   }
@@ -820,6 +825,7 @@ export class PrescriptionsComponent implements OnInit {
     this.saving.set(true);
     const body: PrescriptionRequest = {
       ...this.form,
+      asNeeded: !!this.form.asNeeded,
       prnMinIntervalHours: this.prnIntervalShown() ? this.form.prnMinIntervalHours : null,
     };
     const op = this.editing()

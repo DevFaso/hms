@@ -123,8 +123,9 @@ export class AdmissionService {
     return this.http.put<AdmissionResponse>(`${this.baseUrl}/${id}`, req);
   }
 
-  delete(id: string): Observable<void> {
-    return this.http.delete<void>(`${this.baseUrl}/${id}`);
+  /** QA D1381 (round 32): a stay is cancelled with its reason (sent in the body, never the URL). */
+  delete(id: string, reason: string): Observable<void> {
+    return this.http.delete<void>(`${this.baseUrl}/${id}`, { body: { reason } });
   }
 
   discharge(id: string, data: Record<string, unknown>): Observable<AdmissionResponse> {

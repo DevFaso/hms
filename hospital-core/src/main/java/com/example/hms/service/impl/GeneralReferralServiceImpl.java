@@ -464,7 +464,7 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
         List<GeneralReferral> outgoing;
         List<GeneralReferral> incoming;
         if (status != null && !status.isBlank()) {
-            ReferralStatus referralStatus = ReferralStatus.valueOf(status.toUpperCase());
+            ReferralStatus referralStatus = referralStatusParam(status);
             outgoing = referralRepository.findByHospitalIdAndStatusOrderByCreatedAtDesc(effectiveHospitalId, referralStatus);
             incoming = referralRepository.findByReceivingHospitalIdAndStatusOrderByCreatedAtDesc(effectiveHospitalId, referralStatus);
         } else {
@@ -494,7 +494,7 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
         }
         List<GeneralReferral> referrals;
         if (status != null && !status.isBlank()) {
-            ReferralStatus referralStatus = ReferralStatus.valueOf(status.toUpperCase());
+            ReferralStatus referralStatus = referralStatusParam(status);
             referrals = referralRepository.findByStatusOrderByCreatedAtDesc(referralStatus);
         } else {
             referrals = referralRepository.findAllByOrderByCreatedAtDesc();
@@ -953,5 +953,14 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
     private static boolean worksAt(Staff staff, UUID hospitalId) {
         return staff.getHospital() != null && staff.getHospital().getId() != null
             && staff.getHospital().getId().equals(hospitalId);
+    }
+
+    /** QA D1384 (round 32): an unknown {@code status} filter is refused on its name, never raw Java text. */
+    private static ReferralStatus referralStatusParam(String status) {
+        try {
+            return ReferralStatus.valueOf(status.trim().toUpperCase(java.util.Locale.ROOT));
+        } catch (IllegalArgumentException ex) {
+            throw com.example.hms.utility.EnumQueryParam.refusal("status");
+        }
     }
 }

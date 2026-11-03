@@ -45,6 +45,8 @@ export interface OrderSetItem {
   doseUnit?: string;
   /** QA round 30: the minimum hours between two doses of an as-needed (PRN) item. */
   prnMinIntervalHours?: number | null;
+  /** QA D1378 (round 32): the author's explicit "as needed (PRN)" tick on a medication item. */
+  asNeeded?: boolean;
   notes?: string;
   [key: string]: unknown;
 }

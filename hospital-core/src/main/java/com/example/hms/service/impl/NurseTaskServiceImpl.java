@@ -845,7 +845,9 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         // silently returning [] for a typo would read as "no handoffs".
         String effectiveStatus = status == null || status.isBlank() ? STATUS_PENDING : status.trim().toUpperCase();
         if (!STATUS_PENDING.equals(effectiveStatus) && !STATUS_COMPLETED.equals(effectiveStatus)) {
-            throw new BusinessException("nurse.handoff.unknownStatus", String.valueOf(status));
+            // QA D1384 (round 32): the refusal names the parameter, so the filter is marked.
+            throw new com.example.hms.exception.FieldBusinessException("status", "nurse.handoff.unknownStatus",
+                String.valueOf(status));
         }
 
         // Scan page is larger than the display limit so the assignee filter

@@ -27,8 +27,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /**
  * QA round 30 (user decision 2026-11-02, option a): the minimum interval of
  * an as-needed order is written by the prescriber, required on a new
- * as-needed order, refused on any other, never invented. And QA D1359: the
- * prescribed route is one the route reading knows.
+ * as-needed order, refused on any other, never invented. QA D1378 (round 32):
+ * as-needed is the prescriber's explicit tick; a conditional frequency
+ * without it is refused on {@code asNeeded} (the safety net). And QA D1359:
+ * the prescribed route is one the route reading knows.
  */
 class PrnMinIntervalTest {
 
@@ -46,11 +48,16 @@ class PrnMinIntervalTest {
         factory.close();
     }
 
+    /**
+     * QA D1378 (round 32): an order the prescriber ticked as needed needs its
+     * interval, whatever its frequency says ("q4h", "SOS", nothing at all).
+     */
     @ParameterizedTest
-    @ValueSource(strings = {"PRN", "si besoin", "Si besoin, max 4/j", "as needed", "si es necesario"})
-    void anAsNeededOrderWithoutItsIntervalIsRefusedOnTheField(String frequency) {
+    @ValueSource(strings = {"PRN", "si besoin", "SOS", "q4h", "toutes les 6 heures", ""})
+    void aTickedOrderWithoutItsIntervalIsRefusedOnTheField(String frequency) {
         Prescription rx = new Prescription();
         rx.setFrequency(frequency);
+        rx.setAsNeeded(true);
         assertThatThrownBy(() -> PrnMinInterval.applyTo(rx))
             .isInstanceOf(FieldBusinessException.class)
             .hasFieldOrPropertyWithValue("field", PrnMinInterval.FIELD)
@@ -61,18 +68,29 @@ class PrnMinIntervalTest {
     }
 
     /**
-     * QA D1360: a controlled morphine PRN order written with ANY wording of the
-     * shared as-needed fixture ("au besoin", "à la demande", "si nécessaire",
-     * "si douleur", ...) is refused without its minimum interval, at the edge
-     * (named with the other refusals) and in the service (every write path).
+     * QA D1378 replay (round 32), QA D1360: a controlled morphine order written
+     * with ANY as-needed wording - the round-31 phrases and the ~45 round-32
+     * ones (SOS, p.r.n., sur demande, si precisa, when necessary ...) - and not
+     * ticked is refused on {@code asNeeded} (the safety net), at the edge with
+     * the other refusals and in the service (every write path). Ticked, it
+     * needs its interval; ticked with the interval, it passes.
      */
     @ParameterizedTest
-    @MethodSource("com.example.hms.service.impl.MarDoseScheduleTest#asNeededCases")
-    void d1360_aMorphinePrnOrderInAnyWordingNeedsItsInterval(String frequency) {
+    @MethodSource({"com.example.hms.service.impl.MarDoseScheduleTest#asNeededCases",
+        "com.example.hms.service.impl.MarDoseScheduleTest#conditionalCases"})
+    void d1378_aMorphineOrderInAnyAsNeededWordingIsConfirmed(String frequency) {
         PrescriptionRequestDTO request = morphine(frequency);
-        assertThat(paths(request, Default.class, OnCreate.class)).as(frequency).contains(PrnMinInterval.FIELD);
+        assertThat(paths(request, Default.class, OnCreate.class)).as(frequency)
+            .contains(PrnMinInterval.AS_NEEDED_FIELD).doesNotContain(PrnMinInterval.FIELD);
+        request.setAsNeeded(false);
+        assertThat(paths(request, Default.class, OnCreate.class)).as(frequency)
+            .contains(PrnMinInterval.AS_NEEDED_FIELD);
+        request.setAsNeeded(true);
+        assertThat(paths(request, Default.class, OnCreate.class)).as(frequency)
+            .contains(PrnMinInterval.FIELD).doesNotContain(PrnMinInterval.AS_NEEDED_FIELD);
         request.setPrnMinIntervalHours(4);
-        assertThat(paths(request, Default.class, OnCreate.class)).as(frequency).doesNotContain(PrnMinInterval.FIELD);
+        assertThat(paths(request, Default.class, OnCreate.class)).as(frequency)
+            .doesNotContain(PrnMinInterval.FIELD, PrnMinInterval.AS_NEEDED_FIELD);
 
         Prescription rx = new Prescription();
         rx.setMedicationName(request.getMedicationName());
@@ -80,16 +98,26 @@ class PrnMinIntervalTest {
         rx.setFrequency(frequency);
         assertThatThrownBy(() -> PrnMinInterval.applyTo(rx)).as(frequency)
             .isInstanceOf(FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", PrnMinInterval.AS_NEEDED_FIELD)
+            .hasFieldOrPropertyWithValue("messageKey", PrnMinInterval.CONFIRM_KEY);
+        rx.setAsNeeded(true);
+        assertThatThrownBy(() -> PrnMinInterval.applyTo(rx)).as(frequency)
             .hasFieldOrPropertyWithValue("field", PrnMinInterval.FIELD)
             .hasFieldOrPropertyWithValue("messageKey", PrnMinInterval.REQUIRED_KEY);
+        rx.setPrnMinIntervalHours(4);
+        PrnMinInterval.applyTo(rx);
     }
 
-    /** QA D1360: a frequency the fixture says is not as-needed is never asked for (nor allowed) an interval. */
+    /** QA D1378: a fixed schedule, not ticked, is neither asked to confirm nor for an interval. */
     @ParameterizedTest
-    @MethodSource("com.example.hms.service.impl.MarDoseScheduleTest#notAsNeededCases")
-    void d1360_aNonAsNeededFrequencyIsNotAskedForAnInterval(String frequency) {
+    @MethodSource("com.example.hms.service.impl.MarDoseScheduleTest#fixedScheduleCases")
+    void d1378_aFixedScheduleIsNotAskedAnything(String frequency) {
         assertThat(paths(morphine(frequency), Default.class, OnCreate.class)).as(frequency)
-            .doesNotContain(PrnMinInterval.FIELD);
+            .doesNotContain(PrnMinInterval.FIELD, PrnMinInterval.AS_NEEDED_FIELD);
+        Prescription rx = new Prescription();
+        rx.setFrequency(frequency);
+        PrnMinInterval.applyTo(rx);
+        assertThat(rx.getPrnMinIntervalHours()).isNull();
     }
 
     private static PrescriptionRequestDTO morphine(String frequency) {
@@ -104,6 +132,7 @@ class PrnMinIntervalTest {
     void anOutOfRangeIntervalIsRefusedOnTheServiceToo() {
         Prescription rx = new Prescription();
         rx.setFrequency("PRN");
+        rx.setAsNeeded(true);
         rx.setPrnMinIntervalHours(0);
         assertThatThrownBy(() -> PrnMinInterval.applyTo(rx))
             .hasFieldOrPropertyWithValue("messageKey", PrnMinInterval.RANGE_KEY);
@@ -112,18 +141,21 @@ class PrnMinIntervalTest {
             .hasFieldOrPropertyWithValue("messageKey", PrnMinInterval.RANGE_KEY);
     }
 
+    /** QA D1378: an interval on an order not ticked as needed is refused, never silently dropped. */
     @Test
-    void anEditToAFixedScheduleDropsTheInterval() {
+    void anIntervalOnAnOrderNotTickedIsRefused() {
         Prescription rx = new Prescription();
         rx.setFrequency("3 fois par jour");
         rx.setPrnMinIntervalHours(6);
-        PrnMinInterval.applyTo(rx);
-        assertThat(rx.getPrnMinIntervalHours()).isNull();
+        assertThatThrownBy(() -> PrnMinInterval.applyTo(rx))
+            .hasFieldOrPropertyWithValue("field", PrnMinInterval.FIELD)
+            .hasFieldOrPropertyWithValue("messageKey", PrnMinInterval.NOT_AS_NEEDED_KEY);
     }
 
     @Test
     void theRequestNamesTheMissingIntervalWithTheOtherRefusalsOnCreate() {
         PrescriptionRequestDTO request = request("si besoin");
+        request.setAsNeeded(true);
         assertThat(paths(request, Default.class, OnCreate.class)).contains(PrnMinInterval.FIELD);
         // An edit or a withdrawal (Default group only) is not refused for it at the edge.
         assertThat(paths(request, Default.class)).doesNotContain(PrnMinInterval.FIELD);
@@ -131,15 +163,31 @@ class PrnMinIntervalTest {
         assertThat(paths(request, Default.class, OnCreate.class)).doesNotContain(PrnMinInterval.FIELD);
     }
 
+    /**
+     * QA D1378: a withdrawal (Default group, an update) that echoes an older
+     * unticked order's "SOS" frequency is never refused by the safety net.
+     */
     @Test
-    void theRangeAndAnIntervalOnAFixedScheduleAreRefusedOnTheField() {
+    void aWithdrawalEchoingAnUntickedAsNeededWordingIsNotRefused() {
+        PrescriptionRequestDTO echo = request("SOS");
+        assertThat(paths(echo, Default.class)).doesNotContain(PrnMinInterval.AS_NEEDED_FIELD, PrnMinInterval.FIELD);
+        echo.setAsNeeded(false);
+        assertThat(paths(echo, Default.class)).doesNotContain(PrnMinInterval.AS_NEEDED_FIELD, PrnMinInterval.FIELD);
+    }
+
+    @Test
+    void theRangeAndAnIntervalOnAnOrderNotTickedAreRefusedOnTheField() {
         PrescriptionRequestDTO prn = request("PRN");
+        prn.setAsNeeded(true);
         prn.setPrnMinIntervalHours(0);
         assertThat(paths(prn, Default.class)).contains(PrnMinInterval.FIELD);
         prn.setPrnMinIntervalHours(73);
         assertThat(paths(prn, Default.class)).contains(PrnMinInterval.FIELD);
         PrescriptionRequestDTO tid = request("TID");
         tid.setPrnMinIntervalHours(6);
+        // Not ticked (absent = not as-needed on create; false on any request).
+        assertThat(paths(tid, Default.class, OnCreate.class)).contains(PrnMinInterval.FIELD);
+        tid.setAsNeeded(false);
         assertThat(paths(tid, Default.class)).contains(PrnMinInterval.FIELD);
         tid.setPrnMinIntervalHours(null);
         assertThat(paths(tid, Default.class, OnCreate.class)).doesNotContain(PrnMinInterval.FIELD);

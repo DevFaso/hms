@@ -75,6 +75,15 @@ public class PrescriptionRequestDTO {
     private Integer prnMinIntervalHours;
 
     /**
+     * QA D1378 / D1360 (round 32): the prescriber's explicit "as needed (PRN)"
+     * tick. True requires {@link #prnMinIntervalHours}; false (or absent on
+     * create) refuses one, and a frequency that reads as "as needed" is then
+     * refused on this field so the prescriber confirms. On update, null keeps
+     * the stored value.
+     */
+    private Boolean asNeeded;
+
+    /**
      * Administration route (PO, IV, IM, SC, ...). The MAR five-rights route
      * check compares the bedside scan with this value; without it every
      * order looked oral and an IV dose always failed the route right.

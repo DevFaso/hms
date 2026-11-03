@@ -114,6 +114,7 @@ public class PrescriptionMapper {
             .dosage(p.getDosage())
             .frequency(p.getFrequency())
             .prnMinIntervalHours(p.getPrnMinIntervalHours())
+            .asNeeded(p.isAsNeeded())
             .duration(p.getDuration())
             .route(p.getRoute())
             .instructions(p.getInstructions())
@@ -222,6 +223,8 @@ public class PrescriptionMapper {
         e.setFrequency(dto.getFrequency());
         // QA round 30: the as-needed interval (PrnMinInterval.applyTo checks it).
         e.setPrnMinIntervalHours(dto.getPrnMinIntervalHours());
+        // QA D1378 / D1360: as-needed is the prescriber's tick, absent = not as-needed.
+        e.setAsNeeded(Boolean.TRUE.equals(dto.getAsNeeded()));
         e.setRoute(normalizeRoute(dto.getRoute()));
         e.setDuration(dto.getDuration());
         e.setNotes(dto.getNotes());
@@ -278,10 +281,18 @@ public class PrescriptionMapper {
 
         target.setDosage(dto.getDosage());
         target.setFrequency(dto.getFrequency());
-        // QA round 30: null keeps the stored interval; PrnMinInterval.applyTo
-        // clears it when the edited frequency is no longer as-needed.
+        // QA round 30: null keeps the stored interval (QA D1378: unticking
+        // "as needed" drops it, below).
         if (dto.getPrnMinIntervalHours() != null) {
             target.setPrnMinIntervalHours(dto.getPrnMinIntervalHours());
+        }
+        // QA D1378 / D1360: null keeps the stored tick; unticking drops the
+        // stored interval (an interval sent with the untick is refused).
+        if (dto.getAsNeeded() != null) {
+            target.setAsNeeded(dto.getAsNeeded());
+            if (!dto.getAsNeeded() && dto.getPrnMinIntervalHours() == null) {
+                target.setPrnMinIntervalHours(null);
+            }
         }
         if (dto.getRoute() != null) {
             target.setRoute(normalizeRoute(dto.getRoute()));

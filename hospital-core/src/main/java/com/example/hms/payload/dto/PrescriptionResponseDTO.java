@@ -49,6 +49,9 @@ public class PrescriptionResponseDTO {
     private String frequency;
     /** QA round 30: the minimum hours between two doses of an as-needed order, or null. */
     private Integer prnMinIntervalHours;
+
+    /** QA D1378 / D1360 (round 32): the order is as-needed (PRN), as the prescriber ticked it. */
+    private boolean asNeeded;
     private String duration;
     private String route;
     private String instructions;

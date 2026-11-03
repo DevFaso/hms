@@ -130,9 +130,10 @@ describe('OrderSetEditComponent', () => {
     expect(navigateSpy).toHaveBeenCalledWith(['/admin/order-sets']);
   });
 
-  // QA round 30 (user decision 2026-11-02): an as-needed (PRN) item states the
+  // QA round 30 (user decision 2026-11-02) / QA D1378 / D1382 (round 32): an
+  // item its author ticks as needed (the coded PRN preset ticks it) states the
   // minimum interval between two doses; the order it creates requires it.
-  it('QA round 30: a PRN item asks for its minimum interval, marks it, and saves it', async () => {
+  it('QA round 30 / D1378: a PRN item asks for its minimum interval, marks it, and saves it', async () => {
     await configure('new');
     spyOn(TestBed.inject(Router), 'navigate').and.resolveTo(true);
     fixture = TestBed.createComponent(OrderSetEditComponent);
@@ -141,12 +142,18 @@ describe('OrderSetEditComponent', () => {
     fixture.componentInstance['form'].name = 'Douleur';
     const items = fixture.componentInstance['items']();
     items[0].medicationName = 'Paracétamol';
-    items[0].frequency = 'PRN';
-    fixture.componentInstance['items'].set([...items]);
-    fixture.detectChanges();
     const host = fixture.nativeElement as HTMLElement;
     const field = () =>
       host.querySelector<HTMLInputElement>('[data-testid="order-set-item-prn-0"]');
+    const tick = () =>
+      host.querySelector<HTMLInputElement>('[data-testid="order-set-item-as-needed-0"]');
+    fixture.detectChanges();
+    expect(tick()!.getAttribute('data-server-field')).toBe('orderItems[0].asNeeded');
+    expect(field()).withContext('not ticked: no interval').toBeNull();
+    fixture.componentInstance['onFrequencyChange'](items[0], 'PRN');
+    fixture.componentInstance['items'].set([...items]);
+    fixture.detectChanges();
+    expect(items[0].asNeeded).withContext('the coded PRN preset ticks it').toBeTrue();
     expect(field()).not.toBeNull();
 
     cmp.save();
@@ -161,16 +168,19 @@ describe('OrderSetEditComponent', () => {
     fixture.componentInstance['items'].set([...items]);
     cmp.save();
     expect(svc.create.calls.mostRecent().args[0].orderItems[0].prnMinIntervalHours).toBe(6);
+    expect(svc.create.calls.mostRecent().args[0].orderItems[0].asNeeded).toBeTrue();
 
-    // A fixed schedule carries no interval.
-    items[0].frequency = 'Q6H';
+    // Another pick never unticks; unticking drops the tick and the interval.
+    fixture.componentInstance['onFrequencyChange'](items[0], 'Q6H');
+    expect(items[0].asNeeded).toBeTrue();
+    fixture.componentInstance['onAsNeededChange'](items[0], false);
     fixture.componentInstance['items'].set([...items]);
     fixture.detectChanges();
     expect(field()).toBeNull();
     cmp.save();
-    expect(
-      'prnMinIntervalHours' in svc.create.calls.mostRecent().args[0].orderItems[0],
-    ).toBeFalse();
+    const saved = svc.create.calls.mostRecent().args[0].orderItems[0];
+    expect('prnMinIntervalHours' in saved).toBeFalse();
+    expect('asNeeded' in saved).toBeFalse();
   });
 
   it('errors when an item is missing a name', async () => {

@@ -469,8 +469,9 @@ class CancelVoidReasonGuardTest {
             "NOT A CLINICAL RECORD: a reporting mapping");
         DELETE_PROOFS.put("DELETE /admin/mllp/allowed-senders/{id}",
             "NOT A CLINICAL RECORD: an integration allowlist entry");
+        // QA D1381 (round 32): the KNOWN GAP closed - the reason is required, kept on the admission.
         DELETE_PROOFS.put("DELETE /admissions/{admissionId}",
-            "KNOWN GAP (D1241 class, standing debt): a doctor cancels a stay still in progress (CANCELLABLE_STATUSES, never billed) with no reason; the portal sends none yet, so requiring it needs its UI half first");
+            "AdmissionCancelRequestDTO.reason -> service/impl/AdmissionServiceImplTest#d1381_aCancelWithoutAReasonIsRefused");
         DELETE_PROOFS.put("DELETE /admissions/{admissionId}/bed",
             "NOT A CLINICAL RECORD: frees the bed of a stay; the stay itself is unchanged");
         DELETE_PROOFS.put("DELETE /announcements/{id}",

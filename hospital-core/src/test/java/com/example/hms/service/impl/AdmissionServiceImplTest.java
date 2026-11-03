@@ -215,7 +215,7 @@ class AdmissionServiceImplTest {
         when(registrationRepository.findByPatientIdAndHospitalId(patientId, hospitalId))
             .thenReturn(Optional.of(registration));
 
-        service.cancelAdmission(admissionId);
+        service.cancelAdmission(admissionId, CANCEL_REASON);
 
         assertThat(registration.getStayStatus()).isEqualTo(com.example.hms.enums.PatientStayStatus.REGISTERED);
     }
@@ -318,6 +318,9 @@ class AdmissionServiceImplTest {
         verify(stayEncounters, never()).followStayDepartment(any());
     }
 
+    /** QA D1381: the reason a cancel test gives. */
+    private static final String CANCEL_REASON = "Admission ouverte par erreur";
+
     @Test
     void cancelAdmission_success() {
         Admission admission = new Admission();
@@ -325,9 +328,49 @@ class AdmissionServiceImplTest {
         admission.setStatus(AdmissionStatus.ACTIVE);
         when(admissionRepository.findById(admissionId)).thenReturn(Optional.of(admission));
 
-        service.cancelAdmission(admissionId);
+        service.cancelAdmission(admissionId, CANCEL_REASON);
 
         verify(admissionRepository).save(admission);
+    }
+
+    /** QA D1381 (round 32): the reason is kept on the cancelled admission, trimmed, with when. */
+    @Test
+    void d1381_theCancelKeepsItsReason() {
+        Admission admission = new Admission();
+        admission.setId(admissionId);
+        admission.setStatus(AdmissionStatus.ACTIVE);
+        when(admissionRepository.findById(admissionId)).thenReturn(Optional.of(admission));
+
+        service.cancelAdmission(admissionId, "  " + CANCEL_REASON + "  ");
+
+        assertThat(admission.getStatus()).isEqualTo(AdmissionStatus.CANCELLED);
+        assertThat(admission.getCancellationReason()).isEqualTo(CANCEL_REASON);
+        assertThat(admission.getCancelledAt()).isNotNull();
+    }
+
+    /** QA D1381 (round 32): a blank, missing or over-long reason is refused on "reason"; nothing changes. */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.NullAndEmptySource
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"   ", "	"})
+    void d1381_aCancelWithoutAReasonIsRefused(String reason) {
+        assertThatThrownBy(() -> service.cancelAdmission(admissionId, reason))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getField()).isEqualTo("reason"));
+        assertThatThrownBy(() -> service.cancelAdmission(admissionId, "x".repeat(1001)))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getField()).isEqualTo("reason"));
+        verify(admissionRepository, never()).findById(any());
+        verify(admissionRepository, never()).save(any());
+    }
+
+    /** QA D1384 (round 32): an unknown status filter is refused on "status", never raw Java text. */
+    @Test
+    void d1384_anUnknownStatusFilterIsRefusedOnItsName() {
+        assertThatThrownBy(() -> AdmissionServiceImpl.admissionStatusParam("BOGUS"))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getField()).isEqualTo("status"))
+            .hasMessageNotContaining("No enum constant");
+        assertThat(AdmissionServiceImpl.admissionStatusParam(" active ")).isEqualTo(AdmissionStatus.ACTIVE);
     }
 
     /** QA D603: DELETE /api/admissions/{id} on a discharged (closed) stay is refused and changes nothing. */
@@ -340,7 +383,7 @@ class AdmissionServiceImplTest {
         admission.setStatus(status);
         when(admissionRepository.findById(admissionId)).thenReturn(Optional.of(admission));
 
-        assertThatThrownBy(() -> service.cancelAdmission(admissionId))
+        assertThatThrownBy(() -> service.cancelAdmission(admissionId, CANCEL_REASON))
             .isInstanceOf(com.example.hms.exception.ConflictException.class)
             .hasMessageContaining("admission.cancel.notInProgress");
         assertThat(admission.getStatus()).isEqualTo(status);
@@ -358,7 +401,7 @@ class AdmissionServiceImplTest {
         when(billingInvoiceRepository.existsByEncounter_AdmissionIdAndStatusNot(admissionId,
             com.example.hms.enums.InvoiceStatus.CANCELLED)).thenReturn(true);
 
-        assertThatThrownBy(() -> service.cancelAdmission(admissionId))
+        assertThatThrownBy(() -> service.cancelAdmission(admissionId, CANCEL_REASON))
             .isInstanceOf(com.example.hms.exception.ConflictException.class)
             .hasMessageContaining("admission.cancel.billed");
         assertThat(admission.getStatus()).isEqualTo(AdmissionStatus.ACTIVE);
@@ -368,7 +411,7 @@ class AdmissionServiceImplTest {
     @Test
     void cancelAdmission_notFound() {
         when(admissionRepository.findById(admissionId)).thenReturn(Optional.empty());
-        assertThatThrownBy(() -> service.cancelAdmission(admissionId)).isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.cancelAdmission(admissionId, CANCEL_REASON)).isInstanceOf(ResourceNotFoundException.class);
     }
 
     @Test
@@ -672,7 +715,7 @@ class AdmissionServiceImplTest {
         admission.setStatus(AdmissionStatus.ACTIVE);
         when(admissionRepository.findById(admissionId)).thenReturn(Optional.of(admission));
 
-        service.cancelAdmission(admissionId);
+        service.cancelAdmission(admissionId, CANCEL_REASON);
 
         verify(bedAssignmentService).releaseBed(admission);
         verify(admissionRepository).save(admission);
@@ -834,7 +877,7 @@ class AdmissionServiceImplTest {
     void cancelAdmission_fromAnotherHospital_isNotFound_D262() {
         Admission admission = activeAdmissionAtHospitalA();
 
-        assertThatThrownBy(() -> service.cancelAdmission(admissionId))
+        assertThatThrownBy(() -> service.cancelAdmission(admissionId, CANCEL_REASON))
             .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
         assertThat(admission.getStatus()).isEqualTo(AdmissionStatus.ACTIVE);
         verify(bedAssignmentService, never()).releaseBed(any());

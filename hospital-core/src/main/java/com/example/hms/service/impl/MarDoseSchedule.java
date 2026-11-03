@@ -1,6 +1,9 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.model.Prescription;
+
 import java.text.Normalizer;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -19,11 +22,23 @@ import java.util.regex.Pattern;
  * treated as a single dose, so the MAR ended the course after its first
  * outcome. A frequency now reads as one of four {@link Kind}s. Only a
  * frequency that says so ({@link Kind#ONE_OFF}: STAT, once, "dose unique")
- * gives one dose; {@link Kind#AS_NEEDED} (PRN, "si besoin") is given on
- * demand within the prescriber's minimum interval (QA round 30,
- * {@code PrnMinInterval}, {@code MarNextDose}). A frequency the
- * reader cannot place is {@link Kind#UNREAD}: the MAR keeps that course open
- * and flags it, it never ends it.
+ * gives one dose; {@link Kind#AS_NEEDED} is given on demand within the
+ * prescriber's minimum interval (QA round 30, {@code PrnMinInterval},
+ * {@code MarNextDose}). A frequency the reader cannot place is
+ * {@link Kind#UNREAD}: the MAR keeps that course open and flags it, it never
+ * ends it.
+ *
+ * <p>QA D1378 / D1360 (round 32, coordinator decision 2026-11-03): no word
+ * list ever covers every way a prescriber writes "as needed" (round 32 found
+ * ~45 more: SOS, p.r.n., sur demande, si precisa, when necessary ...). An
+ * order is as-needed because the prescriber TICKED it
+ * ({@code Prescription.asNeeded}, V260): only {@link #read(Prescription)}
+ * gives {@link Kind#AS_NEEDED}, from that flag. The text reader
+ * {@link #read(String)} never does; a frequency it reads as "as needed" on an
+ * order not ticked is {@link Kind#UNREAD} (open, every later dose asks why).
+ * The text feeds one more thing: the safety net {@link #looksAsNeeded}, which
+ * makes the prescriber confirm a conditional frequency written without the
+ * tick (MarAsNeededFlagGuardTest).
  */
 public final class MarDoseSchedule {
 
@@ -33,7 +48,10 @@ public final class MarDoseSchedule {
         REPEATING,
         /** A single dose (STAT, once, "dose unique", or no frequency written). */
         ONE_OFF,
-        /** PRN, "si besoin", "as needed": no fixed repeat; given on demand within the order's minimum interval. */
+        /**
+         * An order the prescriber ticked as needed (PRN): no fixed repeat; given on demand within the
+         * order's minimum interval. Only {@link #read(Prescription)} gives it (QA D1378).
+         */
         AS_NEEDED,
         /** Written, but not readable as a schedule: never read as a single dose (D1237). */
         UNREAD
@@ -119,13 +137,17 @@ public final class MarDoseSchedule {
     private static final Pattern HOUR_WORD = Pattern.compile("\\b([A-Z]+(?:-[A-Z]+)?)(?=\\s*" + HOUR_UNIT + "\\b)");
 
     /**
-     * QA D1360: the ways a prescriber writes "as needed" in English, French and
-     * Spanish, upper case without accents, words separated by one space. The
-     * portal's {@code shared/as-needed-frequency.ts} holds the same list
-     * (scripts/lib/as-needed-frequency.test.mjs holds the two equal) and both
-     * sides read the shared fixture {@code shared/as-needed-frequency.cases.json}.
-     * A phrase matches where a word starts, anywhere in the frequency, so
-     * "si douleurs" and "q4h PRN" read as needed and "para demanda" does not.
+     * QA D1360: the round-31 list of the ways a prescriber writes "as needed"
+     * in English, French and Spanish, upper case without accents, words
+     * separated by one space. A phrase matches where a word starts, anywhere in
+     * the frequency, so "si douleurs" and "q4h PRN" read as needed and
+     * "para demanda" does not.
+     *
+     * <p>QA D1378 (round 32): this list no longer makes an order as-needed. It
+     * is frozen: V260 backfilled {@code as_needed} from exactly these phrases
+     * (PrnAsNeededBackfillMigrationIT holds the SQL and this list equal), and
+     * it is one half of the safety net {@link #looksAsNeeded}; the other half
+     * is the broad conditional detector. Do not grow it: grow the detector.
      */
     static final List<String> AS_NEEDED_PHRASES = List.of(
         "PRN", "AS NEEDED", "AS REQUIRED", "WHEN NEEDED", "WHEN REQUIRED", "IF NEEDED", "IF REQUIRED",
@@ -134,6 +156,28 @@ public final class MarDoseSchedule {
         "SI NECESSAIRE", "SI DOULEUR", "SI FIEVRE", "EN CAS DE DOULEUR", "EN CAS DE FIEVRE",
         "SI NECESARIO", "SI ES NECESARIO", "EN CASO NECESARIO", "SEGUN NECESIDAD", "A DEMANDA",
         "SI DOLOR", "SI FIEBRE", "EN CASO DE DOLOR", "EN CASO DE FIEBRE");
+
+    /** QA D1378: a threshold ("si EVA > 4", "T >= 38,5") makes a frequency conditional. */
+    private static final Pattern COMPARISON = Pattern.compile("[<>\u2264\u2265]");
+
+    /**
+     * QA D1378: words that make a frequency conditional wherever they stand
+     * (upper case, accents removed; a run of single letters is one word, so
+     * "p.r.n." is PRN, "S.O.S." SOS and "s/p" SP).
+     */
+    private static final Set<String> CONDITIONAL_WORDS = Set.of(
+        "PRN", "SOS", "SP", "SI", "IF", "WHEN", "WHENEVER", "QUAND", "LORSQUE", "CUANDO", "SELON", "SEGUN",
+        "BESOIN", "BESOINS", "DEMANDE", "DEMAND", "DEMANDA", "NECESSITE", "NECESSAIRE", "NECESARIO", "NECESARIA",
+        "NECESIDAD", "NECESITE", "NECESITA", "NECESSARY", "NEEDED", "REQUIRED", "PRECISA", "PRECISE");
+
+    /** QA D1378: phrases that make a frequency conditional (words separated by one space). */
+    private static final List<String> CONDITIONAL_PHRASES = List.of(
+        "PRO RE NATA", "S IL", "SIL Y A", "EN CAS", "EN CASO", "ON REQUEST", "AU CAS");
+
+    /** QA D1378: what may follow "for" without making it conditional: a count or a duration. */
+    private static final Set<String> NOT_A_SYMPTOM = Set.of(
+        "A", "AN", "ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE", "TEN",
+        "DAY", "DAYS", "WEEK", "WEEKS", "MONTH", "MONTHS", "YEAR", "YEARS", "HOUR", "HOURS", "LIFE");
 
     /** Any run of characters that is not a letter or a digit (one class, no backtracking). */
     private static final Pattern NOT_ALPHANUMERIC = Pattern.compile("[^A-Z0-9]+");
@@ -148,9 +192,23 @@ public final class MarDoseSchedule {
     }
 
     /**
-     * QA D1237: what the frequency says. A blank frequency is a one-off order
-     * (nothing to repeat was written); a written one that is not read is
-     * {@link Kind#UNREAD}, never a single dose.
+     * QA D1378: what an order says about repeating. An order the prescriber
+     * ticked as needed is {@link Kind#AS_NEEDED}, whatever its frequency text;
+     * any other order reads its frequency ({@link #read(String)}).
+     */
+    public static Reading read(Prescription rx) {
+        if (rx == null) {
+            return Reading.ONE_OFF;
+        }
+        return PrnMinInterval.isAsNeeded(rx) ? Reading.AS_NEEDED : read(rx.getFrequency());
+    }
+
+    /**
+     * QA D1237: what the frequency text says. A blank frequency is a one-off
+     * order (nothing to repeat was written); a written one that is not read is
+     * {@link Kind#UNREAD}, never a single dose. QA D1378: never
+     * {@link Kind#AS_NEEDED} (only the prescriber's tick is, {@link #read(Prescription)});
+     * an "as needed" wording on an order not ticked is {@link Kind#UNREAD}.
      */
     public static Reading read(String frequency) {
         if (frequency == null || frequency.isBlank()) {
@@ -161,7 +219,7 @@ public final class MarDoseSchedule {
             return Reading.ONE_OFF;
         }
         if (isAsNeeded(frequency)) {
-            return Reading.AS_NEEDED;
+            return Reading.UNREAD;
         }
         Integer minutes = intervalMinutesOf(frequency);
         if (minutes != null) {
@@ -321,6 +379,17 @@ public final class MarDoseSchedule {
     }
 
     /**
+     * QA D1378: the frozen round-31 reading of a frequency text as "as needed"
+     * - the one V260 backfilled {@code prescriptions.as_needed} from
+     * (PrnAsNeededBackfillMigrationIT holds the SQL equal to it). Never a
+     * reader of PRN: an order is as-needed by its tick (MarAsNeededFlagGuardTest).
+     */
+    static boolean readByRound31Phrases(String frequency) {
+        return frequency != null && !frequency.isBlank() && !normalize(frequency).contains("STAT")
+            && isAsNeeded(frequency);
+    }
+
+    /**
      * PRN and "as needed" in English, French and Spanish: never a fixed repeat.
      * Reads the frequency as written (accents and case ignored, punctuation
      * read as a space), not the count-as-digits form {@link #normalize} gives.
@@ -333,6 +402,75 @@ public final class MarDoseSchedule {
             }
         }
         return false;
+    }
+
+    /**
+     * QA D1378 / D1360 (round 32): the SAFETY NET. Whether a frequency text
+     * looks conditional ("as needed"), so an order written with it but not
+     * ticked as needed is refused until the prescriber confirms
+     * ({@code PrnMinInterval}). Broad on purpose: a false positive costs the
+     * prescriber one answer, a false negative a PRN order with no minimum
+     * interval. True for the round-31 phrase list, and for:
+     * <ul>
+     *   <li>a comparison ("si EVA &gt; 4", "T &ge; 38,5");</li>
+     *   <li>a trigger word anywhere: PRN (also "p.r.n."), SOS ("S.O.S."), S/P,
+     *       si, if, when, quand, cuando, selon, segun, besoin, demande,
+     *       demand(a), necessite, necessaire, necesario, necesidad, necessary,
+     *       needed, required, precisa, necesite ...;</li>
+     *   <li>a trigger phrase: pro re nata, s'il, en cas, en caso, on request;</li>
+     *   <li>"for" followed by a word that is not a count or a duration
+     *       ("for pain", not "for 5 days").</li>
+     * </ul>
+     * Case, accents and punctuation are ignored; a run of single letters
+     * ("P.R.N.", "S.O.S.", "s/p") is read as one word. A single dose (STAT)
+     * is not exempt: "PRN STAT" asks too. The shared fixture
+     * {@code as-needed-frequency.cases.json} holds every round-31 and round-32
+     * wording (MarDoseScheduleTest).
+     */
+    public static boolean looksAsNeeded(String frequency) {
+        if (frequency == null || frequency.isBlank()) {
+            return false;
+        }
+        if (COMPARISON.matcher(frequency).find() || isAsNeeded(frequency)) {
+            return true;
+        }
+        String words = NOT_ALPHANUMERIC.matcher(accentlessUpper(frequency)).replaceAll(" ").trim();
+        List<String> tokens = joinSingleLetters(words.split(" "));
+        for (int i = 0; i < tokens.size(); i++) {
+            String token = tokens.get(i);
+            if (CONDITIONAL_WORDS.contains(token)
+                || ("FOR".equals(token) && i + 1 < tokens.size() && isSymptomWord(tokens.get(i + 1)))) {
+                return true;
+            }
+        }
+        String spaced = " " + String.join(" ", tokens) + " ";
+        return CONDITIONAL_PHRASES.stream().anyMatch(phrase -> spaced.contains(" " + phrase + " "));
+    }
+
+    /** "P R N" (from "p.r.n."), "S O S", "S P" (from "s/p"): a run of single letters read as one word. */
+    private static List<String> joinSingleLetters(String[] tokens) {
+        List<String> out = new ArrayList<>();
+        StringBuilder run = new StringBuilder();
+        for (String token : tokens) {
+            if (token.length() == 1 && Character.isLetter(token.charAt(0))) {
+                run.append(token);
+                continue;
+            }
+            if (!run.isEmpty()) {
+                out.add(run.toString());
+                run.setLength(0);
+            }
+            out.add(token);
+        }
+        if (!run.isEmpty()) {
+            out.add(run.toString());
+        }
+        return out;
+    }
+
+    /** After "for": a word that is not a count or a duration ("for pain", "for nausea"; not "for 5 days"). */
+    private static boolean isSymptomWord(String token) {
+        return !token.isEmpty() && Character.isLetter(token.charAt(0)) && !NOT_A_SYMPTOM.contains(token);
     }
 
     /** Upper case with the accents removed. */
