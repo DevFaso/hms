@@ -41,10 +41,17 @@ class LabResultValueRulesTest {
     @Test
     void aNumericTestRefusesTextAndANegativeValue() {
         LabTestDefinition potassium = potassium();
+        // QA D1386 (round 32): each refusal names resultValue, so the dialog marks the field.
         assertThatThrownBy(() -> LabResultValueRules.requireValidValue("abc", potassium))
-            .isInstanceOf(BusinessException.class).hasFieldOrPropertyWithValue("messageKey", "lab.result.value.notNumeric");
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "lab.result.value.notNumeric")
+            .hasFieldOrPropertyWithValue("field", "resultValue");
+        assertThatThrownBy(() -> LabResultValueRules.requireValidValue("mille", potassium))
+            .hasFieldOrPropertyWithValue("field", "resultValue");
         assertThatThrownBy(() -> LabResultValueRules.requireValidValue("-1", potassium))
-            .isInstanceOf(BusinessException.class).hasFieldOrPropertyWithValue("messageKey", "lab.result.value.negative");
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "lab.result.value.negative")
+            .hasFieldOrPropertyWithValue("field", "resultValue");
         assertThatThrownBy(() -> LabResultValueRules.requireValidValue("NaN", potassium))
             .isInstanceOf(BusinessException.class);
         assertThatCode(() -> LabResultValueRules.requireValidValue("4.2", potassium)).doesNotThrowAnyException();
