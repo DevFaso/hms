@@ -2306,6 +2306,18 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
     expect(el('[data-testid="rx-list-truncated"]')).toBeNull();
   });
 
+  it('QA D1347: a reload cancels the read still in flight, so a stale list never lands last', async () => {
+    const stale = new Subject<PrescriptionResponse[]>();
+    await setup({ list$: stale });
+    prescriptionServiceSpy.list.and.returnValue(of([makeRx({ id: 'rx-new', status: 'SIGNED' })]));
+    component.load();
+
+    stale.next([makeRx({ id: 'rx-stale', status: 'SIGNED' })]);
+
+    expect(stale.observed).withContext('the first read is cancelled').toBeFalse();
+    expect(component.prescriptions().map((p) => p.id)).toEqual(['rx-new']);
+  });
+
   it('QA D1347: says the load failed and keeps the list when the read fails (never a partial list)', async () => {
     const list$ = new Subject<PrescriptionResponse[]>();
     await setup({ list$ });

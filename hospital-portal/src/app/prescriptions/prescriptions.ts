@@ -15,7 +15,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
-import { forkJoin, of, Subject } from 'rxjs';
+import { forkJoin, of, Subject, Subscription } from 'rxjs';
 import { catchError, debounceTime, map, switchMap } from 'rxjs/operators';
 import {
   PrescriptionService,
@@ -1365,15 +1365,23 @@ export class PrescriptionsComponent implements OnInit {
       });
   }
 
+  /** The list read in flight, so a newer `load` supersedes it (see `load`). */
+  private listLoad: Subscription | null = null;
+
   load(): void {
     this.loading.set(true);
+    // A read is now several requests long, so a reload (a scope switch, a
+    // dispatch) can overtake the one before it. The older read is cancelled:
+    // finishing last, it would put the previous hospital's or a stale list
+    // back on screen.
+    this.listLoad?.unsubscribe();
     // QA D1347 (round 30): EVERY prescription, all pages. The list used to
     // read the newest 200 (plus the newest 200 in an attention status) and
     // the tabs counted that, so "Needs attention" was a minimum on a busy
     // tenant. Every count on the tab bar is now a count of the whole list. A
     // read that fails — including one past the paging helper's ceiling — is
     // said out loud and leaves the list as it was: never a partial list.
-    this.prescriptionService
+    this.listLoad = this.prescriptionService
       .list()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
