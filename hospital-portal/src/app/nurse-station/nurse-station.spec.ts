@@ -20,6 +20,7 @@ import {
   PatientTrackerEvent,
 } from '../services/patient-tracker-ws.service';
 import { expectEmptySubmitRefusal } from '../testing/form-refusal-behaviour';
+import { fieldControlFor } from '../shared/forms/server-field-errors';
 
 describe('NurseStationComponent — two-tier polling', () => {
   let component: NurseStationComponent;
@@ -742,6 +743,15 @@ describe('NurseStationComponent — two-tier polling', () => {
     );
     expect(toastSpy.success).toHaveBeenCalled();
     expect(component.handoffCreateOpen()).toBeFalse();
+  });
+
+  // QA D1352 (round 30, flagged by fix/r30-portal-forms): the server refuses
+  // a handoff recipient on recipientUserId; the shared mapper marks the select.
+  it('QA D1352: a refusal on recipientUserId reaches the recipient select', () => {
+    component.openHandoffCreate();
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    expect(fieldControlFor(host, 'recipientUserId')?.id).toBe('ho-recipient');
   });
 
   it('QA D776: a handoff with no recipient is not posted', () => {
