@@ -12468,7 +12468,9 @@
     "TYPE": "Type de certificat",
     "TYPE_ATTENDANCE": "Certificat de présence",
     "TYPE_GENERAL": "Certificat médical",
-    "TYPE_SICK_LEAVE": "Arrêt de travail"
+    "TYPE_SICK_LEAVE": "Arrêt de travail",
+    "TYPE_REQUIRED": "Choisissez le type de certificat.",
+    "TYPE_CHOOSE": "Choisir le type…"
   },
   "ORDER_LIFECYCLE": {
     "CANCEL_REASON_LABEL": "Motif de l’annulation",

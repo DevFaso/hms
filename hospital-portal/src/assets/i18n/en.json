@@ -12468,7 +12468,9 @@
     "TYPE": "Kind of certificate",
     "TYPE_ATTENDANCE": "Certificate of attendance",
     "TYPE_GENERAL": "Medical certificate",
-    "TYPE_SICK_LEAVE": "Sick leave (arrêt de travail)"
+    "TYPE_SICK_LEAVE": "Sick leave (arrêt de travail)",
+    "TYPE_REQUIRED": "Choose the type of certificate.",
+    "TYPE_CHOOSE": "Choose the type…"
   },
   "ORDER_LIFECYCLE": {
     "CANCEL_REASON_LABEL": "Reason for the cancellation",

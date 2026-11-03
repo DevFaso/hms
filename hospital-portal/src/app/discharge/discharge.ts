@@ -28,6 +28,7 @@ import { AuthorshipService } from '../shared/authorship.service';
 import { refusalReason } from '../shared/refusal-reason';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { missingRequiredMessage } from '../shared/required-fields';
 type ApprovalFilter = DischargeStatus | 'ALL';
 type SummaryFilter = 'unfinalized' | 'pending-results' | 'range';
 
@@ -597,7 +598,15 @@ export class DischargeComponent implements OnInit {
       !form.dischargeDate ||
       !form.dischargeDiagnosis.trim()
     ) {
-      this.toast.error(this.translate.instant('DISCHARGE.SUMMARY_REQUIRED_FIELDS'));
+      // QA D1358: name the blank fields, not a fixed list.
+      this.toast.error(
+        missingRequiredMessage(this.translate, [
+          { labelKey: 'DISCHARGE.PATIENT', value: form.patientId },
+          { labelKey: 'DISCHARGE.ENCOUNTER', value: form.encounterId },
+          { labelKey: 'DISCHARGE.DISCHARGE_DATE', value: form.dischargeDate },
+          { labelKey: 'DISCHARGE.DIAGNOSIS', value: form.dischargeDiagnosis.trim() },
+        ]) ?? this.translate.instant('COMMON.SUBMIT_BLOCKED_REQUIRED'),
+      );
       return;
     }
     form.hospitalId = this.hospitalId!;

@@ -1,3 +1,4 @@
+import { allRows } from '../shared/all-pages';
 import { refusalReason } from '../shared/refusal-reason';
 import { InlineSubFormDirective } from '../shared/a11y/inline-sub-form.directive';
 import { InlineDiscardAskComponent } from '../shared/a11y/inline-discard-ask.component';
@@ -16,7 +17,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { firstValueFrom, Subscription } from 'rxjs';
+import { firstValueFrom, Subscription, map } from 'rxjs';
 import { ToastService } from '../core/toast.service';
 import {
   PharmacyService,
@@ -417,9 +418,9 @@ export class DispensingComponent implements OnInit, OnDestroy {
   }
 
   private loadPharmacies(): void {
-    this.svc.listPharmacies(0, 100).subscribe({
-      next: (page) => {
-        const list = page?.content ?? [];
+    // QA D1347: every pharmacy (all pages), not the first 100.
+    allRows((page, size) => this.svc.listPharmacies(page, size)).subscribe({
+      next: (list) => {
         this.pharmacies.set(list);
         this.pharmaciesLoaded.set(true);
         if (list.length > 0) {
@@ -598,10 +599,14 @@ export class DispensingComponent implements OnInit, OnDestroy {
 
   private loadInventory(): void {
     if (!this.selectedPharmacyId) return;
-    this.svc.listInventoryByPharmacy(this.selectedPharmacyId, 0, 200).subscribe({
-      next: (res) => {
-        const page = res?.data;
-        this.inventoryItems.set(page?.content ?? []);
+    // QA D1347: every inventory item of the pharmacy (all pages), not the first 200.
+    allRows((page, size) =>
+      this.svc
+        .listInventoryByPharmacy(this.selectedPharmacyId, page, size)
+        .pipe(map((r) => r?.data)),
+    ).subscribe({
+      next: (items) => {
+        this.inventoryItems.set(items);
       },
     });
   }

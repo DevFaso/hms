@@ -431,6 +431,7 @@
         <label for="transfer-destination">{{ 'BED_BOARD.DESTINATION' | translate }} *</label>
         <select
           id="transfer-destination"
+          data-server-field="toBedId"
           required
           [(ngModel)]="transferForm.toBedId"
           name="destination"

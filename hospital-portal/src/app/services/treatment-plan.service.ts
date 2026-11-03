@@ -2,6 +2,8 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable, map } from 'rxjs';
 
+import { allRows, PageSlice } from '../shared/all-pages';
+
 export type TreatmentPlanStatus =
   'DRAFT' | 'IN_REVIEW' | 'REVISIONS_REQUIRED' | 'APPROVED' | 'ARCHIVED' | 'CANCELLED';
 
@@ -107,33 +109,39 @@ export class TreatmentPlanService {
     return this.http.get<TreatmentPlanResponse>(`${this.baseUrl}/${id}`);
   }
 
+  /** Every plan of the patient (QA D1347: was the server's first page of 20). */
   getByPatient(patientId: string): Observable<TreatmentPlanResponse[]> {
-    return this.http
-      .get<{ content: TreatmentPlanResponse[] }>(`${this.baseUrl}/by-patient/${patientId}`)
-      .pipe(map((res) => res?.content ?? []));
+    return this.listPlans(`${this.baseUrl}/by-patient/${patientId}`);
   }
 
   getByHospital(
     hospitalId: string,
     params?: { page?: number; size?: number },
   ): Observable<TreatmentPlanResponse[]> {
-    let httpParams = new HttpParams();
-    if (params?.page != null) httpParams = httpParams.set('page', params.page);
-    if (params?.size) httpParams = httpParams.set('size', params.size);
-    return this.http
-      .get<{
-        content: TreatmentPlanResponse[];
-      }>(`${this.baseUrl}/by-hospital/${hospitalId}`, { params: httpParams })
-      .pipe(map((res) => res?.content ?? []));
+    return this.listPlans(`${this.baseUrl}/by-hospital/${hospitalId}`, params);
   }
 
   getAll(params?: { page?: number; size?: number }): Observable<TreatmentPlanResponse[]> {
-    let httpParams = new HttpParams();
-    if (params?.page != null) httpParams = httpParams.set('page', params.page);
-    if (params?.size) httpParams = httpParams.set('size', params.size);
-    return this.http
-      .get<{ content: TreatmentPlanResponse[] }>(this.baseUrl, { params: httpParams })
-      .pipe(map((res) => res?.content ?? []));
+    return this.listPlans(this.baseUrl, params);
+  }
+
+  /**
+   * QA D1347: without `page`, EVERY plan the endpoint has (all pages, `size`
+   * is the transfer size); with `page`, that one page.
+   */
+  private listPlans(
+    url: string,
+    params?: { page?: number; size?: number },
+  ): Observable<TreatmentPlanResponse[]> {
+    const fetchPage = (page: number, size: number | undefined) => {
+      let httpParams = new HttpParams().set('page', page);
+      if (size) httpParams = httpParams.set('size', size);
+      return this.http.get<PageSlice<TreatmentPlanResponse>>(url, { params: httpParams });
+    };
+    if (params?.page != null) {
+      return fetchPage(params.page, params.size).pipe(map((res) => res?.content ?? []));
+    }
+    return allRows(fetchPage, params?.size || undefined);
   }
 
   addFollowUp(

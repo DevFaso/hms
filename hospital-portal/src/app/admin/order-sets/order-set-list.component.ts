@@ -1,3 +1,4 @@
+import { allRows } from '../../shared/all-pages';
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -172,12 +173,13 @@ export class OrderSetListComponent implements OnInit {
           this.loading.set(true);
           this.error.set(false);
           const hid = this.roleContext.effectiveHospitalIdForRequest() ?? '';
-          return this.orderSetService.list(hid, term);
+          // QA D1347: every order set the search matches (all pages), not the first 20.
+          return allRows((page, size) => this.orderSetService.list(hid, term, page, size));
         }),
       )
       .subscribe({
-        next: (page) => {
-          this.rows.set(page.content ?? []);
+        next: (rows) => {
+          this.rows.set(rows);
           this.loading.set(false);
         },
         error: () => {

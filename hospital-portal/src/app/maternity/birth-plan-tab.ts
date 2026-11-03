@@ -21,6 +21,7 @@ import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { refusalReason } from '../shared/refusal-reason';
 import { ReasonDialogComponent } from '../shared/reason-dialog/reason-dialog.component';
 import { DateTimePipe } from '../shared/pipes/date-time.pipe';
+import { missingRequiredMessage } from '../shared/required-fields';
 type BirthPlanFilter = 'all' | 'pending-review' | 'reviewed';
 
 @Component({
@@ -257,7 +258,16 @@ export class BirthPlanTabComponent implements OnInit {
       !form.introduction.expectedDueDate ||
       !form.flexibilityAcknowledgment
     ) {
-      this.toast.error(this.translate.instant('BIRTH_PLAN.REQUIRED_FIELDS'));
+      // QA D1358: name the blank fields, not a fixed list.
+      this.toast.error(
+        missingRequiredMessage(this.translate, [
+          { labelKey: 'MATERNITY.PATIENT', value: form.patientId },
+          { labelKey: 'BIRTH_PLAN.PATIENT_NAME', value: form.introduction.patientName?.trim() },
+          { labelKey: 'MATERNITY.EDD', value: form.introduction.expectedDueDate },
+          // An unticked box is a blank field.
+          { labelKey: 'BIRTH_PLAN.FLEXIBILITY', value: form.flexibilityAcknowledgment || null },
+        ]) ?? this.translate.instant('COMMON.SUBMIT_BLOCKED_REQUIRED'),
+      );
       return;
     }
     form.hospitalId = this.hospitalId ?? undefined;

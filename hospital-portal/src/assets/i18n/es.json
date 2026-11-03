@@ -12468,7 +12468,9 @@
     "TYPE": "Tipo de certificado",
     "TYPE_ATTENDANCE": "Certificado de asistencia",
     "TYPE_GENERAL": "Certificado médico",
-    "TYPE_SICK_LEAVE": "Baja laboral"
+    "TYPE_SICK_LEAVE": "Baja laboral",
+    "TYPE_REQUIRED": "Elija el tipo de certificado.",
+    "TYPE_CHOOSE": "Elija el tipo…"
   },
   "ORDER_LIFECYCLE": {
     "CANCEL_REASON_LABEL": "Motivo de la cancelación",

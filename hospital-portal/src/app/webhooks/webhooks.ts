@@ -1,3 +1,4 @@
+import { allRows } from '../shared/all-pages';
 import {
   Component,
   ElementRef,
@@ -372,11 +373,12 @@ export class WebhooksComponent implements OnInit, OnDestroy {
   private loadDeliveries(endpointId: string): void {
     this.deliveryRows.set([]);
     this.deliveriesFailed.set(false);
-    this.api.deliveries(endpointId).subscribe({
-      next: (page) => {
+    // QA D1347: every delivery of the endpoint (all pages), not the 25 newest.
+    allRows((page, size) => this.api.deliveries(endpointId, page, size)).subscribe({
+      next: (rows) => {
         // A slow response for a drilldown the user already left is stale.
         if (this.deliveriesFor() === endpointId) {
-          this.deliveryRows.set(page.content ?? []);
+          this.deliveryRows.set(rows);
         }
       },
       error: () => {

@@ -1761,11 +1761,14 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   private loadNotifications(): void {
+    // The bell previews the 10 newest (a preview: "see all" opens the list).
     this.notifService.getNotifications({ page: 0, size: 10 }).subscribe({
-      next: (page) => {
-        this.recentNotifications.set(page.content);
-        this.unreadCount.set(page.content.filter((n) => !n.read).length);
-      },
+      next: (page) => this.recentNotifications.set(page.content),
+    });
+    // QA D1347: the badge is the server's count of unread notifications, not
+    // the unread among the 10 newest (an 11th unread was never counted).
+    this.notifService.getNotifications({ read: false, page: 0, size: 1 }).subscribe({
+      next: (page) => this.unreadCount.set(page.totalElements ?? 0),
     });
   }
 

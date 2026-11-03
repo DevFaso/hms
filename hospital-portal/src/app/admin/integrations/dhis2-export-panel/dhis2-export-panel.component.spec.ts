@@ -69,7 +69,7 @@ describe('Dhis2ExportPanelComponent', () => {
 
   it('loads recent runs on init when a hospital is active', () => {
     fixture.detectChanges();
-    expect(dhis2.listRuns).toHaveBeenCalledWith('h1');
+    expect(dhis2.listRuns).toHaveBeenCalledWith('h1', 0, 200); // QA D1347: every page
     expect((component as any).runs().length).toBe(1);
   });
 

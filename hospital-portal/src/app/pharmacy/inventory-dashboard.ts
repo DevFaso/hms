@@ -1,3 +1,4 @@
+import { allRows } from '../shared/all-pages';
 import { refusalReason } from '../shared/refusal-reason';
 import { FocusOnRenderDirective } from '../shared/a11y/focus-on-render.directive';
 import {
@@ -31,6 +32,7 @@ import { serverDateOrInstant } from '../shared/date-utils';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { refuseFields } from '../shared/forms/invalid-fields';
 import { DashPipe } from '../shared/pipes/dash.pipe';
+import { missingRequiredMessage } from '../shared/required-fields';
 
 /** The add-item field the form may refuse (QA D1306). */
 const CI_FIELD_IDS = ['ciMed'];
@@ -108,11 +110,11 @@ export class InventoryDashboardComponent implements OnInit {
   }
 
   private loadPharmacies(): void {
-    this.svc.listPharmacies(0, 100).subscribe({
-      next: (page) => {
-        this.pharmacies.set(page?.content ?? []);
+    // QA D1347: every pharmacy (all pages), not the first 100.
+    allRows((page, size) => this.svc.listPharmacies(page, size)).subscribe({
+      next: (list) => {
+        this.pharmacies.set(list);
         this.pharmaciesLoaded.set(true);
-        const list = page?.content ?? [];
         if (list.length > 0) {
           this.selectedPharmacyId = list[0].id;
           this.loadTabData();
@@ -218,8 +220,9 @@ export class InventoryDashboardComponent implements OnInit {
   }
 
   private loadMedications(): void {
-    this.svc.listMedications(0, 200).subscribe({
-      next: (page) => this.medications.set(page?.content ?? []),
+    // QA D1347: every catalogue medication (all pages), not the first 200.
+    allRows((page, size) => this.svc.listMedications(page, size)).subscribe({
+      next: (list) => this.medications.set(list),
     });
   }
 
@@ -231,9 +234,14 @@ export class InventoryDashboardComponent implements OnInit {
     const root = this.host.nativeElement;
     if (!this.createForm.pharmacyId || !this.createForm.medicationCatalogItemId) {
       // QA D1306 (round 28): the blank medication is marked, not only a toast.
-      const message = this.translate.instant('PHARMACY.ITEM_REQUIRED_FIELDS');
+      // QA D1358: name the blank fields, not a fixed list.
+      const message =
+        missingRequiredMessage(this.translate, [
+          { labelKey: 'PHARMACY.SELECT_PHARMACY', value: this.createForm.pharmacyId },
+          { labelKey: 'PHARMACY.MEDICATION', value: this.createForm.medicationCatalogItemId },
+        ]) ?? this.translate.instant('COMMON.SUBMIT_BLOCKED_REQUIRED');
       const blank = this.createForm.medicationCatalogItemId ? [] : CI_FIELD_IDS;
-      refuseFields(root, blank, CI_FIELD_IDS, message);
+      refuseFields(root, blank, CI_FIELD_IDS, this.translate.instant('COMMON.FIELD_REQUIRED'));
       this.toast.error(message);
       return;
     }

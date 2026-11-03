@@ -78,7 +78,7 @@ describe('PharmacyCheckoutComponent (QA D264)', () => {
 
   it('QA D416: lists the pharmacy fills to pick from, without the cancelled ones', () => {
     const c = create(2250);
-    expect(svc.listDispensesByPharmacy).toHaveBeenCalledWith('ph-1', 0, 50);
+    expect(svc.listDispensesByPharmacy).toHaveBeenCalledWith('ph-1', 0, 200); // QA D1347: every page
     expect(c.dispenses().map((d) => d.id)).toEqual(['d-1']);
     expect(svc.getDispense).toHaveBeenCalledWith('d-1');
   });

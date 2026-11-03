@@ -35,7 +35,10 @@ import {
   PatientTimeline,
   PatientLabResult,
   TimelineEntry,
+  WithheldResult,
 } from '../../services/patient.service';
+import { Observable, defer, map } from 'rxjs';
+import { allRows, PageSlice } from '../../shared/all-pages';
 import { AuthService } from '../../auth/auth.service';
 import { RoleContextService } from '../../core/role-context.service';
 import { ToastService } from '../../core/toast.service';
@@ -251,6 +254,7 @@ export class PatientChartComponent implements OnInit, OnChanges {
   ];
 
   /* ── Chart updates ── */
+
   updates = signal<ChartUpdate[]>([]);
   updatesLoading = signal(false);
   /** QA D504 — other hospitals' chart updates are held back by the patient's opt-out. */
@@ -868,19 +872,33 @@ export class PatientChartComponent implements OnInit, OnChanges {
 
   loadUpdates(): void {
     this.updatesLoading.set(true);
-    this.patientService
-      .listChartUpdates(this.patientId, { hospitalId: this.hospitalId() || undefined, size: 20 })
-      .subscribe({
-        next: (result) => {
-          this.updates.set(result?.items?.content ?? []);
-          this.updatesWithheld.set(result?.withheld ?? false);
-          this.updatesLoading.set(false);
-        },
-        error: () => {
-          this.toast.error(this.translate.instant('CHART.UPDATES_LOAD_ERROR'));
-          this.updatesLoading.set(false);
-        },
-      });
+    // QA D1347: every version (all pages), not the 20 newest.
+    this.allChartUpdates(this.hospitalId() || undefined).subscribe({
+      next: (result) => {
+        this.updates.set(result?.items ?? []);
+        this.updatesWithheld.set(result?.withheld ?? false);
+        this.updatesLoading.set(false);
+      },
+      error: () => {
+        this.toast.error(this.translate.instant('CHART.UPDATES_LOAD_ERROR'));
+        this.updatesLoading.set(false);
+      },
+    });
+  }
+
+  /** Every chart update (all pages), withheld when any page says so (QA D1347). */
+  private allChartUpdates(hospitalId?: string): Observable<WithheldResult<ChartUpdate[]>> {
+    return defer(() => {
+      let withheld = false;
+      return allRows((page, size) =>
+        this.patientService.listChartUpdates(this.patientId, { hospitalId, page, size }).pipe(
+          map((res) => {
+            withheld = withheld || res.withheld;
+            return res.items as PageSlice<ChartUpdate>;
+          }),
+        ),
+      ).pipe(map((items) => ({ items, withheld })));
+    });
   }
 
   toggleUpdate(update: ChartUpdate): void {

@@ -38,6 +38,7 @@ import { PatientSublinePipe } from '../../shared/patient-picker/patient-subline'
 import { rankPeopleByName } from '../../shared/person-search';
 import { ListEscapeDirective } from '../../shared/a11y/list-escape.directive';
 import { DashPipe } from '../../shared/pipes/dash.pipe';
+import { missingRequiredMessage } from '../../shared/required-fields';
 type RecallFilter = 'ALL' | RecallStatus;
 
 /**
@@ -190,7 +191,14 @@ export class RecallsPanelComponent implements OnInit {
         RECALL_FIELDS,
         this.translate.instant('COMMON.FIELD_REQUIRED'),
       );
-      this.toast.error(this.translate.instant('RECEPTION.RECALL_FIELDS_REQUIRED'));
+      // QA D1358: name the blank fields, not a fixed list.
+      this.toast.error(
+        missingRequiredMessage(this.translate, [
+          { labelKey: 'PATIENTS.PATIENT', value: this.selectedPatient() },
+          { labelKey: 'RECEPTION.RECALL_DUE', value: this.dueDate() },
+          { labelKey: 'RECEPTION.REASON', value: this.reason() },
+        ]) ?? this.translate.instant('COMMON.SUBMIT_BLOCKED_REQUIRED'),
+      );
       return;
     }
     // QA D1215 (round 23): a recall due in 2020 sat at the top of the list as

@@ -1,3 +1,5 @@
+import { map } from 'rxjs';
+import { allRows } from '../shared/all-pages';
 import { refusalReason } from '../shared/refusal-reason';
 import {
   Component,
@@ -24,6 +26,7 @@ import { localDateString } from '../shared/date-utils';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { blankFields, refuseFields } from '../shared/forms/invalid-fields';
 import { DashPipe } from '../shared/pipes/dash.pipe';
+import { missingRequiredMessage } from '../shared/required-fields';
 
 /** QA D1233: how many recent lots the receipt page lists. */
 const RECENT_LOTS = 20;
@@ -87,9 +90,9 @@ export class GoodsReceiptComponent implements OnInit {
   }
 
   private loadPharmacies(): void {
-    this.svc.listPharmacies(0, 100).subscribe({
-      next: (page) => {
-        const list = page?.content ?? [];
+    // QA D1347: every pharmacy (all pages), not the first 100.
+    allRows((page, size) => this.svc.listPharmacies(page, size)).subscribe({
+      next: (list) => {
         this.pharmacies.set(list);
         this.pharmaciesLoaded.set(true);
         if (list.length > 0) {
@@ -107,9 +110,14 @@ export class GoodsReceiptComponent implements OnInit {
   }
 
   private loadInventoryItems(): void {
-    this.svc.listInventoryByPharmacy(this.selectedPharmacyId, 0, 200).subscribe({
-      next: (res) => {
-        this.inventoryItems.set(res?.data?.content ?? []);
+    // QA D1347: every inventory item of the pharmacy (all pages), not the first 200.
+    allRows((page, size) =>
+      this.svc
+        .listInventoryByPharmacy(this.selectedPharmacyId, page, size)
+        .pipe(map((r) => r?.data)),
+    ).subscribe({
+      next: (items) => {
+        this.inventoryItems.set(items);
       },
     });
   }
@@ -179,8 +187,14 @@ export class GoodsReceiptComponent implements OnInit {
       ['grLot', 'grExpiry', 'grQty'],
     );
     if (blankLot.length > 0) {
-      const message = this.translate.instant('PHARMACY.LOT_FIELDS_REQUIRED');
-      refuseFields(root, blankLot, GR_FIELD_IDS, message);
+      // QA D1358: name the blank fields, not a fixed list.
+      const message =
+        missingRequiredMessage(this.translate, [
+          { labelKey: 'PHARMACY.LOT_NUMBER', value: this.form.lotNumber },
+          { labelKey: 'PHARMACY.EXPIRY_DATE', value: this.form.expiryDate },
+          { labelKey: 'PHARMACY.QUANTITY_RECEIVED', value: this.form.initialQuantity },
+        ]) ?? this.translate.instant('COMMON.SUBMIT_BLOCKED_REQUIRED');
+      refuseFields(root, blankLot, GR_FIELD_IDS, this.translate.instant('COMMON.FIELD_REQUIRED'));
       this.toast.error(message);
       return;
     }

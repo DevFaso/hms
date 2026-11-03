@@ -355,7 +355,12 @@ describe('LabResultsComponent', () => {
     // reload triggered
     const reloadReq = httpMock.expectOne((r) => r.url === '/lab-results' && r.method === 'GET');
     reloadReq.flush({
-      data: { content: [mockResult({ id: 'new-result', resultValue: '7.0' })], totalElements: 1 },
+      data: {
+        content: [mockResult({ id: 'new-result', resultValue: '7.0' })],
+        totalElements: 1,
+        totalPages: 1,
+        number: 0,
+      },
       success: true,
     });
 

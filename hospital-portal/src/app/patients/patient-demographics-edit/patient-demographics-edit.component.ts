@@ -25,7 +25,7 @@ import {
   invalidPhoneInputs,
   refuseInvalidPhones,
 } from '../../shared/forms/phone-field.directive';
-import { joinReasons } from '../../shared/required-fields';
+import { joinReasons, missingRequiredMessage } from '../../shared/required-fields';
 
 /**
  * QA D926: the front desk corrects a registered patient's identity, contact
@@ -40,6 +40,15 @@ const DEMOGRAPHICS_FIELD_IDS: Readonly<Record<string, string>> = {
   dateOfBirth: 'demoDob',
   gender: 'demoGender',
   phoneNumberPrimary: 'demoPhone',
+};
+
+/** The label each required field is shown under, to name it when it is blank (QA D1358). */
+const DEMOGRAPHICS_LABEL_KEYS: Readonly<Record<string, string>> = {
+  firstName: 'PATIENTS.FIRST_NAME',
+  lastName: 'PATIENTS.LAST_NAME',
+  dateOfBirth: 'PATIENTS.DOB',
+  gender: 'PATIENTS.GENDER',
+  phoneNumberPrimary: 'PATIENTS.PHONE',
 };
 
 @Component({
@@ -187,7 +196,12 @@ export class PatientDemographicsEditComponent implements OnInit {
       refuseInvalidPhones(this.host.nativeElement, badPhones, missing.length === 0);
       this.error.set(
         joinReasons([
-          missing.length > 0 && this.translate.instant('PATIENTS.EDIT_REQUIRED_MISSING'),
+          // QA D1358: the blank fields by name, never a fixed sentence (it named
+          // filled fields and left out the date of birth).
+          missingRequiredMessage(
+            this.translate,
+            missing.map((k) => ({ labelKey: DEMOGRAPHICS_LABEL_KEYS[k], value: '' })),
+          ),
           badPhones.length > 0 && this.translate.instant('USERS.PHONE_INVALID'),
         ]),
       );

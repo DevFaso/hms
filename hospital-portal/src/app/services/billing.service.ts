@@ -1,6 +1,6 @@
 import { HttpClient, HttpParams, HttpResponse } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { Observable, map } from 'rxjs';
+import { Observable } from 'rxjs';
 
 /*
  * Billing invoices — /billing-invoices (+ /invoice-items). Bare DTOs and
@@ -268,34 +268,6 @@ export class BillingService {
 
   getInvoice(id: string): Observable<BillingInvoiceResponse> {
     return this.http.get<BillingInvoiceResponse>(`/billing-invoices/${id}`);
-  }
-
-  getInvoicesByPatient(
-    patientId: string,
-    params?: { page?: number; size?: number },
-  ): Observable<BillingInvoiceResponse[]> {
-    let httpParams = new HttpParams();
-    if (params?.page !== undefined) httpParams = httpParams.set('page', String(params.page));
-    if (params?.size !== undefined) httpParams = httpParams.set('size', String(params.size));
-    return this.http
-      .get<{
-        content: BillingInvoiceResponse[];
-      }>(`/billing-invoices/patient/${patientId}`, { params: httpParams })
-      .pipe(map((res) => res?.content ?? []));
-  }
-
-  getInvoicesByHospital(
-    hospitalId: string,
-    params?: { page?: number; size?: number },
-  ): Observable<BillingInvoiceResponse[]> {
-    let httpParams = new HttpParams();
-    if (params?.page !== undefined) httpParams = httpParams.set('page', String(params.page));
-    if (params?.size !== undefined) httpParams = httpParams.set('size', String(params.size));
-    return this.http
-      .get<{
-        content: BillingInvoiceResponse[];
-      }>(`/billing-invoices/hospital/${hospitalId}`, { params: httpParams })
-      .pipe(map((res) => res?.content ?? []));
   }
 
   /** Server-side "overdue" = SENT/PARTIALLY_PAID with dueDate before the

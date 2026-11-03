@@ -42,6 +42,7 @@ import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { blankFields, refuseFields } from '../shared/forms/invalid-fields';
 import { DateTimePipe } from '../shared/pipes/date-time.pipe';
+import { missingRequiredMessage } from '../shared/required-fields';
 type Worklist = 'all' | 'pending-consent' | ProcedureOrderStatus;
 
 /**
@@ -269,8 +270,14 @@ export class ProcedureOrdersComponent implements OnInit {
       PROC_REQUIRED_IDS,
     );
     if (blank.length > 0) {
-      const message = this.translate.instant('PROCEDURES.REQUIRED_FIELDS');
-      refuseFields(root, blank, PROC_ORDER_IDS, message);
+      // QA D1358: name the blank fields, not a fixed list.
+      const message =
+        missingRequiredMessage(this.translate, [
+          { labelKey: 'PROCEDURES.PATIENT', value: form.patientId },
+          { labelKey: 'PROCEDURES.PROCEDURE', value: form.procedureName },
+          { labelKey: 'PROCEDURES.INDICATION', value: form.indication },
+        ]) ?? this.translate.instant('COMMON.SUBMIT_BLOCKED_REQUIRED');
+      refuseFields(root, blank, PROC_ORDER_IDS, this.translate.instant('COMMON.FIELD_REQUIRED'));
       this.toast.error(message);
       return;
     }

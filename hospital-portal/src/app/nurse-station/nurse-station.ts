@@ -1249,7 +1249,7 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
     const fromDate = toServerDateTime(`${localDateString()}T00:00`);
     const byStatus = (status: 'ARRIVED' | 'TRIAGE') =>
       this.encounterService
-        .list({ status, fromDate, size: 100 })
+        .list({ status, fromDate })
         .pipe(catchError(() => of([] as EncounterResponse[])));
     return forkJoin([byStatus('ARRIVED'), byStatus('TRIAGE')]).pipe(
       map(([arrived, triage]) =>

@@ -1,3 +1,4 @@
+import { allRows } from '../shared/all-pages';
 import { textMatches } from '../shared/person-search';
 import {
   Component,
@@ -516,10 +517,13 @@ export class BillingComponent implements OnInit {
     }
     this.proposedVisit = null;
     if (!patientId || this.editing()) return;
-    this.billingService.searchInvoices({ patientId, statuses: ['PAID'] }, 0, 50).subscribe({
-      next: (res) => {
+    // QA D1347: every paid invoice of the patient (all pages), not the 50 newest.
+    allRows((page, size) =>
+      this.billingService.searchInvoices({ patientId, statuses: ['PAID'] }, page, size),
+    ).subscribe({
+      next: (invoices) => {
         if (this.form.patientId !== patientId) return;
-        const open = (res?.content ?? []).filter(
+        const open = invoices.filter(
           (inv) => inv.checkInCopay && !inv.creditedToInvoiceNumber && !!inv.encounterCode,
         );
         this.openCopays.set(open);

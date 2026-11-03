@@ -1,3 +1,4 @@
+import { allRows } from '../../../shared/all-pages';
 import { ChangeDetectionStrategy, Component, OnDestroy, inject, signal } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
@@ -281,9 +282,13 @@ export class Dhis2MappingEditorComponent implements OnDestroy {
     this.loading.set(true);
     this.error.set(false);
     this.listSub?.unsubscribe();
-    this.listSub = this.dhis2.listMappings(hospitalId, this.filterDatasetUid).subscribe({
-      next: (page) => {
-        this.rows.set(page.content);
+    // QA D1347: every mapping of the data set (all pages), not the first 20.
+    const datasetUid = this.filterDatasetUid;
+    this.listSub = allRows((page, size) =>
+      this.dhis2.listMappings(hospitalId, datasetUid, page, size),
+    ).subscribe({
+      next: (rows) => {
+        this.rows.set(rows);
         this.loading.set(false);
       },
       error: () => {

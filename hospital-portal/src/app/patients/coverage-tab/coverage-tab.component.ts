@@ -36,6 +36,7 @@ import { PhoneFieldDirective } from '../../shared/forms/phone-field.directive';
 import { ReasonDialogComponent } from '../../shared/reason-dialog/reason-dialog.component';
 import { focusWhenRendered } from '../../shared/a11y/focus-when-rendered';
 import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
+import { missingRequiredMessage } from '../../shared/required-fields';
 /**
  * Coverage tab on patient detail (Phase 3 task 17): insurance policies and
  * hospital registrations for one patient. Insurance roles are HOSPITAL_ADMIN/
@@ -384,7 +385,13 @@ export class CoverageTabComponent implements OnInit {
 
   submitLink(): void {
     if (!this.linkForm.payerCode.trim() || !this.linkForm.policyNumber.trim()) {
-      this.toast.error(this.translate.instant('COVERAGE.LINK_REQUIRED_FIELDS'));
+      // QA D1358: name the blank fields, not a fixed list.
+      this.toast.error(
+        missingRequiredMessage(this.translate, [
+          { labelKey: 'COVERAGE.PAYER_CODE', value: this.linkForm.payerCode },
+          { labelKey: 'COVERAGE.POLICY', value: this.linkForm.policyNumber },
+        ]) ?? this.translate.instant('COMMON.SUBMIT_BLOCKED_REQUIRED'),
+      );
       return;
     }
     this.linkSaving.set(true);
@@ -433,7 +440,13 @@ export class CoverageTabComponent implements OnInit {
   submitEdit(): void {
     const insurance = this.editingInsurance();
     if (!insurance || !this.editForm.providerName.trim() || !this.editForm.policyNumber.trim()) {
-      this.toast.error(this.translate.instant('COVERAGE.EDIT_REQUIRED_FIELDS'));
+      // QA D1358: name the blank fields, not a fixed list.
+      this.toast.error(
+        missingRequiredMessage(this.translate, [
+          { labelKey: 'COVERAGE.PROVIDER', value: this.editForm.providerName },
+          { labelKey: 'COVERAGE.POLICY', value: this.editForm.policyNumber },
+        ]) ?? this.translate.instant('COMMON.SUBMIT_BLOCKED_REQUIRED'),
+      );
       return;
     }
     this.editSaving.set(true);

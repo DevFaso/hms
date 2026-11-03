@@ -184,6 +184,7 @@
               >{{ 'DIRECTIVES.PHYSICIAN' | translate }}{{ needsPhysician() ? ' *' : '' }}
               <input
                 id="directive-physician"
+                [required]="needsPhysician()"
                 type="text"
                 [(ngModel)]="form.physicianName"
                 name="physicianName"
@@ -219,6 +220,8 @@
               type="submit"
               class="btn-primary"
               [disabled]="saving()"
+              appSubmitGuard
+              submitGuardRequired
               data-testid="directive-save"
             >
               {{ 'COMMON.SAVE' | translate }}

@@ -1,3 +1,5 @@
+import { map } from 'rxjs';
+import { allRows } from '../shared/all-pages';
 import { refusalReason } from '../shared/refusal-reason';
 import {
   Component,
@@ -81,9 +83,9 @@ export class PharmacyCheckoutComponent implements OnInit {
   }
 
   private loadPharmacies(): void {
-    this.svc.listPharmacies(0, 100).subscribe({
-      next: (page) => {
-        const list = page?.content ?? [];
+    // QA D1347: every pharmacy (all pages), not the first 100.
+    allRows((page, size) => this.svc.listPharmacies(page, size)).subscribe({
+      next: (list) => {
         this.pharmacies.set(list);
         if (list.length > 0) {
           this.selectPharmacy(list[0].id);
@@ -112,9 +114,12 @@ export class PharmacyCheckoutComponent implements OnInit {
       return;
     }
     this.dispensesLoading.set(true);
-    this.svc.listDispensesByPharmacy(pharmacyId, 0, 50).subscribe({
-      next: (res) => {
-        const rows = res?.data?.content ?? [];
+    // QA D1347: every dispense of the pharmacy (all pages), not the 50 newest:
+    // an older unpaid dispense was never offered at the till.
+    allRows((page, size) =>
+      this.svc.listDispensesByPharmacy(pharmacyId, page, size).pipe(map((r) => r?.data)),
+    ).subscribe({
+      next: (rows) => {
         this.dispenses.set(rows.filter((d) => d.status !== 'CANCELLED' && d.paid !== true));
         this.dispensesLoading.set(false);
       },

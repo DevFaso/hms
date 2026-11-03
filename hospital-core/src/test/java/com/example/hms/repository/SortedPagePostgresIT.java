@@ -79,6 +79,7 @@ class SortedPagePostgresIT {
     @Autowired private PatientRepository patients;
     @Autowired private UserRoleHospitalAssignmentRepository assignments;
     @Autowired private PermissionRepository permissions;
+    @Autowired private LabOrderRepository labOrders;
 
     private final List<UUID> savedNotifications = new ArrayList<>();
 
@@ -142,6 +143,34 @@ class SortedPagePostgresIT {
             PageRequest byName = PageRequest.of(0, 20, Sort.by("name", "id"));
             permissions.findAll(PermissionSpecification.build(new PermissionFilterDTO(null, null)), byName);
             permissions.findAll(PermissionSpecification.build(new PermissionFilterDTO(any, "read")), byName);
+        }).doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("QA D1347: the lab-order worklist and the encounter list page on a total order, every filter combination")
+    void worklistsPageOnATotalOrder() {
+        UUID any = UUID.randomUUID();
+        LocalDateTime from = LocalDateTime.of(2026, 1, 1, 0, 0);
+        LocalDateTime to = from.plusMonths(1);
+        PageRequest page = PageRequest.of(1, 200);
+        assertThatCode(() -> {
+            // The portal reads every page of GET /lab-orders (hospital scoped,
+            // optionally one patient; super-admin global view has no hospital).
+            for (UUID hospital : new UUID[]{null, any}) {
+                for (UUID patient : new UUID[]{null, any}) {
+                    for (LocalDateTime[] range : new LocalDateTime[][]{{null, null}, {from, null}, {null, to}, {from, to}}) {
+                        assertThat(labOrders.search(hospital, patient, range[0], range[1], page).getContent()).isEmpty();
+                    }
+                }
+            }
+            // EncounterService.list / listForPatient send sort=encounterDate,desc&sort=id,desc.
+            encounters.findAll(PageRequest.of(1, 200, Sort.by(Sort.Direction.DESC, "encounterDate", "id")));
+            // The desk's payment panel sends sort=createdAt,desc&sort=id,desc.
+            PageRequest newestInvoice = PageRequest.of(1, 200, Sort.by(Sort.Direction.DESC, "createdAt", "id"));
+            invoices.findByPatient_IdAndHospital_Id(any, any, newestInvoice);
+            invoices.findByPatient_Id(any, newestInvoice);
+            // StaffService.list(hospitalId) sends sort=id.
+            staff.findByHospitalIdAndActiveTrueExcludingDeletedUsers(any, PageRequest.of(1, 200, Sort.by("id")));
         }).doesNotThrowAnyException();
     }
 

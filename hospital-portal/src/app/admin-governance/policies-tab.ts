@@ -1,3 +1,4 @@
+import { allRows } from '../shared/all-pages';
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
@@ -76,8 +77,9 @@ export class PoliciesTabComponent implements OnInit {
 
   ngOnInit(): void {
     this.load();
-    this.orgService.list(0, 100).subscribe({
-      next: (page) => this.organizations.set(page.content ?? []),
+    // QA D1347: every organization (all pages), not the first 100.
+    allRows((page, size) => this.orgService.list(page, size)).subscribe({
+      next: (list) => this.organizations.set(list),
       error: () => this.toast.error(this.translate.instant('ADMIN_GOV.ORGS_LOAD_ERROR')),
     });
   }

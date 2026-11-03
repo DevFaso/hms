@@ -1,3 +1,4 @@
+import { allRows } from '../../shared/all-pages';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import {
   Component,
@@ -163,9 +164,10 @@ export class LabApprovalQueueComponent implements OnInit {
 
   loadQueue(): void {
     this.loading.set(true);
-    // Fetch all pending definitions (both PENDING_QA_REVIEW and PENDING_DIRECTOR_APPROVAL)
-    this.labService.searchTestDefinitions({ size: 200 }).subscribe({
-      next: ({ content }) => {
+    // Fetch all pending definitions (both PENDING_QA_REVIEW and PENDING_DIRECTOR_APPROVAL).
+    // QA D1347: every definition (all pages), not the first 200.
+    allRows((page, size) => this.labService.searchTestDefinitions({ page, size })).subscribe({
+      next: (content) => {
         const pending = content.filter(
           (d) =>
             d.approvalStatus === 'PENDING_QA_REVIEW' ||

@@ -1,3 +1,5 @@
+import { map } from 'rxjs';
+import { allRows } from '../shared/all-pages';
 import { CommonModule, DatePipe } from '@angular/common';
 import {
   Component,
@@ -70,9 +72,12 @@ export class PharmacyClaimsComponent implements OnInit {
 
   load(): void {
     this.loading.set(true);
-    this.pharmacy.listClaimsByHospital(0, 100).subscribe({
-      next: (res) => {
-        this.claims.set(res.data?.content ?? []);
+    // QA D1347: every claim (all pages), not the 100 newest.
+    allRows((page, size) =>
+      this.pharmacy.listClaimsByHospital(page, size).pipe(map((r) => r?.data)),
+    ).subscribe({
+      next: (claims) => {
+        this.claims.set(claims);
         this.loading.set(false);
       },
       error: () => {

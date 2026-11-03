@@ -36,6 +36,35 @@ describe('MedicalCertificateDialogComponent (QA D961)', () => {
     fixture.detectChanges();
   });
 
+  it('QA D1356: opens empty, and an untouched form signs nothing', () => {
+    expect(component.type).toBe('');
+    expect(component.days).toBeNull();
+    expect(component.missing()).toBe('MEDICAL_CERTIFICATE.TYPE_REQUIRED');
+    component.submit();
+    expect(service.issue).not.toHaveBeenCalled();
+    // Choosing a sick leave still asks for the days: none is proposed.
+    component.type = 'SICK_LEAVE';
+    expect(component.missing()).toBe('MEDICAL_CERTIFICATE.DAYS_REQUIRED');
+    component.submit();
+    expect(service.issue).not.toHaveBeenCalled();
+  });
+
+  it('QA D1356: the type control renders blank and required, and the press marks it', async () => {
+    const fixture = TestBed.createComponent(MedicalCertificateDialogComponent);
+    fixture.componentInstance.encounter = { id: 'enc-2' } as EncounterResponse;
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    const select = host.querySelector<HTMLSelectElement>('#mc-type')!;
+    expect(select.required).toBeTrue();
+    expect(select.value).toBe('');
+    host.querySelector<HTMLButtonElement>('button[type="submit"]')!.click();
+    fixture.detectChanges();
+    expect(service.issue).not.toHaveBeenCalled();
+    expect(select.getAttribute('aria-invalid')).toBe('true');
+  });
+
   it('sends a sick-leave note with its days, start and language', () => {
     service.issue.and.returnValue(
       of({ id: 'doc-1', patientId: 'p1', displayName: 'Arrêt.pdf' } as PatientDocumentResponse),

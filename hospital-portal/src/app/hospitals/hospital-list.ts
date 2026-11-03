@@ -1,3 +1,4 @@
+import { allRows } from '../shared/all-pages';
 import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
@@ -12,16 +13,22 @@ import { OrgTextPipe } from '../shared/pipes/org-text.pipe';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { PhoneFieldDirective } from '../shared/forms/phone-field.directive';
+import { missingRequiredMessage } from '../shared/required-fields';
 
 type RequiredHospitalField = 'name' | 'phoneNumber' | 'country' | 'city' | 'address';
 
 /** The form's required fields, in the order they appear, with their input ids. */
-const REQUIRED_HOSPITAL_FIELDS: readonly { key: RequiredHospitalField; inputId: string }[] = [
-  { key: 'name', inputId: 'hName' },
-  { key: 'phoneNumber', inputId: 'hPhone' },
-  { key: 'country', inputId: 'hCountry' },
-  { key: 'city', inputId: 'hCity' },
-  { key: 'address', inputId: 'hAddress' },
+const REQUIRED_HOSPITAL_FIELDS: readonly {
+  key: RequiredHospitalField;
+  inputId: string;
+  /** The label the form shows for the field (QA D1358). */
+  labelKey: string;
+}[] = [
+  { key: 'name', inputId: 'hName', labelKey: 'DEPARTMENTS.NAME' },
+  { key: 'phoneNumber', inputId: 'hPhone', labelKey: 'PATIENTS.PHONE' },
+  { key: 'country', inputId: 'hCountry', labelKey: 'HOSPITALS.COUNTRY' },
+  { key: 'city', inputId: 'hCity', labelKey: 'HOSPITALS.CITY' },
+  { key: 'address', inputId: 'hAddress', labelKey: 'HOSPITALS.ADDRESS' },
 ];
 
 @Component({
@@ -77,8 +84,9 @@ export class HospitalListComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadHospitals();
-    this.orgService.list(0, 100, true).subscribe({
-      next: (page) => this.organizations.set(page.content),
+    // QA D1347: every active organization (all pages), not the first 100.
+    allRows((page, size) => this.orgService.list(page, size, true)).subscribe({
+      next: (list) => this.organizations.set(list),
     });
   }
 
@@ -178,7 +186,16 @@ export class HospitalListComponent implements OnInit {
     const missing = this.missingFields();
     if (missing.length > 0) {
       this.showMissing.set(true);
-      this.toast.error(this.translate.instant('HOSPITALS.REQUIRED_FIELDS'));
+      // QA D1358: name the blank fields, not a fixed list.
+      this.toast.error(
+        missingRequiredMessage(
+          this.translate,
+          REQUIRED_HOSPITAL_FIELDS.map((f) => ({
+            labelKey: f.labelKey,
+            value: this.form[f.key]?.trim(),
+          })),
+        ) ?? this.translate.instant('COMMON.SUBMIT_BLOCKED_REQUIRED'),
+      );
       const first = REQUIRED_HOSPITAL_FIELDS.find((f) => f.key === missing[0]);
       if (first) {
         // After the change detection that applies the marks.

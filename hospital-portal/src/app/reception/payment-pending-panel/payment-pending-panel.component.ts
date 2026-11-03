@@ -1,3 +1,4 @@
+import { allRows, PageSlice } from '../../shared/all-pages';
 import { refusalReason } from '../../shared/refusal-reason';
 import {
   Component,
@@ -126,27 +127,34 @@ export class PaymentPendingPanelComponent {
 
   private loadInvoices(patientId: string): void {
     this.loadingInvoices.set(true);
-    const params = new HttpParams().set('size', '20');
-    this.http
-      .get<{ content: OpenInvoice[] }>(`/billing-invoices/patient/${patientId}`, { params })
-      .subscribe({
-        next: (res) => {
-          const open = (res.content ?? []).filter(
-            (inv) =>
-              inv.status !== 'PAID' &&
-              inv.status !== 'CANCELLED' &&
-              inv.status !== 'DRAFT' &&
-              (inv.balanceDue ?? inv.totalAmount - (inv.amountPaid ?? 0)) > 0,
-          );
-          this.openInvoices.set(open);
-          if (open.length === 1) this.selectInvoice(open[0].id);
-          this.loadingInvoices.set(false);
-        },
-        error: () => {
-          this.toast.error(this.translate.instant('RECEPTION.LOAD_INVOICES_FAILED'));
-          this.loadingInvoices.set(false);
-        },
-      });
+    // QA D1347: every invoice of the patient (all pages), not the 20 newest —
+    // an older open invoice was never offered for payment.
+    allRows((page, size) =>
+      this.http.get<PageSlice<OpenInvoice>>(`/billing-invoices/patient/${patientId}`, {
+        params: new HttpParams()
+          .set('page', page)
+          .set('size', size)
+          .append('sort', 'createdAt,desc')
+          .append('sort', 'id,desc'),
+      }),
+    ).subscribe({
+      next: (invoices) => {
+        const open = invoices.filter(
+          (inv) =>
+            inv.status !== 'PAID' &&
+            inv.status !== 'CANCELLED' &&
+            inv.status !== 'DRAFT' &&
+            (inv.balanceDue ?? inv.totalAmount - (inv.amountPaid ?? 0)) > 0,
+        );
+        this.openInvoices.set(open);
+        if (open.length === 1) this.selectInvoice(open[0].id);
+        this.loadingInvoices.set(false);
+      },
+      error: () => {
+        this.toast.error(this.translate.instant('RECEPTION.LOAD_INVOICES_FAILED'));
+        this.loadingInvoices.set(false);
+      },
+    });
   }
 
   /** The amount still due on an invoice. */

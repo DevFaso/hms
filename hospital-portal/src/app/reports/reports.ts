@@ -23,6 +23,7 @@ import { focusFirstInvalid, refuseFields } from '../shared/forms/invalid-fields'
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { missingRequiredMessage } from '../shared/required-fields';
 /**
  * QA D855: the address shape the server accepts (EmailAddresses.isDeliverable),
  * so a typo is caught on the field before the round trip.
@@ -117,12 +118,17 @@ export class ReportsComponent implements OnInit {
     const root = this.host.nativeElement;
     if (!this.name().trim() || !this.recipients().trim()) {
       // QA D1306 (round 28): the blank fields are marked, not only a toast.
-      const message = this.translate.instant('REPORTS.FIELDS_REQUIRED');
+      // QA D1358: name the blank fields, not a fixed list.
+      const message =
+        missingRequiredMessage(this.translate, [
+          { labelKey: 'COMMON.NAME', value: this.name() },
+          { labelKey: 'REPORTS.RECIPIENTS', value: this.recipients() },
+        ]) ?? this.translate.instant('COMMON.SUBMIT_BLOCKED_REQUIRED');
       const blank = [
         this.name().trim() ? null : 'rep-name',
         this.recipients().trim() ? null : 'rep-recipients',
       ].filter((id): id is string => id !== null);
-      refuseFields(root, blank, REPORT_FIELD_IDS, message);
+      refuseFields(root, blank, REPORT_FIELD_IDS, this.translate.instant('COMMON.FIELD_REQUIRED'));
       this.toast.error(message);
       return;
     }

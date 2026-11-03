@@ -8,6 +8,11 @@ import {
   AdvanceDirectiveService,
 } from '../../services/advance-directive.service';
 import { ToastService } from '../../core/toast.service';
+import {
+  expectEmptySubmitRefusal,
+  expectFieldsMarked,
+  fieldErrorsResponse,
+} from '../../testing/form-refusal-behaviour';
 
 /**
  * Advance-directives tab (P2 #13) — the first write surface for a table that
@@ -137,9 +142,13 @@ describe('AdvanceDirectivesTabComponent', () => {
     expect(toast.error).toHaveBeenCalledWith(backendMessage);
   });
 
-  it('QA D1148: one click on Save records nothing — type, status and date are named, the DNR needs its physician', () => {
+  it('QA D1148: one click on Save records nothing — type, status and date are named, the DNR needs its physician', async () => {
     setup([]);
     component.openCreate();
+    fixture.detectChanges();
+    // The form as the reader sees it: ngModel has written the blank choices
+    // (round 30: the save button's submit guard reads the DOM).
+    await fixture.whenStable();
     fixture.detectChanges();
     const host = fixture.nativeElement as HTMLElement;
     // A submit button submits only a form that is in the document.
@@ -167,6 +176,74 @@ describe('AdvanceDirectivesTabComponent', () => {
     expect(directiveService.create).not.toHaveBeenCalled();
     expect(host.querySelector('#directive-physician')?.getAttribute('aria-invalid')).toBe('true');
     host.remove();
+  });
+
+  it('QA D1357: an empty save names the blank fields once, never one sentence repeated under each', async () => {
+    setup([]);
+    component.openCreate();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    document.body.appendChild(host);
+    host.querySelector<HTMLButtonElement>('[data-testid="directive-save"]')!.click();
+    fixture.detectChanges();
+    expect(directiveService.create).not.toHaveBeenCalled();
+    const alerts = [...host.querySelectorAll('[role="alert"]')].map((a) => a.textContent?.trim());
+    expect(alerts).not.toContain('DIRECTIVES.REQUIRED_FIELDS');
+    // The one summary that names the fields (the submit guard, under the button).
+    expect(alerts.filter((t) => t?.includes('COMMON.MISSING_REQUIRED_FIELDS')).length).toBe(1);
+    host.remove();
+
+    // The component's own check (a path the guard cannot see) names them too.
+    component.form = { directiveType: '', status: '', effectiveDate: '' };
+    component.submit();
+    expect(toast.error).toHaveBeenCalledWith('COMMON.MISSING_REQUIRED_FIELDS');
+    expect(directiveService.create).not.toHaveBeenCalled();
+  });
+
+  it('round-29 behaviour: the empty save marks every blank required field and sends nothing', async () => {
+    setup([]);
+    component.openCreate();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    document.body.appendChild(host);
+    const marked = expectEmptySubmitRefusal(fixture, {
+      button: '[data-testid="directive-save"]',
+      sent: directiveService.create,
+    });
+    expect(marked).toEqual(
+      jasmine.arrayContaining(['directive-type', 'directive-status', 'directive-effective']),
+    );
+    host.remove();
+  });
+
+  it('QA D1355: every field the server names under fieldErrors is marked with its reason', () => {
+    setup([]);
+    component.openCreate();
+    fixture.detectChanges();
+    directiveService.create.and.returnValue(
+      throwError(() =>
+        fieldErrorsResponse({
+          physicianName: 'Le médecin est obligatoire.',
+          effectiveDate: "La date d'effet est obligatoire.",
+        }),
+      ),
+    );
+    component.form = {
+      directiveType: 'DO_NOT_RESUSCITATE',
+      status: 'ACTIVE',
+      effectiveDate: '2026-11-02',
+      physicianName: 'Dr K',
+    };
+    component.submit();
+    fixture.detectChanges();
+    expectFieldsMarked(fixture, {
+      'directive-physician': 'Le médecin est obligatoire.',
+      'directive-effective': "La date d'effet est obligatoire.",
+    });
   });
 
   it('revokes through the revoke endpoint after confirmation, then reloads', () => {

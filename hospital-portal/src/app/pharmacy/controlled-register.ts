@@ -1,3 +1,5 @@
+import { map } from 'rxjs';
+import { allRows } from '../shared/all-pages';
 import { refusalReason } from '../shared/refusal-reason';
 import {
   ChangeDetectionStrategy,
@@ -85,9 +87,9 @@ export class ControlledRegisterComponent implements OnInit {
     const today = new Date();
     this.to = localIsoDate(today);
     this.from = localIsoDate(new Date(today.getFullYear(), today.getMonth(), 1));
-    this.svc.listPharmacies(0, 100).subscribe({
-      next: (page) => {
-        const list = page?.content ?? [];
+    // QA D1347: every pharmacy (all pages), not the first 100.
+    allRows((page, size) => this.svc.listPharmacies(page, size)).subscribe({
+      next: (list) => {
         this.pharmacies.set(list);
         this.pharmaciesLoaded.set(true);
         if (list.length > 0) {
@@ -104,9 +106,13 @@ export class ControlledRegisterComponent implements OnInit {
     this.controlledItems.set([]);
     this.register.set(null);
     if (!this.selectedPharmacyId) return;
-    this.svc.listInventoryByPharmacy(this.selectedPharmacyId, 0, 500).subscribe({
-      next: (res) =>
-        this.controlledItems.set((res?.data?.content ?? []).filter((item) => !!item.controlled)),
+    // QA D1347: every inventory item (all pages), not the first 500.
+    allRows((page, size) =>
+      this.svc
+        .listInventoryByPharmacy(this.selectedPharmacyId, page, size)
+        .pipe(map((r) => r?.data)),
+    ).subscribe({
+      next: (items) => this.controlledItems.set(items.filter((item) => !!item.controlled)),
       error: () => this.controlledItems.set([]),
     });
     this.load();

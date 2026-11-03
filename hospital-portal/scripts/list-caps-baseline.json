@@ -1,0 +1,110 @@
+{
+  "$comment": [
+    "Fixed-size list reads, as they stand today (QA D1347).",
+    "Each key is \"file::rule::member:detail\"; \"why\" says why the site is not a silent cap, or its defect id.",
+    "A site not listed fails the build: read every page (allRows / allPages in src/app/shared/all-pages.ts)",
+    "or page on screen with the server's total, then delete its pin."
+  ],
+  "pinned": {
+    "src/app/dashboard/dashboard.ts::fixed-size::loadDashboardData:getDispenseWorkQueue:page0x1": {
+      "count": 1,
+      "why": "count probe: one row asked for, only totalElements is read (the tile's number)"
+    },
+    "src/app/dashboard/dashboard.ts::fixed-size::loadDashboardData:listClaimsByHospital:page0x1": {
+      "count": 1,
+      "why": "count probe: one row asked for, only totalElements is read (the tile's number)"
+    },
+    "src/app/dashboard/dashboard.ts::fixed-size::loadDashboardData:searchInvoices:page0x5": {
+      "count": 1,
+      "why": "preview card: the 5 newest invoices, with a link to /billing for the whole list"
+    },
+    "src/app/departments/department-list.ts::page-content::loadDepartments:res": {
+      "count": 1,
+      "why": "GET /departments answers the WHOLE list as a bare array (DepartmentController.getAllDepartments); content is a legacy-shape fallback (QA D75)"
+    },
+    "src/app/maternity/birth-plan-tab.ts::fixed-size::load:page:size=20": {
+      "count": 1,
+      "why": "paged on screen: page() with the server's totalPages and a pager"
+    },
+    "src/app/maternity/maternity.ts::fixed-size::loadBoard:search:size=20": {
+      "count": 1,
+      "why": "paged on screen: the board pages with the server's totalElements (boardTotal)"
+    },
+    "src/app/nurse-station/nurse-station.ts::fixed-size::loadFast$:getNurseInbox:limit=20": {
+      "count": 1,
+      "why": "D1295: the server returns EVERY unread row whatever the limit; limit is only the read-history length (NurseTaskController inbox)"
+    },
+    "src/app/pharmacy/dispensing.ts::fixed-size::loadRecentDispenses:listDispensesByPharmacy:page0x10": {
+      "count": 1,
+      "why": "preview: the panel is titled PHARMACY.RECENT_DISPENSES (the 10 newest fills)"
+    },
+    "src/app/pharmacy/goods-receipt.ts::page-content::loadRecentLots:res": {
+      "count": 1,
+      "why": "preview: the panel is titled PHARMACY.RECENT_LOTS (RECENT_LOTS newest receipts)"
+    },
+    "src/app/prescriptions/prescriptions.ts::fixed-size::initCatalogSearch:searchMedications:page0x15": {
+      "count": 1,
+      "why": "typeahead: the 15 best catalogue matches for the typed text; typing more narrows it"
+    },
+    "src/app/prescriptions/prescriptions.ts::page-flattened::initCatalogSearch:content": {
+      "count": 1,
+      "why": "typeahead: the 15 best catalogue matches for the typed text; typing more narrows it"
+    },
+    "src/app/prescriptions/prescriptions.ts::fixed-size::initPharmacyHistory:listDispensesByPrescription:page0x20": {
+      "count": 1,
+      "why": "D1347 open: a prescription's pharmacy history reads its 20 newest dispenses; prescriptions.* belongs to fix/r30-prn-interval this round (flagged in the round-30 hand-back)"
+    },
+    "src/app/prescriptions/prescriptions.ts::fixed-size::initPharmacyHistory:listRoutingDecisionsByPrescription:page0x20": {
+      "count": 1,
+      "why": "D1347 open: a prescription's routing history reads its 20 newest decisions; prescriptions.* belongs to fix/r30-prn-interval this round (flagged in the round-30 hand-back)"
+    },
+    "src/app/profile/profile.ts::page-content::loadActivity:res": {
+      "count": 1,
+      "why": "preview: the section is titled PROFILE.RECENT_ACTIVITY (the user's newest audit events)"
+    },
+    "src/app/reception/waitlist-panel/waitlist-panel.component.ts::fixed-size::openOfferModal:searchOpen:limit=50": {
+      "count": 1,
+      "why": "D1347 open: GET /slots/search answers a bare list capped server-side at 200 (SlotInventoryServiceImpl.MAX_SEARCH_RESULTS) with no total; the offer picker shows the earliest 50 of the entry's window. Needs a paged endpoint (round-30 setup note); flagged in the hand-back"
+    },
+    "src/app/services/department-lookup.service.ts::page-content::res:res": {
+      "count": 1,
+      "why": "shape tolerance for GET /departments, which answers the whole list as a bare array (QA D75)"
+    },
+    "src/app/services/discharge.service.ts::fixed-size::findActiveRegistration:set:size=1": {
+      "count": 1,
+      "why": "lookup of the ONE active registration of a patient at a hospital (a patient has at most one per hospital)"
+    },
+    "src/app/services/lab.service.ts::page-flattened::listOrders:content": {
+      "count": 1,
+      "why": "the explicit-page branch: a caller that passes page asked for that page (the chart's lab tab says 'latest N'); without page listOrders reads every page"
+    },
+    "src/app/services/prescription.service.ts::page-flattened::list:content": {
+      "count": 1,
+      "why": "D1347 open: PrescriptionService.list keeps the server's first page (20) and the prescriptions attention list reads it; prescription files belong to fix/r30-prn-interval this round (flagged in the round-30 hand-back)"
+    },
+    "src/app/services/treatment-plan.service.ts::page-flattened::listPlans:content": {
+      "count": 1,
+      "why": "the explicit-page branch: a caller that passes page asked for that page; without page listPlans reads every page"
+    },
+    "src/app/shell/shell.ts::fixed-size::loadNotifications:getNotifications:size=1": {
+      "count": 1,
+      "why": "count probe: the bell badge reads totalElements of read=false (the server's unread count)"
+    },
+    "src/app/shell/shell.ts::fixed-size::loadNotifications:getNotifications:size=10": {
+      "count": 1,
+      "why": "preview: the bell drop-down shows the 10 newest, with a link to /notifications for every one"
+    },
+    "src/app/slot-admin/slot-admin.ts::fixed-size::searchSlots:searchOpen:limit=200": {
+      "count": 1,
+      "why": "D1347 open: GET /slots/search is capped server-side at 200 (SlotInventoryServiceImpl.MAX_SEARCH_RESULTS) and answers a bare list with no total (round-30 setup note); needs a paged endpoint in hospital-core, flagged in the hand-back"
+    },
+    "src/app/super-admin/emergency/emergency.ts::fixed-size::constructor:search:page0x10": {
+      "count": 1,
+      "why": "typeahead: the 10 best user matches for the typed name; typing more narrows it"
+    },
+    "src/app/super-admin/emergency/emergency.ts::page-content::constructor:page": {
+      "count": 1,
+      "why": "typeahead: the 10 best user matches for the typed name; typing more narrows it"
+    }
+  }
+}

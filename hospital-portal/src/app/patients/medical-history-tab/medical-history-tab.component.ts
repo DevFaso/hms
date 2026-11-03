@@ -35,6 +35,7 @@ import { hasClinicalContent } from '../../shared/forms/clinical-content';
 import { refusalReason } from '../../shared/refusal-reason';
 import { KeyLabelPipe } from '../../shared/pipes/key-label.pipe';
 import { DashPipe } from '../../shared/pipes/dash.pipe';
+import { missingRequiredMessage } from '../../shared/required-fields';
 
 /** QA D1148: what a social-history version records; one of them is required. */
 const SOCIAL_CONTENT_FIELDS = [
@@ -342,7 +343,13 @@ export class MedicalHistoryTabComponent implements OnInit {
   submitFamily(): void {
     const form = this.familyForm;
     if (!form.relationship.trim() || !form.conditionDisplay.trim()) {
-      this.toast.error(this.translate.instant('MED_HISTORY.FAMILY_REQUIRED_FIELDS'));
+      // QA D1358: name the blank fields, not a fixed list.
+      this.toast.error(
+        missingRequiredMessage(this.translate, [
+          { labelKey: 'MED_HISTORY.RELATIONSHIP', value: form.relationship },
+          { labelKey: 'MED_HISTORY.CONDITION', value: form.conditionDisplay },
+        ]) ?? this.translate.instant('COMMON.SUBMIT_BLOCKED_REQUIRED'),
+      );
       return;
     }
     form.recordedByStaffId = this.auth.getUserProfile()?.staffId ?? form.recordedByStaffId;
@@ -524,7 +531,13 @@ export class MedicalHistoryTabComponent implements OnInit {
     const form = this.immunizationForm;
     // QA D1003: the CVX code is optional (a PEV vaccine may have none).
     if (!form.vaccineDisplay.trim() || !form.administrationDate) {
-      this.toast.error(this.translate.instant('MED_HISTORY.IMMUNIZATION_REQUIRED_FIELDS'));
+      // QA D1358: name the blank fields, not a fixed list.
+      this.toast.error(
+        missingRequiredMessage(this.translate, [
+          { labelKey: 'MED_HISTORY.VACCINE', value: form.vaccineDisplay },
+          { labelKey: 'MED_HISTORY.ADMINISTERED', value: form.administrationDate },
+        ]) ?? this.translate.instant('COMMON.SUBMIT_BLOCKED_REQUIRED'),
+      );
       return;
     }
     // QA D1003: only a dose given here is credited to the clinician recording

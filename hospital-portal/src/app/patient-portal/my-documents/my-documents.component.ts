@@ -1,3 +1,4 @@
+import { allPages } from '../../shared/all-pages';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -123,10 +124,13 @@ export class MyDocumentsComponent implements OnInit {
   loadDocuments(): void {
     this.loading.set(true);
     const filter = this.filterType() || undefined;
-    this.portalService.listDocuments(filter as PatientDocumentType | undefined, 0, 50).subscribe({
+    // QA D1347: every document (all pages), not the 50 newest.
+    allPages((page, size) =>
+      this.portalService.listDocuments(filter as PatientDocumentType | undefined, page, size),
+    ).subscribe({
       next: (result) => {
-        this.documents.set(result.content);
-        this.totalElements.set(result.totalElements);
+        this.documents.set(result.rows);
+        this.totalElements.set(result.total);
         this.loading.set(false);
       },
       error: (err: unknown) => {

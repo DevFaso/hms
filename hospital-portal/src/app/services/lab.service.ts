@@ -2,6 +2,8 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable, map } from 'rxjs';
 
+import { allPages, allRows, AllRows } from '../shared/all-pages';
+
 export interface LabOrderResponse {
   id: string;
   labOrderCode: string;
@@ -444,18 +446,40 @@ export type LabResultPage = PageResponse<LabResultResponse>;
 export class LabService {
   private readonly http = inject(HttpClient);
 
+  /**
+   * The lab orders in scope. QA D1347: without `page` this is EVERY order the
+   * request matches (all pages read, `size` is only the transfer size); with
+   * `page` it is that one page, for a caller that says so on screen.
+   */
   listOrders(params?: {
     patientId?: string;
     page?: number;
     size?: number;
   }): Observable<LabOrderResponse[]> {
-    let httpParams = new HttpParams();
-    if (params?.patientId) httpParams = httpParams.set('patientId', params.patientId);
-    if (params?.page !== undefined) httpParams = httpParams.set('page', String(params.page));
-    if (params?.size !== undefined) httpParams = httpParams.set('size', String(params.size));
+    if (params?.page !== undefined) {
+      return this.listOrdersPage(params.page, params.size, params.patientId).pipe(
+        map((page) => page?.content ?? []),
+      );
+    }
+    return this.listAllOrders(params?.patientId).pipe(map((all) => all.rows));
+  }
+
+  /** Every order in scope and the server's own count of them (QA D1347). */
+  listAllOrders(patientId?: string): Observable<AllRows<LabOrderResponse>> {
+    return allPages((page, size) => this.listOrdersPage(page, size, patientId));
+  }
+
+  private listOrdersPage(
+    page: number,
+    size: number | undefined,
+    patientId?: string,
+  ): Observable<PageResponse<LabOrderResponse> | undefined> {
+    let httpParams = new HttpParams().set('page', String(page));
+    if (patientId) httpParams = httpParams.set('patientId', patientId);
+    if (size !== undefined) httpParams = httpParams.set('size', String(size));
     return this.http
       .get<ApiWrapper<PageResponse<LabOrderResponse>>>('/lab-orders', { params: httpParams })
-      .pipe(map((res) => res?.data?.content ?? []));
+      .pipe(map((res) => res?.data));
   }
 
   getOrder(id: string): Observable<LabOrderResponse> {
@@ -464,13 +488,15 @@ export class LabService {
       .pipe(map((res) => res.data));
   }
 
-  listResults(params?: { page?: number; size?: number }): Observable<LabResultResponse[]> {
-    let httpParams = new HttpParams();
-    if (params?.page !== undefined) httpParams = httpParams.set('page', String(params.page));
-    if (params?.size !== undefined) httpParams = httpParams.set('size', String(params.size));
-    return this.http
-      .get<ApiWrapper<PageResponse<LabResultResponse>>>('/lab-results', { params: httpParams })
-      .pipe(map((res) => res?.data?.content ?? []));
+  /** Every lab result in scope and the server's own count (QA D1347: was one page of 200). */
+  listAllResults(): Observable<AllRows<LabResultResponse>> {
+    return allPages((page, size) =>
+      this.http
+        .get<ApiWrapper<PageResponse<LabResultResponse>>>('/lab-results', {
+          params: new HttpParams().set('page', String(page)).set('size', String(size)),
+        })
+        .pipe(map((res) => res?.data)),
+    );
   }
 
   getResult(id: string): Observable<LabResultResponse> {
@@ -483,7 +509,7 @@ export class LabService {
    * B14 — the release worklist: every result of the acting hospital that
    * nobody has released yet, oldest first (the endpoint's own default sort).
    *
-   * <p>Unlike {@link listResults} this keeps the whole page rather than its
+   * <p>Unlike {@link listAllResults} this keeps the whole page rather than its
    * content: the worklist counts what is waiting and pages through it, and a
    * total that has been thrown away cannot be shown.
    */
@@ -518,7 +544,7 @@ export class LabService {
     approvalStatus?: LabTestDefinition['approvalStatus'];
     page?: number;
     size?: number;
-  }): Observable<{ content: LabTestDefinition[]; totalElements: number }> {
+  }): Observable<{ content: LabTestDefinition[]; totalElements: number; totalPages?: number }> {
     let httpParams = new HttpParams();
     if (params.keyword) httpParams = httpParams.set('keyword', params.keyword);
     if (params.approvalStatus) httpParams = httpParams.set('approvalStatus', params.approvalStatus);
@@ -532,6 +558,7 @@ export class LabService {
         map((res) => ({
           content: res?.data?.content ?? [],
           totalElements: res?.data?.totalElements ?? 0,
+          totalPages: res?.data?.totalPages ?? 0,
         })),
       );
   }
@@ -664,14 +691,22 @@ export class LabService {
     return this.http.delete<void>(`/lab-test-validation-studies/${id}`);
   }
 
-  getQcEventsByDefinition(definitionId: string, size = 150): Observable<LabQcEvent[]> {
-    const params = new HttpParams()
-      .set('testDefinitionId', definitionId)
-      .set('size', String(size))
-      .set('sort', 'recordedAt,asc');
-    return this.http
-      .get<ApiWrapper<PageResponse<LabQcEvent>>>('/lab-qc-events', { params })
-      .pipe(map((res) => res?.data?.content ?? []));
+  /**
+   * Every QC event of the definition, oldest first. QA D1347: this read the
+   * 150 OLDEST once, so a definition with more lost its recent runs.
+   */
+  getQcEventsByDefinition(definitionId: string): Observable<LabQcEvent[]> {
+    return allRows((page, size) =>
+      this.http
+        .get<ApiWrapper<PageResponse<LabQcEvent>>>('/lab-qc-events', {
+          params: new HttpParams()
+            .set('testDefinitionId', definitionId)
+            .set('page', String(page))
+            .set('size', String(size))
+            .set('sort', 'recordedAt,asc'),
+        })
+        .pipe(map((res) => res?.data)),
+    );
   }
 
   getQcSummary(): Observable<LabQcSummary[]> {
