@@ -75,7 +75,8 @@ public final class RequiredFields {
      */
     public FieldBusinessException failure() {
         if (missing.isEmpty()) {
-            throw new IllegalStateException("RequiredFields.failure() with every field given");
+            // A caller bug (it calls failure() only when a value is missing), never shown to a user.
+            throw new IllegalStateException();
         }
         if (missing.size() == 1) {
             // One field: the usual single-field refusal, with its message key.

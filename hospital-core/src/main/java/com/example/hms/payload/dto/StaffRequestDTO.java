@@ -45,12 +45,14 @@ public class StaffRequestDTO {
     @Schema(requiredMode = Schema.RequiredMode.REQUIRED, description = "Job title for the staff")
     private String jobTitle;
 
-    @NotBlank(message = "{staff.employmentType.blank}")
+    // Round 30: @NotNull, not @NotBlank (an enum: HV000030 when validated). Default group only,
+    // which no handler applies to this body (create validates OnCreate, update nothing).
+    @jakarta.validation.constraints.NotNull(message = "{staff.employmentType.blank}")
     @Schema(description = "Employment type, e.g. FULL_TIME, PART_TIME")
     @Enumerated(EnumType.STRING)
     private EmploymentType employmentType;
 
-    @Size(max = 100, message = "{staff.specialization.size}")
+    // Round 30: the @Size it carried cannot apply to an enum (HV000030); removed.
     @Enumerated(EnumType.STRING)
     @Schema(description = "Specialization of the staff (e.g. CARDIOLOGY, PEDIATRICS) — required for doctors/radiologists only")
     private Specialization specialization;

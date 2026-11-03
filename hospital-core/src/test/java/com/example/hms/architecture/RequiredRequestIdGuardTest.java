@@ -101,8 +101,8 @@ class RequiredRequestIdGuardTest {
         // QA D1349 (round 30): StaffController#create validates the OnCreate group
         // (its three required names), so its entry is gone.
         "StaffController#update",
-        "standing debt: StaffRequestDTO puts @NotBlank / @Size on enum fields, which bean validation cannot apply"
-            + " (UnexpectedTypeException, a 500); a partial edit whose ids are names the service resolves itself");
+        "a partial edit: a field left out keeps its stored value, so the body's constraints (the employment"
+            + " type, the three create-only names) do not apply; its ids are names the service resolves itself");
 
     @Test
     @DisplayName("a request body that declares constraints is bound with @Valid")
