@@ -59,9 +59,28 @@ const EXPECTED = [
   ['nurse-station/nurse-station.html', 'ho-recipient', 'recipientUserId'],
   ['discharge/discharge.html', 'decision-diagnosis', 'dischargeDiagnosis'],
   ['discharge/discharge.html', 'decision-note', 'rejectionReason'],
+  // QA round 31: D1367 (an appointment conflict names startTime), D1365 (a
+  // duplicate dose names administrationDate), D1368 (a withdrawal without a
+  // reason names withdrawalReason), D1373 (an unknown sex names gender).
+  ['appointments/appointment-form.html', 'start', 'startTime'],
+  ['appointments/appointment-detail.html', 'reschedStart', 'startTime'],
+  ['appointments/appointment-detail.html', 'reschedDate', 'appointmentDate'],
+  ['appointments/appointment-detail.html', 'reschedStaff', 'staffId'],
+  [
+    'patients/medical-history-tab/medical-history-tab.component.html',
+    'im-date',
+    'administrationDate',
+  ],
+  ['prescriptions/prescriptions.html', 'rx-withdrawalReason', 'withdrawalReason'],
+  ['patients/patient-form.html', 'gender', 'gender'],
+  [
+    'patients/patient-demographics-edit/patient-demographics-edit.component.html',
+    'demoGender',
+    'gender',
+  ],
 ];
 
-test('D1352/D1354: each refused field of these screens answers to the key the server names', () => {
+test('D1352/D1354/R31: each refused field of these screens answers to the key the server names', () => {
   const missing = [];
   for (const [file, id, key] of EXPECTED) {
     const tag = controlTag(readFileSync(resolve(SRC_DIR, file), 'utf8'), id);

@@ -27,6 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -126,12 +127,12 @@ class OrderSetItemDispatcherTest {
             assertThat(applied.type()).as(String.valueOf(hours)).isEqualTo(DispatchResult.Type.MEDICATION);
         }
         ArgumentCaptor<PrescriptionRequestDTO> captor = ArgumentCaptor.forClass(PrescriptionRequestDTO.class);
-        verify(prescriptionService, org.mockito.Mockito.times(3)).createPrescription(captor.capture(), eq(Locale.ENGLISH));
+        verify(prescriptionService, times(3)).createPrescription(captor.capture(), eq(Locale.ENGLISH));
         assertThat(captor.getAllValues()).allSatisfy(r -> assertThat(r.getPrnMinIntervalHours()).isEqualTo(6));
 
         dispatcher.dispatch(Map.of("orderType", "MEDICATION", "medicationName", "Amoxicillin", "frequency", "TID",
             "prnMinIntervalHours", 6), ctx(), Locale.ENGLISH);
-        verify(prescriptionService, org.mockito.Mockito.times(4)).createPrescription(captor.capture(), eq(Locale.ENGLISH));
+        verify(prescriptionService, times(4)).createPrescription(captor.capture(), eq(Locale.ENGLISH));
         assertThat(captor.getValue().getPrnMinIntervalHours()).isNull();
     }
 

@@ -156,7 +156,8 @@ public class LaborServiceImpl implements LaborService {
      * pregnancy reaching labour (20 weeks is the floor of a birth). It is a
      * charting error unless the clinician states why (e.g. a retained twin).
      */
-    static final int MIN_DAYS_BETWEEN_DELIVERIES = 140;
+    static final int MIN_DAYS_BETWEEN_DELIVERIES =
+        com.example.hms.validation.RecentDeliveryOverrideGivenValidator.MIN_DAYS_BETWEEN_DELIVERIES;
 
     private final LaborEpisodeRepository episodeRepository;
     private final LaborPartographEntryRepository entryRepository;

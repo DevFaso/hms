@@ -125,6 +125,13 @@ public class RequestBodyDefaultsModule extends SimpleModule {
         @Override
         public Object handleWeirdStringValue(DeserializationContext ctxt, Class<?> targetType,
                                              String valueToConvert, String failureMsg) {
+            // QA D1364 (round 31): a blank yes/no (a cleared toggle) is absent, as a blank
+            // enum or date is (D1316), so a required one is named "required" with the rest.
+            // A primitive keeps the malformed answer: absent would read as false there.
+            if (targetType == Boolean.class && valueToConvert != null && valueToConvert.isBlank()
+                    && RequestBodyProblems.collecting()) {
+                return null;
+            }
             return collect(ctxt.getParser(), false, targetType);
         }
 
@@ -138,6 +145,14 @@ public class RequestBodyDefaultsModule extends SimpleModule {
         public Object handleUnexpectedToken(DeserializationContext ctxt, JavaType targetType, JsonToken t,
                                             JsonParser p, String failureMsg) {
             boolean structure = t == JsonToken.START_OBJECT || t == JsonToken.START_ARRAY;
+            if (t == JsonToken.START_OBJECT && isListBodyRoot(p, targetType)) {
+                // QA D1364 (round 31): one object sent where the body is a list of them is
+                // read as that one-element list, so its refusals name the element's fields
+                // ("[0].channel") instead of "the request could not be read".
+                List<Object> one = new java.util.ArrayList<>();
+                one.add(ctxt.readValue(p, targetType.getContentType()));
+                return one;
+            }
             Object absent = collect(p, structure, targetType.getRawClass());
             if (absent != NOT_HANDLED && structure) {
                 p.skipChildren();
@@ -152,10 +167,21 @@ public class RequestBodyDefaultsModule extends SimpleModule {
             TokenStreamContext context = p.streamReadContext();
             // On a '{' or '[' the parser already stands in the value's own context.
             String path = jsonPath(structure && context != null ? context.getParent() : context);
-            if (path.isEmpty() || !RequestBodyProblems.record(path)) {
+            if (path.isEmpty() || !RequestBodyProblems.recordMalformed(path)) {
                 return NOT_HANDLED;
             }
             return targetType.isPrimitive() ? ClassUtil.defaultValue(targetType) : null;
+        }
+
+        /** The body itself (not a field of it) is a list, and a request body is being read. */
+        private static boolean isListBodyRoot(JsonParser p, JavaType targetType) {
+            if (p == null || !RequestBodyProblems.collecting() || !targetType.isCollectionLikeType()
+                    || !targetType.getRawClass().isAssignableFrom(java.util.ArrayList.class)) {
+                return false;
+            }
+            TokenStreamContext context = p.streamReadContext();
+            TokenStreamContext parent = context == null ? null : context.getParent();
+            return parent != null && parent.inRoot();
         }
 
         /** "items[0].dose" style; empty at the root of the body. */

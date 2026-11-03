@@ -154,7 +154,8 @@ public class PatientRecallServiceImpl implements PatientRecallService {
             .orElseThrow(() -> new ResourceNotFoundException("appointment.notFound", appointmentId));
         if (appointment.getPatient() == null
             || !recall.getPatient().getId().equals(appointment.getPatient().getId())) {
-            throw new BusinessException("recall.link.otherPatient");
+            // QA D1367 (round 31): the appointment given is named, so the link dialog marks it.
+            throw new com.example.hms.exception.FieldBusinessException("appointmentId", "recall.link.otherPatient");
         }
         recall.setLinkedAppointment(appointment);
         recall.setStatus(RecallStatus.SCHEDULED);

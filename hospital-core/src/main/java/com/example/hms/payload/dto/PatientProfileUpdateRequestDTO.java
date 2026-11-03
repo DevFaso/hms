@@ -34,7 +34,10 @@ public class PatientProfileUpdateRequestDTO {
     @jakarta.validation.constraints.Past
     private java.time.LocalDate dateOfBirth;
 
+    /** QA D1373: one of {@link com.example.hms.enums.PatientGender}, refused by name otherwise. */
     @Size(max = 10)
+    @jakarta.validation.constraints.Pattern(regexp = com.example.hms.enums.PatientGender.CODES,
+        flags = jakarta.validation.constraints.Pattern.Flag.CASE_INSENSITIVE, message = "{patient.gender.invalid}")
     private String gender;
 
     @Size(max = 100)

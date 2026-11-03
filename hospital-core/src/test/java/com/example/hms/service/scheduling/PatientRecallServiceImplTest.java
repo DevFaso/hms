@@ -237,7 +237,9 @@ class PatientRecallServiceImplTest {
 
         UUID recallId = recall.getId();
         assertThatThrownBy(() -> service.linkAppointment(recallId, hospitalId, appointmentId))
-            .isInstanceOf(BusinessException.class)
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .satisfies(e -> assertThat(((com.example.hms.exception.FieldBusinessException) e).getField())
+                .as("QA D1367: the appointment given is named").isEqualTo("appointmentId"))
             .hasMessageContaining("recall.link.otherPatient");
     }
 

@@ -86,6 +86,25 @@ public class ControlledDrugRegisterService {
         return buildRegister(pharmacyId, inventoryItemId, from, to);
     }
 
+    /**
+     * The pharmacy's controlled drugs, by name; only the one asked for when an
+     * item is named (Sonar S3776, round 31: split out of {@link #buildRegister}).
+     */
+    private List<InventoryItem> controlledDrugs(Pharmacy pharmacy, UUID inventoryItemId) {
+        List<InventoryItem> drugs = inventoryItemRepository.findAllWithCatalogItemByPharmacyId(pharmacy.getId())
+                .stream()
+                .filter(ControlledStockWitness::isControlled)
+                .filter(item -> inventoryItemId == null || inventoryItemId.equals(item.getId()))
+                .sorted(Comparator.comparing(ControlledDrugRegisterService::drugName,
+                        Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)))
+                .toList();
+        if (inventoryItemId != null && drugs.isEmpty()) {
+            // Another pharmacy's item, or one that is not controlled: same answer as a missing one.
+            throw new ResourceNotFoundException("inventoryItem.notFound", inventoryItemId);
+        }
+        return drugs;
+    }
+
     /** The register itself; the exports call it directly, inside their own read-only transaction. */
     private ControlledRegisterDTO buildRegister(UUID pharmacyId, UUID inventoryItemId, LocalDate from, LocalDate to) {
         // QA D1337 (round 29): a blank start or end is named as missing, both at
@@ -106,17 +125,7 @@ public class ControlledDrugRegisterService {
             throw new com.example.hms.exception.FieldBusinessException("to", "pharmacy.register.periodTooLong", String.valueOf(MAX_DAYS));
         }
         Pharmacy pharmacy = pharmacyInScope(pharmacyId);
-        List<InventoryItem> drugs = inventoryItemRepository.findAllWithCatalogItemByPharmacyId(pharmacy.getId())
-                .stream()
-                .filter(ControlledStockWitness::isControlled)
-                .filter(item -> inventoryItemId == null || inventoryItemId.equals(item.getId()))
-                .sorted(Comparator.comparing(ControlledDrugRegisterService::drugName,
-                        Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)))
-                .toList();
-        if (inventoryItemId != null && drugs.isEmpty()) {
-            // Another pharmacy's item, or one that is not controlled: same answer as a missing one.
-            throw new ResourceNotFoundException("inventoryItem.notFound", inventoryItemId);
-        }
+        List<InventoryItem> drugs = controlledDrugs(pharmacy, inventoryItemId);
         if (drugs.isEmpty()) {
             return new ControlledRegisterDTO(pharmacy.getId(), pharmacy.getName(), from, to, false, List.of());
         }

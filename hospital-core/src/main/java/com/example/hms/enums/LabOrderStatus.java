@@ -27,6 +27,14 @@ public enum LabOrderStatus {
      * its results no longer load anywhere ({@code LabResult}'s restriction).
      * FHIR: ServiceRequest and DiagnosticReport {@code entered-in-error}.
      */
-    ENTERED_IN_ERROR
+    ENTERED_IN_ERROR;
+
+    /**
+     * QA D1370 (round 31): the edge check for a request field - a status in
+     * any case, or blank (left to the field's required rule).
+     * {@code FreeTextStatusRequestFieldGuardTest} keeps it equal to {@link #values()}.
+     */
+    public static final String CODES =
+        "\\s*+(?:ORDERED|PENDING|COLLECTED|RECEIVED|IN_PROGRESS|RESULTED|VERIFIED|COMPLETED|CANCELLED|ENTERED_IN_ERROR)?\\s*+";
 }
 

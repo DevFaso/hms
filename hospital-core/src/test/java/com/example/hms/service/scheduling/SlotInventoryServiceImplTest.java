@@ -548,7 +548,8 @@ class SlotInventoryServiceImplTest {
 
         UUID slotId = slot.getId();
         assertThatThrownBy(() -> service.hold(slotId, 10))
-            .isInstanceOf(BusinessException.class)
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "slotId")
             .hasFieldOrPropertyWithValue("messageKey", "appointment.staff.unavailable");
         assertThat(slot.getStatus()).isEqualTo(SlotStatus.OPEN);
     }
@@ -560,7 +561,8 @@ class SlotInventoryServiceImplTest {
 
         UUID bookableId = slot.getId();
         assertThatThrownBy(() -> service.book(bookableId, patientId, null))
-            .isInstanceOf(BusinessException.class)
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "slotId")
             .hasFieldOrPropertyWithValue("messageKey", "appointment.staff.unavailable");
         verify(appointmentRepository, never()).save(any(Appointment.class));
     }

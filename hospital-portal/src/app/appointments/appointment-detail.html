@@ -300,6 +300,7 @@
               type="date"
               [(ngModel)]="rescheduleDate"
               name="reschedDate"
+              data-server-field="appointmentDate"
               required
             />
           </div>
@@ -310,6 +311,7 @@
               type="time"
               [(ngModel)]="rescheduleStart"
               name="reschedStart"
+              data-server-field="startTime"
               required
             />
             <!-- QA D1060: the clinician's slot rules set how long the visit lasts. -->
@@ -324,6 +326,7 @@
             <select
               id="reschedStaff"
               name="reschedStaff"
+              data-server-field="staffId"
               [ngModel]="rescheduleStaffId"
               (ngModelChange)="onRescheduleStaffChange($event)"
             >

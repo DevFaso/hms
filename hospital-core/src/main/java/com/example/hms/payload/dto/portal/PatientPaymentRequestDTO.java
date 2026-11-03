@@ -29,6 +29,10 @@ public class PatientPaymentRequestDTO {
     // QA D1317 (round 29): a blank method read "size must be between 1 and 50".
     @NotBlank
     @Size(max = 50)
+    // QA D1363 (round 31): an unsupported method is named with a malformed amount, in one refusal.
+    @jakarta.validation.constraints.Pattern(regexp = com.example.hms.enums.PaymentMethod.CODES,
+        flags = jakarta.validation.constraints.Pattern.Flag.CASE_INSENSITIVE, message = "{billing.payment.methodUnsupported}")
+
     @Schema(description = "Payment method used", example = "CARD",
             allowableValues = {"CARD", "CASH", "BANK_TRANSFER", "MOBILE_MONEY", "INSURANCE"},
             requiredMode = Schema.RequiredMode.REQUIRED)

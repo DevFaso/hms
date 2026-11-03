@@ -61,6 +61,14 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     // Sonar S1192 (Pattern 5 of docs/SonarQubeInstructions.md): the
     // i18n key for "prescription not found" appears 5x in this file.
     private static final String PRESCRIPTION_NOT_FOUND = "prescription.notfound";
+    /** QA D1368 (round 31): the request property a missing withdrawal reason is named by. */
+    private static final String FIELD_WITHDRAWAL_REASON = "withdrawalReason";
+    /**
+     * QA D1354 class (round 31, KNOWN GAP of round 30 closed: this branch owns the
+     * file): a refusal of the order's status or visit names the request field.
+     */
+    private static final String FIELD_STATUS = "status";
+    private static final String FIELD_ENCOUNTER_ID = "encounterId";
     private static final String CROSS_HOSPITAL_READ = "Cross-hospital prescription read on the treatment relationship";
     private static final String NOT_ON_STAY_CARE_TEAM =
         "The prescriber does not work at the hospital of this patient's stay.";
@@ -1061,7 +1069,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         PrescriptionStatus status = request.getStatus();
         if (status != null && !CLIENT_ASSERTABLE_STATUSES.contains(status)) {
             // QA D660: a key, so the refusal reaches the prescriber in her language.
-            throw new BusinessException("prescription.status.notAssertable");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_STATUS, "prescription.status.notAssertable");
         }
     }
 
@@ -1103,7 +1111,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             // does (D660); it used to go through with no reason at all.
             String reason = request.getWithdrawalReason() == null ? null : request.getWithdrawalReason().trim();
             if (reason == null || reason.isEmpty()) {
-                throw new com.example.hms.exception.FieldBusinessException("reason", "prescription.signed.withdrawalReason.required");
+                throw new com.example.hms.exception.FieldBusinessException(FIELD_WITHDRAWAL_REASON, "prescription.signed.withdrawalReason.required");
             }
             existing.setWithdrawalReason(reason);
             closeClarificationOnWithdrawal(existing);
@@ -1123,7 +1131,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
      */
     private static void rejectReopeningWithdrawn(PrescriptionStatus requested) {
         if (!requested.isWithdrawn()) {
-            throw new BusinessException("prescription.withdrawn.final");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_STATUS, "prescription.withdrawn.final");
         }
     }
 
@@ -1209,10 +1217,10 @@ public class PrescriptionServiceImpl implements PrescriptionService {
      */
     private void rejectSafeguardWithdrawal(Prescription existing, PrescriptionRequestDTO request) {
         if (existing.isControlledSubstance() && Boolean.FALSE.equals(request.getControlledSubstance())) {
-            throw new BusinessException("prescription.controlled.flagLocked");
+            throw new com.example.hms.exception.FieldBusinessException("controlledSubstance", "prescription.controlled.flagLocked");
         }
         if (existing.isRequiresCosign() && Boolean.FALSE.equals(request.getRequiresCosign())) {
-            throw new BusinessException("prescription.cosign.flagLocked");
+            throw new com.example.hms.exception.FieldBusinessException("requiresCosign", "prescription.cosign.flagLocked");
         }
     }
 
@@ -1590,11 +1598,11 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                                                                PrescriptionRequestDTO request) {
         PrescriptionStatus requested = request.getStatus();
         if (requested == null || !requested.isWithdrawn() || changesSignedContent(existing, request)) {
-            throw new BusinessException("prescription.signed.onlyWithdrawal");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_STATUS, "prescription.signed.onlyWithdrawal");
         }
         String reason = request.getWithdrawalReason() == null ? null : request.getWithdrawalReason().trim();
         if (reason == null || reason.isEmpty()) {
-            throw new com.example.hms.exception.FieldBusinessException("reason", "prescription.signed.withdrawalReason.required");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_WITHDRAWAL_REASON, "prescription.signed.withdrawalReason.required");
         }
         UUID currentUserId = authService.getCurrentUserId();
         UUID hospitalId = existing.getHospital() != null ? existing.getHospital().getId() : null;
@@ -2021,14 +2029,14 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             // discharge closed it was accepted, and would surface as a due
             // dose for a patient who has gone home.
             if (isHospitalStay(named) && isClosedEncounter(named)) {
-                throw new BusinessException("prescription.encounter.stayClosed");
+                throw new com.example.hms.exception.FieldBusinessException(FIELD_ENCOUNTER_ID, "prescription.encounter.stayClosed");
             }
             // QA D739 (r10 re-test 3): the same rule for every encounter type.
             // A finished consultation or ED visit named explicitly took the new
             // order, which then showed in that closed visit's chart. An edit
             // that keeps the order's own encounter is not a new attachment.
             if (isClosedEncounter(named) && !named.getId().equals(keptEncounterId)) {
-                throw new BusinessException("prescription.encounter.closed");
+                throw new com.example.hms.exception.FieldBusinessException(FIELD_ENCOUNTER_ID, "prescription.encounter.closed");
             }
             return named;
         }
@@ -2706,7 +2714,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private static void refuseNameItemMismatch(String medicationName,
                                                com.example.hms.model.medication.MedicationCatalogItem item) {
         if (com.example.hms.service.pharmacy.OrderedDrugIdentity.contradicts(medicationName, item)) {
-            throw new BusinessException("prescription.catalog.nameMismatch", medicationName.trim(),
+            throw new com.example.hms.exception.FieldBusinessException("medicationName", "prescription.catalog.nameMismatch", medicationName.trim(),
                 com.example.hms.service.pharmacy.DispenseVerificationService.describe(item));
         }
     }

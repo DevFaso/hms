@@ -40,7 +40,8 @@ public class StaffAvailabilityServiceImpl implements StaffAvailabilityService {
 
     /** A working day has its hours, the end after the start; a day off has none (Sonar S3776, round 30). */
     private static void requireWorkingHours(StaffAvailabilityRequestDTO dto) {
-        if (dto.dayOff()) {
+        // Sonar S5411 (round 31): never null (the record defaults it), compared without unboxing.
+        if (Boolean.TRUE.equals(dto.dayOff())) {
             return;
         }
         if (dto.availableFrom() == null || dto.availableTo() == null) {

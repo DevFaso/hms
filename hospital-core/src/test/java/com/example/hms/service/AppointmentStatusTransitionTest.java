@@ -804,8 +804,22 @@ class AppointmentStatusTransitionTest {
 
         assertThatThrownBy(() ->
             appointmentService.updateAppointment(appointmentId, edit, java.util.Locale.ENGLISH, "doctor_b"))
-            .isInstanceOf(BusinessException.class);
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            // QA D1367 (round 31): the reschedule dialog marks the time the slot is held at.
+            .hasFieldOrPropertyWithValue("field", "startTime");
         verify(appointmentRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void qaD1374_anUnknownStatusActionIsRefusedOnTheActionParameter() {
+        givenAppointment(AppointmentStatus.SCHEDULED, LocalDate.now().plusDays(7));
+
+        assertThatThrownBy(() ->
+            appointmentService.confirmOrCancelAppointment(appointmentId, "PARTIR", null, "doctor_b"))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "action")
+            .hasFieldOrPropertyWithValue("messageKey", "appointment.invalidAction");
+        verify(appointmentRepository, never()).save(any());
     }
 
     @Test

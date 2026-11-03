@@ -348,7 +348,9 @@ class ImmunizationServiceImplTest {
         when(immunizationRepository.findByPatient_IdAndActiveTrue(patientId)).thenReturn(List.of(dose(null, "RR", day, 2)));
 
         assertThatThrownBy(() -> service.createImmunization(dto))
-            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .satisfies(e -> assertThat(((com.example.hms.exception.FieldBusinessException) e).getField())
+                .as("QA D1365: named on the date").isEqualTo("administrationDate"))
             .extracting("messageKey").isEqualTo("immunization.r25.duplicateDose");
         verify(immunizationRepository, never()).save(any());
     }
@@ -381,7 +383,9 @@ class ImmunizationServiceImplTest {
         PatientImmunization other = dose(null, "RR", day, 2);
         when(immunizationRepository.findByPatient_IdAndActiveTrue(patientId)).thenReturn(List.of(existing, other));
         assertThatThrownBy(() -> service.updateImmunization(immunizationId, dto))
-            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .satisfies(e -> assertThat(((com.example.hms.exception.FieldBusinessException) e).getField())
+                .as("QA D1365: named on the date").isEqualTo("administrationDate"))
             .extracting("messageKey").isEqualTo("immunization.r25.duplicateDose");
     }
 

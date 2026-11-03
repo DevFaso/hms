@@ -51,8 +51,13 @@ public class LabOrderRequestDTO {
     private String testCode;
 
     @NotBlank(message = "{labOrder.status.required}")
+    // QA D1370 (round 31): a malformed status, priority or channel is named with the other fields.
+    @jakarta.validation.constraints.Pattern(regexp = com.example.hms.enums.LabOrderStatus.CODES,
+        flags = jakarta.validation.constraints.Pattern.Flag.CASE_INSENSITIVE, message = "{lab.order.status.invalid}")
     private String status;
 
+    @jakarta.validation.constraints.Pattern(regexp = com.example.hms.enums.ClinicalPriority.CODES,
+        flags = jakarta.validation.constraints.Pattern.Flag.CASE_INSENSITIVE, message = "{lab.order.priority.invalid}")
     private String priority;
 
     @NotBlank(message = "{labOrder.clinicalIndication.required}")
@@ -75,6 +80,8 @@ public class LabOrderRequestDTO {
 
     @Schema(description = "Channel used to document or transmit the lab order (ELECTRONIC, PORTAL, PHONE, FAX, EMAIL, WRITTEN, WALK_IN, OTHER)")
     @NotBlank(message = "{labOrder.orderChannel.required}")
+    @jakarta.validation.constraints.Pattern(regexp = com.example.hms.enums.LabOrderChannel.CODES,
+        flags = jakarta.validation.constraints.Pattern.Flag.CASE_INSENSITIVE, message = "{lab.order.orderChannel.invalid}")
     private String orderChannel;
 
     @Schema(description = "Free-text descriptor when orderChannel is OTHER")

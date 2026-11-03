@@ -253,11 +253,6 @@ class WriteEndpointRequiredFieldSweepIT extends BaseIT {
     );
 
     /**
-     * Endpoints whose fill-and-resend answer is a refusal that is not about a
-     * field (a state, the caller's role, a sample value the sweep cannot make
-     * real), each with why. Stale entries fail.
-     */
-    /**
      * "METHOD /pattern field" of a required text field a blank value legitimately
      * satisfies (phase 6). Each with why; none so far.
      */
@@ -291,6 +286,12 @@ class WriteEndpointRequiredFieldSweepIT extends BaseIT {
         "PUT /drug-interactions/{id}"
     );
 
+    /**
+     * Endpoints whose fill-and-resend answer is a refusal that is not about a
+     * field (a state, the caller's role, a sample value the sweep cannot make
+     * real), each with why. Stale entries fail. (Sonar S8491, round 31: this
+     * comment was left above the previous constant.)
+     */
     private static final Map<String, String> NOT_A_FIELD_ONCE_FILLED = Map.ofEntries(
         Map.entry("POST /auth/me/complete-setup", "state: the account has no pending username or password change"),
         Map.entry("POST /high-risk-care-plans", "role: the sweep's caller is not obstetric clinical staff"),

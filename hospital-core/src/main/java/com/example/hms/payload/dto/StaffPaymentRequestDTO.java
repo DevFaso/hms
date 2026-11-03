@@ -20,6 +20,9 @@ public class StaffPaymentRequestDTO {
      * (D1293), so bean validation names it with the amount in one refusal.
      */
     @jakarta.validation.constraints.NotBlank(message = "{billing.payment.methodRequired}")
+    // QA D1363 (round 31): an unsupported method is named with a malformed amount, in one refusal.
+    @jakarta.validation.constraints.Pattern(regexp = com.example.hms.enums.PaymentMethod.CODES,
+        flags = jakarta.validation.constraints.Pattern.Flag.CASE_INSENSITIVE, message = "{billing.payment.methodUnsupported}")
     private String method;
     /** billing.payment_transactions.reference_number is VARCHAR(120). */
     @jakarta.validation.constraints.Size(max = 120)

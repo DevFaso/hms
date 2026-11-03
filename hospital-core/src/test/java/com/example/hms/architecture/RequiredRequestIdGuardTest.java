@@ -410,7 +410,9 @@ class RequiredRequestIdGuardTest {
             // QA D1338 (round 29): a 409 whose message starts "field:" carries fieldErrors for that field.
             Matcher thrown = Pattern.compile("throw\\s++new\\s++(" + QUALIFIED_TYPE + ")\\(\\s*+"
                 + "(\"[a-z]\\w*+:\"\\s*+\\+\\s*+)?"
-                + "(?:(?:com\\.example\\.hms\\.utility\\.)?MessageUtil\\.resolve(?:OrRaw)?\\(\\s*+)?"
+                + "(?:(?:com\\.example\\.hms\\.utility\\.)?MessageUtil\\.resolve(?:OrRaw)?\\(\\s*+"
+                // QA D1367 (round 31): a message pre-resolved through the message source was not read.
+                + "|messageSource\\.getMessage\\(\\s*+)?"
                 + "(?:\"([\\w.]++)\"|([A-Z][A-Z0-9_]++)\\b)").matcher(source);
             while (thrown.find()) {
                 String key = thrown.group(3) != null ? thrown.group(3) : constants.get(thrown.group(4));
@@ -584,7 +586,9 @@ class RequiredRequestIdGuardTest {
     }
 
     private static final Pattern DUPLICATE_KEY = Pattern.compile(
-        "[dD]uplicate|[tT]aken|[nN]umberExists|[cC]odeExists|[aA]lreadyUsed|[nN]otUnique");
+        "[dD]uplicate|[tT]aken|[nN]umberExists|[cC]odeExists|[aA]lreadyUsed|[nN]otUnique"
+            // QA D1367 (round 31): a slot another booking holds, an appointment of another patient.
+            + "|staff\\.unavailable\\b|[oO]therPatient");
 
     /** Duplicate-shaped keys that do not refuse a value the user typed, each with why. Shrinks only. */
     private static final Map<String, String> NOT_A_TYPED_VALUE = Map.ofEntries(
@@ -592,8 +596,6 @@ class RequiredRequestIdGuardTest {
             "the same test for the same patient at the same minute: the order as a whole, not a field"),
         Map.entry("slot.justTaken",
             "the slot was booked by someone else meanwhile: a state of the slot, not a typed value"),
-        Map.entry("immunization.r25.duplicateDose",
-            "the same dose (vaccine, dose number, date) is already recorded: the record as a whole"),
         Map.entry("platform.releaseWindow.duplicate",
             "a 409 conflict on the platform release calendar (super-admin), kept as a conflict"),
         Map.entry("provider.licence.duplicate",
@@ -1375,14 +1377,12 @@ class RequiredRequestIdGuardTest {
         return type.substring(type.lastIndexOf('.') + 1);
     }
 
+    // QA round 31: the eight KNOWN GAP D1354 entries of PrescriptionServiceImpl are fixed (this branch owns the file).
     /**
      * Refusals guarded by a request value that refuse the RECORD or its state,
      * not the value (site {@code Service#method:Getter:key}), each with why.
      * Shrinks only.
      */
-    private static final String RX_FILE_OWNED_ELSEWHERE = "KNOWN GAP D1354 (round 30): PrescriptionServiceImpl belongs to fix/r30-prn-interval this round (file split);"
-            + " a refusal of the prescription's own value, to name its field there";
-
     private static final Map<String, String> REFUSAL_OF_THE_RECORD = Map.ofEntries(
         Map.entry("ControlledSubstanceGuard#requireDispensable:PrescriptionId:prescription.safeguard.CONTROLLED_SUBSTANCE.dispense",
             "a safeguard the prescription still awaits (2FA, co-signature, paediatric review): a state of the order"
@@ -1394,23 +1394,246 @@ class RequiredRequestIdGuardTest {
             "a safeguard the prescription still awaits (2FA, co-signature, paediatric review): a state of the order"
                 + " (the round-29 rule reads COSIGN_REQUIRED the same way)"),
         Map.entry("LabOrderServiceImpl#buildLabOrder:OrderDatetime:lab.order.duplicate",
-            "the same test for the same patient at the same minute: the order as a whole (the D1301 rule excuses the same key)"),
-        Map.entry("PrescriptionServiceImpl#rejectClientAssertedWorkflowStatus:Status:prescription.status.notAssertable",
-            RX_FILE_OWNED_ELSEWHERE),
-        Map.entry("PrescriptionServiceImpl#rejectSafeguardWithdrawal:ControlledSubstance:prescription.controlled.flagLocked",
-            RX_FILE_OWNED_ELSEWHERE),
-        Map.entry("PrescriptionServiceImpl#rejectSafeguardWithdrawal:RequiresCosign:prescription.cosign.flagLocked",
-            RX_FILE_OWNED_ELSEWHERE),
-        Map.entry("PrescriptionServiceImpl#withdrawSignedPrescription:Status:prescription.signed.onlyWithdrawal",
-            RX_FILE_OWNED_ELSEWHERE),
-        Map.entry("PrescriptionServiceImpl#resolveEncounterContext:EncounterId:prescription.encounter.stayClosed",
-            RX_FILE_OWNED_ELSEWHERE),
-        Map.entry("PrescriptionServiceImpl#resolveEncounterContext:EncounterId:prescription.encounter.closed",
-            RX_FILE_OWNED_ELSEWHERE),
-        Map.entry("PrescriptionServiceImpl#refuseNameItemMismatch:MedicationName:prescription.catalog.nameMismatch",
-            RX_FILE_OWNED_ELSEWHERE),
-        Map.entry("PrescriptionServiceImpl#rejectReopeningWithdrawn:Status:prescription.withdrawn.final",
-            RX_FILE_OWNED_ELSEWHERE));
+            "the same test for the same patient at the same minute: the order as a whole (the D1301 rule excuses the same key)"));
+
+    /**
+     * QA D1369 (round 31): {@code BirthPlanRequestDTO.introduction} was
+     * {@code @NotNull} without {@code @Valid}, so its blank name and due date
+     * were never checked at the edge: they failed at persist time, one request
+     * later, in Hibernate's English, under unprefixed keys. A request field
+     * whose class declares constraints (or a list of such) is cascaded with
+     * {@code @Valid}, on the field or on its element type, so every nested
+     * refusal is named with the rest of the body.
+     */
+    @Test
+    @DisplayName("a nested request object whose class declares constraints is validated with the body (@Valid)")
+    void everyConstrainedNestedRequestObjectIsCascaded() {
+        Set<String> uncascaded = new java.util.TreeSet<>();
+        Set<Class<?>> seen = new LinkedHashSet<>();
+        for (Handler handler : handlers()) {
+            if (handler.validated()) {
+                collectUncascaded(handler.body(), seen, uncascaded);
+            }
+        }
+        assertThat(seen).as("validated request classes read").hasSizeGreaterThan(300);
+        Set<String> stale = new java.util.TreeSet<>(UNCASCADED_ALLOWED.keySet());
+        stale.removeAll(uncascaded);
+        uncascaded.removeAll(UNCASCADED_ALLOWED.keySet());
+        assertThat(stale).as("allowlist entries that are now cascaded or gone (remove them)").isEmpty();
+        assertThat(uncascaded)
+            .as("its constraints never run at the edge, so a blank nested field is refused a request late, or at"
+                + " flush in English (QA D1369); add @Valid" + SourceScan.MANDATE)
+            .isEmpty();
+    }
+
+    /** "Class#field" of a constrained nested object deliberately not cascaded, each with why. Shrinks only. */
+    private static final String DISCHARGE_ROWS_DEBT = "KNOWN GAP D1369 class (round 31): the discharge form adds blank"
+        + " rows (discharge.ts addMedication / addPendingTest / addFollowUp) and saves them today; cascading would refuse"
+        + " a save that works until the form drops or marks blank rows (standing debt, tasklist.md)";
+
+    private static final Map<String, String> UNCASCADED_ALLOWED = Map.ofEntries(
+        Map.entry("AdminSignupRequest#patient",
+            "the patient part of a sign-up: its @NotNull userId is the user this request creates, so cascading would"
+                + " refuse every sign-up; the patient fields are checked by the signup service"),
+        Map.entry("PatientRequestDTO#insurance",
+            "insurance given at registration: its @NotNull patientId is the patient this request creates, so"
+                + " cascading would refuse every registration that carries one"),
+        Map.entry("EncounterRequestDTO#note",
+            "the note nested in an encounter: its @NotNull template is for the note endpoint; here a missing"
+                + " template defaults to SOAP (EncounterServiceImpl#applyTemplateSelection)"),
+        Map.entry("DischargeSummaryRequestDTO#medicationReconciliation", DISCHARGE_ROWS_DEBT),
+        Map.entry("DischargeSummaryRequestDTO#pendingTestResults", DISCHARGE_ROWS_DEBT),
+        Map.entry("DischargeSummaryRequestDTO#followUpAppointments", DISCHARGE_ROWS_DEBT));
+
+    private static void collectUncascaded(Class<?> type, Set<Class<?>> seen, Set<String> out) {
+        if (!type.getName().startsWith("com.example.hms.") || type.isEnum() || type.isInterface() || !seen.add(type)) {
+            return;
+        }
+        for (Field field : fields(type)) {
+            Class<?> nested = nestedPayloadType(field);
+            if (nested == null) {
+                continue;
+            }
+            if (declaresConstraints(nested, new LinkedHashSet<>()) && !cascaded(field)) {
+                out.add(field.getDeclaringClass().getSimpleName() + "#" + field.getName());
+            }
+            collectUncascaded(nested, seen, out);
+        }
+    }
+
+    /** The payload class a field holds - itself, or the element of a list or set - or null. */
+    private static Class<?> nestedPayloadType(Field field) {
+        if (field.getType().getName().startsWith("com.example.hms.") && !field.getType().isEnum()) {
+            return field.getType();
+        }
+        if (java.util.Collection.class.isAssignableFrom(field.getType())
+                && field.getGenericType() instanceof ParameterizedType parameterized
+                && parameterized.getActualTypeArguments()[0] instanceof Class<?> element
+                && element.getName().startsWith("com.example.hms.") && !element.isEnum()) {
+            return element;
+        }
+        return null;
+    }
+
+    private static boolean cascaded(Field field) {
+        if (field.isAnnotationPresent(Valid.class)) {
+            return true;
+        }
+        if (field.getAnnotatedType() instanceof java.lang.reflect.AnnotatedParameterizedType annotated) {
+            for (java.lang.reflect.AnnotatedType argument : annotated.getAnnotatedActualTypeArguments()) {
+                if (argument.isAnnotationPresent(Valid.class)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * QA D1374 (round 31): {@code PUT /appointments/{id}/status?action=PARTIR}
+     * answered "Action de rendez-vous invalide" with no field. A value no case
+     * of a switch recognises is a value the caller gave (a query parameter or
+     * a body field): its refusal names that field.
+     */
+    @Test
+    @DisplayName("an unrecognised value of a switch is refused with its field named")
+    void everyUnrecognisedSwitchValueRefusalNamesItsField() throws IOException {
+        Pattern defaultThrow = Pattern.compile("default\\s*+(?:->|:)\\s*+\\{?\\s*+throw\\s++new\\s++(" + QUALIFIED_TYPE
+            + ")\\(\\s*+(?:\"([\\w.]++)\")?");
+        List<String> fieldless = new ArrayList<>();
+        Set<String> excused = new LinkedHashSet<>();
+        List<Path> files = new ArrayList<>(serviceFiles());
+        try (Stream<Path> controllers = Files.walk(MAIN.resolve("controller"))) {
+            files.addAll(controllers.filter(f -> f.toString().endsWith(".java")).toList());
+        }
+        for (Path file : files) {
+            String source = SourceScan.stripComments(Files.readString(file, StandardCharsets.UTF_8));
+            Matcher thrown = defaultThrow.matcher(source);
+            while (thrown.find()) {
+                if (!"BusinessException".equals(simpleName(thrown.group(1)))) {
+                    continue;
+                }
+                String key = java.util.Objects.requireNonNullElse(thrown.group(2), "?");
+                if (STATE_SWITCH_REFUSALS.containsKey(key)) {
+                    excused.add(key);
+                } else {
+                    fieldless.add(file.getFileName() + ":" + SourceScan.lineOf(source, thrown.start()) + " " + key);
+                }
+            }
+        }
+        assertThat(fieldless)
+            .as("an unrecognised value is refused with no fieldErrors (QA D1374); throw a FieldBusinessException"
+                + " naming the parameter" + SourceScan.MANDATE)
+            .isEmpty();
+        assertThat(excused).as("an excused key that disappeared: delete its entry")
+            .containsExactlyInAnyOrderElementsOf(STATE_SWITCH_REFUSALS.keySet());
+    }
+
+    /** Switch defaults that refuse a state of a record, not a value the caller gave. Shrinks only. */
+    private static final Map<String, String> STATE_SWITCH_REFUSALS = Map.of(
+        "lab.order.statusNotTransitionable",
+        "LabOrderServiceImpl: the switch is on the TARGET status the transition endpoint already parsed and named;"
+            + " the default is a status no transition reaches (a state of the order)");
+
+    /**
+     * QA D1368 (round 31): withdrawing a signed prescription without a reason
+     * answered {@code fieldErrors.reason}, a key the request does not have
+     * (its field is {@code withdrawalReason}), so no form could mark it and
+     * sending "reason" did not satisfy it. A field-named refusal guarded by a
+     * request-body value names a property of that body.
+     */
+    @Test
+    @DisplayName("a field-named refusal of a request value names a property the request has")
+    void everyFieldNamedRefusalNamesAPropertyOfTheRequest() throws IOException {
+        Map<String, Class<?>> bodies = requestBodyTypes();
+        Pattern fieldArgument = Pattern.compile("FieldBusinessException\\(\\s*+(?:\"([\\w.\\[\\]]++)\"|([A-Z][A-Z0-9_]++)\\b)");
+        List<String> foreign = new ArrayList<>();
+        int named = 0;
+        for (Path file : serviceFiles()) {
+            String source = SourceScan.stripComments(Files.readString(file, StandardCharsets.UTF_8));
+            Map<String, String> constants = new HashMap<>();
+            Matcher constant = Pattern.compile("static\\s++final\\s++String\\s++(\\w++)\\s*+=\\s*+\"([^\"]++)\"").matcher(source);
+            while (constant.find()) {
+                constants.put(constant.group(1), constant.group(2));
+            }
+            for (int[] guard : guardsOfThrows(source)) {
+                String method = methodAround(source, guard[0]);
+                Matcher argument = fieldArgument.matcher(source);
+                argument.region(guard[2], source.length());
+                if (method == null || !source.startsWith("throw", guard[2])
+                        || !argument.find() || argument.start() > source.indexOf(';', guard[2])) {
+                    continue;
+                }
+                Class<?> body = bodyClassRead(source.substring(guard[0], guard[1]), method, bodies);
+                String field = argument.group(1);
+                if (field == null) {
+                    field = constants.get(argument.group(2));
+                }
+                if (body == null || field == null) {
+                    continue;
+                }
+                named++;
+                if (!isPropertyOf(body, field)) {
+                    foreign.add(file.getFileName() + ":" + SourceScan.lineOf(source, guard[2]) + " names '" + field
+                        + "', not a property of " + body.getSimpleName());
+                }
+            }
+        }
+        assertThat(named).as("field-named refusals guarded by a request value").isGreaterThan(30);
+        assertThat(foreign)
+            .as("the refusal names a key the request does not have, so no form marks it (QA D1368)" + SourceScan.MANDATE)
+            .isEmpty();
+    }
+
+    /**
+     * The request-body class whose getter the guard reads - directly, or through
+     * a local the method initialised from one ({@code String reason =
+     * request.getWithdrawalReason() ...; if (reason == null) throw}) - or null.
+     */
+    private static Class<?> bodyClassRead(String guard, String method, Map<String, Class<?>> bodies) {
+        Class<?> direct = getterOwner(guard, method, bodies);
+        if (direct != null) {
+            return direct;
+        }
+        Matcher local = LOCAL_INIT.matcher(method);
+        while (local.find()) {
+            if (Pattern.compile("(?<![.\\w])" + Pattern.quote(local.group(1)) + "\\b").matcher(guard).find()) {
+                Class<?> type = getterOwner(local.group(2), method, bodies);
+                if (type != null) {
+                    return type;
+                }
+            }
+        }
+        return null;
+    }
+
+    private static Class<?> getterOwner(String text, String method, Map<String, Class<?>> bodies) {
+        Matcher getter = GETTER.matcher(text);
+        while (getter.find()) {
+            Class<?> type = parameterType(method, getter.group(1), bodies);
+            if (type != null) {
+                return type;
+            }
+        }
+        return null;
+    }
+
+    /** The first segment of a request path ("items[0].dose" reads "items") is a JSON property of the class. */
+    private static boolean isPropertyOf(Class<?> type, String path) {
+        String head = path.split("[.\\[]", 2)[0];
+        for (Field f : fields(type)) {
+            if (f.getName().equals(head)) {
+                return true;
+            }
+            com.fasterxml.jackson.annotation.JsonProperty property = f.getAnnotation(com.fasterxml.jackson.annotation.JsonProperty.class);
+            com.fasterxml.jackson.annotation.JsonAlias alias = f.getAnnotation(com.fasterxml.jackson.annotation.JsonAlias.class);
+            if ((property != null && property.value().equals(head))
+                    || (alias != null && List.of(alias.value()).contains(head))) {
+                return true;
+            }
+        }
+        return false;
+    }
 
     // ── helpers ──
 
@@ -1539,7 +1762,9 @@ class RequiredRequestIdGuardTest {
             .matcher(source);
         while (check.find()) {
             String method = AppointmentSlotRulesGuardTest.enclosingMethod(source, check.start());
-            out.merge(methodName(method), check.group(1) != null ? check.group(1) : check.group(2), (a, b) -> a + "," + b);
+            // Sonar S9358 (round 31): one of the two groups matched.
+            out.merge(methodName(method), java.util.Objects.requireNonNullElse(check.group(1), check.group(2)),
+                (a, b) -> a + "," + b);
         }
         return out;
     }

@@ -68,6 +68,7 @@ import java.util.stream.Collectors;
 public class AppointmentServiceImpl implements AppointmentService {
     /** Request properties a refusal names (QA D1352 class, round 30). */
     private static final String FIELD_STAFF_ID = "staffId";
+    private static final String FIELD_START_TIME = "startTime";
 
     private static final String USER_NOT_FOUND_BY_USERNAME_KEY = "user.notFoundByUsername";
     private static final String PATIENT_NOT_FOUND_FOR_USER_KEY = "patient.notFoundForUser";
@@ -311,7 +312,7 @@ public class AppointmentServiceImpl implements AppointmentService {
             .requireValue(request.getStaffId(), FIELD_STAFF_ID, "appointment.staff.required")
             .requireValue(request.getHospitalId(), "hospitalId", "appointment.hospital.required")
             .requireValue(request.getAppointmentDate(), "appointmentDate", "appointment.date.required")
-            .requireValue(request.getStartTime(), "startTime", "appointment.timeRange.invalid")
+            .requireValue(request.getStartTime(), FIELD_START_TIME, "appointment.timeRange.invalid")
             .orThrow();
     }
 
@@ -545,7 +546,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         // end time in the request is ignored: a patient booked a clinician's
         // whole day through this endpoint.
         if (request.getStartTime() == null || request.getAppointmentDate() == null) {
-            throw new com.example.hms.exception.FieldBusinessException("startTime", "appointment.timeRange.invalid");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_START_TIME, "appointment.timeRange.invalid");
         }
         LocalTime endTime = slotPolicy.endFor(staff.getId(), request.getAppointmentDate(), request.getStartTime());
         LocalDateTime requestedStart = LocalDateTime.of(request.getAppointmentDate(), request.getStartTime());
@@ -569,7 +570,8 @@ public class AppointmentServiceImpl implements AppointmentService {
             appointmentRepository.findByStaff_IdAndAppointmentDate(staff.getId(), request.getAppointmentDate()),
             null, requestedStart, requestedEnd);
         if (hasConflict) {
-            throw new BusinessException(messageSource.getMessage(
+            // QA D1367 (round 31): the time the slot is held at is named, so the form marks it.
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_START_TIME, messageSource.getMessage(
                 "appointment.staff.unavailable",
                 new Object[]{staff.getId(), DisplayDates.date(request.getAppointmentDate(), locale),
                     DisplayDates.time(request.getStartTime(), locale), DisplayDates.time(endTime, locale)},
@@ -998,7 +1000,8 @@ public class AppointmentServiceImpl implements AppointmentService {
                 appointmentRepository.findByStaff_IdAndAppointmentDate(staff.getId(), request.getAppointmentDate()),
                 id, requestedStart, requestedEnd);
         if (hasConflict) {
-            throw new BusinessException(messageSource.getMessage(
+            // QA D1367 (round 31): the time the slot is held at is named, so the form marks it.
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_START_TIME, messageSource.getMessage(
                 "appointment.staff.unavailable",
                 new Object[]{staff.getId(), DisplayDates.date(request.getAppointmentDate(), locale),
                     DisplayDates.time(request.getStartTime(), locale), DisplayDates.time(request.getEndTime(), locale)},
@@ -1078,7 +1081,8 @@ public class AppointmentServiceImpl implements AppointmentService {
             case "reschedule" -> newStatus = AppointmentStatus.RESCHEDULED;
             case "in_progress"-> newStatus = AppointmentStatus.IN_PROGRESS;
             case "fail"       -> newStatus = AppointmentStatus.FAILED;
-            default -> throw new BusinessException("appointment.invalidAction", action);
+            // QA D1374 (round 31): the query parameter is named.
+            default -> throw new com.example.hms.exception.FieldBusinessException("action", "appointment.invalidAction", action);
         }
 
         // ── Validate status transition ──

@@ -414,7 +414,6 @@ class AppointmentSlotRulesGuardTest {
         return out;
     }
 
-    /** The body of the method (4-space indented member) around {@code index}. */
     /**
      * The first identifier of {@code text} followed by a "(" (spaces allowed),
      * or "?". Sonar S8786 (round 30): the regex {@code (\w++)\s*+\(} run with
@@ -455,6 +454,7 @@ class AppointmentSlotRulesGuardTest {
         return c == ' ' || c == 0x09 || c == 0x0A || c == 0x0B || c == 0x0C || c == 0x0D;
     }
 
+    /** The body of the method (4-space indented member) around {@code index}. Sonar S8491 (round 31): moved onto it. */
     static String enclosingMethod(String src, int index) {
         java.util.regex.Matcher header = java.util.regex.Pattern.compile(
             "(?m)^    [a-zA-Z][^\\n(]*\\(")

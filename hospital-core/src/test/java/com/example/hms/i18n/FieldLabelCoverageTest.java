@@ -117,7 +117,7 @@ class FieldLabelCoverageTest {
                     && p.getType() != java.util.Optional.class;
                 Class<?> type = elementOf(p);
                 if (required || isParsed(type)) {
-                    String name = !rp.name().isEmpty() ? rp.name() : rp.value();
+                    String name = rp.name().isEmpty() ? rp.value() : rp.name();
                     out.add(name.isEmpty() ? p.getName() : name);
                 }
             }
@@ -151,6 +151,34 @@ class FieldLabelCoverageTest {
             }
         }
         assertThat(raw).as("a label that is the property name itself (QA D1268)").isEmpty();
+    }
+
+    /**
+     * QA D1374 (round 31): {@code ?from=abc} was refused as « du » and
+     * {@code ?to=xyz} as « destinataire » - a preposition, and a word borrowed
+     * from a chat recipient - so the reader could not tell which field was
+     * wrong. A label names a field: never a bare preposition or article; and
+     * {@code to}, only ever a period's end (no request body has a recipient
+     * called {@code to}), never reads as a recipient.
+     */
+    @Test
+    @DisplayName("D1374: no label is a bare preposition, and to is the end of a period, not a recipient")
+    void labelsNameAField() throws IOException {
+        Set<String> notAName = Set.of("du", "de", "des", "la", "le", "les", "au", "à", "a", "en", "par", "pour",
+            "from", "to", "by", "of", "the", "for", "since", "until", "depuis", "desde", "hasta", "del", "el", "los", "las", "para", "por");
+        List<String> bare = new ArrayList<>();
+        for (String suffix : List.of("", "_en", "_fr", "_es")) {
+            Properties labels = labels(suffix);
+            for (String key : labels.stringPropertyNames()) {
+                if (key.startsWith("field.label.")
+                        && notAName.contains(labels.getProperty(key).trim().toLowerCase(java.util.Locale.ROOT))) {
+                    bare.add(suffix + ": " + key + "=" + labels.getProperty(key));
+                }
+            }
+            assertThat(labels.getProperty("field.label.to")).as(suffix + " to")
+                .doesNotContain("destinat", "recipient");
+        }
+        assertThat(bare).as("a label that names no field (QA D1374)").isEmpty();
     }
 
     /**
