@@ -104,16 +104,18 @@ public class TransferServiceImpl implements TransferService {
 
         Bed origin = admission.getBed();
         if (origin != null && Objects.equals(origin.getId(), destination.getId())) {
-            throw new com.example.hms.exception.FieldBusinessException("toBedId", "transfer.r7.alreadyInBed");
+            throw new com.example.hms.exception.FieldBusinessException(BedAssignmentService.FIELD_TO_BED_ID, "transfer.r7.alreadyInBed");
         }
         // QA D609: the same sex and age rule bed assignment applies, checked when
         // the transfer is ORDERED. It was only checked on completion, so a
         // 6-year-old's transfer reserved a maternity bed and then stuck at 400.
-        BedAssignmentService.requireWardFitsPatient(destination, admission.getPatient());
+        // QA D1366 class: refused on the destination picker (toBedId), so the form marks it.
+        BedAssignmentService.requireWardFitsPatient(destination, admission.getPatient(),
+            BedAssignmentService.FIELD_TO_BED_ID);
         transferOrderRepository.findPendingForDestinationBed(destination.getId())
             .ifPresent(existing -> {
-                throw new BusinessException("transfer.r7.destinationTaken",
-                    BedAssignmentService.bedLabel(destination));
+                throw new com.example.hms.exception.FieldBusinessException(BedAssignmentService.FIELD_TO_BED_ID,
+                    "transfer.r7.destinationTaken", BedAssignmentService.bedLabel(destination));
             });
 
         List<IsolationPrecaution> precautions =

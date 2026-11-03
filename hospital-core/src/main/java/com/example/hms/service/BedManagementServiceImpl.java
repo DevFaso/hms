@@ -251,7 +251,8 @@ public class BedManagementServiceImpl implements BedManagementService {
             throw new com.example.hms.exception.FieldBusinessException("status", "bed.occupied.manualStatus");
         }
         if (bed.getStatus() == BedStatus.OCCUPIED) {
-            throw new BusinessException("bed.occupied.unassignFirst");
+            // QA D1366 class: the requested status is refused while the bed is occupied; named on it.
+            throw new com.example.hms.exception.FieldBusinessException("status", "bed.occupied.unassignFirst");
         }
         bed.setStatus(request.getStatus());
         if (request.getNotes() != null) {

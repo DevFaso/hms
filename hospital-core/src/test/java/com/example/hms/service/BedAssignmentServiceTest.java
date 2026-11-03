@@ -321,6 +321,49 @@ class BedAssignmentServiceTest {
         assertThat(bed.getStatus()).isEqualTo(BedStatus.RESERVED);
     }
 
+    /**
+     * QA D1366 (round 31, dup31.js): an occupied bed picked in assign-bed or as
+     * a transfer destination answered 400 with fieldErrors null. The refusal
+     * is named on the picker's field; transfer completion (no bed in its
+     * request) still refuses without one.
+     */
+    @Test
+    void d1366_anOccupiedBedIsRefusedOnThePickersField() {
+        Bed bed = bed("B09", BedStatus.OCCUPIED);
+        when(bedRepository.findByIdAndWard_Hospital_Id(bed.getId(), hospitalId)).thenReturn(Optional.of(bed));
+        UUID bedId = bed.getId();
+        Set<BedStatus> claimable = Set.of(BedStatus.AVAILABLE, BedStatus.RESERVED);
+
+        assertThatThrownBy(() -> service.assignBed(admission, bedId))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", BedAssignmentService.FIELD_BED_ID)
+            .hasFieldOrPropertyWithValue("messageKey", "bed.r7.notAvailable");
+        assertThatThrownBy(() -> service.reserveBed(bedId, hospitalId))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", BedAssignmentService.FIELD_TO_BED_ID);
+        assertThatThrownBy(() -> service.assignBed(admission, bedId, claimable))
+            .isInstanceOf(BusinessException.class)
+            .isNotInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "bed.r7.notAvailable");
+    }
+
+    /** QA D1366 class: a bed whose ward does not fit the patient is refused on the picker's field too. */
+    @Test
+    void d1366_aWardThatDoesNotFitIsRefusedOnTheField() {
+        ward.setWardType(com.example.hms.enums.WardType.PEDIATRIC);
+        com.example.hms.model.Patient adult = new com.example.hms.model.Patient();
+        adult.setDateOfBirth(java.time.LocalDate.now().minusYears(40));
+        Bed bed = bed("P01", BedStatus.AVAILABLE);
+
+        assertThatThrownBy(() -> BedAssignmentService.requireWardFitsPatient(bed, adult, "toBedId"))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "toBedId")
+            .hasFieldOrPropertyWithValue("messageKey", "bed.ward.pediatricMismatch");
+        assertThatThrownBy(() -> BedAssignmentService.requireWardFitsPatient(bed, adult))
+            .isNotInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "bed.ward.pediatricMismatch");
+    }
+
     @Test
     void releaseReservationHandsAHeldBedBack() {
         Bed bed = bed("B09", BedStatus.RESERVED);

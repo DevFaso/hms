@@ -3,6 +3,7 @@ package com.example.hms.service;
 import com.example.hms.enums.AdmissionStatus;
 import com.example.hms.enums.BedStatus;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Admission;
 import com.example.hms.model.Bed;
@@ -35,6 +36,12 @@ import java.util.UUID;
 public class BedAssignmentService {
 
     /** Admission states that can hold a bed. */
+    /** The assign-bed request's bed field (QA D1366: a refused bed is named on it). */
+    public static final String FIELD_BED_ID = "bedId";
+
+    /** The transfer request's destination bed field (QA D1366). */
+    public static final String FIELD_TO_BED_ID = "toBedId";
+
     private static final Set<AdmissionStatus> BED_HOLDING_STATUSES = Set.of(
         AdmissionStatus.PENDING, AdmissionStatus.ACTIVE,
         AdmissionStatus.ON_LEAVE, AdmissionStatus.AWAITING_DISCHARGE);
@@ -65,7 +72,7 @@ public class BedAssignmentService {
         // Delegates to a private helper rather than the overload below: a
         // self-invocation of a @Transactional method bypasses the Spring proxy,
         // so the annotation on the inner call would silently do nothing.
-        doAssign(admission, bedId, Set.of(BedStatus.AVAILABLE));
+        doAssign(admission, bedId, Set.of(BedStatus.AVAILABLE), FIELD_BED_ID);
     }
 
     /**
@@ -82,11 +89,17 @@ public class BedAssignmentService {
      */
     @Transactional
     public void assignBed(Admission admission, UUID bedId, Set<BedStatus> claimableFrom) {
-        doAssign(admission, bedId, claimableFrom);
+        // Transfer completion: the bed was picked when the order was raised, not in this request.
+        doAssign(admission, bedId, claimableFrom, null);
     }
 
-    /** The actual work, shared by both public entry points. */
-    private void doAssign(Admission admission, UUID bedId, Set<BedStatus> claimableFrom) {
+    /**
+     * The actual work, shared by both public entry points. {@code field} is the
+     * request field the bed was picked in ({@code bedId}), so a bed that is no
+     * longer free or does not fit the patient is named on it (QA D1366); null
+     * when the request carries no bed.
+     */
+    private void doAssign(Admission admission, UUID bedId, Set<BedStatus> claimableFrom, String field) {
         if (!BED_HOLDING_STATUSES.contains(admission.getStatus())) {
             throw new BusinessException("bed.r7.admissionNotActive");
         }
@@ -100,9 +113,9 @@ public class BedAssignmentService {
             return; // already assigned — idempotent
         }
         if (!bed.isActive() || !claimableFrom.contains(bed.getStatus())) {
-            throw new BusinessException("bed.r7.notAvailable", bedLabel(bed));
+            throw refusal(field, "bed.r7.notAvailable", bedLabel(bed));
         }
-        requireWardFitsPatient(bed, admission.getPatient());
+        requireWardFitsPatient(bed, admission.getPatient(), field);
 
         if (current != null) {
             markAvailable(current);
@@ -133,6 +146,15 @@ public class BedAssignmentService {
      * through (an incomplete record must not block an admission).
      */
     public static void requireWardFitsPatient(Bed bed, com.example.hms.model.Patient patient) {
+        requireWardFitsPatient(bed, patient, null);
+    }
+
+    /**
+     * The same rule, refused on {@code field} (the request field the bed was
+     * picked in: {@code bedId}, {@code toBedId}) so the form marks the picker
+     * (QA D1366 class); a null field refuses without one.
+     */
+    public static void requireWardFitsPatient(Bed bed, com.example.hms.model.Patient patient, String field) {
         if (bed.getWard() == null || bed.getWard().getWardType() == null || patient == null) {
             return;
         }
@@ -147,12 +169,22 @@ public class BedAssignmentService {
             default -> false; // Every other ward takes any patient.
         };
         if (mismatch) {
-            throw new BusinessException(switch (type) {
+            throw refusal(field, switch (type) {
                 case MATERNITY -> "bed.ward.maternityMismatch";
                 case PEDIATRIC -> "bed.ward.pediatricMismatch";
                 default -> "bed.ward.nicuMismatch";
             }, bedLabel(bed));
         }
+    }
+
+    /**
+     * QA D1366 (round 31): a refusal about the bed the user picked names the
+     * request field it was picked in, so the form marks that picker (an
+     * occupied bed answered 400 with fieldErrors null). A null field (no bed
+     * in the request) refuses without one.
+     */
+    private static BusinessException refusal(String field, String key, Object... args) {
+        return field == null ? new BusinessException(key, args) : new FieldBusinessException(field, key, args);
     }
 
     /**
@@ -236,7 +268,8 @@ public class BedAssignmentService {
         Bed bed = bedRepository.findByIdAndWard_Hospital_Id(bedId, hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("bed.notFound", bedId));
         if (!bed.isActive() || bed.getStatus() != BedStatus.AVAILABLE) {
-            throw new BusinessException("bed.r7.notAvailable", bedLabel(bed));
+            // QA D1366: the transfer's destination, picked in toBedId.
+            throw new FieldBusinessException(FIELD_TO_BED_ID, "bed.r7.notAvailable", bedLabel(bed));
         }
         bed.setStatus(BedStatus.RESERVED);
         bedRepository.save(bed);

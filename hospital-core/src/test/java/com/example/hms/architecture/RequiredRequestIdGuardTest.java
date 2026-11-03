@@ -592,7 +592,6 @@ class RequiredRequestIdGuardTest {
             "the same test for the same patient at the same minute: the order as a whole, not a field"),
         Map.entry("slot.justTaken",
             "the slot was booked by someone else meanwhile: a state of the slot, not a typed value"),
-        Map.entry("transfer.r7.destinationTaken", "a pending transfer holds the destination bed: a state of the bed"),
         Map.entry("immunization.r25.duplicateDose",
             "the same dose (vaccine, dose number, date) is already recorded: the record as a whole"),
         Map.entry("platform.releaseWindow.duplicate",
@@ -910,6 +909,50 @@ class RequiredRequestIdGuardTest {
             i++;
         }
         return i;
+    }
+
+    /**
+     * QA D1366 (round 31): an occupied bed picked in assign-bed or as a
+     * transfer destination answered 400 with fieldErrors null. The D1352 rule
+     * below reads a body getter one call deep; the bed id reaches the bed
+     * choke point as a plain parameter through the controller and the
+     * admission service, so it could not see it. Partial guard: in the bed
+     * choke points, every plain {@code BusinessException} is a state of the
+     * stay or the order (listed with why); a refusal of the bed itself goes
+     * through {@code refusal(field, ...)} or a {@code FieldBusinessException}.
+     */
+    @Test
+    @DisplayName("the bed choke points refuse a picked bed on the picker's field (QA D1366)")
+    void theBedChokePointsRefuseAPickedBedOnItsField() throws IOException {
+        Map<String, Set<String>> stateKeys = Map.of(
+            "BedAssignmentService.java", Set.of(
+                // the stay itself is closed (the admission id is the path, not a picker)
+                "bed.r7.admissionNotActive"),
+            "TransferServiceImpl.java", Set.of(
+                // the order is no longer pending (complete / cancel of the order in the path)
+                "transfer.r7.notPending",
+                // no hospital scope on the caller (server context, not a request field)
+                "transfer.r7.hospitalRequired"));
+        Pattern plain = Pattern.compile("new\\s++(?:[\\w.]++\\.)?BusinessException\\(\\s*+\"([^\"]++)\"");
+        List<String> fieldless = new ArrayList<>();
+        int read = 0;
+        for (Path file : serviceFiles()) {
+            Set<String> allowed = stateKeys.get(file.getFileName().toString());
+            if (allowed == null) {
+                continue;
+            }
+            read++;
+            Matcher m = plain.matcher(SourceScan.stripComments(Files.readString(file, StandardCharsets.UTF_8)));
+            while (m.find()) {
+                if (!allowed.contains(m.group(1))) {
+                    fieldless.add(file.getFileName() + ": " + m.group(1));
+                }
+            }
+        }
+        assertThat(read).isEqualTo(stateKeys.size());
+        assertThat(fieldless)
+            .as("a refusal of the bed the user picked with no field: name bedId / toBedId (QA D1366)")
+            .isEmpty();
     }
 
     /**
@@ -1350,8 +1393,6 @@ class RequiredRequestIdGuardTest {
         Map.entry("ControlledSubstanceGuard#requireDispensable:PrescriptionId:prescription.safeguard.PEDIATRIC_DOSE_REVIEW.dispense",
             "a safeguard the prescription still awaits (2FA, co-signature, paediatric review): a state of the order"
                 + " (the round-29 rule reads COSIGN_REQUIRED the same way)"),
-        Map.entry("TransferServiceImpl#requestTransfer:ToBedId:transfer.r7.destinationTaken",
-            "a pending transfer holds the destination bed: a state of the bed (the D1301 rule excuses the same key)"),
         Map.entry("LabOrderServiceImpl#buildLabOrder:OrderDatetime:lab.order.duplicate",
             "the same test for the same patient at the same minute: the order as a whole (the D1301 rule excuses the same key)"),
         Map.entry("PrescriptionServiceImpl#rejectClientAssertedWorkflowStatus:Status:prescription.status.notAssertable",

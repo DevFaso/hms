@@ -263,6 +263,34 @@ class WriteEndpointRequiredFieldSweepIT extends BaseIT {
      */
     private static final Set<String> BLANK_TEXT_ACCEPTED = Set.of();
 
+    /**
+     * "METHOD /pattern" whose filled-body value refusal (phase 7) still comes
+     * after the edge's refusals, each a KNOWN GAP with its defect id. Shrinks
+     * only.
+     */
+    private static final Set<String> VALUE_REFUSED_AFTER_THE_EDGE = Set.of(
+        // KNOWN GAP D1371 class (round 31, standing debt in tasklist.md): the first run of phase 7
+        // found these 15 besides the handoff (fixed): a value or cross-field rule (an end before its
+        // start, the same drug twice, a due date before the invoice date, a QC level, a password
+        // check, a recipient list, an event list) checked in the service after bean validation.
+        // Each moves to a constraint on its request (a class-level rule for a cross-field one).
+        "POST /admin/adt-intake-configs",
+        "POST /auth/me/change-email",
+        "POST /billing-invoices",
+        "POST /drug-interactions",
+        "POST /lab-qc-events",
+        "POST /me/patient/appointments",
+        "POST /mortality/deaths",
+        "POST /on-call",
+        "POST /reports",
+        "POST /session-templates",
+        "POST /staff/scheduling/shifts/bulk",
+        "POST /super-admin/platform/release-windows",
+        "POST /transfusions/administrations/{administrationId}/reaction",
+        "POST /webhook-endpoints",
+        "PUT /drug-interactions/{id}"
+    );
+
     private static final Map<String, String> NOT_A_FIELD_ONCE_FILLED = Map.ofEntries(
         Map.entry("POST /auth/me/complete-setup", "state: the account has no pending username or password change"),
         Map.entry("POST /high-risk-care-plans", "role: the sweep's caller is not obstetric clinical staff"),
@@ -367,7 +395,8 @@ class WriteEndpointRequiredFieldSweepIT extends BaseIT {
             return;
         }
         Map<String, Object> filled = endpoint.filledBody(empty.fieldErrors.keySet());
-        fillAndResend(endpoint, empty, filled, failures, allowedSeen);
+        Answer second = fillAndResend(endpoint, empty, filled, failures, allowedSeen);
+        valueRefusalNamedWithTheEdge(endpoint, empty, filled, second, failures);
         missingOneAtATime(endpoint, filled, failures);
         blankTyped(endpoint, empty, failures);
         malformedTyped(endpoint, empty, failures);
@@ -406,13 +435,13 @@ class WriteEndpointRequiredFieldSweepIT extends BaseIT {
     }
 
     /** Phase 2: every named field filled; nothing still omitted may be named now. */
-    private void fillAndResend(Endpoint endpoint, Answer empty, Map<String, Object> filled,
-                               Map<String, List<String>> failures, Set<String> allowedSeen) throws Exception {
+    private Answer fillAndResend(Endpoint endpoint, Answer empty, Map<String, Object> filled,
+                                 Map<String, List<String>> failures, Set<String> allowedSeen) throws Exception {
         String key = endpoint.key();
         Answer second = call(endpoint, endpoint.wrap(filled));
         if (second.status >= 500) {
             fail(failures, "5xx once the named fields are filled", key + " -> " + second.status + " " + second.brief());
-            return;
+            return second;
         }
         List<String> late = new ArrayList<>();
         for (String named : second.fieldErrors.keySet()) {
@@ -434,6 +463,52 @@ class WriteEndpointRequiredFieldSweepIT extends BaseIT {
                 fail(failures, "refused without fieldErrors once the named fields are filled",
                     key + " -> " + second.brief());
             }
+        }
+        return second;
+    }
+
+    /**
+     * Phase 7 (QA D1371 / D1372, round 31): a value the server refuses once
+     * every named field is filled (an unknown handoff type, a reason the
+     * service requires) must be named WITH the edge's refusals, not one
+     * request after them. From the filled body, each edge-named field is left
+     * out alone (an edge refusal); the answer must still name every field the
+     * filled body was refused on. A service-only check behind bean validation
+     * fails here; declare it on the request (a constraint) so both meet.
+     */
+    private void valueRefusalNamedWithTheEdge(Endpoint endpoint, Answer empty, Map<String, Object> filled,
+                                              Answer second, Map<String, List<String>> failures) throws Exception {
+        if (second == null || second.status != 400 || second.fieldErrors.isEmpty()) {
+            return;
+        }
+        Set<String> refusedOnValue = new TreeSet<>();
+        for (String named : second.fieldErrors.keySet()) {
+            if (filled.containsKey(Endpoint.topLevel(named))) {
+                refusedOnValue.add(named);
+            }
+        }
+        if (refusedOnValue.isEmpty()) {
+            return;
+        }
+        String key = endpoint.key();
+        for (String edge : new TreeSet<>(empty.fieldErrors.keySet())) {
+            String top = Endpoint.topLevel(edge);
+            if (refusedOnValue.stream().anyMatch(v -> Endpoint.topLevel(v).equals(top))) {
+                continue;
+            }
+            Map<String, Object> withoutOne = new LinkedHashMap<>(filled);
+            withoutOne.remove(top);
+            Answer seventh = call(endpoint, endpoint.wrap(withoutOne));
+            if (seventh.status != 400 || !seventh.fieldErrors.containsKey(edge)) {
+                // Not an edge refusal of that field (the sweep cannot tell which refusal came first).
+                continue;
+            }
+            List<String> unnamed = refusedOnValue.stream().filter(v -> !seventh.fieldErrors.containsKey(v)).toList();
+            if (!unnamed.isEmpty() && !VALUE_REFUSED_AFTER_THE_EDGE.contains(key)) {
+                fail(failures, "a refused value named only after the edge's refusals (D1371)",
+                    key + " without " + top + " -> named " + seventh.fieldErrors.keySet() + ", not " + unnamed);
+            }
+            return;
         }
     }
 
