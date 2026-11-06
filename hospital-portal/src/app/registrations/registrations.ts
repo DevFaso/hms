@@ -20,6 +20,7 @@ import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { refusalReason } from '../shared/refusal-reason';
+import { isFrontDeskOnly } from '../patients/patient-chart/chart-access';
 type ActiveFilter = 'all' | 'active' | 'inactive';
 
 /**
@@ -50,6 +51,9 @@ export class RegistrationsComponent implements OnInit {
   private readonly translate = inject(TranslateService);
 
   private hospitalId: string | null = null;
+
+  /** RCPT-CLIN: the desk neither reads the discharge note nor writes it; the server keeps the stored one. */
+  readonly frontDeskOnly = isFrontDeskOnly((roles) => this.roleContext.hasAnyActiveRole(roles));
 
   readonly canManage = this.roleContext.hasAnyActiveRole([
     'ROLE_RECEPTIONIST',

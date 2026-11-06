@@ -441,7 +441,18 @@ public class PatientServiceImpl implements PatientService {
         }
 
         PatientAddressHistoryRecorder.AddressSnapshot before = addressHistoryRecorder.snapshot(patient);
+        // RCPT-CLIN: this replaces the whole record, and the desk cannot read these three:
+        // a body that left them out emptied what a clinician wrote.
+        boolean deskCaller = com.example.hms.controller.support.ReceptionistResponseShaping.isReceptionistOnly();
+        String storedHistory = patient.getMedicalHistorySummary();
+        String storedCareTeamNotes = patient.getCareTeamNotes();
+        String storedConditions = patient.getChronicConditions();
         patientMapper.updatePatientFromDto(dto, patient, user);
+        if (deskCaller) {
+            patient.setMedicalHistorySummary(storedHistory);
+            patient.setCareTeamNotes(storedCareTeamNotes);
+            patient.setChronicConditions(storedConditions);
+        }
         UUID phoneHospitalId = dto.getHospitalId() != null ? dto.getHospitalId() : patient.getHospitalId();
         normalizePhones(patient, phoneHospitalId == null ? null
             : hospitalRepository.findById(phoneHospitalId).orElse(null));

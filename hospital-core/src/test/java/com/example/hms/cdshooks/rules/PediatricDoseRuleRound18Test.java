@@ -102,6 +102,51 @@ class PediatricDoseRuleRound18Test {
             .contains("WHO Pocket Book"));
     }
 
+    /**
+     * Round 33: the limits judge the high end of a range. Paracetamol 15 mg/kg for 19 kg is
+     * 285 mg, and 1000 mg a dose at most: each of these passed, read at its first number.
+     */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {
+        "200-400 mg", "200 \u00e0 400 mg", "de 200 a 400 mg", "200 to 400 mg", "entre 200 y 400 mg", "200 mg - 400 mg",
+        "0,2-0,4 g", "0,2 \u00e0 0,4 g", "0.2 to 0.4 g", "10-20 mg/kg", "10 \u00e0 20 mg/kg",
+    })
+    void aRangeOverTheLimitAtItsHighEndIsASoftStop(String dosage) {
+        List<CdsCard> cards = rule.evaluate(ctx(childAged(6, 0, 0), paracetamol(), dosage, "1 fois par jour",
+            19.0, LocalDateTime.now().minusDays(2)));
+
+        assertThat(critical(cards)).as(dosage).isEqualTo(1);
+        assertThat(cards.get(0).summary()).as(dosage).contains("mg/kg");
+    }
+
+    @Test
+    void aRangeWithinTheLimitAtItsHighEndPasses() {
+        for (String dosage : List.of("100-200 mg", "100 \u00e0 200 mg", "de 100 a 200 mg", "100 to 200 mg")) {
+            assertThat(rule.evaluate(ctx(childAged(6, 0, 0), paracetamol(), dosage, "1 fois par jour",
+                19.0, LocalDateTime.now().minusDays(2)))).as(dosage).isEmpty();
+        }
+    }
+
+    @Test
+    void aRangeOfTabletsOverItsWeightBandAtTheHighEndIsASoftStop() {
+        // 19 kg is the band of 2 tablets.
+        List<CdsCard> cards = rule.evaluate(ctx(childAged(6, 0, 0), artemetherLumefantrine(), "2-3 cp", "2 fois par jour",
+            19.0, LocalDateTime.now().minusDays(2)));
+
+        assertThat(critical(cards)).isEqualTo(2);
+    }
+
+    @Test
+    void aSingleDoseKeepsItsVerdict() {
+        // At the limit, and just over it: the outcome of a valid single dose does not move.
+        assertThat(rule.evaluate(ctx(childAged(6, 0, 0), paracetamol(), "285 mg", "1 fois par jour",
+            19.0, LocalDateTime.now().minusDays(2)))).isEmpty();
+        assertThat(critical(rule.evaluate(ctx(childAged(6, 0, 0), paracetamol(), "286 mg", "1 fois par jour",
+            19.0, LocalDateTime.now().minusDays(2))))).isEqualTo(1);
+        assertThat(rule.evaluate(ctx(childAged(6, 0, 0), artemetherLumefantrine(), "2 cp", "2 fois par jour",
+            19.0, LocalDateTime.now().minusDays(2)))).isEmpty();
+    }
+
     private static CdsRuleContext prnCtx(String dosage, String frequency, Integer intervalHours) {
         double weightKg = 19.0;
         MedicationCatalogItem item = paracetamol();

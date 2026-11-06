@@ -50,6 +50,9 @@
  *    portal rule can see a cut the server made. A `.limit(limit)` the caller
  *    asked for is not reported. A cut that is a preview, or a bound on a log
  *    line, is pinned with that reason.
+ *  - `server-query-top` (round 33 — {@link serverQueryTopFindings}): a derived
+ *    `findTop50By...` query. The same cut one layer down: taking `.limit(50)` off
+ *    the return form's fills would have changed nothing, its query stopped at 50.
  *
  * Not findings: `font-size: 64px` and other CSS in inline styles (a unit
  * follows), `slice(0, 8)` / `substring(0, 50)` (not a read), `size = 20`
@@ -279,6 +282,34 @@ const SERVER_FIXED_LIMIT = /\.limit\(\s*(\d+|[A-Z][A-Z0-9_]*)L?\s*\)/g;
 /** A Java method header, for a stable anchor. */
 const JAVA_METHOD =
   /^\s*(?:(?:public|protected|private|static|final|synchronized|default)\s+)+[\w<>,.?[\]\s]+?\s+([a-zA-Z_$][\w$]*)\s*\(/;
+
+const SERVER_QUERY_TOP = /\.\s*(find(?:Top|First)(\d+)By\w*)\s*\(/g;
+
+/**
+ * Round 33: a fixed cut in a derived repository query (`findTop50ByLot...`).
+ *
+ * @param {string} source a `.java` service or controller
+ * @returns {{line:number, rule:string, anchor:string, message:string}[]}
+ */
+export function serverQueryTopFindings(source) {
+  const code = source
+    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
+    .replace(/(^|[^:'"\\])\/\/[^\n]*/g, (m, lead) => lead + ' '.repeat(m.length - lead.length));
+  const out = [];
+  for (const m of code.matchAll(SERVER_QUERY_TOP)) {
+    // findFirst1 / findTop1 answers "the first": never a list on a screen.
+    if (m[2] === '1') continue;
+    out.push({
+      line: lineOf(code, m.index),
+      rule: 'server-query-top',
+      anchor: m[1],
+      message:
+        `${m[1]} cuts a server list in its query: ` +
+        'answer every row, or page with the total; a preview says it is one and is pinned with that reason',
+    });
+  }
+  return out;
+}
 
 /**
  * QA CX-003: a fixed cut in a backend service (`.limit(10)` on a stream).

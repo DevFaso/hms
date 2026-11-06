@@ -114,17 +114,24 @@ public class MedicationRequestFhirMapper {
         sink.append(value.trim());
     }
 
+    /**
+     * Round 33: only one number is a structured dose. Stripping everything but digits read
+     * "12,5" as 125 and "2 a 4" as 24. A range or any other free text stays in the
+     * dosage's text, which already carries it.
+     */
     private static void addStructuredDose(Dosage d, Prescription src) {
         if (src.getDoseUnit() == null || src.getDosage() == null) return;
-        try {
-            Quantity q = new Quantity()
-                .setValue(new java.math.BigDecimal(src.getDosage().replaceAll("[^0-9.\\-]", "")))
-                .setUnit(src.getDoseUnit());
-            Dosage.DosageDoseAndRateComponent dr = new Dosage.DosageDoseAndRateComponent();
-            dr.setDose(q);
-            d.addDoseAndRate(dr);
-        } catch (RuntimeException ignored) {
-            // freetext dosage — text already captures it
-        }
+        java.util.regex.Matcher single = SINGLE_DOSE.matcher(src.getDosage());
+        if (!single.matches()) return;
+        Quantity q = new Quantity()
+            .setValue(new java.math.BigDecimal(single.group(1).replace(',', '.')))
+            .setUnit(src.getDoseUnit());
+        Dosage.DosageDoseAndRateComponent dr = new Dosage.DosageDoseAndRateComponent();
+        dr.setDose(q);
+        d.addDoseAndRate(dr);
     }
+
+    /** One number, and at most one unit word after it. */
+    private static final java.util.regex.Pattern SINGLE_DOSE =
+        java.util.regex.Pattern.compile("\\s*+(\\d++(?:[.,]\\d++)?+)\\s*+\\p{L}*+\\s*+");
 }

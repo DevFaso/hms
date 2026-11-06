@@ -100,8 +100,6 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
     private final PatientAllergyRepository patientAllergyRepository;
     private final PatientVitalSignRepository patientVitalSignRepository;
     private final PrescriptionRepository prescriptionRepository;
-    /** Prescriptions read to find the running ones; a chart never holds this many live courses. */
-    private static final int ACTIVE_MEDICATION_SCAN = 200;
     private final com.example.hms.repository.AdmissionRepository admissionRepository;
     private final LabOrderRepository labOrderRepository;
     private final LabResultRepository labResultRepository;
@@ -407,18 +405,18 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
             // QA D720/D737: "active" means a running course, by the rule the
             // patient's own list uses (MedicationCourseStatus): no draft, no
             // withdrawn or finished course, no order that ended with a
-            // discharged stay. Filtered before the cap, newest first, so the
-            // current stay's orders are not pushed off by finished ones.
+            // discharged stay. Round 33 (CX-003 class): every running course, newest
+            // first, read from every prescription of the chart; a long chart's old
+            // chronic course fell off a scan of the newest 200, and the list stopped at 10.
             List<com.example.hms.model.Admission> closedStays = admissionRepository
                     .findByPatientIdOrderByAdmissionDateTimeDesc(patientId).stream()
                     .filter(a -> a.getActualDischargeDateTime() != null)
                     .toList();
             List<com.example.hms.model.Prescription> rows = NeverSentRule.prescriptionsReadableHere(
                     prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readable,
-                            PageRequest.of(0, ACTIVE_MEDICATION_SCAN, Sort.by(Sort.Direction.DESC, "createdAt")))
+                            org.springframework.data.domain.Pageable.unpaged(Sort.by(Sort.Direction.DESC, "createdAt")))
                     .getContent(), hospitalId).stream()
                     .filter(rx -> com.example.hms.service.MedicationCourseStatus.isActive(rx, closedStays))
-                    .limit(10)
                     .toList();
             account(reach, hospitalId, rows.stream().map(rx -> CrossHospitalReachRecorder.hospitalIdOf(rx.getHospital())).toList());
             rows.forEach(rx -> medications.add(PatientSnapshotDTO.MedicationItem.builder()
@@ -523,7 +521,6 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
             rows.stream()
                     .filter(o -> o.getStatus() == com.example.hms.enums.LabOrderStatus.PENDING
                             || o.getStatus() == com.example.hms.enums.LabOrderStatus.IN_PROGRESS)
-                    .limit(10)
                     .forEach(o -> pendingOrders.add(PatientSnapshotDTO.OrderItem.builder()
                             .type("LAB")
                             .description(o.getLabTestDefinition() != null
@@ -547,7 +544,6 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
                             .name(e.getStaff().getFullName())
                             .build())
                     .distinct()
-                    .limit(10)
                     .forEach(careTeam::add);
         } catch (Exception e) {
             log.debug("Care team query error: {}", e.getMessage());

@@ -390,7 +390,10 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
             registration.setStayStatus(status);
         }
 
-        if (!isPatch || dto.getReadyForDischargeNote() != null) {
+        // RCPT-CLIN: the desk neither reads this note nor sees its box, and its PUT carries the
+        // whole registration back: it kept emptying what an administrator had written.
+        boolean deskCaller = com.example.hms.controller.support.ReceptionistResponseShaping.isReceptionistOnly();
+        if (!deskCaller && (!isPatch || dto.getReadyForDischargeNote() != null)) {
             registration.setReadyForDischargeNote(trim(dto.getReadyForDischargeNote()));
         }
     }

@@ -16,6 +16,7 @@ import {
   sliceCountFindings,
   serverLimitFindings,
   serverLimitedPaths,
+  serverQueryTopFindings,
   serverStreamLimitFindings,
 } from './list-cap-scan.mjs';
 
@@ -231,5 +232,20 @@ public class X {
   assert.deepEqual(
     serverStreamLimitFindings(java).map((f) => `${f.rule}:${f.anchor}`),
     ['server-stream-limit:buildDepartmentUtilization:10', 'server-stream-limit:preview:MAX_ROWS'],
+  );
+});
+
+test('server-query-top: a derived findTopN query is a cut; findFirst alone and a comment are not', () => {
+  const java = `class S {
+    List<D> fills(UUID id) {
+        // repo.findTop99ByNothing(id) in a comment is not a cut
+        repo.findFirstByLot_Id(id);
+        repo.findTop1ByLot_Id(id);
+        return repo.findTop50ByLot_IdOrderByCreatedAtDesc(id);
+    }
+}`;
+  assert.deepEqual(
+    serverQueryTopFindings(java).map((f) => `${f.rule}:${f.anchor}`),
+    ['server-query-top:findTop50ByLot_IdOrderByCreatedAtDesc'],
   );
 });

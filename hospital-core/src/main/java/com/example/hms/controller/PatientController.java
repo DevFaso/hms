@@ -330,6 +330,11 @@ public class PatientController {
         @RequestHeader(name = "Accept-Language", required = false) String lang,
         Authentication auth
     ) {
+        // RCPT-CLIN: clinical text the desk cannot read is not the desk's to overwrite.
+        if (com.example.hms.controller.support.ReceptionistResponseShaping.isReceptionistOnly()
+            && (dto.getCareTeamNotes() != null || dto.getChronicConditions() != null)) {
+            throw new org.springframework.security.access.AccessDeniedException("Clinical fields are not the desk's to write");
+        }
         Locale locale = parseLocale(lang);
         UUID resolvedHospitalId = authUtils.resolveHospitalScope(auth, null, false);
         return ResponseEntity.ok(patientService.patchPatient(id, dto, resolvedHospitalId, locale));

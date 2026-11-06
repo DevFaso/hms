@@ -358,12 +358,13 @@ public class CdsRuleEngine {
      * limit could fire. Micrograms are converted.
      */
     static Double parseDoseMg(String dosage, Double weightKg, MedicationCatalogItem item) {
-        if (dosage != null && PER_KG.matcher(dosage).find()) {
-            Double perKg = parseDoseMg(dosage);
+        String read = DoseRange.highEnd(dosage);
+        if (read != null && PER_KG.matcher(read).find()) {
+            Double perKg = parseDoseMg(read);
             return perKg == null || weightKg == null || weightKg <= 0d ? null : perKg * weightKg;
         }
-        String unit = leadingUnit(dosage);
-        return unit == null ? parseDoseMg(dosage) : doseMgInUnit(dosage, unit, item);
+        String unit = leadingUnit(read);
+        return unit == null ? parseDoseMg(read) : doseMgInUnit(read, unit, item);
     }
 
     /** The dose in mg when it is written with a unit word: a count, micrograms, mg or g; null otherwise. */
@@ -389,15 +390,16 @@ public class CdsRuleEngine {
      * a dose in mg, mL or any other measured unit.
      */
     static Double parseDoseUnits(String dosage) {
-        String unit = leadingUnit(dosage);
+        String read = DoseRange.highEnd(dosage);
+        String unit = leadingUnit(read);
         if (unit == null || COUNT_UNITS.contains(unit)) {
-            return leadingNumber(dosage);
+            return leadingNumber(read);
         }
         return null;
     }
 
     /** Tablet, capsule and sachet words in English, French and Spanish, lower-cased. */
-    private static final Set<String> COUNT_UNITS = Set.of(
+    static final Set<String> COUNT_UNITS = Set.of(
         "cp", "cps", "comp", "comps", "cpr", "comprimé", "comprimés", "comprime", "comprimes",
         "tab", "tabs", "tablet", "tablets", "comprimido", "comprimidos",
         "gélule", "gélules", "gelule", "gelules", "caps", "capsule", "capsules", "cápsula", "cápsulas",
@@ -466,12 +468,13 @@ public class CdsRuleEngine {
 
     /**
      * Parse leading number from a dosage string into mg. Accepts "500 mg",
-     * "0,25 g" (returns 250), "12.5 mg". Returns null when the string
+     * "0,25 g" (returns 250), "12.5 mg", a range at its high end ("2-4 mg"
+     * returns 4). Returns null when the string
      * cannot be parsed — rules then degrade gracefully.
      */
     static Double parseDoseMg(String dosage) {
         if (dosage == null || dosage.isBlank()) return null;
-        Matcher m = DOSE_NUMBER.matcher(dosage);
+        Matcher m = DOSE_NUMBER.matcher(DoseRange.highEnd(dosage));
         if (!m.find()) return null;
         try {
             String numeric = m.group(1).replace(',', '.');

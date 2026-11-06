@@ -561,6 +561,49 @@ class PatientSnapshotServiceImplTest {
         assertTrue(result.getPendingOrders().isEmpty());
     }
 
+    /** CX-003 class (round 33): the snapshot stopped at 10 of each with no total. */
+    @Test
+    void getSnapshot_everyMedicationPendingOrderAndCareTeamMemberIsAnswered() {
+        UUID patientId = UUID.randomUUID();
+        Patient patient = stubPatient(patientId);
+        givenPatient(patientId, patient);
+        int count = 25;
+        List<com.example.hms.model.Prescription> running = new java.util.ArrayList<>();
+        List<LabOrder> orders = new java.util.ArrayList<>();
+        List<Encounter> visits = new java.util.ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            com.example.hms.model.Prescription rx = new com.example.hms.model.Prescription();
+            rx.setMedicationName("Med " + i);
+            rx.setStatus(com.example.hms.enums.PrescriptionStatus.SIGNED);
+            running.add(rx);
+            LabOrder order = mock(LabOrder.class);
+            when(order.getStatus()).thenReturn(LabOrderStatus.PENDING);
+            orders.add(order);
+            Staff clinician = mock(Staff.class);
+            when(clinician.getFullName()).thenReturn("Dr " + i);
+            Encounter visit = mock(Encounter.class);
+            when(visit.getStaff()).thenReturn(clinician);
+            visits.add(visit);
+        }
+        when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(patientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(eq(patientId), eq(READABLE), any()))
+                .thenReturn(Collections.emptyList());
+        org.mockito.ArgumentCaptor<org.springframework.data.domain.Pageable> read =
+                org.mockito.ArgumentCaptor.forClass(org.springframework.data.domain.Pageable.class);
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(eq(patientId), eq(READABLE), read.capture()))
+                .thenReturn(new PageImpl<>(running));
+        when(labOrderRepository.findByPatient_IdAndHospital_IdIn(patientId, READABLE)).thenReturn(orders);
+        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(READABLE), eq(HOSPITAL_ID), eq(false), any())).thenReturn(Collections.emptyList());
+        when(encounterRepository.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(patientId, READABLE)).thenReturn(visits);
+
+        PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
+
+        assertEquals(count, result.getActiveMedications().size());
+        assertEquals(count, result.getPendingOrders().size());
+        assertEquals(count, result.getCareTeam().size());
+        assertTrue(read.getValue().isUnpaged(), "every prescription of the chart is read, not the newest 200");
+    }
+
     @Test
     void getSnapshot_withCareTeam_shouldMapFromEncounters() {
         UUID patientId = UUID.randomUUID();

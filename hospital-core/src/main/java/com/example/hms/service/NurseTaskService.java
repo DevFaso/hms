@@ -33,6 +33,13 @@ public interface NurseTaskService {
      */
     int NO_LIMIT = Integer.MAX_VALUE;
 
+    /**
+     * How far ahead a vitals round counts as due: the one default the vitals list
+     * and its dashboard tile share (QA D1402). {@code window} on {@link #getDueVitals}
+     * widens the look-ahead only; it never changes how often a round falls due.
+     */
+    Duration VITALS_LOOK_AHEAD = Duration.ofMinutes(30);
+
     List<NurseVitalTaskResponseDTO> getDueVitals(UUID nurseUserId, UUID hospitalId, Duration window);
 
     List<NurseMedicationTaskResponseDTO> getMedicationTasks(UUID nurseUserId, UUID hospitalId, String statusFilter);

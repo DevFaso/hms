@@ -86,6 +86,62 @@ class PatientControllerTest {
         verify(patientService).getAllPatients(eq(hospitalId), any(Locale.class));
     }
 
+    /** RCPT-CLIN: the desk corrects demographics by PATCH, and cannot overwrite clinical text it cannot read. */
+    @org.junit.jupiter.api.Nested
+    class ClinicalTextAtTheDesk {
+        private final UUID patientId = UUID.randomUUID();
+
+        private org.springframework.security.core.Authentication signedInAs(String... roles) {
+            var auth = new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("someone", "n/a",
+                org.springframework.security.core.authority.AuthorityUtils.createAuthorityList(roles));
+            org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(auth);
+            return auth;
+        }
+
+        @org.junit.jupiter.api.AfterEach
+        void signOut() {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+
+        @Test
+        void aReceptionistCannotPatchCareTeamNotesOrChronicConditions() {
+            var auth = signedInAs(ROLE_RECEPTIONIST_CODE);
+            var notes = new com.example.hms.payload.dto.PatientProfileUpdateRequestDTO();
+            notes.setCareTeamNotes("");
+            var conditions = new com.example.hms.payload.dto.PatientProfileUpdateRequestDTO();
+            conditions.setChronicConditions(List.of());
+
+            org.junit.jupiter.api.Assertions.assertThrows(org.springframework.security.access.AccessDeniedException.class,
+                () -> controller.patchPatient(patientId, notes, null, auth));
+            org.junit.jupiter.api.Assertions.assertThrows(org.springframework.security.access.AccessDeniedException.class,
+                () -> controller.patchPatient(patientId, conditions, null, auth));
+            org.mockito.Mockito.verifyNoInteractions(patientService);
+        }
+
+        @Test
+        void aReceptionistStillCorrectsDemographicsAndABloodType() {
+            var auth = signedInAs(ROLE_RECEPTIONIST_CODE);
+            var body = new com.example.hms.payload.dto.PatientProfileUpdateRequestDTO();
+            body.setFirstName("Awa");
+            body.setBloodType("O+");
+
+            controller.patchPatient(patientId, body, null, auth);
+
+            verify(patientService).patchPatient(eq(patientId), eq(body), any(), any(Locale.class));
+        }
+
+        @Test
+        void aDoctorStillWritesThem() {
+            var auth = signedInAs("ROLE_DOCTOR", ROLE_RECEPTIONIST_CODE);
+            var body = new com.example.hms.payload.dto.PatientProfileUpdateRequestDTO();
+            body.setCareTeamNotes("Vu en consultation");
+
+            controller.patchPatient(patientId, body, null, auth);
+
+            verify(patientService).patchPatient(eq(patientId), eq(body), any(), any(Locale.class));
+        }
+    }
+
     @Test
     void theSearchParameterFiltersInsteadOfBeingDropped() {
         // QA D79: the admission typeahead sends ?search=, which used to be
