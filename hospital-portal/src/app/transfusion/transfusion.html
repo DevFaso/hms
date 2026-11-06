@@ -421,6 +421,15 @@
             <h3>{{ 'TRANSFUSION.WORKUP' | translate }}</h3>
             @if (canLab && req.status !== 'COMPLETED' && req.status !== 'CANCELLED') {
               <div class="action-group">
+                @if (canReleaseInEmergency(req)) {
+                  <button
+                    class="btn-danger"
+                    data-testid="emergency-release"
+                    (click)="openEmergencyRelease(req)"
+                  >
+                    {{ 'TRANSFUSION.EMERGENCY_RELEASE' | translate }}
+                  </button>
+                }
                 <button
                   class="btn-secondary"
                   data-testid="record-group-for-request"
@@ -556,6 +565,12 @@
                 >
                 @if (!g.screenCurrent) {
                   <span class="warn-inline">{{ 'TRANSFUSION.SCREEN_LAPSED' | translate }}</span>
+                }
+                @if (g.correctionReason) {
+                  {{ ' '
+                  }}<span>{{
+                    'COMMON.REASON_VALUE' | translate: { reason: g.correctionReason }
+                  }}</span>
                 }
               } @else {
                 <span class="warn-inline">{{ 'TRANSFUSION.NO_GROUP_ON_FILE' | translate }}</span>
@@ -878,6 +893,55 @@
             [submitGuardFields]="['xm-unit']"
           >
             {{ 'COMMON.SAVE' | translate }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ══ Emergency release modal ══ -->
+  @if (showEmergencyModal()) {
+    <div
+      class="modal-backdrop"
+      tabindex="-1"
+      (click)="$event.target === $event.currentTarget && closeEmergencyRelease()"
+      (keydown.escape)="closeEmergencyRelease()"
+    >
+      <div
+        class="modal"
+        appModalDialog
+        aria-labelledby="transfusion-dialog-7-title"
+        (escaped)="closeEmergencyRelease()"
+      >
+        <div class="modal-header">
+          <h2 id="transfusion-dialog-7-title">{{ 'TRANSFUSION.EMERGENCY_RELEASE' | translate }}</h2>
+          <button class="modal-close" (click)="closeEmergencyRelease()">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-hint warn">{{ 'TRANSFUSION.EMERGENCY_RELEASE_HINT' | translate }}</p>
+          <div class="field">
+            <label for="em-unit">{{ 'TRANSFUSION.UNIT_NUMBER' | translate }} *</label>
+            <select required id="em-unit" [(ngModel)]="emergencyUnitId">
+              <option value="">{{ 'COMMON.SELECT' | translate }}</option>
+              @for (u of emergencyUnits(); track u.id) {
+                <option [value]="u.id">{{ u.unitNumber }}</option>
+              }
+            </select>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn-secondary" (click)="closeEmergencyRelease()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+          <button
+            class="btn-danger"
+            data-testid="submit-emergency-release"
+            (click)="submitEmergencyRelease()"
+            [disabled]="emergencySubmitting()"
+            [appSubmitGuard]="!emergencyUnitId"
+            [submitGuardFields]="['em-unit']"
+          >
+            {{ 'TRANSFUSION.ISSUE' | translate }}
           </button>
         </div>
       </div>

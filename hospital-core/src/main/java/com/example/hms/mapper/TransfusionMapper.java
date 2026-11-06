@@ -63,6 +63,7 @@ public class TransfusionMapper {
             .superseded(group.getSuperseded())
             .screenCurrent(group.screenIsCurrent(LocalDateTime.now(clock)))
             .notes(group.getNotes())
+            .correctionReason(group.getCorrectionReason())
             .createdAt(group.getCreatedAt())
             .build();
     }

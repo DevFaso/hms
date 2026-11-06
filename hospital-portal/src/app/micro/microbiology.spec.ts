@@ -284,6 +284,23 @@ describe('MicrobiologyComponent', () => {
       expect(toastSpy.error).toHaveBeenCalledWith('Seul germe');
     });
 
+    it('after an organism turned the report to growth, the next save does not offer to remove it', () => {
+      open(culture({ status: 'FINAL', growthResult: 'NO_GROWTH', isolates: [] }));
+      component.editGrowthResult.set('NO_GROWTH');
+      microServiceSpy.addIsolate.and.returnValue(
+        of(culture({ status: 'CORRECTED', growthResult: 'GROWTH', isolates: [isolate] })),
+      );
+      component.isoOrganism.set('Escherichia coli');
+      component.submitIsolate();
+      expect(component.editGrowthResult()).toBe('GROWTH');
+
+      component.correctionReason.set('Note');
+      microServiceSpy.update.and.returnValue(of(culture({ status: 'CORRECTED' })));
+      component.saveCulture();
+      expect(component.confirmingNoGrowth()).toBeFalse();
+      expect(microServiceSpy.update.calls.mostRecent().args[1].growthResult).toBe('GROWTH');
+    });
+
     it('shows what the report said before each correction', () => {
       const corrected = culture({
         status: 'CORRECTED',

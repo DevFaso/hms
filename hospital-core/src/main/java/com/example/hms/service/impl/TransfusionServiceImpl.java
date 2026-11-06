@@ -172,6 +172,8 @@ public class TransfusionServiceImpl implements TransfusionService {
             .performedBy(currentStaff(hospitalId))
             .superseded(Boolean.FALSE)
             .notes(request.getNotes())
+            .correctionReason(StringUtils.hasText(request.getCorrectionReason())
+                ? request.getCorrectionReason().trim() : null)
             .build();
 
         PatientBloodGroup saved = bloodGroupRepository.save(group);
@@ -538,7 +540,10 @@ public class TransfusionServiceImpl implements TransfusionService {
         TransfusionCrossmatch saved = crossmatchRepository.save(crossmatch);
 
         if (Boolean.TRUE.equals(request.getCompatible())) {
-            unit.setStatus(BloodUnitStatus.CROSSMATCHED);
+            // A bag already out keeps its status: this is a result on it, not a new reservation.
+            if (unit.getStatus() != BloodUnitStatus.ISSUED) {
+                unit.setStatus(BloodUnitStatus.CROSSMATCHED);
+            }
             unit.setRequest(transfusionRequest);
             unitRepository.save(unit);
             if (transfusionRequest.getStatus() == TransfusionRequestStatus.REQUESTED) {
@@ -578,6 +583,17 @@ public class TransfusionServiceImpl implements TransfusionService {
         // whatever crossmatch it still has on file.
         if (unit.isTerminal()) {
             throw new BusinessException("transfusion.unit.noLongerUsable", unit.getUnitNumber());
+        }
+        // The crossmatch path has always checked the product; the emergency path never reached it.
+        if (unit.getProductType() != request.getProductType()) {
+            throw new FieldBusinessException(FIELD_BLOOD_UNIT_ID, "transfusion.unit.productMismatch", unit.getUnitNumber(),
+                productLabel(unit.getProductType()), productLabel(request.getProductType()));
+        }
+        // Emergency release takes no crossmatch, so nothing else stops it taking a bag
+        // held for another patient, or one already running into them.
+        requireNotHeldByAnother(unit, requestId);
+        if (administrationRepository.findByBloodUnit_Id(unitId).isPresent()) {
+            throw new FieldBusinessException(FIELD_BLOOD_UNIT_ID, "transfusion.unit.alreadyHung", unit.getUnitNumber());
         }
 
         TransfusionCrossmatch crossmatch = crossmatchRepository
@@ -640,15 +656,7 @@ public class TransfusionServiceImpl implements TransfusionService {
         administrationRepository.findByBloodUnit_Id(unit.getId()).ifPresent(existing -> {
             throw new com.example.hms.exception.FieldBusinessException(FIELD_BLOOD_UNIT_ID, "transfusion.unit.alreadyHung", unit.getUnitNumber());
         });
-        // QA CX-011: a group corrected after the bag left the lab stops it at the
-        // bedside, the last place it can be stopped. Only the group: a screen that
-        // lapsed while the bag was on its way does not change what is in the bag.
-        PatientBloodGroup screen = currentScreen(transfusionRequest);
-        if (screen != null && !groupStillAllows(screen, unit, transfusionRequest,
-                crossmatchRepository.findByRequest_IdAndBloodUnit_Id(transfusionRequest.getId(), unit.getId()).orElse(null))) {
-            throw new FieldBusinessException(FIELD_BLOOD_UNIT_ID, "transfusion.administration.groupChanged",
-                unit.getUnitNumber());
-        }
+        requireCrossmatchStillStands(transfusionRequest, unit);
 
         Staff administering = currentStaff(hospitalId);
         if (administering == null) {
@@ -689,6 +697,40 @@ public class TransfusionServiceImpl implements TransfusionService {
 
         TransfusionAdministration saved = administrationRepository.save(administration);
         return mapper.toDto(saved, List.of());
+    }
+
+    /**
+     * QA CX-008: who can be the second check at the bedside. The list a nurse picks
+     * from on the MAR, on this module's own bedside gate (that one leaves out surgeons,
+     * who hang blood here), and only people with an active staff record at this
+     * hospital, because that is what the hang goes on to require.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<com.example.hms.payload.dto.pharmacy.StockWitnessCandidateDTO> listVerifierCandidates() {
+        UUID hospitalId = requireHospital();
+        UUID self = roleValidator.getCurrentUserId();
+        return staffRepository.findByHospital_IdIn(List.of(hospitalId)).stream()
+            .filter(Staff::isActive)
+            .filter(staff -> staff.getUser() != null && staff.getUser().isActive() && !staff.getUser().isDeleted()
+                && !Objects.equals(staff.getUser().getId(), self))
+            .filter(staff -> staff.getAssignment() != null && staff.getAssignment().getRole() != null
+                && staff.getAssignment().getRole().getCode() != null
+                && com.example.hms.service.emar.ControlledAdministrationWitness.WITNESS_ROLE_CODES
+                    .contains(staff.getAssignment().getRole().getCode().toUpperCase(java.util.Locale.ROOT)))
+            .map(staff -> new com.example.hms.payload.dto.pharmacy.StockWitnessCandidateDTO(
+                staff.getUser().getId(), verifierName(staff)))
+            .sorted(java.util.Comparator.comparing(
+                com.example.hms.payload.dto.pharmacy.StockWitnessCandidateDTO::displayName,
+                java.util.Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)))
+            .toList();
+    }
+
+    private static String verifierName(Staff staff) {
+        String first = staff.getUser().getFirstName();
+        String last = staff.getUser().getLastName();
+        String combined = ((first != null ? first.trim() : "") + " " + (last != null ? last.trim() : "")).trim();
+        return combined.isEmpty() ? staff.getUser().getUsername() : combined;
     }
 
     @Override
@@ -849,13 +891,41 @@ public class TransfusionServiceImpl implements TransfusionService {
         if (!screen.screenIsCurrent(now)) {
             return new BusinessException("transfusion.issue.screenLapsed", unit.getUnitNumber());
         }
-        boolean predatesNewAntibodies = screen.getAntibodyScreen() == AntibodyScreenResult.POSITIVE
-            && crossmatch.getPerformedAt() != null && screen.getPerformedAt() != null
-            && crossmatch.getPerformedAt().isBefore(screen.getPerformedAt());
-        if (predatesNewAntibodies || !groupStillAllows(screen, unit, request, crossmatch)) {
+        if (predatesNewAntibodies(screen, crossmatch) || !groupStillAllows(screen, unit, request, crossmatch)) {
             return new BusinessException("transfusion.issue.crossmatchOutdated", unit.getUnitNumber());
         }
         return null;
+    }
+
+    private static boolean predatesNewAntibodies(PatientBloodGroup screen, TransfusionCrossmatch crossmatch) {
+        return screen.getAntibodyScreen() == AntibodyScreenResult.POSITIVE
+            && crossmatch.getPerformedAt() != null && screen.getPerformedAt() != null
+            && crossmatch.getPerformedAt().isBefore(screen.getPerformedAt());
+    }
+
+    /**
+     * QA CX-011: the last place a bag can be stopped. A crossmatch since found
+     * incompatible, a group corrected after it, or antibodies it was never read
+     * against all stop the bag. A screen that merely lapsed on the way does not
+     * change what is in the bag. A bag released uncrossmatched in an emergency has
+     * no crossmatch to stand on and passes: nothing here may block a resuscitation.
+     */
+    private void requireCrossmatchStillStands(TransfusionRequest request, BloodUnit unit) {
+        TransfusionCrossmatch crossmatch = crossmatchRepository
+            .findByRequest_IdAndBloodUnit_Id(request.getId(), unit.getId()).orElse(null);
+        if (crossmatch == null) {
+            return;
+        }
+        if (!Boolean.TRUE.equals(crossmatch.getCompatible())) {
+            throw new FieldBusinessException(FIELD_BLOOD_UNIT_ID, "transfusion.issue.crossmatchIncompatible",
+                unit.getUnitNumber());
+        }
+        PatientBloodGroup screen = currentScreen(request);
+        if (screen != null
+                && (predatesNewAntibodies(screen, crossmatch) || !groupStillAllows(screen, unit, request, crossmatch))) {
+            throw new FieldBusinessException(FIELD_BLOOD_UNIT_ID, "transfusion.administration.groupChanged",
+                unit.getUnitNumber());
+        }
     }
 
     /** The pairing passes ABO/Rh, or is the one platelet Rh mismatch a recorded reason permits. */
@@ -885,11 +955,22 @@ public class TransfusionServiceImpl implements TransfusionService {
             request.getProductType(), childbearingPotential);
     }
 
-    /** A bag on its way to, or reserved for, another request cannot be crossmatched here. */
+    /**
+     * A bag held for another request cannot be crossmatched here, and one already
+     * hung has nothing left to decide. A bag issued for THIS request can: a result
+     * on it after a repeat screen is what stops it at the bedside.
+     */
     private void requireNotHeldElsewhere(BloodUnit unit, UUID requestId) {
-        boolean heldHere = unit.getRequest() != null && Objects.equals(unit.getRequest().getId(), requestId);
+        requireNotHeldByAnother(unit, requestId);
         if (unit.getStatus() == BloodUnitStatus.ISSUED
-                || (unit.getStatus() == BloodUnitStatus.CROSSMATCHED && !heldHere)) {
+                && administrationRepository.findByBloodUnit_Id(unit.getId()).isPresent()) {
+            throw new FieldBusinessException(FIELD_BLOOD_UNIT_ID, "transfusion.unit.alreadyHung", unit.getUnitNumber());
+        }
+    }
+
+    private static void requireNotHeldByAnother(BloodUnit unit, UUID requestId) {
+        boolean held = unit.getStatus() == BloodUnitStatus.ISSUED || unit.getStatus() == BloodUnitStatus.CROSSMATCHED;
+        if (held && unit.getRequest() != null && !Objects.equals(unit.getRequest().getId(), requestId)) {
             throw new FieldBusinessException(FIELD_BLOOD_UNIT_ID, "transfusion.unit.reserved", unit.getUnitNumber());
         }
     }

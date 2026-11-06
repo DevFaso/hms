@@ -94,6 +94,9 @@ public interface TransfusionService {
 
     TransfusionAdministrationResponseDTO startAdministration(TransfusionAdministrationRequestDTO request);
 
+    /** Colleagues who can be the second check at the bedside (QA CX-008). */
+    List<com.example.hms.payload.dto.pharmacy.StockWitnessCandidateDTO> listVerifierCandidates();
+
     TransfusionAdministrationResponseDTO completeAdministration(UUID administrationId, Integer volumeMl);
 
     TransfusionAdministrationResponseDTO stopAdministration(UUID administrationId, String reason);

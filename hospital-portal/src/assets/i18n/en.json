@@ -11647,6 +11647,8 @@
     "VT_SAVE_ERROR": "Could not save the visit type."
   },
   "TRANSFUSION": {
+    "EMERGENCY_RELEASE": "Emergency release",
+    "EMERGENCY_RELEASE_HINT": "Group O Rh-negative units of this product, released with no crossmatch. Use only when waiting would endanger the patient.",
     "VERIFIER_LOAD_ERROR": "The list of colleagues could not be loaded. Close this form and try again.",
     "ADMINISTRATIONS": "Transfusions on this request",
     "ADMIN_STATUS_IN_PROGRESS": "In progress",

@@ -11647,6 +11647,8 @@
     "VT_SAVE_ERROR": "No se pudo guardar el tipo de visita."
   },
   "TRANSFUSION": {
+    "EMERGENCY_RELEASE": "Entrega de emergencia",
+    "EMERGENCY_RELEASE_HINT": "Unidades O Rh negativo de este producto, entregadas sin prueba cruzada. Úselo solo si esperar pone en peligro al paciente.",
     "VERIFIER_LOAD_ERROR": "No se pudo cargar la lista de colegas. Cierre este formulario e inténtelo de nuevo.",
     "ADMINISTRATIONS": "Transfusiones de esta solicitud",
     "ADMIN_STATUS_IN_PROGRESS": "En curso",

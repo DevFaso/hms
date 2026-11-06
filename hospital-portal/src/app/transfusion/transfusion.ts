@@ -29,9 +29,9 @@ import {
   TransfusionRequestStatus,
   TransfusionService,
   TransfusionUrgency,
+  VerifierCandidate,
 } from '../services/transfusion.service';
 import { PatientResponse } from '../services/patient.service';
-import { AdministrationWitnessCandidate, NurseTaskService } from '../services/nurse-task.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { finalize } from 'rxjs';
@@ -87,7 +87,6 @@ export class TransfusionComponent implements OnInit {
 
   private readonly translate = inject(TranslateService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
-  private readonly nurseTasks = inject(NurseTaskService);
 
   tab = signal<Tab>('requests');
   loading = signal(false);
@@ -200,7 +199,7 @@ export class TransfusionComponent implements OnInit {
   hangSubmitting = signal(false);
   hangForm = { bloodUnitId: '', verifiedByUserId: '', verificationMethod: 'Wristband scan' };
   /** QA CX-008: colleagues the server accepts as the second check; a staff id was typed by hand. */
-  verifierCandidates = signal<AdministrationWitnessCandidate[]>([]);
+  verifierCandidates = signal<VerifierCandidate[]>([]);
   verifierCandidatesFailed = signal(false);
 
   showReactionModal = signal(false);
@@ -280,6 +279,10 @@ export class TransfusionComponent implements OnInit {
   }
 
   private showRequest(request: TransfusionRequestResponse, thenFocus = false): void {
+    // Another request's running bag must not sit under this one's header.
+    if (this.selectedRequest()?.id !== request.id) {
+      this.administrations.set([]);
+    }
     this.selectedRequest.set(request);
     this.loadAdministrations(thenFocus);
   }
@@ -307,6 +310,8 @@ export class TransfusionComponent implements OnInit {
         },
         error: () => {
           if (this.selectedRequest()?.id !== request.id) return;
+          // No stale actions: what these cards offer may already have ended.
+          this.administrations.set([]);
           this.administrationsState.set('failed');
         },
       });
@@ -579,9 +584,20 @@ export class TransfusionComponent implements OnInit {
       method: '',
       incompatibilityReason: '',
     };
+    // QA CX-011: a bag this request already holds can be crossmatched again, and a
+    // refused issue tells the lab to. The stock list does not hold it. A bag already
+    // hung has nothing left to decide.
+    const held = (this.selectedRequest()?.units ?? []).filter(
+      (u) => u.status === 'CROSSMATCHED' || (u.status === 'ISSUED' && !this.administrationOf(u.id)),
+    );
+    this.assignableUnits.set(held);
     this.transfusion.listAssignableUnits().subscribe({
-      next: (list) => this.assignableUnits.set(list ?? []),
-      error: () => this.assignableUnits.set([]),
+      next: (list) =>
+        this.assignableUnits.set([
+          ...held,
+          ...(list ?? []).filter((u) => !held.some((h) => h.id === u.id)),
+        ]),
+      error: () => this.assignableUnits.set(held),
     });
     this.showCrossmatchModal.set(true);
   }
@@ -619,6 +635,67 @@ export class TransfusionComponent implements OnInit {
       });
   }
 
+  /* ── Emergency release (QA CX-008) ── */
+
+  showEmergencyModal = signal(false);
+  emergencySubmitting = signal(false);
+  emergencyUnits = signal<BloodUnitResponse[]>([]);
+  emergencyUnitId = '';
+
+  /** The server's uncrossmatched release had no way in: a bag only reached the row by a crossmatch. */
+  canReleaseInEmergency(request: TransfusionRequestResponse): boolean {
+    return (
+      this.canLab &&
+      request.urgency === 'EMERGENCY' &&
+      request.status !== 'COMPLETED' &&
+      request.status !== 'CANCELLED'
+    );
+  }
+
+  /**
+   * Narrows the list to what the server releases; it stays the one that decides,
+   * and refuses anything else with its reason.
+   */
+  openEmergencyRelease(request: TransfusionRequestResponse): void {
+    this.emergencyUnitId = '';
+    this.emergencyUnits.set([]);
+    this.transfusion.listAssignableUnits().subscribe({
+      next: (list) =>
+        this.emergencyUnits.set(
+          (list ?? []).filter(
+            (u) =>
+              u.aboGroup === 'O' &&
+              u.rhFactor === 'NEGATIVE' &&
+              u.productType === request.productType,
+          ),
+        ),
+      error: () => this.toast.error(this.translate.instant('TRANSFUSION.LOAD_ERROR')),
+    });
+    this.showEmergencyModal.set(true);
+  }
+
+  closeEmergencyRelease(): void {
+    this.showEmergencyModal.set(false);
+  }
+
+  submitEmergencyRelease(): void {
+    const request = this.selectedRequest();
+    if (!request || !this.emergencyUnitId || this.emergencySubmitting()) return;
+    this.emergencySubmitting.set(true);
+    this.transfusion.issueUnit(request.id, this.emergencyUnitId).subscribe({
+      next: () => {
+        this.toast.success(this.translate.instant('TRANSFUSION.UNIT_ISSUED'));
+        this.emergencySubmitting.set(false);
+        this.showEmergencyModal.set(false);
+        this.refreshSelected();
+      },
+      error: (err: unknown) => {
+        this.emergencySubmitting.set(false);
+        this.toast.error(refusalReason(err) ?? this.translate.instant('TRANSFUSION.ISSUE_ERROR'));
+      },
+    });
+  }
+
   issueUnit(unit: BloodUnitResponse): void {
     const request = this.selectedRequest();
     if (!request) return;
@@ -641,8 +718,8 @@ export class TransfusionComponent implements OnInit {
       verificationMethod: 'Wristband scan',
     };
     this.verifierCandidatesFailed.set(false);
-    this.nurseTasks
-      .getAdministrationWitnessCandidates()
+    this.transfusion
+      .listVerifierCandidates()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (list) => this.verifierCandidates.set(list ?? []),
@@ -757,6 +834,8 @@ export class TransfusionComponent implements OnInit {
           this.toast.error(
             refusalReason(err) ?? this.translate.instant('TRANSFUSION.ADMIN_COMPLETE_ERROR'),
           );
+          // A colleague may have ended it: the cards say so.
+          this.loadAdministrations();
         },
       });
   }
@@ -780,6 +859,7 @@ export class TransfusionComponent implements OnInit {
         this.toast.error(
           refusalReason(err) ?? this.translate.instant('TRANSFUSION.ADMIN_STOP_ERROR'),
         );
+        this.loadAdministrations();
       },
     });
   }
@@ -853,7 +933,10 @@ export class TransfusionComponent implements OnInit {
     if (!current) return;
     this.transfusion.getRequest(current.id).subscribe({
       next: (full) => {
-        this.showRequest(full, thenFocus);
+        // The panel was closed while this was on its way: it stays closed.
+        if (this.selectedRequest()?.id === current.id) {
+          this.showRequest(full, thenFocus);
+        }
         this.loadRequests();
       },
       error: () => this.toast.error(this.translate.instant('TRANSFUSION.LOAD_ERROR')),

@@ -242,6 +242,13 @@ public class TransfusionController {
             .body(transfusionService.startAdministration(request));
     }
 
+    @GetMapping("/verifier-candidates")
+    @PreAuthorize(BEDSIDE)
+    @Operation(summary = "Colleagues who can be the second check at the bedside")
+    public ResponseEntity<List<com.example.hms.payload.dto.pharmacy.StockWitnessCandidateDTO>> listVerifierCandidates() {
+        return ResponseEntity.ok(transfusionService.listVerifierCandidates());
+    }
+
     @PostMapping("/administrations/{administrationId}/complete")
     @PreAuthorize(BEDSIDE)
     @Operation(summary = "Record that a unit finished")

@@ -27,3 +27,9 @@ CREATE TABLE IF NOT EXISTS lab.micro_culture_corrections (
 
 CREATE INDEX IF NOT EXISTS idx_micro_correction_culture
     ON lab.micro_culture_corrections (culture_result_id, corrected_at);
+
+-- QA CX-011: a repeat screen that disagrees with the standing group must give a
+-- reason. The reason was checked and then dropped: nothing stored it, so the history
+-- showed two groups and never why they differ.
+ALTER TABLE clinical.patient_blood_groups
+    ADD COLUMN IF NOT EXISTS correction_reason VARCHAR(500);

@@ -208,6 +208,10 @@ const NESTED_DIALOGS = new Map([
     SPEC_SHAPES,
   ],
   [
+    'src/app/transfusion/transfusion.html::div.detail-panel[transfusion-panel-1-title] => div.modal[transfusion-dialog-7-title]',
+    SPEC_SHAPES,
+  ],
+  [
     'src/app/transfusion/transfusion.html::div.detail-panel[transfusion-panel-1-title] => div.modal[transfusion-dialog-6-title]',
     SPEC_SHAPES,
   ],

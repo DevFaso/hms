@@ -11647,6 +11647,8 @@
     "VT_SAVE_ERROR": "Impossible d'enregistrer le type de visite."
   },
   "TRANSFUSION": {
+    "EMERGENCY_RELEASE": "Délivrance en urgence vitale",
+    "EMERGENCY_RELEASE_HINT": "Unités O Rh négatif de ce produit, délivrées sans épreuve de compatibilité. À utiliser seulement si attendre met le patient en danger.",
     "VERIFIER_LOAD_ERROR": "La liste des collègues n'a pas pu être chargée. Fermez ce formulaire et réessayez.",
     "ADMINISTRATIONS": "Transfusions de cette demande",
     "ADMIN_STATUS_IN_PROGRESS": "En cours",
