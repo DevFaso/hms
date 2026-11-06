@@ -550,10 +550,10 @@ public class TransfusionServiceImpl implements TransfusionService {
                 transfusionRequest.setStatus(TransfusionRequestStatus.CROSSMATCHED);
                 requestRepository.save(transfusionRequest);
             }
-        } else if (unit.getStatus() == BloodUnitStatus.CROSSMATCHED) {
-            // A bag reserved here and now found incompatible goes back on the shelf.
-            // Left reserved, nothing could ever release it: the issue refuses it and
-            // it is hidden from the units that can be crossmatched.
+        } else if (unit.getStatus() == BloodUnitStatus.CROSSMATCHED || unit.getStatus() == BloodUnitStatus.ISSUED) {
+            // A bag reserved here, or out and not hung, and now found incompatible goes
+            // back to the lab. Left as it was, nothing could ever release it: issue and
+            // hang refuse it, and it is hidden from the units that can be crossmatched.
             unit.setStatus(BloodUnitStatus.RETURNED);
             unitRepository.save(unit);
         }
@@ -607,10 +607,7 @@ public class TransfusionServiceImpl implements TransfusionService {
             // Emergency release: group O Rh-negative may go out uncrossmatched,
             // because in a haemorrhage the crossmatch takes longer than the
             // patient has. Anything else must be crossmatched first.
-            boolean emergencyRelease = request.isEmergency()
-                && unit.getAboGroup() == AboGroup.emergencyReleaseGroup()
-                && unit.getRhFactor() == AboGroup.emergencyReleaseRh();
-            if (!emergencyRelease) {
+            if (!emergencyReleaseAllowed(request, unit, crossmatch)) {
                 throw refusal;
             }
             log.warn("EMERGENCY uncrossmatched release of unit {} against request {}",
@@ -895,6 +892,30 @@ public class TransfusionServiceImpl implements TransfusionService {
             return new BusinessException("transfusion.issue.crossmatchOutdated", unit.getUnitNumber());
         }
         return null;
+    }
+
+    /**
+     * O Rh-negative is the universal RED CELL donor. It is not a universal donor of
+     * plasma or platelets, so a pairing the ABO/Rh rules reject for a known group does
+     * not go out on urgency. O negative red cells pass every group, so this blocks no
+     * resuscitation. Nor does urgency overrule what was found: an incompatible result
+     * for this bag, or a crossmatch older than antibodies found since, stops it here
+     * at the lab, not at the bedside.
+     */
+    private boolean emergencyReleaseAllowed(TransfusionRequest request, BloodUnit unit,
+                                            TransfusionCrossmatch crossmatch) {
+        if (!request.isEmergency()
+                || unit.getAboGroup() != AboGroup.emergencyReleaseGroup()
+                || unit.getRhFactor() != AboGroup.emergencyReleaseRh()) {
+            return false;
+        }
+        PatientBloodGroup screen = currentScreen(request);
+        if (crossmatch != null && !Boolean.TRUE.equals(crossmatch.getCompatible())) {
+            return false;
+        }
+        return screen == null
+            || (groupStillAllows(screen, unit, request, crossmatch)
+                && (crossmatch == null || !predatesNewAntibodies(screen, crossmatch)));
     }
 
     private static boolean predatesNewAntibodies(PatientBloodGroup screen, TransfusionCrossmatch crossmatch) {

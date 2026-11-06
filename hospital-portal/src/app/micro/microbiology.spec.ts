@@ -301,6 +301,20 @@ describe('MicrobiologyComponent', () => {
       expect(microServiceSpy.update.calls.mostRecent().args[1].growthResult).toBe('GROWTH');
     });
 
+    it('adding an organism keeps what the lab typed and has not saved', () => {
+      const preliminary = culture({ isolates: [] });
+      microServiceSpy.list.and.returnValue(of(page([preliminary])));
+      fixture.detectChanges();
+      component.select(preliminary);
+      component.editGrowthResult.set('GROWTH');
+      component.editNotes.set('Pas encore enregistre');
+      microServiceSpy.addIsolate.and.returnValue(of(culture({ isolates: [isolate] })));
+      component.isoOrganism.set('Escherichia coli');
+      component.submitIsolate();
+      expect(component.editGrowthResult()).toBe('GROWTH');
+      expect(component.editNotes()).toBe('Pas encore enregistre');
+    });
+
     it('shows what the report said before each correction', () => {
       const corrected = culture({
         status: 'CORRECTED',

@@ -836,6 +836,17 @@ describe('TransfusionComponent: a transfusion in progress (QA CX-008)', () => {
       expect(el('emergency-release')).toBeNull();
       expect(component.canReleaseInEmergency(mockRequest({ urgency: 'ROUTINE' }))).toBeFalse();
     });
+
+    it('is offered for red cells only: O is no universal donor of plasma or platelets', async () => {
+      await open(['ROLE_LAB_TECHNICIAN']);
+      const on = (productType: TransfusionRequestResponse['productType']) =>
+        component.canReleaseInEmergency(mockRequest({ urgency: 'EMERGENCY', productType }));
+      expect(on('PACKED_RED_CELLS')).toBeTrue();
+      expect(on('WHOLE_BLOOD')).toBeTrue();
+      expect(on('FRESH_FROZEN_PLASMA')).toBeFalse();
+      expect(on('PLATELETS')).toBeFalse();
+      expect(on('CRYOPRECIPITATE')).toBeFalse();
+    });
   });
 
   it('another request shows no cards of the one before, and a failed read leaves no actions', async () => {
