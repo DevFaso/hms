@@ -72,18 +72,36 @@ public interface DispenseRepository extends JpaRepository<Dispense, UUID> {
      * of that catalogue item, with no lot - in the given states, newest first, each
      * with what the return form prints (one query, however many fills).
      */
-    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"patient", "prescription", "stockLot"})
-    List<Dispense> findWithDetailsByPharmacy_IdAndMedicationCatalogItem_IdAndStockLotIsNullAndStatusInOrderByCreatedAtDesc(
-            UUID pharmacyId, UUID medicationCatalogItemId, Collection<DispenseStatus> statuses);
+    @org.springframework.data.jpa.repository.Query("""
+        SELECT d FROM Dispense d
+        LEFT JOIN FETCH d.patient
+        WHERE d.pharmacy.id = :pharmacyId
+          AND d.medicationCatalogItem.id = :medicationCatalogItemId
+          AND d.stockLot IS NULL
+          AND d.status IN :statuses
+        ORDER BY d.createdAt DESC, d.id DESC
+        """)
+    List<Dispense> findReturnableFillsOutOfLots(
+            @Param("pharmacyId") UUID pharmacyId,
+            @Param("medicationCatalogItemId") UUID medicationCatalogItemId,
+            @Param("statuses") Collection<DispenseStatus> statuses);
 
     /** QA D653: the fills taken from one lot in the given states, newest first. */
     List<Dispense> findByStockLot_IdAndStatusInOrderByCreatedAtDesc(UUID stockLotId,
                                                                     Collection<DispenseStatus> statuses);
 
     /** The return form lists every fill of a lot, each with what it prints (one query, however many fills). */
-    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"patient", "prescription", "stockLot"})
-    List<Dispense> findWithDetailsByStockLot_IdAndStatusInOrderByCreatedAtDesc(UUID stockLotId,
-            java.util.Collection<com.example.hms.enums.DispenseStatus> statuses);
+    @org.springframework.data.jpa.repository.Query("""
+        SELECT d FROM Dispense d
+        LEFT JOIN FETCH d.patient
+        LEFT JOIN FETCH d.stockLot
+        WHERE d.stockLot.id = :stockLotId
+          AND d.status IN :statuses
+        ORDER BY d.createdAt DESC, d.id DESC
+        """)
+    List<Dispense> findReturnableFillsOfLot(
+            @Param("stockLotId") UUID stockLotId,
+            @Param("statuses") Collection<DispenseStatus> statuses);
 
     /**
      * T-39: dispenses completed within a time window — used by the refill reminder scheduler

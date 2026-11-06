@@ -288,10 +288,8 @@ public class PatientController {
     @ApiResponse(responseCode = "404", description = "Patient not found",
         content = @Content(mediaType = "application/json",
             schema = @Schema(implementation = MessageResponse.class)))
-    // RCPT-CLIN: this replaces the whole record, the chronic conditions, the history summary and
-    // the care-team notes included, which the desk cannot read. The desk corrects through PATCH.
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_RECEPTIONIST','ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
     public ResponseEntity<PatientResponseDTO> updatePatient(
         @PathVariable UUID id,
         @Valid @RequestBody PatientRequestDTO dto,

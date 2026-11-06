@@ -249,14 +249,14 @@ public class StockTransactionServiceImpl implements StockTransactionService {
             if (lot.getInventoryItem() == null || !item.getId().equals(lot.getInventoryItem().getId())) {
                 throw new BusinessException(MessageUtil.resolve("stockTransaction.lot.wrongItem"));
             }
-            return dispenseRepository.findWithDetailsByStockLot_IdAndStatusInOrderByCreatedAtDesc(stockLotId,
+            return dispenseRepository.findReturnableFillsOfLot(stockLotId,
                     RETURNABLE_FILL_STATES);
         }
         if (item.getMedicationCatalogItem() == null || item.getPharmacy() == null) {
             return List.of();
         }
         return dispenseRepository
-                .findWithDetailsByPharmacy_IdAndMedicationCatalogItem_IdAndStockLotIsNullAndStatusInOrderByCreatedAtDesc(
+                .findReturnableFillsOutOfLots(
                         item.getPharmacy().getId(), item.getMedicationCatalogItem().getId(),
                         RETURNABLE_FILL_STATES);
     }

@@ -150,9 +150,9 @@ class DispenseJsonbPostgresIT {
         insertFill(pharmacyId, catalogueItemId, UUID.randomUUID(), com.example.hms.enums.DispenseStatus.COMPLETED);
 
         List<Dispense> ofTheLot = new TransactionTemplate(transactionManager).execute(status ->
-            repository.findWithDetailsByStockLot_IdAndStatusInOrderByCreatedAtDesc(lotId, states));
+            repository.findReturnableFillsOfLot(lotId, states));
         List<Dispense> ofTheItem = new TransactionTemplate(transactionManager).execute(status ->
-            repository.findWithDetailsByPharmacy_IdAndMedicationCatalogItem_IdAndStockLotIsNullAndStatusInOrderByCreatedAtDesc(
+            repository.findReturnableFillsOutOfLots(
                 pharmacyId, catalogueItemId, states));
 
         assertThat(ofTheLot).hasSize(fills).isSortedAccordingTo(

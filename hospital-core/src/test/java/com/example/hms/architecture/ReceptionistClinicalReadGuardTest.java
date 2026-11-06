@@ -58,10 +58,8 @@ class ReceptionistClinicalReadGuardTest {
         "DigitalSignatureController#isReportSigned",
         "DigitalSignatureController#verifySignature",
         "RecordAccessController#decide",
-        // They write text the role cannot read: the check-out the discharge diagnoses and the
-        // instructions, the full replace of a patient the conditions and the care-team notes.
-        "EncounterController#checkOut",
-        "PatientController#updatePatient");
+        // It writes the discharge diagnoses and the instructions, which the role cannot read.
+        "EncounterController#checkOut");
 
     /**
      * Type#field the role still receives, and why: what the desk's workflow reads
@@ -156,11 +154,11 @@ class ReceptionistClinicalReadGuardTest {
         Map.entry("PatientProfileUpdateRequestDTO#bloodType", "the desk records and corrects it on the demographics dialog"),
         Map.entry("PatientProfileUpdateRequestDTO#careTeamNotes", "refused for the desk: PatientController#patchPatient"),
         Map.entry("PatientProfileUpdateRequestDTO#chronicConditions", "refused for the desk: PatientController#patchPatient"),
-        Map.entry("PatientRequestDTO#allergies", "a NEW patient: what the desk is told at registration, imported as rows"),
-        Map.entry("PatientRequestDTO#bloodType", "a NEW patient: nothing to overwrite"),
-        Map.entry("PatientRequestDTO#careTeamNotes", "a NEW patient: nothing to overwrite"),
-        Map.entry("PatientRequestDTO#chronicConditions", "a NEW patient: nothing to overwrite"),
-        Map.entry("PatientRequestDTO#medicalHistorySummary", "a NEW patient: nothing to overwrite"),
+        Map.entry("PatientRequestDTO#allergies", "a NEW patient: what the desk is told at registration, imported as rows; a PUT never writes it"),
+        Map.entry("PatientRequestDTO#bloodType", "the desk records and corrects it on the demographics dialog"),
+        Map.entry("PatientRequestDTO#careTeamNotes", "a NEW patient; on a PUT the desk's value is dropped and the stored one kept (PatientServiceImpl#updatePatient)"),
+        Map.entry("PatientRequestDTO#chronicConditions", "a NEW patient; on a PUT the desk's value is dropped and the stored one kept (PatientServiceImpl#updatePatient)"),
+        Map.entry("PatientRequestDTO#medicalHistorySummary", "a NEW patient; on a PUT the desk's value is dropped and the stored one kept (PatientServiceImpl#updatePatient)"),
         Map.entry("PaymentReasonRequestDTO#reason", "why a payment was refused"),
         Map.entry("PrenatalRescheduleRequestDTO#notes", "booking notes the desk writes"),
         Map.entry("PrenatalScheduleRequestDTO#highRisk", "picks the cadence of a read-only calculation; stores nothing"),

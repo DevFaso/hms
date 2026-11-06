@@ -14,6 +14,9 @@ import java.lang.annotation.Target;
  * writes, {@code /prenatal/schedule} reads). An access-audit row is not a write of
  * the record: the audit log keeps working in downtime on purpose.
  *
+ * <p>The one source of truth: {@code WriteAuditInterceptor} reads it too, so a declared read
+ * leaves no {@code DATA_CREATE} row and anything else under POST is a recorded write.
+ *
  * <p>{@code ReadOnlyPostGuardTest} fails when a POST named as a read is neither
  * declared here nor listed there as a write despite its name.
  */

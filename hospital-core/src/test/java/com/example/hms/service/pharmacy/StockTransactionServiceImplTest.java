@@ -952,7 +952,7 @@ class StockTransactionServiceImplTest {
             when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
             stubHospitalScope();
             when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
-            when(dispenseRepository.findWithDetailsByStockLot_IdAndStatusInOrderByCreatedAtDesc(eq(stockLotId), any()))
+            when(dispenseRepository.findReturnableFillsOfLot(eq(stockLotId), any()))
                     .thenReturn(List.of(open, partlyBack, allBack));
             when(roleValidator.hasAnyAuthority(any(String[].class))).thenReturn(true);
             when(stockTransactionRepository.sumQuantityByReferences(any(), eq(java.util.EnumSet.of(StockTransactionType.RETURN))))
@@ -983,7 +983,7 @@ class StockTransactionServiceImplTest {
             when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
             stubHospitalScope();
             when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
-            when(dispenseRepository.findWithDetailsByStockLot_IdAndStatusInOrderByCreatedAtDesc(eq(stockLotId), any()))
+            when(dispenseRepository.findReturnableFillsOfLot(eq(stockLotId), any()))
                     .thenReturn(fills);
             when(roleValidator.hasAnyAuthority(any(String[].class))).thenReturn(false);
             UUID newestFullyReturned = fills.get(0).getId();
@@ -1020,7 +1020,7 @@ class StockTransactionServiceImplTest {
             when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
             stubHospitalScope();
             when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
-            when(dispenseRepository.findWithDetailsByStockLot_IdAndStatusInOrderByCreatedAtDesc(eq(stockLotId), any()))
+            when(dispenseRepository.findReturnableFillsOfLot(eq(stockLotId), any()))
                     .thenReturn(List.of(open));
             when(roleValidator.hasAnyAuthority(any(String[].class))).thenReturn(false);
 
@@ -1042,7 +1042,7 @@ class StockTransactionServiceImplTest {
 
             assertThatThrownBy(() -> service.listReturnableDispenses(inventoryItemId, stockLotId))
                     .isInstanceOf(ResourceNotFoundException.class);
-            verify(dispenseRepository, never()).findWithDetailsByStockLot_IdAndStatusInOrderByCreatedAtDesc(any(), any());
+            verify(dispenseRepository, never()).findReturnableFillsOfLot(any(), any());
         }
 
         @Test

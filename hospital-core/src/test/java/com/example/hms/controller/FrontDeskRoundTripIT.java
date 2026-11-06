@@ -647,6 +647,38 @@ class FrontDeskRoundTripIT extends BaseIT {
     }
 
     @Test
+    @DisplayName("RCPT-CLIN: a desk PUT keeps the clinical text it cannot read; a desk PATCH of it is refused")
+    void aDeskPutKeepsTheClinicalText() throws Exception {
+        aicha.setMedicalHistorySummary("Ant\u00e9c\u00e9dent de l'interne");
+        aicha.setCareTeamNotes("Note de l'\u00e9quipe");
+        aicha.setChronicConditions("HTA");
+        patientRepository.saveAndFlush(aicha);
+
+        mockMvc.perform(put(API + "/patients/{id}", aicha.getId()).contextPath(API)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"firstName":"A\u00efcha","lastName":"Kabor\u00e9","dateOfBirth":"1991-07-22","gender":"F",
+                     "phoneNumberPrimary":"70 16 10 99","city":"Koudougou","country":"Burkina Faso",
+                     "emergencyContactName":"Adjaratou Kabor\u00e9","emergencyContactRelationship":"M\u00e8re",
+                     "medicalHistorySummary":"","careTeamNotes":"","chronicConditions":[],
+                     "userId":"%s","hospitalId":"%s"}
+                    """.formatted(aicha.getUser().getId(), hospital.getId()))
+                .with(asReceptionist()))
+            .andExpect(status().isOk());
+        mockMvc.perform(patch(API + "/patients/{id}", aicha.getId()).contextPath(API)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"careTeamNotes\":\"\"}")
+                .with(asReceptionist()))
+            .andExpect(status().isForbidden());
+
+        Patient stored = patientRepository.findById(aicha.getId()).orElseThrow();
+        assertThat(stored.getCity()).isEqualTo("Koudougou");
+        assertThat(stored.getMedicalHistorySummary()).isEqualTo("Ant\u00e9c\u00e9dent de l'interne");
+        assertThat(stored.getCareTeamNotes()).isEqualTo("Note de l'\u00e9quipe");
+        assertThat(stored.getChronicConditions()).isEqualTo("HTA");
+    }
+
+    @Test
     @DisplayName("D1383: PUT /patients/{id} refuses a blood type outside ABO x Rh by name, as PATCH does; a valid one is stored")
     void aPatientPutRefusesAFreeTextBloodType() throws Exception {
         String body = """
