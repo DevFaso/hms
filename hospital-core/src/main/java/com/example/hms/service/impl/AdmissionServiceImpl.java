@@ -345,11 +345,15 @@ public class AdmissionServiceImpl implements AdmissionService {
                 com.example.hms.enums.InvoiceStatus.CANCELLED)) {
             throw new ConflictException("admission.cancel.billed");
         }
-        admission.cancel(cancelReason, com.example.hms.security.CallerIdentity.currentUserId(),
-            LocalDateTime.now(java.time.ZoneId.systemDefault()));
+        java.util.UUID cancelledBy = com.example.hms.security.CallerIdentity.currentUserId();
+        admission.cancel(cancelReason, cancelledBy, LocalDateTime.now(java.time.ZoneId.systemDefault()));
         // A cancelled admission must not keep its bed occupied
         bedAssignmentService.releaseBed(admission);
         admissionRepository.save(admission);
+        // QA D1393: the stay's orders end, then its encounter, so an order written
+        // from now on is an outpatient order (no discharge meaning, no bill).
+        stayEncounters.recordCancellation(admission, cancelledBy);
+        encounterAutoCompletion.cancelAdmissionEncounters(admission.getId());
         // QA D764: a cancelled stay never happened; the patient is registered only.
         syncRegistrationStayStatus(admission, com.example.hms.enums.PatientStayStatus.REGISTERED);
     }

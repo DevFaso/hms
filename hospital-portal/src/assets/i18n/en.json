@@ -1653,6 +1653,7 @@
       "ROI_STATUS": "Release-of-information request {{verb}}",
       "ENCOUNTER_STATUS_DENIED": "Encounter status change refused: the encounter is not assigned to the caller",
       "ENCOUNTER_STATUS_UPDATED": "Encounter status changed from {{from}} to {{to}}",
+      "ENCOUNTER_CANCELLED_WITH_ADMISSION": "Encounter closed: admission {{admission}} was cancelled (was {{previous}})",
       "ENCOUNTER_DISCHARGE_COMPLETED": "Encounter closed at the discharge of admission {{admission}} (was {{previous}})",
       "ENCOUNTER_ADMISSION_COMPLETED": "Encounter closed when admission {{admission}} began (was {{previous}})",
       "CHECKED_IN": "Patient checked in for appointment {{appointment}}; encounter {{encounter}} opened as arrived. {{identity}} {{insurance}}",
@@ -1947,6 +1948,7 @@
       "PHARMACIST_RECORDED_PARTNER_DISPENSE": "Partner dispense recorded by the pharmacist"
     },
     "WARD_ORDER_TRIGGER": {
+      "ADMISSION_CANCELLED": "admission cancelled",
       "PARTNER_SMS_ACCEPT": "partner accepted by SMS",
       "PARTNER_SMS_REJECT": "partner refused by SMS",
       "PARTNER_SMS_CONFIRM_DISPENSE": "partner confirmed dispensing by SMS",
@@ -4393,7 +4395,9 @@
     "MARK_ALL_READ": "Mark All Read",
     "MEDICATION": "Medication",
     "MEDICATIONS": "Medications",
-    "MEDICATIONS_DUE": "Medications Due",
+    "MEDICATIONS_AS_NEEDED_HINT": "+ {{count}} as needed",
+    "MEDICATIONS_DUE": "Scheduled doses due",
+    "MEDICATIONS_OVERDUE": "Overdue doses",
     "MEDICATION_LIST": "Medication List",
     "MEDICATION_MAR": "Medication Administration Record",
     "MEDIUM": "Medium",
@@ -11905,6 +11909,7 @@
     "TRANSFER_CANCEL_CONFIRM": "Cancel transfer"
   },
   "EMAR": {
+    "ORDER_NO_LONGER_ACTIVE": "This order is no longer active. No dose was recorded.",
     "ACTION_RECORD_GIVEN": "Record as given",
     "ADMIN_STATUS": {
       "GIVEN": "given",

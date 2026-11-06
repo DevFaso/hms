@@ -75,6 +75,30 @@ public class EncounterAutoCompletionService {
     }
 
     /**
+     * QA D1393: a cancelled admission's own open encounters end with it, as
+     * CANCELLED: the stay never happened, so unlike a discharge this hands
+     * nothing to billing and writes no summary. The cancel closed nothing, so
+     * the encounter stayed IN_PROGRESS for ever and took every later order of
+     * the patient (the D414 lookup), each then refused at the pharmacy.
+     */
+    @Transactional
+    public void cancelAdmissionEncounters(UUID admissionId) {
+        if (admissionId == null) {
+            return;
+        }
+        List<Encounter> active = encounterRepository.findByAdmissionIdAndStatusNotIn(admissionId, TERMINAL_STATUSES);
+        LocalDateTime now = LocalDateTime.now(java.time.ZoneId.systemDefault());
+        for (Encounter enc : active) {
+            String previous = enc.getStatus() != null ? enc.getStatus().name() : null;
+            enc.setStatus(EncounterStatus.CANCELLED);
+            enc.setCheckoutTimestamp(now);
+            encounterRepository.save(enc);
+            trackerEventPublisher.publishStatusTransition(enc, previous, EncounterStatus.CANCELLED.name());
+            emitAudit(enc, previous, "Encounter cancelled with admission " + admissionId);
+        }
+    }
+
+    /**
      * QA D712: the visit that led to an admission (the emergency visit, or the
      * same-day consultation that decided it) stayed IN_PROGRESS for ever: it
      * carries no admission id, so the discharge (D134) rightly never touched

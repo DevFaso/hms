@@ -6,6 +6,10 @@
     </p>
   </header>
 
+  @if (orderGoneNotice(); as notice) {
+    <div class="emar__notice" role="alert" data-testid="emar-order-gone">{{ notice }}</div>
+  }
+
   @switch (state()) {
     @case ('loading') {
       <div class="emar__state emar__state--loading" data-testid="emar-loading">

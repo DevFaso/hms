@@ -346,6 +346,12 @@ class AdmissionServiceImplTest {
         assertThat(admission.getStatus()).isEqualTo(AdmissionStatus.CANCELLED);
         assertThat(admission.getCancellationReason()).isEqualTo(CANCEL_REASON);
         assertThat(admission.getCancelledAt()).isNotNull();
+        // QA D1393: its orders, then its encounter, end with it; never the discharge's meaning.
+        org.mockito.InOrder ends = org.mockito.Mockito.inOrder(stayEncounters, encounterAutoCompletion);
+        ends.verify(stayEncounters).recordCancellation(eq(admission), any());
+        ends.verify(encounterAutoCompletion).cancelAdmissionEncounters(admissionId);
+        verify(stayEncounters, never()).recordDischarge(any(), any());
+        verify(encounterAutoCompletion, never()).completeAdmissionEncounters(any());
     }
 
     /** QA D1381 (round 32): a blank, missing or over-long reason is refused on "reason"; nothing changes. */

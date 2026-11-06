@@ -191,18 +191,30 @@ public interface EncounterRepository
     List<Encounter> findByAdmissionIdAndStatusNotIn(UUID admissionId, Collection<EncounterStatus> statuses);
 
     /**
-     * The patient's open hospital stay at this hospital led by this clinician
-     * (QA D136): a prescription's encounter must carry its prescriber.
+     * The patient's open hospital stays at this hospital, latest first (QA
+     * D136, D414): what a new order with no encounter named is filed on. QA
+     * D1393: an encounter whose admission has ended ({@code endedStays}) is no
+     * open stay, whatever its own status says. Cancelled stays left their
+     * encounters IN_PROGRESS, so every later order landed on the stay that
+     * never happened and the pharmacy refused it. {@code admissionId} is a bare
+     * column with no key, so a missing admission row does not end a stay.
      */
-    Optional<Encounter> findFirstByPatient_IdAndStaff_IdAndHospital_IdAndAdmissionIdIsNotNullAndStatusNotInOrderByEncounterDateDesc(
-            UUID patientId, UUID staffId, UUID hospitalId, Collection<EncounterStatus> statuses);
-
-    /**
-     * The patient's open hospital stay at this hospital, whoever leads it
-     * (QA D414): a consultant's order for an inpatient belongs to the stay.
-     */
-    Optional<Encounter> findFirstByPatient_IdAndHospital_IdAndAdmissionIdIsNotNullAndStatusNotInOrderByEncounterDateDesc(
-            UUID patientId, UUID hospitalId, Collection<EncounterStatus> statuses);
+    @Query("""
+        SELECT e FROM Encounter e
+        WHERE e.patient.id = :patientId
+          AND e.hospital.id = :hospitalId
+          AND e.admissionId IS NOT NULL
+          AND e.status NOT IN :closedStatuses
+          AND NOT EXISTS (
+              SELECT a.id FROM Admission a
+              WHERE a.id = e.admissionId AND a.status IN :endedStays)
+        ORDER BY e.encounterDate DESC, e.id DESC
+    """)
+    List<Encounter> findOpenStayEncounters(
+            @Param("patientId") UUID patientId,
+            @Param("hospitalId") UUID hospitalId,
+            @Param("closedStatuses") Collection<EncounterStatus> closedStatuses,
+            @Param("endedStays") Collection<com.example.hms.enums.AdmissionStatus> endedStays);
 
     /** An admission's own encounter, most recent first (QA D135). */
     Optional<Encounter> findFirstByAdmissionIdOrderByEncounterDateDesc(UUID admissionId);

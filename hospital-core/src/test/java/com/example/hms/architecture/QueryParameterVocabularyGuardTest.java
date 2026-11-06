@@ -58,7 +58,6 @@ class QueryParameterVocabularyGuardTest {
     private static final Map<String, String> CHECKED_ELSEWHERE = Map.ofEntries(
         Map.entry("AdmissionController#status", D1384 + "AdmissionServiceImpl.admissionStatusParam"),
         Map.entry("AdmissionController#admissionType", D1384 + "AdmissionServiceImpl.getOrderSetsByHospital"),
-        Map.entry("NurseTaskController#status", D1384 + "NurseTaskServiceImpl.getHandoffSummaries"),
         Map.entry("NurseTaskController#assignee", D1384 + "NurseTaskController.resolveAssignee"),
         Map.entry("AppointmentController#action", "AppointmentServiceImpl: FieldBusinessException(action, appointment.invalidAction)"),
         Map.entry("AuditEventLogController#status", NO_FIELD + "audit.status.invalid in AuditEventLogController"),
@@ -110,7 +109,9 @@ class QueryParameterVocabularyGuardTest {
             }
         }
         assertThat(viaOneOf).as("parameters read through oneOf")
-            .contains("ReceptionController#status", "MaternalHistoryController#riskCategory", "BirthPlanController#direction");
+            .contains("ReceptionController#status", "MaternalHistoryController#riskCategory", "BirthPlanController#direction",
+                // QA D1408: every list of the nurse station.
+                "NurseTaskController#status");
         Set<String> stale = new TreeSet<>(CHECKED_ELSEWHERE.keySet());
         stale.removeAll(unchecked);
         unchecked.removeAll(CHECKED_ELSEWHERE.keySet());

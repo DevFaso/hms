@@ -865,4 +865,76 @@ describe('EmarComponent (P1 #8 — five-rights barcode-scan loop)', () => {
 
     expect(component['verification']()).toBe(verified);
   });
+
+  describe('QA d1392: the order is withdrawn while its panel is open', () => {
+    const refusal = new HttpErrorResponse({
+      status: 409,
+      error: { message: 'Cette prescription a été retirée par le prescripteur.' },
+    });
+
+    beforeEach(() => {
+      nurseSpy.getMedicationMAR.and.returnValue(of([sampleTask]));
+      fixture.detectChanges();
+      (component as unknown as { selectTask(t: unknown): void }).selectTask(sampleTask);
+      nurseSpy.getMedicationMAR.calls.reset();
+      nurseSpy.getMedicationMAR.and.returnValue(of([]));
+    });
+
+    const noticeAfter = (): string => {
+      fixture.detectChanges();
+      const el = fixture.nativeElement as HTMLElement;
+      return el.querySelector('[data-testid="emar-order-gone"]')?.textContent?.trim() ?? '';
+    };
+
+    it('the bedside check closes the panel, says why and reads the queue again', () => {
+      nurseSpy.verifyMedication.and.returnValue(throwError(() => refusal));
+      const c = component as unknown as {
+        patientScan: { set(v: string): void };
+        medicationScan: { set(v: string): void };
+        doseScan: { set(v: string): void };
+        routeScan: { set(v: string): void };
+        verify(): void;
+        activeTask(): unknown;
+      };
+      c.patientScan.set('p');
+      c.medicationScan.set('m');
+      c.doseScan.set('d');
+      c.routeScan.set('r');
+      c.verify();
+
+      expect(c.activeTask()).toBeNull();
+      expect(noticeAfter()).toContain('retirée');
+      expect(nurseSpy.getMedicationMAR).toHaveBeenCalledOnceWith({ status: 'PENDING' });
+    });
+
+    it('a dose refused the same way records nothing and leaves no panel open', () => {
+      nurseSpy.administerMedication.and.returnValue(throwError(() => refusal));
+      const c = component as unknown as {
+        sendAdministration(id: string, p: { status: string }): void;
+        activeTask(): unknown;
+      };
+      c.sendAdministration(sampleTask.id, { status: 'GIVEN' });
+
+      expect(c.activeTask()).toBeNull();
+      expect(toastSpy.success).not.toHaveBeenCalled();
+      expect(noticeAfter()).toContain('retirée');
+    });
+
+    it('any other refusal keeps the panel, so the nurse can act on it', () => {
+      nurseSpy.administerMedication.and.returnValue(
+        throwError(
+          () => new HttpErrorResponse({ status: 400, error: { message: 'Motif requis' } }),
+        ),
+      );
+      const c = component as unknown as {
+        sendAdministration(id: string, p: { status: string }): void;
+        activeTask(): unknown;
+      };
+      c.sendAdministration(sampleTask.id, { status: 'GIVEN' });
+
+      expect(c.activeTask()).not.toBeNull();
+      expect(noticeAfter()).toBe('');
+      expect(toastSpy.error).toHaveBeenCalledWith('Motif requis');
+    });
+  });
 });
