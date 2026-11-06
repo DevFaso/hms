@@ -3,7 +3,6 @@ package com.example.hms.service.impl;
 import com.example.hms.model.Prescription;
 
 import java.text.Normalizer;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -36,9 +35,10 @@ import java.util.regex.Pattern;
  * gives {@link Kind#AS_NEEDED}, from that flag. The text reader
  * {@link #read(String)} never does; a frequency it reads as "as needed" on an
  * order not ticked is {@link Kind#UNREAD} (open, every later dose asks why).
- * The text feeds one more thing: the safety net {@link #looksAsNeeded}, which
- * makes the prescriber confirm a conditional frequency written without the
- * tick (MarAsNeededFlagGuardTest).
+ * The text feeds one more thing: the rule on an order not ticked
+ * ({@link FrequencyWording}, QA D1391 / D1395), which accepts only a fixed
+ * schedule (MarAsNeededFlagGuardTest). That rule never changes how an order
+ * already written is read here.
  */
 public final class MarDoseSchedule {
 
@@ -146,8 +146,7 @@ public final class MarDoseSchedule {
      * <p>QA D1378 (round 32): this list no longer makes an order as-needed. It
      * is frozen: V260 backfilled {@code as_needed} from exactly these phrases
      * (PrnAsNeededBackfillMigrationIT holds the SQL and this list equal), and
-     * it is one half of the safety net {@link #looksAsNeeded}; the other half
-     * is the broad conditional detector. Do not grow it: grow the detector.
+     * {@link FrequencyWording} refuses it on an order not ticked. Do not grow it.
      */
     static final List<String> AS_NEEDED_PHRASES = List.of(
         "PRN", "AS NEEDED", "AS REQUIRED", "WHEN NEEDED", "WHEN REQUIRED", "IF NEEDED", "IF REQUIRED",
@@ -156,28 +155,6 @@ public final class MarDoseSchedule {
         "SI NECESSAIRE", "SI DOULEUR", "SI FIEVRE", "EN CAS DE DOULEUR", "EN CAS DE FIEVRE",
         "SI NECESARIO", "SI ES NECESARIO", "EN CASO NECESARIO", "SEGUN NECESIDAD", "A DEMANDA",
         "SI DOLOR", "SI FIEBRE", "EN CASO DE DOLOR", "EN CASO DE FIEBRE");
-
-    /** QA D1378: a threshold ("si EVA > 4", "T >= 38,5") makes a frequency conditional. */
-    private static final Pattern COMPARISON = Pattern.compile("[<>\u2264\u2265]");
-
-    /**
-     * QA D1378: words that make a frequency conditional wherever they stand
-     * (upper case, accents removed; a run of single letters is one word, so
-     * "p.r.n." is PRN, "S.O.S." SOS and "s/p" SP).
-     */
-    private static final Set<String> CONDITIONAL_WORDS = Set.of(
-        "PRN", "SOS", "SP", "SI", "IF", "WHEN", "WHENEVER", "QUAND", "LORSQUE", "CUANDO", "SELON", "SEGUN",
-        "BESOIN", "BESOINS", "DEMANDE", "DEMAND", "DEMANDA", "NECESSITE", "NECESSAIRE", "NECESARIO", "NECESARIA",
-        "NECESIDAD", "NECESITE", "NECESITA", "NECESSARY", "NEEDED", "REQUIRED", "PRECISA", "PRECISE");
-
-    /** QA D1378: phrases that make a frequency conditional (words separated by one space). */
-    private static final List<String> CONDITIONAL_PHRASES = List.of(
-        "PRO RE NATA", "S IL", "SIL YA", "EN CAS", "EN CASO", "ON REQUEST", "AU CAS");
-
-    /** QA D1378: what may follow "for" without making it conditional: a count or a duration. */
-    private static final Set<String> NOT_A_SYMPTOM = Set.of(
-        "A", "AN", "ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE", "TEN",
-        "DAY", "DAYS", "WEEK", "WEEKS", "MONTH", "MONTHS", "YEAR", "YEARS", "HOUR", "HOURS", "LIFE");
 
     /** Any run of characters that is not a letter or a digit (one class, no backtracking). */
     private static final Pattern NOT_ALPHANUMERIC = Pattern.compile("[^A-Z0-9]+");
@@ -334,6 +311,11 @@ public final class MarDoseSchedule {
             || PER_DAY_WORDS.matcher(f).region(from, f.length()).lookingAt();
     }
 
+    /** QA D1391: a per-day slash anywhere: "3 cp/j", which no count before it makes a repeat here. */
+    static boolean hasPerDaySlash(String text) {
+        return PER_DAY_SLASH.matcher(normalize(text)).find();
+    }
+
     /** The count of a "3 fois par jour" (or "1-0-1") frequency, or {@code null}. */
     private static Integer timesPerDay(String f) {
         String compact = f.replace(" ", "");
@@ -372,7 +354,7 @@ public final class MarDoseSchedule {
     }
 
     /** Upper case, accents removed, separators read as spaces, number words read as digits. */
-    private static String normalize(String frequency) {
+    static String normalize(String frequency) {
         String plain = accentlessUpper(frequency.trim())
             .replace('_', ' ').replace('.', ' ').replace(',', ' ');
         return wordsAsDigits(wordsAsDigits(plain, COUNT_WORD, false), HOUR_WORD, true);
@@ -394,7 +376,7 @@ public final class MarDoseSchedule {
      * Reads the frequency as written (accents and case ignored, punctuation
      * read as a space), not the count-as-digits form {@link #normalize} gives.
      */
-    private static boolean isAsNeeded(String frequency) {
+    static boolean isAsNeeded(String frequency) {
         String words = NOT_ALPHANUMERIC.matcher(accentlessUpper(frequency)).replaceAll(" ").trim();
         for (String phrase : AS_NEEDED_PHRASES) {
             if (startsAWord(words, phrase)) {
@@ -404,77 +386,8 @@ public final class MarDoseSchedule {
         return false;
     }
 
-    /**
-     * QA D1378 / D1360 (round 32): the SAFETY NET. Whether a frequency text
-     * looks conditional ("as needed"), so an order written with it but not
-     * ticked as needed is refused until the prescriber confirms
-     * ({@code PrnMinInterval}). Broad on purpose: a false positive costs the
-     * prescriber one answer, a false negative a PRN order with no minimum
-     * interval. True for the round-31 phrase list, and for:
-     * <ul>
-     *   <li>a comparison ("si EVA &gt; 4", "T &ge; 38,5");</li>
-     *   <li>a trigger word anywhere: PRN (also "p.r.n."), SOS ("S.O.S."), S/P,
-     *       si, if, when, quand, cuando, selon, segun, besoin, demande,
-     *       demand(a), necessite, necessaire, necesario, necesidad, necessary,
-     *       needed, required, precisa, necesite ...;</li>
-     *   <li>a trigger phrase: pro re nata, s'il, en cas, en caso, on request;</li>
-     *   <li>"for" followed by a word that is not a count or a duration
-     *       ("for pain", not "for 5 days").</li>
-     * </ul>
-     * Case, accents and punctuation are ignored; a run of single letters
-     * ("P.R.N.", "S.O.S.", "s/p") is read as one word. A single dose (STAT)
-     * is not exempt: "PRN STAT" asks too. The shared fixture
-     * {@code as-needed-frequency.cases.json} holds every round-31 and round-32
-     * wording (MarDoseScheduleTest).
-     */
-    public static boolean looksAsNeeded(String frequency) {
-        if (frequency == null || frequency.isBlank()) {
-            return false;
-        }
-        if (COMPARISON.matcher(frequency).find() || isAsNeeded(frequency)) {
-            return true;
-        }
-        String words = NOT_ALPHANUMERIC.matcher(accentlessUpper(frequency)).replaceAll(" ").trim();
-        List<String> tokens = joinSingleLetters(words.split(" "));
-        for (int i = 0; i < tokens.size(); i++) {
-            String token = tokens.get(i);
-            if (CONDITIONAL_WORDS.contains(token)
-                || ("FOR".equals(token) && i + 1 < tokens.size() && isSymptomWord(tokens.get(i + 1)))) {
-                return true;
-            }
-        }
-        String spaced = " " + String.join(" ", tokens) + " ";
-        return CONDITIONAL_PHRASES.stream().anyMatch(phrase -> spaced.contains(" " + phrase + " "));
-    }
-
-    /** "P R N" (from "p.r.n."), "S O S", "S P" (from "s/p"): a run of single letters read as one word. */
-    private static List<String> joinSingleLetters(String[] tokens) {
-        List<String> out = new ArrayList<>();
-        StringBuilder run = new StringBuilder();
-        for (String token : tokens) {
-            if (token.length() == 1 && Character.isLetter(token.charAt(0))) {
-                run.append(token);
-                continue;
-            }
-            if (!run.isEmpty()) {
-                out.add(run.toString());
-                run.setLength(0);
-            }
-            out.add(token);
-        }
-        if (!run.isEmpty()) {
-            out.add(run.toString());
-        }
-        return out;
-    }
-
-    /** After "for": a word that is not a count or a duration ("for pain", "for nausea"; not "for 5 days"). */
-    private static boolean isSymptomWord(String token) {
-        return !token.isEmpty() && Character.isLetter(token.charAt(0)) && !NOT_A_SYMPTOM.contains(token);
-    }
-
     /** Upper case with the accents removed. */
-    private static String accentlessUpper(String text) {
+    static String accentlessUpper(String text) {
         return Normalizer.normalize(text, Normalizer.Form.NFD)
             .replaceAll("\\p{M}", "")
             .toUpperCase(Locale.ROOT);
@@ -509,7 +422,7 @@ public final class MarDoseSchedule {
      * "ONCE" before "veces" is Spanish eleven (English "once" has no
      * "fois/veces/times" after it, so it never reaches here).
      */
-    private static String countDigitOf(String word) {
+    static String countDigitOf(String word) {
         return switch (word) {
             case "UNE", "UN", "UNA", "UNO", "ONE" -> "1";
             case "DEUX", "DOS", "TWO" -> "2";
@@ -531,21 +444,11 @@ public final class MarDoseSchedule {
     /** QA D1237: a number of hours as a word in EN, FR and ES ("ONCE" before an hour unit is Spanish eleven). */
     private static String hoursDigitOf(String word) {
         return switch (word) {
-            case "UNE", "UN", "UNA", "ONE" -> "1";
-            case "DEUX", "DOS", "TWO" -> "2";
-            case "TROIS", "TRES", "THREE" -> "3";
-            case "QUATRE", "CUATRO", "FOUR" -> "4";
-            case "CINQ", "CINCO", "FIVE" -> "5";
-            case "SIX", "SEIS" -> "6";
-            case "SEPT", "SIETE", "SEVEN" -> "7";
-            case "HUIT", "OCHO", "EIGHT" -> "8";
-            case "NEUF", "NUEVE", "NINE" -> "9";
-            case "DIX", "DIEZ", "TEN" -> "10";
-            case "ONZE", "ONCE", "ELEVEN" -> "11";
-            case "DOUZE", "DOCE", "TWELVE" -> "12";
+            // Spanish "uno" is a count ("uno al dia"), never an hour ("una hora").
+            case "UNO" -> null;
             case "VINGT-QUATRE", "VEINTICUATRO", "TWENTY-FOUR" -> "24";
             case "QUARANTE-HUIT", "FORTY-EIGHT" -> "48";
-            default -> null;
+            default -> countDigitOf(word);
         };
     }
 

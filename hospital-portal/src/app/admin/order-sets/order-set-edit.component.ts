@@ -81,7 +81,7 @@ const DOSE_UNITS: Choice[] = [
 /** QA D1378: the coded as-needed frequency preset; picking it ticks the item as needed. */
 const PRN_PRESET = 'PRN';
 
-const FREQUENCY_PRESETS: Choice[] = [
+export const FREQUENCY_PRESETS: Choice[] = [
   { value: 'QD', labelKey: 'ORDER_SETS.FREQUENCY.QD' },
   { value: 'BID', labelKey: 'ORDER_SETS.FREQUENCY.BID' },
   { value: 'TID', labelKey: 'ORDER_SETS.FREQUENCY.TID' },
@@ -416,6 +416,14 @@ export class OrderSetEditComponent implements OnInit {
     }
     if (out.doseRangeMax === undefined || (out.doseRangeMax as unknown) === null) {
       delete out.doseRangeMax;
+    }
+    // QA D1396: a quantity left blank is not sent (0 and the like are the server's to refuse).
+    const blankQuantity = out.quantity === undefined || out.quantity === null;
+    if (blankQuantity || (out.quantity as unknown) === '') {
+      delete out.quantity;
+    }
+    if (!out.quantityUnit?.trim()) {
+      delete out.quantityUnit;
     }
     // QA round 30 / QA D1378: the tick and the interval belong to an as-needed item only.
     if (this.prnIntervalShown(out)) {

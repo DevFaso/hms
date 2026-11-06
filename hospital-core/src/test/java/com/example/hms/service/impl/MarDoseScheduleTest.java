@@ -322,14 +322,16 @@ class MarDoseScheduleTest {
 
     /**
      * QA D1378 replay (prn32*.js, prnw32.js, prnsweep32.log, rxprn32.js): the
-     * SAFETY NET catches every round-31 and round-32 as-needed wording - SOS,
+     * wording rule refuses every round-31 and round-32 as-needed wording - SOS,
      * p.r.n., sur demande, si precisa, s/p, when necessary, for pain, si EVA > 4
-     * ... - and every frozen round-31 phrase case.
+     * ... - and every frozen round-31 phrase case (QA D1391 / D1395: as reading
+     * "as needed").
      */
     @ParameterizedTest
     @MethodSource({"conditionalCases", "asNeededCases"})
     void d1378_theSafetyNetCatchesEveryAsNeededWording(String frequency) {
-        assertThat(MarDoseSchedule.looksAsNeeded(frequency)).as(frequency).isTrue();
+        assertThat(FrequencyWording.classify(frequency)).as(frequency)
+            .isEqualTo(FrequencyWording.Verdict.CONDITIONAL);
     }
 
     /** QA D1378: a fixed schedule, a single dose or nothing written is never asked to confirm. */
@@ -337,7 +339,7 @@ class MarDoseScheduleTest {
     @MethodSource("fixedScheduleCases")
     @NullAndEmptySource
     void d1378_theSafetyNetLeavesAFixedScheduleAlone(String frequency) {
-        assertThat(MarDoseSchedule.looksAsNeeded(frequency)).as(frequency).isFalse();
+        assertThat(FrequencyWording.classify(frequency)).as(frequency).isEqualTo(FrequencyWording.Verdict.FIXED);
     }
 
     /** QA D1378: the fixture holds every wording QA filed under D1378 and D1360, word for word. */

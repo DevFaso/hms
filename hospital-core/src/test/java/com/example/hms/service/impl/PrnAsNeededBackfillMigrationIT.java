@@ -90,7 +90,7 @@ class PrnAsNeededBackfillMigrationIT {
     /** Every fixture wording, plus a few shapes the fixture has no reason to hold. */
     private static List<String> frequencies() throws Exception {
         Set<String> all = new LinkedHashSet<>();
-        for (String key : List.of("asNeeded", "notAsNeeded", "conditional", "fixedSchedule")) {
+        for (String key : List.of("asNeeded", "notAsNeeded", "conditional", "fixedSchedule", "unreadable")) {
             all.addAll(MarDoseScheduleTest.fixtureList(key));
         }
         all.addAll(List.of("Q4H PRN", "prn stat", "Stat puis si besoin", "SI-BESOIN", "à LA DEMANDE", "aprn",

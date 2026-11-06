@@ -21,10 +21,10 @@ import com.example.hms.model.Prescription;
  * through {@link #refusalOf}):
  * <ul>
  *   <li>ticked as needed: the interval is required, 1 to {@link #MAX_HOURS} hours;</li>
- *   <li>not ticked: no interval; and a frequency that looks conditional
- *       ({@link MarDoseSchedule#looksAsNeeded}) is refused on {@link #AS_NEEDED_FIELD}
- *       so the prescriber confirms: tick "as needed" and give the interval, or
- *       write a fixed schedule (the SAFETY NET).</li>
+ *   <li>not ticked: no interval; and the frequency must read as a fixed
+ *       schedule ({@link FrequencyWording}, QA D1391 / D1395), or it is refused
+ *       on {@link #AS_NEEDED_FIELD}: tick "as needed" and give the interval, or
+ *       write a fixed schedule (the wording rule).</li>
  * </ul>
  * No per-drug default interval is ever written. Pure functions.
  */
@@ -48,8 +48,14 @@ public final class PrnMinInterval {
     /** Refusal: an interval on an order that is not ticked as needed. */
     public static final String NOT_AS_NEEDED_KEY = "prescription.prnMinInterval.notAsNeeded";
 
-    /** QA D1378: the safety net, a conditional frequency on an order not ticked as needed. */
+    /** QA D1378: a conditional frequency on an order not ticked as needed. */
     public static final String CONFIRM_KEY = "prescription.asNeeded.confirm";
+
+    /** QA D1395: a frequency that is not a schedule anyone can read, on an order not ticked as needed. */
+    public static final String UNREADABLE_KEY = "prescription.asNeeded.unreadable";
+
+    /** The hours a daily total is counted over. */
+    private static final double HOURS_PER_DAY = 24d;
 
     /** One refusal: the field it is reported on and its message key. */
     public record Refusal(String field, String key) {
@@ -68,7 +74,7 @@ public final class PrnMinInterval {
      *
      * @param asNeeded  the prescriber's tick
      * @param hours     the minimum interval written, or {@code null}
-     * @param frequency the frequency text (the safety net reads it)
+     * @param frequency the frequency text (the wording rule reads it)
      */
     public static Refusal refusalOf(boolean asNeeded, Integer hours, String frequency) {
         if (asNeeded) {
@@ -77,7 +83,7 @@ public final class PrnMinInterval {
             }
             return hours < 1 || hours > MAX_HOURS ? new Refusal(FIELD, RANGE_KEY) : null;
         }
-        // The safety net first: "si besoin" with an interval but no tick is
+        // The wording first: "si besoin" with an interval but no tick is
         // answered by ticking, not by deleting the interval.
         Refusal confirm = safetyNet(frequency);
         if (confirm != null) {
@@ -87,27 +93,75 @@ public final class PrnMinInterval {
     }
 
     /**
-     * QA D1378: the SAFETY NET alone, for an order NOT ticked as needed: a
-     * frequency that looks conditional ({@link MarDoseSchedule#looksAsNeeded})
-     * is refused on {@link #AS_NEEDED_FIELD} so the prescriber confirms.
-     * The only place the frequency text bears on as-needed.
+     * QA D1391 / D1395: the wording rule alone, for an order NOT ticked as
+     * needed: anything but a fixed schedule is refused on {@link #AS_NEEDED_FIELD}
+     * ({@link FrequencyWording}). The only place the frequency text bears on
+     * as-needed.
      */
     public static Refusal safetyNet(String frequency) {
-        return MarDoseSchedule.looksAsNeeded(frequency) ? new Refusal(AS_NEEDED_FIELD, CONFIRM_KEY) : null;
+        return switch (FrequencyWording.classify(frequency)) {
+            case FIXED -> null;
+            case CONDITIONAL -> new Refusal(AS_NEEDED_FIELD, CONFIRM_KEY);
+            case UNREADABLE -> new Refusal(AS_NEEDED_FIELD, UNREADABLE_KEY);
+        };
     }
 
     /**
-     * The order as written, on every path that writes an order's content (the
-     * prescribing form, order sets, an edit): an as-needed order must carry
-     * its interval; any other order carries none (an edit that unticks it
-     * drops the old interval in {@code PrescriptionMapper.updateEntity}) and
-     * is refused when its frequency looks conditional (the safety net).
+     * The order as written, on every path that writes a NEW order's content
+     * (the prescribing form, order sets): an as-needed order must carry its
+     * interval; any other order carries none and must state a fixed schedule.
      */
     public static void applyTo(Prescription rx) {
         if (rx == null) {
             return;
         }
-        Refusal refusal = refusalOf(isAsNeeded(rx), rx.getPrnMinIntervalHours(), rx.getFrequency());
+        throwIf(refusalOf(isAsNeeded(rx), rx.getPrnMinIntervalHours(), rx.getFrequency()));
+    }
+
+    /**
+     * QA D1391 / D1395, an edit of an existing order: the wording rule judges
+     * what the edit WROTE. An edit that leaves the frequency alone on an order
+     * that was not ticked is not asked about a text written before the rule
+     * (or by another rule), whatever it says; the order stays editable and the
+     * MAR keeps reading it as it did. Unticking an as-needed order does write
+     * the frequency as a fixed schedule, so it is judged. The interval half
+     * applies either way; an edit that unticks drops the old interval in
+     * {@code PrescriptionMapper.updateEntity}.
+     *
+     * @param frequencyBefore the frequency stored before the edit
+     * @param tickedBefore    the tick stored before the edit
+     */
+    public static void applyToEdit(Prescription rx, String frequencyBefore, boolean tickedBefore) {
+        if (rx == null) {
+            return;
+        }
+        if (!isAsNeeded(rx) && !tickedBefore && sameText(frequencyBefore, rx.getFrequency())) {
+            throwIf(rx.getPrnMinIntervalHours() != null ? new Refusal(FIELD, NOT_AS_NEEDED_KEY) : null);
+            return;
+        }
+        applyTo(rx);
+    }
+
+    /**
+     * QA D1397: the most doses a day an as-needed order allows, from its
+     * minimum interval (24 / interval), or {@code null} when it is not ticked
+     * or names no valid interval. Fixed by the prescriber's own numbers, so the
+     * daily limits apply as they do to a fixed schedule.
+     */
+    public static Double highestDosesPerDay(boolean asNeeded, Integer hours) {
+        if (!asNeeded || hours == null || hours < 1) {
+            return null;
+        }
+        return HOURS_PER_DAY / hours;
+    }
+
+    private static boolean sameText(String before, String after) {
+        String a = before == null ? "" : before.strip();
+        String b = after == null ? "" : after.strip();
+        return a.equals(b);
+    }
+
+    private static void throwIf(Refusal refusal) {
         if (refusal != null) {
             throw new FieldBusinessException(refusal.field(), refusal.key());
         }

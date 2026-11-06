@@ -1090,9 +1090,12 @@
     "NURSING_NOTE": "Note infirmière"
   },
   "ORDER_SETS": {
+    "QUANTITY_HINT": "Obligatoire pour un stupéfiant.",
+    "APPLIED_RESULT_ONE": "Appliqué. 1 prescription créée ({{skipped}} ignorée(s)).",
+    "ITEM_ONE": "élément",
     "ADD_ITEM": "Ajouter un élément",
     "ADMIN_TITLE": "Modèles d'ensembles d'ordres",
-    "APPLIED_RESULT": "Appliqué. {{count}} prescriptions créées ({{skipped}} ignorées).",
+    "APPLIED_RESULT": "Appliqué. {{count}} prescriptions créées ({{skipped}} ignorée(s)).",
     "APPLY": "Appliquer à l'admission",
     "COL_ITEM_COUNT": "Éléments",
     "COL_LAST_MODIFIED": "Dernière modification",
@@ -1113,9 +1116,9 @@
     "FIELD_DOSE_MIN": "Dose min",
     "FIELD_DOSE_UNIT": "Unité",
     "FIELD_FREQUENCY": "Fréquence",
-    "FIELD_ITEM_NAME": "Nom",
+    "FIELD_ITEM_NAME": "Nom de l’élément",
     "FIELD_ITEM_TYPE": "Type",
-    "FIELD_NAME": "Nom",
+    "FIELD_NAME": "Nom de l’ensemble",
     "FIELD_NOTES": "Notes",
     "FIELD_ORDER_ITEMS_JSON": "Éléments d'ordre (tableau JSON)",
     "FIELD_ROUTE": "Voie",
@@ -7180,6 +7183,8 @@
     }
   },
   "PRESCRIPTIONS": {
+    "FREQUENCY_UNREADABLE": "Ce n’est pas un horaire que nous pouvons lire : écrivez un horaire fixe (« 3 fois par jour », « toutes les 6 heures », « dose unique »), ou cochez « Si besoin (PRN) ».",
+    "FREQUENCY_READS_AS_NEEDED": "Cela se lit « si besoin » : cochez « Si besoin (PRN) » et indiquez l’intervalle minimum, ou écrivez un horaire fixe.",
     "CLARIFICATION": {
       "ANSWER": "Réponse du prescripteur",
       "ANSWERED_LABEL": "Répondue le",

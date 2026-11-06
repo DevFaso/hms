@@ -187,8 +187,9 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
         Prescription entity = prescriptionMapper.toEntity(request, patient, staff, encounter);
         entity.setAssignment(prescriberAssignment);
-        // QA round 30: an as-needed order names its minimum interval (order
-        // sets reach here without the request constraints).
+        // QA round 30: an as-needed order names its minimum interval, and QA
+        // D1391 / D1395 any other states a fixed schedule (order sets reach
+        // here without the request constraints).
         com.example.hms.service.impl.PrnMinInterval.applyTo(entity);
         requirePrescribedQuantityForControlled(entity, catalogItem);
         recordAllergyOverride(entity, allergyOverride);
@@ -595,7 +596,10 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         List<CdsCard> cards = cdsRuleEngine.evaluateProposedPrescription(prescription.getPatient(), hospitalId,
             new com.example.hms.cdshooks.rules.CdsRuleEngine.ProposedOrder(prescription.getMedicationName(),
                 prescription.getMedicationCode(), prescription.getDosage(), prescription.getFrequency(), item,
-                prescription.getId()));
+                prescription.getId(),
+                com.example.hms.service.impl.PrnMinInterval.highestDosesPerDay(
+                    com.example.hms.service.impl.PrnMinInterval.isAsNeeded(prescription),
+                    prescription.getPrnMinIntervalHours())));
         return cards == null ? List.of() : cards;
     }
 
@@ -1496,17 +1500,21 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // CDS rule engine: drug-drug, duplicate-order, pediatric-dose. QA D970:
         // the order being edited is not a duplicate of itself.
         List<CdsCard> advisories = withCrossReactivityAdvisory(patient, request.getMedicationName(),
-            runCdsRuleEngine(patient, hospitalId, request, catalogItem, existing.getId()));
+            runCdsRuleEngine(patient, hospitalId, request, catalogItem, existing));
 
         PrescriptionStatus statusBefore = existing.getStatus();
         String overrideBefore = existing.isAllergiesReviewed() ? existing.getOverrideReason() : null;
         // QA D1359: an edit names a known route, or echoes the order's own.
         requireKnownRouteOnEdit(existing, request);
+        String frequencyBefore = existing.getFrequency();
+        boolean tickedBefore = com.example.hms.service.impl.PrnMinInterval.isAsNeeded(existing);
         prescriptionMapper.updateEntity(existing, request, patient, staff, encounter);
         existing.setAssignment(prescriberAssignment);
         // QA round 30: an edit of an as-needed order keeps (or names) its
-        // minimum interval; an edit to a fixed schedule drops it.
-        com.example.hms.service.impl.PrnMinInterval.applyTo(existing);
+        // minimum interval; an edit to a fixed schedule drops it. QA D1391 /
+        // D1395: the wording rule judges a frequency this edit wrote, never one
+        // the order already carried.
+        com.example.hms.service.impl.PrnMinInterval.applyToEdit(existing, frequencyBefore, tickedBefore);
         // QA D706: no quantity check on an edit - a legacy controlled row must
         // stay withdrawable; the dispense refuses it until a quantity is set.
         applyAllergyOverrideOnUpdate(existing, allergyOverride, overrideBefore, currentUserId);
@@ -2562,7 +2570,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private List<CdsCard> runCdsRuleEngine(Patient patient, UUID hospitalId,
                                            PrescriptionRequestDTO request,
                                            com.example.hms.model.medication.MedicationCatalogItem catalogItem,
-                                           UUID editedPrescriptionId) {
+                                           Prescription edited) {
         List<CdsCard> advisories = cdsRuleEngine.evaluateProposedPrescription(
             patient, hospitalId,
             new com.example.hms.cdshooks.rules.CdsRuleEngine.ProposedOrder(
@@ -2571,7 +2579,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                 request.getDosage(),
                 request.getFrequency(),
                 catalogItem,
-                editedPrescriptionId));
+                edited == null ? null : edited.getId(),
+                prnDosesPerDay(request, edited)));
         if (advisories.isEmpty()) {
             return advisories;
         }
@@ -2584,6 +2593,21 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         return advisories;
     }
 
+
+    /**
+     * QA D1397: the most doses a day the order allows from its minimum
+     * interval, so the daily limits judge an as-needed order too. On an edit,
+     * null in the request keeps the stored tick and interval (the mapper's rule).
+     */
+    private static Double prnDosesPerDay(PrescriptionRequestDTO request, Prescription edited) {
+        boolean asNeeded = request.getAsNeeded() != null
+            ? request.getAsNeeded() : com.example.hms.service.impl.PrnMinInterval.isAsNeeded(edited);
+        Integer hours = request.getPrnMinIntervalHours();
+        if (hours == null && edited != null) {
+            hours = edited.getPrnMinIntervalHours();
+        }
+        return com.example.hms.service.impl.PrnMinInterval.highestDosesPerDay(asNeeded, hours);
+    }
 
     /** Round 18 (QA D935): a hard stop (a dose above the absolute daily maximum) is refused whatever the override. */
     private void refuseHardStop(List<CdsCard> advisories) {

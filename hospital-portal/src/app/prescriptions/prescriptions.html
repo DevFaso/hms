@@ -61,7 +61,7 @@
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon total">bar_chart</span>
       <div class="card-info">
-        <span class="card-value">{{ prescriptions().length }}</span
+        <span class="card-value">{{ countInTab('all') }}</span
         ><span class="card-label">{{ 'COMMON.TOTAL' | translate }}</span>
       </div>
     </div>
@@ -91,11 +91,11 @@
         type="text"
         [placeholder]="'PRESCRIPTIONS.SEARCH' | translate"
         [(ngModel)]="searchTerm"
-        (input)="applyFilter()"
+        (input)="onSearchInput()"
       />
     </div>
   </div>
-  @if (loading()) {
+  @if (loading() && filtered().length === 0) {
     <div class="loading-state">
       <div class="spinner"></div>
       <p>{{ 'PRESCRIPTIONS.LOADING' | translate }}</p>
@@ -112,7 +112,8 @@
       <p>{{ 'PRESCRIPTIONS.EMPTY_MESSAGE' | translate }}</p>
     </div>
   }
-  @if (!loading() && filtered().length > 0) {
+  <!-- QA D1412: a move of the pager keeps the rows and the button in place until the page lands. -->
+  @if (filtered().length > 0) {
     <div class="data-table">
       @if (actionError()) {
         <p class="form-error" role="alert" data-testid="rx-action-error">{{ actionError() }}</p>
@@ -294,6 +295,17 @@
         </tbody>
       </table>
     </div>
+    <!-- QA D1412: one page on screen, the server's total, every row one page away. -->
+    <app-range-pager
+      testId="rx-list-pager"
+      [label]="'PRESCRIPTIONS.TITLE' | translate"
+      [page]="listPage()"
+      [size]="pageRows"
+      [total]="listTotal()"
+      [shown]="filtered().length"
+      [busy]="loading()"
+      (pageChange)="onListPage($event)"
+    />
   }
   @if (selectedPrescription(); as rx) {
     <div class="detail-overlay" tabindex="-1" (keydown.escape)="closeDetail()">
@@ -993,10 +1005,14 @@
               <input
                 id="rx-frequency"
                 type="text"
-                [(ngModel)]="form.frequency"
+                [ngModel]="form.frequency"
+                (ngModelChange)="onFrequencyChange($event)"
                 [readonly]="editingSigned()"
                 [placeholder]="'PRESCRIPTIONS.FREQUENCY_PLACEHOLDER' | translate"
               />
+              @if (frequencyHintKey(); as hintKey) {
+                <p class="field-hint" data-testid="rx-frequency-hint">{{ hintKey | translate }}</p>
+              }
             </div>
             <div class="field">
               <label for="rx-route">{{ 'PRESCRIPTIONS.ROUTE' | translate }}</label>

@@ -1090,6 +1090,9 @@
     "NURSING_NOTE": "Nursing note"
   },
   "ORDER_SETS": {
+    "QUANTITY_HINT": "Required for a controlled drug.",
+    "APPLIED_RESULT_ONE": "Applied. Created 1 order ({{skipped}} skipped).",
+    "ITEM_ONE": "item",
     "ADD_ITEM": "Add item",
     "ADMIN_TITLE": "Order set templates",
     "APPLIED_RESULT": "Applied. Created {{count}} orders ({{skipped}} skipped).",
@@ -1113,9 +1116,9 @@
     "FIELD_DOSE_MIN": "Dose min",
     "FIELD_DOSE_UNIT": "Unit",
     "FIELD_FREQUENCY": "Frequency",
-    "FIELD_ITEM_NAME": "Name",
+    "FIELD_ITEM_NAME": "Item name",
     "FIELD_ITEM_TYPE": "Type",
-    "FIELD_NAME": "Name",
+    "FIELD_NAME": "Order set name",
     "FIELD_NOTES": "Notes",
     "FIELD_ORDER_ITEMS_JSON": "Order items (JSON array)",
     "FIELD_ROUTE": "Route",
@@ -7180,6 +7183,8 @@
     }
   },
   "PRESCRIPTIONS": {
+    "FREQUENCY_UNREADABLE": "This is not a schedule we can read: write a fixed schedule (“3 times a day”, “every 6 hours”, “single dose”), or tick “As needed (PRN)”.",
+    "FREQUENCY_READS_AS_NEEDED": "This reads as “as needed”: tick “As needed (PRN)” and give the minimum interval, or write a fixed schedule.",
     "CLARIFICATION": {
       "ANSWER": "The prescriber's answer",
       "ANSWERED_LABEL": "Answered",

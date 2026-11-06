@@ -104,7 +104,8 @@ export function refuseFields(
         msg.id = msgId;
         msg.className = 'invalid-field-msg';
         msg.setAttribute('role', 'alert');
-        el.insertAdjacentElement('afterend', msg);
+        // QA D1406: after a checkbox's whole label, never between the box and its words.
+        (el.closest('.checkbox-label') ?? el).insertAdjacentElement('afterend', msg);
       }
       msg.textContent = reason;
       others.push(msgId);

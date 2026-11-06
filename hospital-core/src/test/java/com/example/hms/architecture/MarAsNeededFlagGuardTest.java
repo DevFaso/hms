@@ -32,11 +32,17 @@ import static org.assertj.core.api.Assertions.assertThat;
  *       order, never a frequency text;</li>
  *   <li>{@code Reading.AS_NEEDED} is produced only by {@code MarDoseSchedule.read(Prescription)},
  *       from the helper;</li>
- *   <li>the frequency text bears on as-needed ONLY through the safety net:
- *       {@code looksAsNeeded(} is called only by {@code PrnMinInterval.safetyNet},
- *       and the frozen phrase list is read only inside {@code MarDoseSchedule}.</li>
- *   <li>QA D1382: every writer of order-set items (from a request) holds them to
- *       the prescription rule with {@code OrderSetItemPrnRules.requireValid}.</li>
+ *   <li>the frequency text bears on as-needed ONLY through the wording rule:
+ *       {@code FrequencyWording.classify(} is called only by
+ *       {@code PrnMinInterval.safetyNet}, and the frozen phrase list is read only
+ *       inside {@code MarDoseSchedule}.</li>
+ *   <li>QA D1382 / D1396: every writer of order-set items (from a request) holds
+ *       them to the prescription rule with {@code OrderSetItemPrnRules.requireValid}
+ *       and to the quantity rule with {@code requireValid} of
+ *       {@code OrderSetItemQuantityRules}.</li>
+ *   <li>QA D1391 / D1395: the prescription service's edit goes through
+ *       {@code PrnMinInterval.applyToEdit} (a frequency the edit did not write is
+ *       not judged), its create through {@code applyTo}.</li>
  * </ol>
  * The portal half is {@code scripts/lib/as-needed-frequency.test.mjs}: no
  * screen reads the frequency for PRN, the forms show the interval from the
@@ -57,8 +63,10 @@ class MarAsNeededFlagGuardTest {
     private static final Pattern FLAG_READ = Pattern.compile("\\.isAsNeeded\\(\\)");
     private static final Pattern READ_CALL = Pattern.compile("MarDoseSchedule\\.read\\(([^()]*+(?:\\(\\))?+)\\)");
     private static final Pattern AS_NEEDED_READING = Pattern.compile("Reading\\.AS_NEEDED\\b");
-    private static final Pattern NET_CALL = Pattern.compile("\\blooksAsNeeded\\(");
+    private static final Pattern NET_CALL = Pattern.compile("\\bFrequencyWording\\.classify\\(");
     /** Rule 5 (QA D1382): an order-set writer stores the request's items. */
+    /** Rule 5 (QA D1396): the writer's call of the quantity rule. */
+    private static final Pattern READS_QUANTITY_RULE = Pattern.compile("[qQ]uantityRules\\.requireValid\\(");
     private static final Pattern WRITES_ORDER_ITEMS = Pattern.compile("\\.setOrderItems\\([^;]*request\\.getOrderItems\\(\\)");
 
     @Test
@@ -99,11 +107,14 @@ class MarAsNeededFlagGuardTest {
                 found.put(rel + " #4", "reads the frozen as-needed phrase list");
             }
         }
-        if (NET_CALL.matcher(src).find() && !rel.equals(HELPER) && !rel.equals(SCHEDULE)) {
-            found.put(rel + " #4", "calls the safety net's detector itself: use PrnMinInterval.safetyNet");
+        if (NET_CALL.matcher(src).find() && !rel.equals(HELPER)) {
+            found.put(rel + " #4", "calls the wording rule itself: use PrnMinInterval.safetyNet");
         }
         if (WRITES_ORDER_ITEMS.matcher(src).find() && !src.contains("OrderSetItemPrnRules.requireValid(")) {
             found.put(rel + " #5", "writes order-set items without OrderSetItemPrnRules.requireValid (QA D1382)");
+        }
+        if (WRITES_ORDER_ITEMS.matcher(src).find() && !READS_QUANTITY_RULE.matcher(src).find()) {
+            found.put(rel + " #5b", "writes order-set items without OrderSetItemQuantityRules (QA D1396)");
         }
     }
 
@@ -125,16 +136,33 @@ class MarAsNeededFlagGuardTest {
         assertThat(count).as("Reading.AS_NEEDED used once, in read(Prescription)").isEqualTo(1);
     }
 
+    /** Rule 6 (QA D1391 / D1395): an edit is judged on what it wrote; the MAR never reads the wording rule. */
+    @Test
+    void anEditIsJudgedOnWhatItWrote() throws IOException {
+        String service = SourceScan.stripComments(Files.readString(
+            MAIN.resolve("service/PrescriptionServiceImpl.java"), StandardCharsets.UTF_8));
+        assertThat(service).contains("PrnMinInterval.applyToEdit(existing, frequencyBefore, tickedBefore)");
+        assertThat(Pattern.compile("PrnMinInterval\\.applyTo\\(").matcher(service).results().count())
+            .as("applyTo is the create path only").isEqualTo(1);
+        for (String reader : java.util.List.of("service/impl/MarNextDose.java", "service/impl/MarDoseInterval.java")) {
+            assertThat(SourceScan.stripComments(Files.readString(MAIN.resolve(reader), StandardCharsets.UTF_8)))
+                .as(reader).doesNotContain("FrequencyWording");
+        }
+        String schedule = SourceScan.stripComments(Files.readString(MAIN.resolve(SCHEDULE), StandardCharsets.UTF_8));
+        assertThat(schedule).as("the MAR's reader does not read the wording rule").doesNotContain("FrequencyWording");
+    }
+
     @Test
     void theScanSeesTheShapesItGuards() {
         Map<String, String> found = new TreeMap<>();
         check("service/impl/Example.java",
             "if (MarDoseSchedule.read(rx.getFrequency()).kind() == K) {} boolean b = rx.isAsNeeded();"
-                + " x = MarDoseSchedule.looksAsNeeded(f); y = Reading.AS_NEEDED;"
+                + " x = FrequencyWording.classify(f); y = Reading.AS_NEEDED;"
                 + " next.setOrderItems(request.getOrderItems() == null ? List.of() : request.getOrderItems());",
             found);
         assertThat(found).containsKeys("service/impl/Example.java #1", "service/impl/Example.java #2",
-            "service/impl/Example.java #3", "service/impl/Example.java #4", "service/impl/Example.java #5");
+            "service/impl/Example.java #3", "service/impl/Example.java #4", "service/impl/Example.java #5",
+            "service/impl/Example.java #5b");
         Map<String, String> clean = new TreeMap<>();
         check("service/impl/Example.java", "MarDoseSchedule.read(rx); PrnMinInterval.isAsNeeded(rx);", clean);
         assertThat(clean).isEmpty();
