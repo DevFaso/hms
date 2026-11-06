@@ -1090,6 +1090,7 @@
     "NURSING_NOTE": "Nota de enfermería"
   },
   "ORDER_SETS": {
+    "FIELD_CATALOG_ITEM": "Artículo exacto del catálogo",
     "QUANTITY_HINT": "Obligatorio para un estupefaciente.",
     "APPLIED_RESULT_ONE": "Aplicado. 1 orden creada ({{skipped}} omitida(s)).",
     "ITEM_ONE": "elemento",

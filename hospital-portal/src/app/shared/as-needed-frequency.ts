@@ -60,6 +60,7 @@ const SPAN_WORDS = words(
 const PERIOD_WORDS = words('JOUR J DAY DIA SEMAINE SEM WEEK SEMANA MOIS MONTH MES AN YEAR ANO');
 const PERIOD_JOINS = words('PAR PER POR AL A');
 const INTAKE_WORDS = words('DOSE DOSES DOSIS PRISE PRISES TOMA TOMAS');
+const ONLY_WORDS = words('SEUL SEULE SOLO SOLA');
 const MINUTE_WORDS = words('MIN MN MINUTE MINUTES MINUTOS');
 const BEFORE_CLOCK = words('A AT LAS VERS');
 const NUMBER_WORDS = words(
@@ -175,6 +176,9 @@ const PER_DAY_WORDS = /^(?:PAR JOUR|PAR 24 ?H|AL DIA|POR DIA|DAILY|A DAY|PER DAY
 const COMPARISON = /[<>≤≥]/;
 const SLASH_SP = /\bS *\/ *P\b/;
 const WEIGHT_BAND = /\b(?:POIDS|PESO|WEIGHT|\d+ *KG)\b/;
+const PER_HOURS_SLASH = /\/ ?\d{0,2} ?H\b/;
+const POSOLOGY_WORD = /\b\d(?:-\d){2,3}\b/;
+const CLOCK_WORD = /^\d{1,2}H(?:\d{2})?$/;
 const NUMBER_THEN_REST = /^(\d{1,4})([A-Z0-9]*)$/;
 const CODED_COUNT_WORD = /^(?:Q\d{1,2}H|X\d{1,2})$/;
 const HOUR_AND_MINUTES = /^H\d{2}$/;
@@ -354,10 +358,16 @@ function readsConditional(text: string, list: readonly string[]): boolean {
   );
 }
 
-function endsARange(list: readonly string[], at: number): boolean {
+function isPer(list: readonly string[], at: number): boolean {
+  return AFTER_RANGE.has(list[at] ?? '');
+}
+
+function endsARange(list: readonly string[], at: number, second: number): boolean {
   const word = list[at];
+  if (word === undefined) return false;
+  if (HOUR_WORDS.has(word)) return second !== 24;
   return (
-    word !== undefined && (TIMES_WORDS.has(word) || HOUR_WORDS.has(word) || AFTER_RANGE.has(word))
+    TIMES_WORDS.has(word) || isPer(list, at) || (numberOf(word) === null && isPer(list, at + 1))
   );
 }
 
@@ -369,12 +379,13 @@ function rangeStartsAt(list: readonly string[], at: number): boolean {
   const whole = NUMBER_THEN_REST.exec(list[end]);
   if (!whole) {
     const word = numberOf(list[end]);
-    return word !== null && word > first && endsARange(list, end + 1);
+    return word !== null && word > first && endsARange(list, end + 1, word);
   }
+  const second = Number(whole[1]);
   const counted = whole[2]
-    ? whole[2] === 'X' || HOUR_WORDS.has(whole[2])
-    : endsARange(list, end + 1);
-  return Number(whole[1]) > first && counted;
+    ? whole[2] === 'X' || (!HOUR_WORDS.has(whole[2]) && isPer(list, end + 1))
+    : endsARange(list, end + 1, second);
+  return second > first && counted;
 }
 
 function readsAsLimit(list: readonly string[]): boolean {
@@ -404,6 +415,8 @@ function scheduleAt(list: readonly string[], at: number): boolean {
   if (SCHEDULE_WORDS.has(word) || gluedSchedule(list, at)) return true;
   if (at === 0) return false;
   const before = list[at - 1];
+  if (INTAKE_WORDS.has(word) && ONLY_WORDS.has(before)) return true;
+  if (word === '24' && before === '24H') return true;
   const count = numberOf(before);
   if (
     count !== null &&
@@ -422,6 +435,9 @@ function statesASchedule(text: string, list: readonly string[]): boolean {
   return (
     readerReadsIt(text) ||
     PER_DAY_SLASH.test(normalize(text)) ||
+    PER_HOURS_SLASH.test(normalize(text)) ||
+    POSOLOGY_WORD.test(text) ||
+    list.filter((word) => CLOCK_WORD.test(word)).length >= 2 ||
     list.some((_, i) => scheduleAt(list, i))
   );
 }
@@ -436,6 +452,7 @@ function isAccountedFor(word: string): boolean {
     HOUR_WORDS.has(word) ||
     SPAN_WORDS.has(word) ||
     INTAKE_WORDS.has(word) ||
+    ONLY_WORDS.has(word) ||
     MINUTE_WORDS.has(word) ||
     CLAUSE_OPENERS.has(word) ||
     CODED_COUNT_WORD.test(word)

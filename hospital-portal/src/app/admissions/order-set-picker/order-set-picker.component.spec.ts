@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { of, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 
 import { OrderSetPickerComponent } from './order-set-picker.component';
 import {
@@ -130,7 +130,7 @@ describe('OrderSetPickerComponent', () => {
   });
 
   /** Picks the set, then runs `then` once the search has landed. */
-  function pick(set: typeof sepsisSet, then: () => void, done: DoneFn): void {
+  function pick(set: typeof sepsisSet, then: () => void, done: () => void): void {
     svc.list.and.returnValue(of({ content: [set], totalElements: 1, number: 0, size: 200 }));
     fixture.detectChanges();
     setTimeout(() => {
@@ -172,6 +172,53 @@ describe('OrderSetPickerComponent', () => {
           .not.toBeNull();
       },
       done,
+    );
+  });
+
+  it('QA D1396: after a refused apply the list stays, to pick another set', (done) => {
+    svc.apply.and.returnValue(throwError(() => ({ status: 400, error: { message: 'Non.' } })));
+    pick(
+      sepsisSet,
+      () => {
+        (
+          fixture.nativeElement.querySelector(
+            '[data-testid="order-set-picker-apply"]',
+          ) as HTMLButtonElement
+        ).click();
+        fixture.detectChanges();
+        expect(
+          fixture.nativeElement.querySelector('[data-testid="order-set-picker-item"]'),
+        ).not.toBeNull();
+      },
+      done,
+    );
+  });
+
+  it('QA D1345 class: a search landing during an apply keeps "Apply" closed', (done) => {
+    const inFlight = new Subject<AppliedOrderSetSummary>();
+    svc.apply.and.returnValue(inFlight);
+    pick(
+      sepsisSet,
+      () => {
+        const button = () =>
+          fixture.nativeElement.querySelector(
+            '[data-testid="order-set-picker-apply"]',
+          ) as HTMLButtonElement;
+        button().click();
+        fixture.detectChanges();
+        expect(button().disabled).toBeTrue();
+        const c = fixture.componentInstance as unknown as { onSearch(v: string): void };
+        c.onSearch('x');
+        setTimeout(() => {
+          fixture.detectChanges();
+          expect(button().disabled)
+            .withContext('a second POST would create every order again')
+            .toBeTrue();
+          inFlight.next(appliedResult);
+          done();
+        }, DEBOUNCE_WAIT_MS);
+      },
+      () => undefined,
     );
   });
 

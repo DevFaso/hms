@@ -1090,6 +1090,7 @@
     "NURSING_NOTE": "Note infirmière"
   },
   "ORDER_SETS": {
+    "FIELD_CATALOG_ITEM": "Article exact du catalogue",
     "QUANTITY_HINT": "Obligatoire pour un stupéfiant.",
     "APPLIED_RESULT_ONE": "Appliqué. 1 prescription créée ({{skipped}} ignorée(s)).",
     "ITEM_ONE": "élément",

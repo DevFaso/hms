@@ -53,6 +53,8 @@ export interface OrderSetItem {
    * the item on `orderItems[i].quantity`).
    */
   quantity?: number | null;
+  /** QA D1396: the exact catalogue item, when several carry this name. */
+  medicationCatalogItemId?: string | null;
   quantityUnit?: string | null;
   notes?: string;
   [key: string]: unknown;

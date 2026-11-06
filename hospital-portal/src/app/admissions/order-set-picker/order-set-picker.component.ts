@@ -68,7 +68,7 @@ type State = 'idle' | 'searching' | 'ready' | 'applying' | 'applied' | 'error';
         (ngModelChange)="onSearch($event)"
       />
 
-      @if (state() === 'ready' && results().length > 0) {
+      @if (showList() && results().length > 0) {
         <ul class="order-set-picker__list" data-testid="order-set-picker-list">
           @for (os of results(); track trackById($index, os)) {
             <li
@@ -94,7 +94,7 @@ type State = 'idle' | 'searching' | 'ready' | 'applying' | 'applied' | 'error';
         </ul>
       }
 
-      @if (state() === 'ready' && results().length === 0) {
+      @if (showList() && results().length === 0) {
         <p class="order-set-picker__empty" data-testid="order-set-picker-empty">
           {{ 'ORDER_SETS.NO_RESULTS' | translate }}
         </p>
@@ -106,7 +106,7 @@ type State = 'idle' | 'searching' | 'ready' | 'applying' | 'applied' | 'error';
         </p>
       }
 
-      @if (state() === 'error') {
+      @if (state() === 'error' || applyFailed()) {
         <p class="order-set-picker__error" role="alert" data-testid="order-set-picker-error">
           {{ applyRefusal() || ('ORDER_SETS.ERROR' | translate) }}
         </p>
@@ -227,6 +227,12 @@ export class OrderSetPickerComponent implements OnChanges, OnDestroy {
   protected readonly appliedSummary = signal<AppliedOrderSetSummary | null>(null);
   /** QA D1396: the server's own reason an apply was refused, shown instead of the generic line. */
   protected readonly applyRefusal = signal<string | null>(null);
+  /** An apply failed: said on the page, and the list stays to pick another set. */
+  protected readonly applyFailed = signal(false);
+  /** The list while nothing is being read, and while a set is being applied. */
+  protected readonly showList = computed(
+    () => this.state() === 'ready' || this.state() === 'applying',
+  );
 
   private readonly orderSetService = inject(OrderSetService);
   private readonly translate = inject(TranslateService);
@@ -250,21 +256,20 @@ export class OrderSetPickerComponent implements OnChanges, OnDestroy {
             this.state.set('idle');
             return [];
           }
-          this.state.set('searching');
+          // QA D1345 class: a search landing mid-apply never re-enables "Apply".
+          if (this.state() !== 'applying') this.state.set('searching');
           // QA D1347: every order set the search matches (all pages), not the first 20.
           return allRows((page, size) => this.orderSetService.list(hid, term, page, size));
         }),
       )
       .subscribe({
         next: (rows) => {
-          this.applyRefusal.set(null);
           this.results.set(rows);
-          this.state.set('ready');
+          if (this.state() !== 'applying') this.state.set('ready');
         },
         error: () => {
-          this.applyRefusal.set(null);
           this.results.set([]);
-          this.state.set('error');
+          if (this.state() !== 'applying') this.state.set('error');
         },
       });
     this.searchSubject.next('');
@@ -292,7 +297,7 @@ export class OrderSetPickerComponent implements OnChanges, OnDestroy {
     this.selected.set(os);
     this.appliedSummary.set(null);
     this.applyRefusal.set(null);
-    if (this.state() === 'error') this.state.set('ready');
+    this.applyFailed.set(false);
   }
 
   protected apply(os: OrderSetSummary): void {
@@ -302,6 +307,7 @@ export class OrderSetPickerComponent implements OnChanges, OnDestroy {
     if (this.appliedSummary() !== null || this.applying()) return;
     this.applySub?.unsubscribe();
     this.applyRefusal.set(null);
+    this.applyFailed.set(false);
     this.state.set('applying');
     this.applySub = this.orderSetService
       .apply(os.id, this.admissionId(), {
@@ -316,7 +322,8 @@ export class OrderSetPickerComponent implements OnChanges, OnDestroy {
         },
         error: (err: unknown) => {
           this.applyRefusal.set(refusalReason(err));
-          this.state.set('error');
+          this.applyFailed.set(true);
+          this.state.set('ready');
         },
       });
   }

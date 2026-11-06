@@ -1,5 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import en from '../../../assets/i18n/en.json';
+import { MedicationCatalogItemResponse, PharmacyService } from '../../services/pharmacy.service';
+import type { Page } from '../../services/pharmacy.service';
 import es from '../../../assets/i18n/es.json';
 import fr from '../../../assets/i18n/fr.json';
 import { ActivatedRoute, provideRouter, Router } from '@angular/router';
@@ -208,6 +210,52 @@ describe('OrderSetEditComponent', () => {
       const { FIELD_NAME, FIELD_ITEM_NAME } = locale.ORDER_SETS;
       expect(FIELD_NAME).not.toBe(FIELD_ITEM_NAME);
     }
+  });
+
+  /** QA D1396: a name several catalogue items carry offers the exact item; a new name drops the pick. */
+  it('QA D1396: the catalogue pick is offered and sent, and a new name drops it', async () => {
+    await configure('new');
+    const pharmacy = TestBed.inject(PharmacyService);
+    spyOn(pharmacy, 'searchMedications').and.returnValue(
+      of({
+        content: [
+          { id: 'm10', nameFr: 'Morphine', strength: '10', strengthUnit: 'mg' },
+          { id: 'm30', nameFr: 'Morphine', strength: '30', strengthUnit: 'mg' },
+        ],
+      } as unknown as Page<MedicationCatalogItemResponse>),
+    );
+    fixture = TestBed.createComponent(OrderSetEditComponent);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    const select = () => host.querySelector('[data-testid="order-set-item-catalog-0"]');
+    expect(select()).withContext('nothing to choose yet').toBeNull();
+
+    const c = fixture.componentInstance as unknown as {
+      form: { name: string };
+      items: () => Record<string, unknown>[];
+      save(): void;
+      loadCatalogChoices(i: number): void;
+      setItemName(it: unknown, value: string): void;
+    };
+    c.form.name = 'Douleur';
+    c.setItemName(c.items()[0], 'Morphine');
+    c.loadCatalogChoices(0);
+    fixture.detectChanges();
+    expect(select()!.getAttribute('data-server-field')).toBe(
+      'orderItems[0].medicationCatalogItemId',
+    );
+    expect(select()!.querySelectorAll('option').length).toBe(3);
+
+    c.items()[0]['medicationCatalogItemId'] = 'm30';
+    c.items()[0]['quantity'] = 6;
+    c.save();
+    expect(svc.create.calls.mostRecent().args[0].orderItems[0].medicationCatalogItemId).toBe('m30');
+
+    c.setItemName(c.items()[0], 'Paracetamol');
+    c.save();
+    expect(
+      'medicationCatalogItemId' in svc.create.calls.mostRecent().args[0].orderItems[0],
+    ).toBeFalse();
   });
 
   /** QA D1396: the editor writes the quantity; the server's refusal names this control. */

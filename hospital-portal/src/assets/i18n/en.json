@@ -1090,6 +1090,7 @@
     "NURSING_NOTE": "Nursing note"
   },
   "ORDER_SETS": {
+    "FIELD_CATALOG_ITEM": "Exact catalogue item",
     "QUANTITY_HINT": "Required for a controlled drug.",
     "APPLIED_RESULT_ONE": "Applied. Created 1 order ({{skipped}} skipped).",
     "ITEM_ONE": "item",

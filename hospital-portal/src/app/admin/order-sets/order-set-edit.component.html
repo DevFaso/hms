@@ -77,6 +77,7 @@
                   type="text"
                   [ngModel]="itemName(item)"
                   (ngModelChange)="setItemName(item, $event)"
+                  (blur)="loadCatalogChoices(i)"
                   [id]="'order-set-item-name-' + i"
                   [name]="'itemName-' + i"
                   required
@@ -113,6 +114,24 @@
               />
             </label>
             @if (isMedicationLike(item.orderType)) {
+              @if ((catalogChoices()[i]?.length ?? 0) > 1 || item.medicationCatalogItemId) {
+                <!-- QA D1396: several items carry this name; the exact one, when a controlled drug is among them. -->
+                <label class="order-set-item__synonyms">
+                  <span>{{ 'ORDER_SETS.FIELD_CATALOG_ITEM' | translate }}</span>
+                  <select
+                    [(ngModel)]="item.medicationCatalogItemId"
+                    [name]="'catalogItem-' + i"
+                    [id]="'order-set-item-catalog-' + i"
+                    [attr.data-testid]="'order-set-item-catalog-' + i"
+                    [attr.data-server-field]="'orderItems[' + i + '].medicationCatalogItemId'"
+                  >
+                    <option [ngValue]="undefined"></option>
+                    @for (choice of catalogChoices()[i] ?? []; track choice.id) {
+                      <option [ngValue]="choice.id">{{ catalogChoiceLabel(choice) }}</option>
+                    }
+                  </select>
+                </label>
+              }
               <div class="order-set-item__dose-grid">
                 <label>
                   <span>{{ 'ORDER_SETS.FIELD_DOSE_MIN' | translate }}</span>

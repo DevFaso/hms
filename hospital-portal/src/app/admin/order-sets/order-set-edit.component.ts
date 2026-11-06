@@ -18,6 +18,7 @@ import {
   OrderSetService,
   OrderSetSummary,
 } from '../../services/order-set.service';
+import { MedicationCatalogItemResponse, PharmacyService } from '../../services/pharmacy.service';
 import { RoleContextService } from '../../core/role-context.service';
 import { ToastService } from '../../core/toast.service';
 import { AuthService } from '../../auth/auth.service';
@@ -117,6 +118,7 @@ interface EditableItem extends OrderSetItem {
  */
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { allRows } from '../../shared/all-pages';
 import { refusalReason } from '../../shared/refusal-reason';
 import { joinReasons } from '../../shared/required-fields';
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
@@ -163,6 +165,12 @@ export class OrderSetEditComponent implements OnInit {
    */
   protected readonly itemsMissingPrnInterval = signal<number[]>([]);
   protected readonly prnMaxIntervalHours = PRN_MAX_INTERVAL_HOURS;
+  /**
+   * QA D1396: the catalogue items an item's name answers to, by item row. A
+   * name several items carry, one of them controlled, can only be applied once
+   * the author chooses the exact one (`orderItems[i].medicationCatalogItemId`).
+   */
+  protected readonly catalogChoices = signal<Record<number, MedicationCatalogItemResponse[]>>({});
 
   protected form: {
     name: string;
@@ -180,6 +188,7 @@ export class OrderSetEditComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly orderSetService = inject(OrderSetService);
+  private readonly pharmacy = inject(PharmacyService);
   private readonly roleContext = inject(RoleContextService);
   private readonly toast = inject(ToastService);
   private readonly auth = inject(AuthService);
@@ -343,6 +352,8 @@ export class OrderSetEditComponent implements OnInit {
       error: (err: unknown) => {
         this.saving.set(false);
         this.toast.error(refusalReason(err) ?? this.translate.instant('ORDER_SETS.SAVE_FAILED'));
+        // A set reopened untouched has no list yet, and the refusal may ask for a choice from it.
+        this.items().forEach((_, i) => this.loadCatalogChoices(i));
       },
     });
   }
@@ -363,6 +374,30 @@ export class OrderSetEditComponent implements OnInit {
   protected setItemName(it: EditableItem, value: string): void {
     const key = this.nameKey(it.orderType);
     (it as Record<string, unknown>)[key as string] = value;
+    // QA D1223: a pick names one drug; a new name drops it.
+    delete it.medicationCatalogItemId;
+  }
+
+  /** QA D1396: reads which catalogue items the name answers to, when the author leaves the field. */
+  protected loadCatalogChoices(index: number): void {
+    const item = this.items()[index];
+    const name = item?.medicationName?.trim();
+    if (!item || !this.isMedicationLike(item.orderType) || !name || name.length < 2) {
+      this.catalogChoices.update((all) => ({ ...all, [index]: [] }));
+      return;
+    }
+    // Every item the name answers to: the exact one may be past any first page.
+    allRows<MedicationCatalogItemResponse>((page, size) =>
+      this.pharmacy.searchMedications(name, page, size),
+    ).subscribe({
+      next: (rows) => this.catalogChoices.update((all) => ({ ...all, [index]: rows })),
+      // The server still decides at save; the list only offers the choice.
+      error: () => this.catalogChoices.update((all) => ({ ...all, [index]: [] })),
+    });
+  }
+
+  protected catalogChoiceLabel(item: MedicationCatalogItemResponse): string {
+    return [item.nameFr, item.strength, item.strengthUnit, item.form].filter((p) => !!p).join(' ');
   }
 
   protected itemDisplayName(it: OrderSetItem): string {
@@ -424,6 +459,9 @@ export class OrderSetEditComponent implements OnInit {
     }
     if (!out.quantityUnit?.trim()) {
       delete out.quantityUnit;
+    }
+    if (!out.medicationCatalogItemId) {
+      delete out.medicationCatalogItemId;
     }
     // QA round 30 / QA D1378: the tick and the interval belong to an as-needed item only.
     if (this.prnIntervalShown(out)) {

@@ -1216,6 +1216,12 @@ describe('PrescriptionsComponent — signing', () => {
       expect(component.frequencyHintKey()).withContext('ticked: nothing to say').toBeNull();
     });
 
+    it('QA D1391: unticking an order is told about its frequency, which the server now judges', () => {
+      component.openEdit({ ...rx('rx-old', 'DRAFT'), frequency: 'si douleur', asNeeded: true });
+      component.onAsNeededChange(false);
+      expect(component.frequencyHintKey()).toBe('PRESCRIPTIONS.FREQUENCY_READS_AS_NEEDED');
+    });
+
     it('QA D1391: an edit is not told about the frequency the order already carries', () => {
       component.openEdit({ ...rx('rx-old', 'DRAFT'), frequency: 'SOS' });
       expect(component.frequencyHintKey()).toBeNull();
@@ -2453,6 +2459,61 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
     component.onSearchInput();
     expect(component.filtered().length).toBe(50);
     expect(component.listTotal()).toBe(120);
+  });
+
+  it('QA D1412: a search past its last page shows the page that is left', async () => {
+    const rows = Array.from({ length: 51 }, (_, i) =>
+      makeRx({ id: 'rx-' + i, status: 'SIGNED', medicationName: 'Morphine' }),
+    );
+    await setup({ list: rows });
+    component.searchTerm = 'morph';
+    component.onSearchInput();
+    component.onListPage(1);
+    expect(component.filtered().length).toBe(1);
+
+    prescriptionServiceSpy.list.and.returnValue(of(rows.slice(0, 50)));
+    component.load();
+
+    expect(component.listPage()).toBe(0);
+    expect(component.filtered().length).toBe(50);
+  });
+
+  it('QA D1412: a page move that fails stays on the page shown', async () => {
+    const rows = Array.from({ length: 60 }, (_, i) => makeRx({ id: 'rx-' + i, status: 'SIGNED' }));
+    await setup({ list: rows });
+    prescriptionServiceSpy.list.and.returnValue(throwError(() => new Error('down')));
+
+    component.onListPage(1);
+
+    expect(component.listPage()).toBe(0);
+    expect(component.filtered().length).toBe(50);
+  });
+
+  it('QA D1412: no row of the last scope or tab stays on screen while the next reads or fails', async () => {
+    await setup({ list: [makeRx({ id: 'rx-a', status: 'SIGNED' })] });
+    prescriptionServiceSpy.list.and.returnValue(throwError(() => new Error('down')));
+
+    component.setTab('draft');
+    expect(component.filtered()).toEqual([]);
+
+    prescriptionServiceSpy.list.and.returnValue(of([makeRx({ id: 'rx-a', status: 'SIGNED' })]));
+    component.setTab('all');
+    expect(component.filtered().length).toBe(1);
+    prescriptionServiceSpy.list.and.returnValue(throwError(() => new Error('down')));
+    component.onScopeChange('other-hospital');
+    expect(component.filtered()).toEqual([]);
+  });
+
+  it('QA D1412: when the only row of a page leaves its tab, the tab is read again', async () => {
+    const rows = [makeRx({ id: 'd1', status: 'DRAFT' }), makeRx({ id: 'd2', status: 'DRAFT' })];
+    await setup({ list: rows });
+    component.setTab('draft');
+    prescriptionServiceSpy.list.and.returnValue(of([rows[1]]));
+    component.prescriptions.set([{ ...rows[0], status: 'SIGNED' }]);
+
+    component.applyFilter();
+
+    expect(component.filtered().map((p) => p.id)).toEqual(['d2']);
   });
 
   it('QA D1412: past the last page (the last row went) the page before is shown', async () => {

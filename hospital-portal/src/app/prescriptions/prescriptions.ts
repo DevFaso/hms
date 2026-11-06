@@ -683,7 +683,8 @@ export class PrescriptionsComponent implements OnInit {
     if (isWithdrawnStatus(p.status)) return;
     this.resetCatalogPick();
     this.createdWithAdvisories.set(false);
-    this.frequencyBeforeEdit = p.frequency ?? '';
+    // A ticked order: unticking it writes its frequency as a fixed schedule, so the hint speaks.
+    this.frequencyBeforeEdit = p.asNeeded ? undefined : (p.frequency ?? '');
     this.form = {
       patientId: p.patientId ?? '',
       staffId: p.staffId ?? '',
@@ -1383,6 +1384,10 @@ export class PrescriptionsComponent implements OnInit {
    */
   onScopeChange(_hospitalId: string | null): void {
     this.listPage.set(0);
+    // Never another hospital's rows under the new chip, even while it reads or if it fails.
+    this.prescriptions.set([]);
+    this.filtered.set([]);
+    this.wholeTabRead = false;
     this.load();
     this.loadPrescribers();
   }
@@ -1488,7 +1493,7 @@ export class PrescriptionsComponent implements OnInit {
   }
 
   /** The rows on screen: one server page, or the whole tab while the search box is in use. */
-  private loadRows(): void {
+  private loadRows(page = this.listPage()): void {
     this.loading.set(true);
     // A reload (a scope switch, a dispatch, a tab) can overtake the read before
     // it. The older read is cancelled: finishing last, it would put the
@@ -1519,19 +1524,20 @@ export class PrescriptionsComponent implements OnInit {
       return;
     }
     this.listLoad = this.prescriptionService
-      .page({ statuses }, this.listPage(), PrescriptionsComponent.PAGE_ROWS)
+      .page({ statuses }, page, PrescriptionsComponent.PAGE_ROWS)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (slice) => {
           const rows = slice?.content ?? [];
           // The last row of the last page went (a withdrawal elsewhere): show the page before.
-          if (rows.length === 0 && this.listPage() > 0) {
-            this.listPage.update((p) => p - 1);
-            this.loadRows();
+          if (rows.length === 0 && page > 0) {
+            this.loadRows(page - 1);
             return;
           }
           this.loading.set(false);
           this.wholeTabRead = false;
+          // Only now: a move that fails leaves the pager on the rows still shown.
+          this.listPage.set(page);
           this.prescriptions.set(rows);
           this.listTotal.set(slice?.totalElements ?? rows.length);
           this.applyFilter();
@@ -1551,14 +1557,20 @@ export class PrescriptionsComponent implements OnInit {
     this.listPage.set(0);
     this.wholeTabRead = false;
     this.wholeTabLoading = false;
+    // Never the last tab's rows under this tab's label, even if the read fails.
+    this.prescriptions.set([]);
+    this.filtered.set([]);
     this.loadRows();
   }
 
   /** QA D1412: the pager's move. In a search the matches are on hand; else the server reads the page. */
   onListPage(page: number): void {
-    this.listPage.set(page);
-    if (this.needsWholeTab()) this.applyFilter();
-    else this.loadRows();
+    if (this.needsWholeTab()) {
+      this.listPage.set(page);
+      this.applyFilter();
+    } else {
+      this.loadRows(page);
+    }
   }
 
   /**
@@ -1617,8 +1629,14 @@ export class PrescriptionsComponent implements OnInit {
     );
     if (!this.needsWholeTab()) {
       // The whole tab was on hand for a search that has now been cleared.
-      if (this.wholeTabRead) this.loadRows();
-      else this.filtered.set(inTab);
+      if (this.wholeTabRead) {
+        this.loadRows();
+      } else if (inTab.length === 0 && this.prescriptions().length > 0) {
+        // The page's only row left the tab: re-read, the tab may hold others.
+        this.load();
+      } else {
+        this.filtered.set(inTab);
+      }
       return;
     }
     if (!this.wholeTabRead) {
@@ -1634,6 +1652,9 @@ export class PrescriptionsComponent implements OnInit {
         )
       : inTab;
     this.listTotal.set(matches.length);
+    // A row went while on the last page of the matches: show the page that is left.
+    const lastPage = Math.max(0, Math.ceil(matches.length / PrescriptionsComponent.PAGE_ROWS) - 1);
+    if (this.listPage() > lastPage) this.listPage.set(lastPage);
     const from = this.listPage() * PrescriptionsComponent.PAGE_ROWS;
     this.filtered.set(matches.slice(from, from + PrescriptionsComponent.PAGE_ROWS));
   }

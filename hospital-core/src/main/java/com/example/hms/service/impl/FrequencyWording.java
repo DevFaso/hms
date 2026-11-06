@@ -69,6 +69,21 @@ public final class FrequencyWording {
     /** Any run of characters that is not a letter or a digit (one class, no backtracking). */
     private static final Pattern NOT_ALPHANUMERIC = Pattern.compile("[^A-Z0-9]+");
 
+    /** Separators and any kind of space, read as one space, as the portal's mirror reads them. */
+    private static final Pattern SEPARATORS = Pattern.compile("[_.,\\s\\u00A0\\u202F]++");
+
+    /** Nothing but spaces, of any kind. */
+    private static final Pattern NOTHING_WRITTEN = Pattern.compile("[\\s\\u00A0\\u202F]*+");
+
+    /** Per hours or per hour after a slash: "3 fois/24h", "1 g/8h", "c/8h", "125 ml/h". */
+    private static final Pattern PER_HOURS_SLASH = Pattern.compile("/ ?\\d{0,2}+ ?H\\b");
+
+    /** A posology with a word after it: "1-0-1 cp". */
+    private static final Pattern POSOLOGY_WORD = Pattern.compile("\\b\\d(?:-\\d){2,3}+\\b");
+
+    /** A clock time written with its hour: "8H", "20H", "8H30". */
+    private static final Pattern CLOCK_WORD = Pattern.compile("\\d{1,2}+H(?:\\d{2}+)?+");
+
     /** A number, then whatever follows it in the same word ("6H", "3X", "250MG"). */
     private static final Pattern NUMBER_THEN_REST = Pattern.compile("(\\d{1,4}+)([A-Z0-9]*+)");
 
@@ -139,6 +154,9 @@ public final class FrequencyWording {
     /** Single intakes and doses, with a number: "1 dose", "en 2 prises", "3 tomas". */
     static final Set<String> INTAKE_WORDS = words("DOSE DOSES DOSIS PRISE PRISES TOMA TOMAS");
 
+    /** One intake, said in words: "une seule dose", "una sola toma". */
+    static final Set<String> ONLY_WORDS = words("SEUL SEULE SOLO SOLA");
+
     /** Minutes, with a number: "toutes les 15 min", "sur 30 min". */
     static final Set<String> MINUTE_WORDS = words("MIN MN MINUTE MINUTES MINUTOS");
 
@@ -200,6 +218,11 @@ public final class FrequencyWording {
         + "IV IM SC PO VO SL IVL IVD IVSE ORAL ORALE RECTAL RECTALE LENTE LENT LENTEMENT SLOW DIRECTE SERINGUE "
         + "PSE LAIT EAU VERRE GRAND JUS NOURRITURE ALIMENT ALIMENTS FOOD WATER MILK AGUA LECHE ALIMENTOS PETIT");
 
+    private static final int HOURS_PER_DAY = 24;
+
+    /** "8h et 20h": two clock times are a schedule, one bare "8h" says nothing. */
+    private static final int CLOCK_TIMES_OF_A_SCHEDULE = 2;
+
     private FrequencyWording() {
     }
 
@@ -210,10 +233,11 @@ public final class FrequencyWording {
 
     /** What an unticked frequency says ({@code null} and blank: nothing written, {@link Verdict#FIXED}). */
     public static Verdict classify(String frequency) {
-        if (frequency == null || frequency.isBlank()) {
+        if (frequency == null || NOTHING_WRITTEN.matcher(frequency).matches()) {
             return Verdict.FIXED;
         }
-        String text = withoutWeightBands(MarDoseSchedule.accentlessUpper(frequency));
+        String text = SEPARATORS.matcher(withoutWeightBands(MarDoseSchedule.accentlessUpper(frequency)))
+            .replaceAll(" ").strip();
         List<String> words = wordsOf(text);
         if (readsConditional(text, words)) {
             return Verdict.CONDITIONAL;
@@ -327,20 +351,37 @@ public final class FrequencyWording {
         var whole = NUMBER_THEN_REST.matcher(words.get(end));
         if (!whole.matches()) {
             Integer word = numberOf(words.get(end));
-            return word != null && word > first && endsARange(words, end + 1);
+            return word != null && word > first && endsARange(words, end + 1, word);
         }
         int second = Integer.parseInt(whole.group(1));
         String glued = whole.group(2);
-        boolean counted = glued.isEmpty() ? endsARange(words, end + 1) : "X".equals(glued) || HOUR_WORDS.contains(glued);
-        return second > first && counted;
+        return second > first && (glued.isEmpty() ? endsARange(words, end + 1, second) : gluedRangeEnd(words, end, glued));
     }
 
-    private static boolean endsARange(List<String> words, int at) {
+    /** "1-3x/j", "1-3cp/j"; never "3/24h", which is "per 24 hours". */
+    private static boolean gluedRangeEnd(List<String> words, int end, String glued) {
+        return "X".equals(glued) || (!HOUR_WORDS.contains(glued) && isPer(words, end + 1));
+    }
+
+    /**
+     * What ends a range: a count of times, hours, a period ("1 a 3 fois", "4 a 6
+     * heures", "3 ou 4 par jour"), or a dose and then a period ("1 a 3 cp par
+     * jour"). Not a dose and then a schedule: "1 a 2 cp 3 fois par jour" is a
+     * fixed three times a day. Not "3/24 h", which is "per 24 hours".
+     */
+    private static boolean endsARange(List<String> words, int at, int second) {
         if (at >= words.size()) {
             return false;
         }
         String word = words.get(at);
-        return TIMES_WORDS.contains(word) || HOUR_WORDS.contains(word) || AFTER_RANGE.contains(word);
+        if (HOUR_WORDS.contains(word)) {
+            return second != HOURS_PER_DAY;
+        }
+        return TIMES_WORDS.contains(word) || isPer(words, at) || (numberOf(word) == null && isPer(words, at + 1));
+    }
+
+    private static boolean isPer(List<String> words, int at) {
+        return at < words.size() && AFTER_RANGE.contains(words.get(at));
     }
 
     /** The value of a word that is only a number, or {@code null}. */
@@ -357,7 +398,9 @@ public final class FrequencyWording {
         if (words.isEmpty()) {
             return false;
         }
-        if (MarDoseSchedule.read(text).kind() != MarDoseSchedule.Kind.UNREAD || MarDoseSchedule.hasPerDaySlash(text)) {
+        if (MarDoseSchedule.read(text).kind() != MarDoseSchedule.Kind.UNREAD || MarDoseSchedule.hasPerDaySlash(text)
+            || PER_HOURS_SLASH.matcher(text).find() || POSOLOGY_WORD.matcher(text).find()
+            || words.stream().filter(word -> CLOCK_WORD.matcher(word).matches()).count() >= CLOCK_TIMES_OF_A_SCHEDULE) {
             return true;
         }
         for (int i = 0; i < words.size(); i++) {
@@ -376,6 +419,12 @@ public final class FrequencyWording {
         String before = at > 0 ? words.get(at - 1) : null;
         boolean afterNumber = before != null && numberOf(before) != null;
         if (afterNumber && (SPAN_WORDS.contains(word) || INTAKE_WORDS.contains(word) || MINUTE_WORDS.contains(word))) {
+            return true;
+        }
+        if (INTAKE_WORDS.contains(word) && before != null && ONLY_WORDS.contains(before)) {
+            return true;
+        }
+        if ("24".equals(word) && "24H".equals(before)) {
             return true;
         }
         return singleTimeAt(words, at, before) || periodAt(words, at, before) || clockAt(words, at, before);
@@ -432,6 +481,7 @@ public final class FrequencyWording {
 
     private static boolean isScheduleVocabulary(String word) {
         return NUMBER_WORDS.contains(word) || TIMES_WORDS.contains(word) || HOUR_WORDS.contains(word)
-            || SPAN_WORDS.contains(word) || INTAKE_WORDS.contains(word) || MINUTE_WORDS.contains(word);
+            || SPAN_WORDS.contains(word) || INTAKE_WORDS.contains(word) || ONLY_WORDS.contains(word)
+            || MINUTE_WORDS.contains(word);
     }
 }

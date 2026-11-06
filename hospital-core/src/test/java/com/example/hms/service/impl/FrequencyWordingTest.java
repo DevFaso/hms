@@ -120,6 +120,16 @@ class FrequencyWordingTest {
             .isEqualTo(FrequencyWording.Verdict.CONDITIONAL);
     }
 
+    /** Review of round 33: a range of doses over a period is the same ceiling as a range of times. */
+    @Test
+    void aRangeOfDosesIsNotASchedule() {
+        for (String wording : List.of("1 a 3 cp par jour", "1-3 cp/j", "1-3cp/j", "1-3x/j")) {
+            assertThat(FrequencyWording.classify(wording)).as(wording).isEqualTo(FrequencyWording.Verdict.UNREADABLE);
+        }
+        assertThat(FrequencyWording.classify("1 a 2 cp 3 fois par jour")).as("a dose range, a fixed cadence")
+            .isEqualTo(FrequencyWording.Verdict.FIXED);
+    }
+
     /** S/P needs its slash; SP alone is a regimen, in any case. */
     @Test
     void onlyTheSlashMakesSpConditional() {
