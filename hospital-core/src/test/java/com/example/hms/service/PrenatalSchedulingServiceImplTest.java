@@ -149,6 +149,30 @@ class PrenatalSchedulingServiceImplTest {
         HospitalContextHolder.clear();
     }
 
+    /** RCPT-CLIN: the box does not count for the desk, so neither the alert nor the cadence says it. */
+    @Test
+    void theHighRiskBoxDoesNotCountForTheDesk() {
+        LocalDate lmp = LocalDate.of(2023, 9, 4); // 30 weeks on fixed clock date
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(appointmentRepository.findByHospital_IdAndPatient_Id(hospitalId, patientId)).thenReturn(List.of());
+        PrenatalScheduleRequestDTO ticked = PrenatalScheduleRequestDTO.builder()
+            .patientId(patientId).hospitalId(hospitalId).lastMenstrualPeriodDate(lmp).highRisk(true).build();
+        PrenatalScheduleRequestDTO unticked = PrenatalScheduleRequestDTO.builder()
+            .patientId(patientId).hospitalId(hospitalId).lastMenstrualPeriodDate(lmp).highRisk(false).build();
+        PrenatalScheduleResponseDTO asNobody = service.generateSchedule(unticked, Locale.US, SCHEDULER_USERNAME);
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.TestingAuthenticationToken("desk", "p", "ROLE_RECEPTIONIST"));
+        try {
+            PrenatalScheduleResponseDTO desk = service.generateSchedule(ticked, Locale.US, SCHEDULER_USERNAME);
+            assertThat(desk.getAlerts()).noneSatisfy(alert -> assertThat(alert).contains("High-risk"));
+            assertThat(desk.getCurrentGestationalWeek()).isEqualTo(asNobody.getCurrentGestationalWeek());
+            assertThat(desk.getRecommendations()).hasSameSizeAs(asNobody.getRecommendations());
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+    }
+
     @Test
     void generateScheduleHighRiskProducesWeeklyVisitsAfterTwentyEightWeeks() {
         LocalDate lmp = LocalDate.of(2023, 9, 4); // 30 weeks on fixed clock date
@@ -179,7 +203,7 @@ class PrenatalSchedulingServiceImplTest {
 
     PrenatalScheduleResponseDTO response = service.generateSchedule(request, Locale.US, SCHEDULER_USERNAME);
 
-    assertThat(response.isHighRisk()).isTrue();
+    assertThat(response.getHighRisk()).isTrue();
     assertThat(response.getAlerts()).anySatisfy(alert -> assertThat(alert).contains("High-risk"));
 
         List<Integer> weeks = response.getRecommendations().stream()

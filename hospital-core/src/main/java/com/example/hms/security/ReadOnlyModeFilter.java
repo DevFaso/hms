@@ -46,6 +46,13 @@ import java.util.Set;
  * refused, an unknown path and a failed lookup included. The HAPI FHIR servlet
  * has no MVC handler: its two read forms are named in {@link #isFhirRead}.
  *
+ * <p>User decision 2026-11-06: {@code /api/auth/} is no longer open as a prefix. A write under it
+ * passes only when {@link #OPEN_AUTH_WRITES} names it, exactly: an account action that a downtime
+ * can wait for (registration, a new username or e-mail, recovery contacts, an optional MFA change)
+ * is refused like any write, and a new route is refused until {@code ReadOnlyAuthWritesGuardTest}
+ * and this list classify it. The filter runs before authentication, so the two enrolment routes pass
+ * here and {@code MfaController} refuses them unless the enrolment is what blocks the sign-in.
+ *
  * <p>IMPORTANT: servlet-registered filters see the {@code /api} context
  * prefix in {@code getRequestURI()} — allowlist entries are written WITH
  * the prefix (the RateLimitFilter convention), unlike SecurityConfig
@@ -66,22 +73,47 @@ public class ReadOnlyModeFilter extends OncePerRequestFilter {
     private static final Set<String> MUTATING_METHODS = Set.of("POST", "PUT", "PATCH", "DELETE");
 
     /**
-     * Writes that must survive downtime: authentication (login/refresh/MFA
-     * are POSTs; refresh writes go to Redis, not the app DB), the portal's
-     * error-telemetry sink, and the toggle endpoint itself — a mode you
-     * cannot turn off is an outage, not a mode.
+     * Writes that must survive downtime: the portal's error-telemetry sink and
+     * the toggle endpoint itself — a mode you cannot turn off is an outage, not a mode.
      */
     private static final List<String> ALLOWLISTED_PREFIXES = List.of(
-        "/api/auth/",
         "/api/frontend-audit",
         "/api/super-admin/downtime"
+    );
+
+    /**
+     * The writes under {@code /api/auth/} that survive a downtime, as exact paths: signing in and out
+     * (refresh writes go to Redis, not the app DB), resetting a forgotten password, the first sign-in
+     * steps that block all reading, and what keeps an open session readable (the lock screen, the
+     * notification socket). Everything else under the prefix is refused.
+     */
+    public static final Set<String> OPEN_AUTH_WRITES = Set.of(
+        "/api/auth/login",
+        "/api/auth/logout",
+        "/api/auth/token/refresh",
+        "/api/auth/mfa/verify",
+        "/api/auth/mfa/enroll",
+        "/api/auth/mfa/verify-enrollment",
+        "/api/auth/request-reset",
+        "/api/auth/reset-password",
+        "/api/auth/password/request",
+        "/api/auth/password/request-reset",
+        "/api/auth/password/confirm",
+        "/api/auth/password/reset-password",
+        "/api/auth/username/reminder",
+        "/api/auth/me/complete-setup",
+        "/api/auth/me/change-password",
+        "/api/auth/verify-email",
+        "/api/auth/resend-verification",
+        "/api/auth/verify-password",
+        "/api/auth/ws-ticket"
     );
 
     private static final String FHIR_PREFIX = "/api/fhir/";
     private static final String POST = "POST";
 
     /** QA D1407: the default sentence, in the reader's language. */
-    static final String DEFAULT_MESSAGE_KEY = "downtime.readOnly.default";
+    public static final String DEFAULT_MESSAGE_KEY = "downtime.readOnly.default";
     private static final String DEFAULT_MESSAGE_FALLBACK =
         "The system is in read-only mode for maintenance. Viewing is available; changes are temporarily disabled.";
 
@@ -175,7 +207,7 @@ public class ReadOnlyModeFilter extends OncePerRequestFilter {
             return true;
         }
         String path = request.getRequestURI();
-        return ALLOWLISTED_PREFIXES.stream().anyMatch(path::startsWith);
+        return OPEN_AUTH_WRITES.contains(path) || ALLOWLISTED_PREFIXES.stream().anyMatch(path::startsWith);
     }
 
     private static final class IsolatedAttributesRequest extends HttpServletRequestWrapper {

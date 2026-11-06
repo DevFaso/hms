@@ -1633,6 +1633,7 @@
       "CROSS_TENANT_READ": "Lecture du super-administrateur sur tous les hôpitaux : {{view}} ({{rows}} lignes)",
       "CROSS_HOSPITAL_READ_LAB": "Demande d’analyses d’un autre hôpital consultée par le laboratoire exécutant",
       "CROSS_HOSPITAL_READ_LAB_RESULT": "Résultat d’analyses d’un autre hôpital consulté par le laboratoire exécutant",
+      "EMERGENCY_BLOOD_RELEASED": "Délivrance en urgence sans épreuve de compatibilité de la poche {{unit}} pour la demande {{request}}",
       "CROSS_HOSPITAL_READ": "Consultation d’un autre hôpital au titre de la relation de soins : {{subject}}{{extra}}",
       "SUPPORT_SESSION_REFUSED": "Session de support refusée : {{what}} (données de connexion ou de récupération)",
       "IMPERSONATION_STARTED": "Session de support ouverte en tant que {{user}}. Motif : {{reason}}",
@@ -6396,6 +6397,7 @@
         "PROVIDER_REJECTED": "Prestataire refusé",
         "PROVIDER_VERIFICATION_REVOKED": "Vérification du prestataire révoquée",
         "PROVIDER_VERIFIED": "Prestataire vérifié",
+        "EMERGENCY_BLOOD_RELEASED": "Sang délivré en urgence sans épreuve de compatibilité",
         "PRO_ALERT_ACKNOWLEDGED": "Alerte PRO acquittée",
         "PRO_INSTRUMENT_IMPORTED": "Questionnaire PRO importé",
         "PRO_RESPONSE_RECORDED": "Réponse PRO enregistrée",
@@ -6834,6 +6836,7 @@
         "GENERAL": "Général"
       },
       "AUDIT_ENTITY_TYPE": {
+        "TRANSFUSION_REQUEST": "Demande de transfusion",
         "DEPARTMENT_DEFAULT_SENSITIVITY": "Sensibilité par défaut du service",
         "DISPENSE": "Dispensation",
         "ENCOUNTER_SENSITIVITY": "Sensibilité de la consultation",
@@ -11765,6 +11768,8 @@
     "RECORD_CROSSMATCH": "Saisir une épreuve de compatibilité",
     "COMPATIBLE": "Compatible",
     "INCOMPATIBLE": "Incompatible",
+    "RUNNING_INCOMPATIBLE": "L’épreuve de compatibilité de la poche {{unit}}, en cours de transfusion, est revenue incompatible. La poche n’a pas été arrêtée : le clinicien décide.",
+    "RUNNING_INCOMPATIBLE_SHORT": "Épreuve de compatibilité incompatible en cours de transfusion : le clinicien décide",
     "CROSSMATCH_LAPSED": "réservation expirée",
     "METHOD": "Méthode",
     "INCOMPAT_REASON": "Motif",

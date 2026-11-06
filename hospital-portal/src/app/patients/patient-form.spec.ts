@@ -75,7 +75,10 @@ describe('PatientFormComponent', () => {
     hospitalSpy.getMyHospitalAsResponse.and.returnValue(
       of({ id: 'h1', name: 'City Hospital' } as HospitalResponse),
     );
-    const roleCtx = { isSuperAdmin: () => false } as unknown as RoleContextService;
+    const roleCtx = {
+      isSuperAdmin: () => false,
+      hasAnyActiveRole: () => false,
+    } as unknown as RoleContextService;
 
     await TestBed.configureTestingModule({
       imports: [PatientFormComponent, TranslateModule.forRoot()],

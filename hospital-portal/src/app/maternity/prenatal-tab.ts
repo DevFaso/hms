@@ -22,6 +22,7 @@ import {
 import { PatientResponse } from '../services/patient.service';
 import { AuthService } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
+import { isFrontDeskOnly } from '../patients/patient-chart/chart-access';
 import { ToastService } from '../core/toast.service';
 import { refusalReason } from '../shared/refusal-reason';
 import { localDateString, serverLocalDate } from '../shared/date-utils';
@@ -78,6 +79,11 @@ export class PrenatalTabComponent implements OnInit {
   private readonly translate = inject(TranslateService);
 
   private hospitalId: string | null = null;
+
+  /** RCPT-CLIN: the desk books by the gestational week; the high-risk flag is not its to read or tick. */
+  frontDeskOnly(): boolean {
+    return isFrontDeskOnly((roles) => this.roleContext.hasAnyActiveRole(roles));
+  }
 
   patient = signal<PatientResponse | null>(null);
   lmpDate = '';

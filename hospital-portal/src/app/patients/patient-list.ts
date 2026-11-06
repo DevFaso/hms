@@ -17,6 +17,7 @@ import { HospitalService, HospitalResponse } from '../services/hospital.service'
 import { PermissionService } from '../core/permission.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
+import { isFrontDeskOnly } from './patient-chart/chart-access';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
@@ -60,6 +61,10 @@ export class PatientListComponent implements OnInit, OnDestroy {
   genderFilter = '';
   statusFilter = '';
   bloodTypeFilter = '';
+  /** RCPT-CLIN: the desk neither reads the blood type nor filters on it. */
+  frontDeskOnly(): boolean {
+    return isFrontDeskOnly((roles) => this.roleContext.hasAnyActiveRole(roles));
+  }
   hospitalFilter = '';
   showFilters = signal(false);
 

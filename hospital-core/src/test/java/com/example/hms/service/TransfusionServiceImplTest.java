@@ -97,6 +97,8 @@ class TransfusionServiceImplTest {
     @Mock private EncounterRepository encounterRepository;
     @Mock private PatientChartAccess patientChartAccess;
     @Mock private RoleValidator roleValidator;
+    @Mock private com.example.hms.service.InBasketService inBasketService;
+    @Mock private com.example.hms.service.AuditEventLogService auditEventLogService;
     /**
      * A real system clock, not a mock: the fixtures below build their own
      * timestamps from LocalDateTime.now(), so moving the service's clock away
@@ -1999,13 +2001,226 @@ class TransfusionServiceImplTest {
         verify(administrationRepository, never()).save(any());
     }
 
-    @Test
-    void aHungBagTakesNoNewCrossmatch_CX011() {
-        TransfusionAdministration running = running();
-        UUID requestId = running.getRequest().getId();
-        CrossmatchRequestDTO again = compatibleCrossmatch(running.getBloodUnit());
+    // ---- A result on a bag out of the lab (coordinator finding, round 34).
 
-        assertThatThrownBy(() -> service.recordCrossmatch(requestId, again)).isInstanceOf(FieldBusinessException.class);
+    private CrossmatchRequestDTO incompatible(BloodUnit bag) {
+        return CrossmatchRequestDTO.builder().bloodUnitId(bag.getId()).compatible(Boolean.FALSE)
+            .incompatibilityReason("Anti-K").build();
+    }
+
+    private List<com.example.hms.payload.dto.clinical.CreateInBasketItemRequest> filedItems(int count) {
+        org.mockito.ArgumentCaptor<com.example.hms.payload.dto.clinical.CreateInBasketItemRequest> items =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.clinical.CreateInBasketItemRequest.class);
+        verify(inBasketService, org.mockito.Mockito.times(count)).createItemInNewTransaction(items.capture());
+        return items.getAllValues();
+    }
+
+    /** Behaviour change: this used to be refused ("a hung bag takes no new crossmatch"), which hid the result. */
+    @Test
+    void aRunningBagTakesAResultAndStaysWhatItIs() {
+        TransfusionAdministration running = running();
+        TransfusionRequest request = running.getRequest();
+        BloodUnit bag = running.getBloodUnit();
+        UUID doctor = UUID.randomUUID();
+        UUID nurse = UUID.randomUUID();
+        request.setRequestedBy(requester(doctor));
+        running.setAdministeredBy(requester(nurse));
+        patient.setFirstName("Awa");
+        patient.setLastName("Kabore");
+
+        service.recordCrossmatch(request.getId(), incompatible(bag));
+
+        assertThat(bag.getStatus()).as("not back at the lab").isEqualTo(BloodUnitStatus.ISSUED);
+        assertThat(running.getStatus()).as("not stopped: the clinician decides").isEqualTo(TransfusionAdministrationStatus.IN_PROGRESS);
+        assertThat(request.getStatus()).isEqualTo(TransfusionRequestStatus.ISSUED);
+        var items = filedItems(2);
+        assertThat(items).extracting(com.example.hms.payload.dto.clinical.CreateInBasketItemRequest::getRecipientUserId)
+            .containsExactlyInAnyOrder(doctor, nurse);
+        assertThat(items).allSatisfy(item -> {
+            assertThat(item.getPriority()).isEqualTo(com.example.hms.enums.InBasketPriority.URGENT);
+            assertThat(item.getBodyKey()).isEqualTo(TransfusionServiceImpl.INCOMPATIBLE_RUNNING_BODY_KEY);
+            assertThat(item.getTitleKey()).isEqualTo(TransfusionServiceImpl.INCOMPATIBLE_TITLE_KEY);
+            assertThat(item.getBodyArgs()).containsExactly(bag.getUnitNumber(), "Awa Kabore");
+            assertThat(item.getTitleArgs()).containsExactly(bag.getUnitNumber());
+            assertThat(item.getPatientId()).isEqualTo(patientId);
+        });
+    }
+
+    @Test
+    void aRunningBagShowsTheResultOnThePanel() {
+        TransfusionAdministration running = running();
+        TransfusionCrossmatch result = TransfusionCrossmatch.builder().request(running.getRequest())
+            .bloodUnit(running.getBloodUnit()).hospital(hospital).compatible(Boolean.FALSE)
+            .incompatibilityReason("Anti-K").performedAt(LocalDateTime.now()).expiresAt(LocalDateTime.now().plusHours(1)).build();
+        when(crossmatchRepository.findByRequest_IdAndBloodUnit_Id(running.getRequest().getId(), running.getBloodUnit().getId()))
+            .thenReturn(Optional.of(result));
+        when(administrationRepository.findByPatient_IdAndHospital_IdOrderByStartedAtDesc(patientId, hospitalId))
+            .thenReturn(List.of(running));
+
+        var panel = service.listAdministrationsForPatient(patientId);
+
+        assertThat(panel).singleElement().satisfies(row -> {
+            assertThat(row.getCrossmatch().getCompatible()).isFalse();
+            assertThat(row.getCrossmatch().getIncompatibilityReason()).isEqualTo("Anti-K");
+        });
+    }
+
+    @Test
+    void anAdministrationWithNoCrossmatchReadsNone() {
+        TransfusionAdministration running = running();
+        when(administrationRepository.findByPatient_IdAndHospital_IdOrderByStartedAtDesc(patientId, hospitalId))
+            .thenReturn(List.of(running));
+        assertThat(service.listAdministrationsForPatient(patientId).get(0).getCrossmatch()).isNull();
+    }
+
+    @Test
+    void theRequesterWhoHangsItIsToldOnce() {
+        TransfusionAdministration running = running();
+        UUID sameUser = UUID.randomUUID();
+        running.getRequest().setRequestedBy(requester(sameUser));
+        running.setAdministeredBy(requester(sameUser));
+
+        service.recordCrossmatch(running.getRequest().getId(), incompatible(running.getBloodUnit()));
+
+        assertThat(filedItems(1).get(0).getRecipientUserId()).isEqualTo(sameUser);
+    }
+
+    @Test
+    void aBagOutAndNotHungGoesBackAndTheRequesterIsTold() {
+        TransfusionRequest request = request(group(AboGroup.O, RhFactor.POSITIVE, AntibodyScreenResult.NEGATIVE), TransfusionUrgency.ROUTINE);
+        UUID doctor = UUID.randomUUID();
+        request.setRequestedBy(requester(doctor));
+        BloodUnit bag = unit(AboGroup.O, RhFactor.POSITIVE, BloodProductType.PACKED_RED_CELLS, BloodUnitStatus.ISSUED);
+        bag.setRequest(request);
+
+        service.recordCrossmatch(request.getId(), incompatible(bag));
+
+        assertThat(bag.getStatus()).isEqualTo(BloodUnitStatus.RETURNED);
+        var items = filedItems(1);
+        assertThat(items.get(0).getRecipientUserId()).isEqualTo(doctor);
+        assertThat(items.get(0).getBodyKey()).isEqualTo(TransfusionServiceImpl.INCOMPATIBLE_ISSUED_BODY_KEY);
+    }
+
+    @Test
+    void aBagStillAtTheLabTellsNobody() {
+        TransfusionRequest request = request(group(AboGroup.O, RhFactor.POSITIVE, AntibodyScreenResult.NEGATIVE), TransfusionUrgency.ROUTINE);
+        request.setRequestedBy(requester(UUID.randomUUID()));
+        BloodUnit bag = unit(AboGroup.O, RhFactor.POSITIVE, BloodProductType.PACKED_RED_CELLS, BloodUnitStatus.CROSSMATCHED);
+        bag.setRequest(request);
+
+        service.recordCrossmatch(request.getId(), incompatible(bag));
+
+        assertThat(bag.getStatus()).isEqualTo(BloodUnitStatus.RETURNED);
+        verify(inBasketService, never()).createItemInNewTransaction(any());
+    }
+
+    @Test
+    void theSameResultRecordedAgainIsNotASecondAlert() {
+        TransfusionAdministration running = running();
+        running.getRequest().setRequestedBy(requester(UUID.randomUUID()));
+        TransfusionCrossmatch earlier = TransfusionCrossmatch.builder().request(running.getRequest())
+            .bloodUnit(running.getBloodUnit()).hospital(hospital).compatible(Boolean.FALSE).build();
+        earlier.setId(UUID.randomUUID());
+        when(crossmatchRepository.findByRequest_IdAndBloodUnit_Id(running.getRequest().getId(), running.getBloodUnit().getId()))
+            .thenReturn(Optional.of(earlier));
+
+        service.recordCrossmatch(running.getRequest().getId(), incompatible(running.getBloodUnit()));
+
+        verify(inBasketService, never()).createItemInNewTransaction(any());
+    }
+
+    @Test
+    void aFailedNotificationNeverUndoesTheResult() {
+        TransfusionAdministration running = running();
+        running.getRequest().setRequestedBy(requester(UUID.randomUUID()));
+        running.setAdministeredBy(requester(UUID.randomUUID()));
+        when(inBasketService.createItemInNewTransaction(any())).thenThrow(new IllegalStateException("down"));
+
+        assertThat(service.recordCrossmatch(running.getRequest().getId(), incompatible(running.getBloodUnit())).getCompatible()).isFalse();
+
+        // One failing does not cost the other its item.
+        filedItems(2);
+    }
+
+    @Test
+    void aRequestWithNoRequesterStillTellsTheNurse() {
+        TransfusionAdministration running = running();
+        UUID nurse = UUID.randomUUID();
+        running.setAdministeredBy(requester(nurse));
+
+        service.recordCrossmatch(running.getRequest().getId(), incompatible(running.getBloodUnit()));
+
+        assertThat(filedItems(1).get(0).getRecipientUserId()).isEqualTo(nurse);
+    }
+
+    @Test
+    void aBagThatRanOutOfDateWhileRunningStillTakesTheResult() {
+        TransfusionAdministration running = running();
+        running.getBloodUnit().setExpiresOn(LocalDate.now().minusDays(1));
+
+        assertThat(service.recordCrossmatch(running.getRequest().getId(), incompatible(running.getBloodUnit())).getCompatible()).isFalse();
+    }
+
+    @Test
+    void aBagHungForAnotherRequestStaysClosed() {
+        TransfusionAdministration running = running();
+        TransfusionRequest other = request(group(AboGroup.O, RhFactor.POSITIVE, AntibodyScreenResult.NEGATIVE), TransfusionUrgency.ROUTINE);
+        UUID otherId = other.getId();
+        CrossmatchRequestDTO result = incompatible(running.getBloodUnit());
+
+        assertThatThrownBy(() -> service.recordCrossmatch(otherId, result)).isInstanceOf(FieldBusinessException.class);
+        verify(inBasketService, never()).createItemInNewTransaction(any());
+    }
+
+    @Test
+    void aFinishedBagStillTakesNoResult() {
+        TransfusionAdministration running = running();
+        running.setStatus(TransfusionAdministrationStatus.COMPLETED);
+        running.getBloodUnit().setStatus(BloodUnitStatus.TRANSFUSED);
+        UUID requestId = running.getRequest().getId();
+        CrossmatchRequestDTO result = incompatible(running.getBloodUnit());
+
+        assertThatThrownBy(() -> service.recordCrossmatch(requestId, result)).isInstanceOf(FieldBusinessException.class);
+    }
+
+    @Test
+    void anEmergencyReleaseIsAuditedByIdsOnly() {
+        TransfusionRequest req = request(null, TransfusionUrgency.EMERGENCY);
+        BloodUnit oNeg = unit(AboGroup.O, RhFactor.NEGATIVE, BloodProductType.PACKED_RED_CELLS, BloodUnitStatus.AVAILABLE);
+
+        service.issueUnit(req.getId(), oNeg.getId());
+
+        org.mockito.ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> row =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(row.capture());
+        assertThat(row.getValue().getEventType()).isEqualTo(com.example.hms.enums.AuditEventType.EMERGENCY_BLOOD_RELEASED);
+        assertThat(row.getValue().getUserId()).isEqualTo(callerUserId);
+        assertThat(row.getValue().getHospitalId()).isEqualTo(hospitalId);
+        assertThat(row.getValue().getResourceId()).isEqualTo(req.getId().toString());
+        assertThat(row.getValue().getEventDescription()).contains(oNeg.getId().toString()).contains(req.getId().toString());
+    }
+
+    @Test
+    void aCrossmatchedIssueWritesNoEmergencyRow() {
+        TransfusionRequest req = request(group(AboGroup.O, RhFactor.POSITIVE, AntibodyScreenResult.NEGATIVE), TransfusionUrgency.ROUTINE);
+        BloodUnit bag = unit(AboGroup.O, RhFactor.POSITIVE, BloodProductType.PACKED_RED_CELLS, BloodUnitStatus.CROSSMATCHED);
+        bag.setRequest(req);
+        usableCrossmatch(req, bag);
+
+        service.issueUnit(req.getId(), bag.getId());
+
+        verify(auditEventLogService, never()).logEvent(any());
+    }
+
+    @Test
+    void aFailedEmergencyAuditDoesNotStopTheBlood() {
+        TransfusionRequest req = request(null, TransfusionUrgency.EMERGENCY);
+        BloodUnit oNeg = unit(AboGroup.O, RhFactor.NEGATIVE, BloodProductType.PACKED_RED_CELLS, BloodUnitStatus.AVAILABLE);
+        when(auditEventLogService.logEvent(any())).thenThrow(new IllegalStateException("down"));
+
+        service.issueUnit(req.getId(), oNeg.getId());
+
+        assertThat(oNeg.getStatus()).isEqualTo(BloodUnitStatus.ISSUED);
     }
 
     @Test

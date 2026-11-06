@@ -88,6 +88,13 @@ public class TransfusionServiceImpl implements TransfusionService {
     private static final String MSG_GROUP_NOT_FOUND = "transfusion.bloodGroup.notFound";
     private static final String MSG_ADMIN_NOT_FOUND = "transfusion.administration.notFound";
 
+    /** The in-basket item of an incompatible result on a bag already out of the lab. */
+    public static final String INCOMPATIBLE_TITLE_KEY = "transfusion.crossmatch.incompatible.inBasketTitle";
+    public static final String INCOMPATIBLE_RUNNING_BODY_KEY = "transfusion.crossmatch.incompatible.running.inBasketBody";
+    public static final String INCOMPATIBLE_ISSUED_BODY_KEY = "transfusion.crossmatch.incompatible.issued.inBasketBody";
+    static final String CROSSMATCH_REFERENCE_TYPE = "TRANSFUSION_CROSSMATCH";
+    private static final String REQUEST_ENTITY_TYPE = "TRANSFUSION_REQUEST";
+
     /** Default life of an antibody screen and of a crossmatch reservation. */
     private static final int DEFAULT_VALIDITY_HOURS = 72;
 
@@ -110,6 +117,8 @@ public class TransfusionServiceImpl implements TransfusionService {
     private final PatientChartAccess patientChartAccess;
     private final TransfusionMapper mapper;
     private final RoleValidator roleValidator;
+    private final com.example.hms.service.InBasketService inBasketService;
+    private final com.example.hms.service.AuditEventLogService auditEventLogService;
     /**
      * Injected rather than reading the system clock inline, following
      * ReferralExpiryServiceImpl and PrenatalSchedulingServiceImpl. Expiry is
@@ -454,7 +463,10 @@ public class TransfusionServiceImpl implements TransfusionService {
         }
 
         BloodUnit unit = loadUnitScoped(request.getBloodUnitId());
-        if (unit.isExpiredOn(LocalDate.now(clock))) {
+        // A bag running into this patient: the result still has to be written, and told, whatever
+        // the bag's date says by now (an emergency bag is crossmatched after it went up).
+        TransfusionAdministration running = runningAdministration(unit, requestId);
+        if (running == null && unit.isExpiredOn(LocalDate.now(clock))) {
             throw new com.example.hms.exception.FieldBusinessException(FIELD_BLOOD_UNIT_ID, "transfusion.unit.expired", unit.getUnitNumber(),
                 DisplayDates.date(unit.getExpiresOn()));
         }
@@ -465,7 +477,7 @@ public class TransfusionServiceImpl implements TransfusionService {
             throw new com.example.hms.exception.FieldBusinessException(FIELD_BLOOD_UNIT_ID, "transfusion.unit.productMismatch", unit.getUnitNumber(),
                 productLabel(unit.getProductType()), productLabel(transfusionRequest.getProductType()));
         }
-        requireNotHeldElsewhere(unit, requestId);
+        requireNotHeldElsewhere(unit, requestId, running);
         requireInFuture(request.getExpiresAt());
 
         // QA CX-011: the patient's current screen. A request raised before a
@@ -531,6 +543,7 @@ public class TransfusionServiceImpl implements TransfusionService {
                 .bloodUnit(unit)
                 .hospital(transfusionRequest.getHospital())
                 .build());
+        boolean alreadyIncompatible = crossmatch.getId() != null && !Boolean.TRUE.equals(crossmatch.getCompatible());
 
         crossmatch.setCompatible(request.getCompatible());
         crossmatch.setMethod(request.getMethod());
@@ -553,14 +566,119 @@ public class TransfusionServiceImpl implements TransfusionService {
                 transfusionRequest.setStatus(TransfusionRequestStatus.CROSSMATCHED);
                 requestRepository.save(transfusionRequest);
             }
-        } else if (unit.getStatus() == BloodUnitStatus.CROSSMATCHED || unit.getStatus() == BloodUnitStatus.ISSUED) {
-            // A bag reserved here, or out and not hung, and now found incompatible goes
-            // back to the lab. Left as it was, nothing could ever release it: issue and
-            // hang refuse it, and it is hidden from the units that can be crossmatched.
-            unit.setStatus(BloodUnitStatus.RETURNED);
-            unitRepository.save(unit);
+        } else {
+            if (unit.getStatus() == BloodUnitStatus.ISSUED && !alreadyIncompatible) {
+                fileIncompatibleResultAfterCommit(transfusionRequest, unit, running, saved);
+            }
+            // A running bag stays what it is: it is not back at the lab, and only the
+            // clinician stops it. Stopping or finishing it closes it as any other.
+            if (running == null
+                    && (unit.getStatus() == BloodUnitStatus.CROSSMATCHED || unit.getStatus() == BloodUnitStatus.ISSUED)) {
+                // A bag reserved here, or out and not hung, and now found incompatible goes
+                // back to the lab. Left as it was, nothing could ever release it: issue and
+                // hang refuse it, and it is hidden from the units that can be crossmatched.
+                unit.setStatus(BloodUnitStatus.RETURNED);
+                unitRepository.save(unit);
+            }
         }
         return mapper.toDto(saved);
+    }
+
+    /**
+     * An incompatible result on a bag out of the lab: URGENT, to the clinician who asked for the
+     * blood and, when it is hanging, to the nurse giving it, each in their own language. Read here,
+     * in the transaction; filed after the commit in a transaction of its own, so a failure here
+     * leaves the result recorded. An emergency request can have no requester (a caller with no
+     * staff record); then the running nurse alone is told, and the log says so.
+     */
+    private void fileIncompatibleResultAfterCommit(TransfusionRequest request, BloodUnit unit,
+                                                   TransfusionAdministration running, TransfusionCrossmatch crossmatch) {
+        java.util.Set<UUID> recipients = new java.util.LinkedHashSet<>();
+        addRecipient(recipients, request.getRequestedBy());
+        if (running != null) {
+            addRecipient(recipients, running.getAdministeredBy());
+        }
+        UUID crossmatchId = crossmatch.getId();
+        if (recipients.isEmpty()) {
+            log.warn("Incompatible crossmatch {} on a bag out of the lab has nobody to tell", crossmatchId);
+            return;
+        }
+        List<com.example.hms.payload.dto.clinical.CreateInBasketItemRequest> items = recipients.stream()
+            .map(recipient -> incompatibleResultItem(recipient, request, unit, running, crossmatchId))
+            .toList();
+        com.example.hms.utility.TransactionCallbacks.afterCommit(() -> {
+            for (com.example.hms.payload.dto.clinical.CreateInBasketItemRequest item : items) {
+                try {
+                    inBasketService.createItemInNewTransaction(item);
+                } catch (RuntimeException ex) {
+                    log.warn("In-basket item not filed for incompatible crossmatch {}: {}", crossmatchId,
+                        ex.getClass().getSimpleName());
+                }
+            }
+        });
+    }
+
+    /** One reader's item: the keys render it in their language, the text is the stored staff-language copy. */
+    private static com.example.hms.payload.dto.clinical.CreateInBasketItemRequest incompatibleResultItem(
+            UUID recipient, TransfusionRequest request, BloodUnit unit, TransfusionAdministration running, UUID crossmatchId) {
+        Patient patient = request.getPatient();
+        String patientName = patient != null ? patient.getFullName() : null;
+        Object[] titleArgs = {unit.getUnitNumber()};
+        Object[] bodyArgs = {unit.getUnitNumber(), patientName};
+        com.example.hms.payload.dto.clinical.CreateInBasketItemRequest item =
+            new com.example.hms.payload.dto.clinical.CreateInBasketItemRequest();
+        item.setRecipientUserId(recipient);
+        item.setHospitalId(request.getHospital().getId());
+        item.setItemType(com.example.hms.enums.InBasketItemType.RESULT);
+        item.setPriority(com.example.hms.enums.InBasketPriority.URGENT);
+        item.setTitleKey(INCOMPATIBLE_TITLE_KEY);
+        item.setTitleArgs(titleArgs);
+        item.setTitle(MessageUtil.resolve(com.example.hms.service.i18n.NotificationLocales.STAFF,
+            INCOMPATIBLE_TITLE_KEY, titleArgs));
+        if (running != null) {
+            item.setBodyKey(INCOMPATIBLE_RUNNING_BODY_KEY);
+        } else {
+            item.setBodyKey(INCOMPATIBLE_ISSUED_BODY_KEY);
+        }
+        item.setBodyArgs(bodyArgs);
+        item.setBody(MessageUtil.resolve(com.example.hms.service.i18n.NotificationLocales.STAFF, item.getBodyKey(), bodyArgs));
+        item.setReferenceId(crossmatchId);
+        item.setReferenceType(CROSSMATCH_REFERENCE_TYPE);
+        item.setEncounterId(request.getEncounter() != null ? request.getEncounter().getId() : null);
+        item.setPatientId(patient != null ? patient.getId() : null);
+        item.setPatientName(patientName);
+        return item;
+    }
+
+    private static void addRecipient(java.util.Set<UUID> recipients, Staff staff) {
+        if (staff != null && staff.getUser() != null) {
+            recipients.add(staff.getUser().getId());
+        }
+    }
+
+    /** Who released which unit against which request, ids only: the callback has no session. */
+    private void auditEmergencyReleaseAfterCommit(TransfusionRequest request, BloodUnit unit) {
+        UUID actorUserId = roleValidator.getCurrentUserId();
+        UUID hospitalId = request.getHospital().getId();
+        UUID requestId = request.getId();
+        UUID unitId = unit.getId();
+        com.example.hms.utility.TransactionCallbacks.afterCommit(() -> {
+            try {
+                auditEventLogService.logEvent(com.example.hms.payload.dto.AuditEventRequestDTO.builder()
+                    .userId(actorUserId)
+                    .hospitalId(hospitalId)
+                    .eventType(com.example.hms.enums.AuditEventType.EMERGENCY_BLOOD_RELEASED)
+                    .status(com.example.hms.enums.AuditStatus.SUCCESS)
+                    .eventDescription("Emergency uncrossmatched release of blood unit " + unitId
+                        + " against transfusion request " + requestId)
+                    .entityType(REQUEST_ENTITY_TYPE)
+                    .resourceId(requestId.toString())
+                    .build());
+            } catch (RuntimeException ex) {
+                log.warn("Audit not written for the emergency release of unit {} against request {}: {}",
+                    unitId, requestId, ex.getClass().getSimpleName());
+            }
+        });
     }
 
     @Override
@@ -615,6 +733,7 @@ public class TransfusionServiceImpl implements TransfusionService {
             }
             log.warn("EMERGENCY uncrossmatched release of unit {} against request {}",
                 unit.getUnitNumber(), requestId);
+            auditEmergencyReleaseAfterCommit(request, unit);
         }
 
         unit.setStatus(BloodUnitStatus.ISSUED);
@@ -696,7 +815,7 @@ public class TransfusionServiceImpl implements TransfusionService {
             .build();
 
         TransfusionAdministration saved = administrationRepository.save(administration);
-        return mapper.toDto(saved, List.of());
+        return toDetail(saved, List.of());
     }
 
     /**
@@ -752,7 +871,7 @@ public class TransfusionServiceImpl implements TransfusionService {
         unitRepository.save(unit);
 
         completeRequestIfDone(administration.getRequest());
-        return mapper.toDto(administrationRepository.save(administration),
+        return toDetail(administrationRepository.save(administration),
             reactionRepository.findByAdministration_IdOrderByOnsetAtDesc(administrationId));
     }
 
@@ -774,7 +893,7 @@ public class TransfusionServiceImpl implements TransfusionService {
         // the request open for good.
         discardHungUnit(administration.getBloodUnit(), reason.trim());
         completeRequestIfDone(administration.getRequest());
-        return mapper.toDto(administrationRepository.save(administration),
+        return toDetail(administrationRepository.save(administration),
             reactionRepository.findByAdministration_IdOrderByOnsetAtDesc(administrationId));
     }
 
@@ -786,7 +905,7 @@ public class TransfusionServiceImpl implements TransfusionService {
         return administrationRepository
             .findByPatient_IdAndHospital_IdOrderByStartedAtDesc(patientId, hospitalId)
             .stream()
-            .map(a -> mapper.toDto(a, reactionRepository.findByAdministration_IdOrderByOnsetAtDesc(a.getId())))
+            .map(a -> toDetail(a, reactionRepository.findByAdministration_IdOrderByOnsetAtDesc(a.getId())))
             .toList();
     }
 
@@ -986,16 +1105,26 @@ public class TransfusionServiceImpl implements TransfusionService {
     }
 
     /**
-     * A bag held for another request cannot be crossmatched here, and one already
-     * hung has nothing left to decide. A bag issued for THIS request can: a result
-     * on it after a repeat screen is what stops it at the bedside.
+     * A bag held for another request cannot be crossmatched here. A bag issued for THIS request can:
+     * a result on it after a repeat screen is what stops it at the bedside. So can one running into
+     * this patient: an emergency bag goes up before its crossmatch, and refusing the result hid it
+     * from the clinician. Only a bag hung for some other request stays closed.
      */
-    private void requireNotHeldElsewhere(BloodUnit unit, UUID requestId) {
+    private void requireNotHeldElsewhere(BloodUnit unit, UUID requestId, TransfusionAdministration running) {
         requireNotHeldByAnother(unit, requestId);
-        if (unit.getStatus() == BloodUnitStatus.ISSUED
+        if (running == null && unit.getStatus() == BloodUnitStatus.ISSUED
                 && administrationRepository.findByBloodUnit_Id(unit.getId()).isPresent()) {
             throw new FieldBusinessException(FIELD_BLOOD_UNIT_ID, "transfusion.unit.alreadyHung", unit.getUnitNumber());
         }
+    }
+
+    /** The administration running this bag for this request, null when it is not hanging for it. */
+    private TransfusionAdministration runningAdministration(BloodUnit unit, UUID requestId) {
+        return administrationRepository.findByBloodUnit_Id(unit.getId())
+            .filter(TransfusionAdministration::isInProgress)
+            .filter(administration -> administration.getRequest() != null
+                && Objects.equals(administration.getRequest().getId(), requestId))
+            .orElse(null);
     }
 
     private static void requireNotHeldByAnother(BloodUnit unit, UUID requestId) {
@@ -1063,6 +1192,16 @@ public class TransfusionServiceImpl implements TransfusionService {
             request.setStatus(TransfusionRequestStatus.COMPLETED);
             requestRepository.save(request);
         }
+    }
+
+    /** A bag's administration with the crossmatch result on file for it, so the panel can show what came back. */
+    private TransfusionAdministrationResponseDTO toDetail(TransfusionAdministration administration,
+                                                          List<TransfusionReaction> reactions) {
+        TransfusionCrossmatch crossmatch = administration.getRequest() == null || administration.getBloodUnit() == null
+            ? null
+            : crossmatchRepository.findByRequest_IdAndBloodUnit_Id(administration.getRequest().getId(),
+                administration.getBloodUnit().getId()).orElse(null);
+        return mapper.toDto(administration, reactions, crossmatch);
     }
 
     private TransfusionRequestResponseDTO toDetail(TransfusionRequest request) {

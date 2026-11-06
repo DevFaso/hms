@@ -50,6 +50,7 @@ public class EncounterMapper {
             : nullSafe(e.getNotes()));
         dto.setArrivalTimestamp(e.getArrivalTimestamp());
         dto.setChiefComplaint(nullSafe(e.getChiefComplaint()));
+        dto.setDeskChiefComplaint(nullSafe(e.getDeskChiefComplaint()));
         dto.setEsiScore(e.getEsiScore());
         dto.setRoomAssignment(nullSafe(e.getRoomAssignment()));
         dto.setTriageTimestamp(e.getTriageTimestamp());
@@ -309,6 +310,10 @@ public class EncounterMapper {
         // QA D944: the walk-in's "Motif principal" is the visit's chief complaint.
         if (dto.getChiefComplaint() != null && !dto.getChiefComplaint().isBlank()) {
             e.setChiefComplaint(dto.getChiefComplaint().trim());
+            // RCPT-CLIN: what a receptionist typed stays hers to read, whatever triage writes after it.
+            if (com.example.hms.controller.support.ReceptionistResponseShaping.isReceptionistOnly()) {
+                e.setDeskChiefComplaint(dto.getChiefComplaint().trim());
+            }
         }
 
         return e;

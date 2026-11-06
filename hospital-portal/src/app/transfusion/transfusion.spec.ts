@@ -577,6 +577,54 @@ describe('TransfusionComponent: a transfusion in progress (QA CX-008)', () => {
     expect(component.reactionForm.onsetAt).withContext('the time is already there').not.toBe('');
   });
 
+  const reopenWith = (list: TransfusionAdministrationResponse[]) => {
+    txSpy.listAdministrationsForPatient.and.returnValue(of(list));
+    component.openRequest(issuedRequest);
+    fixture.detectChanges();
+  };
+
+  it('a running bag found incompatible says so on the request and on its card, and is still running', async () => {
+    await start(['ROLE_NURSE']);
+    reopenWith([
+      administration({
+        crossmatch: {
+          compatible: false,
+          incompatibilityReason: 'Anti-K',
+        } as TransfusionAdministrationResponse['crossmatch'],
+      }),
+    ]);
+    expect(component.runningIncompatible().length).toBe(1);
+    expect(el('running-incompatible-banner')).toBeTruthy();
+    expect(el('xm-incompatible-adm-1')).toBeTruthy();
+    expect(el('stop-administration')).withContext('the clinician decides').toBeTruthy();
+  });
+
+  it('a running bag with a compatible result shows no alert; a finished one keeps the fact, not the banner', async () => {
+    await start(['ROLE_NURSE']);
+    reopenWith([
+      administration({
+        crossmatch: { compatible: true } as TransfusionAdministrationResponse['crossmatch'],
+      }),
+    ]);
+    expect(el('running-incompatible-banner')).toBeNull();
+    expect(el('xm-incompatible-adm-1')).toBeNull();
+    reopenWith([
+      administration({
+        status: 'COMPLETED',
+        crossmatch: { compatible: false } as TransfusionAdministrationResponse['crossmatch'],
+      }),
+    ]);
+    expect(el('running-incompatible-banner')).toBeNull();
+    expect(el('xm-incompatible-adm-1')).toBeTruthy();
+  });
+
+  it('the lab can pick the running bag: the result still has to reach the clinician', async () => {
+    await start(['ROLE_NURSE']);
+    txSpy.listAssignableUnits.and.returnValue(of([]));
+    component.openCrossmatch();
+    expect(component.assignableUnits().map((u) => u.id)).toContain('u1');
+  });
+
   it('a bag not yet hung still offers hang, once the list has answered', async () => {
     await start(['ROLE_NURSE']);
     txSpy.listAdministrationsForPatient.and.returnValue(of([]));
@@ -748,7 +796,7 @@ describe('TransfusionComponent: a transfusion in progress (QA CX-008)', () => {
     expect(txSpy.startAdministration).not.toHaveBeenCalled();
   });
 
-  it('QA CX-011: the crossmatch list offers the bags this request holds, first, except a hung one', async () => {
+  it('QA CX-011: the crossmatch list offers the bags this request holds, first, a running one included', async () => {
     await start(['ROLE_LAB_TECHNICIAN']);
     txSpy.listAssignableUnits = jasmine
       .createSpy()
@@ -763,7 +811,7 @@ describe('TransfusionComponent: a transfusion in progress (QA CX-008)', () => {
       }),
     );
     component.openCrossmatch();
-    expect(component.assignableUnits().map((u) => u.id)).toEqual(['held', 'out', 'stock']);
+    expect(component.assignableUnits().map((u) => u.id)).toEqual(['held', 'out', 'u1', 'stock']);
   });
 
   describe('emergency release', () => {

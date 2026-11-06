@@ -108,6 +108,8 @@ class TransfusionRepeatScreenPostgresIT {
 
     @MockitoBean private RoleValidator roleValidator;
     @MockitoBean private PatientChartAccess patientChartAccess;
+    @MockitoBean private InBasketService inBasketService;
+    @MockitoBean private AuditEventLogService auditEventLogService;
 
     private final UUID hospital = UUID.randomUUID();
     private final UUID patient = UUID.randomUUID();

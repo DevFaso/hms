@@ -20,6 +20,7 @@ import {
 } from '../shared/delivery-warnings';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { RoleContextService } from '../core/role-context.service';
+import { isFrontDeskOnly } from './patient-chart/chart-access';
 import { ReceptionService, DuplicateCandidate } from '../reception/reception.service';
 import { RegistrationService } from '../services/registration.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -111,6 +112,11 @@ export class PatientFormComponent implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly hospitalService = inject(HospitalService);
   private readonly roleContext = inject(RoleContextService);
+
+  /** RCPT-CLIN: the blood type is not the desk's to read, so not its box to fill. */
+  frontDeskOnly(): boolean {
+    return isFrontDeskOnly((roles) => this.roleContext.hasAnyActiveRole(roles));
+  }
   private readonly receptionService = inject(ReceptionService);
   private readonly registrationService = inject(RegistrationService);
   private readonly translate = inject(TranslateService);

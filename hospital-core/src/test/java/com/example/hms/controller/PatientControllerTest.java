@@ -119,15 +119,20 @@ class PatientControllerTest {
         }
 
         @Test
-        void aReceptionistStillCorrectsDemographicsAndABloodType() {
+        void aReceptionistStillCorrectsDemographicsAndNoLongerABloodType() {
             var auth = signedInAs(ROLE_RECEPTIONIST_CODE);
             var body = new com.example.hms.payload.dto.PatientProfileUpdateRequestDTO();
             body.setFirstName("Awa");
-            body.setBloodType("O+");
 
             controller.patchPatient(patientId, body, null, auth);
 
             verify(patientService).patchPatient(eq(patientId), eq(body), any(), any(Locale.class));
+
+            // User decision 2026-11-06: the desk does not read it, so it does not write it.
+            var bloodType = new com.example.hms.payload.dto.PatientProfileUpdateRequestDTO();
+            bloodType.setBloodType("O+");
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> controller.patchPatient(patientId, bloodType, null, auth))
+                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
         }
 
         @Test

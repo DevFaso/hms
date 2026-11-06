@@ -3365,4 +3365,11 @@
                  stripComments="false"/>
     </changeSet>
 
+    <changeSet id="V265-r34-desk-chief-complaint" author="hms-team" runOnChange="false">
+        <sqlFile path="V265__r34_desk_chief_complaint.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

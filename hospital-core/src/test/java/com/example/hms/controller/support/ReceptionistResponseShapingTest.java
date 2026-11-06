@@ -84,7 +84,7 @@ class ReceptionistResponseShapingTest {
         PatientResponseDTO shaped = (PatientResponseDTO) write(patient(), "/patients/1");
         assertThat(shaped.getFirstName()).isEqualTo("Awa");
         assertThat(shaped.getPhoneNumberPrimary()).isEqualTo("70000000");
-        assertThat(shaped.getBloodType()).isEqualTo("O+");
+        assertThat(shaped.getBloodType()).isNull();
         assertThat(shaped.getAllergies()).isNull();
         assertThat(shaped.getChronicConditions()).isEmpty();
         assertThat(shaped.getFlags()).isEmpty();
@@ -156,6 +156,123 @@ class ReceptionistResponseShapingTest {
         write(board, "/bed-board");
         assertThat(occupant.getPatientName()).isEqualTo("Awa");
         assertThat(occupant.getPrimaryDiagnosis()).isNull();
+    }
+
+    // ---- User decision 2026-11-06, field by field: the desk does not get it, a doctor and a nurse still do.
+
+    @ParameterizedTest
+    @ValueSource(strings = {"ROLE_DOCTOR", "ROLE_NURSE"})
+    @DisplayName("blood type: gone for the desk, kept for a clinician")
+    void bloodType(String clinician) {
+        signedInAs("ROLE_RECEPTIONIST");
+        assertThat(((PatientResponseDTO) write(patient(), "/patients/1")).getBloodType()).isNull();
+        signedInAs(clinician);
+        assertThat(((PatientResponseDTO) write(patient(), "/patients/1")).getBloodType()).isEqualTo("O+");
+    }
+
+    private static EncounterResponseDTO triagedEncounter(String deskTyped) {
+        EncounterResponseDTO encounter = new EncounterResponseDTO();
+        encounter.setChiefComplaint("Triage: chest pain");
+        encounter.setDeskChiefComplaint(deskTyped);
+        encounter.setAppointmentReason("Booked visit");
+        return encounter;
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"ROLE_DOCTOR", "ROLE_NURSE"})
+    @DisplayName("chief complaint: triage's is gone for the desk, what the desk typed and the booked reason stay; a clinician reads triage's")
+    void chiefComplaint(String clinician) {
+        signedInAs("ROLE_RECEPTIONIST");
+        EncounterResponseDTO none = (EncounterResponseDTO) write(triagedEncounter(null), "/encounters/1");
+        assertThat(none.getChiefComplaint()).isNull();
+        assertThat(none.getAppointmentReason()).isEqualTo("Booked visit");
+        EncounterResponseDTO typed = (EncounterResponseDTO) write(triagedEncounter("Fever"), "/encounters/1");
+        assertThat(typed.getChiefComplaint()).isEqualTo("Fever");
+        signedInAs(clinician);
+        assertThat(((EncounterResponseDTO) write(triagedEncounter("Fever"), "/encounters/1")).getChiefComplaint())
+            .isEqualTo("Triage: chest pain");
+    }
+
+    private static com.example.hms.payload.dto.ReceptionQueueItemDTO queueRow() {
+        return com.example.hms.payload.dto.ReceptionQueueItemDTO.builder()
+            .appointmentReason("Triage: chest pain").deskAppointmentReason(null).build();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"ROLE_DOCTOR", "ROLE_NURSE"})
+    @DisplayName("queue and flow board: the fallback to triage's complaint reads empty for the desk, through every column")
+    void queueRowAndFlowBoard(String clinician) {
+        signedInAs("ROLE_RECEPTIONIST");
+        assertThat(((com.example.hms.payload.dto.ReceptionQueueItemDTO) write(queueRow(), "/reception/queue")).getAppointmentReason()).isNull();
+        var inList = queueRow();
+        write(List.of(inList), "/reception/queue");
+        assertThat(inList.getAppointmentReason()).isNull();
+        List<com.example.hms.payload.dto.ReceptionQueueItemDTO> columns = List.of(queueRow(), queueRow(), queueRow(), queueRow(),
+            queueRow(), queueRow(), queueRow());
+        com.example.hms.payload.dto.FlowBoardDTO flow = com.example.hms.payload.dto.FlowBoardDTO.builder()
+            .scheduled(List.of(columns.get(0))).confirmed(List.of(columns.get(1))).arrived(List.of(columns.get(2)))
+            .inProgress(List.of(columns.get(3))).noShow(List.of(columns.get(4))).completed(List.of(columns.get(5)))
+            .walkIn(List.of(columns.get(6))).build();
+        write(flow, "/reception/flow-board");
+        assertThat(columns).allSatisfy(row -> assertThat(row.getAppointmentReason()).isNull());
+        signedInAs(clinician);
+        assertThat(((com.example.hms.payload.dto.ReceptionQueueItemDTO) write(queueRow(), "/reception/queue")).getAppointmentReason())
+            .isEqualTo("Triage: chest pain");
+    }
+
+    @Test
+    @DisplayName("the serialized row never carries the desk's copy, for anyone")
+    void theCarriersAreNotSerialized() throws Exception {
+        var mapper = new com.fasterxml.jackson.databind.ObjectMapper()
+            .findAndRegisterModules();
+        var row = com.example.hms.payload.dto.ReceptionQueueItemDTO.builder().appointmentReason("A").deskAppointmentReason("B").build();
+        assertThat(mapper.writeValueAsString(row)).doesNotContain("deskAppointmentReason");
+        EncounterResponseDTO encounter = new EncounterResponseDTO();
+        encounter.setDeskChiefComplaint("B");
+        assertThat(mapper.writeValueAsString(encounter)).doesNotContain("deskChiefComplaint");
+    }
+
+    private static com.example.hms.payload.dto.prenatal.PrenatalScheduleResponseDTO schedule() {
+        return com.example.hms.payload.dto.prenatal.PrenatalScheduleResponseDTO.builder()
+            .highRisk(true).currentGestationalWeek(24).build();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"ROLE_DOCTOR", "ROLE_NURSE"})
+    @DisplayName("prenatal schedule: the high-risk flag is gone for the desk, the gestational week stays; a clinician keeps both")
+    void prenatalSchedule(String clinician) throws Exception {
+        signedInAs("ROLE_RECEPTIONIST");
+        var shaped = (com.example.hms.payload.dto.prenatal.PrenatalScheduleResponseDTO) write(schedule(), "/prenatal/schedule");
+        assertThat(shaped.getHighRisk()).isNull();
+        assertThat(shaped.getCurrentGestationalWeek()).isEqualTo(24);
+        assertThat(new com.fasterxml.jackson.databind.ObjectMapper().findAndRegisterModules().writeValueAsString(shaped))
+            .doesNotContain("highRisk");
+        signedInAs(clinician);
+        assertThat(((com.example.hms.payload.dto.prenatal.PrenatalScheduleResponseDTO) write(schedule(), "/prenatal/schedule")).getHighRisk())
+            .isTrue();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"ROLE_DOCTOR", "ROLE_NURSE"})
+    @DisplayName("isolation: the desk keeps the precaution type, without organism or reason; a clinician keeps all three")
+    void isolationPrecaution(String clinician) {
+        signedInAs("ROLE_RECEPTIONIST");
+        IsolationPrecautionResponseDTO shaped = (IsolationPrecautionResponseDTO) write(precaution(), "/isolation/1");
+        assertThat(shaped.getPrecautionType()).isEqualTo(com.example.hms.enums.IsolationPrecautionType.CONTACT);
+        assertThat(shaped.getSuspectedOrganism()).isNull();
+        assertThat(shaped.getReason()).isNull();
+        signedInAs(clinician);
+        IsolationPrecautionResponseDTO whole = (IsolationPrecautionResponseDTO) write(precaution(), "/isolation/1");
+        assertThat(whole.getSuspectedOrganism()).isEqualTo("MRSA");
+        assertThat(whole.getReason()).isEqualTo("Wound");
+    }
+
+    private static IsolationPrecautionResponseDTO precaution() {
+        IsolationPrecautionResponseDTO precaution = new IsolationPrecautionResponseDTO();
+        precaution.setPrecautionType(com.example.hms.enums.IsolationPrecautionType.CONTACT);
+        precaution.setSuspectedOrganism("MRSA");
+        precaution.setReason("Wound");
+        return precaution;
     }
 
     @Test

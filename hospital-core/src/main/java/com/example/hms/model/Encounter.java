@@ -141,6 +141,15 @@ public class Encounter extends BaseEntity {
     @Column(name = "chief_complaint", length = 2048)
     private String chiefComplaint;
 
+    /**
+     * RCPT-CLIN (user decision 2026-11-06): what the desk itself typed as the complaint.
+     * {@link #chiefComplaint} is overwritten by triage and the nursing intake, and a receptionist
+     * reads only this one, so a new writer of the clinical column cannot reach the desk by accident.
+     */
+    @Column(name = "desk_chief_complaint", columnDefinition = "TEXT")
+    @jakarta.persistence.Convert(converter = com.example.hms.security.EncryptedStringConverter.class)
+    private String deskChiefComplaint;
+
     /** ESI acuity score (1-5) assigned at triage (MVP 2). */
     @Column(name = "esi_score")
     private Integer esiScore;

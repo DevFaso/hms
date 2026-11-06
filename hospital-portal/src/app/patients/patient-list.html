@@ -90,23 +90,25 @@
         </select>
       </div>
 
-      <div class="filter-group">
-        <label class="filter-label" for="bloodTypeFilter">{{
-          'PATIENTS.BLOOD_TYPE' | translate
-        }}</label>
-        <select
-          id="bloodTypeFilter"
-          class="filter-select"
-          [title]="'PATIENTS.FILTER_BLOOD_TYPE' | translate"
-          [(ngModel)]="bloodTypeFilter"
-          (ngModelChange)="onFilterChange()"
-        >
-          <option value="">{{ 'COMMON.ALL' | translate }}</option>
-          @for (bt of bloodTypes; track bt) {
-            <option [value]="bt">{{ bt }}</option>
-          }
-        </select>
-      </div>
+      @if (!frontDeskOnly()) {
+        <div class="filter-group">
+          <label class="filter-label" for="bloodTypeFilter">{{
+            'PATIENTS.BLOOD_TYPE' | translate
+          }}</label>
+          <select
+            id="bloodTypeFilter"
+            class="filter-select"
+            [title]="'PATIENTS.FILTER_BLOOD_TYPE' | translate"
+            [(ngModel)]="bloodTypeFilter"
+            (ngModelChange)="onFilterChange()"
+          >
+            <option value="">{{ 'COMMON.ALL' | translate }}</option>
+            @for (bt of bloodTypes; track bt) {
+              <option [value]="bt">{{ bt }}</option>
+            }
+          </select>
+        </div>
+      }
 
       @if (hospitals().length > 0) {
         <div class="filter-group">
@@ -256,7 +258,9 @@
               {{ 'PATIENTS.GENDER' | translate }}
               <span class="material-symbols-outlined sort-icon">{{ sortIcon('gender') }}</span>
             </th>
-            <th scope="col">{{ 'PATIENTS.BLOOD_TYPE' | translate }}</th>
+            @if (!frontDeskOnly()) {
+              <th scope="col">{{ 'PATIENTS.BLOOD_TYPE' | translate }}</th>
+            }
             <th
               class="sortable-th"
               (click)="sort('status')"
@@ -297,13 +301,15 @@
               <td>{{ patient.email }}</td>
               <td>{{ patient.phoneNumberPrimary | dash }}</td>
               <td>{{ patient.gender ? (patient.gender | enumLabel: 'gender') : '—' }}</td>
-              <td>
-                @if (patient.bloodType) {
-                  <span class="blood-badge">{{ patient.bloodType }}</span>
-                } @else {
-                  —
-                }
-              </td>
+              @if (!frontDeskOnly()) {
+                <td>
+                  @if (patient.bloodType) {
+                    <span class="blood-badge">{{ patient.bloodType }}</span>
+                  } @else {
+                    —
+                  }
+                </td>
+              }
               <td>
                 <span
                   class="status-badge with-dot"

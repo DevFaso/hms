@@ -171,6 +171,8 @@ export interface TransfusionAdministrationResponse {
   stopReason: string | null;
   notes: string | null;
   reactions: TransfusionReactionResponse[];
+  /** The result on file for this bag; it can come back while the bag is running. */
+  crossmatch?: CrossmatchResponse | null;
 }
 
 export interface VerifierCandidate {

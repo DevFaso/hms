@@ -219,20 +219,22 @@
           <small class="field-error" id="gender-server-error" role="alert">{{ reason }}</small>
         }
       </div>
-      <div class="form-group">
-        <label for="bloodType">{{ 'PATIENTS.BLOOD_TYPE' | translate }}</label>
-        <select id="bloodType" [(ngModel)]="form.bloodType" name="bloodType">
-          <option value="">{{ 'PATIENTS.SELECT_BLOOD_TYPE' | translate }}</option>
-          <option value="A+">A+</option>
-          <option value="A-">A-</option>
-          <option value="B+">B+</option>
-          <option value="B-">B-</option>
-          <option value="AB+">AB+</option>
-          <option value="AB-">AB-</option>
-          <option value="O+">O+</option>
-          <option value="O-">O-</option>
-        </select>
-      </div>
+      @if (!frontDeskOnly()) {
+        <div class="form-group">
+          <label for="bloodType">{{ 'PATIENTS.BLOOD_TYPE' | translate }}</label>
+          <select id="bloodType" [(ngModel)]="form.bloodType" name="bloodType">
+            <option value="">{{ 'PATIENTS.SELECT_BLOOD_TYPE' | translate }}</option>
+            <option value="A+">A+</option>
+            <option value="A-">A-</option>
+            <option value="B+">B+</option>
+            <option value="B-">B-</option>
+            <option value="AB+">AB+</option>
+            <option value="AB-">AB-</option>
+            <option value="O+">O+</option>
+            <option value="O-">O-</option>
+          </select>
+        </div>
+      }
       <div class="form-group">
         <label for="hospital">{{ 'ENCOUNTERS.HOSPITAL' | translate }} *</label>
         @if (hospitalLocked) {

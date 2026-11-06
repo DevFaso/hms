@@ -47,7 +47,9 @@ class ReceptionistClinicalReadGuardTest {
     private static final Pattern CLINICAL_FIELD = Pattern.compile(
         "(?i).*(chronic|condition|risk|flag|allerg|diagnos|vital|medication|prescri|labresult|labresults|imaging|narrative|organism|acuity|esiscore"
             + "|soap|assessment|chiefcomplaint|problem|complaint|clinical|historysummary|careteamnotes|reason|notes?"
-            + "|followupinstruction|treatment|symptom|immuniz|procedure|bloodtype|gestation).*");
+            + "|followupinstruction|treatment|symptom|immuniz|procedure|bloodtype|gestation"
+            // User decision 2026-11-06: the desk's vocabulary, named one by one.
+            + "|bloodgroup|abogroup|rhfactor|antibody|triage|isolation|highrisk).*");
 
     /** The surfaces refused outright. */
     private static final List<String> REFUSED = List.of(
@@ -67,7 +69,22 @@ class ReceptionistClinicalReadGuardTest {
      * ({@code /me/**}) are not the desk's reach and are skipped by name below.
      */
     private static final Map<String, String> THE_DESK_NEEDS_IT = Map.ofEntries(
-        Map.entry("ReceptionQueueItemDTO#appointmentReason", "the visit reason on the queue, walk-in complaint or triage's when none was booked"),
+        // User decision 2026-11-06: the isolation precaution stays on the bed board as a type, and the
+        // yes/no facts around it place the patient. Organism and reason are removed by the shaping.
+        Map.entry("BedBoardDTO.OccupantDTO#isolationPrecautions", "the precaution TYPE on the bed board, user decision 2026-11-06"),
+        Map.entry("BedBoardDTO.OccupantDTO#isolationMismatch", "whether the bed fits the precaution: placement"),
+        Map.entry("BedBoardDTO.OccupantDTO#requiresIsolationWard", "whether the precaution needs an isolation ward: placement"),
+        Map.entry("BedBoardDTO.CensusDTO#patientsOnIsolation", "a count, nobody's record"),
+        Map.entry("BedBoardDTO.WardBoardDTO#isolationCapable", "a fact about the ward, nobody's record"),
+        Map.entry("IsolationPrecautionResponseDTO#requiresIsolationWard", "whether the precaution needs an isolation ward: placement"),
+        Map.entry("EncounterResponseDTO#triageTimestamp", "when, not what: the desk's wait times"),
+        Map.entry("PatientTrackerItemDTO#triageTimestamp", "when, not what: the desk's wait times"),
+        Map.entry("PatientTrackerBoardDTO#triage", "the column of the tracker the desk reads; its rows are shaped"),
+        Map.entry("TransferOrderResponseDTO#destinationIsolationMismatch", "whether the bed fits the precaution: placement"),
+        Map.entry("TransferOrderResponseDTO#isolationOverride", "a yes/no on a transfer the desk places; the reason is removed"),
+        Map.entry("TransferOrderResponseDTO#isolationPrecautions", "the precaution TYPES on a transfer, as on the bed board"),
+        Map.entry("ReceptionQueueItemDTO#appointmentReason", "the visit reason on the queue; for the role the shaping puts deskAppointmentReason here, never triage's complaint"),
+        Map.entry("ReceptionQueueItemDTO#deskAppointmentReason", "never serialized: the booked reason or what the desk itself typed"),
         Map.entry("AppointmentResponseDTO#reason", "the visit reason the desk books and reschedules"),
         Map.entry("AppointmentResponseDTO#notes", "booking notes the desk writes"),
         Map.entry("AppointmentResponseDTO#statusReason", "why the appointment was cancelled or moved"),
@@ -75,8 +92,8 @@ class ReceptionistClinicalReadGuardTest {
         Map.entry("AppointmentResponseDTO#treatmentName", "the booked service"),
         Map.entry("AppointmentResponseDTO#treatmentDescription", "the booked service"),
         Map.entry("AppointmentSummaryDTO#notes", "booking notes the desk writes"),
-        Map.entry("PatientResponseDTO#bloodType", "the desk records and corrects it on the demographics dialog"),
-        Map.entry("EncounterResponseDTO#chiefComplaint", "the desk types it at walk-in and check-in"),
+        Map.entry("EncounterResponseDTO#chiefComplaint", "for the role the shaping puts deskChiefComplaint here, never triage's complaint"),
+        Map.entry("EncounterResponseDTO#deskChiefComplaint", "never serialized: what the desk itself typed at walk-in and check-in"),
         Map.entry("EncounterResponseDTO#appointmentReason", "the booked visit reason"),
         Map.entry("EncounterResponseDTO#appointmentNotes", "booking notes the desk writes"),
         Map.entry("RecallResponseDTO#reason", "the desk phones the patient about the recall"),
@@ -108,12 +125,11 @@ class ReceptionistClinicalReadGuardTest {
         Map.entry("PatientResponseDTO.VitalSnapshot#clinicallySignificant", "inside lastVitals, which is removed whole"),
         Map.entry("PatientResponseDTO.VitalSnapshot#notes", "inside lastVitals, which is removed whole"),
         Map.entry("PaymentTransactionResponseDTO#reversalReason", "why a payment was reversed"),
-        Map.entry("PrenatalAppointmentSummaryDTO#gestationalWeek", "the desk books prenatal visits by the week; reported as a judgment call"),
+        Map.entry("PrenatalAppointmentSummaryDTO#gestationalWeek", "user decision 2026-11-06: the desk books prenatal visits by the week"),
         Map.entry("PrenatalAppointmentSummaryDTO#reason", "the visit reason of a booked prenatal appointment"),
         Map.entry("EducationResourceResponseDTO#isHighRiskRelevant", "a library resource, nobody's record"),
-        Map.entry("PrenatalScheduleResponseDTO#highRisk", "picks the visit cadence the desk books; reported as a judgment call"),
-        Map.entry("PrenatalScheduleResponseDTO#currentGestationalWeek", "the desk books prenatal visits by the week; reported as a judgment call"),
-        Map.entry("PrenatalVisitRecommendationDTO#gestationalWeek", "the desk books prenatal visits by the week; reported as a judgment call"),
+        Map.entry("PrenatalScheduleResponseDTO#currentGestationalWeek", "user decision 2026-11-06: the desk books prenatal visits by the week"),
+        Map.entry("PrenatalVisitRecommendationDTO#gestationalWeek", "user decision 2026-11-06: the desk books prenatal visits by the week"),
         Map.entry("PrenatalVisitRecommendationDTO#notes", "the fixed text of the recommended cadence, nobody's record"),
         Map.entry("RecordSharingOptOutDTO#reason", "the patient's stated reason, recorded at the desk"),
         Map.entry("ServiceTranslationResponseDTO#treatmentId", "the public service catalogue"),
@@ -151,17 +167,17 @@ class ReceptionistClinicalReadGuardTest {
         Map.entry("PatientEducationProgressRequestDTO#providerNotes", "the desk's own progress row"),
         Map.entry("PatientHospitalRegistrationRequestDTO#readyForDischargeNote",
             "ignored for the desk: PatientHospitalRegistrationServiceImpl keeps the stored note"),
-        Map.entry("PatientProfileUpdateRequestDTO#bloodType", "the desk records and corrects it on the demographics dialog"),
+        Map.entry("PatientProfileUpdateRequestDTO#bloodType", "refused for the desk: PatientController#patchPatient"),
         Map.entry("PatientProfileUpdateRequestDTO#careTeamNotes", "refused for the desk: PatientController#patchPatient"),
         Map.entry("PatientProfileUpdateRequestDTO#chronicConditions", "refused for the desk: PatientController#patchPatient"),
         Map.entry("PatientRequestDTO#allergies", "a NEW patient: what the desk is told at registration, imported as rows; a PUT never writes it"),
-        Map.entry("PatientRequestDTO#bloodType", "the desk records and corrects it on the demographics dialog"),
+        Map.entry("PatientRequestDTO#bloodType", "a NEW patient; on a PUT the desk's value is dropped and the stored one kept (PatientServiceImpl#updatePatient)"),
         Map.entry("PatientRequestDTO#careTeamNotes", "a NEW patient; on a PUT the desk's value is dropped and the stored one kept (PatientServiceImpl#updatePatient)"),
         Map.entry("PatientRequestDTO#chronicConditions", "a NEW patient; on a PUT the desk's value is dropped and the stored one kept (PatientServiceImpl#updatePatient)"),
         Map.entry("PatientRequestDTO#medicalHistorySummary", "a NEW patient; on a PUT the desk's value is dropped and the stored one kept (PatientServiceImpl#updatePatient)"),
         Map.entry("PaymentReasonRequestDTO#reason", "why a payment was refused"),
         Map.entry("PrenatalRescheduleRequestDTO#notes", "booking notes the desk writes"),
-        Map.entry("PrenatalScheduleRequestDTO#highRisk", "picks the cadence of a read-only calculation; stores nothing"),
+        Map.entry("PrenatalScheduleRequestDTO#highRisk", "ignored for the desk: PrenatalSchedulingServiceImpl; a read-only calculation that stores nothing"),
         Map.entry("PrenatalScheduleRequestDTO#notes", "a read-only calculation; stores nothing"),
         Map.entry("RecallRequestDTO#notes", "the desk's own recall notes"),
         Map.entry("RecallRequestDTO#reason", "the desk's own recall"),
@@ -229,6 +245,70 @@ class ReceptionistClinicalReadGuardTest {
         Set<String> stale = new TreeSet<>(THE_DESK_NEEDS_IT.keySet());
         stale.removeAll(used);
         assertThat(stale).as("listed, and the role no longer receives it").isEmpty();
+    }
+
+    /** The holders ReceptionistResponseShaping#shape walks into: a shaped type anywhere else goes out unshaped. */
+    private static final Set<Class<?>> SHAPE_WALKS_INTO = Set.of(
+        com.example.hms.payload.dto.ApiResponseWrapper.class,
+        com.example.hms.payload.dto.FlowBoardDTO.class,
+        com.example.hms.payload.dto.bed.BedBoardDTO.BedBoardEntryDTO.class,
+        com.example.hms.payload.dto.clinical.PatientTrackerBoardDTO.class);
+
+    /**
+     * The field rule trusts the REMOVED list by type, and the shaping switches on the body's own type: a
+     * response that embeds a shaped type where the shaping does not walk would pass the first and leak.
+     */
+    @Test
+    @DisplayName("a shaped type is only nested where the shaping reaches it")
+    void aShapedTypeIsOnlyNestedWhereTheShapingReachesIt() {
+        Set<Class<?>> shaped = new HashSet<>(ReceptionistResponseShaping.REMOVED.keySet());
+        shaped.add(com.example.hms.payload.dto.ReceptionQueueItemDTO.class);
+        Set<String> unreached = new TreeSet<>();
+        for (HandlerMethod handler : handlers().values()) {
+            String admits = RoleExpression.admits(handler, RECEPTIONIST);
+            boolean ownRecord = handler.getBeanType().getSimpleName().equals("PatientPortalController")
+                || handler.getBeanType().getSimpleName().equals("MeController");
+            if (!ownRecord && (RoleExpression.YES.equals(admits) || RoleExpression.NONE.equals(admits))) {
+                nested(handler.getMethod().getGenericReturnType(), new HashSet<>(), shaped, unreached);
+            }
+        }
+        assertThat(unreached).as("teach ReceptionistResponseShaping#shape to walk into the holder").isEmpty();
+    }
+
+    private static void nested(Type type, Set<Class<?>> seen, Set<Class<?>> shaped, Set<String> unreached) {
+        if (type instanceof WildcardType wildcard) {
+            for (Type bound : wildcard.getUpperBounds()) {
+                nested(bound, seen, shaped, unreached);
+            }
+        } else if (type instanceof ParameterizedType parameterized) {
+            for (Type argument : parameterized.getActualTypeArguments()) {
+                nested(argument, seen, shaped, unreached);
+            }
+        } else if (type instanceof Class<?> raw && raw.getName().startsWith("com.example.hms.") && !raw.isEnum()
+                && seen.add(raw)) {
+            for (Field field : raw.getDeclaredFields()) {
+                if (Modifier.isStatic(field.getModifiers())) {
+                    continue;
+                }
+                Set<Class<?>> held = new HashSet<>();
+                collect(field.getGenericType(), held);
+                held.retainAll(shaped);
+                if (!held.isEmpty() && !SHAPE_WALKS_INTO.contains(raw)) {
+                    unreached.add(raw.getSimpleName() + "#" + field.getName());
+                }
+                nested(field.getGenericType(), seen, shaped, unreached);
+            }
+        }
+    }
+
+    private static void collect(Type type, Set<Class<?>> out) {
+        if (type instanceof ParameterizedType parameterized) {
+            for (Type argument : parameterized.getActualTypeArguments()) {
+                collect(argument, out);
+            }
+        } else if (type instanceof Class<?> raw) {
+            out.add(raw);
+        }
     }
 
     @Test

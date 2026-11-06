@@ -179,7 +179,8 @@ public class TransfusionMapper {
     }
 
     public TransfusionAdministrationResponseDTO toDto(TransfusionAdministration administration,
-                                                      List<TransfusionReaction> reactions) {
+                                                      List<TransfusionReaction> reactions,
+                                                      TransfusionCrossmatch crossmatch) {
         if (administration == null) {
             return null;
         }
@@ -201,6 +202,7 @@ public class TransfusionMapper {
             .stopReason(administration.getStopReason())
             .notes(administration.getNotes())
             .reactions(reactions == null ? List.of() : reactions.stream().map(this::toDto).toList())
+            .crossmatch(toDto(crossmatch))
             .build();
     }
 

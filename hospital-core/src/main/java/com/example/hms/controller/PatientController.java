@@ -332,7 +332,7 @@ public class PatientController {
     ) {
         // RCPT-CLIN: clinical text the desk cannot read is not the desk's to overwrite.
         if (com.example.hms.controller.support.ReceptionistResponseShaping.isReceptionistOnly()
-            && (dto.getCareTeamNotes() != null || dto.getChronicConditions() != null)) {
+            && (dto.getCareTeamNotes() != null || dto.getChronicConditions() != null || dto.getBloodType() != null)) {
             throw new org.springframework.security.access.AccessDeniedException("Clinical fields are not the desk's to write");
         }
         Locale locale = parseLocale(lang);

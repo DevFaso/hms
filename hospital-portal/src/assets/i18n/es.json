@@ -1633,6 +1633,7 @@
       "CROSS_TENANT_READ": "Lectura del superadministrador en todos los hospitales: {{view}} ({{rows}} filas)",
       "CROSS_HOSPITAL_READ_LAB": "Solicitud de laboratorio de otro hospital consultada por el laboratorio que la realiza",
       "CROSS_HOSPITAL_READ_LAB_RESULT": "Resultado de laboratorio de otro hospital consultado por el laboratorio que lo realiza",
+      "EMERGENCY_BLOOD_RELEASED": "Entrega de urgencia sin prueba cruzada de la unidad {{unit}} para la solicitud {{request}}",
       "CROSS_HOSPITAL_READ": "Consulta de otro hospital por la relación asistencial: {{subject}}{{extra}}",
       "SUPPORT_SESSION_REFUSED": "Sesión de soporte rechazada: {{what}} (datos de inicio de sesión o de recuperación)",
       "IMPERSONATION_STARTED": "Sesión de soporte iniciada como {{user}}. Motivo: {{reason}}",
@@ -6430,6 +6431,7 @@
         "PROVIDER_REJECTED": "Proveedor rechazado",
         "PROVIDER_VERIFICATION_REVOKED": "Verificación del proveedor revocada",
         "PROVIDER_VERIFIED": "Proveedor verificado",
+        "EMERGENCY_BLOOD_RELEASED": "Sangre entregada de urgencia sin prueba cruzada",
         "PRO_ALERT_ACKNOWLEDGED": "Alerta PRO confirmada",
         "PRO_INSTRUMENT_IMPORTED": "Instrumento PRO importado",
         "PRO_RESPONSE_RECORDED": "Respuesta PRO registrada",
@@ -6868,6 +6870,7 @@
         "GENERAL": "General"
       },
       "AUDIT_ENTITY_TYPE": {
+        "TRANSFUSION_REQUEST": "Solicitud de transfusión",
         "DEPARTMENT_DEFAULT_SENSITIVITY": "Sensibilidad predeterminada del departamento",
         "DISPENSE": "Dispensación",
         "ENCOUNTER_SENSITIVITY": "Sensibilidad de la consulta",
@@ -11765,6 +11768,8 @@
     "RECORD_CROSSMATCH": "Registrar prueba cruzada",
     "COMPATIBLE": "Compatible",
     "INCOMPATIBLE": "Incompatible",
+    "RUNNING_INCOMPATIBLE": "La prueba cruzada de la unidad {{unit}}, en curso de transfusión, resultó incompatible. La unidad no se ha detenido: decide el clínico.",
+    "RUNNING_INCOMPATIBLE_SHORT": "Prueba cruzada incompatible durante la transfusión: decide el clínico",
     "CROSSMATCH_LAPSED": "reserva caducada",
     "METHOD": "Método",
     "INCOMPAT_REASON": "Motivo",

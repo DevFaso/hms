@@ -4,6 +4,9 @@ import com.example.hms.payload.dto.ApiResponseWrapper;
 import com.example.hms.payload.dto.EncounterResponseDTO;
 import com.example.hms.payload.dto.PatientHospitalRegistrationResponseDTO;
 import com.example.hms.payload.dto.PatientResponseDTO;
+import com.example.hms.payload.dto.FlowBoardDTO;
+import com.example.hms.payload.dto.ReceptionQueueItemDTO;
+import com.example.hms.payload.dto.prenatal.PrenatalScheduleResponseDTO;
 import com.example.hms.payload.dto.bed.BedBoardDTO;
 import com.example.hms.payload.dto.clinical.AfterVisitSummaryDTO;
 import com.example.hms.payload.dto.clinical.PatientTrackerBoardDTO;
@@ -43,6 +46,10 @@ import java.util.Set;
  *
  * <p>The DTOs are built per request (nothing in the application caches them), so
  * they are changed in place.
+ *
+ * <p>User decision 2026-11-06, the desk's clinical fields one by one: the booked visit reason and a
+ * complaint the desk typed itself stay; triage's complaint, the blood type and the high-risk flag go;
+ * the isolation precaution stays as a type, without organism or reason; the gestational week stays.
  */
 @ControllerAdvice
 public class ReceptionistResponseShaping implements ResponseBodyAdvice<Object> {
@@ -57,18 +64,19 @@ public class ReceptionistResponseShaping implements ResponseBodyAdvice<Object> {
      * The fields removed, by response type. The guard reads this; {@link #shape}
      * is what does it, and {@code ReceptionistResponseShapingTest} holds the two equal.
      */
-    public static final Map<Class<?>, Set<String>> REMOVED = Map.of(
-        PatientHospitalRegistrationResponseDTO.class, Set.of("readyForDischargeNote"),
-        PatientResponseDTO.class, Set.of("allergies", "chronicConditions", "flags", "risks", "medicalHistorySummary",
-            "careTeamNotes", "hr", "bp", "spo2", "lastVitals", "chartRestrictionReason"),
-        EncounterResponseDTO.class, Set.of("notes", "esiScore", "urgency", "followUpInstructions",
-            "dischargeDiagnoses", "extraFields", "note", "noteEntries"),
-        AfterVisitSummaryDTO.class, Set.of("chiefComplaint", "dischargeDiagnoses", "prescriptionSummary",
-            "referralSummary", "followUpInstructions", "patientEducationMaterials"),
-        BedBoardDTO.OccupantDTO.class, Set.of("primaryDiagnosis"),
-        TransferOrderResponseDTO.class, Set.of("reason", "notes", "cancellationReason", "isolationOverrideReason"),
-        IsolationPrecautionResponseDTO.class, Set.of("reason", "suspectedOrganism", "notes", "discontinuationReason"),
-        PatientTrackerItemDTO.class, Set.of("acuityLevel"));
+    public static final Map<Class<?>, Set<String>> REMOVED = Map.ofEntries(
+        Map.entry(PatientHospitalRegistrationResponseDTO.class, Set.of("readyForDischargeNote")),
+        Map.entry(PatientResponseDTO.class, Set.of("bloodType", "allergies", "chronicConditions", "flags", "risks",
+            "medicalHistorySummary", "careTeamNotes", "hr", "bp", "spo2", "lastVitals", "chartRestrictionReason")),
+        Map.entry(EncounterResponseDTO.class, Set.of("notes", "esiScore", "urgency", "followUpInstructions",
+            "dischargeDiagnoses", "extraFields", "note", "noteEntries")),
+        Map.entry(AfterVisitSummaryDTO.class, Set.of("chiefComplaint", "dischargeDiagnoses", "prescriptionSummary",
+            "referralSummary", "followUpInstructions", "patientEducationMaterials")),
+        Map.entry(BedBoardDTO.OccupantDTO.class, Set.of("primaryDiagnosis")),
+        Map.entry(TransferOrderResponseDTO.class, Set.of("reason", "notes", "cancellationReason", "isolationOverrideReason")),
+        Map.entry(IsolationPrecautionResponseDTO.class, Set.of("reason", "suspectedOrganism", "notes", "discontinuationReason")),
+        Map.entry(PatientTrackerItemDTO.class, Set.of("acuityLevel")),
+        Map.entry(PrenatalScheduleResponseDTO.class, Set.of("highRisk")));
 
     @Override
     public boolean supports(@NonNull MethodParameter returnType,
@@ -120,6 +128,9 @@ public class ReceptionistResponseShaping implements ResponseBodyAdvice<Object> {
             case IsolationPrecautionResponseDTO precaution -> shapePrecaution(precaution);
             case PatientTrackerBoardDTO tracker -> shapeTracker(tracker);
             case PatientTrackerItemDTO item -> item.setAcuityLevel(null);
+            case ReceptionQueueItemDTO row -> row.setAppointmentReason(row.getDeskAppointmentReason());
+            case FlowBoardDTO flow -> shapeFlow(flow);
+            case PrenatalScheduleResponseDTO schedule -> schedule.setHighRisk(null);
             default -> { /* Nothing clinical: the guard keeps this true. */ }
         }
     }
@@ -130,7 +141,14 @@ public class ReceptionistResponseShaping implements ResponseBodyAdvice<Object> {
         }
     }
 
+    private static void shapeFlow(FlowBoardDTO flow) {
+        java.util.stream.Stream.of(flow.getScheduled(), flow.getConfirmed(), flow.getArrived(), flow.getInProgress(),
+                flow.getNoShow(), flow.getCompleted(), flow.getWalkIn())
+            .forEach(ReceptionistResponseShaping::shapeIfPresent);
+    }
+
     private static void shapePatient(PatientResponseDTO patient) {
+        patient.setBloodType(null);
         patient.setAllergies(null);
         patient.setChronicConditions(List.of());
         patient.setFlags(List.of());
@@ -145,6 +163,7 @@ public class ReceptionistResponseShaping implements ResponseBodyAdvice<Object> {
     }
 
     private static void shapeEncounter(EncounterResponseDTO encounter) {
+        encounter.setChiefComplaint(encounter.getDeskChiefComplaint());
         encounter.setNotes(null);
         encounter.setEsiScore(null);
         encounter.setUrgency(null);

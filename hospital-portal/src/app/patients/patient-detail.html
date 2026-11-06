@@ -567,11 +567,11 @@
             {{ 'PATIENTS.MEDICAL_DETAILS' | translate }}
           </h3>
           <div class="info-rows">
-            <div class="info-row">
-              <span class="label">{{ 'PATIENTS.BLOOD_TYPE' | translate }}</span
-              ><span class="value">{{ p.bloodType | dash }}</span>
-            </div>
             @if (!isFrontDeskOnly()) {
+              <div class="info-row">
+                <span class="label">{{ 'PATIENTS.BLOOD_TYPE' | translate }}</span
+                ><span class="value">{{ p.bloodType | dash }}</span>
+              </div>
               <div class="info-row">
                 <span class="label">{{ 'PATIENTS.ALLERGIES' | translate }}</span
                 ><span class="value">{{

@@ -1,3 +1,4 @@
+import { RoleContextService } from '../../core/role-context.service';
 import { TestBed } from '@angular/core/testing';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
@@ -37,6 +38,20 @@ describe('PatientDemographicsEditComponent (QA D926)', () => {
     fixture.detectChanges();
     return fixture;
   }
+
+  it('RCPT-CLIN: the blood type is not offered to a receptionist, and stays for a nurse', () => {
+    const fixture = create();
+    const roles = TestBed.inject(RoleContextService);
+    const box = () => (fixture.nativeElement as HTMLElement).querySelector('#demoBloodType');
+    roles.setRoles(['ROLE_NURSE']);
+    fixture.componentRef.changeDetectorRef.markForCheck();
+    fixture.detectChanges();
+    expect(box()).not.toBeNull();
+    roles.setRoles(['ROLE_RECEPTIONIST']);
+    fixture.componentRef.changeDetectorRef.markForCheck();
+    fixture.detectChanges();
+    expect(box()).toBeNull();
+  });
 
   it('opens on the chart as it stands, the legacy address included', () => {
     const c = create().componentInstance;

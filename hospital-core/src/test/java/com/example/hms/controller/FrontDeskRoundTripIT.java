@@ -225,14 +225,21 @@ class FrontDeskRoundTripIT extends BaseIT {
     void theDeskCorrectsPostalCodeEthnicityAndBloodGroup() throws Exception {
         mockMvc.perform(patch(API + "/patients/{id}", aicha.getId()).contextPath(API)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"postalCode\":\"01 BP 1234\",\"ethnicity\":\"Mossi\",\"bloodType\":\"o+\"}")
+                .content("{\"postalCode\":\"01 BP 1234\",\"ethnicity\":\"Mossi\"}")
                 .with(asReceptionist()))
             .andExpect(status().isOk());
 
         Patient stored = patientRepository.findById(aicha.getId()).orElseThrow();
         assertThat(stored.getZipCode()).isEqualTo("01 BP 1234");
         assertThat(stored.getEthnicity()).isEqualTo("Mossi");
-        assertThat(stored.getBloodType()).isEqualTo("O+");
+
+        // User decision 2026-11-06: the blood type is not the desk's to read, so not its to correct.
+        String before = stored.getBloodType();
+        mockMvc.perform(patch(API + "/patients/{id}", aicha.getId()).contextPath(API)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"bloodType\":\"o+\"}")
+                .with(asReceptionist()))
+            .andExpect(status().isForbidden());
+        assertThat(patientRepository.findById(aicha.getId()).orElseThrow().getBloodType()).isEqualTo(before);
 
         mockMvc.perform(patch(API + "/patients/{id}", aicha.getId()).contextPath(API)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"bloodType\":\"Z9\"}")
@@ -700,8 +707,17 @@ class FrontDeskRoundTripIT extends BaseIT {
         mockMvc.perform(put(API + "/patients/{id}", aicha.getId()).contextPath(API)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body.formatted("ab-", aicha.getUser().getId(), hospital.getId()))
-                .with(asReceptionist()))
+                .with(asDoctor()))
             .andExpect(status().isOk());
+        assertThat(patientRepository.findById(aicha.getId()).orElseThrow().getBloodType()).isEqualTo("AB-");
+
+        // User decision 2026-11-06: the desk's whole-record PUT does not touch the type it cannot read.
+        mockMvc.perform(put(API + "/patients/{id}", aicha.getId()).contextPath(API)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body.formatted("o+", aicha.getUser().getId(), hospital.getId()))
+                .with(asReceptionist()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.bloodType").doesNotExist());
         assertThat(patientRepository.findById(aicha.getId()).orElseThrow().getBloodType()).isEqualTo("AB-");
     }
 
@@ -835,6 +851,10 @@ class FrontDeskRoundTripIT extends BaseIT {
         return User.builder().username("r16d" + prefix + suffix).passwordHash("hashed")
             .email("r16d" + prefix + suffix + "@example.test").firstName(prefix).lastName("R16" + suffix)
             .phoneNumber("+22678" + suffix).isActive(true).build();
+    }
+
+    private RequestPostProcessor asDoctor() {
+        return as(receptionist, "ROLE_DOCTOR");
     }
 
     private RequestPostProcessor asReceptionist() {

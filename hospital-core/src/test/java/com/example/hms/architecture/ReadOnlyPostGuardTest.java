@@ -68,9 +68,9 @@ class ReadOnlyPostGuardTest {
         Map.entry("InstrumentOutboxController#retryMessage", "re-queues an outbox row"),
         Map.entry("AuthController#verifyEmail", "activates the account (under /auth/, open in downtime)"),
         Map.entry("AuthController#verifyPassword", "records the step-up (under /auth/, open in downtime)"),
-        Map.entry("AuthController#verifyRecoveryContact", "marks the contact verified (under /auth/, open in downtime)"),
+        Map.entry("AuthController#verifyRecoveryContact", "marks the contact verified (refused in downtime: ReadOnlyAuthWritesGuardTest)"),
         Map.entry("MfaController#verifyMfa", "completes the login (under /auth/, open in downtime)"),
-        Map.entry("MfaController#verifyEnrollment", "enrols the factor (under /auth/, open in downtime)"));
+        Map.entry("MfaController#verifyEnrollment", "enrols the factor (open in downtime only when it blocks the sign-in)"));
 
     /** Every declared read, so that declaring a write as a read needs this list to change too: review sees it. */
     private static final Set<String> DECLARED_READS = Set.of(
@@ -164,7 +164,7 @@ class ReadOnlyPostGuardTest {
         List<String> wrong = new ArrayList<>();
         for (Post post : posts()) {
             String uri = "/api" + post.path();
-            boolean open = uri.startsWith("/api/auth/") || uri.startsWith("/api/frontend-audit");
+            boolean open = ReadOnlyModeFilter.OPEN_AUTH_WRITES.contains(uri) || uri.startsWith("/api/frontend-audit");
             MockHttpServletRequest request = new MockHttpServletRequest("POST", uri);
             request.setContextPath("/api");
             request.setContentType("application/json");
