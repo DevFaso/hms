@@ -87,6 +87,18 @@ class ReadOnlyModeFilterTest {
     }
 
     @Test
+    void anAccountActionADowntimeCanWaitForIsRefused() throws Exception {
+        for (String uri : new String[] {
+            "/api/auth/register", "/api/auth/bootstrap-signup", "/api/auth/me/change-username",
+            "/api/auth/me/change-email", "/api/auth/credentials/recovery", "/api/auth/credentials/mfa"}) {
+            MockHttpServletResponse response = new MockHttpServletResponse();
+            filter.doFilter(request("POST", uri), response, chain);
+            assertThat(response.getStatus()).as(uri).isEqualTo(503);
+            assertThat(response.getHeader("X-Readonly-Mode")).as(uri).isEqualTo("true");
+        }
+    }
+
+    @Test
     void allowlistIsContextPrefixed_aContextStrippedPathIsStillBlocked() throws Exception {
         // Servlet filters see /api/...; a SecurityConfig-style "/auth/login"
         // does NOT match the allowlist. This pins the convention that has

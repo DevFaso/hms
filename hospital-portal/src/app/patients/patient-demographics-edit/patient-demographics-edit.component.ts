@@ -1,3 +1,5 @@
+import { RoleContextService } from '../../core/role-context.service';
+import { isFrontDeskOnly } from '../patient-chart/chart-access';
 import { refuseFields } from '../../shared/forms/invalid-fields';
 import {
   birthDateRefusalKey,
@@ -73,6 +75,13 @@ export class PatientDemographicsEditComponent implements OnInit {
   @Output() saved = new EventEmitter<PatientResponse>();
 
   private readonly patientService = inject(PatientService);
+  private readonly roleContext = inject(RoleContextService);
+
+  /** RCPT-CLIN: the blood type is not the desk's to read, so not its box to change. */
+  frontDeskOnly(): boolean {
+    return isFrontDeskOnly((roles) => this.roleContext.hasAnyActiveRole(roles));
+  }
+
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);

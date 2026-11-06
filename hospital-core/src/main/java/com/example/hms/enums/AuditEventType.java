@@ -242,6 +242,10 @@ public enum AuditEventType {
     PROVIDER_REJECTED,
     PROVIDER_VERIFICATION_REVOKED,
 
+    // Blood bank. Past tense per the naming convention above. The row carries
+    // who released it, the unit id and the request id only.
+    EMERGENCY_BLOOD_RELEASED,
+
     OTHER
 }
 

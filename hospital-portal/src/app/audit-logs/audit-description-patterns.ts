@@ -1282,6 +1282,12 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     params: ['invoice'],
   },
   {
+    // Who is on the row; the unit and the request by id only.
+    key: 'AUDIT.DESC.EMERGENCY_BLOOD_RELEASED',
+    re: /^Emergency uncrossmatched release of blood unit (\S+) against transfusion request (\S+)$/,
+    params: ['unit', 'request'],
+  },
+  {
     key: 'AUDIT.DESC.STATUS_WAS',
     re: /^(.+) \(was ([A-Z_]+)\)$/,
     params: ['what', 'previous'],

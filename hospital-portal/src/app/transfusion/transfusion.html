@@ -255,6 +255,12 @@
               {{ 'TRANSFUSION.EMERGENCY_UNTYPED' | translate }}
             </div>
           }
+          @for (a of runningIncompatible(); track a.id) {
+            <div class="emergency-banner" role="alert" data-testid="running-incompatible-banner">
+              <span class="material-symbols-outlined">warning</span>
+              {{ 'TRANSFUSION.RUNNING_INCOMPATIBLE' | translate: { unit: a.unitNumber } }}
+            </div>
+          }
           @if (req.bloodGroupId && !req.screenCurrent) {
             <div class="warn-banner">
               <span class="material-symbols-outlined">schedule</span>
@@ -365,6 +371,30 @@
                     <span>{{ 'COMMON.REASON_VALUE' | translate: { reason: a.stopReason } }}</span>
                   }
                 </div>
+                @if (a.crossmatch; as xm) {
+                  @if (!xm.compatible) {
+                    <div
+                      class="administration-reaction"
+                      [attr.data-testid]="'xm-incompatible-' + a.id"
+                    >
+                      <span class="material-symbols-outlined">warning</span>
+                      <span>
+                        {{
+                          (isInProgress(a)
+                            ? 'TRANSFUSION.RUNNING_INCOMPATIBLE_SHORT'
+                            : 'TRANSFUSION.INCOMPATIBLE'
+                          ) | translate
+                        }}
+                        @if (xm.incompatibilityReason) {
+                          —
+                          {{
+                            'COMMON.REASON_VALUE' | translate: { reason: xm.incompatibilityReason }
+                          }}
+                        }
+                      </span>
+                    </div>
+                  }
+                }
                 @for (rx of a.reactions; track rx.id) {
                   <div class="administration-reaction" [attr.data-testid]="'reaction-' + rx.id">
                     <span class="material-symbols-outlined">warning</span>

@@ -411,3 +411,41 @@ describe('PrenatalTabComponent', () => {
     expect(existing.querySelectorAll('.actions-cell button').length).toBe(2);
   });
 });
+
+describe('PrenatalTabComponent: the front desk (RCPT-CLIN)', () => {
+  function create(roles: string[]) {
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      imports: [PrenatalTabComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        {
+          provide: PrenatalService,
+          useValue: jasmine.createSpyObj('PrenatalService', ['schedule']),
+        },
+        {
+          provide: AuthService,
+          useValue: jasmine.createSpyObj('AuthService', ['getHospitalId', 'getUserProfile']),
+        },
+        {
+          provide: ToastService,
+          useValue: jasmine.createSpyObj('ToastService', ['success', 'error']),
+        },
+        {
+          provide: RoleContextService,
+          useValue: roleContextStub({ superAdmin: false, hospitalId: 'h-1', roles }),
+        },
+      ],
+    });
+    const fixture = TestBed.createComponent(PrenatalTabComponent);
+    fixture.detectChanges();
+    return fixture;
+  }
+
+  it('hides the high-risk flag from a receptionist and keeps it for a midwife', () => {
+    expect(create(['ROLE_RECEPTIONIST']).componentInstance.frontDeskOnly()).toBeTrue();
+    expect(create(['ROLE_MIDWIFE']).componentInstance.frontDeskOnly()).toBeFalse();
+  });
+});

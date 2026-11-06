@@ -1633,6 +1633,7 @@
       "CROSS_TENANT_READ": "Super-admin read across all hospitals: {{view}} ({{rows}} rows)",
       "CROSS_HOSPITAL_READ_LAB": "Lab order of another hospital read by the performing laboratory",
       "CROSS_HOSPITAL_READ_LAB_RESULT": "Lab result of another hospital read by the performing laboratory",
+      "EMERGENCY_BLOOD_RELEASED": "Emergency uncrossmatched release of unit {{unit}} against request {{request}}",
       "CROSS_HOSPITAL_READ": "Read from another hospital on the treatment relationship: {{subject}}{{extra}}",
       "SUPPORT_SESSION_REFUSED": "Support session refused: {{what}} (sign-in or recovery details)",
       "IMPERSONATION_STARTED": "Support session started as {{user}}. Reason: {{reason}}",
@@ -6430,6 +6431,7 @@
         "PROVIDER_REJECTED": "Provider Rejected",
         "PROVIDER_VERIFICATION_REVOKED": "Provider Verification Revoked",
         "PROVIDER_VERIFIED": "Provider Verified",
+        "EMERGENCY_BLOOD_RELEASED": "Emergency blood released uncrossmatched",
         "PRO_ALERT_ACKNOWLEDGED": "PRO Alert Acknowledged",
         "PRO_INSTRUMENT_IMPORTED": "PRO Instrument Imported",
         "PRO_RESPONSE_RECORDED": "PRO Response Recorded",
@@ -6868,6 +6870,7 @@
         "GENERAL": "General"
       },
       "AUDIT_ENTITY_TYPE": {
+        "TRANSFUSION_REQUEST": "Transfusion request",
         "DEPARTMENT_DEFAULT_SENSITIVITY": "Department default sensitivity",
         "DISPENSE": "Dispensing",
         "ENCOUNTER_SENSITIVITY": "Encounter sensitivity",
@@ -11765,6 +11768,8 @@
     "RECORD_CROSSMATCH": "Record crossmatch",
     "COMPATIBLE": "Compatible",
     "INCOMPATIBLE": "Incompatible",
+    "RUNNING_INCOMPATIBLE": "A crossmatch result came back incompatible for unit {{unit}}, which is running. The bag has not been stopped: the clinician decides.",
+    "RUNNING_INCOMPATIBLE_SHORT": "Crossmatch incompatible while running: the clinician decides",
     "CROSSMATCH_LAPSED": "reservation lapsed",
     "METHOD": "Method",
     "INCOMPAT_REASON": "Reason",

@@ -25,12 +25,14 @@
         [placeholder]="'PRENATAL.SUPPLEMENTAL_HINT' | translate"
       />
     </div>
-    <div class="field checkbox-field">
-      <label>
-        <input type="checkbox" [(ngModel)]="highRisk" />
-        {{ 'ULTRASOUND.HIGH_RISK' | translate }}
-      </label>
-    </div>
+    @if (!frontDeskOnly()) {
+      <div class="field checkbox-field">
+        <label>
+          <input type="checkbox" [(ngModel)]="highRisk" />
+          {{ 'ULTRASOUND.HIGH_RISK' | translate }}
+        </label>
+      </div>
+    }
   </div>
   <div class="field">
     <label for="pn-notes">{{ 'MATERNITY.CLINICAL_NOTES' | translate }}</label>
@@ -71,7 +73,7 @@
         'PRENATAL.ANC_CONTACTS'
           | translate: { done: s.completedContacts ?? 0, next: (s.completedContacts ?? 0) + 1 }
       }}</span>
-      @if (s.highRisk) {
+      @if (s.highRisk && !frontDeskOnly()) {
         {{ ' ' }}<span class="risk-badge risk-high">{{ 'ULTRASOUND.HIGH_RISK' | translate }}</span>
       }
     </h3>

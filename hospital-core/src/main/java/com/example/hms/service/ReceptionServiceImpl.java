@@ -444,6 +444,7 @@ public class ReceptionServiceImpl implements ReceptionService {
                 .providerName(providerName(appt))
                 .departmentName(appt.getDepartment() != null ? appt.getDepartment().getName() : null)
                 .appointmentReason(visitReason(appt, encounter))
+                .deskAppointmentReason(deskVisitReason(appt, encounter))
                 .status(row.status())
                 .queueFilters(List.copyOf(row.filters()))
                 .waitMinutes(computeWaitMinutes(encounter))
@@ -478,6 +479,7 @@ public class ReceptionServiceImpl implements ReceptionService {
                         : null)
                 .departmentName(walkIn.getDepartment() != null ? walkIn.getDepartment().getName() : null)
                 .appointmentReason(walkInReason(walkIn))
+                .deskAppointmentReason(notBlank(walkIn.getDeskChiefComplaint()) ? walkIn.getDeskChiefComplaint() : null)
                 .status(row.status())
                 .queueFilters(List.copyOf(row.filters()))
                 .waitMinutes(waitMins)
@@ -503,6 +505,16 @@ public class ReceptionServiceImpl implements ReceptionService {
     static String visitReason(Appointment appt, Encounter encounter) {
         if (notBlank(appt.getReason())) return appt.getReason();
         if (encounter != null && notBlank(encounter.getChiefComplaint())) return encounter.getChiefComplaint();
+        return notBlank(appt.getNotes()) ? appt.getNotes() : null;
+    }
+
+    /**
+     * RCPT-CLIN (user decision 2026-11-06): the same row as a receptionist reads it. The booked
+     * reason, else what the desk itself typed, else the booking notes; never triage's complaint.
+     */
+    static String deskVisitReason(Appointment appt, Encounter encounter) {
+        if (notBlank(appt.getReason())) return appt.getReason();
+        if (encounter != null && notBlank(encounter.getDeskChiefComplaint())) return encounter.getDeskChiefComplaint();
         return notBlank(appt.getNotes()) ? appt.getNotes() : null;
     }
 
@@ -1151,6 +1163,8 @@ public class ReceptionServiceImpl implements ReceptionService {
 
         if (request.getChiefComplaint() != null && !request.getChiefComplaint().isBlank()) {
             encounter.setChiefComplaint(request.getChiefComplaint());
+            // RCPT-CLIN: the desk's own words, which triage's later complaint never replaces for it.
+            encounter.setDeskChiefComplaint(request.getChiefComplaint());
         }
         if (request.getNotes() != null && !request.getNotes().isBlank()) {
             encounter.setNotes(request.getNotes());

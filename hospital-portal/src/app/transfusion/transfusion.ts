@@ -585,10 +585,11 @@ export class TransfusionComponent implements OnInit {
       incompatibilityReason: '',
     };
     // QA CX-011: a bag this request already holds can be crossmatched again, and a
-    // refused issue tells the lab to. The stock list does not hold it. A bag already
-    // hung has nothing left to decide.
+    // refused issue tells the lab to. The stock list does not hold it. That includes
+    // a bag already running: an emergency bag goes up before its crossmatch, and the
+    // result still has to reach the clinician.
     const held = (this.selectedRequest()?.units ?? []).filter(
-      (u) => u.status === 'CROSSMATCHED' || (u.status === 'ISSUED' && !this.administrationOf(u.id)),
+      (u) => u.status === 'CROSSMATCHED' || u.status === 'ISSUED',
     );
     this.assignableUnits.set(held);
     this.transfusion.listAssignableUnits().subscribe({
@@ -891,6 +892,13 @@ export class TransfusionComponent implements OnInit {
       unit.status === 'ISSUED' &&
       this.administrationsState() === 'loaded' &&
       !this.administrationOf(unit.id)
+    );
+  }
+
+  /** A bag on the open request found incompatible while it is running. Nothing stops it: the clinician decides. */
+  runningIncompatible(): TransfusionAdministrationResponse[] {
+    return this.administrations().filter(
+      (a) => this.isInProgress(a) && a.crossmatch?.compatible === false,
     );
   }
 

@@ -51,7 +51,8 @@ export interface PrenatalScheduleResponse {
   currentGestationalWeek: number;
   /** QA D1031: antenatal contacts already held in this pregnancy. */
   completedContacts?: number;
-  highRisk: boolean;
+  /** Absent for a receptionist (RCPT-CLIN). */
+  highRisk?: boolean;
   recommendations: PrenatalVisitRecommendation[];
   existingAppointments: PrenatalAppointmentSummary[];
   alerts: string[];

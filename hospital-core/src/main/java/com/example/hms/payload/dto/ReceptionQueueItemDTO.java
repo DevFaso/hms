@@ -24,6 +24,12 @@ public class ReceptionQueueItemDTO {
     private String departmentName;
     private String appointmentReason;
     /**
+     * RCPT-CLIN: {@link #appointmentReason} without triage's complaint. Never serialized:
+     * ReceptionistResponseShaping puts it in place of the other for a receptionist.
+     */
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    private String deskAppointmentReason;
+    /**
      * Computed front-desk status:
      * SCHEDULED | CONFIRMED | PENDING | ARRIVED | IN_PROGRESS | NO_SHOW | COMPLETED | WALK_IN
      */

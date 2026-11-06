@@ -130,7 +130,11 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
             .sorted(Comparator.comparing(Appointment::getAppointmentDate).thenComparing(Appointment::getStartTime))
             .toList();
 
-        boolean highRisk = Boolean.TRUE.equals(request.getHighRisk());
+        // RCPT-CLIN (user decision 2026-11-06): the high-risk flag is not the desk's, to tick or to
+        // read back: for a receptionist the box does not count, so neither the alert nor the denser
+        // cadence says it. The clinician who ticks it gets what they always got.
+        boolean highRisk = Boolean.TRUE.equals(request.getHighRisk())
+            && !com.example.hms.controller.support.ReceptionistResponseShaping.isReceptionistOnly();
     List<Integer> supplementalWeeks = Optional.ofNullable(request.getSupplementalVisitWeeks()).orElse(List.of());
 
     List<PrenatalVisitRecommendationDTO> recommendations = buildRecommendations(lmp, today, currentWeek, highRisk, supplementalWeeks, futureAppointments, textLocale);

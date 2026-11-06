@@ -74,6 +74,9 @@ public class MfaController {
     private final com.example.hms.security.LoginAttemptService loginAttemptService;
     /** The source the login offered roles from, so a picked role is re-checked against the same list. */
     private final com.example.hms.security.HospitalUserDetailsService userDetailsService;
+    /** Providers, like {@code AuthController}'s gate: a {@code @WebMvcTest} slice has neither bean. */
+    private final org.springframework.beans.factory.ObjectProvider<com.example.hms.security.DowntimeStateService> downtimeState;
+    private final org.springframework.beans.factory.ObjectProvider<com.example.hms.security.provider.ProviderMfaGate> providerMfaGate;
 
     /**
      * Why {@link #honouredPick} refused, told apart: a challenge that no longer
@@ -152,6 +155,38 @@ public class MfaController {
     }
 
     /**
+     * User decision 2026-11-06: in read-only mode an enrolment goes through only when it is what
+     * stands between the user and reading: the login's challenge session (a required role with no
+     * authenticator yet), or a provider user the second-factor gate refuses everything else to. Any
+     * other enrolment is an optional change, refused like the filter refuses a write. The filter
+     * cannot tell them apart: it runs before authentication.
+     */
+    private Optional<ResponseEntity<Object>> readOnlyRefusal(User user, Authentication authentication) {
+        com.example.hms.security.DowntimeStateService downtime = downtimeState.getIfAvailable();
+        com.example.hms.security.DowntimeStateService.DowntimeSnapshot snapshot =
+            downtime == null ? com.example.hms.security.DowntimeStateService.DowntimeSnapshot.NORMAL : downtime.snapshot();
+        if (!snapshot.readOnly()
+                || com.example.hms.security.MfaChallengeScope.isChallengeSession(authentication)
+                || blockedByTheProviderGate(user, authentication)) {
+            return Optional.empty();
+        }
+        boolean custom = snapshot.message() != null;
+        return Optional.of(ResponseEntity.status(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE)
+            .header("X-Readonly-Mode", "true")
+            .header("Retry-After", "300")
+            .<Object>body(Map.of("error", "READ_ONLY_MODE",
+                "message", custom ? snapshot.message()
+                    : message(com.example.hms.security.ReadOnlyModeFilter.DEFAULT_MESSAGE_KEY),
+                "customMessage", custom)));
+    }
+
+    private boolean blockedByTheProviderGate(User user, Authentication authentication) {
+        com.example.hms.security.provider.ProviderMfaGate gate = providerMfaGate.getIfAvailable();
+        return gate != null && gate.isProviderUser(user.getId(), user.getUsername())
+            && !gate.secondFactorPresented(authentication);
+    }
+
+    /**
      * Start TOTP enrollment — returns secret, otpauth URI, and backup codes.
      * With an active authenticator this starts its replacement, which needs a
      * full session and the step-up in {@code X-Mfa-Token} (a current code or
@@ -165,6 +200,8 @@ public class MfaController {
         Optional<User> authenticated = resolveFullyAuthenticatedUser(principal);
         if (authenticated.isEmpty()) return notFullyAuthenticated();
         User user = authenticated.get();
+        Optional<ResponseEntity<Object>> readOnly = readOnlyRefusal(user, authentication);
+        if (readOnly.isPresent()) return readOnly.get();
 
         MfaService.MfaEnrollmentResult result = mfaService.enrollTotp(user, authentication, stepUpCode);
 
@@ -198,6 +235,8 @@ public class MfaController {
         Optional<User> authenticated = resolveFullyAuthenticatedUser(principal);
         if (authenticated.isEmpty()) return notFullyAuthenticated();
         User user = authenticated.get();
+        Optional<ResponseEntity<Object>> readOnly = readOnlyRefusal(user, authentication);
+        if (readOnly.isPresent()) return readOnly.get();
 
         boolean verified = mfaService.verifyEnrollment(user.getId(), request.code(), authentication);
 
