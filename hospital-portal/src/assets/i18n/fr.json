@@ -82,7 +82,7 @@
   },
   "BEDS": {
     "DELETE_BED_CONFIRM": "Supprimer le lit {{name}} ?",
-    "DELETE_WARD_CONFIRM": "Supprimer le service {{name}} ?",
+    "DELETE_WARD_CONFIRM": "Supprimer l'unité {{name}} ?",
     "ACTIVE": "Actif",
     "AVAILABLE": "Disponibles",
     "BEDS_IN": "Lits de {{ward}}",

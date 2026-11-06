@@ -1,9 +1,11 @@
 package com.example.hms.controller;
 
-import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.security.DowntimeStateService;
 import com.example.hms.service.AuditEventLogService;
+import jakarta.validation.Validation;
+import jakarta.validation.Validator;
+import jakarta.validation.ValidatorFactory;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -17,18 +19,13 @@ import org.springframework.security.core.Authentication;
 import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
  * QA CX-001 (round 33): a platform-wide read-only mode says why. The refusal is
- * on the server too, so nothing but the confirmed portal path can turn every
- * hospital read-only in silence; lifting the mode needs no reason; both are audited.
+ * on the server too (a bean constraint, so {@code WriteEndpointRequiredFieldSweepIT}
+ * holds it, on {@code fieldErrors.message}); lifting the mode needs no reason; both are audited.
  */
 @ExtendWith(MockitoExtension.class)
 class DowntimeControllerTest {
@@ -46,16 +43,18 @@ class DowntimeControllerTest {
     }
 
     @Test
-    @DisplayName("activating with no message, or a blank one, is refused on its field and changes nothing")
+    @DisplayName("activating with no message, or a blank one, is refused at the edge")
     void activatingSaysWhy() {
-        for (String blank : new String[] {null, "", "   "}) {
-            DowntimeController.DowntimeToggleRequest body = request(true, blank);
-            assertThatThrownBy(() -> controller.toggle(body, ACTOR))
-                .isInstanceOfSatisfying(FieldBusinessException.class,
-                    refused -> assertThat(refused.getFieldErrors()).containsOnlyKeys("message"));
+        try (ValidatorFactory factory = Validation.buildDefaultValidatorFactory()) {
+            Validator validator = factory.getValidator();
+            for (String blank : new String[] {null, "", "   "}) {
+                assertThat(validator.validate(request(true, blank))).as("activating with \"%s\"", blank).hasSize(1);
+            }
+            assertThat(validator.validate(request(true, "Maintenance"))).isEmpty();
+            assertThat(validator.validate(request(false, null))).as("lifting needs no reason").isEmpty();
+            assertThat(validator.validate(new DowntimeController.DowntimeToggleRequest()))
+                .as("an empty body names both fields at once").hasSize(2);
         }
-        verify(downtimeStateService, never()).setReadOnly(anyBoolean(), any(), any());
-        verifyNoInteractions(auditEventLogService);
     }
 
     @Test

@@ -45,10 +45,12 @@ class PlatformAnalyticsHonestNumbersGuardTest {
         "service/impl/KpiDashboardServiceImpl.java");
 
     /** A builder or setter handing a metric a literal: {@code .staffCount(0)}, {@code .encounterTrend(List.of())}. */
-    private static final Pattern MADE_UP = Pattern.compile(
-        "\\.(?:set)?(\\w*+(?:[cC]ount|[tT]otal|[tT]rend|[rR]ate|[pP]ercent|[aA]verage|[sS]um)\\w*+)\\(\\s*+"
-            + "(-?\\d++L?+|-?\\d++\\.\\d++|BigDecimal\\.ZERO|Collections\\.emptyList\\(\\)|List\\.of\\(\\)|Map\\.of\\(\\))"
+    private static final Pattern LITERAL_ARGUMENT = Pattern.compile(
+        "\\.(\\w++)\\(\\s*+"
+            + "(?:-?\\d++L?+|-?\\d++\\.\\d++|BigDecimal\\.ZERO|Collections\\.emptyList\\(\\)|List\\.of\\(\\)|Map\\.of\\(\\))"
             + "\\s*+\\)");
+    /** The name of a metric, whatever precedes it. */
+    private static final Pattern METRIC_NAME = Pattern.compile("count|total|trend|rate|percent|average|sum", Pattern.CASE_INSENSITIVE);
 
     @Test
     @DisplayName("a dashboard service never sets a metric to a literal")
@@ -79,9 +81,11 @@ class PlatformAnalyticsHonestNumbersGuardTest {
 
     private static List<String> madeUpMetrics(String file, String source) {
         List<String> found = new ArrayList<>();
-        Matcher m = MADE_UP.matcher(source);
+        Matcher m = LITERAL_ARGUMENT.matcher(source);
         while (m.find()) {
-            found.add(file + ":" + SourceScan.lineOf(source, m.start()) + " " + m.group());
+            if (METRIC_NAME.matcher(m.group(1)).find()) {
+                found.add(file + ":" + SourceScan.lineOf(source, m.start()) + " " + m.group());
+            }
         }
         return found;
     }
