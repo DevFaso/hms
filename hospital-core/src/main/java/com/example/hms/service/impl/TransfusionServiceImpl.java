@@ -472,14 +472,17 @@ public class TransfusionServiceImpl implements TransfusionService {
         // repeat must neither stay blocked by the screen it replaced, nor be
         // crossmatched against a group the repeat corrected.
         PatientBloodGroup group = currentScreen(transfusionRequest);
-        if (group == null) {
+        // A current screen is what a COMPATIBLE verdict stands on. An incompatible one
+        // stops a bag and needs none: refusing it let a bag found incompatible still hang.
+        boolean claimsCompatible = Boolean.TRUE.equals(request.getCompatible());
+        if (claimsCompatible && group == null) {
             throw new BusinessException("transfusion.crossmatch.noTypeAndScreen");
         }
-        if (!group.screenIsCurrent(LocalDateTime.now(clock))) {
+        if (claimsCompatible && !group.screenIsCurrent(LocalDateTime.now(clock))) {
             throw new BusinessException("transfusion.crossmatch.screenLapsed");
         }
 
-        boolean serologicallyCompatible = serologicallyCompatible(group, unit, transfusionRequest);
+        boolean serologicallyCompatible = !claimsCompatible || serologicallyCompatible(group, unit, transfusionRequest);
 
         // THE rule. A tick box cannot overrule antigen biology: if the caller
         // says compatible and the ABO/Rh rules disagree, the write is refused
@@ -929,12 +932,18 @@ public class TransfusionServiceImpl implements TransfusionService {
      * incompatible, a group corrected after it, or antibodies it was never read
      * against all stop the bag. A screen that merely lapsed on the way does not
      * change what is in the bag. A bag released uncrossmatched in an emergency has
-     * no crossmatch to stand on and passes: nothing here may block a resuscitation.
+     * no crossmatch to stand on, so only the ABO/Rh rules apply once the patient is
+     * typed. O negative red cells pass every group, so this blocks no resuscitation.
      */
     private void requireCrossmatchStillStands(TransfusionRequest request, BloodUnit unit) {
         TransfusionCrossmatch crossmatch = crossmatchRepository
             .findByRequest_IdAndBloodUnit_Id(request.getId(), unit.getId()).orElse(null);
         if (crossmatch == null) {
+            PatientBloodGroup typedSince = currentScreen(request);
+            if (typedSince != null && !serologicallyCompatible(typedSince, unit, request)) {
+                throw new FieldBusinessException(FIELD_BLOOD_UNIT_ID, "transfusion.administration.groupExcludes",
+                    unit.getUnitNumber());
+            }
             return;
         }
         if (!Boolean.TRUE.equals(crossmatch.getCompatible())) {
