@@ -23,6 +23,14 @@ public interface PatientMedicationService {
     List<PatientMedicationResponseDTO> getMedicationsForPatientPortal(UUID patientId, UUID hospitalId, int limit);
 
     /**
+     * QA D1399 (D1347 class): one page of the same list as the portal read, with
+     * the server's total. {@link #getMedicationsForPatientPortal} bounds the
+     * history at its limit and says nothing of the rest; this pages all of it.
+     */
+    org.springframework.data.domain.Page<PatientMedicationResponseDTO> getMedicationsPageForPatientPortal(
+        UUID patientId, org.springframework.data.domain.Pageable pageable);
+
+    /**
      * QA D1362 (round 31): how many medications the patient has in all - every
      * issued prescription, at every hospital, whatever its course status (the
      * rows the portal list draws from; drafts are not medications).

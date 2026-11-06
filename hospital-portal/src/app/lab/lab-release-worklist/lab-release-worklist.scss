@@ -217,6 +217,7 @@
 
   /* Never graded: no configured range is in the result's unit. Amber, the
      reviewer must look at it, and never the green of a normal row. */
+  &.flag-grade_unknown,
   &.flag-unit_mismatch {
     background: #fef3c7;
     color: #92400e;

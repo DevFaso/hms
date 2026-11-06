@@ -1034,6 +1034,24 @@ class LabResultServiceImplLifecycleTest {
         assertThat(order.getStatus()).isEqualTo(LabOrderStatus.RESULTED);
     }
 
+    /** QA D1394: the analyser's or anyone's NORMAL aside, a value no bound settled is not auto-released. */
+    @Test
+    @DisplayName("D1394 - auto-verification skips a value whose comparator settles no grade")
+    void autoVerificationSkipsAValueThatSettlesNoGrade() {
+        ReflectionTestUtils.setField(service, "autoVerificationEnabled", true);
+        stubEntryPath();
+        when(labResultMapper.toResponseDTO(any(LabResult.class)))
+            .thenReturn(LabResultResponseDTO.builder()
+                .severityFlag(LabResultMapper.FLAG_UNSPECIFIED).gradeUnknown(true).build());
+        when(labResultMapper.isGradeUnknown(any(LabResult.class))).thenReturn(true);
+
+        service.createLabResult(entryRequest(), Locale.ENGLISH);
+
+        ArgumentCaptor<LabResult> saved = ArgumentCaptor.forClass(LabResult.class);
+        verify(labResultRepository).save(saved.capture());
+        assertThat(saved.getValue().isReleased()).isFalse();
+    }
+
     @Test
     @DisplayName("D31 - even switched on, a result nothing graded (no range, no flag) is not auto-released")
     void autoVerificationSkipsAnUngradedResult() {

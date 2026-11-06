@@ -436,6 +436,7 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
             .unit(unit)
             .referenceRange(referenceTextOf(result, testDefinition))
             .unitMismatch(mapped != null && mapped.isUnitMismatch())
+            .gradeUnknown(mapped != null && mapped.isGradeUnknown())
             .performedBy(resolveAssignmentUser(result.getAssignment()))
             .notes(result.getNotes())
             .build();
@@ -535,7 +536,8 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
             if (STATUS_UNKNOWN.equals(fromFlag) && isQualitative(result.getResultValue())) {
                 return STATUS_QUALITATIVE;
             }
-            return fromFlag;
+            // QA D1394: an analyser's NORMAL does not grade a value the hospital's ranges could not.
+            return mapped != null && mapped.isGradeUnknown() ? STATUS_UNKNOWN : fromFlag;
         }
         int rangeRank = rank(fromRange);
         int flagRank = rank(fromFlag);

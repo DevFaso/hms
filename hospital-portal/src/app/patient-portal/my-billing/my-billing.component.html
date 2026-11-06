@@ -54,6 +54,13 @@
                 >{{ 'PORTAL.BILLING.DUE' | translate }}
                 {{ inv.dueDate | serverTime | date: 'mediumDate' }}</span
               >
+              @if (inv.description && inv.facility) {
+                <!-- QA D1413: the title is the visit when it has one; the hospital is always named -->
+                {{ ' '
+                }}<span class="pli-meta" [attr.data-testid]="'invoice-hospital-' + inv.id">{{
+                  'PORTAL.BILLING.ISSUED_BY' | translate: { hospital: inv.facility }
+                }}</span>
+              }
             </div>
             <div class="pli-end">
               <!-- QA D254: the invoice total, with what is left to pay when anything is -->
@@ -136,6 +143,11 @@
                 @if (downloadError()) {
                   <p class="pay-error" role="alert" data-testid="download-error">
                     {{ downloadFailureReason() ?? ('PORTAL.BILLING.DOWNLOAD_FAILED' | translate) }}
+                  </p>
+                }
+                @if (inv.facility) {
+                  <p class="pli-meta" [attr.data-testid]="'invoice-detail-hospital-' + inv.id">
+                    {{ 'PORTAL.BILLING.ISSUED_BY' | translate: { hospital: inv.facility } }}
                   </p>
                 }
                 <h3 class="detail-title">{{ 'PORTAL.BILLING.LINES' | translate }}</h3>

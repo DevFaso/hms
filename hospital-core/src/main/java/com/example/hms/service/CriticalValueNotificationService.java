@@ -447,6 +447,10 @@ public class CriticalValueNotificationService {
     }
 
     /**
+     * QA D1394: a value graded critical from its comparator (">6,5") is phoned and
+     * repeated with it; the comparator is part of what must match, so ">6,5 mmol/L"
+     * reads back ">6.5" and "6,5" does not.
+     *
      * {@code [number, unit key or null]} of "6,8 mmol/L", "6.8" or "-2"; an
      * empty array when it does not start with a number (Sonar S1168: never null).
      */
@@ -472,8 +476,10 @@ public class CriticalValueNotificationService {
 
     /** A number (one comma or point decimal), then anything (the unit), with nothing given back. */
     private static final java.util.regex.Pattern NUMBER_THEN_UNIT =
-        java.util.regex.Pattern.compile("([+-]?+\\d++(?:[.,]\\d++)?+)\\s*+(.*+)");
+        java.util.regex.Pattern.compile("((?:<=|>=|<|>|\u2264|\u2265)?+\\s*+[+-]?+\\d++(?:[.,]\\d++)?+)\\s*+(.*+)");
     private static final java.util.regex.Pattern WHITESPACE = java.util.regex.Pattern.compile("\\s+");
+    private static final java.util.regex.Pattern READ_BACK_COMPARATOR =
+        java.util.regex.Pattern.compile("^(<=|>=|<|>|\u2264|\u2265)\\s*+");
 
     /**
      * Compare on trimmed, case-folded text with trailing zeros normalised, so
@@ -485,15 +491,22 @@ public class CriticalValueNotificationService {
             return null;
         }
         String trimmed = value.trim().toLowerCase(java.util.Locale.ROOT);
+        // QA D1394: the comparator, spaces aside, then the number as below.
+        java.util.regex.Matcher comparator = READ_BACK_COMPARATOR.matcher(trimmed);
+        String prefix = "";
+        if (comparator.find()) {
+            prefix = comparator.group(1);
+            trimmed = trimmed.substring(comparator.end());
+        }
         // QA D415: a French reader says and types "28,5"; one comma between
         // digits is the decimal separator, not a mismatch.
         if (trimmed.matches("[+-]?\\d+,\\d+")) {
             trimmed = trimmed.replace(',', '.');
         }
         try {
-            return new java.math.BigDecimal(trimmed).stripTrailingZeros().toPlainString();
+            return prefix + new java.math.BigDecimal(trimmed).stripTrailingZeros().toPlainString();
         } catch (NumberFormatException notNumeric) {
-            return trimmed;
+            return prefix + trimmed;
         }
     }
 

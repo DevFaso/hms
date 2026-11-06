@@ -505,4 +505,22 @@ describe('MyBillingComponent', () => {
       expect(input().required).toBeFalse();
     });
   });
+
+  it('QA D1413: a card titled by its visit still names the issuing hospital', () => {
+    create([invoice({ id: 'd', description: 'demo-r33', facility: 'CHU de Bogodogo' })]);
+
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('.pli-title')?.textContent).toContain('demo-r33');
+    expect(el.querySelector('[data-testid="invoice-hospital-d"]')?.textContent).toContain(
+      'PORTAL.BILLING.ISSUED_BY',
+    );
+  });
+
+  it('QA D1413: a card titled by its hospital does not name it twice', () => {
+    create([invoice({ id: 'f', description: '', facility: 'CHU de Bogodogo' })]);
+
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('.pli-title')?.textContent).toContain('CHU de Bogodogo');
+    expect(el.querySelector('[data-testid="invoice-hospital-f"]')).toBeNull();
+  });
 });

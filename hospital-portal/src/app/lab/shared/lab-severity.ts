@@ -9,7 +9,9 @@
  * enum domain.
  *
  * The flags are the ones LabResultMapper emits (severityFlag), plus
- * UNIT_MISMATCH when no configured range is in the result's unit.
+ * UNIT_MISMATCH when no configured range is in the result's unit and
+ * GRADE_UNKNOWN when a range applies but the value does not settle a grade
+ * (QA D1394: ">1" on a range ending at 6.5).
  */
 export const LAB_SEVERITY_FLAGS = [
   'CRITICAL',
@@ -20,20 +22,28 @@ export const LAB_SEVERITY_FLAGS = [
   'UNSPECIFIED',
 ] as const;
 
-export type LabSeverityFlag = (typeof LAB_SEVERITY_FLAGS)[number] | 'UNIT_MISMATCH';
+export type LabSeverityFlag =
+  (typeof LAB_SEVERITY_FLAGS)[number] | 'UNIT_MISMATCH' | 'GRADE_UNKNOWN';
 
 export interface GradedLabResult {
   severityFlag?: string | null;
   unitMismatch?: boolean | null;
+  gradeUnknown?: boolean | null;
 }
 
 /** The result's grade as the server stated it; anything unknown is UNSPECIFIED, never NORMAL. */
 export function labSeverityFlag(r: GradedLabResult): LabSeverityFlag {
   if (r.unitMismatch) return 'UNIT_MISMATCH';
+  if (r.gradeUnknown) return 'GRADE_UNKNOWN';
   const flag = (r.severityFlag ?? '').trim().toUpperCase();
   return (LAB_SEVERITY_FLAGS as readonly string[]).includes(flag)
     ? (flag as LabSeverityFlag)
     : 'UNSPECIFIED';
+}
+
+/** QA D1092 / D1394: the server could not grade it, so a person confirms before releasing it. */
+export function labReleaseNeedsReview(r: GradedLabResult): boolean {
+  return !!r.unitMismatch || !!r.gradeUnknown;
 }
 
 /** How a grade is drawn: critical, abnormal (out of range or a positive answer), normal, or ungraded. */

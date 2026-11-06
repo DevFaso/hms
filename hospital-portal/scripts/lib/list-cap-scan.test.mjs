@@ -11,7 +11,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { listCapFindings, sliceCountFindings } from './list-cap-scan.mjs';
+import {
+  listCapFindings,
+  sliceCountFindings,
+  serverLimitFindings,
+  serverLimitedPaths,
+} from './list-cap-scan.mjs';
 
 const rules = (ts, file = 'src/app/x/x.ts') =>
   listCapFindings(ts, file).map((f) => `${f.rule}:${f.anchor}`);
@@ -164,4 +169,38 @@ test('D1380: a count read from the length of a payload list is found; the server
   });
 }`;
   assert.deepEqual(rules(ts), ['payload-length-count:counts:c.medications']);
+});
+
+test('D1399: a read of a list the server caps by default is found; a paged one is not', () => {
+  const controller = `
+    @GetMapping("/medications")
+    public ResponseEntity<X> a(Authentication auth,
+            @RequestParam(defaultValue = "20") int limit) { return null; }
+    @GetMapping("/medications/page")
+    public ResponseEntity<X> b(Authentication auth, Pageable pageable) { return null; }
+    @GetMapping("/proxy-access/{patientId}/lab-results")
+    public ResponseEntity<X> c(@PathVariable UUID patientId,
+            @RequestParam(defaultValue = "50") int limit,
+            @RequestParam(required = false) Integer offset) { return null; }
+  `;
+  const paths = serverLimitedPaths(controller);
+  assert.deepEqual(paths, ['/medications', '/proxy-access/{patientId}/lab-results']);
+  const service = `export class S {
+  getMine() {
+    return this.http.get(\`\${this.base}/medications\`);
+  }
+  getAll() {
+    return this.rows(\`\${this.base}/medications/page\`);
+  }
+  getPage(patientId, offset) {
+    return this.http.get(\`\${this.base}/proxy-access/\${patientId}/lab-results\`, { params: { offset } });
+  }
+  getCut(patientId) {
+    return this.http.get(\`\${this.base}/proxy-access/\${patientId}/lab-results\`, { params: { limit: 5 } });
+  }
+}`;
+  assert.deepEqual(
+    serverLimitFindings(service, paths).map((f) => f.anchor),
+    ['getMine:/medications', 'getCut:/proxy-access/{patientId}/lab-results'],
+  );
 });

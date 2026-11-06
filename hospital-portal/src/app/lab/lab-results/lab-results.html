@@ -140,6 +140,14 @@
                     [attr.data-testid]="'unit-mismatch-' + r.id"
                     >{{ 'LAB_RESULTS.NOT_GRADED_UNITS_DIFFER' | translate }}</span
                   >
+                } @else if (r.gradeUnknown) {
+                  <!-- QA D1394: a comparator whose bound settles no grade is never just "not graded" -->
+                  <span
+                    class="severity-badge severity-unit-mismatch"
+                    [attr.title]="'LAB_RESULTS.GRADE_UNKNOWN_HINT' | translate"
+                    [attr.data-testid]="'grade-unknown-' + r.id"
+                    >{{ 'LAB_RESULTS.GRADE_UNKNOWN' | translate }}</span
+                  >
                 } @else if (r.severityFlag) {
                   <span [class]="getSeverityClass(r.severityFlag)">{{
                     r.severityFlag | enumLabel: 'labSeverityFlag'
@@ -368,6 +376,11 @@
                 <span class="field-value" data-testid="detail-unit-mismatch"
                   >{{ 'LAB_RESULTS.NOT_GRADED_UNITS_DIFFER' | translate }} —
                   {{ 'LAB_RESULTS.NOT_GRADED_UNITS_DIFFER_HINT' | translate }}</span
+                >
+              } @else if (r.gradeUnknown) {
+                <span class="field-value" data-testid="detail-grade-unknown"
+                  >{{ 'LAB_RESULTS.GRADE_UNKNOWN' | translate }} —
+                  {{ 'LAB_RESULTS.GRADE_UNKNOWN_HINT' | translate }}</span
                 >
               } @else {
                 <span class="field-value" data-testid="detail-severity">{{
@@ -635,7 +648,18 @@
               [(ngModel)]="form.resultValue"
               [placeholder]="'LAB_RESULTS.VALUE_PLACEHOLDER' | translate"
               required
+              [attr.aria-describedby]="valueHasComparator() ? 'lr-resultValue-hint' : null"
             />
+            @if (valueHasComparator()) {
+              <!-- QA D1394: the dialog warned about other units but not about comparators -->
+              <small
+                id="lr-resultValue-hint"
+                class="field-hint"
+                role="note"
+                data-testid="comparator-hint"
+                >{{ 'LAB_RESULTS.COMPARATOR_HINT' | translate }}</small
+              >
+            }
           </div>
           <div class="field">
             <label for="lr-resultUnit"
@@ -763,6 +787,15 @@
           <!-- QA D1092: no range can grade this value; releasing it is a reviewed decision -->
           <p role="note" data-testid="release-ungraded-note">
             {{ 'LAB_RELEASE.UNGRADED_NOTE' | translate: { unit: target.resultUnit || '—' } }}
+          </p>
+        }
+        @if (target.gradeUnknown) {
+          <!-- QA D1394: the same reviewed release for a comparator that settles no grade -->
+          <p role="note" data-testid="release-grade-unknown-note">
+            {{
+              'LAB_RELEASE.GRADE_UNKNOWN_NOTE'
+                | translate: { value: target.resultValue | labValue: target.resultUnit }
+            }}
           </p>
         }
       </div>

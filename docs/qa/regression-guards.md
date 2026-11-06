@@ -899,3 +899,13 @@ Rounds 27, 28 and 29 each found 20–30 new siblings of the required-field class
 | `scripts/lib/as-needed-frequency.test.mjs` (widened) | Only the prescribing form reads the mirror, for a hint; the verdict never sets the tick. | D1391, D1395 | none |
 | `controller/PrescriptionWriteAuthorizationIT` (new) | A role that may not prescribe reading a 400 about the body instead of a 403, through the real filter chain. | round 33, RF | the other controllers: tasklist standing debt |
 | portal `prescriptions.spec.ts` (`QA D1412`) with `npm run guards` list caps | `/prescriptions` reads one page with the server's total; each tab count is the server's. | D1412 (D1347 class) | list-caps baseline unchanged |
+
+## Guards added or widened by round 33 (fix/r33-lab-patient-meds)
+
+| Guard | Class it stops | Scope / allowlist |
+|---|---|---|
+| `mapper/LabResultComparatorGradingTest` (new, table) | D1394: a value the system accepts but cannot grade passing as if it were fine. Every value of the report and the variants of comparator, comma, case and unit: `> 6,5`, `<1,5`, `>500 mg/dL`, `7 mEq/L`, `600 MG/DL`, `30 MG/DL`; a bound that settles nothing is UNSPECIFIED + `gradeUnknown`, never NORMAL; calcium, magnesium and any other analyte in mEq/L stay a unit mismatch. | The one grader, `LabResultMapper#determineSeverityFlag`, read by every severity reader. |
+| `architecture/LabResultChartRound19GuardTest#d1394_everyReleasePathAsksWhetherTheValueSettledAGrade` (new) | D1394: a path that releases a result without asking whether it settled a grade. | every `setReleased(true)` in main; no allowlist. |
+| `architecture/LabResultChartRound19GuardTest#d1394_aLabValueIsReadAsANumberInOnePlace` (new) | D1394: `Double.parseDouble` of a raw value (fails on `>6,5`, reads `NaN` as a number) instead of `LabResultValueRules.numericValue`. | one pin with its reason: the trend direction, which grades nothing. |
+| `controller/LabOrderEndToEndIT#aCriticalInAnySpellingReachesTheDoctor` (new) | D1394: through the real chain, each spelling is CRITICAL on entry, pages the doctor on release and closes by read-back. | |
+| `scripts/lib/list-cap-scan.mjs` rule `server-limit` (new, part of `npm run guards` → list caps) | D1399 (D1347 class): a read of a `PatientPortalController` list whose limit has a server DEFAULT and no `offset`, so no number appears at the call site for `fixed-limit` or `default-limit` to see. The limited paths are read from the controller, so a new one is covered the day it is added. | 2 pins, previews with the server's total. 2 `default-limit` pins deleted (`getProxyMedications`, `getMyLabResults`). |

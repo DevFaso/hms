@@ -31,6 +31,9 @@ public class LabResultMapper {
     public static final String FLAG_CRITICAL = "CRITICAL";
     /** A result no range grades (a qualitative answer) that reads abnormal. */
     public static final String FLAG_ABNORMAL = "ABNORMAL";
+    private static final String FLAG_LOW = "LOW";
+    private static final String FLAG_HIGH = "HIGH";
+    private static final String FLAG_NORMAL = "NORMAL";
 
     private static final OrderContext EMPTY_ORDER_CONTEXT = new OrderContext(
         "",
@@ -52,7 +55,7 @@ public class LabResultMapper {
 
         OrderContext context = extractOrderContext(result.getLabOrder());
         List<LabResultReferenceRangeDTO> referenceRanges = toReferenceRangeDtos(context.referenceRanges());
-        Grading grading = gradingOf(result.getResultUnit(), context.testUnit(), context.referenceRanges(), demographicsOf(result));
+        Grading grading = gradingOf(result, context);
         String severityFlag = effectiveSeverityFlag(result, grading.range(), context.expectedResult());
 
         return LabResultResponseDTO.builder()
@@ -87,6 +90,7 @@ public class LabResultMapper {
             .expectedResult(context.expectedResult())
             .severityFlag(severityFlag)
             .unitMismatch(grading.unitMismatch())
+            .gradeUnknown(gradeUnknown(result, grading, severityFlag))
             .acknowledged(result.isAcknowledged())
             .criticalNotifiedAt(result.getCriticalNotifiedAt())
             .criticalEscalatedAt(result.getCriticalEscalatedAt())
@@ -136,7 +140,7 @@ public class LabResultMapper {
         }
 
         OrderContext context = extractOrderContext(result.getLabOrder());
-        Grading grading = gradingOf(result.getResultUnit(), context.testUnit(), context.referenceRanges(), demographicsOf(result));
+        Grading grading = gradingOf(result, context);
         String severityFlag = effectiveSeverityFlag(result, grading.range(), context.expectedResult());
 
         return LabResultTrendPointDTO.builder()
@@ -174,7 +178,7 @@ public class LabResultMapper {
             return FLAG_UNSPECIFIED;
         }
         OrderContext context = extractOrderContext(result.getLabOrder());
-        LabTestReferenceRange graded = gradingOf(result.getResultUnit(), context.testUnit(), context.referenceRanges(), demographicsOf(result)).range();
+        LabTestReferenceRange graded = gradingOf(result, context).range();
         return effectiveSeverityFlag(result, graded, context.expectedResult());
     }
 
@@ -213,7 +217,7 @@ public class LabResultMapper {
         if (FLAG_UNSPECIFIED.equals(flag) && !isAbnormalRecorded(result.getAbnormalFlag())
                 && result.getAbnormalFlag() != com.example.hms.enums.AbnormalFlag.CRITICAL
                 && matchesExpectedResult(result.getResultValue(), expectedResult)) {
-            return "NORMAL";
+            return FLAG_NORMAL;
         }
         // QA D313: a value outside a range that declares no critical limits
         // stays HIGH or LOW (abnormal). It used to be promoted to CRITICAL here.
@@ -296,7 +300,7 @@ public class LabResultMapper {
             return null;
         }
         OrderContext context = extractOrderContext(result.getLabOrder());
-        LabTestReferenceRange graded = gradingOf(result.getResultUnit(), context.testUnit(), context.referenceRanges(), demographicsOf(result)).range();
+        LabTestReferenceRange graded = gradingOf(result, context).range();
         return graded != null ? toReferenceRangeDto(graded) : null;
     }
 
@@ -316,7 +320,45 @@ public class LabResultMapper {
             return false;
         }
         OrderContext context = extractOrderContext(result.getLabOrder());
-        return gradingOf(result.getResultUnit(), context.testUnit(), context.referenceRanges(), demographicsOf(result)).unitMismatch();
+        return gradingOf(result, context).unitMismatch();
+    }
+
+    /**
+     * QA D1394: true when a range with limits applies to this result and its
+     * value does not settle a grade against them: a comparator its bound cannot
+     * decide ("&gt;1" on a range ending at 6.5), or text a numeric test cannot grade
+     * (an analyser's "Hémolysé"). Like {@link #isUngradedForUnitMismatch} it says
+     * nothing can tell the value is not critical, so a person reviews it.
+     * An analyser's own NORMAL does not settle it, as it does not for a unit
+     * mismatch; an abnormal flag does (the row is then graded ABNORMAL).
+     */
+    public boolean isGradeUnknown(LabResult result) {
+        if (result == null) {
+            return false;
+        }
+        OrderContext context = extractOrderContext(result.getLabOrder());
+        Grading grading = gradingOf(result, context);
+        return gradeUnknown(result, grading, effectiveSeverityFlag(result, grading.range(), context.expectedResult()));
+    }
+
+    /**
+     * QA D1394: the one question the release gate, the auto-release paths and the
+     * ordering clinician's in-basket ask: did this value end up with no grade
+     * although the test has ranges to grade it? Nothing can then say it is not
+     * critical, so it never passes without a person reading it.
+     */
+    public boolean isUngraded(LabResult result) {
+        return isUngradedForUnitMismatch(result) || isGradeUnknown(result);
+    }
+
+    private static boolean gradeUnknown(LabResult result, Grading grading, String severityFlag) {
+        return FLAG_UNSPECIFIED.equals(severityFlag) && hasLimit(grading.range())
+            && result.getResultValue() != null && !result.getResultValue().isBlank();
+    }
+
+    private static boolean hasLimit(LabTestReferenceRange range) {
+        return range != null && (range.getMinValue() != null || range.getMaxValue() != null
+            || range.getCriticalLow() != null || range.getCriticalHigh() != null);
     }
 
     /**
@@ -328,6 +370,11 @@ public class LabResultMapper {
 
     private static final Grading NOT_GRADED = new Grading(null, false);
     private static final Grading UNITS_DIFFER = new Grading(null, true);
+
+    private static Grading gradingOf(LabResult result, OrderContext context) {
+        return gradingOf(result.getResultUnit(), context.testUnit(), context.referenceRanges(), demographicsOf(result),
+            LabUnitConversion.isMonovalentIon(context.labTestName(), context.labTestCode()));
+    }
 
     /**
      * The one unit-matching rule, in this order, independent of the order the
@@ -341,7 +388,8 @@ public class LabResultMapper {
      *   <li>the first range whose effective unit is the result's effective unit;</li>
      *   <li>else (QA D1092) the first range whose effective unit converts to the
      *       result's without knowing the analyte (mg/dL and g/L, mmol/L and
-     *       µmol/L), restated in the result's unit;</li>
+     *       µmol/L), or (QA D1394) as mmol/L for mEq/L of a monovalent ion,
+     *       restated in the result's unit;</li>
      *   <li>else the first range with no effective unit at all (neither the
      *       range nor the test states one: bare limits);</li>
      *   <li>else, when neither the result nor the test states a unit, the
@@ -351,7 +399,7 @@ public class LabResultMapper {
      */
     private static Grading gradingOf(String resultUnit, String testUnit,
                                      List<LabTestReferenceRange> configuredRanges,
-                                     LabRangeApplicability.Demographics patient) {
+                                     LabRangeApplicability.Demographics patient, boolean monovalentIon) {
         if (configuredRanges == null || configuredRanges.isEmpty()) {
             return NOT_GRADED;
         }
@@ -370,7 +418,7 @@ public class LabResultMapper {
             // knowing the analyte (g/L for a value in mg/dL), restated in the
             // value's own unit, so 510 mg/dL is graded on 0.45-5.0 g/L's
             // critical limits as 45-500 mg/dL.
-            chosen = firstConvertible(referenceRanges, rawUnitOf(resultUnit, testUnit), testUnit);
+            chosen = firstConvertible(referenceRanges, rawUnitOf(resultUnit, testUnit), testUnit, monovalentIon);
         }
         if (chosen == null) {
             chosen = firstWithoutUnit(referenceRanges, testUnit);
@@ -400,7 +448,7 @@ public class LabResultMapper {
      * every other field of the range (sex, age band, source).
      */
     private static LabTestReferenceRange firstConvertible(List<LabTestReferenceRange> ranges, String resultUnit,
-                                                          String testUnit) {
+                                                          String testUnit, boolean monovalentIon) {
         if (resultUnit == null) {
             return null;
         }
@@ -409,7 +457,7 @@ public class LabResultMapper {
                 continue;
             }
             String rangeUnit = rawUnitOf(range.getUnit(), testUnit);
-            java.util.Optional<java.math.BigDecimal> factor = LabUnitConversion.factor(rangeUnit, resultUnit);
+            java.util.Optional<java.math.BigDecimal> factor = LabUnitConversion.gradingFactor(rangeUnit, resultUnit, monovalentIon);
             if (factor.isPresent()) {
                 java.math.BigDecimal f = factor.get();
                 return range.toBuilder()
@@ -721,40 +769,87 @@ public class LabResultMapper {
     /**
      * LOW / HIGH / NORMAL against {@code matchingRange}, the range
      * {@link #gradingOf} chose; UNSPECIFIED when there is none (no range
-     * configured, or only ranges in another unit) or the value is not a
-     * number.
+     * configured, or only ranges in another unit), the value is not a number, or
+     * (QA D1394) its comparator's bound does not settle the grade.
      */
     private static String determineSeverityFlag(String rawResultValue, LabTestReferenceRange matchingRange) {
-        if (rawResultValue == null || rawResultValue.isBlank()) {
-            return FLAG_UNSPECIFIED;
-        }
         if (matchingRange == null) {
             return FLAG_UNSPECIFIED;
         }
+        return com.example.hms.service.LabResultValueRules.numericValue(rawResultValue)
+            .map(parsed -> switch (parsed.bound()) {
+                case EXACT -> gradeExact(parsed.number(), matchingRange);
+                case ABOVE -> gradeAbove(parsed.number(), matchingRange);
+                case BELOW -> gradeBelow(parsed.number(), matchingRange);
+            })
+            .orElse(FLAG_UNSPECIFIED);
+    }
 
-        double value;
-        try {
-            value = Double.parseDouble(rawResultValue);
-        } catch (NumberFormatException ex) {
-            return FLAG_UNSPECIFIED;
-        }
-
+    private static String gradeExact(double value, LabTestReferenceRange range) {
         // D107: the panic limits come first, so a value beyond them is
         // labelled CRITICAL - the same word the alert uses.
-        if (matchingRange.getCriticalLow() != null && value < matchingRange.getCriticalLow()) {
+        if (range.getCriticalLow() != null && value < range.getCriticalLow()) {
             return FLAG_CRITICAL;
         }
-        if (matchingRange.getCriticalHigh() != null && value > matchingRange.getCriticalHigh()) {
+        if (range.getCriticalHigh() != null && value > range.getCriticalHigh()) {
             return FLAG_CRITICAL;
         }
-        Double min = matchingRange.getMinValue();
-        Double max = matchingRange.getMaxValue();
+        Double min = range.getMinValue();
+        Double max = range.getMaxValue();
         if (min != null && value < min) {
-            return "LOW";
+            return FLAG_LOW;
         }
         if (max != null && value > max) {
-            return "HIGH";
+            return FLAG_HIGH;
         }
-        return "NORMAL";
+        return FLAG_NORMAL;
+    }
+
+    /**
+     * QA D1394: "&gt;X" is beyond every limit at or below X. NORMAL only when the
+     * value cannot leave the range upward (no upper limit at all) and X is already
+     * inside its lower limits: "&gt;60" on an eGFR of at least 60. Anything else is
+     * not known: "&gt;1" on a range ending at 6.5 may be 2 or 200.
+     */
+    private static String gradeAbove(double bound, LabTestReferenceRange range) {
+        if (range.getCriticalHigh() != null && bound >= range.getCriticalHigh()) {
+            return FLAG_CRITICAL;
+        }
+        if (range.getMaxValue() != null && bound >= range.getMaxValue()) {
+            return FLAG_HIGH;
+        }
+        boolean noUpperLimit = range.getMaxValue() == null && range.getCriticalHigh() == null;
+        boolean aboveLowerLimits = atOrAbove(bound, range.getMinValue()) && atOrAbove(bound, range.getCriticalLow());
+        return noUpperLimit && aboveLowerLimits && hasLimit(range) ? FLAG_NORMAL : FLAG_UNSPECIFIED;
+    }
+
+    /**
+     * QA D1394: "&lt;X" is beyond every limit at or above X. NORMAL only when X is
+     * inside the upper limits and the value cannot leave the range downward: no
+     * lower limit other than zero. "&lt;5" on a CRP of 0-5 is normal; "&lt;5" on
+     * 3.5-5.0 may be 4 or 1, and "&lt;1" on a base excess of -2 to 2 may be -3.
+     */
+    private static String gradeBelow(double bound, LabTestReferenceRange range) {
+        if (range.getCriticalLow() != null && bound <= range.getCriticalLow()) {
+            return FLAG_CRITICAL;
+        }
+        if (range.getMinValue() != null && bound <= range.getMinValue()) {
+            return FLAG_LOW;
+        }
+        boolean belowUpperLimits = atOrBelow(bound, range.getMaxValue()) && atOrBelow(bound, range.getCriticalHigh());
+        boolean noLowerLimit = isZeroOrAbsent(range.getMinValue()) && isZeroOrAbsent(range.getCriticalLow());
+        return belowUpperLimits && noLowerLimit && hasLimit(range) ? FLAG_NORMAL : FLAG_UNSPECIFIED;
+    }
+
+    private static boolean atOrAbove(double bound, Double limit) {
+        return limit == null || bound >= limit;
+    }
+
+    private static boolean atOrBelow(double bound, Double limit) {
+        return limit == null || bound <= limit;
+    }
+
+    private static boolean isZeroOrAbsent(Double limit) {
+        return limit == null || Double.compare(limit, 0d) == 0;
     }
 }

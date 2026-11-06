@@ -74,7 +74,12 @@
               {{ ' '
               }}<span class="pli-meta"
                 >{{ lab.collectedDate | serverTime | date: 'mediumDate' }} ·
-                {{ lab.status | enumLabel: 'status' }}</span
+                <!-- QA D1394: never "Inconnu", which reads as if nothing were wrong -->
+                {{
+                  lab.isUngraded
+                    ? ('PORTAL.LAB_RESULTS.NOT_GRADED_STATUS' | translate)
+                    : (lab.status | enumLabel: 'status')
+                }}</span
               >
             </div>
             @if (lab.isAbnormal) {
@@ -82,6 +87,11 @@
             } @else if (lab.isPending) {
               <span class="pending-badge">{{
                 'PORTAL.LAB_RESULTS.PENDING_BADGE' | translate
+              }}</span>
+            } @else if (lab.isUngraded) {
+              {{ ' '
+              }}<span class="pending-badge" [attr.data-testid]="'lab-not-graded-' + lab.id">{{
+                'PORTAL.LAB_RESULTS.NOT_GRADED_STATUS' | translate
               }}</span>
             }
           </div>
@@ -118,7 +128,9 @@
                   <span class="dl">{{ 'PORTAL.LAB_RESULTS.STATUS' | translate }}</span>
                   {{ ' '
                   }}<span class="dv portal-status-chip" [attr.data-status]="lab.status">{{
-                    lab.status | enumLabel: 'status'
+                    lab.isUngraded
+                      ? ('PORTAL.LAB_RESULTS.NOT_GRADED_STATUS' | translate)
+                      : (lab.status | enumLabel: 'status')
                   }}</span>
                 </div>
                 <div class="detail-item">
@@ -132,6 +144,11 @@
           }
         }
       </div>
+      @if (labTotal(); as total) {
+        <p class="pli-meta" data-testid="lab-count">
+          {{ 'PORTAL_PAGING.SHOWN_OF' | translate: { shown: results().length, total: total } }}
+        </p>
+      }
       <!-- QA D1213: the older results are one click away, never silently cut -->
       @if (pager.loadMoreFailed()) {
         <p class="portal-inline-error" data-testid="lab-load-more-failed" role="alert">

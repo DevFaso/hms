@@ -134,13 +134,13 @@
       "count": 1,
       "why": "open D1347 sibling found by the round-32 default-limit rule (D1379 class), flagged in the fix/r32-list-caps hand-back: the encounter's nursing-notes panel shows the 20 newest notes (50 on a closed visit) with no total"
     },
-    "src/app/services/patient-portal.service.ts::default-limit::getMyLabResults:limit=20": {
+    "src/app/services/patient-portal.service.ts::server-limit::getMyLabResults:/lab-results": {
       "count": 1,
-      "why": "the default is never used: every caller passes its own number (the dashboard preview 5, the my-records card counted from the server's labResultTotal, QA D1362)"
+      "why": "two previews: the dashboard 5 and the my-records card, which counts from the server's labResultTotal (QA D1362); /my-lab-results pages with offset and the total"
     },
-    "src/app/services/patient-portal.service.ts::default-limit::getProxyMedications:limit=50": {
+    "src/app/services/patient-portal.service.ts::server-limit::getMyMedications:/medications": {
       "count": 1,
-      "why": "open D1347 sibling found by the round-32 default-limit rule (D1379 class), flagged in the fix/r32-list-caps hand-back: the same contract as /medications (QA D1346: every ACTIVE course whatever the limit), but the history after them is cut at 50 with no total on the proxy viewer"
+      "why": "two previews: the dashboard card of current medicines (every ACTIVE course comes whatever the limit, QA D1346) and the my-records card, which counts from the server's medicationTotal; /my-medications reads every page (QA D1399)"
     },
     "src/app/services/postpartum.service.ts::default-limit::recentNewbornAssessments:limit=10": {
       "count": 1,

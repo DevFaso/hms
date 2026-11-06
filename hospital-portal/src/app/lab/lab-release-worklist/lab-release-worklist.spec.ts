@@ -460,6 +460,17 @@ describe('LabReleaseWorklistComponent', () => {
     expect(row?.querySelector('.flag-unit_mismatch')).not.toBeNull();
   });
 
+  it('QA D1394: labels a row whose limit settles no grade, not "not flagged"', () => {
+    setup(['ROLE_LAB_SCIENTIST']);
+    fixture.detectChanges();
+    flushWorklist([result({ severityFlag: 'UNSPECIFIED', gradeUnknown: true })]);
+    fixture.detectChanges();
+
+    expect(component.severityKey(component.rows()[0])).toBe('GRADE_UNKNOWN');
+    const row = host().querySelector('[data-testid="release-row-result-1"]');
+    expect(row?.textContent).toContain('LAB_RELEASE.FLAG_GRADE_UNKNOWN');
+  });
+
   it('keeps the graded flag for a row in its range unit', () => {
     setup(['ROLE_LAB_SCIENTIST']);
     fixture.detectChanges();

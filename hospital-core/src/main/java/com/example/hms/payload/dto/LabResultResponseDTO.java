@@ -63,6 +63,13 @@ public class LabResultResponseDTO {
      * (OBX-8) is separate and still honoured.
      */
     private boolean unitMismatch;
+
+    /**
+     * QA D1394: a range with limits applies, but the value does not settle a grade
+     * against it (a comparator such as "&gt;1" on a range ending at 6.5). severityFlag
+     * is UNSPECIFIED and no range alert was raised: a person must review it.
+     */
+    private boolean gradeUnknown;
     private boolean acknowledged;
     private LocalDateTime acknowledgedAt;
     private String acknowledgedBy;

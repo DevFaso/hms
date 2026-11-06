@@ -39,7 +39,7 @@ describe('PatientPortalService lab results', () => {
 
   function labResults(rows: unknown[]): LabResultSummary[] {
     let received: LabResultSummary[] = [];
-    service.getMyLabResults().subscribe((r) => (received = r));
+    service.getMyLabResults(20).subscribe((r) => (received = r));
     httpMock.expectOne((req) => req.url === '/me/patient/lab-results').flush({ data: rows });
     return received;
   }

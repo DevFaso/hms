@@ -251,6 +251,15 @@
             {{ 'LAB_RELEASE.UNGRADED_NOTE' | translate: { unit: target.resultUnit || '—' } }}
           </p>
         }
+        @if (target.gradeUnknown) {
+          <!-- QA D1394: the same reviewed release for a comparator that settles no grade -->
+          <p class="self-release-note" role="note" data-testid="release-grade-unknown-note">
+            {{
+              'LAB_RELEASE.GRADE_UNKNOWN_NOTE'
+                | translate: { value: target.resultValue | labValue: target.resultUnit }
+            }}
+          </p>
+        }
         @if (isSelfRelease(target)) {
           <p class="self-release-note" role="note" data-testid="self-release-note">
             {{ 'LAB_RELEASE.SELF_RELEASE_NOTE' | translate }}

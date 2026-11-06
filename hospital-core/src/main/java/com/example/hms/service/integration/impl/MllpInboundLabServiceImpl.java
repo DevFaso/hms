@@ -405,7 +405,8 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
         if (order != null && order.getLabTestDefinition() != null) {
             org.hibernate.Hibernate.initialize(order.getLabTestDefinition());
         }
-        if (labResultMapper.isUngradedForUnitMismatch(result)) {
+        // QA D1394: nor when a comparator's bound leaves the grade unknown.
+        if (labResultMapper.isUngradedForUnitMismatch(result) || labResultMapper.isGradeUnknown(result)) {
             return;
         }
         result.setReleased(true);

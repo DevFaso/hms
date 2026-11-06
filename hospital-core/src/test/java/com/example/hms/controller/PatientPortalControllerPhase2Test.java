@@ -904,4 +904,39 @@ class PatientPortalControllerPhase2Test {
                             org.hamcrest.Matchers.containsString("com.example"))));
         }
     }
+
+    /** QA D1399: the pages and totals of the lists that used to stop at their default limit. */
+    @Test
+    @DisplayName("GET /medications/page answers the server's total")
+    void d1399_myMedicationsPage() throws Exception {
+        when(portalService.getMyMedicationsPage(any(), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(java.util.List.of(
+                com.example.hms.payload.dto.medication.PatientMedicationResponseDTO.builder()
+                    .medicationName("Paracétamol").asNeeded(true).prnMinIntervalHours(6).build()),
+                org.springframework.data.domain.PageRequest.of(0, 20), 249));
+
+        mockMvc.perform(get("/me/patient/medications/page").param("page", "0").param("size", "20").principal(auth))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.totalElements").value(249))
+            .andExpect(jsonPath("$.data.content[0].asNeeded").value(true))
+            .andExpect(jsonPath("$.data.content[0].prnMinIntervalHours").value(6));
+    }
+
+    @Test
+    @DisplayName("GET /proxy-access/{id}/medications/page and the lab counts answer the server's total")
+    void d1399_proxyMedicationsPageAndLabCounts() throws Exception {
+        java.util.UUID grantor = java.util.UUID.randomUUID();
+        when(portalService.getProxyMedicationsPage(any(), eq(grantor), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(java.util.List.of(),
+                org.springframework.data.domain.PageRequest.of(0, 20), 340));
+        when(portalService.countProxyLabResults(any(), eq(grantor))).thenReturn(121L);
+        when(portalService.countMyLabResults(any())).thenReturn(7L);
+
+        mockMvc.perform(get("/me/patient/proxy-access/" + grantor + "/medications/page").principal(auth))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.data.totalElements").value(340));
+        mockMvc.perform(get("/me/patient/proxy-access/" + grantor + "/lab-results/count").principal(auth))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.data").value(121));
+        mockMvc.perform(get("/me/patient/lab-results/count").principal(auth))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.data").value(7));
+    }
 }

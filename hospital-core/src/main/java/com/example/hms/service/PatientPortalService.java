@@ -90,6 +90,9 @@ public interface PatientPortalService {
     // ── Medications ──────────────────────────────────────────────────────
     List<PatientMedicationResponseDTO> getMyMedications(Authentication auth, int limit);
 
+    /** QA D1399: one page of every medication of mine, with the server's total. */
+    Page<PatientMedicationResponseDTO> getMyMedicationsPage(Authentication auth, Pageable pageable);
+
     // ── Prescriptions ────────────────────────────────────────────────────
     List<PrescriptionResponseDTO> getMyPrescriptions(Authentication auth, Locale locale);
 
@@ -228,6 +231,15 @@ public interface PatientPortalService {
 
     /** View grantor's medications as proxy. */
     List<PatientMedicationResponseDTO> getProxyMedications(Authentication auth, UUID patientId, int limit);
+
+    /** QA D1399: one page of every medication of the grantor, with the server's total. */
+    Page<PatientMedicationResponseDTO> getProxyMedicationsPage(Authentication auth, UUID patientId, Pageable pageable);
+
+    /** QA D1399: how many lab results the grantor's list holds, the total its pages read. */
+    long countProxyLabResults(Authentication auth, UUID patientId);
+
+    /** QA D1399: how many lab results my list holds, the total its pages read. */
+    long countMyLabResults(Authentication auth);
 
     /** View grantor's lab results as proxy. */
     List<PatientLabResultResponseDTO> getProxyLabResults(Authentication auth, UUID patientId, int limit);

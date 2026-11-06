@@ -162,6 +162,14 @@ public class PatientPortalController {
         return ResponseEntity.ok(ApiResponseWrapper.success(results));
     }
 
+    /** QA D1399: the total `/my-lab-results` pages read; the list above has no room for one. */
+    @Operation(summary = "How many lab results of mine the list holds (QA D1399)")
+    @GetMapping("/lab-results/count")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<Long>> countMyLabResults(Authentication auth) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(portalService.countMyLabResults(auth)));
+    }
+
     // ── Medications ──────────────────────────────────────────────────────
 
     @Operation(summary = "View my current medications")
@@ -172,6 +180,20 @@ public class PatientPortalController {
             @RequestParam(defaultValue = "20") int limit) {
         List<PatientMedicationResponseDTO> meds = portalService.getMyMedications(auth, limit);
         return ResponseEntity.ok(ApiResponseWrapper.success(meds));
+    }
+
+    /**
+     * QA D1399 (D1347 class): "Médicaments passés" read the list above with its
+     * default limit, so 20 of 249 past medicines showed with nothing to say so.
+     * This pages every medication, active first, with the total; the list stays
+     * as it is for the dashboard and the mobile apps.
+     */
+    @Operation(summary = "Every medication of mine, one page at a time with the total (QA D1399)")
+    @GetMapping("/medications/page")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<Page<PatientMedicationResponseDTO>>> getMyMedicationsPage(
+            Authentication auth, @PageableDefault(size = 20) Pageable pageable) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(portalService.getMyMedicationsPage(auth, pageable)));
     }
 
     // ── Prescriptions ────────────────────────────────────────────────────
@@ -695,6 +717,25 @@ public class PatientPortalController {
             @RequestParam(defaultValue = "50") int limit) {
         List<PatientMedicationResponseDTO> data = portalService.getProxyMedications(auth, patientId, limit);
         return ResponseEntity.ok(ApiResponseWrapper.success(data));
+    }
+
+    /** QA D1399 (D1347 class): the proxy tab showed active + 50 of 340, with nothing to say so. */
+    @Operation(summary = "Every medication of the grantor, one page at a time with the total (QA D1399)")
+    @GetMapping("/proxy-access/{patientId}/medications/page")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponseWrapper<Page<PatientMedicationResponseDTO>>> getProxyMedicationsPage(
+            Authentication auth, @PathVariable UUID patientId, @PageableDefault(size = 20) Pageable pageable) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+            portalService.getProxyMedicationsPage(auth, patientId, pageable)));
+    }
+
+    /** QA D1399: the total the Labs tab's pages read; its list has no room for one. */
+    @Operation(summary = "How many lab results of the grantor the list holds (QA D1399)")
+    @GetMapping("/proxy-access/{patientId}/lab-results/count")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponseWrapper<Long>> countProxyLabResults(
+            Authentication auth, @PathVariable UUID patientId) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(portalService.countProxyLabResults(auth, patientId)));
     }
 
     @Operation(summary = "View grantor's lab results as proxy")
