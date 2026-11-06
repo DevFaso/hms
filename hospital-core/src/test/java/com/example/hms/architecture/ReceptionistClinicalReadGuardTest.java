@@ -33,7 +33,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  *       unless {@link ReceptionistResponseShaping#REMOVED} takes it out or
  *       {@link #THE_DESK_NEEDS_IT} says why the desk keeps it;</li>
  *   <li>a handler that declares no {@code @PreAuthorize} (the URL rules decide)
- *       answers nothing clinical either, by rule 2 run on it too.</li>
+ *       answers nothing clinical either, by rule 2 run on it too;</li>
+ *   <li>a request body the role can send holds no clinical field, unless
+ *       {@link #THE_DESK_WRITES_IT} says what it does with it: a desk that cannot read a
+ *       text must not overwrite it.</li>
  * </ol>
  */
 @DisplayName("RCPT-CLIN: no clinical content reaches a receptionist")
@@ -54,7 +57,11 @@ class ReceptionistClinicalReadGuardTest {
         "DigitalSignatureController#getSignatureById",
         "DigitalSignatureController#isReportSigned",
         "DigitalSignatureController#verifySignature",
-        "RecordAccessController#decide");
+        "RecordAccessController#decide",
+        // They write text the role cannot read: the check-out the discharge diagnoses and the
+        // instructions, the full replace of a patient the conditions and the care-team notes.
+        "EncounterController#checkOut",
+        "PatientController#updatePatient");
 
     /**
      * Type#field the role still receives, and why: what the desk's workflow reads
@@ -121,6 +128,53 @@ class ReceptionistClinicalReadGuardTest {
         Map.entry("TreatmentConsentResponseDTO#notes", "the desk records consents"),
         Map.entry("UserRecoveryContactDTO#notes", "the caller's own account"));
 
+    /**
+     * Request type#field the role may send, and why it overwrites no clinician's text: a new
+     * record, the desk's own administrative note, or a server that refuses or keeps the stored value.
+     */
+    private static final Map<String, String> THE_DESK_WRITES_IT = Map.ofEntries(
+        Map.entry("AppointmentRequestDTO#notes", "booking notes the desk writes"),
+        Map.entry("AppointmentRequestDTO#reason", "the visit reason the desk books"),
+        Map.entry("AppointmentRequestDTO#statusReason", "why the appointment moved"),
+        Map.entry("AppointmentStatusChangeRequestDTO#reason", "why the appointment moved"),
+        Map.entry("CheckInRequestDTO#chiefComplaint", "typed at check-in, before any clinician; a blank never clears it"),
+        Map.entry("CheckInRequestDTO#notes", "the desk's check-in note"),
+        Map.entry("CloseReasonRequestDTO#reason", "why the desk closed a recall or a waitlist entry"),
+        Map.entry("CloseUnseenVisitRequestDTO#reason", "a visit nobody saw: no clinician's text exists"),
+        Map.entry("EligibilityAttestationRequestDTO#eligibilityNotes", "the desk's own eligibility note"),
+        Map.entry("EncounterNoteRequestDTO#chiefComplaint", "a NEW walk-in visit, nothing to overwrite (POST /encounters)"),
+        Map.entry("EncounterNoteRequestDTO#linkedPrescriptionIds", "a NEW walk-in visit, nothing to overwrite (POST /encounters)"),
+        Map.entry("EncounterRequestDTO#chiefComplaint", "a NEW walk-in visit, nothing to overwrite (POST /encounters)"),
+        Map.entry("EncounterRequestDTO#note", "a NEW walk-in visit, nothing to overwrite (POST /encounters)"),
+        Map.entry("EncounterRequestDTO#notes", "a NEW walk-in visit, nothing to overwrite (POST /encounters)"),
+        Map.entry("GuarantorDeactivationRequestDTO#reason", "administrative: who pays"),
+        Map.entry("GuarantorRequestDTO#notes", "administrative: who pays"),
+        Map.entry("OptOutRequestDTO#reason", "the patient's stated reason, recorded at the desk"),
+        Map.entry("PatientEducationProgressRequestDTO#providerNotes", "the desk's own progress row"),
+        Map.entry("PatientHospitalRegistrationRequestDTO#readyForDischargeNote",
+            "ignored for the desk: PatientHospitalRegistrationServiceImpl keeps the stored note"),
+        Map.entry("PatientProfileUpdateRequestDTO#bloodType", "the desk records and corrects it on the demographics dialog"),
+        Map.entry("PatientProfileUpdateRequestDTO#careTeamNotes", "refused for the desk: PatientController#patchPatient"),
+        Map.entry("PatientProfileUpdateRequestDTO#chronicConditions", "refused for the desk: PatientController#patchPatient"),
+        Map.entry("PatientRequestDTO#allergies", "a NEW patient: what the desk is told at registration, imported as rows"),
+        Map.entry("PatientRequestDTO#bloodType", "a NEW patient: nothing to overwrite"),
+        Map.entry("PatientRequestDTO#careTeamNotes", "a NEW patient: nothing to overwrite"),
+        Map.entry("PatientRequestDTO#chronicConditions", "a NEW patient: nothing to overwrite"),
+        Map.entry("PatientRequestDTO#medicalHistorySummary", "a NEW patient: nothing to overwrite"),
+        Map.entry("PaymentReasonRequestDTO#reason", "why a payment was refused"),
+        Map.entry("PrenatalRescheduleRequestDTO#notes", "booking notes the desk writes"),
+        Map.entry("PrenatalScheduleRequestDTO#highRisk", "picks the cadence of a read-only calculation; stores nothing"),
+        Map.entry("PrenatalScheduleRequestDTO#notes", "a read-only calculation; stores nothing"),
+        Map.entry("RecallRequestDTO#notes", "the desk's own recall notes"),
+        Map.entry("RecallRequestDTO#reason", "the desk's own recall"),
+        Map.entry("RoiDecisionDTO#note", "the desk cancels a release request it took"),
+        Map.entry("SlotBookingRequestDTO#reason", "the visit reason the desk books"),
+        Map.entry("StaffLeaveRequestDTO#reason", "staff rota"),
+        Map.entry("StaffPaymentRequestDTO#notes", "cashier notes"),
+        Map.entry("TreatmentConsentRequestDTO#notes", "the desk records consents"),
+        Map.entry("UserRecoveryContactRequestDTO#notes", "the caller's own account"),
+        Map.entry("WaitlistEntryRequestDTO#reason", "the visit reason of the waitlist entry"));
+
     private static Map<String, HandlerMethod> handlers() {
         Map<String, HandlerMethod> out = new TreeMap<>();
         ControllerMappingRegistry.mapping().getHandlerMethods().forEach((info, handler) ->
@@ -177,6 +231,49 @@ class ReceptionistClinicalReadGuardTest {
         Set<String> stale = new TreeSet<>(THE_DESK_NEEDS_IT.keySet());
         stale.removeAll(used);
         assertThat(stale).as("listed, and the role no longer receives it").isEmpty();
+    }
+
+    @Test
+    @DisplayName("a body the role can send holds no clinical field that is neither refused, kept nor reasoned")
+    void noClinicalFieldIsWrittenByTheRole() {
+        Set<String> sent = new TreeSet<>();
+        for (HandlerMethod handler : handlers().values()) {
+            String admits = RoleExpression.admits(handler, RECEPTIONIST);
+            if (!RoleExpression.YES.equals(admits) && !RoleExpression.NONE.equals(admits)) {
+                continue;
+            }
+            for (org.springframework.core.MethodParameter parameter : handler.getMethodParameters()) {
+                if (parameter.hasParameterAnnotation(org.springframework.web.bind.annotation.RequestBody.class)) {
+                    walkBody(parameter.getGenericParameterType(), new HashSet<>(), sent);
+                }
+            }
+        }
+        Set<String> unexplained = new TreeSet<>(sent);
+        unexplained.removeAll(THE_DESK_WRITES_IT.keySet());
+        assertThat(unexplained).as("refuse the role, keep the stored value, or say why the desk writes it").isEmpty();
+        Set<String> stale = new TreeSet<>(THE_DESK_WRITES_IT.keySet());
+        stale.removeAll(sent);
+        assertThat(stale).as("listed, and the role no longer sends it").isEmpty();
+    }
+
+    private static void walkBody(Type type, Set<Class<?>> seen, Set<String> sent) {
+        if (type instanceof ParameterizedType parameterized) {
+            walkBody(parameterized.getRawType(), seen, sent);
+            for (Type argument : parameterized.getActualTypeArguments()) {
+                walkBody(argument, seen, sent);
+            }
+        } else if (type instanceof Class<?> raw && raw.getName().startsWith("com.example.hms.") && !raw.isEnum()
+                && seen.add(raw)) {
+            for (Field field : raw.getDeclaredFields()) {
+                if (!Modifier.isStatic(field.getModifiers())) {
+                    if (CLINICAL_FIELD.matcher(field.getName()).matches()) {
+                        sent.add(raw.getName().substring(raw.getName().lastIndexOf('.') + 1).replace('$', '.')
+                            + "#" + field.getName());
+                    }
+                    walkBody(field.getGenericType(), seen, sent);
+                }
+            }
+        }
     }
 
     private static void walk(Type type, Set<Class<?>> seen, String handler, Set<String> found, Set<String> used) {

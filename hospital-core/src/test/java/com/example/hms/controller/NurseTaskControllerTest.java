@@ -88,6 +88,19 @@ class NurseTaskControllerTest {
         assertThat(response.getBody()).hasSize(1);
     }
 
+    /** The list's default is the tile's, one constant: the two read one rule (QA D1402). */
+    @ParameterizedTest(name = "getDueVitals window={0}")
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"", " ", "invalid"})
+    void getDueVitalsNoReadableWindowIsTheSharedLookAhead(String window) {
+        when(nurseTaskService.getDueVitals(null, HOSPITAL_ID, Duration.ofMinutes(30))).thenReturn(List.of());
+
+        controller.getDueVitals(window, null, null, auth);
+        controller.getDueVitals(null, null, null, auth);
+
+        org.mockito.Mockito.verify(nurseTaskService, org.mockito.Mockito.times(2))
+            .getDueVitals(null, HOSPITAL_ID, Duration.ofMinutes(30));
+    }
+
     @ParameterizedTest(name = "getDueVitals window={0}, assignee={1}")
     @MethodSource("dueVitalsWindowArgs")
     void getDueVitalsWithVariousWindowsAndAssignees(String window, String assignee, Duration expectedDuration) {

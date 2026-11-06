@@ -288,8 +288,10 @@ public class PatientController {
     @ApiResponse(responseCode = "404", description = "Patient not found",
         content = @Content(mediaType = "application/json",
             schema = @Schema(implementation = MessageResponse.class)))
+    // RCPT-CLIN: this replaces the whole record, the chronic conditions, the history summary and
+    // the care-team notes included, which the desk cannot read. The desk corrects through PATCH.
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_RECEPTIONIST','ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
     public ResponseEntity<PatientResponseDTO> updatePatient(
         @PathVariable UUID id,
         @Valid @RequestBody PatientRequestDTO dto,
@@ -330,6 +332,11 @@ public class PatientController {
         @RequestHeader(name = "Accept-Language", required = false) String lang,
         Authentication auth
     ) {
+        // RCPT-CLIN: clinical text the desk cannot read is not the desk's to overwrite.
+        if (com.example.hms.controller.support.ReceptionistResponseShaping.isReceptionistOnly()
+            && (dto.getCareTeamNotes() != null || dto.getChronicConditions() != null)) {
+            throw new org.springframework.security.access.AccessDeniedException("Clinical fields are not the desk's to write");
+        }
         Locale locale = parseLocale(lang);
         UUID resolvedHospitalId = authUtils.resolveHospitalScope(auth, null, false);
         return ResponseEntity.ok(patientService.patchPatient(id, dto, resolvedHospitalId, locale));

@@ -952,7 +952,7 @@ class StockTransactionServiceImplTest {
             when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
             stubHospitalScope();
             when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
-            when(dispenseRepository.findTop50ByStockLot_IdAndStatusInOrderByCreatedAtDesc(eq(stockLotId), any()))
+            when(dispenseRepository.findWithDetailsByStockLot_IdAndStatusInOrderByCreatedAtDesc(eq(stockLotId), any()))
                     .thenReturn(List.of(open, partlyBack, allBack));
             when(roleValidator.hasAnyAuthority(any(String[].class))).thenReturn(true);
             when(stockTransactionRepository.sumQuantityByReferences(any(), eq(java.util.EnumSet.of(StockTransactionType.RETURN))))
@@ -969,6 +969,46 @@ class StockTransactionServiceImplTest {
             assertThat(rows.get(1).returnableQuantity()).isEqualByComparingTo("3");
         }
 
+        /**
+         * CX-003 class (round 33): the newest 50 fills, fully returned ones among them, then
+         * nothing. An older fill could not be returned, and the form did not say so.
+         */
+        @Test
+        @DisplayName("every returnable fill is listed, however old, past a thousand returned-sum values")
+        void everyReturnableFillIsListed() {
+            List<com.example.hms.model.pharmacy.Dispense> fills = new java.util.ArrayList<>();
+            for (int i = 0; i < 1203; i++) {
+                fills.add(dispenseOf(new BigDecimal("2"), com.example.hms.enums.DispenseStatus.COMPLETED, stockLot));
+            }
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+            when(dispenseRepository.findWithDetailsByStockLot_IdAndStatusInOrderByCreatedAtDesc(eq(stockLotId), any()))
+                    .thenReturn(fills);
+            when(roleValidator.hasAnyAuthority(any(String[].class))).thenReturn(false);
+            UUID newestFullyReturned = fills.get(0).getId();
+            UUID oldestPartlyReturned = fills.get(1202).getId();
+            when(stockTransactionRepository.sumQuantityByReferences(any(), eq(java.util.EnumSet.of(StockTransactionType.RETURN))))
+                    .thenAnswer(call -> {
+                        java.util.Collection<UUID> ids = call.getArgument(0);
+                        assertThat(ids).hasSizeLessThanOrEqualTo(1000);
+                        List<Object[]> rows = new java.util.ArrayList<>();
+                        if (ids.contains(newestFullyReturned)) {
+                            rows.add(new Object[] {newestFullyReturned, new BigDecimal("2")});
+                        }
+                        if (ids.contains(oldestPartlyReturned)) {
+                            rows.add(new Object[] {oldestPartlyReturned, new BigDecimal("1")});
+                        }
+                        return rows;
+                    });
+
+            var rows = service.listReturnableDispenses(inventoryItemId, stockLotId);
+
+            assertThat(rows).hasSize(1202);
+            assertThat(rows.get(1201).dispenseId()).isEqualTo(oldestPartlyReturned);
+            assertThat(rows.get(1201).returnableQuantity()).isEqualByComparingTo("1");
+        }
+
         @Test
         @DisplayName("review of #975: an inventory clerk picks the fill without the patient's name (minimum necessary)")
         void aStockRoleSeesTheFillsWithoutThePatientsName() {
@@ -980,7 +1020,7 @@ class StockTransactionServiceImplTest {
             when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
             stubHospitalScope();
             when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
-            when(dispenseRepository.findTop50ByStockLot_IdAndStatusInOrderByCreatedAtDesc(eq(stockLotId), any()))
+            when(dispenseRepository.findWithDetailsByStockLot_IdAndStatusInOrderByCreatedAtDesc(eq(stockLotId), any()))
                     .thenReturn(List.of(open));
             when(roleValidator.hasAnyAuthority(any(String[].class))).thenReturn(false);
 
@@ -1002,7 +1042,7 @@ class StockTransactionServiceImplTest {
 
             assertThatThrownBy(() -> service.listReturnableDispenses(inventoryItemId, stockLotId))
                     .isInstanceOf(ResourceNotFoundException.class);
-            verify(dispenseRepository, never()).findTop50ByStockLot_IdAndStatusInOrderByCreatedAtDesc(any(), any());
+            verify(dispenseRepository, never()).findWithDetailsByStockLot_IdAndStatusInOrderByCreatedAtDesc(any(), any());
         }
 
         @Test

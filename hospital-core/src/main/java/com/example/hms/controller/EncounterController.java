@@ -430,8 +430,10 @@ public class EncounterController {
     // ----------------------------------------------------------
     // MVP 6 — Check-Out & After-Visit Summary
     // ----------------------------------------------------------
+    // RCPT-CLIN: the check-out writes the discharge diagnoses and the instructions, which the
+    // desk can no longer read; a receptionist closes only a visit nobody saw (/close-unseen).
     @PostMapping(value = "/{encounterId}/checkout", consumes = MediaType.APPLICATION_JSON_VALUE)
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_RECEPTIONIST')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
     @Operation(
         summary = "Check out a patient and generate After-Visit Summary (MVP 6)",
         description = "Only once the clinician has completed the examination (AWAITING_RESULTS or "

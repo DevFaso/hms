@@ -24,6 +24,7 @@ import {
   listCapFindings,
   serverLimitFindings,
   serverLimitedPaths,
+  serverQueryTopFindings,
   serverStreamLimitFindings,
   sliceCountFindings,
 } from './lib/list-cap-scan.mjs';
@@ -56,13 +57,21 @@ const SERVICES_DIR = resolve(
   'hospital-core/src/main/java/com/example/hms/service',
 );
 
+/** Round 33: a controller calling a `findTopN` query directly is the same cut. */
+const CONTROLLERS_DIR = resolve(SERVICES_DIR, '..', 'controller');
+
 function serverFindings() {
   const out = [];
-  for (const path of walk(SERVICES_DIR, ['.java'])) {
+  const add = (path, hits) => {
     const file = relative(resolve(PORTAL_DIR, '..'), path).replaceAll('\\', '/');
-    for (const hit of serverStreamLimitFindings(readFileSync(path, 'utf8'))) {
-      out.push({ ...hit, file, id: `${file}::${hit.rule}::${hit.anchor}` });
-    }
+    for (const hit of hits) out.push({ ...hit, file, id: `${file}::${hit.rule}::${hit.anchor}` });
+  };
+  for (const path of walk(SERVICES_DIR, ['.java'])) {
+    const source = readFileSync(path, 'utf8');
+    add(path, [...serverStreamLimitFindings(source), ...serverQueryTopFindings(source)]);
+  }
+  for (const path of walk(CONTROLLERS_DIR, ['.java'])) {
+    add(path, serverQueryTopFindings(readFileSync(path, 'utf8')));
   }
   return out;
 }

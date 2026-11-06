@@ -54,11 +54,6 @@ import com.example.hms.service.recordaccess.BreakGlassGate;
 @RequiredArgsConstructor
 public class PatientStoryboardServiceImpl implements PatientStoryboardService {
 
-    /** Cap each chip list to keep the banner compact on mobile. */
-    static final int MAX_ALLERGIES = 8;
-    static final int MAX_PROBLEMS = 8;
-    static final int MAX_DIRECTIVES = 5;
-
     private static final Set<EncounterStatus> TERMINAL_ENCOUNTER_STATUSES = EncounterStatus.CLOSED;
 
     private static final Set<AllergySeverity> HIGH_SEVERITY =
@@ -176,6 +171,8 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
      * Hôpital B must see.
      */
     private List<AllergySummaryDTO> loadAllergies(UUID patientId, UUID hospitalId) {
+        // Round 33 (CX-003 class): every active allergy, problem and directive. The banner
+        // stopped at 8, 8 and 5 with no word, and a clinician read a cut list as complete.
         // QA D110: an opted-out patient's other-hospital rows stay there.
         // QA D504: unless a break-the-glass session overrides the opt-out.
         List<PatientAllergy> source = com.example.hms.service.allergy.AllergySharingVisibility.rowsVisibleAt(
@@ -187,7 +184,6 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
                 .comparing(PatientStoryboardServiceImpl::severityRank).reversed()
                 .thenComparing(a -> Optional.ofNullable(a.getRecordedDate()).orElse(LocalDate.MIN),
                     Comparator.reverseOrder()))
-            .limit(MAX_ALLERGIES)
             .map(this::toAllergyDto)
             .toList();
     }
@@ -213,7 +209,6 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
                 .comparing(PatientProblem::isChronic).reversed()
                 .thenComparing(p -> Optional.ofNullable(p.getOnsetDate()).orElse(LocalDate.MIN),
                     Comparator.reverseOrder()))
-            .limit(MAX_PROBLEMS)
             .map(this::toProblemDto)
             .toList();
     }
@@ -265,7 +260,6 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
             .sorted(Comparator
                 .comparing((AdvanceDirective d) -> Optional.ofNullable(d.getEffectiveDate()).orElse(LocalDate.MIN))
                 .reversed())
-            .limit(MAX_DIRECTIVES)
             .map(this::toDirectiveDto)
             .toList();
         if ((patient.getCodeStatus() == null || patient.getCodeStatus().isBlank())

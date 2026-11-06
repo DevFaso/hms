@@ -274,10 +274,12 @@
           <label for="reg-physician">{{ 'REGISTRATIONS.PHYSICIAN' | translate }}</label>
           <input id="reg-physician" type="text" [(ngModel)]="form.attendingPhysicianName" />
         </div>
-        <div class="field">
-          <label for="reg-note">{{ 'REGISTRATIONS.DISCHARGE_NOTE' | translate }}</label>
-          <textarea id="reg-note" rows="2" [(ngModel)]="form.readyForDischargeNote"></textarea>
-        </div>
+        @if (!frontDeskOnly) {
+          <div class="field">
+            <label for="reg-note">{{ 'REGISTRATIONS.DISCHARGE_NOTE' | translate }}</label>
+            <textarea id="reg-note" rows="2" [(ngModel)]="form.readyForDischargeNote"></textarea>
+          </div>
+        }
       </div>
       <div class="modal-actions">
         <button type="button" class="btn-secondary" (click)="closeFormModal()">

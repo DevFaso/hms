@@ -230,6 +230,8 @@ public class MaternalHistoryController {
         return ResponseEntity.ok(response);
     }
 
+    // Stores the score on the existing history, so an update: a POST is DATA_CREATE by default.
+    @com.example.hms.security.audit.WriteAudited(eventType = com.example.hms.enums.AuditEventType.DATA_UPDATE)
     @PostMapping("/{id}/calculate-risk")
     @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_SUPER_ADMIN')")
     @Operation(summary = "Calculate risk score",

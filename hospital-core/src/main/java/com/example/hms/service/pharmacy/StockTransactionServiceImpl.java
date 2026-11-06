@@ -193,15 +193,17 @@ public class StockTransactionServiceImpl implements StockTransactionService {
     /** QA D932: the states a fill can be returned against (the same as requireReturnWithinDispense). */
     private static final List<com.example.hms.enums.DispenseStatus> RETURNABLE_FILL_STATES = List.of(
             com.example.hms.enums.DispenseStatus.COMPLETED, com.example.hms.enums.DispenseStatus.PARTIAL);
-    /** QA D932: the most fills the return form lists. */
-    static final int RETURNABLE_LIST_MAX = 50;
+    /** A row count for one IN list: PostgreSQL takes at most 32767 bind values. */
+    private static final int RETURNED_SUM_BATCH = 1000;
 
     /**
      * QA D932: a return of dispensed stock must name its dispense, and the
      * form had no way to: it cleared the reference and the server refused
      * every return ("Un retour de stock délivré doit indiquer sa délivrance").
      * The fills listed are those {@link #requireReturnWithinDispense} accepts
-     * for this item and lot, with what each can still take back.
+     * for this item and lot, with what each can still take back. Round 33
+     * (CX-003 class): every one of them. The form stopped at the newest 50 fills,
+     * fully returned ones included, so an older fill could not be returned at all.
      */
     @Override
     @Transactional(readOnly = true)
@@ -213,15 +215,14 @@ public class StockTransactionServiceImpl implements StockTransactionService {
         if (fills == null || fills.isEmpty()) {
             return List.of();
         }
-        List<com.example.hms.model.pharmacy.Dispense> recent = fills.stream().limit(RETURNABLE_LIST_MAX).toList();
-        Map<UUID, BigDecimal> returned = returnedSoFar(recent);
+        Map<UUID, BigDecimal> returned = returnedSoFar(fills);
         // Review of #975 (minimum necessary): the patient's name is for the
         // roles that dispense; an inventory clerk picks the fill by its date,
         // quantity and lot.
         boolean showsPatient = roleValidator.hasAnyAuthority(
                 "ROLE_PHARMACIST", "ROLE_STORE_MANAGER", "ROLE_HOSPITAL_ADMIN", "ROLE_SUPER_ADMIN");
         List<com.example.hms.payload.dto.pharmacy.ReturnableDispenseDTO> out = new java.util.ArrayList<>();
-        for (com.example.hms.model.pharmacy.Dispense d : recent) {
+        for (com.example.hms.model.pharmacy.Dispense d : fills) {
             BigDecimal returnable = nz(d.getQuantityDispensed()).subtract(nz(returned.get(d.getId())));
             if (returnable.signum() <= 0) {
                 continue;
@@ -240,7 +241,7 @@ public class StockTransactionServiceImpl implements StockTransactionService {
         return out;
     }
 
-    /** The latest fills of the item (of the lot, when one is named) a return may be booked against. */
+    /** Every fill of the item (of the lot, when one is named) a return may be booked against, newest first. */
     private List<com.example.hms.model.pharmacy.Dispense> returnableFills(InventoryItem item, UUID stockLotId) {
         if (stockLotId != null) {
             StockLot lot = stockLotRepository.findById(stockLotId)
@@ -248,14 +249,14 @@ public class StockTransactionServiceImpl implements StockTransactionService {
             if (lot.getInventoryItem() == null || !item.getId().equals(lot.getInventoryItem().getId())) {
                 throw new BusinessException(MessageUtil.resolve("stockTransaction.lot.wrongItem"));
             }
-            return dispenseRepository.findTop50ByStockLot_IdAndStatusInOrderByCreatedAtDesc(stockLotId,
+            return dispenseRepository.findWithDetailsByStockLot_IdAndStatusInOrderByCreatedAtDesc(stockLotId,
                     RETURNABLE_FILL_STATES);
         }
         if (item.getMedicationCatalogItem() == null || item.getPharmacy() == null) {
             return List.of();
         }
         return dispenseRepository
-                .findTop50ByPharmacy_IdAndMedicationCatalogItem_IdAndStockLotIsNullAndStatusInOrderByCreatedAtDesc(
+                .findWithDetailsByPharmacy_IdAndMedicationCatalogItem_IdAndStockLotIsNullAndStatusInOrderByCreatedAtDesc(
                         item.getPharmacy().getId(), item.getMedicationCatalogItem().getId(),
                         RETURNABLE_FILL_STATES);
     }
@@ -263,17 +264,24 @@ public class StockTransactionServiceImpl implements StockTransactionService {
     /** What has already been returned against each fill, in one query. */
     private Map<UUID, BigDecimal> returnedSoFar(List<com.example.hms.model.pharmacy.Dispense> fills) {
         Map<UUID, BigDecimal> returned = new java.util.HashMap<>();
-        List<Object[]> rows = stockTransactionRepository.sumQuantityByReferences(
-                fills.stream().map(com.example.hms.model.pharmacy.Dispense::getId).toList(), RETURNED_TYPES);
+        List<UUID> ids = fills.stream().map(com.example.hms.model.pharmacy.Dispense::getId).toList();
+        for (int from = 0; from < ids.size(); from += RETURNED_SUM_BATCH) {
+            List<Object[]> rows = stockTransactionRepository.sumQuantityByReferences(
+                    ids.subList(from, Math.min(from + RETURNED_SUM_BATCH, ids.size())), RETURNED_TYPES);
+            collectReturned(rows, returned);
+        }
+        return returned;
+    }
+
+    private static void collectReturned(List<Object[]> rows, Map<UUID, BigDecimal> returned) {
         if (rows == null) {
-            return returned;
+            return;
         }
         for (Object[] row : rows) {
             if (row != null && row.length == 2 && row[0] instanceof UUID id && row[1] instanceof BigDecimal sum) {
                 returned.put(id, sum);
             }
         }
-        return returned;
     }
 
     private static String patientName(com.example.hms.model.Patient patient) {

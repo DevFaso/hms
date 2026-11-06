@@ -132,7 +132,12 @@ public class NurseTaskServiceImpl implements NurseTaskService {
 
     /* ── Constants ────────────────────────────────────────────────────── */
 
-    private static final Duration DEFAULT_WINDOW = Duration.ofHours(2);
+    /**
+     * User decision (round 33): routine vitals for a stable inpatient are due
+     * every 2 hours, whatever look-ahead a reader asks for. A NEWS2 band shortens
+     * the interval (News2EscalationService.observationInterval).
+     */
+    private static final Duration ROUTINE_VITALS_INTERVAL = Duration.ofHours(2);
     private static final int DEFAULT_LIMIT = 6;
     private static final int MAX_LIMIT = 20;
     /** QA D1255: the MAR list's order, soonest due first, a finished course last. */
@@ -299,11 +304,12 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             // QA D518: the adult score does not set a child's interval.
             news = NewsScoreCalculator.applies(last.get()) ? NewsScoreCalculator.score(last.get()) : null;
             dueTime = last.get().getRecordedAt().plus(
-                com.example.hms.service.vitals.News2EscalationService.observationInterval(news, effectiveWindow));
+                com.example.hms.service.vitals.News2EscalationService.observationInterval(news, ROUTINE_VITALS_INTERVAL));
             overdue = dueTime.isBefore(now);
         }
 
-        // Only include if within the lookahead window or already overdue
+        // Only include if within the look-ahead or already overdue. The look-ahead
+        // was also the routine interval, so nearly every admitted patient was due.
         if (overdue || dueTime.isBefore(now.plus(effectiveWindow))) {
             return NurseVitalTaskResponseDTO.builder()
                 .id(UUID.nameUUIDFromBytes((ctx.patientId() + ":VITAL:" + hospitalId).getBytes()))
@@ -1071,7 +1077,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
 
         LocalDateTime now = LocalDateTime.now();
 
-        // QA D1402: the rows of GET /nurse/vitals/due at its default window.
+        // QA D1402: the rows of GET /nurse/vitals/due at its default look-ahead (VITALS_LOOK_AHEAD).
         long vitalsDue = dueVitalRounds(patients, hospitalId, normalizeWindow(null), now).size();
         MarCounts medCounts = countMedicationStatuses(patients, hospitalId, now);
 
@@ -1734,7 +1740,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
        ═══════════════════════════════════════════════════════════════════ */
 
     private Duration normalizeWindow(Duration window) {
-        long requestedMinutes = window == null ? DEFAULT_WINDOW.toMinutes() : window.toMinutes();
+        long requestedMinutes = window == null ? VITALS_LOOK_AHEAD.toMinutes() : window.toMinutes();
         long clamped = clampLong(requestedMinutes, 15L, 480L);
         return Duration.ofMinutes(clamped);
     }

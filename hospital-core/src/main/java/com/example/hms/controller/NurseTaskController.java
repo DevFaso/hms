@@ -469,7 +469,7 @@ public class NurseTaskController {
 
     private Duration parseWindow(String raw) {
         if (raw == null || raw.isBlank()) {
-            return Duration.ofHours(2);
+            return NurseTaskService.VITALS_LOOK_AHEAD;
         }
         String normalized = raw.trim().toLowerCase(Locale.ROOT);
         try {
@@ -487,7 +487,7 @@ public class NurseTaskController {
             long clamped = clampLong(minutes, 15, 720);
             return Duration.ofMinutes(clamped);
         } catch (NumberFormatException ignored) {
-            return Duration.ofHours(2);
+            return NurseTaskService.VITALS_LOOK_AHEAD;
         }
     }
 

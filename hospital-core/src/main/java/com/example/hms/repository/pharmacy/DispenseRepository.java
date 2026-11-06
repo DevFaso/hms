@@ -68,18 +68,21 @@ public interface DispenseRepository extends JpaRepository<Dispense, UUID> {
     Page<Dispense> findByPharmacyId(@Param("pharmacyId") UUID pharmacyId, Pageable pageable);
 
     /**
-     * QA D932: the newest fills of an item that is not kept in lots - from
-     * that pharmacy, of that catalogue item, with no lot - in the given states.
+     * QA D932: the fills of an item that is not kept in lots - from that pharmacy,
+     * of that catalogue item, with no lot - in the given states, newest first, each
+     * with what the return form prints (one query, however many fills).
      */
-    List<Dispense> findTop50ByPharmacy_IdAndMedicationCatalogItem_IdAndStockLotIsNullAndStatusInOrderByCreatedAtDesc(
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"patient", "prescription", "stockLot"})
+    List<Dispense> findWithDetailsByPharmacy_IdAndMedicationCatalogItem_IdAndStockLotIsNullAndStatusInOrderByCreatedAtDesc(
             UUID pharmacyId, UUID medicationCatalogItemId, Collection<DispenseStatus> statuses);
 
     /** QA D653: the fills taken from one lot in the given states, newest first. */
     List<Dispense> findByStockLot_IdAndStatusInOrderByCreatedAtDesc(UUID stockLotId,
                                                                     Collection<DispenseStatus> statuses);
 
-    /** Review of #975: the return form lists at most 50 fills of a lot; the query stops there too. */
-    List<Dispense> findTop50ByStockLot_IdAndStatusInOrderByCreatedAtDesc(UUID stockLotId,
+    /** The return form lists every fill of a lot, each with what it prints (one query, however many fills). */
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"patient", "prescription", "stockLot"})
+    List<Dispense> findWithDetailsByStockLot_IdAndStatusInOrderByCreatedAtDesc(UUID stockLotId,
             java.util.Collection<com.example.hms.enums.DispenseStatus> statuses);
 
     /**

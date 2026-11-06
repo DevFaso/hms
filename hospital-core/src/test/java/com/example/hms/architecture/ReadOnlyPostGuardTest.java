@@ -178,6 +178,76 @@ class ReadOnlyPostGuardTest {
         assertThat(wrong).isEmpty();
     }
 
+    /**
+     * Round 33: the write audit kept a list of route names of its own, and the two disagreed:
+     * {@code /signatures/verify} was a read written down as DATA_CREATE, {@code /calculate-risk}
+     * a write written down as nothing. Every POST through the real interceptor, the same way.
+     */
+    @Test
+    @DisplayName("through the real write audit: a declared read leaves no row, every other POST leaves one or says who does")
+    void theWriteAuditReadsTheSameDeclaration() throws Exception {
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("someone", "x",
+                List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_DOCTOR"))));
+        try {
+            List<String> wrong = new ArrayList<>();
+            for (Post post : posts()) {
+                com.example.hms.service.AuditEventLogService audit = mock(com.example.hms.service.AuditEventLogService.class);
+                MockHttpServletResponse ok = new MockHttpServletResponse();
+                ok.setStatus(200);
+                MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api" + post.path());
+                request.setAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE, post.path());
+                writeAudit(audit).afterCompletion(request, ok, post.handler(), null);
+                boolean recorded = !org.mockito.Mockito.mockingDetails(audit).getInvocations().isEmpty();
+                if (recorded == (post.declaredRead() || optsOut(post))) {
+                    wrong.add(post.name() + " recorded=" + recorded);
+                }
+            }
+            assertThat(wrong).isEmpty();
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+    }
+
+    @Test
+    @DisplayName("the writes named as reads are recorded, by the interceptor or their service; the reads are not")
+    void theRowsThatMoved() {
+        Map<String, Post> byName = new java.util.HashMap<>();
+        posts().forEach(post -> byName.put(post.name(), post));
+        assertThat(byName.get("MaternalHistoryController#calculateRiskScore").declaredRead()).isFalse();
+        assertThat(optsOut(byName.get("MaternalHistoryController#calculateRiskScore"))).isFalse();
+        assertThat(byName.get("EligibilityController#checkCoverage").declaredRead()).isFalse();
+        assertThat(annotationOf(byName.get("EligibilityController#checkCoverage")).reason()).contains("eligibility audit");
+    }
+
+    private static boolean optsOut(Post post) {
+        var annotation = annotationOf(post);
+        return annotation != null && annotation.skip();
+    }
+
+    private static com.example.hms.security.audit.WriteAudited annotationOf(Post post) {
+        var onMethod = org.springframework.core.annotation.AnnotatedElementUtils.findMergedAnnotation(
+            post.handler().getMethod(), com.example.hms.security.audit.WriteAudited.class);
+        return onMethod != null ? onMethod : org.springframework.core.annotation.AnnotatedElementUtils.findMergedAnnotation(
+            post.handler().getBeanType(), com.example.hms.security.audit.WriteAudited.class);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static com.example.hms.security.audit.WriteAuditInterceptor writeAudit(
+            com.example.hms.service.AuditEventLogService audit) {
+        ObjectProvider<com.example.hms.service.AuditEventLogService> auditProvider = mock(ObjectProvider.class);
+        when(auditProvider.getIfAvailable()).thenReturn(audit);
+        ObjectProvider<com.example.hms.controller.support.ControllerAuthUtils> authProvider = mock(ObjectProvider.class);
+        com.example.hms.controller.support.ControllerAuthUtils auth = mock(com.example.hms.controller.support.ControllerAuthUtils.class);
+        when(auth.resolveUserId(org.mockito.ArgumentMatchers.any()))
+            .thenReturn(java.util.Optional.of(java.util.UUID.randomUUID()));
+        when(authProvider.getIfAvailable()).thenReturn(auth);
+        ObjectProvider<com.example.hms.repository.UserRoleHospitalAssignmentRepository> assignments = mock(ObjectProvider.class);
+        var interceptor = new com.example.hms.security.audit.WriteAuditInterceptor(auditProvider, authProvider, assignments);
+        org.springframework.test.util.ReflectionTestUtils.setField(interceptor, "enabled", true);
+        return interceptor;
+    }
+
     @Test
     @DisplayName("the lookup leaves nothing on the request: the dispatcher meets it as if nobody had looked")
     void theLookupLeavesTheRequestUntouched() throws Exception {

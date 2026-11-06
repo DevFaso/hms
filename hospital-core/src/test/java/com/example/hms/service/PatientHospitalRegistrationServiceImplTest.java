@@ -482,6 +482,35 @@ class PatientHospitalRegistrationServiceImplTest {
         assertThat(service.updateRegistration(registrationId, dto)).isEqualTo(responseDTO);
     }
 
+    /** RCPT-CLIN: the desk's form no longer holds the note, and its PUT emptied what an administrator wrote. */
+    @Test
+    void aReceptionistsUpdateKeepsTheStoredDischargeNote_anAdministratorsWritesIt() {
+        registration.setReadyForDischargeNote("Sortie apr\u00e8s avis");
+        when(registrationRepository.findById(registrationId)).thenReturn(Optional.of(registration));
+        when(registrationRepository.save(registration)).thenReturn(registration);
+        when(mapper.toResponseDTO(registration)).thenReturn(responseDTO);
+        try {
+            signIn("ROLE_RECEPTIONIST");
+            service.updateRegistration(registrationId, PatientHospitalRegistrationRequestDTO.builder()
+                .currentRoom("Room A").readyForDischargeNote("").build());
+            assertThat(registration.getReadyForDischargeNote()).isEqualTo("Sortie apr\u00e8s avis");
+            assertThat(registration.getCurrentRoom()).isEqualTo("Room A");
+
+            signIn("ROLE_HOSPITAL_ADMIN");
+            service.updateRegistration(registrationId, PatientHospitalRegistrationRequestDTO.builder()
+                .readyForDischargeNote("Autre").build());
+            assertThat(registration.getReadyForDischargeNote()).isEqualTo("Autre");
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+    }
+
+    private static void signIn(String role) {
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("someone", "n/a",
+                org.springframework.security.core.authority.AuthorityUtils.createAuthorityList(role)));
+    }
+
     @Test
     void reactivationAtAProvider_isRefusedAsRegisterPatientRefusesIt() {
         // A legacy (or planted) inactive registration at a pharmacy.

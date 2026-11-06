@@ -1699,9 +1699,10 @@ class NurseTaskServiceImplTest {
 
             NurseDashboardSummaryDTO summary = service.getDashboardSummary(nurseId, hospitalId);
 
-            // QA D1402: the tile is the list's row count. A set an hour old has its
-            // next round inside the list's two-hour window, so it is one row.
-            assertThat(summary.getVitalsDue()).isEqualTo(1);
+            // QA D1402: the tile is the list's row count. Round 33: a set an hour old has its
+            // next round an hour away, past the 30-minute look-ahead, so it is no row (it was one
+            // while the look-ahead was also the 2-hour interval: nearly every patient was due).
+            assertThat(summary.getVitalsDue()).isZero();
             assertThat(summary.getMedicationsOverdue()).isEqualTo(1);
             assertThat(summary.getMedicationsDue()).isZero();
             assertThat(summary.getAnnouncements()).isZero();
@@ -5095,6 +5096,74 @@ class NurseTaskServiceImplTest {
                 .containsExactlyInAnyOrder(neverMeasured, shortened, longAgo);
             assertThat(summary.getVitalsDue()).isEqualTo(list.size());
         }
+    }
+
+    /**
+     * User decision (round 33): routine rounds fall due every 2 hours, and the look-ahead is
+     * 30 minutes. Both used one constant, so a patient measured 10 minutes ago was already "due".
+     */
+    @Test
+    void routineVitals_areDueInTheLastThirtyMinutesOfTheirTwoHours_inTheListAndTheTile() {
+        UUID nurseId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID justMeasured = UUID.randomUUID();
+        UUID dueInAnHour = UUID.randomUUID();
+        UUID dueIn31Minutes = UUID.randomUUID();
+        UUID dueIn29Minutes = UUID.randomUUID();
+        UUID overdue = UUID.randomUUID();
+        LocalDateTime fixedNow = LocalDateTime.of(2026, 11, 6, 17, 43);
+        when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null)).thenReturn(List.of(
+            patient(justMeasured, "A A", "A", "A"), patient(dueInAnHour, "B B", "B", "B"),
+            patient(dueIn31Minutes, "C C", "C", "C"), patient(dueIn29Minutes, "D D", "D", "D"),
+            patient(overdue, "E E", "E", "E")));
+        stubLastSet(justMeasured, hospitalId, fixedNow.minusMinutes(10));
+        stubLastSet(dueInAnHour, hospitalId, fixedNow.minusHours(1));
+        stubLastSet(dueIn31Minutes, hospitalId, fixedNow.minusMinutes(89));
+        stubLastSet(dueIn29Minutes, hospitalId, fixedNow.minusMinutes(91));
+        stubLastSet(overdue, hospitalId, fixedNow.minusMinutes(121));
+
+        try (MockedStatic<LocalDateTime> mockedNow = mockStatic(LocalDateTime.class)) {
+            mockedNow.when(LocalDateTime::now).thenReturn(fixedNow);
+            List<NurseVitalTaskResponseDTO> list = service.getDueVitals(nurseId, hospitalId, null);
+            NurseDashboardSummaryDTO summary = service.getDashboardSummary(nurseId, hospitalId);
+
+            assertThat(list).extracting(NurseVitalTaskResponseDTO::getPatientId)
+                .containsExactly(overdue, dueIn29Minutes);
+            assertThat(list.get(0).isOverdue()).isTrue();
+            assertThat(list.get(1).isOverdue()).isFalse();
+            assertThat(list.get(1).getDueTime()).isEqualTo(fixedNow.plusMinutes(29));
+            assertThat(summary.getVitalsDue()).isEqualTo(list.size());
+        }
+    }
+
+    /** The reader's look-ahead shows more rounds; it never moves when a round falls due. */
+    @Test
+    void routineVitals_aWiderLookAheadNeverStretchesTheTwoHourInterval() {
+        UUID nurseId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID fiveHoursAgo = UUID.randomUUID();
+        UUID oneHourAgo = UUID.randomUUID();
+        LocalDateTime fixedNow = LocalDateTime.of(2026, 11, 6, 17, 43);
+        when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null)).thenReturn(List.of(
+            patient(fiveHoursAgo, "A A", "A", "A"), patient(oneHourAgo, "B B", "B", "B")));
+        stubLastSet(fiveHoursAgo, hospitalId, fixedNow.minusHours(5));
+        stubLastSet(oneHourAgo, hospitalId, fixedNow.minusHours(1));
+
+        try (MockedStatic<LocalDateTime> mockedNow = mockStatic(LocalDateTime.class)) {
+            mockedNow.when(LocalDateTime::now).thenReturn(fixedNow);
+            List<NurseVitalTaskResponseDTO> list = service.getDueVitals(nurseId, hospitalId, Duration.ofHours(8));
+
+            assertThat(list).extracting(NurseVitalTaskResponseDTO::getPatientId)
+                .containsExactly(fiveHoursAgo, oneHourAgo);
+            assertThat(list.get(0).isOverdue()).isTrue();
+            assertThat(list.get(0).getDueTime()).isEqualTo(fixedNow.minusHours(3));
+            assertThat(list.get(1).getDueTime()).isEqualTo(fixedNow.plusHours(1));
+        }
+    }
+
+    private void stubLastSet(UUID patientId, UUID hospitalId, LocalDateTime recordedAt) {
+        when(vitalSignRepository.findLatestObservationSet(patientId, hospitalId))
+            .thenReturn(Optional.of(PatientVitalSign.builder().recordedAt(recordedAt).build()));
     }
 
     /**

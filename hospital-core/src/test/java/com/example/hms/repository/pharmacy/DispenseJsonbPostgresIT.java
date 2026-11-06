@@ -129,6 +129,63 @@ class DispenseJsonbPostgresIT {
         assertThat(firstTwo).containsExactly(prepared, yesterday);
     }
 
+    /**
+     * CX-003 class (round 33): the return form's two reads on a real PostgreSQL, the only
+     * parameters their one caller varies being the lot or the pharmacy and catalogue item.
+     * More fills than the 50 the queries stopped at, newest first, in the states it asks.
+     */
+    @Test
+    void theReturnFormReadsEveryFillOfALotAndOfAnItemKeptOutOfLots() {
+        UUID lotId = UUID.randomUUID();
+        UUID pharmacyId = UUID.randomUUID();
+        UUID catalogueItemId = UUID.randomUUID();
+        java.util.Set<com.example.hms.enums.DispenseStatus> states = java.util.EnumSet.of(
+            com.example.hms.enums.DispenseStatus.COMPLETED, com.example.hms.enums.DispenseStatus.PARTIAL);
+        int fills = 55;
+        for (int i = 0; i < fills; i++) {
+            insertFill(pharmacyId, null, lotId, com.example.hms.enums.DispenseStatus.COMPLETED);
+            insertFill(pharmacyId, catalogueItemId, null, com.example.hms.enums.DispenseStatus.PARTIAL);
+        }
+        insertFill(pharmacyId, null, lotId, com.example.hms.enums.DispenseStatus.CANCELLED);
+        insertFill(pharmacyId, catalogueItemId, UUID.randomUUID(), com.example.hms.enums.DispenseStatus.COMPLETED);
+
+        List<Dispense> ofTheLot = new TransactionTemplate(transactionManager).execute(status ->
+            repository.findWithDetailsByStockLot_IdAndStatusInOrderByCreatedAtDesc(lotId, states));
+        List<Dispense> ofTheItem = new TransactionTemplate(transactionManager).execute(status ->
+            repository.findWithDetailsByPharmacy_IdAndMedicationCatalogItem_IdAndStockLotIsNullAndStatusInOrderByCreatedAtDesc(
+                pharmacyId, catalogueItemId, states));
+
+        assertThat(ofTheLot).hasSize(fills).isSortedAccordingTo(
+            java.util.Comparator.comparing(Dispense::getCreatedAt).reversed());
+        assertThat(ofTheItem).hasSize(fills).isSortedAccordingTo(
+            java.util.Comparator.comparing(Dispense::getCreatedAt).reversed());
+    }
+
+    private void insertFill(UUID pharmacyId, UUID catalogueItemId, UUID lotId, com.example.hms.enums.DispenseStatus state) {
+        UUID id = new TransactionTemplate(transactionManager).execute(status -> {
+            skipForeignKeysInThisTransaction();
+            Dispense dispense = Dispense.builder()
+                .prescription(entityManager.getReference(Prescription.class, UUID.randomUUID()))
+                .patient(entityManager.getReference(Patient.class, UUID.randomUUID()))
+                .pharmacy(entityManager.getReference(Pharmacy.class, pharmacyId))
+                .dispensedByUser(entityManager.getReference(User.class, UUID.randomUUID()))
+                .medicationName("Amoxicillin 500 mg")
+                .quantityRequested(new BigDecimal("10"))
+                .quantityDispensed(new BigDecimal("10"))
+                .status(state)
+                .build();
+            if (catalogueItemId != null) {
+                dispense.setMedicationCatalogItem(entityManager.getReference(
+                    com.example.hms.model.medication.MedicationCatalogItem.class, catalogueItemId));
+            }
+            if (lotId != null) {
+                dispense.setStockLot(entityManager.getReference(com.example.hms.model.pharmacy.StockLot.class, lotId));
+            }
+            return repository.saveAndFlush(dispense).getId();
+        });
+        saved.add(id);
+    }
+
     private UUID insertFor(UUID patientId, LocalDateTime dispensedAt) {
         UUID id = new TransactionTemplate(transactionManager).execute(status -> {
             skipForeignKeysInThisTransaction();
