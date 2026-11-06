@@ -48,7 +48,7 @@ public class RecordAccessController {
 
     static final String CLINICAL_ROLES = "hasAnyAuthority("
         + "'ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_PHARMACIST','ROLE_LAB_SCIENTIST',"
-        + "'ROLE_LAB_TECHNICIAN','ROLE_RECEPTIONIST','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')";
+        + "'ROLE_LAB_TECHNICIAN','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')";
     static final String OPT_OUT_ROLES = "hasAnyAuthority("
         + "'ROLE_PATIENT','ROLE_RECEPTIONIST','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')";
     /**

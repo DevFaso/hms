@@ -4857,6 +4857,9 @@
     "SHOWING_FIRST": "Mostrando las primeras {{shown}} de {{total}} solicitudes."
   },
   "PATIENTS": {
+    "DOB_NOT_PAST": "La fecha de nacimiento debe ser una fecha pasada.",
+    "DOB_IMPOSSIBLE": "Esta fecha de nacimiento es imposible: tiene más de 130 años.",
+    "NAME_DIGITS_ONLY": "Un nombre no puede estar compuesto solo por dígitos.",
     "ADDRESS": "Dirección",
     "ADDRESS_HISTORY": "Historial de direcciones",
     "ADDRESS_HISTORY_EMPTY": "Sin direcciones anteriores — el paciente no se ha mudado desde el registro.",

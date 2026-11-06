@@ -21,6 +21,8 @@ import java.util.UUID;
 public class InsuranceIssueDTO {
     // ── Queue context ────────────────────────────────────────────
     private UUID appointmentId;
+    /** QA D1401: a walk-in has no appointment; its visit tells two of them apart. */
+    private UUID encounterId;
     private UUID patientId;
     private String patientName;
     private String mrn;

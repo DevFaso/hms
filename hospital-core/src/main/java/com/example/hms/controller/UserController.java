@@ -93,7 +93,10 @@ public class UserController {
         // QA D626 (verification): the flag alone proves nothing, the client sets
         // it. A patient registration carries the patient record and both are
         // written in one transaction, so no PATIENT account is left without one.
-        final boolean patientRegistration = Boolean.TRUE.equals(request.getPatientRegistration());
+        // QA D1416: a receptionist only ever registers a patient (the roles were
+        // forced above), so the same rule holds for them, flag or no flag.
+        final boolean patientRegistration = callerIsReceptionistOnly
+            || Boolean.TRUE.equals(request.getPatientRegistration());
         if (patientRegistration && request.getPatient() == null) {
             throw new com.example.hms.exception.FieldBusinessException("patient", "users.patientRegistration.patientRequired");
         }

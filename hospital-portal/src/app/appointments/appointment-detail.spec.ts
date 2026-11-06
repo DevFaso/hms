@@ -115,12 +115,14 @@ describe('AppointmentDetailComponent', () => {
     mockReceptionService.checkInPatient.calls.reset();
     mockAppointmentService.getById.calls.reset();
 
+    // QA D1415: the button opens the dialog that attests the identity; it sends nothing itself.
     component.checkIn();
-
-    expect(mockReceptionService.checkInPatient).toHaveBeenCalledWith({
-      appointmentId: 'appt-1',
-    });
+    expect(component.checkinItem()?.appointmentId).toBe('appt-1');
+    expect(mockReceptionService.checkInPatient).not.toHaveBeenCalled();
     expect(navigate).not.toHaveBeenCalled();
+
+    component.onCheckedIn();
+    expect(component.checkinItem()).toBeNull();
     // Re-read rather than patching locally — check-in also stamps
     // checkedInAt and creates the encounter.
     expect(mockAppointmentService.getById).toHaveBeenCalledWith('appt-1');

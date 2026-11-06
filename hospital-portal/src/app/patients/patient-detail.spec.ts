@@ -16,6 +16,7 @@ import { RoleContextService } from '../core/role-context.service';
 import { BpaService } from '../services/bpa.service';
 import { CdsAcknowledgementService } from '../services/cds-acknowledgement.service';
 import { StoryboardService } from '../services/storyboard.service';
+import { CHART_REVIEW_VIEW_ROLES } from './patient-chart/chart-access';
 import { BreakGlassService } from '../services/break-glass.service';
 import { AuthService } from '../auth/auth.service';
 import { FluidBalanceService } from '../services/fluid-balance.service';
@@ -363,6 +364,26 @@ describe('PatientDetailComponent', () => {
       roles.includes('ROLE_RECEPTIONIST'),
     );
     expect(component.canViewAppointments()).toBeTrue();
+  });
+
+  it('RCPT-CLIN: the front desk has no chart review and no clinical summary, and the storyboard is not asked for', () => {
+    roleContextSpy.hasAnyActiveRole.and.callFake((roles: string[]) =>
+      roles.includes('ROLE_RECEPTIONIST'),
+    );
+    expect(component.canViewChartReview()).toBeFalse();
+    expect(component.isFrontDeskOnly()).toBeTrue();
+    expect(CHART_REVIEW_VIEW_ROLES).not.toContain('ROLE_RECEPTIONIST');
+    fixture.detectChanges();
+    const page = fixture.nativeElement as HTMLElement;
+    expect(page.querySelector('app-storyboard-banner')).toBeNull();
+
+    // A second clinical or administrative role lifts it, as on the server.
+    for (const role of ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_HOSPITAL_ADMIN']) {
+      roleContextSpy.hasAnyActiveRole.and.callFake(
+        (roles: string[]) => roles.includes('ROLE_RECEPTIONIST') || roles.includes(role),
+      );
+      expect(component.isFrontDeskOnly()).withContext(role).toBeFalse();
+    }
   });
 
   it('hides the Documents tab from the front desk and the pharmacy (QA D112)', () => {

@@ -909,3 +909,14 @@ Rounds 27, 28 and 29 each found 20–30 new siblings of the required-field class
 | `architecture/LabResultChartRound19GuardTest#d1394_aLabValueIsReadAsANumberInOnePlace` (new) | D1394: `Double.parseDouble` of a raw value (fails on `>6,5`, reads `NaN` as a number) instead of `LabResultValueRules.numericValue`. | one pin with its reason: the trend direction, which grades nothing. |
 | `controller/LabOrderEndToEndIT#aCriticalInAnySpellingReachesTheDoctor` (new) | D1394: through the real chain, each spelling is CRITICAL on entry, pages the doctor on release and closes by read-back. | |
 | `scripts/lib/list-cap-scan.mjs` rule `server-limit` (new, part of `npm run guards` → list caps) | D1399 (D1347 class): a read of a `PatientPortalController` list whose limit has a server DEFAULT and no `offset`, so no number appears at the call site for `fixed-limit` or `default-limit` to see. The limited paths are read from the controller, so a new one is covered the day it is added. | 2 pins, previews with the server's total. 2 `default-limit` pins deleted (`getProxyMedications`, `getMyLabResults`). |
+
+## Guards added or widened by round 33 (fix/r33-reception-billing)
+
+| Guard | Class it stops | Scope / allowlist |
+|---|---|---|
+| `service/ReceptionServiceImplTest$CardsCountWhatTheyOpen`, `reception-cockpit.component.spec.ts` (walks every `.sum-card`) | D1400 + D1401: a summary counted apart from the rows its card opens. Choke point: `ReceptionQueueFilters` | every card, mixed fixture, both sides; a new card on the strip must keep the rule |
+| `architecture/ReadOnlyPostGuardTest` (new) | D1404: a POST that only reads, refused in read-only mode. Spring's mapping registry (`testsupport/ControllerMappingRegistry`) over every controller; every POST through the real filter in both directions | a POST named as a read declares `@ReadsOnly` or sits in `WRITES_DESPITE_THE_NAME` with what it writes; `DECLARED_READS` is pinned so declaring a write as a read is seen in review |
+| `architecture/PatientIdentityWriterGuardTest` (new) | D1403 + D1414: a writer of a patient's birth date or names that skips `PatientIdentityRules` | known writers listed; `createPatient` stays the backfill's alone |
+| `architecture/ReceptionistClinicalReadGuardTest` (new), `controller/support/ReceptionistResponseShapingTest`, `controller/ChartReviewReceptionistAccessTest` | RCPT-CLIN: clinical content reaching a receptionist. Every handler's real `@PreAuthorize` evaluated for the role; the response type walked for clinical field names | removed in `ReceptionistResponseShaping.REMOVED`, or `THE_DESK_NEEDS_IT` with a reason; stale entries fail |
+| `architecture/RequestFieldColumnLengthGuardTest` (pins shrunk) | D1418: `InvoiceItemRequestDTO#itemDescription` pins deleted | the sibling invoice DTOs already carry `@Size` |
+| `i18n/FieldLabelMeaningTest#providerSignatureIsTheCliniciansInEveryLanguage` (new) | D1411 | en, fr, es |

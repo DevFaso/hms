@@ -670,7 +670,7 @@ public class SecurityConfig {
                 // /patients/** blanket below, which HOSPITAL_ADMIN and ADMIN keep
                 // for demographics. Same list as the blanket minus those two.
                 .requestMatchers(HttpMethod.GET, API_PATIENT_CHART_PATTERNS)
-                .hasAnyAuthority(ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
+                .hasAnyAuthority(ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
                         ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
                         ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER, ROLE_PHARMACIST,
                         ROLE_RADIOLOGIST, ROLE_ANESTHESIOLOGIST, ROLE_PHYSIOTHERAPIST, ROLE_SUPER_ADMIN)

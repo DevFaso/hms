@@ -488,3 +488,10 @@
     </dialog>
   </div>
 }
+@if (checkinItem(); as item) {
+  <app-checkin-dialog
+    [queueItem]="item"
+    (dismissed)="checkinItem.set(null)"
+    (checkedIn)="onCheckedIn()"
+  />
+}

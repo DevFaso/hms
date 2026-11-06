@@ -2482,7 +2482,26 @@ class BillingInvoiceServiceImplTest {
             () -> billingInvoiceService.addAdjustment(invoice.getId(),
                 adjustment(com.example.hms.enums.InvoiceAdjustmentType.CREDIT_NOTE, null, "Erreur", line.getId()),
                 UUID.randomUUID(), Locale.FRENCH));
-        assertEquals("billing.adjustment.creditBeyondUnpaid", capped.getMessageKey());
+        // QA D1417: no payment on this invoice, so the refusal names the discount, not a payment to reverse.
+        assertEquals("billing.adjustment.creditBeyondDiscount", capped.getMessageKey());
+    }
+
+    @Test
+    void addAdjustment_anEmptyCreditNoteAfterADiscountNamesTheDiscountNotAPayment_D1417() {
+        adjustments();
+        BillingInvoice invoice = issued("2500", "0");
+        com.example.hms.model.InvoiceItem line = new com.example.hms.model.InvoiceItem();
+        line.setId(UUID.randomUUID());
+        line.setBillingInvoice(invoice);
+        line.setTotalPrice(new BigDecimal("3000"));
+        when(invoiceItemRepository.findById(line.getId())).thenReturn(Optional.of(line));
+
+        com.example.hms.exception.BusinessException refused = assertThrows(com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.addAdjustment(invoice.getId(),
+                adjustment(com.example.hms.enums.InvoiceAdjustmentType.CREDIT_NOTE, null, "Erreur", line.getId()),
+                UUID.randomUUID(), Locale.FRENCH));
+        assertEquals("billing.adjustment.creditBeyondDiscount", refused.getMessageKey());
+        assertEquals(0, new BigDecimal("2500").compareTo(invoice.getTotalAmount()));
     }
 
     @Test

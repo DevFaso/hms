@@ -67,6 +67,7 @@ public class ReceptionController {
     }
 
     private static final String SYSTEM_ACTOR = "system";
+    private static final String FIELD_STATUS = "status";
 
     private final ReceptionService receptionService;
     private final RoleValidator roleValidator;
@@ -285,16 +286,16 @@ public class ReceptionController {
             @RequestBody java.util.Map<String, String> body,
             @AuthenticationPrincipal UserDetails principal) {
         UUID hospitalId = resolveHospitalId();
-        String statusStr = body.get("status");
+        String statusStr = body.get(FIELD_STATUS);
         // QA round 29 sweep: a missing or unknown status is named (it was an empty 400).
         if (statusStr == null || statusStr.isBlank()) {
-            throw new com.example.hms.exception.FieldBusinessException("status", "reception.encounterStatus.required");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_STATUS, "reception.encounterStatus.required");
         }
         EncounterStatus status;
         try {
             status = EncounterStatus.valueOf(statusStr.trim().toUpperCase(java.util.Locale.ROOT));
         } catch (IllegalArgumentException e) {
-            throw new com.example.hms.exception.FieldBusinessException("status", "reception.encounterStatus.required");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_STATUS, "reception.encounterStatus.required");
         }
         String callerUsername = principal != null ? principal.getUsername() : SYSTEM_ACTOR;
         receptionService.updateEncounterStatus(encounterId, status, hospitalId, callerUsername);

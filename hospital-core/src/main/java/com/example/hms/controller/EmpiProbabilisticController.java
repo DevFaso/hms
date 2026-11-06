@@ -43,6 +43,7 @@ public class EmpiProbabilisticController {
         return ResponseEntity.ok(java.util.Map.of("enabled", matcher.isEnabled()));
     }
 
+    @com.example.hms.security.ReadsOnly("scores match candidates for a typed identity; stores nothing")
     @PostMapping("/candidates")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','RECEPTIONIST','NURSE','DOCTOR')")
     public ResponseEntity<List<EmpiCandidateMatchDTO>> candidates(
