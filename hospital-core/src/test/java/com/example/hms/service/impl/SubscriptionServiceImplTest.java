@@ -451,8 +451,10 @@ class SubscriptionServiceImplTest {
 
         assertThat(existing.getStatus()).isEqualTo(OrganizationSubscription.Status.CANCELLED);
         assertThat(existing.getEndsAt()).isNotNull();
-        // Two saves: cancel existing + persist new.
-        verify(subscriptionRepository, times(2)).save(any(OrganizationSubscription.class));
+        // Cancel flushed first, then persist new (QA CX-011: the partial unique index).
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(subscriptionRepository);
+        order.verify(subscriptionRepository).saveAndFlush(existing);
+        order.verify(subscriptionRepository).save(any(OrganizationSubscription.class));
     }
 
     @Test

@@ -222,13 +222,15 @@ export class MicrobiologyComponent implements OnInit {
   }
 
   private applyUpdated(updated: MicroCultureResponse): void {
+    const before = this.selected();
     this.selected.set(updated);
     this.correctionReason.set('');
     // QA CX-009: adding an organism can change the outcome. A form still reading the
-    // old one would offer to remove that organism on the next save.
-    this.editGrowthResult.set(updated.growthResult ?? '');
-    this.editGramStain.set(updated.gramStain ?? '');
-    this.editNotes.set(updated.notes ?? '');
+    // old one would offer to remove that organism on the next save. Only what the
+    // server changed moves: what the lab has typed and not saved stays.
+    if (before?.growthResult !== updated.growthResult) {
+      this.editGrowthResult.set(updated.growthResult ?? '');
+    }
     this.cultures.set(this.cultures().map((c) => (c.id === updated.id ? updated : c)));
   }
 

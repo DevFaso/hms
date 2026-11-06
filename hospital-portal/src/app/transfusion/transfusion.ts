@@ -647,6 +647,8 @@ export class TransfusionComponent implements OnInit {
     return (
       this.canLab &&
       request.urgency === 'EMERGENCY' &&
+      // O negative is the universal red cell donor, not a universal plasma or platelet donor.
+      (request.productType === 'PACKED_RED_CELLS' || request.productType === 'WHOLE_BLOOD') &&
       request.status !== 'COMPLETED' &&
       request.status !== 'CANCELLED'
     );

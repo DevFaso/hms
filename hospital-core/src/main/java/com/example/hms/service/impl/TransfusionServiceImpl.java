@@ -472,14 +472,17 @@ public class TransfusionServiceImpl implements TransfusionService {
         // repeat must neither stay blocked by the screen it replaced, nor be
         // crossmatched against a group the repeat corrected.
         PatientBloodGroup group = currentScreen(transfusionRequest);
-        if (group == null) {
+        // A current screen is what a COMPATIBLE verdict stands on. An incompatible one
+        // stops a bag and needs none: refusing it let a bag found incompatible still hang.
+        boolean claimsCompatible = Boolean.TRUE.equals(request.getCompatible());
+        if (claimsCompatible && group == null) {
             throw new BusinessException("transfusion.crossmatch.noTypeAndScreen");
         }
-        if (!group.screenIsCurrent(LocalDateTime.now(clock))) {
+        if (claimsCompatible && !group.screenIsCurrent(LocalDateTime.now(clock))) {
             throw new BusinessException("transfusion.crossmatch.screenLapsed");
         }
 
-        boolean serologicallyCompatible = serologicallyCompatible(group, unit, transfusionRequest);
+        boolean serologicallyCompatible = !claimsCompatible || serologicallyCompatible(group, unit, transfusionRequest);
 
         // THE rule. A tick box cannot overrule antigen biology: if the caller
         // says compatible and the ABO/Rh rules disagree, the write is refused
@@ -550,10 +553,10 @@ public class TransfusionServiceImpl implements TransfusionService {
                 transfusionRequest.setStatus(TransfusionRequestStatus.CROSSMATCHED);
                 requestRepository.save(transfusionRequest);
             }
-        } else if (unit.getStatus() == BloodUnitStatus.CROSSMATCHED) {
-            // A bag reserved here and now found incompatible goes back on the shelf.
-            // Left reserved, nothing could ever release it: the issue refuses it and
-            // it is hidden from the units that can be crossmatched.
+        } else if (unit.getStatus() == BloodUnitStatus.CROSSMATCHED || unit.getStatus() == BloodUnitStatus.ISSUED) {
+            // A bag reserved here, or out and not hung, and now found incompatible goes
+            // back to the lab. Left as it was, nothing could ever release it: issue and
+            // hang refuse it, and it is hidden from the units that can be crossmatched.
             unit.setStatus(BloodUnitStatus.RETURNED);
             unitRepository.save(unit);
         }
@@ -607,10 +610,7 @@ public class TransfusionServiceImpl implements TransfusionService {
             // Emergency release: group O Rh-negative may go out uncrossmatched,
             // because in a haemorrhage the crossmatch takes longer than the
             // patient has. Anything else must be crossmatched first.
-            boolean emergencyRelease = request.isEmergency()
-                && unit.getAboGroup() == AboGroup.emergencyReleaseGroup()
-                && unit.getRhFactor() == AboGroup.emergencyReleaseRh();
-            if (!emergencyRelease) {
+            if (!emergencyReleaseAllowed(request, unit, crossmatch)) {
                 throw refusal;
             }
             log.warn("EMERGENCY uncrossmatched release of unit {} against request {}",
@@ -897,6 +897,30 @@ public class TransfusionServiceImpl implements TransfusionService {
         return null;
     }
 
+    /**
+     * O Rh-negative is the universal RED CELL donor. It is not a universal donor of
+     * plasma or platelets, so a pairing the ABO/Rh rules reject for a known group does
+     * not go out on urgency. O negative red cells pass every group, so this blocks no
+     * resuscitation. Nor does urgency overrule what was found: an incompatible result
+     * for this bag, or a crossmatch older than antibodies found since, stops it here
+     * at the lab, not at the bedside.
+     */
+    private boolean emergencyReleaseAllowed(TransfusionRequest request, BloodUnit unit,
+                                            TransfusionCrossmatch crossmatch) {
+        if (!request.isEmergency()
+                || unit.getAboGroup() != AboGroup.emergencyReleaseGroup()
+                || unit.getRhFactor() != AboGroup.emergencyReleaseRh()) {
+            return false;
+        }
+        PatientBloodGroup screen = currentScreen(request);
+        if (crossmatch != null && !Boolean.TRUE.equals(crossmatch.getCompatible())) {
+            return false;
+        }
+        return screen == null
+            || (groupStillAllows(screen, unit, request, crossmatch)
+                && (crossmatch == null || !predatesNewAntibodies(screen, crossmatch)));
+    }
+
     private static boolean predatesNewAntibodies(PatientBloodGroup screen, TransfusionCrossmatch crossmatch) {
         return screen.getAntibodyScreen() == AntibodyScreenResult.POSITIVE
             && crossmatch.getPerformedAt() != null && screen.getPerformedAt() != null
@@ -908,12 +932,18 @@ public class TransfusionServiceImpl implements TransfusionService {
      * incompatible, a group corrected after it, or antibodies it was never read
      * against all stop the bag. A screen that merely lapsed on the way does not
      * change what is in the bag. A bag released uncrossmatched in an emergency has
-     * no crossmatch to stand on and passes: nothing here may block a resuscitation.
+     * no crossmatch to stand on, so only the ABO/Rh rules apply once the patient is
+     * typed. O negative red cells pass every group, so this blocks no resuscitation.
      */
     private void requireCrossmatchStillStands(TransfusionRequest request, BloodUnit unit) {
         TransfusionCrossmatch crossmatch = crossmatchRepository
             .findByRequest_IdAndBloodUnit_Id(request.getId(), unit.getId()).orElse(null);
         if (crossmatch == null) {
+            PatientBloodGroup typedSince = currentScreen(request);
+            if (typedSince != null && !serologicallyCompatible(typedSince, unit, request)) {
+                throw new FieldBusinessException(FIELD_BLOOD_UNIT_ID, "transfusion.administration.groupExcludes",
+                    unit.getUnitNumber());
+            }
             return;
         }
         if (!Boolean.TRUE.equals(crossmatch.getCompatible())) {
