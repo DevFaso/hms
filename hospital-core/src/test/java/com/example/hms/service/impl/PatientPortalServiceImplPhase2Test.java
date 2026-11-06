@@ -165,6 +165,8 @@ class PatientPortalServiceImplPhase2Test {
 
     @BeforeEach
     void setUp() {
+        // The refusals below assert the key: another class may have left a bundle in the static holder.
+        com.example.hms.utility.MessageUtil.setMessageSource(null);
         com.example.hms.testsupport.SlotPolicyStubs.defaultLength(slotPolicy);
         com.example.hms.testsupport.SlotPolicyStubs.publishedSlots(slotPolicy);
         // findClinicalById answers as the database does: the stubbed row, when it is a hospital.

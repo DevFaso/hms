@@ -192,6 +192,9 @@ class DrugAllergyBrandEntryPointsTest {
             + " is refused at signature and fails the dispense DRUG check)"),
         Map.entry("service/pharmacy/PrescriptionControlledResolver.java", "the controlled flag of a SAVED order, as"
             + " for the mapper"),
+        Map.entry("service/orderset/OrderSetItemQuantityRules.java", "asks whether a set's item must state a quantity,"
+            + " treating any item its name reaches as controlled; the order it creates goes through the"
+            + " prescription service, which refuses a contradiction"),
         Map.entry("service/pharmacy/DispenseServiceImpl.java", "the product the pharmacist dispenses, not the order;"
             + " the lot is checked against the order by DispenseVerificationService"),
         Map.entry("service/pharmacy/InventoryServiceImpl.java", "a stock item, no order"),
