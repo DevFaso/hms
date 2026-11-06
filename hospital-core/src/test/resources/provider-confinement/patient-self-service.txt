@@ -34,8 +34,10 @@ GET /me/patient/family-history
 GET /me/patient/health-summary
 GET /me/patient/immunizations
 GET /me/patient/lab-results
+GET /me/patient/lab-results/count
 GET /me/patient/medical-history
 GET /me/patient/medications
+GET /me/patient/medications/page
 GET /me/patient/notification-preferences
 GET /me/patient/notifications
 GET /me/patient/notifications/unread-count
@@ -51,7 +53,9 @@ GET /me/patient/proxy-access
 GET /me/patient/proxy-access/{patientId}/appointments
 GET /me/patient/proxy-access/{patientId}/billing
 GET /me/patient/proxy-access/{patientId}/lab-results
+GET /me/patient/proxy-access/{patientId}/lab-results/count
 GET /me/patient/proxy-access/{patientId}/medications
+GET /me/patient/proxy-access/{patientId}/medications/page
 GET /me/patient/proxy-access/{patientId}/records
 GET /me/patient/referrals
 GET /me/patient/refills

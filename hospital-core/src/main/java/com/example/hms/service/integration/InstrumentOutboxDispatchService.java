@@ -80,13 +80,16 @@ public class InstrumentOutboxDispatchService {
     private boolean dispatchOne(InstrumentOutbox message) {
         // QA D820: an order voided as entered in error after its message was
         // queued must not reach the analyzer. Terminal, not retried, and
-        // nothing is transmitted.
+        // nothing is transmitted. QA D1392 class: nor one cancelled meanwhile.
         LabOrder order = message.getLabOrder();
-        if (order != null && order.getStatus() == LabOrderStatus.ENTERED_IN_ERROR) {
+        if (order != null && (order.getStatus() == LabOrderStatus.ENTERED_IN_ERROR
+                || order.getStatus() == LabOrderStatus.CANCELLED)) {
             message.setStatus(InstrumentOutboxStatus.ERROR);
-            message.setLastError("Not sent: the lab order was entered in error");
+            message.setLastError(order.getStatus() == LabOrderStatus.CANCELLED
+                ? "Not sent: the lab order was cancelled"
+                : "Not sent: the lab order was entered in error");
             outboxRepository.save(message);
-            log.info("Instrument outbox {} not sent: its lab order was voided", message.getId());
+            log.info("Instrument outbox {} not sent: its lab order was withdrawn", message.getId());
             return false;
         }
         message.setAttempts(message.getAttempts() + 1);

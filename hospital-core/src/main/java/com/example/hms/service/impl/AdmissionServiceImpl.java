@@ -345,11 +345,15 @@ public class AdmissionServiceImpl implements AdmissionService {
                 com.example.hms.enums.InvoiceStatus.CANCELLED)) {
             throw new ConflictException("admission.cancel.billed");
         }
-        admission.cancel(cancelReason, com.example.hms.security.CallerIdentity.currentUserId(),
-            LocalDateTime.now(java.time.ZoneId.systemDefault()));
+        java.util.UUID cancelledBy = com.example.hms.security.CallerIdentity.currentUserId();
+        admission.cancel(cancelReason, cancelledBy, LocalDateTime.now(java.time.ZoneId.systemDefault()));
         // A cancelled admission must not keep its bed occupied
         bedAssignmentService.releaseBed(admission);
         admissionRepository.save(admission);
+        // QA D1393: the stay's orders end, then its encounter, so an order written
+        // from now on is an outpatient order (no discharge meaning, no bill).
+        stayEncounters.recordCancellation(admission, cancelledBy);
+        encounterAutoCompletion.cancelAdmissionEncounters(admission.getId());
         // QA D764: a cancelled stay never happened; the patient is registered only.
         syncRegistrationStayStatus(admission, com.example.hms.enums.PatientStayStatus.REGISTERED);
     }
@@ -427,6 +431,13 @@ public class AdmissionServiceImpl implements AdmissionService {
     private static final int MAX_BED_RELEASE_REASON = 500;
 
     private com.example.hms.service.AuditEventLogService auditEventLogService;
+
+    private com.example.hms.service.orderset.OrderSetItemQuantityRules orderSetItemQuantityRules;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setOrderSetItemQuantityRules(com.example.hms.service.orderset.OrderSetItemQuantityRules rules) {
+        this.orderSetItemQuantityRules = rules;
+    }
 
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     void setAuditEventLogService(com.example.hms.service.AuditEventLogService auditEventLogService) {
@@ -679,6 +690,10 @@ public class AdmissionServiceImpl implements AdmissionService {
             .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", request.getCreatedByStaffId()));
         // QA D1382 / D1378: the second order-set writer is held to the same item rule.
         com.example.hms.service.orderset.OrderSetItemPrnRules.requireValid(request.getOrderItems());
+        // QA D1396: and to the quantity rule.
+        if (orderSetItemQuantityRules != null) {
+            orderSetItemQuantityRules.requireValid(request.getOrderItems(), hospital.getId());
+        }
 
         AdmissionOrderSet orderSet = new AdmissionOrderSet();
         orderSet.setName(request.getName());

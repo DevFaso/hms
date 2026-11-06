@@ -670,7 +670,7 @@ public class SecurityConfig {
                 // /patients/** blanket below, which HOSPITAL_ADMIN and ADMIN keep
                 // for demographics. Same list as the blanket minus those two.
                 .requestMatchers(HttpMethod.GET, API_PATIENT_CHART_PATTERNS)
-                .hasAnyAuthority(ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
+                .hasAnyAuthority(ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
                         ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
                         ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER, ROLE_PHARMACIST,
                         ROLE_RADIOLOGIST, ROLE_ANESTHESIOLOGIST, ROLE_PHYSIOTHERAPIST, ROLE_SUPER_ADMIN)
@@ -1101,6 +1101,17 @@ public class SecurityConfig {
                 // endpoints (/me/patient/documents/{id}/download,
                 // /chat/attachments/{id}/download).
                 .requestMatchers(HttpMethod.GET, "/uploads/profile-images/**").permitAll()
+
+                // QA round 33: a caller who may not prescribe is answered 403 at the
+                // edge. Spring validates a @Valid body BEFORE a method's @PreAuthorize,
+                // so a receptionist's refused body read a 400 about the frequency: the
+                // answer told her why the order was wrong, not that it is not hers to
+                // write. The same roles as the two handlers' annotations
+                // (PreAuthorizeMatcherPairingTest holds the pair).
+                .requestMatchers(HttpMethod.POST, "/prescriptions")
+                .hasAnyAuthority(ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)
+                .requestMatchers(HttpMethod.PUT, "/prescriptions/*")
+                .hasAnyAuthority(ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)
 
                 .anyRequest().authenticated()
             )

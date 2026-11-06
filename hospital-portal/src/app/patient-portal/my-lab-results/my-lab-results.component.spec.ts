@@ -41,6 +41,7 @@ describe('MyLabResultsComponent', () => {
     of({ items: results.slice(offset, offset + 20), hasMore: results.length > offset + 20 });
   const mockPortalService = {
     getMyLabResultsPage: (offset: number) => pageFor(offset),
+    getMyLabResultTotal: () => of(results.length),
   };
 
   async function render(rows: LabResultSummary[] = []): Promise<HTMLElement> {
@@ -265,5 +266,27 @@ describe('MyLabResultsComponent', () => {
       expect(failed?.textContent).not.toContain('NullPointerException');
       expect(el.querySelector('[data-testid="lab-load-more"]')).not.toBeNull();
     });
+  });
+
+  it('QA D1394: a value nothing graded never reads "Inconnu", in the row or its detail', async () => {
+    const el = await render([lab({ id: 'u', status: 'UNKNOWN', isUngraded: true, result: '>1' })]);
+
+    const row = el.querySelector('[data-testid="lab-not-graded-u"]');
+    expect(row?.textContent).toContain('PORTAL.LAB_RESULTS.NOT_GRADED_STATUS');
+    component.expandedId.set('u');
+    fixture.detectChanges();
+    expect(el.querySelector('.portal-status-chip')?.textContent).toContain(
+      'PORTAL.LAB_RESULTS.NOT_GRADED_STATUS',
+    );
+    expect(component.interpretation(component.results()[0])).toBe(
+      'PORTAL.LAB_RESULTS.NOT_GRADED_RESULT',
+    );
+  });
+
+  it('QA D1399: the page shows the server total of my results', async () => {
+    const el = await render([lab({ id: 'a' }), lab({ id: 'b' })]);
+
+    expect(el.querySelector('[data-testid="lab-count"]')).not.toBeNull();
+    expect(component.labTotal()).toBe(2);
   });
 });

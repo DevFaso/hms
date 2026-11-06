@@ -8,6 +8,7 @@ import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.example.hms.controller.support.ControllerAuthUtils;
@@ -325,7 +326,7 @@ class NurseTaskControllerTest {
     @Test
     void getOrdersWithLimitClamp() {
         // limit=50 → clamped to 20
-        when(nurseTaskService.getOrderTasks(null, HOSPITAL_ID, "stat", 20)).thenReturn(List.of());
+        when(nurseTaskService.getOrderTasks(null, HOSPITAL_ID, "STAT", 20)).thenReturn(List.of());
 
         ResponseEntity<List<NurseOrderTaskResponseDTO>> response =
             controller.getOrders(null, "stat", 50, null, auth);
@@ -578,5 +579,47 @@ class NurseTaskControllerTest {
         assertThatThrownBy(() -> controller.getDueVitals(null, "tous", null, auth))
             .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
                 ex -> assertThat(ex.getField()).isEqualTo("assignee"));
+    }
+    /** QA D1408: an unknown filter is refused on its name; it read as "nothing to do". */
+    @Test
+    void d1408_anUnknownStatusIsRefusedOnItsField() {
+        for (org.assertj.core.api.ThrowableAssert.ThrowingCallable call
+                : List.<org.assertj.core.api.ThrowableAssert.ThrowingCallable>of(
+                    () -> controller.getMedicationTasks("all", "BOGUS", null, auth),
+                    () -> controller.getOrders("all", "BOGUS", null, null, auth),
+                    () -> controller.getHandoffs("all", null, null, "BOGUS", auth),
+                    () -> controller.getNursingTaskBoard("BOGUS", null, null, auth))) {
+            assertThatThrownBy(call).isInstanceOfSatisfying(
+                com.example.hms.exception.InvalidQueryParameterException.class,
+                ex -> assertThat(ex.getParameter()).isEqualTo("status"));
+        }
+        verifyNoInteractions(nurseTaskService);
+    }
+
+    /** QA D1408: the task board has no assignee filter; a value it could not honour was silently ignored. */
+    @Test
+    void d1408_theTaskBoardRefusesAnUnknownAssignee() {
+        assertThatThrownBy(() -> controller.getNursingTaskBoard(null, "BOGUS", null, auth))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getField()).isEqualTo("assignee"));
+        verifyNoInteractions(nurseTaskService);
+    }
+
+    /** What must not break: every value a screen sends, in any case. */
+    @Test
+    void d1408_theValuesInUseStillFilter() {
+        for (String status : List.of("PENDING", "pending", " Due ", "OVERDUE", "UPCOMING", "COMPLETED")) {
+            assertThat(controller.getMedicationTasks("all", status, null, auth).getStatusCode()).isEqualTo(HttpStatus.OK);
+        }
+        for (String priority : List.of("ROUTINE", "URGENT", "STAT", "stat")) {
+            assertThat(controller.getOrders("all", priority, null, null, auth).getStatusCode()).isEqualTo(HttpStatus.OK);
+        }
+        for (String status : List.of("PENDING", "COMPLETED", "completed")) {
+            assertThat(controller.getHandoffs("all", null, null, status, auth).getStatusCode()).isEqualTo(HttpStatus.OK);
+        }
+        for (String status : List.of("ALL", "PENDING", "IN_PROGRESS", "COMPLETED", "CANCELLED")) {
+            assertThat(controller.getNursingTaskBoard(status, null, null, auth).getStatusCode()).isEqualTo(HttpStatus.OK);
+        }
+        assertThat(controller.getNursingTaskBoard(null, "all", null, auth).getStatusCode()).isEqualTo(HttpStatus.OK);
     }
 }

@@ -20,7 +20,7 @@ import { ToastService } from '../../core/toast.service';
 import { shortOrderCode } from '../../shared/lab/order-code';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
-import { labSeverityFlag } from '../shared/lab-severity';
+import { labSeverityFlag, labReleaseNeedsReview } from '../shared/lab-severity';
 import { LabValuePipe } from '../shared/lab-value.pipe';
 import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
 
@@ -266,7 +266,7 @@ export class LabReleaseWorklistComponent implements OnInit {
     const selfRelease = this.isSelfRelease(target);
     // QA D1092: the dialog shows the "not graded" warning for such a result,
     // so confirming it is the reviewed release the API asks for.
-    this.labService.releaseResult(target.id, selfRelease, !!target.unitMismatch).subscribe({
+    this.labService.releaseResult(target.id, selfRelease, labReleaseNeedsReview(target)).subscribe({
       next: () => {
         this.releasingId.set(null);
         this.releaseTarget.set(null);

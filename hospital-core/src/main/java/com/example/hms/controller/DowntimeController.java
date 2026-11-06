@@ -58,6 +58,18 @@ public class DowntimeController {
         private Boolean readOnly;
         @Size(max = 500)
         private String message;
+
+        /**
+         * QA CX-001: turning the whole platform read-only says why: the message
+         * is what every signed-in user reads on the banner. Lifting it needs
+         * none. An empty body is held to it too, so one refusal names both fields.
+         */
+        @jakarta.validation.constraints.AssertTrue(message = "{downtime.message.required}")
+        @com.example.hms.validation.ReportedOn("message")
+        @com.fasterxml.jackson.annotation.JsonIgnore
+        public boolean isMessageGivenWhenActivating() {
+            return Boolean.FALSE.equals(readOnly) || (message != null && !message.isBlank());
+        }
     }
 
     public record DowntimeStatusResponse(boolean readOnly, String message, Instant activatedAt) {}

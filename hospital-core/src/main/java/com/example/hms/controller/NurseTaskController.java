@@ -1,6 +1,7 @@
 package com.example.hms.controller;
 
 import com.example.hms.controller.support.ControllerAuthUtils;
+import com.example.hms.controller.support.QueryParameterValues;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.payload.dto.nurse.MarVerificationRequestDTO;
 import com.example.hms.payload.dto.nurse.MarVerificationResponseDTO;
@@ -44,6 +45,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
 
 @RestController
@@ -53,6 +55,15 @@ import java.util.UUID;
 public class NurseTaskController {
 
     private static final String NURSE_IDENTITY_ERROR = "nurse.identity.unresolved";
+
+    /** QA D1408: what {@code /nurse/medications/mar?status=} filters on: the row statuses, and PENDING for "still to give" (D76). */
+    private static final Set<String> MAR_STATUSES = Set.of("PENDING", "DUE", "OVERDUE", "UPCOMING", "COMPLETED");
+    /** QA D1408: {@code /nurse/orders?status=} filters the queue on the order's priority or urgency, every enum and code a row can carry. */
+    private static final Set<String> ORDER_QUEUE_FILTERS = orderQueueFilters();
+    /** QA D1408: {@code /nurse/handoffs?status=}: the two statuses a handoff has. */
+    private static final Set<String> HANDOFF_STATUSES = Set.of("PENDING", "COMPLETED");
+    /** QA D1408: {@code /nurse/tasks?status=}: what a nursing task carries, and ALL. */
+    private static final Set<String> NURSING_TASK_STATUSES = Set.of("ALL", "PENDING", "IN_PROGRESS", "COMPLETED", "CANCELLED");
 
     private final NurseTaskService nurseTaskService;
     private final ControllerAuthUtils authUtils;
@@ -85,7 +96,8 @@ public class NurseTaskController {
         authUtils.requireAuth(auth);
         UUID nurseId = resolveAssignee(auth, assignee);
         UUID scopedHospital = ensureHospitalScope(auth, hospitalId);
-        return ResponseEntity.ok(nurseTaskService.getMedicationTasks(nurseId, scopedHospital, status));
+        String statusCode = QueryParameterValues.oneOf("status", status, MAR_STATUSES);
+        return ResponseEntity.ok(nurseTaskService.getMedicationTasks(nurseId, scopedHospital, statusCode));
     }
 
     @PostMapping("/medications/mar/{taskId}/verify")
@@ -160,7 +172,8 @@ public class NurseTaskController {
         UUID scopedHospital = ensureHospitalScope(auth, hospitalId);
         // QA D1255: the nurse's order queue is a worklist; without a limit it lists every order.
         int effectiveLimit = limit == null ? NurseTaskService.NO_LIMIT : safeLimit(limit, 6, 20);
-        return ResponseEntity.ok(nurseTaskService.getOrderTasks(nurseId, scopedHospital, status, effectiveLimit));
+        String statusCode = QueryParameterValues.oneOf("status", status, ORDER_QUEUE_FILTERS);
+        return ResponseEntity.ok(nurseTaskService.getOrderTasks(nurseId, scopedHospital, statusCode, effectiveLimit));
     }
 
     @GetMapping("/handoffs")
@@ -180,10 +193,11 @@ public class NurseTaskController {
         UUID scopedHospital = ensureHospitalScope(auth, hospitalId);
         // QA D1255: the pending handoffs are a worklist; without a limit they are all listed.
         // The completed list is a history and keeps its default length.
-        boolean completed = status != null && "COMPLETED".equalsIgnoreCase(status.trim());
+        String statusCode = QueryParameterValues.oneOf("status", status, HANDOFF_STATUSES);
+        boolean completed = "COMPLETED".equals(statusCode);
         int effectiveLimit = limit == null && !completed ? NurseTaskService.NO_LIMIT : safeLimit(limit, 6, 20);
         return ResponseEntity.ok(nurseTaskService.getHandoffSummaries(nurseId, viewerId, scopedHospital,
-            effectiveLimit, status));
+            effectiveLimit, statusCode));
     }
 
     @PostMapping("/handoffs")
@@ -332,12 +346,17 @@ public class NurseTaskController {
     @Operation(summary = "Nursing task board — bedside care tasks for the unit")
     public ResponseEntity<java.util.List<NurseTaskItemDTO>> getNursingTaskBoard(
         @RequestParam(name = "status", required = false) String status,
+        @RequestParam(name = "assignee", required = false) String assignee,
         @RequestParam(name = "hospitalId", required = false) UUID hospitalId,
         Authentication auth
     ) {
         authUtils.requireAuth(auth);
+        // QA D1408: the board is the whole unit's, so me and all read alike; an
+        // unknown assignee used to be ignored and answer the full list as if it had filtered.
+        resolveAssignee(auth, assignee);
         UUID scopedHospital = ensureHospitalScope(auth, hospitalId);
-        return ResponseEntity.ok(nurseTaskService.getNursingTaskBoard(scopedHospital, status));
+        String statusCode = QueryParameterValues.oneOf("status", status, NURSING_TASK_STATUSES);
+        return ResponseEntity.ok(nurseTaskService.getNursingTaskBoard(scopedHospital, statusCode));
     }
 
     @PostMapping("/tasks")
@@ -414,6 +433,17 @@ public class NurseTaskController {
         UUID scopedHospital = ensureHospitalScope(auth, hospitalId);
         return ResponseEntity.status(201).body(
             nurseTaskService.createCareNote(patientId, nurseId, scopedHospital, request));
+    }
+
+    private static Set<String> orderQueueFilters() {
+        Set<String> codes = new java.util.HashSet<>(Set.of("ROUTINE", "URGENT", "STAT"));
+        for (Enum<?> code : com.example.hms.enums.ImagingOrderPriority.values()) {
+            codes.add(code.name());
+        }
+        for (Enum<?> code : com.example.hms.enums.ProcedureUrgency.values()) {
+            codes.add(code.name());
+        }
+        return Set.copyOf(codes);
     }
 
     private UUID ensureHospitalScope(Authentication auth, UUID requestedHospital) {

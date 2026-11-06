@@ -281,24 +281,33 @@ public class PrescriptionMapper {
 
         target.setDosage(dto.getDosage());
         target.setFrequency(dto.getFrequency());
-        // QA round 30: null keeps the stored interval (QA D1378: unticking
-        // "as needed" drops it, below).
-        if (dto.getPrnMinIntervalHours() != null) {
-            target.setPrnMinIntervalHours(dto.getPrnMinIntervalHours());
-        }
-        // QA D1378 / D1360: null keeps the stored tick; unticking drops the
-        // stored interval (an interval sent with the untick is refused).
-        if (dto.getAsNeeded() != null) {
-            target.setAsNeeded(dto.getAsNeeded());
-            if (!dto.getAsNeeded() && dto.getPrnMinIntervalHours() == null) {
-                target.setPrnMinIntervalHours(null);
-            }
-        }
+        updateAsNeededPart(target, dto);
         if (dto.getRoute() != null) {
             target.setRoute(normalizeRoute(dto.getRoute()));
         }
         target.setDuration(dto.getDuration());
         target.setNotes(dto.getNotes());
+        updateQuantityStatusAndFlags(target, dto);
+    }
+
+    /**
+     * QA round 30: null keeps the stored interval. QA D1378 / D1360: null keeps
+     * the stored tick; unticking drops the stored interval (an interval sent
+     * with the untick is refused).
+     */
+    private static void updateAsNeededPart(Prescription target, PrescriptionRequestDTO dto) {
+        if (dto.getPrnMinIntervalHours() != null) {
+            target.setPrnMinIntervalHours(dto.getPrnMinIntervalHours());
+        }
+        if (dto.getAsNeeded() != null) {
+            target.setAsNeeded(dto.getAsNeeded());
+            if (Boolean.FALSE.equals(dto.getAsNeeded()) && dto.getPrnMinIntervalHours() == null) {
+                target.setPrnMinIntervalHours(null);
+            }
+        }
+    }
+
+    private static void updateQuantityStatusAndFlags(Prescription target, PrescriptionRequestDTO dto) {
         // QA D706: null leaves the prescribed quantity unchanged.
         if (dto.getQuantity() != null) {
             target.setQuantity(dto.getQuantity());

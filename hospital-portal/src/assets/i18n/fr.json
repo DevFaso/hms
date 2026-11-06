@@ -81,6 +81,8 @@
     }
   },
   "BEDS": {
+    "DELETE_BED_CONFIRM": "Supprimer le lit {{name}} ?",
+    "DELETE_WARD_CONFIRM": "Supprimer l'unité {{name}} ?",
     "ACTIVE": "Actif",
     "AVAILABLE": "Disponibles",
     "BEDS_IN": "Lits de {{ward}}",
@@ -409,6 +411,8 @@
       "FAILED": "L'export CSV a échoué. Réessayez."
     },
     "SAVED": {
+      "DELETE_FAILED": "Impossible de supprimer la recherche enregistrée.",
+      "DELETE_CONFIRM": "Supprimer la recherche enregistrée {{name}} ?",
       "LABEL": "Recherches enregistrées",
       "EMPTY": "Aucune recherche enregistrée — nommez les filtres actuels et enregistrez.",
       "NAME_PLACEHOLDER": "Nommez ce jeu de filtres",
@@ -460,12 +464,14 @@
       "CONFIRM_PLACEHOLDER": "FORCE LOGOUT ALL"
     },
     "KILL_FEATURE": {
+      "CONFIRM": "Désactiver {{key}} pour tous les établissements ?",
       "TITLE": "Désactiver un feature flag",
       "DESC": "Définit la surcharge globale de FeatureFlag pour cette clé sur désactivé.",
       "FLAG_KEY": "Clé du flag",
       "ACTION": "Désactiver la feature"
     },
     "FORCE_MFA": {
+      "CONFIRM": "Réinitialiser le second facteur des {{count}} utilisateur(s) sélectionné(s) ?",
       "TITLE": "Forcer le ré-enrôlement MFA",
       "DESC": "Efface l'enrôlement MFA et les codes de secours des utilisateurs sélectionnés. Sans sélection, TOUS les utilisateurs enrôlés sont réinitialisés (éventuellement pour un seul hôpital) — cela exige une confirmation saisie.",
       "SEARCH_USERS": "Utilisateurs à réinitialiser",
@@ -488,6 +494,7 @@
       "RETRY": "Réessayer"
     },
     "BROADCAST": {
+      "CONFIRM": "Envoyer ce message à tous les utilisateurs connectés ?",
       "TITLE": "Bannière de diffusion",
       "DESC": "Publie un message bannière sur /topic/emergency-broadcast.",
       "MESSAGE": "Message",
@@ -499,6 +506,11 @@
     },
     "REQUEST_FAILED": "La requête a échoué.",
     "DOWNTIME": {
+      "MESSAGE_REQUIRED": "Indiquez pourquoi la plateforme passe en lecture seule.",
+      "CONFIRM_DEACTIVATE_BODY": "Tous les établissements pourront de nouveau écrire immédiatement.",
+      "CONFIRM_DEACTIVATE": "Lever le mode lecture seule ?",
+      "CONFIRM_ACTIVATE_BODY": "Toutes les écritures de tous les établissements seront refusées jusqu'à la levée. Les utilisateurs connectés liront : {{message}}",
+      "CONFIRM_ACTIVATE": "Passer toute la plateforme en lecture seule ?",
       "TITLE": "Mode lecture seule (maintenance)",
       "DESC": "Bloque toutes les écritures de la plateforme avec un 503 tandis que la consultation reste disponible. La connexion, le rafraîchissement de jeton et ce commutateur restent ouverts. Effet immédiat ici, sous 30 secondes sur les autres instances.",
       "ACTIVE": "LE MODE LECTURE SEULE EST ACTIF.",
@@ -513,6 +525,11 @@
     "DISMISS": "Ignorer la diffusion"
   },
   "SUBSCRIPTIONS": {
+    "DEACTIVATE_CONFIRM_BODY": "Elle ne pourra plus être attribuée à une organisation.",
+    "DEACTIVATE_CONFIRM": "Désactiver la formule {{name}} ?",
+    "DEACTIVATED": "Formule {{name}} désactivée.",
+    "UPDATED": "Formule {{name}} enregistrée.",
+    "CREATED": "Formule {{name}} créée.",
     "TITLE": "Plans d'abonnement",
     "SUBTITLE": "Catalogue de plans et affectations par organisation.",
     "ACTIVE_ONLY": "Plans actifs uniquement",
@@ -837,6 +854,7 @@
       "SECRET_CONFIGURED": "Variable définie"
     },
     "MAPPINGS": {
+      "DELETE_CONFIRM": "Supprimer ce mappage DHIS2 ?",
       "ADD": "Ajouter une correspondance",
       "ADDED": "Correspondance ajoutée",
       "ADD_FAILED": "Impossible d'ajouter la correspondance",
@@ -889,6 +907,7 @@
     }
   },
   "BREAK_GLASS": {
+    "REVOKE_CONFIRM": "Mettre fin à cet accès d'urgence maintenant ?",
     "ACTIVE": "Accès d'urgence actif — chaque lecture est journalisée.",
     "CONFIRM": "Activer l'accès",
     "DECLARE": "Déclencher l'accès d'urgence",
@@ -1090,9 +1109,13 @@
     "NURSING_NOTE": "Note infirmière"
   },
   "ORDER_SETS": {
+    "FIELD_CATALOG_ITEM": "Article exact du catalogue",
+    "QUANTITY_HINT": "Obligatoire pour un stupéfiant.",
+    "APPLIED_RESULT_ONE": "Appliqué. 1 prescription créée ({{skipped}} ignorée(s)).",
+    "ITEM_ONE": "élément",
     "ADD_ITEM": "Ajouter un élément",
     "ADMIN_TITLE": "Modèles d'ensembles d'ordres",
-    "APPLIED_RESULT": "Appliqué. {{count}} prescriptions créées ({{skipped}} ignorées).",
+    "APPLIED_RESULT": "Appliqué. {{count}} prescriptions créées ({{skipped}} ignorée(s)).",
     "APPLY": "Appliquer à l'admission",
     "COL_ITEM_COUNT": "Éléments",
     "COL_LAST_MODIFIED": "Dernière modification",
@@ -1113,9 +1136,9 @@
     "FIELD_DOSE_MIN": "Dose min",
     "FIELD_DOSE_UNIT": "Unité",
     "FIELD_FREQUENCY": "Fréquence",
-    "FIELD_ITEM_NAME": "Nom",
+    "FIELD_ITEM_NAME": "Nom de l’élément",
     "FIELD_ITEM_TYPE": "Type",
-    "FIELD_NAME": "Nom",
+    "FIELD_NAME": "Nom de l’ensemble",
     "FIELD_NOTES": "Notes",
     "FIELD_ORDER_ITEMS_JSON": "Éléments d'ordre (tableau JSON)",
     "FIELD_ROUTE": "Voie",
@@ -1177,6 +1200,7 @@
     }
   },
   "REFILLS": {
+    "REJECT_CONFIRM": "Refuser cette demande de renouvellement ?",
     "QUEUE_TITLE": "Demandes de renouvellement",
     "STATUS_REQUESTED": "En attente",
     "STATUS_PAUSED": "Suspendue",
@@ -1289,6 +1313,7 @@
     "WARD": "Unité"
   },
   "ANALYTICS": {
+    "LOAD_FAILED": "Impossible de charger les indicateurs. Réessayez.",
     "APPOINTMENTS": "Rendez-vous",
     "APPOINTMENTS_BY_STATUS": "Rendez-vous par statut",
     "APPOINTMENT_TREND": "Tendance des rendez-vous",
@@ -1653,6 +1678,7 @@
       "ROI_STATUS": "Demande de communication du dossier {{verb}}",
       "ENCOUNTER_STATUS_DENIED": "Changement de statut de consultation refusé : la consultation n’est pas attribuée à l’auteur",
       "ENCOUNTER_STATUS_UPDATED": "Statut de la consultation changé de {{from}} à {{to}}",
+      "ENCOUNTER_CANCELLED_WITH_ADMISSION": "Consultation clôturée : l’hospitalisation {{admission}} a été annulée (était {{previous}})",
       "ENCOUNTER_DISCHARGE_COMPLETED": "Consultation clôturée à la sortie de l’hospitalisation {{admission}} (était {{previous}})",
       "ENCOUNTER_ADMISSION_COMPLETED": "Consultation clôturée à l’hospitalisation {{admission}} (était {{previous}})",
       "CHECKED_IN": "Patient enregistré pour le rendez-vous {{appointment}} ; consultation {{encounter}} ouverte au statut arrivé. {{identity}} {{insurance}}",
@@ -1947,6 +1973,7 @@
       "PHARMACIST_RECORDED_PARTNER_DISPENSE": "Délivrance du partenaire saisie par le pharmacien"
     },
     "WARD_ORDER_TRIGGER": {
+      "ADMISSION_CANCELLED": "hospitalisation annulée",
       "PARTNER_SMS_ACCEPT": "acceptation du partenaire par SMS",
       "PARTNER_SMS_REJECT": "refus du partenaire par SMS",
       "PARTNER_SMS_CONFIRM_DISPENSE": "délivrance confirmée par le partenaire par SMS",
@@ -3791,6 +3818,10 @@
     "SIGNATURE": "Signature",
     "UNIT_UNKNOWN": "unité inconnue",
     "NOT_GRADED_UNITS_DIFFER": "Non évalué : unités différentes",
+    "GRADE_UNKNOWN": "Non évalué : la limite ne permet pas de conclure",
+    "GRADE_UNKNOWN_HINT": "Cette valeur est donnée comme une limite, et cette limite peut être dans l’intervalle de référence ou en dehors. Elle n’a pas été comparée à l’intervalle et n’a levé aucune alerte critique : vérifiez-la.",
+    "COMPARATOR_HINT": "Une valeur avec < ou > est évaluée à partir de sa limite. Si la limite ne permet pas de conclure, le résultat est marqué « non évalué » et doit être vérifié avant la validation.",
+    "SAVED_NOT_GRADED": "Enregistré, mais non évalué : aucune alerte critique ne peut être levée pour cette valeur. Vérifiez-la avant la validation.",
     "NOT_GRADED_UNITS_DIFFER_HINT": "Aucun intervalle de référence n’est configuré dans l’unité de ce résultat ; il n’a donc pas été comparé à un intervalle.",
     "REFERENCE_RANGES": "Plages de référence",
     "GENDER": "Sexe",
@@ -3887,6 +3918,7 @@
     "FLAG_LOW": "Bas",
     "FLAG_NORMAL": "Normal",
     "FLAG_UNSPECIFIED": "Non évalué",
+    "FLAG_GRADE_UNKNOWN": "Non évalué : la limite ne permet pas de conclure",
     "FLAG_UNIT_MISMATCH": "Non évalué : unités différentes",
     "CRITICAL": "Critique",
     "RELEASE": "Valider",
@@ -3903,6 +3935,7 @@
     "SELF_RELEASE_NOTE": "Vous avez saisi ce résultat vous-même. Le valider sans second relecteur est permis, et la validation est enregistrée comme « Validé par son auteur ».",
     "SELF_RELEASE_CONFIRM": "Le valider moi-même",
     "CONFIRM_CORRECTION": "Ce résultat est une correction : le valider remplace une valeur déjà validée et communiquée au clinicien et au patient.",
+    "GRADE_UNKNOWN_NOTE": "Non évalué : {{value}} est une limite qui peut être dans l’intervalle de référence ou en dehors, aucune alerte critique ne peut donc être levée. En la validant, vous confirmez l’avoir vérifiée ; le prescripteur sera invité à la revoir.",
     "UNGRADED_NOTE": "Non évalué : aucun intervalle de référence n'est dans l'unité de cette valeur ({{unit}}) ni convertible, aucune alerte critique ne peut donc être levée. En la validant, vous confirmez l'avoir vérifiée ; le prescripteur sera invité à la revoir."
   },
   "LAB_INSTRUMENTS": {
@@ -4393,7 +4426,9 @@
     "MARK_ALL_READ": "Tout marquer comme lu",
     "MEDICATION": "Médicament",
     "MEDICATIONS": "Médicaments",
-    "MEDICATIONS_DUE": "Médicaments à administrer",
+    "MEDICATIONS_AS_NEEDED_HINT": "+ {{count}} si besoin",
+    "MEDICATIONS_DUE": "Doses prévues à donner",
+    "MEDICATIONS_OVERDUE": "Doses en retard",
     "MEDICATION_LIST": "Liste des médicaments",
     "MEDICATION_MAR": "Registre d'administration des médicaments",
     "MEDIUM": "Moyenne",
@@ -4843,6 +4878,9 @@
     "SHOWING_FIRST": "Affichage des {{shown}} premières demandes sur {{total}}."
   },
   "PATIENTS": {
+    "DOB_NOT_PAST": "La date de naissance doit être une date passée.",
+    "DOB_IMPOSSIBLE": "Cette date de naissance est impossible : elle remonte à plus de 130 ans.",
+    "NAME_DIGITS_ONLY": "Un nom ne peut pas être composé uniquement de chiffres.",
     "ADDRESS": "Adresse",
     "ADDRESS_HISTORY": "Historique des adresses",
     "ADDRESS_HISTORY_EMPTY": "Aucune adresse antérieure — le patient n'a pas déménagé depuis l'enregistrement.",
@@ -5443,6 +5481,9 @@
       "STATUS": "Statut",
       "PROVIDER": "Praticien",
       "REFILLS_REMAINING": "Renouvellements restants",
+      "AS_NEEDED": "Si besoin",
+      "AS_NEEDED_INTERVAL": "Si besoin : au moins {{hours}} h entre deux prises",
+      "MIN_INTERVAL": "Au moins {{hours}} h entre deux prises",
       "REFILLS_COUNT": "{{count}} renouvellements restants",
       "STARTED": "Début",
       "REQUEST_REFILL": "Demander un renouvellement",
@@ -5474,6 +5515,7 @@
       "INTERPRETATION": "Interprétation",
       "ABNORMAL": "Anormal",
       "NORMAL_RESULT": "Dans les limites normales",
+      "NOT_GRADED_STATUS": "À voir avec votre médecin",
       "NOT_GRADED_RESULT": "Non comparé à un intervalle de référence — veuillez interroger votre médecin sur ce résultat",
       "ABNORMAL_RESULT": "Hors des limites normales — veuillez consulter votre médecin",
       "NORMAL_PREFIX": "Normal :",
@@ -5511,6 +5553,8 @@
       "NO_LINES": "Cette facture n’a pas de lignes détaillées.",
       "NO_PAYMENTS": "Aucun paiement pour le moment.",
       "PAYMENTS": "Paiements",
+      "ISSUED_BY": "Émise par {{hospital}}",
+      "ISSUED_BY_COLUMN": "Établissement",
       "SHOW_DETAIL": "Voir le détail",
       "TITLE": "Facturation et paiements",
       "LOADING": "Chargement des informations de facturation…",
@@ -5633,6 +5677,7 @@
       "SUMMARY_EXTERNAL": "fois où votre dossier est sorti de votre équipe soignante",
       "ACCESS_LOG_TITLE": "Accès et communications",
       "OPT_OUT": {
+        "REVOKE_CONFIRM": "Partager de nouveau votre dossier avec vos autres établissements ?",
         "TITLE": "Partage avec les autres hôpitaux",
         "DESC": "Votre dossier vous suit : un soignant qui vous prend en charge dans un autre hôpital peut le lire. Vous pouvez fermer cette porte. Votre propre hôpital garde son accès, et un accès d’urgence reste possible, enregistré et affiché ici.",
         "LOADING": "Vérification de votre réglage de partage…",
@@ -7181,6 +7226,8 @@
     }
   },
   "PRESCRIPTIONS": {
+    "FREQUENCY_UNREADABLE": "Ce n’est pas un horaire que nous pouvons lire : écrivez un horaire fixe (« 3 fois par jour », « toutes les 6 heures », « dose unique »), ou cochez « Si besoin (PRN) ».",
+    "FREQUENCY_READS_AS_NEEDED": "Cela se lit « si besoin » : cochez « Si besoin (PRN) » et indiquez l’intervalle minimum, ou écrivez un horaire fixe.",
     "CLARIFICATION": {
       "ANSWER": "Réponse du prescripteur",
       "ANSWERED_LABEL": "Répondue le",
@@ -9135,6 +9182,7 @@
     "LAB_STATUS_NORMAL": "Normal",
     "LAB_STATUS_NOT_GRADED_UNITS": "Non évalué : unités différentes",
     "LAB_STATUS_PENDING": "En attente de publication",
+    "LAB_STATUS_GRADE_UNKNOWN": "Non évalué : la limite ne permet pas de conclure",
     "LAB_STATUS_UNKNOWN": "Inconnu",
     "LAB_TEST": "Examen",
     "LAB_TRUNCATED": "Affichage des {{count}} plus récents.",
@@ -10813,6 +10861,7 @@
     "ASSESSMENT_EMPTY": "Saisissez au moins un résultat (un score d'APGAR, un signe vital ou l'examen) avant d'enregistrer."
   },
   "ASSIGN_ADMIN": {
+    "DEACTIVATE_CONFIRM": "Désactiver cette affectation ? L'utilisateur perd ce rôle dans cet établissement.",
     "TITLE": "Administration des affectations",
     "SUBTITLE": "Affectations utilisateur-rôle-hôpital, codes de confirmation et import en masse",
     "BULK_IMPORT": "Import en masse",
@@ -11313,6 +11362,8 @@
     "LATE_ENTRY": "saisie tardive"
   },
   "MICRO": {
+    "SUSCEPTIBILITY_REMOVE_CONFIRM": "Retirer ce résultat d'antibiogramme ?",
+    "ISOLATE_REMOVE_CONFIRM": "Retirer cet isolat et ses antibiogrammes ?",
     "CORRECTION_HISTORY": "Historique des corrections",
     "CORRECTION_BEFORE": "Avant cette correction",
     "NO_GROWTH_CONFIRM_TITLE": "Déclarer le résultat stérile ?",
@@ -11508,6 +11559,7 @@
     "NEXT_MONTH": "Mois suivant"
   },
   "REPORTS": {
+    "DEACTIVATE_CONFIRM": "Désactiver le rapport {{name}} ? Ses exécutions planifiées s'arrêtent.",
     "TITLE": "Rapports planifiés",
     "SUBTITLE": "Rapports CSV agrégés envoyés par e-mail à chaque période close",
     "CREATE": "Nouveau rapport",
@@ -11551,6 +11603,8 @@
     "RECIPIENT_INVALID": "« {{address}} » n'est pas une adresse e-mail valide."
   },
   "SLOT_ADMIN": {
+    "TPL_RETIRE_CONFIRM": "Retirer ce modèle de séance ?",
+    "VT_RETIRE_CONFIRM": "Retirer le type de visite {{name}} ?",
     "ACTIONS": "Actions",
     "ACTIVE": "Actif",
     "ALL": "Tous",
@@ -11934,6 +11988,7 @@
     "TRANSFER_CANCEL_CONFIRM": "Annuler le transfert"
   },
   "EMAR": {
+    "ORDER_NO_LONGER_ACTIVE": "Cette prescription n’est plus active. Aucune dose n’a été enregistrée.",
     "ACTION_RECORD_GIVEN": "Enregistrer comme administrée",
     "ADMIN_STATUS": {
       "GIVEN": "administrée",
@@ -12566,6 +12621,9 @@
   "PORTAL_PAGING": {
     "LAB_LOAD_MORE": "Afficher les résultats plus anciens",
     "LAB_LOAD_FAILED": "Vos résultats d’examens n’ont pas pu être chargés.",
+    "MED_LOAD_FAILED": "Vos médicaments n’ont pas pu être chargés.",
+    "SHOWN_OF": "{{shown}} sur {{total}}",
+    "SHOW_MORE": "Afficher plus",
     "LAB_LOAD_MORE_FAILED": "Les résultats plus anciens n’ont pas pu être chargés. Réessayez."
   },
   "MAR_HISTORY": {

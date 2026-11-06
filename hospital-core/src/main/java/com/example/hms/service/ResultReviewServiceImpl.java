@@ -494,9 +494,11 @@ public class ResultReviewServiceImpl implements ResultReviewService {
                 direction = null;
             }
             default -> {
-                abnormalFlag = result.getAbnormalFlag() != null
+                // QA D1394: an analyser's NORMAL does not grade a value the hospital's ranges could not.
+                boolean ungraded = labResultMapper != null && labResultMapper.isUngraded(result);
+                abnormalFlag = result.getAbnormalFlag() != null && !ungraded
                         ? result.getAbnormalFlag().severity().name() : LabResultMapper.FLAG_UNSPECIFIED;
-                direction = result.getAbnormalFlag() != null ? result.getAbnormalFlag().direction() : null;
+                direction = result.getAbnormalFlag() != null && !ungraded ? result.getAbnormalFlag().direction() : null;
             }
         }
         return DoctorResultQueueItemDTO.builder()

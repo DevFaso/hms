@@ -147,14 +147,14 @@
                 row.direction
               }}</span>
             </td>
-            <td>{{ row.messageType ?? '—' }}</td>
+            <td>{{ row.messageType | dash }}</td>
             <td>
               <span class="status-badge" [attr.data-status]="row.status">
-                {{ 'INTEGRATION_MESSAGES.STATUS.' + row.status | translate }}
+                {{ row.status | keyLabel: 'INTEGRATION_MESSAGES.STATUS.' }}
               </span>
             </td>
             <td>{{ row.attemptCount }}</td>
-            <td class="cell-error">{{ row.errorMessage ?? '—' }}</td>
+            <td class="cell-error">{{ row.errorMessage | dash }}</td>
             <td class="cell-actions">
               @if (isPurged(row)) {
                 <small

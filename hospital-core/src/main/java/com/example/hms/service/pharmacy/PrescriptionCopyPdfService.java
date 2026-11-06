@@ -151,6 +151,12 @@ public class PrescriptionCopyPdfService {
         // QA D1025 class: the route in the reader's language.
         pdf.field(label(locale, "pdf.rxcopy.route"), com.example.hms.service.emar.MedicationRoutes.label(rx.getRoute(), locale), 11f);
         pdf.field(label(locale, "pdf.rxcopy.frequency"), rx.getFrequency(), 11f);
+        if (com.example.hms.service.impl.PrnMinInterval.isAsNeeded(rx)) {
+            // QA D1398: the patient takes this at home; "q6h" alone reads as a fixed schedule.
+            pdf.paragraph(PharmacyPdfWriter.REGULAR, 11f, rx.getPrnMinIntervalHours() != null
+                ? label(locale, "pdf.rxcopy.asNeededInterval", rx.getPrnMinIntervalHours())
+                : label(locale, "pdf.rxcopy.asNeeded"));
+        }
         pdf.field(label(locale, "pdf.rxcopy.duration"), rx.getDuration(), 11f);
         pdf.field(label(locale, "pdf.rxcopy.quantityToDispense"),
                 FillAccounting.remainingLabel(remaining, rx.getQuantityUnit(), locale), 12f);

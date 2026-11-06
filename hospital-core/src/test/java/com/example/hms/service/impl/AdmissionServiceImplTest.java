@@ -346,6 +346,12 @@ class AdmissionServiceImplTest {
         assertThat(admission.getStatus()).isEqualTo(AdmissionStatus.CANCELLED);
         assertThat(admission.getCancellationReason()).isEqualTo(CANCEL_REASON);
         assertThat(admission.getCancelledAt()).isNotNull();
+        // QA D1393: its orders, then its encounter, end with it; never the discharge's meaning.
+        org.mockito.InOrder ends = org.mockito.Mockito.inOrder(stayEncounters, encounterAutoCompletion);
+        ends.verify(stayEncounters).recordCancellation(eq(admission), any());
+        ends.verify(encounterAutoCompletion).cancelAdmissionEncounters(admissionId);
+        verify(stayEncounters, never()).recordDischarge(any(), any());
+        verify(encounterAutoCompletion, never()).completeAdmissionEncounters(any());
     }
 
     /** QA D1381 (round 32): a blank, missing or over-long reason is refused on "reason"; nothing changes. */
@@ -378,6 +384,33 @@ class AdmissionServiceImplTest {
         assertThatThrownBy(() -> service.createOrderSet(request))
             .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
                 ex -> assertThat(ex.getField()).isEqualTo("orderItems[0].asNeeded"));
+        verify(orderSetRepository, never()).save(any());
+    }
+
+    /** QA D1396 (round 33): the second order-set writer holds a controlled item to the quantity rule. */
+    @Test
+    void d1396_theAdmissionOrderSetWriterRefusesAControlledItemWithoutItsQuantity() {
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        com.example.hms.repository.MedicationCatalogItemRepository catalog =
+            org.mockito.Mockito.mock(com.example.hms.repository.MedicationCatalogItemRepository.class);
+        com.example.hms.model.medication.MedicationCatalogItem morphine =
+            new com.example.hms.model.medication.MedicationCatalogItem();
+        morphine.setNameFr("Morphine");
+        morphine.setControlled(true);
+        when(catalog.findByHospital_IdAndActiveTrue(any(), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(java.util.List.of(morphine)));
+        service.setOrderSetItemQuantityRules(new com.example.hms.service.orderset.OrderSetItemQuantityRules(catalog));
+        com.example.hms.payload.dto.AdmissionOrderSetRequestDTO request =
+            new com.example.hms.payload.dto.AdmissionOrderSetRequestDTO();
+        request.setName("Douleur");
+        request.setHospitalId(hospitalId);
+        request.setCreatedByStaffId(staffId);
+        request.setOrderItems(java.util.List.of(java.util.Map.of("orderType", "MEDICATION",
+            "medicationName", "Morphine", "frequency", "Q4H")));
+        assertThatThrownBy(() -> service.createOrderSet(request))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getField()).isEqualTo("orderItems[0].quantity"));
         verify(orderSetRepository, never()).save(any());
     }
 

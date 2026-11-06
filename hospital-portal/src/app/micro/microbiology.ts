@@ -36,6 +36,7 @@ import { InlineDiscardAskComponent } from '../shared/a11y/inline-discard-ask.com
 import { ConfirmDialogComponent } from '../shared/confirm-dialog/confirm-dialog.component';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { refuseFields } from '../shared/forms/invalid-fields';
+import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 
 /**
  * Microbiology workbench (P3 #19) — the lab-facing resulting surface:
@@ -68,6 +69,7 @@ export class MicrobiologyComponent implements OnInit {
   private readonly labService = inject(LabService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly confirm = inject(ConfirmService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly roleContext = inject(RoleContextService);
 
@@ -409,9 +411,15 @@ export class MicrobiologyComponent implements OnInit {
       });
   }
 
-  deleteIsolate(isolateId: string): void {
+  async deleteIsolate(isolateId: string): Promise<void> {
     const culture = this.selected();
     if (!culture || this.missingCorrectionReason()) return;
+    // QA CX-010: the correction reason says why, it does not ask whether.
+    const confirmed = await this.confirm.ask({
+      titleKey: 'MICRO.ISOLATE_REMOVE_CONFIRM',
+      confirmKey: 'COMMON.REMOVE',
+    });
+    if (!confirmed) return;
     this.microService.deleteIsolate(culture.id, isolateId, this.reasonOrUndefined()).subscribe({
       next: (updated) => {
         this.toast.success(this.translate.instant('MICRO.ISOLATE_REMOVED'));
@@ -473,9 +481,15 @@ export class MicrobiologyComponent implements OnInit {
       });
   }
 
-  deleteSusceptibility(isolateId: string, susceptibilityId: string): void {
+  async deleteSusceptibility(isolateId: string, susceptibilityId: string): Promise<void> {
     const culture = this.selected();
     if (!culture || this.missingCorrectionReason()) return;
+    // QA CX-010: the correction reason says why, it does not ask whether.
+    const confirmed = await this.confirm.ask({
+      titleKey: 'MICRO.SUSCEPTIBILITY_REMOVE_CONFIRM',
+      confirmKey: 'COMMON.REMOVE',
+    });
+    if (!confirmed) return;
     this.microService
       .deleteSusceptibility(culture.id, isolateId, susceptibilityId, this.reasonOrUndefined())
       .subscribe({

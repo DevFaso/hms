@@ -200,6 +200,56 @@ class RequiredFormHostComponent {
   submitted = 0;
 }
 
+/** QA D1410: two rows of one list share a label. */
+@Component({
+  standalone: true,
+  imports: [FormsModule, SubmitGuardDirective],
+  template: `
+    <form (ngSubmit)="submitted = submitted + 1">
+      <label
+        >Nom de l'élément * <input type="text" name="a" id="a" required [(ngModel)]="a"
+      /></label>
+      <label
+        >Nom de l'élément * <input type="text" name="b" id="b" required [(ngModel)]="b"
+      /></label>
+      <button id="create" type="submit" appSubmitGuard submitGuardRequired>Créer</button>
+    </form>
+  `,
+})
+class RepeatedLabelHostComponent {
+  a = '';
+  b = '';
+  submitted = 0;
+}
+
+describe('SubmitGuardDirective repeated labels (QA D1410)', () => {
+  it('says a repeated label once, and marks both fields', fakeAsync(() => {
+    TestBed.configureTestingModule({
+      imports: [RepeatedLabelHostComponent, TranslateModule.forRoot()],
+    });
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', {
+      COMMON: {
+        FIELD_REQUIRED: 'Ce champ est obligatoire.',
+        MISSING_REQUIRED_FIELDS: 'Champs obligatoires manquants : {{fields}}',
+      },
+    });
+    translate.use('fr');
+    const fixture = TestBed.createComponent(RepeatedLabelHostComponent);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    el.querySelector<HTMLButtonElement>('#create')!.click();
+    fixture.detectChanges();
+    tick();
+    expect(el.querySelector('[data-testid="submit-guard-reason"]')?.textContent?.trim()).toBe(
+      "Champs obligatoires manquants : Nom de l'élément",
+    );
+    el.querySelectorAll('input[required]').forEach((f) =>
+      expect(f.getAttribute('aria-invalid')).toBe('true'),
+    );
+  }));
+});
+
 describe('SubmitGuardDirective submitGuardRequired (QA D1193)', () => {
   let fixture: ComponentFixture<RequiredFormHostComponent>;
   let el: HTMLElement;

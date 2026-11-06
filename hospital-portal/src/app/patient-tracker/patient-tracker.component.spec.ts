@@ -104,6 +104,20 @@ describe('PatientTrackerComponent', () => {
     component = fixture.componentInstance;
   });
 
+  it('RCPT-CLIN: the desk is told apart from the roles that read acuity and open the check-out', () => {
+    const roles = TestBed.inject(RoleContextService);
+    const active = spyOn(roles, 'hasAnyActiveRole');
+    active.and.callFake((asked: string[]) => asked.includes('ROLE_RECEPTIONIST'));
+    expect(component.frontDeskOnly).toBeTrue();
+    active.and.callFake((asked: string[]) => asked.includes('ROLE_NURSE'));
+    expect(component.frontDeskOnly).toBeFalse();
+    active.and.callFake(
+      (asked: string[]) =>
+        asked.includes('ROLE_RECEPTIONIST') || asked.includes('ROLE_HOSPITAL_ADMIN'),
+    );
+    expect(component.frontDeskOnly).toBeFalse();
+  });
+
   it('should create', () => {
     expect(component).toBeTruthy();
   });

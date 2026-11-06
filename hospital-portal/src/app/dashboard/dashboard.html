@@ -2968,6 +2968,15 @@
                 <div class="med-info">
                   <span class="med-name">{{ med.medicationName }}</span>
                   <span class="med-dosage">{{ med.dosage }} · {{ med.frequency }}</span>
+                  @if (med.asNeeded) {
+                    <!-- QA D1398: as needed, with its least interval -->
+                    <span class="med-dosage" [attr.data-testid]="'dash-med-prn-' + med.id">{{
+                      (med.prnMinIntervalHours
+                        ? 'PORTAL.MEDICATIONS.AS_NEEDED_INTERVAL'
+                        : 'PORTAL.MEDICATIONS.AS_NEEDED'
+                      ) | translate: { hours: med.prnMinIntervalHours }
+                    }}</span>
+                  }
                 </div>
               </div>
             }
@@ -3030,6 +3039,12 @@
                       @if (lab.referenceRange) {
                         <!-- QA D1140: the space is inside the span; between elements Angular drops it -->
                         <span class="lab-range">&ngsp;({{ lab.referenceRange | labRange }})</span>
+                      }
+                      @if (lab.isUngraded) {
+                        <!-- QA D1394: a value nothing graded never reads as a plain one -->
+                        <span class="lab-range"
+                          >&ngsp;{{ 'PORTAL.LAB_RESULTS.NOT_GRADED_STATUS' | translate }}</span
+                        >
                       }
                     </span>
                   }

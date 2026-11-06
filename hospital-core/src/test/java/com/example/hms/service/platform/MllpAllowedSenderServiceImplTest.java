@@ -171,6 +171,41 @@ class MllpAllowedSenderServiceImplTest {
     }
 
     @Test
+    @DisplayName("QA CX-005: a sender pair already allow-listed is refused on its field, before the constraint")
+    void createRefusesADuplicatePairOnItsField() {
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(senderRepository.existsBySendingApplicationAndSendingFacility("ROCHE_COBAS", "LAB_A")).thenReturn(true);
+
+        MllpAllowedSenderRequestDTO req = new MllpAllowedSenderRequestDTO(hospitalId, "Roche_Cobas", "lab_a", null, null);
+        assertThatThrownBy(() -> service.create(req, Locale.ENGLISH))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                refused -> assertThat(refused.getFieldErrors()).containsOnlyKeys("sendingApplication"));
+        verify(senderRepository, org.mockito.Mockito.never()).save(any(MllpAllowedSender.class));
+    }
+
+    @Test
+    @DisplayName("QA CX-005: an update keeps its own pair; moving onto another sender's pair is refused before the row changes")
+    void updateRefusesAnotherSendersPair() {
+        UUID id = UUID.randomUUID();
+        MllpAllowedSender row = MllpAllowedSender.builder().hospital(hospital)
+            .sendingApplication("ROCHE_COBAS").sendingFacility("LAB_A").active(true).build();
+        when(senderRepository.findById(id)).thenReturn(Optional.of(row));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(senderRepository.existsBySendingApplicationAndSendingFacility("OTHER", "LAB_A")).thenReturn(true);
+
+        MllpAllowedSenderRequestDTO moved = new MllpAllowedSenderRequestDTO(hospitalId, "other", "lab_a", null, null);
+        assertThatThrownBy(() -> service.update(id, moved, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
+        assertThat(row.getSendingApplication()).isEqualTo("ROCHE_COBAS");
+
+        when(senderRepository.save(any(MllpAllowedSender.class))).thenAnswer(inv -> inv.getArgument(0));
+        MllpAllowedSenderRequestDTO own = new MllpAllowedSenderRequestDTO(hospitalId, "roche_cobas", "lab_a", "note", null);
+        service.update(id, own, Locale.ENGLISH);
+        verify(senderRepository, org.mockito.Mockito.never())
+            .existsBySendingApplicationAndSendingFacility("ROCHE_COBAS", "LAB_A");
+    }
+
+    @Test
     @DisplayName("create normalises sender fields to upper-case via the mapper and saves")
     void createNormalisesAndSaves() {
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));

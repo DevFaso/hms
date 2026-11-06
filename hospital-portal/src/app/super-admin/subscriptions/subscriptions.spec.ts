@@ -8,6 +8,9 @@ import { of, throwError } from 'rxjs';
 import { SubscriptionsComponent } from './subscriptions';
 import { SubscriptionService } from '../../services/subscription.service';
 import { SubscriptionPlan } from '../../services/subscription.model';
+import { ConfirmService } from '../../shared/confirm-dialog/confirm.service';
+import { ToastService } from '../../core/toast.service';
+import { expectEmptySubmitRefusal } from '../../testing/form-refusal-behaviour';
 
 describe('SubscriptionsComponent', () => {
   let service: jasmine.SpyObj<SubscriptionService>;
@@ -145,13 +148,79 @@ describe('SubscriptionsComponent', () => {
     expect(cmp.currencyOptions()).toContain('ZZZZ');
   });
 
-  it('QA D850: a refused deactivation shows the server reason', () => {
+  it('QA CX-010: deactivating asks first; a cancel sends nothing, a yes sends it and says so', async () => {
+    service.deactivatePlan.and.returnValue(of(void 0));
+    const cmp = setup();
+    const ask = spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(false);
+    const plan = { id: 'p1', name: 'Pro', active: true } as SubscriptionPlan;
+
+    await cmp.deactivate(plan);
+    expect(ask).toHaveBeenCalledTimes(1);
+    expect(service.deactivatePlan).not.toHaveBeenCalled();
+
+    const success = spyOn(TestBed.inject(ToastService), 'success');
+    ask.and.resolveTo(true);
+    await cmp.deactivate(plan);
+    expect(service.deactivatePlan).toHaveBeenCalledOnceWith('p1');
+    expect(success).toHaveBeenCalledTimes(1);
+  });
+
+  it('QA CX-004: an empty plan marks name and tier code, starred, and sends nothing', () => {
+    TestBed.configureTestingModule({
+      imports: [SubscriptionsComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        { provide: SubscriptionService, useValue: service },
+      ],
+    });
+    const fixture = TestBed.createComponent(SubscriptionsComponent);
+    document.body.appendChild(fixture.nativeElement);
+    fixture.detectChanges();
+    fixture.componentInstance.startCreate();
+    fixture.detectChanges();
+
+    const marked = expectEmptySubmitRefusal(fixture, {
+      button: '[data-testid="plan-save"]',
+      sent: service.createPlan,
+    });
+
+    expect(marked).toEqual(['plan-name', 'plan-tier-code']);
+    (fixture.nativeElement as HTMLElement).remove();
+  });
+
+  it('QA CX-007: a save says so, new and edited', () => {
+    service.createPlan.and.returnValue(of({} as SubscriptionPlan));
+    service.updatePlan.and.returnValue(of({} as SubscriptionPlan));
+    const cmp = setup();
+    const success = spyOn(TestBed.inject(ToastService), 'success');
+    cmp.startCreate();
+    cmp.updateForm('name', 'Pro');
+    cmp.updateForm('tierCode', 'PRO');
+    cmp.submit();
+    expect(success).toHaveBeenCalledWith('SUBSCRIPTIONS.CREATED');
+
+    cmp.startEdit({
+      id: 'p1',
+      name: 'Pro',
+      tierCode: 'PRO',
+      currency: 'XOF',
+      monthlyPriceCents: 0,
+      active: true,
+    } as SubscriptionPlan);
+    cmp.submit();
+    expect(success).toHaveBeenCalledWith('SUBSCRIPTIONS.UPDATED');
+  });
+
+  it('QA D850: a refused deactivation shows the server reason', async () => {
     const reason = "Cette formule est encore l'abonnement actif de 1 organisation(s).";
     service.deactivatePlan.and.returnValue(
       throwError(() => new HttpErrorResponse({ status: 409, error: { message: reason } })),
     );
     const cmp = setup();
-    cmp.deactivate({ id: 'p1', active: true } as SubscriptionPlan);
+    spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
+    await cmp.deactivate({ id: 'p1', active: true } as SubscriptionPlan);
 
     expect(cmp.deactivateError()).toBe(reason);
     expect(service.listPlans).toHaveBeenCalledTimes(1);

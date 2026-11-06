@@ -40,6 +40,7 @@
     "guard:translate-params": "node scripts/check-translate-params.mjs",
     "guard:required-refusal": "node scripts/check-required-refusal.mjs",
     "guard:form-behaviour": "node scripts/check-form-behaviour.mjs",
+    "guard:destructive-confirm": "node scripts/check-destructive-confirm.mjs",
     "guards": "node scripts/check-guards.mjs",
     "test:scripts": "node --test \"scripts/**/*.test.mjs\"",
     "i18n:report": "node scripts/check-i18n-coverage.mjs --report-only"

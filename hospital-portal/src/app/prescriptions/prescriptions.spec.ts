@@ -8,6 +8,7 @@ import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { signal } from '@angular/core';
 import { Observable, of, Subject, throwError } from 'rxjs';
+import { map } from 'rxjs/operators';
 
 import {
   ATTENTION_REASONS,
@@ -50,6 +51,32 @@ import { isSubmitBlocked } from '../shared/forms/submit-guard.testing';
  * the page, dropping it out of the backdrop's flex centring, and swallowing
  * every click (the backdrop's own handler closes the modal).
  */
+/**
+ * QA D1412: `/prescriptions` reads one page with the server's total; these tests
+ * state the tenant's rows through the `list` spy, and this answers each page and
+ * count from them, filtered by status as the server does.
+ */
+function pageFromList(spy: jasmine.SpyObj<PrescriptionService>): void {
+  spy.page.and.callFake((filters, page, size) =>
+    spy.list().pipe(
+      map((rows) => {
+        const statuses = filters.statuses ?? [];
+        const kept = statuses.length
+          ? rows.filter((r) => statuses.includes(r.status as string))
+          : rows;
+        return {
+          content: kept.slice(page * size, (page + 1) * size),
+          totalElements: kept.length,
+          totalPages: Math.ceil(kept.length / size),
+          number: page,
+          size,
+          last: (page + 1) * size >= kept.length,
+        };
+      }),
+    ),
+  );
+}
+
 describe('PrescriptionsComponent — SMS dispatch modal', () => {
   let fixture: ComponentFixture<PrescriptionsComponent>;
   let component: PrescriptionsComponent;
@@ -58,8 +85,10 @@ describe('PrescriptionsComponent — SMS dispatch modal', () => {
   beforeEach(async () => {
     prescriptionService = jasmine.createSpyObj<PrescriptionService>('PrescriptionService', [
       'list',
+      'page',
       'dispatchSms',
     ]);
+    pageFromList(prescriptionService);
     prescriptionService.list.and.returnValue(of([]));
 
     const staffService = jasmine.createSpyObj<StaffService>('StaffService', ['list']);
@@ -245,18 +274,16 @@ describe('PrescriptionsComponent — SMS dispatch modal', () => {
     );
     component.dispatchTarget.set({ id: 'rx-1', status: 'SIGNED' } as PrescriptionResponse);
     component.dispatchPharmacyId = 'ph-1';
-    const listCallsBefore = prescriptionService.list.calls.count();
+    const listCallsBefore = prescriptionService.page.calls.count();
 
     component.submitDispatch();
 
     expect(prescriptionService.dispatchSms).toHaveBeenCalledWith('rx-1', 'ph-1', undefined);
-    expect(prescriptionService.list.calls.count())
+    expect(prescriptionService.page.calls.count())
       .withContext(
         'without a reload the row keeps its pre-dispatch status and its SMS button, and a second click supersedes the decision just made',
       )
-      // One call per reload since QA D1347: `list` reads every page itself,
-      // so the separate "Needs attention" bucket (G12) is gone.
-      .toBe(listCallsBefore + 1);
+      .toBeGreaterThan(listCallsBefore);
     expect(component.dispatching()).toBeFalse();
   });
 
@@ -266,13 +293,13 @@ describe('PrescriptionsComponent — SMS dispatch modal', () => {
     );
     component.dispatchTarget.set({ id: 'rx-1', status: 'SIGNED' } as PrescriptionResponse);
     component.dispatchPharmacyId = 'ph-1';
-    const listCallsBefore = prescriptionService.list.calls.count();
+    const listCallsBefore = prescriptionService.page.calls.count();
 
     component.submitDispatch();
 
-    expect(prescriptionService.list.calls.count())
+    expect(prescriptionService.page.calls.count())
       .withContext('the backend committed TRANSMISSION_FAILED; a stale row would still read SIGNED')
-      .toBe(listCallsBefore + 1);
+      .toBeGreaterThan(listCallsBefore);
     expect(component.dispatching()).toBeFalse();
     expect(component.dispatchTarget())
       .withContext('the modal stays open for a retry or another pharmacy')
@@ -321,12 +348,14 @@ describe('PrescriptionsComponent — signing', () => {
   beforeEach(async () => {
     prescriptionService = jasmine.createSpyObj<PrescriptionService>('PrescriptionService', [
       'list',
+      'page',
       'sign',
       'cosign',
       'update',
       'create',
       'getById',
     ]);
+    pageFromList(prescriptionService);
     prescriptionService.list.and.returnValue(of([]));
     prescriptionService.sign.and.returnValue(of(rx('rx-1', 'SIGNED')));
 
@@ -1147,6 +1176,59 @@ describe('PrescriptionsComponent — signing', () => {
       );
     });
 
+    it('QA D1406: ticking clears the refusal that asked for the tick, and so does a new frequency', () => {
+      prescriptionService.create.and.returnValue(
+        throwError(() => ({
+          status: 400,
+          error: { message: 'Cette fréquence se lit « si besoin ».' },
+        })),
+      );
+      component.openCreate();
+      component.form = {
+        ...component.form,
+        medicationName: 'Paracétamol',
+        quantity: 10,
+        frequency: 'SOS',
+      } as never;
+      component.submitForm();
+      expect(component['formError']()).toContain('si besoin');
+
+      component.onAsNeededChange(true);
+      expect(component['formError']()).withContext('the tick answers it').toBe('');
+
+      component['formError'].set('old refusal');
+      component.onFrequencyChange('q6h');
+      expect(component.form.frequency).toBe('q6h');
+      expect(component['formError']()).withContext('a new frequency answers it').toBe('');
+    });
+
+    it('QA D1391 / D1395: the hint under the frequency says what the server will answer', () => {
+      component.openCreate();
+      component.form.frequency = 'q6h';
+      expect(component.frequencyHintKey()).toBeNull();
+      component.form.frequency = 'TPI-SP';
+      expect(component.frequencyHintKey()).withContext('D1391: a regimen is a schedule').toBeNull();
+      component.form.frequency = 'pour douleur';
+      expect(component.frequencyHintKey()).toBe('PRESCRIPTIONS.FREQUENCY_READS_AS_NEEDED');
+      component.form.frequency = 'max 4/j';
+      expect(component.frequencyHintKey()).toBe('PRESCRIPTIONS.FREQUENCY_UNREADABLE');
+      component.form.asNeeded = true;
+      expect(component.frequencyHintKey()).withContext('ticked: nothing to say').toBeNull();
+    });
+
+    it('QA D1391: unticking an order is told about its frequency, which the server now judges', () => {
+      component.openEdit({ ...rx('rx-old', 'DRAFT'), frequency: 'si douleur', asNeeded: true });
+      component.onAsNeededChange(false);
+      expect(component.frequencyHintKey()).toBe('PRESCRIPTIONS.FREQUENCY_READS_AS_NEEDED');
+    });
+
+    it('QA D1391: an edit is not told about the frequency the order already carries', () => {
+      component.openEdit({ ...rx('rx-old', 'DRAFT'), frequency: 'SOS' });
+      expect(component.frequencyHintKey()).toBeNull();
+      component.form.frequency = 'pour douleur';
+      expect(component.frequencyHintKey()).toBe('PRESCRIPTIONS.FREQUENCY_READS_AS_NEEDED');
+    });
+
     it('unticking hides the field and sends no interval, the tick false', () => {
       prescriptionService.create.and.returnValue(of(rx('rx-tid', 'DRAFT')));
       component.openCreate();
@@ -1258,9 +1340,11 @@ describe('PrescriptionsComponent — pharmacist verification', () => {
 
     prescriptionService = jasmine.createSpyObj<PrescriptionService>('PrescriptionService', [
       'list',
+      'page',
       'pharmacistVerify',
       'recordPediatricDoseReview',
     ]);
+    pageFromList(prescriptionService);
     prescriptionService.list.and.returnValue(of([]));
     prescriptionService.pharmacistVerify.and.returnValue(of(verifiable()));
     prescriptionService.recordPediatricDoseReview.and.returnValue(of(verifiable()));
@@ -1675,7 +1759,9 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
 
     const prescriptionService = jasmine.createSpyObj<PrescriptionService>('PrescriptionService', [
       'list',
+      'page',
     ]);
+    pageFromList(prescriptionService);
     // QA D1347: `list` reads EVERY page (its own spec proves that), so the
     // page asks for it once, unfiltered.
     prescriptionService.list.and.callFake(() => opts.list$ ?? of(opts.list ?? []));
@@ -2303,11 +2389,144 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
 
   /* ── G12: the status filter ───────────────────────────────────────── */
 
-  it('QA D1347: reads the whole list once, unfiltered, instead of a page plus an attention bucket', async () => {
+  it('QA D1412: reads one page and the server total of each tab, never the whole list', async () => {
     await setup();
 
-    expect(prescriptionServiceSpy.list).toHaveBeenCalledTimes(1);
-    expect(prescriptionServiceSpy.list).toHaveBeenCalledWith();
+    expect(prescriptionServiceSpy.list.calls.allArgs().filter((args) => args.length > 0))
+      .withContext('no whole-list read without a search')
+      .toEqual([]);
+    const rowsRead = prescriptionServiceSpy.page.calls
+      .allArgs()
+      .filter(([, , size]) => size === PrescriptionsComponent.PAGE_ROWS);
+    expect(rowsRead.length).toBe(1);
+    expect(rowsRead[0][0].statuses).toEqual([]);
+    const counted = prescriptionServiceSpy.page.calls.allArgs().filter(([, , size]) => size === 1);
+    expect(counted.length).withContext('one count per tab').toBe(6);
+  });
+
+  it('QA D1412: the pager shows the server total and every row is reachable', async () => {
+    const rows = Array.from({ length: 120 }, (_, i) =>
+      makeRx({ id: 'rx-' + i, status: 'SIGNED', createdAt: '2026-09-20T08:00:00' }),
+    );
+    await setup({ list: rows });
+    fixture.detectChanges();
+
+    expect(component.filtered().length).toBe(50);
+    expect(component.listTotal()).toBe(120);
+    expect(document.querySelectorAll('.data-row').length).toBeLessThanOrEqual(50);
+    expect(el('[data-testid="rx-list-pager"]')).not.toBeNull();
+
+    const seen = new Set(component.filtered().map((p) => p.id));
+    component.onListPage(1);
+    component.filtered().forEach((p) => seen.add(p.id));
+    component.onListPage(2);
+    component.filtered().forEach((p) => seen.add(p.id));
+    expect(seen.size).withContext('every row, page by page').toBe(120);
+  });
+
+  it('QA D1412: a tab pages its own status from the server, from its first page', async () => {
+    const rows = [
+      ...Array.from({ length: 60 }, (_, i) => makeRx({ id: 's' + i, status: 'SIGNED' })),
+      makeRx({ id: 'd1', status: 'DRAFT' }),
+    ];
+    await setup({ list: rows });
+    component.onListPage(1);
+    component.setTab('draft');
+
+    expect(component.listPage()).toBe(0);
+    expect(component.filtered().map((p) => p.id)).toEqual(['d1']);
+    expect(component.listTotal()).toBe(1);
+    expect(component.countInTab('all')).toBe(61);
+  });
+
+  it('QA D1412: the search reaches a row on any page, then the pages come back', async () => {
+    const rows = Array.from({ length: 120 }, (_, i) =>
+      makeRx({
+        id: 'rx-' + i,
+        status: 'SIGNED',
+        medicationName: i === 110 ? 'Morphine' : 'Paracetamol',
+      }),
+    );
+    await setup({ list: rows });
+    expect(component.filtered().map((p) => p.id)).not.toContain('rx-110');
+
+    component.searchTerm = 'morph';
+    component.onSearchInput();
+    expect(component.filtered().map((p) => p.id)).toEqual(['rx-110']);
+    expect(component.listTotal()).toBe(1);
+
+    component.searchTerm = '';
+    component.onSearchInput();
+    expect(component.filtered().length).toBe(50);
+    expect(component.listTotal()).toBe(120);
+  });
+
+  it('QA D1412: a search past its last page shows the page that is left', async () => {
+    const rows = Array.from({ length: 51 }, (_, i) =>
+      makeRx({ id: 'rx-' + i, status: 'SIGNED', medicationName: 'Morphine' }),
+    );
+    await setup({ list: rows });
+    component.searchTerm = 'morph';
+    component.onSearchInput();
+    component.onListPage(1);
+    expect(component.filtered().length).toBe(1);
+
+    prescriptionServiceSpy.list.and.returnValue(of(rows.slice(0, 50)));
+    component.load();
+
+    expect(component.listPage()).toBe(0);
+    expect(component.filtered().length).toBe(50);
+  });
+
+  it('QA D1412: a page move that fails stays on the page shown', async () => {
+    const rows = Array.from({ length: 60 }, (_, i) => makeRx({ id: 'rx-' + i, status: 'SIGNED' }));
+    await setup({ list: rows });
+    prescriptionServiceSpy.list.and.returnValue(throwError(() => new Error('down')));
+
+    component.onListPage(1);
+
+    expect(component.listPage()).toBe(0);
+    expect(component.filtered().length).toBe(50);
+  });
+
+  it('QA D1412: no row of the last scope or tab stays on screen while the next reads or fails', async () => {
+    await setup({ list: [makeRx({ id: 'rx-a', status: 'SIGNED' })] });
+    prescriptionServiceSpy.list.and.returnValue(throwError(() => new Error('down')));
+
+    component.setTab('draft');
+    expect(component.filtered()).toEqual([]);
+
+    prescriptionServiceSpy.list.and.returnValue(of([makeRx({ id: 'rx-a', status: 'SIGNED' })]));
+    component.setTab('all');
+    expect(component.filtered().length).toBe(1);
+    prescriptionServiceSpy.list.and.returnValue(throwError(() => new Error('down')));
+    component.onScopeChange('other-hospital');
+    expect(component.filtered()).toEqual([]);
+  });
+
+  it('QA D1412: when the only row of a page leaves its tab, the tab is read again', async () => {
+    const rows = [makeRx({ id: 'd1', status: 'DRAFT' }), makeRx({ id: 'd2', status: 'DRAFT' })];
+    await setup({ list: rows });
+    component.setTab('draft');
+    prescriptionServiceSpy.list.and.returnValue(of([rows[1]]));
+    component.prescriptions.set([{ ...rows[0], status: 'SIGNED' }]);
+
+    component.applyFilter();
+
+    expect(component.filtered().map((p) => p.id)).toEqual(['d2']);
+  });
+
+  it('QA D1412: past the last page (the last row went) the page before is shown', async () => {
+    const rows = Array.from({ length: 51 }, (_, i) => makeRx({ id: 'rx-' + i, status: 'SIGNED' }));
+    await setup({ list: rows });
+    component.onListPage(1);
+    expect(component.filtered().length).toBe(1);
+
+    prescriptionServiceSpy.list.and.returnValue(of(rows.slice(0, 50)));
+    component.load();
+
+    expect(component.listPage()).toBe(0);
+    expect(component.filtered().length).toBe(50);
   });
 
   it('QA D1347: counts every prescription of a list longer than one page, with no "minimum" banner', async () => {
@@ -3081,9 +3300,11 @@ describe('PrescriptionsComponent — answering a pharmacist clarification', () =
     activeRoles = roles;
     prescriptionService = jasmine.createSpyObj<PrescriptionService>('PrescriptionService', [
       'list',
+      'page',
       'resolveClarification',
       'getById',
     ]);
+    pageFromList(prescriptionService);
     prescriptionService.list.and.returnValue(of([pendingClarification()]));
     prescriptionService.resolveClarification.and.returnValue(of(pendingClarification()));
 
@@ -3214,10 +3435,12 @@ describe('PrescriptionsComponent — row actions per role and status (QA D611/D6
   async function render(role: string) {
     const prescriptionService = jasmine.createSpyObj<PrescriptionService>('PrescriptionService', [
       'list',
+      'page',
       'sign',
       'cosign',
       'update',
     ]);
+    pageFromList(prescriptionService);
     prescriptionService.list.and.returnValue(of([]));
     const staffService = jasmine.createSpyObj<StaffService>('StaffService', ['list']);
     staffService.list.and.returnValue(of([]));

@@ -102,6 +102,42 @@ class PediatricDoseRuleRound18Test {
             .contains("WHO Pocket Book"));
     }
 
+    private static CdsRuleContext prnCtx(String dosage, String frequency, Integer intervalHours) {
+        double weightKg = 19.0;
+        MedicationCatalogItem item = paracetamol();
+        return new CdsRuleContext(childAged(6, 0, 0), UUID.randomUUID(), item.getNameFr(), null, null,
+            CdsRuleEngine.parseDoseMg(dosage, weightKg, item), item, weightKg, List.of(), List.of(),
+            frequency, CdsRuleEngine.parseDoseUnits(dosage), LocalDateTime.now(),
+            com.example.hms.service.impl.PrnMinInterval.highestDosesPerDay(intervalHours != null, intervalHours));
+    }
+
+    /**
+     * QA D1397 (round 33): paracetamol 250 mg as needed with a minimum interval
+     * of 1 h is at most 6 g a day, above the absolute 4000 mg: the same hard
+     * stop as "q1h". It got a warning that the total could not be read.
+     */
+    @Test
+    void d1397_aTickedIntervalIsJudgedByTheDailyLimits() {
+        List<CdsCard> ticked = rule.evaluate(prnCtx("250 mg", "si fi\u00e8vre", 1));
+        assertThat(anyHardStop(ticked)).as("250 mg x 24 is above 4000 mg").isTrue();
+        assertThat(critical(ticked)).as("the hard stop and the mg/kg/day stop").isGreaterThanOrEqualTo(2);
+        assertThat(ticked).noneMatch(c -> c.summary().contains("could not be read"));
+
+        List<CdsCard> fixed = rule.evaluate(prnCtx("250 mg", "q1h", null));
+        assertThat(anyHardStop(fixed)).as("the same stop as the fixed schedule").isTrue();
+
+        List<CdsCard> safe = rule.evaluate(prnCtx("250 mg", "si fi\u00e8vre", 6));
+        assertThat(anyHardStop(safe)).as("4 doses of 250 mg is 1 g").isFalse();
+        assertThat(critical(safe)).isZero();
+
+        // The text can only ask for more: a ticked "q1h" with a 6 h interval stays stopped, as before.
+        assertThat(anyHardStop(rule.evaluate(prnCtx("250 mg", "q1h", 6)))).isTrue();
+
+        // No interval (refused later by the prescription rule): the warning stands, as before.
+        assertThat(rule.evaluate(prnCtx("250 mg", "si fi\u00e8vre", null)))
+            .anyMatch(c -> c.summary().contains("could not be read"));
+    }
+
     @Test
     void aboveTheAbsoluteDailyMaximumIsAHardStop() {
         List<CdsCard> cards = rule.evaluate(ctx(childAged(6, 0, 0), paracetamol(), "1 g", "q4h",

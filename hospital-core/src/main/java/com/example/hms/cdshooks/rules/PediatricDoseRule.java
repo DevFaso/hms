@@ -127,8 +127,19 @@ public class PediatricDoseRule implements CdsRule {
             // Review of round 18: the doses given on a dosing day - at least the
             // dose itself (q48h is still a full dose that day); a count that
             // does not divide the day ("5 fois par jour") is read as written.
-            Double perDay = MarDoseSchedule.dosesPerDay(context.proposedFrequency());
+            // QA D1397: a ticked interval is the most an as-needed order allows,
+            // so the daily limits judge it; a frequency text read beside it can
+            // only ask for more doses, never fewer.
+            Double perDay = highest(MarDoseSchedule.dosesPerDay(context.proposedFrequency()),
+                context.proposedPrnDosesPerDay());
             this.dosesPerDay = perDay == null ? null : Math.max(1d, perDay);
+        }
+
+        private static Double highest(Double read, Double fromInterval) {
+            if (read == null || fromInterval == null) {
+                return read == null ? fromInterval : read;
+            }
+            return Math.max(read, fromInterval);
         }
 
         String medication() {

@@ -188,6 +188,8 @@
           [(ngModel)]="form.dateOfBirth"
           name="dateOfBirth"
           required
+          [min]="minBirthDate"
+          [max]="maxBirthDate"
           (ngModelChange)="onNameOrDobChange()"
           [attr.aria-invalid]="serverFieldErrors['dateOfBirth'] ? true : null"
           [attr.aria-describedby]="

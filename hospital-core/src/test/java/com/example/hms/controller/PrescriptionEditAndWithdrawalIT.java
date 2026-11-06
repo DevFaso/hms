@@ -344,13 +344,63 @@ class PrescriptionEditAndWithdrawalIT extends BaseIT {
     }
 
     /**
-     * QA D1378 (round 32): an older order the round-31 list did not read
-     * ("SOS", left unticked by V260) asks its author to confirm when its
-     * content is edited; its withdrawal is never refused for it.
+     * QA D1391 / D1395 (round 33), over the real endpoint: an unticked order is
+     * accepted only with a fixed schedule; a limit, a clause or a wording that
+     * states no schedule is refused on the tick, and nothing is created.
      */
     @Test
-    @DisplayName("QA D1378: an older unticked SOS order is confirmed on edit, withdrawn without question")
-    void d1378_anOlderUntickedOrderIsConfirmedOnEditButWithdrawnFreely() throws Exception {
+    @DisplayName("QA D1391 / D1395: an unticked order states a fixed schedule, in FR, ES and EN")
+    void d1391_d1395_anUntickedOrderStatesAFixedSchedule() throws Exception {
+        long before = prescriptionRepository.count();
+        for (String wording : new String[] {"pour douleur", "toutes les 6 h pour douleur", "q6h si fièvre",
+            "para el dolor", "in case of pain", "max 4/j", "jusqu'à 4 fois par jour", "1 à 3 fois par jour",
+            "up to 4 times a day", "douleur", "pain", "selon prescription médicale", "SP + AQ", "ad lib"}) {
+            mockMvc.perform(post(API_CONTEXT + "/prescriptions")
+                    .contextPath(API_CONTEXT)
+                    .with(as(authorUser))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(createBody(wording)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors.asNeeded").exists());
+        }
+        assertThat(prescriptionRepository.count()).isEqualTo(before);
+
+        for (String wording : new String[] {"Prise unique (TPI-SP 2)", "TPI-SP", "SP dose unique",
+            "SP-AQ 1 fois par jour", "SMC : SP + AQ, 1 fois par mois", "4 cp 2 fois par jour (poids > 35 kg)",
+            "3 fois par jour selon ordonnance", "2 fois par jour selon protocole", "Q6H", "cada 6 horas",
+            "3 times a day"}) {
+            String answer = mockMvc.perform(post(API_CONTEXT + "/prescriptions")
+                    .contextPath(API_CONTEXT)
+                    .with(as(authorUser))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(createBody(wording)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.asNeeded").value(false))
+                .andReturn().getResponse().getContentAsString();
+            UUID created = UUID.fromString(com.jayway.jsonpath.JsonPath.read(answer, "$.id"));
+            auditEventLogRepository.deleteAllInBatch(auditEventLogRepository.findAll().stream()
+                .filter(row -> created.toString().equals(row.getResourceId())).toList());
+            prescriptionRepository.deleteById(created);
+        }
+    }
+
+    private String createBody(String frequency) {
+        return "{\"patientId\":\"" + patient.getId() + "\",\"staffId\":\"" + authorStaff.getId()
+            + "\",\"encounterId\":\"" + encounter.getId() + "\",\"medicationName\":\"Fansidar\","
+            + "\"dosage\":\"3 cp\",\"frequency\":\"" + frequency + "\",\"route\":\"PO\",\"quantity\":3}";
+    }
+
+    /**
+     * QA D1391 / D1395 (round 33), replacing the round-32 assertion: an edit is
+     * judged on what it WROTE. An older order ("SOS", left unticked by V260)
+     * whose frequency the edit leaves alone stays editable (it was refused,
+     * which made such an order impossible to correct at all); an edit that
+     * writes a new frequency is held to the rule; its withdrawal is never
+     * refused for it.
+     */
+    @Test
+    @DisplayName("QA D1391 / D1395: an older unticked order is edited freely until the edit writes a frequency")
+    void d1391_anOlderUntickedOrderIsEditedUntilTheEditWritesAFrequency() throws Exception {
         prescription.setFrequency("SOS");
         prescription = prescriptionRepository.save(prescription);
 
@@ -360,16 +410,31 @@ class PrescriptionEditAndWithdrawalIT extends BaseIT {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body("Amoxicilline 500 mg", null, null).replace("3x/day", "SOS")
                     .replace("\"dosage\":\"500 mg\"", "\"dosage\":\"1 g\"")))
-            .andExpect(status().isBadRequest())
-            .andExpect(jsonPath("$.fieldErrors.asNeeded").exists());
+            .andExpect(status().isOk());
+        Prescription edited = prescriptionRepository.findById(prescription.getId()).orElseThrow();
+        assertThat(edited.getDosage()).isEqualTo("1 g");
+        assertThat(edited.getFrequency()).as("the old text is kept as written").isEqualTo("SOS");
+        assertThat(edited.isAsNeeded()).isFalse();
 
+        for (String refused : new String[] {"pour douleur", "max 4/j"}) {
+            mockMvc.perform(put(API_CONTEXT + UPDATE_PATH, prescription.getId())
+                    .contextPath(API_CONTEXT)
+                    .with(as(authorUser))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(body("Amoxicilline 500 mg", null, null).replace("3x/day", refused)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors.asNeeded").exists());
+        }
+
+        prescription = prescriptionRepository.findById(prescription.getId()).orElseThrow();
         prescription.setStatus(PrescriptionStatus.SIGNED);
         prescription = prescriptionRepository.save(prescription);
         mockMvc.perform(put(API_CONTEXT + UPDATE_PATH, prescription.getId())
                 .contextPath(API_CONTEXT)
                 .with(as(authorUser))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(body("Amoxicilline 500 mg", "DISCONTINUED", "Traitement terminé").replace("3x/day", "SOS")))
+                .content(body("Amoxicilline 500 mg", "DISCONTINUED", "Traitement terminé").replace("3x/day", "SOS")
+                    .replace("\"dosage\":\"500 mg\"", "\"dosage\":\"1 g\"")))
             .andExpect(status().isOk());
         assertThat(prescriptionRepository.findById(prescription.getId()).orElseThrow().getStatus())
             .isEqualTo(PrescriptionStatus.DISCONTINUED);

@@ -57,6 +57,7 @@ public class SubscriptionServiceImpl implements SubscriptionService {
     public SubscriptionPlanResponseDTO createPlan(SubscriptionPlanRequestDTO request) {
         String currency = normalizeCurrency(request.getCurrency());
         requirePriceFitsCurrency(request.getMonthlyPriceCents(), currency);
+        requireTierCodeFree(request.getTierCode());
         SubscriptionPlan plan = SubscriptionPlan.builder()
             .name(request.getName())
             .tierCode(request.getTierCode())
@@ -82,6 +83,9 @@ public class SubscriptionServiceImpl implements SubscriptionService {
         // QA D850: deactivating through an edit is the same act as DELETE.
         if (Boolean.FALSE.equals(request.getActive()) && plan.isActive()) {
             requireNotInUse(plan);
+        }
+        if (request.getTierCode() != null && !request.getTierCode().equalsIgnoreCase(plan.getTierCode())) {
+            requireTierCodeFree(request.getTierCode());
         }
         plan.setName(request.getName());
         plan.setTierCode(request.getTierCode());
@@ -109,6 +113,17 @@ public class SubscriptionServiceImpl implements SubscriptionService {
         requireNotInUse(plan);
         plan.setActive(false);
         planRepository.save(plan);
+    }
+
+    /**
+     * QA CX-005: a tier code another plan holds is refused on its field, so the
+     * form marks it. It used to reach the unique constraint and come back as
+     * "this record already exists", naming nothing.
+     */
+    private void requireTierCodeFree(String tierCode) {
+        if (tierCode != null && planRepository.existsByTierCodeIgnoreCase(tierCode)) {
+            throw new FieldBusinessException("tierCode", "subscription.plan.tierCode.duplicate", tierCode);
+        }
     }
 
     /**

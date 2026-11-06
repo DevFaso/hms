@@ -196,6 +196,8 @@ export interface NurseDashboardSummary {
   vitalsDue: number;
   medicationsDue: number;
   medicationsOverdue: number;
+  /** QA D1402: the as-needed orders on the eMAR, which the two counts above leave out. */
+  medicationsAsNeeded?: number;
   ordersPending: number;
   handoffsPending: number;
   announcements: number;

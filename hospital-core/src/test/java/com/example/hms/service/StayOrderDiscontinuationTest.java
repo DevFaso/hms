@@ -287,4 +287,39 @@ class StayOrderDiscontinuationTest {
         verify(endedStayOrders, never()).endedWithAStay(dispensed);
         verify(prescriptionRepository, never()).save(any());
     }
+
+    /**
+     * QA D1393: a cancelled stay ends the orders filed on its own encounter, with
+     * the cancel's reason. Paths re-verified: a take-home order, a dispensed
+     * one, an outpatient one, another stay's, and an emergency order the
+     * discharge rule would carry over (the stay never happened, so it stays the
+     * department's).
+     */
+    @Test
+    void d1393_aCancelledStayEndsOnlyTheOrdersFiledOnItsOwnEncounter() {
+        when(messageSource.getMessage(eq("prescription.discontinuedStayCancelled"), any(), any(), any()))
+            .thenReturn("cancelled stay");
+        Prescription signed = order("Paracétamol", stayEncounter, PrescriptionStatus.SIGNED, ADMITTED.plusHours(1));
+        Prescription partly = order("Ceftriaxone", stayEncounter, PrescriptionStatus.PARTIALLY_FILLED, ADMITTED.plusHours(1));
+        Prescription takeHome = order("Amoxicilline", stayEncounter, PrescriptionStatus.SIGNED, ADMITTED.plusHours(2));
+        takeHome.setTakeHome(true);
+        Prescription dispensed = order("Métronidazole", stayEncounter, PrescriptionStatus.DISPENSED, ADMITTED.plusHours(2));
+        Prescription outpatient = order("Fer", encounter(EncounterType.CONSULTATION, null), PrescriptionStatus.SIGNED, ADMITTED.plusHours(3));
+        Prescription otherStay = order("Insuline", encounter(EncounterType.INPATIENT, UUID.randomUUID()),
+            PrescriptionStatus.SIGNED, ADMITTED.plusHours(3));
+        Prescription emergency = order("Morphine", encounter(EncounterType.EMERGENCY, null), PrescriptionStatus.SIGNED, ADMITTED.minusHours(1));
+        when(prescriptionRepository.findByPatient_IdAndHospital_Id(stay.getPatient().getId(), stay.getHospital().getId()))
+            .thenReturn(List.of(signed, partly, takeHome, dispensed, outpatient, otherStay, emergency));
+
+        List<Prescription> ended = service.discontinueOrdersOfCancelledStay(stay, actor);
+
+        org.assertj.core.api.Assertions.assertThat(ended).containsExactly(signed, partly);
+        org.assertj.core.api.Assertions.assertThat(signed.getStatus()).isEqualTo(PrescriptionStatus.DISCONTINUED);
+        org.assertj.core.api.Assertions.assertThat(signed.getWithdrawalReason()).isEqualTo("cancelled stay");
+        org.mockito.Mockito.verify(preparedFills).voidPreparedFill(signed, com.example.hms.enums.ReadyCancelReason.PRESCRIPTION_WITHDRAWN);
+        org.mockito.Mockito.verify(withdrawnOrders).withdrawPartnerOffers(partly);
+        org.assertj.core.api.Assertions.assertThat(List.of(takeHome, outpatient, otherStay, emergency))
+            .allSatisfy(rx -> org.assertj.core.api.Assertions.assertThat(rx.getStatus()).isEqualTo(PrescriptionStatus.SIGNED));
+        org.assertj.core.api.Assertions.assertThat(dispensed.getStatus()).isEqualTo(PrescriptionStatus.DISPENSED);
+    }
 }

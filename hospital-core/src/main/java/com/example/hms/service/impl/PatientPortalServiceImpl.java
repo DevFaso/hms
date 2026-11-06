@@ -496,6 +496,12 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         return medicationService.getMedicationsForPatientPortal(patient.getId(), null, limit);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public Page<PatientMedicationResponseDTO> getMyMedicationsPage(Authentication auth, Pageable pageable) {
+        return medicationService.getMedicationsPageForPatientPortal(findPatient(auth).getId(), pageable);
+    }
+
     // ── Prescriptions ────────────────────────────────────────────────────
 
     @Override
@@ -1879,6 +1885,26 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         Patient patient = verifyProxyAccess(auth, patientId, "VIEW_MEDICATIONS");
         UUID hospitalId = resolvePatientHospitalId(patient);
         return medicationService.getMedicationsForPatientPortal(patient.getId(), hospitalId, limit);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<PatientMedicationResponseDTO> getProxyMedicationsPage(Authentication auth, UUID patientId, Pageable pageable) {
+        Patient patient = verifyProxyAccess(auth, patientId, "VIEW_MEDICATIONS");
+        return medicationService.getMedicationsPageForPatientPortal(patient.getId(), pageable);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public long countProxyLabResults(Authentication auth, UUID patientId) {
+        Patient patient = verifyProxyAccess(auth, patientId, PROXY_VIEW_LAB_RESULTS);
+        return labResultService.countLabResultsForPatientPortal(patient.getId());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public long countMyLabResults(Authentication auth) {
+        return labResultService.countLabResultsForPatientPortal(findPatient(auth).getId());
     }
 
     @Override

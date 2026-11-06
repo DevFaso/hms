@@ -407,6 +407,57 @@ describe('NurseStationComponent — two-tier polling', () => {
 
   /* ── P0 #1: real SBAR handoffs ─────────────────────────────── */
 
+  describe('QA D1402: a tile says what it counts', () => {
+    const rows = [
+      { id: 'a', status: 'DUE', asNeeded: false },
+      { id: 'b', status: 'OVERDUE', asNeeded: false },
+      { id: 'c', status: 'UPCOMING', asNeeded: false },
+      { id: 'd', status: 'DUE', asNeeded: true },
+    ] as unknown as NurseMedicationTask[];
+
+    function hint(): string {
+      fixture.detectChanges();
+      const el = fixture.nativeElement as HTMLElement;
+      return el.querySelector('[data-testid="meds-as-needed-hint"]')?.textContent?.trim() ?? '';
+    }
+
+    it('reads the server when it answered, and adds the as-needed rows apart', () => {
+      fixture.detectChanges();
+      component.medications.set(rows);
+      component.summary.set({
+        assignedPatients: 1,
+        vitalsDue: 0,
+        medicationsDue: 9,
+        medicationsOverdue: 2,
+        medicationsAsNeeded: 12,
+        ordersPending: 0,
+        handoffsPending: 0,
+        announcements: 0,
+      });
+      component['pendingLoads'].set(0);
+      expect(component.medsDueCount()).toBe(9);
+      expect(component.medsOverdueCount()).toBe(2);
+      expect(component.medsAsNeededCount()).toBe(12);
+      expect(hint()).toContain('NURSE.MEDICATIONS_AS_NEEDED_HINT');
+    });
+
+    it('with no summary it counts the same thing in the rows on hand', () => {
+      component.medications.set(rows);
+      component.summary.set(null);
+      expect(component.medsDueCount()).toBe(1);
+      expect(component.medsOverdueCount()).toBe(1);
+      expect(component.medsAsNeededCount()).toBe(1);
+    });
+
+    it('says nothing when no order is as needed', () => {
+      fixture.detectChanges();
+      component.medications.set([]);
+      component.summary.set(null);
+      component['pendingLoads'].set(0);
+      expect(hint()).toBe('');
+    });
+  });
+
   describe('MAR rows (QA D929, D949, D950, D922, D993)', () => {
     // No patientId: the name renders as text, not a router link (the spec has no router).
     const rows = [

@@ -38,6 +38,18 @@
  *    in a member named like a count). The chart review badges said
  *    MÉDICAMENTS 20 for 667 prescriptions: the payload held one page. A
  *    count is the server's total (`totals`, `totalElements`).
+ *  - `server-limit` (QA D1399, round 33 — {@link serverLimitFindings}): a read of a
+ *    PatientPortalController list whose row limit has a server DEFAULT, without an
+ *    `offset`. No number at the call site, none in the method: "Médicaments passés"
+ *    stopped at 20 of 249 and the proxy tab at active + 50. Page it with the total.
+ *
+ *  - `server-stream-limit` (QA CX-003, round 33 — {@link serverStreamLimitFindings}):
+ *    a backend service cutting a stream with a fixed number
+ *    (`.limit(10)`, `.limit(MAX_ROWS)`) before answering. The super-admin
+ *    department table stopped at 10 of 14 rows, with no total and no word: no
+ *    portal rule can see a cut the server made. A `.limit(limit)` the caller
+ *    asked for is not reported. A cut that is a preview, or a bound on a log
+ *    line, is pinned with that reason.
  *
  * Not findings: `font-size: 64px` and other CSS in inline styles (a unit
  * follows), `slice(0, 8)` / `substring(0, 50)` (not a read), `size = 20`
@@ -215,6 +227,90 @@ export function sliceCountFindings(html) {
       message:
         `${m[1]}.length - ${m[2]} counts "more" from the rows on hand (QA D1362): ` +
         'use moreCount(serverTotal, shown) (src/app/shared/more-count.ts)',
+    });
+  }
+  return out;
+}
+
+/** The GET paths of a controller whose method takes `@RequestParam(defaultValue = "N") int limit`. */
+export function serverLimitedPaths(controllerSource) {
+  const paths = [];
+  const mapping = /@GetMapping\(\s*(?:value\s*=\s*)?"([^"]+)"[^)]*\)/g;
+  for (const m of controllerSource.matchAll(mapping)) {
+    const rest = controllerSource.slice(m.index + m[0].length);
+    const signature = rest.slice(0, rest.search(/\)\s*(?:throws [\w, ]+)?\{/));
+    if (/@RequestParam\(\s*defaultValue\s*=\s*"\d+"\s*\)\s*int\s+limit\b/.test(signature)) {
+      paths.push(m[1]);
+    }
+  }
+  return paths;
+}
+
+/**
+ * QA D1399: a read of one of those paths (`${this.base}/medications`) with no
+ * `offset` in the call. The paths are read from the controller, so a new limited
+ * list is covered the day it is added.
+ */
+export function serverLimitFindings(source, limitedPaths) {
+  const lines = source.split(/\r?\n/);
+  const found = [];
+  for (const path of limitedPaths) {
+    const spelled = path.replace(/\{(\w+)\}/g, (_, name) => '${' + name + '}');
+    const literal = '`${this.base}' + spelled + '`';
+    lines.forEach((line, index) => {
+      if (!line.includes(literal)) return;
+      // A write to the same path is not a read of the list.
+      if (/\.(post|put|patch|delete)\b/.test(`${lines[index - 1] ?? ''} ${line}`)) return;
+      const call = lines.slice(index, index + 4).join(' ');
+      if (!/\boffset\b/.test(call)) {
+        found.push({
+          line: index + 1,
+          rule: 'server-limit',
+          anchor: `${memberAt(lines, index)}:${path}`,
+          message: `${path} has a server default limit and no offset here (QA D1399): page it with the total, or pin a preview`,
+        });
+      }
+    });
+  }
+  return found;
+}
+
+const SERVER_FIXED_LIMIT = /\.limit\(\s*(\d+|[A-Z][A-Z0-9_]*)L?\s*\)/g;
+/** A Java method header, for a stable anchor. */
+const JAVA_METHOD =
+  /^\s*(?:(?:public|protected|private|static|final|synchronized|default)\s+)+[\w<>,.?[\]\s]+?\s+([a-zA-Z_$][\w$]*)\s*\(/;
+
+/**
+ * QA CX-003: a fixed cut in a backend service (`.limit(10)` on a stream).
+ *
+ * @param {string} source a `.java` service
+ * @returns {{line:number, rule:string, anchor:string, message:string}[]}
+ */
+export function serverStreamLimitFindings(source) {
+  const code = source
+    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
+    .replace(/(^|[^:'"\\])\/\/[^\n]*/g, (m, lead) => lead + ' '.repeat(m.length - lead.length));
+  const lines = code.split('\n');
+  const out = [];
+  for (const m of code.matchAll(SERVER_FIXED_LIMIT)) {
+    const line = lineOf(code, m.index);
+    let method = '(top)';
+    for (let i = line - 1; i >= 0; i--) {
+      const header = JAVA_METHOD.exec(lines[i]);
+      if (header && !['if', 'for', 'while', 'switch', 'return', 'new'].includes(header[1])) {
+        method = header[1];
+        break;
+      }
+    }
+    // A cut of one row answers "the first": never a list on a screen.
+    if (m[1] === '1') continue;
+    out.push({
+      line,
+      rule: 'server-stream-limit',
+      anchor: `${method}:${m[1]}`,
+      message:
+        `.limit(${m[1]}) cuts a server list with a fixed number (QA CX-003): ` +
+        'answer every row, or page with the total; a preview says it is one and is pinned with that reason',
     });
   }
   return out;

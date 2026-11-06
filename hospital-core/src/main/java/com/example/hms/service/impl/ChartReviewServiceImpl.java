@@ -659,6 +659,10 @@ public class ChartReviewServiceImpl implements ChartReviewService {
         if ("NORMAL".equals(graded)) {
             return com.example.hms.enums.AbnormalFlag.NORMAL.name();
         }
+        // QA D1394: a value the hospital's ranges could not grade says so, whatever an analyser's NORMAL says.
+        if (labResultMapper.isUngraded(r)) {
+            return com.example.hms.mapper.LabResultMapper.FLAG_UNSPECIFIED;
+        }
         return r.getAbnormalFlag() != null ? r.getAbnormalFlag().severity().name() : null;
     }
 

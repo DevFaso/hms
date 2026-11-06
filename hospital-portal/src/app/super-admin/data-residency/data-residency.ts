@@ -17,6 +17,7 @@ import { OrganizationRegion, OrganizationRegionRow } from '../../services/data-r
 import { OrgTextPipe } from '../../shared/pipes/org-text.pipe';
 import { InlineSubFormDirective } from '../../shared/a11y/inline-sub-form.directive';
 import { InlineDiscardAskComponent } from '../../shared/a11y/inline-discard-ask.component';
+import { KeyLabelPipe } from '../../shared/pipes/key-label.pipe';
 
 interface EditState {
   organizationId: string;
@@ -30,6 +31,7 @@ interface EditState {
   selector: 'app-super-admin-data-residency',
   standalone: true,
   imports: [
+    KeyLabelPipe,
     FormsModule,
     RouterLink,
     TranslateModule,

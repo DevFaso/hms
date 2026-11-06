@@ -46,6 +46,40 @@ public final class LabResultValueRules {
     private LabResultValueRules() {
     }
 
+    /** Which side of its number a censored value lies on; {@link #EXACT} when it is a plain number. */
+    public enum Bound { EXACT, BELOW, ABOVE }
+
+    /** A lab value read as a number: the number, and which side of it the true value lies on. */
+    public record NumericValue(Bound bound, double number) {}
+
+    /**
+     * QA D1394: the ONE reading of a lab value as a number, for everything that
+     * compares it (grading, reflex thresholds). A plain or censored number, with
+     * a decimal point or a decimal comma ("6.5", "6,5", "&gt; 6,5", "&lt;=1.5"). Empty when
+     * it is not a finite number: "Positif", "abc", "NaN".
+     */
+    public static java.util.Optional<NumericValue> numericValue(String rawValue) {
+        if (rawValue == null || rawValue.isBlank()) {
+            return java.util.Optional.empty();
+        }
+        String trimmed = normalizeDecimalComma(rawValue).trim();
+        java.util.regex.Matcher censor = CENSOR_PREFIX.matcher(trimmed);
+        Bound bound = Bound.EXACT;
+        String number = trimmed;
+        if (censor.find()) {
+            bound = censor.group(1).startsWith("<") || "\u2264".equals(censor.group(1)) ? Bound.BELOW : Bound.ABOVE;
+            number = trimmed.substring(censor.end());
+        }
+        try {
+            double value = Double.parseDouble(number);
+            return Double.isNaN(value) || Double.isInfinite(value)
+                ? java.util.Optional.empty()
+                : java.util.Optional.of(new NumericValue(bound, value));
+        } catch (NumberFormatException notANumber) {
+            return java.util.Optional.empty();
+        }
+    }
+
     /** A plain or censored number written with a decimal comma: "7,9", "-0,5", "<0,5". */
     private static final Pattern DECIMAL_COMMA = Pattern.compile("^((?:<=|>=|<|>|≤|≥)\\s*)?(-?\\d+),(\\d+)$");
 

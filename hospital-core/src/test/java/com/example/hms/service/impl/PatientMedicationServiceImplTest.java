@@ -617,4 +617,79 @@ class PatientMedicationServiceImplTest {
         p.setCreatedAt(createdAt);
         return p;
     }
+
+    /** QA D1398: the patient takes it at home; "q6h" alone reads as a fixed schedule. */
+    @Test
+    void d1398_theRowSaysItIsAsNeededAndItsLeastInterval() {
+        Prescription prn = issued("Paracétamol", LocalDateTime.now().minusDays(1));
+        prn.setAsNeeded(true);
+        prn.setPrnMinIntervalHours(6);
+        Prescription fixed = issued("Amoxicilline", LocalDateTime.now().minusDays(2));
+        when(patientChartAccess.requireOwnRecord(patientId)).thenReturn(patient);
+        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(prn, fixed)));
+
+        List<PatientMedicationResponseDTO> rows = service.getMedicationsForPatientPortal(patientId, null, 10);
+
+        assertThat(rows.get(0).isAsNeeded()).isTrue();
+        assertThat(rows.get(0).getPrnMinIntervalHours()).isEqualTo(6);
+        assertThat(rows.get(1).isAsNeeded()).isFalse();
+        assertThat(rows.get(1).getPrnMinIntervalHours()).isNull();
+    }
+
+    /** QA D1399: 20 of 249 past medicines with nothing to say so; every row is on a page, with the total. */
+    @Test
+    void d1399_thePagesReachEveryRowWithTheServersTotal() {
+        List<Prescription> rows = new java.util.ArrayList<>();
+        LocalDateTime sameMoment = LocalDateTime.of(2026, 11, 1, 9, 0);
+        for (int i = 0; i < 45; i++) {
+            Prescription past = issued("Passé " + i, sameMoment);
+            past.setStatus(com.example.hms.enums.PrescriptionStatus.CANCELLED);
+            rows.add(past);
+        }
+        when(patientChartAccess.requireOwnRecord(patientId)).thenReturn(patient);
+        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+            .thenAnswer(read -> new org.springframework.data.domain.PageImpl<>(new java.util.ArrayList<>(rows)));
+
+        java.util.Set<UUID> seen = new java.util.HashSet<>();
+        for (int page = 0; page < 3; page++) {
+            // The repository's order is not promised between reads: each page re-reads it reversed.
+            java.util.Collections.reverse(rows);
+            org.springframework.data.domain.Page<PatientMedicationResponseDTO> slice = service
+                .getMedicationsPageForPatientPortal(patientId, org.springframework.data.domain.PageRequest.of(page, 20));
+            assertThat(slice.getTotalElements()).isEqualTo(45);
+            slice.getContent().forEach(row -> seen.add(row.getId()));
+        }
+        assertThat(seen).as("a tie on the date never moves a row to another page").hasSize(45);
+    }
+
+    @Test
+    void d1399_thePagesPutActiveCoursesFirstAndLeaveOutDrafts() {
+        Prescription old = issued("Ancien actif", LocalDateTime.now().minusDays(9));
+        Prescription recentPast = issued("Récent arrêté", LocalDateTime.now().minusDays(1));
+        recentPast.setStatus(com.example.hms.enums.PrescriptionStatus.CANCELLED);
+        Prescription draft = issued("Brouillon", LocalDateTime.now());
+        draft.setStatus(com.example.hms.enums.PrescriptionStatus.DRAFT);
+        when(patientChartAccess.requireOwnRecord(patientId)).thenReturn(patient);
+        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(draft, recentPast, old)));
+
+        org.springframework.data.domain.Page<PatientMedicationResponseDTO> page = service
+            .getMedicationsPageForPatientPortal(patientId, org.springframework.data.domain.PageRequest.of(0, 20));
+
+        assertThat(page.getContent()).extracting(PatientMedicationResponseDTO::getMedicationName)
+            .containsExactly("Ancien actif", "Récent arrêté");
+        assertThat(page.getTotalElements()).isEqualTo(2);
+        assertThat(service.getMedicationsPageForPatientPortal(patientId,
+            org.springframework.data.domain.PageRequest.of(5, 20)).getContent()).as("past the end").isEmpty();
+    }
+
+    private static Prescription issued(String name, LocalDateTime createdAt) {
+        Prescription rx = new Prescription();
+        rx.setId(UUID.randomUUID());
+        rx.setMedicationName(name);
+        rx.setCreatedAt(createdAt);
+        rx.setStatus(com.example.hms.enums.PrescriptionStatus.SIGNED);
+        return rx;
+    }
 }

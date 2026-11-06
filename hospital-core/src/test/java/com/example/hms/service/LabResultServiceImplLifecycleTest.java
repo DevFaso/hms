@@ -1034,6 +1034,24 @@ class LabResultServiceImplLifecycleTest {
         assertThat(order.getStatus()).isEqualTo(LabOrderStatus.RESULTED);
     }
 
+    /** QA D1394: the analyser's or anyone's NORMAL aside, a value no bound settled is not auto-released. */
+    @Test
+    @DisplayName("D1394 - auto-verification skips a value whose comparator settles no grade")
+    void autoVerificationSkipsAValueThatSettlesNoGrade() {
+        ReflectionTestUtils.setField(service, "autoVerificationEnabled", true);
+        stubEntryPath();
+        when(labResultMapper.toResponseDTO(any(LabResult.class)))
+            .thenReturn(LabResultResponseDTO.builder()
+                .severityFlag(LabResultMapper.FLAG_UNSPECIFIED).gradeUnknown(true).build());
+        when(labResultMapper.isGradeUnknown(any(LabResult.class))).thenReturn(true);
+
+        service.createLabResult(entryRequest(), Locale.ENGLISH);
+
+        ArgumentCaptor<LabResult> saved = ArgumentCaptor.forClass(LabResult.class);
+        verify(labResultRepository).save(saved.capture());
+        assertThat(saved.getValue().isReleased()).isFalse();
+    }
+
     @Test
     @DisplayName("D31 - even switched on, a result nothing graded (no range, no flag) is not auto-released")
     void autoVerificationSkipsAnUngradedResult() {
@@ -1978,5 +1996,25 @@ class LabResultServiceImplLifecycleTest {
         assertThat(child.isDocumentationSharedWithLab()).isTrue();
         assertThat(child.getDocumentationReference()).isEqualTo("DOC-42");
         assertThat(child.getOrderChannel()).isEqualTo(LabOrderChannel.ELECTRONIC);
+    }
+
+    @Test
+    @DisplayName("QA D1392 class — a result is not typed onto a cancelled order, nothing saved")
+    void aCancelledOrderTakesNoTypedResult() {
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        org.mockito.Mockito.lenient().when(labOrderRepository.findWithLockById(order.getId()))
+            .thenReturn(Optional.of(order));
+        when(labOrderRepository.findStatusById(order.getId())).thenReturn(com.example.hms.enums.LabOrderStatus.CANCELLED);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(authService.getCurrentUserId()).thenReturn(actorId);
+        when(roleValidator.hasRole(actorId, hospitalId, "ROLE_LAB_SCIENTIST")).thenReturn(true);
+        org.mockito.Mockito.lenient().when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
+        LabResultRequestDTO request = entryRequest();
+
+        assertThatThrownBy(() -> service.createLabResult(request, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .satisfies(e -> org.assertj.core.api.Assertions.assertThat(((BusinessException) e).getMessageKey())
+                .isEqualTo("lab.order.cancelledNoResult"));
+        verify(labResultRepository, never()).save(any(LabResult.class));
     }
 }

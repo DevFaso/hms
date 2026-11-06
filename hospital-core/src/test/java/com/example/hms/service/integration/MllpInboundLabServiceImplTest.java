@@ -531,6 +531,24 @@ class MllpInboundLabServiceImplTest {
         assertThat(captor.getValue().getAbnormalFlag()).isEqualTo(com.example.hms.enums.AbnormalFlag.NORMAL);
     }
 
+    /** QA D1394: an analyser's N on ">1" settles nothing; the hospital's range could not grade it. */
+    @Test
+    @DisplayName("Auto-release on: an explicit N is NOT released on a comparator its bound cannot settle")
+    void explicitNormalOnAnUndecidableComparatorWaitsForAPerson() {
+        ReflectionTestUtils.setField(service, "autoReleaseEnabled", true);
+        configureRangesIn("mmol/L");
+        when(specimenRepository.findByAccessionNumber("ACC-1")).thenReturn(Optional.of(specimen));
+        when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.processOruR01(List.of(observation("ACC-1", ">80", "1", "GLU", "N")),
+            hospital, "APP", "FAC", null, "MSH|...\r");
+
+        ArgumentCaptor<LabResult> captor = ArgumentCaptor.forClass(LabResult.class);
+        verify(labResultRepository).save(captor.capture());
+        assertThat(captor.getValue().isReleased()).isFalse();
+        assertThat(labResultMapper.isUngradedForUnitMismatch(captor.getValue())).as("the units agree").isFalse();
+    }
+
     @Test
     @DisplayName("Auto-release on: a bare range on a test in another unit does not release an explicit N")
     void explicitNormalAgainstABareRangeInTheTestsOtherUnitWaits() {

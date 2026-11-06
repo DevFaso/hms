@@ -162,6 +162,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     private static final String STATUS_UPCOMING = "UPCOMING";
     private static final String STATUS_COMPLETED = "COMPLETED";
     private static final String STATUS_PENDING = "PENDING";
+    /** Never a row status: how {@link #countedMarStatus} tells a tile an as-needed order apart (QA D1402). */
+    private static final String STATUS_AS_NEEDED = "AS_NEEDED";
     /** How far before now a new task may be dated (a shift's worth of back-entry). */
     static final java.time.Duration TASK_DUE_BACKDATE_LIMIT = java.time.Duration.ofHours(12);
     private static final String MSG_PATIENT_NOT_FOUND = "Patient not found: ";
@@ -196,9 +198,6 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     private static final Set<PrescriptionStatus> ACTIVE_RX_STATUSES = Set.of(
         PrescriptionStatus.SIGNED, PrescriptionStatus.TRANSMITTED
     );
-
-    /** Duration after which a patient's vitals are considered overdue. */
-    private static final Duration VITALS_OVERDUE_THRESHOLD = Duration.ofHours(4);
 
     /* ── Dependencies ─────────────────────────────────────────────────── */
 
@@ -248,26 +247,34 @@ public class NurseTaskServiceImpl implements NurseTaskService {
 
     @Override
     public List<NurseVitalTaskResponseDTO> getDueVitals(UUID nurseUserId, UUID hospitalId, Duration window) {
-        List<PatientContext> patients = resolvePatientContexts(nurseUserId, hospitalId);
-        Duration effectiveWindow = normalizeWindow(window);
-        LocalDateTime now = LocalDateTime.now();
-        // QA D220: vitals rounds are for patients in a bed here — not for a
-        // discharged stay or an outpatient the nurse's list also carries.
-        Set<UUID> admitted = activelyAdmittedPatientIds(hospitalId);
-
-        List<NurseVitalTaskResponseDTO> tasks = new ArrayList<>();
-        for (PatientContext ctx : patients) {
-            if (ctx.patientId() != null && admitted.contains(ctx.patientId())) {
-                NurseVitalTaskResponseDTO task = vitalTaskFor(ctx, hospitalId, now, effectiveWindow);
-                if (task != null) {
-                    tasks.add(task);
-                }
-            }
-        }
+        List<NurseVitalTaskResponseDTO> tasks = dueVitalRounds(
+            resolvePatientContexts(nurseUserId, hospitalId), hospitalId, normalizeWindow(window), LocalDateTime.now());
 
         // QA D1255 class: every admitted patient's round, soonest first; the
         // list was cut at 20 rows for the whole hospital.
         tasks.sort(Comparator.comparing(NurseVitalTaskResponseDTO::getDueTime));
+        return tasks;
+    }
+
+    /**
+     * QA D1402: the one rule of "vitals due", read by the list and by the
+     * tile of the same name. The tile had its own (no set in the last four
+     * hours), so a patient on a NEWS2-shortened interval was overdue in the
+     * list and absent from the tile: 30 against 34 at the same moment.
+     */
+    private List<NurseVitalTaskResponseDTO> dueVitalRounds(List<PatientContext> patients, UUID hospitalId,
+                                                           Duration effectiveWindow, LocalDateTime now) {
+        // QA D220: vitals rounds are for patients in a bed here — not for a
+        // discharged stay or an outpatient the nurse's list also carries.
+        Set<UUID> admitted = activelyAdmittedPatientIds(hospitalId);
+        List<NurseVitalTaskResponseDTO> tasks = new ArrayList<>();
+        for (PatientContext ctx : patients) {
+            NurseVitalTaskResponseDTO task = ctx.patientId() != null && admitted.contains(ctx.patientId())
+                ? vitalTaskFor(ctx, hospitalId, now, effectiveWindow) : null;
+            if (task != null) {
+                tasks.add(task);
+            }
+        }
         return tasks;
     }
 
@@ -491,7 +498,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         if (rxOpt.isPresent()) {
             Prescription rx = rxOpt.get();
             validateHospitalMatch(rx.getHospital(), hospitalId);
-            requireOrderNotEndedByDischarge(rx, hospitalId);
+            requireOrderStillStands(rx, hospitalId);
             requirePharmacistVerification(rx, marStatus);
             // QA D922: a controlled dose is given with a witness, refused before anything is written.
             User witness = controlledAdministrationWitness.resolve(rx, marStatus, witnessUserId, nurseUserId);
@@ -504,7 +511,10 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         if (existingMar.isPresent()) {
             MedicationAdministrationRecord marRecord = existingMar.get();
             validateHospitalMatch(marRecord.getHospital(), hospitalId);
-            requireOrderNotEndedByDischarge(marRecord.getPrescription(), hospitalId);
+            // QA D1392: the order's lock comes before its status is read, so a
+            // withdrawal committed while this panel was open is seen here.
+            lockOrderOf(marRecord, hospitalId);
+            requireOrderStillStands(marRecord.getPrescription(), hospitalId);
             requireStillPending(marRecord, hospitalId);
             requirePharmacistVerification(marRecord.getPrescription(), marStatus);
             requireScanByAdministeringNurse(marRecord, marStatus, nurseUserId, hospitalId);
@@ -626,11 +636,18 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         UUID marId, UUID nurseUserId, UUID hospitalId
     ) {
         Optional<MedicationAdministrationRecord> existing = marRepository.findById(marId);
-        if (existing.isPresent()) return existing.get();
+        if (existing.isPresent()) {
+            MedicationAdministrationRecord row = existing.get();
+            validateHospitalMatch(row.getHospital(), hospitalId);
+            // QA D1392: a bedside check of a withdrawn order is refused, as its dose is.
+            requireOrderStillStands(row.getPrescription(), hospitalId);
+            return row;
+        }
 
         Prescription rx = lockPrescription(marId, hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("nurse.mar.notFound", marId));
         validateHospitalMatch(rx.getHospital(), hospitalId);
+        requireOrderStillStands(rx, hospitalId);
 
         // Re-verifying the same dose reuses its PENDING row instead of
         // leaving one orphan row per verify call (D77).
@@ -1053,10 +1070,10 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         long assignedPatients = patients.stream().filter(p -> p.patientId() != null).count();
 
         LocalDateTime now = LocalDateTime.now();
-        LocalDateTime overdueThreshold = now.minus(VITALS_OVERDUE_THRESHOLD);
 
-        long vitalsDue = countVitalsDue(patients, hospitalId, overdueThreshold);
-        long[] medCounts = countMedicationStatuses(patients, hospitalId, now);
+        // QA D1402: the rows of GET /nurse/vitals/due at its default window.
+        long vitalsDue = dueVitalRounds(patients, hospitalId, normalizeWindow(null), now).size();
+        MarCounts medCounts = countMedicationStatuses(patients, hospitalId, now);
 
         long ordersPending = deriveOrderTasks(nurseUserId, hospitalId).size();
         long handoffsPending = countPendingHandoffs(nurseUserId, hospitalId);
@@ -1067,8 +1084,9 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         return NurseDashboardSummaryDTO.builder()
             .assignedPatients(assignedPatients)
             .vitalsDue(vitalsDue)
-            .medicationsDue(medCounts[0])
-            .medicationsOverdue(medCounts[1])
+            .medicationsDue(medCounts.due())
+            .medicationsOverdue(medCounts.overdue())
+            .medicationsAsNeeded(medCounts.asNeeded())
             .ordersPending(ordersPending)
             .handoffsPending(handoffsPending)
             .announcements(announcementCount)
@@ -1083,8 +1101,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             return nurseHandoffRepository.countByHospital_IdAndStatus(hospitalId, STATUS_PENDING);
         }
         return nurseHandoffRepository
-            .findByHospital_IdAndStatusOrderByCreatedAtDesc(hospitalId, STATUS_PENDING,
-                PageRequest.of(0, HANDOFF_SCAN_PAGE))
+            // QA D1402: the count reads what the uncapped list reads (QA D1255), not its first 100.
+            .findByHospital_IdAndStatusOrderByCreatedAtDesc(hospitalId, STATUS_PENDING, Pageable.unpaged())
             .stream()
             // QA D776: a handoff addressed to me is mine whoever the patient's nurse is.
             .filter(h -> inScope(h.getPatient(), scope) || addressedTo(h, nurseUserId))
@@ -1111,22 +1129,6 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         if (news != null && (news.riskBand() == NewsScoreCalculator.RiskBand.MEDIUM
             || news.riskBand() == NewsScoreCalculator.RiskBand.LOW_MEDIUM)) return VITALS_ROUND_NEWS2_MEDIUM;
         return overdue ? VITALS_ROUND_FULL_SET : VITALS_ROUND_ROUTINE;
-    }
-
-    /** Count patients whose vitals are overdue (no vitals or last recording before threshold). */
-    private long countVitalsDue(List<PatientContext> patients, UUID hospitalId, LocalDateTime overdueThreshold) {
-        long count = 0;
-        Set<UUID> admitted = activelyAdmittedPatientIds(hospitalId);
-        for (PatientContext ctx : patients) {
-            if (ctx.patientId() == null || !admitted.contains(ctx.patientId())) continue;
-            Optional<LocalDateTime> lastRecorded = vitalSignRepository
-                .findLatestObservationSet(ctx.patientId(), hospitalId)
-                .map(v -> v.getRecordedAt());
-            if (lastRecorded.isEmpty() || lastRecorded.get().isBefore(overdueThreshold)) {
-                count++;
-            }
-        }
-        return count;
     }
 
     /** The patient's discharged stays here; none are fetched when there is no prescription to end. */
@@ -1170,10 +1172,20 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         return stays;
     }
 
-    /** Count medications by status (DUE / OVERDUE). Returns {due, overdue}. */
-    private long[] countMedicationStatuses(List<PatientContext> patients, UUID hospitalId, LocalDateTime now) {
+    /**
+     * What the medication tiles count, each a filter of the eMAR's own rows
+     * (QA D1402): scheduled doses due now, scheduled doses overdue, and the
+     * as-needed orders on offer, which are no dose waiting to be given but do
+     * sit in the same list.
+     */
+    record MarCounts(long due, long overdue, long asNeeded) {
+    }
+
+    /** Count the MAR rows by what the tiles say (QA D1402). */
+    private MarCounts countMedicationStatuses(List<PatientContext> patients, UUID hospitalId, LocalDateTime now) {
         long due = 0;
         long overdue = 0;
+        long asNeeded = 0;
         // QA D514: counted on the same rule as the eMAR list itself.
         java.util.Map<UUID, Admission> admitted = activeStaysByPatient(hospitalId);
         for (PatientContext ctx : patients) {
@@ -1188,18 +1200,21 @@ public class NurseTaskServiceImpl implements NurseTaskService {
                     due++;
                 } else if (STATUS_OVERDUE.equals(counted)) {
                     overdue++;
+                } else if (STATUS_AS_NEEDED.equals(counted)) {
+                    asNeeded++;
                 }
                 // COMPLETED, UPCOMING or not counted at all (QA D949).
             }
         }
-        return new long[]{due, overdue};
+        return new MarCounts(due, overdue, asNeeded);
     }
 
     /**
-     * The MAR status an order counts as on the workboard, or {@code null}
-     * when it is not counted: not on this ward's MAR, or (QA round 30) an
-     * as-needed order, which is not a dose waiting to be given. Sonar S135:
-     * one exit per order instead of two {@code continue}s in the loop.
+     * The MAR status an order counts as on the tiles, or {@code null} when it
+     * is not on this ward's MAR. QA round 30: an as-needed order is not a dose
+     * waiting to be given, so it counts apart ({@link #STATUS_AS_NEEDED}, QA
+     * D1402) while the course is open. Sonar S135: one exit per order instead
+     * of two {@code continue}s in the loop.
      */
     private String countedMarStatus(Prescription rx, List<Admission> closedStays, Admission stay,
                                     LocalDateTime now) {
@@ -1207,22 +1222,13 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             return null;
         }
         MarNextDose.Due next = nextDose(rx, now);
-        return next.asNeeded() ? null : resolveMarStatus(next, now);
+        String status = resolveMarStatus(next, now);
+        return next.asNeeded() && STATUS_DUE.equals(status) ? STATUS_AS_NEEDED : status;
     }
 
     /* ═══════════════════════════════════════════════════════════════════
        Private helpers — MAR
        ═══════════════════════════════════════════════════════════════════ */
-
-    /**
-     * A dose waiting to be given (DUE or OVERDUE, QA D949): what the workboard
-     * counts. QA round 30: an as-needed order is offered on demand, never
-     * waiting, so it is not counted.
-     */
-    private boolean isPendingDose(Prescription rx, LocalDateTime now) {
-        MarNextDose.Due next = nextDose(rx, now);
-        return !next.asNeeded() && isDueStatus(resolveMarStatus(next, now));
-    }
 
     /**
      * The MAR status of a next dose at {@code now}: what every MAR screen keys
@@ -1690,6 +1696,33 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         }
     }
 
+    /**
+     * QA D1392: every write that verifies or records a dose comes through here.
+     * Only the stay's end was checked, so an order the prescriber had cancelled
+     * took a five-rights check and a GIVEN dose (morphine included) from a
+     * panel opened before the cancel, or by the API. The discharge's own
+     * refusal goes first and keeps its wording; then the order's stay, closed
+     * with no discharge (a cancelled stay, QA D1393, for an order a prepared
+     * fill still holds); then the order's own status
+     * ({@link com.example.hms.service.emar.MarOrderStanding}).
+     * Doses already recorded are not touched.
+     */
+    private void requireOrderStillStands(Prescription rx, UUID hospitalId) {
+        requireOrderNotEndedByDischarge(rx, hospitalId);
+        if (com.example.hms.service.InpatientOrderEnd.endedWithItsStay(rx)) {
+            throw new com.example.hms.exception.ConflictException("nurse.mar.stayEnded");
+        }
+        com.example.hms.service.emar.MarOrderStanding.requireStands(rx);
+    }
+
+    /** The lock {@link #requireStillPending} takes again; a foreign or missing order is refused there. */
+    private void lockOrderOf(MedicationAdministrationRecord marRecord, UUID hospitalId) {
+        Prescription rx = marRecord.getPrescription();
+        if (rx != null && rx.getId() != null) {
+            lockPrescription(rx.getId(), hospitalId);
+        }
+    }
+
     /** Resolve nurse Staff entity from userId + hospitalId. */
     private Optional<Staff> resolveNurseStaff(UUID nurseUserId, UUID hospitalId) {
         if (nurseUserId == null || hospitalId == null) return Optional.empty();
@@ -1811,11 +1844,10 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         if (hospitalId == null) return List.of();
         List<Admission> admissions = admissionRepository.findActiveAdmissionsByHospital(hospitalId);
         LocalDateTime now = LocalDateTime.now();
-        LocalDateTime overdueThreshold = now.minus(VITALS_OVERDUE_THRESHOLD);
 
         List<NurseWorkboardPatientDTO> result = new ArrayList<>();
         for (Admission a : admissions) {
-            NurseWorkboardPatientDTO card = toWorkboardCard(a, hospitalId, overdueThreshold, now);
+            NurseWorkboardPatientDTO card = toWorkboardCard(a, hospitalId, now);
             if (card != null) {
                 result.add(card);
             }
@@ -1823,8 +1855,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         return result;
     }
 
-    private NurseWorkboardPatientDTO toWorkboardCard(Admission a, UUID hospitalId,
-                                                     LocalDateTime overdueThreshold, LocalDateTime now) {
+    private NurseWorkboardPatientDTO toWorkboardCard(Admission a, UUID hospitalId, LocalDateTime now) {
         UUID admissionId = a.getId();
         Patient patient = JpaProxyUtils.safeInit(a.getPatient(), ADMISSION_OWNER, admissionId, ASSOCIATION_PATIENT);
         if (patient == null) return null;
@@ -1833,14 +1864,20 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .findLatestObservationSet(patient.getId(), hospitalId)
             .map(PatientVitalSign::getRecordedAt);
 
-        boolean vitalsDue = lastVitals.isEmpty() || lastVitals.get().isBefore(overdueThreshold);
+        // QA D1402: the card says "vitals due" when the vitals list says overdue,
+        // not on a threshold of its own.
+        NurseVitalTaskResponseDTO vitalRound = vitalTaskFor(new PatientContext(patient.getId(), null),
+            hospitalId, now, normalizeWindow(null));
+        boolean vitalsDue = vitalRound != null && vitalRound.isOverdue();
 
-        long medsDue = prescriptionRepository
-            .findByPatient_IdAndHospital_Id(patient.getId(), hospitalId)
-            .stream()
-            .filter(rx -> ACTIVE_RX_STATUSES.contains(rx.getStatus()))
-            // QA D949: due means DUE or OVERDUE, never a later slot or a finished course.
-            .filter(rx -> isPendingDose(rx, now))
+        // QA D949: due means DUE or OVERDUE, never a later slot or a finished course.
+        // QA D1402: of the rows the eMAR lists for this stay; a live take-home
+        // order of an earlier visit is no ward dose (QA D702) and was counted here.
+        List<Prescription> orders = prescriptionRepository.findByPatient_IdAndHospital_Id(patient.getId(), hospitalId);
+        List<Admission> closedStays = closedStaysFor(patient.getId(), hospitalId, orders);
+        long medsDue = orders.stream()
+            .map(rx -> countedMarStatus(rx, closedStays, a, now))
+            .filter(NurseTaskServiceImpl::isDueStatus)
             .count();
 
         Department department = JpaProxyUtils.safeInit(

@@ -68,6 +68,27 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
         return getMedications(patientId, hospitalId, limit, true);
     }
 
+    /**
+     * QA D1399 (D1347 class): every issued prescription, in the order of the list
+     * read (active courses first, then history, each newest first, ties by id so a
+     * row is on one page only), sliced after the course status is known.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<PatientMedicationResponseDTO> getMedicationsPageForPatientPortal(
+            UUID patientId, Pageable pageable) {
+        Patient patient = patientChartAccess.requireOwnRecord(patientId);
+        List<Prescription> prescriptions = prescriptionRepository
+            .findByPatient_Id(patient.getId(), Pageable.unpaged()).getContent()
+            .stream().filter(p -> isIssued(p.getStatus())).toList();
+        List<com.example.hms.model.Admission> closedStays = closedStaysOf(patient, prescriptions);
+        List<Prescription> ordered = activeFirst(prescriptions, closedStays, Integer.MAX_VALUE);
+        int from = (int) Math.min(pageable.getOffset(), ordered.size());
+        int to = Math.min(from + pageable.getPageSize(), ordered.size());
+        return new org.springframework.data.domain.PageImpl<>(
+            toResponses(ordered.subList(from, to), closedStays), pageable, ordered.size());
+    }
+
     @Override
     @Transactional(readOnly = true)
     public long countMedicationsForPatientPortal(UUID patientId) {
@@ -135,12 +156,20 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
 
         // QA D136: the same stay-end rule as the MAR, so an order a
         // non-attending clinician wrote during the stay ends with it too.
-        List<com.example.hms.model.Admission> closedStays = prescriptions.isEmpty() ? List.of()
+        List<com.example.hms.model.Admission> closedStays = closedStaysOf(patient, prescriptions);
+        List<Prescription> visible = activeFirst(prescriptions, closedStays, limit > 0 ? limit : DEFAULT_LIMIT);
+        return toResponses(visible, closedStays);
+    }
+
+    private List<com.example.hms.model.Admission> closedStaysOf(Patient patient, List<Prescription> prescriptions) {
+        return prescriptions.isEmpty() ? List.of()
             : admissionRepository.findByPatientIdOrderByAdmissionDateTimeDesc(patient.getId()).stream()
                 .filter(a -> a.getActualDischargeDateTime() != null)
                 .toList();
-        List<Prescription> visible = activeFirst(prescriptions, closedStays, limit > 0 ? limit : DEFAULT_LIMIT);
+    }
 
+    private List<PatientMedicationResponseDTO> toResponses(List<Prescription> visible,
+                                                           List<com.example.hms.model.Admission> closedStays) {
         Map<UUID, RefillRequest> latestRefills = latestRefillsFor(visible);
         Map<UUID, com.example.hms.service.pharmacy.ReadyForCollectionLookup.Readiness> ready =
             readyForCollection.openPreparations(visible);
@@ -163,7 +192,7 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
                                           List<com.example.hms.model.Admission> closedStays, int historyLimit) {
         Comparator<Prescription> newestFirst = Comparator.comparing(
             Prescription::getCreatedAt, Comparator.nullsLast(Comparator.<java.time.LocalDateTime>naturalOrder())
-        ).reversed();
+        ).reversed().thenComparing(Prescription::getId, Comparator.nullsLast(Comparator.<UUID>naturalOrder()));
         Map<Boolean, List<Prescription>> byActive = prescriptions.stream()
             .sorted(newestFirst)
             .collect(java.util.stream.Collectors.partitioningBy(
@@ -213,6 +242,8 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
             .prescribedBy(Optional.ofNullable(prescription.getStaff()).map(Staff::getFullName).orElse(null))
             .indication(prescription.getNotes())
             .instructions(prescription.getInstructions())
+            .asNeeded(PrnMinInterval.isAsNeeded(prescription))
+            .prnMinIntervalHours(prescription.getPrnMinIntervalHours())
             .refillsAllowed(prescription.getRefillsAllowed())
             .refillsRemaining(prescription.getRefillsRemaining())
             .refillsUsed(prescription.getRefillsUsed())

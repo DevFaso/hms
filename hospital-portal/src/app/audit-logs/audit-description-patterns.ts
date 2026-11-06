@@ -745,6 +745,12 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     localise: { previous: 'enum' },
   },
   {
+    key: 'AUDIT.DESC.ENCOUNTER_CANCELLED_WITH_ADMISSION',
+    re: /^Encounter cancelled with admission (\S+) \(was (\S+)\)$/,
+    params: ['admission', 'previous'],
+    localise: { previous: 'enum' },
+  },
+  {
     key: 'AUDIT.DESC.ENCOUNTER_ADMISSION_COMPLETED',
     re: /^Encounter completed on admission (\S+) \(was (\S+)\)$/,
     params: ['admission', 'previous'],

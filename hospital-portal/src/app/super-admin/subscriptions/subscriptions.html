@@ -84,6 +84,7 @@
     <section
       class="edit-card"
       data-test="edit-card"
+      data-submit-scope
       appInlineSubForm
       #planForm="inlineSubForm"
       (dismissed)="cancelEdit()"
@@ -97,13 +98,23 @@
       </h2>
       <div class="grid">
         <label>
-          <span>{{ 'SUBSCRIPTIONS.FORM.NAME' | translate }}</span>
-          <input type="text" [ngModel]="form().name" (ngModelChange)="updateForm('name', $event)" />
+          <span>{{ 'SUBSCRIPTIONS.FORM.NAME' | translate }} *</span>
+          <input
+            id="plan-name"
+            type="text"
+            required
+            data-server-field="name"
+            [ngModel]="form().name"
+            (ngModelChange)="updateForm('name', $event)"
+          />
         </label>
         <label>
-          <span>{{ 'SUBSCRIPTIONS.FORM.TIER_CODE' | translate }}</span>
+          <span>{{ 'SUBSCRIPTIONS.FORM.TIER_CODE' | translate }} *</span>
           <input
+            id="plan-tier-code"
             type="text"
+            required
+            data-server-field="tierCode"
             [ngModel]="form().tierCode"
             (ngModelChange)="updateForm('tierCode', $event)"
           />
@@ -111,7 +122,9 @@
         <label class="span-2">
           <span>{{ 'SUBSCRIPTIONS.FORM.DESCRIPTION' | translate }}</span>
           <textarea
+            id="plan-description"
             rows="2"
+            data-server-field="description"
             [ngModel]="form().description"
             (ngModelChange)="updateForm('description', $event)"
           ></textarea>
@@ -119,6 +132,8 @@
         <label>
           <span>{{ 'SUBSCRIPTIONS.FORM.CURRENCY' | translate }}</span>
           <select
+            id="plan-currency"
+            data-server-field="currency"
             data-test="plan-currency"
             [ngModel]="form().currency"
             (ngModelChange)="updateForm('currency', $event)"
@@ -133,8 +148,10 @@
             'SUBSCRIPTIONS.FORM.PRICE' | translate: { currency: currencyUnit(form().currency) }
           }}</span>
           <input
+            id="plan-price"
             type="number"
             min="0"
+            data-server-field="monthlyPriceCents"
             data-test="plan-price"
             [step]="priceStep()"
             [ngModel]="priceAmount()"
@@ -144,8 +161,10 @@
         <label>
           <span>{{ 'SUBSCRIPTIONS.FORM.INCLUDED_SEATS' | translate }}</span>
           <input
+            id="plan-seats"
             type="number"
             min="0"
+            data-server-field="includedSeats"
             [ngModel]="form().includedSeats"
             (ngModelChange)="updateForm('includedSeats', +$event)"
           />
@@ -153,7 +172,9 @@
         <label class="span-2">
           <span>{{ 'SUBSCRIPTIONS.FORM.FEATURE_KEYS' | translate }}</span>
           <input
+            id="plan-feature-keys"
             type="text"
+            data-server-field="featureKeys"
             placeholder="{{ 'SUBSCRIPTIONS.FORM.FEATURE_KEYS_PLACEHOLDER' | translate }}"
             [ngModel]="form().featureKeys"
             (ngModelChange)="updateForm('featureKeys', $event)"
@@ -161,10 +182,18 @@
         </label>
       </div>
       @if (formError()) {
-        <p class="form-error">{{ formError()! | translate }}</p>
+        <p class="form-error" role="alert">{{ formError()! | translate }}</p>
       }
       <div class="actions">
-        <button type="button" class="btn-primary" (click)="submit()" [disabled]="formBusy()">
+        <button
+          type="button"
+          class="btn-primary"
+          data-testid="plan-save"
+          appSubmitGuard
+          submitGuardRequired
+          (click)="submit()"
+          [disabled]="formBusy()"
+        >
           {{ 'SUBSCRIPTIONS.SAVE' | translate }}
         </button>
         <button type="button" class="btn-ghost" (click)="cancelEdit()">

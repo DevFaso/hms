@@ -20,7 +20,6 @@ import {
   AppointmentUpsertRequest,
   AppointmentStatus,
 } from '../services/appointment.service';
-import { ReceptionService } from '../reception/reception.service';
 import { ToastService } from '../core/toast.service';
 import { PermissionService } from '../core/permission.service';
 import { AuthService } from '../auth/auth.service';
@@ -66,10 +65,13 @@ const CHECK_IN_ELIGIBLE: readonly AppointmentStatus[] = ['SCHEDULED', 'CONFIRMED
 /** Every field the reschedule form may refuse. */
 const RESCHEDULE_FIELDS = ['reschedDate', 'reschedStart'];
 
+import { CheckinDialogComponent } from '../reception/checkin-dialog/checkin-dialog.component';
+import type { ReceptionQueueItem } from '../reception/reception.service';
 @Component({
   selector: 'app-appointment-detail',
   standalone: true,
   imports: [
+    CheckinDialogComponent,
     DateTimePipe,
     SubmitGuardDirective,
     DialogFocusDirective,
@@ -88,7 +90,6 @@ export class AppointmentDetailComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly appointmentService = inject(AppointmentService);
   private readonly toast = inject(ToastService);
-  private readonly receptionService = inject(ReceptionService);
   private readonly translate = inject(TranslateService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   protected readonly permissions = inject(PermissionService);
@@ -135,6 +136,8 @@ export class AppointmentDetailComponent implements OnInit {
   appointment = signal<AppointmentResponse | null>(null);
   loading = signal(true);
   saving = signal(false);
+  /** QA D1415: the appointment being checked in through the dialog. */
+  checkinItem = signal<ReceptionQueueItem | null>(null);
   cancelling = signal(false);
 
   // Reschedule modal
@@ -462,22 +465,30 @@ export class AppointmentDetailComponent implements OnInit {
   checkIn(): void {
     const appt = this.appointment();
     if (!appt || this.saving()) return;
+    // QA D1415: the desk confirms the identity itself, in the same dialog as the
+    // queue: the server requires that attestation, and nothing here may assume it.
+    this.checkinItem.set({
+      appointmentId: this.appointmentId,
+      patientId: appt.patientId,
+      patientName: appt.patientName,
+      mrn: null,
+      dateOfBirth: null,
+      appointmentTime: appt.startTime ?? null,
+      providerName: appt.staffName ?? null,
+      departmentName: appt.departmentName ?? null,
+      appointmentReason: appt.reason ?? null,
+      status: appt.status,
+      waitMinutes: 0,
+      encounterId: null,
+      hasInsuranceIssue: false,
+      hasOutstandingBalance: false,
+    } as ReceptionQueueItem);
+  }
 
-    this.saving.set(true);
-    this.receptionService.checkInPatient({ appointmentId: this.appointmentId }).subscribe({
-      next: () => {
-        this.toast.success(this.translate.instant('RECEPTION.CHECK_IN_SUCCESS'));
-        // Re-read rather than patching the status locally: check-in also
-        // stamps checkedInAt and creates the encounter, and the row the
-        // server has is the one that matters.
-        this.loadAppointment(this.appointmentId);
-        this.saving.set(false);
-      },
-      error: (err) => {
-        this.toast.error(refusalReason(err) ?? this.translate.instant('RECEPTION.CHECK_IN_FAILED'));
-        this.saving.set(false);
-      },
-    });
+  /** Re-read rather than patch: check-in also stamps checkedInAt and creates the encounter. */
+  onCheckedIn(): void {
+    this.checkinItem.set(null);
+    this.loadAppointment(this.appointmentId);
   }
 
   /** Open the Reception cockpit — for the co-pay, insurance and consent steps. */

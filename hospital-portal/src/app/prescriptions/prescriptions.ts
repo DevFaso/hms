@@ -40,6 +40,8 @@ import {
 } from '../services/encounter.service';
 import { encounterOptionLabel } from '../shared/encounter-option-label';
 import { allPages, allRows } from '../shared/all-pages';
+import { RangePagerComponent } from '../shared/range-pager/range-pager.component';
+import { unTickedFrequencyVerdict } from '../shared/as-needed-frequency';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { expandRoleEquivalents, roleSatisfies } from '../core/role-equivalence';
@@ -182,6 +184,7 @@ const RX_PRN_INTERVAL_IDS = ['rx-prnMinIntervalHours'];
     HospitalScopeChipComponent,
     EnumLabelPipe,
     PrescriptionClarificationComponent,
+    RangePagerComponent,
   ],
   templateUrl: './prescriptions.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -656,6 +659,7 @@ export class PrescriptionsComponent implements OnInit {
   }
 
   openCreate(): void {
+    this.frequencyBeforeEdit = undefined;
     this.form = this.emptyForm();
     this.createdWithAdvisories.set(false);
     this.resetCatalogPick();
@@ -679,6 +683,8 @@ export class PrescriptionsComponent implements OnInit {
     if (isWithdrawnStatus(p.status)) return;
     this.resetCatalogPick();
     this.createdWithAdvisories.set(false);
+    // A ticked order: unticking it writes its frequency as a fixed schedule, so the hint speaks.
+    this.frequencyBeforeEdit = p.asNeeded ? undefined : (p.frequency ?? '');
     this.form = {
       patientId: p.patientId ?? '',
       staffId: p.staffId ?? '',
@@ -790,7 +796,33 @@ export class PrescriptionsComponent implements OnInit {
     if (!checked) {
       this.form.prnMinIntervalHours = null;
     }
+    // QA D1406: the tick answers the refusal; its banner does not outlive the answer.
+    this.formError.set('');
   }
+
+  /** QA D1406: so does a new frequency. */
+  onFrequencyChange(value: string): void {
+    this.form.frequency = value;
+    this.formError.set('');
+  }
+
+  /**
+   * QA D1391 / D1395: what the server will answer about this wording, under the
+   * field, before the round trip (the mirror of its one rule). A hint: the
+   * server decides. Not for a ticked order, and not for a frequency an edit
+   * leaves as it was.
+   */
+  frequencyHintKey(): string | null {
+    if (this.form.asNeeded || this.frequencyBeforeEdit === this.form.frequency) return null;
+    const verdict = unTickedFrequencyVerdict(this.form.frequency);
+    if (verdict === 'FIXED') return null;
+    return verdict === 'CONDITIONAL'
+      ? 'PRESCRIPTIONS.FREQUENCY_READS_AS_NEEDED'
+      : 'PRESCRIPTIONS.FREQUENCY_UNREADABLE';
+  }
+
+  /** The frequency the order being edited already carries (no hint about it). */
+  private frequencyBeforeEdit: string | null | undefined = undefined;
 
   /** QA round 30: a whole number of hours from 1 to the maximum. */
   private prnIntervalValid(): boolean {
@@ -1351,6 +1383,11 @@ export class PrescriptionsComponent implements OnInit {
    * because nothing re-asked.
    */
   onScopeChange(_hospitalId: string | null): void {
+    this.listPage.set(0);
+    // Never another hospital's rows under the new chip, even while it reads or if it fails.
+    this.prescriptions.set([]);
+    this.filtered.set([]);
+    this.wholeTabRead = false;
     this.load();
     this.loadPrescribers();
   }
@@ -1373,39 +1410,167 @@ export class PrescriptionsComponent implements OnInit {
 
   /** The list read in flight, so a newer `load` supersedes it (see `load`). */
   private listLoad: Subscription | null = null;
+  /** The tab counts read in flight. */
+  private countsLoad: Subscription | null = null;
+
+  /**
+   * QA D1412: rows on one page of the list. The page read every order of the
+   * tenant (17 requests, 11 s to the first row, 3250 table rows, 54000 DOM
+   * nodes) so its tabs and its search could be computed here. It now shows one
+   * page from the server with the server's total, as the chart review does
+   * (QA D1380), and every row stays reachable: QA D1347's every-count-is-whole
+   * still holds, because each count IS the server's total for that tab.
+   */
+  static readonly PAGE_ROWS = 50;
+  protected readonly pageRows = PrescriptionsComponent.PAGE_ROWS;
+  /** The page of the list on screen. */
+  readonly listPage = signal(0);
+  /** The server's count of the rows the current tab holds, or the search's matches. */
+  readonly listTotal = signal(0);
+  /** True while `prescriptions` holds the WHOLE tab, read for the search box. */
+  private wholeTabRead = false;
+  /** That read is in flight: the keystrokes meanwhile are applied when it lands. */
+  private wholeTabLoading = false;
+  /** The list holds a status this build does not know: "Needs attention" is read whole, and narrowed here. */
+  private unmappedStatuses = false;
+
+  /** What only the whole tab can answer: the search box, or a status with no name to ask for. */
+  private needsWholeTab(): boolean {
+    return !!this.searchTerm.trim() || (this.unmappedStatuses && this.activeTab() === 'attention');
+  }
+
+  /** The statuses of a tab (none: every status). */
+  private tabStatuses(tab: PrescriptionTab): string[] {
+    if (tab === 'all') return [];
+    return Object.keys(TAB_BY_STATUS).filter((status) => TAB_BY_STATUS[status] === tab);
+  }
 
   load(): void {
-    this.loading.set(true);
-    // A read is now several requests long, so a reload (a scope switch, a
-    // dispatch) can overtake the one before it. The older read is cancelled:
-    // finishing last, it would put the previous hospital's or a stale list
-    // back on screen.
-    this.listLoad?.unsubscribe();
-    // QA D1347 (round 30): EVERY prescription, all pages. The list used to
-    // read the newest 200 (plus the newest 200 in an attention status) and
-    // the tabs counted that, so "Needs attention" was a minimum on a busy
-    // tenant. Every count on the tab bar is now a count of the whole list. A
-    // read that fails — including one past the paging helper's ceiling — is
-    // said out loud and leaves the list as it was: never a partial list.
-    this.listLoad = this.prescriptionService
-      .list()
+    this.loadCounts();
+    this.loadRows();
+  }
+
+  /**
+   * QA D1347 / D1412: each count is the server's total for that tab, read with
+   * the smallest page: never a count of the rows on hand.
+   */
+  private loadCounts(): void {
+    this.countsLoad?.unsubscribe();
+    const ids: PrescriptionTab[] = [
+      'all',
+      'draft',
+      'attention',
+      'inPharmacy',
+      'dispensed',
+      'closed',
+    ];
+    this.countsLoad = forkJoin(
+      ids.map((tab) =>
+        this.prescriptionService
+          .page({ statuses: this.tabStatuses(tab) }, 0, 1)
+          .pipe(map((slice) => slice?.totalElements ?? 0)),
+      ),
+    )
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: (rows) => {
+        next: (totals) => {
+          const count = Object.fromEntries(ids.map((tab, i) => [tab, totals[i]])) as Record<
+            PrescriptionTab,
+            number
+          >;
+          // A status this build has never heard of cannot be asked for by name,
+          // and it belongs in "Needs attention" (gap G10: never out of the
+          // list), so that tab's count is whatever the other tabs leave.
+          const rest = count.all - count.draft - count.inPharmacy - count.dispensed - count.closed;
+          const unmapped = Math.max(0, rest - count.attention);
+          this.tabTotals.set({ ...count, attention: Math.max(rest, count.attention) });
+          const change = unmapped > 0 !== this.unmappedStatuses;
+          this.unmappedStatuses = unmapped > 0;
+          if (change && this.activeTab() === 'attention') this.loadRows();
+        },
+        error: () => this.toast.error(this.translate.instant('PRESCRIPTIONS.TOAST.LOAD_FAILED')),
+      });
+  }
+
+  /** The rows on screen: one server page, or the whole tab while the search box is in use. */
+  private loadRows(page = this.listPage()): void {
+    this.loading.set(true);
+    // A reload (a scope switch, a dispatch, a tab) can overtake the read before
+    // it. The older read is cancelled: finishing last, it would put the
+    // previous hospital's or a stale list back on screen.
+    this.listLoad?.unsubscribe();
+    this.wholeTabLoading = false;
+    const statuses = this.tabStatuses(this.activeTab());
+    if (this.needsWholeTab()) {
+      // A name is not searchable on the server (names are encrypted at rest),
+      // so the search box reads the tab, once, and narrows it here. A read that
+      // fails is said out loud and leaves the list as it was: never a partial list.
+      this.wholeTabLoading = true;
+      this.listLoad = this.prescriptionService
+        .list({
+          statuses: this.unmappedStatuses && this.activeTab() === 'attention' ? [] : statuses,
+        })
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe({
+          next: (rows) => {
+            this.loading.set(false);
+            this.wholeTabLoading = false;
+            this.wholeTabRead = true;
+            this.prescriptions.set(Array.isArray(rows) ? rows : []);
+            this.applyFilter();
+          },
+          error: () => this.refuseLoad(),
+        });
+      return;
+    }
+    this.listLoad = this.prescriptionService
+      .page({ statuses }, page, PrescriptionsComponent.PAGE_ROWS)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (slice) => {
+          const rows = slice?.content ?? [];
+          // The last row of the last page went (a withdrawal elsewhere): show the page before.
+          if (rows.length === 0 && page > 0) {
+            this.loadRows(page - 1);
+            return;
+          }
           this.loading.set(false);
-          this.prescriptions.set(Array.isArray(rows) ? rows : []);
+          this.wholeTabRead = false;
+          // Only now: a move that fails leaves the pager on the rows still shown.
+          this.listPage.set(page);
+          this.prescriptions.set(rows);
+          this.listTotal.set(slice?.totalElements ?? rows.length);
           this.applyFilter();
         },
-        error: () => {
-          this.loading.set(false);
-          this.toast.error(this.translate.instant('PRESCRIPTIONS.TOAST.LOAD_FAILED'));
-        },
+        error: () => this.refuseLoad(),
       });
+  }
+
+  private refuseLoad(): void {
+    this.loading.set(false);
+    this.wholeTabLoading = false;
+    this.toast.error(this.translate.instant('PRESCRIPTIONS.TOAST.LOAD_FAILED'));
   }
 
   setTab(tab: PrescriptionTab): void {
     this.activeTab.set(tab);
-    this.applyFilter();
+    this.listPage.set(0);
+    this.wholeTabRead = false;
+    this.wholeTabLoading = false;
+    // Never the last tab's rows under this tab's label, even if the read fails.
+    this.prescriptions.set([]);
+    this.filtered.set([]);
+    this.loadRows();
+  }
+
+  /** QA D1412: the pager's move. In a search the matches are on hand; else the server reads the page. */
+  onListPage(page: number): void {
+    if (this.needsWholeTab()) {
+      this.listPage.set(page);
+      this.applyFilter();
+    } else {
+      this.loadRows(page);
+    }
   }
 
   /**
@@ -1419,33 +1584,19 @@ export class PrescriptionsComponent implements OnInit {
     return TAB_BY_STATUS[status] ?? 'attention';
   }
 
-  /**
-   * Every tab's count in one pass, memoised by the signal.
-   *
-   * <p>The tab bar binds six counts and the summary card a seventh; filtering
-   * the whole list per call re-scanned it seven times on every change
-   * detection, which on a tenant with thousands of unpaged prescriptions is
-   * seven full scans per keystroke in the search box.
-   */
-  private readonly tabCounts = computed<Record<PrescriptionTab, number>>(() => {
-    const counts: Record<PrescriptionTab, number> = {
-      all: 0,
-      draft: 0,
-      attention: 0,
-      inPharmacy: 0,
-      dispensed: 0,
-      closed: 0,
-    };
-    for (const p of this.prescriptions()) {
-      counts.all += 1;
-      counts[this.tabForStatus(p.status)] += 1;
-    }
-    return counts;
+  /** QA D1412: the server's count of each tab. */
+  private readonly tabTotals = signal<Record<PrescriptionTab, number>>({
+    all: 0,
+    draft: 0,
+    attention: 0,
+    inPharmacy: 0,
+    dispensed: 0,
+    closed: 0,
   });
 
   /** How many prescriptions the tab holds, before the search box narrows it. */
   countInTab(tab: PrescriptionTab): number {
-    return this.tabCounts()[tab];
+    return this.tabTotals()[tab];
   }
 
   /** True while the prescriber, not the pharmacy, is the one holding this up. */
@@ -1463,20 +1614,49 @@ export class PrescriptionsComponent implements OnInit {
     return match ? match.labelKey : UNRECOGNISED_STATUS.labelKey;
   }
 
+  /** The search box: `(input)` here. Starting or clearing a search changes what is read. */
+  onSearchInput(): void {
+    this.listPage.set(0);
+    this.applyFilter();
+  }
+
   applyFilter(): void {
-    let list = this.prescriptions();
-    const tab = this.activeTab();
-    if (tab !== 'all') list = list.filter((p) => this.tabForStatus(p.status) === tab);
     const term = this.searchTerm.toLowerCase().trim();
-    if (term) {
-      list = list.filter(
-        (p) =>
-          textMatches(p.patientFullName, term) ||
-          (p.medicationName ?? '').toLowerCase().includes(term) ||
-          textMatches(p.staffFullName, term),
-      );
+    // A row re-read in place may have left the tab (a signature, a withdrawal).
+    const tab = this.activeTab();
+    const inTab = this.prescriptions().filter(
+      (p) => tab === 'all' || this.tabForStatus(p.status) === tab,
+    );
+    if (!this.needsWholeTab()) {
+      // The whole tab was on hand for a search that has now been cleared.
+      if (this.wholeTabRead) {
+        this.loadRows();
+      } else if (inTab.length === 0 && this.prescriptions().length > 0) {
+        // The page's only row left the tab: re-read, the tab may hold others.
+        this.load();
+      } else {
+        this.filtered.set(inTab);
+      }
+      return;
     }
-    this.filtered.set(list);
+    if (!this.wholeTabRead) {
+      if (!this.wholeTabLoading) this.loadRows();
+      return;
+    }
+    const matches = term
+      ? inTab.filter(
+          (p) =>
+            textMatches(p.patientFullName, term) ||
+            (p.medicationName ?? '').toLowerCase().includes(term) ||
+            textMatches(p.staffFullName, term),
+        )
+      : inTab;
+    this.listTotal.set(matches.length);
+    // A row went while on the last page of the matches: show the page that is left.
+    const lastPage = Math.max(0, Math.ceil(matches.length / PrescriptionsComponent.PAGE_ROWS) - 1);
+    if (this.listPage() > lastPage) this.listPage.set(lastPage);
+    const from = this.listPage() * PrescriptionsComponent.PAGE_ROWS;
+    this.filtered.set(matches.slice(from, from + PrescriptionsComponent.PAGE_ROWS));
   }
 
   /* ── Pharmacy state + history (gaps G7 / G11) ─────────────────── */

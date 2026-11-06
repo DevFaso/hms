@@ -17,12 +17,55 @@
  *   node scripts/check-list-caps.mjs --report-only
  *   node scripts/check-list-caps.mjs --write-baseline   # READ THE DIFF
  */
-import { resolve } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { relative, resolve } from 'node:path';
 
-import { listCapFindings, sliceCountFindings } from './lib/list-cap-scan.mjs';
+import {
+  listCapFindings,
+  serverLimitFindings,
+  serverLimitedPaths,
+  serverStreamLimitFindings,
+  sliceCountFindings,
+} from './lib/list-cap-scan.mjs';
 import { PORTAL_DIR, scanTemplates } from './lib/template-gate.mjs';
+import { walk } from './lib/walk.mjs';
 import { scanComponents } from './lib/component-sources.mjs';
 import { runGate, isMain } from './lib/baseline.mjs';
+
+const PORTAL_SERVICE = 'src/app/services/patient-portal.service.ts';
+const PORTAL_CONTROLLER =
+  '../hospital-core/src/main/java/com/example/hms/controller/PatientPortalController.java';
+
+/** QA D1399: a patient-portal read of a list the server caps by default, not paged. */
+function portalServerLimitFindings() {
+  const limited = serverLimitedPaths(readFileSync(resolve(PORTAL_DIR, PORTAL_CONTROLLER), 'utf8'));
+  return serverLimitFindings(
+    readFileSync(resolve(PORTAL_DIR, PORTAL_SERVICE), 'utf8'),
+    limited,
+  ).map((hit) => ({
+    ...hit,
+    file: PORTAL_SERVICE,
+    id: `${PORTAL_SERVICE}::${hit.rule}::${hit.anchor}`,
+  }));
+}
+
+/** The backend services, for the cuts no portal rule can see (QA CX-003). */
+const SERVICES_DIR = resolve(
+  PORTAL_DIR,
+  '..',
+  'hospital-core/src/main/java/com/example/hms/service',
+);
+
+function serverFindings() {
+  const out = [];
+  for (const path of walk(SERVICES_DIR, ['.java'])) {
+    const file = relative(resolve(PORTAL_DIR, '..'), path).replaceAll('\\', '/');
+    for (const hit of serverStreamLimitFindings(readFileSync(path, 'utf8'))) {
+      out.push({ ...hit, file, id: `${file}::${hit.rule}::${hit.anchor}` });
+    }
+  }
+  return out;
+}
 
 export const gate = {
   name: 'list caps',
@@ -31,6 +74,9 @@ export const gate = {
   findings: (ctx) => [
     ...scanComponents((source, file) => listCapFindings(source, file), ctx),
     ...scanTemplates((html) => sliceCountFindings(html), {}, ctx),
+    // QA D1399: a portal read of a list the server caps by default.
+    ...portalServerLimitFindings(),
+    ...serverFindings(),
   ],
   comment: [
     'Fixed-size list reads, as they stand today (QA D1347).',

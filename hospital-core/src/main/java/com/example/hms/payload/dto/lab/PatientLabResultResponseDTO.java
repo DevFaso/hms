@@ -48,6 +48,9 @@ public class PatientLabResultResponseDTO {
      * present it as "within normal range".
      */
     private boolean unitMismatch;
+
+    /** QA D1394: a range applies but the value does not settle a grade against it. */
+    private boolean gradeUnknown;
     private LocalDateTime collectedAt;
     private LocalDateTime resultedAt;
     private String orderedBy;

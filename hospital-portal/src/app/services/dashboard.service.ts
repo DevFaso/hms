@@ -586,12 +586,15 @@ export interface TrendPoint {
 }
 
 export interface DepartmentUtilization {
+  departmentId: string;
+  hospitalName: string;
   departmentName: string;
   appointmentCount: number;
   encounterCount: number;
 }
 
 export interface HospitalMetric {
+  hospitalId: string;
   hospitalName: string;
   patientCount: number;
   appointmentCount: number;

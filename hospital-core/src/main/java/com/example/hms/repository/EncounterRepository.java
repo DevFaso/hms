@@ -191,18 +191,30 @@ public interface EncounterRepository
     List<Encounter> findByAdmissionIdAndStatusNotIn(UUID admissionId, Collection<EncounterStatus> statuses);
 
     /**
-     * The patient's open hospital stay at this hospital led by this clinician
-     * (QA D136): a prescription's encounter must carry its prescriber.
+     * The patient's open hospital stays at this hospital, latest first (QA
+     * D136, D414): what a new order with no encounter named is filed on. QA
+     * D1393: an encounter whose admission has ended ({@code endedStays}) is no
+     * open stay, whatever its own status says. Cancelled stays left their
+     * encounters IN_PROGRESS, so every later order landed on the stay that
+     * never happened and the pharmacy refused it. {@code admissionId} is a bare
+     * column with no key, so a missing admission row does not end a stay.
      */
-    Optional<Encounter> findFirstByPatient_IdAndStaff_IdAndHospital_IdAndAdmissionIdIsNotNullAndStatusNotInOrderByEncounterDateDesc(
-            UUID patientId, UUID staffId, UUID hospitalId, Collection<EncounterStatus> statuses);
-
-    /**
-     * The patient's open hospital stay at this hospital, whoever leads it
-     * (QA D414): a consultant's order for an inpatient belongs to the stay.
-     */
-    Optional<Encounter> findFirstByPatient_IdAndHospital_IdAndAdmissionIdIsNotNullAndStatusNotInOrderByEncounterDateDesc(
-            UUID patientId, UUID hospitalId, Collection<EncounterStatus> statuses);
+    @Query("""
+        SELECT e FROM Encounter e
+        WHERE e.patient.id = :patientId
+          AND e.hospital.id = :hospitalId
+          AND e.admissionId IS NOT NULL
+          AND e.status NOT IN :closedStatuses
+          AND NOT EXISTS (
+              SELECT a.id FROM Admission a
+              WHERE a.id = e.admissionId AND a.status IN :endedStays)
+        ORDER BY e.encounterDate DESC, e.id DESC
+    """)
+    List<Encounter> findOpenStayEncounters(
+            @Param("patientId") UUID patientId,
+            @Param("hospitalId") UUID hospitalId,
+            @Param("closedStatuses") Collection<EncounterStatus> closedStatuses,
+            @Param("endedStays") Collection<com.example.hms.enums.AdmissionStatus> endedStays);
 
     /** An admission's own encounter, most recent first (QA D135). */
     Optional<Encounter> findFirstByAdmissionIdOrderByEncounterDateDesc(UUID admissionId);
@@ -371,4 +383,21 @@ public interface EncounterRepository
     /** E8 #48 — every encounter of this patient here; the resolver applies the status/decay rule. */
     List<Encounter> findByPatient_IdAndHospital_Id(UUID patientId, UUID hospitalId);
 
+
+    /** QA CX-002: visits per department (the same definition as {@link #countVisits}). */
+    @Query("SELECT e.department.id AS ownerId, COUNT(e) AS total FROM Encounter e "
+        + "WHERE e.department IS NOT NULL AND " + NOT_PRESCRIPTION_ANCHOR + " GROUP BY e.department.id")
+    List<PlatformCountRows.IdCount> countVisitsPerDepartment();
+
+    /** QA CX-002: visits per status, platform-wide (the anchors stay out, QA D791). */
+    @Query("SELECT CAST(e.status AS string) AS label, COUNT(e) AS total FROM Encounter e WHERE "
+        + NOT_PRESCRIPTION_ANCHOR + " GROUP BY e.status")
+    List<PlatformCountRows.StatusCount> countVisitsPerStatus();
+
+    /** QA CX-002: visits per calendar day of a window, {@code from} included, {@code to} excluded. */
+    @Query("SELECT CAST(e.encounterDate AS LocalDate) AS day, COUNT(e) AS total FROM Encounter e "
+        + "WHERE e.encounterDate >= :from AND e.encounterDate < :to AND " + NOT_PRESCRIPTION_ANCHOR
+        + " GROUP BY CAST(e.encounterDate AS LocalDate)")
+    List<PlatformCountRows.DayCount> countVisitsPerDay(@Param("from") java.time.LocalDateTime from,
+                                                       @Param("to") java.time.LocalDateTime to);
 }

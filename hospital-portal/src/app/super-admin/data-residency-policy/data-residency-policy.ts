@@ -11,6 +11,7 @@ import { RegionPolicyRow } from '../../services/region-policy.model';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { InlineSubFormDirective } from '../../shared/a11y/inline-sub-form.directive';
 import { InlineDiscardAskComponent } from '../../shared/a11y/inline-discard-ask.component';
+import { KeyLabelPipe } from '../../shared/pipes/key-label.pipe';
 
 /**
  * QA D867: the export formats TenantExportPackager knows, shown by name.
@@ -34,6 +35,7 @@ interface EditState {
   selector: 'app-data-residency-policy',
   standalone: true,
   imports: [
+    KeyLabelPipe,
     FormsModule,
     RouterLink,
     TranslateModule,

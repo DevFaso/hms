@@ -202,6 +202,7 @@ public class AppointmentController {
     }
 
     // ---- SEARCH ----
+    @com.example.hms.security.ReadsOnly("a filtered search of appointments, under POST for its body")
     @PostMapping("/search")
     @PreAuthorize(APPOINTMENT_READ_ROLES)
     public ResponseEntity<Page<AppointmentResponseDTO>> searchAppointments(

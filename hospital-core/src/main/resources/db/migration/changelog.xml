@@ -3351,6 +3351,13 @@
                  stripComments="false"/>
     </changeSet>
 
+    <changeSet id="V263-r33-end-encounters-of-cancelled-stays" author="hms-team" runOnChange="false">
+        <sqlFile path="V263__r33_end_encounters_of_cancelled_stays.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
     <changeSet id="V264-r33-correction-history" author="hms-team" runOnChange="false">
         <sqlFile path="V264__r33_correction_history.sql"
                  relativeToChangelogFile="true"

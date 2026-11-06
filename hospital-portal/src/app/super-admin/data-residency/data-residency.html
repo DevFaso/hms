@@ -43,7 +43,7 @@
             [class.active]="filterRegion() === entry.region"
             (click)="setFilter(entry.region)"
           >
-            <span class="chip-label">{{ 'ORG_REGION.CODE.' + entry.region | translate }}</span>
+            <span class="chip-label">{{ entry.region | keyLabel: 'ORG_REGION.CODE.' }}</span>
             {{ ' ' }}<span class="chip-count">{{ entry.count }}</span>
           </button>
         }
@@ -80,7 +80,7 @@
                   </td>
                   <td>
                     <span class="region-badge region-badge--{{ row.region.toLowerCase() }}">
-                      {{ 'ORG_REGION.CODE.' + row.region | translate }}
+                      {{ row.region | keyLabel: 'ORG_REGION.CODE.' }}
                     </span>
                   </td>
                   <td class="actions-col">

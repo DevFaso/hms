@@ -563,8 +563,7 @@ class RequiredRequestIdGuardTest {
         Map.entry("HospitalRequestDTO.state", "KNOWN GAP D1300: the address rule depends on the country"),
         Map.entry("HospitalRequestDTO.zipCode", "KNOWN GAP D1300: the address rule depends on the country"),
         Map.entry("ImagingReportUpsertRequestDTO.imagingOrderId", "KNOWN GAP D1300: create only; the upsert body edits"),
-        Map.entry("LabSpecimenRequestDTO.labOrderId", "the controller sets it from the path after binding: never absent"),
-        Map.entry("CheckInRequestDTO.appointmentId", "KNOWN GAP D1300: the DTO documents a walk-in with patientId instead"));
+        Map.entry("LabSpecimenRequestDTO.labOrderId", "the controller sets it from the path after binding: never absent"));
 
     /** The field carries @NotNull / @NotBlank / @NotEmpty (any group), or a class-level @OneOf lists it. */
     private static boolean constrainedPresent(Class<?> body, String field) {
@@ -596,8 +595,6 @@ class RequiredRequestIdGuardTest {
             "the same test for the same patient at the same minute: the order as a whole, not a field"),
         Map.entry("slot.justTaken",
             "the slot was booked by someone else meanwhile: a state of the slot, not a typed value"),
-        Map.entry("platform.releaseWindow.duplicate",
-            "a 409 conflict on the platform release calendar (super-admin), kept as a conflict"),
         Map.entry("provider.licence.duplicate",
             "a 409 conflict on provider verification (a licence held by another facility); standing debt D1301"),
         Map.entry("provider.business.duplicate",

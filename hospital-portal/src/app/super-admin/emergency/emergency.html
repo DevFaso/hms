@@ -17,21 +17,26 @@
 
   <div class="panel-grid">
     <!-- Force Logout All -->
-    <section class="action-panel danger">
+    <section class="action-panel danger" data-submit-scope>
       <h2>{{ 'EMERGENCY.FORCE_LOGOUT.TITLE' | translate }}</h2>
       <p>{{ 'EMERGENCY.FORCE_LOGOUT.DESC' | translate }}</p>
       <label>
-        <span>{{ 'EMERGENCY.REASON' | translate }}</span>
+        <span>{{ 'EMERGENCY.REASON' | translate }} *</span>
         <textarea
+          id="emergency-logout-reason"
           rows="2"
+          required
+          data-server-field="reason"
           [ngModel]="logoutReason()"
           (ngModelChange)="logoutReason.set($event)"
         ></textarea>
       </label>
       <label>
-        <span>{{ 'EMERGENCY.CONFIRM_TYPED' | translate }}</span>
+        <span>{{ 'EMERGENCY.CONFIRM_TYPED' | translate }} *</span>
         <input
+          id="emergency-logout-confirm"
           type="text"
+          required
           placeholder="{{ 'EMERGENCY.FORCE_LOGOUT.CONFIRM_PLACEHOLDER' | translate }}"
           [ngModel]="logoutConfirm()"
           (ngModelChange)="logoutConfirm.set($event)"
@@ -40,6 +45,7 @@
       <label>
         <span>{{ 'EMERGENCY.MFA_TOKEN' | translate }}</span>
         <input
+          id="emergency-logout-mfa"
           type="text"
           inputmode="numeric"
           [ngModel]="logoutMfa()"
@@ -49,6 +55,9 @@
       <button
         type="button"
         class="btn-danger"
+        data-testid="emergency-logout-submit"
+        appSubmitGuard
+        submitGuardRequired
         (click)="forceLogoutAll()"
         [disabled]="logoutPanel().busy"
       >
@@ -66,17 +75,27 @@
     </section>
 
     <!-- Kill Feature -->
-    <section class="action-panel warn">
+    <section class="action-panel warn" data-submit-scope>
       <h2>{{ 'EMERGENCY.KILL_FEATURE.TITLE' | translate }}</h2>
       <p>{{ 'EMERGENCY.KILL_FEATURE.DESC' | translate }}</p>
       <label>
-        <span>{{ 'EMERGENCY.KILL_FEATURE.FLAG_KEY' | translate }}</span>
-        <input type="text" [ngModel]="killFlagKey()" (ngModelChange)="killFlagKey.set($event)" />
+        <span>{{ 'EMERGENCY.KILL_FEATURE.FLAG_KEY' | translate }} *</span>
+        <input
+          id="emergency-kill-key"
+          type="text"
+          required
+          data-server-field="flagKey"
+          [ngModel]="killFlagKey()"
+          (ngModelChange)="killFlagKey.set($event)"
+        />
       </label>
       <label>
-        <span>{{ 'EMERGENCY.REASON' | translate }}</span>
+        <span>{{ 'EMERGENCY.REASON' | translate }} *</span>
         <textarea
+          id="emergency-kill-reason"
           rows="2"
+          required
+          data-server-field="reason"
           [ngModel]="killReason()"
           (ngModelChange)="killReason.set($event)"
         ></textarea>
@@ -84,13 +103,22 @@
       <label>
         <span>{{ 'EMERGENCY.MFA_TOKEN' | translate }}</span>
         <input
+          id="emergency-kill-mfa"
           type="text"
           inputmode="numeric"
           [ngModel]="killMfa()"
           (ngModelChange)="killMfa.set($event)"
         />
       </label>
-      <button type="button" class="btn-warn" (click)="killFeature()" [disabled]="killPanel().busy">
+      <button
+        type="button"
+        class="btn-warn"
+        data-testid="emergency-kill-submit"
+        appSubmitGuard
+        submitGuardRequired
+        (click)="killFeature()"
+        [disabled]="killPanel().busy"
+      >
         {{ 'EMERGENCY.KILL_FEATURE.ACTION' | translate }}
       </button>
       @if (killPanel().error) {
@@ -102,13 +130,15 @@
     </section>
 
     <!-- Force MFA Re-enrol -->
-    <section class="action-panel warn">
+    <section class="action-panel warn" data-submit-scope>
       <h2>{{ 'EMERGENCY.FORCE_MFA.TITLE' | translate }}</h2>
       <p>{{ 'EMERGENCY.FORCE_MFA.DESC' | translate }}</p>
       <label>
         <span>{{ 'EMERGENCY.FORCE_MFA.SEARCH_USERS' | translate }}</span>
         <input
+          id="emergency-mfa-search"
           type="search"
+          data-server-field="userIds"
           autocomplete="off"
           placeholder="{{ 'EMERGENCY.FORCE_MFA.SEARCH_PLACEHOLDER' | translate }}"
           [ngModel]="mfaQuery()"
@@ -160,6 +190,8 @@
       <label>
         <span>{{ 'EMERGENCY.FORCE_MFA.HOSPITAL_SCOPE' | translate }}</span>
         <select
+          id="emergency-mfa-hospital"
+          data-server-field="hospitalId"
           [ngModel]="mfaHospitalId()"
           (ngModelChange)="onMfaScopeChange($event)"
           [disabled]="hospitalsLoading() || hospitalsFailed()"
@@ -193,9 +225,11 @@
           }}
         </p>
         <label>
-          <span>{{ 'EMERGENCY.FORCE_MFA.RESET_ALL_CONFIRM' | translate }}</span>
+          <span>{{ 'EMERGENCY.FORCE_MFA.RESET_ALL_CONFIRM' | translate }} *</span>
           <input
+            id="emergency-mfa-confirm"
             type="text"
+            required
             autocomplete="off"
             placeholder="{{ 'EMERGENCY.FORCE_MFA.RESET_ALL_PLACEHOLDER' | translate }}"
             [ngModel]="mfaResetAllConfirm()"
@@ -208,9 +242,12 @@
         </p>
       }
       <label>
-        <span>{{ 'EMERGENCY.REASON' | translate }}</span>
+        <span>{{ 'EMERGENCY.REASON' | translate }} *</span>
         <textarea
+          id="emergency-mfa-reason"
           rows="2"
+          required
+          data-server-field="reason"
           [ngModel]="mfaReason()"
           (ngModelChange)="mfaReason.set($event)"
         ></textarea>
@@ -218,6 +255,7 @@
       <label>
         <span>{{ 'EMERGENCY.MFA_TOKEN' | translate }}</span>
         <input
+          id="emergency-mfa-token"
           type="text"
           inputmode="numeric"
           [ngModel]="mfaMfa()"
@@ -227,6 +265,9 @@
       <button
         type="button"
         class="btn-warn"
+        data-testid="emergency-mfa-submit"
+        appSubmitGuard
+        submitGuardRequired
         (click)="forceMfaReenrol()"
         [disabled]="mfaPanel().busy"
       >
@@ -241,20 +282,28 @@
     </section>
 
     <!-- Broadcast -->
-    <section class="action-panel info">
+    <section class="action-panel info" data-submit-scope>
       <h2>{{ 'EMERGENCY.BROADCAST.TITLE' | translate }}</h2>
       <p>{{ 'EMERGENCY.BROADCAST.DESC' | translate }}</p>
       <label>
-        <span>{{ 'EMERGENCY.BROADCAST.MESSAGE' | translate }}</span>
+        <span>{{ 'EMERGENCY.BROADCAST.MESSAGE' | translate }} *</span>
         <textarea
+          id="emergency-broadcast-message"
           rows="3"
+          required
+          data-server-field="message"
           [ngModel]="broadcastMessage()"
           (ngModelChange)="broadcastMessage.set($event)"
         ></textarea>
       </label>
       <label>
         <span>{{ 'EMERGENCY.BROADCAST.SEVERITY' | translate }}</span>
-        <select [ngModel]="broadcastSeverity()" (ngModelChange)="broadcastSeverity.set($event)">
+        <select
+          id="emergency-broadcast-severity"
+          data-server-field="severity"
+          [ngModel]="broadcastSeverity()"
+          (ngModelChange)="broadcastSeverity.set($event)"
+        >
           <option value="INFO">{{ 'EMERGENCY.BROADCAST.SEVERITY_INFO' | translate }}</option>
           <option value="WARN">{{ 'EMERGENCY.BROADCAST.SEVERITY_WARN' | translate }}</option>
           <option value="CRITICAL">
@@ -265,6 +314,7 @@
       <label>
         <span>{{ 'EMERGENCY.MFA_TOKEN' | translate }}</span>
         <input
+          id="emergency-broadcast-mfa"
           type="text"
           inputmode="numeric"
           [ngModel]="broadcastMfa()"
@@ -274,6 +324,9 @@
       <button
         type="button"
         class="btn-primary"
+        data-testid="emergency-broadcast-submit"
+        appSubmitGuard
+        submitGuardRequired
         (click)="broadcast()"
         [disabled]="broadcastPanel().busy"
       >
@@ -287,7 +340,7 @@
       }
     </section>
     <!-- Downtime read-only mode (P3 #23a) -->
-    <section class="action-panel warn" data-test="downtime-panel">
+    <section class="action-panel warn" data-test="downtime-panel" data-submit-scope>
       <h2>{{ 'EMERGENCY.DOWNTIME.TITLE' | translate }}</h2>
       <p>{{ 'EMERGENCY.DOWNTIME.DESC' | translate }}</p>
       @if (downtimeStatus()?.readOnly) {
@@ -300,20 +353,26 @@
           {{ 'EMERGENCY.DOWNTIME.INACTIVE' | translate }}
         </p>
       }
-      <label>
-        <span>{{ 'EMERGENCY.DOWNTIME.MESSAGE' | translate }}</span>
-        <textarea
-          rows="2"
-          maxlength="500"
-          [ngModel]="downtimeMessage()"
-          (ngModelChange)="downtimeMessage.set($event)"
-        ></textarea>
-      </label>
       @if (!downtimeStatus()?.readOnly) {
+        <label>
+          <span>{{ 'EMERGENCY.DOWNTIME.MESSAGE' | translate }} *</span>
+          <textarea
+            id="emergency-downtime-message"
+            rows="2"
+            maxlength="500"
+            required
+            data-server-field="message"
+            [ngModel]="downtimeMessage()"
+            (ngModelChange)="downtimeMessage.set($event)"
+          ></textarea>
+        </label>
         <button
           type="button"
           class="btn-danger"
           data-test="downtime-activate"
+          data-testid="downtime-activate"
+          appSubmitGuard
+          submitGuardRequired
           (click)="setDowntime(true)"
           [disabled]="downtimeBusy()"
         >

@@ -65,6 +65,20 @@ describe('PatientDemographicsEditComponent (QA D926)', () => {
     expect(toast.success).toHaveBeenCalled();
   });
 
+  for (const change of [
+    { dateOfBirth: '2999-01-01' },
+    { dateOfBirth: '1800-01-01' },
+    { lastName: '12345' },
+  ]) {
+    it(`QA D1403 + D1414: ${JSON.stringify(change)} is refused before the request`, () => {
+      const c = create().componentInstance;
+      Object.assign(c.form, change);
+      c.submit();
+      expect(c.error()).toBeTruthy();
+      expect(patients.patchDemographics).not.toHaveBeenCalled();
+    });
+  }
+
   it('refuses a blank required field without calling the server', () => {
     const c = create().componentInstance;
     c.form.phoneNumberPrimary = '  ';

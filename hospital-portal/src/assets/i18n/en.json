@@ -81,6 +81,8 @@
     }
   },
   "BEDS": {
+    "DELETE_BED_CONFIRM": "Delete the bed {{name}}?",
+    "DELETE_WARD_CONFIRM": "Delete the ward {{name}}?",
     "ACTIVE": "Active",
     "AVAILABLE": "Available",
     "BEDS_IN": "Beds in {{ward}}",
@@ -409,6 +411,8 @@
       "FAILED": "CSV export failed. Try again."
     },
     "SAVED": {
+      "DELETE_FAILED": "Could not delete the saved search.",
+      "DELETE_CONFIRM": "Delete the saved search {{name}}?",
       "LABEL": "Saved searches",
       "EMPTY": "No saved searches yet — name the current filters and save.",
       "NAME_PLACEHOLDER": "Name this filter set",
@@ -460,12 +464,14 @@
       "CONFIRM_PLACEHOLDER": "FORCE LOGOUT ALL"
     },
     "KILL_FEATURE": {
+      "CONFIRM": "Turn off {{key}} for every hospital?",
       "TITLE": "Kill a feature flag",
       "DESC": "Sets the global FeatureFlagOverride for this key to disabled.",
       "FLAG_KEY": "Flag key",
       "ACTION": "Kill feature"
     },
     "FORCE_MFA": {
+      "CONFIRM": "Reset the second factor of the {{count}} selected user(s)?",
       "TITLE": "Force MFA re-enrolment",
       "DESC": "Clears MFA enrolment and backup codes for the selected users. With nobody selected it resets EVERY enrolled user (optionally at one hospital) — that needs a typed confirmation.",
       "SEARCH_USERS": "Users to reset",
@@ -488,6 +494,7 @@
       "RETRY": "Retry"
     },
     "BROADCAST": {
+      "CONFIRM": "Send this message to every signed-in user?",
       "TITLE": "Broadcast banner",
       "DESC": "Publishes a banner message to /topic/emergency-broadcast.",
       "MESSAGE": "Message",
@@ -499,6 +506,11 @@
     },
     "REQUEST_FAILED": "Request failed.",
     "DOWNTIME": {
+      "MESSAGE_REQUIRED": "Say why the platform is going read-only.",
+      "CONFIRM_DEACTIVATE_BODY": "Every hospital can write again at once.",
+      "CONFIRM_DEACTIVATE": "Lift read-only mode?",
+      "CONFIRM_ACTIVATE_BODY": "Every hospital's writes are refused until this is lifted. Signed-in users will read: {{message}}",
+      "CONFIRM_ACTIVATE": "Turn the whole platform read-only?",
       "TITLE": "Read-only (downtime) mode",
       "DESC": "Blocks every write across the platform with a 503 while viewing stays available. Login, token refresh and this toggle stay open. Takes effect immediately here, within 30 seconds on other instances.",
       "ACTIVE": "READ-ONLY MODE IS ACTIVE.",
@@ -513,6 +525,11 @@
     "DISMISS": "Dismiss broadcast"
   },
   "SUBSCRIPTIONS": {
+    "DEACTIVATE_CONFIRM_BODY": "It can no longer be assigned to an organization.",
+    "DEACTIVATE_CONFIRM": "Deactivate plan {{name}}?",
+    "DEACTIVATED": "Plan {{name}} deactivated.",
+    "UPDATED": "Plan {{name}} saved.",
+    "CREATED": "Plan {{name}} created.",
     "TITLE": "Subscription Plans",
     "SUBTITLE": "Plan catalogue and per-organization assignments.",
     "ACTIVE_ONLY": "Active plans only",
@@ -837,6 +854,7 @@
       "SECRET_CONFIGURED": "Env-var set"
     },
     "MAPPINGS": {
+      "DELETE_CONFIRM": "Delete this DHIS2 mapping?",
       "ADD": "Add a mapping",
       "ADDED": "Mapping added",
       "ADD_FAILED": "Could not add mapping",
@@ -889,6 +907,7 @@
     }
   },
   "BREAK_GLASS": {
+    "REVOKE_CONFIRM": "End this emergency access now?",
     "ACTIVE": "Emergency access active — every read is audited.",
     "CONFIRM": "Declare access",
     "DECLARE": "Declare break-the-glass",
@@ -1090,6 +1109,10 @@
     "NURSING_NOTE": "Nursing note"
   },
   "ORDER_SETS": {
+    "FIELD_CATALOG_ITEM": "Exact catalogue item",
+    "QUANTITY_HINT": "Required for a controlled drug.",
+    "APPLIED_RESULT_ONE": "Applied. Created 1 order ({{skipped}} skipped).",
+    "ITEM_ONE": "item",
     "ADD_ITEM": "Add item",
     "ADMIN_TITLE": "Order set templates",
     "APPLIED_RESULT": "Applied. Created {{count}} orders ({{skipped}} skipped).",
@@ -1113,9 +1136,9 @@
     "FIELD_DOSE_MIN": "Dose min",
     "FIELD_DOSE_UNIT": "Unit",
     "FIELD_FREQUENCY": "Frequency",
-    "FIELD_ITEM_NAME": "Name",
+    "FIELD_ITEM_NAME": "Item name",
     "FIELD_ITEM_TYPE": "Type",
-    "FIELD_NAME": "Name",
+    "FIELD_NAME": "Order set name",
     "FIELD_NOTES": "Notes",
     "FIELD_ORDER_ITEMS_JSON": "Order items (JSON array)",
     "FIELD_ROUTE": "Route",
@@ -1177,6 +1200,7 @@
     }
   },
   "REFILLS": {
+    "REJECT_CONFIRM": "Refuse this refill request?",
     "QUEUE_TITLE": "Refill requests",
     "STATUS_REQUESTED": "Pending",
     "STATUS_PAUSED": "On hold",
@@ -1289,6 +1313,7 @@
     "WARD": "Ward"
   },
   "ANALYTICS": {
+    "LOAD_FAILED": "The analytics could not be loaded. Try again.",
     "APPOINTMENTS": "Appointments",
     "APPOINTMENTS_BY_STATUS": "Appointments by Status",
     "APPOINTMENT_TREND": "Appointment Trend",
@@ -1653,6 +1678,7 @@
       "ROI_STATUS": "Release-of-information request {{verb}}",
       "ENCOUNTER_STATUS_DENIED": "Encounter status change refused: the encounter is not assigned to the caller",
       "ENCOUNTER_STATUS_UPDATED": "Encounter status changed from {{from}} to {{to}}",
+      "ENCOUNTER_CANCELLED_WITH_ADMISSION": "Encounter closed: admission {{admission}} was cancelled (was {{previous}})",
       "ENCOUNTER_DISCHARGE_COMPLETED": "Encounter closed at the discharge of admission {{admission}} (was {{previous}})",
       "ENCOUNTER_ADMISSION_COMPLETED": "Encounter closed when admission {{admission}} began (was {{previous}})",
       "CHECKED_IN": "Patient checked in for appointment {{appointment}}; encounter {{encounter}} opened as arrived. {{identity}} {{insurance}}",
@@ -1947,6 +1973,7 @@
       "PHARMACIST_RECORDED_PARTNER_DISPENSE": "Partner dispense recorded by the pharmacist"
     },
     "WARD_ORDER_TRIGGER": {
+      "ADMISSION_CANCELLED": "admission cancelled",
       "PARTNER_SMS_ACCEPT": "partner accepted by SMS",
       "PARTNER_SMS_REJECT": "partner refused by SMS",
       "PARTNER_SMS_CONFIRM_DISPENSE": "partner confirmed dispensing by SMS",
@@ -3791,6 +3818,10 @@
     "SIGNATURE": "Signature",
     "UNIT_UNKNOWN": "unit unknown",
     "NOT_GRADED_UNITS_DIFFER": "Not graded: units differ",
+    "GRADE_UNKNOWN": "Not graded: the limit does not settle it",
+    "GRADE_UNKNOWN_HINT": "This value is stated as a limit, and that limit could be inside or outside the reference range. It was not compared with the range and raised no critical alert: review it.",
+    "COMPARATOR_HINT": "A value with < or > is graded from its limit. If the limit does not settle the grade, the result is marked \"not graded\" and must be reviewed before release.",
+    "SAVED_NOT_GRADED": "Saved, but not graded: no critical alert can be raised for this value. Review it before release.",
     "NOT_GRADED_UNITS_DIFFER_HINT": "No reference range is configured in this result's unit, so it was not compared with a range.",
     "REFERENCE_RANGES": "Reference Ranges",
     "GENDER": "Gender",
@@ -3887,6 +3918,7 @@
     "FLAG_LOW": "Low",
     "FLAG_NORMAL": "Normal",
     "FLAG_UNSPECIFIED": "Not graded",
+    "FLAG_GRADE_UNKNOWN": "Not graded: the limit does not settle it",
     "FLAG_UNIT_MISMATCH": "Not graded: units differ",
     "CRITICAL": "Critical",
     "RELEASE": "Release",
@@ -3903,6 +3935,7 @@
     "SELF_RELEASE_NOTE": "You entered this result yourself. Releasing it without a second reviewer is allowed, and it is recorded as a self-release.",
     "SELF_RELEASE_CONFIRM": "Release it myself",
     "CONFIRM_CORRECTION": "This result is a correction: validating it replaces a value already validated and sent to the clinician and the patient.",
+    "GRADE_UNKNOWN_NOTE": "Not graded: {{value}} is a limit that could be inside or outside the reference range, so no critical alert can be raised. By releasing it you confirm that you reviewed it; the ordering clinician will be asked to review it.",
     "UNGRADED_NOTE": "Not graded: no reference range is in this value’s unit ({{unit}}) or converts to it, so no critical alert can be raised. By releasing it you confirm you reviewed it; the ordering clinician will be asked to review it."
   },
   "LAB_INSTRUMENTS": {
@@ -4393,7 +4426,9 @@
     "MARK_ALL_READ": "Mark All Read",
     "MEDICATION": "Medication",
     "MEDICATIONS": "Medications",
-    "MEDICATIONS_DUE": "Medications Due",
+    "MEDICATIONS_AS_NEEDED_HINT": "+ {{count}} as needed",
+    "MEDICATIONS_DUE": "Scheduled doses due",
+    "MEDICATIONS_OVERDUE": "Overdue doses",
     "MEDICATION_LIST": "Medication List",
     "MEDICATION_MAR": "Medication Administration Record",
     "MEDIUM": "Medium",
@@ -4843,6 +4878,9 @@
     "SHOWING_FIRST": "Showing the first {{shown}} of {{total}} requests."
   },
   "PATIENTS": {
+    "DOB_NOT_PAST": "The date of birth must be in the past.",
+    "DOB_IMPOSSIBLE": "This date of birth is impossible: it is more than 130 years ago.",
+    "NAME_DIGITS_ONLY": "A name cannot be made of digits only.",
     "ADDRESS": "Address",
     "ADDRESS_HISTORY": "Address history",
     "ADDRESS_HISTORY_EMPTY": "No previous addresses — the patient has not moved since registration.",
@@ -5443,6 +5481,9 @@
       "STATUS": "Status",
       "PROVIDER": "Provider",
       "REFILLS_REMAINING": "Refills Remaining",
+      "AS_NEEDED": "As needed",
+      "AS_NEEDED_INTERVAL": "As needed: at least {{hours}} h between two doses",
+      "MIN_INTERVAL": "At least {{hours}} h between two doses",
       "REFILLS_COUNT": "{{count}} refills remaining",
       "STARTED": "Started",
       "REQUEST_REFILL": "Request Refill",
@@ -5474,6 +5515,7 @@
       "INTERPRETATION": "Interpretation",
       "ABNORMAL": "Abnormal",
       "NORMAL_RESULT": "Within normal limits",
+      "NOT_GRADED_STATUS": "Ask your doctor about this result",
       "NOT_GRADED_RESULT": "Not compared with a reference range — please ask your provider about this result",
       "ABNORMAL_RESULT": "Outside normal range — please consult your provider",
       "NORMAL_PREFIX": "Normal:",
@@ -5511,6 +5553,8 @@
       "NO_LINES": "This invoice has no detailed lines.",
       "NO_PAYMENTS": "No payment yet.",
       "PAYMENTS": "Payments",
+      "ISSUED_BY": "Issued by {{hospital}}",
+      "ISSUED_BY_COLUMN": "Hospital",
       "SHOW_DETAIL": "See details",
       "TITLE": "Billing & Payments",
       "LOADING": "Loading billing information...",
@@ -5633,6 +5677,7 @@
       "SUMMARY_EXTERNAL": "times your record went outside your care team",
       "ACCESS_LOG_TITLE": "Accesses and disclosures",
       "OPT_OUT": {
+        "REVOKE_CONFIRM": "Share your record with your other hospitals again?",
         "TITLE": "Sharing with other hospitals",
         "DESC": "Your record follows you: a clinician treating you at another hospital can read it. You can close that door. Your own hospital keeps its access, and an emergency access stays possible, recorded, and shown to you here.",
         "LOADING": "Checking your sharing setting…",
@@ -7181,6 +7226,8 @@
     }
   },
   "PRESCRIPTIONS": {
+    "FREQUENCY_UNREADABLE": "This is not a schedule we can read: write a fixed schedule (“3 times a day”, “every 6 hours”, “single dose”), or tick “As needed (PRN)”.",
+    "FREQUENCY_READS_AS_NEEDED": "This reads as “as needed”: tick “As needed (PRN)” and give the minimum interval, or write a fixed schedule.",
     "CLARIFICATION": {
       "ANSWER": "The prescriber's answer",
       "ANSWERED_LABEL": "Answered",
@@ -9135,6 +9182,7 @@
     "LAB_STATUS_NORMAL": "Normal",
     "LAB_STATUS_NOT_GRADED_UNITS": "Not graded: units differ",
     "LAB_STATUS_PENDING": "Pending release",
+    "LAB_STATUS_GRADE_UNKNOWN": "Not graded: the limit does not settle it",
     "LAB_STATUS_UNKNOWN": "Unknown",
     "LAB_TEST": "Test",
     "LAB_TRUNCATED": "Showing the {{count}} most recent.",
@@ -10813,6 +10861,7 @@
     "ASSESSMENT_EMPTY": "Record at least one finding (an APGAR score, a vital sign or the examination) before saving."
   },
   "ASSIGN_ADMIN": {
+    "DEACTIVATE_CONFIRM": "Deactivate this assignment? The user loses this role at this hospital.",
     "TITLE": "Assignment Administration",
     "SUBTITLE": "User-role-hospital assignments, confirmation codes and bulk import",
     "BULK_IMPORT": "Bulk import",
@@ -11313,6 +11362,8 @@
     "LATE_ENTRY": "late entry"
   },
   "MICRO": {
+    "SUSCEPTIBILITY_REMOVE_CONFIRM": "Remove this susceptibility result?",
+    "ISOLATE_REMOVE_CONFIRM": "Remove this isolate and its susceptibilities?",
     "CORRECTION_HISTORY": "Correction history",
     "CORRECTION_BEFORE": "Before this correction",
     "NO_GROWTH_CONFIRM_TITLE": "Declare no growth?",
@@ -11508,6 +11559,7 @@
     "NEXT_MONTH": "Next month"
   },
   "REPORTS": {
+    "DEACTIVATE_CONFIRM": "Deactivate the report {{name}}? Its scheduled runs stop.",
     "TITLE": "Scheduled Reports",
     "SUBTITLE": "Aggregate CSV reports emailed each closed period",
     "CREATE": "New Report",
@@ -11551,6 +11603,8 @@
     "RECIPIENT_INVALID": "\"{{address}}\" is not a valid email address."
   },
   "SLOT_ADMIN": {
+    "TPL_RETIRE_CONFIRM": "Retire this session template?",
+    "VT_RETIRE_CONFIRM": "Retire the visit type {{name}}?",
     "ACTIONS": "Actions",
     "ACTIVE": "Active",
     "ALL": "All",
@@ -11934,6 +11988,7 @@
     "TRANSFER_CANCEL_CONFIRM": "Cancel transfer"
   },
   "EMAR": {
+    "ORDER_NO_LONGER_ACTIVE": "This order is no longer active. No dose was recorded.",
     "ACTION_RECORD_GIVEN": "Record as given",
     "ADMIN_STATUS": {
       "GIVEN": "given",
@@ -12566,6 +12621,9 @@
   "PORTAL_PAGING": {
     "LAB_LOAD_MORE": "Show older results",
     "LAB_LOAD_FAILED": "Your test results could not be loaded.",
+    "MED_LOAD_FAILED": "Your medications could not be loaded.",
+    "SHOWN_OF": "{{shown}} of {{total}}",
+    "SHOW_MORE": "Show more",
     "LAB_LOAD_MORE_FAILED": "The older results could not be loaded. Try again."
   },
   "MAR_HISTORY": {

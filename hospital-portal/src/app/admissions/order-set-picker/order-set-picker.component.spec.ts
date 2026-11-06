@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { TranslateModule } from '@ngx-translate/core';
-import { of, throwError } from 'rxjs';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { of, Subject, throwError } from 'rxjs';
 
 import { OrderSetPickerComponent } from './order-set-picker.component';
 import {
@@ -127,6 +127,199 @@ describe('OrderSetPickerComponent', () => {
       expect(svc.apply).toHaveBeenCalledTimes(1);
       done();
     }, DEBOUNCE_WAIT_MS);
+  });
+
+  /** Picks the set, then runs `then` once the search has landed. */
+  function pick(set: typeof sepsisSet, then: () => void, done: () => void): void {
+    svc.list.and.returnValue(of({ content: [set], totalElements: 1, number: 0, size: 200 }));
+    fixture.detectChanges();
+    setTimeout(() => {
+      fixture.detectChanges();
+      (
+        fixture.nativeElement.querySelector('[data-testid="order-set-picker-item"]') as HTMLElement
+      ).click();
+      fixture.detectChanges();
+      then();
+      done();
+    }, DEBOUNCE_WAIT_MS);
+  }
+
+  const text = (testId: string) =>
+    (fixture.nativeElement.querySelector(`[data-testid="${testId}"]`)?.textContent ?? '') as string;
+
+  /** QA D1396: the apply's refusal is the server's own reason, and the set stays open to retry. */
+  it('QA D1396: an apply refused by the server shows its reason, never the generic line', (done) => {
+    const reason = 'Élément 1 (Morphine) : un stupéfiant doit indiquer la quantité à délivrer.';
+    svc.apply.and.returnValue(
+      throwError(() => ({
+        status: 400,
+        error: { message: reason, fieldErrors: { 'orderItems[0].quantity': reason } },
+      })),
+    );
+    pick(
+      sepsisSet,
+      () => {
+        (
+          fixture.nativeElement.querySelector(
+            '[data-testid="order-set-picker-apply"]',
+          ) as HTMLButtonElement
+        ).click();
+        fixture.detectChanges();
+        expect(text('order-set-picker-error')).toContain(reason);
+        expect(text('order-set-picker-error')).not.toContain('ORDER_SETS.ERROR');
+        expect(fixture.nativeElement.querySelector('[data-testid="order-set-picker-apply"]'))
+          .withContext('another try stays possible')
+          .not.toBeNull();
+      },
+      done,
+    );
+  });
+
+  it('QA D1396: after a refused apply the list stays, to pick another set', (done) => {
+    svc.apply.and.returnValue(throwError(() => ({ status: 400, error: { message: 'Non.' } })));
+    pick(
+      sepsisSet,
+      () => {
+        (
+          fixture.nativeElement.querySelector(
+            '[data-testid="order-set-picker-apply"]',
+          ) as HTMLButtonElement
+        ).click();
+        fixture.detectChanges();
+        expect(
+          fixture.nativeElement.querySelector('[data-testid="order-set-picker-item"]'),
+        ).not.toBeNull();
+      },
+      done,
+    );
+  });
+
+  it('QA D1345 class: a search landing during an apply keeps "Apply" closed', (done) => {
+    const inFlight = new Subject<AppliedOrderSetSummary>();
+    svc.apply.and.returnValue(inFlight);
+    pick(
+      sepsisSet,
+      () => {
+        const button = () =>
+          fixture.nativeElement.querySelector(
+            '[data-testid="order-set-picker-apply"]',
+          ) as HTMLButtonElement;
+        button().click();
+        fixture.detectChanges();
+        expect(button().disabled).toBeTrue();
+        const c = fixture.componentInstance as unknown as { onSearch(v: string): void };
+        c.onSearch('x');
+        setTimeout(() => {
+          fixture.detectChanges();
+          expect(button().disabled)
+            .withContext('a second POST would create every order again')
+            .toBeTrue();
+          inFlight.next(appliedResult);
+          done();
+        }, DEBOUNCE_WAIT_MS);
+      },
+      () => undefined,
+    );
+  });
+
+  it('QA D1396: a failure with no reason of its own keeps the generic line', (done) => {
+    svc.apply.and.returnValue(throwError(() => ({ status: 500, error: { message: 'boom' } })));
+    pick(
+      sepsisSet,
+      () => {
+        (
+          fixture.nativeElement.querySelector(
+            '[data-testid="order-set-picker-apply"]',
+          ) as HTMLButtonElement
+        ).click();
+        fixture.detectChanges();
+        expect(text('order-set-picker-error')).toContain('ORDER_SETS.ERROR');
+        expect(text('order-set-picker-error')).not.toContain('boom');
+      },
+      done,
+    );
+  });
+
+  /** QA D1405: two items of one drug are told apart, in the reader's language. */
+  it('QA D1405: translated type and route, dose, frequency, interval and quantity on each item', (done) => {
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation(
+      'fr',
+      {
+        ORDER_SETS: {
+          ITEM_TYPE: { MEDICATION: 'Médicament' },
+          ROUTE: { PO: 'Orale' },
+          FREQUENCY: { Q6H: 'Toutes les 6 h', PRN: 'Si besoin (PRN)' },
+          ITEM_ONE: 'élément',
+          ITEMS: 'éléments',
+        },
+        PRESCRIPTIONS: {
+          PRN_MIN_INTERVAL_VALUE: 'Au moins {{hours}} h entre deux doses',
+          QUANTITY_VALUE: '{{value}} {{unit}}',
+        },
+      },
+      true,
+    );
+    translate.use('fr');
+    pick(
+      {
+        ...sepsisSet,
+        orderCount: 1,
+        orderItems: [
+          {
+            orderType: 'MEDICATION',
+            medicationName: 'Paracétamol',
+            doseRangeMin: 500,
+            doseUnit: 'mg',
+            route: 'PO',
+            frequency: 'Q6H',
+          },
+          {
+            orderType: 'MEDICATION',
+            medicationName: 'Paracétamol',
+            dose: '1 g',
+            frequency: 'si fièvre',
+            asNeeded: true,
+            prnMinIntervalHours: 6,
+            quantity: 6,
+            quantityUnit: 'cp',
+          },
+          { orderType: 'LAB', orderName: 'Lactate' },
+        ],
+      } as typeof sepsisSet,
+      () => {
+        const items = Array.from(
+          fixture.nativeElement.querySelectorAll('[data-testid="order-set-picker-preview-item"]'),
+        ).map((li) => ((li as HTMLElement).textContent ?? '').replace(/\s+/g, ' ').trim());
+        expect(items[0]).toContain('Médicament');
+        expect(items[0]).not.toContain('MEDICATION');
+        expect(items[0]).toContain('500 mg · Orale · Toutes les 6 h');
+        expect(items[1]).toContain(
+          '1 g · si fièvre · Si besoin (PRN) · Au moins 6 h entre deux doses · 6 cp',
+        );
+        expect(items[0]).not.toEqual(items[1]);
+        expect(text('order-set-picker-list')).toContain('1 élément');
+        expect(text('order-set-picker-list')).not.toContain('éléments');
+      },
+      done,
+    );
+  });
+
+  it('QA D1405: one order created reads in the singular', (done) => {
+    svc.apply.and.returnValue(of({ ...appliedResult, labOrderIds: [] }));
+    pick(
+      sepsisSet,
+      () => {
+        (
+          fixture.nativeElement.querySelector(
+            '[data-testid="order-set-picker-apply"]',
+          ) as HTMLButtonElement
+        ).click();
+        fixture.detectChanges();
+        expect(text('order-set-picker-applied')).toContain('ORDER_SETS.APPLIED_RESULT_ONE');
+      },
+      done,
+    );
   });
 
   it('shows the error state when search fails', (done) => {

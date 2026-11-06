@@ -238,6 +238,30 @@ describe('PatientFormComponent', () => {
     });
   }
 
+  it('QA D1403 + D1414: a future date, an impossible date and a digit name are refused on their field, in the same press', () => {
+    for (const [field, value] of [
+      ['dateOfBirth', '2999-01-01'],
+      ['dateOfBirth', '1800-01-01'],
+      ['lastName', '12345'],
+      ['firstName', '12'],
+    ]) {
+      fillValidForm();
+      Object.assign(component.form, { [field]: value });
+      component.onSubmit();
+      expect(component.serverFieldErrors[field])
+        .withContext(field + value)
+        .toBeTruthy();
+      expect(userSpy.adminRegister).not.toHaveBeenCalled();
+    }
+  });
+
+  it('QA D1414: a name with a digit and a letter stays accepted', () => {
+    fillValidForm();
+    Object.assign(component.form, { firstName: 'A1' });
+    component.onSubmit();
+    expect(component.serverFieldErrors['firstName']).toBeUndefined();
+  });
+
   it('QA D626: a refused registration leaves nothing to compensate and keeps the form open', () => {
     userSpy.adminRegister.and.returnValue(throwError(() => ({ status: 400, error: {} })));
     fillValidForm();

@@ -217,12 +217,17 @@ export class SubmitGuardDirective {
         .map((id) => labelOf(root, id))
         .filter((l) => l !== '');
       if (required.length === 0) return reason;
-      const fields = this.translate.instant(MISSING_FIELDS_KEY, { fields: required.join(', ') });
+      // QA D1410: two blank rows of one list are one label, said once ("Nom, Nom").
+      const fields = this.translate.instant(MISSING_FIELDS_KEY, {
+        fields: [...new Set(required)].join(', '),
+      });
       return `${fields}. ${reason}`;
     }
     const labels = blank.map((id) => labelOf(root, id)).filter((l) => l !== '');
     if (labels.length > 0) {
-      return this.translate.instant(MISSING_FIELDS_KEY, { fields: labels.join(', ') });
+      return this.translate.instant(MISSING_FIELDS_KEY, {
+        fields: [...new Set(labels)].join(', '),
+      });
     }
     return this.translate.instant(BLOCKED_KEY);
   }

@@ -137,6 +137,8 @@ interface LabResultApiResponse {
   status: string;
   /** No configured reference range is in the result's unit, so nothing graded it. */
   unitMismatch?: boolean;
+  /** QA D1394: a range applies but the value (">1") does not settle a grade against it. */
+  gradeUnknown?: boolean;
   collectedAt: string;
   resultedAt: string;
   orderedBy: string;
@@ -159,6 +161,10 @@ export interface MedicationSummary {
   endDate: string;
   indication: string;
   instructions: string;
+  /** QA D1398: as needed (PRN), not on a fixed schedule. */
+  asNeeded?: boolean;
+  /** QA D1398: the least time, in hours, between two doses of an as-needed medicine. */
+  prnMinIntervalHours?: number | null;
 
   /** Refills the prescriber authorized when writing the prescription. */
   refillsAllowed?: number;
@@ -467,7 +473,7 @@ function mapLabResult(l: LabResultApiResponse): LabResultSummary {
     isUngraded:
       !pending &&
       !ABNORMAL_LAB_STATUSES.has(l.status) &&
-      (l.unitMismatch === true || l.status === 'UNKNOWN'),
+      (l.unitMismatch === true || l.gradeUnknown === true || l.status === 'UNKNOWN'),
     unit: l.unit ?? '',
     orderedBy: l.orderedBy ?? '',
     performedBy: l.performedBy ?? '',
@@ -706,6 +712,10 @@ export interface PortalPrescription {
   prescribedBy: string;
   prescribedDate: string;
   status: string;
+  /** QA D1398: as needed (PRN), not on a fixed schedule. */
+  asNeeded?: boolean;
+  /** QA D1398: the least time, in hours, between two doses. */
+  prnMinIntervalHours?: number | null;
   /** G15: when a fill was marked ready for collection; absent when nothing is waiting. */
   readyForCollectionAt?: string;
   /** G15: the pharmacy where it is waiting. */
@@ -715,6 +725,8 @@ export interface PortalPrescription {
 /** Raw shape returned by backend PrescriptionResponseDTO. */
 interface PrescriptionApiResponse {
   id: string;
+  asNeeded?: boolean;
+  prnMinIntervalHours?: number | null;
   medicationName: string;
   medicationDisplayName?: string;
   dosage: string;
@@ -1263,6 +1275,16 @@ export class PatientPortalService {
     );
   }
 
+  /**
+   * QA D1399 (D1347 class): every medication of mine, every page read, active
+   * first. `/my-medications` read the list with its default limit: 20 of 249 past
+   * medicines and nothing to say so. Errors propagate so the page can say the load
+   * failed rather than "no medicines".
+   */
+  getAllMyMedications(): Observable<MedicationSummary[]> {
+    return this.allPortalRows<MedicationSummary>(`${this.base}/medications/page`);
+  }
+
   getMyPrescriptions(): Observable<PortalPrescription[]> {
     return this.http.get<ApiWrapper<PrescriptionApiResponse[]>>(`${this.base}/prescriptions`).pipe(
       map((r) =>
@@ -1276,6 +1298,8 @@ export class PatientPortalService {
           prescribedBy: p.staffFullName ?? '',
           prescribedDate: p.createdAt ?? '',
           status: p.status ?? '',
+          asNeeded: p.asNeeded === true,
+          prnMinIntervalHours: p.prnMinIntervalHours ?? null,
           readyForCollectionAt: p.readyForCollectionAt ?? undefined,
           readyForCollectionPharmacyName: p.readyForCollectionPharmacyName ?? undefined,
         })),
@@ -1284,7 +1308,14 @@ export class PatientPortalService {
     );
   }
 
-  getMyLabResults(limit = 20): Observable<LabResultSummary[]> {
+  /** QA D1399: how many lab results my list holds, in all. */
+  getMyLabResultTotal(): Observable<number> {
+    return this.http
+      .get<ApiWrapper<number>>(`${this.base}/lab-results/count`)
+      .pipe(map((r) => r.data ?? 0));
+  }
+
+  getMyLabResults(limit: number): Observable<LabResultSummary[]> {
     return this.http
       .get<ApiWrapper<LabResultApiResponse[]>>(`${this.base}/lab-results`, { params: { limit } })
       .pipe(
@@ -1855,12 +1886,18 @@ export class PatientPortalService {
       .pipe(map((r) => (r.data ?? []).map(mapAppointment)));
   }
 
-  getProxyMedications(patientId: string, limit = 50): Observable<MedicationSummary[]> {
+  /** QA D1399 (D1347 class): every medication of the grantor (was active + 50). */
+  getProxyMedications(patientId: string): Observable<MedicationSummary[]> {
+    return this.allPortalRows<MedicationSummary>(
+      `${this.base}/proxy-access/${patientId}/medications/page`,
+    );
+  }
+
+  /** QA D1399: how many lab results the grantor's list holds, in all. */
+  getProxyLabResultTotal(patientId: string): Observable<number> {
     return this.http
-      .get<ApiWrapper<MedicationSummary[]>>(`${this.base}/proxy-access/${patientId}/medications`, {
-        params: { limit },
-      })
-      .pipe(map((r) => r.data ?? []));
+      .get<ApiWrapper<number>>(`${this.base}/proxy-access/${patientId}/lab-results/count`)
+      .pipe(map((r) => r.data ?? 0));
   }
 
   /**

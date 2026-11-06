@@ -152,4 +152,18 @@ class PrescriptionCopyPdfServiceTest {
             return new PDFTextStripper().getText(doc).replace(' ', ' ');
         }
     }
+
+    /** QA D1398: the copy the patient takes home says it is as needed, and how far apart. */
+    @Test
+    void d1398_theCopySaysAsNeededAndTheLeastInterval() throws Exception {
+        rx.setFrequency("q6h");
+        rx.setAsNeeded(true);
+        rx.setPrnMinIntervalHours(6);
+
+        assertThat(textOf(service.copyForStaff(rx.getId()))).contains("Si besoin : au moins 6 h entre deux prises");
+
+        rx.setAsNeeded(false);
+        rx.setPrnMinIntervalHours(null);
+        assertThat(textOf(service.copyForStaff(rx.getId()))).doesNotContain("Si besoin");
+    }
 }

@@ -20,6 +20,9 @@ import { currentLocale, formatCfa } from '../../shared/i18n/app-locale';
 import { refusalReason } from '../../shared/refusal-reason';
 import { InlineSubFormDirective } from '../../shared/a11y/inline-sub-form.directive';
 import { InlineDiscardAskComponent } from '../../shared/a11y/inline-discard-ask.component';
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+import { ConfirmService } from '../../shared/confirm-dialog/confirm.service';
+import { ToastService } from '../../core/toast.service';
 
 /**
  * QA D865: the currencies a plan can be priced in, as ISO 4217 codes. The
@@ -51,6 +54,7 @@ const FRESH_REQUEST: SubscriptionPlanRequest = {
     TranslateModule,
     InlineSubFormDirective,
     InlineDiscardAskComponent,
+    SubmitGuardDirective,
   ],
   templateUrl: './subscriptions.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -59,6 +63,8 @@ const FRESH_REQUEST: SubscriptionPlanRequest = {
 export class SubscriptionsComponent implements OnInit {
   private readonly service = inject(SubscriptionService);
   private readonly translate = inject(TranslateService);
+  private readonly confirm = inject(ConfirmService);
+  private readonly toast = inject(ToastService);
 
   readonly loading = signal(true);
   readonly errored = signal(false);
@@ -182,17 +188,36 @@ export class SubscriptionsComponent implements OnInit {
       .subscribe((saved) => {
         this.formBusy.set(false);
         if (saved) {
+          // QA CX-007: the form closes on a save, so the reader is told it worked.
+          this.toast.success(
+            this.translate.instant(target ? 'SUBSCRIPTIONS.UPDATED' : 'SUBSCRIPTIONS.CREATED', {
+              name: body.name,
+            }),
+          );
           this.cancelEdit();
           this.refresh();
         }
       });
   }
 
-  deactivate(plan: SubscriptionPlan): void {
+  async deactivate(plan: SubscriptionPlan): Promise<void> {
     if (!plan.active) return;
     this.deactivateError.set(null);
+    // QA CX-010: one click deactivated the plan.
+    const confirmed = await this.confirm.ask({
+      titleKey: 'SUBSCRIPTIONS.DEACTIVATE_CONFIRM',
+      messageKey: 'SUBSCRIPTIONS.DEACTIVATE_CONFIRM_BODY',
+      params: { name: plan.name },
+      confirmKey: 'SUBSCRIPTIONS.DEACTIVATE',
+    });
+    if (!confirmed) return;
     this.service.deactivatePlan(plan.id).subscribe({
-      next: () => this.refresh(),
+      next: () => {
+        this.toast.success(
+          this.translate.instant('SUBSCRIPTIONS.DEACTIVATED', { name: plan.name }),
+        );
+        this.refresh();
+      },
       // QA D850: a plan an organization still holds is refused (409) with
       // a reason naming how many; show it rather than a generic failure.
       error: (err: HttpErrorResponse) =>

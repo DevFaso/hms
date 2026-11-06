@@ -104,6 +104,49 @@ class OrderSetItemDispatcherTest {
     }
 
     /**
+     * QA D1396 (round 33): the item's quantity, unit and catalogue pick reach
+     * the order, so a controlled drug can be applied; the editor's dose range is
+     * the order's dose. Numbers come out of JSON as Integer, Double or String.
+     */
+    @Test
+    void d1396_theQuantityUnitPickAndDoseRangeReachTheOrder() {
+        PrescriptionResponseDTO resp = new PrescriptionResponseDTO();
+        resp.setId(UUID.randomUUID());
+        resp.setCdsAdvisories(List.of());
+        when(prescriptionService.createPrescription(any(), any(Locale.class))).thenReturn(resp);
+        UUID pick = UUID.randomUUID();
+        ArgumentCaptor<PrescriptionRequestDTO> captor = ArgumentCaptor.forClass(PrescriptionRequestDTO.class);
+
+        dispatcher.dispatch(Map.of("orderType", "MEDICATION", "medicationName", "Morphine", "doseRangeMin", 2,
+            "doseRangeMax", 2.0, "doseUnit", "mg", "route", "IV", "frequency", "Q4H", "quantity", 6,
+            "quantityUnit", "ampoules", "medicationCatalogItemId", pick.toString()), ctx(), Locale.FRENCH);
+        verify(prescriptionService).createPrescription(captor.capture(), eq(Locale.FRENCH));
+        PrescriptionRequestDTO sent = captor.getValue();
+        assertThat(sent.getQuantity()).isEqualByComparingTo("6");
+        assertThat(sent.getQuantityUnit()).isEqualTo("ampoules");
+        assertThat(sent.getMedicationCatalogItemId()).isEqualTo(pick);
+        assertThat(sent.getDosage()).isEqualTo("2 mg IV");
+        assertThat(sent.getRoute()).as("the route reaches the order itself").isEqualTo("IV");
+
+        org.mockito.Mockito.clearInvocations(prescriptionService);
+        dispatcher.dispatch(Map.of("orderType", "MEDICATION", "medicationName", "Morphine", "doseRangeMin", 2,
+            "doseRangeMax", 4, "doseUnit", "mg", "quantity", "6.5", "medicationCatalogItemId", "not-a-uuid"),
+            ctx(), Locale.FRENCH);
+        verify(prescriptionService).createPrescription(captor.capture(), eq(Locale.FRENCH));
+        assertThat(captor.getValue().getDosage()).isEqualTo("2-4 mg");
+        assertThat(captor.getValue().getQuantity()).isEqualByComparingTo("6.5");
+        assertThat(captor.getValue().getMedicationCatalogItemId()).isNull();
+        assertThat(captor.getValue().getRoute()).as("no route written").isNull();
+
+        org.mockito.Mockito.clearInvocations(prescriptionService);
+        dispatcher.dispatch(Map.of("orderType", "MEDICATION", "medicationName", "X", "route", "BOGUS",
+            "notes", "Surveiller la FR"), ctx(), Locale.FRENCH);
+        verify(prescriptionService).createPrescription(captor.capture(), eq(Locale.FRENCH));
+        assertThat(captor.getValue().getRoute()).as("a route the reading does not know is not stored").isNull();
+        assertThat(captor.getValue().getNotes()).contains("Sepsis bundle").contains("Surveiller la FR");
+    }
+
+    /**
      * QA round 30 / QA D1378 / D1382 (round 32): an item ticked as needed
      * carries its author's tick and minimum interval to the order (a number,
      * digits or a long); an item not ticked sends neither, whatever its

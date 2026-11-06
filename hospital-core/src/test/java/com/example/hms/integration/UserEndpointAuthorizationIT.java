@@ -429,9 +429,9 @@ class UserEndpointAuthorizationIT extends BaseIT {
     void receptionistCompensationDelete() throws Exception {
         String receptionist = hms(receptionistA, "ROLE_RECEPTIONIST");
 
-        // Step 1 of patient-form, through the real chain: admin-register a PATIENT.
+        // QA D1416: a receptionist without a patient record gets what an admin gets, and no account.
         String suffix = next();
-        MvcResult registered = perform(post("/users/admin-register"), receptionist, Map.of(
+        MvcResult refused = perform(post("/users/admin-register"), receptionist, Map.of(
             "username", "orphan" + suffix,
             "firstName", "Orphan",
             "lastName", "Account",
@@ -439,12 +439,15 @@ class UserEndpointAuthorizationIT extends BaseIT {
             "roleNames", List.of("PATIENT"),
             "hospitalId", hospitalA.getId().toString(),
             "forcePasswordChange", true));
-        assertThat(registered.getResponse().getStatus()).isEqualTo(201);
-        UUID orphanId = UUID.fromString(objectMapper.readTree(
-            registered.getResponse().getContentAsString()).get("id").asText());
+        assertThat(refused.getResponse().getStatus()).isEqualTo(400);
+        assertThat(objectMapper.readTree(refused.getResponse().getContentAsString())
+            .get("fieldErrors").get("patient").asText()).isNotBlank();
+        assertThat(userRepository.findByUsername("orphan" + suffix)).isEmpty();
+
+        // An account left without its patient row, as older registrations did; the compensation deletes it.
+        UUID orphanId = account("orphan" + suffix, "ROLE_PATIENT", hospitalA).getId();
         createdUsers.add(orphanId);
 
-        // Step 2 failed (no patient row); the compensation deletes the account.
         assertThat(status(delete("/users/" + orphanId), receptionist, null)).isEqualTo(200);
         assertThat(userRepository.findById(orphanId).orElseThrow().isDeleted()).isTrue();
 

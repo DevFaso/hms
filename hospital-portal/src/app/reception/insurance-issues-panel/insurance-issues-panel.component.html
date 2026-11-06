@@ -13,7 +13,10 @@
       </tr>
     </thead>
     <tbody>
-      @for (issue of issues; track issue.patientId + (issue.appointmentId ?? '')) {
+      @for (
+        issue of issues;
+        track issue.patientId + (issue.appointmentId ?? issue.encounterId ?? '')
+      ) {
         <tr>
           <td>{{ issue.appointmentTime | dash }}</td>
           <td>

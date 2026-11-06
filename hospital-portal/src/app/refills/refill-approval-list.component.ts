@@ -22,6 +22,7 @@ import { ToastService } from '../core/toast.service';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { refuseFields } from '../shared/forms/invalid-fields';
 import { refusalReason, refusedFieldReasons } from '../shared/refusal-reason';
+import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 
 const STATUS_FILTERS: { value: RefillStatus | 'ALL'; labelKey: string }[] = [
   { value: 'REQUESTED', labelKey: 'REFILLS.STATUS_REQUESTED' },
@@ -57,6 +58,7 @@ export class RefillApprovalListComponent implements OnInit {
   protected decisionNotes: Record<string, string> = {};
 
   private readonly service = inject(RefillApprovalService);
+  private readonly confirm = inject(ConfirmService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
@@ -98,12 +100,18 @@ export class RefillApprovalListComponent implements OnInit {
     );
   }
 
-  protected reject(refill: RefillRequest): void {
+  protected async reject(refill: RefillRequest): Promise<void> {
     const providerNotes = this.notesFor(refill);
     if (!providerNotes) {
       this.refuseNotes(refill, 'REFILLS.NOTES_REQUIRED_REJECT');
       return;
     }
+    // QA CX-010: the note says why, it does not ask whether.
+    const confirmed = await this.confirm.ask({
+      titleKey: 'REFILLS.REJECT_CONFIRM',
+      confirmKey: 'REFILLS.ACTION_REJECT',
+    });
+    if (!confirmed) return;
     this.dispatch(
       refill,
       () => this.service.reject(refill.id, { providerNotes }),

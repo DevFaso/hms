@@ -128,11 +128,22 @@
                 </tr>
               </thead>
               <tbody>
-                @for (m of medications(); track m.id) {
+                @for (m of medicationRows.shown(); track m.id) {
                   <tr>
                     <td>{{ m.medicationName }}</td>
                     <td>{{ m.dosage || '—' }}</td>
-                    <td>{{ m.frequency || '—' }}</td>
+                    <td>
+                      {{ m.frequency || '—' }}
+                      @if (m.asNeeded) {
+                        <!-- QA D1398: as needed, with its least interval -->
+                        <small [attr.data-testid]="'proxy-med-prn-' + m.id">{{
+                          (m.prnMinIntervalHours
+                            ? 'PORTAL.MEDICATIONS.AS_NEEDED_INTERVAL'
+                            : 'PORTAL.MEDICATIONS.AS_NEEDED'
+                          ) | translate: { hours: m.prnMinIntervalHours }
+                        }}</small>
+                      }
+                    </td>
                     <td>
                       <span class="portal-status-chip" [attr.data-status]="m.status">{{
                         m.status | enumLabel: 'status'
@@ -143,6 +154,25 @@
               </tbody>
             </table>
           </div>
+          <!-- QA D1399: the server's total, and every row one click away -->
+          <p class="text-muted" data-testid="proxy-med-count">
+            {{
+              'PORTAL_PAGING.SHOWN_OF'
+                | translate: { shown: medicationRows.shown().length, total: medicationRows.total() }
+            }}
+          </p>
+          @if (medicationRows.hasMore()) {
+            <div class="portal-load-more">
+              <button
+                type="button"
+                class="btn-secondary"
+                data-testid="proxy-med-more"
+                (click)="medicationRows.showMore()"
+              >
+                {{ 'PORTAL_PAGING.SHOW_MORE' | translate }}
+              </button>
+            </div>
+          }
         }
       }
 
@@ -176,6 +206,11 @@
                         <app-lab-correction-badge [corrected]="l.corrected" audience="patient" />
                         @if (l.isAbnormal) {
                           <span class="material-symbols-outlined abnormal-flag">warning</span>
+                        } @else if (l.isUngraded) {
+                          <!-- QA D1394: a value nothing graded never reads as a plain one -->
+                          <small [attr.data-testid]="'proxy-lab-not-graded-' + l.id">{{
+                            'PORTAL.LAB_RESULTS.NOT_GRADED_STATUS' | translate
+                          }}</small>
                         }
                       }
                     </td>
@@ -186,6 +221,13 @@
               </tbody>
             </table>
           </div>
+          @if (labTotal(); as total) {
+            <p class="text-muted" data-testid="proxy-lab-count">
+              {{
+                'PORTAL_PAGING.SHOWN_OF' | translate: { shown: labResults().length, total: total }
+              }}
+            </p>
+          }
           <!-- QA D1213 (sibling): the grantor's older results, one click away -->
           @if (labPager.loadMoreFailed()) {
             <p class="portal-inline-error" data-testid="proxy-labs-load-more-failed" role="alert">
@@ -222,6 +264,7 @@
                 <tr>
                   <th>{{ 'PORTAL.FAMILY.VIEWER.INVOICE' | translate }}</th>
                   <th>{{ 'PORTAL.FAMILY.VIEWER.DATE' | translate }}</th>
+                  <th>{{ 'PORTAL.BILLING.ISSUED_BY_COLUMN' | translate }}</th>
                   <th>{{ 'PORTAL.FAMILY.VIEWER.AMOUNT' | translate }}</th>
                   <th>{{ 'PORTAL.FAMILY.VIEWER.BALANCE' | translate }}</th>
                   <th>{{ 'PORTAL.FAMILY.VIEWER.STATUS' | translate }}</th>
@@ -232,6 +275,8 @@
                   <tr>
                     <td>{{ inv.invoiceNumber }}</td>
                     <td>{{ inv.date | serverTime | date: 'mediumDate' }}</td>
+                    <!-- QA D1413: every invoice names the hospital that issued it -->
+                    <td>{{ inv.facility || '—' }}</td>
                     <td>{{ inv.amount | cfa }}</td>
                     <td>{{ inv.balance | cfa }}</td>
                     <td>
