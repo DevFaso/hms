@@ -28,8 +28,11 @@ public class TransfusionAdministrationRequestDTO {
     @NotNull
     private UUID bloodUnitId;
 
-    @NotNull
+    /** The second checker by staff record, or by user: one of the two is required (the service refuses neither). */
     private UUID verifiedByStaffId;
+
+    /** QA CX-008: the portal's picker lists colleagues by user; nobody knows a staff id by heart. */
+    private UUID verifiedByUserId;
 
     @Size(max = 60)
     private String verificationMethod;

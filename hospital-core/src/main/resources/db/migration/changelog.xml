@@ -3351,4 +3351,11 @@
                  stripComments="false"/>
     </changeSet>
 
+    <changeSet id="V264-r33-micro-culture-corrections" author="hms-team" runOnChange="false">
+        <sqlFile path="V264__r33_micro_culture_corrections.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

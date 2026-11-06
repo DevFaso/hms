@@ -33,6 +33,7 @@ import { toServerDateTime } from '../shared/date-utils';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { InlineSubFormDirective } from '../shared/a11y/inline-sub-form.directive';
 import { InlineDiscardAskComponent } from '../shared/a11y/inline-discard-ask.component';
+import { ConfirmDialogComponent } from '../shared/confirm-dialog/confirm-dialog.component';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { refuseFields } from '../shared/forms/invalid-fields';
 
@@ -47,6 +48,7 @@ import { refuseFields } from '../shared/forms/invalid-fields';
   selector: 'app-microbiology',
   standalone: true,
   imports: [
+    ConfirmDialogComponent,
     ModalDialogDirective,
     SubmitGuardDirective,
     ServerTimePipe,
@@ -98,6 +100,8 @@ export class MicrobiologyComponent implements OnInit {
   readonly editGramStain = signal('');
   readonly editNotes = signal('');
   readonly savingCulture = signal(false);
+  /** QA CX-009: correcting to no growth takes the organisms off; that is asked first. */
+  readonly confirmingNoGrowth = signal(false);
 
   /* Isolate modal */
   readonly showIsolateModal = signal(false);
@@ -289,6 +293,24 @@ export class MicrobiologyComponent implements OnInit {
   saveCulture(): void {
     const culture = this.selected();
     if (!culture || this.savingCulture() || this.missingCorrectionReason()) return;
+    if (
+      this.selectedLocked() &&
+      this.editGrowthResult() === 'NO_GROWTH' &&
+      culture.isolates.length > 0
+    ) {
+      this.confirmingNoGrowth.set(true);
+      return;
+    }
+    this.sendCulture(culture, false);
+  }
+
+  confirmNoGrowth(): void {
+    const culture = this.selected();
+    if (!culture || this.savingCulture()) return;
+    this.sendCulture(culture, true);
+  }
+
+  private sendCulture(culture: MicroCultureResponse, removeIsolates: boolean): void {
     this.savingCulture.set(true);
     this.microService
       .update(culture.id, {
@@ -296,15 +318,18 @@ export class MicrobiologyComponent implements OnInit {
         gramStain: this.editGramStain() || undefined,
         notes: this.editNotes() || undefined,
         correctionReason: this.reasonOrUndefined(),
+        ...(removeIsolates ? { removeIsolates: true } : {}),
       })
       .subscribe({
         next: (updated) => {
           this.savingCulture.set(false);
+          this.confirmingNoGrowth.set(false);
           this.toast.success(this.translate.instant('MICRO.CULTURE_SAVED'));
           this.applyUpdated(updated);
         },
         error: (err) => {
           this.savingCulture.set(false);
+          this.confirmingNoGrowth.set(false);
           this.toast.error(err?.error?.message ?? this.translate.instant('MICRO.SAVE_FAILED'));
         },
       });

@@ -896,6 +896,7 @@ export class EnumLabelService implements OnDestroy {
       OBSTETRIC_ALERT_ESCALATION: 'Urgent Obstetric Alert Escalation',
       PHARMACY_EVENT: 'Pharmacy Update',
       POSITIVE_CULTURE_RESULT: 'Positive Culture Result',
+      CORRECTED_CULTURE_RESULT: 'Corrected Culture Result',
       PRENATAL_REMINDER: 'Antenatal visit reminder',
       PRO_CRITICAL_ITEM: 'Critical PRO Item',
       PRO_CRITICAL_ITEM_ESCALATION: 'Critical PRO Item Escalation',

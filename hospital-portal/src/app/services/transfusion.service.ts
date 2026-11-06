@@ -176,7 +176,7 @@ export interface TransfusionAdministrationRequest {
   requestId: string;
   bloodUnitId: string;
   /** The independent second bedside check. Never the caller themselves. */
-  verifiedByStaffId: string;
+  verifiedByUserId: string;
   verificationMethod?: string;
   notes?: string;
 }

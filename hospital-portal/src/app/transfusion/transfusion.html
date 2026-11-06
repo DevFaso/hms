@@ -5,6 +5,15 @@
       <p class="page-subtitle">{{ 'TRANSFUSION.SUBTITLE' | translate }}</p>
     </div>
     <div class="page-actions">
+      @if (tab() === 'requests' && canLab) {
+        <button
+          class="btn-secondary"
+          data-testid="record-group-any-patient"
+          (click)="openGroupModalForAnyPatient()"
+        >
+          {{ 'TRANSFUSION.RECORD_GROUP' | translate }}
+        </button>
+      }
       @if (tab() === 'requests' && canRequest) {
         <button class="btn-primary" (click)="openNewRequest()">
           <span class="material-symbols-outlined">add</span>
@@ -287,13 +296,141 @@
             <p>{{ req.indication }}</p>
           </div>
 
+          <!-- QA CX-008: above the workup, because this is where an emergency starts. -->
+          @if (administrationsState() === 'failed') {
+            <div class="warn-banner" data-testid="administrations-failed">
+              <span class="material-symbols-outlined">error</span>
+              {{ 'TRANSFUSION.ADMIN_LOAD_ERROR' | translate }}
+              <button class="btn-secondary" (click)="loadAdministrations()">
+                {{ 'COMMON.RETRY' | translate }}
+              </button>
+            </div>
+          }
+          @if (administrations().length > 0) {
+            <div class="section-head">
+              <h3 id="tx-administrations-heading" tabindex="-1">
+                {{ 'TRANSFUSION.ADMINISTRATIONS' | translate }}
+              </h3>
+            </div>
+            @for (a of administrations(); track a.id) {
+              <div
+                class="administration-card"
+                [class.in-progress]="isInProgress(a)"
+                [attr.data-testid]="'administration-' + a.id"
+              >
+                <div class="administration-head">
+                  <span class="mono">{{ a.unitNumber }}</span>
+                  <span
+                    class="status-badge"
+                    [class.status-progress]="isInProgress(a)"
+                    [class.status-completed]="a.status === 'COMPLETED'"
+                    [class.status-cancelled]="a.status === 'STOPPED'"
+                    >{{ 'TRANSFUSION.ADMIN_STATUS_' + a.status | translate }}</span
+                  >
+                </div>
+                <div class="administration-facts">
+                  <span
+                    >{{ 'TRANSFUSION.ADMIN_STARTED' | translate }}{{ 'COMMON.COLON' | translate }}
+                    {{ a.startedAt | serverTime | date: 'short' }}</span
+                  >
+                  @if (a.administeredByName) {
+                    <span
+                      >{{ 'TRANSFUSION.ADMIN_GIVEN_BY' | translate
+                      }}{{ 'COMMON.COLON' | translate }} {{ a.administeredByName }}</span
+                    >
+                  }
+                  @if (a.verifiedByName) {
+                    <span
+                      >{{ 'TRANSFUSION.VERIFIER' | translate }}{{ 'COMMON.COLON' | translate }}
+                      {{ a.verifiedByName }}</span
+                    >
+                  }
+                  @if (a.completedAt) {
+                    <span
+                      >{{ 'TRANSFUSION.ADMIN_ENDED' | translate }}{{ 'COMMON.COLON' | translate }}
+                      {{ a.completedAt | serverTime | date: 'short' }}</span
+                    >
+                  }
+                  @if (a.volumeTransfusedMl != null) {
+                    <span
+                      >{{ 'TRANSFUSION.ADMIN_VOLUME_GIVEN' | translate
+                      }}{{ 'COMMON.COLON' | translate }} {{ a.volumeTransfusedMl }} mL</span
+                    >
+                  }
+                  <!-- A reaction's own stop reason is written by the server for the
+                       record; the reaction below says what happened, in the reader's
+                       language. A nurse's own reason is shown as she wrote it. -->
+                  @if (a.stopReason && a.reactions.length === 0) {
+                    <span>{{ 'COMMON.REASON_VALUE' | translate: { reason: a.stopReason } }}</span>
+                  }
+                </div>
+                @for (rx of a.reactions; track rx.id) {
+                  <div class="administration-reaction" [attr.data-testid]="'reaction-' + rx.id">
+                    <span class="material-symbols-outlined">warning</span>
+                    <span>
+                      {{ 'TRANSFUSION.REACTION_' + rx.reactionType | translate }} —
+                      {{ 'TRANSFUSION.SEVERITY_' + rx.severity | translate }} —
+                      {{ rx.onsetAt | serverTime | date: 'short' }}
+                    </span>
+                  </div>
+                }
+                @if (canBedside) {
+                  <div class="administration-actions">
+                    @if (isInProgress(a)) {
+                      <button
+                        class="btn-danger"
+                        data-testid="suspected-reaction"
+                        (click)="openReaction(a.id)"
+                      >
+                        <span class="material-symbols-outlined">emergency</span>
+                        {{ 'TRANSFUSION.SUSPECTED_REACTION' | translate }}
+                      </button>
+                      <button
+                        class="btn-secondary"
+                        data-testid="complete-administration"
+                        (click)="openComplete(a)"
+                      >
+                        {{ 'TRANSFUSION.ADMIN_COMPLETE' | translate }}
+                      </button>
+                      <button
+                        class="btn-secondary"
+                        data-testid="stop-administration"
+                        (click)="openStop(a)"
+                      >
+                        {{ 'TRANSFUSION.ADMIN_STOP' | translate }}
+                      </button>
+                    } @else {
+                      <!-- Some reactions come after the bag has run out. -->
+                      <button
+                        class="btn-secondary"
+                        data-testid="later-reaction"
+                        (click)="openReaction(a.id)"
+                      >
+                        {{ 'TRANSFUSION.REPORT_REACTION' | translate }}
+                      </button>
+                    }
+                  </div>
+                }
+              </div>
+            }
+          }
+
           <!-- Workup -->
           <div class="section-head">
             <h3>{{ 'TRANSFUSION.WORKUP' | translate }}</h3>
             @if (canLab && req.status !== 'COMPLETED' && req.status !== 'CANCELLED') {
-              <button class="btn-secondary" (click)="openCrossmatch()">
-                {{ 'TRANSFUSION.RECORD_CROSSMATCH' | translate }}
-              </button>
+              <div class="action-group">
+                <button
+                  class="btn-secondary"
+                  data-testid="record-group-for-request"
+                  (click)="openGroupModalForRequest(req)"
+                >
+                  {{ 'TRANSFUSION.RECORD_GROUP' | translate }}
+                </button>
+                <button class="btn-secondary" (click)="openCrossmatch()">
+                  {{ 'TRANSFUSION.RECORD_CROSSMATCH' | translate }}
+                </button>
+              </div>
             }
           </div>
 
@@ -356,8 +493,12 @@
                               {{ 'TRANSFUSION.ISSUE' | translate }}
                             </button>
                           }
-                          @if (canBedside && u.status === 'ISSUED') {
-                            <button class="action-link" (click)="openHang(u)">
+                          @if (canHang(u)) {
+                            <button
+                              class="action-link"
+                              data-testid="hang-unit"
+                              (click)="openHang(u)"
+                            >
                               {{ 'TRANSFUSION.HANG' | translate }}
                             </button>
                           }
@@ -508,6 +649,15 @@
           <button class="modal-close" (click)="closeGroupModal()">&times;</button>
         </div>
         <div class="modal-body">
+          @if (groupNeedsPatient()) {
+            <label for="grp-patient">{{ 'PATIENTS.PATIENT_NAME' | translate }} *</label>
+            <app-patient-picker
+              inputId="grp-patient"
+              required
+              [selected]="groupPickerPatient()"
+              (selectedChange)="onGroupPatientPicked($event)"
+            />
+          }
           <div class="field-row">
             <div class="field">
               <label for="grp-abo">{{ 'TRANSFUSION.ABO' | translate }}</label>
@@ -550,7 +700,13 @@
           <button class="btn-secondary" (click)="closeGroupModal()">
             {{ 'COMMON.CANCEL' | translate }}
           </button>
-          <button class="btn-primary" (click)="submitGroup()" [disabled]="groupSubmitting()">
+          <button
+            class="btn-primary"
+            (click)="submitGroup()"
+            [disabled]="groupSubmitting()"
+            [appSubmitGuard]="!groupForm.patientId"
+            [submitGuardFields]="['grp-patient']"
+          >
             {{ 'COMMON.SAVE' | translate }}
           </button>
         </div>
@@ -748,13 +904,24 @@
           <p class="modal-hint">{{ 'TRANSFUSION.HANG_HINT' | translate }}</p>
           <div class="field">
             <label for="hang-verifier">{{ 'TRANSFUSION.VERIFIER' | translate }} *</label>
-            <input
+            <select
               required
               id="hang-verifier"
-              type="text"
-              [(ngModel)]="hangForm.verifiedByStaffId"
-            />
-            <small class="field-hint">{{ 'TRANSFUSION.VERIFIER_HINT' | translate }}</small>
+              data-testid="hang-verifier"
+              [(ngModel)]="hangForm.verifiedByUserId"
+            >
+              <option value="">{{ 'COMMON.SELECT' | translate }}</option>
+              @for (c of verifierCandidates(); track c.userId) {
+                <option [value]="c.userId">{{ c.displayName }}</option>
+              }
+            </select>
+            <small class="field-hint">
+              @if (verifierCandidatesFailed()) {
+                {{ 'TRANSFUSION.VERIFIER_LOAD_ERROR' | translate }}
+              } @else {
+                {{ 'TRANSFUSION.VERIFIER_HINT' | translate }}
+              }
+            </small>
           </div>
           <div class="field">
             <label for="hang-method">{{ 'TRANSFUSION.VERIFICATION_METHOD' | translate }}</label>
@@ -769,7 +936,7 @@
             class="btn-primary"
             (click)="submitHang()"
             [disabled]="hangSubmitting()"
-            [appSubmitGuard]="!hangForm.verifiedByStaffId"
+            [appSubmitGuard]="!hangForm.verifiedByUserId"
             [submitGuardFields]="['hang-verifier']"
           >
             {{ 'COMMON.SAVE' | translate }}
@@ -881,5 +1048,39 @@
     [busy]="discardBusy()"
     (confirmed)="confirmDiscardUnit(u, $event)"
     (cancelled)="discardingUnit.set(null)"
+  />
+}
+<!-- QA CX-008: both of these end the transfusion, so each asks first. -->
+@if (completingAdministration(); as a) {
+  <app-confirm-dialog
+    titleKey="TRANSFUSION.ADMIN_COMPLETE_TITLE"
+    messageKey="TRANSFUSION.ADMIN_COMPLETE_MESSAGE"
+    confirmKey="TRANSFUSION.ADMIN_COMPLETE"
+    [params]="{ unit: a.unitNumber }"
+    [busy]="completeBusy()"
+    (confirmed)="confirmComplete(a)"
+    (cancelled)="completingAdministration.set(null)"
+  >
+    <div class="field">
+      <label for="tx-complete-volume">{{ 'TRANSFUSION.ADMIN_VOLUME_GIVEN' | translate }}</label>
+      <input
+        id="tx-complete-volume"
+        data-testid="complete-volume"
+        type="number"
+        min="0"
+        [max]="maxUnitVolumeMl"
+        [(ngModel)]="completeVolumeMl"
+      />
+    </div>
+  </app-confirm-dialog>
+}
+@if (stoppingAdministration(); as a) {
+  <app-reason-dialog
+    titleKey="TRANSFUSION.ADMIN_STOP_TITLE"
+    messageKey="TRANSFUSION.ADMIN_STOP_MESSAGE"
+    confirmKey="TRANSFUSION.ADMIN_STOP"
+    [busy]="stopBusy()"
+    (confirmed)="confirmStop(a, $event)"
+    (cancelled)="stoppingAdministration.set(null)"
   />
 }

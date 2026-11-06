@@ -220,4 +220,93 @@ describe('MicrobiologyComponent', () => {
       'A growth result is required before the report can be finalized.',
     );
   });
+
+  describe('QA CX-009: correcting a validated report to no growth', () => {
+    const isolate = {
+      id: 'i1',
+      isolateNumber: 1,
+      organismName: 'Escherichia coli',
+      susceptibilities: [],
+    } as unknown as MicroCultureResponse['isolates'][number];
+    const validated = () => culture({ status: 'FINAL', growthResult: 'GROWTH', isolates: [isolate] });
+
+    const open = (report: MicroCultureResponse) => {
+      microServiceSpy.list.and.returnValue(of(page([report])));
+      fixture.detectChanges();
+      component.select(report);
+      component.correctionReason.set('Contamination');
+      component.editGrowthResult.set('NO_GROWTH');
+    };
+
+    it('asks first, says what leaves, and only then sends the removal', () => {
+      open(validated());
+      component.saveCulture();
+      expect(microServiceSpy.update).not.toHaveBeenCalled();
+      expect(component.confirmingNoGrowth()).toBeTrue();
+
+      microServiceSpy.update.and.returnValue(
+        of(culture({ status: 'CORRECTED', growthResult: 'NO_GROWTH', isolates: [] })),
+      );
+      component.confirmNoGrowth();
+      expect(microServiceSpy.update.calls.mostRecent().args[1]).toEqual(
+        jasmine.objectContaining({ growthResult: 'NO_GROWTH', removeIsolates: true }),
+      );
+      expect(component.confirmingNoGrowth()).toBeFalse();
+    });
+
+    it('no organism on it: nothing to confirm, no removal asked', () => {
+      open(culture({ status: 'FINAL', growthResult: 'GROWTH', isolates: [] }));
+      microServiceSpy.update.and.returnValue(of(culture({ status: 'CORRECTED' })));
+      component.saveCulture();
+      expect(component.confirmingNoGrowth()).toBeFalse();
+      expect(microServiceSpy.update.calls.mostRecent().args[1].removeIsolates).toBeUndefined();
+    });
+
+    it('a preliminary report saves as it always did: the server refuses, its reason is shown', () => {
+      open(culture({ isolates: [isolate] }));
+      microServiceSpy.update.and.returnValue(
+        throwError(() => ({ error: { message: 'Retirez les isolats' } })),
+      );
+      component.saveCulture();
+      expect(component.confirmingNoGrowth()).toBeFalse();
+      expect(microServiceSpy.update.calls.mostRecent().args[1].removeIsolates).toBeUndefined();
+      expect(toastSpy.error).toHaveBeenCalledWith('Retirez les isolats');
+    });
+
+    it('a refused last-isolate removal shows the server reason through the existing path', () => {
+      open(validated());
+      component.correctionReason.set('Erreur');
+      microServiceSpy.deleteIsolate.and.returnValue(
+        throwError(() => ({ error: { message: 'Seul germe' } })),
+      );
+      component.deleteIsolate('i1');
+      expect(toastSpy.error).toHaveBeenCalledWith('Seul germe');
+    });
+
+    it('shows what the report said before each correction', () => {
+      const corrected = culture({
+        status: 'CORRECTED',
+        growthResult: 'NO_GROWTH',
+        isolates: [],
+        corrections: [
+          {
+            id: 'k1',
+            correctedAt: '2026-11-06T10:00:00',
+            correctedByName: null,
+            reason: 'Contamination',
+            statusBefore: 'FINAL',
+            growthBefore: 'GROWTH',
+            gramStainBefore: null,
+            notesBefore: null,
+            isolatesBefore: '#1 Escherichia coli',
+          },
+        ],
+      });
+      open(corrected);
+      fixture.detectChanges();
+      const history = fixture.nativeElement.querySelector('[data-testid="correction-history"]');
+      expect(history).toBeTruthy();
+      expect(history.textContent).toContain('Escherichia coli');
+    });
+  });
 });
