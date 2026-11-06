@@ -1425,6 +1425,13 @@ public class LabResultServiceImpl implements LabResultService {
                 throw new ConflictException(com.example.hms.utility.MessageUtil.resolve(
                     UNGRADED_RELEASE_CONFIRM_KEY, LabResultMapper.unitOf(labResult)));
             }
+            // QA D1394: the same reviewed release for a value whose comparator settles no grade.
+            if (labResultMapper.isGradeUnknown(labResult)) {
+                throw new ConflictException(com.example.hms.utility.MessageUtil.resolve(
+                    GRADE_UNKNOWN_RELEASE_CONFIRM_KEY,
+                    com.example.hms.utility.DisplayNumbers.labValueWithUnit(labResult.getResultValue(),
+                        LabResultMapper.unitOf(labResult), com.example.hms.utility.DisplayNumbers.requestLocale())));
+            }
         }
 
         LabResult superseded = null;
@@ -1498,6 +1505,10 @@ public class LabResultServiceImpl implements LabResultService {
     static final String UNGRADED_RELEASE_CONFIRM_KEY = "labresult.release.ungraded.confirmRequired";
     /** QA D1092: the in-basket body of a released result no range could grade. */
     static final String UNGRADED_IN_BASKET_BODY_KEY = "lab.result.ungraded.inBasketBody";
+    /** QA D1394: the 409 a release of a value that settles no grade answers until it is confirmed. */
+    static final String GRADE_UNKNOWN_RELEASE_CONFIRM_KEY = "labresult.release.gradeUnknown.confirmRequired";
+    /** QA D1394: the in-basket body of a released value that settled no grade. */
+    static final String GRADE_UNKNOWN_IN_BASKET_BODY_KEY = "lab.result.gradeUnknown.inBasketBody";
     static final String CORRECTION_IN_BASKET_BODY_KEY = "lab.result.correction.inBasketBody";
 
     private void fileInOrderingClinicianInBasketAfterCommit(LabResult labResult, LabResult superseded) {
@@ -1509,7 +1520,7 @@ public class LabResultServiceImpl implements LabResultService {
                 || order.getHospital() == null) {
             return;
         }
-        boolean ungraded = labResultMapper.isUngradedForUnitMismatch(labResult);
+        boolean ungraded = notGradedByAnyRange(labResult);
         com.example.hms.enums.InBasketPriority priority = inBasketPriorityOf(labResult, superseded, ungraded);
         String testName = order.getLabTestDefinition() != null
             ? order.getLabTestDefinition().getName()
@@ -1523,7 +1534,7 @@ public class LabResultServiceImpl implements LabResultService {
         request.setItemType(com.example.hms.enums.InBasketItemType.RESULT);
         request.setPriority(priority);
         String title = describeChange(request, testName != null ? testName : "Lab result", labResult, superseded,
-            ungraded);
+            ungraded, labResultMapper.isUngradedForUnitMismatch(labResult));
         request.setTitle(title);
         request.setReferenceId(labResult.getId());
         request.setReferenceType(LAB_RESULT_REFERENCE_TYPE);
@@ -1567,7 +1578,8 @@ public class LabResultServiceImpl implements LabResultService {
      * and as keys (QA D1053: each reader sees it in their language). Returns the title.
      */
     private static String describeChange(com.example.hms.payload.dto.clinical.CreateInBasketItemRequest request,
-                                         String title, LabResult labResult, LabResult superseded, boolean ungraded) {
+                                         String title, LabResult labResult, LabResult superseded, boolean ungraded,
+                                         boolean unitsDiffer) {
         if (superseded != null) {
             // QA D931: the item says it replaces a result, and from what to what.
             Object[] titleArgs = {title};
@@ -1588,9 +1600,16 @@ public class LabResultServiceImpl implements LabResultService {
             Object[] bodyArgs = {
                 com.example.hms.service.lab.LabResultReleaseNotifier.valueOf(labResult)
             };
-            request.setBody(com.example.hms.utility.MessageUtil.resolve(
-                com.example.hms.service.i18n.NotificationLocales.STAFF, UNGRADED_IN_BASKET_BODY_KEY, bodyArgs));
-            request.setBodyKey(UNGRADED_IN_BASKET_BODY_KEY);
+            if (unitsDiffer) {
+                request.setBody(com.example.hms.utility.MessageUtil.resolve(
+                    com.example.hms.service.i18n.NotificationLocales.STAFF, UNGRADED_IN_BASKET_BODY_KEY, bodyArgs));
+                request.setBodyKey(UNGRADED_IN_BASKET_BODY_KEY);
+            } else {
+                // QA D1394: not a question of units; a limit that settles no grade.
+                request.setBody(com.example.hms.utility.MessageUtil.resolve(
+                    com.example.hms.service.i18n.NotificationLocales.STAFF, GRADE_UNKNOWN_IN_BASKET_BODY_KEY, bodyArgs));
+                request.setBodyKey(GRADE_UNKNOWN_IN_BASKET_BODY_KEY);
+            }
             request.setBodyArgs(bodyArgs);
         }
         return title;
@@ -1870,7 +1889,7 @@ public class LabResultServiceImpl implements LabResultService {
      * graded, so a person reviews it on the release worklist.
      */
     private void performAutoVerification(LabResult result, String severity) {
-        if (!autoVerificationEnabled || labResultMapper.isUngradedForUnitMismatch(result)) {
+        if (!autoVerificationEnabled || notGradedByAnyRange(result)) {
             return;
         }
         boolean rangeSaysNormal = "NORMAL".equalsIgnoreCase(severity);
@@ -1921,20 +1940,38 @@ public class LabResultServiceImpl implements LabResultService {
             if (cond.containsKey("thresholdValue") && cond.containsKey("thresholdOperator")) {
                 double threshold = ((Number) cond.get("thresholdValue")).doubleValue();
                 String operator = (String) cond.get("thresholdOperator");
-                double value = Double.parseDouble(result.getResultValue().trim());
-                return switch (operator.toUpperCase()) {
-                    case "GT"  -> value > threshold;
-                    case "GTE" -> value >= threshold;
-                    case "LT"  -> value < threshold;
-                    case "LTE" -> value <= threshold;
-                    default    -> false;
-                };
+                // QA D1394: the one reading of a value; a comparator meets a threshold
+                // only when its bound settles it (">12" GT 11 does, ">1" GT 11 does not).
+                return LabResultValueRules.numericValue(result.getResultValue())
+                    .map(parsed -> meetsThreshold(parsed, operator, threshold))
+                    .orElse(false);
             }
         } catch (Exception e) {
             LOG.warn("Failed to evaluate reflex condition '{}' for result {}: {}",
                 conditionJson, result.getId(), e.getMessage());
         }
         return false;
+    }
+
+    /** QA D1092 / D1394: the test has ranges and none graded this value; a person reads it. */
+    private boolean notGradedByAnyRange(LabResult result) {
+        return labResultMapper.isUngradedForUnitMismatch(result) || labResultMapper.isGradeUnknown(result);
+    }
+
+    private static boolean meetsThreshold(LabResultValueRules.NumericValue parsed, String operator, double threshold) {
+        double value = parsed.number();
+        String op = operator.toUpperCase(java.util.Locale.ROOT);
+        return switch (parsed.bound()) {
+            case EXACT -> switch (op) {
+                case "GT" -> value > threshold;
+                case "GTE" -> value >= threshold;
+                case "LT" -> value < threshold;
+                case "LTE" -> value <= threshold;
+                default -> false;
+            };
+            case ABOVE -> ("GT".equals(op) || "GTE".equals(op)) && value >= threshold;
+            case BELOW -> ("LT".equals(op) || "LTE".equals(op)) && value <= threshold;
+        };
     }
 
     private void createReflexChildOrder(LabReflexRule rule, LabOrder parent, LabResult result) {

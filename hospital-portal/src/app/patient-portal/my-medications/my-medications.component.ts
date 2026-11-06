@@ -21,6 +21,7 @@ import { ToastService } from '../../core/toast.service';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { PrintLabelService } from '../../services/print-label.service';
 import { refusalReason } from '../../shared/refusal-reason';
+import { ShownRows } from '../shown-rows';
 
 @Component({
   selector: 'app-my-medications',
@@ -38,18 +39,27 @@ export class MyMedicationsComponent implements OnInit {
   private readonly printLabel = inject(PrintLabelService);
 
   medications = signal<MedicationSummary[]>([]);
+  /** QA D1399: the medicines could not be read: said so, never "no medicines". */
+  medicationsFailed = signal(false);
+  /** The server's reason, when it gave one. */
+  medicationsFailureReason = signal<string | null>(null);
+  private readonly pastMedications = computed(() => {
+    const all = this.medications();
+    const active = currentMedications(all);
+    return all.filter((m) => !active.includes(m));
+  });
+  /** QA D1399: every past medicine is one click away, with the total. */
+  readonly pastRows = new ShownRows(this.pastMedications);
   /**
    * QA D720: "Active medications" lists the courses still running; a
    * completed or discontinued one moves to "Past medications" (where its
    * refill button stays: a finished, dispensed course is refillable).
    */
   medicationGroups = computed(() => {
-    const all = this.medications();
-    const active = currentMedications(all);
-    const past = all.filter((m) => !active.includes(m));
+    const active = currentMedications(this.medications());
     return [
-      { titleKey: 'PORTAL.MEDICATIONS.ACTIVE', meds: active },
-      { titleKey: 'PORTAL.MEDICATIONS.PAST', meds: past },
+      { titleKey: 'PORTAL.MEDICATIONS.ACTIVE', meds: active, pager: null },
+      { titleKey: 'PORTAL.MEDICATIONS.PAST', meds: this.pastRows.shown(), pager: this.pastRows },
     ].filter((g) => g.meds.length > 0);
   });
   prescriptions = signal<PortalPrescription[]>([]);
@@ -80,12 +90,16 @@ export class MyMedicationsComponent implements OnInit {
       if (--pending <= 0) this.loading.set(false);
     };
 
-    this.portal.getMyMedications().subscribe({
+    this.portal.getAllMyMedications().subscribe({
       next: (meds) => {
         this.medications.set(meds);
         done();
       },
-      error: () => done(),
+      error: (err: unknown) => {
+        this.medicationsFailureReason.set(refusalReason(err));
+        this.medicationsFailed.set(true);
+        done();
+      },
     });
 
     this.portal.getMyPrescriptions().subscribe({

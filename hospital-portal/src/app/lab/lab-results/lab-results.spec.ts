@@ -103,6 +103,26 @@ describe('LabResultsComponent', () => {
     expect(marker?.textContent).toContain('LAB_RESULTS.NOT_GRADED_UNITS_DIFFER');
   });
 
+  it('QA D1394: marks a value whose limit settles no grade', () => {
+    fixture.detectChanges();
+    flushInit([mockResult({ severityFlag: 'UNSPECIFIED', gradeUnknown: true })]);
+    fixture.detectChanges();
+
+    const marker = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="grade-unknown-result-1"]',
+    );
+    expect(marker?.textContent).toContain('LAB_RESULTS.GRADE_UNKNOWN');
+  });
+
+  it('QA D1394: the entry dialog says a comparator is graded from its limit', () => {
+    component.form.resultValue = '4,2';
+    expect(component.valueHasComparator()).toBeFalse();
+    for (const value of ['> 6,5', '<1.5', ' >=7', '\u2264 2']) {
+      component.form.resultValue = value;
+      expect(component.valueHasComparator()).withContext(value).toBeTrue();
+    }
+  });
+
   it('shows the severity, not the marker, for a result graded in its own unit', () => {
     fixture.detectChanges();
     flushInit([mockResult({ severityFlag: 'HIGH', unitMismatch: false })]);
@@ -1124,6 +1144,35 @@ describe('LabResultsComponent — rendered delete gate and order picker', () => 
     component.submitForm();
     const req = httpMock.expectOne((r) => r.url === '/lab-results' && r.method === 'POST');
     expect(req.request.body.resultUnit).toBe('g/L');
+  });
+
+  it('QA D1394: a value whose limit settles no grade is released only after the warning is confirmed', () => {
+    setup(['ROLE_LAB_SCIENTIST']);
+    const ungraded = mockResult({
+      gradeUnknown: true,
+      enteredByUserId: 'user-2',
+      resultValue: '>1',
+    });
+    flushInit([ungraded], []);
+
+    component.releaseResult(ungraded as unknown as LabResultResponse);
+    fixture.detectChanges();
+    httpMock.expectNone((r) => r.method === 'POST');
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[data-testid="release-grade-unknown-note"]')).not.toBeNull();
+
+    component.confirmSelfRelease();
+    const req = httpMock.expectOne(
+      (r) => r.url === '/lab-results/result-1/release' && r.method === 'POST',
+    );
+    expect(req.request.params.get('ungradedConfirmed')).toBe('true');
+    req.flush({ ...ungraded, released: true });
+    httpMock
+      .expectOne((r) => r.url === '/lab-results' && r.method === 'GET')
+      .flush({
+        data: { content: [], totalElements: 0, totalPages: 1, number: 0 },
+        success: true,
+      });
   });
 
   it('QA D1092: a result no range can grade is released only after the warning is confirmed', () => {

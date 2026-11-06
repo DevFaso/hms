@@ -39,7 +39,7 @@ import {
   serverInstant,
 } from '../../shared/date-utils';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
-import { labSeverityFlag, labSeverityTone } from '../shared/lab-severity';
+import { labSeverityFlag, labSeverityTone, labReleaseNeedsReview } from '../shared/lab-severity';
 import { LabValuePipe, formatLabNumber } from '../shared/lab-value.pipe';
 import { MeasurePipe } from '../../shared/pipes/measure.pipe';
 
@@ -445,6 +445,11 @@ export class LabResultsComponent implements OnInit {
   }
 
   /** QA D1095: the selected order's test unit, which the unit field requires. */
+  /** QA D1394: the value states a limit ("> 6,5"), which the server grades from its bound. */
+  valueHasComparator(): boolean {
+    return /^\s*[<>\u2264\u2265]/.test(this.form.resultValue ?? '');
+  }
+
   selectedTestUnit(): string {
     return (
       this.orders()
@@ -478,10 +483,14 @@ export class LabResultsComponent implements OnInit {
         : this.labService.createResult(payload);
 
     op.subscribe({
-      next: () => {
+      next: (saved) => {
         this.toast.success(
           this.translate.instant(this.editing() ? 'LAB_RESULTS.UPDATED' : 'LAB_RESULTS.CREATED'),
         );
+        // QA D1394: the server graded it and could not: say so at once, not at release.
+        if (labReleaseNeedsReview(saved ?? {})) {
+          this.toast.warning(this.translate.instant('LAB_RESULTS.SAVED_NOT_GRADED'));
+        }
         this.closeModal();
         this.saving.set(false);
         this.loadResults();
@@ -567,7 +576,7 @@ export class LabResultsComponent implements OnInit {
   releaseResult(r: LabResultResponse): void {
     // QA D1092: a value no range can grade is released only once someone
     // has read the warning, in the same confirmation dialog.
-    if (this.isSelfRelease(r) || r.unitMismatch) {
+    if (this.isSelfRelease(r) || labReleaseNeedsReview(r)) {
       this.selfReleaseTarget.set(r);
       return;
     }
@@ -578,7 +587,7 @@ export class LabResultsComponent implements OnInit {
     const target = this.selfReleaseTarget();
     if (!target) return;
     this.selfReleaseTarget.set(null);
-    this.sendRelease(target, this.isSelfRelease(target), !!target.unitMismatch);
+    this.sendRelease(target, this.isSelfRelease(target), labReleaseNeedsReview(target));
   }
 
   cancelSelfRelease(): void {

@@ -2,8 +2,12 @@ package com.example.hms.mapper;
 
 import java.math.BigDecimal;
 import java.math.MathContext;
+import java.text.Normalizer;
+import java.util.Arrays;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -28,6 +32,13 @@ import java.util.regex.Pattern;
  * cell count in French laboratories) is not {@code g/L} (grams per litre), so
  * only a lower-case {@code g} is a gram. Litres are accepted as {@code L} or
  * {@code l}.
+ *
+ * <p>QA D1394: {@link #gradingFactor} is what grading asks. It adds two things
+ * and invents nothing: another spelling's case (MG/DL, MMOL/L; {@code G/L} on its
+ * own stays giga), and mEq/L as mmol/L for a monovalent ion (potassium, sodium,
+ * chloride, bicarbonate), which the test definition's name or code identifies. A
+ * divalent ion (calcium, magnesium: 2 mEq = 1 mmol) is never converted, and no
+ * other analyte is either: its value stays ungraded and flagged.
  */
 public final class LabUnitConversion {
 
@@ -46,6 +57,31 @@ public final class LabUnitConversion {
 
     private static final Map<String, Integer> VOLUME_PREFIX = Map.of(
         "", 0, "d", -1, "c", -2, "m", -3, "µ", -6, "μ", -6);
+
+    /** The one spelling whose case carries meaning: a cell count, not grams. */
+    private static final Pattern GIGA_PER_LITRE = Pattern.compile("^G\\s*/\\s*[lL]$");
+
+    private static final Pattern MILLI_EQUIVALENT = Pattern.compile("^meq\\s*/\\s*l$");
+
+    /** The unit of a monovalent ion's mEq/L: 1 mEq is 1 mmol. */
+    private static final Unit MILLIMOLAR = new Unit(Dimension.MOLAR, -3);
+
+    /** Words of a test's name (EN, FR, ES, accents folded) that name a monovalent ion. */
+    private static final Set<String> MONOVALENT_NAME_WORDS = Set.of(
+        "POTASSIUM", "POTASIO", "KALIEMIE", "KALEMIE", "KALEMIA", "KALIEMIA",
+        "SODIUM", "SODIO", "NATREMIE", "NATREMIA",
+        "CHLORIDE", "CHLORE", "CHLORURE", "CHLORURES", "CHLOREMIE", "CLORO", "CLORURO", "CLOREMIA",
+        "BICARBONATE", "BICARBONATES", "BICARBONATO", "BICARBONATOS", "HCO3");
+
+    /** Words that rule a test out: a divalent ion, whatever else its name says. */
+    private static final Set<String> DIVALENT_NAME_WORDS = Set.of(
+        "CALCIUM", "CALCIO", "CALCEMIE", "CALCEMIA", "MAGNESIUM", "MAGNESIO", "MAGNESEMIE", "MAGNESEMIA");
+
+    /** A whole test code (or short name), sign aside. Whole only: "VIT-K" and "CL-CREAT" are not ions. */
+    private static final Set<String> MONOVALENT_CODES = Set.of("K", "NA", "CL", "HCO3");
+
+    private static final Pattern NOT_A_WORD = Pattern.compile("[^A-Z0-9]+");
+    private static final Pattern COMBINING_MARKS = Pattern.compile("\\p{M}");
 
     private LabUnitConversion() {
     }
@@ -77,6 +113,66 @@ public final class LabUnitConversion {
             return Optional.empty();
         }
         return Optional.of(BigDecimal.ONE.scaleByPowerOfTen(source.get().exponent() - target.get().exponent()));
+    }
+
+    /**
+     * QA D1394: the factor grading uses from a range's unit to a result's. Exactly
+     * {@link #factor} when that answers; else the same power of ten read without
+     * regard to case, and mEq/L as mmol/L when {@code monovalentIon}.
+     */
+    static Optional<BigDecimal> gradingFactor(String from, String to, boolean monovalentIon) {
+        Optional<BigDecimal> exact = factor(from, to);
+        if (exact.isPresent()) {
+            return exact;
+        }
+        Optional<Unit> source = parseForGrading(from, monovalentIon);
+        Optional<Unit> target = parseForGrading(to, monovalentIon);
+        if (source.isEmpty() || target.isEmpty() || source.get().dimension() != target.get().dimension()) {
+            return Optional.empty();
+        }
+        return Optional.of(BigDecimal.ONE.scaleByPowerOfTen(source.get().exponent() - target.get().exponent()));
+    }
+
+    private static Optional<Unit> parseForGrading(String unit, boolean monovalentIon) {
+        if (unit == null || unit.isBlank() || GIGA_PER_LITRE.matcher(unit.trim()).matches()) {
+            return Optional.empty();
+        }
+        String folded = unit.trim().toLowerCase(Locale.ROOT);
+        if (MILLI_EQUIVALENT.matcher(folded).matches()) {
+            return monovalentIon ? Optional.of(MILLIMOLAR) : Optional.empty();
+        }
+        return parse(folded);
+    }
+
+    /**
+     * Whether a test measures a monovalent ion, from its definition's code or name.
+     * A name that also names a divalent ion is not one; an unknown test is not one.
+     */
+    static boolean isMonovalentIon(String testName, String testCode) {
+        if (isIonCode(testCode) || isIonCode(testName)) {
+            return true;
+        }
+        if (testName == null || testName.isBlank()) {
+            return false;
+        }
+        String[] words = NOT_A_WORD.split(fold(testName));
+        return Arrays.stream(words).noneMatch(DIVALENT_NAME_WORDS::contains)
+            && Arrays.stream(words).anyMatch(MONOVALENT_NAME_WORDS::contains);
+    }
+
+    private static boolean isIonCode(String code) {
+        if (code == null || code.isBlank()) {
+            return false;
+        }
+        String folded = fold(code);
+        // "K+" and "Na+" are the ion; the sign is notation.
+        return MONOVALENT_CODES.contains(folded.endsWith("+") || folded.endsWith("-")
+            ? folded.substring(0, folded.length() - 1) : folded);
+    }
+
+    private static String fold(String text) {
+        return COMBINING_MARKS.matcher(Normalizer.normalize(text.trim(), Normalizer.Form.NFD))
+            .replaceAll("").toUpperCase(Locale.ROOT);
     }
 
     /** Whether a value in {@code from} can be expressed in {@code to}. */

@@ -101,6 +101,46 @@ class LabResultChartRound19GuardTest {
             .isEmpty();
     }
 
+    // ── QA D1394: a value the ranges could not grade never passes silently ──
+
+    @Test
+    void d1394_everyReleasePathAsksWhetherTheValueSettledAGrade() throws IOException {
+        List<String> offenders = new ArrayList<>();
+        sources().forEach((rel, src) -> {
+            if (src.contains("setReleased(true)")
+                && !(src.contains("isGradeUnknown(") || src.contains("isUngraded("))) {
+                offenders.add(rel);
+            }
+        });
+        assertThat(offenders)
+            .as("QA D1394: a path that releases a lab result must ask LabResultMapper.isGradeUnknown / isUngraded "
+                + "(\">1\" on a range ending at 6.5 has no grade and raises no alert); " + SourceScan.MANDATE)
+            .isEmpty();
+    }
+
+    /** A stored lab value is parsed as a number only through LabResultValueRules.numericValue. */
+    private static final Pattern RAW_VALUE_PARSE =
+        Pattern.compile("parse(?:Double|Float)\\([^)]*[rR]esultValue|new (?:java\\.math\\.)?BigDecimal\\([^)]*[rR]esultValue");
+
+    /** Not grading: both read the value only to draw a trend, and a value they cannot parse leaves the trend. */
+    private static final Map<String, String> RAW_VALUE_PARSE_ALLOWED = Map.of(
+        "service/LabResultServiceImpl.java", "determineTrendDirection: a trend over plain numbers, no grade or alert");
+
+    @Test
+    void d1394_aLabValueIsReadAsANumberInOnePlace() throws IOException {
+        List<String> offenders = new ArrayList<>();
+        sources().forEach((rel, src) -> {
+            if (RAW_VALUE_PARSE.matcher(src).find() && !RAW_VALUE_PARSE_ALLOWED.containsKey(rel)) {
+                offenders.add(rel);
+            }
+        });
+        assertThat(offenders)
+            .as("QA D1394: Double.parseDouble of a raw lab value fails on \">6,5\" and the grade silently became "
+                + "UNSPECIFIED; read it through LabResultValueRules.numericValue; " + SourceScan.MANDATE)
+            .isEmpty();
+        assertThat(sources().get("mapper/LabResultMapper.java")).contains("LabResultValueRules.numericValue(");
+    }
+
     // ── QA D1094: a visit is not its lead clinician's alone ────────────────
 
     /** An entity invariant that ties an order to the visit's clinician of record (a 500 for a colleague). */

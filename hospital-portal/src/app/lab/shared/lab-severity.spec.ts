@@ -1,4 +1,4 @@
-import { labSeverityFlag, labSeverityTone } from './lab-severity';
+import { labSeverityFlag, labSeverityTone, labReleaseNeedsReview } from './lab-severity';
 
 describe('labSeverityFlag (QA D969)', () => {
   it('reads a positive qualitative answer as ABNORMAL, never "not graded"', () => {
@@ -16,5 +16,15 @@ describe('labSeverityFlag (QA D969)', () => {
 
   it('reads a result no range in its unit could grade as UNIT_MISMATCH', () => {
     expect(labSeverityFlag({ severityFlag: 'NORMAL', unitMismatch: true })).toBe('UNIT_MISMATCH');
+  });
+
+  it('QA D1394: a value no bound settled reads GRADE_UNKNOWN and needs a review', () => {
+    expect(labSeverityFlag({ severityFlag: 'UNSPECIFIED', gradeUnknown: true })).toBe(
+      'GRADE_UNKNOWN',
+    );
+    expect(labSeverityTone('GRADE_UNKNOWN')).toBe('ungraded');
+    expect(labReleaseNeedsReview({ gradeUnknown: true })).toBeTrue();
+    expect(labReleaseNeedsReview({ unitMismatch: true })).toBeTrue();
+    expect(labReleaseNeedsReview({ severityFlag: 'UNSPECIFIED' })).toBeFalse();
   });
 });

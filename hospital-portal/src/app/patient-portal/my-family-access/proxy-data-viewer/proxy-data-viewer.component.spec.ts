@@ -37,12 +37,14 @@ describe('ProxyDataViewerComponent', () => {
       'getProxyAppointments',
       'getProxyMedications',
       'getProxyLabResultsPage',
+      'getProxyLabResultTotal',
       'getProxyBilling',
       'getProxyRecords',
     ]);
     portal.getProxyAppointments.and.returnValue(of([]));
     portal.getProxyMedications.and.returnValue(of([]));
     portal.getProxyLabResultsPage.and.returnValue(of({ items: [], hasMore: false }));
+    portal.getProxyLabResultTotal.and.returnValue(of(0));
     portal.getProxyBilling.and.returnValue(of([]));
 
     await TestBed.configureTestingModule({
@@ -299,5 +301,66 @@ describe('ProxyDataViewerComponent', () => {
     expect(portal.getProxyLabResultsPage).toHaveBeenCalledWith('p-1', 2);
     expect(el.querySelectorAll('[data-testid="proxy-labs-table"] tbody tr').length).toBe(3);
     expect(el.querySelector('[data-testid="proxy-labs-load-more"]')).toBeNull();
+  });
+
+  it('QA D1398 / D1399: the medications tab pages every row with the total, as needed marked', () => {
+    const med = (id: string, extra = {}) =>
+      ({
+        id,
+        medicationName: 'Paracétamol',
+        dosage: '',
+        frequency: 'q6h',
+        status: 'ACTIVE',
+        ...extra,
+      }) as never;
+    portal.getMyProxyAccess.and.returnValue(of([grant('VIEW_MEDICATIONS')]));
+    portal.getProxyMedications.and.returnValue(
+      of([
+        med('prn', { asNeeded: true, prnMinIntervalHours: 6 }),
+        ...Array.from({ length: 30 }, (_, i) => med('m' + i)),
+      ]),
+    );
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+
+    expect(el.querySelectorAll('[data-testid="proxy-medications-table"] tbody tr').length).toBe(20);
+    expect(component.medicationRows.total()).toBe(31);
+    expect(el.querySelector('[data-testid="proxy-med-prn-prn"]')?.textContent).toContain(
+      'PORTAL.MEDICATIONS.AS_NEEDED_INTERVAL',
+    );
+    (el.querySelector('[data-testid="proxy-med-more"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    expect(el.querySelectorAll('[data-testid="proxy-medications-table"] tbody tr').length).toBe(31);
+    expect(el.querySelector('[data-testid="proxy-med-more"]')).toBeNull();
+  });
+
+  it('QA D1394: a lab value nothing graded is marked on the proxy tab', () => {
+    portal.getMyProxyAccess.and.returnValue(of([grant('VIEW_LAB_RESULTS')]));
+    portal.getProxyLabResultTotal.and.returnValue(of(121));
+    portal.getProxyLabResultsPage.and.returnValue(
+      of({
+        items: [{ id: 'u', testName: 'K', result: '>1', isUngraded: true } as never],
+        hasMore: false,
+      }),
+    );
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+
+    expect(el.querySelector('[data-testid="proxy-lab-not-graded-u"]')).not.toBeNull();
+    expect(el.querySelector('[data-testid="proxy-lab-count"]')).not.toBeNull();
+    expect(component.labTotal()).toBe(121);
+  });
+
+  it('QA D1413: the billing tab names the hospital that issued each invoice', () => {
+    portal.getMyProxyAccess.and.returnValue(of([grant('VIEW_BILLING')]));
+    portal.getProxyBilling.and.returnValue(
+      of([{ id: 'i', invoiceNumber: '1', facility: 'CHU de Bogodogo', status: 'SENT' } as never]),
+    );
+    fixture.detectChanges();
+
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="proxy-billing-table"]')
+        ?.textContent,
+    ).toContain('CHU de Bogodogo');
   });
 });

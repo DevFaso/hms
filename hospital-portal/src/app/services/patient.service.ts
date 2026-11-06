@@ -343,6 +343,8 @@ export interface PatientLabResult {
    * graded it: a NORMAL status then only means no abnormal flag was recorded.
    */
   unitMismatch?: boolean;
+  /** QA D1394: a range applies but the value does not settle a grade against it. */
+  gradeUnknown?: boolean;
   collectedAt?: string;
   resultedAt?: string;
   orderedBy?: string;

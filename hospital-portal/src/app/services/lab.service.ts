@@ -77,6 +77,11 @@ export interface LabResultResponse {
    * and is never auto-released. Shown as "not graded: units differ".
    */
   unitMismatch?: boolean;
+  /**
+   * QA D1394: a range applies but the value does not settle a grade against it
+   * (">1" on a range ending at 6.5): UNSPECIFIED, no alert, reviewed before release.
+   */
+  gradeUnknown?: boolean;
   acknowledged: boolean;
   acknowledgedAt: string | null;
   acknowledgedBy: string | null;

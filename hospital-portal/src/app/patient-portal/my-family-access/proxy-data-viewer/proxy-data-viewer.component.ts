@@ -17,6 +17,7 @@ import { EnumLabelPipe } from '../../../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../../../shared/pipes/server-time.pipe';
 import { refusalReason } from '../../../shared/refusal-reason';
 import { LabResultPager } from '../../lab-result-pager';
+import { ShownRows } from '../../shown-rows';
 import { ClockTimePipe } from '../../../shared/pipes/clock-time.pipe';
 
 export type ProxyTabKey = 'appointments' | 'medications' | 'labResults' | 'billing' | 'records';
@@ -129,6 +130,10 @@ export class ProxyDataViewerComponent implements OnInit {
 
   appointments = signal<PortalAppointment[]>([]);
   medications = signal<MedicationSummary[]>([]);
+  /** QA D1399: every medication is one click away, with the total. */
+  readonly medicationRows = new ShownRows(this.medications);
+  /** QA D1399: the server's count of the grantor's lab results; null until it answered. */
+  labTotal = signal<number | null>(null);
   /** QA D1213 (sibling): the grantor's lab results, page by page, as on /my-lab-results. */
   readonly labPager = new LabResultPager((offset) =>
     this.portal.getProxyLabResultsPage(this.patientId, offset),
@@ -217,6 +222,11 @@ export class ProxyDataViewerComponent implements OnInit {
    * loading and error state like the other tabs.
    */
   private loadLabs(): void {
+    // A total that could not be read only hides the count: the rows still page.
+    this.portal.getProxyLabResultTotal(this.patientId).subscribe({
+      next: (total) => this.labTotal.set(total),
+      error: () => this.labTotal.set(null),
+    });
     this.labPager.reload(
       () => {
         this.loadedTabs.add('labResults');

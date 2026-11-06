@@ -239,6 +239,23 @@ class PatientLabResultServiceImplTest {
         assertThat(row.getPerformedBy()).isNull();
     }
 
+    /** QA D1394: an analyser's N is no grade the patient may read as fine when the ranges could not grade it. */
+    @Test void portalView_aValueNoBoundSettled_isMarkedAndNeverNormal() {
+        LabResult lr = unreleasedGlucoseWithEverything();
+        lr.setReleased(true);
+        lr.setResultValue(">1");
+        lr.setAbnormalFlag(com.example.hms.enums.AbnormalFlag.NORMAL);
+        LabResultResponseDTO mapped = new LabResultResponseDTO();
+        mapped.setSeverityFlag("UNSPECIFIED");
+        mapped.setGradeUnknown(true);
+        when(labResultMapper.toResponseDTO(lr)).thenReturn(mapped);
+        givenTheOnlyRowIs(lr);
+
+        PatientLabResultResponseDTO row = service.getLabResultsForPatientPortal(patientId, hospitalId, 10).get(0);
+        assertThat(row.isGradeUnknown()).isTrue();
+        assertThat(row.getStatus()).isEqualTo("UNKNOWN");
+    }
+
     /** B3 — the same row, once released, reaches the patient whole. */
     @Test void portalView_releasedRow_carriesTheValue() {
         LabResult lr = unreleasedGlucoseWithEverything();

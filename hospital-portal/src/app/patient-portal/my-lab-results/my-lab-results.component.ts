@@ -40,6 +40,8 @@ export class MyLabResultsComponent implements OnInit {
 
   /** QA D1213: every current result, page by page (see LabResultPager). */
   readonly pager = new LabResultPager((offset) => this.portal.getMyLabResultsPage(offset));
+  /** QA D1399: the server's count of my results; null until it answered. */
+  readonly labTotal = signal<number | null>(null);
   readonly results = this.pager.results;
   /** The server's reason the last read failed (a 4xx), when it gave one. */
   readonly failureReason = this.pager.failureReason;
@@ -51,6 +53,11 @@ export class MyLabResultsComponent implements OnInit {
 
   ngOnInit() {
     this.pager.reload();
+    // A total that could not be read only hides the count: the rows still page.
+    this.portal.getMyLabResultTotal().subscribe({
+      next: (total) => this.labTotal.set(total),
+      error: () => this.labTotal.set(null),
+    });
   }
 
   /** Reads the first page again after it failed. */

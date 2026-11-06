@@ -1075,7 +1075,10 @@ export class PatientChartComponent implements OnInit, OnChanges {
    */
   isUngradedResult(result: PatientLabResult): boolean {
     const status = result.status ?? 'NORMAL';
-    return result.unitMismatch === true && (status === 'NORMAL' || status === 'UNKNOWN');
+    return (
+      (result.unitMismatch === true || result.gradeUnknown === true) &&
+      (status === 'NORMAL' || status === 'UNKNOWN')
+    );
   }
 
   /** Colour class for a RELEASED row only; a pending row gets none. */
@@ -1106,7 +1109,12 @@ export class PatientChartComponent implements OnInit, OnChanges {
    */
   labStatusKey(result: PatientLabResult): string {
     if (this.isPendingResult(result)) return 'CHART.LAB_STATUS_PENDING';
-    if (this.isUngradedResult(result)) return 'CHART.LAB_STATUS_NOT_GRADED_UNITS';
+    if (this.isUngradedResult(result)) {
+      // QA D1394: a comparator that settles no grade is not a question of units.
+      return result.gradeUnknown === true && result.unitMismatch !== true
+        ? 'CHART.LAB_STATUS_GRADE_UNKNOWN'
+        : 'CHART.LAB_STATUS_NOT_GRADED_UNITS';
+    }
     switch (result.status) {
       case 'NORMAL':
       case 'ABNORMAL':

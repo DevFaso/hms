@@ -726,6 +726,15 @@ class CriticalValueNotificationServiceTest {
         "POSITIF | | positif | true",
         "POSITIF | | négatif | false",
         "6.8 | mmol/L | | false",
+        // QA D1394: a value critical from its comparator reads back with it.
+        ">6.5 | mmol/L | >6,5 | true",
+        ">6.5 | mmol/L | > 6,5 mmol/L | true",
+        "> 6.5 | mmol/L | >6.50 | true",
+        "<1.5 | mmol/L | <1,5 MMOL/L | true",
+        ">6.5 | mmol/L | 6,5 | false",
+        ">6.5 | mmol/L | <6,5 | false",
+        ">6.5 | mmol/L | >7 | false",
+        "6.5 | mmol/L | >6,5 | false",
     })
     void readBackAcceptsTheUnitAndTheCommaButNotAWrongNumberOrUnit(String value, String unit, String repeated,
                                                                      boolean matches) {

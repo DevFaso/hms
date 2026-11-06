@@ -6129,3 +6129,9 @@ ships*, not for building — and check the shipped surface before trusting a
 - [ ] Native apps: `patient-android-app` sends `size=20` to `GET /me/patient/vitals`, which reads only `limit` (default 10), so the app shows 10 readings; the apps should read `GET /me/patient/vitals/history` (page + total) like the web portal.
 - [ ] `NursingNoteServiceImpl#getRecentNotes` reads `findTop50…` and then the caller's limit: a recent-notes read, but the nursing-notes panel shows no total (same class as the pins above).
 - [ ] `POST /patients/{id}/doctor-record` caps each section at `maxItems` (≤ 200) with no total; no portal screen reads it today (API only).
+
+## Standing debt — round 33 (fix/r33-lab-patient-meds)
+- [ ] D1394 native apps: both patient apps read only `status` (`UNKNOWN` shows "Statut indisponible": not a claim of normal, and a value no bound settled now always answers UNKNOWN). They do not read `gradeUnknown` / `unitMismatch`, so a unit-mismatch row an analyser flagged N still reads Normal there, as before this round. Needs a store build: the portal is fixed, CI is the only Swift compiler.
+- [ ] D1398 native apps: the medication rows now carry `asNeeded` and `prnMinIntervalHours`; neither app draws them yet.
+- [ ] D1394 sibling, not a comparator: a reflex rule with `{"severityFlag": ...}` reads only the stored analyser flag (`LabResultServiceImpl#evaluateReflexCondition`), so a hand-entered critical never fires a CRITICAL rule, plain number or not. Not changed: it would create child orders that do not exist today, and needs a decision.
+- [ ] D1394 note: `G/L` and `g/L` compare equal at step 1 of `LabResultMapper#gradingOf` (a range in the result's unit, case aside), as they always did. A test configured in one and a result typed in the other is graded, though a conversion would refuse them. Not changed: no catalogue test mixes them, and the brief keeps unit matching case-insensitive.
