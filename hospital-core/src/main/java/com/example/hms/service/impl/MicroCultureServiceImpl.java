@@ -39,6 +39,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -88,6 +89,7 @@ public class MicroCultureServiceImpl implements MicroCultureService {
     private final UserRepository userRepository;
     private final NotificationService notificationService;
     private final MessageSource messageSource;
+    private final Clock clock;
 
     @Override
     public MicroCultureResponseDTO createCulture(UUID hospitalId, UUID actorUserId,
@@ -213,7 +215,7 @@ public class MicroCultureServiceImpl implements MicroCultureService {
         requireConsistentOutcome(null, culture.getGrowthResult(), 1,
             isolateRepository.countByCultureResult_Id(culture.getId()), "micro.culture.isolateRequired");
         culture.setStatus(MicroCultureStatus.FINAL);
-        culture.setFinalizedAt(LocalDateTime.now());
+        culture.setFinalizedAt(LocalDateTime.now(clock));
         culture.setFinalizedByUserId(actorUserId);
         MicroCultureResult saved = cultureRepository.save(culture);
 
@@ -422,7 +424,7 @@ public class MicroCultureServiceImpl implements MicroCultureService {
         if (correctionReason == null || correctionReason.isBlank()) {
             throw new com.example.hms.exception.FieldBusinessException("correctionReason", "micro.culture.correctionReasonRequired");
         }
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(clock);
         // QA CX-009: before anything changes, what the report says now. Each
         // correction overwrites the reason on the report and a removed isolate is
         // a deleted row, so this is the record of both.
@@ -465,7 +467,7 @@ public class MicroCultureServiceImpl implements MicroCultureService {
             line.append(" (").append(isolate.getGrowthQuantity()).append(')');
         }
         if (!susceptibilities.isEmpty()) {
-            line.append(": ").append(susceptibilities.stream()
+            line.append(" — ").append(susceptibilities.stream()
                 .map(s -> s.getAntibioticName() + ' ' + s.getInterpretation())
                 .collect(Collectors.joining(", ")));
         }

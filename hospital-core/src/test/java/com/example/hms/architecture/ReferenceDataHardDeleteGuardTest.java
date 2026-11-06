@@ -71,9 +71,9 @@ class ReferenceDataHardDeleteGuardTest {
     private static final Map<String, String> RECORDED = Map.ofEntries(
         entry("com.example.hms.service.LabTestValidationStudyServiceImpl#delete",
             "a validation study is a leaf record: no order, result or definition column points at it"),
-        entry("com.example.hms.service.impl.MicroCultureServiceImpl#deleteIsolate",
+        entry("com.example.hms.service.impl.MicroCultureServiceImpl#removeWithSusceptibilities",
             "children (susceptibilities) are deleted first in the same method; a final report needs a "
-                + "correction reason and is stamped CORRECTED, so the chart keeps the trail"),
+                + "correction reason, is stamped CORRECTED and keeps what it said in its correction history (CX-009)"),
         entry("com.example.hms.service.impl.MicroCultureServiceImpl#deleteSusceptibility",
             "a susceptibility row is a leaf; a final report needs a correction reason and is stamped CORRECTED"));
 

@@ -85,6 +85,11 @@ class MicroCultureOutcomePostgresIT {
         MessageSource microOutcomeMessages() {
             return com.example.hms.i18n.TestMessageSources.bundles();
         }
+
+        @Bean
+        java.time.Clock microOutcomeClock() {
+            return java.time.Clock.systemDefaultZone();
+        }
     }
 
     @Autowired private MicroCultureService service;

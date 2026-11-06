@@ -65,6 +65,7 @@ class StoredReasonExposureGuardTest {
         Map.entry("AppointmentWaitlist", List.of("WaitlistEntryResponseDTO")),
         Map.entry("ImagingReportStatusHistory", List.of("ImagingReportStatusDTO")),
         Map.entry("MicroCultureResult", List.of("MicroCultureResponseDTO")),
+        Map.entry("MicroCultureCorrection", List.of("MicroCultureResponseDTO")),
         Map.entry("PatientImmunization", List.of("ImmunizationResponseDTO")),
         Map.entry("PatientTreatmentConsent", List.of("TreatmentConsentResponseDTO")),
         Map.entry("TransfusionCrossmatch", List.of("CrossmatchResponseDTO")),

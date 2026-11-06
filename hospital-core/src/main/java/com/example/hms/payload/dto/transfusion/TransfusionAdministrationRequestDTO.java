@@ -16,6 +16,8 @@ import java.util.UUID;
  * is named explicitly because a transfusion requires an independent second
  * bedside check, and the service refuses the two being the same person.
  */
+@com.example.hms.payload.dto.OneOf(fields = {"verifiedByStaffId", "verifiedByUserId"},
+    message = "{transfusion.administration.verifierRequired}")
 @Data
 @Builder
 @NoArgsConstructor

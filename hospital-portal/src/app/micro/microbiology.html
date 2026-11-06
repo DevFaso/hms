@@ -192,7 +192,7 @@
           <!-- QA CX-009: what the report said before each correction, organisms included. -->
           <details class="correction-history" data-testid="correction-history">
             <summary>
-              {{ 'MICRO.CORRECTION_HISTORY' | translate }} ({{ culture.corrections?.length }})
+              {{ 'MICRO.CORRECTION_HISTORY' | translate }} ({{ culture.corrections.length }})
             </summary>
             @for (c of culture.corrections; track c.id) {
               <div class="correction-entry" data-testid="correction-entry">
@@ -720,7 +720,7 @@
     titleKey="MICRO.NO_GROWTH_CONFIRM_TITLE"
     messageKey="MICRO.NO_GROWTH_CONFIRM_MESSAGE"
     confirmKey="MICRO.NO_GROWTH_CONFIRM"
-    [params]="{ count: selected()?.isolates?.length ?? 0 }"
+    [params]="{ count: selected()?.isolates.length ?? 0 }"
     [busy]="savingCulture()"
     (confirmed)="confirmNoGrowth()"
     (cancelled)="confirmingNoGrowth.set(false)"

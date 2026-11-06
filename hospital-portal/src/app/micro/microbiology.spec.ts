@@ -228,7 +228,8 @@ describe('MicrobiologyComponent', () => {
       organismName: 'Escherichia coli',
       susceptibilities: [],
     } as unknown as MicroCultureResponse['isolates'][number];
-    const validated = () => culture({ status: 'FINAL', growthResult: 'GROWTH', isolates: [isolate] });
+    const validated = () =>
+      culture({ status: 'FINAL', growthResult: 'GROWTH', isolates: [isolate] });
 
     const open = (report: MicroCultureResponse) => {
       microServiceSpy.list.and.returnValue(of(page([report])));

@@ -98,7 +98,7 @@ class MicroCultureServiceImplTest {
             cultureRepository, isolateRepository, susceptibilityRepository, correctionRepository,
             labOrderRepository, specimenRepository, patientChartAccess,
             staffRepository, userRepository, notificationService,
-            TestMessageSources.bundles());
+            TestMessageSources.bundles(), java.time.Clock.systemDefaultZone());
 
         hospitalId = UUID.randomUUID();
         hospital = new Hospital();

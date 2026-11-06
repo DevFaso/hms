@@ -22,6 +22,7 @@ import { RoleContextService } from '../core/role-context.service';
 import { roleContextStub } from '../testing/role-context.stub';
 import { AuthService } from '../auth/auth.service';
 import { answerReasonDialog, reasonDialog } from '../shared/reason-dialog/reason-dialog.testing';
+import { expectEmptySubmitRefusal } from '../testing/form-refusal-behaviour';
 
 function mockRequest(
   overrides: Partial<TransfusionRequestResponse> = {},
@@ -658,6 +659,18 @@ describe('TransfusionComponent: a transfusion in progress (QA CX-008)', () => {
     expect(component.stoppingAdministration()).toBeNull();
   });
 
+  it('after ending it, the keyboard lands on the section, not on the page body', async () => {
+    await start(['ROLE_NURSE']);
+    txSpy.stopAdministration.and.returnValue(of(administration({ status: 'STOPPED' })));
+    txSpy.listAdministrationsForPatient.and.returnValue(
+      of([administration({ status: 'STOPPED' })]),
+    );
+    component.confirmStop(administration(), 'Voie veineuse perdue');
+    fixture.detectChanges();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(document.activeElement?.id).toBe('tx-administrations-heading');
+  });
+
   it('a finished administration offers only a later reaction, and shows what happened', async () => {
     await start(['ROLE_NURSE']);
     txSpy.listAdministrationsForPatient.and.returnValue(
@@ -666,7 +679,12 @@ describe('TransfusionComponent: a transfusion in progress (QA CX-008)', () => {
           status: 'STOPPED',
           stopReason: 'Transfusion reaction: ALLERGIC',
           reactions: [
-            { id: 'rx1', reactionType: 'ALLERGIC', severity: 'MILD', onsetAt: '2026-11-06T10:30:00' },
+            {
+              id: 'rx1',
+              reactionType: 'ALLERGIC',
+              severity: 'MILD',
+              onsetAt: '2026-11-06T10:30:00',
+            },
           ] as TransfusionReactionResponse[],
         }),
       ]),
@@ -696,7 +714,9 @@ describe('TransfusionComponent: a transfusion in progress (QA CX-008)', () => {
     await start(['ROLE_NURSE']);
     const nurseTasks = TestBed.inject(NurseTaskService);
     spyOn(nurseTasks, 'getAdministrationWitnessCandidates').and.returnValue(
-      of([{ userId: 'user-2', displayName: 'Aminata Sawadogo' }] as AdministrationWitnessCandidate[]),
+      of([
+        { userId: 'user-2', displayName: 'Aminata Sawadogo' },
+      ] as AdministrationWitnessCandidate[]),
     );
     txSpy.startAdministration = jasmine
       .createSpy()
@@ -745,6 +765,17 @@ describe('TransfusionComponent: a transfusion in progress (QA CX-008)', () => {
     component.openGroupModalForRequest(issuedRequest);
     component.submitGroup();
     expect(txSpy.getRequest.calls.count()).toBe(fetches + 1);
+  });
+
+  it('QA CX-011: a screen with no patient chosen is refused on the patient field', async () => {
+    await start(['ROLE_LAB_TECHNICIAN']);
+    component.closeRequest();
+    fixture.detectChanges();
+    component.openGroupModalForAnyPatient();
+    fixture.detectChanges();
+    const marked = expectEmptySubmitRefusal(fixture, { button: '[data-testid="submit-group"]' });
+    expect(marked).toEqual(['grp-patient']);
+    expect(txSpy.recordBloodGroup).not.toHaveBeenCalled();
   });
 
   it('a clinician who cannot do lab work is not offered the screen', async () => {
