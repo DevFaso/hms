@@ -211,6 +211,58 @@ class PrnMinIntervalTest {
         }
     }
 
+    /** QA D1395: each kind of refusal says what is wrong, on the tick. */
+    @Test
+    void d1395_theTwoRefusalsAreDistinct() {
+        assertThat(PrnMinInterval.safetyNet("pour douleur"))
+            .isEqualTo(new PrnMinInterval.Refusal(PrnMinInterval.AS_NEEDED_FIELD, PrnMinInterval.CONFIRM_KEY));
+        assertThat(PrnMinInterval.safetyNet("selon prescription m\u00e9dicale"))
+            .isEqualTo(new PrnMinInterval.Refusal(PrnMinInterval.AS_NEEDED_FIELD, PrnMinInterval.UNREADABLE_KEY));
+        assertThat(PrnMinInterval.safetyNet("q6h")).isNull();
+        assertThat(PrnMinInterval.safetyNet(null)).isNull();
+    }
+
+    /** QA D1391 / D1395: an edit that writes no frequency is not asked about an old one; one that does is. */
+    @Test
+    void d1391_anEditIsJudgedOnWhatItWrote() {
+        Prescription rx = new Prescription();
+        rx.setFrequency("SOS");
+        PrnMinInterval.applyToEdit(rx, "SOS", false);
+        PrnMinInterval.applyToEdit(rx, " SOS ", false);
+
+        rx.setFrequency("pour douleur");
+        assertThatThrownBy(() -> PrnMinInterval.applyToEdit(rx, "SOS", false))
+            .hasFieldOrPropertyWithValue("field", PrnMinInterval.AS_NEEDED_FIELD);
+
+        // Unticking keeps the old text, and that text is now the prescriber's statement of a fixed schedule.
+        rx.setFrequency("SOS");
+        assertThatThrownBy(() -> PrnMinInterval.applyToEdit(rx, "SOS", true))
+            .hasFieldOrPropertyWithValue("field", PrnMinInterval.AS_NEEDED_FIELD);
+
+        // The interval half applies either way.
+        rx.setPrnMinIntervalHours(4);
+        assertThatThrownBy(() -> PrnMinInterval.applyToEdit(rx, "SOS", false))
+            .hasFieldOrPropertyWithValue("messageKey", PrnMinInterval.NOT_AS_NEEDED_KEY);
+
+        // Ticked: the interval rule, whatever the frequency did.
+        rx.setAsNeeded(true);
+        rx.setPrnMinIntervalHours(null);
+        assertThatThrownBy(() -> PrnMinInterval.applyToEdit(rx, "SOS", true))
+            .hasFieldOrPropertyWithValue("messageKey", PrnMinInterval.REQUIRED_KEY);
+        PrnMinInterval.applyToEdit(null, null, false);
+    }
+
+    /** QA D1397: 24 / interval, only for a ticked order with an interval. */
+    @Test
+    void d1397_theHighestDosesADayComeFromTheInterval() {
+        assertThat(PrnMinInterval.highestDosesPerDay(true, 1)).isEqualTo(24d);
+        assertThat(PrnMinInterval.highestDosesPerDay(true, 6)).isEqualTo(4d);
+        assertThat(PrnMinInterval.highestDosesPerDay(true, 48)).isEqualTo(0.5d);
+        assertThat(PrnMinInterval.highestDosesPerDay(false, 6)).isNull();
+        assertThat(PrnMinInterval.highestDosesPerDay(true, null)).isNull();
+        assertThat(PrnMinInterval.highestDosesPerDay(true, 0)).isNull();
+    }
+
     private static PrescriptionRequestDTO request(String frequency) {
         PrescriptionRequestDTO r = new PrescriptionRequestDTO();
         r.setPatientId(UUID.randomUUID());

@@ -10,8 +10,12 @@
 //     no phrase list, no PRN/"si besoin" test on a frequency);
 //  2. the prescription form and the order-set item editor offer the explicit
 //     tick, marked by the server's fieldErrors key, and show the interval from it;
-//  3. the shared fixture holds every wording QA filed (the server safety net
-//     MarDoseSchedule.looksAsNeeded must catch them: MarDoseScheduleTest).
+//  3. the shared fixture holds every wording QA filed (the server rule
+//     FrequencyWording must refuse them: FrequencyWordingTest).
+// QA D1391 / D1395 (round 33): the portal holds a MIRROR of that server rule
+// about an order NOT ticked, in shared/as-needed-frequency.ts, for a hint under
+// the field. It is the one reader of the text; it never makes an order as-needed
+// (rule 4), and only the prescribing form reads it (rule 5).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
@@ -33,6 +37,10 @@ const READS_FREQUENCY_FOR_PRN = [
   /frequency\W[^;\n]{0,60}\.(?:includes|match|startsWith|test|indexOf)\([^;\n]{0,30}(?:\bPRN\b|BESOIN|AS NEEDED|NECESARIO)/i,
   /\/[^/\n]*(?:\\bPRN|si besoin|as needed)[^/\n]*\/[gimsuy]*\.test\(\s*[\w.?!]*frequency/i,
 ];
+
+/** Who may read the mirror's verdict, and the one file it lives in. */
+const MIRROR = join('shared', 'as-needed-frequency.ts');
+const MIRROR_READERS = new Set([MIRROR, join('prescriptions', 'prescriptions.ts')]);
 
 function sources(dir) {
   const out = [];
@@ -58,6 +66,23 @@ test('no portal source decides PRN from the frequency text (QA D1378)', () => {
   const files = sources(APP).map((p) => [relative(APP, p), readFileSync(p, 'utf8')]);
   assert.ok(files.length > 500, `only ${files.length} sources read: the scan went blind`);
   assert.deepEqual(frequencyReaders(files), []);
+});
+
+test('only the prescribing form reads the mirror, and it never ticks an order from it (QA D1391)', () => {
+  const files = sources(APP).map((p) => [relative(APP, p), readFileSync(p, 'utf8')]);
+  const readers = files
+    .filter(([, text]) => /\bunTickedFrequencyVerdict\b/.test(text))
+    .map(([p]) => p);
+  assert.deepEqual(new Set(readers), MIRROR_READERS);
+  const ts = readFileSync(RX_TS, 'utf8');
+  assert.doesNotMatch(
+    ts,
+    /asNeeded\s*=[^=][^;\n]*unTickedFrequencyVerdict/,
+    'the verdict never sets the tick',
+  );
+  const body = /frequencyHintKey\(\)[^{]*\{([\s\S]*?)\n {2}\}/.exec(ts);
+  assert.ok(body, 'the hint method exists');
+  assert.doesNotMatch(body[1], /form\.asNeeded\s*=[^=]/);
 });
 
 test('the prescription form offers the explicit tick and shows the interval from it', () => {
@@ -100,6 +125,21 @@ test('the shared fixture holds every wording QA filed under D1360 and D1378', ()
     assert.ok(fixture.conditional.includes(wording), `fixture lost "${wording}"`);
   }
   assert.ok(fixture.fixedSchedule.includes('3 fois par jour'));
+  // QA D1391 and D1395 (round 33): both directions, word for word.
+  for (const wording of ['TPI-SP', 'Prise unique (TPI-SP 2)', '3 fois par jour selon ordonnance']) {
+    assert.ok(fixture.fixedSchedule.includes(wording), `fixture lost "${wording}"`);
+  }
+  for (const wording of ['pour douleur', 'toutes les 6 h pour douleur', 'q6h si fièvre']) {
+    assert.ok(fixture.conditional.includes(wording), `fixture lost "${wording}"`);
+  }
+  for (const wording of [
+    'max 4/j',
+    '1 à 3 fois par jour',
+    'selon prescription médicale',
+    'SP + AQ',
+  ]) {
+    assert.ok(fixture.unreadable.includes(wording), `fixture lost "${wording}"`);
+  }
 });
 
 test('guard: the scan sees the shapes it guards', () => {

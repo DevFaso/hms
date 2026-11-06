@@ -138,7 +138,14 @@ public class CdsRuleEngine {
      * (null on a create).
      */
     public record ProposedOrder(String medicationName, String medicationCode, String dosage, String frequency,
-                                MedicationCatalogItem catalogItem, UUID excludedPrescriptionId) {
+                                MedicationCatalogItem catalogItem, UUID excludedPrescriptionId,
+                                Double prnDosesPerDay) {
+
+        /** An order with no as-needed interval. */
+        public ProposedOrder(String medicationName, String medicationCode, String dosage, String frequency,
+                             MedicationCatalogItem catalogItem, UUID excludedPrescriptionId) {
+            this(medicationName, medicationCode, dosage, frequency, catalogItem, excludedPrescriptionId, null);
+        }
     }
 
     /**
@@ -186,7 +193,8 @@ public class CdsRuleEngine {
             activeRxnorms,
             proposedFrequency,
             parseDoseUnits(proposedDosage),
-            weighedAt
+            weighedAt,
+            order.prnDosesPerDay()
         );
     }
 

@@ -1,4 +1,9 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import en from '../../../assets/i18n/en.json';
+import { MedicationCatalogItemResponse, PharmacyService } from '../../services/pharmacy.service';
+import type { Page } from '../../services/pharmacy.service';
+import es from '../../../assets/i18n/es.json';
+import fr from '../../../assets/i18n/fr.json';
 import { ActivatedRoute, provideRouter, Router } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { of } from 'rxjs';
@@ -197,6 +202,95 @@ describe('OrderSetEditComponent', () => {
 
     expect(svc.create).not.toHaveBeenCalled();
     expect(toast.error).toHaveBeenCalled();
+  });
+
+  /** QA D1410: the refusal named "Nom, Nom"; the set and its items read differently, in every language. */
+  it('QA D1410: the set name and the item name have different labels in EN, FR and ES', () => {
+    for (const locale of [en, fr, es]) {
+      const { FIELD_NAME, FIELD_ITEM_NAME } = locale.ORDER_SETS;
+      expect(FIELD_NAME).not.toBe(FIELD_ITEM_NAME);
+    }
+  });
+
+  /** QA D1396: a name several catalogue items carry offers the exact item; a new name drops the pick. */
+  it('QA D1396: the catalogue pick is offered and sent, and a new name drops it', async () => {
+    await configure('new');
+    const pharmacy = TestBed.inject(PharmacyService);
+    spyOn(pharmacy, 'searchMedications').and.returnValue(
+      of({
+        content: [
+          { id: 'm10', nameFr: 'Morphine', strength: '10', strengthUnit: 'mg' },
+          { id: 'm30', nameFr: 'Morphine', strength: '30', strengthUnit: 'mg' },
+        ],
+      } as unknown as Page<MedicationCatalogItemResponse>),
+    );
+    fixture = TestBed.createComponent(OrderSetEditComponent);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    const select = () => host.querySelector('[data-testid="order-set-item-catalog-0"]');
+    expect(select()).withContext('nothing to choose yet').toBeNull();
+
+    const c = fixture.componentInstance as unknown as {
+      form: { name: string };
+      items: () => Record<string, unknown>[];
+      save(): void;
+      loadCatalogChoices(i: number): void;
+      setItemName(it: unknown, value: string): void;
+    };
+    c.form.name = 'Douleur';
+    c.setItemName(c.items()[0], 'Morphine');
+    c.loadCatalogChoices(0);
+    fixture.detectChanges();
+    expect(select()!.getAttribute('data-server-field')).toBe(
+      'orderItems[0].medicationCatalogItemId',
+    );
+    expect(select()!.querySelectorAll('option').length).toBe(3);
+
+    c.items()[0]['medicationCatalogItemId'] = 'm30';
+    c.items()[0]['quantity'] = 6;
+    c.save();
+    expect(svc.create.calls.mostRecent().args[0].orderItems[0].medicationCatalogItemId).toBe('m30');
+
+    c.setItemName(c.items()[0], 'Paracetamol');
+    c.save();
+    expect(
+      'medicationCatalogItemId' in svc.create.calls.mostRecent().args[0].orderItems[0],
+    ).toBeFalse();
+  });
+
+  /** QA D1396: the editor writes the quantity; the server's refusal names this control. */
+  it('QA D1396: the quantity and unit are saved with the item, and a blank one is not sent', async () => {
+    await configure('new');
+    fixture = TestBed.createComponent(OrderSetEditComponent);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    const quantity = host.querySelector('[data-testid="order-set-item-quantity-0"]')!;
+    expect(quantity.getAttribute('data-server-field')).toBe('orderItems[0].quantity');
+    expect(quantity.hasAttribute('required'))
+      .withContext('only a controlled drug needs it')
+      .toBeFalse();
+
+    const c = fixture.componentInstance as unknown as {
+      form: { name: string };
+      items: () => Record<string, unknown>[];
+      save(): void;
+    };
+    c.form.name = 'Douleur';
+    Object.assign(c.items()[0], {
+      medicationName: 'Morphine',
+      quantity: 6,
+      quantityUnit: 'ampoules',
+    });
+    c.save();
+    let sent = svc.create.calls.mostRecent().args[0].orderItems[0];
+    expect(sent.quantity).toBe(6);
+    expect(sent.quantityUnit).toBe('ampoules');
+
+    Object.assign(c.items()[0], { quantity: null, quantityUnit: ' ' });
+    c.save();
+    sent = svc.create.calls.mostRecent().args[0].orderItems[0];
+    expect('quantity' in sent).toBeFalse();
+    expect('quantityUnit' in sent).toBeFalse();
   });
 
   /** QA D859: HOSPITAL_ADMIN_A opened /admin/order-sets/new in FR and ES. */

@@ -1090,9 +1090,13 @@
     "NURSING_NOTE": "Nota de enfermería"
   },
   "ORDER_SETS": {
+    "FIELD_CATALOG_ITEM": "Artículo exacto del catálogo",
+    "QUANTITY_HINT": "Obligatorio para un estupefaciente.",
+    "APPLIED_RESULT_ONE": "Aplicado. 1 orden creada ({{skipped}} omitida(s)).",
+    "ITEM_ONE": "elemento",
     "ADD_ITEM": "Agregar elemento",
     "ADMIN_TITLE": "Plantillas de conjuntos de órdenes",
-    "APPLIED_RESULT": "Aplicado. {{count}} órdenes creadas ({{skipped}} omitidas).",
+    "APPLIED_RESULT": "Aplicado. {{count}} órdenes creadas ({{skipped}} omitida(s)).",
     "APPLY": "Aplicar al ingreso",
     "COL_ITEM_COUNT": "Elementos",
     "COL_LAST_MODIFIED": "Última modificación",
@@ -1113,9 +1117,9 @@
     "FIELD_DOSE_MIN": "Dosis mín.",
     "FIELD_DOSE_UNIT": "Unidad",
     "FIELD_FREQUENCY": "Frecuencia",
-    "FIELD_ITEM_NAME": "Nombre",
+    "FIELD_ITEM_NAME": "Nombre del elemento",
     "FIELD_ITEM_TYPE": "Tipo",
-    "FIELD_NAME": "Nombre",
+    "FIELD_NAME": "Nombre del conjunto",
     "FIELD_NOTES": "Notas",
     "FIELD_ORDER_ITEMS_JSON": "Elementos de orden (matriz JSON)",
     "FIELD_ROUTE": "Vía",
@@ -7184,6 +7188,8 @@
     }
   },
   "PRESCRIPTIONS": {
+    "FREQUENCY_UNREADABLE": "Este no es un horario que podamos leer: escriba un horario fijo («3 veces al día», «cada 6 horas», «dosis única»), o marque «Si es necesario (PRN)».",
+    "FREQUENCY_READS_AS_NEEDED": "Esto se lee «si es necesario»: marque «Si es necesario (PRN)» e indique el intervalo mínimo, o escriba un horario fijo.",
     "CLARIFICATION": {
       "ANSWER": "Respuesta del prescriptor",
       "ANSWERED_LABEL": "Respondida el",

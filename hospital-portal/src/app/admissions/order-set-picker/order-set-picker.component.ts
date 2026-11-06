@@ -14,7 +14,7 @@ import {
 } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Subject, Subscription, debounceTime, switchMap, takeUntil } from 'rxjs';
 
 import {
@@ -24,6 +24,7 @@ import {
 } from '../../services/order-set.service';
 import { CdsCardListComponent } from '../../shared/cds-card/cds-card.component';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
+import { refusalReason } from '../../shared/refusal-reason';
 
 type State = 'idle' | 'searching' | 'ready' | 'applying' | 'applied' | 'error';
 
@@ -67,7 +68,7 @@ type State = 'idle' | 'searching' | 'ready' | 'applying' | 'applied' | 'error';
         (ngModelChange)="onSearch($event)"
       />
 
-      @if (state() === 'ready' && results().length > 0) {
+      @if (showList() && results().length > 0) {
         <ul class="order-set-picker__list" data-testid="order-set-picker-list">
           @for (os of results(); track trackById($index, os)) {
             <li
@@ -83,7 +84,9 @@ type State = 'idle' | 'searching' | 'ready' | 'applying' | 'applied' | 'error';
                 {{ os.name }} <small>v{{ os.version }}</small>
               </div>
               <div class="order-set-picker__item-meta">
-                {{ os.orderCount }} {{ 'ORDER_SETS.ITEMS' | translate }} ·
+                {{ os.orderCount }}
+                {{ (os.orderCount === 1 ? 'ORDER_SETS.ITEM_ONE' : 'ORDER_SETS.ITEMS') | translate }}
+                ·
                 {{ os.admissionType | enumLabel: 'admissionType' }}
               </div>
             </li>
@@ -91,7 +94,7 @@ type State = 'idle' | 'searching' | 'ready' | 'applying' | 'applied' | 'error';
         </ul>
       }
 
-      @if (state() === 'ready' && results().length === 0) {
+      @if (showList() && results().length === 0) {
         <p class="order-set-picker__empty" data-testid="order-set-picker-empty">
           {{ 'ORDER_SETS.NO_RESULTS' | translate }}
         </p>
@@ -103,9 +106,9 @@ type State = 'idle' | 'searching' | 'ready' | 'applying' | 'applied' | 'error';
         </p>
       }
 
-      @if (state() === 'error') {
-        <p class="order-set-picker__error" data-testid="order-set-picker-error">
-          {{ 'ORDER_SETS.ERROR' | translate }}
+      @if (state() === 'error' || applyFailed()) {
+        <p class="order-set-picker__error" role="alert" data-testid="order-set-picker-error">
+          {{ applyRefusal() || ('ORDER_SETS.ERROR' | translate) }}
         </p>
       }
 
@@ -117,9 +120,12 @@ type State = 'idle' | 'searching' | 'ready' | 'applying' | 'applied' | 'error';
           }
           <ul>
             @for (item of sel.orderItems; track item; let i = $index) {
-              <li>
+              <li data-testid="order-set-picker-preview-item">
                 <strong>{{ orderItemType(item) }}</strong
                 >: {{ orderItemLabel(item) }}
+                @if (orderItemDetail(item); as detail) {
+                  <small class="order-set-picker__item-detail">{{ detail }}</small>
+                }
               </li>
             }
           </ul>
@@ -143,15 +149,10 @@ type State = 'idle' | 'searching' | 'ready' | 'applying' | 'applied' | 'error';
         <section class="order-set-picker__applied" data-testid="order-set-picker-applied">
           <p>
             {{
-              'ORDER_SETS.APPLIED_RESULT'
-                | translate
-                  : {
-                      count:
-                        summary.prescriptionIds.length +
-                        summary.labOrderIds.length +
-                        summary.imagingOrderIds.length,
-                      skipped: summary.skippedItemCount,
-                    }
+              (createdCount(summary) === 1
+                ? 'ORDER_SETS.APPLIED_RESULT_ONE'
+                : 'ORDER_SETS.APPLIED_RESULT'
+              ) | translate: { count: createdCount(summary), skipped: summary.skippedItemCount }
             }}
           </p>
           <app-cds-card-list [cards]="summary.cdsAdvisories" />
@@ -196,6 +197,10 @@ type State = 'idle' | 'searching' | 'ready' | 'applying' | 'applied' | 'error';
       .order-set-picker__error {
         color: var(--danger, #b00020);
       }
+      .order-set-picker__item-detail {
+        display: block;
+        color: var(--text-secondary, #64748b);
+      }
       .order-set-picker__preview {
         margin-top: 1rem;
         padding-top: 1rem;
@@ -220,8 +225,17 @@ export class OrderSetPickerComponent implements OnChanges, OnDestroy {
   protected readonly selected = signal<OrderSetSummary | null>(null);
   protected readonly searchTerm = signal<string>('');
   protected readonly appliedSummary = signal<AppliedOrderSetSummary | null>(null);
+  /** QA D1396: the server's own reason an apply was refused, shown instead of the generic line. */
+  protected readonly applyRefusal = signal<string | null>(null);
+  /** An apply failed: said on the page, and the list stays to pick another set. */
+  protected readonly applyFailed = signal(false);
+  /** The list while nothing is being read, and while a set is being applied. */
+  protected readonly showList = computed(
+    () => this.state() === 'ready' || this.state() === 'applying',
+  );
 
   private readonly orderSetService = inject(OrderSetService);
+  private readonly translate = inject(TranslateService);
   private readonly searchSubject = new Subject<string>();
   private readonly destroyed$ = new Subject<void>();
   private applySub?: Subscription;
@@ -242,7 +256,8 @@ export class OrderSetPickerComponent implements OnChanges, OnDestroy {
             this.state.set('idle');
             return [];
           }
-          this.state.set('searching');
+          // QA D1345 class: a search landing mid-apply never re-enables "Apply".
+          if (this.state() !== 'applying') this.state.set('searching');
           // QA D1347: every order set the search matches (all pages), not the first 20.
           return allRows((page, size) => this.orderSetService.list(hid, term, page, size));
         }),
@@ -250,11 +265,11 @@ export class OrderSetPickerComponent implements OnChanges, OnDestroy {
       .subscribe({
         next: (rows) => {
           this.results.set(rows);
-          this.state.set('ready');
+          if (this.state() !== 'applying') this.state.set('ready');
         },
         error: () => {
           this.results.set([]);
-          this.state.set('error');
+          if (this.state() !== 'applying') this.state.set('error');
         },
       });
     this.searchSubject.next('');
@@ -281,6 +296,8 @@ export class OrderSetPickerComponent implements OnChanges, OnDestroy {
   protected select(os: OrderSetSummary): void {
     this.selected.set(os);
     this.appliedSummary.set(null);
+    this.applyRefusal.set(null);
+    this.applyFailed.set(false);
   }
 
   protected apply(os: OrderSetSummary): void {
@@ -289,6 +306,8 @@ export class OrderSetPickerComponent implements OnChanges, OnDestroy {
     // picking a set again starts a new preview.
     if (this.appliedSummary() !== null || this.applying()) return;
     this.applySub?.unsubscribe();
+    this.applyRefusal.set(null);
+    this.applyFailed.set(false);
     this.state.set('applying');
     this.applySub = this.orderSetService
       .apply(os.id, this.admissionId(), {
@@ -301,7 +320,11 @@ export class OrderSetPickerComponent implements OnChanges, OnDestroy {
           this.state.set('applied');
           this.applied.emit(summary);
         },
-        error: () => this.state.set('error'),
+        error: (err: unknown) => {
+          this.applyRefusal.set(refusalReason(err));
+          this.applyFailed.set(true);
+          this.state.set('ready');
+        },
       });
   }
 
@@ -309,8 +332,63 @@ export class OrderSetPickerComponent implements OnChanges, OnDestroy {
     return os.id;
   }
 
+  /** QA D1405: the item's type in the reader's language, never the wire code. */
   protected orderItemType(item: Record<string, unknown>): string {
-    return String(item['orderType'] ?? '?');
+    return this.labelFor('ORDER_SETS.ITEM_TYPE', String(item['orderType'] ?? '?'));
+  }
+
+  protected createdCount(summary: AppliedOrderSetSummary): number {
+    return (
+      summary.prescriptionIds.length + summary.labOrderIds.length + summary.imagingOrderIds.length
+    );
+  }
+
+  /**
+   * QA D1405: what tells two items of one drug apart: dose, route, frequency,
+   * the as-needed interval, the quantity. Empty for an item with none of them.
+   */
+  protected orderItemDetail(item: Record<string, unknown>): string {
+    const interval = item['prnMinIntervalHours'];
+    const parts = [
+      this.doseText(item),
+      this.codedText('ORDER_SETS.ROUTE', item['route']),
+      this.codedText('ORDER_SETS.FREQUENCY', item['frequency']),
+      item['asNeeded'] === true ? this.translate.instant('ORDER_SETS.FREQUENCY.PRN') : '',
+      interval
+        ? this.translate.instant('PRESCRIPTIONS.PRN_MIN_INTERVAL_VALUE', { hours: interval })
+        : '',
+      item['quantity']
+        ? this.translate.instant('PRESCRIPTIONS.QUANTITY_VALUE', {
+            value: item['quantity'],
+            unit: item['quantityUnit'] ?? '',
+          })
+        : '',
+    ];
+    return parts
+      .map((p) => String(p).trim())
+      .filter((p) => p !== '')
+      .join(' · ');
+  }
+
+  private doseText(item: Record<string, unknown>): string {
+    if (typeof item['dose'] === 'string' && item['dose'].trim()) return item['dose'];
+    const min = item['doseRangeMin'];
+    const max = item['doseRangeMax'];
+    const range = min != null && max != null && min !== max ? `${min}-${max}` : (min ?? max ?? '');
+    if (range === '') return '';
+    const unit = item['doseUnit'];
+    return unit ? `${range as string | number} ${unit as string}` : String(range);
+  }
+
+  private codedText(prefix: string, code: unknown): string {
+    return typeof code === 'string' && code.trim() ? this.labelFor(prefix, code) : '';
+  }
+
+  /** The translation of a coded value, or the value as written when it is not a known code. */
+  private labelFor(prefix: string, code: string): string {
+    const key = `${prefix}.${code}`;
+    const label: string = this.translate.instant(key);
+    return label === key ? code : label;
   }
 
   protected orderItemLabel(item: Record<string, unknown>): string {

@@ -329,6 +329,28 @@ export class PrescriptionService {
     );
   }
 
+  /**
+   * QA D1412: one page of the list and the server's own total. Same order as
+   * {@link list}. `/prescriptions` shows these; every row is one page away.
+   */
+  page(
+    filters: { statuses?: readonly string[] },
+    page: number,
+    size: number,
+  ): Observable<PageSlice<PrescriptionResponse>> {
+    let params = new HttpParams();
+    for (const status of filters.statuses ?? []) {
+      params = params.append('status', status);
+    }
+    return this.http.get<PageSlice<PrescriptionResponse>>(this.baseUrl, {
+      params: params
+        .set('page', page)
+        .set('size', size)
+        .append('sort', 'createdAt,desc')
+        .append('sort', 'id,desc'),
+    });
+  }
+
   getById(id: string): Observable<PrescriptionResponse> {
     return this.http.get<PrescriptionResponse>(`${this.baseUrl}/${id}`);
   }

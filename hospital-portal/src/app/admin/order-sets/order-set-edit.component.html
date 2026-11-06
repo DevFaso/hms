@@ -77,6 +77,7 @@
                   type="text"
                   [ngModel]="itemName(item)"
                   (ngModelChange)="setItemName(item, $event)"
+                  (blur)="loadCatalogChoices(i)"
                   [id]="'order-set-item-name-' + i"
                   [name]="'itemName-' + i"
                   required
@@ -113,6 +114,24 @@
               />
             </label>
             @if (isMedicationLike(item.orderType)) {
+              @if ((catalogChoices()[i]?.length ?? 0) > 1 || item.medicationCatalogItemId) {
+                <!-- QA D1396: several items carry this name; the exact one, when a controlled drug is among them. -->
+                <label class="order-set-item__synonyms">
+                  <span>{{ 'ORDER_SETS.FIELD_CATALOG_ITEM' | translate }}</span>
+                  <select
+                    [(ngModel)]="item.medicationCatalogItemId"
+                    [name]="'catalogItem-' + i"
+                    [id]="'order-set-item-catalog-' + i"
+                    [attr.data-testid]="'order-set-item-catalog-' + i"
+                    [attr.data-server-field]="'orderItems[' + i + '].medicationCatalogItemId'"
+                  >
+                    <option [ngValue]="undefined"></option>
+                    @for (choice of catalogChoices()[i] ?? []; track choice.id) {
+                      <option [ngValue]="choice.id">{{ catalogChoiceLabel(choice) }}</option>
+                    }
+                  </select>
+                </label>
+              }
               <div class="order-set-item__dose-grid">
                 <label>
                   <span>{{ 'ORDER_SETS.FIELD_DOSE_MIN' | translate }}</span>
@@ -175,6 +194,34 @@
                       <option [value]="f.value">{{ choiceLabel(f) }}</option>
                     }
                   </select>
+                </label>
+                <!-- QA D1396: the quantity to hand over reaches the order the item creates; the
+                   server requires it for a drug the catalogue marks controlled, on this field. -->
+                <label>
+                  <span>{{ 'PRESCRIPTIONS.PRESCRIBED_QUANTITY' | translate }}</span>
+                  <input
+                    type="number"
+                    min="0.01"
+                    step="any"
+                    [(ngModel)]="item.quantity"
+                    [name]="'quantity-' + i"
+                    [id]="'order-set-item-quantity-' + i"
+                    [attr.data-testid]="'order-set-item-quantity-' + i"
+                    [attr.data-server-field]="'orderItems[' + i + '].quantity'"
+                    [placeholder]="'PRESCRIPTIONS.PRESCRIBED_QUANTITY_PLACEHOLDER' | translate"
+                  />
+                  <small class="field-hint">{{ 'ORDER_SETS.QUANTITY_HINT' | translate }}</small>
+                </label>
+                <label>
+                  <span>{{ 'PRESCRIPTIONS.PRESCRIBED_QUANTITY_UNIT' | translate }}</span>
+                  <input
+                    type="text"
+                    maxlength="60"
+                    [(ngModel)]="item.quantityUnit"
+                    [name]="'quantityUnit-' + i"
+                    [attr.data-testid]="'order-set-item-quantity-unit-' + i"
+                    [placeholder]="'PRESCRIPTIONS.PRESCRIBED_QUANTITY_UNIT_PLACEHOLDER' | translate"
+                  />
                 </label>
                 <!-- QA D1378 / D1382 (round 32): as-needed is the author's explicit tick;
                    the server refuses a conditional frequency without it, and a ticked

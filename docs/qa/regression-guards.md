@@ -889,3 +889,13 @@ Rounds 27, 28 and 29 each found 20–30 new siblings of the required-field class
 | `db/CancelledStayMigrationIT` (new) | D1393: V263 on rows shaped as dev's (written after the cancel, before it, take-home, held, a cancel with no `cancelled_at`, stays that were not cancelled, a second run). | — |
 | `NurseTaskServiceImplTest#d1402_*` (new) | D1402 (D1347 class): a tile computed by a rule of its own. The vitals tile is the list's row count (`dueVitalRounds`), each medication tile a filter of the eMAR rows, the workboard card the eMAR's and the list's rule. | the nurse dashboard tiles; orders and handoffs already read the list's own query (the handoff count's 100-row cap is gone) |
 | `architecture/QueryParameterVocabularyGuardTest` (allowlist shrunk) | D1408: `NurseTaskController#status` now goes through `QueryParameterValues.oneOf` on all four lists. | `CHECKED_ELSEWHERE` −1 |
+
+## Guards added or widened by round 33 (fix/r33-prn-ordersets)
+
+| Guard | Class it stops | QA defects | Allowlist today |
+|---|---|---|---|
+| `service/impl/FrequencyWordingTest` + portal `shared/as-needed-frequency.spec.ts` (new, one fixture) | A trigger word list deciding what an unticked frequency may say: it refused `TPI-SP` and `selon ordonnance` and let `pour douleur` and `max 4/j` through. The rule is inverted: a schedule, and every other word accounted for. `as-needed-frequency.cases.json` holds every fixed-schedule set of the QA scripts (r32, r33), every filed wording, the dropdown, and the repo's frequencies, and BOTH sides read it; a word list differing between Java and the TS mirror fails the test. | D1391, D1395 (D1378, D1360 NOT_FIXED: a net of triggers can only catch what it lists) | none |
+| `architecture/MarAsNeededFlagGuardTest` (widened) | Rule 4 now holds `FrequencyWording.classify` to `PrnMinInterval.safetyNet`. Rule 5b: a writer of order-set items without `OrderSetItemQuantityRules`. Rule 6: an edit goes through `applyToEdit` (judged on what it wrote), and the MAR's readers never read the wording rule. | D1391, D1395, D1396 | `FLAG_READERS` unchanged |
+| `scripts/lib/as-needed-frequency.test.mjs` (widened) | Only the prescribing form reads the mirror, for a hint; the verdict never sets the tick. | D1391, D1395 | none |
+| `controller/PrescriptionWriteAuthorizationIT` (new) | A role that may not prescribe reading a 400 about the body instead of a 403, through the real filter chain. | round 33, RF | the other controllers: tasklist standing debt |
+| portal `prescriptions.spec.ts` (`QA D1412`) with `npm run guards` list caps | `/prescriptions` reads one page with the server's total; each tab count is the server's. | D1412 (D1347 class) | list-caps baseline unchanged |

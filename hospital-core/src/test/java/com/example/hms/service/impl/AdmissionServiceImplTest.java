@@ -387,6 +387,33 @@ class AdmissionServiceImplTest {
         verify(orderSetRepository, never()).save(any());
     }
 
+    /** QA D1396 (round 33): the second order-set writer holds a controlled item to the quantity rule. */
+    @Test
+    void d1396_theAdmissionOrderSetWriterRefusesAControlledItemWithoutItsQuantity() {
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        com.example.hms.repository.MedicationCatalogItemRepository catalog =
+            org.mockito.Mockito.mock(com.example.hms.repository.MedicationCatalogItemRepository.class);
+        com.example.hms.model.medication.MedicationCatalogItem morphine =
+            new com.example.hms.model.medication.MedicationCatalogItem();
+        morphine.setNameFr("Morphine");
+        morphine.setControlled(true);
+        when(catalog.findByHospital_IdAndActiveTrue(any(), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(java.util.List.of(morphine)));
+        service.setOrderSetItemQuantityRules(new com.example.hms.service.orderset.OrderSetItemQuantityRules(catalog));
+        com.example.hms.payload.dto.AdmissionOrderSetRequestDTO request =
+            new com.example.hms.payload.dto.AdmissionOrderSetRequestDTO();
+        request.setName("Douleur");
+        request.setHospitalId(hospitalId);
+        request.setCreatedByStaffId(staffId);
+        request.setOrderItems(java.util.List.of(java.util.Map.of("orderType", "MEDICATION",
+            "medicationName", "Morphine", "frequency", "Q4H")));
+        assertThatThrownBy(() -> service.createOrderSet(request))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getField()).isEqualTo("orderItems[0].quantity"));
+        verify(orderSetRepository, never()).save(any());
+    }
+
     /** QA D1384 (round 32): an unknown status filter is refused on "status", never raw Java text. */
     @Test
     void d1384_anUnknownStatusFilterIsRefusedOnItsName() {

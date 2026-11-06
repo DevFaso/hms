@@ -432,6 +432,13 @@ public class AdmissionServiceImpl implements AdmissionService {
 
     private com.example.hms.service.AuditEventLogService auditEventLogService;
 
+    private com.example.hms.service.orderset.OrderSetItemQuantityRules orderSetItemQuantityRules;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setOrderSetItemQuantityRules(com.example.hms.service.orderset.OrderSetItemQuantityRules rules) {
+        this.orderSetItemQuantityRules = rules;
+    }
+
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     void setAuditEventLogService(com.example.hms.service.AuditEventLogService auditEventLogService) {
         this.auditEventLogService = auditEventLogService;
@@ -683,6 +690,10 @@ public class AdmissionServiceImpl implements AdmissionService {
             .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", request.getCreatedByStaffId()));
         // QA D1382 / D1378: the second order-set writer is held to the same item rule.
         com.example.hms.service.orderset.OrderSetItemPrnRules.requireValid(request.getOrderItems());
+        // QA D1396: and to the quantity rule.
+        if (orderSetItemQuantityRules != null) {
+            orderSetItemQuantityRules.requireValid(request.getOrderItems(), hospital.getId());
+        }
 
         AdmissionOrderSet orderSet = new AdmissionOrderSet();
         orderSet.setName(request.getName());

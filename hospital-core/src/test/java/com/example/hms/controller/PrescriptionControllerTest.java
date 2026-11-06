@@ -51,14 +51,25 @@ class PrescriptionControllerTest {
         assertThat(roles).containsExactly("DOCTOR");
     }
 
+    /**
+     * QA round 33: the two writes answer a refused role at the edge, because a
+     * @Valid body is read before @PreAuthorize (a receptionist read a 400 about
+     * the frequency). This asserted no /prescriptions matcher at all; its reason
+     * stands: a matcher must admit every role the annotation admits, so each is
+     * held to the annotation's exact roles, and no other /prescriptions matcher
+     * exists (every other route's annotation is its gate).
+     */
     @Test
-    void securityConfig_declaresNoPrescriptionsMatcher_soTheAnnotationsAreTheGate() throws Exception {
+    void securityConfig_declaresOnlyTheTwoWriteMatchers_withTheAnnotationsRoles() throws Exception {
         String source = java.nio.file.Files.readString(
                 java.nio.file.Paths.get("src/main/java/com/example/hms/config/SecurityConfig.java"),
-                java.nio.charset.StandardCharsets.UTF_8);
+                java.nio.charset.StandardCharsets.UTF_8).replaceAll("\\s+", " ");
+        String roles = ".hasAnyAuthority(ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)";
         assertThat(source)
                 .as("a /prescriptions matcher must admit every role the controller annotations admit")
-                .doesNotContain("\"/prescriptions");
+                .contains("requestMatchers(HttpMethod.POST, \"/prescriptions\") " + roles)
+                .contains("requestMatchers(HttpMethod.PUT, \"/prescriptions/*\") " + roles);
+        assertThat(source.split("\"/prescriptions", -1)).as("no other /prescriptions matcher").hasSize(3);
     }
 
     @Test

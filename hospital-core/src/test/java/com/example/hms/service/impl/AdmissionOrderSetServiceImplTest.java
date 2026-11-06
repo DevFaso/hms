@@ -35,8 +35,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class AdmissionOrderSetServiceImplTest {
@@ -49,6 +51,9 @@ class AdmissionOrderSetServiceImplTest {
     private final AdmissionOrderSetMapper mapper = new AdmissionOrderSetMapper();
     private final OrderSetItemDispatcher dispatcher = mock(OrderSetItemDispatcher.class);
 
+    private final com.example.hms.repository.MedicationCatalogItemRepository catalogRepo =
+        mock(com.example.hms.repository.MedicationCatalogItemRepository.class);
+
     private AdmissionOrderSetServiceImpl service;
 
     private static final UUID HOSPITAL_ID = UUID.randomUUID();
@@ -60,8 +65,20 @@ class AdmissionOrderSetServiceImplTest {
     void setUp() {
         service = new AdmissionOrderSetServiceImpl(
             orderSetRepo, admissionRepo, hospitalRepo, departmentRepo, staffRepo,
-            mapper, dispatcher
+            mapper, dispatcher, new com.example.hms.service.orderset.OrderSetItemQuantityRules(catalogRepo)
         );
+        when(catalogRepo.findByHospital_IdAndActiveTrue(any(), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(morphine())));
+    }
+
+    private static com.example.hms.model.medication.MedicationCatalogItem morphine() {
+        com.example.hms.model.medication.MedicationCatalogItem item =
+            new com.example.hms.model.medication.MedicationCatalogItem();
+        item.setId(UUID.randomUUID());
+        item.setNameFr("Morphine");
+        item.setCode("MOR");
+        item.setControlled(true);
+        return item;
     }
 
     private static Hospital hospital() {
@@ -270,7 +287,7 @@ class AdmissionOrderSetServiceImplTest {
             assertThatThrownBy(() -> service.update(ORDER_SET_ID, request)).as(e.getKey())
                 .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
         }
-        verify(orderSetRepo, org.mockito.Mockito.never()).save(any());
+        verify(orderSetRepo, never()).save(any());
 
         when(orderSetRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
         AdmissionOrderSetRequestDTO ok = sampleRequest();
@@ -301,8 +318,79 @@ class AdmissionOrderSetServiceImplTest {
         assertThatThrownBy(() -> service.applyToAdmission(ADMISSION_ID, ORDER_SET_ID, req, Locale.ENGLISH))
             .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
                 ex -> assertThat(ex.getField()).isEqualTo("orderItems[1].prnMinIntervalHours"));
-        org.mockito.Mockito.verifyNoInteractions(dispatcher);
-        verify(admissionRepo, org.mockito.Mockito.never()).save(any());
+        verifyNoInteractions(dispatcher);
+        verify(admissionRepo, never()).save(any());
+    }
+
+    /**
+     * QA D1396 (round 33): a set with a catalogue-controlled drug is refused at
+     * save without its quantity, by name, on the item's own field; with it, it
+     * saves. Non-controlled drugs are not asked.
+     */
+    @Test
+    void d1396_aControlledItemStatesItsQuantityAtSave() {
+        when(hospitalRepo.findClinicalById(HOSPITAL_ID)).thenReturn(Optional.of(hospital()));
+        when(staffRepo.findById(STAFF_ID)).thenReturn(Optional.of(staff()));
+        when(orderSetRepo.findById(ORDER_SET_ID)).thenReturn(Optional.of(existing()));
+        AdmissionOrderSetRequestDTO refused = sampleRequest();
+        refused.setOrderItems(List.of(Map.of("orderType", "LAB", "orderName", "Lactate"),
+            Map.of("orderType", "MEDICATION", "medicationName", "Morphine", "dose", "2 mg", "frequency", "Q4H")));
+        assertThatThrownBy(() -> service.create(refused))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getField()).isEqualTo("orderItems[1].quantity"));
+        assertThatThrownBy(() -> service.update(ORDER_SET_ID, refused))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getField()).isEqualTo("orderItems[1].quantity"));
+        verify(orderSetRepo, never()).save(any());
+
+        when(orderSetRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        AdmissionOrderSetRequestDTO ok = sampleRequest();
+        ok.setOrderItems(List.of(Map.of("orderType", "MEDICATION", "medicationName", "Morphine", "dose", "2 mg",
+            "frequency", "Q4H", "quantity", 6, "quantityUnit", "ampoules")));
+        assertThat(service.create(ok).getVersion()).isEqualTo(1);
+    }
+
+    /** QA D1396: a set saved before the rule is refused at apply, clearly, before any order is created. */
+    @Test
+    void d1396_aStoredControlledItemWithoutAQuantityIsRefusedAtApplyNeverSkipped() {
+        AdmissionOrderSet os = existing();
+        os.setOrderItems(List.of(
+            Map.of("orderType", "LAB", "orderName", "Lactate"),
+            Map.of("orderType", "MEDICATION", "medicationName", "Morphine", "dose", "2 mg", "frequency", "Q4H")));
+        when(orderSetRepo.findById(ORDER_SET_ID)).thenReturn(Optional.of(os));
+        Admission admission = new Admission();
+        admission.setId(ADMISSION_ID);
+        admission.setHospital(hospital());
+        when(admissionRepo.findById(ADMISSION_ID)).thenReturn(Optional.of(admission));
+
+        ApplyOrderSetRequestDTO req = new ApplyOrderSetRequestDTO(UUID.randomUUID(), STAFF_ID, false);
+        assertThatThrownBy(() -> service.applyToAdmission(ADMISSION_ID, ORDER_SET_ID, req, Locale.ENGLISH))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getField()).isEqualTo("orderItems[1].quantity"));
+        verifyNoInteractions(dispatcher);
+        verify(admissionRepo, never()).save(any());
+    }
+
+    /** QA D1395: an item's wording is held to the rule at save, and D1391: a fixed schedule is not. */
+    @Test
+    void d1395_anItemWordingIsHeldToTheFixedScheduleRule() {
+        when(hospitalRepo.findClinicalById(HOSPITAL_ID)).thenReturn(Optional.of(hospital()));
+        when(staffRepo.findById(STAFF_ID)).thenReturn(Optional.of(staff()));
+        when(orderSetRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        for (String refused : List.of("pour douleur", "max 4/j", "selon prescription m\u00e9dicale", "SP + AQ")) {
+            AdmissionOrderSetRequestDTO request = sampleRequest();
+            request.setOrderItems(List.of(Map.of("orderType", "MEDICATION", "medicationName", "Paracetamol",
+                "frequency", refused)));
+            assertThatThrownBy(() -> service.create(request)).as(refused)
+                .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                    ex -> assertThat(ex.getField()).isEqualTo("orderItems[0].asNeeded"));
+        }
+        for (String accepted : List.of("Q6H", "TPI-SP", "3 fois par jour selon ordonnance", "Prise unique (TPI-SP 2)")) {
+            AdmissionOrderSetRequestDTO request = sampleRequest();
+            request.setOrderItems(List.of(Map.of("orderType", "MEDICATION", "medicationName", "Paracetamol",
+                "frequency", accepted)));
+            assertThat(service.create(request).getVersion()).as(accepted).isEqualTo(1);
+        }
     }
 
     @Test

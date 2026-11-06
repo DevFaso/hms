@@ -36,6 +36,10 @@ import java.util.UUID;
  * critical-block contract and {@code forceOverride} semantics from
  * P1 #3 without bespoke wiring here.
  *
+ * <p>QA D1396 (round 33): the item's quantity, unit and catalogue pick reach
+ * the order, so a catalogue-controlled drug can be applied (its quantity is
+ * required at save, {@link OrderSetItemQuantityRules}).
+ *
  * <p>Item types DIET / ACTIVITY / MONITORING are recognised but emit
  * a {@link DispatchResult#skipped(String)} with a reason — they have
  * no equivalent order entity yet and are captured separately as
@@ -120,7 +124,10 @@ public class OrderSetItemDispatcher {
         req.setEncounterId(ctx.encounterId());
         req.setMedicationName(name);
         req.setMedicationCode(string(item.get("medicationCode")));
+        req.setMedicationCatalogItemId(catalogItemId(item));
         req.setDosage(combineDose(item));
+        req.setQuantity(OrderSetItemQuantityRules.quantityOf(item));
+        req.setQuantityUnit(string(item.get(OrderSetItemQuantityRules.QUANTITY_UNIT_KEY)));
         req.setFrequency(string(item.get("frequency")));
         // QA D1378 / D1382 (round 32): the item is as-needed because its
         // author ticked it, and the order carries the item's interval. The
@@ -133,7 +140,15 @@ public class OrderSetItemDispatcher {
             req.setPrnMinIntervalHours(OrderSetItemPrnRules.intervalHours(item));
         }
         req.setDuration(string(item.get("duration")));
-        req.setNotes(NARRATIVE_PREFIX + ctx.orderSetName());
+        // QA D1396 class: what the editor writes reaches the order: the route
+        // (it reached only the dose text, so the MAR's route right saw none),
+        // when it is one the route reading knows, and the item's own notes.
+        String route = string(item.get("route"));
+        if (com.example.hms.service.emar.MedicationRoutes.canonical(route) != null) {
+            req.setRoute(route);
+        }
+        String notes = string(item.get("notes"));
+        req.setNotes(NARRATIVE_PREFIX + ctx.orderSetName() + (notes == null ? "" : " - " + notes));
         req.setForceOverride(ctx.forceOverride());
         req.setOverrideReason(ctx.overrideReason());
 
@@ -228,8 +243,52 @@ public class OrderSetItemDispatcher {
         return a != null ? a : b;
     }
 
-    private static String combineDose(Map<String, Object> item) {
+    /** The catalogue pick when the item carries a well-formed one. */
+    private static UUID catalogItemId(Map<String, Object> item) {
+        String pick = string(item.get(OrderSetItemQuantityRules.CATALOG_ITEM_KEY));
+        if (pick == null) {
+            return null;
+        }
+        try {
+            return UUID.fromString(pick.strip());
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
+    }
+
+    /**
+     * QA D1396: the editor writes a dose as its range and unit
+     * ({@code doseRangeMin}, {@code doseRangeMax}, {@code doseUnit}); the order
+     * reads it as "2 mg", or "2-4 mg". A plain {@code dose} wins.
+     */
+    private static String doseOf(Map<String, Object> item) {
         String dose = string(item.get("dose"));
+        if (dose != null) {
+            return dose;
+        }
+        String min = number(item.get("doseRangeMin"));
+        String max = number(item.get("doseRangeMax"));
+        if (min == null && max == null) {
+            return null;
+        }
+        String range = min == null ? max : min;
+        if (min != null && max != null && !min.equals(max)) {
+            range = min + "-" + max;
+        }
+        String unit = string(item.get("doseUnit"));
+        return unit == null ? range : range + " " + unit;
+    }
+
+    private static String number(Object value) {
+        if (value instanceof Number n) {
+            // In the reader's own writing, as a prescriber types a dose ("2,5 mg"); the dose reading takes both.
+            return com.example.hms.utility.DisplayNumbers.quantity(new java.math.BigDecimal(n.toString()));
+        }
+        return string(value);
+    }
+
+    private static String combineDose(Map<String, Object> item) {
+        String dose = doseOf(item);
         String route = string(item.get("route"));
         if (dose == null && route == null) return null;
         if (dose == null) return route;
