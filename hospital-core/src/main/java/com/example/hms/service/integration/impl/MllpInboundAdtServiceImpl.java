@@ -325,7 +325,7 @@ public class MllpInboundAdtServiceImpl implements MllpInboundAdtService {
     }
 
     private static boolean digitNameChange(String sent, String stored) {
-        return StringUtils.hasText(sent) && !sent.trim().equals(stored)
+        return StringUtils.hasText(sent) && !sent.trim().equals(stored == null ? null : stored.trim())
             && PatientIdentityRules.isMadeOfDigits(sent);
     }
 

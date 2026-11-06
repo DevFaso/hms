@@ -203,7 +203,8 @@ export interface CheckInRequest {
   /** QA D975: how the copay was paid (cash when absent) and its reference. */
   copayMethod?: string | null;
   copayReference?: string | null;
-  identityConfirmed?: boolean;
+  /** QA D1415: required by the server, so required here: a caller cannot forget the attestation. */
+  identityConfirmed: boolean;
   insuranceVerified?: boolean;
   notes?: string | null;
   /* Consent-to-treat capture (P3 #21) — recorded as a queryable row, never

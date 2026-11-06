@@ -51,6 +51,7 @@ import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { isNeverSeenVisit, mayEndExamination, mayStartVisit } from '../core/encounter-start';
 import { refusalReason } from '../shared/refusal-reason';
 
+import { isFrontDeskOnly } from '../patients/patient-chart/chart-access';
 @Component({
   selector: 'app-patient-tracker',
   standalone: true,
@@ -99,6 +100,15 @@ export class PatientTrackerComponent implements OnInit, OnDestroy {
    * QA D788: a visit IN_PROGRESS is checked out by its clinician (it closes their
    * consultation); the desk waits until the examination is completed.
    */
+  /**
+   * RCPT-CLIN: the desk gets no acuity from the server, and an absent acuity must
+   * not read as "routine". The check-out dialog opens on GET /encounters/{id},
+   * which refuses this role, so the button only ever did nothing for it.
+   */
+  get frontDeskOnly(): boolean {
+    return isFrontDeskOnly((roles) => this.roleContext.hasAnyActiveRole(roles));
+  }
+
   get isClinician(): boolean {
     return this.auth.hasAnyRole(['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE']);
   }

@@ -59,8 +59,8 @@ public class ReceptionistResponseShaping implements ResponseBodyAdvice<Object> {
      */
     public static final Map<Class<?>, Set<String>> REMOVED = Map.of(
         PatientHospitalRegistrationResponseDTO.class, Set.of("readyForDischargeNote"),
-        PatientResponseDTO.class, Set.of("allergies", "medicalHistorySummary", "careTeamNotes", "hr", "bp", "spo2",
-            "lastVitals", "chartRestrictionReason"),
+        PatientResponseDTO.class, Set.of("allergies", "chronicConditions", "flags", "risks", "medicalHistorySummary",
+            "careTeamNotes", "hr", "bp", "spo2", "lastVitals", "chartRestrictionReason"),
         EncounterResponseDTO.class, Set.of("notes", "esiScore", "urgency", "followUpInstructions",
             "dischargeDiagnoses", "extraFields", "note", "noteEntries"),
         AfterVisitSummaryDTO.class, Set.of("chiefComplaint", "dischargeDiagnoses", "prescriptionSummary",
@@ -132,6 +132,9 @@ public class ReceptionistResponseShaping implements ResponseBodyAdvice<Object> {
 
     private static void shapePatient(PatientResponseDTO patient) {
         patient.setAllergies(null);
+        patient.setChronicConditions(List.of());
+        patient.setFlags(List.of());
+        patient.setRisks(List.of());
         patient.setMedicalHistorySummary(null);
         patient.setCareTeamNotes(null);
         patient.setHr(null);

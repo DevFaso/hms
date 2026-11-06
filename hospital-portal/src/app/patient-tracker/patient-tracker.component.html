@@ -47,7 +47,10 @@
             appRovingFocus=".patient-card"
           >
             @for (item of getColumnItems(col.key); track item.encounterId) {
-              <li class="patient-card" [class]="getAcuityClass(item.acuityLevel)">
+              <li
+                class="patient-card"
+                [class]="frontDeskOnly ? '' : getAcuityClass(item.acuityLevel)"
+              >
                 <div class="card-header">
                   <span class="patient-name">{{ item.patientName }}</span>
                   @if (item.mrn) {
@@ -84,10 +87,12 @@
                   <span class="wait-badge" [class]="getWaitClass(item.currentWaitMinutes)">
                     {{ item.currentWaitMinutes }} {{ 'TRACKER.MIN' | translate }}
                   </span>
-                  {{ ' '
-                  }}<span class="acuity-badge">{{
-                    item.acuityLevel | enumLabel: 'trackerAcuity'
-                  }}</span>
+                  @if (!frontDeskOnly) {
+                    {{ ' '
+                    }}<span class="acuity-badge">{{
+                      item.acuityLevel | enumLabel: 'trackerAcuity'
+                    }}</span>
+                  }
                   @if (item.preCheckedIn) {
                     {{ ' '
                     }}<span
@@ -158,9 +163,10 @@
                     </button>
                   }
                   @if (
-                    col.key === 'readyForDischarge' ||
-                    col.key === 'awaitingResults' ||
-                    (col.key === 'inProgress' && isClinician && canEndExamItem(item))
+                    !frontDeskOnly &&
+                    (col.key === 'readyForDischarge' ||
+                      col.key === 'awaitingResults' ||
+                      (col.key === 'inProgress' && isClinician && canEndExamItem(item)))
                   ) {
                     <button
                       class="btn-checkout"

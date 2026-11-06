@@ -42,7 +42,7 @@ class ReceptionistClinicalReadGuardTest {
     private static final String RECEPTIONIST = "ROLE_RECEPTIONIST";
 
     private static final Pattern CLINICAL_FIELD = Pattern.compile(
-        "(?i).*(allerg|diagnos|vital|medication|prescri|labresult|labresults|imaging|narrative|organism|acuity|esiscore"
+        "(?i).*(chronic|condition|risk|flag|allerg|diagnos|vital|medication|prescri|labresult|labresults|imaging|narrative|organism|acuity|esiscore"
             + "|soap|assessment|chiefcomplaint|problem|complaint|clinical|historysummary|careteamnotes|reason|notes?"
             + "|followupinstruction|treatment|symptom|immuniz|procedure|bloodtype|gestation).*");
 
@@ -105,6 +105,8 @@ class ReceptionistClinicalReadGuardTest {
         Map.entry("PaymentTransactionResponseDTO#reversalReason", "why a payment was reversed"),
         Map.entry("PrenatalAppointmentSummaryDTO#gestationalWeek", "the desk books prenatal visits by the week; reported as a judgment call"),
         Map.entry("PrenatalAppointmentSummaryDTO#reason", "the visit reason of a booked prenatal appointment"),
+        Map.entry("EducationResourceResponseDTO#isHighRiskRelevant", "a library resource, nobody's record"),
+        Map.entry("PrenatalScheduleResponseDTO#highRisk", "picks the visit cadence the desk books; reported as a judgment call"),
         Map.entry("PrenatalScheduleResponseDTO#currentGestationalWeek", "the desk books prenatal visits by the week; reported as a judgment call"),
         Map.entry("PrenatalVisitRecommendationDTO#gestationalWeek", "the desk books prenatal visits by the week; reported as a judgment call"),
         Map.entry("PrenatalVisitRecommendationDTO#notes", "the fixed text of the recommended cadence, nobody's record"),

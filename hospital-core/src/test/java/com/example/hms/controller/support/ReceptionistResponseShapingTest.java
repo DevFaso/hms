@@ -65,6 +65,9 @@ class ReceptionistResponseShapingTest {
         patient.setPhoneNumberPrimary("70000000");
         patient.setBloodType("O+");
         patient.setAllergies("Penicillin");
+        patient.setChronicConditions(List.of("Diabetes"));
+        patient.setFlags(List.of("Allergies noted"));
+        patient.setRisks(List.of("Review history"));
         patient.setMedicalHistorySummary("Diabetes");
         patient.setCareTeamNotes("Notes");
         patient.setHr(80);
@@ -83,6 +86,9 @@ class ReceptionistResponseShapingTest {
         assertThat(shaped.getPhoneNumberPrimary()).isEqualTo("70000000");
         assertThat(shaped.getBloodType()).isEqualTo("O+");
         assertThat(shaped.getAllergies()).isNull();
+        assertThat(shaped.getChronicConditions()).isEmpty();
+        assertThat(shaped.getFlags()).isEmpty();
+        assertThat(shaped.getRisks()).isEmpty();
         assertThat(shaped.getMedicalHistorySummary()).isNull();
         assertThat(shaped.getCareTeamNotes()).isNull();
         assertThat(shaped.getHr()).isNull();

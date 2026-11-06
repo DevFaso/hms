@@ -28,6 +28,7 @@ import { PatientChartComponent } from './patient-chart/patient-chart.component';
 import {
   APPOINTMENT_VIEW_ROLES,
   CHART_REVIEW_VIEW_ROLES,
+  isFrontDeskOnly,
   CHART_VIEW_ROLES,
   ENCOUNTER_VIEW_ROLES,
   VITALS_VIEW_ROLES,
@@ -325,18 +326,10 @@ export class PatientDetailComponent implements OnInit {
    * RCPT-CLIN (user decision 2026-11-06): the front desk reads no clinical
    * content. The server refuses the storyboard and removes allergies and the
    * history from the patient it answers; this hides what would otherwise read
-   * as "none recorded", a false statement about the patient. Mirrors
-   * ReceptionistResponseShaping: a second clinical or administrative role lifts it.
+   * as "none recorded", a false statement about the patient.
    */
   isFrontDeskOnly(): boolean {
-    return (
-      this.roleContext.hasAnyActiveRole(['ROLE_RECEPTIONIST']) &&
-      !this.roleContext.hasAnyActiveRole([
-        ...CHART_REVIEW_VIEW_ROLES,
-        'ROLE_HOSPITAL_ADMIN',
-        'ROLE_ADMIN',
-      ])
-    );
+    return isFrontDeskOnly((roles) => this.roleContext.hasAnyActiveRole(roles));
   }
 
   /** Mirrors GrowthChartController's @PreAuthorize list exactly — NOT the
