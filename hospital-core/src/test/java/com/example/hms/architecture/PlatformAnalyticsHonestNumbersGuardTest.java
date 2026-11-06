@@ -39,7 +39,10 @@ class PlatformAnalyticsHonestNumbersGuardTest {
     private static final List<String> DASHBOARD_SERVICES = List.of(
         "service/impl/PlatformAnalyticsServiceImpl.java",
         "service/SuperAdminDashboardServiceImpl.java",
-        "service/impl/SuperAdminAuditAggregationServiceImpl.java");
+        "service/impl/SuperAdminAuditAggregationServiceImpl.java",
+        "service/impl/SuperAdminPlatformRegistryServiceImpl.java",
+        "service/impl/SuperAdminIntegrationHealthServiceImpl.java",
+        "service/impl/KpiDashboardServiceImpl.java");
 
     /** A builder or setter handing a metric a literal: {@code .staffCount(0)}, {@code .encounterTrend(List.of())}. */
     private static final Pattern MADE_UP = Pattern.compile(
@@ -118,7 +121,8 @@ class PlatformAnalyticsHonestNumbersGuardTest {
                 String source = Files.readString(entity, StandardCharsets.UTF_8);
                 String name = entity.getFileName().toString().replace(".java", "");
                 boolean unique = source.contains("@UniqueConstraint(") || source.contains("unique = true")
-                    || (name.equals("AuditSavedSearch")) || (name.equals("OrganizationSubscription"));
+                    // Unique by a table constraint or a partial index the entity does not declare.
+                    || "AuditSavedSearch".equals(name) || "OrganizationSubscription".equals(name);
                 if (unique && !UNIQUE_ENTITIES.containsKey(name) && !NOT_A_TYPED_VALUE.containsKey(name)) {
                     undeclared.add(name);
                 }

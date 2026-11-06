@@ -121,12 +121,13 @@ public class MllpAllowedSenderServiceImpl implements MllpAllowedSenderService {
         MllpAllowedSender entity = senderRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(SENDER_NOT_FOUND, id));
         Hospital hospital = loadHospital(request.hospitalId());
-        String application = entity.getSendingApplication();
-        String facility = entity.getSendingFacility();
-        mapper.applyToEntity(request, hospital, entity);
-        if (!entity.getSendingApplication().equals(application) || !entity.getSendingFacility().equals(facility)) {
-            requireSenderPairFree(entity.getSendingApplication(), entity.getSendingFacility());
+        // Checked before the row changes: the query would flush the managed row and find it.
+        MllpAllowedSender wanted = mapper.toEntity(request, hospital);
+        if (!wanted.getSendingApplication().equals(entity.getSendingApplication())
+                || !wanted.getSendingFacility().equals(entity.getSendingFacility())) {
+            requireSenderPairFree(wanted.getSendingApplication(), wanted.getSendingFacility());
         }
+        mapper.applyToEntity(request, hospital, entity);
         MllpAllowedSender saved = senderRepository.save(entity);
         log.info("MLLP allowed sender updated id={} active={}", saved.getId(), saved.isActive());
         return mapper.toResponseDTO(saved);

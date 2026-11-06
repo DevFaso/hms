@@ -14,7 +14,8 @@ import {
   SuperAdminSummary,
 } from '../services/dashboard.service';
 import { PlatformService, PlatformSummary } from '../services/platform.service';
-import { EnumLabelService } from '../core/enum-label.service';
+import fr from '../../assets/i18n/fr.json';
+import es from '../../assets/i18n/es.json';
 
 /**
  * Empty {@link SuperAdminRecentActivityBundle} for tests — F5 from
@@ -477,16 +478,24 @@ describe('SuperAdminComponent', () => {
       ),
     );
     const c = setup();
-    const transform = spyOn(TestBed.inject(EnumLabelService), 'transform').and.callFake(
-      (value, domain) => `label(${value},${domain})`,
-    );
     c.selectActivityTab('consultations');
     const summary = c.selectedActivityRows()[0].summary;
 
-    expect(transform).toHaveBeenCalledWith('ROUTINE', 'consultationUrgency');
-    expect(summary).toContain('label(ROUTINE,consultationUrgency)');
-    expect(summary).toContain('label(CANCELLED,consultationStatus)');
-    expect(summary).toContain('Ada');
-    expect(summary).toContain('ROUTINE_SPECIALTY');
+    expect(summary).toBe('Ada · ROUTINE_SPECIALTY · Routine · Cancelled');
+  });
+
+  it('QA CX-006: the codes the summaries show are translated in French and Spanish', () => {
+    for (const locale of [fr, es]) {
+      const labels = locale.PORTAL.ENUM as unknown as Record<string, Record<string, string>>;
+      for (const [domain, code] of [
+        ['CONSULTATION_URGENCY', 'ROUTINE'],
+        ['CONSULTATION_URGENCY', 'URGENT'],
+        ['CONSULTATION_STATUS', 'REQUESTED'],
+        ['CONSULTATION_STATUS', 'CANCELLED'],
+      ]) {
+        expect(labels[domain][code]).withContext(`${domain}.${code}`).toBeTruthy();
+        expect(labels[domain][code]).not.toBe(code);
+      }
+    }
   });
 });
