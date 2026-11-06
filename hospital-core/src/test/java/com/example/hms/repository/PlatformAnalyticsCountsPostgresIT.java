@@ -87,9 +87,11 @@ class PlatformAnalyticsCountsPostgresIT {
     private final UUID hospitalA = UUID.randomUUID();
     private final UUID hospitalB = UUID.randomUUID();
     private final UUID busyDepartment = UUID.randomUUID();
+    private final UUID quietDepartment = UUID.randomUUID();
     private final UUID patient = UUID.randomUUID();
     private final List<UUID> staffRows = new ArrayList<>();
     private final List<UUID> userRows = new ArrayList<>();
+    private final List<UUID> assignmentRows = new ArrayList<>();
     private final List<UUID> departmentRows = new ArrayList<>();
     private final List<UUID> encounterRows = new ArrayList<>();
     private final List<UUID> appointmentRows = new ArrayList<>();
@@ -110,7 +112,8 @@ class PlatformAnalyticsCountsPostgresIT {
             staffMember(hospitalB, true, false);
 
             department(busyDepartment, hospitalA, "Urgences");
-            for (int i = 1; i < DEPARTMENTS_AT_A; i++) {
+            department(quietDepartment, hospitalA, "Service 1");
+            for (int i = 2; i < DEPARTMENTS_AT_A; i++) {
                 department(UUID.randomUUID(), hospitalA, "Service " + i);
             }
             department(UUID.randomUUID(), hospitalB, "Urgences");
@@ -130,18 +133,21 @@ class PlatformAnalyticsCountsPostgresIT {
             encounter(busyDepartment, "COMPLETED", null, today.minusDays(TREND_DAYS + 5L));
 
             appointment(busyDepartment, LocalDate.now());
-            appointment(null, LocalDate.now().minusDays(TREND_DAYS + 5L));
+            // Before the window: in the totals, not in the trend. No visit, so the busy department sorts first.
+            appointment(quietDepartment, LocalDate.now().minusDays(TREND_DAYS + 5L));
         });
     }
 
     @AfterEach
     void clear() {
         new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            entityManager.createNativeQuery("SET LOCAL session_replication_role = replica").executeUpdate();
             delete("clinical.appointments", appointmentRows);
             delete("clinical.encounters", encounterRows);
             delete("clinical.patients", List.of(patient));
             delete("hospital.departments", departmentRows);
             delete("hospital.staff", staffRows);
+            delete("security.user_role_hospital_assignment", assignmentRows);
             delete("security.users", userRows);
             delete("hospital.hospitals", List.of(hospitalA, hospitalB));
         });
@@ -233,13 +239,21 @@ class PlatformAnalyticsCountsPostgresIT {
             .setParameter("phone", "+226" + Math.abs(handle.hashCode())).setParameter("deleted", accountDeleted)
             .executeUpdate();
         userRows.add(user);
+        // The staff read inner-joins the assignment and its role (fk_staff_assignment holds it in production).
+        UUID assignment = UUID.randomUUID();
+        entityManager.createNativeQuery("""
+            INSERT INTO security.user_role_hospital_assignment (id, user_id, role_id, hospital_id, is_active,
+                assigned_at, created_at, updated_at)
+            VALUES (:id, :u, (SELECT r.id FROM security.roles r ORDER BY r.id LIMIT 1), :h, true, now(), now(), now())
+            """).setParameter("id", assignment).setParameter("u", user).setParameter("h", hospital).executeUpdate();
+        assignmentRows.add(assignment);
         UUID row = UUID.randomUUID();
         entityManager.createNativeQuery("""
             INSERT INTO hospital.staff (id, user_id, hospital_id, assignment_id, active, employment_type, job_title,
                 created_at, updated_at)
             VALUES (:id, :u, :h, :a, :active, 'FULL_TIME', 'DOCTOR', now(), now())
             """).setParameter("id", row).setParameter("u", user).setParameter("h", hospital)
-            .setParameter("a", UUID.randomUUID()).setParameter("active", active).executeUpdate();
+            .setParameter("a", assignment).setParameter("active", active).executeUpdate();
         staffRows.add(row);
     }
 

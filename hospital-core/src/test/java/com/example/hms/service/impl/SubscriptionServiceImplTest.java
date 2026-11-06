@@ -138,7 +138,6 @@ class SubscriptionServiceImplTest {
         own.setName("Clinic renamed");
         own.setTierCode("clinic");
         when(planRepository.save(any(SubscriptionPlan.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(mapper.toDto(any(SubscriptionPlan.class))).thenReturn(SubscriptionPlanResponseDTO.builder().build());
         service.updatePlan(id, own);
         verify(planRepository, never()).existsByTierCodeIgnoreCase(any());
 
