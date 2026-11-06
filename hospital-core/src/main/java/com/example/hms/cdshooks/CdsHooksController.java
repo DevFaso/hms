@@ -78,6 +78,7 @@ public class CdsHooksController {
         return ResponseEntity.ok(new CdsServiceCatalog(registry.descriptors()));
     }
 
+    @com.example.hms.security.ReadsOnly("evaluates a hook context against the chart and answers cards; stores nothing")
     @PostMapping(value = "/{serviceId}", consumes = MediaType.APPLICATION_JSON_VALUE)
     @PreAuthorize(CdsAcknowledgementController.CLINICIAN_ROLES)
     @Operation(summary = "Invoke a CDS service for the given hook context",

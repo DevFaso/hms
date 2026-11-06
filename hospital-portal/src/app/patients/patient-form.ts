@@ -37,6 +37,12 @@ import {
   refuseInvalidPhones,
 } from '../shared/forms/phone-field.directive';
 import { joinReasons } from '../shared/required-fields';
+import {
+  birthDateRefusalKey,
+  earliestBirthDate,
+  isMadeOfDigits,
+  latestBirthDate,
+} from '../shared/patient-identity';
 import { bornLabelKey, genderedKey } from '../shared/i18n/born-label';
 import { DashPipe } from '../shared/pipes/dash.pipe';
 
@@ -477,6 +483,24 @@ export class PatientFormComponent implements OnInit {
     this.submitRegistration();
   }
 
+  /** The earliest and latest birth dates the server accepts, for the picker. */
+  readonly minBirthDate = earliestBirthDate();
+  readonly maxBirthDate = latestBirthDate();
+
+  private identityRefusals(): Record<string, string> {
+    const out: Record<string, string> = {};
+    const dobKey = birthDateRefusalKey(this.form.dateOfBirth ?? '');
+    if (dobKey) {
+      out['dateOfBirth'] = this.translate.instant(dobKey);
+    }
+    for (const field of ['firstName', 'middleName', 'lastName'] as const) {
+      if (isMadeOfDigits(this.form[field] ?? '')) {
+        out[field] = this.translate.instant('PATIENTS.NAME_DIGITS_ONLY');
+      }
+    }
+    return out;
+  }
+
   onSubmit(): void {
     // QA D1061: a child is registered under the parent's or guardian's number:
     // with the patient's own phone left blank, the guardian's is used.
@@ -496,12 +520,23 @@ export class PatientFormComponent implements OnInit {
     // QA D1289 (round 27): a phone number the server refuses ("70a2b") is
     // refused here, on its field, with the missing fields in the same press.
     const badPhones = invalidPhoneInputs(this.host.nativeElement);
-    if (missing.length > 0 || !this.form.hospitalId || badPhones.length > 0) {
+    // QA D1403 + D1414: a birth date or a name the server refuses is refused here,
+    // on its field, in the reader's language, with the missing fields in the same press.
+    const impossible = this.identityRefusals();
+    if (
+      missing.length > 0 ||
+      !this.form.hospitalId ||
+      badPhones.length > 0 ||
+      Object.keys(impossible).length > 0
+    ) {
       const required = this.translate.instant('COMMON.FIELD_REQUIRED');
-      this.serverFieldErrors = Object.fromEntries(missing.map((f) => [f, required]));
+      this.serverFieldErrors = {
+        ...Object.fromEntries(missing.map((f) => [f, required])),
+        ...impossible,
+      };
       focusFirstInvalid(
         this.host.nativeElement,
-        missing.map((f) => PATIENT_FORM_FIELD_IDS[f] ?? f),
+        [...missing, ...Object.keys(impossible)].map((f) => PATIENT_FORM_FIELD_IDS[f] ?? f),
       );
       refuseInvalidPhones(this.host.nativeElement, badPhones, missing.length === 0);
       const gap =
@@ -511,8 +546,11 @@ export class PatientFormComponent implements OnInit {
             )
           : null;
       this.toast.error(
-        joinReasons([gap, badPhones.length > 0 && this.translate.instant('USERS.PHONE_INVALID')]) ??
-          '',
+        joinReasons([
+          gap,
+          badPhones.length > 0 && this.translate.instant('USERS.PHONE_INVALID'),
+          ...Object.values(impossible),
+        ]) ?? '',
       );
       return;
     }

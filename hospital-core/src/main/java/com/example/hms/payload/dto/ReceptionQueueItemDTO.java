@@ -28,6 +28,11 @@ public class ReceptionQueueItemDTO {
      * SCHEDULED | CONFIRMED | PENDING | ARRIVED | IN_PROGRESS | NO_SHOW | COMPLETED | WALK_IN
      */
     private String status;
+    /**
+     * QA D1400 + D1401: the filters that open this row (ReceptionQueueFilters),
+     * the rule the summary counts through. A walk-in carries its status and WALK_IN.
+     */
+    private java.util.List<String> queueFilters;
     private int waitMinutes;
     private UUID encounterId;
     private boolean hasInsuranceIssue;

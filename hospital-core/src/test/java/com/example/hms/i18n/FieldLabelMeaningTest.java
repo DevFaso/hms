@@ -135,6 +135,18 @@ class FieldLabelMeaningTest {
         }
     }
 
+    /** QA D1411: a discharge summary's signer is a clinician in every language; "prescripteur" named another role. */
+    @Test
+    @DisplayName("the provider signature reads as the clinician's in every language")
+    void providerSignatureIsTheCliniciansInEveryLanguage() {
+        Map<String, String> expected = Map.of(
+            "en", "clinician signature", "fr", "signature du clinicien", "es", "firma del clínico");
+        for (String lang : LANGUAGES) {
+            assertThat(label(new Context("providerSignature", Nature.TEXT, false, "DischargeSummary"),
+                Locale.forLanguageTag(lang))).as(lang).isEqualTo(expected.get(lang));
+        }
+    }
+
     /**
      * The QA path: POST /api/billing-invoices/{id}/email and
      * /api/invoices/{id}/email with an empty or blank recipient, through bean

@@ -433,8 +433,10 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
         // instead of waiting for the next poll; the component-level error
         // handler still gets the refusal (rethrown below) so the user sees
         // why their save failed.
-        const body = error.error as { message?: string } | null;
-        downtime.markReadOnly(body?.message ?? null);
+        // QA D1407: the banner keeps its own translated sentence unless the
+        // administrator wrote one for this downtime.
+        const body = error.error as { message?: string; customMessage?: boolean } | null;
+        downtime.markReadOnly(body?.customMessage ? (body.message ?? null) : null);
       } else if (isCsrfRefusal(error)) {
         // QA D1145: a stale CSRF token is not a forbidden page. The CSRF
         // interceptor (outside this one) fetches a fresh token and replays

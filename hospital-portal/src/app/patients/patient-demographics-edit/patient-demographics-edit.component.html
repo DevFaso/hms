@@ -70,6 +70,7 @@
             type="date"
             class="form-control"
             required
+            [min]="earliest"
             [max]="today"
             [(ngModel)]="form.dateOfBirth"
           />

@@ -481,6 +481,7 @@ public class PatientController {
         description = "Provides a comprehensive patient record snapshot with sensitive data gating and audit logging.",
         security = @SecurityRequirement(name = "bearerAuth")
     )
+    @com.example.hms.security.ReadsOnly("a chart read under POST for its access reason; only the access audit is written")
     @PostMapping("/{id}/doctor-record")
     @PreAuthorize("hasAuthority('ROLE_DOCTOR')")
     public ResponseEntity<DoctorPatientRecordDTO> getDoctorRecord(
@@ -507,6 +508,7 @@ public class PatientController {
         description = "Provides a longitudinal patient timeline with sensitive data gating and audit logging.",
         security = @SecurityRequirement(name = "bearerAuth")
     )
+    @com.example.hms.security.ReadsOnly("a timeline read under POST for its access reason; only the access audit is written")
     @PostMapping("/{id}/doctor-timeline")
     @PreAuthorize("hasAuthority('ROLE_DOCTOR')")
     public ResponseEntity<PatientTimelineResponseDTO> getDoctorTimeline(

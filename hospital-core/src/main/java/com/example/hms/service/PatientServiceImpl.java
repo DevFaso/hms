@@ -90,6 +90,7 @@ import com.example.hms.repository.UltrasoundReportRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.security.SecurityUtils;
 import com.example.hms.utility.DiagnosisCodeValidator;
+import com.example.hms.utility.PatientIdentityRules;
 import com.example.hms.utility.MessageUtil;
 import com.example.hms.utility.PatientMatchKeys;
 import com.example.hms.service.allergy.ActiveAllergyDuplicates;
@@ -138,6 +139,9 @@ import com.example.hms.service.recordaccess.BreakGlassGate;
 public class PatientServiceImpl implements PatientService {
     /** Request properties a refusal names (QA D1352 class, round 30). */
     private static final String FIELD_HOSPITAL_ID = "hospitalId";
+    private static final String FIELD_FIRST_NAME = "firstName";
+    private static final String FIELD_LAST_NAME = "lastName";
+    private static final String FIELD_MIDDLE_NAME = "middleName";
 
 
     private static final String FIELD_PHONE_PRIMARY = "phoneNumberPrimary";
@@ -421,6 +425,7 @@ public class PatientServiceImpl implements PatientService {
     public PatientResponseDTO updatePatient(UUID id, PatientRequestDTO dto, Locale locale) {
         Patient patient = patientRepository.findByIdUnscoped(id)
             .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, id));
+        requirePossibleIdentity(dto, patient);
 
         if (dto.getHospitalId() != null) {
             ensurePatientRegistered(id, dto.getHospitalId());
@@ -492,8 +497,12 @@ public class PatientServiceImpl implements PatientService {
 
     /** QA D926: the identity the desk corrects. A required field sent blank is refused rather than cleared. */
     private void patchIdentity(Patient patient, PatientProfileUpdateRequestDTO request) {
-        applyRequired(request.getFirstName(), patient::setFirstName, "patient.r16.firstNameRequired", "firstName");
-        applyRequired(request.getLastName(), patient::setLastName, "patient.r16.lastNameRequired", "lastName");
+        PatientIdentityRules.requireNameWithLetters(FIELD_FIRST_NAME, request.getFirstName(), patient.getFirstName());
+        PatientIdentityRules.requireNameWithLetters(FIELD_LAST_NAME, request.getLastName(), patient.getLastName());
+        PatientIdentityRules.requireNameWithLetters(FIELD_MIDDLE_NAME, request.getMiddleName(), patient.getMiddleName());
+        PatientIdentityRules.requirePossibleBirthDate(request.getDateOfBirth(), patient.getDateOfBirth());
+        applyRequired(request.getFirstName(), patient::setFirstName, "patient.r16.firstNameRequired", FIELD_FIRST_NAME);
+        applyRequired(request.getLastName(), patient::setLastName, "patient.r16.lastNameRequired", FIELD_LAST_NAME);
         applyNullable(request.getMiddleName(), patient::setMiddleName);
         if (request.getDateOfBirth() != null) {
             patient.setDateOfBirth(request.getDateOfBirth());
@@ -888,6 +897,7 @@ public class PatientServiceImpl implements PatientService {
     @Transactional
     @PreAuthorize("hasAnyRole('RECEPTIONIST','HOSPITAL_ADMIN')")
     public PatientResponseDTO createPatientByStaff(PatientRequestDTO dto, Locale locale) {
+        requirePossibleIdentity(dto, null);
         UUID hospitalId = dto.getHospitalId();
         if (hospitalId == null) {
             // QA D1282 (sweep): named, so the form marks the field.
@@ -946,6 +956,15 @@ public class PatientServiceImpl implements PatientService {
         }
 
         return buildPatientDto(patient, hospital.getId());
+    }
+
+    /** QA D1403 + D1414: judged before anything is written; a stored value sent back is not a change. */
+    private static void requirePossibleIdentity(PatientRequestDTO dto, Patient stored) {
+        boolean create = stored == null;
+        PatientIdentityRules.requireNameWithLetters(FIELD_FIRST_NAME, dto.getFirstName(), create ? null : stored.getFirstName());
+        PatientIdentityRules.requireNameWithLetters(FIELD_LAST_NAME, dto.getLastName(), create ? null : stored.getLastName());
+        PatientIdentityRules.requireNameWithLetters(FIELD_MIDDLE_NAME, dto.getMiddleName(), create ? null : stored.getMiddleName());
+        PatientIdentityRules.requirePossibleBirthDate(dto.getDateOfBirth(), create ? null : stored.getDateOfBirth());
     }
 
     private void ensurePatientRegistration(Patient patient, Hospital hospital) {

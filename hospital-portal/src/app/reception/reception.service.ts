@@ -38,6 +38,8 @@ export interface ReceptionQueueItem {
   departmentName: string | null;
   appointmentReason: string | null;
   status: QueueStatus;
+  /** QA D1400 + D1401: the filters that open this row, by the rule the summary counts through. */
+  queueFilters?: string[];
   waitMinutes: number;
   encounterId: string | null;
   hasInsuranceIssue: boolean;
@@ -84,6 +86,7 @@ export interface FrontDeskPatientSnapshot {
 
 export interface InsuranceIssue {
   appointmentId: string | null;
+  encounterId?: string | null;
   patientId: string;
   patientName: string;
   mrn: string | null;

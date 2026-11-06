@@ -109,7 +109,10 @@ export class ReceptionCockpitComponent implements OnInit {
   filteredQueue = computed(() => {
     const f = this.statusFilter();
     const items = this.queueItems();
-    return f === 'ALL' ? items : items.filter((i) => i.status === f);
+    // QA D1400 + D1401: the server says which filters open a row, by the rule its
+    // summary counts through, so a card's number is the rows it opens. A walk-in's
+    // status is ARRIVED, IN_PROGRESS, ...: it carries WALK_IN here, never as a status.
+    return f === 'ALL' ? items : items.filter((i) => (i.queueFilters ?? [i.status]).includes(f));
   });
 
   ngOnInit(): void {

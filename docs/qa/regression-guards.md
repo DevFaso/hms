@@ -877,3 +877,14 @@ Rounds 27, 28 and 29 each found 20–30 new siblings of the required-field class
 | `architecture/RequiredRequestIdGuardTest#everyRefusalOfAGivenRequestValueNamesItsField` (widened) | D1386 (D1299 class): a value rule refused in a `catch (NumberFormatException)` (it read only `if` guards), in a package-private static helper called from another service of its package (it read only public ones). A throw in a catch of a parse failure (NumberFormatException, DateTimeParseException, IllegalArgumentException) refuses what its try block parsed. | every service; 0 new pins |
 | `architecture/RequestFieldColumnLengthGuardTest` (pins shrunk) | D1387 (D1050 / D1316 class): 13 lab pins deleted (LabResult, LabOrder, LabQcEvent, LabReflexRule request fields now carry `@Size(max = <column>)`). | pins −13 |
 | `scripts/lib/unlabelled-reason.test.mjs` (new) | D1389: an undo / correction / rejection reason interpolated bare (under a badge it read as the record's own reason). It goes through `COMMON.REASON_VALUE` or follows a label. | every template; 0 |
+
+## Guards added or widened by round 33 (fix/r33-reception-billing)
+
+| Guard | Class it stops | Scope / allowlist |
+|---|---|---|
+| `service/ReceptionServiceImplTest$CardsCountWhatTheyOpen`, `reception-cockpit.component.spec.ts` (walks every `.sum-card`) | D1400 + D1401: a summary counted apart from the rows its card opens. Choke point: `ReceptionQueueFilters` | every card, mixed fixture, both sides; a new card on the strip must keep the rule |
+| `architecture/ReadOnlyPostGuardTest` (new) | D1404: a POST that only reads, refused in read-only mode. Spring's mapping registry (`testsupport/ControllerMappingRegistry`) over every controller; every POST through the real filter in both directions | a POST named as a read declares `@ReadsOnly` or sits in `WRITES_DESPITE_THE_NAME` with what it writes; `DECLARED_READS` is pinned so declaring a write as a read is seen in review |
+| `architecture/PatientIdentityWriterGuardTest` (new) | D1403 + D1414: a writer of a patient's birth date or names that skips `PatientIdentityRules` | known writers listed; `createPatient` stays the backfill's alone |
+| `architecture/ReceptionistClinicalReadGuardTest` (new), `controller/support/ReceptionistResponseShapingTest`, `controller/ChartReviewReceptionistAccessTest` | RCPT-CLIN: clinical content reaching a receptionist. Every handler's real `@PreAuthorize` evaluated for the role; the response type walked for clinical field names | removed in `ReceptionistResponseShaping.REMOVED`, or `THE_DESK_NEEDS_IT` with a reason; stale entries fail |
+| `architecture/RequestFieldColumnLengthGuardTest` (pins shrunk) | D1418: `InvoiceItemRequestDTO#itemDescription` pins deleted | the sibling invoice DTOs already carry `@Size` |
+| `i18n/FieldLabelMeaningTest#providerSignatureIsTheCliniciansInEveryLanguage` (new) | D1411 | en, fr, es |

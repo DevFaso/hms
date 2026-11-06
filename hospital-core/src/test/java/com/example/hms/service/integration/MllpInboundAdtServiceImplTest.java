@@ -79,6 +79,38 @@ class MllpInboundAdtServiceImplTest {
             .build();
     }
 
+    private void known() {
+        when(empiService.findIdentityByAlias(EmpiAliasType.MRN, "MRN-1"))
+            .thenReturn(Optional.of(empiHit(patientId)));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(registrationRepository.findByPatientIdAndHospitalId(patientId, hospital.getId()))
+            .thenReturn(Optional.of(new PatientHospitalRegistration()));
+    }
+
+    @Test
+    @DisplayName("QA D1414: an impossible birth date or a digit name from an interface is dead-lettered, not stored")
+    void impossibleIdentityIsRejected() {
+        known();
+        assertThat(service.processAdt(adt("MRN-1", "Doe", "Jane", LocalDate.of(1800, 1, 1)), hospital, "REG", "HOSP1"))
+            .isEqualTo(MllpInboundOutcome.REJECTED_INVALID);
+        assertThat(service.processAdt(adt("MRN-1", "Doe", "Jane", LocalDate.of(2999, 1, 1)), hospital, "REG", "HOSP1"))
+            .isEqualTo(MllpInboundOutcome.REJECTED_INVALID);
+        assertThat(service.processAdt(adt("MRN-1", "12345", "Jane", LocalDate.of(1985, 1, 1)), hospital, "REG", "HOSP1"))
+            .isEqualTo(MllpInboundOutcome.REJECTED_INVALID);
+        assertThat(patient.getLastName()).isEqualTo("Name");
+    }
+
+    @Test
+    @DisplayName("QA D1414: a stored impossible value the sender repeats does not block the rest of the message")
+    void aRepeatedStoredValueIsNotAChange() {
+        known();
+        patient.setDateOfBirth(LocalDate.of(1800, 1, 1));
+        patient.setLastName("12345");
+        assertThat(service.processAdt(adt("MRN-1", "12345", "Jane", LocalDate.of(1800, 1, 1)), hospital, "REG", "HOSP1"))
+            .isEqualTo(MllpInboundOutcome.ACCEPTED);
+        assertThat(patient.getFirstName()).isEqualTo("Jane");
+    }
+
     @Test
     @DisplayName("ACCEPTED — known MRN, registered patient, demographics applied")
     void acceptedHappyPath() {

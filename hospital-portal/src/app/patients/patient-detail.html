@@ -128,11 +128,13 @@
     </div>
 
     <!-- Storyboard — allergies / problems / active encounter / code status. Identity is the header above. -->
-    <app-storyboard-banner
-      [patientId]="p.id"
-      [refreshToken]="accessEpoch()"
-      (openRestricted)="openRestrictedRows()"
-    />
+    @if (!isFrontDeskOnly()) {
+      <app-storyboard-banner
+        [patientId]="p.id"
+        [refreshToken]="accessEpoch()"
+        (openRestricted)="openRestrictedRows()"
+      />
+    }
 
     <!-- Break-the-glass: live emergency-access banner / declare modal (gated to clinical roles) -->
     <app-break-glass-banner
@@ -569,26 +571,30 @@
               <span class="label">{{ 'PATIENTS.BLOOD_TYPE' | translate }}</span
               ><span class="value">{{ p.bloodType | dash }}</span>
             </div>
-            <div class="info-row">
-              <span class="label">{{ 'PATIENTS.ALLERGIES' | translate }}</span
-              ><span class="value">{{
-                p.allergies ?? ('PATIENTS.NONE_RECORDED' | translate)
-              }}</span>
-            </div>
+            @if (!isFrontDeskOnly()) {
+              <div class="info-row">
+                <span class="label">{{ 'PATIENTS.ALLERGIES' | translate }}</span
+                ><span class="value">{{
+                  p.allergies ?? ('PATIENTS.NONE_RECORDED' | translate)
+                }}</span>
+              </div>
+            }
             @if (p.allergiesWithheld) {
               <p class="info-row" role="note">{{ 'CHART.ALLERGIES_WITHHELD' | translate }}</p>
             }
           </div>
         </div>
-        <div class="info-card">
-          <h3>
-            <span class="material-symbols-outlined">history</span>
-            {{ 'PATIENTS.MEDICAL_HISTORY' | translate }}
-          </h3>
-          <p class="medical-text">
-            {{ p.medicalHistorySummary ?? ('PATIENTS.NO_MEDICAL_HISTORY' | translate) }}
-          </p>
-        </div>
+        @if (!isFrontDeskOnly()) {
+          <div class="info-card">
+            <h3>
+              <span class="material-symbols-outlined">history</span>
+              {{ 'PATIENTS.MEDICAL_HISTORY' | translate }}
+            </h3>
+            <p class="medical-text">
+              {{ p.medicalHistorySummary ?? ('PATIENTS.NO_MEDICAL_HISTORY' | translate) }}
+            </p>
+          </div>
+        }
       </div>
     }
 

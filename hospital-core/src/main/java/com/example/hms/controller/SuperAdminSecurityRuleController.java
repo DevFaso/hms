@@ -59,6 +59,7 @@ public class SuperAdminSecurityRuleController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
+    @com.example.hms.security.ReadsOnly("evaluates the rules in the body; nothing is applied or stored")
     @PostMapping("/simulations")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "Simulate the impact of security rules")

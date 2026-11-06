@@ -3,7 +3,12 @@ import { ReceptionCockpitComponent } from './reception-cockpit.component';
 import { TranslateModule } from '@ngx-translate/core';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
-import { ReceptionService } from '../reception.service';
+import {
+  InsuranceIssue,
+  ReceptionDashboardSummary,
+  ReceptionQueueItem,
+  ReceptionService,
+} from '../reception.service';
 import { ToastService } from '../../core/toast.service';
 import { of } from 'rxjs';
 
@@ -55,6 +60,85 @@ describe('ReceptionCockpitComponent', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  describe('QA D1400 + D1401: every card opens rows equal to its number', () => {
+    // A mixed day as the server answers it: each row carries the filters that open it.
+    const row = (status: string, walkIn: boolean, filters: string[]): ReceptionQueueItem =>
+      ({
+        appointmentId: walkIn ? null : status + filters.length,
+        patientId: status + (walkIn ? '-w' : '-a') + filters.length,
+        patientName: status,
+        status,
+        queueFilters: filters,
+        encounterId: 'e-' + status + filters.length,
+        hasInsuranceIssue: true,
+        hasOutstandingBalance: false,
+        waitMinutes: 0,
+      }) as unknown as ReceptionQueueItem;
+    const rows = [
+      row('SCHEDULED', false, ['SCHEDULED']),
+      row('CONFIRMED', false, ['CONFIRMED', 'SCHEDULED']),
+      row('ARRIVED', false, ['ARRIVED']),
+      row('ARRIVED', true, ['ARRIVED', 'WALK_IN']),
+      row('IN_PROGRESS', true, ['IN_PROGRESS', 'WALK_IN']),
+      row('COMPLETED', true, ['COMPLETED', 'WALK_IN']),
+    ];
+    const issues = rows.map((r) => ({
+      appointmentId: r.appointmentId,
+      encounterId: r.encounterId,
+      patientId: r.patientId,
+      patientName: r.patientName,
+      mrn: null,
+      appointmentTime: null,
+      issueType: 'MISSING_INSURANCE',
+      providerName: null,
+      departmentName: null,
+    })) as InsuranceIssue[];
+
+    beforeEach(() => {
+      component.summary.set({
+        scheduledToday: 2,
+        arrivedCount: 2,
+        inProgressCount: 1,
+        walkInCount: 3,
+      } as ReceptionDashboardSummary);
+      component.queueItems.set(rows);
+      component.insuranceIssues.set(issues);
+      component.paymentsPending.set(rows.slice(0, 1));
+      fixture.detectChanges();
+    });
+
+    it('walks every card on the strip, so a new card has to keep the rule too', () => {
+      const root = fixture.nativeElement as HTMLElement;
+      const cards = Array.from(root.querySelectorAll<HTMLButtonElement>('.sum-card'));
+      expect(cards.length).toBe(6);
+      for (const card of cards) {
+        const shown = Number(card.querySelector('.sum-num')?.textContent);
+        card.click();
+        fixture.detectChanges();
+        const opened = root.querySelectorAll('.tab-content tbody tr').length;
+        expect(opened)
+          .withContext(card.querySelector('.sum-label')?.textContent ?? '')
+          .toBe(shown);
+      }
+    });
+
+    it('Planifie opens its own filter, not Tous', () => {
+      const root = fixture.nativeElement as HTMLElement;
+      root.querySelector<HTMLButtonElement>('.sum-card')?.click();
+      expect(component.statusFilter()).toBe('SCHEDULED');
+    });
+
+    it('Sans rendez-vous opens the visits with no appointment, whatever their status', () => {
+      component.statusFilter.set('WALK_IN');
+      expect(component.filteredQueue().map((i) => i.appointmentId)).toEqual([null, null, null]);
+      expect(component.filteredQueue().map((i) => i.status)).toEqual([
+        'ARRIVED',
+        'IN_PROGRESS',
+        'COMPLETED',
+      ]);
+    });
   });
 
   it('QA D261: every input rendered on the cockpit has an accessible name', () => {

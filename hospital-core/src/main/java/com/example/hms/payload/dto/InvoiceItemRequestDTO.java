@@ -31,6 +31,7 @@ public class InvoiceItemRequestDTO {
     private UUID billingInvoiceId;
 
     @NotBlank
+    @jakarta.validation.constraints.Size(max = 255)
     private String itemDescription;
 
     @NotNull

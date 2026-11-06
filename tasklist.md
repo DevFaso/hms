@@ -6129,3 +6129,12 @@ ships*, not for building — and check the shipped surface before trusting a
 - [ ] Native apps: `patient-android-app` sends `size=20` to `GET /me/patient/vitals`, which reads only `limit` (default 10), so the app shows 10 readings; the apps should read `GET /me/patient/vitals/history` (page + total) like the web portal.
 - [ ] `NursingNoteServiceImpl#getRecentNotes` reads `findTop50…` and then the caller's limit: a recent-notes read, but the nursing-notes panel shows no total (same class as the pins above).
 - [ ] `POST /patients/{id}/doctor-record` caps each section at `maxItems` (≤ 200) with no total; no portal screen reads it today (API only).
+
+## Standing debt — round 33 (fix/r33-reception-billing)
+- [ ] Flow board: the "Sans rendez-vous" column is filled only by a walk-in whose encounter is SCHEDULED; a walk-in on the queue sits in its status column. Not changed: moving walk-ins between columns changes the board's drag rules (D1400 sibling).
+- [ ] `ReceptionServiceImpl#getQueue` applies `departmentId` / `providerId` to booked visits only, not to walk-ins. The portal sends neither today (API only).
+- [ ] `WriteAuditInterceptor.READ_ONLY_POST_TAILS` is a second, name-based list beside `@ReadsOnly`: `/eligibility/check` and `/maternal-history/{id}/calculate-risk` write and are not write-audited; `/cds-services/{id}`, `/prenatal/schedule`, `/signatures/verify` and the rule simulation read and are recorded as DATA_CREATE. The interceptor should read `@ReadsOnly` (D1404 sibling, other branch's file).
+- [ ] `/api/auth/` stays wholly open in read-only mode, as decided for D1404, and that prefix holds real writes: register, bootstrap-signup, change-password, change-username, change-email, complete-setup, MFA enrolment, recovery contacts, password reset. A login must work in downtime; these need not.
+- [ ] The entity's `@Past` refuses a birth date of today, so a newborn cannot be registered on its birthday (kept: the rule is existing behaviour; D1403 only localised it).
+- [ ] `ReceptionistResponseShaping` reads the caller's authorities: an account that is a doctor at hospital A and a receptionist at hospital B, on a token that holds both, keeps the doctor's view while acting at B (RCPT-CLIN; a token minted after the role picker holds one role).
+- [ ] `DigitalSignatureServiceImpl#verifySignature` saves the verification attempt inside `@Transactional(readOnly = true)`, so the counter may never be written. Found while declaring it `@ReadsOnly`; not changed here.

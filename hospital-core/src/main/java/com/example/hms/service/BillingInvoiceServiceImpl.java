@@ -536,7 +536,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         // A discount or a waiver may name a line too: it is then held against that line.
         InvoiceItem line = request.getInvoiceItemId() != null ? lineOf(invoice, request.getInvoiceItemId()) : null;
         BigDecimal amount = line != null
-            ? amountAgainstLine(line, request.getAmount(), creditNote, total.subtract(paid).subtract(pending), locale)
+            ? amountAgainstLine(line, request.getAmount(), creditNote, total, paid.add(pending), locale)
             : request.getAmount();
         if (amount == null || amount.signum() <= 0) {
             throw new com.example.hms.exception.FieldBusinessException(FIELD_AMOUNT, "billing.adjustment.amountPositive");
@@ -586,17 +586,22 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
      * What a line-bound adjustment takes off the line: never more than is left
      * on it; a credit note with no amount takes all that is left, and says how
      * much could be credited when a payment would have to be reversed first.
+     * QA D1417: with no money received or declared, an earlier discount is what
+     * keeps the total under the line, and the refusal says so: a sentence about
+     * reversing a payment was untrue on an invoice with none.
      */
     private BigDecimal amountAgainstLine(InvoiceItem line, BigDecimal requested, boolean creditNote,
-                                         BigDecimal room, Locale locale) {
+                                         BigDecimal total, BigDecimal moneyIn, Locale locale) {
         BigDecimal left = nz(line.getTotalPrice()).subtract(nz(adjustmentRepository.sumByInvoiceItemId(line.getId())));
         if (left.signum() <= 0) {
             throw new com.example.hms.exception.FieldBusinessException(FIELD_INVOICE_ITEM_ID, "billing.adjustment.lineFullyCredited");
         }
         BigDecimal amount = requested;
         if (amount == null && creditNote) {
+            BigDecimal room = total.subtract(moneyIn);
             if (left.compareTo(room) > 0) {
-                throw new com.example.hms.exception.FieldBusinessException(FIELD_INVOICE_ITEM_ID, "billing.adjustment.creditBeyondUnpaid",
+                throw new com.example.hms.exception.FieldBusinessException(FIELD_INVOICE_ITEM_ID,
+                    moneyIn.signum() > 0 ? "billing.adjustment.creditBeyondUnpaid" : "billing.adjustment.creditBeyondDiscount",
                     formatFrancs(room.max(BigDecimal.ZERO), locale));
             }
             amount = left;

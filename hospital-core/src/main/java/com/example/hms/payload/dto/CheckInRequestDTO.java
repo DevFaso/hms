@@ -19,10 +19,11 @@ import java.util.UUID;
 @AllArgsConstructor
 public class CheckInRequestDTO {
 
-    /** The appointment being checked in. Required for scheduled visits; null for walk-ins. */
+    /** The appointment being checked in. A walk-in has its own endpoint; named with identityConfirmed in one answer. */
+    @jakarta.validation.constraints.NotNull(message = "{reception.checkin.appointmentRequired}")
     private UUID appointmentId;
 
-    /** The patient being checked in. Required for walk-in visits when appointmentId is null. */
+    /** Not read by the check-in: the appointment names the patient. */
     private UUID patientId;
 
     /** Chief complaint text captured at check-in. */
@@ -42,6 +43,7 @@ public class CheckInRequestDTO {
     private String copayReference;
 
     /** Whether the receptionist confirmed patient identity (photo ID, DOB, etc.). */
+    @jakarta.validation.constraints.AssertTrue(message = "{reception.checkin.identityRequired}")
     @Builder.Default
     private boolean identityConfirmed = false;
 

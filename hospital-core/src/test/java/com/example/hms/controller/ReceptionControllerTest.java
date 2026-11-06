@@ -200,13 +200,13 @@ class ReceptionControllerTest {
             }
             f.setAccessible(true);
             if (f.getName().startsWith("WAITLIST_STATUS_")) {
-                assertThat(ReceptionController.WAITLIST_STATUSES).as(f.getName()).contains((String) f.get(null));
+                assertThat((String) f.get(null)).as(f.getName()).isIn(ReceptionController.WAITLIST_STATUSES);
             } else if (f.getName().startsWith("STATUS_")) {
-                assertThat(ReceptionController.QUEUE_STATUSES).as(f.getName()).contains((String) f.get(null));
+                assertThat((String) f.get(null)).as(f.getName()).isIn(ReceptionController.QUEUE_STATUSES);
             }
         }
         for (com.example.hms.enums.AppointmentStatus value : com.example.hms.enums.AppointmentStatus.values()) {
-            assertThat(ReceptionController.QUEUE_STATUSES).contains(value.name());
+            assertThat(value.name()).isIn(ReceptionController.QUEUE_STATUSES);
         }
     }
 }

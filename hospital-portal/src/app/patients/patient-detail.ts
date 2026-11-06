@@ -321,6 +321,24 @@ export class PatientDetailComponent implements OnInit {
     return this.roleContext.hasAnyActiveRole(CHART_REVIEW_VIEW_ROLES);
   }
 
+  /**
+   * RCPT-CLIN (user decision 2026-11-06): the front desk reads no clinical
+   * content. The server refuses the storyboard and removes allergies and the
+   * history from the patient it answers; this hides what would otherwise read
+   * as "none recorded", a false statement about the patient. Mirrors
+   * ReceptionistResponseShaping: a second clinical or administrative role lifts it.
+   */
+  isFrontDeskOnly(): boolean {
+    return (
+      this.roleContext.hasAnyActiveRole(['ROLE_RECEPTIONIST']) &&
+      !this.roleContext.hasAnyActiveRole([
+        ...CHART_REVIEW_VIEW_ROLES,
+        'ROLE_HOSPITAL_ADMIN',
+        'ROLE_ADMIN',
+      ])
+    );
+  }
+
   /** Mirrors GrowthChartController's @PreAuthorize list exactly — NOT the
    *  'Update Vital Signs' write permission the vitals tab uses, because a
    *  read-only chart gated on a write permission locks out read-only roles. */

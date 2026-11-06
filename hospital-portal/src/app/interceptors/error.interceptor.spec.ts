@@ -701,7 +701,7 @@ describe('errorInterceptor', () => {
       let error: HttpErrorResponse | undefined;
       http.post('/patients', {}).subscribe({ error: (e) => (error = e) });
       httpMock.expectOne('/patients').flush(
-        { error: 'READ_ONLY_MODE', message: 'Maintenance until 14:00' },
+        { error: 'READ_ONLY_MODE', message: 'Maintenance until 14:00', customMessage: true },
         {
           status: 503,
           statusText: 'Service Unavailable',
@@ -712,6 +712,23 @@ describe('errorInterceptor', () => {
       expect(downtime.status()?.readOnly).toBeTrue();
       expect(downtime.status()?.message).toBe('Maintenance until 14:00');
       expect(error?.status).toBe(503);
+    });
+
+    it('QA D1407: the default sentence leaves the banner on its own translated text', () => {
+      const downtime = TestBed.inject(DowntimeService);
+
+      http.post('/patients', {}).subscribe({ error: () => undefined });
+      httpMock.expectOne('/patients').flush(
+        { error: 'READ_ONLY_MODE', message: 'The system is read-only', customMessage: false },
+        {
+          status: 503,
+          statusText: 'Service Unavailable',
+          headers: { 'X-Readonly-Mode': 'true' },
+        },
+      );
+
+      expect(downtime.status()?.readOnly).toBeTrue();
+      expect(downtime.status()?.message).toBeNull();
     });
 
     it('a bare 503 without the header does not touch the downtime state', () => {

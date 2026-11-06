@@ -29,7 +29,7 @@
   <!-- Summary Strip -->
   @if (summary(); as s) {
     <div class="summary-strip">
-      <button class="sum-card" (click)="statusFilter.set('ALL'); activeTab.set('queue')">
+      <button class="sum-card" (click)="statusFilter.set('SCHEDULED'); activeTab.set('queue')">
         <span class="sum-num">{{ s.scheduledToday }}</span>
         <span class="sum-label">{{ 'RECEPTION.SCHEDULED' | translate }}</span>
       </button>

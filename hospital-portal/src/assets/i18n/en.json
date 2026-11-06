@@ -4843,6 +4843,9 @@
     "SHOWING_FIRST": "Showing the first {{shown}} of {{total}} requests."
   },
   "PATIENTS": {
+    "DOB_NOT_PAST": "The date of birth must be in the past.",
+    "DOB_IMPOSSIBLE": "This date of birth is impossible: it is more than 130 years ago.",
+    "NAME_DIGITS_ONLY": "A name cannot be made of digits only.",
     "ADDRESS": "Address",
     "ADDRESS_HISTORY": "Address history",
     "ADDRESS_HISTORY_EMPTY": "No previous addresses — the patient has not moved since registration.",

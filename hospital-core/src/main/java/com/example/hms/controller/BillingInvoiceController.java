@@ -172,6 +172,7 @@ public class BillingInvoiceController {
         return ResponseEntity.ok(invoiceService.cashClosing(date, locale));
     }
 
+    @com.example.hms.security.ReadsOnly("a filtered search of invoices, under POST for its body")
     @PostMapping("/search")
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST','ROLE_ACCOUNTANT','ROLE_RECEPTIONIST')")
     @Operation(summary = "Search Billing Invoices")

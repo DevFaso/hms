@@ -4843,6 +4843,9 @@
     "SHOWING_FIRST": "Affichage des {{shown}} premières demandes sur {{total}}."
   },
   "PATIENTS": {
+    "DOB_NOT_PAST": "La date de naissance doit être une date passée.",
+    "DOB_IMPOSSIBLE": "Cette date de naissance est impossible : elle remonte à plus de 130 ans.",
+    "NAME_DIGITS_ONLY": "Un nom ne peut pas être composé uniquement de chiffres.",
     "ADDRESS": "Adresse",
     "ADDRESS_HISTORY": "Historique des adresses",
     "ADDRESS_HISTORY_EMPTY": "Aucune adresse antérieure — le patient n'a pas déménagé depuis l'enregistrement.",

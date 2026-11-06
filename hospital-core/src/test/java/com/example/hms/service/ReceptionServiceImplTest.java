@@ -196,6 +196,125 @@ class ReceptionServiceImplTest {
         lenient().when(invoiceRepo.existsOutstandingBalance(any(), any())).thenReturn(false);
     }
 
+    // ── D1400 + D1401: a card's number is the rows it opens ──────────────────
+
+    @Nested
+    @DisplayName("QA D1400 + D1401: every card counts exactly the rows it opens")
+    class CardsCountWhatTheyOpen {
+
+        private List<ReceptionQueueItemDTO> queue;
+        private ReceptionDashboardSummaryDTO summary;
+
+        /** A day at hospital A with one visit in every state the desk can meet. */
+        @BeforeEach
+        void aMixedDay() {
+            Appointment scheduled = makeAppointment(AppointmentStatus.SCHEDULED);
+            Appointment confirmed = makeAppointment(AppointmentStatus.CONFIRMED);
+            Appointment pending = makeAppointment(AppointmentStatus.PENDING);
+            Appointment rescheduled = makeAppointment(AppointmentStatus.RESCHEDULED);
+            Appointment noShow = makeAppointment(AppointmentStatus.NO_SHOW);
+            Appointment cancelled = makeAppointment(AppointmentStatus.CANCELLED);
+            Appointment completedNoVisit = makeAppointment(AppointmentStatus.COMPLETED);
+            Appointment arrived = makeAppointment(AppointmentStatus.CHECKED_IN);
+            Appointment triage = makeAppointment(AppointmentStatus.CHECKED_IN);
+            Appointment waiting = makeAppointment(AppointmentStatus.CHECKED_IN);
+            Appointment inProgress = makeAppointment(AppointmentStatus.IN_PROGRESS);
+            Appointment awaitingResults = makeAppointment(AppointmentStatus.IN_PROGRESS);
+            Appointment ready = makeAppointment(AppointmentStatus.IN_PROGRESS);
+            Appointment done = makeAppointment(AppointmentStatus.COMPLETED);
+            Appointment walkedOut = makeAppointment(AppointmentStatus.CANCELLED);
+            when(appointmentRepo.findByHospital_IdAndAppointmentDate(hospitalId, today)).thenReturn(List.of(
+                scheduled, confirmed, pending, rescheduled, noShow, cancelled, completedNoVisit,
+                arrived, triage, waiting, inProgress, awaitingResults, ready, done, walkedOut));
+            List<Encounter> visits = List.of(
+                makeEncounter(EncounterStatus.ARRIVED, arrived),
+                makeEncounter(EncounterStatus.TRIAGE, triage),
+                makeEncounter(EncounterStatus.WAITING_FOR_PHYSICIAN, waiting),
+                makeEncounter(EncounterStatus.IN_PROGRESS, inProgress),
+                makeEncounter(EncounterStatus.AWAITING_RESULTS, awaitingResults),
+                makeEncounter(EncounterStatus.READY_FOR_DISCHARGE, ready),
+                makeEncounter(EncounterStatus.COMPLETED, done),
+                makeEncounter(EncounterStatus.LEFT_WITHOUT_BEING_SEEN, walkedOut));
+            List<Encounter> walkIns = List.of(
+                makeWalkInEncounter(EncounterStatus.ARRIVED),
+                makeWalkInEncounter(EncounterStatus.TRIAGE),
+                makeWalkInEncounter(EncounterStatus.IN_PROGRESS),
+                makeWalkInEncounter(EncounterStatus.COMPLETED),
+                makeWalkInEncounter(EncounterStatus.CANCELLED));
+            walkIns.forEach(walkIn -> lenient().when(walkIn.getHospital()).thenReturn(hospital));
+            when(encounterRepo.findByAppointmentIdIn(any())).thenReturn(visits);
+            when(encounterRepo.findWalkInsForHospitalAndPeriod(eq(hospitalId), any(), any())).thenReturn(walkIns);
+            stubEmptyInsuranceAndInvoices();
+            queue = service.getQueue(today, hospitalId, "ALL", null, null);
+            summary = service.getDashboardSummary(today, hospitalId);
+        }
+
+        private long opened(String filter) {
+            assertThat(service.getQueue(today, hospitalId, filter, null, null))
+                .as("the server filter and the row's own list agree on " + filter)
+                .hasSize((int) queue.stream().filter(i -> i.getQueueFilters().contains(filter)).count());
+            return service.getQueue(today, hospitalId, filter, null, null).size();
+        }
+
+        @Test
+        void everyStatusCardEqualsItsFilter() {
+            assertThat(summary.getScheduledToday()).isEqualTo(opened("SCHEDULED")).isEqualTo(4);
+            assertThat(summary.getArrivedCount()).isEqualTo(opened("ARRIVED")).isEqualTo(5);
+            assertThat(summary.getInProgressCount()).isEqualTo(opened("IN_PROGRESS")).isEqualTo(4);
+            assertThat(summary.getCompletedCount()).isEqualTo(opened("COMPLETED")).isEqualTo(3);
+            assertThat(summary.getNoShowCount()).isEqualTo(opened("NO_SHOW")).isEqualTo(1);
+            assertThat(summary.getWaitingCount()).isEqualTo(summary.getArrivedCount());
+        }
+
+        @Test
+        void walkInsOpenByHavingNoAppointmentNotByAStatusTheyNeverHave() {
+            assertThat(summary.getWalkInCount()).isEqualTo(opened("WALK_IN")).isEqualTo(5);
+            assertThat(service.getQueue(today, hospitalId, "WALK_IN", null, null))
+                .allSatisfy(item -> assertThat(item.getAppointmentId()).isNull());
+            assertThat(queue.stream().filter(i -> i.getAppointmentId() == null))
+                .allSatisfy(item -> assertThat(item.getStatus()).isNotEqualTo("WALK_IN"));
+        }
+
+        @Test
+        void aConfirmedVisitOpensUnderItsOwnFilterToo() {
+            assertThat(opened("CONFIRMED")).isEqualTo(1);
+            assertThat(service.getFlowBoard(today, hospitalId, null).getScheduled())
+                .as("the board's columns stay exact").hasSize(1);
+        }
+
+        @Test
+        void theInsuranceCardIsTheRowsTheQueueFlags() {
+            // No policy for anyone in this fixture: every visit that took place is flagged, walk-ins too.
+            List<InsuranceIssueDTO> issues = service.getInsuranceIssues(today, hospitalId);
+            assertThat(issues).hasSameSizeAs(queue.stream().filter(ReceptionQueueItemDTO::isHasInsuranceIssue).toList());
+            assertThat(issues).hasSize(queue.size() - 4);
+            assertThat(issues).anySatisfy(issue -> {
+                assertThat(issue.getAppointmentId()).isNull();
+                assertThat(issue.getEncounterId()).isNotNull();
+            });
+            // A visit that did not take place is not the desk's to chase.
+            assertThat(queue).filteredOn(i -> Set.of("CANCELLED", "NO_SHOW", "LEFT_WITHOUT_BEING_SEEN").contains(i.getStatus()))
+                .isNotEmpty().allSatisfy(i -> assertThat(i.isHasInsuranceIssue()).isFalse());
+        }
+
+        @Test
+        void thePaymentCardIsTheRowsTheQueueFlags() {
+            when(invoiceRepo.existsOutstandingBalance(any(), any())).thenReturn(true);
+            assertThat(service.getPaymentsPending(today, hospitalId))
+                .hasSameSizeAs(service.getQueue(today, hospitalId, "ALL", null, null).stream()
+                    .filter(ReceptionQueueItemDTO::isHasOutstandingBalance).toList());
+        }
+
+        @Test
+        void anEmptyDayCountsNothing() {
+            when(appointmentRepo.findByHospital_IdAndAppointmentDate(hospitalId, today)).thenReturn(List.of());
+            when(encounterRepo.findWalkInsForHospitalAndPeriod(eq(hospitalId), any(), any())).thenReturn(List.of());
+            ReceptionDashboardSummaryDTO empty = service.getDashboardSummary(today, hospitalId);
+            assertThat(empty.getScheduledToday() + empty.getArrivedCount() + empty.getWalkInCount()).isZero();
+            assertThat(service.getInsuranceIssues(today, hospitalId)).isEmpty();
+        }
+    }
+
     // ── getDashboardSummary ──────────────────────────────────────────────────
 
     @Nested
@@ -203,8 +322,8 @@ class ReceptionServiceImplTest {
     class GetDashboardSummary {
 
         @Test
-        @DisplayName("waitingCount is arrivedCount minus inProgressCount (never negative)")
-        void waitingCountIsArrivedMinusInProgress() {
+        @DisplayName("QA D1401: waitingCount is the ARRIVED rows of the queue")
+        void waitingCountIsTheArrivedRows() {
             Appointment appt1 = makeAppointment(AppointmentStatus.SCHEDULED);
             Appointment appt2 = makeAppointment(AppointmentStatus.SCHEDULED);
             Encounter arrived1 = makeEncounter(EncounterStatus.ARRIVED, appt1);
@@ -220,8 +339,8 @@ class ReceptionServiceImplTest {
 
             ReceptionDashboardSummaryDTO result = service.getDashboardSummary(today, hospitalId);
 
-            // 2 arrived, 1 in-progress → waitingCount = max(0, 2-1) = 1
-            assertThat(result.getWaitingCount()).isEqualTo(1);
+            // One row per appointment: both read ARRIVED on the queue, so both wait.
+            assertThat(result.getWaitingCount()).isEqualTo(result.getArrivedCount()).isEqualTo(2);
         }
 
         @Test
@@ -280,7 +399,7 @@ class ReceptionServiceImplTest {
             assertThat(result.getDate()).isEqualTo(today);
             assertThat(result.getHospitalId()).isEqualTo(hospitalId);
             assertThat(result.getNoShowCount()).isEqualTo(1);
-            assertThat(result.getCompletedCount()).isZero(); // no linked encounter or walk-in with COMPLETED
+            assertThat(result.getCompletedCount()).isEqualTo(1); // QA D1401: the queue shows this appointment as COMPLETED
             assertThat(result.getWalkInCount()).isEqualTo(1);
             assertThat(result.getScheduledToday()).isEqualTo(1); // only 'scheduled' qualifies
         }

@@ -1,5 +1,11 @@
 import { refuseFields } from '../../shared/forms/invalid-fields';
 import {
+  birthDateRefusalKey,
+  earliestBirthDate,
+  isMadeOfDigits,
+  latestBirthDate,
+} from '../../shared/patient-identity';
+import {
   ChangeDetectionStrategy,
   Component,
   EventEmitter,
@@ -19,7 +25,6 @@ import {
 } from '../../services/patient.service';
 import { ToastService } from '../../core/toast.service';
 import { DialogFocusDirective } from '../../shared/a11y/dialog-focus.directive';
-import { localDateString } from '../../shared/date-utils';
 import {
   PhoneFieldDirective,
   invalidPhoneInputs,
@@ -101,8 +106,10 @@ export class PatientDemographicsEditComponent implements OnInit {
   readonly genders = ['MALE', 'FEMALE', 'OTHER'];
   /** QA D1036: the groups the server accepts. */
   readonly bloodTypes = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
-  /** The local calendar day (a birth date cannot be later). */
-  readonly today = localDateString(new Date());
+  /** The latest birth date the server accepts (it must be in the past). */
+  readonly today = latestBirthDate();
+  /** QA D1414: a record stored before the rule keeps its date, so the picker's lower limit is advisory. */
+  readonly earliest = earliestBirthDate();
 
   ngOnInit(): void {
     for (const key of Object.keys(this.form) as (keyof PatientDemographicsPatch)[]) {
@@ -170,6 +177,17 @@ export class PatientDemographicsEditComponent implements OnInit {
     return out;
   }
 
+  private identityRefusal(body: PatientDemographicsPatch): string | null {
+    const dobKey = body.dateOfBirth ? birthDateRefusalKey(body.dateOfBirth) : null;
+    if (dobKey) {
+      return this.translate.instant(dobKey);
+    }
+    const digits = [body.firstName, body.middleName, body.lastName].some(
+      (name) => !!name && isMadeOfDigits(name),
+    );
+    return digits ? this.translate.instant('PATIENTS.NAME_DIGITS_ONLY') : null;
+  }
+
   submit(): void {
     // The date of birth is required too (NOT NULL on the record): a cleared
     // one would be sent as "" and kept by the server, while the dialog said
@@ -210,6 +228,13 @@ export class PatientDemographicsEditComponent implements OnInit {
     const body = this.changes();
     if (Object.keys(body).length === 0) {
       this.dismissed.emit();
+      return;
+    }
+    // QA D1403 + D1414: only a change is judged, as on the server: a record stored
+    // before the rule stays editable on its other fields.
+    const impossible = this.identityRefusal(body);
+    if (impossible) {
+      this.error.set(impossible);
       return;
     }
     this.error.set(null);
