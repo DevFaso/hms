@@ -11662,7 +11662,7 @@
     "ADMIN_COMPLETE_MESSAGE": "Unit {{unit}} will be recorded as fully given. This cannot be undone.",
     "ADMIN_STOP": "Stop the transfusion",
     "ADMIN_STOP_TITLE": "Stop this transfusion?",
-    "ADMIN_STOP_MESSAGE": "The unit cannot be used again and is discarded. If you suspect a reaction, cancel and use Suspected reaction instead.",
+    "ADMIN_STOP_MESSAGE": "The unit cannot be used again and is discarded. If you suspect a reaction, cancel and use the suspected reaction button instead.",
     "ADMIN_COMPLETED": "Transfusion completed",
     "ADMIN_STOPPED": "Transfusion stopped",
     "ADMIN_COMPLETE_ERROR": "The transfusion could not be completed.",

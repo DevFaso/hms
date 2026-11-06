@@ -203,6 +203,22 @@ const NESTED_DIALOGS = new Map([
     'src/app/transfusion/transfusion.html::div.modal[transfusion-dialog-1-title] => div.modal[transfusion-dialog-2-title]',
     SPEC_SHAPES,
   ],
+  [
+    'src/app/transfusion/transfusion.html::div.detail-panel[transfusion-panel-1-title] => div.modal[transfusion-dialog-2-title]',
+    SPEC_SHAPES,
+  ],
+  [
+    'src/app/transfusion/transfusion.html::div.detail-panel[transfusion-panel-1-title] => div.modal[transfusion-dialog-6-title]',
+    SPEC_SHAPES,
+  ],
+  [
+    'src/app/transfusion/transfusion.html::div.detail-panel[transfusion-panel-1-title] => app-confirm-dialog[TRANSFUSION.ADMIN_COMPLETE_TITLE]',
+    SPEC_SHAPES,
+  ],
+  [
+    'src/app/transfusion/transfusion.html::div.detail-panel[transfusion-panel-1-title] => app-reason-dialog[TRANSFUSION.ADMIN_STOP_TITLE]',
+    SPEC_SHAPES,
+  ],
 ]);
 
 const PORTAL = resolve(import.meta.dirname, '..', '..');

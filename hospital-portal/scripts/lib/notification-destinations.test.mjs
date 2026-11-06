@@ -57,6 +57,7 @@ const NO_DESTINATION = {
   OBSTETRIC_ALERT: 'staff only (maternity team); the staff bell expands the message',
   OBSTETRIC_ALERT_ESCALATION: 'staff only (escalation chain); the staff bell expands the message',
   POSITIVE_CULTURE_RESULT: 'staff only (ordering clinician); the staff bell expands the message',
+  CORRECTED_CULTURE_RESULT: 'staff only (ordering clinician); the staff bell expands the message',
   PRO_CRITICAL_ITEM: 'staff only (care team); the staff bell expands the message',
   PRO_CRITICAL_ITEM_ESCALATION: 'staff only (escalation chain); the staff bell expands the message',
   PRO_SCREEN_POSITIVE: 'staff only (care team); the staff bell expands the message',

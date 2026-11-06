@@ -320,7 +320,8 @@
               >
                 <div class="administration-head">
                   <span class="mono">{{ a.unitNumber }}</span>
-                  <span
+                  {{ ' '
+                  }}<span
                     class="status-badge"
                     [class.status-progress]="isInProgress(a)"
                     [class.status-completed]="a.status === 'COMPLETED'"
@@ -1065,6 +1066,7 @@
     <div class="field">
       <label for="tx-complete-volume">{{ 'TRANSFUSION.ADMIN_VOLUME_GIVEN' | translate }}</label>
       <input
+        appFocusOnRender
         id="tx-complete-volume"
         data-testid="complete-volume"
         type="number"

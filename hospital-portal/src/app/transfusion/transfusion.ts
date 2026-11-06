@@ -47,6 +47,7 @@ import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { ReasonDialogComponent } from '../shared/reason-dialog/reason-dialog.component';
 import { ConfirmDialogComponent } from '../shared/confirm-dialog/confirm-dialog.component';
 import { focusWhenRendered } from '../shared/a11y/focus-when-rendered';
+import { FocusOnRenderDirective } from '../shared/a11y/focus-on-render.directive';
 type Tab = 'requests' | 'units';
 
 /**
@@ -61,6 +62,7 @@ type Tab = 'requests' | 'units';
   selector: 'app-transfusion',
   standalone: true,
   imports: [
+    FocusOnRenderDirective,
     ConfirmDialogComponent,
     ReasonDialogComponent,
     SubmitGuardDirective,
@@ -398,7 +400,8 @@ export class TransfusionComponent implements OnInit {
   /* ── Type and screen ── */
 
   openGroupModal(): void {
-    this.openGroupFor(this.selectedPatient()?.id ?? '');
+    this.resetGroupFor(this.selectedPatient()?.id ?? '');
+    this.showGroupModal.set(true);
   }
 
   /**
@@ -407,20 +410,21 @@ export class TransfusionComponent implements OnInit {
    * screens that request's patient, whichever patient the request form last held.
    */
   openGroupModalForRequest(request: TransfusionRequestResponse): void {
-    this.openGroupFor(request.patientId);
+    this.resetGroupFor(request.patientId);
+    this.showGroupModal.set(true);
   }
 
   /** From the page: the laboratory picks the patient in the form. */
   openGroupModalForAnyPatient(): void {
     this.groupPickerPatient.set(null);
-    this.openGroupFor('');
+    this.resetGroupFor('');
+    this.showGroupModal.set(true);
   }
 
-  private openGroupFor(patientId: string): void {
+  private resetGroupFor(patientId: string): void {
     this.groupForm = this.emptyGroupForm();
     this.groupForm.patientId = patientId;
     this.groupNeedsPatient.set(!patientId);
-    this.showGroupModal.set(true);
   }
 
   onGroupPatientPicked(patient: PatientResponse | null): void {

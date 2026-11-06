@@ -11662,7 +11662,7 @@
     "ADMIN_COMPLETE_MESSAGE": "La unidad {{unit}} se registrará como transfundida por completo. Esta acción es definitiva.",
     "ADMIN_STOP": "Detener la transfusión",
     "ADMIN_STOP_TITLE": "¿Detener esta transfusión?",
-    "ADMIN_STOP_MESSAGE": "La unidad no podrá volver a usarse y se desechará. Si sospecha una reacción, cancele y use Reacción sospechada.",
+    "ADMIN_STOP_MESSAGE": "La unidad no podrá volver a usarse y se desechará. Si sospecha una reacción, cancele y use el botón de reacción sospechada.",
     "ADMIN_COMPLETED": "Transfusión finalizada",
     "ADMIN_STOPPED": "Transfusión detenida",
     "ADMIN_COMPLETE_ERROR": "No se pudo finalizar la transfusión.",
