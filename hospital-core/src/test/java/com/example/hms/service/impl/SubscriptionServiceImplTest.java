@@ -114,6 +114,44 @@ class SubscriptionServiceImplTest {
     }
 
     @Test
+    @DisplayName("QA CX-005: a tier code another plan holds is refused on its field, whatever its case")
+    void createPlanDuplicateTierCode() {
+        SubscriptionPlanRequestDTO req = new SubscriptionPlanRequestDTO();
+        req.setName("Clinic");
+        req.setTierCode("CLINIC");
+        when(planRepository.existsByTierCodeIgnoreCase("CLINIC")).thenReturn(true);
+
+        assertThatThrownBy(() -> service.createPlan(req))
+            .isInstanceOfSatisfying(FieldBusinessException.class,
+                refused -> assertThat(refused.getFieldErrors()).containsOnlyKeys("tierCode"));
+        verify(planRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("QA CX-005: editing a plan keeps its own tier code; a code another plan holds is refused")
+    void updatePlanDuplicateTierCode() {
+        UUID id = UUID.randomUUID();
+        SubscriptionPlan plan = SubscriptionPlan.builder().name("Clinic").tierCode("CLINIC").currency("USD").active(true).build();
+        when(planRepository.findByIdForUpdate(id)).thenReturn(Optional.of(plan));
+
+        SubscriptionPlanRequestDTO own = new SubscriptionPlanRequestDTO();
+        own.setName("Clinic renamed");
+        own.setTierCode("clinic");
+        when(planRepository.save(any(SubscriptionPlan.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(mapper.toDto(any(SubscriptionPlan.class))).thenReturn(SubscriptionPlanResponseDTO.builder().build());
+        service.updatePlan(id, own);
+        verify(planRepository, never()).existsByTierCodeIgnoreCase(any());
+
+        SubscriptionPlanRequestDTO taken = new SubscriptionPlanRequestDTO();
+        taken.setName("Clinic");
+        taken.setTierCode("HOSPITAL");
+        when(planRepository.existsByTierCodeIgnoreCase("HOSPITAL")).thenReturn(true);
+        assertThatThrownBy(() -> service.updatePlan(id, taken))
+            .isInstanceOfSatisfying(FieldBusinessException.class,
+                refused -> assertThat(refused.getFieldErrors()).containsOnlyKeys("tierCode"));
+    }
+
+    @Test
     @DisplayName("createPlan persists with defaults applied")
     void createPlanDefaults() {
         SubscriptionPlanRequestDTO req = SubscriptionPlanRequestDTO.builder()

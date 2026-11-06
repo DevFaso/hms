@@ -371,4 +371,21 @@ public interface EncounterRepository
     /** E8 #48 — every encounter of this patient here; the resolver applies the status/decay rule. */
     List<Encounter> findByPatient_IdAndHospital_Id(UUID patientId, UUID hospitalId);
 
+
+    /** QA CX-002: visits per department (the same definition as {@link #countVisits}). */
+    @Query("SELECT e.department.id AS ownerId, COUNT(e) AS total FROM Encounter e "
+        + "WHERE e.department IS NOT NULL AND " + NOT_PRESCRIPTION_ANCHOR + " GROUP BY e.department.id")
+    List<PlatformCountRows.IdCount> countVisitsPerDepartment();
+
+    /** QA CX-002: visits per status, platform-wide (the anchors stay out, QA D791). */
+    @Query("SELECT CAST(e.status AS string) AS label, COUNT(e) AS total FROM Encounter e WHERE "
+        + NOT_PRESCRIPTION_ANCHOR + " GROUP BY e.status")
+    List<PlatformCountRows.StatusCount> countVisitsPerStatus();
+
+    /** QA CX-002: visits per calendar day of a window, {@code from} included, {@code to} excluded. */
+    @Query("SELECT CAST(e.encounterDate AS LocalDate) AS day, COUNT(e) AS total FROM Encounter e "
+        + "WHERE e.encounterDate >= :from AND e.encounterDate < :to AND " + NOT_PRESCRIPTION_ANCHOR
+        + " GROUP BY CAST(e.encounterDate AS LocalDate)")
+    List<PlatformCountRows.DayCount> countVisitsPerDay(@Param("from") java.time.LocalDateTime from,
+                                                       @Param("to") java.time.LocalDateTime to);
 }

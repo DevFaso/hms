@@ -135,4 +135,8 @@ public interface DepartmentRepository extends JpaRepository<Department, UUID>, J
     Optional<Department> findByIdWithTranslations(@Param("id") UUID id);
 
     boolean existsByHeadOfDepartment_Id(UUID staffId);
+
+    /** QA CX-003: every department with its hospital, for the analytics table (no lazy read per row). */
+    @Query("SELECT d FROM Department d JOIN FETCH d.hospital")
+    List<Department> findAllForAnalytics();
 }

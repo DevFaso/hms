@@ -173,4 +173,25 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID>,
     @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
     @org.springframework.data.jpa.repository.Query("SELECT a FROM Appointment a WHERE a.id = :id")
     java.util.Optional<Appointment> lockById(@org.springframework.data.repository.query.Param("id") java.util.UUID id);
+
+    /** QA CX-002: appointments per department, by the database. */
+    @org.springframework.data.jpa.repository.Query("SELECT a.department.id AS ownerId, COUNT(a) AS total FROM Appointment a "
+        + "WHERE a.department IS NOT NULL GROUP BY a.department.id")
+    java.util.List<PlatformCountRows.IdCount> countPerDepartment();
+
+    /** QA CX-002: appointments per hospital, by the database. */
+    @org.springframework.data.jpa.repository.Query("SELECT a.hospital.id AS ownerId, COUNT(a) AS total FROM Appointment a "
+        + "WHERE a.hospital IS NOT NULL GROUP BY a.hospital.id")
+    java.util.List<PlatformCountRows.IdCount> countPerHospital();
+
+    /** QA CX-002: appointments per status, by the database. */
+    @org.springframework.data.jpa.repository.Query("SELECT CAST(a.status AS string) AS label, COUNT(a) AS total FROM Appointment a GROUP BY a.status")
+    java.util.List<PlatformCountRows.StatusCount> countPerStatus();
+
+    /** QA CX-002: appointments per day of a window, both ends included. */
+    @org.springframework.data.jpa.repository.Query("SELECT a.appointmentDate AS day, COUNT(a) AS total FROM Appointment a "
+        + "WHERE a.appointmentDate BETWEEN :from AND :to GROUP BY a.appointmentDate")
+    java.util.List<PlatformCountRows.DayCount> countPerDay(
+        @org.springframework.data.repository.query.Param("from") java.time.LocalDate from,
+        @org.springframework.data.repository.query.Param("to") java.time.LocalDate to);
 }

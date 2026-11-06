@@ -1,5 +1,6 @@
 package com.example.hms.service.platform.impl;
 
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.MllpAllowedSenderMapper;
 import com.example.hms.model.Hospital;
@@ -100,10 +101,18 @@ public class MllpAllowedSenderServiceImpl implements MllpAllowedSenderService {
     public MllpAllowedSenderResponseDTO create(MllpAllowedSenderRequestDTO request, Locale locale) {
         Hospital hospital = loadHospital(request.hospitalId());
         MllpAllowedSender entity = mapper.toEntity(request, hospital);
+        requireSenderPairFree(entity.getSendingApplication(), entity.getSendingFacility());
         MllpAllowedSender saved = senderRepository.save(entity);
         log.info("MLLP allowed sender created id={} app={} facility={} hospital={}",
             saved.getId(), saved.getSendingApplication(), saved.getSendingFacility(), hospital.getId());
         return mapper.toResponseDTO(saved);
+    }
+
+    /** QA CX-005: a sender pair already allow-listed is refused on its field, not by the unique constraint. */
+    private void requireSenderPairFree(String application, String facility) {
+        if (senderRepository.existsBySendingApplicationAndSendingFacility(application, facility)) {
+            throw new FieldBusinessException("sendingApplication", "mllpAllowedSender.duplicate", application, facility);
+        }
     }
 
     @Override
@@ -112,7 +121,12 @@ public class MllpAllowedSenderServiceImpl implements MllpAllowedSenderService {
         MllpAllowedSender entity = senderRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(SENDER_NOT_FOUND, id));
         Hospital hospital = loadHospital(request.hospitalId());
+        String application = entity.getSendingApplication();
+        String facility = entity.getSendingFacility();
         mapper.applyToEntity(request, hospital, entity);
+        if (!entity.getSendingApplication().equals(application) || !entity.getSendingFacility().equals(facility)) {
+            requireSenderPairFree(entity.getSendingApplication(), entity.getSendingFacility());
+        }
         MllpAllowedSender saved = senderRepository.save(entity);
         log.info("MLLP allowed sender updated id={} active={}", saved.getId(), saved.isActive());
         return mapper.toResponseDTO(saved);

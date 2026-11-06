@@ -3,6 +3,7 @@ package com.example.hms.controller;
 import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.security.DowntimeStateService;
 import com.example.hms.service.AuditEventLogService;
@@ -81,6 +82,12 @@ public class DowntimeController {
         @Valid @RequestBody DowntimeToggleRequest request,
         Authentication auth
     ) {
+        // QA CX-001: turning the whole platform read-only says why: the message is
+        // what every signed-in user reads on the banner. Lifting it needs none.
+        if (Boolean.TRUE.equals(request.getReadOnly())
+                && (request.getMessage() == null || request.getMessage().isBlank())) {
+            throw new FieldBusinessException("message", "downtime.message.required");
+        }
         String actor = auth != null ? auth.getName() : null;
         DowntimeStateService.DowntimeSnapshot snapshot =
             downtimeStateService.setReadOnly(request.getReadOnly(), request.getMessage(), actor);

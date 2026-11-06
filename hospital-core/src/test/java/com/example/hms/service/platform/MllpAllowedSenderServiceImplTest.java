@@ -171,6 +171,19 @@ class MllpAllowedSenderServiceImplTest {
     }
 
     @Test
+    @DisplayName("QA CX-005: a sender pair already allow-listed is refused on its field, before the constraint")
+    void createRefusesADuplicatePairOnItsField() {
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(senderRepository.existsBySendingApplicationAndSendingFacility("ROCHE_COBAS", "LAB_A")).thenReturn(true);
+
+        MllpAllowedSenderRequestDTO req = new MllpAllowedSenderRequestDTO(hospitalId, "Roche_Cobas", "lab_a", null, null);
+        assertThatThrownBy(() -> service.create(req, Locale.ENGLISH))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                refused -> assertThat(refused.getFieldErrors()).containsOnlyKeys("sendingApplication"));
+        verify(senderRepository, org.mockito.Mockito.never()).save(any(MllpAllowedSender.class));
+    }
+
+    @Test
     @DisplayName("create normalises sender fields to upper-case via the mapper and saves")
     void createNormalisesAndSaves() {
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));

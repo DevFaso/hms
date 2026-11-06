@@ -434,4 +434,15 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
         OR LOWER(p.email) = LOWER(CAST(:identifier AS string))
     """)
     Optional<Patient> findByUsernameOrEmail(@Param("identifier") String identifier);
+
+    /** QA CX-002: patients per hospital, by the database (no record is read or decrypted to count it). */
+    @org.springframework.data.jpa.repository.Query("SELECT p.hospitalId AS ownerId, COUNT(p) AS total FROM Patient p WHERE p.hospitalId IS NOT NULL GROUP BY p.hospitalId")
+    java.util.List<PlatformCountRows.IdCount> countPerHospital();
+
+    /** QA CX-002: registrations per calendar day of a window, {@code from} included, {@code to} excluded. */
+    @org.springframework.data.jpa.repository.Query("SELECT CAST(p.createdAt AS LocalDate) AS day, COUNT(p) AS total FROM Patient p "
+        + "WHERE p.createdAt >= :from AND p.createdAt < :to GROUP BY CAST(p.createdAt AS LocalDate)")
+    java.util.List<PlatformCountRows.DayCount> countRegistrationsPerDay(
+        @org.springframework.data.repository.query.Param("from") java.time.LocalDateTime from,
+        @org.springframework.data.repository.query.Param("to") java.time.LocalDateTime to);
 }
