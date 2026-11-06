@@ -49,6 +49,7 @@ export interface PatientBloodGroupResponse {
   /** The SCREEN is still usable for a crossmatch. ABO/Rh never expires. */
   screenCurrent: boolean;
   notes: string | null;
+  correctionReason?: string | null;
 }
 
 export interface PatientBloodGroupRequest {
@@ -172,11 +173,16 @@ export interface TransfusionAdministrationResponse {
   reactions: TransfusionReactionResponse[];
 }
 
+export interface VerifierCandidate {
+  userId: string;
+  displayName: string;
+}
+
 export interface TransfusionAdministrationRequest {
   requestId: string;
   bloodUnitId: string;
   /** The independent second bedside check. Never the caller themselves. */
-  verifiedByStaffId: string;
+  verifiedByUserId: string;
   verificationMethod?: string;
   notes?: string;
 }
@@ -259,6 +265,11 @@ export class TransfusionService {
     let params = new HttpParams();
     if (status) params = params.set('status', status);
     return this.http.get<BloodUnitResponse[]>(`${this.baseUrl}/units`, { params });
+  }
+
+  /** Colleagues who can be the second check at the bedside (QA CX-008). */
+  listVerifierCandidates(): Observable<VerifierCandidate[]> {
+    return this.http.get<VerifierCandidate[]>(`${this.baseUrl}/verifier-candidates`);
   }
 
   listAssignableUnits(): Observable<BloodUnitResponse[]> {

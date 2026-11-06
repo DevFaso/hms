@@ -3,13 +3,14 @@ import { provideRouter } from '@angular/router';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TranslateModule } from '@ngx-translate/core';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 
 import { TransfusionComponent } from './transfusion';
 import {
   BloodUnitResponse,
   CrossmatchResponse,
   PatientBloodGroupResponse,
+  TransfusionAdministrationResponse,
   TransfusionReactionResponse,
   TransfusionRequestResponse,
   TransfusionService,
@@ -20,6 +21,7 @@ import { RoleContextService } from '../core/role-context.service';
 import { roleContextStub } from '../testing/role-context.stub';
 import { AuthService } from '../auth/auth.service';
 import { answerReasonDialog, reasonDialog } from '../shared/reason-dialog/reason-dialog.testing';
+import { expectEmptySubmitRefusal } from '../testing/form-refusal-behaviour';
 
 function mockRequest(
   overrides: Partial<TransfusionRequestResponse> = {},
@@ -75,7 +77,13 @@ describe('TransfusionComponent', () => {
       'issueUnit',
       'startAdministration',
       'recordReaction',
+      'listAdministrationsForPatient',
+      'completeAdministration',
+      'stopAdministration',
+      'listVerifierCandidates',
     ]);
+    txSpy.listAdministrationsForPatient.and.returnValue(of([]));
+    txSpy.listVerifierCandidates.and.returnValue(of([]));
     txSpy.listRequests.and.returnValue(of([mockRequest()]));
     txSpy.listUnits.and.returnValue(of([mockUnit()]));
     txSpy.listAssignableUnits.and.returnValue(of([mockUnit()]));
@@ -230,7 +238,7 @@ describe('TransfusionComponent', () => {
   it('does not submit a hang without a second verifier', () => {
     component.selectedRequest.set(mockRequest());
     component.openHang(mockUnit({ status: 'ISSUED' }));
-    component.hangForm.verifiedByStaffId = '   ';
+    component.hangForm.verifiedByUserId = '   ';
     component.submitHang();
     expect(txSpy.startAdministration).not.toHaveBeenCalled();
   });
@@ -388,7 +396,13 @@ describe('TransfusionComponent — platelet pairing pending confirmation', () =>
       'issueUnit',
       'startAdministration',
       'recordReaction',
+      'listAdministrationsForPatient',
+      'completeAdministration',
+      'stopAdministration',
+      'listVerifierCandidates',
     ]);
+    txSpy.listAdministrationsForPatient.and.returnValue(of([]));
+    txSpy.listVerifierCandidates.and.returnValue(of([]));
     txSpy.listRequests.and.returnValue(of([mockRequest()]));
     txSpy.listUnits.and.returnValue(of([]));
     txSpy.listAssignableUnits.and.returnValue(of([]));
@@ -465,5 +479,434 @@ describe('TransfusionComponent — platelet pairing pending confirmation', () =>
     expect(
       fixture.nativeElement.querySelector('[data-testid="xm-pending-confirmation-u1"]'),
     ).toBeNull();
+  });
+});
+
+describe('TransfusionComponent: a transfusion in progress (QA CX-008)', () => {
+  let fixture: ComponentFixture<TransfusionComponent>;
+  let component: TransfusionComponent;
+  let txSpy: jasmine.SpyObj<TransfusionService>;
+  let toastSpy: jasmine.SpyObj<ToastService>;
+
+  const administration = (
+    overrides: Partial<TransfusionAdministrationResponse> = {},
+  ): TransfusionAdministrationResponse =>
+    ({
+      id: 'adm-1',
+      requestId: 'req-1',
+      bloodUnitId: 'u1',
+      unitNumber: 'BU-001',
+      patientId: 'p1',
+      status: 'IN_PROGRESS',
+      startedAt: '2026-11-06T10:00:00',
+      completedAt: null,
+      volumeTransfusedMl: null,
+      stopReason: null,
+      reactions: [],
+      ...overrides,
+    }) as TransfusionAdministrationResponse;
+
+  const issuedRequest = mockRequest({
+    status: 'ISSUED',
+    units: [mockUnit({ id: 'u1', status: 'ISSUED' })],
+  });
+
+  const start = async (roles: string[]) => {
+    txSpy = jasmine.createSpyObj('TransfusionService', [
+      'listRequests',
+      'getRequest',
+      'listAdministrationsForPatient',
+      'completeAdministration',
+      'stopAdministration',
+      'recordReaction',
+      'recordBloodGroup',
+      'listVerifierCandidates',
+      'listAssignableUnits',
+      'issueUnit',
+      'startAdministration',
+    ]);
+    txSpy.listRequests.and.returnValue(of([issuedRequest]));
+    txSpy.getRequest.and.returnValue(of(issuedRequest));
+    txSpy.listAdministrationsForPatient.and.returnValue(of([administration()]));
+    toastSpy = jasmine.createSpyObj('ToastService', ['success', 'error']);
+    await TestBed.configureTestingModule({
+      imports: [TransfusionComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        { provide: TransfusionService, useValue: txSpy },
+        { provide: ToastService, useValue: toastSpy },
+        {
+          provide: RoleContextService,
+          useValue: roleContextStub({ superAdmin: false, hospitalId: 'h1', roles }),
+        },
+      ],
+    }).compileComponents();
+    fixture = TestBed.createComponent(TransfusionComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    component.openRequest(issuedRequest);
+    fixture.detectChanges();
+  };
+
+  const el = (testId: string): HTMLElement | null =>
+    (fixture.nativeElement as HTMLElement).querySelector(`[data-testid="${testId}"]`);
+
+  it('a nurse sees the three actions on the running bag, and hang is gone for that bag', async () => {
+    await start(['ROLE_NURSE']);
+    expect(el('suspected-reaction')).toBeTruthy();
+    expect(el('complete-administration')).toBeTruthy();
+    expect(el('stop-administration')).toBeTruthy();
+    expect(el('hang-unit')).toBeNull();
+    expect(component.hangableUnits()).toEqual([]);
+  });
+
+  it('the suspected reaction is the first action, one click from the running bag', async () => {
+    await start(['ROLE_NURSE']);
+    const actions = (fixture.nativeElement as HTMLElement).querySelector(
+      '.administration-actions',
+    )!;
+    expect(actions.firstElementChild).toBe(el('suspected-reaction'));
+    expect(actions.firstElementChild!.classList).toContain('btn-danger');
+
+    el('suspected-reaction')!.click();
+    fixture.detectChanges();
+    expect(component.showReactionModal()).toBeTrue();
+    expect(component.reactionTarget()).toBe('adm-1');
+    expect(component.reactionForm.onsetAt).withContext('the time is already there').not.toBe('');
+  });
+
+  it('a bag not yet hung still offers hang, once the list has answered', async () => {
+    await start(['ROLE_NURSE']);
+    txSpy.listAdministrationsForPatient.and.returnValue(of([]));
+    component.loadAdministrations();
+    fixture.detectChanges();
+    expect(el('hang-unit')).toBeTruthy();
+    expect(el('suspected-reaction')).toBeNull();
+  });
+
+  it('when the list cannot be read, it says so and offers no hang: the bag may be running', async () => {
+    await start(['ROLE_NURSE']);
+    txSpy.listAdministrationsForPatient.and.returnValue(throwError(() => new Error('down')));
+    component.administrations.set([]);
+    component.loadAdministrations();
+    fixture.detectChanges();
+    expect(el('administrations-failed')).toBeTruthy();
+    expect(el('hang-unit')).toBeNull();
+  });
+
+  it('only administrations of the open request are listed', async () => {
+    await start(['ROLE_NURSE']);
+    txSpy.listAdministrationsForPatient.and.returnValue(
+      of([administration(), administration({ id: 'other', requestId: 'req-2' })]),
+    );
+    component.loadAdministrations();
+    expect(component.administrations().map((a) => a.id)).toEqual(['adm-1']);
+  });
+
+  it('an answer for a request the panel has left is dropped', async () => {
+    await start(['ROLE_NURSE']);
+    const late = new Subject<TransfusionAdministrationResponse[]>();
+    txSpy.listAdministrationsForPatient.and.returnValue(late);
+    component.loadAdministrations();
+    component.closeRequest();
+    late.next([administration()]);
+    expect(component.administrations()).toEqual([]);
+  });
+
+  it('completing asks first, sends the volume, shows the result and refreshes', async () => {
+    await start(['ROLE_NURSE']);
+    txSpy.completeAdministration.and.returnValue(of(administration({ status: 'COMPLETED' })));
+    el('complete-administration')!.click();
+    fixture.detectChanges();
+    expect(txSpy.completeAdministration).not.toHaveBeenCalled();
+    expect(el('confirm-dialog')).toBeTruthy();
+
+    component.completeVolumeMl = 300;
+    el('confirm-dialog-confirm')!.click();
+    expect(txSpy.completeAdministration).toHaveBeenCalledWith('adm-1', 300);
+    expect(toastSpy.success).toHaveBeenCalled();
+    expect(component.completingAdministration()).toBeNull();
+    expect(txSpy.getRequest.calls.count()).toBe(2);
+  });
+
+  it('cancelling the confirmation leaves the transfusion running', async () => {
+    await start(['ROLE_NURSE']);
+    el('complete-administration')!.click();
+    fixture.detectChanges();
+    el('confirm-dialog-cancel')!.click();
+    fixture.detectChanges();
+    expect(txSpy.completeAdministration).not.toHaveBeenCalled();
+    expect(el('confirm-dialog')).toBeNull();
+  });
+
+  it('a refused completion shows the server reason and keeps the dialog', async () => {
+    await start(['ROLE_NURSE']);
+    txSpy.completeAdministration.and.returnValue(
+      throwError(() => ({ status: 400, error: { message: 'Déjà terminée' } })),
+    );
+    component.openComplete(administration());
+    component.confirmComplete(administration());
+    expect(toastSpy.error).toHaveBeenCalledWith('Déjà terminée');
+    expect(component.completingAdministration()).not.toBeNull();
+    expect(component.completeBusy()).toBeFalse();
+  });
+
+  it('stopping needs a reason in the shared dialog, then sends it', async () => {
+    await start(['ROLE_NURSE']);
+    txSpy.stopAdministration.and.returnValue(of(administration({ status: 'STOPPED' })));
+    el('stop-administration')!.click();
+    expect(reasonDialog(fixture)).toBeTruthy();
+    expect(txSpy.stopAdministration).not.toHaveBeenCalled();
+
+    answerReasonDialog(fixture, 'Voie veineuse perdue');
+    expect(txSpy.stopAdministration).toHaveBeenCalledWith('adm-1', 'Voie veineuse perdue');
+    expect(toastSpy.success).toHaveBeenCalled();
+    expect(component.stoppingAdministration()).toBeNull();
+  });
+
+  it('after ending it, the keyboard lands on the section, not on the page body', async () => {
+    await start(['ROLE_NURSE']);
+    txSpy.stopAdministration.and.returnValue(of(administration({ status: 'STOPPED' })));
+    txSpy.listAdministrationsForPatient.and.returnValue(
+      of([administration({ status: 'STOPPED' })]),
+    );
+    component.confirmStop(administration(), 'Voie veineuse perdue');
+    fixture.detectChanges();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(document.activeElement?.id).toBe('tx-administrations-heading');
+  });
+
+  it('a finished administration offers only a later reaction, and shows what happened', async () => {
+    await start(['ROLE_NURSE']);
+    txSpy.listAdministrationsForPatient.and.returnValue(
+      of([
+        administration({
+          status: 'STOPPED',
+          stopReason: 'Transfusion reaction: ALLERGIC',
+          reactions: [
+            {
+              id: 'rx1',
+              reactionType: 'ALLERGIC',
+              severity: 'MILD',
+              onsetAt: '2026-11-06T10:30:00',
+            },
+          ] as TransfusionReactionResponse[],
+        }),
+      ]),
+    );
+    component.loadAdministrations();
+    fixture.detectChanges();
+    expect(el('complete-administration')).toBeNull();
+    expect(el('stop-administration')).toBeNull();
+    expect(el('suspected-reaction')).toBeNull();
+    expect(el('later-reaction')).toBeTruthy();
+    expect(el('reaction-rx1')).toBeTruthy();
+    expect((fixture.nativeElement as HTMLElement).textContent).not.toContain(
+      'Transfusion reaction: ALLERGIC',
+    );
+  });
+
+  it('a laboratory role reads the administration and is offered none of its actions', async () => {
+    await start(['ROLE_LAB_TECHNICIAN']);
+    expect(el('administration-adm-1')).toBeTruthy();
+    expect(el('suspected-reaction')).toBeNull();
+    expect(el('complete-administration')).toBeNull();
+    expect(el('stop-administration')).toBeNull();
+    expect(el('hang-unit')).toBeNull();
+  });
+
+  it('hang names the second checker from the list of colleagues, by user', async () => {
+    await start(['ROLE_SURGEON']);
+    txSpy.listVerifierCandidates = jasmine
+      .createSpy()
+      .and.returnValue(of([{ userId: 'user-2', displayName: 'Aminata Sawadogo' }]));
+    txSpy.startAdministration = jasmine
+      .createSpy()
+      .and.returnValue(of(administration())) as typeof txSpy.startAdministration;
+    component.openHang(mockUnit({ status: 'ISSUED' }));
+    fixture.detectChanges();
+    expect(el('hang-verifier')!.textContent).toContain('Aminata Sawadogo');
+
+    component.hangForm.verifiedByUserId = 'user-2';
+    component.submitHang();
+    expect(txSpy.startAdministration).toHaveBeenCalledWith(
+      jasmine.objectContaining({ verifiedByUserId: 'user-2', bloodUnitId: 'u1' }),
+    );
+  });
+
+  it('hang says so when the list of colleagues cannot be read, and sends nothing', async () => {
+    await start(['ROLE_NURSE']);
+    txSpy.listVerifierCandidates = jasmine
+      .createSpy()
+      .and.returnValue(throwError(() => new Error('down')));
+    txSpy.startAdministration = jasmine.createSpy() as typeof txSpy.startAdministration;
+    component.openHang(mockUnit({ status: 'ISSUED' }));
+    expect(component.verifierCandidatesFailed()).toBeTrue();
+    component.submitHang();
+    expect(txSpy.startAdministration).not.toHaveBeenCalled();
+  });
+
+  it('QA CX-011: the crossmatch list offers the bags this request holds, first, except a hung one', async () => {
+    await start(['ROLE_LAB_TECHNICIAN']);
+    txSpy.listAssignableUnits = jasmine
+      .createSpy()
+      .and.returnValue(of([mockUnit({ id: 'stock', status: 'AVAILABLE' })]));
+    component.selectedRequest.set(
+      mockRequest({
+        units: [
+          mockUnit({ id: 'held', status: 'CROSSMATCHED' }),
+          mockUnit({ id: 'out', status: 'ISSUED' }),
+          mockUnit({ id: 'u1', status: 'ISSUED' }),
+        ],
+      }),
+    );
+    component.openCrossmatch();
+    expect(component.assignableUnits().map((u) => u.id)).toEqual(['held', 'out', 'stock']);
+  });
+
+  describe('emergency release', () => {
+    const emergency = mockRequest({
+      id: 'req-1',
+      urgency: 'EMERGENCY',
+      status: 'REQUESTED',
+      productType: 'PACKED_RED_CELLS',
+      units: [],
+    });
+
+    const open = async (roles: string[]) => {
+      await start(roles);
+      txSpy.getRequest.and.returnValue(of(emergency));
+      component.openRequest(emergency);
+      fixture.detectChanges();
+    };
+
+    it('the lab can release from an emergency request with no bag on it', async () => {
+      await open(['ROLE_LAB_TECHNICIAN']);
+      txSpy.listAssignableUnits = jasmine
+        .createSpy()
+        .and.returnValue(
+          of([
+            mockUnit({ id: 'oneg' }),
+            mockUnit({ id: 'opos', rhFactor: 'POSITIVE' }),
+            mockUnit({ id: 'aneg', aboGroup: 'A' }),
+            mockUnit({ id: 'plasma', productType: 'FRESH_FROZEN_PLASMA' }),
+          ]),
+        );
+      txSpy.issueUnit = jasmine
+        .createSpy()
+        .and.returnValue(of(mockUnit({ id: 'oneg', status: 'ISSUED' })));
+      el('emergency-release')!.click();
+      expect(component.emergencyUnits().map((u) => u.id)).toEqual(['oneg']);
+
+      component.emergencyUnitId = 'oneg';
+      component.submitEmergencyRelease();
+      expect(txSpy.issueUnit).toHaveBeenCalledWith('req-1', 'oneg');
+      expect(toastSpy.success).toHaveBeenCalled();
+      expect(component.showEmergencyModal()).toBeFalse();
+    });
+
+    it('releasing with no bag chosen is refused on the field', async () => {
+      await open(['ROLE_LAB_TECHNICIAN']);
+      txSpy.listAssignableUnits = jasmine.createSpy().and.returnValue(of([]));
+      el('emergency-release')!.click();
+      fixture.detectChanges();
+      const marked = expectEmptySubmitRefusal(fixture, {
+        button: '[data-testid="submit-emergency-release"]',
+      });
+      expect(marked).toEqual(['em-unit']);
+    });
+
+    it('a refusal shows the server reason and keeps the form', async () => {
+      await open(['ROLE_LAB_TECHNICIAN']);
+      txSpy.listAssignableUnits = jasmine.createSpy().and.returnValue(of([]));
+      txSpy.issueUnit = jasmine
+        .createSpy()
+        .and.returnValue(throwError(() => ({ status: 400, error: { message: 'Déjà réservée' } })));
+      component.openEmergencyRelease(emergency);
+      component.emergencyUnitId = 'x';
+      component.submitEmergencyRelease();
+      expect(toastSpy.error).toHaveBeenCalledWith('Déjà réservée');
+      expect(component.showEmergencyModal()).toBeTrue();
+    });
+
+    it('is not offered to the bedside, or on a routine request', async () => {
+      await open(['ROLE_NURSE']);
+      expect(el('emergency-release')).toBeNull();
+      expect(component.canReleaseInEmergency(mockRequest({ urgency: 'ROUTINE' }))).toBeFalse();
+    });
+  });
+
+  it('another request shows no cards of the one before, and a failed read leaves no actions', async () => {
+    await start(['ROLE_NURSE']);
+    const pending = new Subject<TransfusionRequestResponse>();
+    txSpy.getRequest.and.returnValue(of(mockRequest({ id: 'req-2' })));
+    txSpy.listAdministrationsForPatient.and.returnValue(new Subject());
+    component.openRequest(mockRequest({ id: 'req-2' }));
+    fixture.detectChanges();
+    expect(el('suspected-reaction')).toBeNull();
+    pending.complete();
+
+    txSpy.getRequest.and.returnValue(of(issuedRequest));
+    txSpy.listAdministrationsForPatient.and.returnValue(of([administration()]));
+    component.openRequest(issuedRequest);
+    fixture.detectChanges();
+    expect(el('suspected-reaction')).toBeTruthy();
+    txSpy.listAdministrationsForPatient.and.returnValue(throwError(() => new Error('down')));
+    component.loadAdministrations();
+    fixture.detectChanges();
+    expect(el('suspected-reaction')).toBeNull();
+  });
+
+  it('a late refresh does not reopen a panel that was closed', async () => {
+    await start(['ROLE_NURSE']);
+    const late = new Subject<TransfusionRequestResponse>();
+    txSpy.getRequest.and.returnValue(late);
+    txSpy.stopAdministration.and.returnValue(of(administration({ status: 'STOPPED' })));
+    component.confirmStop(administration(), 'Voie veineuse perdue');
+    component.closeRequest();
+    late.next(issuedRequest);
+    expect(component.selectedRequest()).toBeNull();
+  });
+
+  it('QA CX-011: the laboratory reaches the screen from the page and from the request', async () => {
+    await start(['ROLE_LAB_TECHNICIAN']);
+    expect(el('record-group-any-patient')).toBeTruthy();
+    el('record-group-for-request')!.click();
+    expect(component.groupForm.patientId).toBe('p1');
+    expect(component.groupNeedsPatient()).toBeFalse();
+
+    component.openGroupModalForAnyPatient();
+    expect(component.groupForm.patientId).toBe('');
+    expect(component.groupNeedsPatient()).toBeTrue();
+    component.onGroupPatientPicked({ id: 'p9' } as PatientResponse);
+    expect(component.groupForm.patientId).toBe('p9');
+  });
+
+  it('QA CX-011: a repeat screen refreshes the open request it was taken for', async () => {
+    await start(['ROLE_LAB_TECHNICIAN']);
+    txSpy.recordBloodGroup.and.returnValue(of({ id: 'g2' } as PatientBloodGroupResponse));
+    const fetches = txSpy.getRequest.calls.count();
+    component.openGroupModalForRequest(issuedRequest);
+    component.submitGroup();
+    expect(txSpy.getRequest.calls.count()).toBe(fetches + 1);
+  });
+
+  it('QA CX-011: a screen with no patient chosen is refused on the patient field', async () => {
+    await start(['ROLE_LAB_TECHNICIAN']);
+    component.closeRequest();
+    fixture.detectChanges();
+    component.openGroupModalForAnyPatient();
+    fixture.detectChanges();
+    const marked = expectEmptySubmitRefusal(fixture, { button: '[data-testid="submit-group"]' });
+    expect(marked).toEqual(['grp-patient']);
+    expect(txSpy.recordBloodGroup).not.toHaveBeenCalled();
+  });
+
+  it('a clinician who cannot do lab work is not offered the screen', async () => {
+    await start(['ROLE_NURSE']);
+    expect(el('record-group-any-patient')).toBeNull();
+    expect(el('record-group-for-request')).toBeNull();
   });
 });

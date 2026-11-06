@@ -1,6 +1,7 @@
 import {
   Component,
   DestroyRef,
+  ElementRef,
   computed,
   inject,
   OnInit,
@@ -21,12 +22,14 @@ import {
   BloodUnitStatus,
   PatientBloodGroupResponse,
   RhFactor,
+  TransfusionAdministrationResponse,
   TransfusionReactionSeverity,
   TransfusionReactionType,
   TransfusionRequestResponse,
   TransfusionRequestStatus,
   TransfusionService,
   TransfusionUrgency,
+  VerifierCandidate,
 } from '../services/transfusion.service';
 import { PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
@@ -42,6 +45,9 @@ import { AuthorshipService } from '../shared/authorship.service';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { ReasonDialogComponent } from '../shared/reason-dialog/reason-dialog.component';
+import { ConfirmDialogComponent } from '../shared/confirm-dialog/confirm-dialog.component';
+import { focusWhenRendered } from '../shared/a11y/focus-when-rendered';
+import { FocusOnRenderDirective } from '../shared/a11y/focus-on-render.directive';
 type Tab = 'requests' | 'units';
 
 /**
@@ -56,6 +62,8 @@ type Tab = 'requests' | 'units';
   selector: 'app-transfusion',
   standalone: true,
   imports: [
+    FocusOnRenderDirective,
+    ConfirmDialogComponent,
     ReasonDialogComponent,
     SubmitGuardDirective,
     ModalDialogDirective,
@@ -78,6 +86,7 @@ export class TransfusionComponent implements OnInit {
   private readonly roleContext = inject(RoleContextService);
 
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   tab = signal<Tab>('requests');
   loading = signal(false);
@@ -172,6 +181,8 @@ export class TransfusionComponent implements OnInit {
   showGroupModal = signal(false);
   groupSubmitting = signal(false);
   groupForm = this.emptyGroupForm();
+  groupNeedsPatient = signal(false);
+  groupPickerPatient = signal<PatientResponse | null>(null);
 
   /* ── Unit modal ── */
   showUnitModal = signal(false);
@@ -186,12 +197,27 @@ export class TransfusionComponent implements OnInit {
   /* ── Bedside modals ── */
   showHangModal = signal(false);
   hangSubmitting = signal(false);
-  hangForm = { bloodUnitId: '', verifiedByStaffId: '', verificationMethod: 'Wristband scan' };
+  hangForm = { bloodUnitId: '', verifiedByUserId: '', verificationMethod: 'Wristband scan' };
+  /** QA CX-008: colleagues the server accepts as the second check; a staff id was typed by hand. */
+  verifierCandidates = signal<VerifierCandidate[]>([]);
+  verifierCandidatesFailed = signal(false);
 
   showReactionModal = signal(false);
   reactionSubmitting = signal(false);
   reactionTarget = signal<string | null>(null);
   reactionForm = this.emptyReactionForm();
+
+  /* ── The open request's administrations (QA CX-008) ── */
+  administrations = signal<TransfusionAdministrationResponse[]>([]);
+  /** Until 'loaded' nothing says a bag is not already hung, so "hang" is not offered. */
+  administrationsState = signal<'loading' | 'loaded' | 'failed'>('loading');
+
+  completingAdministration = signal<TransfusionAdministrationResponse | null>(null);
+  completeBusy = signal(false);
+  completeVolumeMl: number | null = null;
+
+  stoppingAdministration = signal<TransfusionAdministrationResponse | null>(null);
+  stopBusy = signal(false);
 
   ngOnInit(): void {
     this.loadRequests();
@@ -242,13 +268,53 @@ export class TransfusionComponent implements OnInit {
     // so rendering the panel from it would show an empty workup for a request
     // that has one.
     this.transfusion.getRequest(request.id).subscribe({
-      next: (full) => this.selectedRequest.set(full),
+      next: (full) => this.showRequest(full),
       error: () => this.toast.error(this.translate.instant('TRANSFUSION.LOAD_ERROR')),
     });
   }
 
   closeRequest(): void {
     this.selectedRequest.set(null);
+    this.administrations.set([]);
+  }
+
+  private showRequest(request: TransfusionRequestResponse, thenFocus = false): void {
+    // Another request's running bag must not sit under this one's header.
+    if (this.selectedRequest()?.id !== request.id) {
+      this.administrations.set([]);
+    }
+    this.selectedRequest.set(request);
+    this.loadAdministrations(thenFocus);
+  }
+
+  /**
+   * QA CX-008: what is running on the open request. The server lists them by
+   * patient, the open request keeps its own. An answer that arrives after the
+   * panel moved to another request is dropped.
+   */
+  loadAdministrations(thenFocus = false): void {
+    const request = this.selectedRequest();
+    if (!request) return;
+    this.administrationsState.set('loading');
+    this.transfusion
+      .listAdministrationsForPatient(request.patientId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (list) => {
+          if (this.selectedRequest()?.id !== request.id) return;
+          this.administrations.set((list ?? []).filter((a) => a.requestId === request.id));
+          this.administrationsState.set('loaded');
+          if (thenFocus) {
+            focusWhenRendered(this.host.nativeElement, '#tx-administrations-heading');
+          }
+        },
+        error: () => {
+          if (this.selectedRequest()?.id !== request.id) return;
+          // No stale actions: what these cards offer may already have ended.
+          this.administrations.set([]);
+          this.administrationsState.set('failed');
+        },
+      });
   }
 
   openNewRequest(): void {
@@ -292,7 +358,7 @@ export class TransfusionComponent implements OnInit {
           this.toast.success(this.translate.instant('TRANSFUSION.REQUEST_CREATED'));
           this.requestSubmitting.set(false);
           this.showRequestModal.set(false);
-          this.selectedRequest.set(created);
+          this.showRequest(created);
           this.loadRequests();
         },
         error: (err: unknown) => {
@@ -326,7 +392,7 @@ export class TransfusionComponent implements OnInit {
         this.toast.success(this.translate.instant('TRANSFUSION.REQUEST_CANCELLED'));
         this.cancelRequestBusy.set(false);
         this.cancellingRequest.set(null);
-        this.selectedRequest.set(updated);
+        this.showRequest(updated);
         this.loadRequests();
       },
       error: (err: unknown) => {
@@ -339,10 +405,36 @@ export class TransfusionComponent implements OnInit {
   /* ── Type and screen ── */
 
   openGroupModal(): void {
-    const patient = this.selectedPatient();
-    this.groupForm = this.emptyGroupForm();
-    this.groupForm.patientId = patient?.id ?? this.selectedRequest()?.patientId ?? '';
+    this.resetGroupFor(this.selectedPatient()?.id ?? '');
     this.showGroupModal.set(true);
+  }
+
+  /**
+   * QA CX-011: a repeat screen is lab work, and the lab raises no requests, so
+   * the form inside "new request" was out of its reach. From an open request it
+   * screens that request's patient, whichever patient the request form last held.
+   */
+  openGroupModalForRequest(request: TransfusionRequestResponse): void {
+    this.resetGroupFor(request.patientId);
+    this.showGroupModal.set(true);
+  }
+
+  /** From the page: the laboratory picks the patient in the form. */
+  openGroupModalForAnyPatient(): void {
+    this.groupPickerPatient.set(null);
+    this.resetGroupFor('');
+    this.showGroupModal.set(true);
+  }
+
+  private resetGroupFor(patientId: string): void {
+    this.groupForm = this.emptyGroupForm();
+    this.groupForm.patientId = patientId;
+    this.groupNeedsPatient.set(!patientId);
+  }
+
+  onGroupPatientPicked(patient: PatientResponse | null): void {
+    this.groupPickerPatient.set(patient);
+    this.groupForm.patientId = patient?.id ?? '';
   }
 
   closeGroupModal(): void {
@@ -368,6 +460,8 @@ export class TransfusionComponent implements OnInit {
           this.groupSubmitting.set(false);
           this.showGroupModal.set(false);
           this.patientGroup.set(group);
+          // The open request now stands on this screen: its banner and group follow.
+          this.refreshSelected();
         },
         error: (err: unknown) => {
           // The backend refuses a silent group change without a correction
@@ -490,9 +584,20 @@ export class TransfusionComponent implements OnInit {
       method: '',
       incompatibilityReason: '',
     };
+    // QA CX-011: a bag this request already holds can be crossmatched again, and a
+    // refused issue tells the lab to. The stock list does not hold it. A bag already
+    // hung has nothing left to decide.
+    const held = (this.selectedRequest()?.units ?? []).filter(
+      (u) => u.status === 'CROSSMATCHED' || (u.status === 'ISSUED' && !this.administrationOf(u.id)),
+    );
+    this.assignableUnits.set(held);
     this.transfusion.listAssignableUnits().subscribe({
-      next: (list) => this.assignableUnits.set(list ?? []),
-      error: () => this.assignableUnits.set([]),
+      next: (list) =>
+        this.assignableUnits.set([
+          ...held,
+          ...(list ?? []).filter((u) => !held.some((h) => h.id === u.id)),
+        ]),
+      error: () => this.assignableUnits.set(held),
     });
     this.showCrossmatchModal.set(true);
   }
@@ -530,6 +635,67 @@ export class TransfusionComponent implements OnInit {
       });
   }
 
+  /* ── Emergency release (QA CX-008) ── */
+
+  showEmergencyModal = signal(false);
+  emergencySubmitting = signal(false);
+  emergencyUnits = signal<BloodUnitResponse[]>([]);
+  emergencyUnitId = '';
+
+  /** The server's uncrossmatched release had no way in: a bag only reached the row by a crossmatch. */
+  canReleaseInEmergency(request: TransfusionRequestResponse): boolean {
+    return (
+      this.canLab &&
+      request.urgency === 'EMERGENCY' &&
+      request.status !== 'COMPLETED' &&
+      request.status !== 'CANCELLED'
+    );
+  }
+
+  /**
+   * Narrows the list to what the server releases; it stays the one that decides,
+   * and refuses anything else with its reason.
+   */
+  openEmergencyRelease(request: TransfusionRequestResponse): void {
+    this.emergencyUnitId = '';
+    this.emergencyUnits.set([]);
+    this.transfusion.listAssignableUnits().subscribe({
+      next: (list) =>
+        this.emergencyUnits.set(
+          (list ?? []).filter(
+            (u) =>
+              u.aboGroup === 'O' &&
+              u.rhFactor === 'NEGATIVE' &&
+              u.productType === request.productType,
+          ),
+        ),
+      error: () => this.toast.error(this.translate.instant('TRANSFUSION.LOAD_ERROR')),
+    });
+    this.showEmergencyModal.set(true);
+  }
+
+  closeEmergencyRelease(): void {
+    this.showEmergencyModal.set(false);
+  }
+
+  submitEmergencyRelease(): void {
+    const request = this.selectedRequest();
+    if (!request || !this.emergencyUnitId || this.emergencySubmitting()) return;
+    this.emergencySubmitting.set(true);
+    this.transfusion.issueUnit(request.id, this.emergencyUnitId).subscribe({
+      next: () => {
+        this.toast.success(this.translate.instant('TRANSFUSION.UNIT_ISSUED'));
+        this.emergencySubmitting.set(false);
+        this.showEmergencyModal.set(false);
+        this.refreshSelected();
+      },
+      error: (err: unknown) => {
+        this.emergencySubmitting.set(false);
+        this.toast.error(refusalReason(err) ?? this.translate.instant('TRANSFUSION.ISSUE_ERROR'));
+      },
+    });
+  }
+
   issueUnit(unit: BloodUnitResponse): void {
     const request = this.selectedRequest();
     if (!request) return;
@@ -548,9 +714,20 @@ export class TransfusionComponent implements OnInit {
   openHang(unit: BloodUnitResponse): void {
     this.hangForm = {
       bloodUnitId: unit.id,
-      verifiedByStaffId: '',
+      verifiedByUserId: '',
       verificationMethod: 'Wristband scan',
     };
+    this.verifierCandidatesFailed.set(false);
+    this.transfusion
+      .listVerifierCandidates()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (list) => this.verifierCandidates.set(list ?? []),
+        error: () => {
+          this.verifierCandidates.set([]);
+          this.verifierCandidatesFailed.set(true);
+        },
+      });
     this.showHangModal.set(true);
   }
 
@@ -560,13 +737,13 @@ export class TransfusionComponent implements OnInit {
 
   submitHang(): void {
     const request = this.selectedRequest();
-    if (!request || !this.hangForm.verifiedByStaffId.trim()) return;
+    if (!request || !this.hangForm.verifiedByUserId.trim()) return;
     this.hangSubmitting.set(true);
     this.transfusion
       .startAdministration({
         requestId: request.id,
         bloodUnitId: this.hangForm.bloodUnitId,
-        verifiedByStaffId: this.hangForm.verifiedByStaffId.trim(),
+        verifiedByUserId: this.hangForm.verifiedByUserId.trim(),
         verificationMethod: this.hangForm.verificationMethod.trim() || undefined,
       })
       .subscribe({
@@ -587,6 +764,9 @@ export class TransfusionComponent implements OnInit {
   openReaction(administrationId: string): void {
     this.maxOnsetAt = nowLocalDatetime();
     this.reactionForm = this.emptyReactionForm();
+    // QA CX-008: an emergency path. The nurse reports what she sees now and can
+    // move the time back; she should not have to set the clock first.
+    this.reactionForm.onsetAt = this.maxOnsetAt;
     this.reactionTarget.set(administrationId);
     this.showReactionModal.set(true);
   }
@@ -614,7 +794,7 @@ export class TransfusionComponent implements OnInit {
           this.toast.success(this.translate.instant('TRANSFUSION.REACTION_RECORDED'));
           this.reactionSubmitting.set(false);
           this.closeReaction();
-          this.refreshSelected();
+          this.refreshSelected(true);
         },
         error: (err: unknown) => {
           // QA D885: the server's reason, in the caller's language.
@@ -626,6 +806,64 @@ export class TransfusionComponent implements OnInit {
       });
   }
 
+  /* ── A transfusion in progress (QA CX-008) ── */
+
+  isInProgress(administration: TransfusionAdministrationResponse): boolean {
+    return administration.status === 'IN_PROGRESS';
+  }
+
+  openComplete(administration: TransfusionAdministrationResponse): void {
+    this.completeVolumeMl = null;
+    this.completingAdministration.set(administration);
+  }
+
+  confirmComplete(administration: TransfusionAdministrationResponse): void {
+    if (this.completeBusy()) return;
+    this.completeBusy.set(true);
+    this.transfusion
+      .completeAdministration(administration.id, this.completeVolumeMl ?? undefined)
+      .subscribe({
+        next: () => {
+          this.toast.success(this.translate.instant('TRANSFUSION.ADMIN_COMPLETED'));
+          this.completeBusy.set(false);
+          this.completingAdministration.set(null);
+          this.refreshSelected(true);
+        },
+        error: (err: unknown) => {
+          this.completeBusy.set(false);
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('TRANSFUSION.ADMIN_COMPLETE_ERROR'),
+          );
+          // A colleague may have ended it: the cards say so.
+          this.loadAdministrations();
+        },
+      });
+  }
+
+  openStop(administration: TransfusionAdministrationResponse): void {
+    this.stoppingAdministration.set(administration);
+  }
+
+  confirmStop(administration: TransfusionAdministrationResponse, reason: string): void {
+    if (this.stopBusy()) return;
+    this.stopBusy.set(true);
+    this.transfusion.stopAdministration(administration.id, reason).subscribe({
+      next: () => {
+        this.toast.success(this.translate.instant('TRANSFUSION.ADMIN_STOPPED'));
+        this.stopBusy.set(false);
+        this.stoppingAdministration.set(null);
+        this.refreshSelected(true);
+      },
+      error: (err: unknown) => {
+        this.stopBusy.set(false);
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('TRANSFUSION.ADMIN_STOP_ERROR'),
+        );
+        this.loadAdministrations();
+      },
+    });
+  }
+
   /* ── Derived ── */
 
   /** Units on this request that the lab may still release to the ward. */
@@ -635,8 +873,24 @@ export class TransfusionComponent implements OnInit {
 
   /** Units already at the bedside, waiting to be hung. */
   readonly hangableUnits = computed(() =>
-    (this.selectedRequest()?.units ?? []).filter((u) => u.status === 'ISSUED'),
+    (this.selectedRequest()?.units ?? []).filter(
+      (u) => u.status === 'ISSUED' && !this.administrationOf(u.id),
+    ),
   );
+
+  administrationOf(unitId: string): TransfusionAdministrationResponse | undefined {
+    return this.administrations().find((a) => a.bloodUnitId === unitId);
+  }
+
+  /** QA CX-008: a bag is hung once. The server refuses a second, so it is not offered. */
+  canHang(unit: BloodUnitResponse): boolean {
+    return (
+      this.canBedside &&
+      unit.status === 'ISSUED' &&
+      this.administrationsState() === 'loaded' &&
+      !this.administrationOf(unit.id)
+    );
+  }
 
   crossmatchFor(unitId: string) {
     return (this.selectedRequest()?.crossmatches ?? []).find((c) => c.bloodUnitId === unitId);
@@ -674,12 +928,15 @@ export class TransfusionComponent implements OnInit {
     }
   }
 
-  private refreshSelected(): void {
+  private refreshSelected(thenFocus = false): void {
     const current = this.selectedRequest();
     if (!current) return;
     this.transfusion.getRequest(current.id).subscribe({
       next: (full) => {
-        this.selectedRequest.set(full);
+        // The panel was closed while this was on its way: it stays closed.
+        if (this.selectedRequest()?.id === current.id) {
+          this.showRequest(full, thenFocus);
+        }
         this.loadRequests();
       },
       error: () => this.toast.error(this.translate.instant('TRANSFUSION.LOAD_ERROR')),

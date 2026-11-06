@@ -131,6 +131,7 @@ class ClientSuppliedIdentityGuardTest {
         Map.entry("TransferController#cancelTransfer{cancelledByStaffId}", CHECKED),
         Map.entry("TransferController#completeTransfer{completedByStaffId}", CHECKED),
         Map.entry("TransferController#requestTransfer{requestedByStaffId}", CHECKED),
+        Map.entry("TransfusionController#startAdministration{verifiedByUserId}", "checked: the same second checker named by user, an active staff member at this hospital and never the caller"),
         Map.entry("TransfusionController#startAdministration{verifiedByStaffId}", "checked: the independent second checker, an active staff member at this hospital and never the caller"),
         Map.entry("TreatmentPlanController#create{authorStaffId}", CHECKED),
         Map.entry("TreatmentPlanController#update{authorStaffId}", "checked: an edit keeps the author; a new author must be the caller")

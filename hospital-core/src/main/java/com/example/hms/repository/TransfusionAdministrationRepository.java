@@ -1,5 +1,6 @@
 package com.example.hms.repository;
 
+import com.example.hms.enums.TransfusionAdministrationStatus;
 import com.example.hms.model.TransfusionAdministration;
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -13,6 +14,9 @@ public interface TransfusionAdministrationRepository extends JpaRepository<Trans
     Optional<TransfusionAdministration> findByBloodUnit_Id(UUID bloodUnitId);
 
     List<TransfusionAdministration> findByRequest_IdOrderByStartedAtDesc(UUID requestId);
+
+    /** Blood is running on this request right now. */
+    boolean existsByRequest_IdAndStatus(UUID requestId, TransfusionAdministrationStatus status);
 
     List<TransfusionAdministration> findByPatient_IdAndHospital_IdOrderByStartedAtDesc(
         UUID patientId, UUID hospitalId);

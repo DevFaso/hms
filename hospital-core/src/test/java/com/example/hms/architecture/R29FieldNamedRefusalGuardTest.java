@@ -72,7 +72,6 @@ class R29FieldNamedRefusalGuardTest {
     private static final Map<String, String> NOT_A_FIELD = Map.ofEntries(
         Map.entry("lab.definition.rangesRequired", "state: a definition goes live only with a grading basis"),
         Map.entry("lab.definition.rangesRequiredForReview", "state: a definition goes to review only with a grading basis"),
-        Map.entry("micro.culture.isolateRequired", "state: a growth culture is finalised only once an isolate is recorded"),
         Map.entry("nurse.mar.overrideRequired", "state of the dose's bedside checks"),
         Map.entry("nurse.mar.pharmacistVerificationRequired", "state: the order awaits the pharmacist's verification"),
         Map.entry("nurse.vitals.required", "a null body"),

@@ -37,4 +37,11 @@ public class MicroCultureUpdateDTO {
 
     @Size(max = 500)
     private String correctionReason;
+
+    /**
+     * QA CX-009: correcting a validated report to NO_GROWTH also takes its
+     * organisms off it, in this one step and only when asked. Refused anywhere
+     * else; the organisms stay readable in the report's correction history.
+     */
+    private Boolean removeIsolates;
 }

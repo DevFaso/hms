@@ -208,3 +208,45 @@
 .data-table.compact table {
   font-size: 0.88rem;
 }
+
+.administration-card {
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 8px;
+  padding: 0.75rem;
+  margin-bottom: 0.75rem;
+
+  &.in-progress {
+    border-color: var(--primary, #0e7c6b);
+    border-width: 2px;
+  }
+}
+
+.administration-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.administration-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  font-size: 0.875rem;
+}
+
+.administration-reaction {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-top: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.administration-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
