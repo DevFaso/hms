@@ -243,4 +243,8 @@ public interface BillingInvoiceRepository extends JpaRepository<BillingInvoice, 
     /** True when the invoice carries at least one line (QA D72). */
     @Query("SELECT CASE WHEN COUNT(ii) > 0 THEN TRUE ELSE FALSE END FROM InvoiceItem ii WHERE ii.billingInvoice.id = :invoiceId")
     boolean hasItems(@Param("invoiceId") UUID invoiceId);
+
+    /** QA CX-002: invoices per status, by the database. */
+    @org.springframework.data.jpa.repository.Query("SELECT CAST(i.status AS string) AS label, COUNT(i) AS total FROM BillingInvoice i GROUP BY i.status")
+    java.util.List<PlatformCountRows.StatusCount> countPerStatus();
 }

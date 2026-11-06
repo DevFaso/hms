@@ -560,6 +560,27 @@ export class SuperAdminComponent implements OnInit {
     referrals: ['patientName', 'receivingHospitalName', 'referralType', 'status'],
   };
 
+  /**
+   * QA CX-006: the coded fields of {@link ACTIVITY_FIELDS}, per tab, with their
+   * label domain: the summaries showed ROUTINE, URGENT, REQUESTED, CANCELLED in
+   * every language. `null` looks the code up in every domain (a lab result's
+   * status has no domain of its own). `scripts/lib/activity-summary-enums.test.mjs`
+   * fails on a coded field left out of this table.
+   */
+  private static readonly ACTIVITY_ENUM_DOMAINS: Record<
+    ActivityKey,
+    Readonly<Record<string, string | null>>
+  > = {
+    consultations: { urgency: 'consultationUrgency', status: 'consultationStatus' },
+    admissions: { admissionType: 'admissionType', status: 'admissionStatus' },
+    prescriptions: { status: 'prescriptionStatus' },
+    labOrders: { status: 'labOrderStatus' },
+    labResults: { status: null },
+    labTestDefinitions: {},
+    treatmentPlans: { status: 'treatmentPlanStatus' },
+    referrals: { referralType: 'referralType', status: 'referralStatus' },
+  };
+
   /** Human codes a recent-activity record may carry, most specific first. */
   private static readonly ACTIVITY_CODE_FIELDS = [
     'labOrderCode',
@@ -585,11 +606,16 @@ export class SuperAdminComponent implements OnInit {
       ) ?? '';
     const ordered = SuperAdminComponent.ACTIVITY_FIELDS[tab] ?? [];
     // QA D1002 class: a lab value in the summary reads in the reader's number format.
+    const domains = SuperAdminComponent.ACTIVITY_ENUM_DOMAINS[tab] ?? {};
     const stringFields = ordered
-      .map((field) =>
-        field === 'resultValue' ? formatLabNumber(item[field] as string) : item[field],
-      )
-      .map((v) => (v == null ? '' : String(v)))
+      .map((field) => {
+        const value =
+          field === 'resultValue' ? formatLabNumber(item[field] as string) : item[field];
+        if (value == null) return '';
+        return field in domains
+          ? this.enumLabels.transform(String(value), domains[field] ?? undefined)
+          : String(value);
+      })
       .filter((s) => s.length > 0);
     // Activity-row timestamp extractor.
     //

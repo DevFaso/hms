@@ -17,6 +17,7 @@ import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { roleContextStub } from '../testing/role-context.stub';
 import { AuthService } from '../auth/auth.service';
+import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 
 /**
  * Slot-inventory administration (P2 #11) — the populator without which
@@ -274,5 +275,19 @@ describe('SlotAdminComponent', () => {
     component.release(blocked);
 
     expect(slotService.release).toHaveBeenCalledWith('slot-2');
+  });
+
+  it('QA CX-010: retiring asks first and a no sends nothing; restoring asks nothing', async () => {
+    setup();
+    const ask = spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(false);
+    await component.toggleVisitTypeActive({
+      id: 'v1',
+      name: 'Consultation',
+      active: true,
+    } as never);
+    await component.toggleTemplateActive({ id: 't1', active: true } as never);
+    expect(ask).toHaveBeenCalledTimes(2);
+    expect(slotService.deactivateVisitType).not.toHaveBeenCalled();
+    expect(slotService.deactivateTemplate).not.toHaveBeenCalled();
   });
 });

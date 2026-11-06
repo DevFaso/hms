@@ -16,6 +16,7 @@ import {
   sliceCountFindings,
   serverLimitFindings,
   serverLimitedPaths,
+  serverStreamLimitFindings,
 } from './list-cap-scan.mjs';
 
 const rules = (ts, file = 'src/app/x/x.ts') =>
@@ -202,5 +203,33 @@ test('D1399: a read of a list the server caps by default is found; a paged one i
   assert.deepEqual(
     serverLimitFindings(service, paths).map((f) => f.anchor),
     ['getMine:/medications', 'getCut:/proxy-access/{patientId}/lab-results'],
+  );
+});
+
+test('QA CX-003: a backend service cutting a list with a fixed number is reported', () => {
+  const java = `
+public class X {
+    private List<Row> buildDepartmentUtilization() {
+        return rows.stream()
+                .limit(10)
+                .toList();
+    }
+
+    public List<Row> preview() {
+        return rows.stream().limit(MAX_ROWS).toList();
+    }
+
+    public List<Row> asked(int limit) {
+        return rows.stream().limit(limit).toList();
+    }
+
+    public Optional<Row> first() {
+        // .limit(99) in a comment is not a cut
+        return rows.stream().limit(1).findFirst();
+    }
+}`;
+  assert.deepEqual(
+    serverStreamLimitFindings(java).map((f) => `${f.rule}:${f.anchor}`),
+    ['server-stream-limit:buildDepartmentUtilization:10', 'server-stream-limit:preview:MAX_ROWS'],
   );
 });

@@ -30,13 +30,16 @@ export const REGISTRY_FILE = join(APP_DIR, 'testing', 'form-behaviour.registry.t
 
 /** The directories (under src/app) whose forms the behavioural spec drives. */
 export const COVERED_DIRS = [
+  'admin/adt-intake-config',
   'appointments',
   'billing',
   'checkout',
+  'feature-flags',
   'patient-portal',
   'patients',
   'pharmacy',
   'reception',
+  'super-admin',
 ];
 
 const SUBMIT_RE = /<form[\s>]|type="submit"|appSubmitGuard|\(ngSubmit\)/;

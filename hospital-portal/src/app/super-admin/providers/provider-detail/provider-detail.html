@@ -440,19 +440,21 @@
               <input
                 id="verify-ifu"
                 type="checkbox"
+                required
                 [ngModel]="dialog.ifuMatchesRccm"
                 (ngModelChange)="patchVerify({ ifuMatchesRccm: $event })"
               />
-              <label for="verify-ifu">{{ 'PROVIDER.VERIFY.IFU_MATCHES' | translate }}</label>
+              <label for="verify-ifu">{{ 'PROVIDER.VERIFY.IFU_MATCHES' | translate }} *</label>
             </div>
             <div class="check-row">
               <input
                 id="verify-cnss"
                 type="checkbox"
+                required
                 [ngModel]="dialog.cnssMatchesRccm"
                 (ngModelChange)="patchVerify({ cnssMatchesRccm: $event })"
               />
-              <label for="verify-cnss">{{ 'PROVIDER.VERIFY.CNSS_MATCHES' | translate }}</label>
+              <label for="verify-cnss">{{ 'PROVIDER.VERIFY.CNSS_MATCHES' | translate }} *</label>
             </div>
 
             <div class="field">
@@ -501,6 +503,7 @@
               type="button"
               class="btn-primary"
               data-test="verify-confirm"
+              data-testid="verify-confirm"
               [disabled]="busy()"
               [appSubmitGuard]="!verifyReady()"
               submitGuardRequired

@@ -457,7 +457,13 @@ export class AdminAssignmentsComponent implements OnInit {
     return !!me && row.userId === me;
   }
 
-  deactivate(row: AssignmentResponse): void {
+  async deactivate(row: AssignmentResponse): Promise<void> {
+    // QA CX-010: one click took the role away.
+    const confirmed = await this.confirmService.ask({
+      titleKey: 'ASSIGN_ADMIN.DEACTIVATE_CONFIRM',
+      confirmKey: 'ASSIGN_ADMIN.DEACTIVATE',
+    });
+    if (!confirmed) return;
     this.service.deactivate(row.id).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('ASSIGN_ADMIN.DEACTIVATED'));

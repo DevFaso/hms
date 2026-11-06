@@ -55,7 +55,7 @@
                 {{ row.region }}
               </span>
               <span class="region-label">
-                {{ 'ORG_REGION.CODE.' + row.region | translate }}
+                {{ row.region | keyLabel: 'ORG_REGION.CODE.' }}
               </span>
             </td>
             <td>

@@ -28,6 +28,7 @@ import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
 
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+import { ConfirmService } from '../../shared/confirm-dialog/confirm.service';
 const SERVER_TIME = new ServerTimePipe();
 
 type LoadState = 'idle' | 'loading' | 'ready' | 'error';
@@ -59,6 +60,7 @@ export class BreakGlassBannerComponent implements OnChanges, OnDestroy {
   private readonly toast = inject(ToastService);
   private readonly auth = inject(AuthService);
   private readonly translate = inject(TranslateService);
+  private readonly confirm = inject(ConfirmService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   protected readonly state = signal<LoadState>('idle');
@@ -223,11 +225,17 @@ export class BreakGlassBannerComponent implements OnChanges, OnDestroy {
     });
   }
 
-  protected revoke(): void {
+  protected async revoke(): Promise<void> {
     const session = this.mySession();
     if (!session || !session.live) {
       return;
     }
+    // QA CX-010: one click ended the emergency access mid-care.
+    const confirmed = await this.confirm.ask({
+      titleKey: 'BREAK_GLASS.REVOKE_CONFIRM',
+      confirmKey: 'COMMON.CONFIRM',
+    });
+    if (!confirmed) return;
     this.cancelInFlight();
     this.inFlight = this.service.revoke(session.id, {}).subscribe({
       next: (updated) => {

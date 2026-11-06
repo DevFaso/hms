@@ -14,6 +14,8 @@ import {
   SuperAdminSummary,
 } from '../services/dashboard.service';
 import { PlatformService, PlatformSummary } from '../services/platform.service';
+import fr from '../../assets/i18n/fr.json';
+import es from '../../assets/i18n/es.json';
 
 /**
  * Empty {@link SuperAdminRecentActivityBundle} for tests — F5 from
@@ -454,5 +456,46 @@ describe('SuperAdminComponent', () => {
     expect(panel!.getAttribute('aria-labelledby')).toBe(
       `activity-tab-${fix.componentInstance.selectedActivityTab()}`,
     );
+  });
+
+  it('QA CX-006: a coded field of a recent-activity summary reads as a label, free text as typed', () => {
+    dashboard.getSummary.and.returnValue(of(fakeSummary()));
+    platform.getSummary.and.returnValue(of(fakePlatformSummary()));
+    dashboard.getRecentActivity.and.returnValue(
+      of(
+        bundleWith({
+          consultations: [
+            {
+              id: 'c1',
+              patientName: 'Ada',
+              specialtyRequested: 'ROUTINE_SPECIALTY',
+              urgency: 'ROUTINE',
+              status: 'CANCELLED',
+              createdAt: '2026-05-02T10:00:00Z',
+            },
+          ] as SuperAdminRecentItem[],
+        }),
+      ),
+    );
+    const c = setup();
+    c.selectActivityTab('consultations');
+    const summary = c.selectedActivityRows()[0].summary;
+
+    expect(summary).toBe('Ada · ROUTINE_SPECIALTY · Routine · Cancelled');
+  });
+
+  it('QA CX-006: the codes the summaries show are translated in French and Spanish', () => {
+    for (const locale of [fr, es]) {
+      const labels = locale.PORTAL.ENUM as unknown as Record<string, Record<string, string>>;
+      for (const [domain, code] of [
+        ['CONSULTATION_URGENCY', 'ROUTINE'],
+        ['CONSULTATION_URGENCY', 'URGENT'],
+        ['CONSULTATION_STATUS', 'REQUESTED'],
+        ['CONSULTATION_STATUS', 'CANCELLED'],
+      ]) {
+        expect(labels[domain][code]).withContext(`${domain}.${code}`).toBeTruthy();
+        expect(labels[domain][code]).not.toBe(code);
+      }
+    }
   });
 });

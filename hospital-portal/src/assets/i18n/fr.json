@@ -81,6 +81,8 @@
     }
   },
   "BEDS": {
+    "DELETE_BED_CONFIRM": "Supprimer le lit {{name}} ?",
+    "DELETE_WARD_CONFIRM": "Supprimer l'unité {{name}} ?",
     "ACTIVE": "Actif",
     "AVAILABLE": "Disponibles",
     "BEDS_IN": "Lits de {{ward}}",
@@ -409,6 +411,8 @@
       "FAILED": "L'export CSV a échoué. Réessayez."
     },
     "SAVED": {
+      "DELETE_FAILED": "Impossible de supprimer la recherche enregistrée.",
+      "DELETE_CONFIRM": "Supprimer la recherche enregistrée {{name}} ?",
       "LABEL": "Recherches enregistrées",
       "EMPTY": "Aucune recherche enregistrée — nommez les filtres actuels et enregistrez.",
       "NAME_PLACEHOLDER": "Nommez ce jeu de filtres",
@@ -460,12 +464,14 @@
       "CONFIRM_PLACEHOLDER": "FORCE LOGOUT ALL"
     },
     "KILL_FEATURE": {
+      "CONFIRM": "Désactiver {{key}} pour tous les établissements ?",
       "TITLE": "Désactiver un feature flag",
       "DESC": "Définit la surcharge globale de FeatureFlag pour cette clé sur désactivé.",
       "FLAG_KEY": "Clé du flag",
       "ACTION": "Désactiver la feature"
     },
     "FORCE_MFA": {
+      "CONFIRM": "Réinitialiser le second facteur des {{count}} utilisateur(s) sélectionné(s) ?",
       "TITLE": "Forcer le ré-enrôlement MFA",
       "DESC": "Efface l'enrôlement MFA et les codes de secours des utilisateurs sélectionnés. Sans sélection, TOUS les utilisateurs enrôlés sont réinitialisés (éventuellement pour un seul hôpital) — cela exige une confirmation saisie.",
       "SEARCH_USERS": "Utilisateurs à réinitialiser",
@@ -488,6 +494,7 @@
       "RETRY": "Réessayer"
     },
     "BROADCAST": {
+      "CONFIRM": "Envoyer ce message à tous les utilisateurs connectés ?",
       "TITLE": "Bannière de diffusion",
       "DESC": "Publie un message bannière sur /topic/emergency-broadcast.",
       "MESSAGE": "Message",
@@ -499,6 +506,11 @@
     },
     "REQUEST_FAILED": "La requête a échoué.",
     "DOWNTIME": {
+      "MESSAGE_REQUIRED": "Indiquez pourquoi la plateforme passe en lecture seule.",
+      "CONFIRM_DEACTIVATE_BODY": "Tous les établissements pourront de nouveau écrire immédiatement.",
+      "CONFIRM_DEACTIVATE": "Lever le mode lecture seule ?",
+      "CONFIRM_ACTIVATE_BODY": "Toutes les écritures de tous les établissements seront refusées jusqu'à la levée. Les utilisateurs connectés liront : {{message}}",
+      "CONFIRM_ACTIVATE": "Passer toute la plateforme en lecture seule ?",
       "TITLE": "Mode lecture seule (maintenance)",
       "DESC": "Bloque toutes les écritures de la plateforme avec un 503 tandis que la consultation reste disponible. La connexion, le rafraîchissement de jeton et ce commutateur restent ouverts. Effet immédiat ici, sous 30 secondes sur les autres instances.",
       "ACTIVE": "LE MODE LECTURE SEULE EST ACTIF.",
@@ -513,6 +525,11 @@
     "DISMISS": "Ignorer la diffusion"
   },
   "SUBSCRIPTIONS": {
+    "DEACTIVATE_CONFIRM_BODY": "Elle ne pourra plus être attribuée à une organisation.",
+    "DEACTIVATE_CONFIRM": "Désactiver la formule {{name}} ?",
+    "DEACTIVATED": "Formule {{name}} désactivée.",
+    "UPDATED": "Formule {{name}} enregistrée.",
+    "CREATED": "Formule {{name}} créée.",
     "TITLE": "Plans d'abonnement",
     "SUBTITLE": "Catalogue de plans et affectations par organisation.",
     "ACTIVE_ONLY": "Plans actifs uniquement",
@@ -837,6 +854,7 @@
       "SECRET_CONFIGURED": "Variable définie"
     },
     "MAPPINGS": {
+      "DELETE_CONFIRM": "Supprimer ce mappage DHIS2 ?",
       "ADD": "Ajouter une correspondance",
       "ADDED": "Correspondance ajoutée",
       "ADD_FAILED": "Impossible d'ajouter la correspondance",
@@ -889,6 +907,7 @@
     }
   },
   "BREAK_GLASS": {
+    "REVOKE_CONFIRM": "Mettre fin à cet accès d'urgence maintenant ?",
     "ACTIVE": "Accès d'urgence actif — chaque lecture est journalisée.",
     "CONFIRM": "Activer l'accès",
     "DECLARE": "Déclencher l'accès d'urgence",
@@ -1181,6 +1200,7 @@
     }
   },
   "REFILLS": {
+    "REJECT_CONFIRM": "Refuser cette demande de renouvellement ?",
     "QUEUE_TITLE": "Demandes de renouvellement",
     "STATUS_REQUESTED": "En attente",
     "STATUS_PAUSED": "Suspendue",
@@ -1293,6 +1313,7 @@
     "WARD": "Unité"
   },
   "ANALYTICS": {
+    "LOAD_FAILED": "Impossible de charger les indicateurs. Réessayez.",
     "APPOINTMENTS": "Rendez-vous",
     "APPOINTMENTS_BY_STATUS": "Rendez-vous par statut",
     "APPOINTMENT_TREND": "Tendance des rendez-vous",
@@ -5656,6 +5677,7 @@
       "SUMMARY_EXTERNAL": "fois où votre dossier est sorti de votre équipe soignante",
       "ACCESS_LOG_TITLE": "Accès et communications",
       "OPT_OUT": {
+        "REVOKE_CONFIRM": "Partager de nouveau votre dossier avec vos autres établissements ?",
         "TITLE": "Partage avec les autres hôpitaux",
         "DESC": "Votre dossier vous suit : un soignant qui vous prend en charge dans un autre hôpital peut le lire. Vous pouvez fermer cette porte. Votre propre hôpital garde son accès, et un accès d’urgence reste possible, enregistré et affiché ici.",
         "LOADING": "Vérification de votre réglage de partage…",
@@ -10838,6 +10860,7 @@
     "ASSESSMENT_EMPTY": "Saisissez au moins un résultat (un score d'APGAR, un signe vital ou l'examen) avant d'enregistrer."
   },
   "ASSIGN_ADMIN": {
+    "DEACTIVATE_CONFIRM": "Désactiver cette affectation ? L'utilisateur perd ce rôle dans cet établissement.",
     "TITLE": "Administration des affectations",
     "SUBTITLE": "Affectations utilisateur-rôle-hôpital, codes de confirmation et import en masse",
     "BULK_IMPORT": "Import en masse",
@@ -11338,6 +11361,8 @@
     "LATE_ENTRY": "saisie tardive"
   },
   "MICRO": {
+    "SUSCEPTIBILITY_REMOVE_CONFIRM": "Retirer ce résultat d'antibiogramme ?",
+    "ISOLATE_REMOVE_CONFIRM": "Retirer cet isolat et ses antibiogrammes ?",
     "TAB": "Microbiologie",
     "TAB_TITLE": "Rapports de culture et antibiogrammes",
     "PAGE_TITLE": "Microbiologie",
@@ -11528,6 +11553,7 @@
     "NEXT_MONTH": "Mois suivant"
   },
   "REPORTS": {
+    "DEACTIVATE_CONFIRM": "Désactiver le rapport {{name}} ? Ses exécutions planifiées s'arrêtent.",
     "TITLE": "Rapports planifiés",
     "SUBTITLE": "Rapports CSV agrégés envoyés par e-mail à chaque période close",
     "CREATE": "Nouveau rapport",
@@ -11571,6 +11597,8 @@
     "RECIPIENT_INVALID": "« {{address}} » n'est pas une adresse e-mail valide."
   },
   "SLOT_ADMIN": {
+    "TPL_RETIRE_CONFIRM": "Retirer ce modèle de séance ?",
+    "VT_RETIRE_CONFIRM": "Retirer le type de visite {{name}} ?",
     "ACTIONS": "Actions",
     "ACTIVE": "Actif",
     "ALL": "Tous",

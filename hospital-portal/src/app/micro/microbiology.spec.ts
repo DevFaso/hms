@@ -10,6 +10,7 @@ import { LabService } from '../services/lab.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { RoleContextStub, roleContextStub } from '../testing/role-context.stub';
+import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 
 describe('MicrobiologyComponent', () => {
   const EVERY_ROLE = [
@@ -219,5 +220,26 @@ describe('MicrobiologyComponent', () => {
     expect(toastSpy.error).toHaveBeenCalledWith(
       'A growth result is required before the report can be finalized.',
     );
+  });
+
+  it('QA CX-010: removing an isolate or a susceptibility asks first; the reason is not the question', async () => {
+    microServiceSpy.list.and.returnValue(of(page([culture({})])));
+    fixture.detectChanges();
+    component.select(component.cultures()[0]);
+    const ask = spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(false);
+
+    await component.deleteIsolate('i1');
+    await component.deleteSusceptibility('i1', 's1');
+    expect(ask).toHaveBeenCalledTimes(2);
+    expect(microServiceSpy.deleteIsolate).not.toHaveBeenCalled();
+    expect(microServiceSpy.deleteSusceptibility).not.toHaveBeenCalled();
+
+    ask.and.resolveTo(true);
+    microServiceSpy.deleteIsolate.and.returnValue(of(culture({})));
+    microServiceSpy.deleteSusceptibility.and.returnValue(of(culture({})));
+    await component.deleteIsolate('i1');
+    await component.deleteSusceptibility('i1', 's1');
+    expect(microServiceSpy.deleteIsolate).toHaveBeenCalledTimes(1);
+    expect(microServiceSpy.deleteSusceptibility).toHaveBeenCalledTimes(1);
   });
 });

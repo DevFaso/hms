@@ -102,7 +102,8 @@ public class PlatformRegistryServiceImpl implements PlatformRegistryService {
         boolean exists = organizationPlatformServiceRepository
             .existsByOrganizationIdAndServiceType(organizationId, request.getServiceType());
         if (exists) {
-            throw new ConflictException(MessageUtil.resolve(locale,
+            // QA CX-005: marked on the field that conflicts.
+            throw new ConflictException("serviceType:" + MessageUtil.resolve(locale,
                 "platform.service.alreadyRegistered", request.getServiceType().name()));
         }
 

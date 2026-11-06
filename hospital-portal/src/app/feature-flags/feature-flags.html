@@ -140,10 +140,12 @@
         </div>
         <div class="modal-body">
           <div class="form-group">
-            <label for="flag-key">{{ 'FLAGS.KEY_LABEL' | translate }}</label>
+            <label for="flag-key">{{ 'FLAGS.KEY_LABEL' | translate }} *</label>
             <input
               id="flag-key"
               type="text"
+              required
+              data-server-field="key flagKey"
               [placeholder]="'FLAGS.KEY_PLACEHOLDER' | translate"
               [ngModel]="newFlagKey()"
               (ngModelChange)="newFlagKey.set($event)"
@@ -181,7 +183,15 @@
           <button class="btn-secondary" (click)="closeCreate()">
             {{ 'COMMON.CANCEL' | translate }}
           </button>
-          <button class="btn-primary" (click)="createFlag()" [disabled]="saving()">
+          <button
+            class="btn-primary"
+            type="button"
+            data-testid="flag-create-save"
+            appSubmitGuard
+            submitGuardRequired
+            (click)="createFlag()"
+            [disabled]="saving()"
+          >
             {{ saving() ? ('FLAGS.CREATING' | translate) : ('FLAGS.CREATE' | translate) }}
           </button>
         </div>

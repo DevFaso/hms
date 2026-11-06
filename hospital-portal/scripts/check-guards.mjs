@@ -31,6 +31,7 @@ import { gate as translateParams } from './check-translate-params.mjs';
 import { gate as requiredRefusal } from './check-required-refusal.mjs';
 import { gate as formBehaviour } from './check-form-behaviour.mjs';
 import { gate as listCaps } from './check-list-caps.mjs';
+import { gate as destructiveConfirm } from './check-destructive-confirm.mjs';
 
 const argv = process.argv.slice(2);
 // The `.ts` sources are read once and handed to the template loader, so a
@@ -51,6 +52,7 @@ for (const gate of [
   requiredRefusal,
   formBehaviour,
   listCaps,
+  destructiveConfirm,
 ]) {
   if (!evaluateGate(gate, argv, ctx)) failed++;
 }

@@ -137,10 +137,6 @@
       "count": 1,
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
     },
-    "src/app/feature-flags/feature-flags.ts::unmarked-refusal::createFlag::FLAGS.KEY_REQUIRED": {
-      "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
-    },
     "src/app/hospitals/hospital-list.ts::unmarked-refusal::submitForm::COMMON.SUBMIT_BLOCKED_REQUIRED": {
       "count": 1,
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only (key re-pinned by D1358: the toast now names the blank fields; the fallback key is what the scan reads)"

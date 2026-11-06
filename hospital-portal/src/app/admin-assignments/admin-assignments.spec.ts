@@ -380,13 +380,21 @@ describe('AdminAssignmentsComponent — the signed-in account cannot remove its 
     expect(component.isOwnRow({ id: 'a-x' } as AssignmentResponse)).toBeFalse();
   });
 
-  it('shows the server’s sentence when a deactivation is refused with a 409', () => {
+  it('QA CX-010: deactivating asks first; a no sends nothing', async () => {
+    const ask = spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(false);
+    await component.deactivate(other);
+    expect(ask).toHaveBeenCalledTimes(1);
+    expect(service.deactivate).not.toHaveBeenCalled();
+  });
+
+  it('shows the server’s sentence when a deactivation is refused with a 409', async () => {
+    spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
     const sentence =
       'Cette modification laisserait la plateforme sans aucun super administrateur actif. Attribuez d’abord ce rôle à un autre compte.';
     service.deactivate.and.returnValue(
       throwError(() => new HttpErrorResponse({ status: 409, error: { message: sentence } })),
     );
-    component.deactivate(other);
+    await component.deactivate(other);
     expect(toast.error).toHaveBeenCalledWith(sentence);
   });
 });

@@ -43,6 +43,14 @@
  *    `offset`. No number at the call site, none in the method: "Médicaments passés"
  *    stopped at 20 of 249 and the proxy tab at active + 50. Page it with the total.
  *
+ *  - `server-stream-limit` (QA CX-003, round 33 — {@link serverStreamLimitFindings}):
+ *    a backend service cutting a stream with a fixed number
+ *    (`.limit(10)`, `.limit(MAX_ROWS)`) before answering. The super-admin
+ *    department table stopped at 10 of 14 rows, with no total and no word: no
+ *    portal rule can see a cut the server made. A `.limit(limit)` the caller
+ *    asked for is not reported. A cut that is a preview, or a bound on a log
+ *    line, is pinned with that reason.
+ *
  * Not findings: `font-size: 64px` and other CSS in inline styles (a unit
  * follows), `slice(0, 8)` / `substring(0, 50)` (not a read), `size = 20`
  * default parameters of a service method (the call site decides: the rules
@@ -265,4 +273,45 @@ export function serverLimitFindings(source, limitedPaths) {
     });
   }
   return found;
+}
+
+const SERVER_FIXED_LIMIT = /\.limit\(\s*(\d+|[A-Z][A-Z0-9_]*)L?\s*\)/g;
+/** A Java method header, for a stable anchor. */
+const JAVA_METHOD =
+  /^\s*(?:(?:public|protected|private|static|final|synchronized|default)\s+)+[\w<>,.?[\]\s]+?\s+([a-zA-Z_$][\w$]*)\s*\(/;
+
+/**
+ * QA CX-003: a fixed cut in a backend service (`.limit(10)` on a stream).
+ *
+ * @param {string} source a `.java` service
+ * @returns {{line:number, rule:string, anchor:string, message:string}[]}
+ */
+export function serverStreamLimitFindings(source) {
+  const code = source
+    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
+    .replace(/(^|[^:'"\\])\/\/[^\n]*/g, (m, lead) => lead + ' '.repeat(m.length - lead.length));
+  const lines = code.split('\n');
+  const out = [];
+  for (const m of code.matchAll(SERVER_FIXED_LIMIT)) {
+    const line = lineOf(code, m.index);
+    let method = '(top)';
+    for (let i = line - 1; i >= 0; i--) {
+      const header = JAVA_METHOD.exec(lines[i]);
+      if (header && !['if', 'for', 'while', 'switch', 'return', 'new'].includes(header[1])) {
+        method = header[1];
+        break;
+      }
+    }
+    // A cut of one row answers "the first": never a list on a screen.
+    if (m[1] === '1') continue;
+    out.push({
+      line,
+      rule: 'server-stream-limit',
+      anchor: `${method}:${m[1]}`,
+      message:
+        `.limit(${m[1]}) cuts a server list with a fixed number (QA CX-003): ` +
+        'answer every row, or page with the total; a preview says it is one and is pinned with that reason',
+    });
+  }
+  return out;
 }

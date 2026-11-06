@@ -17,6 +17,7 @@ import { UserDetail } from '../../../services/user.service';
 import { providerFixture } from '../../../testing/provider-fixtures';
 import { ProviderDetailComponent } from './provider-detail';
 import { isSubmitBlocked } from '../../../shared/forms/submit-guard.testing';
+import { expectEmptySubmitRefusal } from '../../../testing/form-refusal-behaviour';
 
 describe('ProviderDetailComponent', () => {
   let service: jasmine.SpyObj<SuperAdminProviderService>;
@@ -417,5 +418,20 @@ describe('ProviderDetailComponent', () => {
     cmp.busy.set(false);
     cmp.closeDialogs();
     expect(cmp.decisionDialog()).toBeNull();
+  });
+
+  it('QA CX-004: an empty verification marks both boxes, starred, and sends nothing', () => {
+    const cmp = setup();
+    document.body.appendChild(fixture.nativeElement);
+    cmp.openVerify();
+    fixture.detectChanges();
+
+    const marked = expectEmptySubmitRefusal(fixture, {
+      button: '[data-testid="verify-confirm"]',
+      sent: service.verify,
+    });
+
+    expect(marked).toEqual(['verify-ifu', 'verify-cnss']);
+    (fixture.nativeElement as HTMLElement).remove();
   });
 });

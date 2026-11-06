@@ -326,7 +326,8 @@ class SuperAdminPlatformRegistryServiceImplTest {
 
         assertThatThrownBy(() -> service.scheduleReleaseWindow(request))
             .isInstanceOf(ConflictException.class)
-            .hasMessage("A release window with this name already exists in this environment.");
+            // QA CX-005: "name:" marks the field on the 409.
+            .hasMessage("name:A release window with this name already exists in this environment.");
         verify(platformReleaseWindowRepository, never()).saveAndFlush(any());
         verify(platformReleaseWindowRepository, never()).save(any());
         verifyNoInteractions(auditEventLogService);

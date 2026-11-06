@@ -73,7 +73,7 @@
                 [style.backgroundColor]="statusColor(row.rolledUpStatus) + '22'"
                 [style.color]="statusColor(row.rolledUpStatus)"
               >
-                {{ 'INTEGRATION_HEALTH.STATUS.' + row.rolledUpStatus | translate }}
+                {{ row.rolledUpStatus | keyLabel: 'INTEGRATION_HEALTH.STATUS.' }}
               </span>
               <span class="material-symbols-outlined chevron" aria-hidden="true">
                 {{ expandedIntegrationId() === row.integrationId ? 'expand_less' : 'expand_more' }}
@@ -202,7 +202,7 @@
                             [style.backgroundColor]="statusColor(org.status) + '22'"
                             [style.color]="statusColor(org.status)"
                           >
-                            {{ 'INTEGRATION_HEALTH.STATUS.' + org.status | translate }}
+                            {{ org.status | keyLabel: 'INTEGRATION_HEALTH.STATUS.' }}
                           </span>
                         </td>
                         <td>

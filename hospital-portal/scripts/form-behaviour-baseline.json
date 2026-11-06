@@ -74,10 +74,6 @@
       "count": 1,
       "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
     },
-    "src/app/admin/adt-intake-config/adt-intake-config.component.ts::empty-submit-untested::data-testid=adt-intake-save": {
-      "count": 1,
-      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
-    },
     "src/app/admin/adt-intake-config/adt-intake-config.component.ts::server-field-errors-unmapped::component": {
       "count": 1,
       "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
@@ -317,6 +313,10 @@
     "src/app/encounters/medical-certificate-dialog/medical-certificate-dialog.component.html::server-field-errors-unmapped::component": {
       "count": 1,
       "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/feature-flags/feature-flags.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "marked by the shared serverFieldErrorsInterceptor through data-server-field, the mapper form-behaviour.spec.ts drives on this screen (QA CX-004/CX-005); the component adds no map of its own"
     },
     "src/app/hospitals/hospital-detail.html::empty-submit-untested::(click)=submitDialog": {
       "count": 1,
@@ -1126,6 +1126,10 @@
       "count": 1,
       "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
     },
+    "src/app/super-admin/emergency/emergency.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "marked by the shared serverFieldErrorsInterceptor through data-server-field, the mapper form-behaviour.spec.ts drives on this screen (QA CX-004/CX-005); the component adds no map of its own"
+    },
     "src/app/super-admin/integration-messages/integration-messages.html::empty-submit-untested::type=submit": {
       "count": 1,
       "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
@@ -1135,10 +1139,6 @@
       "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
     },
     "src/app/super-admin/providers/provider-detail/provider-detail.html::empty-submit-untested::(click)=submitLifecycle": {
-      "count": 1,
-      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
-    },
-    "src/app/super-admin/providers/provider-detail/provider-detail.html::empty-submit-untested::(click)=submitVerify": {
       "count": 1,
       "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
     },
@@ -1153,6 +1153,10 @@
     "src/app/super-admin/providers/provider-form/provider-form.html::server-field-errors-unmapped::component": {
       "count": 1,
       "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/super-admin/subscriptions/subscriptions.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "marked by the shared serverFieldErrorsInterceptor through data-server-field, the mapper form-behaviour.spec.ts drives on this screen (QA CX-004/CX-005); the component adds no map of its own"
     },
     "src/app/transfusion/transfusion.html::empty-submit-untested::(click)=submitCrossmatch": {
       "count": 1,

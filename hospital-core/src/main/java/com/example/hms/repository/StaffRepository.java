@@ -216,5 +216,14 @@ public interface StaffRepository extends JpaRepository<Staff, UUID> {
         @Param("roleCodes") Collection<String> roleCodes,
         Pageable pageable);
 
-}
 
+    /**
+     * QA CX-002: staff per hospital for the super-admin analytics, with the
+     * definition of {@code GET /staff/hospital/{id}}
+     * ({@link #findByHospitalIdExcludingDeletedUsers}): every staff row of an
+     * undeleted account, active or not.
+     */
+    @Query("SELECT s.hospital.id AS ownerId, COUNT(s) AS total FROM Staff s "
+        + "WHERE s.user.isDeleted = false GROUP BY s.hospital.id")
+    List<PlatformCountRows.IdCount> countPerHospitalExcludingDeletedUsers();
+}

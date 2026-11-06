@@ -24,6 +24,7 @@ import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { missingRequiredMessage } from '../shared/required-fields';
+import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 /**
  * QA D855: the address shape the server accepts (EmailAddresses.isDeliverable),
  * so a typo is caught on the field before the round trip.
@@ -58,6 +59,7 @@ export class ReportsComponent implements OnInit {
   private readonly reportsService = inject(ReportsService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly confirm = inject(ConfirmService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   /* ── List state ─────────────── */
@@ -215,8 +217,17 @@ export class ReportsComponent implements OnInit {
     });
   }
 
-  toggleActive(definition: ReportDefinitionResponse): void {
+  async toggleActive(definition: ReportDefinitionResponse): Promise<void> {
     if (this.actingOnId()) return;
+    // QA CX-010: one click stopped a scheduled report; turning it back on asks nothing.
+    if (definition.active) {
+      const confirmed = await this.confirm.ask({
+        titleKey: 'REPORTS.DEACTIVATE_CONFIRM',
+        params: { name: definition.name },
+        confirmKey: 'COMMON.CONFIRM',
+      });
+      if (!confirmed) return;
+    }
     this.actingOnId.set(definition.id);
     const call = definition.active
       ? this.reportsService.deactivate(definition.id)
