@@ -199,13 +199,14 @@ public class SubscriptionServiceImpl implements SubscriptionService {
         }
 
         // Cancel any existing ACTIVE subscription so the partial unique index
-        // (one ACTIVE per org) holds. Done in-memory then saved — keeps the
-        // entire assignment in a single tx.
+        // (one ACTIVE per org) holds, in a single tx. Flushed at once (QA CX-011):
+        // Hibernate runs INSERTs before UPDATEs, so with a plain save the new row
+        // reached uq_orgsub_active_per_org while this one still held it.
         subscriptionRepository.findByOrganizationIdAndStatus(organizationId, OrganizationSubscription.Status.ACTIVE)
             .ifPresent(existing -> {
                 existing.setStatus(OrganizationSubscription.Status.CANCELLED);
                 existing.setEndsAt(Instant.now());
-                subscriptionRepository.save(existing);
+                subscriptionRepository.saveAndFlush(existing);
             });
 
         // PR #228 review — billing period is now a typed enum on the DTO,

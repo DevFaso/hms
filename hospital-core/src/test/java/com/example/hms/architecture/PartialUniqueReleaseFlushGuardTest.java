@@ -79,10 +79,7 @@ class PartialUniqueReleaseFlushGuardTest {
     private static final Set<String> KEY_ONLY_ENTITIES =
         Set.of("Hospital", "User", "LabResult", "StockLot", "Encounter", "BillingInvoice", "MedicationCatalogItem");
 
-    private static final Map<String, Allowance> ALLOWED = GuardAllowlist.allow(
-        "service/impl/SubscriptionServiceImpl.java#OrganizationSubscription", 1,
-        "QA CX-011 sibling: assignPlan cancels the ACTIVE row with save() and inserts the new ACTIVE one."
-            + " The file belongs to fix/r33-platform-admin; the fix is saveAndFlush on that save.");
+    private static final Map<String, Allowance> ALLOWED = GuardAllowlist.allow();
 
     private static final Pattern PARTIAL_UNIQUE = Pattern.compile(
         "CREATE\\s+UNIQUE\\s+INDEX[^;]*?\\bON\\s+(?:[a-z_]+\\.)?([a-z_]+)\\s*\\([^;]*?\\bWHERE\\b[^;]*?;",
