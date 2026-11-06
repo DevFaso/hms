@@ -253,6 +253,12 @@ class TransfusionRepeatScreenPostgresIT {
             .isInstanceOf(BusinessException.class);
 
         PatientBloodGroupResponseDTO repeat = service.recordBloodGroup(screen(AboGroup.O, RhFactor.POSITIVE, null));
+
+        // At once, before anything is crossmatched: the worklist stops saying "lapsed".
+        TransfusionRequestResponseDTO followed = service.getRequest(request.getId());
+        assertThat(followed.getBloodGroupId()).isEqualTo(repeat.getId());
+        assertThat(followed.getScreenCurrent()).isTrue();
+
         crossmatch(request.getId(), bag.getId());
 
         TransfusionRequestResponseDTO after = service.getRequest(request.getId());

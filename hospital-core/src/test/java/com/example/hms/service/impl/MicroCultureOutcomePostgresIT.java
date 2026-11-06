@@ -36,12 +36,12 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -203,29 +203,62 @@ class MicroCultureOutcomePostgresIT {
     @Test
     @DisplayName("two people removing the two organisms at once cannot empty the report")
     void concurrentRemovalsLeaveOne() throws Exception {
-        List<UUID> isolates = List.of(isolate(1, "Escherichia coli"), isolate(2, "Klebsiella pneumoniae"));
-        ExecutorService pool = Executors.newFixedThreadPool(2);
-        CountDownLatch start = new CountDownLatch(1);
-        List<Future<MicroCultureResponseDTO>> outcomes = new ArrayList<>();
-        for (UUID id : isolates) {
-            outcomes.add(pool.submit(() -> {
-                start.await();
-                return service.deleteIsolate(culture, id, hospital, "CX-009 race");
-            }));
-        }
-        start.countDown();
-        int landed = 0;
-        for (Future<MicroCultureResponseDTO> outcome : outcomes) {
+        UUID first = isolate(1, "Escherichia coli");
+        UUID second = isolate(2, "Klebsiella pneumoniae");
+        ExecutorService pool = Executors.newSingleThreadExecutor();
+        List<Future<MicroCultureResponseDTO>> other = new ArrayList<>();
+
+        // The second removal starts while the first has removed but not committed. It
+        // must end refused. On its own this test does not prove the row lock: the first
+        // correction's UPDATE of the report also makes the second wait, through a flush.
+        // The next test is the one that fails without the lock.
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            service.deleteIsolate(culture, first, hospital, "CX-009 race");
+            other.add(pool.submit(() -> service.deleteIsolate(culture, second, hospital, "CX-009 race")));
             try {
-                outcome.get(60, TimeUnit.SECONDS);
-                landed++;
-            } catch (ExecutionException refused) {
-                assertThat(refused.getCause()).isInstanceOf(BusinessException.class);
+                other.get(0).get(3, TimeUnit.SECONDS);
+            } catch (TimeoutException waiting) {
+                // Waiting on the row, as it should: the first commits now.
+                assertThat(other.get(0)).isNotDone();
+            } catch (ExecutionException | InterruptedException unexpected) {
+                throw new IllegalStateException(unexpected);
             }
-        }
+        });
+
+        assertThatThrownBy(() -> other.get(0).get(60, TimeUnit.SECONDS))
+            .isInstanceOf(ExecutionException.class)
+            .cause().isInstanceOf(BusinessException.class);
         pool.shutdown();
-        assertThat(landed).isOne();
-        assertThat(read().getIsolates()).hasSize(1);
+        assertThat(read().getIsolates()).extracting(MicroCultureResponseDTO.Isolate::getOrganismName)
+            .containsExactly("Klebsiella pneumoniae");
+    }
+
+    @Test
+    @DisplayName("two corrections at once both stay: the second reads the report after the first")
+    void concurrentCorrectionsDoNotOverwriteEachOther() throws Exception {
+        ExecutorService pool = Executors.newSingleThreadExecutor();
+        List<Future<MicroCultureResponseDTO>> other = new ArrayList<>();
+
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            service.updateCulture(culture, hospital, MicroCultureUpdateDTO.builder()
+                .gramStain("CX-009 stain").correctionReason("CX-009 stain").build());
+            other.add(pool.submit(() -> service.updateCulture(culture, hospital, MicroCultureUpdateDTO.builder()
+                .notes("CX-009 note").correctionReason("CX-009 note").build())));
+            try {
+                other.get(0).get(3, TimeUnit.SECONDS);
+            } catch (TimeoutException waiting) {
+                assertThat(other.get(0)).isNotDone();
+            } catch (ExecutionException | InterruptedException unexpected) {
+                throw new IllegalStateException(unexpected);
+            }
+        });
+        other.get(0).get(60, TimeUnit.SECONDS);
+        pool.shutdown();
+
+        MicroCultureResponseDTO after = read();
+        assertThat(after.getGramStain()).isEqualTo("CX-009 stain");
+        assertThat(after.getNotes()).isEqualTo("CX-009 note");
+        assertThat(after.getCorrections()).hasSize(2);
     }
 
     @Test
