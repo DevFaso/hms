@@ -219,14 +219,17 @@ const EMPTY_FORM: IntakeFormState = {
         </h2>
 
         <div class="form-row adt-intake__typeahead">
-          <label for="adt-hospital-search">{{
-            'ADT_INTAKE.FIELD.HOSPITAL_PICKER' | translate
-          }}</label>
+          <label for="adt-hospital-search"
+            >{{ 'ADT_INTAKE.FIELD.HOSPITAL_PICKER' | translate }} *</label
+          >
           <input
             id="adt-hospital-search"
             name="hospitalSearch"
             type="text"
             autocomplete="off"
+            required
+            data-server-field="hospitalId"
+            [attr.data-submit-blank]="form.hospitalId ? 'false' : 'true'"
             [attr.aria-label]="'ADT_INTAKE.FIELD.HOSPITAL_PICKER' | translate"
             [placeholder]="'ADT_INTAKE.PLACEHOLDER.HOSPITAL_SEARCH' | translate"
             [ngModel]="hospitalSearchTerm()"
@@ -454,6 +457,7 @@ const EMPTY_FORM: IntakeFormState = {
             [disabled]="saving()"
             appSubmitGuard
             submitGuardRequired
+            [submitGuardFields]="['adt-hospital-search', 'adt-provider']"
             data-testid="adt-intake-save"
           >
             {{ saving() ? ('ADT_INTAKE.SAVING' | translate) : ('ADT_INTAKE.SAVE' | translate) }}

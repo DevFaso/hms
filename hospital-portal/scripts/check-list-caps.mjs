@@ -17,12 +17,32 @@
  *   node scripts/check-list-caps.mjs --report-only
  *   node scripts/check-list-caps.mjs --write-baseline   # READ THE DIFF
  */
-import { resolve } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { relative, resolve } from 'node:path';
 
-import { listCapFindings, sliceCountFindings } from './lib/list-cap-scan.mjs';
+import { listCapFindings, serverLimitFindings, sliceCountFindings } from './lib/list-cap-scan.mjs';
 import { PORTAL_DIR, scanTemplates } from './lib/template-gate.mjs';
+import { walk } from './lib/walk.mjs';
 import { scanComponents } from './lib/component-sources.mjs';
 import { runGate, isMain } from './lib/baseline.mjs';
+
+/** The backend services, for the cuts no portal rule can see (QA CX-003). */
+const SERVICES_DIR = resolve(
+  PORTAL_DIR,
+  '..',
+  'hospital-core/src/main/java/com/example/hms/service',
+);
+
+function serverFindings() {
+  const out = [];
+  for (const path of walk(SERVICES_DIR, ['.java'])) {
+    const file = relative(resolve(PORTAL_DIR, '..'), path).replaceAll('\\', '/');
+    for (const hit of serverLimitFindings(readFileSync(path, 'utf8'))) {
+      out.push({ ...hit, file, id: `${file}::${hit.rule}::${hit.anchor}` });
+    }
+  }
+  return out;
+}
 
 export const gate = {
   name: 'list caps',
@@ -31,6 +51,7 @@ export const gate = {
   findings: (ctx) => [
     ...scanComponents((source, file) => listCapFindings(source, file), ctx),
     ...scanTemplates((html) => sliceCountFindings(html), {}, ctx),
+    ...serverFindings(),
   ],
   comment: [
     'Fixed-size list reads, as they stand today (QA D1347).',

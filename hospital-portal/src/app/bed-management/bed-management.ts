@@ -26,6 +26,7 @@ import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { refusalReason } from '../shared/refusal-reason';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 /**
  * Ward & bed administration (P0 #4). First writer for the V25 ward/bed
  * schema — makes the dashboard occupancy tiles real.
@@ -48,6 +49,7 @@ export class BedManagementComponent implements OnInit {
   private readonly bedService = inject(BedService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly confirm = inject(ConfirmService);
   private readonly departmentLookup = inject(DepartmentLookupService);
   private readonly roleContext = inject(RoleContextService);
 
@@ -214,7 +216,14 @@ export class BedManagementComponent implements OnInit {
     });
   }
 
-  deleteWard(ward: WardResponse): void {
+  async deleteWard(ward: WardResponse): Promise<void> {
+    // QA CX-010: one click removed the ward.
+    const confirmed = await this.confirm.ask({
+      titleKey: 'BEDS.DELETE_WARD_CONFIRM',
+      params: { name: ward.name },
+      confirmKey: 'COMMON.DELETE',
+    });
+    if (!confirmed) return;
     this.bedService.deleteWard(ward.id).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('BEDS.TOAST.WARD_DELETED'));
@@ -298,7 +307,13 @@ export class BedManagementComponent implements OnInit {
     });
   }
 
-  deleteBed(bed: BedResponse): void {
+  async deleteBed(bed: BedResponse): Promise<void> {
+    const confirmed = await this.confirm.ask({
+      titleKey: 'BEDS.DELETE_BED_CONFIRM',
+      params: { name: bed.bedNumber },
+      confirmKey: 'COMMON.DELETE',
+    });
+    if (!confirmed) return;
     this.bedService.deleteBed(bed.id).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('BEDS.TOAST.BED_DELETED'));

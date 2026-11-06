@@ -8,6 +8,7 @@ import { Dhis2MappingEditorComponent } from './dhis2-mapping-editor.component';
 import { Dhis2Service } from '../../../services/integrations/dhis2.service';
 import { RoleContextService } from '../../../core/role-context.service';
 import { ToastService } from '../../../core/toast.service';
+import { ConfirmService } from '../../../shared/confirm-dialog/confirm.service';
 
 describe('Dhis2MappingEditorComponent', () => {
   let fixture: ComponentFixture<Dhis2MappingEditorComponent>;
@@ -127,5 +128,19 @@ describe('Dhis2MappingEditorComponent', () => {
 
     expect(dhis2.createMapping).toHaveBeenCalled();
     expect(toast.success).toHaveBeenCalledWith('DHIS2.MAPPINGS.ADDED');
+  });
+
+  it('QA CX-010: deleting a mapping asks first; a no sends nothing', async () => {
+    const ask = spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(false);
+    const component = TestBed.createComponent(Dhis2MappingEditorComponent)
+      .componentInstance as unknown as { onDelete(id: string): Promise<void> };
+    await component.onDelete('m1');
+    expect(ask).toHaveBeenCalledTimes(1);
+    expect(dhis2.deleteMapping).not.toHaveBeenCalled();
+
+    ask.and.resolveTo(true);
+    dhis2.deleteMapping.and.returnValue(of(void 0));
+    await component.onDelete('m1');
+    expect(dhis2.deleteMapping).toHaveBeenCalledTimes(1);
   });
 });

@@ -22,6 +22,8 @@ import {
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { toServerDateTime } from '../../shared/date-utils';
 import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
+import { KeyLabelPipe } from '../../shared/pipes/key-label.pipe';
+import { DashPipe } from '../../shared/pipes/dash.pipe';
 
 const DEFAULT_PAGE_SIZE = 25;
 const STATUS_OPTIONS: IntegrationMessageStatus[] = ['SENT', 'RECEIVED', 'FAILED', 'REPLAYED'];
@@ -41,6 +43,8 @@ interface ReplayState {
   selector: 'app-super-admin-integration-messages',
   standalone: true,
   imports: [
+    DashPipe,
+    KeyLabelPipe,
     DateTimePipe,
     ServerTimePipe,
     CommonModule,

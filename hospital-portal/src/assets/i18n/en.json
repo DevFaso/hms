@@ -81,6 +81,8 @@
     }
   },
   "BEDS": {
+    "DELETE_BED_CONFIRM": "Delete the bed {{name}}?",
+    "DELETE_WARD_CONFIRM": "Delete the ward {{name}}?",
     "ACTIVE": "Active",
     "AVAILABLE": "Available",
     "BEDS_IN": "Beds in {{ward}}",
@@ -409,6 +411,8 @@
       "FAILED": "CSV export failed. Try again."
     },
     "SAVED": {
+      "DELETE_FAILED": "Could not delete the saved search.",
+      "DELETE_CONFIRM": "Delete the saved search {{name}}?",
       "LABEL": "Saved searches",
       "EMPTY": "No saved searches yet — name the current filters and save.",
       "NAME_PLACEHOLDER": "Name this filter set",
@@ -460,12 +464,14 @@
       "CONFIRM_PLACEHOLDER": "FORCE LOGOUT ALL"
     },
     "KILL_FEATURE": {
+      "CONFIRM": "Turn off {{key}} for every hospital?",
       "TITLE": "Kill a feature flag",
       "DESC": "Sets the global FeatureFlagOverride for this key to disabled.",
       "FLAG_KEY": "Flag key",
       "ACTION": "Kill feature"
     },
     "FORCE_MFA": {
+      "CONFIRM": "Reset the second factor of the {{count}} selected user(s)?",
       "TITLE": "Force MFA re-enrolment",
       "DESC": "Clears MFA enrolment and backup codes for the selected users. With nobody selected it resets EVERY enrolled user (optionally at one hospital) — that needs a typed confirmation.",
       "SEARCH_USERS": "Users to reset",
@@ -488,6 +494,7 @@
       "RETRY": "Retry"
     },
     "BROADCAST": {
+      "CONFIRM": "Send this message to every signed-in user?",
       "TITLE": "Broadcast banner",
       "DESC": "Publishes a banner message to /topic/emergency-broadcast.",
       "MESSAGE": "Message",
@@ -499,6 +506,11 @@
     },
     "REQUEST_FAILED": "Request failed.",
     "DOWNTIME": {
+      "MESSAGE_REQUIRED": "Say why the platform is going read-only.",
+      "CONFIRM_DEACTIVATE_BODY": "Every hospital can write again at once.",
+      "CONFIRM_DEACTIVATE": "Lift read-only mode?",
+      "CONFIRM_ACTIVATE_BODY": "Every hospital's writes are refused until this is lifted. Signed-in users will read: {{message}}",
+      "CONFIRM_ACTIVATE": "Turn the whole platform read-only?",
       "TITLE": "Read-only (downtime) mode",
       "DESC": "Blocks every write across the platform with a 503 while viewing stays available. Login, token refresh and this toggle stay open. Takes effect immediately here, within 30 seconds on other instances.",
       "ACTIVE": "READ-ONLY MODE IS ACTIVE.",
@@ -513,6 +525,11 @@
     "DISMISS": "Dismiss broadcast"
   },
   "SUBSCRIPTIONS": {
+    "DEACTIVATE_CONFIRM_BODY": "It can no longer be assigned to an organization.",
+    "DEACTIVATE_CONFIRM": "Deactivate plan {{name}}?",
+    "DEACTIVATED": "Plan {{name}} deactivated.",
+    "UPDATED": "Plan {{name}} saved.",
+    "CREATED": "Plan {{name}} created.",
     "TITLE": "Subscription Plans",
     "SUBTITLE": "Plan catalogue and per-organization assignments.",
     "ACTIVE_ONLY": "Active plans only",
@@ -837,6 +854,7 @@
       "SECRET_CONFIGURED": "Env-var set"
     },
     "MAPPINGS": {
+      "DELETE_CONFIRM": "Delete this DHIS2 mapping?",
       "ADD": "Add a mapping",
       "ADDED": "Mapping added",
       "ADD_FAILED": "Could not add mapping",
@@ -889,6 +907,7 @@
     }
   },
   "BREAK_GLASS": {
+    "REVOKE_CONFIRM": "End this emergency access now?",
     "ACTIVE": "Emergency access active — every read is audited.",
     "CONFIRM": "Declare access",
     "DECLARE": "Declare break-the-glass",
@@ -1177,6 +1196,7 @@
     }
   },
   "REFILLS": {
+    "REJECT_CONFIRM": "Refuse this refill request?",
     "QUEUE_TITLE": "Refill requests",
     "STATUS_REQUESTED": "Pending",
     "STATUS_PAUSED": "On hold",
@@ -1289,6 +1309,7 @@
     "WARD": "Ward"
   },
   "ANALYTICS": {
+    "LOAD_FAILED": "The analytics could not be loaded. Try again.",
     "APPOINTMENTS": "Appointments",
     "APPOINTMENTS_BY_STATUS": "Appointments by Status",
     "APPOINTMENT_TREND": "Appointment Trend",
@@ -5633,6 +5654,7 @@
       "SUMMARY_EXTERNAL": "times your record went outside your care team",
       "ACCESS_LOG_TITLE": "Accesses and disclosures",
       "OPT_OUT": {
+        "REVOKE_CONFIRM": "Share your record with your other hospitals again?",
         "TITLE": "Sharing with other hospitals",
         "DESC": "Your record follows you: a clinician treating you at another hospital can read it. You can close that door. Your own hospital keeps its access, and an emergency access stays possible, recorded, and shown to you here.",
         "LOADING": "Checking your sharing setting…",
@@ -10812,6 +10834,7 @@
     "ASSESSMENT_EMPTY": "Record at least one finding (an APGAR score, a vital sign or the examination) before saving."
   },
   "ASSIGN_ADMIN": {
+    "DEACTIVATE_CONFIRM": "Deactivate this assignment? The user loses this role at this hospital.",
     "TITLE": "Assignment Administration",
     "SUBTITLE": "User-role-hospital assignments, confirmation codes and bulk import",
     "BULK_IMPORT": "Bulk import",
@@ -11312,6 +11335,8 @@
     "LATE_ENTRY": "late entry"
   },
   "MICRO": {
+    "SUSCEPTIBILITY_REMOVE_CONFIRM": "Remove this susceptibility result?",
+    "ISOLATE_REMOVE_CONFIRM": "Remove this isolate and its susceptibilities?",
     "TAB": "Microbiology",
     "TAB_TITLE": "Culture reports and susceptibility panels",
     "PAGE_TITLE": "Microbiology",
@@ -11502,6 +11527,7 @@
     "NEXT_MONTH": "Next month"
   },
   "REPORTS": {
+    "DEACTIVATE_CONFIRM": "Deactivate the report {{name}}? Its scheduled runs stop.",
     "TITLE": "Scheduled Reports",
     "SUBTITLE": "Aggregate CSV reports emailed each closed period",
     "CREATE": "New Report",
@@ -11545,6 +11571,8 @@
     "RECIPIENT_INVALID": "\"{{address}}\" is not a valid email address."
   },
   "SLOT_ADMIN": {
+    "TPL_RETIRE_CONFIRM": "Retire this session template?",
+    "VT_RETIRE_CONFIRM": "Retire the visit type {{name}}?",
     "ACTIONS": "Actions",
     "ACTIVE": "Active",
     "ALL": "All",

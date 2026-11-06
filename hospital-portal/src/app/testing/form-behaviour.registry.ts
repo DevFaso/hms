@@ -2,12 +2,14 @@
 // scripts/lib/form-behaviour-registry.test.mjs fails when this is not the current list.
 import { Type } from '@angular/core';
 
+import { AdtIntakeConfigComponent } from '../admin/adt-intake-config/adt-intake-config.component';
 import { AppointmentDetailComponent } from '../appointments/appointment-detail';
 import { AppointmentFormComponent } from '../appointments/appointment-form';
 import { AppointmentListComponent } from '../appointments/appointment-list';
 import { BillingComponent } from '../billing/billing';
 import { CashClosingComponent } from '../billing/cash-closing/cash-closing.component';
 import { CheckoutDialogComponent } from '../checkout/checkout-dialog/checkout-dialog.component';
+import { FeatureFlagsComponent } from '../feature-flags/feature-flags';
 import { MyAppointmentsComponent } from '../patient-portal/my-appointments/my-appointments.component';
 import { PreCheckinFormComponent } from '../patient-portal/my-appointments/pre-checkin-form/pre-checkin-form.component';
 import { MyBillingComponent } from '../patient-portal/my-billing/my-billing.component';
@@ -51,6 +53,16 @@ import { RecallsPanelComponent } from '../reception/recalls-panel/recalls-panel.
 import { ReceptionCockpitComponent } from '../reception/reception-cockpit/reception-cockpit.component';
 import { WaitlistPanelComponent } from '../reception/waitlist-panel/waitlist-panel.component';
 import { WalkInDialogComponent } from '../reception/walkin-dialog/walkin-dialog.component';
+import { SuperAdminAuditSearchComponent } from '../super-admin/audit-search/audit-search';
+import { CostPanelComponent } from '../super-admin/cost-panel/cost-panel.component';
+import { DataResidencyPolicyComponent } from '../super-admin/data-residency-policy/data-residency-policy';
+import { DataResidencyComponent } from '../super-admin/data-residency/data-residency';
+import { EmergencyComponent } from '../super-admin/emergency/emergency';
+import { IntegrationMessagesComponent } from '../super-admin/integration-messages/integration-messages';
+import { ProviderDetailComponent } from '../super-admin/providers/provider-detail/provider-detail';
+import { ProviderFormComponent } from '../super-admin/providers/provider-form/provider-form';
+import { ProviderListComponent } from '../super-admin/providers/provider-list/provider-list';
+import { SubscriptionsComponent } from '../super-admin/subscriptions/subscriptions';
 
 /** Every covered component whose template holds a submit (form-behaviour.spec.ts). */
 export const FORM_BEHAVIOUR_COMPONENTS: readonly {
@@ -58,6 +70,11 @@ export const FORM_BEHAVIOUR_COMPONENTS: readonly {
   file: string;
   type: Type<unknown>;
 }[] = [
+  {
+    name: 'AdtIntakeConfigComponent',
+    file: 'admin/adt-intake-config/adt-intake-config.component',
+    type: AdtIntakeConfigComponent,
+  },
   {
     name: 'AppointmentDetailComponent',
     file: 'appointments/appointment-detail',
@@ -83,6 +100,11 @@ export const FORM_BEHAVIOUR_COMPONENTS: readonly {
     name: 'CheckoutDialogComponent',
     file: 'checkout/checkout-dialog/checkout-dialog.component',
     type: CheckoutDialogComponent,
+  },
+  {
+    name: 'FeatureFlagsComponent',
+    file: 'feature-flags/feature-flags',
+    type: FeatureFlagsComponent,
   },
   {
     name: 'MyAppointmentsComponent',
@@ -270,5 +292,51 @@ export const FORM_BEHAVIOUR_COMPONENTS: readonly {
     name: 'WalkInDialogComponent',
     file: 'reception/walkin-dialog/walkin-dialog.component',
     type: WalkInDialogComponent,
+  },
+  {
+    name: 'SuperAdminAuditSearchComponent',
+    file: 'super-admin/audit-search/audit-search',
+    type: SuperAdminAuditSearchComponent,
+  },
+  {
+    name: 'CostPanelComponent',
+    file: 'super-admin/cost-panel/cost-panel.component',
+    type: CostPanelComponent,
+  },
+  {
+    name: 'DataResidencyPolicyComponent',
+    file: 'super-admin/data-residency-policy/data-residency-policy',
+    type: DataResidencyPolicyComponent,
+  },
+  {
+    name: 'DataResidencyComponent',
+    file: 'super-admin/data-residency/data-residency',
+    type: DataResidencyComponent,
+  },
+  { name: 'EmergencyComponent', file: 'super-admin/emergency/emergency', type: EmergencyComponent },
+  {
+    name: 'IntegrationMessagesComponent',
+    file: 'super-admin/integration-messages/integration-messages',
+    type: IntegrationMessagesComponent,
+  },
+  {
+    name: 'ProviderDetailComponent',
+    file: 'super-admin/providers/provider-detail/provider-detail',
+    type: ProviderDetailComponent,
+  },
+  {
+    name: 'ProviderFormComponent',
+    file: 'super-admin/providers/provider-form/provider-form',
+    type: ProviderFormComponent,
+  },
+  {
+    name: 'ProviderListComponent',
+    file: 'super-admin/providers/provider-list/provider-list',
+    type: ProviderListComponent,
+  },
+  {
+    name: 'SubscriptionsComponent',
+    file: 'super-admin/subscriptions/subscriptions',
+    type: SubscriptionsComponent,
   },
 ];

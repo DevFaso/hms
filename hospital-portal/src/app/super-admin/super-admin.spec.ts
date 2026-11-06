@@ -14,6 +14,7 @@ import {
   SuperAdminSummary,
 } from '../services/dashboard.service';
 import { PlatformService, PlatformSummary } from '../services/platform.service';
+import { EnumLabelService } from '../core/enum-label.service';
 
 /**
  * Empty {@link SuperAdminRecentActivityBundle} for tests — F5 from
@@ -454,5 +455,38 @@ describe('SuperAdminComponent', () => {
     expect(panel!.getAttribute('aria-labelledby')).toBe(
       `activity-tab-${fix.componentInstance.selectedActivityTab()}`,
     );
+  });
+
+  it('QA CX-006: a coded field of a recent-activity summary reads as a label, free text as typed', () => {
+    dashboard.getSummary.and.returnValue(of(fakeSummary()));
+    platform.getSummary.and.returnValue(of(fakePlatformSummary()));
+    dashboard.getRecentActivity.and.returnValue(
+      of(
+        bundleWith({
+          consultations: [
+            {
+              id: 'c1',
+              patientName: 'Ada',
+              specialtyRequested: 'ROUTINE_SPECIALTY',
+              urgency: 'ROUTINE',
+              status: 'CANCELLED',
+              createdAt: '2026-05-02T10:00:00Z',
+            },
+          ] as SuperAdminRecentItem[],
+        }),
+      ),
+    );
+    const c = setup();
+    const transform = spyOn(TestBed.inject(EnumLabelService), 'transform').and.callFake(
+      (value, domain) => `label(${value},${domain})`,
+    );
+    c.selectActivityTab('consultations');
+    const summary = c.selectedActivityRows()[0].summary;
+
+    expect(transform).toHaveBeenCalledWith('ROUTINE', 'consultationUrgency');
+    expect(summary).toContain('label(ROUTINE,consultationUrgency)');
+    expect(summary).toContain('label(CANCELLED,consultationStatus)');
+    expect(summary).toContain('Ada');
+    expect(summary).toContain('ROUTINE_SPECIALTY');
   });
 });

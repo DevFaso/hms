@@ -23,6 +23,7 @@ import { InlineDiscardAskComponent } from '../../shared/a11y/inline-discard-ask.
 import { focusWhenRendered } from '../../shared/a11y/focus-when-rendered';
 import { refusalReason } from '../../shared/refusal-reason';
 import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
+import { ConfirmService } from '../../shared/confirm-dialog/confirm.service';
 
 /**
  * "Who accessed my record" (E9 #66, decision D7).
@@ -56,6 +57,7 @@ export class MySharingComponent implements OnInit {
   private readonly portal = inject(PatientPortalService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly confirm = inject(ConfirmService);
 
   /* ── Opt-out ── */
   optOut = signal<RecordSharingOptOut | null>(null);
@@ -188,8 +190,14 @@ export class MySharingComponent implements OnInit {
     });
   }
 
-  revokeOptOut(): void {
+  async revokeOptOut(): Promise<void> {
     if (!this.patientId || this.optOutSaving()) return;
+    // QA CX-010: one click opened the record to other hospitals again.
+    const confirmed = await this.confirm.ask({
+      titleKey: 'PORTAL.SHARING.OPT_OUT.REVOKE_CONFIRM',
+      confirmKey: 'COMMON.CONFIRM',
+    });
+    if (!confirmed) return;
     this.optOutSaving.set(true);
     this.portal.revokeOptOut(this.patientId).subscribe({
       next: (state) => {

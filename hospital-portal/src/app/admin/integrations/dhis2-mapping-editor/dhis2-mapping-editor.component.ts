@@ -22,6 +22,8 @@ import { SubmitGuardDirective } from '../../../shared/forms/submit-guard.directi
  * mappings. Filters by datasetUid because DHIS2 dataElements live
  * inside datasets and a code can map differently per dataset.
  */
+import { ConfirmService } from '../../../shared/confirm-dialog/confirm.service';
+
 @Component({
   selector: 'app-dhis2-mapping-editor',
   standalone: true,
@@ -211,6 +213,7 @@ export class Dhis2MappingEditorComponent implements OnDestroy {
   private readonly roleContext = inject(RoleContextService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly confirm = inject(ConfirmService);
   private listSub?: Subscription;
 
   ngOnDestroy(): void {
@@ -258,9 +261,15 @@ export class Dhis2MappingEditorComponent implements OnDestroy {
     });
   }
 
-  protected onDelete(id: string): void {
+  protected async onDelete(id: string): Promise<void> {
     const hospitalId = this.roleContext.activeHospitalId;
     if (!hospitalId) return;
+    // QA CX-010: one click removed the mapping.
+    const confirmed = await this.confirm.ask({
+      titleKey: 'DHIS2.MAPPINGS.DELETE_CONFIRM',
+      confirmKey: 'COMMON.DELETE',
+    });
+    if (!confirmed) return;
     this.dhis2.deleteMapping(id, hospitalId).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('DHIS2.MAPPINGS.DELETED'));

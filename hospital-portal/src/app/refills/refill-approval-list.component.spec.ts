@@ -10,6 +10,7 @@ import {
   RefillStatus,
 } from '../services/refill-approval.service';
 import { ToastService } from '../core/toast.service';
+import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 
 describe('RefillApprovalListComponent', () => {
   let fixture: ComponentFixture<RefillApprovalListComponent>;
@@ -46,7 +47,7 @@ describe('RefillApprovalListComponent', () => {
   /** Reaches past `protected` — the spec exercises the same surface the template does. */
   interface TemplateApi {
     approve(r: RefillRequest): void;
-    reject(r: RefillRequest): void;
+    reject(r: RefillRequest): Promise<void>;
     pause(r: RefillRequest): void;
     isOpen(s: RefillStatus): boolean;
     canPause(s: RefillStatus): boolean;
@@ -246,5 +247,14 @@ describe('RefillApprovalListComponent', () => {
 
   it('gives a paused request its own badge, distinct from pending', () => {
     expect(api().statusBadgeClass('PAUSED')).not.toBe(api().statusBadgeClass('REQUESTED'));
+  });
+
+  it('QA CX-010: refusing a refill asks first even with its reason written; a no sends nothing', async () => {
+    fixture.detectChanges();
+    const ask = spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(false);
+    api().decisionNotes['r1'] = 'Not without a visit';
+    await api().reject(refill());
+    expect(ask).toHaveBeenCalledTimes(1);
+    expect(service.reject).not.toHaveBeenCalled();
   });
 });

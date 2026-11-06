@@ -35,6 +35,7 @@ import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { refuseFields } from '../shared/forms/invalid-fields';
 import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 import { RangePagerComponent } from '../shared/range-pager/range-pager.component';
+import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 type AdminSection = 'visit-types' | 'templates' | 'slots';
 
 /** QA D1306 (round 28): the fields each form may refuse, so a fixed one loses its mark. */
@@ -80,6 +81,7 @@ export class SlotAdminComponent implements OnInit {
   private readonly staffService = inject(StaffService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly confirm = inject(ConfirmService);
   private readonly roleContext = inject(RoleContextService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
@@ -260,7 +262,16 @@ export class SlotAdminComponent implements OnInit {
     });
   }
 
-  toggleVisitTypeActive(row: VisitTypeResponse): void {
+  async toggleVisitTypeActive(row: VisitTypeResponse): Promise<void> {
+    // QA CX-010: one click retired it; restoring asks nothing.
+    if (row.active) {
+      const confirmed = await this.confirm.ask({
+        titleKey: 'SLOT_ADMIN.VT_RETIRE_CONFIRM',
+        params: { name: row.name },
+        confirmKey: 'COMMON.CONFIRM',
+      });
+      if (!confirmed) return;
+    }
     const request$ = row.active
       ? this.slotService.deactivateVisitType(row.id)
       : this.slotService.reactivateVisitType(row.id);
@@ -389,7 +400,14 @@ export class SlotAdminComponent implements OnInit {
     });
   }
 
-  toggleTemplateActive(row: SessionTemplateResponse): void {
+  async toggleTemplateActive(row: SessionTemplateResponse): Promise<void> {
+    if (row.active) {
+      const confirmed = await this.confirm.ask({
+        titleKey: 'SLOT_ADMIN.TPL_RETIRE_CONFIRM',
+        confirmKey: 'COMMON.CONFIRM',
+      });
+      if (!confirmed) return;
+    }
     const request$ = row.active
       ? this.slotService.deactivateTemplate(row.id)
       : this.slotService.reactivateTemplate(row.id);

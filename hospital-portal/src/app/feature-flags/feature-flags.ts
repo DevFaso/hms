@@ -14,6 +14,7 @@ import { ToastService } from '../core/toast.service';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { refusalReason } from '../shared/refusal-reason';
 import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 
 interface FeatureFlag {
   key: string;
@@ -34,7 +35,7 @@ interface FlagOverride {
 @Component({
   selector: 'app-feature-flags',
   standalone: true,
-  imports: [ModalDialogDirective, FormsModule, TranslateModule],
+  imports: [ModalDialogDirective, FormsModule, TranslateModule, SubmitGuardDirective],
   templateUrl: './feature-flags.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './feature-flags.scss',
@@ -161,10 +162,8 @@ export class FeatureFlagsComponent implements OnInit {
 
   createFlag(): void {
     const key = this.newFlagKey().trim();
-    if (!key) {
-      this.toast.error(this.translate.instant('FLAGS.KEY_REQUIRED'));
-      return;
-    }
+    // The submit guard refuses a blank key on its field (QA CX-004) before this runs.
+    if (!key) return;
     this.saving.set(true);
     this.http
       .put<Record<string, boolean>>(`/feature-flags/${encodeURIComponent(key)}`, {

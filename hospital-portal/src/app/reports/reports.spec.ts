@@ -5,6 +5,7 @@ import { of, throwError } from 'rxjs';
 import { ReportsComponent } from './reports';
 import { ReportDefinitionResponse, ReportRunResponse, ReportsService } from './reports.service';
 import { ToastService } from '../core/toast.service';
+import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 
 function definition(overrides: Partial<ReportDefinitionResponse> = {}): ReportDefinitionResponse {
   return {
@@ -197,11 +198,21 @@ describe('ReportsComponent', () => {
     expect(mockService.runNow).not.toHaveBeenCalled();
   });
 
-  it('toggles active state through the matching endpoint', () => {
-    component.toggleActive(definition({ active: true }));
+  it('toggles active state through the matching endpoint', async () => {
+    const ask = spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
+    await component.toggleActive(definition({ active: true }));
     expect(mockService.deactivate).toHaveBeenCalledWith('d1');
+    expect(ask).toHaveBeenCalledTimes(1);
 
-    component.toggleActive(definition({ active: false }));
+    // QA CX-010: turning a report back on ends nothing, so it asks nothing.
+    await component.toggleActive(definition({ active: false }));
     expect(mockService.reactivate).toHaveBeenCalledWith('d1');
+    expect(ask).toHaveBeenCalledTimes(1);
+  });
+
+  it('QA CX-010: a no to deactivating sends nothing', async () => {
+    spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(false);
+    await component.toggleActive(definition({ active: true }));
+    expect(mockService.deactivate).not.toHaveBeenCalled();
   });
 });

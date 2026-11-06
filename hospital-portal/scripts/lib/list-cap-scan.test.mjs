@@ -11,7 +11,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { listCapFindings, sliceCountFindings } from './list-cap-scan.mjs';
+import { listCapFindings, sliceCountFindings, serverLimitFindings } from './list-cap-scan.mjs';
 
 const rules = (ts, file = 'src/app/x/x.ts') =>
   listCapFindings(ts, file).map((f) => `${f.rule}:${f.anchor}`);
@@ -164,4 +164,32 @@ test('D1380: a count read from the length of a payload list is found; the server
   });
 }`;
   assert.deepEqual(rules(ts), ['payload-length-count:counts:c.medications']);
+});
+
+test('QA CX-003: a backend service cutting a list with a fixed number is reported', () => {
+  const java = `
+public class X {
+    private List<Row> buildDepartmentUtilization() {
+        return rows.stream()
+                .limit(10)
+                .toList();
+    }
+
+    public List<Row> preview() {
+        return rows.stream().limit(MAX_ROWS).toList();
+    }
+
+    public List<Row> asked(int limit) {
+        return rows.stream().limit(limit).toList();
+    }
+
+    public Optional<Row> first() {
+        // .limit(99) in a comment is not a cut
+        return rows.stream().limit(1).findFirst();
+    }
+}`;
+  assert.deepEqual(
+    serverLimitFindings(java).map((f) => `${f.rule}:${f.anchor}`),
+    ['server-stream-limit:buildDepartmentUtilization:10', 'server-stream-limit:preview:MAX_ROWS'],
+  );
 });

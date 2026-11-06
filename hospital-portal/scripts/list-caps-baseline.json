@@ -6,6 +6,66 @@
     "or page on screen with the server's total, then delete its pin."
   ],
   "pinned": {
+    "hospital-core/src/main/java/com/example/hms/service/ClinicalDashboardServiceImpl.java::server-stream-limit::getRecentPatients:6": {
+      "count": 1,
+      "why": "a dashboard preview titled recent patients, with a link to the patient list"
+    },
+    "hospital-core/src/main/java/com/example/hms/service/ContentServiceImpl.java::server-stream-limit::listArticles:12": {
+      "count": 1,
+      "why": "the public site's newest articles: marketing content, not a work list"
+    },
+    "hospital-core/src/main/java/com/example/hms/service/ContentServiceImpl.java::server-stream-limit::listTestimonials:20": {
+      "count": 1,
+      "why": "the public site's newest testimonials: marketing content, not a work list"
+    },
+    "hospital-core/src/main/java/com/example/hms/service/DischargeSummaryServiceImpl.java::server-stream-limit::recordPortalFetchOutcome:10": {
+      "count": 1,
+      "why": "bounds a log line, not a list a reader sees"
+    },
+    "hospital-core/src/main/java/com/example/hms/service/impl/NurseTaskServiceImpl.java::server-stream-limit::withDoseHistory:DOSE_HISTORY_LIMIT": {
+      "count": 1,
+      "why": "QA D1225: the last doses shown on a MAR row; the patient's MAR holds the full history"
+    },
+    "hospital-core/src/main/java/com/example/hms/service/impl/PatientStoryboardServiceImpl.java::server-stream-limit::loadAllergies:MAX_ALLERGIES": {
+      "count": 1,
+      "why": "OPEN sibling of CX-003: the storyboard banner shows 8 allergies with no 'and N more'; tasklist.md round-33 standing debt (clinical file, another round's)"
+    },
+    "hospital-core/src/main/java/com/example/hms/service/impl/PatientStoryboardServiceImpl.java::server-stream-limit::loadCodeStatus:MAX_DIRECTIVES": {
+      "count": 1,
+      "why": "OPEN sibling of CX-003: the storyboard banner shows 5 directives with no 'and N more'; tasklist.md round-33 standing debt"
+    },
+    "hospital-core/src/main/java/com/example/hms/service/impl/PatientStoryboardServiceImpl.java::server-stream-limit::loadProblems:MAX_PROBLEMS": {
+      "count": 1,
+      "why": "OPEN sibling of CX-003: the storyboard banner shows 8 problems with no 'and N more'; tasklist.md round-33 standing debt"
+    },
+    "hospital-core/src/main/java/com/example/hms/service/LabResultServiceImpl.java::server-stream-limit::readableTrendRows:TREND_WINDOW": {
+      "count": 1,
+      "why": "a trend chart's window of the newest results, not a list of results"
+    },
+    "hospital-core/src/main/java/com/example/hms/service/PasswordHistoryService.java::server-stream-limit::isPasswordReused:MAX_HISTORY": {
+      "count": 1,
+      "why": "the password-reuse policy's depth, never shown"
+    },
+    "hospital-core/src/main/java/com/example/hms/service/PatientSnapshotServiceImpl.java::server-stream-limit::buildActiveMedications:10": {
+      "count": 1,
+      "why": "OPEN sibling of CX-003: the snapshot lists 10 active medications with no total; tasklist.md round-33 standing debt"
+    },
+    "hospital-core/src/main/java/com/example/hms/service/PatientSnapshotServiceImpl.java::server-stream-limit::buildCareTeam:10": {
+      "count": 1,
+      "why": "OPEN sibling of CX-003: the snapshot lists 10 care-team members with no total; tasklist.md round-33 standing debt"
+    },
+    "hospital-core/src/main/java/com/example/hms/service/PatientSnapshotServiceImpl.java::server-stream-limit::buildPendingOrders:10": {
+      "count": 1,
+      "why": "OPEN sibling of CX-003: the snapshot lists 10 pending orders with no total; tasklist.md round-33 standing debt"
+    },
+    "hospital-core/src/main/java/com/example/hms/service/PatientSnapshotServiceImpl.java::server-stream-limit::buildRecentNotes:5": {
+      "count": 1,
+      "why": "a section titled recent notes: the chart holds the full list"
+    },
+    "hospital-core/src/main/java/com/example/hms/service/pharmacy/StockTransactionServiceImpl.java::server-stream-limit::listReturnableDispenses:RETURNABLE_LIST_MAX": {
+      "count": 1,
+      "why": "QA D932: OPEN sibling of CX-003, the return form's fill picker stops at 50 newest; tasklist.md round-33 standing debt"
+    },
     "src/app/analytics/analytics.ts::fixed-limit::ngOnInit:getAnalytics:14": {
       "count": 1,
       "why": "not a row cap: 14 is the trend window in DAYS (getAnalytics(trendDays)); every day of it is drawn"
