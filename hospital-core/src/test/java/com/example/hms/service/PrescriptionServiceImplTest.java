@@ -4772,8 +4772,7 @@ class PrescriptionServiceImplTest {
         leadAssignment.setId(UUID.randomUUID());
         stay.setAssignment(leadAssignment);
         when(encounterRepository
-            .findFirstByPatient_IdAndHospital_IdAndAdmissionIdIsNotNullAndStatusNotInOrderByEncounterDateDesc(
-                eq(patientId), eq(hospitalId), any())).thenReturn(Optional.of(stay));
+            .findOpenStayEncounters(eq(patientId), eq(hospitalId), any(), any())).thenReturn(List.of(stay));
 
         prescriptionService.createPrescription(requestWithoutEncounter(), Locale.ENGLISH);
 
@@ -4840,8 +4839,7 @@ class PrescriptionServiceImplTest {
         Encounter stay = strangersStay(admission);
         when(admissionRepository.findById(admission.getId())).thenReturn(Optional.of(admission));
         when(encounterRepository
-            .findFirstByPatient_IdAndHospital_IdAndAdmissionIdIsNotNullAndStatusNotInOrderByEncounterDateDesc(
-                eq(patientId), eq(hospitalId), any())).thenReturn(Optional.of(stay));
+            .findOpenStayEncounters(eq(patientId), eq(hospitalId), any(), any())).thenReturn(List.of(stay));
         PrescriptionRequestDTO request = requestWithoutEncounter();
 
         prescriptionService.createPrescription(request, Locale.ENGLISH);
@@ -4858,8 +4856,7 @@ class PrescriptionServiceImplTest {
         moveAdmissionToAnotherHospital(admission);
         when(admissionRepository.findById(admission.getId())).thenReturn(Optional.of(admission));
         when(encounterRepository
-            .findFirstByPatient_IdAndHospital_IdAndAdmissionIdIsNotNullAndStatusNotInOrderByEncounterDateDesc(
-                eq(patientId), eq(hospitalId), any())).thenReturn(Optional.of(stay));
+            .findOpenStayEncounters(eq(patientId), eq(hospitalId), any(), any())).thenReturn(List.of(stay));
         PrescriptionRequestDTO request = requestWithoutEncounter();
 
         assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
@@ -6470,5 +6467,46 @@ class PrescriptionServiceImplTest {
 
         verify(prescriptionRepository).save(mappedEntity);
         assertThat(mappedEntity.isAllergiesReviewed()).isFalse();
+    }
+
+    /**
+     * QA D1393: the lookup answers no open stay once the admission was cancelled,
+     * so the order gets a finished outpatient anchor, and a stay it does answer
+     * is filed on with the prescriber's own first.
+     */
+    @Test
+    void d1393_anOrderWithNoOpenStayGetsAnOutpatientAnchor() {
+        stubPrescriberWithoutEncounter();
+        when(encounterRepository.save(any(Encounter.class))).thenAnswer(i -> i.getArgument(0));
+
+        prescriptionService.createPrescription(requestWithoutEncounter(), Locale.ENGLISH);
+
+        verify(encounterRepository).findOpenStayEncounters(patientId, hospitalId,
+            com.example.hms.enums.EncounterStatus.CLOSED,
+            java.util.EnumSet.of(com.example.hms.enums.AdmissionStatus.DISCHARGED,
+                com.example.hms.enums.AdmissionStatus.CANCELLED));
+        org.mockito.ArgumentCaptor<Encounter> anchor = org.mockito.ArgumentCaptor.forClass(Encounter.class);
+        verify(encounterRepository).save(anchor.capture());
+        assertThat(anchor.getValue().getAdmissionId()).isNull();
+        assertThat(anchor.getValue().getEncounterType()).isEqualTo(com.example.hms.enums.EncounterType.CONSULTATION);
+        assertThat(anchor.getValue().getStatus()).isEqualTo(com.example.hms.enums.EncounterStatus.COMPLETED);
+    }
+
+    @Test
+    void d136_ofTheOpenStaysThePrescribersOwnComesFirst() {
+        stubPrescriberWithoutEncounter();
+        com.example.hms.model.Admission admission = new com.example.hms.model.Admission();
+        admission.setId(UUID.randomUUID());
+        Encounter someoneElses = strangersStay(admission);
+        Encounter mine = strangersStay(admission);
+        mine.setStaff(staff);
+        admission.setAttendingPhysician(staff);
+        lenient().when(admissionRepository.findById(admission.getId())).thenReturn(Optional.of(admission));
+        when(encounterRepository.findOpenStayEncounters(eq(patientId), eq(hospitalId), any(), any()))
+            .thenReturn(List.of(someoneElses, mine));
+
+        prescriptionService.createPrescription(requestWithoutEncounter(), Locale.ENGLISH);
+
+        verify(prescriptionMapper).toEntity(any(), any(), any(), eq(mine));
     }
 }

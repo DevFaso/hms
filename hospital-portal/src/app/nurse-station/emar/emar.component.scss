@@ -5,6 +5,14 @@
   gap: 1rem;
 }
 
+/* QA D1392: the open panel closed because its order was withdrawn. */
+.emar__notice {
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--color-danger, #c53030);
+  border-radius: 0.5rem;
+  color: var(--color-danger, #c53030);
+}
+
 .emar__title {
   margin: 0;
   font-size: 1.25rem;

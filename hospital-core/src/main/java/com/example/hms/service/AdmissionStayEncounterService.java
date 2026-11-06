@@ -159,6 +159,18 @@ public class AdmissionStayEncounterService {
     }
 
     /**
+     * QA D1393: what a cancelled stay does to its orders. Deliberately not
+     * {@link #recordDischarge(Admission)}: a cancelled stay never happened, so
+     * it writes no discharge summary and carries no diagnosis.
+     */
+    @Transactional
+    public void recordCancellation(Admission admission, UUID actorUserId) {
+        if (stayOrders != null) {
+            stayOrders.discontinueOrdersOfCancelledStay(admission, actorUserId);
+        }
+    }
+
+    /**
      * QA D804: the stay's encounter follows the admission to its current
      * department (a transfer, a bed in another department's ward, an edit of
      * the admission). The encounter kept the department it was opened in, so

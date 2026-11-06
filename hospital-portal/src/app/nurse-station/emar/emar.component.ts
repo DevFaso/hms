@@ -101,6 +101,8 @@ export class EmarComponent implements OnInit, OnDestroy {
   /** QA D922: the second clinician who witnesses a controlled dose. */
   protected readonly witnessUserId = signal<string | null>(null);
 
+  /** QA D1392: why the open panel closed: its order was withdrawn meanwhile. Stays until the next choice. */
+  protected readonly orderGoneNotice = signal<string | null>(null);
   protected readonly verification = signal<MarVerificationResponse | null>(null);
   protected readonly verifyInFlight = signal(false);
   protected readonly administerInFlight = signal(false);
@@ -230,6 +232,7 @@ export class EmarComponent implements OnInit, OnDestroy {
   }
 
   protected selectTask(task: NurseMedicationTask): void {
+    this.orderGoneNotice.set(null);
     this.earlyDose.set(null);
     this.activeTask.set(task);
     this.patientScan.set('');
@@ -345,6 +348,7 @@ export class EmarComponent implements OnInit, OnDestroy {
         error: (err: HttpErrorResponse) => {
           if (this.activeTask()?.id !== taskIdAtCall) return;
           this.verifyInFlight.set(false);
+          if (this.closeOnOrderChange(err)) return;
           this.toast.error(
             this.serverReason(err) ?? this.translate.instant('EMAR.TOAST.VERIFY_FAILED'),
           );
@@ -430,12 +434,28 @@ export class EmarComponent implements OnInit, OnDestroy {
             return;
           }
           this.earlyDose.set(null);
+          if (this.closeOnOrderChange(err)) return;
           // QA D233: a five-rights refusal carries its reason; show it.
           this.toast.error(
             this.serverReason(err) ?? this.translate.instant('EMAR.TOAST.ADMINISTER_FAILED'),
           );
         },
       });
+  }
+
+  /**
+   * QA D1392: a 409 says the order changed under this panel (the prescriber
+   * withdrew it): no dose was recorded and no retry can help. The panel closes,
+   * says why where it stood, and the queue is read again without that order.
+   */
+  private closeOnOrderChange(err: HttpErrorResponse): boolean {
+    if (err.status !== 409) return false;
+    this.closeTask();
+    this.orderGoneNotice.set(
+      this.serverReason(err) ?? this.translate.instant('EMAR.ORDER_NO_LONGER_ACTIVE'),
+    );
+    this.loadTasks();
+    return true;
   }
 
   /** The server's own refusal message (a 4xx body), when it sent one. */

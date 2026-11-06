@@ -2052,26 +2052,24 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // stay belongs to the stay (an encounter carries one prescriber). Filed
         // there, it stops with the discharge (the MAR and the patient's list
         // read the stay's status) and it does not mint a phantom consultation.
-        Optional<Encounter> stay = encounterRepository
-            .findFirstByPatient_IdAndStaff_IdAndHospital_IdAndAdmissionIdIsNotNullAndStatusNotInOrderByEncounterDateDesc(
-                patient.getId(), staff.getId(), hospitalId,
-                EncounterStatus.CLOSED);
-        if (stay.isPresent()) {
-            return stay.get();
+        // QA D1393: never a stay whose admission has ended, whatever its encounter says.
+        List<Encounter> openStays = encounterRepository.findOpenStayEncounters(
+            patient.getId(), hospitalId, EncounterStatus.CLOSED, InpatientOrderEnd.ENDED_STAY_STATUSES);
+        Optional<Encounter> ledByPrescriber = openStays.stream()
+            .filter(open -> sameStaff(open.getStaff(), staff.getId()))
+            .findFirst();
+        if (ledByPrescriber.isPresent()) {
+            return ledByPrescriber.get();
         }
         // QA D414 (D41/D97 not fixed): the lookup above only finds a stay the
         // prescriber leads, so a consultant or covering doctor prescribing for
         // an inpatient minted a completed "consultation" that never happened.
         // The order belongs to the patient's open stay whoever leads it; the
         // prescription carries its own prescriber.
-        Optional<Encounter> anyStay = encounterRepository
-            .findFirstByPatient_IdAndHospital_IdAndAdmissionIdIsNotNullAndStatusNotInOrderByEncounterDateDesc(
-                patient.getId(), hospitalId,
-                EncounterStatus.CLOSED);
         // The caller must be on that stay's care team: ensureContextConsistency
         // refuses anyone else (verification GAP-1) for every path, this one too.
-        if (anyStay.isPresent()) {
-            return anyStay.get();
+        if (!openStays.isEmpty()) {
+            return openStays.get(0);
         }
         Encounter openedStay = openStayForActiveAdmission(patient.getId(), hospitalId, staff);
         if (openedStay != null) {

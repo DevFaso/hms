@@ -17,8 +17,21 @@ public interface MedicationAdministrationRecordRepository extends JpaRepository<
     List<MedicationAdministrationRecord> findByPatient_IdAndHospital_IdAndStatus(
         UUID patientId, UUID hospitalId, MedicationAdministrationStatus status);
 
-    /** Every MAR row of one prescription, latest scheduled dose first (D77 dose schedule). */
-    List<MedicationAdministrationRecord> findByPrescription_IdOrderByScheduledTimeDesc(UUID prescriptionId);
+    /**
+     * Every MAR row of one prescription, latest scheduled dose first (D77 dose
+     * schedule). QA D1409: two doses of an as-needed order given in the same
+     * minute share their slot, and nothing broke the tie, so the "last dose"
+     * could be the earlier one. The dose recorded last comes first, then a
+     * total order; a PENDING row, recorded by nobody yet, follows its slot's
+     * recorded rows.
+     */
+    @Query("""
+        SELECT m FROM MedicationAdministrationRecord m
+        WHERE m.prescription.id = :prescriptionId
+        ORDER BY m.scheduledTime DESC, m.administeredAt DESC NULLS LAST, m.createdAt DESC, m.id DESC
+    """)
+    List<MedicationAdministrationRecord> findByPrescription_IdOrderByScheduledTimeDesc(
+        @Param("prescriptionId") UUID prescriptionId);
 
     @Query("""
         SELECT m FROM MedicationAdministrationRecord m

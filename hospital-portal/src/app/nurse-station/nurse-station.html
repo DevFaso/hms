@@ -48,8 +48,14 @@
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon meds">medication</span>
       <div class="card-info">
-        <span class="card-value">{{ summary()?.medicationsDue ?? medications().length }}</span>
+        <span class="card-value">{{ medsDueCount() }}</span>
         <span class="card-label">{{ 'NURSE.MEDICATIONS_DUE' | translate }}</span>
+        @if (medsAsNeededCount() > 0) {
+          {{ ' '
+          }}<span class="card-hint" data-testid="meds-as-needed-hint">{{
+            'NURSE.MEDICATIONS_AS_NEEDED_HINT' | translate: { count: medsAsNeededCount() }
+          }}</span>
+        }
       </div>
     </div>
     <div class="summary-card">
@@ -62,8 +68,8 @@
     <div class="summary-card overdue">
       <span class="material-symbols-outlined card-icon overdue-icon">warning</span>
       <div class="card-info">
-        <span class="card-value">{{ summary()?.medicationsOverdue ?? overdueCount() }}</span>
-        <span class="card-label">{{ 'NURSE.OVERDUE' | translate }}</span>
+        <span class="card-value">{{ medsOverdueCount() }}</span>
+        <span class="card-label">{{ 'NURSE.MEDICATIONS_OVERDUE' | translate }}</span>
       </div>
     </div>
   </div>

@@ -1979,4 +1979,24 @@ class LabResultServiceImplLifecycleTest {
         assertThat(child.getDocumentationReference()).isEqualTo("DOC-42");
         assertThat(child.getOrderChannel()).isEqualTo(LabOrderChannel.ELECTRONIC);
     }
+
+    @Test
+    @DisplayName("QA D1392 class — a result is not typed onto a cancelled order, nothing saved")
+    void aCancelledOrderTakesNoTypedResult() {
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        org.mockito.Mockito.lenient().when(labOrderRepository.findWithLockById(order.getId()))
+            .thenReturn(Optional.of(order));
+        when(labOrderRepository.findStatusById(order.getId())).thenReturn(com.example.hms.enums.LabOrderStatus.CANCELLED);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(authService.getCurrentUserId()).thenReturn(actorId);
+        when(roleValidator.hasRole(actorId, hospitalId, "ROLE_LAB_SCIENTIST")).thenReturn(true);
+        org.mockito.Mockito.lenient().when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
+        LabResultRequestDTO request = entryRequest();
+
+        assertThatThrownBy(() -> service.createLabResult(request, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .satisfies(e -> org.assertj.core.api.Assertions.assertThat(((BusinessException) e).getMessageKey())
+                .isEqualTo("lab.order.cancelledNoResult"));
+        verify(labResultRepository, never()).save(any(LabResult.class));
+    }
 }

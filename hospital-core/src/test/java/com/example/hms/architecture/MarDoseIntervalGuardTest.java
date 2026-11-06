@@ -69,6 +69,44 @@ class MarDoseIntervalGuardTest {
             .isEmpty();
     }
 
+    /** What every write of a dose or a bedside check on a MAR row must ask first (QA D1392). */
+    private static final Pattern MAR_WRITE = Pattern.compile("\\.(?:setAdministeredAt|administeredAt|setScanVerifiedAt)\\(");
+    private static final String STANDING_RULE = "requireOrderStillStands(";
+
+    /**
+     * QA D1392: a cancelled order took a five-rights check and a GIVEN dose,
+     * because the paths asked whether the stay had ended and never what the
+     * order's own status was. A file that writes a MAR row runs the order's
+     * standing rule, and the two doors into those writes do so before anything
+     * else happens. A new administration path that forgets it fails here.
+     */
+    @Test
+    void everyMarWriteAsksWhetherTheOrderStillStands() throws IOException {
+        Map<String, String> missing = new TreeMap<>();
+        int scanned = 0;
+        try (Stream<Path> files = Files.walk(MAIN)) {
+            for (Path file : files.filter(f -> f.toString().endsWith(".java")).toList()) {
+                String rel = MAIN.relativize(file).toString().replace('\\', '/');
+                String src = SourceScan.stripComments(Files.readString(file, StandardCharsets.UTF_8));
+                if (src.contains("MedicationAdministrationRecord") && !NOT_ADMINISTRATIONS.containsKey(rel)
+                    && MAR_WRITE.matcher(src).find()) {
+                    scanned++;
+                    if (!src.contains(STANDING_RULE)) {
+                        missing.put(rel, "writes a MAR row without " + STANDING_RULE);
+                    }
+                }
+            }
+        }
+        assertThat(scanned).as("the scan found the eMAR write paths").isPositive();
+        assertThat(missing).as("a MAR write that does not refuse a withdrawn order (QA D1392)%s", SourceScan.MANDATE).isEmpty();
+
+        String service = SourceScan.stripComments(Files.readString(
+            MAIN.resolve("service/impl/NurseTaskServiceImpl.java"), StandardCharsets.UTF_8));
+        assertThat(count(Pattern.compile("requireOrderStillStands\\(\\w+(?:\\.getPrescription\\(\\))?, hospitalId\\)"), service))
+            .as("the prescription path and the MAR-row path of the administer call, both doors of the bedside check")
+            .isEqualTo(4);
+    }
+
     private static int count(Pattern pattern, String src) {
         Matcher m = pattern.matcher(src);
         int n = 0;

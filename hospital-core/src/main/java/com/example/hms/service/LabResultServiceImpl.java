@@ -277,6 +277,12 @@ public class LabResultServiceImpl implements LabResultService {
         // first-level cache.
         LabOrderStatus committedStatus = labOrderRepository.findStatusById(lockedOrder.getId());
         if (!ingested) {
+            // QA D1392 class: a result is not typed onto an order the clinician
+            // cancelled. An analyser's late ORU stays recorded without moving the
+            // order (LabOrderLifecycle.statusAfterNewResult): the machine did run it.
+            if (committedStatus == LabOrderStatus.CANCELLED) {
+                throw new com.example.hms.exception.FieldBusinessException("labOrderId", "lab.order.cancelledNoResult");
+            }
             requireSpecimenTaken(committedStatus, lockedOrder, labSpecimenRepository);
         }
 

@@ -299,4 +299,36 @@ class CancelledOrderLockGuardTest {
         }
         return start < end ? head.substring(start, end) : "?";
     }
+
+    /**
+     * QA D1393: a cancelled admission left its stay encounter open, and the
+     * lookup that files a new order read only the encounter, so every later
+     * order of the patient landed on the stay that never happened. The cancel
+     * ends the encounter, no lookup may reach an open stay by the encounter's
+     * status alone, and the only one asks for the admission too.
+     */
+    @Test
+    @DisplayName("a cancelled stay is never where a new order goes")
+    void aCancelledStayIsNeverWhereANewOrderGoes() throws IOException {
+        Path main = Path.of("src/main/java/com/example/hms");
+        List<String> statusOnly = new ArrayList<>();
+        try (java.util.stream.Stream<Path> files = Files.walk(main)) {
+            for (Path file : files.filter(f -> f.toString().endsWith(".java")).toList()) {
+                if (Files.readString(file, StandardCharsets.UTF_8).contains("AdmissionIdIsNotNull")) {
+                    statusOnly.add(main.relativize(file).toString());
+                }
+            }
+        }
+        assertThat(statusOnly).as("an open-stay lookup that cannot see the admission (QA D1393): use "
+            + "EncounterRepository.findOpenStayEncounters" + SourceScan.MANDATE).isEmpty();
+
+        String admissions = SourceScan.stripComments(Files.readString(
+            SERVICES.resolve("impl/AdmissionServiceImpl.java"), StandardCharsets.UTF_8));
+        int open = admissions.indexOf('{', admissions.indexOf("public void cancelAdmission("));
+        String cancel = admissions.substring(open, SourceScan.closingBrace(admissions, open));
+        assertThat(cancel).as("the cancel ends the stay's orders and its encounter (QA D1393)")
+            .contains("recordCancellation(").contains("cancelAdmissionEncounters(")
+            .as("a cancelled stay never happened: no discharge summary, no bill")
+            .doesNotContain("recordDischarge(").doesNotContain("completeAdmissionEncounters(");
+    }
 }

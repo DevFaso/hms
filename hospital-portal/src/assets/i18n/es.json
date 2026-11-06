@@ -1653,6 +1653,7 @@
       "ROI_STATUS": "Solicitud de acceso a la historia {{verb}}",
       "ENCOUNTER_STATUS_DENIED": "Cambio de estado de la consulta rechazado: la consulta no está asignada al autor",
       "ENCOUNTER_STATUS_UPDATED": "Estado de la consulta cambiado de {{from}} a {{to}}",
+      "ENCOUNTER_CANCELLED_WITH_ADMISSION": "Encuentro cerrado: la hospitalización {{admission}} fue cancelada (estaba {{previous}})",
       "ENCOUNTER_DISCHARGE_COMPLETED": "Consulta cerrada en el alta del ingreso {{admission}} (estaba {{previous}})",
       "ENCOUNTER_ADMISSION_COMPLETED": "Consulta cerrada al ingreso {{admission}} (estaba {{previous}})",
       "CHECKED_IN": "Paciente registrado para la cita {{appointment}}; consulta {{encounter}} abierta como llegada. {{identity}} {{insurance}}",
@@ -1947,6 +1948,7 @@
       "PHARMACIST_RECORDED_PARTNER_DISPENSE": "Dispensación del socio registrada por el farmacéutico"
     },
     "WARD_ORDER_TRIGGER": {
+      "ADMISSION_CANCELLED": "hospitalización cancelada",
       "PARTNER_SMS_ACCEPT": "aceptación del socio por SMS",
       "PARTNER_SMS_REJECT": "rechazo del socio por SMS",
       "PARTNER_SMS_CONFIRM_DISPENSE": "dispensación confirmada por el socio por SMS",
@@ -4393,7 +4395,9 @@
     "MARK_ALL_READ": "Marcar todo como leído",
     "MEDICATION": "Medicamento",
     "MEDICATIONS": "Medicamentos",
-    "MEDICATIONS_DUE": "Medicamentos pendientes",
+    "MEDICATIONS_AS_NEEDED_HINT": "+ {{count}} si es necesario",
+    "MEDICATIONS_DUE": "Dosis programadas pendientes",
+    "MEDICATIONS_OVERDUE": "Dosis atrasadas",
     "MEDICATION_LIST": "Lista de medicamentos",
     "MEDICATION_MAR": "Registro de administración de medicamentos",
     "MEDIUM": "Medio",
@@ -11905,6 +11909,7 @@
     "TRANSFER_CANCEL_CONFIRM": "Cancelar el traslado"
   },
   "EMAR": {
+    "ORDER_NO_LONGER_ACTIVE": "Esta receta ya no está activa. No se registró ninguna dosis.",
     "ACTION_RECORD_GIVEN": "Registrar como administrada",
     "ADMIN_STATUS": {
       "GIVEN": "administrada",

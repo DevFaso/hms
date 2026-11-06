@@ -502,14 +502,24 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
 
   /* ── Computed counts ───────────────────────────────────── */
 
-  overdueCount(): number {
-    return this.vitals().filter((v: NurseVitalTask) => v.overdue).length;
-  }
-
+  /**
+   * QA D1402: each tile says what it counts, from the server's one rule. With
+   * no summary it counts the same thing in the rows on hand, never a different
+   * thing (the overdue tile fell back on overdue vitals).
+   */
   medsDueCount(): number {
     return (
       this.summary()?.medicationsDue ??
-      this.medications().filter((m: NurseMedicationTask) => m.status === 'DUE').length
+      this.medications().filter((m: NurseMedicationTask) => m.status === 'DUE' && !m.asNeeded)
+        .length
+    );
+  }
+
+  /** QA D1402: the as-needed rows of the same list, said apart from the doses due. */
+  medsAsNeededCount(): number {
+    return (
+      this.summary()?.medicationsAsNeeded ??
+      this.medications().filter((m: NurseMedicationTask) => m.asNeeded).length
     );
   }
 
@@ -685,6 +695,12 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
         }
         this.earlyDose.set(null);
         this.toast.error(this.actionError(err));
+        // QA D1392: the order changed since this list was read (withdrawn by the
+        // prescriber): its row is stale and no retry can help.
+        if ((err as { status?: number } | null)?.status === 409) {
+          this.reasonPrompt.set(null);
+          this.loadAll();
+        }
       },
     });
   }

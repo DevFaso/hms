@@ -239,4 +239,22 @@ class EncounterAutoCompletionServiceTest {
         assertThat(later.getStatus()).isEqualTo(EncounterStatus.IN_PROGRESS);
         verify(encounterRepository).saveAll(List.of(walkIn));
     }
+
+    /** QA D1393: the stay never happened: its encounter ends CANCELLED and nothing goes to billing. */
+    @Test
+    void d1393_aCancelledAdmissionsEncounterEndsCancelledAndIsNotBilled() {
+        Encounter stay = new Encounter();
+        stay.setId(UUID.randomUUID());
+        stay.setStatus(EncounterStatus.IN_PROGRESS);
+        when(encounterRepository.findByAdmissionIdAndStatusNotIn(eq(admissionId), anyCollection()))
+                .thenReturn(List.of(stay));
+
+        service.cancelAdmissionEncounters(admissionId);
+
+        assertThat(stay.getStatus()).isEqualTo(EncounterStatus.CANCELLED);
+        assertThat(stay.getCheckoutTimestamp()).isNotNull();
+        verify(encounterRepository).save(stay);
+        verify(trackerEventPublisher).publishStatusTransition(stay, "IN_PROGRESS", "CANCELLED");
+        org.mockito.Mockito.verifyNoInteractions(eventPublisher);
+    }
 }
