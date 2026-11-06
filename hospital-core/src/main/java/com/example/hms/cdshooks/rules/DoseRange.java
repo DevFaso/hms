@@ -38,25 +38,42 @@ public final class DoseRange {
     private static final Map<String, Double> MG_PER_UNIT = Map.of(
         "mcg", 0.001d, "ug", 0.001d, "µg", 0.001d, "μg", 0.001d, "mg", 1d, "g", 1000d);
 
+    /** "1 000" and "1 000 000": a thousands group is one number, not 1 and then a count. */
+    private static final Pattern SPACED_THOUSANDS =
+        Pattern.compile("(?<![\\d.,])\\d{1,3}+(?: \\d{3}+(?![\\d]))++");
+    /** A leading part of a tablet: "1/2 cp". "500/125 mg" is a combination and does not match. */
+    private static final Pattern LEADING_FRACTION =
+        Pattern.compile("^\\s*+([1-3])\\s*+/\\s*+([2-4])(?![\\d.,/])");
+    private static final Map<String, String> FRACTION_SIGNS = Map.of(
+        "½", "0.5", "¼", "0.25", "¾", "0.75");
+    private static final Pattern LEADING_FRACTION_SIGN = Pattern.compile("^\\s*+([\\u00bd\\u00bc\\u00be])");
+
     private DoseRange() {
     }
 
     /**
      * The dose as written with a leading range replaced by its high end ("2-4 mg PO" reads
-     * "4 mg PO"); any other text unchanged, the same instance.
+     * "4 mg PO"), a spaced thousand closed up ("1 000 mg" reads "1000 mg") and a leading
+     * fraction as a decimal ("1/2 cp" reads "0.5 cp"). Read at their first number, the last
+     * two passed limits they were over: 1 000 mg as 1 mg, half a tablet as a whole one. Any
+     * other text unchanged, the same instance.
      */
     public static String highEnd(String dosage) {
         if (dosage == null) {
             return null;
         }
-        Matcher m = RANGE.matcher(WIDE_SPACE.matcher(dosage).replaceAll(" "));
+        String wide = WIDE_SPACE.matcher(dosage).replaceAll(" ");
+        String numbers = withPlainNumbers(wide);
+        // No rewrite and no range: the caller's own text, as it always was.
+        String unchanged = numbers.equals(wide) ? dosage : numbers;
+        Matcher m = RANGE.matcher(numbers);
         if (!m.find()) {
-            return dosage;
+            return unchanged;
         }
         String firstUnit = m.group(2);
         String secondUnit = m.group(4);
         if (firstUnit != null && (secondUnit == null || !sameMeasure(firstUnit, secondUnit))) {
-            return dosage;
+            return unchanged;
         }
         String unit = secondUnit != null ? secondUnit : "";
         double first = number(m.group(1)) * mgFactor(firstUnit != null ? firstUnit : unit);
@@ -66,6 +83,23 @@ public final class DoseRange {
         String highUnit = firstIsHigh && firstUnit != null ? firstUnit : unit;
         String rest = m.replaceFirst("");
         return (highUnit.isEmpty() ? high : high + " " + highUnit) + rest;
+    }
+
+    private static String withPlainNumbers(String dosage) {
+        String closed = SPACED_THOUSANDS.matcher(dosage).replaceAll(r -> r.group().replace(" ", ""));
+        Matcher sign = LEADING_FRACTION_SIGN.matcher(closed);
+        if (sign.find()) {
+            return FRACTION_SIGNS.get(sign.group(1)) + closed.substring(sign.end());
+        }
+        Matcher fraction = LEADING_FRACTION.matcher(closed);
+        if (fraction.find()) {
+            int top = Integer.parseInt(fraction.group(1));
+            int bottom = Integer.parseInt(fraction.group(2));
+            if (top < bottom) {
+                return (double) top / bottom + closed.substring(fraction.end());
+            }
+        }
+        return closed;
     }
 
     /** Two mass units, two counts of a unit, or one unit twice; "per" the same thing in both. */

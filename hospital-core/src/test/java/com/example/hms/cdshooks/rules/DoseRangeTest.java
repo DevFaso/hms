@@ -117,10 +117,36 @@ class DoseRangeTest {
         // two different measures
         "500 mg - 2 cp", "10 mg/kg - 4 mg", "2 mg/kg - 4 mg/j",
         // a combination, a concentration, a multiplication, a fraction
-        "500/125 mg", "80/480 mg", "250 mg/5 ml", "2 x 500 mg", "2x500mg", "1/2 cp",
+        "500/125 mg", "80/480 mg", "250 mg/5 ml", "2 x 500 mg", "2x500mg", "3/2 cp", "1/2/3 cp",
     })
     void aSingleDoseComesBackUntouched(String dosage) {
         assertThat(DoseRange.highEnd(dosage)).isSameAs(dosage);
+    }
+
+    /** Read at the first number, 1 000 mg was 1 mg: it passed every limit it was over. */
+    @ParameterizedTest
+    @CsvSource({
+        "1 000 mg, 1000", "1\u00a0000 mg, 1000", "1\u202f000 mg, 1000", "1 500 mg PO, 1500",
+        "1 000-2 000 mg, 2000", "1 000 000 mg, 1000000",
+    })
+    void aSpacedThousandIsOneNumber(String dosage, double mg) {
+        assertThat(CdsRuleEngine.parseDoseMg(dosage)).isEqualTo(mg, offset(0.001d));
+    }
+
+    /** Read at the first number, half a tablet was a whole one. */
+    @ParameterizedTest
+    @CsvSource({
+        "1/2 cp, 0.5", "1 / 2 cp, 0.5", "\u00bd cp, 0.5", "1/4 comprimido, 0.25", "3/4 tablet, 0.75",
+        "\u00be cp, 0.75", "1/2-1 cp, 1",
+    })
+    void aFractionOfATabletIsThatFraction(String dosage, double units) {
+        assertThat(CdsRuleEngine.parseDoseUnits(dosage)).isEqualTo(units, offset(0.001d));
+    }
+
+    @Test
+    void aCombinationStrengthIsNotAFraction() {
+        assertThat(DoseRange.highEnd("500/125 mg")).isEqualTo("500/125 mg");
+        assertThat(DoseRange.highEnd("80/480 mg")).isEqualTo("80/480 mg");
     }
 
     @Test
