@@ -70,7 +70,7 @@ public interface DispenseRepository extends JpaRepository<Dispense, UUID> {
     /**
      * QA D932: the fills of an item that is not kept in lots - from that pharmacy,
      * of that catalogue item, with no lot - in the given states, newest first, each
-     * with what the return form prints (one query, however many fills).
+     * with its patient (one query, however many fills).
      */
     @org.springframework.data.jpa.repository.Query("""
         SELECT d FROM Dispense d
@@ -90,11 +90,10 @@ public interface DispenseRepository extends JpaRepository<Dispense, UUID> {
     List<Dispense> findByStockLot_IdAndStatusInOrderByCreatedAtDesc(UUID stockLotId,
                                                                     Collection<DispenseStatus> statuses);
 
-    /** The return form lists every fill of a lot, each with what it prints (one query, however many fills). */
+    /** The return form lists every fill of a lot, with its patient (one query, however many fills; they share the one lot). */
     @org.springframework.data.jpa.repository.Query("""
         SELECT d FROM Dispense d
         LEFT JOIN FETCH d.patient
-        LEFT JOIN FETCH d.stockLot
         WHERE d.stockLot.id = :stockLotId
           AND d.status IN :statuses
         ORDER BY d.createdAt DESC, d.id DESC

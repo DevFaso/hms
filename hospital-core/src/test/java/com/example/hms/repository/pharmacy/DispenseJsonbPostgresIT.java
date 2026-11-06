@@ -141,13 +141,14 @@ class DispenseJsonbPostgresIT {
         UUID catalogueItemId = UUID.randomUUID();
         java.util.Set<com.example.hms.enums.DispenseStatus> states = java.util.EnumSet.of(
             com.example.hms.enums.DispenseStatus.COMPLETED, com.example.hms.enums.DispenseStatus.PARTIAL);
+        UUID patientId = insertPatient();
         int fills = 55;
         for (int i = 0; i < fills; i++) {
-            insertFill(pharmacyId, null, lotId, com.example.hms.enums.DispenseStatus.COMPLETED);
-            insertFill(pharmacyId, catalogueItemId, null, com.example.hms.enums.DispenseStatus.PARTIAL);
+            insertFill(patientId, pharmacyId, null, lotId, com.example.hms.enums.DispenseStatus.COMPLETED);
+            insertFill(patientId, pharmacyId, catalogueItemId, null, com.example.hms.enums.DispenseStatus.PARTIAL);
         }
-        insertFill(pharmacyId, null, lotId, com.example.hms.enums.DispenseStatus.CANCELLED);
-        insertFill(pharmacyId, catalogueItemId, UUID.randomUUID(), com.example.hms.enums.DispenseStatus.COMPLETED);
+        insertFill(patientId, pharmacyId, null, lotId, com.example.hms.enums.DispenseStatus.CANCELLED);
+        insertFill(patientId, pharmacyId, catalogueItemId, UUID.randomUUID(), com.example.hms.enums.DispenseStatus.COMPLETED);
 
         List<Dispense> ofTheLot = new TransactionTemplate(transactionManager).execute(status ->
             repository.findReturnableFillsOfLot(lotId, states));
@@ -161,12 +162,27 @@ class DispenseJsonbPostgresIT {
             java.util.Comparator.comparing(Dispense::getCreatedAt).reversed());
     }
 
-    private void insertFill(UUID pharmacyId, UUID catalogueItemId, UUID lotId, com.example.hms.enums.DispenseStatus state) {
+    /** The form's name read fetches the patient, so this one row is real; the rest of the graph need not be. */
+    private UUID insertPatient() {
+        UUID id = UUID.randomUUID();
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            skipForeignKeysInThisTransaction();
+            entityManager.createNativeQuery("""
+                INSERT INTO clinical.patients (id, user_id, first_name, last_name, date_of_birth, phone_number_primary,
+                    is_active, created_at, updated_at)
+                VALUES (:id, :u, 'Awa', 'Kabore', DATE '2018-06-15', :phone, true, now(), now())
+                """).setParameter("id", id).setParameter("u", UUID.randomUUID())
+                .setParameter("phone", "+226" + id).executeUpdate();
+        });
+        return id;
+    }
+
+    private void insertFill(UUID patientId, UUID pharmacyId, UUID catalogueItemId, UUID lotId, com.example.hms.enums.DispenseStatus state) {
         UUID id = new TransactionTemplate(transactionManager).execute(status -> {
             skipForeignKeysInThisTransaction();
             Dispense dispense = Dispense.builder()
                 .prescription(entityManager.getReference(Prescription.class, UUID.randomUUID()))
-                .patient(entityManager.getReference(Patient.class, UUID.randomUUID()))
+                .patient(entityManager.getReference(Patient.class, patientId))
                 .pharmacy(entityManager.getReference(Pharmacy.class, pharmacyId))
                 .dispensedByUser(entityManager.getReference(User.class, UUID.randomUUID()))
                 .medicationName("Amoxicillin 500 mg")
