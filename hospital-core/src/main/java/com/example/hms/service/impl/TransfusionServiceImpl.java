@@ -1251,7 +1251,7 @@ public class TransfusionServiceImpl implements TransfusionService {
         unitRepository.lockById(request.getBloodUnitId());
         TransfusionRequest transfusionRequest = loadRequestScoped(request.getRequestId());
         if (transfusionRequest.isTerminal()) {
-            throw new BusinessException("transfusion.request.closed");
+            throw new FieldBusinessException("requestId", "transfusion.request.closed");
         }
         UUID hospitalId = transfusionRequest.getHospital().getId();
         BloodUnit unit = loadUnitScoped(request.getBloodUnitId());
