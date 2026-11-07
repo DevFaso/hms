@@ -550,6 +550,9 @@ class AdultParacetamolRuleTest {
         String detail = evaluate(new Order("1 g", "3 fois par jour").others(other("1 g", "3 fois par jour et 1 fois la nuit")))
             .get(0).detail();
         assertThat(detail).contains("counted at the number of doses a day their frequency states");
+        // Under the ceiling too, and on a card: a sentence no card carries would pass in silence.
+        assertThat(evaluate(new Order("500 mg", "3 fois par jour").others(other("500 mg", "2 fois par jour pendant 5 jours")))
+            .get(0).summary()).contains("counted at what their frequency states");
     }
 
     /** QA D1455: over the ceiling on what the sentence states: "at least", and the total is unknown. */

@@ -127,7 +127,7 @@ public final class MarDoseSchedule {
 
     /** The hour units in English, French and Spanish (accents removed before matching). */
     private static final String HOUR_UNIT = "(?:H|HR|HRS|HS|HOUR|HOURS|HEURE|HEURES|HORA|HORAS)";
-    private static final String EVERY = "(?:EVERY|TOUTES LES|CHAQUE|CADA)";
+    private static final String EVERY = "(?:EVERY|TOUTES LES|TOUTE LES|TOUS LES|TTES LES|TT LES|CHAQUE|CADA)";
 
     private static final Pattern Q_HOURS = Pattern.compile("\\bQ\\s*(\\d{1,2})\\s*H\\b");
     private static final Pattern EVERY_HOURS = Pattern.compile("\\b" + EVERY + "\\s+(\\d{1,2})\\s*" + HOUR_UNIT + "\\b");
@@ -306,8 +306,23 @@ public final class MarDoseSchedule {
         if (shorter != null) {
             return shorter;
         }
-        Integer hours = hoursOf(upper);
+        Integer hours = shortestStatedHours(upper);
         return hours == null ? null : hours * MINUTES_PER_HOUR;
+    }
+
+    /** Every gap the sentence states, not its first: "toutes les 6 h puis toutes les 2 h" allows 2 h. */
+    private static Integer shortestStatedHours(String upper) {
+        Integer shortest = hoursOf(upper);
+        for (Pattern stated : List.of(Q_HOURS, EVERY_HOURS)) {
+            Matcher m = stated.matcher(upper);
+            while (m.find()) {
+                Integer hours = positive(Integer.parseInt(m.group(1)));
+                if (hours != null && (shortest == null || hours < shortest)) {
+                    shortest = hours;
+                }
+            }
+        }
+        return shortest;
     }
 
     /**

@@ -403,7 +403,7 @@ class FrequencyWordingTest {
     /** One instance of each line of the grammar, as the fixture writes it: a line added here is a line with no fixture. */
     private static List<String> oneInstancePerLine() {
         Map<String, String> oneWord = Map.of("HOUR", "H", "DAY", "JOUR", "WEEK", "SEMAINE", "MONTH", "MOIS",
-            "TIMES", "FOIS", "RATE", "ML", "WEEKLYWORD", "WEEKLY");
+            "TIMES", "FOIS", "RATE", "ML", "RATEHOUR", "H", "WEEKLYWORD", "WEEKLY");
         List<String> out = new ArrayList<>();
         FrequencyCadence.GRAMMAR.lines().map(line -> line.split(" \\| ")[1]).forEach(tokens -> out.add(Arrays.stream(
             tokens.split(" ")).map(token -> switch (token) {
@@ -487,10 +487,32 @@ class FrequencyWordingTest {
         assertThat(MarDoseSchedule.read(wording).kind()).as(wording).isEqualTo(MarDoseSchedule.Kind.UNREAD);
         assertThat(MarDoseSchedule.intervalHours(wording)).as(wording).isNull();
         assertThat(MarDoseSchedule.writtenWithNoCount(wording)).as(wording).isTrue();
-        Double perDay = MarDoseSchedule.dosesPerDay(wording);
-        if (!wording.contains("par jour")) {
-            assertThat(perDay).as(wording).isNull();
+        // The count the sentence states is a floor for a limit; a decimal or a stated hour is no count at all.
+        assertThat(MarDoseSchedule.dosesPerDay(wording)).as(wording).isEqualTo(wording.contains("lundi") ? Double.valueOf(1d) : null);
+    }
+
+    /** The independent review of round 35: text in the shape of a form that means something else: each asked once. */
+    @ParameterizedTest
+    @ValueSource(strings = {"12/24", "16/24", "16/24h", "8/24 h", "20/24", "1 g 12/24 h", "8h,20", "8 h, 20", "6h, 12h, 18",
+        "8h 14h 20", "8 h 99", "8:99", "J1 \u00e0 J3", "J1-J5", "4 cp J1 \u00e0 J3", "1,25 mg OD", "1 ml OD", "1 amp OD", "1 cp OD",
+        "ma\u00f1ana por la tarde", "manana en la tarde", "ma\u00f1ana por la noche", "manana tarde", "q.5h", "every .5 hours",
+        ".5 fois par jour", ",5 fois par jour", "6'/6'", "1 cp en continu", "1 cp continu", "1 cp PSE", "1 cp 24/24",
+        "10 mg/HS", "10 UI/HS", "H8 H20", "H8 H14 H20", "0 h 24 h", "1/2/j", "3 cp en une prise"})
+    void reviewOfRound35_whatMeansSomethingElseIsAsked(String wording) {
+        assertThat(FrequencyWording.classify(wording)).as(wording).isEqualTo(FrequencyWording.Verdict.UNREADABLE);
+    }
+
+    /** The same review: what the form says, it reads. */
+    @Test
+    void reviewOfRound35_whatTheFormSaysIsRead() {
+        for (String wording : List.of("24/24 H", "24/24h", "24/24 heures", "24 h/24 h", "125 ml/h", "2 mg/h")) {
+            assertThat(readingOf(wording)).as(wording).isEqualTo("CONTINUOUS");
         }
+        assertThat(readingOf("8h30")).isEqualTo("REPEATING:1440");
+        assertThat(readingOf("8h,20h")).isEqualTo("REPEATING:720");
+        assertThat(readingOf("ma\u00f1ana y noche")).isEqualTo("REPEATING:720");
+        assertThat(readingOf("ma\u00f1ana, tarde y noche")).isEqualTo("REPEATING:480");
+        assertThat(MarDoseSchedule.dosesPerDay("1/2/j")).as("a fraction is no count").isNull();
     }
 
     /** QA D1460: a schedule is not told it reads as needed; a real condition still is. */

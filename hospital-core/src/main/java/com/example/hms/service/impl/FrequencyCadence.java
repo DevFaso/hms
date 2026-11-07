@@ -48,6 +48,10 @@ final class FrequencyCadence {
     private static final int MINUTES_DIGITS = 2;
     private static final int COURSE_ENTRY_DIGITS = 3;
     private static final int SPANISH_ELEVEN = 11;
+    private static final int MAX_COUNT_OVER_24 = 4;
+    /** A clock with its minutes, written against the hour: "08:00", "8h30". */
+    private static final String CLOCK_WITH_MINUTES = "HMIN";
+    private static final String UNREADABLE_MARK = " ? ";
     private static final int POSOLOGY_MIN_TOKENS = 5;
     private static final int POSOLOGY_MAX_TOKENS = 7;
 
@@ -68,7 +72,10 @@ final class FrequencyCadence {
      * too), a name in capitals a word list. The readings: H every # hours, D days, W
      * weeks; S and B "6h/6h" and "6/6", both numbers equal; PD, PW, PM # doses a day,
      * week, month; =n every n minutes, and *n too, but "3 cp daily" may be three doses, so
-     * *n stands behind no dose of several; ONE a single dose; CONT a continuous infusion.
+     * *n stands behind no dose of several; ONE a single dose; CONT a continuous infusion; P24
+     * # doses a day from "#/24", at most {@value #MAX_COUNT_OVER_24}: "16/24" is sixteen hours out of
+     * twenty-four. A reading after "!" stands behind no dose at all: "1 ml OD" is the right eye,
+     * "3 cp en 1 prise" may be a day's total. Nor does a continuous infusion: "1 cp en continu" is no pump.
      * A form holds no optional word: what is not on a line is not read.
      */
     static final String GRAMMAR = """
@@ -84,6 +91,7 @@ final class FrequencyCadence {
         CONT | 24 H / 24
         CONT | 24 H / 24 H
         CONT | 24 / 24
+        CONT | 24 / 24 HOUR
         S | # HOUR / # HOUR
         S | # HOUR / #
         S | # / # HOUR
@@ -128,8 +136,8 @@ final class FrequencyCadence {
         PD | # TIMES / 24
         PD | # TIMES DANS LA JOURNEE
         PD | # / DAY
-        PD | # / 24 HOUR
-        PD | # / 24
+        P24 | # / 24 HOUR
+        P24 | # / 24
         =1440 | ONCE A DAY
         =1440 | ONCE DAILY
         =1440 | ONCE PER DAY
@@ -147,7 +155,7 @@ final class FrequencyCadence {
         *1440 | DIARIA
         =1440 | QD
         =1440 | Q D
-        =1440 | OD
+        !=1440 | OD
         =1440 | QAM
         =1440 | QPM
         =1440 | NIGHTLY
@@ -224,8 +232,8 @@ final class FrequencyCadence {
         ONE | UNE SEULE PRISE
         ONE | UNE FOIS SEULEMENT
         ONE | 1 FOIS SEULEMENT
-        ONE | EN UNE PRISE
-        ONE | EN 1 PRISE
+        !ONE | EN UNE PRISE
+        !ONE | EN 1 PRISE
         ONE | SINGLE DOSE
         ONE | ONCE ONLY
         ONE | ONE TIME
@@ -265,8 +273,8 @@ final class FrequencyCadence {
         CONT | IVSE
         CONT | PSE
         CONT | SERINGUE ELECTRIQUE
-        CONT | ~ RATE / HOUR
-        CONT | DEBIT ~ RATE / HOUR
+        CONT | ~ RATE / RATEHOUR
+        CONT | DEBIT ~ RATE / RATEHOUR
         """;
 
     /**
@@ -341,6 +349,8 @@ final class FrequencyCadence {
     static final Set<String> MONTH_WORDS = words("MOIS MONTH MONTHS MES MESES");
     static final Set<String> TIMES_WORDS = words("FOIS X F TIMES TIME VECES VEZ");
     static final Set<String> RATE_WORDS = words("ML CC MG MCG UG UI IU G L");
+    /** The hour of a rate; never HS, the bedtime of "10 UI/HS". */
+    static final Set<String> RATE_HOUR_WORDS = words("H HR HOUR HEURE HORA");
     static final Set<String> WEEKLY_WORDS = words("WEEKLY HEBDOMADAIRE SEMANAL");
     /** A dose in front of a form, which says how much and not how often. No drops: "1 goutte OD" is the right eye. */
     static final Set<String> DOSE_WORDS = words(
@@ -349,8 +359,6 @@ final class FrequencyCadence {
     static final Set<String> TAKE_WORDS = words("PRENDRE TAKE TOMAR");
     /** What joins two parts of the day, two clock times or two entries of a course. */
     static final Set<String> LIST_JOINS = words("ET AND Y");
-    /** What ends a range of days: "J1 a J3", "J1-J3". */
-    static final Set<String> RANGE_TO_WORDS = words("A AU TO -");
     /** Before a bare number, these alone make it a clock time: "at 8", "a las 8". */
     static final Set<String> BEFORE_BARE_CLOCK = words("AT LAS");
     /** Before a clock time: "a 8 h", "vers 20 h". */
@@ -365,7 +373,7 @@ final class FrequencyCadence {
 
     private static final Map<String, Set<String>> WORD_LISTS = Map.of(
         "HOUR", HOUR_WORDS, "DAY", DAY_WORDS, "WEEK", WEEK_WORDS, "MONTH", MONTH_WORDS, "TIMES", TIMES_WORDS,
-        "RATE", RATE_WORDS, "WEEKLYWORD", WEEKLY_WORDS);
+        "RATE", RATE_WORDS, "RATEHOUR", RATE_HOUR_WORDS, "WEEKLYWORD", WEEKLY_WORDS);
 
     private static final List<Line> FORMS = lines(GRAMMAR);
     /** The longest first: "LE SOIR AU COUCHER" before "LE SOIR". */
@@ -373,8 +381,10 @@ final class FrequencyCadence {
         .sorted((a, b) -> b.tokens().size() - a.tokens().size())
         .toList();
 
-    /** "08:00": the hours and minutes of a clock. */
-    private static final Pattern HH_COLON_MM = Pattern.compile("\\b(\\d{1,2}+):(\\d{2}+)\\b");
+    /** "08:00", "8h30": minutes only against the hour and under 60; "8 h, 20" is two times or none. */
+    private static final Pattern HOUR_AND_MINUTES = Pattern.compile("\\b(\\d{1,2}+)[:H][0-5]\\d\\b");
+    /** ".5", ",5", "q.5h": the point is part of a number, not a separator; "6'/6'": minutes. */
+    private static final Pattern NUMBER_MARK = Pattern.compile("(?<![\\dA-Z])[.,](?=\\d)|(?<=[A-Z])\\.(?=\\d)|(?<=\\d)['\u2019]");
     /** "0,5", "2.5": never a count. */
     private static final Pattern DECIMAL_NUMBER = Pattern.compile("(?<![\\d.,])\\d{1,4}+[.,]\\d{1,3}+(?![\\d.,])");
     /** "TPI-SP", "apres-midi": one space; a hyphen between numbers stays and fits no form ("q4-6h"). */
@@ -385,11 +395,11 @@ final class FrequencyCadence {
     private static final Pattern SEPARATOR = Pattern.compile("[\\s\\p{Z}\\uFEFF_.,'’]");
     private static final Pattern ONLY_DIGITS = Pattern.compile("\\d{1,4}+");
     /** A closing bracket that ends the text: a label that carries its code. */
-    private static final Pattern LABEL_AND_CODE = Pattern.compile("([^()]*+)\\(([^()]*+)\\)\\s*+");
+    private static final Pattern LABEL_AND_CODE = Pattern.compile("([^()]*+)\\(([^()]*+)\\)[\\s\\p{Z}\\uFEFF]*+");
 
     /** A dose written in parts, kept out of what a limit counts: "1,5 fois par jour" is no five, "1/2 fois" no two. */
     private static final String DOSE_PART_SPACED = " DOSEPART ";
-    private static final Pattern FRACTION_DOSE = Pattern.compile("(?<![\\d/:.,])(?:1 ?/ ?[234]|2 ?/ ?[34]|3 ?/ ?4)(?![\\d/])");
+    private static final Pattern FRACTION_DOSE = Pattern.compile("(?<![\\d/:.,])(?:1 ?/ ?[234]|2 ?/ ?[34]|3 ?/ ?4)(?!\\d)");
     private static final Pattern DECIMAL_DOSE = Pattern.compile("(?<![\\d:.,])\\d{1,4}+[.,]\\d{1,3}+(?![\\d.,:])");
 
     /** One line of {@link #GRAMMAR} or {@link #PARTS}: what it means, and its tokens. */
@@ -428,11 +438,11 @@ final class FrequencyCadence {
 
     /** The tokens of a text: what the grammar is matched on. */
     private static List<String> tokensOf(String upper) {
-        String clocked = HH_COLON_MM.matcher(upper).replaceAll("$1H$2");
+        String clocked = HOUR_AND_MINUTES.matcher(upper).replaceAll("$1" + CLOCK_WITH_MINUTES);
         String numbered = DECIMAL_NUMBER.matcher(clocked).replaceAll(" " + DECIMAL + " ")
             .replace("VINGT-QUATRE", "24").replace("VEINTICUATRO", "24").replace("TWENTY-FOUR", "24")
             .replace("QUARANTE-HUIT", "48").replace("FORTY-EIGHT", "48");
-        String joined = HYPHEN_IN_WORDS.matcher(numbered).replaceAll(" ");
+        String joined = HYPHEN_IN_WORDS.matcher(NUMBER_MARK.matcher(numbered).replaceAll(UNREADABLE_MARK)).replaceAll(" ");
         List<String> tokens = new ArrayList<>();
         Matcher token = TOKEN.matcher(joined);
         while (token.find()) {
@@ -454,9 +464,15 @@ final class FrequencyCadence {
             return null;
         }
         List<String> rest = tokens.subList(after, tokens.size());
-        // "3 cp en 1 prise" may be every day's total in one intake: only "en 1 prise" alone says one dose.
-        boolean oneIntakeOfADay = "EN".equals(rest.get(0)) && "PRISE".equals(rest.get(rest.size() - 1));
-        return oneIntakeOfADay || (doseOfSeveral(tokens, after) && isAmountOverAPeriod(rest)) ? null : readForm(rest);
+        if (standsAlone(rest) || (doseOfSeveral(tokens, after) && isAmountOverAPeriod(rest))) {
+            return null;
+        }
+        Reading behind = readForm(rest);
+        return behind != null && behind.kind() == MarDoseSchedule.Kind.CONTINUOUS ? null : behind;
+    }
+
+    private static boolean standsAlone(List<String> rest) {
+        return FORMS.stream().anyMatch(form -> form.meaning().startsWith("!") && matched(form.tokens(), rest).isPresent());
     }
 
     /** "3 cp", "500 mg" in front; not "1 cp", and not "0,5 cp", which are one dose whatever the period. */
@@ -511,7 +527,7 @@ final class FrequencyCadence {
         int doses = 0;
         for (int i = 0; i < tokens.size(); i++) {
             String token = tokens.get(i);
-            boolean fitsHere = i % 2 == 1 ? "-".equals(token) : token.length() == 1 && Character.isDigit(token.charAt(0));
+            boolean fitsHere = i % 2 == 1 ? "-".equals(token) : token.length() == 1 && ONLY_DIGITS.matcher(token).matches();
             if (!fitsHere) {
                 return null;
             }
@@ -565,8 +581,9 @@ final class FrequencyCadence {
         return DECIMAL.equals(token) || ONLY_DIGITS.matcher(token).matches() || wholeNumber(token) != null;
     }
 
-    private static Reading readingOf(String meaning, List<Integer> numbers) {
+    private static Reading readingOf(String line, List<Integer> numbers) {
         int n = numbers.isEmpty() ? 0 : numbers.get(0);
+        String meaning = line.startsWith("!") ? line.substring(1) : line;
         return switch (meaning) {
             case "ONE" -> Reading.ONE_OFF;
             case "CONT" -> Reading.CONTINUOUS;
@@ -577,6 +594,7 @@ final class FrequencyCadence {
             case "D" -> every(n * MINUTES_PER_DAY);
             case "W" -> every(n * MINUTES_PER_WEEK);
             case "PD" -> countOver(n, MINUTES_PER_DAY);
+            case "P24" -> n <= MAX_COUNT_OVER_24 ? countOver(n, MINUTES_PER_DAY) : null;
             case "PW" -> countOver(n, MINUTES_PER_WEEK);
             case "PM" -> countOver(n, MINUTES_PER_MONTH);
             default -> every(Integer.parseInt(meaning.substring(1)));
@@ -602,8 +620,9 @@ final class FrequencyCadence {
 
     /**
      * "matin et soir", "matin, midi et soir", "au coucher": a dose at each part named once. Spanish
-     * "manana" with no part after it is tomorrow and "tarde" alone is late; "soir coucher" with
-     * nothing between them may be one dose or two.
+     * "manana" is the morning only in a list: alone, or with one part behind it ("manana por la tarde",
+     * "manana tarde"), it is tomorrow. "tarde" alone is late. "soir coucher" with nothing between them
+     * may be one dose or two.
      */
     private static Reading partsOfDay(List<String> tokens) {
         List<String> seen = new ArrayList<>();
@@ -633,9 +652,21 @@ final class FrequencyCadence {
     }
 
     private static boolean isBareWordOnItsOwn(Line part, int after, List<String> tokens) {
-        boolean tomorrow = List.of("MANANA").equals(part.tokens()) && after == tokens.size();
+        boolean tomorrow = List.of("MANANA").equals(part.tokens()) && !startsAList(tokens, after);
         boolean late = List.of("TARDE").equals(part.tokens()) && tokens.size() == 1;
         return tomorrow || late;
+    }
+
+    /** Behind a bare "manana": "y ...", or one word of a longer list ("manana mediodia y noche"). */
+    private static boolean startsAList(List<String> tokens, int after) {
+        if (after >= tokens.size()) {
+            return false;
+        }
+        if (LIST_JOINS.contains(tokens.get(after))) {
+            return true;
+        }
+        Line next = partAt(tokens, after);
+        return next != null && next.tokens().size() == 1 && after + 1 < tokens.size();
     }
 
     private static Line partAt(List<String> tokens, int at) {
@@ -648,7 +679,11 @@ final class FrequencyCadence {
         return null;
     }
 
-    /** "H0 H8 H24", "J1 J2 J3", "J1 a J3": a course of doses at fixed moments after the first, that ends. */
+    /**
+     * "H0 H8 H24", "J1 J2 J3": a course of doses at fixed moments after the first, that ends. A range ("J1 a J3",
+     * "4 cp J1 a J3") names no moments, only how long: read, it ended a twice-daily malaria course after three
+     * doses. A course in hours starts at H0: "H8 H20" may be two clock times every day.
+     */
     private static Reading course(List<String> tokens) {
         if (tokens.isEmpty() || !(HOUR_MARK.equals(tokens.get(0)) || "J".equals(tokens.get(0)))) {
             return null;
@@ -657,37 +692,19 @@ final class FrequencyCadence {
         List<Integer> values = new ArrayList<>();
         int at = 0;
         while (at < tokens.size()) {
-            at = readCourseEntry(tokens, at, letter, values);
-            at = at < 0 ? -1 : afterJoin(tokens, at);
+            Integer value = entryAt(tokens, at, letter);
+            at = value == null ? -1 : afterJoin(tokens, at + 2);
             if (at < 0) {
                 return null;
             }
+            values.add(value);
         }
-        List<Integer> offsets = offsets(values, HOUR_MARK.equals(letter) ? MINUTES_PER_HOUR : MINUTES_PER_DAY);
+        boolean hours = HOUR_MARK.equals(letter);
+        if (hours && values.get(0) != 0) {
+            return null;
+        }
+        List<Integer> offsets = offsets(values, hours ? MINUTES_PER_HOUR : MINUTES_PER_DAY);
         return offsets.isEmpty() ? null : Reading.course(offsets);
-    }
-
-    /** One entry or one range of days at {@code at}, into {@code values}: the index after it, or -1. */
-    private static int readCourseEntry(List<String> tokens, int at, String letter, List<Integer> values) {
-        Integer value = entryAt(tokens, at, letter);
-        if (value == null) {
-            return -1;
-        }
-        int next = at + 2;
-        int to = value;
-        if (next < tokens.size() && RANGE_TO_WORDS.contains(tokens.get(next))) {
-            Integer end = entryAt(tokens, next + 1, letter);
-            // "H0 a H24" names no moments: not 25 hourly doses.
-            if (end == null || HOUR_MARK.equals(letter)) {
-                return -1;
-            }
-            to = end;
-            next += 3;
-        }
-        for (int v = value; v <= to && values.size() <= MAX_COURSE_ENTRIES; v++) {
-            values.add(v);
-        }
-        return next;
     }
 
     private static Integer entryAt(List<String> tokens, int at, String letter) {
@@ -751,22 +768,13 @@ final class FrequencyCadence {
             if (AM.equals(after) || PM.equals(after)) {
                 return add(hourOf(number, after), true, i + 2);
             }
+            if (CLOCK_WITH_MINUTES.equals(after)) {
+                return add(number, true, i + 2);
+            }
             if (HOUR_MARK.equals(after)) {
-                return afterHourMark(tokens, i + 2, number, !before.isEmpty());
+                return add(number, !before.isEmpty(), i + 2);
             }
             return BEFORE_BARE_CLOCK.contains(before) ? add(number, true, i + 1) : -1;
-        }
-
-        /** Behind "8 h": minutes ("8 h 30"), or the next time ("8 h 20 h"). */
-        private int afterHourMark(List<String> tokens, int next, int hour, boolean before) {
-            boolean minutes = next < tokens.size() && tokens.get(next).length() == MINUTES_DIGITS
-                && ONLY_DIGITS.matcher(tokens.get(next)).matches() && !startsATime(tokens, next);
-            return minutes ? add(hour, true, next + 1) : add(hour, before, next);
-        }
-
-        private boolean startsATime(List<String> tokens, int at) {
-            String after = at + 1 < tokens.size() ? tokens.get(at + 1) : "";
-            return HOUR_MARK.equals(after) || AM.equals(after) || PM.equals(after);
         }
 
         private int add(int hour, boolean isMarked, int next) {
@@ -786,7 +794,7 @@ final class FrequencyCadence {
         }
 
         Reading reading() {
-            if (hours.isEmpty() || (hours.size() == 1 && !marked)) {
+            if (hours.isEmpty() || (hours.size() == 1 && !marked) || hours.get(hours.size() - 1) - hours.get(0) >= HOURS_PER_DAY) {
                 return null;
             }
             for (int i = 1; i < hours.size(); i++) {

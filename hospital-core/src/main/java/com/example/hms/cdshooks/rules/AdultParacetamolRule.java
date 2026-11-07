@@ -223,6 +223,10 @@ public class AdultParacetamolRule implements CdsRule {
                 cards.add(alert(text.get("cds.adultParacetamol.unreadOther.summary",
                     "{0}: {1} other active order(s) have a frequency that could not be read, counted as one dose - check paracetamol from active orders at this hospital against the maximum of {2} mg per day",
                     medication, String.valueOf(others.unreadFrequency), number(ceiling)), null));
+            } else if (others.statedCountOnly > 0) {
+                cards.add(alert(text.get("cds.adultParacetamol.statedCountOther.summary",
+                    "{0}: {1} other active order(s) are counted at what their frequency states, which could not be read in full - check paracetamol from active orders at this hospital against the maximum of {2} mg per day",
+                    medication, String.valueOf(others.statedCountOnly), number(ceiling)), null));
             } else if (!risks.contains(ParacetamolRisk.SEVERE_HEPATIC)) {
                 information(cards, ceiling);
             }

@@ -449,8 +449,20 @@ class MarDoseScheduleTest {
         assertThat(reading.gapAfter(2)).isEqualTo(960);
         assertThat(reading.gapAfter(6)).isNull();
         assertThat(MarDoseSchedule.dosesPerDay("H0 H8 H24 H36 H48 H60")).isEqualTo(2d);
-        assertThat(MarDoseSchedule.read("J1 à J3").courseOffsets()).containsExactly(0, 1440, 2880);
+        // QA D1452 (changed: "J1 à J3" was a course): a range names no moments.
+        assertThat(MarDoseSchedule.read("J1 J2 J3").courseOffsets()).containsExactly(0, 1440, 2880);
+        assertThat(MarDoseSchedule.read("J1 à J3").kind()).isEqualTo(MarDoseSchedule.Kind.UNREAD);
         assertThat(MarDoseSchedule.intervalHours("J1 J2 J3")).as("not a whole-hour regimen").isNull();
+    }
+
+    /** Independent review of round 35: the gap a limit judges in a sentence not read is the shortest it states. */
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', value = {"toutes les 2 h pendant 3 jours|120", "tous les 2 h pendant 3 jours|120",
+        "ttes les 2 h pendant 3 jours|120", "toutes les 6 h puis toutes les 2 h|120", "q8h puis toutes les 2 h|120",
+        "toutes les 2 à 3 h|120", "q4h-q6h|240"})
+    void r35_theShortestStatedGapIsWhatALimitJudges(String frequency, int minutes) {
+        assertThat(MarDoseSchedule.read(frequency).kind()).as(frequency).isEqualTo(MarDoseSchedule.Kind.UNREAD);
+        assertThat(MarDoseSchedule.shortestMinutesBetweenDoses(frequency)).as(frequency).isEqualTo(minutes);
     }
 
     /** QA D1237: "5 fois par jour" repeats (every 4 h 48), though not in whole hours. */

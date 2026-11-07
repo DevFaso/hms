@@ -65,6 +65,7 @@ const WEEK_WORDS = words('W SEM SEMAINE SEMAINES WEEK WEEKS SEMANA SEMANAS');
 const MONTH_WORDS = words('MOIS MONTH MONTHS MES MESES');
 const TIMES_WORDS = words('FOIS X F TIMES TIME VECES VEZ');
 const RATE_WORDS = words('ML CC MG MCG UG UI IU G L');
+const RATE_HOUR_WORDS = words('H HR HOUR HEURE HORA');
 const WEEKLY_WORDS = words('WEEKLY HEBDOMADAIRE SEMANAL');
 const DOSE_WORDS = words(
   'CP CPS COMPRIME COMPRIMES TAB TABS TABLET TABLETS COMPRIMIDO COMPRIMIDOS GELULE ' +
@@ -73,7 +74,6 @@ const DOSE_WORDS = words(
 );
 const TAKE_WORDS = words('PRENDRE TAKE TOMAR');
 const LIST_JOINS = words('ET AND Y');
-const RANGE_TO_WORDS = words('A AU TO -');
 const BEFORE_BARE_CLOCK = words('AT LAS');
 const BEFORE_CLOCK = words('A AT LAS VERS');
 const AFTER_SPANISH_ELEVEN = words('VECES HORA HORAS');
@@ -94,6 +94,7 @@ H | Q # HOUR
 CONT | 24 H / 24
 CONT | 24 H / 24 H
 CONT | 24 / 24
+CONT | 24 / 24 HOUR
 S | # HOUR / # HOUR
 S | # HOUR / #
 S | # / # HOUR
@@ -138,8 +139,8 @@ PD | # TIMES / 24 HOUR
 PD | # TIMES / 24
 PD | # TIMES DANS LA JOURNEE
 PD | # / DAY
-PD | # / 24 HOUR
-PD | # / 24
+P24 | # / 24 HOUR
+P24 | # / 24
 =1440 | ONCE A DAY
 =1440 | ONCE DAILY
 =1440 | ONCE PER DAY
@@ -157,7 +158,7 @@ PD | # / 24
 *1440 | DIARIA
 =1440 | QD
 =1440 | Q D
-=1440 | OD
+!=1440 | OD
 =1440 | QAM
 =1440 | QPM
 =1440 | NIGHTLY
@@ -234,8 +235,8 @@ ONE | UNE SEULE DOSE
 ONE | UNE SEULE PRISE
 ONE | UNE FOIS SEULEMENT
 ONE | 1 FOIS SEULEMENT
-ONE | EN UNE PRISE
-ONE | EN 1 PRISE
+!ONE | EN UNE PRISE
+!ONE | EN 1 PRISE
 ONE | SINGLE DOSE
 ONE | ONCE ONLY
 ONE | ONE TIME
@@ -275,8 +276,8 @@ CONT | CONTINUOUS INFUSION
 CONT | IVSE
 CONT | PSE
 CONT | SERINGUE ELECTRIQUE
-CONT | ~ RATE / HOUR
-CONT | DEBIT ~ RATE / HOUR
+CONT | ~ RATE / RATEHOUR
+CONT | DEBIT ~ RATE / RATEHOUR
 `;
 /* grammar:end */
 
@@ -349,6 +350,7 @@ const WORD_LISTS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
   ['MONTH', MONTH_WORDS],
   ['TIMES', TIMES_WORDS],
   ['RATE', RATE_WORDS],
+  ['RATEHOUR', RATE_HOUR_WORDS],
   ['WEEKLYWORD', WEEKLY_WORDS],
 ]);
 
@@ -506,13 +508,14 @@ function countOver(count: number, period: number): FrequencyReading | null {
 /** `FrequencyCadence.tokensOf`. */
 function tokensOf(upper: string): string[] {
   const joined = upper
-    .replaceAll(/\b(\d{1,2}):(\d{2})\b/g, '$1H$2')
+    .replaceAll(/\b(\d{1,2})[:H][0-5]\d\b/g, '$1HMIN')
     .replaceAll(/(?<![\d.,])\d{1,4}[.,]\d{1,3}(?![\d.,])/g, ` ${DECIMAL} `)
     .replaceAll('VINGT-QUATRE', '24')
     .replaceAll('VEINTICUATRO', '24')
     .replaceAll('TWENTY-FOUR', '24')
     .replaceAll('QUARANTE-HUIT', '48')
     .replaceAll('FORTY-EIGHT', '48')
+    .replaceAll(/(?<![\dA-Z])[.,](?=\d)|(?<=[A-Z])\.(?=\d)|(?<=\d)['\u2019]/g, ' ? ')
     .replaceAll(/(?<=[A-Z])-(?=[A-Z])/g, ' ');
   return (joined.match(/[A-Z]+|\d+|[^A-Z0-9]/gu) ?? []).filter((token) => !SEPARATOR.test(token));
 }
@@ -551,8 +554,9 @@ function matched(form: readonly string[], tokens: readonly string[]): number[] |
   return numbers;
 }
 
-function readingOf(meaning: string, numbers: readonly number[]): FrequencyReading | null {
+function readingOf(line: string, numbers: readonly number[]): FrequencyReading | null {
   const n = numbers[0] ?? 0;
+  const meaning = line.startsWith('!') ? line.slice(1) : line;
   switch (meaning) {
     case 'ONE':
       return ONE_OFF;
@@ -572,6 +576,8 @@ function readingOf(meaning: string, numbers: readonly number[]): FrequencyReadin
       return every(n * MINUTES_PER_WEEK);
     case 'PD':
       return countOver(n, MINUTES_PER_DAY);
+    case 'P24':
+      return n <= 4 ? countOver(n, MINUTES_PER_DAY) : null;
     case 'PW':
       return countOver(n, MINUTES_PER_WEEK);
     case 'PM':
@@ -593,6 +599,14 @@ function partAt(tokens: readonly string[], at: number): Line | null {
   );
 }
 
+/** `FrequencyCadence.startsAList`. */
+function startsAList(tokens: readonly string[], after: number): boolean {
+  if (after >= tokens.length) return false;
+  if (LIST_JOINS.has(tokens[after])) return true;
+  const next = partAt(tokens, after);
+  return next !== null && next.tokens.length === 1 && after + 1 < tokens.length;
+}
+
 /** `FrequencyCadence.partsOfDay`. */
 function partsOfDay(tokens: readonly string[]): FrequencyReading | null {
   const seen: string[] = [];
@@ -605,12 +619,8 @@ function partsOfDay(tokens: readonly string[]): FrequencyReading | null {
     seen.push(part.meaning);
     const next = at + part.tokens.length;
     const bareWord = part.tokens.length === 1 ? part.tokens[0] : '';
-    if (
-      (bareWord === 'MANANA' && next === tokens.length) ||
-      (bareWord === 'TARDE' && tokens.length === 1)
-    ) {
-      return null;
-    }
+    const tomorrow = bareWord === 'MANANA' && !startsAList(tokens, next);
+    if (tomorrow || (bareWord === 'TARDE' && tokens.length === 1)) return null;
     at = afterJoin(tokens, next);
     if (at < 0) return null;
     joined = at !== next;
@@ -625,26 +635,6 @@ function entryAt(tokens: readonly string[], at: number, letter: string): number 
   return anEntry ? Number(digits) : null;
 }
 
-function readCourseEntry(
-  tokens: readonly string[],
-  at: number,
-  letter: string,
-  values: number[],
-): number {
-  const value = entryAt(tokens, at, letter);
-  if (value === null) return -1;
-  let next = at + 2;
-  let to = value;
-  if (next < tokens.length && RANGE_TO_WORDS.has(tokens[next])) {
-    const end = entryAt(tokens, next + 1, letter);
-    if (end === null || letter === 'H') return -1;
-    to = end;
-    next += 3;
-  }
-  for (let v = value; v <= to && values.length <= MAX_COURSE_ENTRIES; v++) values.push(v);
-  return next;
-}
-
 /** `FrequencyCadence.course`. */
 function course(tokens: readonly string[]): FrequencyReading | null {
   const letter = tokens[0];
@@ -652,10 +642,12 @@ function course(tokens: readonly string[]): FrequencyReading | null {
   const values: number[] = [];
   let at = 0;
   while (at < tokens.length) {
-    const next = readCourseEntry(tokens, at, letter, values);
-    at = next < 0 ? -1 : afterJoin(tokens, next);
-    if (at < 0) return null;
+    const value = entryAt(tokens, at, letter);
+    at = value === null ? -1 : afterJoin(tokens, at + 2);
+    if (value === null || at < 0) return null;
+    values.push(value);
   }
+  if (letter === 'H' && values[0] !== 0) return null;
   if (values.length < 2 || values.length > MAX_COURSE_ENTRIES) return null;
   if (!values.every((v, i) => i === 0 || v > values[i - 1])) return null;
   const unit = letter === 'H' ? MINUTES_PER_HOUR : MINUTES_PER_DAY;
@@ -685,22 +677,9 @@ class ClockList {
     if (number === null) return -1;
     const after = tokens[i + 1] ?? '';
     if (after === 'AM' || after === 'PM') return this.add(hourOf(number, after), true, i + 2);
-    if (after === 'H') return this.afterHourMark(tokens, i + 2, number, before !== '');
+    if (after === 'HMIN') return this.add(number, true, i + 2);
+    if (after === 'H') return this.add(number, before !== '', i + 2);
     return BEFORE_BARE_CLOCK.has(before) ? this.add(number, true, i + 1) : -1;
-  }
-
-  private afterHourMark(
-    tokens: readonly string[],
-    next: number,
-    hour: number,
-    before: boolean,
-  ): number {
-    const word = tokens[next];
-    const after = tokens[next + 1];
-    const startsATime = after === 'H' || after === 'AM' || after === 'PM';
-    const minutes =
-      word !== undefined && word.length === 2 && ONLY_DIGITS.test(word) && !startsATime;
-    return minutes ? this.add(hour, true, next + 1) : this.add(hour, before, next);
   }
 
   private add(hour: number, isMarked: boolean, next: number): number {
@@ -712,6 +691,7 @@ class ClockList {
 
   reading(): FrequencyReading | null {
     if (this.hours.length === 0 || (this.hours.length === 1 && !this.marked)) return null;
+    if (this.hours[this.hours.length - 1] - this.hours[0] >= 24) return null;
     const tooClose = this.hours.some(
       (hour, i) => i > 0 && hour - this.hours[i - 1] < MIN_CLOCK_GAP_HOURS,
     );
@@ -765,16 +745,19 @@ function isAmountOverAPeriod(rest: readonly string[]): boolean {
   return FORMS.some((form) => form.meaning.startsWith('*') && matched(form.tokens, rest) !== null);
 }
 
+function standsAlone(rest: readonly string[]): boolean {
+  return FORMS.some((form) => form.meaning.startsWith('!') && matched(form.tokens, rest) !== null);
+}
+
 function readWithDose(tokens: readonly string[]): FrequencyReading | null {
   const whole = readForm(tokens);
   if (whole) return whole;
   const after = afterDose(tokens);
   if (after === 0 || after === tokens.length) return null;
   const rest = tokens.slice(after);
-  const oneIntakeOfADay = rest[0] === 'EN' && rest.at(-1) === 'PRISE';
-  return oneIntakeOfADay || (doseOfSeveral(tokens, after) && isAmountOverAPeriod(rest))
-    ? null
-    : readForm(rest);
+  if (standsAlone(rest) || (doseOfSeveral(tokens, after) && isAmountOverAPeriod(rest))) return null;
+  const behind = readForm(rest);
+  return behind?.kind === 'CONTINUOUS' ? null : behind;
 }
 
 function sameReading(a: FrequencyReading, b: FrequencyReading | null): boolean {
