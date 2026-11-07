@@ -1020,13 +1020,14 @@
               <label for="rx-frequency">{{ 'PRESCRIPTIONS.FREQUENCY' | translate }} *</label>
               <input
                 id="rx-frequency"
+                list="rx-frequency-choices"
                 data-server-field="frequency"
+                aria-required="true"
                 type="text"
                 [ngModel]="form.frequency"
                 (ngModelChange)="onFrequencyChange($event)"
                 [readonly]="editingSigned()"
                 [placeholder]="'PRESCRIPTIONS.FREQUENCY_PLACEHOLDER' | translate"
-                list="rx-frequency-choices"
               />
               <!-- QA D1472: the schedules the reader reads, so a prescriber need not guess a wording. -->
               <datalist id="rx-frequency-choices" data-testid="rx-frequency-choices">

@@ -190,6 +190,7 @@
                     [id]="'order-set-item-frequency-' + i"
                     [attr.data-testid]="'order-set-item-frequency-' + i"
                     [attr.data-server-field]="'orderItems[' + i + '].frequency'"
+                    [attr.aria-required]="'true'"
                     [attr.aria-invalid]="itemMissingFrequency(i) ? 'true' : null"
                   >
                     <option value=""></option>
