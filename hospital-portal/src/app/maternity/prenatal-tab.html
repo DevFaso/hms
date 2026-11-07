@@ -262,8 +262,12 @@
         <button
           class="btn-primary"
           [disabled]="rescheduleBusy()"
-          [appSubmitGuard]="!rescheduleDate || !rescheduleTime"
-          [submitGuardFields]="['pn-new-date', 'pn-new-time']"
+          [appSubmitGuard]="
+            !rescheduleDate ||
+            !rescheduleTime ||
+            (rescheduleOverbook() && !rescheduleOverbookReason.trim())
+          "
+          [submitGuardFields]="['pn-new-date', 'pn-new-time', 'pn-overbook']"
           (click)="submitReschedule()"
         >
           {{ 'COMMON.CONFIRM' | translate }}

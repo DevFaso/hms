@@ -25,9 +25,14 @@ export function isOffSlot(
   if (!staffId || !date || !time) {
     return of(false);
   }
-  const start = `${date}T${time.slice(0, 5)}`;
-  return slots.searchAllOpen({ staffId, from: date, to: date }).pipe(
-    map(({ rows }) => !rows.some((slot) => slot.startAt?.slice(0, 16) === start)),
+  const hourMinute = time.slice(0, 5);
+  return slots.searchAllOpenInBackground({ staffId, from: date, to: date }).pipe(
+    map(
+      ({ rows }) =>
+        !rows.some(
+          (slot) => slot.startAt?.startsWith(date) && slot.startAt.slice(11, 16) === hourMinute,
+        ),
+    ),
     catchError(() => of(false)),
   );
 }

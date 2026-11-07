@@ -6,7 +6,7 @@ import { isOffSlot, refusesForOverbookReason } from './published-slot';
 describe('published-slot (QA D1429)', () => {
   const slots = (starts: string[]): SlotInventoryService =>
     ({
-      searchAllOpen: () =>
+      searchAllOpenInBackground: () =>
         of({ rows: starts.map((startAt) => ({ startAt })), total: starts.length }),
     }) as unknown as SlotInventoryService;
 
@@ -35,7 +35,7 @@ describe('published-slot (QA D1429)', () => {
 
   it('a failed read asks nothing: the server decides, and its refusal opens the field', () => {
     const failing = {
-      searchAllOpen: () => throwError(() => new Error('403')),
+      searchAllOpenInBackground: () => throwError(() => new Error('403')),
     } as unknown as SlotInventoryService;
     expect(offSlot(failing, '09:00')).toBeFalse();
   });

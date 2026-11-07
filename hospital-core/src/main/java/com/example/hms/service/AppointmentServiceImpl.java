@@ -584,8 +584,12 @@ public class AppointmentServiceImpl implements AppointmentService {
 
         // QA D1429: staff may book outside a published free slot, with a reason; a
         // patient reaching this endpoint books a published free slot, like on the portal.
-        com.example.hms.model.scheduling.AppointmentSlot patientSlot = isStaffOrAdmin ? null
-            : slotPolicy.requirePublishedFreeSlot(staff.getId(), requestedStart, hospital.getId(), null);
+        com.example.hms.model.scheduling.AppointmentSlot patientSlot = null;
+        if (!isStaffOrAdmin) {
+            patientSlot = slotPolicy.requirePublishedFreeSlot(staff.getId(), requestedStart, hospital.getId(), null);
+            AppointmentSlotRules.requirePatientBookable(requestedStart, requestedEnd,
+                com.example.hms.utility.HospitalCalendar.now(hospital));
+        }
         String overbookReason = isStaffOrAdmin
             ? slotPolicy.overbookReasonOffSlot(staff.getId(), requestedStart, hospital.getId(), request.getOverbookReason())
             : null;
@@ -600,7 +604,10 @@ public class AppointmentServiceImpl implements AppointmentService {
         appointment.setStartTime(request.getStartTime());
         appointment.setEndTime(endTime);
         applyBookingText(appointment, request);
-    AppointmentStatus status = Optional.ofNullable(request.getStatus()).orElse(AppointmentStatus.SCHEDULED);
+    // QA D1429: a patient books a live visit, as on the portal: a dead one must not take a slot nobody frees.
+    AppointmentStatus status = isStaffOrAdmin
+        ? Optional.ofNullable(request.getStatus()).orElse(AppointmentStatus.SCHEDULED)
+        : AppointmentStatus.SCHEDULED;
     appointment.setStatus(status);
         // QA D1126: a booking written straight as CANCELLED or NO_SHOW needs its reason too.
         appointment.setStatusReason(requireStatusReason(status, request.getStatusReason()));
@@ -989,10 +996,6 @@ public class AppointmentServiceImpl implements AppointmentService {
     }
 
     /**
-     * QA D1060: whether an edit moves the visit (another date, start or
-     * clinician); a moved visit takes the slot length where it lands.
-     */
-    /**
      * QA D1429: an overbooking is on the audit trail, with no free text (the reason stays
      * on the appointment). A failed audit never breaks the booking.
      */
@@ -1015,6 +1018,10 @@ public class AppointmentServiceImpl implements AppointmentService {
         }
     }
 
+    /**
+     * QA D1060: whether an edit moves the visit (another date, start or
+     * clinician); a moved visit takes the slot length where it lands.
+     */
     private static boolean movesTheVisit(AppointmentRequestDTO request, Appointment existing, Staff staff) {
         return !request.getAppointmentDate().equals(existing.getAppointmentDate())
             || !request.getStartTime().equals(existing.getStartTime())

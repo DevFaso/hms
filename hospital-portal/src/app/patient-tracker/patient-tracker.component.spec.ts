@@ -132,7 +132,7 @@ describe('PatientTrackerComponent', () => {
         triage: [],
         waitingForPhysician: [],
         inProgress: [],
-        awaitingResults: [],
+        awaitingResults: [{ ...card, encounterId: 'e2', currentStatus: 'AWAITING_RESULTS' }],
         readyForDischarge: [],
         totalPatients: 1,
         averageWaitMinutes: 0,
@@ -144,7 +144,7 @@ describe('PatientTrackerComponent', () => {
       component.ngOnInit();
       fixture.detectChanges();
       return (fixture.nativeElement as HTMLElement).querySelectorAll(
-        'button[title="TRIAGE.TITLE"], button[title="TRACKER.COMPLETE_TRIAGE"]',
+        'button[title="TRIAGE.TITLE"], button[title="TRACKER.COMPLETE_TRIAGE"], button[title="TRACKER.READY_DISCHARGE"]',
       ).length;
     };
 
@@ -152,7 +152,7 @@ describe('PatientTrackerComponent', () => {
     expect(triageButtons()).toBe(0);
 
     active.and.callFake((asked: string[]) => asked.includes('ROLE_NURSE'));
-    expect(triageButtons()).toBeGreaterThanOrEqual(2);
+    expect(triageButtons()).toBeGreaterThanOrEqual(3);
   });
 
   it('should create', () => {

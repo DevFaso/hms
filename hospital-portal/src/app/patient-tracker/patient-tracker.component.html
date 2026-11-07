@@ -153,7 +153,7 @@
                       {{ 'TRACKER.COMPLETE_EXAM' | translate }}
                     </button>
                   }
-                  @if (col.key === 'awaitingResults') {
+                  @if (!frontDeskOnly && col.key === 'awaitingResults') {
                     <button
                       class="btn-ready-discharge"
                       (click)="markReadyForDischarge(item)"

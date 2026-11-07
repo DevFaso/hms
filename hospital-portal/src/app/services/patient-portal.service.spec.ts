@@ -456,7 +456,7 @@ describe('mapPortalInvoice (QA D1421)', () => {
     };
     const invoice = mapPortalInvoice(planted);
     expect(invoice.visitType).toBe('INPATIENT');
-    expect(invoice.visitDate).toBe('2026-11-03');
+    expect(invoice.visitDate).toBe('2026-11-03T23:30:00');
     expect(JSON.stringify(invoice)).not.toContain('CLINICAL-SENTINEL');
   });
 });

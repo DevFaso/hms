@@ -46,7 +46,7 @@
                   <!-- QA D1421: the visit's type and day, never its clinical notes -->
                   {{ inv.visitType | enumLabel: 'encounterType' }}
                   @if (inv.visitDate) {
-                    · {{ inv.visitDate | date: 'mediumDate' }}
+                    · {{ inv.visitDate | serverTime | date: 'mediumDate' }}
                   }
                 } @else {
                   {{ inv.facility || ('PORTAL.BILLING.MEDICAL_SERVICES' | translate) }}

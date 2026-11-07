@@ -151,8 +151,9 @@
                   </span>
                   @if (r.deactivationReason) {
                     <!-- QA D1430: why it was deactivated -->
-                    <span class="muted" data-testid="registration-deactivation-reason">{{
-                      r.deactivationReason
+                    {{ ' '
+                    }}<span class="muted" data-testid="registration-deactivation-reason">{{
+                      'COMMON.REASON_VALUE' | translate: { reason: r.deactivationReason }
                     }}</span>
                   }
                 }
@@ -312,8 +313,11 @@
           type="button"
           class="btn-primary"
           [disabled]="formSaving()"
-          [appSubmitGuard]="!editingRegistration() && !form.patientId"
-          [submitGuardFields]="['reg-patient']"
+          [appSubmitGuard]="
+            (!editingRegistration() && !form.patientId) ||
+            (endsTheRegistration && !form.deactivationReason?.trim())
+          "
+          [submitGuardFields]="['reg-patient', 'reg-deactivation-reason']"
           (click)="submitForm()"
         >
           {{ 'COMMON.SAVE' | translate }}
@@ -323,7 +327,6 @@
   </div>
 }
 
-<!-- ══ Hard-delete confirm ══ -->
 <!-- QA D1430: it asks first and takes the reason, as the delete beside it asks. -->
 @if (deactivating(); as target) {
   <app-reason-dialog
@@ -341,6 +344,7 @@
   </app-reason-dialog>
 }
 
+<!-- ══ Hard-delete confirm ══ -->
 @if (deleteTarget(); as target) {
   <div
     class="modal-backdrop"

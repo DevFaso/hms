@@ -58,8 +58,8 @@ import org.springframework.context.MessageSource;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class AppointmentBookingSlotRuleTest {
 
-    private static final LocalDate DAY = LocalDate.of(2026, 11, 19);
-    private static final LocalTime TIME = LocalTime.of(23, 15);
+    private static final LocalDate DAY = LocalDate.now().plusDays(30);
+    private static final LocalTime TIME = LocalTime.of(9, 0);
     private static final LocalDateTime START = LocalDateTime.of(DAY, TIME);
 
     @Mock private com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
@@ -207,6 +207,35 @@ class AppointmentBookingSlotRuleTest {
 
         verify(appointmentRepository, never()).save(any());
         verify(slotPolicy, never()).overbookReasonOffSlot(any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("a patient cannot take a slot with a dead visit: whatever status is sent, the visit is live")
+    void aPatientsVisitIsLive() {
+        when(slotPolicy.requirePublishedFreeSlot(staff.getId(), START, hospital.getId(), null))
+            .thenReturn(new AppointmentSlot());
+        AppointmentRequestDTO request = request(null);
+        request.setStatus(com.example.hms.enums.AppointmentStatus.CANCELLED);
+        request.setStatusReason("x");
+
+        service.createAppointment(request, Locale.FRENCH, "self");
+
+        verify(appointmentRepository).save(argThat(
+            a -> a.getStatus() == com.example.hms.enums.AppointmentStatus.SCHEDULED));
+    }
+
+    @Test
+    @DisplayName("a patient cannot take a slot already past, as on the portal")
+    void aPatientCannotBookThePast() {
+        LocalDate past = LocalDate.now().minusDays(2);
+        when(slotPolicy.requirePublishedFreeSlot(any(), any(), any(), any())).thenReturn(new AppointmentSlot());
+        AppointmentRequestDTO request = request(null);
+        request.setAppointmentDate(past);
+
+        assertThatThrownBy(() -> service.createAppointment(request, Locale.FRENCH, "self"))
+            .isInstanceOf(FieldBusinessException.class);
+
+        verify(appointmentRepository, never()).save(any());
     }
 
     @Test

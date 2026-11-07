@@ -265,6 +265,7 @@ export class AppointmentDetailComponent implements OnInit {
     this.rescheduleDepartmentId = appt.departmentId ?? '';
     this.rescheduleReason = appt.reason ?? '';
     this.rescheduleOverbookReason = '';
+    this.rescheduleSlotRead?.unsubscribe();
     this.rescheduleOffSlot.set(false);
     this.showReschedule.set(true);
     if (appt.hospitalId) {
@@ -277,6 +278,7 @@ export class AppointmentDetailComponent implements OnInit {
   }
 
   closeReschedule(): void {
+    this.rescheduleSlotRead?.unsubscribe();
     this.showReschedule.set(false);
   }
 

@@ -229,21 +229,24 @@ export class RegistrationsComponent implements OnInit {
   submitForm(): void {
     const editing = this.editingRegistration();
     if (!editing && !this.form.patientId) {
-      this.toast.error(this.translate.instant('REGISTRATIONS.PATIENT_REQUIRED'));
+      const message = this.translate.instant('REGISTRATIONS.PATIENT_REQUIRED');
+      refuseFields(this.host.nativeElement, ['reg-patient'], ['reg-patient'], message);
+      this.toast.error(message);
       return;
     }
     // QA D1430: the box in the edit form ends the registration as the row's button does.
-    const reasonMissing = this.endsTheRegistration && !this.form.deactivationReason?.trim();
-    refuseFields(
-      this.host.nativeElement,
-      reasonMissing ? [DEACTIVATION_REASON_FIELD] : [],
-      [DEACTIVATION_REASON_FIELD],
-      this.translate.instant('COMMON.FIELD_REQUIRED'),
-    );
-    if (reasonMissing) {
-      this.toast.error(this.translate.instant('REGISTRATIONS.DEACTIVATE_REASON_REQUIRED'));
+    if (this.endsTheRegistration && !this.form.deactivationReason?.trim()) {
+      const message = this.translate.instant('REGISTRATIONS.DEACTIVATE_REASON_REQUIRED');
+      refuseFields(
+        this.host.nativeElement,
+        [DEACTIVATION_REASON_FIELD],
+        [DEACTIVATION_REASON_FIELD],
+        message,
+      );
+      this.toast.error(message);
       return;
     }
+    refuseFields(this.host.nativeElement, [], ['reg-patient', DEACTIVATION_REASON_FIELD], '');
     this.formSaving.set(true);
     const op = editing
       ? this.registrationService.update(editing.id, this.form)

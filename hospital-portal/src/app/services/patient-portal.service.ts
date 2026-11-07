@@ -588,8 +588,7 @@ export function mapPortalInvoice(api: InvoiceApiResponse): PortalInvoice {
     status: api.status ?? '',
     facility: api.hospitalName ?? '',
     visitType: api.encounterType ?? null,
-    // The day of the visit: a wall date, never shifted by a time zone.
-    visitDate: api.encounterDate?.slice(0, 10) ?? null,
+    visitDate: api.encounterDate ?? null,
     pending: Number(api.pendingDeclaredAmount ?? 0),
     creditedTo: api.creditedToInvoiceNumber ?? null,
   };
