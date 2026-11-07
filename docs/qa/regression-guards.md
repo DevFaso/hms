@@ -1035,3 +1035,14 @@ Rounds 27, 28 and 29 each found 20–30 new siblings of the required-field class
 | `architecture/PatientContactTextGuardTest` (new) | D1471: a service writing a patient's emergency contact name with no `PatientIdentityRules` call | every service; none |
 | `architecture/DeactivatedRegistrationGuardTest` (new) + `repository/RegistrationActiveFlagPostgresIT` (new) | D1476: a desk visit opener (booking, walk-in, waitlist) that does not refuse a deactivated registration; the question itself on real PostgreSQL | 3 openers, listed; add a new one here |
 | `scripts/lib/payment-method-names.test.mjs` (new) | D1485: two names for one payment method in a language, or a portal name unlike what the server prints on a document | every object of codes in `en/fr/es.json` against `pdf.payment.method.*`; none |
+
+## Guards added or widened by round 35 (fix/r35-frequency-reader)
+
+| Guard | What it catches | Allowlist |
+|---|---|---|
+| `service/impl/FrequencyWordingTest#aFormWithAnythingElseBesideItIsNeverASchedule` (new), and its twin in `as-needed-frequency.spec.ts` | D1452-D1459, one class: a cadence read from a part of a sentence. Generated: every form of `grammarForms` with every clause of `matrixClauses`, in front and behind, is not read. | none |
+| `service/impl/FrequencyWordingTest#everyFormOfTheGrammarHasItsCadenceInTheFixture` (new) | A line of `FrequencyCadence.GRAMMAR` or `PARTS` with no stated reading, or read otherwise than its fixture line. | `MANANA`, `TARDE` alone are not forms |
+| `service/impl/FrequencyWordingTest#theGrammarMatchesThePortalMirror` (new) | A form on one side only. `#theWordListsMatchThePortalMirror` still holds the word lists. | none |
+| `service/impl/FrequencyWordingTest#d1472_everyChoiceOfThePrescriptionFormIsASchedule` (new) and `scripts/lib/as-needed-frequency.test.mjs` (widened) | A choice of the form's list that asks, or reads differently in another language, or has no label in one. | none |
+| `cdshooks/rules/PediatricDoseRuleRound18Test#d1455_*`, `AdultParacetamolRuleTest#d1455_*` (new) | An unread frequency judged as one dose a day, or a limit card that does not say the total is unknown. | none |
+| `service/impl/MarNextDoseTest#d1457_aStoredWordingNotReadStaysOpenAndFlagged` (new) | A stored order the grammar does not read ended, or given a cadence. | none |

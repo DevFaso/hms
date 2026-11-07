@@ -7253,8 +7253,28 @@
     }
   },
   "PRESCRIPTIONS": {
-    "FREQUENCY_UNREADABLE": "Cette formulation ne peut pas être planifiée : les infirmiers devront donner un motif à chaque dose après la première. Écrivez un horaire (« 3 fois par jour », « toutes les 6 heures », « dose unique »), cochez « Si besoin (PRN) », ou confirmez-la.",
-    "FREQUENCY_CONFIRM": "Je confirme cette formulation : les infirmiers donneront un motif à chaque dose après la première",
+    "FREQUENCY_UNREADABLE": "Cette formulation ne peut pas être planifiée : les infirmiers devront donner un motif à chaque dose après la première. Mieux vaut choisir un horaire dans la liste ou cocher « Si besoin (PRN) ». Sinon, confirmez-la.",
+    "FREQUENCY_CONFIRM": "Je confirme cette formulation : les infirmiers donneront un motif à chaque dose après la première. Un horaire de la liste, ou « Si besoin (PRN) », le leur éviterait",
+    "FREQUENCY_UNREAD_NOTE": "Non lue comme un horaire : les infirmiers donnent un motif à chaque dose après la première.",
+    "FREQUENCY_CHOICES": {
+      "ONCE_DAILY": "1 fois par jour",
+      "TWICE_DAILY": "2 fois par jour",
+      "THREE_DAILY": "3 fois par jour",
+      "FOUR_DAILY": "4 fois par jour",
+      "Q4H": "toutes les 4 heures",
+      "Q6H": "toutes les 6 heures",
+      "Q8H": "toutes les 8 heures",
+      "Q12H": "toutes les 12 heures",
+      "MORNING": "le matin",
+      "EVENING": "le soir",
+      "MORNING_EVENING": "matin et soir",
+      "MORNING_NOON_EVENING": "matin, midi et soir",
+      "BEDTIME": "au coucher",
+      "ALTERNATE_DAYS": "un jour sur deux",
+      "WEEKLY": "1 fois par semaine",
+      "SINGLE_DOSE": "dose unique",
+      "CONTINUOUS": "perfusion continue"
+    },
     "SEARCHING": "Recherche dans toutes les ordonnances…",
     "FREQUENCY_READS_AS_NEEDED": "Cela se lit « si besoin » : cochez « Si besoin (PRN) » et indiquez l’intervalle minimum, ou écrivez un horaire fixe.",
     "CLARIFICATION": {

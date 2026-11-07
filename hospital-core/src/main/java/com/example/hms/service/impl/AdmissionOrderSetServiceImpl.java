@@ -255,7 +255,7 @@ public class AdmissionOrderSetServiceImpl implements AdmissionOrderSetService {
             ? List.of() : orderSet.getOrderItems();
         // QA D1382 / D1378 / D1396: a set saved before the item rules is refused
         // by name before any order is created, never applied with an item skipped.
-        OrderSetItemPrnRules.requireValid(items);
+        OrderSetItemPrnRules.requireValidToApply(items);
         quantityRules.requireValid(items, ctx.hospitalId());
         for (Map<String, Object> item : items) {
             // CdsCriticalBlockException propagates and rolls back the whole

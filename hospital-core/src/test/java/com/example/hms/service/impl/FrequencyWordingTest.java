@@ -167,7 +167,8 @@ class FrequencyWordingTest {
         List<String> unreadable = unreadableCases();
         JsonNode filed = new ObjectMapper().readTree(Files.readString(MarDoseScheduleTest.AS_NEEDED_CASES)).get("filed");
         int counted = 0;
-        for (String defect : List.of("D1419", "D1426")) {
+        for (String defect : List.of("D1419", "D1426", "D1452", "D1453", "D1454", "D1455", "D1456", "D1457", "D1458",
+            "D1459", "D1460", "D1472")) {
             for (JsonNode node : filed.get(defect)) {
                 String wording = node.asText();
                 long outcomes = java.util.stream.Stream.of(fixed, conditional, unreadable)
@@ -220,27 +221,28 @@ class FrequencyWordingTest {
         assertThat(FrequencyWording.classify(wording)).as(wording).isEqualTo(FrequencyWording.Verdict.UNREADABLE);
     }
 
-    /** The same review: a chronic drug whose name holds STAT is not one dose, and a split wins over the day's total. */
+    /** The same review, what still reads. */
     @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.CsvSource(delimiter = '|', value = {
-        "nystatine 4 fois par jour|360", "atorvastatine 1 cp le soir|1440", "1500 mg/j en 3 doses|480",
-        "three times weekly|3360", "3 fois hebdomadaire|3360", "cada 12 hs|720", "3 cp/24h|480", "aux 2 repas|720",
-        "avant le petit déjeuner, le déjeuner et le dîner|480", "3 fois par 24 heures|480",
-        "q8h for 5 to 7 days|480", "1 cp/j 5 jours|1440"})
+        "three times weekly|3360", "3 fois hebdomadaire|3360", "cada 12 hs|720", "3 fois par 24 heures|480"})
     void secondReviewOfRound34_readsAsWritten(String wording, int minutes) {
         assertThat(MarDoseSchedule.read(wording).intervalMinutes()).as(wording).isEqualTo(minutes);
     }
 
-    /** The same review: a dose at a clock time is still one dose; a regular course is not refused for a diluent or a band. */
+    /**
+     * QA D1452 (changed assertions, declared in the PR: each was read from a part of its sentence): a chronic
+     * drug whose name holds STAT is still not one dose, a diluent or a band is still no condition, and a dose at
+     * a clock time still ends no course. None of them is a form of the grammar: asked once.
+     */
     @Test
     void secondReviewOfRound34_oneDoseAndRegularCourses() {
-        for (String wording : List.of("dose unique à 8 h", "dosis única a las 8", "once at 8 am", "1 dose à 8 h",
-            "demain à 8 h", "ce soir à 20 h", "tonight at 10 pm")) {
-            assertThat(MarDoseSchedule.read(wording).kind()).as(wording).isEqualTo(MarDoseSchedule.Kind.ONE_OFF);
-        }
-        for (String wording : List.of("1 g dans 100 ml de glucosé 5% toutes les 8 h", "poids > 35 kg : 4 cp 2 fois par jour",
-            "enfant < 5 ans 1 cp par jour", "2 fois par jour prévention des convulsions")) {
-            assertThat(FrequencyWording.classify(wording)).as(wording).isEqualTo(FrequencyWording.Verdict.FIXED);
+        for (String wording : List.of("nystatine 4 fois par jour", "atorvastatine 1 cp le soir", "1500 mg/j en 3 doses",
+            "3 cp/24h", "aux 2 repas", "avant le petit déjeuner, le déjeuner et le dîner", "q8h for 5 to 7 days",
+            "1 cp/j 5 jours", "dose unique à 8 h", "dosis única a las 8", "once at 8 am", "1 dose à 8 h",
+            "demain à 8 h", "ce soir à 20 h", "tonight at 10 pm", "1 g dans 100 ml de glucosé 5% toutes les 8 h",
+            "poids > 35 kg : 4 cp 2 fois par jour", "enfant < 5 ans 1 cp par jour",
+            "2 fois par jour prévention des convulsions")) {
+            assertThat(FrequencyWording.classify(wording)).as(wording).isEqualTo(FrequencyWording.Verdict.UNREADABLE);
         }
         for (String wording : List.of("q4h for wheezing", "q6h for diarrhoea", "toutes les 6 h pour crampes", "q6h para mareos",
             "toutes les 8 h dès l'apparition des signes", "dès les premiers symptômes")) {
@@ -278,12 +280,21 @@ class FrequencyWordingTest {
 
     /** The two directions round 33 filed, named here so a fixture edit cannot quietly drop them. */
     @ParameterizedTest
-    @ValueSource(strings = {
-        "Prise unique (TPI-SP 2)", "TPI-SP", "SP dose unique", "TPI SP", "SP-AQ 1 fois par jour",
-        "SMC : SP + AQ, 1 fois par mois", "Prise unique à la CPN (SP)", "4 cp 2 fois par jour (poids > 35 kg)",
-        "2 fois par jour selon poids", "3 fois par jour selon ordonnance", "2 fois par jour selon protocole"})
+    @ValueSource(strings = {"Prise unique (TPI-SP 2)", "TPI-SP", "SP dose unique", "TPI SP"})
     void d1391_theFiledFixedSchedulesPass(String wording) {
         assertThat(FrequencyWording.classify(wording)).as(wording).isEqualTo(FrequencyWording.Verdict.FIXED);
+    }
+
+    /**
+     * QA D1391's complaint was a regular course refused as reading "si besoin". QA D1452 (changed: these were
+     * accepted): each says more than a form of the grammar, so it is asked once; it is still never that refusal.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"SP-AQ 1 fois par jour", "SMC : SP + AQ, 1 fois par mois", "Prise unique à la CPN (SP)",
+        "4 cp 2 fois par jour (poids > 35 kg)", "2 fois par jour selon poids", "3 fois par jour selon ordonnance",
+        "2 fois par jour selon protocole"})
+    void d1391_whatSaysMoreIsAskedNeverRefused(String wording) {
+        assertThat(FrequencyWording.classify(wording)).as(wording).isEqualTo(FrequencyWording.Verdict.UNREADABLE);
     }
 
     @ParameterizedTest
@@ -298,9 +309,10 @@ class FrequencyWordingTest {
     /** A weight band is not a condition, unless a condition stands in its brackets. */
     @Test
     void aConditionInsideAWeightBandIsStillAConditionalClause() {
+        // QA D1452 (changed: these were accepted): asked once, as more than a form of the grammar; never a condition.
         assertThat(FrequencyWording.classify("2 fois par jour, 3 jours (si poids 12 kg)"))
-            .isEqualTo(FrequencyWording.Verdict.FIXED);
-        assertThat(FrequencyWording.classify("1 cp 2 fois par jour (5-15 kg)")).isEqualTo(FrequencyWording.Verdict.FIXED);
+            .isEqualTo(FrequencyWording.Verdict.UNREADABLE);
+        assertThat(FrequencyWording.classify("1 cp 2 fois par jour (5-15 kg)")).isEqualTo(FrequencyWording.Verdict.UNREADABLE);
         assertThat(FrequencyWording.classify("3 fois par jour (poids > 35 kg si douleur)"))
             .isEqualTo(FrequencyWording.Verdict.CONDITIONAL);
     }
@@ -311,15 +323,17 @@ class FrequencyWordingTest {
         for (String wording : List.of("1 a 3 cp par jour", "1-3 cp/j", "1-3cp/j", "1-3x/j")) {
             assertThat(FrequencyWording.classify(wording)).as(wording).isEqualTo(FrequencyWording.Verdict.UNREADABLE);
         }
+        // QA D1452 (changed: this was accepted): a range in front is no dose the grammar strips.
         assertThat(FrequencyWording.classify("1 a 2 cp 3 fois par jour")).as("a dose range, a fixed cadence")
-            .isEqualTo(FrequencyWording.Verdict.FIXED);
+            .isEqualTo(FrequencyWording.Verdict.UNREADABLE);
     }
 
     /** S/P needs its slash; SP alone is a regimen, in any case. */
     @Test
     void onlyTheSlashMakesSpConditional() {
         assertThat(FrequencyWording.classify("1 cp s/p")).isEqualTo(FrequencyWording.Verdict.CONDITIONAL);
-        assertThat(FrequencyWording.classify("1 cp sp le matin")).isEqualTo(FrequencyWording.Verdict.FIXED);
+        // QA D1452 (changed: this was accepted): asked once, never a condition.
+        assertThat(FrequencyWording.classify("1 cp sp le matin")).isEqualTo(FrequencyWording.Verdict.UNREADABLE);
         // QA D1434 (changed): a regimen and a duration state no cadence: a question, never a condition.
         assertThat(FrequencyWording.classify("SP/AQ 3 jours")).isEqualTo(FrequencyWording.Verdict.UNREADABLE);
     }
@@ -332,9 +346,11 @@ class FrequencyWordingTest {
      */
     @Test
     void anUnknownWordIsNeverACondition() {
-        for (String wording : List.of("q6h zzz", "toutes les 6 h zzz", "prendre 1 comprimé 3 fois par jour",
-            "1 fois par jour à heure précise", "1 cp le matin avec un peu de pain")) {
-            assertThat(FrequencyWording.classify(wording)).as(wording).isEqualTo(FrequencyWording.Verdict.FIXED);
+        assertThat(FrequencyWording.classify("prendre 1 comprimé 3 fois par jour")).isEqualTo(FrequencyWording.Verdict.FIXED);
+        // QA D1452 (changed: these were accepted): beside a cadence, an unknown word now asks.
+        for (String wording : List.of("q6h zzz", "toutes les 6 h zzz", "1 fois par jour à heure précise",
+            "1 cp le matin avec un peu de pain")) {
+            assertThat(FrequencyWording.classify(wording)).as(wording).isEqualTo(FrequencyWording.Verdict.UNREADABLE);
         }
                 // A reason is asked about, beside a cadence too: not a condition, and no list of symptoms will finish.
         for (String wording : List.of("zzz", "pour HTA", "selon ordonnance", "1 cp par jour pour HTA",
@@ -373,6 +389,184 @@ class FrequencyWordingTest {
         });
     }
 
+    private static JsonNode cases() throws IOException {
+        return new ObjectMapper().readTree(Files.readString(MarDoseScheduleTest.AS_NEEDED_CASES));
+    }
+
+    private static String readingOf(String wording) {
+        MarDoseSchedule.Reading reading = MarDoseSchedule.read(wording);
+        return reading.kind()
+            + (reading.intervalMinutes() != null ? ":" + reading.intervalMinutes() : "")
+            + (reading.courseOffsets().isEmpty() ? "" : ":" + reading.courseOffsets().toString().replace(" ", ""));
+    }
+
+    /** One instance of each line of the grammar, as the fixture writes it: a line added here is a line with no fixture. */
+    private static List<String> oneInstancePerLine() {
+        Map<String, String> oneWord = Map.of("HOUR", "H", "DAY", "JOUR", "WEEK", "SEMAINE", "MONTH", "MOIS",
+            "TIMES", "FOIS", "RATE", "ML", "RATEHOUR", "H", "WEEKLYWORD", "WEEKLY");
+        List<String> out = new ArrayList<>();
+        FrequencyCadence.GRAMMAR.lines().map(line -> line.split(" \\| ")[1]).forEach(tokens -> out.add(Arrays.stream(
+            tokens.split(" ")).map(token -> switch (token) {
+                // The bare "3/3" is asked: the bare slash reads only 4, 6, 8 and 12.
+                case "#" -> "# / #".equals(tokens) ? "6" : "3";
+                case "~" -> "125";
+                default -> oneWord.getOrDefault(token, token);
+            }).collect(java.util.stream.Collectors.joining(" "))));
+        FrequencyCadence.PARTS.lines().map(line -> line.split(" \\| ")[1])
+            .filter(words -> !List.of("MANANA", "TARDE").contains(words)).forEach(out::add);
+        return out;
+    }
+
+    /** QA D1452: every form of the closed grammar states its cadence in the fixture, and reads it. */
+    @Test
+    void everyFormOfTheGrammarHasItsCadenceInTheFixture() throws IOException {
+        JsonNode forms = cases().get("grammarForms");
+        for (String form : oneInstancePerLine()) {
+            assertThat(forms.has(form)).as("the fixture states the reading of \"%s\"", form).isTrue();
+        }
+        assertThat(forms.size()).isGreaterThan(200);
+        forms.properties().forEach(form -> {
+            assertThat(readingOf(form.getKey())).as(form.getKey()).isEqualTo(form.getValue().asText());
+            assertThat(FrequencyWording.classify(form.getKey())).as(form.getKey()).isEqualTo(FrequencyWording.Verdict.FIXED);
+            assertThat(dueAfterOneDose(form.getKey()).frequencyUnread()).as(form.getKey()).isFalse();
+        });
+    }
+
+    /** Each word of a list stands for its list: it reads as the one the fixture writes. */
+    @Test
+    void everyWordOfAListReadsTheSame() {
+        assertThat(readingOf("3 x / jr")).isEqualTo(readingOf("3 fois par jour"));
+        for (String hour : FrequencyCadence.HOUR_WORDS) {
+            assertThat(readingOf("toutes les 6 " + hour)).as(hour).isEqualTo("REPEATING:360");
+        }
+        for (String day : FrequencyCadence.DAY_WORDS) {
+            assertThat(readingOf("3 fois par " + day)).as(day).isEqualTo("REPEATING:480");
+            assertThat(readingOf("tous les 2 " + day)).as(day).isEqualTo("REPEATING:2880");
+        }
+        for (String week : FrequencyCadence.WEEK_WORDS) {
+            assertThat(readingOf("toutes les 2 " + week)).as(week).isEqualTo("REPEATING:20160");
+        }
+        for (String month : FrequencyCadence.MONTH_WORDS) {
+            assertThat(readingOf("1 fois par " + month)).as(month).isEqualTo("REPEATING:43200");
+        }
+        for (String times : FrequencyCadence.TIMES_WORDS) {
+            assertThat(readingOf("3 " + times + " par jour")).as(times).isEqualTo("REPEATING:480");
+        }
+    }
+
+    /**
+     * THE GUARD of round 35 (QA D1452-D1459, one class: a cadence read from a part of a sentence). Generated,
+     * not listed: every form of the grammar, with an unrelated clause in front or behind, is not read, whatever
+     * the clause, so no first-cadence scan can come back. {@code as-needed-frequency.spec.ts} runs the same
+     * matrix on the mirror.
+     */
+    @Test
+    void aFormWithAnythingElseBesideItIsNeverASchedule() throws IOException {
+        JsonNode cases = cases();
+        List<String> clauses = new ArrayList<>();
+        cases.get("matrixClauses").forEach(clause -> clauses.add(clause.asText()));
+        assertThat(clauses).hasSize(7);
+        int counted = 0;
+        for (Map.Entry<String, JsonNode> entry : cases.get("grammarForms").properties()) {
+            String form = entry.getKey();
+            for (String clause : clauses) {
+                for (String wording : List.of(clause + " " + form, form + " " + clause)) {
+                    assertThat(MarDoseSchedule.read(wording).kind()).as(wording).isEqualTo(MarDoseSchedule.Kind.UNREAD);
+                    assertThat(FrequencyWording.classify(wording)).as(wording).isNotEqualTo(FrequencyWording.Verdict.FIXED);
+                    counted++;
+                }
+            }
+        }
+        assertThat(counted).as("the matrix").isGreaterThan(2500);
+    }
+
+    /** QA D1455: "3 fois chaque jour" has no count the reader can state: never read as one dose a day. */
+    @ParameterizedTest
+    @ValueSource(strings = {"3 fois chaque jour", "2 fois tous les jours", "twice every day", "3 veces cada dia",
+        "1,5 fois par jour", "3 daily", "8 heures par jour", "1 fois par jour le lundi"})
+    void d1455_anUnreadCountIsNotOneDoseADay(String wording) {
+        assertThat(MarDoseSchedule.read(wording).kind()).as(wording).isEqualTo(MarDoseSchedule.Kind.UNREAD);
+        assertThat(MarDoseSchedule.intervalHours(wording)).as(wording).isNull();
+        assertThat(MarDoseSchedule.writtenWithNoCount(wording)).as(wording).isTrue();
+        // The count the sentence states is a floor for a limit; a decimal or a stated hour is no count at all.
+        assertThat(MarDoseSchedule.dosesPerDay(wording)).as(wording).isEqualTo(wording.contains("lundi") ? Double.valueOf(1d) : null);
+    }
+
+    /** The independent review of round 35: text in the shape of a form that means something else: each asked once. */
+    @ParameterizedTest
+    @ValueSource(strings = {"12/24", "16/24", "16/24h", "8/24 h", "20/24", "1 g 12/24 h", "8h,20", "8 h, 20", "6h, 12h, 18",
+        "8h 14h 20", "8 h 99", "8:99", "J1 \u00e0 J3", "J1-J5", "4 cp J1 \u00e0 J3", "1,25 mg OD", "1 ml OD", "1 amp OD", "1 cp OD",
+        "ma\u00f1ana por la tarde", "manana en la tarde", "ma\u00f1ana por la noche", "manana tarde", "q.5h", "every .5 hours",
+        ".5 fois par jour", ",5 fois par jour", "6'/6'", "1 cp en continu", "1 cp continu", "1 cp PSE", "1 cp 24/24",
+        "10 mg/HS", "10 UI/HS", "H8 H20", "H8 H14 H20", "0 h 24 h", "1/2/j", "3 cp en une prise"})
+    void reviewOfRound35_whatMeansSomethingElseIsAsked(String wording) {
+        assertThat(FrequencyWording.classify(wording)).as(wording).isEqualTo(FrequencyWording.Verdict.UNREADABLE);
+    }
+
+    /** The same review: what the form says, it reads. */
+    @Test
+    void reviewOfRound35_whatTheFormSaysIsRead() {
+        for (String wording : List.of("24/24 H", "24/24h", "24/24 heures", "24 h/24 h", "125 ml/h", "2 mg/h")) {
+            assertThat(readingOf(wording)).as(wording).isEqualTo("CONTINUOUS");
+        }
+        assertThat(readingOf("8h30")).isEqualTo("REPEATING:1440");
+        assertThat(readingOf("8h,20h")).isEqualTo("REPEATING:720");
+        assertThat(readingOf("ma\u00f1ana y noche")).isEqualTo("REPEATING:720");
+        assertThat(readingOf("ma\u00f1ana, tarde y noche")).isEqualTo("REPEATING:480");
+        assertThat(MarDoseSchedule.dosesPerDay("1/2/j")).as("a fraction is no count").isNull();
+    }
+
+    /** QA D1460: a schedule is not told it reads as needed; a real condition still is. */
+    @Test
+    void d1460_dormirAndAnAccentedSiAreNoConditions() {
+        for (String wording : List.of("avant de dormir", "le soir avant de dormir", "au moment de dormir", "1 cp avant de dormir",
+            "antes de dormir", "un d\u00eda s\u00ed y otro no", "un d\u00eda s\u00ed, otro no", "d\u00eda s\u00ed, d\u00eda no")) {
+            assertThat(FrequencyWording.classify(wording)).as(wording).isEqualTo(FrequencyWording.Verdict.FIXED);
+        }
+        assertThat(readingOf("un d\u00eda s\u00ed y otro no")).isEqualTo("REPEATING:2880");
+        assertThat(readingOf("avant de dormir")).isEqualTo("REPEATING:1440");
+        // More than the form: asked, and neither "dormir" nor the "yes" makes it a condition.
+        for (String wording : List.of("toutes les 8 h pour dormir", "cada 8 horas para dormir",
+            "una vez al d\u00eda un d\u00eda s\u00ed y otro no", "3 fois par jour un d\u00eda s\u00ed y otro no")) {
+            assertThat(FrequencyWording.classify(wording)).as(wording).isEqualTo(FrequencyWording.Verdict.UNREADABLE);
+        }
+        // "si" with no accent is still "if".
+        assertThat(FrequencyWording.classify("cada 6 horas si dolor")).isEqualTo(FrequencyWording.Verdict.CONDITIONAL);
+        assertThat(FrequencyWording.classify("at bedtime for sleep")).isEqualTo(FrequencyWording.Verdict.CONDITIONAL);
+    }
+
+    /** QA D1472: each choice the form offers, in each language, reads as a schedule, and the same one. */
+    @Test
+    void d1472_everyChoiceOfThePrescriptionFormIsASchedule() throws IOException {
+        Map<String, String> read = new HashMap<>();
+        for (String language : List.of("en", "fr", "es")) {
+            JsonNode choices = new ObjectMapper().readTree(Files.readString(
+                Path.of("..", "hospital-portal", "src", "assets", "i18n", language + ".json"), StandardCharsets.UTF_8))
+                .get("PRESCRIPTIONS").get("FREQUENCY_CHOICES");
+            assertThat(choices.size()).as(language).isGreaterThan(10);
+            choices.properties().forEach(choice -> {
+                String wording = choice.getValue().asText();
+                assertThat(FrequencyWording.classify(wording)).as(language + " " + wording).isEqualTo(FrequencyWording.Verdict.FIXED);
+                assertThat(PrnMinInterval.safetyNet(wording)).as(language + " " + wording).isNull();
+                String reading = readingOf(wording);
+                assertThat(read.computeIfAbsent(choice.getKey(), key -> reading)).as(language + " " + choice.getKey()).isEqualTo(reading);
+            });
+        }
+    }
+
+    /** The grammar is the mirror's, line for line: a form on one side only would make the form and the server disagree. */
+    @Test
+    void theGrammarMatchesThePortalMirror() throws IOException {
+        String mirror = Files.readString(MIRROR, StandardCharsets.UTF_8).replace("\r\n", "\n");
+        assertThat(between(mirror, "const GRAMMAR = `", "`;")).isEqualTo(FrequencyCadence.GRAMMAR.strip());
+        assertThat(between(mirror, "const PARTS = `", "`;")).isEqualTo(FrequencyCadence.PARTS.strip());
+    }
+
+    private static String between(String text, String start, String end) {
+        int from = text.indexOf(start) + start.length();
+        return text.substring(from, text.indexOf(end, from)).strip();
+    }
+
     /**
      * The mirror's word lists are this class's, name for name: a word added on
      * one side only would make the form and the server disagree on the next
@@ -402,7 +596,7 @@ class FrequencyWordingTest {
                     Set<String> server = new TreeSet<>();
                     ((Set<?>) field.get(null)).forEach(word -> server.add(word.toString()));
                     server.remove("");
-                    assertThat(portal.get(field.getName())).as(field.getName()).isEqualTo(server);
+                    assertThat(portal).as(field.getName()).containsEntry(field.getName(), server);
                     compared++;
                 }
             }

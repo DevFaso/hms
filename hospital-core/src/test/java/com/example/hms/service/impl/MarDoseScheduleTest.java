@@ -101,7 +101,7 @@ class MarDoseScheduleTest {
         "chaque heure|1", "cada hora|1", "cada seis horas|6", "cada ocho horas|8", "cada once horas|11",
         "every hour|1", "every six hours|6", "every twelve hours|12", "hourly|1", "Every 1 hour|1",
         "6h/6h|6", "6 h / 6 h|6", "8/8h|8", "12h/12|12", "tous les 2 jours|48", "every other day|48",
-        "Toutes les six heures pendant 2 jours|6", "toutes les 6 heures (Q6H)|6", "Cada 8 horas (Q8H)|8"
+        "toutes les 6 heures (Q6H)|6", "Cada 8 horas (Q8H)|8"
     })
     void d1237_readsHourFrequenciesWrittenInWords(String frequency, int hours) {
         assertThat(MarDoseSchedule.intervalHours(frequency)).isEqualTo(hours);
@@ -372,16 +372,19 @@ class MarDoseScheduleTest {
             .allSatisfy(phrase -> assertThat(folded).as(phrase).contains(phrase));
     }
 
-    /** QA D1237: only a frequency that says so is a single dose (QA D1378: as-needed is the tick). */
+    /**
+     * QA D1237: only a frequency that says so is a single dose (QA D1378: as-needed is the tick).
+     * QA D1452 (changed): "once", "une fois" and "una vez" with nothing else may be the start of a
+     * recurring order and ended it after one dose (D1457): asked; so are meals and minutes.
+     */
     @ParameterizedTest
     @CsvSource(delimiter = '|', value = {
-        "once|ONE_OFF", "STAT|ONE_OFF", "une seule fois|ONE_OFF", "Une fois|ONE_OFF", "dose unique|ONE_OFF",
-        "una vez|ONE_OFF", "dosis única|ONE_OFF", "single dose|ONE_OFF",
+        "once|UNREAD", "STAT|ONE_OFF", "une seule fois|ONE_OFF", "Une fois|UNREAD", "dose unique|ONE_OFF",
+        "una vez|UNREAD", "dosis única|ONE_OFF", "single dose|ONE_OFF",
         // QA D1378: the text alone is never AS_NEEDED; an unticked as-needed wording stays open (UNREAD).
         "PRN|UNREAD", "si besoin|UNREAD", "q4h PRN|UNREAD", "cada 6 horas si es necesario|UNREAD",
-        // QA D1426 (changed): meals, a week and thirty minutes state a cadence, 24h/24 an infusion.
-        "after meals|REPEATING", "après les repas|REPEATING", "une fois par semaine|REPEATING", "q0h|UNREAD",
-        "24h/24|CONTINUOUS", "2 fois|UNREAD", "toutes les 30 minutes|REPEATING"
+        "after meals|UNREAD", "après les repas|UNREAD", "une fois par semaine|REPEATING", "q0h|UNREAD",
+        "24h/24|CONTINUOUS", "2 fois|UNREAD", "toutes les 30 minutes|UNREAD"
     })
     void d1237_readsWhatTheFrequencySays(String frequency, MarDoseSchedule.Kind kind) {
         assertThat(MarDoseSchedule.read(frequency).kind()).isEqualTo(kind);
@@ -394,22 +397,57 @@ class MarDoseScheduleTest {
         assertThat(MarDoseSchedule.read(frequency).kind()).isEqualTo(MarDoseSchedule.Kind.ONE_OFF);
     }
 
-    /** QA D1426: a cadence is read wherever it stands in the sentence, and what the fixture does not hold reads too. */
+    /** QA D1426: what the grammar holds is read, and what the fixture does not hold reads too. */
     @ParameterizedTest
     @CsvSource(delimiter = '|', value = {
-        "2/semaine|5040", "2 fois/semaine|5040", "500 mg/j|1440", "q30min|30", "q2d|2880", "tous les mois|43200",
-        "cada mes|43200", "every week|10080", "8/8|480", "x 3|480", "3f/j|480", "at bedtime|1440", "matin et soir|720",
-        "take 1 tablet twice daily|720", "tomar 1 cada 8 horas|480", "08:00 14:00 20:00|480", "avant les repas|480", "with food|1440"})
-    void d1426_aCadenceAnywhereIsRead(String frequency, int minutes) {
+        "2/semaine|5040", "2 fois/semaine|5040", "q2d|2880", "tous les mois|43200",
+        "cada mes|43200", "every week|10080", "8/8|480", "3f/j|480", "at bedtime|1440", "matin et soir|720",
+        "take 1 tablet twice daily|720", "08:00 14:00 20:00|480"})
+    void d1426_aFormOfTheGrammarIsRead(String frequency, int minutes) {
         assertThat(MarDoseSchedule.read(frequency).intervalMinutes()).as(frequency).isEqualTo(minutes);
     }
 
-    /** QA D1426: a single-dose form ends after its dose, whatever stands beside it. */
+    /** QA D1426: a single-dose form ends after its dose. */
     @ParameterizedTest
-    @ValueSource(strings = {"Prise unique (TPI-SP 2)", "prise unique à la CPN", "en une prise", "SP dose unique", "ce soir",
-        "1 fois ce soir", "à la naissance", "avant l'intervention", "bolus", "en IVD lente", "dose de charge"})
+    @ValueSource(strings = {"Prise unique (TPI-SP 2)", "dose unique", "SP dose unique", "bolus", "dose de charge"})
     void d1426_aSingleDoseFormIsOneDose(String frequency) {
         assertThat(MarDoseSchedule.read(frequency).kind()).as(frequency).isEqualTo(MarDoseSchedule.Kind.ONE_OFF);
+    }
+
+    /**
+     * QA D1452 (changed assertions, declared in the PR: each was read as a schedule or a single dose by a scan of
+     * the sentence, D1426): none of these is one form of the closed grammar, so none is read: asked once, then
+     * flagged on the MAR, never a wrong cadence and never a course ended after one dose.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"Toutes les six heures pendant 2 jours", "500 mg/j", "q30min", "x 3", "tomar 1 cada 8 horas",
+        "avant les repas", "with food", "prise unique à la CPN", "ce soir", "1 fois ce soir", "à la naissance",
+        "avant l'intervention", "en IVD lente", "une fois par jour jusqu'à l'accouchement",
+        // Coordinator ruling on PR 1065: when in doubt, ask.
+        "OD", "od", "en une prise", "en 1 prise", "2/2", "3/3"})
+    void d1452_whatIsNotExactlyAFormIsNotRead(String frequency) {
+        assertThat(MarDoseSchedule.read(frequency).kind()).as(frequency).isEqualTo(MarDoseSchedule.Kind.UNREAD);
+    }
+
+    /**
+     * Coordinator ruling on PR 1065: what stays read beside what is now asked. "OD" and "en une prise" have no count,
+     * so no limit reads them; 24/24 is a continuous infusion (D1419), not every 24 hours.
+     */
+    @Test
+    void r35_whatStaysReadBesideWhatIsAsked() {
+        for (String code : List.of("QD", "BID", "TID", "QID")) {
+            assertThat(MarDoseSchedule.read(code).repeating()).as(code).isTrue();
+        }
+        assertThat(MarDoseSchedule.read("6/6").intervalMinutes()).isEqualTo(360);
+        assertThat(MarDoseSchedule.read("8/8").intervalMinutes()).isEqualTo(480);
+        assertThat(MarDoseSchedule.read("12/12").intervalMinutes()).isEqualTo(720);
+        assertThat(MarDoseSchedule.read("24/24").kind()).isEqualTo(MarDoseSchedule.Kind.CONTINUOUS);
+        assertThat(MarDoseSchedule.read("2h/2h").intervalMinutes()).as("the hour is written").isEqualTo(120);
+        for (String asked : List.of("OD", "en une prise", "2/2", "3/3")) {
+            assertThat(MarDoseSchedule.dosesPerDay(asked)).as(asked).isNull();
+            assertThat(MarDoseSchedule.shortestMinutesBetweenDoses(asked)).as(asked).isNull();
+            assertThat(MarDoseSchedule.writtenWithNoCount(asked)).as(asked).isTrue();
+        }
     }
 
     /** QA D1419: a ceiling, a range or a choice is not a schedule, but the daily limit still judges its highest count. */
@@ -420,7 +458,8 @@ class MarDoseScheduleTest {
         }
         assertThat(MarDoseSchedule.dosesPerDay("max 4/j")).isEqualTo(4d);
         assertThat(MarDoseSchedule.dosesPerDay("1 à 3 fois par jour")).isEqualTo(3d);
-        assertThat(MarDoseSchedule.read("une fois par jour jusqu'à l'accouchement").intervalMinutes()).isEqualTo(1440);
+        // QA D1452 (changed): asked once on the MAR; the limit still judges what it states.
+        assertThat(MarDoseSchedule.dosesPerDay("une fois par jour jusqu'à l'accouchement")).isEqualTo(1d);
     }
 
     /** QA D1419: the artemether-lumefantrine timing is six doses at their own moments; the daily limit counts the fullest day. */
@@ -433,8 +472,20 @@ class MarDoseScheduleTest {
         assertThat(reading.gapAfter(2)).isEqualTo(960);
         assertThat(reading.gapAfter(6)).isNull();
         assertThat(MarDoseSchedule.dosesPerDay("H0 H8 H24 H36 H48 H60")).isEqualTo(2d);
-        assertThat(MarDoseSchedule.read("J1 à J3").courseOffsets()).containsExactly(0, 1440, 2880);
+        // QA D1452 (changed: "J1 à J3" was a course): a range names no moments.
+        assertThat(MarDoseSchedule.read("J1 J2 J3").courseOffsets()).containsExactly(0, 1440, 2880);
+        assertThat(MarDoseSchedule.read("J1 à J3").kind()).isEqualTo(MarDoseSchedule.Kind.UNREAD);
         assertThat(MarDoseSchedule.intervalHours("J1 J2 J3")).as("not a whole-hour regimen").isNull();
+    }
+
+    /** Independent review of round 35: the gap a limit judges in a sentence not read is the shortest it states. */
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', value = {"toutes les 2 h pendant 3 jours|120", "tous les 2 h pendant 3 jours|120",
+        "ttes les 2 h pendant 3 jours|120", "toutes les 6 h puis toutes les 2 h|120", "q8h puis toutes les 2 h|120",
+        "toutes les 2 à 3 h|120", "q4h-q6h|240"})
+    void r35_theShortestStatedGapIsWhatALimitJudges(String frequency, int minutes) {
+        assertThat(MarDoseSchedule.read(frequency).kind()).as(frequency).isEqualTo(MarDoseSchedule.Kind.UNREAD);
+        assertThat(MarDoseSchedule.shortestMinutesBetweenDoses(frequency)).as(frequency).isEqualTo(minutes);
     }
 
     /** QA D1237: "5 fois par jour" repeats (every 4 h 48), though not in whole hours. */

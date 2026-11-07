@@ -55,7 +55,7 @@ describe('as-needed-frequency (QA D1391 / D1395: the mirror of the server rule)'
 
   it('QA D1419 / D1426: every filed wording has one outcome', () => {
     const outcomes = [cases.fixedSchedule, cases.conditional, cases.unreadable];
-    for (const wording of [...cases.filed.D1419, ...cases.filed.D1426]) {
+    for (const wording of Object.values(cases.filed).flat()) {
       expect(outcomes.filter((list) => list.includes(wording)).length)
         .withContext(wording)
         .toBe(1);
@@ -76,6 +76,47 @@ describe('as-needed-frequency (QA D1391 / D1395: the mirror of the server rule)'
     for (const wording of offered) {
       expect(unTickedFrequencyVerdict(wording)).withContext(wording).toBe('FIXED');
     }
+  });
+
+  const read = (wording: string): string => {
+    const r = frequencyReading(wording);
+    return (
+      r.kind +
+      (r.intervalMinutes === undefined ? '' : `:${r.intervalMinutes}`) +
+      (r.courseOffsets === undefined ? '' : `:[${r.courseOffsets.join(',')}]`)
+    );
+  };
+
+  it('QA D1452: reads every form of the grammar as the fixture states, as the server does', () => {
+    const forms = Object.entries(cases.grammarForms as Record<string, string>);
+    expect(forms.length).toBeGreaterThan(200);
+    for (const [wording, reading] of forms) {
+      expect(read(wording)).withContext(wording).toBe(reading);
+      expect(unTickedFrequencyVerdict(wording)).withContext(wording).toBe('FIXED');
+    }
+  });
+
+  it('QA D1452-D1459: a form with anything else beside it is never a schedule, as on the server', () => {
+    let counted = 0;
+    for (const form of Object.keys(cases.grammarForms)) {
+      for (const clause of cases.matrixClauses) {
+        for (const wording of [`${clause} ${form}`, `${form} ${clause}`]) {
+          // One check per form below: thousands of expectations would flood the reporter.
+          if (frequencyReading(wording).kind !== 'UNREAD') fail(`read as a schedule: ${wording}`);
+          if (unTickedFrequencyVerdict(wording) === 'FIXED') fail(`accepted: ${wording}`);
+          counted++;
+        }
+      }
+    }
+    expect(counted).toBeGreaterThan(2500);
+  });
+
+  it('QA D1460: "dormir" and an accented "si" are no conditions; "si" with no accent is', () => {
+    expect(unTickedFrequencyVerdict('avant de dormir')).toBe('FIXED');
+    expect(read('un día sí y otro no')).toBe('REPEATING:2880');
+    expect(unTickedFrequencyVerdict('toutes les 8 h pour dormir')).toBe('UNREADABLE');
+    expect(unTickedFrequencyVerdict('una vez al día un día sí y otro no')).toBe('UNREADABLE');
+    expect(unTickedFrequencyVerdict('cada 6 horas si dolor')).toBe('CONDITIONAL');
   });
 
   it('reads nothing written as nothing to refuse', () => {

@@ -53,6 +53,8 @@ export interface PrescriptionResponse {
   prnMinIntervalHours?: number | null;
   /** QA D1378 (round 32): the order is as-needed (PRN), as the prescriber ticked it. */
   asNeeded?: boolean;
+  /** QA D1452: the MAR cannot schedule this wording: nurses give a reason at each later dose. */
+  frequencyUnread?: boolean;
   /** Administration route code (PO, IV, ...); null on orders that never recorded one. */
   route?: string | null;
   duration: string;

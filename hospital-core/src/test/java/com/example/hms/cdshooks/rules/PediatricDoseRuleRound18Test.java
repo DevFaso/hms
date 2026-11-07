@@ -203,6 +203,60 @@ class PediatricDoseRuleRound18Test {
         assertThat(anyHardStop(cards)).isTrue();
     }
 
+    private static final String UNREAD_COUNT = "3 fois chaque jour";
+
+    private static boolean saysTotalUnknown(List<CdsCard> cards) {
+        return cards.stream().anyMatch(card -> card.summary().contains("the daily total could not be read from the frequency"));
+    }
+
+    /**
+     * QA D1455, its own case: a 19 kg child, 750 mg. "3 fois par jour" is judged at 118,42 mg/kg/day; "3 fois
+     * chaque jour" saved with no dose card, read as one dose a day. It is now not read, and a card says the total
+     * could not be calculated, on every path, and the limit per dose still stands.
+     */
+    @Test
+    void d1455_anUnreadCountIsNeverOneDoseADayForAChild() {
+        List<CdsCard> read = rule.evaluate(ctx(childAged(6, 0, 0), paracetamol(), "750 mg", "3 fois par jour",
+            19.0, LocalDateTime.now()));
+        assertThat(read.stream().map(CdsCard::summary)).anyMatch(summary -> summary.contains("118.42 mg/kg per day"));
+        assertThat(saysTotalUnknown(read)).as("a read count has a known total").isFalse();
+
+        List<CdsCard> unread = rule.evaluate(ctx(childAged(6, 0, 0), paracetamol(), "750 mg", UNREAD_COUNT,
+            19.0, LocalDateTime.now()));
+        assertThat(saysTotalUnknown(unread)).isTrue();
+        assertThat(unread.stream().map(CdsCard::summary))
+            .as("never a daily figure from one dose").noneMatch(summary -> summary.contains("mg/kg per day"))
+            .as("the limit per dose stands").anyMatch(summary -> summary.contains("exceeds ceiling"));
+    }
+
+    /** QA D1455: the dose alone over the cap keeps the hard stop, which says "at least" and that the total is unknown. */
+    @Test
+    void d1455_theHardStopStandsOnTheDoseAlone() {
+        List<CdsCard> cards = rule.evaluate(ctx(childAged(6, 0, 0), paracetamol(), "5 g", UNREAD_COUNT,
+            19.0, LocalDateTime.now()));
+        assertThat(anyHardStop(cards)).isTrue();
+        assertThat(cards.get(0).summary()).contains("at least 5000 mg per day").contains("the daily total is unknown");
+        assertThat(saysTotalUnknown(cards)).as("the hard stop says it itself").isFalse();
+
+        assertThat(anyHardStop(rule.evaluate(ctx(childAged(6, 0, 0), paracetamol(), "1500 mg", "3 fois par jour pendant 5 jours",
+            19.0, LocalDateTime.now())))).as("the count the sentence states still meets the cap: 4500 mg").isTrue();
+    }
+
+    /** QA D1455: the paths that never reach the mg/kg check say it too. */
+    @Test
+    void d1455_everyPathSaysTheTotalIsUnknown() {
+        assertThat(saysTotalUnknown(rule.evaluate(ctx(childAged(6, 0, 0), paracetamol(), "250 mg", UNREAD_COUNT,
+            null, null)))).as("no weight on file").isTrue();
+        assertThat(saysTotalUnknown(rule.evaluate(ctx(childAged(0, 1, 0), paracetamol(), "50 mg", UNREAD_COUNT,
+            4.0, LocalDateTime.now())))).as("under the manual-review age").isTrue();
+        assertThat(saysTotalUnknown(rule.evaluate(ctx(childAged(6, 0, 0), artemetherLumefantrine(), "2 cp", "2 fois chaque jour",
+            19.0, LocalDateTime.now())))).as("weight bands").isTrue();
+        assertThat(saysTotalUnknown(rule.evaluate(ctx(childAged(6, 0, 0), paracetamol(), "250 mg", "3 fois par jour",
+            19.0, LocalDateTime.now())))).as("a schedule").isFalse();
+        assertThat(saysTotalUnknown(rule.evaluate(ctx(childAged(6, 0, 0), MedicationCatalogItem.builder().nameFr("Sans limite").build(),
+            "250 mg", UNREAD_COUNT, 19.0, LocalDateTime.now())))).as("no daily limit to judge").isFalse();
+    }
+
     /** Review round 2: a count that does not divide the day, and an interval over a day, still count. */
     @Test
     void fiveTimesADayAndEveryTwoDaysAreCountedAgainstTheDailyCap() {

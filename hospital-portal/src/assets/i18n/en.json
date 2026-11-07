@@ -7253,8 +7253,28 @@
     }
   },
   "PRESCRIPTIONS": {
-    "FREQUENCY_UNREADABLE": "This wording cannot be scheduled: nurses will be asked a reason at each dose after the first. Write a schedule (“3 times a day”, “every 6 hours”, “single dose”), tick “As needed (PRN)”, or confirm it.",
-    "FREQUENCY_CONFIRM": "I confirm this wording: nurses will give a reason at each dose after the first",
+    "FREQUENCY_UNREADABLE": "This wording cannot be scheduled: nurses will be asked a reason at each dose after the first. Better: pick a schedule from the list, or tick “As needed (PRN)”. Otherwise confirm it.",
+    "FREQUENCY_CONFIRM": "I confirm this wording: nurses will give a reason at each dose after the first. A schedule from the list, or “As needed (PRN)”, would spare them that",
+    "FREQUENCY_UNREAD_NOTE": "Not read as a schedule: nurses give a reason at each dose after the first.",
+    "FREQUENCY_CHOICES": {
+      "ONCE_DAILY": "once a day",
+      "TWICE_DAILY": "twice a day",
+      "THREE_DAILY": "3 times a day",
+      "FOUR_DAILY": "4 times a day",
+      "Q4H": "every 4 hours",
+      "Q6H": "every 6 hours",
+      "Q8H": "every 8 hours",
+      "Q12H": "every 12 hours",
+      "MORNING": "in the morning",
+      "EVENING": "in the evening",
+      "MORNING_EVENING": "morning and evening",
+      "MORNING_NOON_EVENING": "morning, noon and evening",
+      "BEDTIME": "at bedtime",
+      "ALTERNATE_DAYS": "every other day",
+      "WEEKLY": "once a week",
+      "SINGLE_DOSE": "single dose",
+      "CONTINUOUS": "continuous infusion"
+    },
     "SEARCHING": "Searching all prescriptions…",
     "FREQUENCY_READS_AS_NEEDED": "This reads as “as needed”: tick “As needed (PRN)” and give the minimum interval, or write a fixed schedule.",
     "CLARIFICATION": {

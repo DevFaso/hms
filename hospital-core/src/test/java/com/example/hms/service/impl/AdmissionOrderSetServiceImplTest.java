@@ -385,7 +385,8 @@ class AdmissionOrderSetServiceImplTest {
                 ex -> assertThat(ex.getField()).isEqualTo("orderItems[0].asNeeded"));
         // QA D1419 (changed: these were refused outright on asNeeded): not a condition, a question on the
         // item's own field, and the same item with the answer is saved.
-        for (String asked : List.of("max 4/j", "selon prescription m\u00e9dicale", "SP + AQ")) {
+        // QA D1452 (changed: "3 fois par jour selon ordonnance" was accepted): more than a form of the grammar.
+        for (String asked : List.of("max 4/j", "selon prescription m\u00e9dicale", "SP + AQ", "3 fois par jour selon ordonnance")) {
             AdmissionOrderSetRequestDTO request = sampleRequest();
             request.setOrderItems(List.of(Map.of("orderType", "MEDICATION", "medicationName", "Paracetamol",
                 "frequency", asked)));
@@ -397,7 +398,7 @@ class AdmissionOrderSetServiceImplTest {
                 "frequency", asked, "frequencyConfirmed", true)));
             assertThat(service.create(confirmed).getVersion()).as(asked).isEqualTo(1);
         }
-        for (String accepted : List.of("Q6H", "TPI-SP", "3 fois par jour selon ordonnance", "Prise unique (TPI-SP 2)")) {
+        for (String accepted : List.of("Q6H", "TPI-SP", "Prise unique (TPI-SP 2)")) {
             AdmissionOrderSetRequestDTO request = sampleRequest();
             request.setOrderItems(List.of(Map.of("orderType", "MEDICATION", "medicationName", "Paracetamol",
                 "frequency", accepted)));

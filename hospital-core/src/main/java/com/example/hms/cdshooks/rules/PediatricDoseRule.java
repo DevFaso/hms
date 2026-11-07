@@ -84,30 +84,36 @@ public class PediatricDoseRule implements CdsRule {
 
         Check check = new Check(context, age, ChronoUnit.MONTHS.between(dob, today));
         List<CdsCard> cards = new ArrayList<>();
-        check.hardStop().ifPresent(cards::add);
+        Optional<CdsCard> hardStop = check.hardStop();
+        hardStop.ifPresent(cards::add);
+        cards.addAll(limitCards(context, check, age));
+        // QA D1455: the hard stop says it itself.
+        if (hardStop.isEmpty()) {
+            check.dailyTotalUnknown().ifPresent(cards::add);
+        }
+        return cards;
+    }
 
+    /** Whatever the age, the weight and the item leave to judge, after the hard stop. */
+    private List<CdsCard> limitCards(CdsRuleContext context, Check check, Period age) {
         if (check.ageMonths < check.manualReviewUnderMonths()) {
-            cards.add(reviewRequired(text.get("cds.pediatric.manualReview.summary",
+            return List.of(reviewRequired(text.get("cds.pediatric.manualReview.summary",
                 "{0}: child under {1} months - no automatic mg/kg check; a pharmacist or physician must review the dose",
                 check.medication(), String.valueOf(check.manualReviewUnderMonths())), check.limitBasis()));
-            return cards;
         }
         Double weight = context.patientWeightKg();
         if (weight == null || weight <= 0d) {
-            cards.add(softAdvisory(context, age.getYears()));
-            return cards;
+            return List.of(softAdvisory(context, age.getYears()));
         }
+        List<CdsCard> cards = new ArrayList<>();
         check.staleWeightCard().ifPresent(cards::add);
-
         if (check.hasBands()) {
             cards.addAll(check.bandCards());
-            return cards;
-        }
-        if (!check.hasMgLimit()) {
+        } else if (check.hasMgLimit()) {
+            cards.addAll(check.mgCards());
+        } else {
             cards.add(softAdvisory(context, age.getYears()));
-            return cards;
         }
-        cards.addAll(check.mgCards());
         return cards;
     }
 
@@ -145,6 +151,12 @@ public class PediatricDoseRule implements CdsRule {
         private final Period age;
         private final long ageMonths;
         private final Double dosesPerDay;
+        /**
+         * QA D1455: a frequency the reader does not read has no known daily total, whatever
+         * {@link #dosesPerDay} holds: the count the sentence states, a minimum, or nothing. A
+         * ticked interval is known: it is the most the order allows.
+         */
+        private final boolean totalUnknown;
 
         Check(CdsRuleContext context, Period age, long ageMonths) {
             this.context = context;
@@ -158,6 +170,8 @@ public class PediatricDoseRule implements CdsRule {
             // dose itself (q48h is still a full dose that day); a count that
             // does not divide the day ("5 fois par jour") is read as written.
             this.dosesPerDay = dosesOnADosingDay(context.proposedFrequency(), context.proposedPrnDosesPerDay());
+            this.totalUnknown = context.proposedPrnDosesPerDay() == null
+                && MarDoseSchedule.writtenWithNoCount(context.proposedFrequency());
         }
 
         String medication() {
@@ -188,18 +202,43 @@ public class PediatricDoseRule implements CdsRule {
             }
             // Review of round 18: an unreadable frequency (PRN, STAT, free text)
             // still counts at least this one dose: a single dose above the daily
-            // cap is a hard stop whatever the frequency says.
+            // cap is a hard stop whatever the frequency says. QA D1455: the card
+            // then says "at least", and that the daily total is unknown.
             double daily = dosesPerDay == null ? doseMg : doseMg * dosesPerDay;
             if (daily <= cap.doubleValue()) {
                 return Optional.empty();
             }
-            String summary = text.get("cds.pediatric.hardStop.summary",
-                "{0}: {1} mg per day is above the absolute daily maximum of {2} mg - this dose cannot be prescribed",
-                medication(), number(daily), number(cap));
+            String summary = totalUnknown
+                ? text.get("cds.pediatric.hardStop.totalUnknown.summary",
+                    "{0}: at least {1} mg per day is above the absolute daily maximum of {2} mg - this dose cannot be prescribed; the daily total is unknown: the frequency \"{3}\" could not be read",
+                    medication(), number(daily), number(cap), frequencyWritten())
+                : text.get("cds.pediatric.hardStop.summary",
+                    "{0}: {1} mg per day is above the absolute daily maximum of {2} mg - this dose cannot be prescribed",
+                    medication(), number(daily), number(cap));
             String detail = text.get("cds.pediatric.hardStop.detail",
                 "Child aged {0}. The absolute daily maximum cannot be overridden: reduce the dose or the frequency. Limit: {1}.",
                 ageText(), limitBasis());
             return Optional.of(card(summary, detail, CdsCard.Indicator.CRITICAL, Boolean.TRUE));
+        }
+
+        /**
+         * QA D1455: "3 fois chaque jour" is never read as one dose a day: on every path, a limit on the day
+         * that could not be judged says so. Not when the item holds no such limit.
+         */
+        Optional<CdsCard> dailyTotalUnknown() {
+            boolean aDailyLimit = item != null && (item.getPediatricMaxDailyMg() != null
+                || item.getPediatricMaxDailyMgPerKg() != null || hasBands());
+            return totalUnknown && aDailyLimit ? Optional.of(frequencyUnreadCard()) : Optional.empty();
+        }
+
+        private CdsCard frequencyUnreadCard() {
+            return warning(text.get("cds.pediatric.frequencyUnread.summary",
+                "{0}: the daily total could not be read from the frequency \"{1}\" - check it against the daily maximum",
+                medication(), frequencyWritten()), limitBasis());
+        }
+
+        private String frequencyWritten() {
+            return context.proposedFrequency() == null ? "" : context.proposedFrequency();
         }
 
         Optional<CdsCard> staleWeightCard() {
@@ -283,11 +322,8 @@ public class PediatricDoseRule implements CdsRule {
                         "{0}: {1} mg/kg per day is above the usual maximum of {2} mg/kg per day",
                         medication(), number(dailyMgPerKg), number(perDay))));
                 }
-            } else if (perDay != null || item.getPediatricMaxDailyMg() != null) {
-                cards.add(warning(text.get("cds.pediatric.frequencyUnread.summary",
-                    "{0}: the daily total could not be read from the frequency \"{1}\" - check it against the daily maximum",
-                    medication(), context.proposedFrequency() == null ? "" : context.proposedFrequency()),
-                    limitBasis()));
+            } else if (!totalUnknown && (perDay != null || item.getPediatricMaxDailyMg() != null)) {
+                cards.add(frequencyUnreadCard());
             }
             return cards;
         }

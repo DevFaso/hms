@@ -3812,7 +3812,7 @@ class NurseTaskServiceImplTest {
     @Test
     void D77_theSameDoseCannotBeRecordedTwice() {
         UUID hospitalId = UUID.randomUUID();
-        Prescription rx = scheduledRx(hospitalId, "once");
+        Prescription rx = scheduledRx(hospitalId, "once only");
         when(prescriptionRepository.findByIdForUpdate(rx.getId())).thenReturn(Optional.of(rx));
         when(marRepository.findByPrescription_IdOrderByScheduledTimeDesc(rx.getId()))
             .thenReturn(List.of(closedDose(rx, rx.getCreatedAt(), MedicationAdministrationStatus.GIVEN)));

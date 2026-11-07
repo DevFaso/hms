@@ -163,6 +163,13 @@
                       | translate: { hours: p.prnMinIntervalHours }
                   }}</span>
                 }
+                @if (p.frequencyUnread) {
+                  <!-- QA D1452: what the MAR flags, the prescriber sees on the draft. -->
+                  {{ ' '
+                  }}<span class="cell-sub" data-testid="rx-row-frequency-unread">{{
+                    'PRESCRIPTIONS.FREQUENCY_UNREAD_NOTE' | translate
+                  }}</span>
+                }
               </td>
               <td>{{ p.duration || '—' }}</td>
               <td>{{ p.staffFullName || '—' }}</td>
@@ -346,6 +353,12 @@
             <div class="detail-field">
               <span class="field-label">{{ 'PRESCRIPTIONS.FREQUENCY' | translate }}</span
               ><span class="field-value">{{ rx.frequency || '—' }}</span>
+              @if (rx.frequencyUnread) {
+                {{ ' '
+                }}<span class="cell-sub" data-testid="rx-detail-frequency-unread">{{
+                  'PRESCRIPTIONS.FREQUENCY_UNREAD_NOTE' | translate
+                }}</span>
+              }
             </div>
             @if (rx.prnMinIntervalHours) {
               <!-- QA round 30: the as-needed order's minimum interval, as the prescriber wrote it. -->
@@ -1012,7 +1025,16 @@
                 (ngModelChange)="onFrequencyChange($event)"
                 [readonly]="editingSigned()"
                 [placeholder]="'PRESCRIPTIONS.FREQUENCY_PLACEHOLDER' | translate"
+                list="rx-frequency-choices"
               />
+              <!-- QA D1472: the schedules the reader reads, so a prescriber need not guess a wording. -->
+              <datalist id="rx-frequency-choices" data-testid="rx-frequency-choices">
+                @for (choice of frequencyChoices; track choice) {
+                  <option
+                    [value]="'PRESCRIPTIONS.FREQUENCY_CHOICES.' + choice | translate"
+                  ></option>
+                }
+              </datalist>
               @if (frequencyHintKey(); as hintKey) {
                 <p class="field-hint" data-testid="rx-frequency-hint">{{ hintKey | translate }}</p>
               }

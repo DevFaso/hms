@@ -1,5 +1,6 @@
 package com.example.hms.service.impl;
 
+import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -28,6 +29,10 @@ import java.util.regex.Pattern;
  *       {@code frequencyUnread} on the MAR (PrnMinInterval).</li>
  * </ol>
  *
+ * <p>QA D1460 (round 35): a form of the reader's closed grammar is a schedule
+ * first, so "avant de dormir" and "un dia si y otro no" are never conditions;
+ * "dormir" is no condition word and an accented "si" no conditional "si".
+ *
  * <p>The portal mirror is {@code shared/as-needed-frequency.ts}; the shared
  * fixture {@code as-needed-frequency.cases.json} holds both to the same verdict
  * and the same reading (FrequencyWordingTest, as-needed-frequency.spec.ts), and
@@ -44,6 +49,9 @@ public final class FrequencyWording {
         /** Neither: the MAR cannot schedule it. Write a schedule, tick as needed, or confirm the wording. */
         UNREADABLE
     }
+
+    /** Spanish "si" with its accent is "yes", never "if": gone before accents are. */
+    private static final Pattern ACCENTED_SI = Pattern.compile("(?<!\\p{L})[sS][\u00ed\u00cd](?!\\p{L})");
 
     /** A threshold ("si EVA > 4", "T >= 38,5") is a condition; a weight band in brackets was removed before. */
     private static final Pattern COMPARISON = Pattern.compile("[<>≤≥]");
@@ -88,7 +96,7 @@ public final class FrequencyWording {
         + "CONVULSIONS SAIGNEMENT BLEEDING HEMORRAGIE HEMORRHAGE GLYCEMIE GLUCEMIA DEXTRO EFFORT EXERCISE MAUX SIFFLEMENTS "
         + "SAIGNEMENTS HEMORRAGIES WHEEZING DIARRHOEA SPASM INSOMNIA VOMITS FIEBRES CONVULSIONES ESPASMOS HEMORRAGIA "
         + "INSOMNIO MIGRAINE CRAMPS RASH SEIZURES DIZZINESS HEARTBURN HIVES RESTLESSNESS SOB CRAMPES DEMANGEAISONS "
-        + "BRULURES PALPITATIONS AIGREURS ESSOUFFLEMENT MAREOS PICAZON PRURITO SANGRADO CEFALEA MIGRANA ATAQUES DORMIR "
+        + "BRULURES PALPITATIONS AIGREURS ESSOUFFLEMENT MAREOS PICAZON PRURITO SANGRADO CEFALEA MIGRANA ATAQUES "
         + "SYMPTOMES SINTOMAS SYMPTOMS TEMPERATURE TEMPERATURA ONSET PARFOIS SOMETIMES POUSSEES FEBRILE APPARITION SIGNES "
         + "SIGNS");
 
@@ -125,14 +133,14 @@ public final class FrequencyWording {
         if (frequency == null || NOTHING_WRITTEN.matcher(frequency).matches()) {
             return Verdict.FIXED;
         }
-        String text = SEPARATORS.matcher(withoutWeightBands(MarDoseSchedule.accentlessUpper(frequency)))
-            .replaceAll(" ").strip();
-        if (readsConditional(text, wordsOf(text))) {
-            return Verdict.CONDITIONAL;
+        // The one reader first, on what was written: what it reads, the MAR schedules.
+        if (MarDoseSchedule.read(frequency).kind() != MarDoseSchedule.Kind.UNREAD) {
+            return Verdict.FIXED;
         }
-        // The one reader, on what was written: what the MAR will read.
-        return MarDoseSchedule.read(frequency).kind() == MarDoseSchedule.Kind.UNREAD
-            ? Verdict.UNREADABLE : Verdict.FIXED;
+        String yesRemoved = ACCENTED_SI.matcher(Normalizer.normalize(frequency, Normalizer.Form.NFC)).replaceAll(" ");
+        String text = SEPARATORS.matcher(withoutWeightBands(MarDoseSchedule.accentlessUpper(yesRemoved)))
+            .replaceAll(" ").strip();
+        return readsConditional(text, wordsOf(text)) ? Verdict.CONDITIONAL : Verdict.UNREADABLE;
     }
 
     /** "4 cp 2 fois par jour (poids > 35 kg)": a weight band says who gets this dose, not when. */
@@ -151,9 +159,9 @@ public final class FrequencyWording {
             .noneMatch(CONDITIONAL_WORDS::contains);
     }
 
-    /** The words, with the counts and hours written as words read as digits ("trois fois" is "3 FOIS"). */
+    /** The words of a text. */
     private static List<String> wordsOf(String text) {
-        String normal = NOT_ALPHANUMERIC.matcher(MarDoseSchedule.normalize(text)).replaceAll(" ").trim();
+        String normal = NOT_ALPHANUMERIC.matcher(MarDoseSchedule.accentlessUpper(text)).replaceAll(" ").trim();
         return normal.isEmpty() ? List.of() : List.of(normal.split(" "));
     }
 

@@ -29,6 +29,12 @@ import java.util.regex.Pattern;
  * again at apply, before any order is created, so an item stored before this
  * rule is refused by name, never skipped. Each refusal names the item's field
  * ({@code orderItems[2].prnMinIntervalHours}) and its position and name.
+ *
+ * <p>QA D1452 (round 35): the reader now reads only what is exactly one form of its
+ * grammar, so a set saved before can hold a wording accepted then and asked about
+ * now, and at apply nobody can answer: {@link #requireValidToApply} lets that one
+ * question pass. The order is created from the wording as written and flagged on
+ * the MAR, never given a wrong cadence. A condition is still refused by name.
  */
 public final class OrderSetItemPrnRules {
 
@@ -46,6 +52,15 @@ public final class OrderSetItemPrnRules {
 
     /** Refuses the first MEDICATION item whose as-needed part breaks the prescription rule. */
     public static void requireValid(List<Map<String, Object>> items) {
+        check(items, false);
+    }
+
+    /** {@link #requireValid} on a set already saved, when it is applied: see the class comment. */
+    public static void requireValidToApply(List<Map<String, Object>> items) {
+        check(items, true);
+    }
+
+    private static void check(List<Map<String, Object>> items, boolean saved) {
         if (items == null) {
             return;
         }
@@ -55,7 +70,8 @@ public final class OrderSetItemPrnRules {
                 continue;
             }
             PrnMinInterval.Refusal refusal = refusalOf(item);
-            if (refusal != null) {
+            boolean unanswerable = saved && refusal != null && PrnMinInterval.CONFIRMED_FIELD.equals(refusal.field());
+            if (refusal != null && !unanswerable) {
                 throw new FieldBusinessException(ITEMS_FIELD + "[" + i + "]." + refusal.field(), ITEM_REFUSED_KEY,
                     i + 1, nameOf(item), MessageUtil.resolve(refusal.key()));
             }
@@ -80,6 +96,18 @@ public final class OrderSetItemPrnRules {
     public static boolean frequencyConfirmed(Map<String, Object> item) {
         Object value = item.get(PrnMinInterval.CONFIRMED_FIELD);
         return Boolean.TRUE.equals(value) || (value instanceof String s && "true".equalsIgnoreCase(s.strip()));
+    }
+
+    /**
+     * What the order an applied item creates says about its wording: the author's answer, or a set saved
+     * before the wording was asked about, which reaches the MAR flagged ({@link #requireValidToApply}).
+     */
+    static boolean frequencyAnsweredAtApply(Map<String, Object> item) {
+        if (frequencyConfirmed(item) || !(item.get("frequency") instanceof String written)) {
+            return frequencyConfirmed(item);
+        }
+        PrnMinInterval.Refusal refusal = PrnMinInterval.safetyNet(written);
+        return refusal != null && PrnMinInterval.CONFIRMED_FIELD.equals(refusal.field());
     }
 
     /** The item's minimum interval when it is a whole number of hours, else {@code null}. */

@@ -115,6 +115,8 @@ public class PrescriptionMapper {
             .frequency(p.getFrequency())
             .prnMinIntervalHours(p.getPrnMinIntervalHours())
             .asNeeded(p.isAsNeeded())
+            .frequencyUnread(com.example.hms.service.impl.MarDoseSchedule.read(p).kind()
+                == com.example.hms.service.impl.MarDoseSchedule.Kind.UNREAD)
             .duration(p.getDuration())
             .route(p.getRoute())
             .instructions(p.getInstructions())

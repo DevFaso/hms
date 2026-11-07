@@ -165,6 +165,27 @@ export const PRESCRIPTION_TABS: readonly { id: PrescriptionTab; labelKey: string
 /** The prescribed quantity, refused when blank or not positive (QA D1306). */
 const RX_QUANTITY_IDS = ['rx-quantity'];
 /** QA round 30: the as-needed order's minimum interval (server key prnMinIntervalHours). */
+/** QA D1472: `PRESCRIPTIONS.FREQUENCY_CHOICES`; FrequencyWordingTest reads each in EN, FR and ES. */
+const FREQUENCY_CHOICES = [
+  'ONCE_DAILY',
+  'TWICE_DAILY',
+  'THREE_DAILY',
+  'FOUR_DAILY',
+  'Q4H',
+  'Q6H',
+  'Q8H',
+  'Q12H',
+  'MORNING',
+  'EVENING',
+  'MORNING_EVENING',
+  'MORNING_NOON_EVENING',
+  'BEDTIME',
+  'ALTERNATE_DAYS',
+  'WEEKLY',
+  'SINGLE_DOSE',
+  'CONTINUOUS',
+] as const;
+
 /** QA D1440: the server keys of the wording and as-needed refusals, each marked at its own field. */
 const RX_WORDING_FIELDS: ReadonlySet<string> = new Set([
   'asNeeded',
@@ -822,6 +843,9 @@ export class PrescriptionsComponent implements OnInit {
     this.frequencyConfirmAsked.set(false);
     this.wordingRefused.set(false);
   }
+
+  /** QA D1472: the schedules the form offers: each reads as a schedule in every language, and never asks. */
+  protected readonly frequencyChoices = FREQUENCY_CHOICES;
 
   /** QA D1419: the server asked about this wording: the prescriber may confirm it, here. */
   readonly frequencyConfirmAsked = signal(false);
