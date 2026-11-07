@@ -79,6 +79,17 @@ public interface MedicationCatalogItemRepository extends JpaRepository<Medicatio
     Optional<MedicationCatalogItem> findByHospitalIdAndCode(UUID hospitalId, String code);
 
     /**
+     * QA D1314: which of these catalogue lines are controlled, for a page of
+     * orders in one statement. Each row is {@code [item id, hospital id, code]}.
+     * The prescription list read the catalogue once per row of the page.
+     */
+    @Query("SELECT m.id, m.hospital.id, m.code FROM MedicationCatalogItem m WHERE m.controlled = true"
+        + " AND m.hospital.id IN :hospitalIds AND (m.id IN :itemIds OR m.code IN :codes)")
+    java.util.List<Object[]> findControlledAmong(@Param("hospitalIds") java.util.Collection<UUID> hospitalIds,
+                                                 @Param("itemIds") java.util.Collection<UUID> itemIds,
+                                                 @Param("codes") java.util.Collection<String> codes);
+
+    /**
      * Batch lookup used by {@link com.example.hms.cdshooks.rules.CdsRuleEngine}
      * to resolve the RxNorm of every active prescription on a patient
      * in a single query (avoids N+1 over the catalog).

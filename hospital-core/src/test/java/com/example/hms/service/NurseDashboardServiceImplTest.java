@@ -57,6 +57,40 @@ class NurseDashboardServiceImplTest {
         // @InjectMocks handles instantiation but we keep the method for clarity/future config.
     }
 
+    private com.example.hms.payload.dto.nurse.NursePatientNameRow nameRow(String first, String middle, String last,
+                                                                            String registrationName, java.time.LocalDate date, UUID readyBy) {
+        return new com.example.hms.payload.dto.nurse.NursePatientNameRow(UUID.randomUUID(), first, middle, last, registrationName, date, readyBy);
+    }
+
+    @Test
+    void d1314_namesFollowTheFullReadsOrderAndAssignmentAndReadNothingElse() {
+        java.time.LocalDate today = java.time.LocalDate.of(2026, 11, 7);
+        var oldest = nameRow("Awa", null, "Kone", null, today.minusDays(9), null);
+        var newest = nameRow("Pelagie", "Wend", "Kiemde", null, today, nurseUserId);
+        var undated = nameRow("Issa", " ", "Sawadogo", null, null, null);
+        var someoneElses = nameRow("Hors", null, "Liste", null, today, UUID.randomUUID());
+        when(registrationRepository.findActiveNamesForHospital(hospitalId))
+            .thenReturn(java.util.List.of(oldest, undated, newest, someoneElses));
+
+        var names = nurseDashboardService.getPatientNamesForNurse(nurseUserId, hospitalId);
+
+        org.assertj.core.api.Assertions.assertThat(names).extracting("displayName")
+            .containsExactly("Pelagie Wend Kiemde", "Awa Kone", "Issa Sawadogo");
+        org.assertj.core.api.Assertions.assertThat(names.get(0).getId()).isEqualTo(newest.patientId());
+        org.mockito.Mockito.verifyNoInteractions(patientVitalSignService, patientAllergyRepository, recordAccessPolicy);
+        org.mockito.Mockito.verify(registrationRepository, org.mockito.Mockito.never()).findActiveForHospitalWithPatient(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void d1314_noNurseIsEveryRegistrationAndABlankNameFallsBackToTheRegistrationsCopy() {
+        var blank = nameRow(" ", null, " ", "Copie Inscription", null, UUID.randomUUID());
+        when(registrationRepository.findActiveNamesForHospital(hospitalId)).thenReturn(java.util.List.of(blank));
+
+        var names = nurseDashboardService.getPatientNamesForNurse(null, hospitalId);
+
+        org.assertj.core.api.Assertions.assertThat(names).extracting("displayName").containsExactly("Copie Inscription");
+    }
+
     @Test
     void getPatientsForNurse_returnsMappedPatientsForAssignedNurse() {
         Patient patient = buildPatient("jane.doe@example.com", "555-1111", "Jane", "Doe", "nurse-user");

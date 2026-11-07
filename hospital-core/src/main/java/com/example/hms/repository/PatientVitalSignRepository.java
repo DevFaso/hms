@@ -40,6 +40,30 @@ public interface PatientVitalSignRepository extends JpaRepository<PatientVitalSi
                                                @Param("hospitalId") UUID hospitalId,
                                                Pageable page);
 
+    /**
+     * QA D1314: {@link #findLatestObservationSet} for a whole ward, the patient
+     * with it (the NEWS2 reading looks at the age). Two sets of one patient at
+     * the same instant both come back; the caller keeps one.
+     */
+    @Query("""
+        SELECT v FROM PatientVitalSign v
+        JOIN FETCH v.patient
+        WHERE v.hospital.id = :hospitalId AND v.patient.id IN :patientIds
+          AND v.recordedAt = (
+            SELECT MAX(o.recordedAt) FROM PatientVitalSign o
+            WHERE o.patient = v.patient AND o.hospital = v.hospital
+              AND (o.temperatureCelsius IS NOT NULL OR o.heartRateBpm IS NOT NULL
+                   OR o.respiratoryRateBpm IS NOT NULL OR o.systolicBpMmHg IS NOT NULL
+                   OR o.diastolicBpMmHg IS NOT NULL OR o.spo2Percent IS NOT NULL
+                   OR o.consciousnessLevel IS NOT NULL))
+          AND (v.temperatureCelsius IS NOT NULL OR v.heartRateBpm IS NOT NULL
+               OR v.respiratoryRateBpm IS NOT NULL OR v.systolicBpMmHg IS NOT NULL
+               OR v.diastolicBpMmHg IS NOT NULL OR v.spo2Percent IS NOT NULL
+               OR v.consciousnessLevel IS NOT NULL)
+        """)
+    List<PatientVitalSign> findLatestObservationSets(@Param("hospitalId") UUID hospitalId,
+                                                     @Param("patientIds") java.util.Collection<UUID> patientIds);
+
     /** The latest observation set ({@link #findObservationSets}): what the vitals round's clock runs from. */
     default Optional<PatientVitalSign> findLatestObservationSet(UUID patientId, UUID hospitalId) {
         return findObservationSets(patientId, hospitalId, org.springframework.data.domain.PageRequest.of(0, 1))

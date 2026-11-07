@@ -200,9 +200,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     );
 
     /** Only prescriptions in these statuses are shown on the MAR. */
-    private static final Set<PrescriptionStatus> ACTIVE_RX_STATUSES = Set.of(
-        PrescriptionStatus.SIGNED, PrescriptionStatus.TRANSMITTED
-    );
+    private static final Set<PrescriptionStatus> ACTIVE_RX_STATUSES = com.example.hms.service.emar.MarWardReader.ON_MAR_STATUSES;
 
     /* ── Dependencies ─────────────────────────────────────────────────── */
 
@@ -237,6 +235,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     private final com.example.hms.service.emar.ControlledAdministrationWitness controlledAdministrationWitness;
     /** QA D1286: an inbox item is read in the nurse's language, rendered from its stored key. */
     private final com.example.hms.service.i18n.NotificationLocalizer notificationLocalizer;
+    /** QA D1314: the ward's lists read the ward at once. */
+    private final com.example.hms.service.emar.MarWardReader marWardReader;
 
     /** QA D776: the roles a patient can be handed over to. */
     static final Set<String> HANDOFF_RECIPIENT_ROLE_CODES = Set.of("ROLE_NURSE", "ROLE_MIDWIFE", "ROLE_DOCTOR");
@@ -272,10 +272,17 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         // QA D220: vitals rounds are for patients in a bed here — not for a
         // discharged stay or an outpatient the nurse's list also carries.
         Set<UUID> admitted = activelyAdmittedPatientIds(hospitalId);
+        List<PatientContext> inBed = patients.stream()
+            .filter(ctx -> ctx.patientId() != null && admitted.contains(ctx.patientId()))
+            .toList();
+        // QA D1181 class: the most recent observation set here (a weight alone
+        // is not a vitals round and does not restart its clock). QA D1314: read for the ward at once.
+        java.util.Map<UUID, PatientVitalSign> latest = marWardReader.latestObservationSets(hospitalId,
+            inBed.stream().map(PatientContext::patientId).toList());
         List<NurseVitalTaskResponseDTO> tasks = new ArrayList<>();
-        for (PatientContext ctx : patients) {
-            NurseVitalTaskResponseDTO task = ctx.patientId() != null && admitted.contains(ctx.patientId())
-                ? vitalTaskFor(ctx, hospitalId, now, effectiveWindow) : null;
+        for (PatientContext ctx : inBed) {
+            NurseVitalTaskResponseDTO task = vitalTaskFor(ctx, hospitalId, now, effectiveWindow,
+                Optional.ofNullable(latest.get(ctx.patientId())));
             if (task != null) {
                 tasks.add(task);
             }
@@ -285,12 +292,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
 
     /** The vitals round of one admitted patient, or {@code null} when none falls in the window. */
     private NurseVitalTaskResponseDTO vitalTaskFor(PatientContext ctx, UUID hospitalId, LocalDateTime now,
-                                                   Duration effectiveWindow) {
-        // QA D1181 class: the most recent observation set here (a weight alone
-        // is not a vitals round and does not restart its clock).
-        Optional<PatientVitalSign> last = vitalSignRepository
-            .findLatestObservationSet(ctx.patientId(), hospitalId);
-
+                                                   Duration effectiveWindow, Optional<PatientVitalSign> last) {
         // Compute when the next vitals check is due
         LocalDateTime dueTime;
         boolean overdue;
@@ -336,10 +338,12 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         // QA D514: the eMAR is the ward's dose list. It listed the take-home
         // prescriptions of outpatients nobody admitted as due doses.
         java.util.Map<UUID, Admission> admitted = activeStaysByPatient(hospitalId);
+        WardOrders ward = readWardOrders(patientIdsOf(patients), hospitalId, admitted);
         List<NurseMedicationTaskResponseDTO> tasks = new ArrayList<>();
         for (PatientContext ctx : patients) {
-            tasks.addAll(buildMedicationTasksForPatient(ctx, hospitalId, statusFilter, now, admitted));
+            tasks.addAll(buildMedicationTasksForPatient(ctx, statusFilter, now, ward));
         }
+        withAllergyAdvisories(tasks);
 
         // QA D1255: every active order of the scope, soonest due first (a
         // finished course, with no due time, last). The list was cut at 20 rows
@@ -348,35 +352,76 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         return tasks;
     }
 
+    /**
+     * QA D1314: everything the MAR's rows read for a whole ward, in one go:
+     * the orders, their discharged stays, their dose rows and which of them are
+     * controlled. {@code stays} is the active stay of each patient in a bed.
+     */
+    private record WardOrders(java.util.Map<UUID, Admission> stays,
+                              java.util.Map<UUID, List<Prescription>> orders,
+                              java.util.Map<UUID, List<Admission>> closedStays,
+                              java.util.Map<UUID, List<MedicationAdministrationRecord>> doseRows,
+                              Set<UUID> controlled) {
+
+        List<Prescription> ordersOf(UUID patientId) {
+            return orders.getOrDefault(patientId, List.of());
+        }
+
+        List<Admission> closedStaysOf(UUID patientId) {
+            return closedStays.getOrDefault(patientId, List.of());
+        }
+
+        List<MedicationAdministrationRecord> rowsOf(Prescription rx) {
+            return doseRows.getOrDefault(rx.getId(), List.of());
+        }
+
+        boolean onWard(Prescription rx, UUID patientId) {
+            return onWardMar(rx, closedStaysOf(patientId), stays.get(patientId));
+        }
+
+        Admission stayOf(UUID patientId) {
+            return stays.get(patientId);
+        }
+    }
+
+    private static List<UUID> patientIdsOf(List<PatientContext> patients) {
+        return patients.stream().map(PatientContext::patientId).filter(Objects::nonNull).toList();
+    }
+
+    private WardOrders readWardOrders(java.util.Collection<UUID> patientIds, UUID hospitalId,
+                                      java.util.Map<UUID, Admission> stays) {
+        java.util.Map<UUID, List<Prescription>> orders = marWardReader.ordersByPatient(hospitalId, patientIds);
+        java.util.Map<UUID, List<Admission>> closedStays = orders.isEmpty()
+            ? java.util.Map.of() : marWardReader.closedStaysByPatient(hospitalId, orders.keySet());
+        // The rows and the catalogue are read only for the orders still running.
+        List<Prescription> running = new ArrayList<>();
+        orders.forEach((patientId, rows) -> rows.stream()
+            .filter(rx -> ACTIVE_RX_STATUSES.contains(rx.getStatus())
+                && !endedWithAStay(rx, closedStays.getOrDefault(patientId, List.of())))
+            .forEach(running::add));
+        return new WardOrders(stays, orders, closedStays,
+            marWardReader.doseRowsByPrescription(running.stream().map(Prescription::getId).filter(Objects::nonNull).toList()),
+            marWardReader.controlledOrders(running));
+    }
+
     /** Build medication tasks for a single patient from their real prescriptions. */
     private List<NurseMedicationTaskResponseDTO> buildMedicationTasksForPatient(
-        PatientContext ctx, UUID hospitalId, String statusFilter, LocalDateTime now, java.util.Map<UUID, Admission> admitted
+        PatientContext ctx, String statusFilter, LocalDateTime now, WardOrders ward
     ) {
-        if (ctx.patientId() == null || hospitalId == null) return List.of();
-
-        List<Prescription> prescriptions = prescriptionRepository
-            .findByPatient_IdAndHospital_Id(ctx.patientId(), hospitalId);
-
-        List<Admission> closedStays = closedStaysFor(ctx.patientId(), hospitalId, prescriptions);
+        if (ctx.patientId() == null) return List.of();
 
         List<NurseMedicationTaskResponseDTO> result = new ArrayList<>();
-        Admission stay = admitted.get(ctx.patientId());
-        // QA D799: read once per patient, and only when a dose is listed.
-        List<PatientAllergy> allergies = null;
-        for (Prescription rx : prescriptions) {
-            if (!onWardMar(rx, closedStays, stay)) continue;
+        for (Prescription rx : ward.ordersOf(ctx.patientId())) {
+            if (!ward.onWard(rx, ctx.patientId())) continue;
 
             // Review of #975: the closed-dose history is read once per row and
             // answers the due time, the status and the last outcome.
-            List<MedicationAdministrationRecord> rows = doseRows(rx);
+            List<MedicationAdministrationRecord> rows = ward.rowsOf(rx);
             List<MedicationAdministrationRecord> closed = closedDoses(rows);
             MarNextDose.Due due = MarNextDose.of(rx, now, rows, EARLY_ADMINISTRATION_WINDOW);
             LocalDateTime dueTime = due.dueTime();
             String marStatus = resolveMarStatus(due, now);
             if (!isFilteredOut(statusFilter, marStatus)) {
-                if (allergies == null) {
-                    allergies = patientAllergyRepository.findByPatient_Id(ctx.patientId());
-                }
                 result.add(withDoseHistory(withOrderReading(NurseMedicationTaskResponseDTO.builder()
                     .id(rx.getId())
                     .patientId(ctx.patientId())
@@ -387,11 +432,20 @@ public class NurseTaskServiceImpl implements NurseTaskService {
                     .routeCode(com.example.hms.service.emar.MedicationRoutes.canonical(rx.getRoute()))
                     .dueTime(dueTime)
                     .status(marStatus)
-                    .cdsAdvisories(allergyAdvisories(rx.getMedicationName(), allergies))
-                    .build(), rx, due, now), closed));
+                    .build(), rx, due, now, ward.controlled().contains(rx.getId())), closed));
             }
         }
         return result;
+    }
+
+    /** QA D799: the allergies are read once per patient, and only when a dose is listed. */
+    private void withAllergyAdvisories(List<NurseMedicationTaskResponseDTO> tasks) {
+        java.util.Map<UUID, List<PatientAllergy>> allergies = marWardReader.allergiesByPatient(
+            tasks.stream().map(NurseMedicationTaskResponseDTO::getPatientId).collect(Collectors.toSet()));
+        for (NurseMedicationTaskResponseDTO task : tasks) {
+            task.setCdsAdvisories(allergyAdvisories(task.getMedication(),
+                allergies.getOrDefault(task.getPatientId(), List.of())));
+        }
     }
 
     /**
@@ -849,7 +903,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
      */
     private Set<UUID> assignedPatientIds(UUID nurseUserId, UUID hospitalId) {
         if (nurseUserId == null || hospitalId == null) return null;
-        List<PatientResponseDTO> assigned = nurseDashboardService.getPatientsForNurse(nurseUserId, hospitalId, null);
+        List<PatientResponseDTO> assigned = nurseDashboardService.getPatientNamesForNurse(nurseUserId, hospitalId);
         Set<UUID> ids = assigned.stream()
             .map(PatientResponseDTO::getId)
             .filter(Objects::nonNull)
@@ -1200,14 +1254,11 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         long asNeeded = 0;
         // QA D514: counted on the same rule as the eMAR list itself.
         java.util.Map<UUID, Admission> admitted = activeStaysByPatient(hospitalId);
+        WardOrders ward = readWardOrders(patientIdsOf(patients), hospitalId, admitted);
         for (PatientContext ctx : patients) {
-            if (ctx.patientId() == null || hospitalId == null) continue;
-            List<Prescription> prescriptions = prescriptionRepository
-                .findByPatient_IdAndHospital_Id(ctx.patientId(), hospitalId);
-            List<Admission> closedStays = closedStaysFor(ctx.patientId(), hospitalId, prescriptions);
-            Admission stay = admitted.get(ctx.patientId());
-            for (Prescription rx : prescriptions) {
-                String counted = countedMarStatus(rx, closedStays, stay, now);
+            if (ctx.patientId() == null) continue;
+            for (Prescription rx : ward.ordersOf(ctx.patientId())) {
+                String counted = countedMarStatus(rx, ctx.patientId(), ward.stayOf(ctx.patientId()), ward, now);
                 if (STATUS_DUE.equals(counted)) {
                     due++;
                 } else if (STATUS_OVERDUE.equals(counted)) {
@@ -1228,12 +1279,11 @@ public class NurseTaskServiceImpl implements NurseTaskService {
      * D1402) while the course is open. Sonar S135: one exit per order instead
      * of two {@code continue}s in the loop.
      */
-    private String countedMarStatus(Prescription rx, List<Admission> closedStays, Admission stay,
-                                    LocalDateTime now) {
-        if (!onWardMar(rx, closedStays, stay)) {
+    private String countedMarStatus(Prescription rx, UUID patientId, Admission stay, WardOrders ward, LocalDateTime now) {
+        if (!onWardMar(rx, ward.closedStaysOf(patientId), stay)) {
             return null;
         }
-        MarNextDose.Due next = nextDose(rx, now);
+        MarNextDose.Due next = MarNextDose.of(rx, now, ward.rowsOf(rx), EARLY_ADMINISTRATION_WINDOW);
         String status = resolveMarStatus(next, now);
         // QA D1419: a running infusion is not a dose waiting either.
         return (next.asNeeded() || next.running()) && STATUS_DUE.equals(status) ? STATUS_AS_NEEDED : status;
@@ -1315,8 +1365,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
      * to rebuild a subset by hand, so a PRN order came back asNeeded=false.
      */
     private NurseMedicationTaskResponseDTO withOrderReading(NurseMedicationTaskResponseDTO task, Prescription rx,
-                                                             MarNextDose.Due due, LocalDateTime now) {
-        boolean controlled = pharmacistVerificationService.isControlledSubstance(rx);
+                                                             MarNextDose.Due due, LocalDateTime now, boolean controlled) {
         task.setFrequencyUnread(due.frequencyUnread());
         task.setContinuousInfusion(due.continuous());
         // QA round 30: an as-needed order, with the prescriber's minimum interval.
@@ -1342,7 +1391,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         if (rx != null) {
             // The same server clock the list reads (Sonar: the zone made explicit).
             LocalDateTime now = LocalDateTime.now(java.time.ZoneId.systemDefault());
-            withOrderReading(task, rx, MarNextDose.of(rx, now, rows, EARLY_ADMINISTRATION_WINDOW), now);
+            withOrderReading(task, rx, MarNextDose.of(rx, now, rows, EARLY_ADMINISTRATION_WINDOW), now,
+                pharmacistVerificationService.isControlledSubstance(rx));
             task.setCdsAdvisories(allergyAdvisoriesFor(rx.getMedicationName(), rx.getPatient()));
         }
         return withDoseHistory(task, closedDoses(rows));
@@ -1803,11 +1853,12 @@ public class NurseTaskServiceImpl implements NurseTaskService {
 
     private List<PatientResponseDTO> resolvePatients(UUID nurseUserId, UUID hospitalId) {
         if (hospitalId == null) return List.of();
-        List<PatientResponseDTO> patients = nurseDashboardService.getPatientsForNurse(nurseUserId, hospitalId, null);
+        // QA D1314: the id and the name are all a nurse's lists read.
+        List<PatientResponseDTO> patients = nurseDashboardService.getPatientNamesForNurse(nurseUserId, hospitalId);
         if (patients.isEmpty()) {
             log.warn("No assigned patients found for nurse {}, falling back to all-hospital patient list for hospital {}",
                     nurseUserId, hospitalId);
-            patients = nurseDashboardService.getPatientsForNurse(null, hospitalId, null);
+            patients = nurseDashboardService.getPatientNamesForNurse(null, hospitalId);
         }
         return patients;
     }
@@ -1862,9 +1913,16 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         List<Admission> admissions = admissionRepository.findActiveAdmissionsByHospital(hospitalId);
         LocalDateTime now = LocalDateTime.now();
 
+        // QA D1314: the ward's vitals and orders are read at once, not per card.
+        Set<UUID> patientIds = admissions.stream()
+            .map(Admission::getPatient).filter(Objects::nonNull).map(Patient::getId).filter(Objects::nonNull)
+            .collect(Collectors.toCollection(java.util.LinkedHashSet::new));
+        java.util.Map<UUID, PatientVitalSign> latest = marWardReader.latestObservationSets(hospitalId, patientIds);
+        WardOrders ward = readWardOrders(patientIds, hospitalId, activeStaysByPatient(hospitalId));
+
         List<NurseWorkboardPatientDTO> result = new ArrayList<>();
         for (Admission a : admissions) {
-            NurseWorkboardPatientDTO card = toWorkboardCard(a, hospitalId, now);
+            NurseWorkboardPatientDTO card = toWorkboardCard(a, hospitalId, now, latest, ward);
             if (card != null) {
                 result.add(card);
             }
@@ -1872,28 +1930,26 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         return result;
     }
 
-    private NurseWorkboardPatientDTO toWorkboardCard(Admission a, UUID hospitalId, LocalDateTime now) {
+    private NurseWorkboardPatientDTO toWorkboardCard(Admission a, UUID hospitalId, LocalDateTime now,
+                                                     java.util.Map<UUID, PatientVitalSign> latest, WardOrders ward) {
         UUID admissionId = a.getId();
         Patient patient = JpaProxyUtils.safeInit(a.getPatient(), ADMISSION_OWNER, admissionId, ASSOCIATION_PATIENT);
         if (patient == null) return null;
 
-        Optional<LocalDateTime> lastVitals = vitalSignRepository
-            .findLatestObservationSet(patient.getId(), hospitalId)
-            .map(PatientVitalSign::getRecordedAt);
+        Optional<PatientVitalSign> lastSet = Optional.ofNullable(latest.get(patient.getId()));
+        Optional<LocalDateTime> lastVitals = lastSet.map(PatientVitalSign::getRecordedAt);
 
         // QA D1402: the card says "vitals due" when the vitals list says overdue,
         // not on a threshold of its own.
         NurseVitalTaskResponseDTO vitalRound = vitalTaskFor(new PatientContext(patient.getId(), null),
-            hospitalId, now, normalizeWindow(null));
+            hospitalId, now, normalizeWindow(null), lastSet);
         boolean vitalsDue = vitalRound != null && vitalRound.isOverdue();
 
         // QA D949: due means DUE or OVERDUE, never a later slot or a finished course.
         // QA D1402: of the rows the eMAR lists for this stay; a live take-home
         // order of an earlier visit is no ward dose (QA D702) and was counted here.
-        List<Prescription> orders = prescriptionRepository.findByPatient_IdAndHospital_Id(patient.getId(), hospitalId);
-        List<Admission> closedStays = closedStaysFor(patient.getId(), hospitalId, orders);
-        long medsDue = orders.stream()
-            .map(rx -> countedMarStatus(rx, closedStays, a, now))
+        long medsDue = ward.ordersOf(patient.getId()).stream()
+            .map(rx -> countedMarStatus(rx, patient.getId(), a, ward, now))
             .filter(NurseTaskServiceImpl::isDueStatus)
             .count();
 

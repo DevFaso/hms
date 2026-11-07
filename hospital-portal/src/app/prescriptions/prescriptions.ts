@@ -395,6 +395,7 @@ export class PrescriptionsComponent implements OnInit {
   readonly cdsHardStop = computed(() => this.cdsAdvisories().some((c) => !!c.hardStop));
 
   ngOnInit(): void {
+    this.destroyRef.onDestroy(() => clearTimeout(this.searchDelay));
     // Cross-tenant: hydrate URL scope before the first list fetch so
     // the auth interceptor sends the right X-Hospital-Id (or omits it
     // for global view). See docs/super-admin-cross-tenant-design.md.
@@ -1516,9 +1517,13 @@ export class PrescriptionsComponent implements OnInit {
   /** The list holds a status this build does not know: "Needs attention" is read whole, and narrowed here. */
   private unmappedStatuses = false;
 
-  /** What only the whole tab can answer: the search box, or a status with no name to ask for. */
+  /** QA D1314: how long the search box waits for the next keystroke before it asks the server. */
+  static readonly SEARCH_DELAY_MS = 250;
+  private searchDelay: ReturnType<typeof setTimeout> | undefined;
+
+  /** What only the whole tab can answer: a status with no name to ask for. */
   private needsWholeTab(): boolean {
-    return !!this.searchTerm.trim() || (this.unmappedStatuses && this.activeTab() === 'attention');
+    return this.unmappedStatuses && this.activeTab() === 'attention';
   }
 
   /** The statuses of a tab (none: every status). */
@@ -1584,14 +1589,12 @@ export class PrescriptionsComponent implements OnInit {
     this.wholeTabLoading = false;
     const statuses = this.tabStatuses(this.activeTab());
     if (this.needsWholeTab()) {
-      // A name is not searchable on the server (names are encrypted at rest),
-      // so the search box reads the tab, once, and narrows it here. A read that
-      // fails is said out loud and leaves the list as it was: never a partial list.
+      // A status this build has no name for cannot be asked for, so the tab is
+      // read once and narrowed here. A read that fails is said out loud and
+      // leaves the list as it was: never a partial list.
       this.wholeTabLoading = true;
       this.listLoad = this.prescriptionService
-        .list({
-          statuses: this.unmappedStatuses && this.activeTab() === 'attention' ? [] : statuses,
-        })
+        .list({ statuses: [] })
         .pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe({
           next: (rows) => {
@@ -1605,8 +1608,11 @@ export class PrescriptionsComponent implements OnInit {
         });
       return;
     }
+    // QA D1314: the search box asks the server for one page of matches. It read
+    // every row of the tab into the browser (42 to 90 s on 15,800 rows, about
+    // 3 GB allocated on the server, per search) and filtered them here.
     this.listLoad = this.prescriptionService
-      .page({ statuses }, page, PrescriptionsComponent.PAGE_ROWS)
+      .page({ statuses, search: this.searchTerm }, page, PrescriptionsComponent.PAGE_ROWS)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (slice) => {
@@ -1643,6 +1649,7 @@ export class PrescriptionsComponent implements OnInit {
 
   setTab(tab: PrescriptionTab): void {
     this.activeTab.set(tab);
+    clearTimeout(this.searchDelay);
     this.rowsBeforeSearch = null;
     this.listPage.set(0);
     this.wholeTabRead = false;
@@ -1653,7 +1660,7 @@ export class PrescriptionsComponent implements OnInit {
     this.loadRows();
   }
 
-  /** QA D1412: the pager's move. In a search the matches are on hand; else the server reads the page. */
+  /** QA D1412: the pager's move: the server reads the page, unless the whole tab is on hand. */
   onListPage(page: number): void {
     if (this.needsWholeTab()) {
       this.listPage.set(page);
@@ -1707,7 +1714,20 @@ export class PrescriptionsComponent implements OnInit {
   /** The search box: `(input)` here. Starting or clearing a search changes what is read. */
   onSearchInput(): void {
     this.listPage.set(0);
-    this.applyFilter();
+    if (this.needsWholeTab()) {
+      this.applyFilter();
+      return;
+    }
+    // QA D1441: until the answer is known the rows on screen say nothing about
+    // this search: they go, and the list says it is searching.
+    if (this.filtered().length > 0) {
+      this.rowsBeforeSearch = { rows: this.filtered(), total: this.listTotal() };
+    }
+    this.filtered.set([]);
+    this.loading.set(true);
+    this.listLoad?.unsubscribe();
+    clearTimeout(this.searchDelay);
+    this.searchDelay = setTimeout(() => this.loadRows(0), PrescriptionsComponent.SEARCH_DELAY_MS);
   }
 
   applyFilter(): void {
@@ -1718,7 +1738,7 @@ export class PrescriptionsComponent implements OnInit {
       (p) => tab === 'all' || this.tabForStatus(p.status) === tab,
     );
     if (!this.needsWholeTab()) {
-      // The whole tab was on hand for a search that has now been cleared.
+      // The whole tab was on hand and is not needed any more.
       if (this.wholeTabRead) {
         this.loadRows();
       } else if (inTab.length === 0 && this.prescriptions().length > 0) {
@@ -1730,8 +1750,8 @@ export class PrescriptionsComponent implements OnInit {
       return;
     }
     if (!this.wholeTabRead) {
-      // QA D1441: until the answer is known the page's unfiltered rows say nothing
-      // about this search: they go, and the list says it is searching.
+      // QA D1441: until the answer is known the page's rows say nothing about this
+      // search: they go, and the list says it is searching.
       if (this.filtered().length > 0) {
         this.rowsBeforeSearch = { rows: this.filtered(), total: this.listTotal() };
       }

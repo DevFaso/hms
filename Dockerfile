@@ -109,24 +109,49 @@ if [ -n "${OTEL_EXPORTER_OTLP_ENDPOINT:-}" ] && [ -f /app/opentelemetry-javaagen
   echo "[entrypoint] OpenTelemetry agent enabled → ${OTEL_EXPORTER_OTLP_ENDPOINT}"
 fi
 
-# --- JVM memory: sized from this container's limit ----------------------------
-# Heap = JVM_HEAP_PERCENT (default 70, clamped to 10-90) of the container's
-# memory limit, which the JVM reads from cgroups. The service's memory limit is
-# the control: every service must have one, or the JVM sizes from the platform's
-# per-service maximum (docs/runbooks/railway-env-matrix.md §3a). -Xlog:gc+init
-# logs the effective heap at startup. An -Xmx in JAVA_TOOL_OPTIONS overrides
-# this; a MaxRAMPercentage there loses to it. HEAP_PCT is reduced to digits
-# before it reaches the `su -c` string below.
+# --- JVM memory: the whole process inside this container's limit --------------
+# The kernel kills the container when heap PLUS native memory passes the limit,
+# and no Java code can catch that. QA D1314: at MaxRAMPercentage=70 with nothing
+# else bounded, heap 2.8 GB + an unbounded metaspace + direct memory (default:
+# as much as the heap) + code cache + stacks + GC tables could pass 4 GB, and
+# did: "Killed", then CRASHED, with no OutOfMemoryError in the log. With the
+# native parts bounded, a spike ends in an OutOfMemoryError that fails that one
+# request, which is the decision below. The sum, per limit:
+# docs/runbooks/railway-env-matrix.md §3a; JvmContainerBudgetGuardTest checks it.
+#
+# Heap = JVM_HEAP_PERCENT (clamped to 10-90) of the container's memory limit,
+# which the JVM reads from cgroups. Default 60; 50 under a 3 GB limit, where the
+# fixed native bounds weigh more. The service's memory limit is the control:
+# every service must have one, or the JVM sizes from the platform's per-service
+# maximum (docs/runbooks/railway-env-matrix.md §3a). -Xlog:gc+init logs the
+# effective heap at startup. An -Xmx in JAVA_TOOL_OPTIONS overrides this; a
+# MaxRAMPercentage there loses to it. HEAP_PCT is reduced to digits before it
+# reaches the `su -c` string below.
 # No ExitOnOutOfMemoryError, by decision: one oversized request should fail
 # that request, not kill the whole process.
-HEAP_PCT="${JVM_HEAP_PERCENT:-70}"
+LIMIT_MB=0
+for LIMIT_FILE in /sys/fs/cgroup/memory.max /sys/fs/cgroup/memory/memory.limit_in_bytes; do
+  if [ -r "${LIMIT_FILE}" ]; then
+    LIMIT_BYTES="$(cat "${LIMIT_FILE}")"
+    case "${LIMIT_BYTES}" in
+      ''|*[!0-9]*) ;;
+      *) LIMIT_MB=$((LIMIT_BYTES / 1048576)); break ;;
+    esac
+  fi
+done
+DEFAULT_HEAP_PCT=60
+if [ "${LIMIT_MB}" -gt 0 ] && [ "${LIMIT_MB}" -lt 3072 ]; then DEFAULT_HEAP_PCT=50; fi
+HEAP_PCT="${JVM_HEAP_PERCENT:-${DEFAULT_HEAP_PCT}}"
 case "${HEAP_PCT}" in
   [0-9]|[0-9][0-9]|[0-9][0-9][0-9]) ;;
-  *) echo "[entrypoint] Invalid JVM_HEAP_PERCENT='${HEAP_PCT}'; using 70" >&2; HEAP_PCT=70 ;;
+  *) echo "[entrypoint] Invalid JVM_HEAP_PERCENT='${HEAP_PCT}'; using ${DEFAULT_HEAP_PCT}" >&2; HEAP_PCT="${DEFAULT_HEAP_PCT}" ;;
 esac
 if [ "${HEAP_PCT}" -lt 10 ]; then HEAP_PCT=10; fi
 if [ "${HEAP_PCT}" -gt 90 ]; then HEAP_PCT=90; fi
-JVM_MEMORY_OPTS="-XX:MaxRAMPercentage=${HEAP_PCT} -Xlog:gc+init"
+JVM_NATIVE_BOUNDS="-XX:MaxMetaspaceSize=384m -XX:ReservedCodeCacheSize=192m -XX:MaxDirectMemorySize=128m -Xss768k"
+# glibc keeps one malloc arena per thread by default: native memory nothing above bounds.
+export MALLOC_ARENA_MAX=2
+JVM_MEMORY_OPTS="-XX:MaxRAMPercentage=${HEAP_PCT} ${JVM_NATIVE_BOUNDS} -Xlog:gc+init"
 
 exec su -s /bin/sh appuser -c "exec ${JAVA_BIN} ${JVM_MEMORY_OPTS} ${OTEL_AGENT} -Dserver.port=${PORT} -jar /app/app.jar"
 ENTRYPOINT_SH

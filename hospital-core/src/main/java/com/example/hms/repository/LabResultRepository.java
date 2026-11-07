@@ -47,29 +47,11 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
         @org.springframework.data.repository.query.Param("maxRounds") short maxRounds);
 
     @Override
-    @EntityGraph(attributePaths = {
-        "labOrder",
-        "labOrder.patient",
-        "labOrder.hospital",
-        "labOrder.labTestDefinition",
-        "labOrder.orderingStaff",
-        "labOrder.orderingStaff.user",
-        "assignment",
-        "assignment.user"
-    })
+    @EntityGraph(attributePaths = {"labOrder", "labOrder.patient", "labOrder.hospital", "labOrder.labTestDefinition", "labOrder.orderingStaff", "labOrder.orderingStaff.user", "labOrder.orderingStaff.user.staffProfile", "labOrder.orderingStaff.user.patientProfile", "assignment", "assignment.user", "assignment.user.staffProfile", "assignment.user.patientProfile"})
     Optional<LabResult> findById(UUID id);
 
     @Override
-    @EntityGraph(attributePaths = {
-        "labOrder",
-        "labOrder.patient",
-        "labOrder.hospital",
-        "labOrder.labTestDefinition",
-        "labOrder.orderingStaff",
-        "labOrder.orderingStaff.user",
-        "assignment",
-        "assignment.user"
-    })
+    @EntityGraph(attributePaths = {"labOrder", "labOrder.patient", "labOrder.hospital", "labOrder.labTestDefinition", "labOrder.orderingStaff", "labOrder.orderingStaff.user", "labOrder.orderingStaff.user.staffProfile", "labOrder.orderingStaff.user.patientProfile", "assignment", "assignment.user", "assignment.user.staffProfile", "assignment.user.patientProfile"})
     List<LabResult> findAll();
 
     /**
@@ -88,28 +70,10 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
      * across scoped and unscoped queries.</p>
      */
     @Override
-    @EntityGraph(attributePaths = {
-        "labOrder",
-        "labOrder.patient",
-        "labOrder.hospital",
-        "labOrder.labTestDefinition",
-        "labOrder.orderingStaff",
-        "labOrder.orderingStaff.user",
-        "assignment",
-        "assignment.user"
-    })
+    @EntityGraph(attributePaths = {"labOrder", "labOrder.patient", "labOrder.hospital", "labOrder.labTestDefinition", "labOrder.orderingStaff", "labOrder.orderingStaff.user", "labOrder.orderingStaff.user.staffProfile", "labOrder.orderingStaff.user.patientProfile", "assignment", "assignment.user", "assignment.user.staffProfile", "assignment.user.patientProfile"})
     Page<LabResult> findAll(Pageable pageable);
 
-    @EntityGraph(attributePaths = {
-        "labOrder",
-        "labOrder.patient",
-        "labOrder.hospital",
-        "labOrder.labTestDefinition",
-        "labOrder.orderingStaff",
-        "labOrder.orderingStaff.user",
-        "assignment",
-        "assignment.user"
-    })
+    @EntityGraph(attributePaths = {"labOrder", "labOrder.patient", "labOrder.hospital", "labOrder.labTestDefinition", "labOrder.orderingStaff", "labOrder.orderingStaff.user", "labOrder.orderingStaff.user.staffProfile", "labOrder.orderingStaff.user.patientProfile", "assignment", "assignment.user", "assignment.user.staffProfile", "assignment.user.patientProfile"})
     List<LabResult> findByLabOrder_Id(UUID labOrderId);
 
     /** FHIR DiagnosticReport search (Tier 2 item 42): one query for a whole page of orders. */
@@ -164,18 +128,7 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
      * LAZY, so without them the sensitivity check alone costs two selects per
      * lab order — on what is usually a chart's highest-count category.
      */
-    @EntityGraph(attributePaths = {
-        "labOrder",
-        "labOrder.patient",
-        "labOrder.hospital",
-        "labOrder.labTestDefinition",
-        "labOrder.orderingStaff",
-        "labOrder.orderingStaff.user",
-        "labOrder.encounter",
-        "labOrder.encounter.department",
-        "assignment",
-        "assignment.user"
-    })
+    @EntityGraph(attributePaths = {"labOrder", "labOrder.patient", "labOrder.hospital", "labOrder.labTestDefinition", "labOrder.orderingStaff", "labOrder.orderingStaff.user", "labOrder.orderingStaff.user.staffProfile", "labOrder.orderingStaff.user.patientProfile", "labOrder.encounter", "labOrder.encounter.department", "assignment", "assignment.user", "assignment.user.staffProfile", "assignment.user.patientProfile"})
     @Query("""
         SELECT r FROM LabResult r
         WHERE r.labOrder.patient.id = :patientId
@@ -207,16 +160,7 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
         return findPatientResultsReadableAt(patientId, Set.of(new UUID(0L, 0L)), null, true, pageable);
     }
 
-    @EntityGraph(attributePaths = {
-        "labOrder",
-        "labOrder.patient",
-        "labOrder.hospital",
-        "labOrder.labTestDefinition",
-        "labOrder.orderingStaff",
-        "labOrder.orderingStaff.user",
-        "assignment",
-        "assignment.user"
-    })
+    @EntityGraph(attributePaths = {"labOrder", "labOrder.patient", "labOrder.hospital", "labOrder.labTestDefinition", "labOrder.orderingStaff", "labOrder.orderingStaff.user", "labOrder.orderingStaff.user.staffProfile", "labOrder.orderingStaff.user.patientProfile", "assignment", "assignment.user", "assignment.user.staffProfile", "assignment.user.patientProfile"})
     List<LabResult> findByLabOrder_Hospital_IdIn(Collection<UUID> hospitalIds);
 
     /**
@@ -229,16 +173,7 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
      * guards return null for an uninitialised proxy, so the HOSPITAL / ORDER
      * CODE / PATIENT NAME / TEST columns come back empty rather than slow.
      */
-    @EntityGraph(attributePaths = {
-        "labOrder",
-        "labOrder.patient",
-        "labOrder.hospital",
-        "labOrder.labTestDefinition",
-        "labOrder.orderingStaff",
-        "labOrder.orderingStaff.user",
-        "assignment",
-        "assignment.user"
-    })
+    @EntityGraph(attributePaths = {"labOrder", "labOrder.patient", "labOrder.hospital", "labOrder.labTestDefinition", "labOrder.orderingStaff", "labOrder.orderingStaff.user", "labOrder.orderingStaff.user.staffProfile", "labOrder.orderingStaff.user.patientProfile", "assignment", "assignment.user", "assignment.user.staffProfile", "assignment.user.patientProfile"})
     @Query("""
         SELECT r FROM LabResult r
         WHERE r.labOrder.hospital.id IN :hospitalIds
@@ -247,16 +182,7 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
     List<LabResult> findHandledByHospitals(@Param("hospitalIds") Collection<UUID> hospitalIds);
 
     /** B1: paged results of orders the hospital orders OR performs. Same graph, same reason. */
-    @EntityGraph(attributePaths = {
-        "labOrder",
-        "labOrder.patient",
-        "labOrder.hospital",
-        "labOrder.labTestDefinition",
-        "labOrder.orderingStaff",
-        "labOrder.orderingStaff.user",
-        "assignment",
-        "assignment.user"
-    })
+    @EntityGraph(attributePaths = {"labOrder", "labOrder.patient", "labOrder.hospital", "labOrder.labTestDefinition", "labOrder.orderingStaff", "labOrder.orderingStaff.user", "labOrder.orderingStaff.user.staffProfile", "labOrder.orderingStaff.user.patientProfile", "assignment", "assignment.user", "assignment.user.staffProfile", "assignment.user.patientProfile"})
     @Query(value = """
         SELECT r FROM LabResult r
         WHERE r.labOrder.hospital.id = :hospitalId
@@ -276,16 +202,7 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
      * The patient id is a sentinel when {@code anyPatient} is true, so the
      * parameter always has a type on Postgres.
      */
-    @EntityGraph(attributePaths = {
-        "labOrder",
-        "labOrder.patient",
-        "labOrder.hospital",
-        "labOrder.labTestDefinition",
-        "labOrder.orderingStaff",
-        "labOrder.orderingStaff.user",
-        "assignment",
-        "assignment.user"
-    })
+    @EntityGraph(attributePaths = {"labOrder", "labOrder.patient", "labOrder.hospital", "labOrder.labTestDefinition", "labOrder.orderingStaff", "labOrder.orderingStaff.user", "labOrder.orderingStaff.user.staffProfile", "labOrder.orderingStaff.user.patientProfile", "assignment", "assignment.user", "assignment.user.staffProfile", "assignment.user.patientProfile"})
     @Query(value = """
         SELECT r FROM LabResult r
         WHERE (r.labOrder.hospital.id = :hospitalId
@@ -317,16 +234,7 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
      * released-only rule. Same filters as {@link #findHandledByHospitalForReader},
      * no hospital.
      */
-    @EntityGraph(attributePaths = {
-        "labOrder",
-        "labOrder.patient",
-        "labOrder.hospital",
-        "labOrder.labTestDefinition",
-        "labOrder.orderingStaff",
-        "labOrder.orderingStaff.user",
-        "assignment",
-        "assignment.user"
-    })
+    @EntityGraph(attributePaths = {"labOrder", "labOrder.patient", "labOrder.hospital", "labOrder.labTestDefinition", "labOrder.orderingStaff", "labOrder.orderingStaff.user", "labOrder.orderingStaff.user.staffProfile", "labOrder.orderingStaff.user.patientProfile", "assignment", "assignment.user", "assignment.user.staffProfile", "assignment.user.patientProfile"})
     @Query(value = """
         SELECT r FROM LabResult r
         WHERE (:releasedOnly = false OR (r.released = true AND r.supersededByResultId IS NULL
@@ -347,16 +255,7 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
                                      @Param("labOrderId") UUID labOrderId,
                                      Pageable pageable);
 
-    @EntityGraph(attributePaths = {
-        "labOrder",
-        "labOrder.patient",
-        "labOrder.hospital",
-        "labOrder.labTestDefinition",
-        "labOrder.orderingStaff",
-        "labOrder.orderingStaff.user",
-        "assignment",
-        "assignment.user"
-    })
+    @EntityGraph(attributePaths = {"labOrder", "labOrder.patient", "labOrder.hospital", "labOrder.labTestDefinition", "labOrder.orderingStaff", "labOrder.orderingStaff.user", "labOrder.orderingStaff.user.staffProfile", "labOrder.orderingStaff.user.patientProfile", "assignment", "assignment.user", "assignment.user.staffProfile", "assignment.user.patientProfile"})
     Page<LabResult> findByLabOrder_Hospital_IdIn(Collection<UUID> hospitalIds, Pageable pageable);
 
     /**
@@ -374,16 +273,7 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
      * hospital pinned. {@code readableHospitalIds} must never be empty
      * (PostgreSQL rejects {@code IN ()}).
      */
-    @EntityGraph(attributePaths = {
-        "labOrder",
-        "labOrder.patient",
-        "labOrder.hospital",
-        "labOrder.labTestDefinition",
-        "labOrder.orderingStaff",
-        "labOrder.orderingStaff.user",
-        "assignment",
-        "assignment.user"
-    })
+    @EntityGraph(attributePaths = {"labOrder", "labOrder.patient", "labOrder.hospital", "labOrder.labTestDefinition", "labOrder.orderingStaff", "labOrder.orderingStaff.user", "labOrder.orderingStaff.user.staffProfile", "labOrder.orderingStaff.user.patientProfile", "assignment", "assignment.user", "assignment.user.staffProfile", "assignment.user.patientProfile"})
     @Query("""
         SELECT r FROM LabResult r
         WHERE r.labOrder.patient.id = :patientId
@@ -400,16 +290,7 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
                                         @Param("globalView") boolean globalView,
                                         Pageable pageable);
 
-    @EntityGraph(attributePaths = {
-        "labOrder",
-        "labOrder.patient",
-        "labOrder.hospital",
-        "labOrder.labTestDefinition",
-        "labOrder.orderingStaff",
-        "labOrder.orderingStaff.user",
-        "assignment",
-        "assignment.user"
-    })
+    @EntityGraph(attributePaths = {"labOrder", "labOrder.patient", "labOrder.hospital", "labOrder.labTestDefinition", "labOrder.orderingStaff", "labOrder.orderingStaff.user", "labOrder.orderingStaff.user.staffProfile", "labOrder.orderingStaff.user.patientProfile", "assignment", "assignment.user", "assignment.user.staffProfile", "assignment.user.patientProfile"})
     List<LabResult> findByLabOrder_Patient_IdAndLabOrder_Hospital_Id(
         UUID patientId,
         UUID hospitalId,
@@ -417,16 +298,7 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
     );
 
     /** E9 #59b — results across the readable hospitals ({@code RecordAccessPolicy.readableHospitalIds}). */
-    @EntityGraph(attributePaths = {
-        "labOrder",
-        "labOrder.patient",
-        "labOrder.hospital",
-        "labOrder.labTestDefinition",
-        "labOrder.orderingStaff",
-        "labOrder.orderingStaff.user",
-        "assignment",
-        "assignment.user"
-    })
+    @EntityGraph(attributePaths = {"labOrder", "labOrder.patient", "labOrder.hospital", "labOrder.labTestDefinition", "labOrder.orderingStaff", "labOrder.orderingStaff.user", "labOrder.orderingStaff.user.staffProfile", "labOrder.orderingStaff.user.patientProfile", "assignment", "assignment.user", "assignment.user.staffProfile", "assignment.user.patientProfile"})
     List<LabResult> findByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(
         UUID patientId,
         Collection<UUID> hospitalIds,
@@ -439,16 +311,7 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
      * continuation. The list-returning sibling above stays for
      * callers that don't need overflow detection.
      */
-    @EntityGraph(attributePaths = {
-        "labOrder",
-        "labOrder.patient",
-        "labOrder.hospital",
-        "labOrder.labTestDefinition",
-        "labOrder.orderingStaff",
-        "labOrder.orderingStaff.user",
-        "assignment",
-        "assignment.user"
-    })
+    @EntityGraph(attributePaths = {"labOrder", "labOrder.patient", "labOrder.hospital", "labOrder.labTestDefinition", "labOrder.orderingStaff", "labOrder.orderingStaff.user", "labOrder.orderingStaff.user.staffProfile", "labOrder.orderingStaff.user.patientProfile", "assignment", "assignment.user", "assignment.user.staffProfile", "assignment.user.patientProfile"})
     Page<LabResult> findPageByLabOrder_Patient_IdAndLabOrder_Hospital_Id(
         UUID patientId,
         UUID hospitalId,
@@ -456,16 +319,7 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
     );
 
     /** E9 #60b — the paged readable-set sibling, for FHIR {@code $everything}. */
-    @EntityGraph(attributePaths = {
-        "labOrder",
-        "labOrder.patient",
-        "labOrder.hospital",
-        "labOrder.labTestDefinition",
-        "labOrder.orderingStaff",
-        "labOrder.orderingStaff.user",
-        "assignment",
-        "assignment.user"
-    })
+    @EntityGraph(attributePaths = {"labOrder", "labOrder.patient", "labOrder.hospital", "labOrder.labTestDefinition", "labOrder.orderingStaff", "labOrder.orderingStaff.user", "labOrder.orderingStaff.user.staffProfile", "labOrder.orderingStaff.user.patientProfile", "assignment", "assignment.user", "assignment.user.staffProfile", "assignment.user.patientProfile"})
     Page<LabResult> findPageByLabOrder_Patient_IdAndLabOrder_Hospital_IdIn(
         UUID patientId,
         Collection<UUID> hospitalIds,
@@ -547,11 +401,7 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
      * <p>QA D963: STAT first, then URGENT, then the rest; the page's own sort
      * (oldest result first by default) orders within each priority.
      */
-    @EntityGraph(attributePaths = {
-        "labOrder",
-        "labOrder.patient",
-        "labOrder.labTestDefinition"
-    })
+    @EntityGraph(attributePaths = {"labOrder", "labOrder.patient", "labOrder.labTestDefinition"})
     @Query(value = """
         SELECT r FROM LabResult r
         WHERE r.released = false

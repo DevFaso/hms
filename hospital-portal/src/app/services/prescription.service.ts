@@ -339,15 +339,21 @@ export class PrescriptionService {
   /**
    * QA D1412: one page of the list and the server's own total. Same order as
    * {@link list}. `/prescriptions` shows these; every row is one page away.
+   * QA D1314: `search` narrows it on the server (drug, patient or prescriber
+   * name, accents ignored); the total is then the count of the matches.
    */
   page(
-    filters: { statuses?: readonly string[] },
+    filters: { statuses?: readonly string[]; search?: string },
     page: number,
     size: number,
   ): Observable<PageSlice<PrescriptionResponse>> {
     let params = new HttpParams();
     for (const status of filters.statuses ?? []) {
       params = params.append('status', status);
+    }
+    const search = filters.search?.trim();
+    if (search) {
+      params = params.set('search', search);
     }
     return this.http.get<PageSlice<PrescriptionResponse>>(this.baseUrl, {
       params: params
