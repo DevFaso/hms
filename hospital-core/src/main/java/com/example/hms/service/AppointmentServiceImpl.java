@@ -525,6 +525,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         if (isStaffOrAdmin) {
             patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
         }
+        patientRegistrationGuard.refuseDeactivatedRegistration(patient.getId(), hospital.getId());
 
         // --- Staff resolution ---
         final Staff staff = resolveStaff(request);
@@ -554,6 +555,8 @@ public class AppointmentServiceImpl implements AppointmentService {
         LocalTime endTime = slotPolicy.endFor(staff.getId(), request.getAppointmentDate(), request.getStartTime());
         LocalDateTime requestedStart = LocalDateTime.of(request.getAppointmentDate(), request.getStartTime());
         LocalDateTime requestedEnd = LocalDateTime.of(request.getAppointmentDate(), endTime);
+        // QA D1473: an overbook reason does not make a time already gone a booking.
+        requireNotAlreadyPast(requestedStart, hospital);
         // QA D1063: a slot held for a waitlist offer is not given to anyone else.
         slotPolicy.requireNoLiveHold(staff.getId(), requestedStart, requestedEnd);
 
@@ -907,6 +910,11 @@ public class AppointmentServiceImpl implements AppointmentService {
         LocalDateTime requestedStart = LocalDateTime.of(request.getAppointmentDate(), request.getStartTime());
         LocalDateTime requestedEnd = LocalDateTime.of(request.getAppointmentDate(), request.getEndTime());
         if (moved) {
+            // QA D1476: a visit is not moved on for a registration the desk deactivated;
+            // keeping its time, it can still take a note or a cancellation.
+            patientRegistrationGuard.refuseDeactivatedRegistration(patient.getId(), hospital.getId());
+            // QA D1473: nor to a time already gone.
+            requireNotAlreadyPast(requestedStart, hospital);
             // QA D1063: nor is it moved onto a slot held for a waitlist offer.
             slotPolicy.requireNoLiveHold(staff.getId(), requestedStart, requestedEnd);
         }
@@ -992,6 +1000,48 @@ public class AppointmentServiceImpl implements AppointmentService {
         sendRescheduleEmailIfMoved(saved, oldDate, oldStart, oldEnd);
 
         return appointmentMapper.toAppointmentResponseDTO(saved);
+    }
+
+    /**
+     * QA D1473: the desk may overbook, not book the past: today 02:30 at 06:05 was accepted
+     * with a reason, and could be marked a no-show at once. Judged to the minute on the
+     * hospital's clock, so the minute the desk reads on the wall is still bookable.
+     */
+    private static void requireNotAlreadyPast(LocalDateTime start, Hospital hospital) {
+        if (start.isBefore(nowAt(hospital).truncatedTo(java.time.temporal.ChronoUnit.MINUTES))) {
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_START_TIME, "portal.booking.pastTime");
+        }
+    }
+
+    /**
+     * QA D1474: what the booking would say about this time, asked while the desk types, so it
+     * is told at once rather than after writing an overbook reason: the same past, schedule and
+     * overlap rules as {@link #createAppointment}. Null when the time can be booked (with or
+     * without a reason, which {@code isOffSlot} on the form asks about).
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public String bookingTimeRefusal(UUID staffId, java.time.LocalDate date, java.time.LocalTime time,
+                                     UUID movedAppointmentId, Locale locale, String username) {
+        User currentUser = getUserOrThrow(username);
+        Staff staff = staffRepository.findById(staffId)
+            .orElseThrow(() -> new ResourceNotFoundException("staff.notfound", staffId));
+        Hospital hospital = staff.getHospital();
+        requireHospitalScope(currentUser, hospital.getId(), locale);
+        LocalTime endTime = slotPolicy.endFor(staffId, date, time);
+        LocalDateTime start = LocalDateTime.of(date, time);
+        LocalDateTime end = LocalDateTime.of(date, endTime);
+        if (start.isBefore(nowAt(hospital).truncatedTo(java.time.temporal.ChronoUnit.MINUTES))) {
+            return messageSource.getMessage("portal.booking.pastTime", null, locale);
+        }
+        Object[] args = {staffId, DisplayDates.date(date, locale), DisplayDates.time(time, locale),
+            DisplayDates.time(endTime, locale)};
+        if (!staffAvailabilityService.isStaffAvailable(staffId, start)) {
+            return messageSource.getMessage("appointment.staff.unavailable.schedule", args, locale);
+        }
+        boolean taken = AppointmentSlotRules.overlapsHeldSlot(
+            appointmentRepository.findByStaff_IdAndAppointmentDate(staffId, date), movedAppointmentId, start, end);
+        return taken ? messageSource.getMessage("appointment.staff.unavailable", args, locale) : null;
     }
 
     private static LocalDateTime nowAt(Hospital hospital) {

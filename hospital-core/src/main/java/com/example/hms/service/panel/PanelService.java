@@ -75,7 +75,7 @@ public class PanelService {
         LocalDate today = LocalDate.now(clock);
         LocalDate assignedOn = request.getAssignedOn() != null ? request.getAssignedOn() : today;
         if (assignedOn.isAfter(today)) {
-            throw new com.example.hms.exception.FieldBusinessException("assignedOn", "The empanelment date cannot be in the future.");
+            throw new com.example.hms.exception.FieldBusinessException("assignedOn", "panel.assignedOn.future");
         }
 
         // Supersede, never refuse: the new owner is the fact being recorded,
@@ -88,10 +88,8 @@ public class PanelService {
             .orElse(null);
         if (previous != null) {
             if (previous.getAssignedOn() != null && assignedOn.isBefore(previous.getAssignedOn())) {
-                throw new com.example.hms.exception.FieldBusinessException("assignedOn", 
-                    "The empanelment date is before the current owner's start ("
-                        + com.example.hms.utility.DisplayDates.date(previous.getAssignedOn()) + ") — end that assignment first if the "
-                        + "history really needs rewriting.");
+                throw new com.example.hms.exception.FieldBusinessException("assignedOn", "panel.assignedOn.beforeCurrentOwner",
+                    com.example.hms.utility.DisplayDates.date(previous.getAssignedOn()));
             }
             previous.setStatus(PanelAssignmentStatus.ENDED);
             previous.setEndedOn(assignedOn);

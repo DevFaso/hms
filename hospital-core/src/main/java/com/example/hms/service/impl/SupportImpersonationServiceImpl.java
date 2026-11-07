@@ -85,10 +85,10 @@ public class SupportImpersonationServiceImpl implements SupportImpersonationServ
                                                String mfaToken,
                                                String bearerJwt) {
         if (request == null || request.getTargetUserId() == null) {
-            throw new com.example.hms.exception.FieldBusinessException("targetUserId", "targetUserId is required");
+            throw new com.example.hms.exception.FieldBusinessException("targetUserId", "impersonation.targetRequired");
         }
         if (request.getReason() == null || request.getReason().isBlank()) {
-            throw new com.example.hms.exception.FieldBusinessException("reason", "reason is required to start impersonation");
+            throw new com.example.hms.exception.FieldBusinessException("reason", "impersonation.reasonRequired");
         }
         if (ImpersonationContextHolder.isImpersonating()) {
             // Belt-and-braces: the controller is gated on ROLE_SUPER_ADMIN
@@ -104,7 +104,7 @@ public class SupportImpersonationServiceImpl implements SupportImpersonationServ
                 "user.notFound", request.getTargetUserId().toString()));
 
         if (actor.getId().equals(target.getId())) {
-            throw new com.example.hms.exception.FieldBusinessException("targetUserId", "Cannot impersonate yourself");
+            throw new com.example.hms.exception.FieldBusinessException("targetUserId", "impersonation.notYourself");
         }
 
         // Defence in depth — also block if the actor already has an active

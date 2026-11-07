@@ -513,6 +513,10 @@ public class PatientServiceImpl implements PatientService {
         PatientIdentityRules.requireNameWithLetters(FIELD_FIRST_NAME, request.getFirstName(), patient.getFirstName());
         PatientIdentityRules.requireNameWithLetters(FIELD_LAST_NAME, request.getLastName(), patient.getLastName());
         PatientIdentityRules.requireNameWithLetters(FIELD_MIDDLE_NAME, request.getMiddleName(), patient.getMiddleName());
+        // QA D1471: the contact and the city the staff path writes, as on the portal.
+        PatientIdentityRules.requireNameWithLetters("emergencyContactName", request.getEmergencyContactName(),
+            patient.getEmergencyContactName());
+        PatientIdentityRules.requirePlaceWithLetters("city", request.getCity(), patient.getCity());
         PatientIdentityRules.requirePossibleBirthDate(request.getDateOfBirth(), patient.getDateOfBirth());
         applyRequired(request.getFirstName(), patient::setFirstName, "patient.r16.firstNameRequired", FIELD_FIRST_NAME);
         applyRequired(request.getLastName(), patient::setLastName, "patient.r16.lastNameRequired", FIELD_LAST_NAME);
@@ -977,6 +981,10 @@ public class PatientServiceImpl implements PatientService {
         PatientIdentityRules.requireNameWithLetters(FIELD_FIRST_NAME, dto.getFirstName(), create ? null : stored.getFirstName());
         PatientIdentityRules.requireNameWithLetters(FIELD_LAST_NAME, dto.getLastName(), create ? null : stored.getLastName());
         PatientIdentityRules.requireNameWithLetters(FIELD_MIDDLE_NAME, dto.getMiddleName(), create ? null : stored.getMiddleName());
+        // QA D1471: the contact and the city, as on the portal.
+        PatientIdentityRules.requireNameWithLetters("emergencyContactName", dto.getEmergencyContactName(),
+            create ? null : stored.getEmergencyContactName());
+        PatientIdentityRules.requirePlaceWithLetters("city", dto.getCity(), create ? null : stored.getCity());
         PatientIdentityRules.requirePossibleBirthDate(dto.getDateOfBirth(), create ? null : stored.getDateOfBirth());
     }
 

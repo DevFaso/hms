@@ -12,8 +12,8 @@ import {
 
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { Subject, of } from 'rxjs';
-import { debounceTime, map, switchMap } from 'rxjs/operators';
+import { Subject, forkJoin, of } from 'rxjs';
+import { catchError, debounceTime, map, switchMap } from 'rxjs/operators';
 import { AppointmentService, AppointmentUpsertRequest } from '../services/appointment.service';
 import { SlotInventoryService } from '../services/slot-inventory.service';
 import { OVERBOOK_REASON_FIELD, isOffSlot, refusesForOverbookReason } from './published-slot';
@@ -81,6 +81,10 @@ export class AppointmentFormComponent implements OnInit {
   /** QA D1429: the chosen time is not a published free slot, so the form asks why. */
   offSlot = signal(false);
   private readonly slotCheck$ = new Subject<void>();
+  /** QA D1474: why this time cannot be booked at all, told at once, before any reason is asked. */
+  timeRefusal = signal<string | null>(null);
+  /** QA D1475: the clinician's free published slots of the chosen day. */
+  freeSlots = signal<string[]>([]);
 
   // ── Patient picker ──────────────────────────────────────
   patientQuery = signal('');
@@ -231,10 +235,56 @@ export class AppointmentFormComponent implements OnInit {
       .pipe(
         debounceTime(220),
         switchMap(() =>
-          isOffSlot(this.slots, this.form.staffId, this.form.appointmentDate, this.form.startTime),
+          forkJoin({
+            off: isOffSlot(
+              this.slots,
+              this.form.staffId,
+              this.form.appointmentDate,
+              this.form.startTime,
+            ),
+            refusal: this.readTimeRefusal(),
+            free: this.readFreeSlots(),
+          }),
         ),
       )
-      .subscribe((off) => this.offSlot.set(off));
+      .subscribe(({ off, refusal, free }) => {
+        this.timeRefusal.set(refusal);
+        // QA D1474: a time that cannot be booked asks for no overbook reason.
+        this.offSlot.set(off && !refusal);
+        this.freeSlots.set(free);
+      });
+  }
+
+  /** Only the desk's warning: the server still decides at the booking, so a failed read says nothing. */
+  private readTimeRefusal() {
+    const { staffId, appointmentDate, startTime } = this.form;
+    if (!staffId || !appointmentDate || !startTime) return of(null);
+    return this.appointmentService.bookingTimeCheck(staffId, appointmentDate, startTime).pipe(
+      map((answer) => answer?.refusal ?? null),
+      catchError(() => of(null)),
+    );
+  }
+
+  private readFreeSlots() {
+    const { staffId, appointmentDate } = this.form;
+    if (!staffId || !appointmentDate) return of([] as string[]);
+    return this.slots
+      .searchAllOpenInBackground({ staffId, from: appointmentDate, to: appointmentDate })
+      .pipe(
+        map(({ rows }) =>
+          rows
+            .filter((slot) => slot.startAt?.startsWith(appointmentDate))
+            .map((slot) => slot.startAt.slice(11, 16))
+            .sort((a, b) => a.localeCompare(b)),
+        ),
+        catchError(() => of([] as string[])),
+      );
+  }
+
+  /** QA D1475: a free slot picked from the list is the time. */
+  pickFreeSlot(time: string): void {
+    this.form.startTime = time;
+    this.checkSlot();
   }
 
   /** The clinician, the date or the time changed: is it still a published free slot? */

@@ -28,4 +28,21 @@ public final class InvoiceBalance {
         BigDecimal paid = invoice.getAmountPaid() != null ? invoice.getAmountPaid() : BigDecimal.ZERO;
         return total.subtract(paid).max(BigDecimal.ZERO);
     }
+
+    /**
+     * QA D1466: what the hospital holds above the bill and owes back. A check-in
+     * copay above the visit's total folds whole onto the visit invoice (the money
+     * was received, its row moves unsplit), so the amount paid may pass the total.
+     * Nothing further is owed, and this is the refund due. No refund workflow
+     * exists: it is stated as owed, on every surface that shows the invoice.
+     * Nothing on a cancelled invoice.
+     */
+    public static BigDecimal refundDueOf(BillingInvoice invoice) {
+        if (invoice == null || invoice.getStatus() == InvoiceStatus.CANCELLED) {
+            return BigDecimal.ZERO;
+        }
+        BigDecimal total = invoice.getTotalAmount() != null ? invoice.getTotalAmount() : BigDecimal.ZERO;
+        BigDecimal paid = invoice.getAmountPaid() != null ? invoice.getAmountPaid() : BigDecimal.ZERO;
+        return paid.subtract(total).max(BigDecimal.ZERO);
+    }
 }

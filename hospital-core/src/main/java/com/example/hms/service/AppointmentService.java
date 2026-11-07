@@ -78,4 +78,12 @@ public interface AppointmentService {
     java.util.List<com.example.hms.payload.dto.appointment.AppointmentCalendarEventDTO> getCalendarEvents(
         java.util.UUID hospitalId, java.time.LocalDate from, java.time.LocalDate to,
         java.util.UUID staffId, String username, java.util.Locale locale);
+
+    /**
+     * QA D1474: why a booking at this time would be refused (past, off the clinician's schedule,
+     * overlapping a held visit), in the reader's language; null when it can be booked.
+     * {@code movedAppointmentId}, when set, is the visit being moved, which never conflicts with itself.
+     */
+    String bookingTimeRefusal(java.util.UUID staffId, java.time.LocalDate date, java.time.LocalTime time,
+                              java.util.UUID movedAppointmentId, java.util.Locale locale, String username);
 }

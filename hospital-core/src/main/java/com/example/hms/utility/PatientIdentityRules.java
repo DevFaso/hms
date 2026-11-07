@@ -49,6 +49,16 @@ public final class PatientIdentityRules {
         }
     }
 
+    /** QA D1471: a city or a contact's place made of digits, under the same only-a-change rule as a name. */
+    public static void requirePlaceWithLetters(String field, String value, String stored) {
+        if (value == null || Objects.equals(value.trim(), stored == null ? null : stored.trim())) {
+            return;
+        }
+        if (isMadeOfDigits(value)) {
+            throw new FieldBusinessException(field, "patient.city.digitsOnly");
+        }
+    }
+
     /** The message key of what is wrong with this birth date, or null when it is possible. */
     public static String birthDateProblem(LocalDate value, LocalDate today) {
         if (!value.isBefore(today)) {

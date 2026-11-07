@@ -62,9 +62,15 @@ public class BillingInvoiceRequestDTO {
      * The amount of an invoice with no lines. Once the invoice has lines the
      * total is their sum and this is ignored (QA D72).
      */
-    @Digits(integer = 10, fraction = 2)
+    @Digits(integer = 10, fraction = 2, message = "{billing.amount.tooLarge}")
     @PositiveOrZero
     private BigDecimal totalAmount;
+
+    /**
+     * QA D1467: the clerk saw the lines at 0 F CFA and issues them as they are.
+     * Without it, issuing an invoice holding such a line is refused on this field.
+     */
+    private Boolean confirmUnpricedLines;
 
     /**
      * Ignored: the amount paid only ever moves through a recorded payment

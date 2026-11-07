@@ -28,6 +28,8 @@ import { blankFields, refuseFields } from '../../shared/forms/invalid-fields';
 const GRANT_USERNAME_ID = 'family-proxy-username';
 const GRANT_RELATIONSHIP_ID = 'family-relationship';
 const GRANT_FIELDS = [GRANT_USERNAME_ID, GRANT_RELATIONSHIP_ID];
+/** QA D1464: the grant's optional end date. */
+const EXPIRES_FIELD = 'proxy-expires';
 
 @Component({
   selector: 'app-my-family-access',
@@ -139,6 +141,14 @@ export class MyFamilyAccessComponent implements OnInit {
       this.toast.error(
         this.translate.instant('COMMON.MISSING_REQUIRED_FIELDS', { fields: labels.join(', ') }),
       );
+      return;
+    }
+    // QA D1464: `min` only limits the calendar; a typed past date reached the server,
+    // which then answered "access granted" for a grant born expired.
+    if (this.expiresOn && this.expiresOn < this.minExpiry) {
+      const message = this.translate.instant('PORTAL.FAMILY.EXPIRY_IN_PAST');
+      refuseFields(this.host.nativeElement, [EXPIRES_FIELD], [EXPIRES_FIELD], message);
+      this.toast.error(message);
       return;
     }
     // #948 review: the end of the reader's day, on the server's UTC clock

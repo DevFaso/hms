@@ -279,6 +279,10 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         // message, never stored as typed (QA D113: free text, another
         // patient's address, a blank phone failing as a 500).
         applySelfServiceIdentifiers(patient, dto);
+        // QA D1471: the same rule as the patient's names; only a CHANGE is judged.
+        com.example.hms.utility.PatientIdentityRules.requireNameWithLetters(
+                "emergencyContactName", dto.getEmergencyContactName(), patient.getEmergencyContactName());
+        com.example.hms.utility.PatientIdentityRules.requirePlaceWithLetters("city", dto.getCity(), patient.getCity());
         if (dto.getAddressLine1() != null)             patient.setAddressLine1(dto.getAddressLine1());
         if (dto.getAddressLine2() != null)             patient.setAddressLine2(dto.getAddressLine2());
         if (dto.getCity() != null)                     patient.setCity(dto.getCity());
@@ -345,6 +349,10 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         String email = raw.trim();
         if (email.isEmpty()) {
             return null;
+        }
+        // QA D1471: a@b was saved. An address stored before this rule stays, while other fields change.
+        if (!email.equalsIgnoreCase(patient.getEmail()) && !com.example.hms.utility.EmailAddresses.isDeliverable(email)) {
+            throw new com.example.hms.exception.FieldBusinessException("email", "patient.email.undeliverable");
         }
         // The signed-in patient always has an account (findPatient resolves it).
         boolean takenByAccount = patient.getUser() != null
@@ -1738,6 +1746,10 @@ public class PatientPortalServiceImpl implements PatientPortalService {
             throw new com.example.hms.exception.FieldBusinessException("proxyUsername", "portal.proxy.duplicate");
         });
 
+        // QA D1464: told "access granted" while the row was born EXPIRED and the grantee had nothing.
+        com.example.hms.utility.ExpiryRules.requireFuture("expiresAt", dto.getExpiresAt(), "portal.proxy.expiryInPast");
+        requireKnownPermissions(dto.getPermissions());
+
         PatientProxy proxy = PatientProxy.builder()
                 .grantorPatient(patient)
                 .proxyUser(proxyUser)
@@ -1862,6 +1874,22 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .filter(token -> !token.isEmpty())
                 .map(token -> LEGACY_PERMISSION_ALIASES.getOrDefault(token, token))
                 .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    /** What a grant may name: the scopes {@code verifyProxyAccess} checks, and ALL. */
+    private static final Set<String> KNOWN_PROXY_PERMISSIONS = Set.of("ALL", "VIEW_APPOINTMENTS", "VIEW_MEDICATIONS",
+            PROXY_VIEW_LAB_RESULTS, "VIEW_BILLING", "VIEW_RECORDS");
+
+    /**
+     * QA D1468: BANANA was saved, and listed as a grant that opened nothing. Only a new grant is
+     * judged: {@link #normalizedPermissions} still reads whatever an older row holds.
+     */
+    private static void requireKnownPermissions(String raw) {
+        for (String token : normalizedPermissions(raw)) {
+            if (!KNOWN_PROXY_PERMISSIONS.contains(token)) {
+                throw new com.example.hms.exception.FieldBusinessException("permissions", "portal.proxy.permissionUnknown", token);
+            }
+        }
     }
 
     /** Store grants in the canonical VIEW_* vocabulary regardless of client. */
@@ -2418,6 +2446,10 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         }
         if (dto.getAddressLine1() != null) { patient.setAddressLine1(dto.getAddressLine1()); changed = true; }
         if (dto.getAddressLine2() != null) { patient.setAddressLine2(dto.getAddressLine2()); changed = true; }
+        // QA D1471: pre-check-in writes the same fields as the profile, under the same rule.
+        com.example.hms.utility.PatientIdentityRules.requirePlaceWithLetters("city", dto.getCity(), patient.getCity());
+        com.example.hms.utility.PatientIdentityRules.requireNameWithLetters(
+                "emergencyContactName", dto.getEmergencyContactName(), patient.getEmergencyContactName());
         if (dto.getCity() != null) { patient.setCity(dto.getCity()); changed = true; }
         if (dto.getState() != null) { patient.setState(dto.getState()); changed = true; }
         if (dto.getZipCode() != null) { patient.setZipCode(dto.getZipCode()); changed = true; }

@@ -556,6 +556,8 @@ export interface InvoiceApiResponse {
   totalAmount?: number | null;
   amountPaid?: number | null;
   balanceDue?: number | null;
+  /** QA D1466: paid above the total (a copay above the visit total), owed back. */
+  refundDue?: number | null;
   status?: string | null;
   hospitalName?: string | null;
   /** QA D1421: a visit is named by its type and date, never by the visit's clinical notes. */
@@ -589,6 +591,7 @@ export function mapPortalInvoice(api: InvoiceApiResponse): PortalInvoice {
     facility: api.hospitalName ?? '',
     visitType: api.encounterType ?? null,
     visitDate: api.encounterDate ?? null,
+    refundDue: Number(api.refundDue ?? 0),
     pending: Number(api.pendingDeclaredAmount ?? 0),
     creditedTo: api.creditedToInvoiceNumber ?? null,
   };
@@ -643,6 +646,8 @@ export interface PortalInvoice {
   /** QA D1421: what titles the card when the invoice is of a visit. */
   visitType?: string | null;
   visitDate?: string | null;
+  /** QA D1466: paid above the total (a copay above the visit total), owed back to the patient. */
+  refundDue?: number;
   /** QA D421: already declared and awaiting confirmation; it counts against the balance. */
   pending?: number;
   /** QA D428: the invoice a folded check-in copay was credited to. */

@@ -64,11 +64,11 @@ public class ReferenceCatalogServiceImpl implements ReferenceCatalogService {
     public ReferenceCatalogResponseDTO createCatalog(CreateReferenceCatalogRequestDTO requestDTO) {
         String code = normalizeCode(requestDTO.getCode());
         if (code == null) {
-            throw new com.example.hms.exception.FieldBusinessException(FIELD_CODE, "Catalog code cannot be blank");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_CODE, "referenceCatalog.codeRequired");
         }
         catalogRepository.findByCodeIgnoreCase(code)
             .ifPresent(existing -> {
-                throw new com.example.hms.exception.FieldBusinessException(FIELD_CODE, "Catalog with code '" + code + "' already exists");
+                throw new com.example.hms.exception.FieldBusinessException(FIELD_CODE, "referenceCatalog.codeExists", code);
             });
 
         ReferenceCatalog catalog = ReferenceCatalog.builder()

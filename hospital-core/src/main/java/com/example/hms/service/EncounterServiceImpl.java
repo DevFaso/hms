@@ -433,6 +433,12 @@ public class EncounterServiceImpl implements EncounterService {
         }
 
         EncounterResolution ctx = resolveEncounterResolution(request, locale);
+        // QA D1476: a walk-in is not opened on a deactivated registration. Emergency care is
+        // never refused at the desk: the registration is settled after the patient is treated.
+        if (request.getEncounterType() != com.example.hms.enums.EncounterType.EMERGENCY) {
+            com.example.hms.service.support.PatientRegistrationGuard.refuseDeactivatedRegistration(
+                patientHospitalRegistrationRepository, ctx.patient().getId(), ctx.hospital().getId());
+        }
 
         LocalDateTime encounterDate = Optional.ofNullable(request.getEncounterDate()).orElse(LocalDateTime.now());
         // QA D761: a new encounter is asked for as ARRIVED (a walk-in at the

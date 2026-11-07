@@ -93,7 +93,7 @@ public class TreatmentConsentServiceImpl implements TreatmentConsentService {
             .source(source != null ? source : TreatmentConsentSource.MANUAL)
             .signedName(trimToNull(request.getSignedName()))
             .consentedAt(consentedAt)
-            .expiresAt(request.getExpiresAt())
+            .expiresAt(com.example.hms.utility.ExpiryRules.requireFuture("expiresAt", request.getExpiresAt(), "consent.expiryInPast"))
             .notes(trimToNull(request.getNotes()))
             .build();
 

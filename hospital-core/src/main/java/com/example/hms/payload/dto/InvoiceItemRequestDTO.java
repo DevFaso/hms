@@ -41,7 +41,7 @@ public class InvoiceItemRequestDTO {
     private Integer quantity;
 
     @NotNull
-    @Digits(integer = 10, fraction = 2)
+    @Digits(integer = 10, fraction = 2, message = "{billing.amount.tooLarge}")
     @Positive
     private BigDecimal unitPrice;
 

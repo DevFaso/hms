@@ -134,6 +134,12 @@ public class PdfInvoiceService {
             w.down(16);
             // QA D1104: the shared balance rule: nothing is owed on a cancelled invoice.
             w.right(BOLD, 11, t.get(BALANCE_DUE, money(com.example.hms.utility.InvoiceBalance.dueOf(invoice))));
+            // QA D1466: a copay above the visit total: what the hospital owes back.
+            BigDecimal refundDue = com.example.hms.utility.InvoiceBalance.refundDueOf(invoice);
+            if (refundDue.signum() > 0) {
+                w.down(16);
+                w.right(BOLD, 11, t.get("pdf.invoice.refundDue", money(refundDue)));
+            }
 
             List<PaymentTransaction> confirmed = payments.stream()
                 .filter(p -> p.getStatus() == null || p.getStatus() == PaymentStatus.CONFIRMED)

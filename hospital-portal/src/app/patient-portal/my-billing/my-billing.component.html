@@ -30,6 +30,19 @@
       </div>
     }
 
+    @if (totalRefundDue() > 0) {
+      <!-- QA D1466: the copay paid at check-in was above the visit. -->
+      <div class="billing-summary-card" data-testid="refund-due-summary">
+        <div class="bsc-icon">
+          <span class="material-symbols-outlined">savings</span>
+        </div>
+        <div class="bsc-body">
+          <span class="bsc-label">{{ 'PORTAL.BILLING.REFUND_DUE' | translate }}</span>
+          <span class="bsc-amount">{{ totalRefundDue() | cfa }}</span>
+        </div>
+      </div>
+    }
+
     <section class="portal-section">
       <h2 class="portal-section-title">{{ 'PORTAL.BILLING.STATEMENTS' | translate }}</h2>
       <div class="portal-list">
@@ -79,6 +92,12 @@
                 {{ ' '
                 }}<span class="pli-meta"
                   >{{ 'PORTAL.BILLING.BALANCE_DUE' | translate }} {{ inv.balance | cfa }}</span
+                >
+              }
+              @if (inv.refundDue) {
+                {{ ' '
+                }}<span class="pli-meta" [attr.data-testid]="'refund-due-' + inv.id"
+                  >{{ 'PORTAL.BILLING.REFUND_DUE' | translate }} {{ inv.refundDue | cfa }}</span
                 >
               }
               @if (pendingOf(inv) > 0) {

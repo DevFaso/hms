@@ -120,10 +120,10 @@ public class AuditSavedSearchServiceImpl implements AuditSavedSearchService {
             throw new BusinessRuleException("Saved-search payload is required.");
         }
         if (request.getName() == null || request.getName().trim().isEmpty()) {
-            throw new com.example.hms.exception.FieldBusinessException("name", "Saved-search name is required.");
+            throw new com.example.hms.exception.FieldBusinessException("name", "auditSavedSearch.nameRequired");
         }
         if (request.getFilterJson() == null || request.getFilterJson().isBlank()) {
-            throw new com.example.hms.exception.FieldBusinessException("filterJson", "Saved-search filterJson is required.");
+            throw new com.example.hms.exception.FieldBusinessException("filterJson", "auditSavedSearch.filterRequired");
         }
     }
 

@@ -215,7 +215,10 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
      * QA D210: once a visit's invoice is issued, the copay already paid at
      * check-in for that visit is moved onto it as a payment, and the
      * stand-alone copay invoice is closed, so the patient is not billed twice.
-     * A copay larger than what the invoice still owes stays where it is.
+     * QA D1466: a copay larger than what the invoice still owes folds whole
+     * too: it counts against the visit, nothing further is owed, and the
+     * excess is the refund due ({@code InvoiceBalance.refundDueOf}). It used to
+     * stay on its own invoice while the whole visit was billed again.
      */
     private void creditCheckInCopays(BillingInvoice target) {
         creditCheckInCopays(target, BigDecimal.ZERO);
@@ -261,10 +264,22 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             return null;
         }
         BigDecimal credit = copayCredit(copay);
+        // Nothing is owed on an invoice already settled, so a second copay of the visit stays apart.
         BigDecimal paid = target.getAmountPaid() != null ? target.getAmountPaid() : BigDecimal.ZERO;
         BigDecimal owed = (target.getTotalAmount() != null ? target.getTotalAmount() : BigDecimal.ZERO).subtract(paid)
             .subtract(reserved);
-        return credit.signum() <= 0 || credit.compareTo(owed) > 0 ? null : copay;
+        if (credit.signum() <= 0 || owed.signum() <= 0) {
+            return null;
+        }
+        // QA D724: a declared payment still waiting for the cashier must stay confirmable,
+        // so a copay above what is owed waits for that declaration to be settled.
+        return credit.compareTo(owed) <= 0 || (reserved.signum() == 0 && !hasPendingDeclaration(target)) ? copay : null;
+    }
+
+    private boolean hasPendingDeclaration(BillingInvoice invoice) {
+        BigDecimal pending = paymentTransactionRepository.sumAmountByInvoiceAndStatus(invoice.getId(),
+            PaymentStatus.PENDING);
+        return pending != null && pending.signum() > 0;
     }
 
     private static BigDecimal copayCredit(BillingInvoice copay) {
@@ -434,6 +449,33 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     private static void requireIssuableTotal(InvoiceStatus status, BigDecimal total) {
         if (status == InvoiceStatus.SENT && (total == null || total.signum() <= 0)) {
             throw new com.example.hms.exception.FieldBusinessException(FIELD_STATUS, "billing.invoice.zeroTotal");
+        }
+    }
+
+    /**
+     * QA D1467: lines at 0 F CFA lock when the invoice is issued, so a test or an
+     * X-ray left unpriced at checkout went out free, in silence. Issuing asks first:
+     * refused on {@code confirmUnpricedLines}, naming the lines, unless the request
+     * confirms them (a line that really is free stays possible). On the server, so
+     * an API call does not slip through either.
+     */
+    private void requireUnpricedLinesConfirmed(BillingInvoice invoice, InvoiceStatus nextStatus,
+                                               BillingInvoiceRequestDTO dto) {
+        if (nextStatus != InvoiceStatus.SENT || Boolean.TRUE.equals(dto.getConfirmUnpricedLines())
+                || invoiceItemRepository == null) {
+            return;
+        }
+        List<InvoiceItem> lines = invoiceItemRepository.findByBillingInvoiceId(invoice.getId());
+        if (lines == null) {
+            return;
+        }
+        String unpriced = lines.stream()
+            .filter(line -> nz(line.getTotalPrice()).signum() == 0)
+            .map(InvoiceItem::getItemDescription)
+            .collect(java.util.stream.Collectors.joining(", "));
+        if (!unpriced.isEmpty()) {
+            throw new com.example.hms.exception.FieldBusinessException("confirmUnpricedLines",
+                "billing.invoice.unpricedLines", unpriced);
         }
     }
 
@@ -924,6 +966,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         // QA D91: amountPaid is never taken from the form.
         if (wasDraft) {
             requireIssuableTotal(nextStatus, invoice.getTotalAmount());
+            requireUnpricedLinesConfirmed(invoice, nextStatus, dto);
         }
         boolean cancelling = nextStatus == InvoiceStatus.CANCELLED && invoice.getStatus() != InvoiceStatus.CANCELLED;
         if (cancelling) {
@@ -964,7 +1007,10 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     private void applyTypedTotal(BillingInvoice invoice, UUID id, BillingInvoiceRequestDTO dto, BigDecimal paid) {
         if (dto.getTotalAmount() != null && !invoiceRepository.hasItems(id)) {
             requireWholeAmount(dto.getTotalAmount()); // QA D307
-            if (dto.getTotalAmount().compareTo(paid) < 0) {
+            // QA D1466: echoing the total of an invoice holding a refund due moves nothing.
+            boolean unchanged = invoice.getTotalAmount() != null
+                && dto.getTotalAmount().compareTo(invoice.getTotalAmount()) == 0;
+            if (!unchanged && dto.getTotalAmount().compareTo(paid) < 0) {
                 throw new com.example.hms.exception.FieldBusinessException("totalAmount", "billing.invoice.totalBelowPaid");
             }
             invoice.setTotalAmount(dto.getTotalAmount());
@@ -1164,7 +1210,10 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         BigDecimal sum = invoiceRepository.sumItemsByInvoiceId(invoiceId);
         BigDecimal total = sum != null ? sum : BigDecimal.ZERO;
         BigDecimal paid = invoice.getAmountPaid() != null ? invoice.getAmountPaid() : BigDecimal.ZERO;
-        if (total.compareTo(paid) < 0) {
+        // QA D1466: a line added to an invoice holding a refund due lowers that refund; only
+        // a total going DOWN under the money received is refused.
+        BigDecimal before = invoice.getTotalAmount() != null ? invoice.getTotalAmount() : BigDecimal.ZERO;
+        if (total.compareTo(paid) < 0 && total.compareTo(before) < 0) {
             throw new BusinessException("billing.invoice.totalBelowPaid");
         }
         invoice.setTotalAmount(total);

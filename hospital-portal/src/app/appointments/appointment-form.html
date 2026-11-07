@@ -46,8 +46,38 @@
               <small class="field-hint" data-testid="appt-duration-note">{{
                 'APPOINTMENTS.DURATION_SET_BY_SLOTS' | translate
               }}</small>
+              @if (timeRefusal(); as refusal) {
+                <!-- QA D1474: said at once, before any overbook reason is asked. -->
+                <small class="field-refusal" role="alert" data-testid="appt-time-refusal">{{
+                  refusal
+                }}</small>
+              }
             </div>
           </div>
+          @if (form.staffId && form.appointmentDate) {
+            <!-- QA D1475: the desk sees what is free, as the patient's portal does. -->
+            <div class="field-row">
+              <div class="field" data-testid="appt-free-slots">
+                <span class="field-label">{{ 'APPOINTMENTS.FREE_SLOTS' | translate }}</span>
+                @if (freeSlots().length > 0) {
+                  <div class="free-slots">
+                    @for (slot of freeSlots(); track slot) {
+                      <button
+                        type="button"
+                        class="free-slot"
+                        [class.selected]="form.startTime?.slice(0, 5) === slot"
+                        (click)="pickFreeSlot(slot)"
+                      >
+                        {{ slot }}
+                      </button>
+                    }
+                  </div>
+                } @else {
+                  <small class="field-hint">{{ 'APPOINTMENTS.NO_FREE_SLOTS' | translate }}</small>
+                }
+              </div>
+            </div>
+          }
           @if (offSlot()) {
             <!-- QA D1429: the desk may overbook, with a reason the appointment keeps. -->
             <div class="field-row">

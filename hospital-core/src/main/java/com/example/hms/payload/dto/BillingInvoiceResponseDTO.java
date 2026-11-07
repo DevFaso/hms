@@ -59,6 +59,8 @@ public class BillingInvoiceResponseDTO {
     private BigDecimal totalAmount;
     private BigDecimal amountPaid;
     private BigDecimal balanceDue; // Calculated: totalAmount - amountPaid
+    /** QA D1466: the amount paid above the total, owed back to the patient (a copay above the visit total). */
+    private BigDecimal refundDue;
 
     // Insurance Information
     private List<PatientInsuranceSummaryDTO> patientInsurances;

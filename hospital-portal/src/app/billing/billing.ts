@@ -44,6 +44,7 @@ import {
   CFA_AMOUNT_REQUIRED_KEY,
   cfaAmountMessageKey,
   cfaAmountProblem,
+  cfaPriceProblem,
 } from '../shared/cfa-amount';
 import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
 import { refuseFields, type FieldRefusal } from '../shared/forms/invalid-fields';
@@ -57,6 +58,7 @@ import { amountStillDue, pendingDeclared } from '../shared/payment-prefill';
 import { refusalReason } from '../shared/refusal-reason';
 import { joinReasons } from '../shared/required-fields';
 import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
+import { serverFieldErrors } from '../shared/forms/server-field-errors';
 import { KeyLabelPipe } from '../shared/pipes/key-label.pipe';
 type BillingTab = 'all' | 'outstanding' | 'paid' | 'overdue';
 
@@ -71,6 +73,8 @@ const PAYMENT_FIELD_IDS = ['payment-amount', 'payment-reference'];
 
 /** QA D1294: a blank or zero unit price says so (not "a payment amount"). */
 const LINE_PRICE_REQUIRED_KEY = 'BILLING.LINE_UNIT_PRICE_REQUIRED';
+/** QA D1467: the field the server refuses an issue on while lines stand at 0 F CFA. */
+const UNPRICED_LINES_FIELD = 'confirmUnpricedLines';
 
 /**
  * QA D1344 (round 29): what is wrong with a line quantity — blank is
@@ -564,16 +568,37 @@ export class BillingComponent implements OnInit {
       ? this.billingService.updateInvoice(this.editingId()!, this.form)
       : this.billingService.createInvoice(this.form);
     op.subscribe({
-      next: () => {
+      next: (saved: BillingInvoiceResponse) => {
         this.toast.success(
           this.translate.instant(this.editing() ? 'BILLING.UPDATED' : 'BILLING.CREATED'),
         );
+        // QA D1466: the copay taken at check-in was above this visit: say so at issue.
+        if (Number(saved?.refundDue ?? 0) > 0) {
+          this.toast.info(
+            this.translate.instant('BILLING.REFUND_DUE_NOTICE', {
+              amount: this.formatCurrency(saved.refundDue ?? 0),
+            }),
+          );
+        }
+        this.form.confirmUnpricedLines = undefined;
         this.closeModal();
         this.saving.set(false);
         this.loadInvoices(this.page());
       },
       error: (err: HttpErrorResponse) => {
         this.saving.set(false);
+        // QA D1467: the server names the lines at 0 F CFA; issued only on the clerk's word.
+        const unpriced = serverFieldErrors(err).get(UNPRICED_LINES_FIELD);
+        if (unpriced) {
+          void this.confirmService
+            .ask({ titleKey: 'BILLING.UNPRICED_LINES_CONFIRM', message: unpriced })
+            .then((confirmed) => {
+              if (!confirmed) return;
+              this.form = { ...this.form, confirmUnpricedLines: true };
+              this.submitForm();
+            });
+          return;
+        }
         // QA D529: the stay already has an invoice. Billed twice only on purpose.
         if (!this.editing() && err.status === 409 && !this.form.supplementary) {
           const why = err.error?.message ?? '';
@@ -812,7 +837,7 @@ export class BillingComponent implements OnInit {
     if (!inv || this.itemSaving()) return;
     // QA D1089: the button is never dead; the field that is missing or wrong says so.
     const qty = this.newItemQuantity();
-    const priceProblem = cfaAmountProblem(this.newItemUnitPrice());
+    const priceProblem = cfaPriceProblem(this.newItemUnitPrice());
     // QA D1344 (round 29): every wrong field at once, each under its own
     // reason — a quantity of 0 is not "required", it is not above zero.
     const refusals: FieldRefusal[] = [];
@@ -878,7 +903,7 @@ export class BillingComponent implements OnInit {
     return (
       !this.itemSaving() &&
       lineQuantityMessageKey(this.editLineQuantity()) === null &&
-      cfaAmountProblem(this.editLineUnitPrice()) === null
+      cfaPriceProblem(this.editLineUnitPrice()) === null
     );
   }
 
@@ -887,7 +912,7 @@ export class BillingComponent implements OnInit {
     if (!inv || this.itemSaving()) return;
     // QA D1089: the button is never dead; the field that is missing or wrong says so.
     const qtyKey = lineQuantityMessageKey(this.editLineQuantity());
-    const priceProblem = cfaAmountProblem(this.editLineUnitPrice());
+    const priceProblem = cfaPriceProblem(this.editLineUnitPrice());
     if (qtyKey || priceProblem) {
       // QA D1296 class (round 28): every wrong field at once, each under its
       // own reason (the price said "required" when only the quantity was).

@@ -27,7 +27,6 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 import lombok.EqualsAndHashCode;
-import org.hibernate.annotations.Check;
 import org.springframework.data.annotation.CreatedBy;
 import org.springframework.data.annotation.LastModifiedBy;
 
@@ -49,7 +48,6 @@ import java.util.Set;
         @Index(name = "idx_bi_hospital", columnList = "hospital_id")
     }
 )
-@Check(constraints = "amount_paid <= total_amount")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 @ToString(exclude = {"patient", "hospital", "encounter", "invoiceItems", "creditedToInvoice", "createdByUser"})
 @EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)

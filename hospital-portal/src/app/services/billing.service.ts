@@ -46,6 +46,8 @@ export interface BillingInvoiceResponse {
   totalAmount: number;
   amountPaid: number;
   balanceDue: number;
+  /** QA D1466: paid above the total (a copay above the visit total), owed back to the patient. */
+  refundDue?: number;
   insuranceCoverageAmount: number;
   patientResponsibilityAmount: number;
   status: InvoiceStatus;
@@ -114,6 +116,11 @@ export interface BillingInvoiceRequest {
    * already has one (the server answers 409 otherwise).
    */
   supplementary?: boolean;
+  /**
+   * QA D1467: the clerk saw the lines at 0 F CFA and issues them as they are
+   * (the server refuses on this field otherwise, naming them).
+   */
+  confirmUnpricedLines?: boolean;
 }
 
 /** Backend PaymentMethod values the staff modal offers. */

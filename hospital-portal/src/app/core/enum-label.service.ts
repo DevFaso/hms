@@ -789,9 +789,9 @@ export class EnumLabelService implements OnDestroy {
 
     /* ── Payment methods ──────────────────────────────────── */
     paymentMethod: {
-      CARD: 'Credit / Debit Card',
-      BANK_TRANSFER: 'Bank Transfer',
-      MOBILE_MONEY: 'Mobile Money',
+      CARD: 'Card',
+      BANK_TRANSFER: 'Bank transfer',
+      MOBILE_MONEY: 'Mobile money',
       CASH: 'Cash',
       INSURANCE: 'Insurance',
     },
