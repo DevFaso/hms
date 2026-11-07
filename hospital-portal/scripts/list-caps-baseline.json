@@ -14,6 +14,10 @@
       "count": 1,
       "why": "a dashboard preview titled recent patients, with a link to the patient list"
     },
+    "hospital-core/src/main/java/com/example/hms/service/impl/TransfusionServiceImpl.java::server-stream-limit::shownIds:MAX_AUDIT_SHOWN_IDS": {
+      "count": 1,
+      "why": "A bound on one audit sentence, which is lost whole above its 2048-character column: it names the first bags and how many more, and the release row keeps every bag."
+    },
     "hospital-core/src/main/java/com/example/hms/service/ContentServiceImpl.java::server-stream-limit::listArticles:12": {
       "count": 1,
       "why": "the public site's newest articles: marketing content, not a work list"

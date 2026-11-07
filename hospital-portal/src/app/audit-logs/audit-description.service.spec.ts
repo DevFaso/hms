@@ -325,3 +325,39 @@ describe('AuditDescriptionService (QA D894)', () => {
     );
   });
 });
+
+describe('AUDIT_DESCRIPTION_PATTERNS: emergency blood release', () => {
+  const of = (key: string) => AUDIT_DESCRIPTION_PATTERNS.find((p) => p.key === key)!;
+  const tail = ', O negative stated not obtainable in time, stock shown a,b,+40';
+
+  it('each sentence the service writes finds its own pattern first', () => {
+    const samples: [string, string][] = [
+      [
+        'Emergency uncrossmatched release of blood unit u against transfusion request r',
+        'AUDIT.DESC.EMERGENCY_BLOOD_RELEASED',
+      ],
+      [
+        'Emergency release on a documented O positive decision of blood unit u against transfusion request r',
+        'AUDIT.DESC.EMERGENCY_BLOOD_RELEASED_O_POSITIVE',
+      ],
+      [
+        'Emergency release on a documented O positive decision of blood unit u against transfusion request r' +
+          tail,
+        'AUDIT.DESC.EMERGENCY_BLOOD_RELEASED_O_POSITIVE_STATED',
+      ],
+      [
+        'Emergency release, serologically incompatible, of blood unit u against transfusion request r',
+        'AUDIT.DESC.EMERGENCY_BLOOD_RELEASED_INCOMPATIBLE',
+      ],
+      [
+        'Emergency release, serologically incompatible, of blood unit u against transfusion request r' +
+          tail,
+        'AUDIT.DESC.EMERGENCY_BLOOD_RELEASED_INCOMPATIBLE_STATED',
+      ],
+    ];
+    for (const [sentence, key] of samples) {
+      expect(of(key).re.test(sentence)).withContext(key).toBeTrue();
+      expect(AUDIT_DESCRIPTION_PATTERNS.find((p) => p.re.test(sentence))?.key).toBe(key);
+    }
+  });
+});

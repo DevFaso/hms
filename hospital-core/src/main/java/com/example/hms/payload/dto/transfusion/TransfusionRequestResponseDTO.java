@@ -51,5 +51,7 @@ public class TransfusionRequestResponseDTO {
 
     private List<BloodUnitResponseDTO> units;
     private List<CrossmatchResponseDTO> crossmatches;
+    /** Every emergency release on this request, newest first, one per bag; empty on a list row. */
+    private List<EmergencyBloodReleaseResponseDTO> emergencyReleases;
     private LocalDateTime createdAt;
 }

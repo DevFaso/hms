@@ -20,6 +20,7 @@ import {
   BloodProductType,
   BloodUnitResponse,
   BloodUnitStatus,
+  EmergencyReleaseOptions,
   PatientBloodGroupResponse,
   RhFactor,
   TransfusionAdministrationResponse,
@@ -192,6 +193,8 @@ export class TransfusionComponent implements OnInit {
   /* ── Crossmatch modal ── */
   showCrossmatchModal = signal(false);
   crossmatchSubmitting = signal(false);
+  /** Set when the form records a late result on a bag whose transfusion ended. */
+  lateResultUnit = signal<string | null>(null);
   crossmatchForm = { bloodUnitId: '', compatible: true, method: '', incompatibilityReason: '' };
 
   /* ── Bedside modals ── */
@@ -578,6 +581,7 @@ export class TransfusionComponent implements OnInit {
   /* ── Crossmatch and issue ── */
 
   openCrossmatch(): void {
+    this.lateResultUnit.set(null);
     this.crossmatchForm = {
       bloodUnitId: '',
       compatible: true,
@@ -605,6 +609,29 @@ export class TransfusionComponent implements OnInit {
 
   closeCrossmatch(): void {
     this.showCrossmatchModal.set(false);
+  }
+
+  /**
+   * A bag whose transfusion ended can still be found incompatible, on a closed request too:
+   * the server records it and tells the requester and the nurse. It takes nothing else.
+   */
+  canRecordLateResult(administration: TransfusionAdministrationResponse): boolean {
+    return (
+      this.canLab &&
+      !this.isInProgress(administration) &&
+      administration.crossmatch?.compatible !== false
+    );
+  }
+
+  openLateResult(administration: TransfusionAdministrationResponse): void {
+    this.crossmatchForm = {
+      bloodUnitId: administration.bloodUnitId,
+      compatible: false,
+      method: '',
+      incompatibilityReason: '',
+    };
+    this.lateResultUnit.set(administration.unitNumber);
+    this.showCrossmatchModal.set(true);
   }
 
   submitCrossmatch(): void {
@@ -636,44 +663,89 @@ export class TransfusionComponent implements OnInit {
       });
   }
 
-  /* ── Emergency release (QA CX-008) ── */
+  /* ── Emergency release (QA CX-008; user-supplied guidance 2026-11-06) ── */
 
+  /** The server's rules for the open request; this page holds no copy of them. */
+  emergencyOptions = signal<EmergencyReleaseOptions | null>(null);
   showEmergencyModal = signal(false);
   emergencySubmitting = signal(false);
-  emergencyUnits = signal<BloodUnitResponse[]>([]);
   emergencyUnitId = '';
+  emergencyReason = '';
+  emergencyAuthoriserId = '';
+  emergencyNegativeStated = false;
 
   /** The server's uncrossmatched release had no way in: a bag only reached the row by a crossmatch. */
   canReleaseInEmergency(request: TransfusionRequestResponse): boolean {
     return (
       this.canLab &&
       request.urgency === 'EMERGENCY' &&
-      // O negative is the universal red cell donor, not a universal plasma or platelet donor.
+      // O is the universal red cell donor, not a universal plasma or platelet donor.
       (request.productType === 'PACKED_RED_CELLS' || request.productType === 'WHOLE_BLOOD') &&
       request.status !== 'COMPLETED' &&
       request.status !== 'CANCELLED'
     );
   }
 
-  /**
-   * Narrows the list to what the server releases; it stays the one that decides,
-   * and refuses anything else with its reason.
-   */
-  openEmergencyRelease(request: TransfusionRequestResponse): void {
-    this.emergencyUnitId = '';
-    this.emergencyUnits.set([]);
-    this.transfusion.listAssignableUnits().subscribe({
-      next: (list) =>
-        this.emergencyUnits.set(
-          (list ?? []).filter(
-            (u) =>
-              u.aboGroup === 'O' &&
-              u.rhFactor === 'NEGATIVE' &&
-              u.productType === request.productType,
-          ),
-        ),
+  /** The bag picked needs a reason and a name before the server releases it. */
+  emergencyDecisionRequired(): boolean {
+    return !!this.emergencyOptions()?.units.find((u) => u.id === this.emergencyUnitId)
+      ?.decisionRequired;
+  }
+
+  /** The bag picked goes out ahead of O negative the system shows: a statement first. */
+  emergencyStatementRequired(): boolean {
+    const options = this.emergencyOptions();
+    const id = this.emergencyUnitId;
+    return !!(
+      options?.units.find((u) => u.id === id)?.statementRequired ||
+      options?.incompatibleUnits.find((u) => u.id === id)?.statementRequired
+    );
+  }
+
+  /** The unit numbers the form names beside the statement. */
+  negativeStockNumbers(): string {
+    return (this.emergencyOptions()?.negativeStock ?? []).map((u) => u.unitNumber).join(', ');
+  }
+
+  /** A refusal can mean the stock moved: the form asks for what the server now asks. */
+  private refreshEmergencyOptions(request: TransfusionRequestResponse): void {
+    this.transfusion.emergencyReleaseOptions(request.id).subscribe({
+      next: (options) => {
+        if (this.selectedRequest()?.id !== request.id) return;
+        // A statement is about the bags it named: another list asks again.
+        const before = (this.emergencyOptions()?.negativeStock ?? []).map((u) => u.id).join();
+        if (before !== options.negativeStock.map((u) => u.id).join()) {
+          this.emergencyNegativeStated = false;
+        }
+        this.emergencyOptions.set(options);
+      },
+      // The form keeps what it has: the server still decides on the next submit.
       error: () => this.toast.error(this.translate.instant('TRANSFUSION.LOAD_ERROR')),
     });
+  }
+
+  /** A statement is made for one bag: picking another asks again. */
+  onEmergencyUnitPicked(): void {
+    this.emergencyNegativeStated = false;
+  }
+
+  private loadEmergencyOptions(request: TransfusionRequestResponse): void {
+    this.emergencyNegativeStated = false;
+    this.emergencyUnitId = '';
+    this.emergencyReason = '';
+    this.emergencyAuthoriserId = '';
+    this.emergencyOptions.set(null);
+    this.transfusion.emergencyReleaseOptions(request.id).subscribe({
+      // A late answer for a request the panel has left is dropped.
+      next: (options) => {
+        if (this.selectedRequest()?.id === request.id) this.emergencyOptions.set(options);
+      },
+      error: () => this.toast.error(this.translate.instant('TRANSFUSION.LOAD_ERROR')),
+    });
+  }
+
+  openEmergencyRelease(request: TransfusionRequestResponse): void {
+    this.loadEmergencyOptions(request);
     this.showEmergencyModal.set(true);
   }
 
@@ -684,8 +756,21 @@ export class TransfusionComponent implements OnInit {
   submitEmergencyRelease(): void {
     const request = this.selectedRequest();
     if (!request || !this.emergencyUnitId || this.emergencySubmitting()) return;
+    const documented = this.emergencyDecisionRequired();
+    if (documented && (!this.emergencyReason.trim() || !this.emergencyAuthoriserId)) return;
+    const stating = this.emergencyStatementRequired();
+    if (stating && !this.emergencyNegativeStated) return;
     this.emergencySubmitting.set(true);
-    this.transfusion.issueUnit(request.id, this.emergencyUnitId).subscribe({
+    const release = documented
+      ? this.transfusion.emergencyRelease(request.id, {
+          bloodUnitId: this.emergencyUnitId,
+          releaseType: 'O_POSITIVE_DECISION',
+          reason: this.emergencyReason.trim(),
+          authoriserUserId: this.emergencyAuthoriserId,
+          ...(stating ? { negativeUnobtainable: true } : {}),
+        })
+      : this.transfusion.issueUnit(request.id, this.emergencyUnitId);
+    release.subscribe({
       next: () => {
         this.toast.success(this.translate.instant('TRANSFUSION.UNIT_ISSUED'));
         this.emergencySubmitting.set(false);
@@ -695,8 +780,68 @@ export class TransfusionComponent implements OnInit {
       error: (err: unknown) => {
         this.emergencySubmitting.set(false);
         this.toast.error(refusalReason(err) ?? this.translate.instant('TRANSFUSION.ISSUE_ERROR'));
+        this.refreshEmergencyOptions(request);
       },
     });
+  }
+
+  /* ── Emergency release, serologically incompatible ── */
+
+  showIncompatibleModal = signal(false);
+  incompatibleSubmitting = signal(false);
+
+  /** A separate action: only a bag with an incompatible result on this request can take it. */
+  canReleaseIncompatible(request: TransfusionRequestResponse): boolean {
+    return (
+      this.canReleaseInEmergency(request) &&
+      (request.crossmatches ?? []).some((c) => c.compatible === false)
+    );
+  }
+
+  openIncompatibleRelease(request: TransfusionRequestResponse): void {
+    this.loadEmergencyOptions(request);
+    this.showIncompatibleModal.set(true);
+  }
+
+  closeIncompatibleRelease(): void {
+    this.showIncompatibleModal.set(false);
+  }
+
+  submitIncompatibleRelease(): void {
+    const request = this.selectedRequest();
+    if (
+      !request ||
+      !this.emergencyUnitId ||
+      !this.emergencyReason.trim() ||
+      !this.emergencyAuthoriserId ||
+      this.incompatibleSubmitting()
+    ) {
+      return;
+    }
+    const stating = this.emergencyStatementRequired();
+    if (stating && !this.emergencyNegativeStated) return;
+    this.incompatibleSubmitting.set(true);
+    this.transfusion
+      .emergencyRelease(request.id, {
+        bloodUnitId: this.emergencyUnitId,
+        releaseType: 'SEROLOGICALLY_INCOMPATIBLE',
+        reason: this.emergencyReason.trim(),
+        authoriserUserId: this.emergencyAuthoriserId,
+        ...(stating ? { negativeUnobtainable: true } : {}),
+      })
+      .subscribe({
+        next: () => {
+          this.toast.success(this.translate.instant('TRANSFUSION.UNIT_ISSUED'));
+          this.incompatibleSubmitting.set(false);
+          this.showIncompatibleModal.set(false);
+          this.refreshSelected();
+        },
+        error: (err: unknown) => {
+          this.incompatibleSubmitting.set(false);
+          this.toast.error(refusalReason(err) ?? this.translate.instant('TRANSFUSION.ISSUE_ERROR'));
+          this.refreshEmergencyOptions(request);
+        },
+      });
   }
 
   issueUnit(unit: BloodUnitResponse): void {

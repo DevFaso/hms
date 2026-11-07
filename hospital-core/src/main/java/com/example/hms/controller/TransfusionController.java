@@ -4,6 +4,8 @@ import com.example.hms.payload.dto.transfusion.BloodUnitRequestDTO;
 import com.example.hms.payload.dto.transfusion.BloodUnitResponseDTO;
 import com.example.hms.payload.dto.transfusion.CrossmatchRequestDTO;
 import com.example.hms.payload.dto.transfusion.CrossmatchResponseDTO;
+import com.example.hms.payload.dto.transfusion.EmergencyReleaseOptionsDTO;
+import com.example.hms.payload.dto.transfusion.EmergencyReleaseRequestDTO;
 import com.example.hms.payload.dto.transfusion.PatientBloodGroupRequestDTO;
 import com.example.hms.payload.dto.transfusion.PatientBloodGroupResponseDTO;
 import com.example.hms.payload.dto.transfusion.TransfusionAdministrationRequestDTO;
@@ -219,13 +221,32 @@ public class TransfusionController {
     @PostMapping("/requests/{requestId}/issue/{unitId}")
     @PreAuthorize(LABORATORY)
     @Operation(summary = "Issue a unit from the lab to the ward",
-               description = "Requires a compatible, unexpired crossmatch — except group O Rh-negative "
-                   + "on an EMERGENCY request, which may be released uncrossmatched.")
+               description = "Requires a compatible, unexpired crossmatch — except group O red cells on an "
+                   + "EMERGENCY request, as the emergency release rules allow.")
     public ResponseEntity<BloodUnitResponseDTO> issueUnit(
         @PathVariable UUID requestId,
         @PathVariable UUID unitId
     ) {
         return ResponseEntity.ok(transfusionService.issueUnit(requestId, unitId));
+    }
+
+    @GetMapping("/requests/{requestId}/emergency-release/options")
+    @PreAuthorize(LABORATORY)
+    @Operation(summary = "What the emergency release rules say for this request")
+    public ResponseEntity<EmergencyReleaseOptionsDTO> emergencyReleaseOptions(@PathVariable UUID requestId) {
+        return ResponseEntity.ok(transfusionService.emergencyReleaseOptions(requestId));
+    }
+
+    @PostMapping("/requests/{requestId}/emergency-release")
+    @PreAuthorize(LABORATORY)
+    @Operation(summary = "Issue a red-cell unit on a documented emergency decision",
+               description = "O positive on a documented decision, or serologically incompatible on a reason and "
+                   + "a named doctor or laboratory director who is not the caller. An ABO exclusion stays refused.")
+    public ResponseEntity<BloodUnitResponseDTO> emergencyRelease(
+        @PathVariable UUID requestId,
+        @Valid @RequestBody EmergencyReleaseRequestDTO release
+    ) {
+        return ResponseEntity.ok(transfusionService.emergencyRelease(requestId, release));
     }
 
     // ── Bedside ─────────────────────────────────────────────────────────

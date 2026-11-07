@@ -99,6 +99,9 @@ class TransfusionServiceImplTest {
     @Mock private RoleValidator roleValidator;
     @Mock private com.example.hms.service.InBasketService inBasketService;
     @Mock private com.example.hms.service.AuditEventLogService auditEventLogService;
+    @Mock private com.example.hms.repository.EmergencyBloodReleaseRepository releaseRepository;
+    @Mock private com.example.hms.repository.UserRoleHospitalAssignmentRepository assignmentRepository;
+    @Mock private com.example.hms.repository.UserRepository userRepository;
     /**
      * A real system clock, not a mock: the fixtures below build their own
      * timestamps from LocalDateTime.now(), so moving the service's clock away
@@ -530,7 +533,7 @@ class TransfusionServiceImplTest {
 
         assertThatThrownBy(() -> service.issueUnit(requestId, unitId))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Only group O Rh-negative");
+            .hasMessageContaining("Only group O red cells");
     }
 
     @Test
@@ -2172,13 +2175,14 @@ class TransfusionServiceImplTest {
         verify(inBasketService, never()).createItemInNewTransaction(any());
     }
 
+    /** Behaviour change: an INCOMPATIBLE result on it is now recorded and told (TransfusionEmergencyReleaseTest). */
     @Test
-    void aFinishedBagStillTakesNoResult() {
+    void aFinishedBagStillTakesNoCompatibleResult() {
         TransfusionAdministration running = running();
         running.setStatus(TransfusionAdministrationStatus.COMPLETED);
         running.getBloodUnit().setStatus(BloodUnitStatus.TRANSFUSED);
         UUID requestId = running.getRequest().getId();
-        CrossmatchRequestDTO result = incompatible(running.getBloodUnit());
+        CrossmatchRequestDTO result = compatibleCrossmatch(running.getBloodUnit());
 
         assertThatThrownBy(() -> service.recordCrossmatch(requestId, result)).isInstanceOf(FieldBusinessException.class);
     }

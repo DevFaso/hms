@@ -14,6 +14,8 @@ import {
   TransfusionReactionResponse,
   TransfusionRequestResponse,
   TransfusionService,
+  EmergencyReleaseOptions,
+  RhFactor,
 } from '../services/transfusion.service';
 import { PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
@@ -830,23 +832,36 @@ describe('TransfusionComponent: a transfusion in progress (QA CX-008)', () => {
       fixture.detectChanges();
     };
 
-    it('the lab can release from an emergency request with no bag on it', async () => {
+    const options = (over: Partial<EmergencyReleaseOptions> = {}): EmergencyReleaseOptions => ({
+      antibodyWarning: false,
+      antibodyDetail: null,
+      negativeStock: [],
+      units: [],
+      incompatibleUnits: [],
+      deciders: [{ userId: 'doc', displayName: 'Dr A' }],
+      authorisers: [{ userId: 'dir', displayName: 'Dir B' }],
+      ...over,
+    });
+    const unitOption = (id: string, decisionRequired = false) => ({
+      id,
+      unitNumber: id,
+      aboGroup: 'O' as const,
+      rhFactor: (decisionRequired ? 'POSITIVE' : 'NEGATIVE') as RhFactor,
+      expiresOn: '2030-01-01',
+      decisionRequired,
+    });
+    const stubOptions = (over: Partial<EmergencyReleaseOptions> = {}) => {
+      txSpy.emergencyReleaseOptions = jasmine.createSpy().and.returnValue(of(options(over)));
+    };
+
+    it('the lab can release from an emergency request with no bag on it, on what the server lists', async () => {
       await open(['ROLE_LAB_TECHNICIAN']);
-      txSpy.listAssignableUnits = jasmine
-        .createSpy()
-        .and.returnValue(
-          of([
-            mockUnit({ id: 'oneg' }),
-            mockUnit({ id: 'opos', rhFactor: 'POSITIVE' }),
-            mockUnit({ id: 'aneg', aboGroup: 'A' }),
-            mockUnit({ id: 'plasma', productType: 'FRESH_FROZEN_PLASMA' }),
-          ]),
-        );
+      stubOptions({ units: [unitOption('oneg')] });
       txSpy.issueUnit = jasmine
         .createSpy()
         .and.returnValue(of(mockUnit({ id: 'oneg', status: 'ISSUED' })));
       el('emergency-release')!.click();
-      expect(component.emergencyUnits().map((u) => u.id)).toEqual(['oneg']);
+      expect(component.emergencyOptions()!.units.map((u) => u.id)).toEqual(['oneg']);
 
       component.emergencyUnitId = 'oneg';
       component.submitEmergencyRelease();
@@ -857,7 +872,7 @@ describe('TransfusionComponent: a transfusion in progress (QA CX-008)', () => {
 
     it('releasing with no bag chosen is refused on the field', async () => {
       await open(['ROLE_LAB_TECHNICIAN']);
-      txSpy.listAssignableUnits = jasmine.createSpy().and.returnValue(of([]));
+      stubOptions();
       el('emergency-release')!.click();
       fixture.detectChanges();
       const marked = expectEmptySubmitRefusal(fixture, {
@@ -868,7 +883,7 @@ describe('TransfusionComponent: a transfusion in progress (QA CX-008)', () => {
 
     it('a refusal shows the server reason and keeps the form', async () => {
       await open(['ROLE_LAB_TECHNICIAN']);
-      txSpy.listAssignableUnits = jasmine.createSpy().and.returnValue(of([]));
+      stubOptions({ units: [unitOption('x')] });
       txSpy.issueUnit = jasmine
         .createSpy()
         .and.returnValue(throwError(() => ({ status: 400, error: { message: 'Déjà réservée' } })));
@@ -877,6 +892,378 @@ describe('TransfusionComponent: a transfusion in progress (QA CX-008)', () => {
       component.submitEmergencyRelease();
       expect(toastSpy.error).toHaveBeenCalledWith('Déjà réservée');
       expect(component.showEmergencyModal()).toBeTrue();
+    });
+
+    it('a bag the server says needs a decision asks for a reason and a name, then sends them', async () => {
+      await open(['ROLE_LAB_TECHNICIAN']);
+      stubOptions({ units: [unitOption('opos', true)] });
+      txSpy.emergencyRelease = jasmine
+        .createSpy()
+        .and.returnValue(of(mockUnit({ id: 'opos', status: 'ISSUED' })));
+      txSpy.issueUnit = jasmine.createSpy();
+      component.openEmergencyRelease(emergency);
+      component.emergencyUnitId = 'opos';
+      fixture.detectChanges();
+      expect(el('decision-required')).not.toBeNull();
+
+      component.submitEmergencyRelease();
+      expect(txSpy.emergencyRelease).not.toHaveBeenCalled();
+
+      component.emergencyAuthoriserId = 'doc';
+      component.emergencyReason = '  Hémorragie  ';
+      component.submitEmergencyRelease();
+      expect(txSpy.emergencyRelease).toHaveBeenCalledWith('req-1', {
+        bloodUnitId: 'opos',
+        releaseType: 'O_POSITIVE_DECISION',
+        reason: 'Hémorragie',
+        authoriserUserId: 'doc',
+      });
+      expect(txSpy.issueUnit).not.toHaveBeenCalled();
+    });
+
+    it('O negative showing in stock: O positive needs the statement, and it is sent', async () => {
+      await open(['ROLE_LAB_TECHNICIAN']);
+      stubOptions({
+        negativeStock: [unitOption('ONEG-1')],
+        units: [{ ...unitOption('opos', true), statementRequired: true }, unitOption('ONEG-1')],
+      });
+      txSpy.emergencyRelease = jasmine
+        .createSpy()
+        .and.returnValue(of(mockUnit({ id: 'opos', status: 'ISSUED' })));
+      component.openEmergencyRelease(emergency);
+      component.emergencyUnitId = 'opos';
+      component.emergencyAuthoriserId = 'doc';
+      component.emergencyReason = 'Hémorragie';
+      fixture.detectChanges();
+      expect(el('o-negative-first')).not.toBeNull();
+      expect(component.negativeStockNumbers()).toBe('ONEG-1');
+      expect(el('negative-statement')).not.toBeNull();
+
+      component.submitEmergencyRelease();
+      expect(txSpy.emergencyRelease).not.toHaveBeenCalled();
+
+      component.emergencyNegativeStated = true;
+      component.submitEmergencyRelease();
+      expect(txSpy.emergencyRelease).toHaveBeenCalledWith('req-1', {
+        bloodUnitId: 'opos',
+        releaseType: 'O_POSITIVE_DECISION',
+        reason: 'Hémorragie',
+        authoriserUserId: 'doc',
+        negativeUnobtainable: true,
+      });
+    });
+
+    it('no O negative showing: no statement is asked or sent', async () => {
+      await open(['ROLE_LAB_TECHNICIAN']);
+      stubOptions({ units: [unitOption('opos', true)] });
+      component.openEmergencyRelease(emergency);
+      component.emergencyUnitId = 'opos';
+      component.emergencyAuthoriserId = 'doc';
+      component.emergencyReason = 'Hémorragie';
+      txSpy.emergencyRelease = jasmine
+        .createSpy()
+        .and.returnValue(of(mockUnit({ id: 'opos', status: 'ISSUED' })));
+      fixture.detectChanges();
+      expect(el('negative-statement')).toBeNull();
+      component.submitEmergencyRelease();
+      expect(txSpy.emergencyRelease).toHaveBeenCalledWith('req-1', {
+        bloodUnitId: 'opos',
+        releaseType: 'O_POSITIVE_DECISION',
+        reason: 'Hémorragie',
+        authoriserUserId: 'doc',
+      });
+    });
+
+    it('a statement is made for one bag and one list: another bag or another list asks again', async () => {
+      await open(['ROLE_LAB_TECHNICIAN']);
+      stubOptions({
+        negativeStock: [unitOption('ONEG-1')],
+        units: [{ ...unitOption('opos', true), statementRequired: true }],
+      });
+      txSpy.emergencyRelease = jasmine
+        .createSpy()
+        .and.returnValue(throwError(() => ({ status: 400, error: { message: 'Non' } })));
+      component.openEmergencyRelease(emergency);
+      component.emergencyUnitId = 'opos';
+      component.emergencyNegativeStated = true;
+      component.onEmergencyUnitPicked();
+      expect(component.emergencyNegativeStated).toBeFalse();
+
+      component.emergencyNegativeStated = true;
+      component.emergencyAuthoriserId = 'doc';
+      component.emergencyReason = 'Hémorragie';
+      stubOptions({
+        negativeStock: [unitOption('ONEG-1'), unitOption('ONEG-2')],
+        units: [{ ...unitOption('opos', true), statementRequired: true }],
+      });
+      component.submitEmergencyRelease();
+      expect(component.emergencyNegativeStated).toBeFalse();
+      expect(component.negativeStockNumbers()).toBe('ONEG-1, ONEG-2');
+    });
+
+    it('the incompatible form asks for the statement on the bag that needs it, and sends it', async () => {
+      await open(['ROLE_LAB_TECHNICIAN']);
+      stubOptions({
+        negativeStock: [unitOption('ONEG-1')],
+        incompatibleUnits: [
+          {
+            id: 'opos',
+            unitNumber: 'OPOS',
+            aboGroup: 'O',
+            rhFactor: 'POSITIVE',
+            incompatibilityReason: 'Anti-K',
+            releasable: true,
+            statementRequired: true,
+          },
+        ],
+      });
+      txSpy.emergencyRelease = jasmine
+        .createSpy()
+        .and.returnValue(of(mockUnit({ id: 'opos', status: 'ISSUED' })));
+      component.openIncompatibleRelease(emergency);
+      component.emergencyUnitId = 'opos';
+      component.emergencyAuthoriserId = 'dir';
+      component.emergencyReason = 'Rien à temps';
+      fixture.detectChanges();
+      expect(el('si-o-negative-first')).not.toBeNull();
+      expect(fixture.nativeElement.querySelector('#si-statement')).not.toBeNull();
+
+      component.submitIncompatibleRelease();
+      expect(txSpy.emergencyRelease).not.toHaveBeenCalled();
+
+      component.emergencyNegativeStated = true;
+      component.submitIncompatibleRelease();
+      expect(txSpy.emergencyRelease).toHaveBeenCalledWith('req-1', {
+        bloodUnitId: 'opos',
+        releaseType: 'SEROLOGICALLY_INCOMPATIBLE',
+        reason: 'Rien à temps',
+        authoriserUserId: 'dir',
+        negativeUnobtainable: true,
+      });
+    });
+
+    it('says O negative goes first and warns of a positive screen, without blocking the form', async () => {
+      await open(['ROLE_LAB_TECHNICIAN']);
+      stubOptions({
+        negativeStock: [unitOption('oneg')],
+        antibodyWarning: true,
+        antibodyDetail: 'Anti-D',
+        units: [unitOption('oneg')],
+      });
+      component.openEmergencyRelease(emergency);
+      fixture.detectChanges();
+      expect(el('o-negative-first')).not.toBeNull();
+      expect(el('antibody-warning')!.textContent).toContain('Anti-D');
+    });
+
+    describe('serologically incompatible', () => {
+      const withResult = mockRequest({
+        id: 'req-1',
+        urgency: 'EMERGENCY',
+        status: 'REQUESTED',
+        productType: 'PACKED_RED_CELLS',
+        units: [],
+        crossmatches: [
+          {
+            id: 'x',
+            requestId: 'req-1',
+            bloodUnitId: 'bag',
+            unitNumber: 'BAG',
+            compatible: false,
+            method: null,
+            incompatibilityReason: 'Anti-K',
+            performedByName: null,
+            performedAt: '2026-11-06T10:00:00',
+            expiresAt: null,
+            usable: false,
+          },
+        ],
+      });
+
+      const openWithResult = async (roles: string[]) => {
+        await start(roles);
+        txSpy.getRequest.and.returnValue(of(withResult));
+        component.openRequest(withResult);
+        fixture.detectChanges();
+      };
+
+      it('is its own action, offered only with an incompatible result on the request', async () => {
+        await open(['ROLE_LAB_TECHNICIAN']);
+        expect(el('incompatible-release')).toBeNull();
+        expect(component.canReleaseIncompatible(withResult)).toBeTrue();
+        expect(component.canReleaseIncompatible({ ...withResult, urgency: 'URGENT' })).toBeFalse();
+      });
+
+      it('needs a bag, an authoriser and a reason, and sends exactly that type', async () => {
+        await openWithResult(['ROLE_LAB_TECHNICIAN']);
+        stubOptions({
+          incompatibleUnits: [
+            {
+              id: 'bag',
+              unitNumber: 'BAG',
+              aboGroup: 'A',
+              rhFactor: 'POSITIVE',
+              incompatibilityReason: 'Anti-K',
+              releasable: true,
+            },
+            {
+              id: 'no',
+              unitNumber: 'NO',
+              aboGroup: 'B',
+              rhFactor: 'POSITIVE',
+              incompatibilityReason: 'Anti-K',
+              releasable: false,
+            },
+          ],
+        });
+        txSpy.emergencyRelease = jasmine
+          .createSpy()
+          .and.returnValue(of(mockUnit({ id: 'bag', status: 'ISSUED' })));
+        el('incompatible-release')!.click();
+        fixture.detectChanges();
+        const refused = fixture.nativeElement.querySelector('#si-unit option[disabled]');
+        expect(refused).not.toBeNull();
+        expect(component.emergencyOptions()!.authorisers.map((c) => c.userId)).toEqual(['dir']);
+
+        component.emergencyUnitId = 'bag';
+        component.submitIncompatibleRelease();
+        expect(txSpy.emergencyRelease).not.toHaveBeenCalled();
+
+        component.emergencyAuthoriserId = 'dir';
+        component.emergencyReason = 'Rien de compatible à temps';
+        component.submitIncompatibleRelease();
+        expect(txSpy.emergencyRelease).toHaveBeenCalledWith('req-1', {
+          bloodUnitId: 'bag',
+          releaseType: 'SEROLOGICALLY_INCOMPATIBLE',
+          reason: 'Rien de compatible à temps',
+          authoriserUserId: 'dir',
+        });
+        expect(component.showIncompatibleModal()).toBeFalse();
+      });
+
+      it('releasing with nothing filled in is refused on its fields', async () => {
+        await openWithResult(['ROLE_LAB_TECHNICIAN']);
+        stubOptions();
+        el('incompatible-release')!.click();
+        fixture.detectChanges();
+        const marked = expectEmptySubmitRefusal(fixture, {
+          button: '[data-testid="submit-incompatible-release"]',
+        });
+        expect(marked).toEqual(['si-unit', 'si-authoriser', 'si-reason']);
+      });
+
+      it('a refusal shows the server reason and keeps the form', async () => {
+        await openWithResult(['ROLE_LAB_TECHNICIAN']);
+        stubOptions();
+        txSpy.emergencyRelease = jasmine
+          .createSpy()
+          .and.returnValue(throwError(() => ({ status: 400, error: { message: 'Groupe exclu' } })));
+        component.openIncompatibleRelease(withResult);
+        component.emergencyUnitId = 'bag';
+        component.emergencyAuthoriserId = 'dir';
+        component.emergencyReason = 'x';
+        component.submitIncompatibleRelease();
+        expect(toastSpy.error).toHaveBeenCalledWith('Groupe exclu');
+        expect(component.showIncompatibleModal()).toBeTrue();
+      });
+    });
+
+    it('the lab can record an incompatible result on a bag whose transfusion ended, on a closed request too', async () => {
+      const closed = mockRequest({ id: 'req-1', status: 'COMPLETED', units: [] });
+      const finished = {
+        id: 'adm',
+        requestId: 'req-1',
+        bloodUnitId: 'bag',
+        unitNumber: 'BAG-9',
+        patientId: closed.patientId,
+        patientName: closed.patientName,
+        status: 'COMPLETED',
+        startedAt: '2026-11-06T08:00:00',
+        completedAt: '2026-11-06T10:00:00',
+        volumeTransfusedMl: 300,
+        administeredByName: 'Inf',
+        verifiedByName: 'Inf 2',
+        verificationMethod: null,
+        stopReason: null,
+        notes: null,
+        reactions: [],
+        crossmatch: null,
+      } as TransfusionAdministrationResponse;
+      await start(['ROLE_LAB_TECHNICIAN']);
+      txSpy.getRequest.and.returnValue(of(closed));
+      txSpy.listAdministrationsForPatient.and.returnValue(of([finished]));
+      txSpy.recordCrossmatch = jasmine.createSpy().and.returnValue(of({} as CrossmatchResponse));
+      component.openRequest(closed);
+      fixture.detectChanges();
+      el('late-incompatible-result')!.click();
+      fixture.detectChanges();
+      expect(el('late-result-hint')).not.toBeNull();
+      component.crossmatchForm.incompatibilityReason = 'Anti-K';
+      component.submitCrossmatch();
+      expect(txSpy.recordCrossmatch).toHaveBeenCalledWith('req-1', {
+        bloodUnitId: 'bag',
+        compatible: false,
+        method: undefined,
+        incompatibilityReason: 'Anti-K',
+      });
+      expect(
+        component.canRecordLateResult({
+          ...finished,
+          crossmatch: { compatible: false } as CrossmatchResponse,
+        }),
+      ).toBeFalse();
+      expect(component.canRecordLateResult({ ...finished, status: 'IN_PROGRESS' })).toBeFalse();
+    });
+
+    it('the detail shows each release and the reminder to switch to type-specific blood', async () => {
+      const released = mockRequest({
+        id: 'req-1',
+        urgency: 'EMERGENCY',
+        status: 'ISSUED',
+        emergencyReleases: [
+          {
+            id: 'r1',
+            bloodUnitId: 'bag',
+            unitNumber: 'BAG-1',
+            releaseType: 'SEROLOGICALLY_INCOMPATIBLE',
+            reason: 'Rien de compatible',
+            authoriserName: 'Dr Sawadogo',
+            issuedByName: 'Tech Ouedraogo',
+            issuedAt: '2026-11-06T10:00:00',
+            antibodyWarning: true,
+            negativeUnobtainableStated: true,
+            negativeUnitsShown: 'ONEG-1',
+          },
+          {
+            id: 'r2',
+            bloodUnitId: 'bag2',
+            unitNumber: 'BAG-2',
+            releaseType: 'UNCROSSMATCHED',
+            reason: null,
+            authoriserName: null,
+            issuedByName: 'Tech Ouedraogo',
+            issuedAt: '2026-11-06T09:00:00',
+            antibodyWarning: false,
+          },
+        ],
+      });
+      await start(['ROLE_NURSE']);
+      txSpy.getRequest.and.returnValue(of(released));
+      component.openRequest(released);
+      fixture.detectChanges();
+      expect(el('type-specific-reminder')).not.toBeNull();
+      expect(el('release-negative-statement')).not.toBeNull();
+      const table = el('emergency-releases')!;
+      expect(table.querySelectorAll('tbody tr').length).toBe(2);
+      for (const text of [
+        'BAG-1',
+        'Rien de compatible',
+        'Dr Sawadogo',
+        'Tech Ouedraogo',
+        'BAG-2',
+      ]) {
+        expect(table.textContent).toContain(text);
+      }
     });
 
     it('is not offered to the bedside, or on a routine request', async () => {
