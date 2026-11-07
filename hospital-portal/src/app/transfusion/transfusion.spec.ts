@@ -1020,6 +1020,17 @@ describe('TransfusionComponent: a transfusion in progress (QA CX-008)', () => {
         expect(component.showIncompatibleModal()).toBeFalse();
       });
 
+      it('releasing with nothing filled in is refused on its fields', async () => {
+        await openWithResult(['ROLE_LAB_TECHNICIAN']);
+        stubOptions();
+        el('incompatible-release')!.click();
+        fixture.detectChanges();
+        const marked = expectEmptySubmitRefusal(fixture, {
+          button: '[data-testid="submit-incompatible-release"]',
+        });
+        expect(marked).toEqual(['si-unit', 'si-authoriser', 'si-reason']);
+      });
+
       it('a refusal shows the server reason and keeps the form', async () => {
         await openWithResult(['ROLE_LAB_TECHNICIAN']);
         stubOptions();
