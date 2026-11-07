@@ -76,8 +76,6 @@ class MarAndOpenStayQueriesPostgresIT {
     @Autowired private EncounterRepository encounters;
     @Autowired private MedicationAdministrationRecordRepository mar;
     @Autowired private JdbcTemplate jdbc;
-    @Autowired private PatientRepository patients;
-    @Autowired private org.springframework.transaction.PlatformTransactionManager transactions;
 
     @AfterEach
     void noRows() {
@@ -270,56 +268,5 @@ class MarAndOpenStayQueriesPostgresIT {
             .containsExactly(afterMidnight, yesterdayEvening, justInside);
         assertThat(given.get(0).getPrescription().getStatus())
             .isEqualTo(com.example.hms.enums.PrescriptionStatus.DISCONTINUED);
-    }
-
-    /**
-     * CR-03: two doses of two orders of one patient hold no common order lock. The MAR takes the
-     * patient's row before reading the exposure, so the second transaction waits for the first and
-     * counts its dose (read committed, a new statement after the lock).
-     */
-    @Test
-    void cr03_aSecondDoseWaitsOnThePatientsRowAndCountsTheFirst() throws Exception {
-        replica("INSERT INTO clinical.patients (id, user_id, first_name, last_name, date_of_birth, phone_number_primary, "
-            + "is_active, created_at, updated_at) VALUES (?, ?, 'Awa', 'Kabore', DATE '1990-06-15', '+226 70 00 00 31', true, now(), now())",
-            PATIENT, UUID.randomUUID());
-        order("SIGNED");
-        org.springframework.transaction.support.TransactionTemplate tx =
-            new org.springframework.transaction.support.TransactionTemplate(transactions);
-        java.util.concurrent.CountDownLatch firstHolds = new java.util.concurrent.CountDownLatch(1);
-        java.util.concurrent.CountDownLatch releaseFirst = new java.util.concurrent.CountDownLatch(1);
-        java.util.concurrent.ExecutorService threads = java.util.concurrent.Executors.newFixedThreadPool(2);
-        try {
-            java.util.concurrent.Future<?> first = threads.submit(() -> tx.executeWithoutResult(status -> {
-                jdbc.execute("SET LOCAL session_replication_role = replica");
-                jdbc.update("INSERT INTO clinical.medication_administration_records (id, prescription_id, patient_id, hospital_id, "
-                    + "medication_name, scheduled_time, administered_at, status, created_at, updated_at) "
-                    + "VALUES (?, ?, ?, ?, 'Paracetamol', now(), '2026-11-07 10:00:00'::timestamp, 'GIVEN', now(), now())",
-                    UUID.randomUUID(), RX, PATIENT, HOSPITAL);
-                patients.lockByIdUnscoped(PATIENT);
-                firstHolds.countDown();
-                try {
-                    releaseFirst.await(30, java.util.concurrent.TimeUnit.SECONDS);
-                } catch (InterruptedException ex) {
-                    Thread.currentThread().interrupt();
-                }
-            }));
-            firstHolds.await(30, java.util.concurrent.TimeUnit.SECONDS);
-            java.util.concurrent.Future<Integer> second = threads.submit(() -> tx.execute(status -> {
-                patients.lockByIdUnscoped(PATIENT);
-                return mar.findGivenSince(PATIENT, HOSPITAL, java.time.LocalDateTime.of(2026, 11, 7, 0, 0)).size();
-            }));
-
-            org.assertj.core.api.Assertions.assertThatThrownBy(() -> second.get(1, java.util.concurrent.TimeUnit.SECONDS))
-                .as("the second waits for the first").isInstanceOf(java.util.concurrent.TimeoutException.class);
-            releaseFirst.countDown();
-            first.get(30, java.util.concurrent.TimeUnit.SECONDS);
-
-            assertThat(second.get(30, java.util.concurrent.TimeUnit.SECONDS)).as("and counts its dose").isEqualTo(1);
-        } finally {
-            releaseFirst.countDown();
-            threads.shutdownNow();
-            replica("DELETE FROM clinical.medication_administration_records");
-            replica("DELETE FROM clinical.patients WHERE id = ?", PATIENT);
-        }
     }
 }

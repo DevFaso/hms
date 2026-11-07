@@ -289,4 +289,16 @@ class ControlledSubstanceGateTest {
 
         assertThatCode(() -> guard.requireDispensable(rx)).doesNotThrowAnyException();
     }
+
+    /** CR-01 (provisional): signed as an urgent exception, the order is not stopped here; its review follows. */
+    @Test
+    void dispenseAllowsAnOrderSignedAsAnUrgentException() {
+        Prescription rx = new Prescription();
+        rx.setId(UUID.randomUUID());
+        rx.setStatus(PrescriptionStatus.SIGNED);
+        rx.setPediatricDoseReviewRequired(true);
+        rx.setPediatricDoseUrgentExceptionAt(LocalDateTime.now());
+
+        assertThatCode(() -> guard.requireDispensable(rx)).doesNotThrowAnyException();
+    }
 }

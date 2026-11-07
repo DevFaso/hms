@@ -104,7 +104,7 @@ class OrderRouteEntryPointGuardTest {
             "cdshooks/service/OrderSelectRulesCdsService.java",
             "cdshooks/service/OrderSignRulesCdsService.java",
             "service/PrescriptionServiceImpl.java",
-            "service/impl/NurseTaskServiceImpl.java");
+            "service/emar/ParacetamolExposureCheck.java");
     }
 
     @Test

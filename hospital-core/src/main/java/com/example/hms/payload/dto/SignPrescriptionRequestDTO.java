@@ -47,4 +47,12 @@ public class SignPrescriptionRequestDTO {
      */
     @Size(max = 128)
     private String doseExceptionToken;
+
+    /**
+     * CR-01 (provisional): the prescriber states this order cannot wait for the second-person dose
+     * review of a child's order the check could not assess. It passes nothing alone: it needs the
+     * reason and the token, and a review by age or by weight band has no such exception. Not stored:
+     * the signature records the time.
+     */
+    private Boolean urgentDoseException;
 }

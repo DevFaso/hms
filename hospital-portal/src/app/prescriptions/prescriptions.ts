@@ -1347,6 +1347,18 @@ export class PrescriptionsComponent implements OnInit {
     this.signAllergyCards().some((c) => !!c.exceptionKey),
   );
   signAllergyReason = '';
+  /** CR-01: this attempt is the prescriber's urgent exception to the second-person dose review. */
+  readonly signUrgent = signal(false);
+
+  /** CR-01: offered where the review is what holds the signature; the server says whether it may be used. */
+  canSignUrgently(p: PrescriptionResponse): boolean {
+    return this.canSign(p) && !!p.pediatricDoseReviewRequired && !p.pediatricDoseReviewedAt;
+  }
+
+  signUrgently(p: PrescriptionResponse): void {
+    this.signUrgent.set(true);
+    this.doSign(p, { urgentDoseException: true });
+  }
 
   signPrescription(p: PrescriptionResponse): void {
     if (p.controlledSubstance) {
@@ -1390,6 +1402,7 @@ export class PrescriptionsComponent implements OnInit {
     this.signAllergyCards.set([]);
     this.signNeedsSecret.set(false);
     this.signReauthTarget.set(null);
+    this.signUrgent.set(false);
   }
 
   /** What the sign dialog still lacks before it can send. */
@@ -1404,6 +1417,7 @@ export class PrescriptionsComponent implements OnInit {
     const target = this.signReauthTarget();
     if (!target || this.signDialogIncomplete() || this.signingId()) return;
     const body: SignPrescriptionBody = {};
+    if (this.signUrgent()) body.urgentDoseException = true;
     if (this.signNeedsSecret()) {
       const secret = this.signReauthSecret;
       if (this.signReauthUsesCode()) body.mfaCode = secret.trim();

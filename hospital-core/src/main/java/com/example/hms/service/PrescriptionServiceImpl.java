@@ -97,6 +97,15 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private final UserRoleHospitalAssignmentRepository urhaRepository;
     private final CdsRuleEngine cdsRuleEngine;
     private static final String SIGNATURE_REASON_SEPARATOR = " | ";
+    private static final String URGENT_REVIEW_REFERENCE_TYPE = "PRESCRIPTION_URGENT_DOSE_EXCEPTION";
+    private static final String URGENT_REVIEW_TITLE_KEY = "prescription.urgentException.inBasketTitle";
+    private static final String URGENT_REVIEW_BODY_KEY = "prescription.urgentException.inBasketBody";
+    /** Who is asked first: the pharmacy, else a physician. */
+    private static final List<java.util.Set<String>> URGENT_REVIEWER_ROLES = List.of(
+        java.util.Set.of(com.example.hms.config.SecurityConstants.ROLE_PHARMACIST,
+            com.example.hms.config.SecurityConstants.ROLE_PHARMACY_VERIFIER),
+        java.util.Set.of(com.example.hms.config.SecurityConstants.ROLE_DOCTOR));
+
     /** {@code Prescription.overrideReason}'s {@code @Size}. */
     private static final int OVERRIDE_REASON_MAX = 1024;
     private final com.example.hms.service.pharmacy.ControlledSubstanceGuard controlledSubstanceGuard;
@@ -141,6 +150,14 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     public void setDoseReviewUsers(com.example.hms.repository.UserRepository doseReviewUsers) {
         this.doseReviewUsers = doseReviewUsers;
+    }
+
+    /** CR-01: the after-the-fact review item of an urgent exception; absent in unit tests built by hand. */
+    private com.example.hms.service.InBasketService urgentReviewBasket;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setUrgentReviewBasket(com.example.hms.service.InBasketService urgentReviewBasket) {
+        this.urgentReviewBasket = urgentReviewBasket;
     }
 
     @Override
@@ -506,7 +523,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // Round 19 (QA D1096): a dose the check could not judge is signed
         // only once a pharmacist or another physician recorded the review.
         // Before the re-authentication, so no code is spent on a refusal.
-        requirePediatricDoseReviewAtSigning(prescription, signingCards, signer);
+        String urgentReason = requirePediatricDoseReviewAtSigning(prescription, signingCards, signer, reauthentication);
+        String urgentToken = urgentReason == null ? null : doseExceptionToken(prescription, signer, signingCards);
         // QA D1183 (round 23): Septrin and Totapen were SIGNED for allergic
         // patients. The allergy stop is re-run on the order being signed, so
         // an order saved before the rule knew its drug, or before the safety
@@ -540,6 +558,10 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
         logger.info("Prescription {} signed by staff {}", prescription.getId(), signer.getId());
         appendSignatureReason(prescription, contraindicationReason);
+        appendSignatureReason(prescription, urgentReason);
+        if (urgentReason != null) {
+            prescription.setPediatricDoseUrgentExceptionAt(signedAt);
+        }
         PrescriptionResponseDTO signed = prescriptionMapper.toResponseDTO(prescriptionRepository.save(prescription));
         if (allergyAcknowledgement != null) {
             auditAllergyOverrideAfterCommit(prescription, signer.getUser() != null ? signer.getUser().getId() : null,
@@ -549,11 +571,17 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             UUID signerUserId = signer.getUser() != null ? signer.getUser().getId() : null;
             if (exceptionToken != null) {
                 auditDoseExceptionAfterCommit(prescription, signerUserId, contraindicationReason, signingCards,
-                    exceptionToken, versionSigned);
+                    exceptionToken, versionSigned, "Dose exception recorded at signature");
             } else {
                 auditCdsOverrideAfterCommit(prescription, signerUserId, contraindicationReason, signingCards,
                     "Critical decision-support alert overridden at signature");
             }
+        }
+        if (urgentReason != null) {
+            UUID signerUserId = signer.getUser() != null ? signer.getUser().getId() : null;
+            auditDoseExceptionAfterCommit(prescription, signerUserId, urgentReason, signingCards, urgentToken,
+                versionSigned, "Urgent paediatric dose exception recorded at signature");
+            fileUrgentReviewAfterCommit(prescription, signer);
         }
         // QA D793: the signature is the last look before the pharmacy and the
         // ward act on the order, so the cross-reactivity advisory is repeated
@@ -623,7 +651,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
     /** CR-02: what an exception answers: this order at this version, these findings, this signer. */
     private String doseExceptionToken(Prescription prescription, Staff signer, List<CdsCard> cards) {
-        String findings = cards.stream().filter(CdsCard::needsReasonAtSignature)
+        String findings = cards.stream().filter(c -> c.needsReasonAtSignature() || (c.requiresReview() && c.exceptionKey() != null))
             .map(c -> java.util.Objects.toString(c.exceptionKey(), "contraindication"))
             .sorted().collect(java.util.stream.Collectors.joining(";"));
         UUID signerUserId = signer.getUser() != null ? signer.getUser().getId() : null;
@@ -634,7 +662,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
     /** CR-02, after commit: ids, digests and counts only, as the CDS override's audit (the row is not encrypted). */
     private void auditDoseExceptionAfterCommit(Prescription prescription, UUID actorId, String reason,
-                                               List<CdsCard> cards, String token, Long version) {
+                                               List<CdsCard> cards, String token, Long version, String description) {
         UUID prescriptionId = prescription.getId();
         UUID patientId = prescription.getPatient() != null ? prescription.getPatient().getId() : null;
         UUID assignmentId = prescription.getAssignment() != null ? prescription.getAssignment().getId() : null;
@@ -651,7 +679,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                     .userId(actorId)
                     .assignmentId(assignmentId)
                     .patientId(patientId)
-                    .eventDescription("Dose exception recorded at signature")
+                    .eventDescription(description)
                     .details(details)
                     .entityType(AUDIT_ENTITY_PRESCRIPTION)
                     .resourceId(prescriptionId != null ? prescriptionId.toString() : null)
@@ -841,6 +869,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         existing.setPediatricDoseReviewedAt(null);
         existing.setPediatricDoseReviewedBy(null);
         existing.setPediatricDoseReviewReason(null);
+        existing.setPediatricDoseUrgentExceptionAt(null);
     }
 
     /**
@@ -850,16 +879,22 @@ public class PrescriptionServiceImpl implements PrescriptionService {
      * reviewer (two judgments, as for the co-signature). The cards re-run at
      * the signature also set the requirement on an order saved before it
      * existed, or before its item had a manual-review age.
+     *
+     * @return the prescriber's reason when this is signed as an urgent exception, not yet recorded; else {@code null}
      */
-    private static void requirePediatricDoseReviewAtSigning(Prescription prescription, List<CdsCard> cards,
-                                                            Staff signer) {
+    private String requirePediatricDoseReviewAtSigning(Prescription prescription, List<CdsCard> cards,
+                                                       Staff signer,
+                                                       com.example.hms.payload.dto.SignPrescriptionRequestDTO request) {
         if (requiresDoseReview(cards)) {
             prescription.setPediatricDoseReviewRequired(true);
         }
         if (!prescription.isPediatricDoseReviewRequired()) {
-            return;
+            return null;
         }
         if (prescription.getPediatricDoseReviewedAt() == null) {
+            if (request != null && Boolean.TRUE.equals(request.getUrgentDoseException()) && urgentExceptionAdmitted(cards)) {
+                return requireUrgentReason(prescription, cards, signer, request);
+            }
             // Committed, not rolled back: the flag set above must outlive the refusal (QA D1142).
             throw new com.example.hms.exception.PediatricDoseReviewRequiredException();
         }
@@ -868,6 +903,95 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         if (reviewer != null && reviewer.getId() != null && reviewer.getId().equals(signerUserId)) {
             throw new BusinessException("prescription.pediatricReview.reviewerCannotSign");
         }
+        return null;
+    }
+
+    /**
+     * CR-01 (PROVISIONAL, for the neonatal/paediatric lead and the pharmacist): every card asking for
+     * the review is one the check could not assess. A review by age (under three months, or the item's
+     * own age) or for a child outside every weight band carries no key, and keeps needing the second
+     * person; so does a flag on the order that no card explains now.
+     */
+    private static boolean urgentExceptionAdmitted(List<CdsCard> cards) {
+        List<CdsCard> review = cards.stream().filter(CdsCard::requiresReview).toList();
+        return !review.isEmpty() && review.stream().allMatch(c -> c.exceptionKey() != null);
+    }
+
+    /** The CR-02 mechanism for the urgent case: a reason given now, with the token of these findings, this version, this signer. */
+    private String requireUrgentReason(Prescription prescription, List<CdsCard> cards, Staff signer,
+                                       com.example.hms.payload.dto.SignPrescriptionRequestDTO request) {
+        String token = doseExceptionToken(prescription, signer, cards);
+        String reason = request.getAllergyOverrideReason() == null ? "" : request.getAllergyOverrideReason().trim();
+        boolean stale = !reason.isEmpty() && !token.equals(request.getDoseExceptionToken());
+        if (reason.isEmpty() || stale) {
+            List<CdsCard> review = cards.stream().filter(CdsCard::requiresReview).toList();
+            throw new CdsCriticalBlockException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw(signatureRefusalKey(true, stale), review.get(0).summary()),
+                refusedAtSignature(prescription, review, token));
+        }
+        return reason;
+    }
+
+    /**
+     * CR-01: an urgent item for whoever can do the review after the fact: the hospital's pharmacists,
+     * else its other doctors, else the signer, who is then the one left who can answer. After the
+     * commit, as a filed item must never undo a signature; ids and names read before it.
+     */
+    private void fileUrgentReviewAfterCommit(Prescription prescription, Staff signer) {
+        UUID hospitalId = prescription.getHospital() != null ? prescription.getHospital().getId() : null;
+        UUID prescriptionId = prescription.getId();
+        UUID signerUserId = signer.getUser() != null ? signer.getUser().getId() : null;
+        UUID patientId = prescription.getPatient() != null ? prescription.getPatient().getId() : null;
+        String patientName = prescription.getPatient() != null ? prescription.getPatient().getFullName() : null;
+        UUID encounterId = prescription.getEncounter() != null ? prescription.getEncounter().getId() : null;
+        String medication = prescription.getMedicationName();
+        com.example.hms.utility.TransactionCallbacks.afterCommit(() -> {
+            if (urgentReviewBasket == null || hospitalId == null) {
+                return;
+            }
+            try {
+                Object[] titleArgs = {medication};
+                Object[] bodyArgs = {medication, patientName};
+                for (UUID recipient : urgentReviewers(hospitalId, signerUserId)) {
+                    com.example.hms.payload.dto.clinical.CreateInBasketItemRequest item =
+                        new com.example.hms.payload.dto.clinical.CreateInBasketItemRequest();
+                    item.setRecipientUserId(recipient);
+                    item.setHospitalId(hospitalId);
+                    item.setItemType(com.example.hms.enums.InBasketItemType.TASK);
+                    item.setPriority(com.example.hms.enums.InBasketPriority.URGENT);
+                    item.setReferenceId(prescriptionId);
+                    item.setReferenceType(URGENT_REVIEW_REFERENCE_TYPE);
+                    item.setEncounterId(encounterId);
+                    item.setPatientId(patientId);
+                    item.setPatientName(patientName);
+                    item.setTitleKey(URGENT_REVIEW_TITLE_KEY);
+                    item.setBodyKey(URGENT_REVIEW_BODY_KEY);
+                    item.setTitleArgs(titleArgs);
+                    item.setBodyArgs(bodyArgs);
+                    item.setTitle(com.example.hms.utility.MessageUtil.resolve(
+                        com.example.hms.service.i18n.NotificationLocales.STAFF, URGENT_REVIEW_TITLE_KEY, titleArgs));
+                    item.setBody(com.example.hms.utility.MessageUtil.resolve(
+                        com.example.hms.service.i18n.NotificationLocales.STAFF, URGENT_REVIEW_BODY_KEY, bodyArgs));
+                    urgentReviewBasket.createItemInNewTransaction(item);
+                }
+            } catch (RuntimeException ex) {
+                logger.error("Urgent dose review item not filed for prescription {}: {}", prescriptionId,
+                    ex.getClass().getSimpleName(), ex);
+            }
+        });
+    }
+
+    private List<UUID> urgentReviewers(UUID hospitalId, UUID signerUserId) {
+        for (java.util.Set<String> roles : URGENT_REVIEWER_ROLES) {
+            List<UUID> found = urhaRepository.findLiveUsersAtHospitalWithRoleCodes(hospitalId, roles).stream()
+                .map(com.example.hms.model.User::getId)
+                .filter(id -> !id.equals(signerUserId))
+                .distinct().toList();
+            if (!found.isEmpty()) {
+                return found;
+            }
+        }
+        return signerUserId == null ? List.of() : List.of(signerUserId);
     }
 
     @Override

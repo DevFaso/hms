@@ -330,36 +330,24 @@ public class CdsRuleEngine {
 
     /**
      * CR-03: the adult paracetamol exposure at the moment of a dose, as warnings that refuse nothing.
-     * {@code beforeReadingDoses} runs once the drug is known to be paracetamol and before the doses
-     * are read: the MAR passes its lock there, so a second dose given at the same moment on another
-     * order of this patient waits for the first and counts it. Empty for any other drug and for a
-     * failed read, as a rule that throws costs its cards, never the dose (QA D1121).
+     * Empty for any other drug. A failed read throws, so the caller can say the exposure is unknown:
+     * it is never an empty answer, which reads as nothing to say.
      */
     public List<CdsCard> paracetamolAtAdministration(Patient patient, UUID hospitalId, ProposedOrder order,
-                                                     boolean doseJustRecorded, Runnable beforeReadingDoses) {
+                                                     boolean doseJustRecorded) {
         AdultParacetamolRule rule = rules.stream().filter(AdultParacetamolRule.class::isInstance)
             .map(AdultParacetamolRule.class::cast).findFirst().orElse(null);
         if (rule == null || patient == null) {
             return List.of();
         }
-        try {
-            MedicationCatalogItem item = order.catalogItem() != null
-                ? order.catalogItem() : resolveCatalogItem(hospitalId, order.medicationCode());
-            ParacetamolFacts facts = readParacetamolFacts(patient, hospitalId, order.medicationName(), item,
-                order.excludedPrescriptionId());
-            if (!facts.applies()) {
-                return List.of();
-            }
-            beforeReadingDoses.run();
-            return rule.atAdministration(buildContext(patient, hospitalId, order), doseJustRecorded);
-        } catch (RuntimeException ex) {
-            if (failFast) {
-                throw ex;
-            }
-            logger.error("CDS paracetamol check at administration threw {}: {}", ex.getClass().getSimpleName(),
-                ex.getMessage(), ex);
-            return List.of();
+        MedicationCatalogItem item = order.catalogItem() != null
+            ? order.catalogItem() : resolveCatalogItem(hospitalId, order.medicationCode());
+        ParacetamolFacts facts = readParacetamolFacts(patient, hospitalId, order.medicationName(), item,
+            order.excludedPrescriptionId());
+        if (facts == ParacetamolFacts.READ_FAILED) {
+            throw new IllegalStateException("The paracetamol facts could not be read");
         }
+        return facts.applies() ? rule.atAdministration(buildContext(patient, hospitalId, order), doseJustRecorded) : List.of();
     }
 
     /* =====================================================================

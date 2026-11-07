@@ -1079,4 +1079,6 @@ Rounds 27, 28 and 29 each found 20–30 new siblings of the required-field class
 | `architecture/AdultParacetamolGuardTest#theRuleOnlyEverAlerts` (changed) | CR-02: the adult card shapes: an alert, the contraindication, or a held finding with its key; never a hard stop, never a review. | none |
 | `cdshooks/rules/AdultParacetamolRouteExposureTest`, `cdshooks/rules/PediatricDoseRouteLimitTest` (new) | The route, held-finding and exposure matrices of the two rules. | none |
 | `service/PrescriptionServiceImplTest#cr02_*`, `#cr01_*` (new) | The exception at the signature: token, version, findings, signer, audit; a reason alone, a stored reason and a pharmacist's review pass nothing. | none |
-| `repository/MarAndOpenStayQueriesPostgresIT#cr03_*` (new) | The documented doses on PostgreSQL across midnight, and the second of two concurrent doses counting the first. | none |
+| `repository/MarAndOpenStayQueriesPostgresIT#cr03_*` (new) | The documented doses on PostgreSQL across midnight. | none |
+| `service/emar/ParacetamolExposureAfterCommitIT`, `architecture/AdultParacetamolGuardTest#theExposureIsReadOutsideTheDoseAndTheMarTakesNoPatientLock` (new) | CR-03: a failed exposure read undoing a dose, a read inside the dose, a patient lock in the MAR; two concurrent doses, the last to commit counting both. | none |
+| `service/PrescriptionServiceImplTest#cr01_*` (new) | The urgent exception of a child's cannot-assess order: a routine order and the review by age cannot use it. | none |

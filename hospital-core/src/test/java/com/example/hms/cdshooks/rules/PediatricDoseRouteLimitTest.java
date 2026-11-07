@@ -186,4 +186,21 @@ class PediatricDoseRouteLimitTest {
                 ParacetamolFacts.READ_FAILED).withRoute("PO", null)))
             .singleElement().satisfies(card -> assertThat(card.needsReasonAtSignature()).isTrue());
     }
+
+    /** The urgent exception (provisional) reaches the cannot-assess cards, and only those. */
+    @Test
+    void cannotAssessCardsCarryAKeyAndTheOtherReviewsDoNot() {
+        assertThat(evaluate(limit("PO", PediatricDoseLimitStatus.APPROVED), "200 mg", "IV", null))
+            .singleElement().satisfies(card -> assertThat(card.exceptionKey()).startsWith("paedLimit:"));
+        assertThat(evaluate(limit("PO", PediatricDoseLimitStatus.DEFAULT_PENDING_APPROVAL), "100 mg", "PO", null))
+            .singleElement().satisfies(card -> assertThat(card.exceptionKey()).startsWith("paedLimit:"));
+        MedicationCatalogItem item = limit("PO", PediatricDoseLimitStatus.APPROVED);
+        assertThat(rule.evaluate(new CdsRuleContext(childAgedMonths(2), UUID.randomUUID(), "Paracétamol", null, null, 30d,
+                item, 4d, List.of(), List.of(), "3 fois par jour", null, LocalDateTime.now(ZoneId.systemDefault()), null,
+                ParacetamolFacts.NONE).withRoute("PO", null)))
+            .singleElement().satisfies(card -> {
+                assertThat(card.requiresReview()).isTrue();
+                assertThat(card.exceptionKey()).as("the review by age has no urgent exception").isNull();
+            });
+    }
 }

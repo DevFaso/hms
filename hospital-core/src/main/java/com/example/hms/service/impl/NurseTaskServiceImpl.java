@@ -205,11 +205,11 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     /* ── Dependencies ─────────────────────────────────────────────────── */
 
     /** CR-03: the documented paracetamol exposure at a dose; absent in unit tests built by hand. */
-    private com.example.hms.cdshooks.rules.CdsRuleEngine cdsRuleEngine;
+    private com.example.hms.service.emar.ParacetamolExposureCheck exposureCheck;
 
     @org.springframework.beans.factory.annotation.Autowired(required = false)
-    public void setCdsRuleEngine(com.example.hms.cdshooks.rules.CdsRuleEngine cdsRuleEngine) {
-        this.cdsRuleEngine = cdsRuleEngine;
+    public void setExposureCheck(com.example.hms.service.emar.ParacetamolExposureCheck exposureCheck) {
+        this.exposureCheck = exposureCheck;
     }
 
     private final NurseDashboardService nurseDashboardService;
@@ -686,7 +686,9 @@ public class NurseTaskServiceImpl implements NurseTaskService {
 
         List<String> failed = result.failedChecks().stream().map(Enum::name).toList();
 
-        return MarVerificationResponseDTO.builder()
+        List<com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard> advisories =
+            allergyAdvisoriesFor(medicationNameOf(mar), mar.getPatient());
+        MarVerificationResponseDTO verification = MarVerificationResponseDTO.builder()
             .marId(mar.getId())
             .outcomes(outcomes)
             .failedChecks(failed)
@@ -695,9 +697,11 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .verifiedAt(verifiedAt)
             // QA D799: the five rights can all pass and the dose still need a
             // second look; the advisory never turns allPassed false.
-            .cdsAdvisories(withParacetamolExposure(allergyAdvisoriesFor(medicationNameOf(mar), mar.getPatient()),
-                mar.getPrescription(), mar.getPatient(), hospitalId, false))
+            .cdsAdvisories(advisories)
             .build();
+        withParacetamolExposureAfterCommit(mar.getPrescription(), hospitalId, false, advisories,
+            verification::setCdsAdvisories);
+        return verification;
     }
 
     /**
@@ -1404,48 +1408,46 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             LocalDateTime now = LocalDateTime.now(java.time.ZoneId.systemDefault());
             withOrderReading(task, rx, MarNextDose.of(rx, now, rows, EARLY_ADMINISTRATION_WINDOW), now,
                 pharmacistVerificationService.isControlledSubstance(rx));
-            // CR-03: only a dose given moves the exposure; one held or refused is no warning to give.
             List<com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard> allergy =
                 allergyAdvisoriesFor(rx.getMedicationName(), rx.getPatient());
-            task.setCdsAdvisories(recorded == MedicationAdministrationStatus.GIVEN
-                ? withParacetamolExposure(allergy, rx, rx.getPatient(),
-                    rx.getHospital() != null ? rx.getHospital().getId() : null, true)
-                : allergy);
+            task.setCdsAdvisories(allergy);
+            // CR-03: only a dose given moves the exposure; one held or refused is no warning to give.
+            if (recorded == MedicationAdministrationStatus.GIVEN) {
+                withParacetamolExposureAfterCommit(rx, rx.getHospital() != null ? rx.getHospital().getId() : null,
+                    true, allergy, task::setCdsAdvisories);
+            }
         }
         return withDoseHistory(task, closedDoses(rows));
     }
 
     /**
      * CR-03: the documented paracetamol exposure at the dose, a warning that refuses nothing (D1210
-     * stays the only refusal here). With a dose just written, the patient's row is locked first, in
-     * the order MAR writes always take (the order's row, then this one): two doses of two orders of
-     * one patient serialise here, and the second counts the first.
+     * stays the only refusal here). Read after this transaction commits and in one of its own
+     * ({@link com.example.hms.service.emar.ParacetamolExposureCheck}), so a failed read leaves the dose
+     * recorded and says the exposure is unknown. The answer is the object the caller returns: it is
+     * filled in before it leaves the service proxy.
      */
-    private List<com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard> withParacetamolExposure(
-        List<com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard> cards, Prescription rx, Patient patient,
-        UUID hospitalId, boolean doseWritten
+    private void withParacetamolExposureAfterCommit(
+        Prescription rx, UUID hospitalId, boolean doseJustRecorded,
+        List<com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard> cards,
+        java.util.function.Consumer<List<com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard>> answer
     ) {
-        if (cdsRuleEngine == null || rx == null || patient == null) {
-            return cards;
+        if (exposureCheck == null || rx == null || rx.getId() == null) {
+            return;
         }
-        List<com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard> exposure = cdsRuleEngine.paracetamolAtAdministration(
-            patient, hospitalId,
-            new com.example.hms.cdshooks.rules.CdsRuleEngine.ProposedOrder(rx.getMedicationName(), rx.getMedicationCode(),
-                rx.getDosage(), rx.getFrequency(), cdsRuleEngine.itemOf(rx, hospitalId), rx.getId(),
-                PrnMinInterval.highestDosesPerDay(PrnMinInterval.isAsNeeded(rx), rx.getPrnMinIntervalHours()),
-                rx.getRoute(), null),
-            doseWritten,
-            () -> {
-                if (doseWritten) {
-                    patientRepository.lockByIdUnscoped(patient.getId());
-                }
-            });
-        if (exposure.isEmpty()) {
-            return cards;
-        }
-        List<com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard> all = new ArrayList<>(cards);
-        all.addAll(exposure);
-        return all;
+        UUID prescriptionId = rx.getId();
+        String medication = rx.getMedicationName();
+        com.example.hms.utility.TransactionCallbacks.afterCommit(() -> {
+            List<com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard> all = new ArrayList<>(cards);
+            try {
+                all.addAll(exposureCheck.cards(prescriptionId, hospitalId, doseJustRecorded));
+            } catch (RuntimeException ex) {
+                log.error("Paracetamol exposure not read for prescription {}: {}", prescriptionId,
+                    ex.getClass().getSimpleName(), ex);
+                all.add(exposureCheck.unknownCard(medication));
+            }
+            answer.accept(all);
+        });
     }
 
     private MarDoseHistoryDTO toDoseHistory(MedicationAdministrationRecord dose) {

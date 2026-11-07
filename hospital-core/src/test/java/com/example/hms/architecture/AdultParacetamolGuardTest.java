@@ -73,6 +73,20 @@ class AdultParacetamolGuardTest {
             .contains("null, null, null, UUID.randomUUID().toString());");
     }
 
+    /**
+     * CR-03 and the review of this wave: the exposure is read after the dose commits and in a transaction
+     * of its own, so a failed read cannot undo a dose, and the MAR takes no patient lock: death recording
+     * writes the patient and then its orders, the opposite order of a MAR write.
+     */
+    @Test
+    void theExposureIsReadOutsideTheDoseAndTheMarTakesNoPatientLock() throws IOException {
+        assertThat(code(MAIN.resolve("service/emar/ParacetamolExposureCheck.java")))
+            .contains("propagation = Propagation.REQUIRES_NEW");
+        assertThat(code(MAIN.resolve("service/impl/NurseTaskServiceImpl.java")))
+            .contains("TransactionCallbacks.afterCommit(")
+            .doesNotContain("lockByIdUnscoped");
+    }
+
     @Test
     void childrenStayWithThePaediatricRule() throws IOException {
         assertThat(code(RULE)).contains("PediatricDoseRule.isAdult(context.patient())")

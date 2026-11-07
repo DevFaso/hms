@@ -1042,6 +1042,40 @@ describe('PrescriptionsComponent — signing', () => {
       expect(component.signReauthTarget()).toBeNull();
     });
 
+    it('CR-01: an urgent signature asks for the reason, then sends the flag, the reason and the token', () => {
+      prescriptionService.sign.and.returnValues(heldRefusal('tok-u'), of(rx('rx-1', 'SIGNED')));
+      component.signUrgently({ ...rx('rx-1', 'DRAFT'), pediatricDoseReviewRequired: true });
+      fixture.detectChanges();
+
+      expect(prescriptionService.sign.calls.mostRecent().args).toEqual([
+        'rx-1',
+        { urgentDoseException: true },
+      ]);
+      component.signAllergyReason = 'Sepsis, personne sur place';
+      component.submitSignReauth();
+
+      expect(prescriptionService.sign.calls.mostRecent().args).toEqual([
+        'rx-1',
+        {
+          urgentDoseException: true,
+          allergyOverrideReason: 'Sepsis, personne sur place',
+          doseExceptionToken: 'tok-u',
+        },
+      ]);
+      expect(component.signUrgent()).toBeFalse();
+    });
+
+    it('CR-01: a routine signature never sends the urgent flag, and the action is offered only for a due review', () => {
+      prescriptionService.sign.and.returnValue(of(rx('rx-1', 'SIGNED')));
+      component.signPrescription(rx('rx-1', 'DRAFT'));
+      expect(prescriptionService.sign.calls.mostRecent().args).toEqual(['rx-1']);
+      spyOn(component, 'canSign').and.returnValue(true);
+      expect(component.canSignUrgently(rx('rx-1', 'DRAFT'))).toBeFalse();
+      expect(
+        component.canSignUrgently({ ...rx('rx-1', 'DRAFT'), pediatricDoseReviewRequired: true }),
+      ).toBeTrue();
+    });
+
     it('CR-02: a stale exception reopens on the current alerts, asks again and says why', () => {
       prescriptionService.sign.and.returnValues(heldRefusal('tok-1'), heldRefusal('tok-2'));
       component.signPrescription(rx('rx-1', 'DRAFT'));

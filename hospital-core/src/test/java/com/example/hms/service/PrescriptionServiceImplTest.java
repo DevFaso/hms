@@ -7045,4 +7045,145 @@ class PrescriptionServiceImplTest {
         assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.DRAFT);
         assertThat(rx.isAllergiesReviewed()).isFalse();
     }
+
+    /* ── CR-01: a child's cannot-assess order signed as an urgent exception (provisional) ── */
+
+    private static com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard cr01_cannotAssess(String key) {
+        return new com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard("Paracetamol: cannot assess, review required",
+            "detail", com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard.Indicator.WARNING,
+            new com.example.hms.cdshooks.dto.CdsHookDtos.Source("Paediatric dose", null, null),
+            null, null, null, UUID.randomUUID().toString(), null, Boolean.TRUE, null, key);
+    }
+
+    private static com.example.hms.payload.dto.SignPrescriptionRequestDTO cr01_urgent(String reason, String token) {
+        return com.example.hms.payload.dto.SignPrescriptionRequestDTO.builder()
+            .urgentDoseException(true).allergyOverrideReason(reason).doseExceptionToken(token).build();
+    }
+
+    private Prescription cr01_childOrder(UUID user, com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard card) {
+        Prescription rx = signablePrescription(user);
+        rx.setVersion(2L);
+        stubSignable(rx, user);
+        cr02_findings(card);
+        return rx;
+    }
+
+    /** The routine order is untouched: with a reason, or a token from an urgent refusal, it still waits for the second person. */
+    @Test
+    void cr01_aRoutineOrderCannotUseTheUrgentException() {
+        UUID user = UUID.randomUUID();
+        Prescription rx = cr01_childOrder(user, cr01_cannotAssess("paedLimit:IV:PO:APPROVED"));
+        UUID id = rx.getId();
+        com.example.hms.payload.dto.SignPrescriptionRequestDTO noFlag = cr02_exception("It cannot wait", "any");
+
+        assertThatThrownBy(() -> prescriptionService.signPrescription(id, null, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.PediatricDoseReviewRequiredException.class);
+        assertThatThrownBy(() -> prescriptionService.signPrescription(id, noFlag, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.PediatricDoseReviewRequiredException.class);
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.DRAFT);
+        assertThat(rx.getPediatricDoseUrgentExceptionAt()).isNull();
+    }
+
+    @Test
+    void cr01_anUrgentExceptionNeedsAReasonAndItsTokenThenSignsAuditsAndAsksForTheReview() {
+        UUID user = UUID.randomUUID();
+        Prescription rx = cr01_childOrder(user, cr01_cannotAssess("paedLimit:IV:PO:APPROVED"));
+        UUID id = rx.getId();
+        cr02_mapsTheSave();
+        com.example.hms.service.InBasketService basket = mock(com.example.hms.service.InBasketService.class);
+        prescriptionService.setUrgentReviewBasket(basket);
+        com.example.hms.model.User pharmacist = new com.example.hms.model.User();
+        pharmacist.setId(UUID.randomUUID());
+        when(urhaRepository.findLiveUsersAtHospitalWithRoleCodes(eq(rx.getHospital().getId()), any()))
+            .thenReturn(List.of(pharmacist));
+
+        com.example.hms.cdshooks.CdsCriticalBlockException asked = catchThrowableOfType(
+            com.example.hms.cdshooks.CdsCriticalBlockException.class,
+            () -> prescriptionService.signPrescription(id, cr01_urgent(null, null), Locale.ENGLISH));
+        String token = asked.getCards().get(0).exceptionKey();
+        assertThat(token).isNotBlank().isNotEqualTo("paedLimit:IV:PO:APPROVED");
+        com.example.hms.payload.dto.SignPrescriptionRequestDTO noToken = cr01_urgent("Sepsis, nobody on site", null);
+        assertThatThrownBy(() -> prescriptionService.signPrescription(id, noToken, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.cdshooks.CdsCriticalBlockException.class);
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.DRAFT);
+
+        prescriptionService.signPrescription(id, cr01_urgent("Sepsis, nobody on site", token), Locale.ENGLISH);
+
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.SIGNED);
+        assertThat(rx.getSignedBy()).isEqualTo(rx.getStaff());
+        assertThat(rx.getPediatricDoseUrgentExceptionAt()).isEqualTo(rx.getSignedAt());
+        assertThat(rx.getOverrideReason()).isEqualTo("Sepsis, nobody on site");
+        assertThat(rx.getPediatricDoseReviewedAt()).as("the review is still due").isNull();
+        assertThat(rx.isPediatricDoseReviewRequired()).isTrue();
+        verify(auditEventLogService).logEvent(org.mockito.ArgumentMatchers.argThat(e ->
+            "Urgent paediatric dose exception recorded at signature".equals(e.getEventDescription())
+                && user.equals(e.getUserId())
+                && String.valueOf(e.getDetails()).contains(token)
+                && !String.valueOf(e.getDetails()).contains("Sepsis")));
+        verify(basket).createItemInNewTransaction(org.mockito.ArgumentMatchers.argThat(item ->
+            pharmacist.getId().equals(item.getRecipientUserId())
+                && item.getPriority() == com.example.hms.enums.InBasketPriority.URGENT
+                && item.getItemType() == com.example.hms.enums.InBasketItemType.TASK
+                && id.equals(item.getReferenceId())));
+    }
+
+    @Test
+    void cr01_aFailedItemNeverUndoesTheSignature() {
+        UUID user = UUID.randomUUID();
+        Prescription rx = cr01_childOrder(user, cr01_cannotAssess("paedNoLimit:IV"));
+        UUID id = rx.getId();
+        cr02_mapsTheSave();
+        com.example.hms.service.InBasketService basket = mock(com.example.hms.service.InBasketService.class);
+        prescriptionService.setUrgentReviewBasket(basket);
+        when(urhaRepository.findLiveUsersAtHospitalWithRoleCodes(any(), any())).thenThrow(new IllegalStateException("boom"));
+        com.example.hms.cdshooks.CdsCriticalBlockException asked = catchThrowableOfType(
+            com.example.hms.cdshooks.CdsCriticalBlockException.class,
+            () -> prescriptionService.signPrescription(id, cr01_urgent(null, null), Locale.ENGLISH));
+
+        prescriptionService.signPrescription(id, cr01_urgent("Sepsis", asked.getCards().get(0).exceptionKey()), Locale.ENGLISH);
+
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.SIGNED);
+    }
+
+    /** The review by age and the weight band card carry no key: the urgent flag does not pass them. */
+    @Test
+    void cr01_theReviewByAgeHasNoUrgentException() {
+        UUID user = UUID.randomUUID();
+        Prescription rx = cr01_childOrder(user, reviewCard());
+        UUID id = rx.getId();
+        com.example.hms.payload.dto.SignPrescriptionRequestDTO urgent = cr01_urgent("It cannot wait", "any");
+
+        assertThatThrownBy(() -> prescriptionService.signPrescription(id, urgent, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.PediatricDoseReviewRequiredException.class);
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.DRAFT);
+    }
+
+    @Test
+    void cr01_anotherVersionVoidsTheUrgentException() {
+        UUID user = UUID.randomUUID();
+        Prescription rx = cr01_childOrder(user, cr01_cannotAssess("paedLimit:IV:PO:APPROVED"));
+        UUID id = rx.getId();
+        com.example.hms.cdshooks.CdsCriticalBlockException asked = catchThrowableOfType(
+            com.example.hms.cdshooks.CdsCriticalBlockException.class,
+            () -> prescriptionService.signPrescription(id, cr01_urgent(null, null), Locale.ENGLISH));
+        rx.setVersion(3L);
+        com.example.hms.payload.dto.SignPrescriptionRequestDTO stale =
+            cr01_urgent("Decided on the old order", asked.getCards().get(0).exceptionKey());
+
+        assertThatThrownBy(() -> prescriptionService.signPrescription(id, stale, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.cdshooks.CdsCriticalBlockException.class);
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.DRAFT);
+    }
+
+    @Test
+    void cr01_someoneWhoMayNotSignCannotUseIt() {
+        Prescription rx = signablePrescription(UUID.randomUUID());
+        stubSignable(rx, UUID.randomUUID());
+        UUID id = rx.getId();
+        com.example.hms.payload.dto.SignPrescriptionRequestDTO urgent = cr01_urgent("I decide", "any");
+
+        assertThatThrownBy(() -> prescriptionService.signPrescription(id, urgent, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.DRAFT);
+    }
 }

@@ -1694,6 +1694,7 @@
       "REGISTRATION_DEACTIVATED": "Enregistrement du patient désactivé",
       "CDS_CRITICAL_OVERRIDDEN_AT_SIGNATURE": "Alerte critique d’aide à la décision outrepassée à la signature",
       "DOSE_EXCEPTION_AT_SIGNATURE": "Exception de dose enregistrée à la signature",
+      "URGENT_DOSE_EXCEPTION_AT_SIGNATURE": "Exception urgente de dose pédiatrique enregistrée à la signature",
       "ENCOUNTER_CANCELLED_WITH_ADMISSION": "Consultation clôturée : l’hospitalisation {{admission}} a été annulée (était {{previous}})",
       "ENCOUNTER_DISCHARGE_COMPLETED": "Consultation clôturée à la sortie de l’hospitalisation {{admission}} (était {{previous}})",
       "ENCOUNTER_ADMISSION_COMPLETED": "Consultation clôturée à l’hospitalisation {{admission}} (était {{previous}})",
@@ -7512,6 +7513,8 @@
       "CDS_REASON": "Motif du passage outre l’alerte critique"
     },
     "SIGN_EXCEPTION": {
+      "URGENT": "Signer en urgence : ne peut pas attendre l’examen",
+      "URGENT_AT": "Signée en exception urgente",
       "TITLE": "Alerte de dose : signer par exception explicite ?",
       "REASON": "Votre motif pour cette exception, enregistré et audité avec votre nom et l’heure"
     },

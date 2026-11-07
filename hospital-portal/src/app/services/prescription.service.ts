@@ -23,6 +23,8 @@ export interface SignPrescriptionBody extends SignReauthentication {
   allergyOverrideReason?: string;
   /** CR-02: the token the refused signature answered with (`CdsCard.exceptionKey`). */
   doseExceptionToken?: string;
+  /** CR-01: the prescriber states this child's order cannot wait for the second-person review. */
+  urgentDoseException?: boolean;
 }
 import { Injectable, inject } from '@angular/core';
 import { Observable, map } from 'rxjs';
@@ -172,6 +174,8 @@ export interface PrescriptionResponse {
    */
   overrideReason?: string | null;
   allergyOverride?: boolean | null;
+  /** CR-01: signed as an urgent exception; the review is still due after the fact. */
+  pediatricDoseUrgentExceptionAt?: string | null;
   /** QA D1096: the paediatric dose check asked for a recorded review before signing. */
   pediatricDoseReviewRequired?: boolean | null;
   pediatricDoseReviewedAt?: string | null;

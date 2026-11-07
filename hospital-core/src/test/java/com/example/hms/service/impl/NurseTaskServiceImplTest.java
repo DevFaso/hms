@@ -5383,21 +5383,35 @@ class NurseTaskServiceImplTest {
             null, null, null, UUID.randomUUID().toString());
     }
 
+    private MedicationAdministrationRecord cr03_verifiedDose(UUID marId, UUID patientId, UUID hospitalId) {
+        MedicationAdministrationRecord mar = seededMar(patientId, hospitalId, LocalDateTime.now());
+        mar.getPrescription().setId(UUID.randomUUID());
+        mar.setPatientScanValue(patientId.toString());
+        mar.setMedicationScanValue("AMOX-500");
+        mar.setDoseScanValue("500 mg");
+        mar.setRouteScanValue("PO");
+        mar.setFiveRightsStatus(FiveRightsStatus.VERIFIED);
+        mar.setScanVerifiedAt(LocalDateTime.now());
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(mar.getPrescription().getId(), hospitalId))
+            .thenReturn(Optional.of(mar.getPrescription()));
+        when(marRepository.findById(marId)).thenReturn(Optional.of(mar));
+        when(marRepository.save(mar)).thenReturn(mar);
+        return mar;
+    }
+
     @Test
-    void cr03_theBedsideVerificationCarriesTheExposureWithNoLockAndNoRefusal() {
+    void cr03_theBedsideVerificationCarriesTheExposureAndNoRefusal() {
         UUID marId = UUID.randomUUID();
         UUID patientId = UUID.randomUUID();
         UUID hospitalId = UUID.randomUUID();
         MedicationAdministrationRecord mar = seededMar(patientId, hospitalId, LocalDateTime.now());
+        mar.getPrescription().setId(UUID.randomUUID());
         when(marRepository.findById(marId)).thenReturn(Optional.of(mar));
         when(marRepository.save(any(MedicationAdministrationRecord.class))).thenAnswer(inv -> inv.getArgument(0));
-        com.example.hms.cdshooks.rules.CdsRuleEngine engine = mock(com.example.hms.cdshooks.rules.CdsRuleEngine.class);
-        service.setCdsRuleEngine(engine);
+        com.example.hms.service.emar.ParacetamolExposureCheck check = mock(com.example.hms.service.emar.ParacetamolExposureCheck.class);
+        service.setExposureCheck(check);
         com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard card = cr03_exposureCard();
-        when(engine.paracetamolAtAdministration(any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any())).thenAnswer(inv -> {
-            ((Runnable) inv.getArgument(4)).run();
-            return List.of(card);
-        });
+        when(check.cards(mar.getPrescription().getId(), hospitalId, false)).thenReturn(List.of(card));
         MarVerificationRequestDTO req = new MarVerificationRequestDTO();
         req.setPatientScanValue(patientId.toString());
         req.setMedicationScanValue("AMOX-500");
@@ -5408,37 +5422,18 @@ class NurseTaskServiceImplTest {
 
         assertThat(resp.getCdsAdvisories()).contains(card);
         assertThat(resp.isAllPassed()).isTrue();
-        verify(patientRepository, never()).lockByIdUnscoped(any());
-        verify(engine).paracetamolAtAdministration(any(), eq(hospitalId), org.mockito.ArgumentMatchers.argThat(
-            order -> "PO".equals(order.route())), eq(false), any());
     }
 
     @Test
-    void cr03_aRecordedDoseLocksThePatientBeforeReadingAndTheWarningRefusesNothing() {
+    void cr03_aRecordedDoseCarriesTheExposureAndHeldOrRefusedDoesNotReadIt() {
         UUID marId = UUID.randomUUID();
         UUID patientId = UUID.randomUUID();
         UUID hospitalId = UUID.randomUUID();
-        MedicationAdministrationRecord mar = seededMar(patientId, hospitalId, LocalDateTime.now());
-        mar.setPatientScanValue(patientId.toString());
-        mar.setMedicationScanValue("AMOX-500");
-        mar.setDoseScanValue("500 mg");
-        mar.setRouteScanValue("PO");
-        mar.setFiveRightsStatus(FiveRightsStatus.VERIFIED);
-        mar.setScanVerifiedAt(LocalDateTime.now());
-        when(prescriptionRepository.findByIdForUpdate(marId)).thenReturn(Optional.empty());
-        when(marRepository.findById(marId)).thenReturn(Optional.of(mar));
-        when(marRepository.save(mar)).thenReturn(mar);
-        com.example.hms.cdshooks.rules.CdsRuleEngine engine = mock(com.example.hms.cdshooks.rules.CdsRuleEngine.class);
-        service.setCdsRuleEngine(engine);
+        MedicationAdministrationRecord mar = cr03_verifiedDose(marId, patientId, hospitalId);
+        com.example.hms.service.emar.ParacetamolExposureCheck check = mock(com.example.hms.service.emar.ParacetamolExposureCheck.class);
+        service.setExposureCheck(check);
         com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard card = cr03_exposureCard();
-        when(engine.paracetamolAtAdministration(any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any())).thenAnswer(inv -> {
-            verify(patientRepository, never()).lockByIdUnscoped(any());
-            ((Runnable) inv.getArgument(4)).run();
-            verify(patientRepository).lockByIdUnscoped(patientId);
-            // The dose this answer is about was written before the exposure was read.
-            verify(marRepository).save(mar);
-            return List.of(card);
-        });
+        when(check.cards(mar.getPrescription().getId(), hospitalId, true)).thenReturn(List.of(card));
         NurseMedicationAdministrationRequestDTO req = new NurseMedicationAdministrationRequestDTO();
         req.setStatus("GIVEN");
 
@@ -5446,5 +5441,26 @@ class NurseTaskServiceImplTest {
 
         assertThat(mar.getStatus()).isEqualTo(MedicationAdministrationStatus.GIVEN);
         assertThat(answer.getCdsAdvisories()).contains(card);
+    }
+
+    /** A failed read says the exposure is unknown; the dose stands. The real transaction: ParacetamolExposureAfterCommitIT. */
+    @Test
+    void cr03_aFailedReadSaysUnknownAndTheDoseStands() {
+        UUID marId = UUID.randomUUID();
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        MedicationAdministrationRecord mar = cr03_verifiedDose(marId, patientId, hospitalId);
+        com.example.hms.service.emar.ParacetamolExposureCheck check = mock(com.example.hms.service.emar.ParacetamolExposureCheck.class);
+        service.setExposureCheck(check);
+        com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard unknown = cr03_exposureCard();
+        when(check.cards(any(), any(), org.mockito.ArgumentMatchers.anyBoolean())).thenThrow(new IllegalStateException("boom"));
+        when(check.unknownCard(any())).thenReturn(unknown);
+        NurseMedicationAdministrationRequestDTO req = new NurseMedicationAdministrationRequestDTO();
+        req.setStatus("GIVEN");
+
+        NurseMedicationTaskResponseDTO answer = service.recordMedicationAdministration(marId, null, hospitalId, req);
+
+        assertThat(mar.getStatus()).isEqualTo(MedicationAdministrationStatus.GIVEN);
+        assertThat(answer.getCdsAdvisories()).contains(unknown);
     }
 }

@@ -188,6 +188,8 @@ public class PrescriptionResponseDTO {
     /** QA D1096 (round 19): the paediatric dose check asked for a recorded review before signing. */
     private Boolean pediatricDoseReviewRequired;
     private LocalDateTime pediatricDoseReviewedAt;
+    /** CR-01: signed as an urgent exception; the review is still due after the fact. */
+    private LocalDateTime pediatricDoseUrgentExceptionAt;
     private String pediatricDoseReviewedByName;
     private String pediatricDoseReviewReason;
 
@@ -205,6 +207,7 @@ public class PrescriptionResponseDTO {
         this.overrideReason = null;
         this.allergyOverride = null;
         this.pediatricDoseReviewReason = null;
+        this.pediatricDoseUrgentExceptionAt = null;
         this.clarificationReason = null;
         this.clarificationRequestedAt = null;
         this.clarificationResponse = null;

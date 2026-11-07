@@ -1694,6 +1694,7 @@
       "REGISTRATION_DEACTIVATED": "Patient registration deactivated",
       "CDS_CRITICAL_OVERRIDDEN_AT_SIGNATURE": "Critical decision-support alert overridden at signature",
       "DOSE_EXCEPTION_AT_SIGNATURE": "Dose exception recorded at signature",
+      "URGENT_DOSE_EXCEPTION_AT_SIGNATURE": "Urgent paediatric dose exception recorded at signature",
       "ENCOUNTER_CANCELLED_WITH_ADMISSION": "Encounter closed: admission {{admission}} was cancelled (was {{previous}})",
       "ENCOUNTER_DISCHARGE_COMPLETED": "Encounter closed at the discharge of admission {{admission}} (was {{previous}})",
       "ENCOUNTER_ADMISSION_COMPLETED": "Encounter closed when admission {{admission}} began (was {{previous}})",
@@ -7512,6 +7513,8 @@
       "CDS_REASON": "Reason for overriding the critical alert"
     },
     "SIGN_EXCEPTION": {
+      "URGENT": "Sign as urgent: it cannot wait for the review",
+      "URGENT_AT": "Signed as an urgent exception",
       "TITLE": "Dose alert: sign as an explicit exception?",
       "REASON": "Your reason for this exception, recorded and audited with your name and the time"
     },
