@@ -26,6 +26,7 @@ public class EmergencyReleaseRequestDTO {
     /** Required; checked by the service, which names the field in the caller's language. */
     private String reason;
 
-    /** Required: the person making the decision, picked from the options the server offers. */
+    /** The person making the decision, picked from the options the server offers. */
+    @NotNull
     private UUID authoriserUserId;
 }

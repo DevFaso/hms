@@ -697,7 +697,10 @@ export class TransfusionComponent implements OnInit {
     this.emergencyAuthoriserId = '';
     this.emergencyOptions.set(null);
     this.transfusion.emergencyReleaseOptions(request.id).subscribe({
-      next: (options) => this.emergencyOptions.set(options),
+      // A late answer for a request the panel has left is dropped.
+      next: (options) => {
+        if (this.selectedRequest()?.id === request.id) this.emergencyOptions.set(options);
+      },
       error: () => this.toast.error(this.translate.instant('TRANSFUSION.LOAD_ERROR')),
     });
   }

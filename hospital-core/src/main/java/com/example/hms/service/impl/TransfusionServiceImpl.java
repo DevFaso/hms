@@ -110,8 +110,8 @@ public class TransfusionServiceImpl implements TransfusionService {
     private static final String REQUEST_ENTITY_TYPE = "TRANSFUSION_REQUEST";
     public static final String INCOMPATIBLE_FINISHED_BODY_KEY = "transfusion.crossmatch.incompatible.finished.inBasketBody";
     /** The lab director's review item for every serologically incompatible release. */
-    public static final String RELEASE_REVIEW_TITLE_KEY = "transfusion.emergency.incompatible.reviewTitle";
-    public static final String RELEASE_REVIEW_BODY_KEY = "transfusion.emergency.incompatible.reviewBody";
+    public static final String RELEASE_REVIEW_TITLE_KEY = "transfusion.emergency.incompatible.inBasketTitle";
+    public static final String RELEASE_REVIEW_BODY_KEY = "transfusion.emergency.incompatible.inBasketBody";
     static final String RELEASE_REFERENCE_TYPE = "TRANSFUSION_EMERGENCY_RELEASE";
     private static final String FIELD_RELEASE_TYPE = "releaseType";
     private static final String FIELD_AUTHORISER = "authoriserUserId";
@@ -334,6 +334,7 @@ public class TransfusionServiceImpl implements TransfusionService {
         if (!StringUtils.hasText(reason)) {
             throw new com.example.hms.exception.FieldBusinessException("reason", "transfusion.unit.discardReasonRequired");
         }
+        unitRepository.lockById(unitId);
         BloodUnit unit = loadUnitScoped(unitId);
         if (unit.getStatus() == BloodUnitStatus.TRANSFUSED) {
             throw new BusinessException("transfusion.unit.alreadyTransfused", unit.getUnitNumber());
@@ -460,6 +461,8 @@ public class TransfusionServiceImpl implements TransfusionService {
             throw new com.example.hms.exception.ClientSafeAccessDeniedException(
                 com.example.hms.utility.MessageUtil.resolveOrRaw("transfusion.request.cancel.requesterOnly"));
         }
+        // The bags on this request take turns with a hang or a release of them.
+        unitRepository.lockByRequestId(requestId);
         // QA CX-008 sibling: blood is running. Cancelling would close the request
         // over a live transfusion and put the hung bag back into stock.
         if (administrationRepository.existsByRequest_IdAndStatus(requestId, TransfusionAdministrationStatus.IN_PROGRESS)) {
@@ -483,8 +486,8 @@ public class TransfusionServiceImpl implements TransfusionService {
 
     @Override
     public CrossmatchResponseDTO recordCrossmatch(UUID requestId, CrossmatchRequestDTO request) {
-        TransfusionRequest transfusionRequest = loadRequestScoped(requestId);
         unitRepository.lockById(request.getBloodUnitId());
+        TransfusionRequest transfusionRequest = loadRequestScoped(requestId);
         BloodUnit unit = loadUnitScoped(request.getBloodUnitId());
         boolean claimsCompatible = Boolean.TRUE.equals(request.getCompatible());
 
@@ -612,7 +615,7 @@ public class TransfusionServiceImpl implements TransfusionService {
             }
         } else {
             if ((unit.getStatus() == BloodUnitStatus.ISSUED || hung != null) && !alreadyIncompatible) {
-                fileIncompatibleResultAfterCommit(transfusionRequest, unit, hung, saved);
+                notifySafely(() -> fileIncompatibleResultAfterCommit(transfusionRequest, unit, hung, saved), saved.getId());
             }
             // A running bag stays what it is: it is not back at the lab, and only the
             // clinician stops it. Stopping or finishing it closes it as any other. A bag whose
@@ -664,17 +667,27 @@ public class TransfusionServiceImpl implements TransfusionService {
             log.warn("Incompatible crossmatch {} on a bag out of the lab has nobody to tell", crossmatchId);
             return;
         }
-        String bodyKey = INCOMPATIBLE_ISSUED_BODY_KEY;
-        if (hung != null) {
-            bodyKey = hung.isInProgress() ? INCOMPATIBLE_RUNNING_BODY_KEY : INCOMPATIBLE_FINISHED_BODY_KEY;
-        }
         Patient patient = request.getPatient();
         Object[] titleArgs = {unit.getUnitNumber()};
         Object[] bodyArgs = {unit.getUnitNumber(), patient != null ? patient.getFullName() : null};
-        String resolvedBodyKey = bodyKey;
+        // One item per result: the in-basket keeps one item per reference and reader, and a bag can be
+        // found incompatible again on this row after a repeat test said otherwise.
+        UUID resultReference = UUID.nameUUIDFromBytes((crossmatchId + "@" + crossmatch.getPerformedAt())
+            .getBytes(java.nio.charset.StandardCharsets.UTF_8));
         List<com.example.hms.payload.dto.clinical.CreateInBasketItemRequest> items = recipients.stream()
-            .map(recipient -> urgentItem(recipient, request, com.example.hms.enums.InBasketItemType.RESULT,
-                INCOMPATIBLE_TITLE_KEY, titleArgs, resolvedBodyKey, bodyArgs, crossmatchId, CROSSMATCH_REFERENCE_TYPE))
+            .map(recipient -> {
+                com.example.hms.payload.dto.clinical.CreateInBasketItemRequest item = urgentItem(recipient, request,
+                    com.example.hms.enums.InBasketItemType.RESULT, resultReference, CROSSMATCH_REFERENCE_TYPE);
+                item.setTitleKey(INCOMPATIBLE_TITLE_KEY);
+                if (hung == null) {
+                    item.setBodyKey(INCOMPATIBLE_ISSUED_BODY_KEY);
+                } else if (hung.isInProgress()) {
+                    item.setBodyKey(INCOMPATIBLE_RUNNING_BODY_KEY);
+                } else {
+                    item.setBodyKey(INCOMPATIBLE_FINISHED_BODY_KEY);
+                }
+                return staffCopy(item, titleArgs, bodyArgs);
+            })
             .toList();
         fileAfterCommit(items, crossmatchId);
     }
@@ -684,20 +697,35 @@ public class TransfusionServiceImpl implements TransfusionService {
      * hospital's lab directors, after the commit. A failure leaves the release recorded.
      */
     private void fileReleaseReviewAfterCommit(TransfusionRequest request, BloodUnit unit, EmergencyBloodRelease release) {
-        List<UUID> directors = labDirectors(request);
         UUID releaseId = release.getId();
-        if (directors.isEmpty()) {
-            log.warn("Serologically incompatible release {} has no lab director to review it", releaseId);
-            return;
+        List<UUID> reviewers = labDirectors(request);
+        if (reviewers.isEmpty()) {
+            // Nobody holds the role here. The person who authorised it is the one left who can answer.
+            log.warn("Serologically incompatible release {} has no lab director: its authoriser is told", releaseId);
+            reviewers = List.of(release.getAuthoriser().getId());
         }
         Patient patient = request.getPatient();
         Object[] titleArgs = {unit.getUnitNumber()};
         Object[] bodyArgs = {unit.getUnitNumber(), patient != null ? patient.getFullName() : null,
             com.example.hms.mapper.TransfusionMapper.userName(release.getAuthoriser())};
-        fileAfterCommit(directors.stream()
-            .map(director -> urgentItem(director, request, com.example.hms.enums.InBasketItemType.TASK,
-                RELEASE_REVIEW_TITLE_KEY, titleArgs, RELEASE_REVIEW_BODY_KEY, bodyArgs, releaseId, RELEASE_REFERENCE_TYPE))
+        fileAfterCommit(reviewers.stream()
+            .map(reviewer -> {
+                com.example.hms.payload.dto.clinical.CreateInBasketItemRequest item = urgentItem(reviewer, request,
+                    com.example.hms.enums.InBasketItemType.TASK, releaseId, RELEASE_REFERENCE_TYPE);
+                item.setTitleKey(RELEASE_REVIEW_TITLE_KEY);
+                item.setBodyKey(RELEASE_REVIEW_BODY_KEY);
+                return staffCopy(item, titleArgs, bodyArgs);
+            })
             .toList(), releaseId);
+    }
+
+    /** Composing a notification runs in the transaction of what it reports, and must not undo it. */
+    private static void notifySafely(Runnable compose, UUID referenceId) {
+        try {
+            compose.run();
+        } catch (RuntimeException ex) {
+            log.warn("Notification not composed for {}: {}", referenceId, ex.getClass().getSimpleName());
+        }
     }
 
     private List<UUID> labDirectors(TransfusionRequest request) {
@@ -719,11 +747,10 @@ public class TransfusionServiceImpl implements TransfusionService {
         });
     }
 
-    /** One reader's item: the keys render it in their language, the text is the stored staff-language copy. */
-    @SuppressWarnings("java:S107") // One flat description of an item, built in two places.
+    /** One reader's item, before its keys; the keys render it in their language. */
     private static com.example.hms.payload.dto.clinical.CreateInBasketItemRequest urgentItem(
             UUID recipient, TransfusionRequest request, com.example.hms.enums.InBasketItemType type,
-            String titleKey, Object[] titleArgs, String bodyKey, Object[] bodyArgs, UUID referenceId, String referenceType) {
+            UUID referenceId, String referenceType) {
         Patient patient = request.getPatient();
         com.example.hms.payload.dto.clinical.CreateInBasketItemRequest item =
             new com.example.hms.payload.dto.clinical.CreateInBasketItemRequest();
@@ -731,17 +758,21 @@ public class TransfusionServiceImpl implements TransfusionService {
         item.setHospitalId(request.getHospital().getId());
         item.setItemType(type);
         item.setPriority(com.example.hms.enums.InBasketPriority.URGENT);
-        item.setTitleKey(titleKey);
-        item.setTitleArgs(titleArgs);
-        item.setTitle(MessageUtil.resolve(com.example.hms.service.i18n.NotificationLocales.STAFF, titleKey, titleArgs));
-        item.setBodyKey(bodyKey);
-        item.setBodyArgs(bodyArgs);
-        item.setBody(MessageUtil.resolve(com.example.hms.service.i18n.NotificationLocales.STAFF, bodyKey, bodyArgs));
         item.setReferenceId(referenceId);
         item.setReferenceType(referenceType);
         item.setEncounterId(request.getEncounter() != null ? request.getEncounter().getId() : null);
         item.setPatientId(patient != null ? patient.getId() : null);
         item.setPatientName(patient != null ? patient.getFullName() : null);
+        return item;
+    }
+
+    /** The arguments, and the stored copy in the staff language for a reader with no language. */
+    private static com.example.hms.payload.dto.clinical.CreateInBasketItemRequest staffCopy(
+            com.example.hms.payload.dto.clinical.CreateInBasketItemRequest item, Object[] titleArgs, Object[] bodyArgs) {
+        item.setTitleArgs(titleArgs);
+        item.setTitle(MessageUtil.resolve(com.example.hms.service.i18n.NotificationLocales.STAFF, item.getTitleKey(), titleArgs));
+        item.setBodyArgs(bodyArgs);
+        item.setBody(MessageUtil.resolve(com.example.hms.service.i18n.NotificationLocales.STAFF, item.getBodyKey(), bodyArgs));
         return item;
     }
 
@@ -812,6 +843,7 @@ public class TransfusionServiceImpl implements TransfusionService {
 
     @Override
     public BloodUnitResponseDTO issueUnit(UUID requestId, UUID unitId) {
+        unitRepository.lockById(unitId);
         TransfusionRequest request = loadRequestScoped(requestId);
         BloodUnit unit = issuableUnit(request, unitId);
 
@@ -842,6 +874,14 @@ public class TransfusionServiceImpl implements TransfusionService {
         if (release.getAuthoriserUserId() == null) {
             throw new FieldBusinessException(FIELD_AUTHORISER, "transfusion.emergency.authoriserRequired");
         }
+        if (release.getReleaseType() == EmergencyReleaseType.UNCROSSMATCHED) {
+            throw new FieldBusinessException(FIELD_RELEASE_TYPE, "transfusion.emergency.typeNotDocumented");
+        }
+        if (roleValidator.getCurrentUserId() == null) {
+            // A documented release names who issued it: an actor nobody can name cannot make one.
+            throw new AccessDeniedException("A documented emergency release needs an identified caller.");
+        }
+        unitRepository.lockById(release.getBloodUnitId());
         TransfusionRequest request = loadRequestScoped(requestId);
         if (!request.isEmergency()) {
             throw new BusinessException("transfusion.emergency.notEmergency");
@@ -852,36 +892,43 @@ public class TransfusionServiceImpl implements TransfusionService {
         }
         TransfusionCrossmatch crossmatch = crossmatchRepository
             .findByRequest_IdAndBloodUnit_Id(requestId, unit.getId()).orElse(null);
-        switch (release.getReleaseType()) {
-            case O_POSITIVE_DECISION -> requireOPositiveDecisionAllowed(request, unit, crossmatch);
-            case SEROLOGICALLY_INCOMPATIBLE -> requireIncompatibleReleaseAllowed(request, unit, crossmatch);
-            default -> throw new FieldBusinessException(FIELD_RELEASE_TYPE, "transfusion.emergency.typeNotDocumented");
+        if (unit.getStatus() == BloodUnitStatus.ISSUED && documentedRelease(request, unit) != null) {
+            throw new FieldBusinessException(FIELD_BLOOD_UNIT_ID, "transfusion.emergency.alreadyReleased", unit.getUnitNumber());
+        }
+        if (release.getReleaseType() == EmergencyReleaseType.O_POSITIVE_DECISION) {
+            requireOPositiveDecisionAllowed(request, unit, crossmatch);
+        } else {
+            requireIncompatibleReleaseAllowed(request, unit, crossmatch);
         }
         requireAnswerableAuthoriser(request, release);
         log.warn("EMERGENCY {} release of unit {} against request {}",
             release.getReleaseType(), unit.getUnitNumber(), requestId);
         EmergencyBloodRelease saved = recordRelease(request, unit, release.getReleaseType(), reason, release.getAuthoriserUserId());
         if (release.getReleaseType() == EmergencyReleaseType.SEROLOGICALLY_INCOMPATIBLE) {
-            fileReleaseReviewAfterCommit(request, unit, saved);
+            notifySafely(() -> fileReleaseReviewAfterCommit(request, unit, saved), saved.getId());
         }
         return putOut(request, unit);
     }
 
-    /** What every way out of the lab checks; the bag's row is locked first, so releases of it take turns. */
+    /** What every way out of the lab checks; the caller locked the bag's row before reading anything. */
     private BloodUnit issuableUnit(TransfusionRequest request, UUID unitId) {
         if (request.isTerminal()) {
             throw new BusinessException("transfusion.request.closed");
         }
-        unitRepository.lockById(unitId);
         BloodUnit unit = loadUnitScoped(unitId);
+        // A global-view caller has no scope to stop it: a bag only goes out at its own hospital.
+        if (unit.getHospital() != null && request.getHospital() != null
+                && !Objects.equals(unit.getHospital().getId(), request.getHospital().getId())) {
+            throw new ResourceNotFoundException(MSG_UNIT_NOT_FOUND, unitId);
+        }
         if (unit.isExpiredOn(LocalDate.now(clock))) {
-            throw new BusinessException("transfusion.unit.expired", unit.getUnitNumber(),
+            throw new FieldBusinessException(FIELD_BLOOD_UNIT_ID, "transfusion.unit.expired", unit.getUnitNumber(),
                 DisplayDates.date(unit.getExpiresOn()));
         }
         // A bag that was transfused, discarded or retired cannot go out again,
         // whatever crossmatch it still has on file.
         if (unit.isTerminal()) {
-            throw new BusinessException("transfusion.unit.noLongerUsable", unit.getUnitNumber());
+            throw new FieldBusinessException(FIELD_BLOOD_UNIT_ID, "transfusion.unit.noLongerUsable", unit.getUnitNumber());
         }
         // The crossmatch path has always checked the product; the emergency path never reached it.
         if (unit.getProductType() != request.getProductType()) {
@@ -925,6 +972,11 @@ public class TransfusionServiceImpl implements TransfusionService {
      */
     private void requireUncrossmatchedRelease(TransfusionRequest request, BloodUnit unit,
                                               TransfusionCrossmatch crossmatch, BusinessException refusal) {
+        requireNotFoundIncompatibleElsewhere(request, unit, crossmatch);
+        if (unit.getStatus() == BloodUnitStatus.ISSUED
+                && releaseRepository.findFirstByRequest_IdAndBloodUnit_IdOrderByIssuedAtDesc(request.getId(), unit.getId()).isPresent()) {
+            throw new FieldBusinessException(FIELD_BLOOD_UNIT_ID, "transfusion.emergency.alreadyReleased", unit.getUnitNumber());
+        }
         if (emergencyReleaseAllowed(request, unit, crossmatch)) {
             return;
         }
@@ -942,10 +994,29 @@ public class TransfusionServiceImpl implements TransfusionService {
         }
     }
 
+    /**
+     * A bag found incompatible for this patient on another of their requests is the same bag and the
+     * same patient. It goes out only as what it is: that result recorded on this request, then the
+     * serologically incompatible release. A repeat crossmatch here that finds it compatible stands
+     * on its own and never reaches this check.
+     */
+    private void requireNotFoundIncompatibleElsewhere(TransfusionRequest request, BloodUnit unit, TransfusionCrossmatch crossmatch) {
+        boolean onThisRequest = crossmatch != null && !Boolean.TRUE.equals(crossmatch.getCompatible());
+        if (!onThisRequest && foundIncompatibleForPatient(request, unit)) {
+            throw new FieldBusinessException(FIELD_BLOOD_UNIT_ID, "transfusion.emergency.incompatibleForPatient", unit.getUnitNumber());
+        }
+    }
+
+    private boolean foundIncompatibleForPatient(TransfusionRequest request, BloodUnit unit) {
+        return request.getPatient() != null
+            && crossmatchRepository.findIncompatibleUnitIdsForPatient(request.getPatient().getId()).contains(unit.getId());
+    }
+
     private void requireOPositiveDecisionAllowed(TransfusionRequest request, BloodUnit unit, TransfusionCrossmatch crossmatch) {
         if (!AboGroup.isEmergencyOPositive(unit.getAboGroup(), unit.getRhFactor(), unit.getProductType())) {
             throw new FieldBusinessException(FIELD_BLOOD_UNIT_ID, "transfusion.emergency.notOPositive", unit.getUnitNumber());
         }
+        requireNotFoundIncompatibleElsewhere(request, unit, crossmatch);
         if (crossmatch != null && !Boolean.TRUE.equals(crossmatch.getCompatible())) {
             throw new BusinessException("transfusion.issue.crossmatchIncompatible", unit.getUnitNumber());
         }
@@ -960,6 +1031,7 @@ public class TransfusionServiceImpl implements TransfusionService {
      * and O positive keeps its own rule. The result stays exactly as the laboratory recorded it.
      */
     private void requireIncompatibleReleaseAllowed(TransfusionRequest request, BloodUnit unit, TransfusionCrossmatch crossmatch) {
+        requireNotFoundIncompatibleElsewhere(request, unit, crossmatch);
         if (crossmatch == null || Boolean.TRUE.equals(crossmatch.getCompatible())) {
             throw new FieldBusinessException(FIELD_BLOOD_UNIT_ID, "transfusion.emergency.noIncompatibleResult", unit.getUnitNumber());
         }
@@ -979,7 +1051,7 @@ public class TransfusionServiceImpl implements TransfusionService {
     }
 
     private boolean oNegativeAvailable(TransfusionRequest request) {
-        return unitRepository.existsAvailable(request.getHospital().getId(), request.getProductType(),
+        return unitRepository.existsAvailable(request.getHospital().getId(), request.getPatient().getId(), request.getProductType(),
             AboGroup.emergencyReleaseGroup(), AboGroup.emergencyReleaseRh(), LocalDate.now(clock));
     }
 
@@ -1065,31 +1137,38 @@ public class TransfusionServiceImpl implements TransfusionService {
             .build();
     }
 
-    /** Stock of this product in group O, plus a group O bag this request holds and has not hung. */
+    /**
+     * Stock of this product in group O, plus what this request holds and could still need this form
+     * for: a bag whose crossmatch no longer stands, or an O positive bag out with no decision that
+     * now needs one. Nothing found incompatible for this patient: that has its own action.
+     */
     private List<EmergencyReleaseOptionsDTO.Unit> uncrossmatchedOptions(TransfusionRequest request,
                                                                         EmergencyReleasePolicy.OPositiveStep step,
                                                                         boolean oNegativeFirst) {
         LocalDate today = LocalDate.now(clock);
+        boolean decisionStep = step != EmergencyReleasePolicy.OPositiveStep.NONE;
         Map<UUID, BloodUnit> bags = new LinkedHashMap<>();
         unitRepository.findByRequest_IdOrderByUnitNumberAsc(request.getId()).stream()
-            .filter(bag -> bag.getStatus() == BloodUnitStatus.ISSUED && !bag.isExpiredOn(today)
-                && administrationRepository.findByBloodUnit_Id(bag.getId()).isEmpty())
+            .filter(bag -> !bag.isExpiredOn(today) && administrationRepository.findByBloodUnit_Id(bag.getId()).isEmpty())
+            .filter(bag -> bag.getStatus() == BloodUnitStatus.CROSSMATCHED
+                || (bag.getStatus() == BloodUnitStatus.ISSUED && decisionStep && documentedRelease(request, bag) == null
+                    && AboGroup.isEmergencyOPositive(bag.getAboGroup(), bag.getRhFactor(), bag.getProductType())))
             .forEach(bag -> bags.put(bag.getId(), bag));
         unitRepository.findAssignable(request.getHospital().getId(), today)
             .forEach(bag -> bags.put(bag.getId(), bag));
+        List<UUID> incompatible = request.getPatient() == null ? List.of()
+            : crossmatchRepository.findIncompatibleUnitIdsForPatient(request.getPatient().getId());
         List<EmergencyReleaseOptionsDTO.Unit> options = new ArrayList<>();
         for (BloodUnit bag : bags.values()) {
             boolean oPositive = AboGroup.isEmergencyOPositive(bag.getAboGroup(), bag.getRhFactor(), request.getProductType());
             boolean oNegative = bag.getAboGroup() == AboGroup.emergencyReleaseGroup()
                 && bag.getRhFactor() == AboGroup.emergencyReleaseRh();
-            boolean incompatibleOnFile = crossmatchRepository.findByRequest_IdAndBloodUnit_Id(request.getId(), bag.getId())
-                .filter(result -> !Boolean.TRUE.equals(result.getCompatible())).isPresent();
-            if (bag.getProductType() == request.getProductType() && !incompatibleOnFile
+            if (bag.getProductType() == request.getProductType() && !incompatible.contains(bag.getId())
                     && (oNegative || (oPositive && !oNegativeFirst))) {
                 options.add(EmergencyReleaseOptionsDTO.Unit.builder()
                     .id(bag.getId()).unitNumber(bag.getUnitNumber())
                     .aboGroup(bag.getAboGroup()).rhFactor(bag.getRhFactor()).expiresOn(bag.getExpiresOn())
-                    .decisionRequired(oPositive && step != EmergencyReleasePolicy.OPositiveStep.NONE)
+                    .decisionRequired(oPositive && decisionStep)
                     .build());
             }
         }
@@ -1110,8 +1189,10 @@ public class TransfusionServiceImpl implements TransfusionService {
             })
             .map(result -> {
                 BloodUnit bag = result.getBloodUnit();
-                boolean heldBack = oNegativeFirst && step == EmergencyReleasePolicy.OPositiveStep.O_NEGATIVE_FIRST
-                    && AboGroup.isEmergencyOPositive(bag.getAboGroup(), bag.getRhFactor(), bag.getProductType());
+                boolean heldBack = (oNegativeFirst && step == EmergencyReleasePolicy.OPositiveStep.O_NEGATIVE_FIRST
+                    && AboGroup.isEmergencyOPositive(bag.getAboGroup(), bag.getRhFactor(), bag.getProductType()))
+                    || (bag.getStatus() == BloodUnitStatus.CROSSMATCHED && bag.getRequest() != null
+                        && !Objects.equals(bag.getRequest().getId(), request.getId()));
                 return EmergencyReleaseOptionsDTO.IncompatibleUnit.builder()
                     .id(bag.getId()).unitNumber(bag.getUnitNumber())
                     .aboGroup(bag.getAboGroup()).rhFactor(bag.getRhFactor())
@@ -1145,9 +1226,9 @@ public class TransfusionServiceImpl implements TransfusionService {
         if (request.getVerifiedByStaffId() == null && request.getVerifiedByUserId() == null) {
             throw new FieldBusinessException("verifiedByStaffId", "transfusion.administration.verifierRequired");
         }
+        unitRepository.lockById(request.getBloodUnitId());
         TransfusionRequest transfusionRequest = loadRequestScoped(request.getRequestId());
         UUID hospitalId = transfusionRequest.getHospital().getId();
-        unitRepository.lockById(request.getBloodUnitId());
         BloodUnit unit = loadUnitScoped(request.getBloodUnitId());
 
         if (unit.getStatus() != BloodUnitStatus.ISSUED) {
@@ -1418,6 +1499,7 @@ public class TransfusionServiceImpl implements TransfusionService {
     private boolean emergencyReleaseAllowed(TransfusionRequest request, BloodUnit unit,
                                             TransfusionCrossmatch crossmatch) {
         if (!request.isEmergency()
+                || !AboGroup.isEmergencyRedCells(unit.getProductType())
                 || unit.getAboGroup() != AboGroup.emergencyReleaseGroup()
                 || unit.getRhFactor() != AboGroup.emergencyReleaseRh()) {
             return false;
@@ -1453,6 +1535,10 @@ public class TransfusionServiceImpl implements TransfusionService {
             return;
         }
         if (crossmatch == null) {
+            if (foundIncompatibleForPatient(request, unit)) {
+                throw new FieldBusinessException(FIELD_BLOOD_UNIT_ID, "transfusion.issue.crossmatchIncompatible",
+                    unit.getUnitNumber());
+            }
             PatientBloodGroup typedSince = currentScreen(request);
             if (typedSince != null && !serologicallyCompatible(typedSince, unit, request)) {
                 throw new FieldBusinessException(FIELD_BLOOD_UNIT_ID, "transfusion.administration.groupExcludes",
@@ -1479,9 +1565,8 @@ public class TransfusionServiceImpl implements TransfusionService {
      * puts the bag under an ABO exclusion stops it whatever was documented.
      */
     private boolean documentedReleaseStands(TransfusionRequest request, BloodUnit unit, TransfusionCrossmatch crossmatch) {
-        EmergencyBloodRelease release = releaseRepository
-            .findFirstByRequest_IdAndBloodUnit_IdOrderByIssuedAtDesc(request.getId(), unit.getId()).orElse(null);
-        if (release == null || release.getReleaseType() == EmergencyReleaseType.UNCROSSMATCHED) {
+        EmergencyBloodRelease release = documentedRelease(request, unit);
+        if (release == null) {
             return false;
         }
         if (crossmatch != null && !Boolean.TRUE.equals(crossmatch.getCompatible())
@@ -1490,6 +1575,13 @@ public class TransfusionServiceImpl implements TransfusionService {
             return false;
         }
         return documentedReleaseAllows(request, unit);
+    }
+
+    /** The latest release of this bag on this request, when it carried a reason and a name. */
+    private EmergencyBloodRelease documentedRelease(TransfusionRequest request, BloodUnit unit) {
+        return releaseRepository.findFirstByRequest_IdAndBloodUnit_IdOrderByIssuedAtDesc(request.getId(), unit.getId())
+            .filter(release -> release.getReleaseType() != EmergencyReleaseType.UNCROSSMATCHED)
+            .orElse(null);
     }
 
     /** The pairing passes ABO/Rh, or is the one platelet Rh mismatch a recorded reason permits. */

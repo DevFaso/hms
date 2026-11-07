@@ -245,14 +245,14 @@ class TransfusionEmergencyReleasePostgresIT {
             .extracting(com.example.hms.model.User::getId).containsExactlyInAnyOrder(doctorUser, directorUser, techUser);
 
         LocalDate today = LocalDate.now();
-        assertThat(unitRepository.existsAvailable(hospital, BloodProductType.PACKED_RED_CELLS, AboGroup.O, RhFactor.NEGATIVE, today)).isFalse();
+        assertThat(unitRepository.existsAvailable(hospital, patient, BloodProductType.PACKED_RED_CELLS, AboGroup.O, RhFactor.NEGATIVE, today)).isFalse();
         bag(AboGroup.O, RhFactor.POSITIVE);
-        assertThat(unitRepository.existsAvailable(hospital, BloodProductType.PACKED_RED_CELLS, AboGroup.O, RhFactor.NEGATIVE, today)).isFalse();
+        assertThat(unitRepository.existsAvailable(hospital, patient, BloodProductType.PACKED_RED_CELLS, AboGroup.O, RhFactor.NEGATIVE, today)).isFalse();
         bag(AboGroup.O, RhFactor.NEGATIVE);
-        assertThat(unitRepository.existsAvailable(hospital, BloodProductType.PACKED_RED_CELLS, AboGroup.O, RhFactor.NEGATIVE, today)).isTrue();
-        assertThat(unitRepository.existsAvailable(hospital, BloodProductType.WHOLE_BLOOD, AboGroup.O, RhFactor.NEGATIVE, today)).isFalse();
-        assertThat(unitRepository.existsAvailable(UUID.randomUUID(), BloodProductType.PACKED_RED_CELLS, AboGroup.O, RhFactor.NEGATIVE, today)).isFalse();
-        assertThat(unitRepository.existsAvailable(hospital, BloodProductType.PACKED_RED_CELLS, AboGroup.O, RhFactor.NEGATIVE, today.plusDays(20)))
+        assertThat(unitRepository.existsAvailable(hospital, patient, BloodProductType.PACKED_RED_CELLS, AboGroup.O, RhFactor.NEGATIVE, today)).isTrue();
+        assertThat(unitRepository.existsAvailable(hospital, patient, BloodProductType.WHOLE_BLOOD, AboGroup.O, RhFactor.NEGATIVE, today)).isFalse();
+        assertThat(unitRepository.existsAvailable(UUID.randomUUID(), patient, BloodProductType.PACKED_RED_CELLS, AboGroup.O, RhFactor.NEGATIVE, today)).isFalse();
+        assertThat(unitRepository.existsAvailable(hospital, patient, BloodProductType.PACKED_RED_CELLS, AboGroup.O, RhFactor.NEGATIVE, today.plusDays(20)))
             .as("a bag's last day counts as expired").isFalse();
     }
 
@@ -358,6 +358,52 @@ class TransfusionEmergencyReleasePostgresIT {
 
         CrossmatchRequestDTO overwrite = CrossmatchRequestDTO.builder().bloodUnitId(bagId).compatible(Boolean.TRUE).build();
         assertThatThrownBy(() -> service.recordCrossmatch(requestId, overwrite)).hasMessageContaining("result stands");
+    }
+
+    @Test
+    @DisplayName("independent review: an incompatible result on one request stops the bag on the patient's next request, and O negative found incompatible no longer holds O positive back")
+    void incompatibleFollowsThePatient() {
+        TransfusionRequestResponseDTO first = emergencyRequest();
+        UUID negative = bag(AboGroup.O, RhFactor.NEGATIVE).getId();
+        result(first.getId(), negative, false);
+        assertThat(unitRepository.existsAvailable(hospital, patient, BloodProductType.PACKED_RED_CELLS, AboGroup.O, RhFactor.NEGATIVE, LocalDate.now()))
+            .as("not available to this patient").isFalse();
+        assertThat(unitRepository.existsAvailable(hospital, UUID.randomUUID(), BloodProductType.PACKED_RED_CELLS, AboGroup.O, RhFactor.NEGATIVE, LocalDate.now()))
+            .as("still available to anyone else").isTrue();
+
+        TransfusionRequestResponseDTO second = emergencyRequest();
+        UUID secondId = second.getId();
+        assertThatThrownBy(() -> service.issueUnit(secondId, negative)).hasMessageContaining("on another request");
+        EmergencyReleaseOptionsDTO options = service.emergencyReleaseOptions(secondId);
+        assertThat(options.getUnits()).extracting(EmergencyReleaseOptionsDTO.Unit::getId).doesNotContain(negative);
+        assertThat(options.isONegativeFirst()).isFalse();
+
+        UUID positive = bag(AboGroup.O, RhFactor.POSITIVE).getId();
+        service.emergencyRelease(secondId, documented(positive, EmergencyReleaseType.O_POSITIVE_DECISION));
+        assertThat(status(positive)).isEqualTo("ISSUED");
+
+        result(secondId, negative, false);
+        service.emergencyRelease(secondId, documented(negative, EmergencyReleaseType.SEROLOGICALLY_INCOMPATIBLE));
+        assertThat(status(negative)).isEqualTo("ISSUED");
+    }
+
+    @Test
+    @DisplayName("cancelling a request takes the bag locks with its held bags and still returns them")
+    void cancelTakesTheLocks() {
+        TransfusionRequestResponseDTO request = emergencyRequest();
+        UUID bagId = bag(AboGroup.O, RhFactor.NEGATIVE).getId();
+        service.issueUnit(request.getId(), bagId);
+        actingAs(doctorUser);
+        com.example.hms.model.User requester = new com.example.hms.model.User();
+        requester.setId(doctorUser);
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(requester, null, List.of()));
+        try {
+            service.cancelRequest(request.getId(), "Bleeding controlled");
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+        assertThat(status(bagId)).isEqualTo("RETURNED");
     }
 
     @Test

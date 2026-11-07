@@ -190,12 +190,12 @@ class TransfusionEmergencyReleaseTest {
     }
 
     private void noONegativeInStock() {
-        when(unitRepository.existsAvailable(hospitalId, BloodProductType.PACKED_RED_CELLS, AboGroup.O, RhFactor.NEGATIVE,
+        when(unitRepository.existsAvailable(hospitalId, patient.getId(), BloodProductType.PACKED_RED_CELLS, AboGroup.O, RhFactor.NEGATIVE,
             LocalDate.now())).thenReturn(false);
     }
 
     private void oNegativeInStock() {
-        when(unitRepository.existsAvailable(hospitalId, BloodProductType.PACKED_RED_CELLS, AboGroup.O, RhFactor.NEGATIVE,
+        when(unitRepository.existsAvailable(hospitalId, patient.getId(), BloodProductType.PACKED_RED_CELLS, AboGroup.O, RhFactor.NEGATIVE,
             LocalDate.now())).thenReturn(true);
     }
 
@@ -228,6 +228,191 @@ class TransfusionEmergencyReleaseTest {
             .isInstanceOf(BusinessException.class).hasMessageContaining(message);
         assertThat(unit.getStatus()).isNotEqualTo(BloodUnitStatus.ISSUED);
         assertThat(rows).isEmpty();
+    }
+
+    // ── An incompatible result follows the patient (independent review, High) ─────────
+
+    @Test
+    @DisplayName("a bag found incompatible for this patient on another request does not go out uncrossmatched, O negative or O positive")
+    void foundIncompatibleOnAnotherRequest() {
+        adultMale();
+        for (RhFactor rh : RhFactor.values()) {
+            TransfusionRequest request = emergency();
+            UUID requestId = request.getId();
+            BloodUnit unit = bag(AboGroup.O, rh, BloodUnitStatus.RETURNED);
+            when(crossmatchRepository.findIncompatibleUnitIdsForPatient(patient.getId())).thenReturn(List.of(unit.getId()));
+            refused(request, unit, "on another request");
+            EmergencyReleaseRequestDTO silent = incompatibleRelease(unit);
+            assertThatThrownBy(() -> service.emergencyRelease(requestId, silent)).hasMessageContaining("on another request");
+        }
+        TransfusionRequest request = emergency();
+        UUID requestId = request.getId();
+        BloodUnit positive = bag(AboGroup.O, RhFactor.POSITIVE, BloodUnitStatus.RETURNED);
+        when(crossmatchRepository.findIncompatibleUnitIdsForPatient(patient.getId())).thenReturn(List.of(positive.getId()));
+        EmergencyReleaseRequestDTO release = decision(positive);
+        assertThatThrownBy(() -> service.emergencyRelease(requestId, release)).hasMessageContaining("on another request");
+        assertThat(rows).isEmpty();
+    }
+
+    @Test
+    @DisplayName("nor does it hang, and the options hide it; once recorded here the action can release it, and a repeat here that finds it compatible goes out normally")
+    void foundIncompatibleElsewhereAtTheBedsideAndAfter() {
+        adultMale();
+        typed(AboGroup.A, RhFactor.POSITIVE, AntibodyScreenResult.NEGATIVE);
+        TransfusionRequest request = emergency();
+        BloodUnit unit = bag(AboGroup.O, RhFactor.POSITIVE, BloodUnitStatus.ISSUED);
+        unit.setRequest(request);
+        when(crossmatchRepository.findIncompatibleUnitIdsForPatient(patient.getId())).thenReturn(List.of(unit.getId()));
+        assertThatThrownBy(() -> hang(request, unit)).hasMessageContaining("came back incompatible");
+
+        BloodUnit stock = bag(AboGroup.O, RhFactor.NEGATIVE, BloodUnitStatus.RETURNED);
+        when(crossmatchRepository.findIncompatibleUnitIdsForPatient(patient.getId())).thenReturn(List.of(unit.getId(), stock.getId()));
+        when(unitRepository.findAssignable(eq(hospitalId), any())).thenReturn(List.of(stock));
+        assertThat(service.emergencyReleaseOptions(request.getId()).getUnits()).isEmpty();
+
+        unit.setStatus(BloodUnitStatus.RETURNED);
+        TransfusionCrossmatch here = resultOnFile(request, unit, false);
+        service.emergencyRelease(request.getId(), incompatibleRelease(unit));
+        assertThat(unit.getStatus()).isEqualTo(BloodUnitStatus.ISSUED);
+
+        here.setCompatible(true);
+        TransfusionRequest second = emergency();
+        BloodUnit repeated = bag(AboGroup.O, RhFactor.NEGATIVE, BloodUnitStatus.CROSSMATCHED);
+        resultOnFile(second, repeated, true);
+        when(crossmatchRepository.findIncompatibleUnitIdsForPatient(patient.getId())).thenReturn(List.of(repeated.getId()));
+        service.issueUnit(second.getId(), repeated.getId());
+        assertThat(repeated.getStatus()).isEqualTo(BloodUnitStatus.ISSUED);
+    }
+
+    @Test
+    @DisplayName("an O negative plasma, platelet or cryoprecipitate bag does not go out uncrossmatched to an untyped patient")
+    void oNegativeIsRedCellsOnly() {
+        for (BloodProductType product : List.of(BloodProductType.FRESH_FROZEN_PLASMA, BloodProductType.PLATELETS, BloodProductType.CRYOPRECIPITATE)) {
+            refused(request(TransfusionUrgency.EMERGENCY, product), bag(AboGroup.O, RhFactor.NEGATIVE, BloodUnitStatus.AVAILABLE, product),
+                "Only group O red cells");
+        }
+    }
+
+    @Test
+    @DisplayName("each result gets its own item: a second incompatible result on one row is not lost to the one-per-reference rule")
+    void aSecondResultIsASecondItem() {
+        UUID requester = UUID.randomUUID();
+        TransfusionRequest request = request(TransfusionUrgency.ROUTINE, BloodProductType.PACKED_RED_CELLS);
+        request.setRequestedBy(staff(requester));
+        typed(AboGroup.O, RhFactor.POSITIVE, AntibodyScreenResult.NEGATIVE);
+        BloodUnit unit = bag(AboGroup.O, RhFactor.POSITIVE, BloodUnitStatus.ISSUED);
+        unit.setRequest(request);
+        TransfusionCrossmatch row = resultOnFile(request, unit, true);
+        service.recordCrossmatch(request.getId(), result(unit, false));
+        row.setCompatible(true);
+        row.setPerformedAt(LocalDateTime.now().minusDays(1));
+        unit.setStatus(BloodUnitStatus.ISSUED);
+        service.recordCrossmatch(request.getId(), result(unit, false));
+
+        ArgumentCaptor<CreateInBasketItemRequest> items = ArgumentCaptor.forClass(CreateInBasketItemRequest.class);
+        verify(inBasketService, times(2)).createItemInNewTransaction(items.capture());
+        assertThat(items.getAllValues().get(0).getReferenceId()).isNotEqualTo(items.getAllValues().get(1).getReferenceId());
+    }
+
+    @Test
+    @DisplayName("a bag out on a recorded release is not released twice, and no release writes a second director item")
+    void noSecondRelease() {
+        typed(AboGroup.A, RhFactor.POSITIVE, AntibodyScreenResult.NEGATIVE);
+        TransfusionRequest request = emergency();
+        UUID requestId = request.getId();
+        BloodUnit unit = bag(AboGroup.A, RhFactor.POSITIVE, BloodUnitStatus.RETURNED);
+        resultOnFile(request, unit, false);
+        lastRowIs(request, unit);
+        service.emergencyRelease(requestId, incompatibleRelease(unit));
+        EmergencyReleaseRequestDTO again = incompatibleRelease(unit);
+        assertThatThrownBy(() -> service.emergencyRelease(requestId, again)).hasMessageContaining("already out");
+        assertThat(rows).hasSize(1);
+        verify(inBasketService, times(1)).createItemInNewTransaction(any());
+
+        adultMale();
+        TransfusionRequest plain = emergency();
+        UUID plainId = plain.getId();
+        BloodUnit negative = bag(AboGroup.O, RhFactor.NEGATIVE, BloodUnitStatus.AVAILABLE);
+        lastRowIs(plain, negative);
+        rows.clear();
+        service.issueUnit(plainId, negative.getId());
+        UUID negativeId = negative.getId();
+        assertThatThrownBy(() -> service.issueUnit(plainId, negativeId)).hasMessageContaining("already out");
+        assertThat(rows).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("an O positive bag out with no decision can take one when the patient is typed Rh negative since")
+    void aDecisionAfterTheBagIsOut() {
+        adultMale();
+        noONegativeInStock();
+        TransfusionRequest request = emergency();
+        BloodUnit unit = bag(AboGroup.O, RhFactor.POSITIVE, BloodUnitStatus.AVAILABLE);
+        lastRowIs(request, unit);
+        service.issueUnit(request.getId(), unit.getId());
+        typed(AboGroup.A, RhFactor.NEGATIVE, AntibodyScreenResult.NEGATIVE);
+        when(unitRepository.findByRequest_IdOrderByUnitNumberAsc(request.getId())).thenReturn(List.of(unit));
+
+        assertThat(service.emergencyReleaseOptions(request.getId()).getUnits())
+            .singleElement().satisfies(option -> assertThat(option.isDecisionRequired()).isTrue());
+
+        service.emergencyRelease(request.getId(), decision(unit));
+        assertThat(rows).extracting(EmergencyBloodRelease::getReleaseType)
+            .containsExactly(EmergencyReleaseType.UNCROSSMATCHED, EmergencyReleaseType.O_POSITIVE_DECISION);
+        hang(request, unit);
+        verify(administrationRepository).save(any());
+    }
+
+    @Test
+    @DisplayName("a held O positive bag whose crossmatch no longer stands reaches the form that asks for the decision")
+    void aHeldBagReachesTheDecision() {
+        TransfusionRequest request = emergency();
+        BloodUnit unit = bag(AboGroup.O, RhFactor.POSITIVE, BloodUnitStatus.CROSSMATCHED);
+        unit.setRequest(request);
+        when(unitRepository.findByRequest_IdOrderByUnitNumberAsc(request.getId())).thenReturn(List.of(unit));
+
+        assertThat(service.emergencyReleaseOptions(request.getId()).getUnits()).singleElement()
+            .satisfies(option -> assertThat(option.isDecisionRequired()).isTrue());
+    }
+
+    @Test
+    @DisplayName("a global-view caller cannot send another hospital's bag out on this request")
+    void noBagFromAnotherHospital() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        TransfusionRequest request = emergency();
+        UUID requestId = request.getId();
+        BloodUnit unit = bag(AboGroup.O, RhFactor.NEGATIVE, BloodUnitStatus.AVAILABLE);
+        Hospital other = new Hospital();
+        other.setId(UUID.randomUUID());
+        unit.setHospital(other);
+        UUID unitId = unit.getId();
+        assertThatThrownBy(() -> service.issueUnit(requestId, unitId))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("a caller nobody can name cannot make a documented release")
+    void anUnnamedCaller() {
+        when(roleValidator.getCurrentUserId()).thenReturn(null);
+        TransfusionRequest request = emergency();
+        UUID requestId = request.getId();
+        EmergencyReleaseRequestDTO release = decision(bag(AboGroup.O, RhFactor.POSITIVE, BloodUnitStatus.AVAILABLE));
+        assertThatThrownBy(() -> service.emergencyRelease(requestId, release))
+            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+    }
+
+    @Test
+    @DisplayName("with no lab director here, the review item goes to the authoriser")
+    void noDirectorTellsTheAuthoriser() {
+        when(assignmentRepository.findLiveUsersAtHospitalWithRoleCodes(eq(hospitalId), anySet())).thenReturn(List.of());
+        typed(AboGroup.A, RhFactor.POSITIVE, AntibodyScreenResult.NEGATIVE);
+        TransfusionRequest request = emergency();
+        BloodUnit unit = bag(AboGroup.A, RhFactor.POSITIVE, BloodUnitStatus.RETURNED);
+        resultOnFile(request, unit, false);
+        service.emergencyRelease(request.getId(), incompatibleRelease(unit));
+        ArgumentCaptor<CreateInBasketItemRequest> item = ArgumentCaptor.forClass(CreateInBasketItemRequest.class);
+        verify(inBasketService).createItemInNewTransaction(item.capture());
+        assertThat(item.getValue().getRecipientUserId()).isEqualTo(doctor);
     }
 
     // ── A. O positive ───────────────────────────────────────────────────
