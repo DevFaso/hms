@@ -7513,6 +7513,7 @@
       "CDS_REASON": "Motivo de excepción a la alerta crítica"
     },
     "SIGN_EXCEPTION": {
+      "URGENT_CHECK": "Urgente: pedir al farmacéutico o a un médico que revise esta dosis a posteriori",
       "URGENT": "Firmar con urgencia: no puede esperar la revisión",
       "URGENT_AT": "Firmada como excepción urgente",
       "TITLE": "Alerta de dosis: ¿firmar como excepción explícita?",

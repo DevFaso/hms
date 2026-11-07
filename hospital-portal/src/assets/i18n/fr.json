@@ -7513,6 +7513,7 @@
       "CDS_REASON": "Motif du passage outre l’alerte critique"
     },
     "SIGN_EXCEPTION": {
+      "URGENT_CHECK": "Urgent : demander au pharmacien ou à un médecin d’examiner cette dose après coup",
       "URGENT": "Signer en urgence : ne peut pas attendre l’examen",
       "URGENT_AT": "Signée en exception urgente",
       "TITLE": "Alerte de dose : signer par exception explicite ?",

@@ -101,10 +101,11 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private static final String URGENT_REVIEW_TITLE_KEY = "prescription.urgentException.inBasketTitle";
     private static final String URGENT_REVIEW_BODY_KEY = "prescription.urgentException.inBasketBody";
     /** Who is asked first: the pharmacy, else a physician. */
-    private static final List<java.util.Set<String>> URGENT_REVIEWER_ROLES = List.of(
-        java.util.Set.of(com.example.hms.config.SecurityConstants.ROLE_PHARMACIST,
-            com.example.hms.config.SecurityConstants.ROLE_PHARMACY_VERIFIER),
-        java.util.Set.of(com.example.hms.config.SecurityConstants.ROLE_DOCTOR));
+    private static final java.util.Set<String> URGENT_REVIEW_PHARMACY_ROLES = java.util.Set.of(
+        com.example.hms.config.SecurityConstants.ROLE_PHARMACIST,
+        com.example.hms.config.SecurityConstants.ROLE_PHARMACY_VERIFIER);
+    private static final java.util.Set<String> URGENT_REVIEW_PHYSICIAN_ROLES = java.util.Set.of(
+        com.example.hms.config.SecurityConstants.ROLE_DOCTOR);
 
     /** {@code Prescription.overrideReason}'s {@code @Size}. */
     private static final int OVERRIDE_REASON_MAX = 1024;
@@ -525,6 +526,10 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // Before the re-authentication, so no code is spent on a refusal.
         String urgentReason = requirePediatricDoseReviewAtSigning(prescription, signingCards, signer, reauthentication);
         String urgentToken = urgentReason == null ? null : doseExceptionToken(prescription, signer, signingCards);
+        // A child's dose above the limit: the prescriber's own decision signs it, with nobody else needed. Marked urgent, the review follows.
+        boolean urgentAboveLimit = contraindicationReason != null && reauthentication != null
+            && Boolean.TRUE.equals(reauthentication.getUrgentDoseException()) && signingCards.stream()
+                .anyMatch(c -> c.exceptionKey() != null && c.exceptionKey().startsWith("paedAbove:"));
         // QA D1183 (round 23): Septrin and Totapen were SIGNED for allergic
         // patients. The allergy stop is re-run on the order being signed, so
         // an order saved before the rule knew its drug, or before the safety
@@ -559,7 +564,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         logger.info("Prescription {} signed by staff {}", prescription.getId(), signer.getId());
         appendSignatureReason(prescription, contraindicationReason);
         appendSignatureReason(prescription, urgentReason);
-        if (urgentReason != null) {
+        if (urgentReason != null || urgentAboveLimit) {
+            prescription.setPediatricDoseReviewRequired(true);
             prescription.setPediatricDoseUrgentExceptionAt(signedAt);
         }
         PrescriptionResponseDTO signed = prescriptionMapper.toResponseDTO(prescriptionRepository.save(prescription));
@@ -571,7 +577,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             UUID signerUserId = signer.getUser() != null ? signer.getUser().getId() : null;
             if (exceptionToken != null) {
                 auditDoseExceptionAfterCommit(prescription, signerUserId, contraindicationReason, signingCards,
-                    exceptionToken, versionSigned, "Dose exception recorded at signature");
+                    exceptionToken, versionSigned, urgentAboveLimit
+                        ? "Urgent paediatric dose exception recorded at signature" : "Dose exception recorded at signature");
             } else {
                 auditCdsOverrideAfterCommit(prescription, signerUserId, contraindicationReason, signingCards,
                     "Critical decision-support alert overridden at signature");
@@ -581,6 +588,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             UUID signerUserId = signer.getUser() != null ? signer.getUser().getId() : null;
             auditDoseExceptionAfterCommit(prescription, signerUserId, urgentReason, signingCards, urgentToken,
                 versionSigned, "Urgent paediatric dose exception recorded at signature");
+        }
+        if (urgentReason != null || urgentAboveLimit) {
             fileUrgentReviewAfterCommit(prescription, signer);
         }
         // QA D793: the signature is the last look before the pharmacy and the
@@ -982,7 +991,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     }
 
     private List<UUID> urgentReviewers(UUID hospitalId, UUID signerUserId) {
-        for (java.util.Set<String> roles : URGENT_REVIEWER_ROLES) {
+        for (java.util.Set<String> roles : List.of(URGENT_REVIEW_PHARMACY_ROLES, URGENT_REVIEW_PHYSICIAN_ROLES)) {
             List<UUID> found = urhaRepository.findLiveUsersAtHospitalWithRoleCodes(hospitalId, roles).stream()
                 .map(com.example.hms.model.User::getId)
                 .filter(id -> !id.equals(signerUserId))

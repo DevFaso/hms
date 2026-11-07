@@ -67,6 +67,7 @@ class StoredAlertReaderLanguageGuardTest {
         Map.entry("service/lab/LabResultReleaseNotifier.java", NOTICE),
         Map.entry("service/lab/LabSpecimenRejectionNotifier.java", NOTICE),
         Map.entry("service/LabResultServiceImpl.java", NOTICE),
+        Map.entry("service/PrescriptionServiceImpl.java", NOTICE),
         Map.entry("service/maternity/ObstetricAlertEscalationWorker.java", NOTICE),
         Map.entry("service/NotificationServiceImpl.java", NOTICE),
         Map.entry("service/pro/ProScreeningEscalationService.java", "an SMS: the recipient's phone has no session"));

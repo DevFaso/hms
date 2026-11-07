@@ -7513,6 +7513,7 @@
       "CDS_REASON": "Reason for overriding the critical alert"
     },
     "SIGN_EXCEPTION": {
+      "URGENT_CHECK": "Urgent: ask the pharmacist or a physician to review this dose afterwards",
       "URGENT": "Sign as urgent: it cannot wait for the review",
       "URGENT_AT": "Signed as an urgent exception",
       "TITLE": "Dose alert: sign as an explicit exception?",

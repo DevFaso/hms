@@ -86,7 +86,7 @@ class ControlledSigningReauthenticationGuardTest {
     @Test
     void theSignatureRequiresTheRecordedDoseReviewBeforeReAuthenticatingOrSigning() throws IOException {
         String text = Files.readString(MAIN.resolve("service/PrescriptionServiceImpl.java"));
-        int review = text.indexOf("requirePediatricDoseReviewAtSigning(prescription, signingCards, signer);");
+        int review = text.indexOf("requirePediatricDoseReviewAtSigning(prescription, signingCards, signer, reauthentication);");
         int reauth = text.indexOf("prescriberReauthentication.requireForControlledSigning(");
         int signed = text.indexOf(SIGNED_WRITE);
         assertThat(review).as("the signature checks the paediatric dose review").isPositive();

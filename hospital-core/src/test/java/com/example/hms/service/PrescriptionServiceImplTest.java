@@ -7186,4 +7186,79 @@ class PrescriptionServiceImplTest {
             .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
         assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.DRAFT);
     }
+
+    /* ── A child's dose above an approved limit: the fresh decision at the signature (provisional) ── */
+
+    private static com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard paed_aboveLimit(String key) {
+        return new com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard("Pediatric dose exceeds ceiling", "detail",
+            com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard.Indicator.CRITICAL,
+            new com.example.hms.cdshooks.dto.CdsHookDtos.Source("Paediatric dose", null, null),
+            null, null, null, UUID.randomUUID().toString(), null, null, Boolean.TRUE, key);
+    }
+
+    /** A reason given at creation does not pass the signature, nor one with no token. */
+    @Test
+    void paed_aDoseAboveTheLimitNeedsAFreshDecisionAtTheSignature() {
+        UUID user = UUID.randomUUID();
+        Prescription rx = cr01_childOrder(user, paed_aboveLimit("paedAbove:mgPerKg:20.0:15"));
+        rx.setOverrideReason("Passed at creation");
+        UUID id = rx.getId();
+        cr02_mapsTheSave();
+        com.example.hms.service.InBasketService basket = mock(com.example.hms.service.InBasketService.class);
+        prescriptionService.setUrgentReviewBasket(basket);
+
+        String token = cr02_tokenOfARefusal(rx);
+        com.example.hms.payload.dto.SignPrescriptionRequestDTO reasonAlone = cr02_exception("Décision", null);
+        assertThatThrownBy(() -> prescriptionService.signPrescription(id, reasonAlone, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.cdshooks.CdsCriticalBlockException.class);
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.DRAFT);
+
+        prescriptionService.signPrescription(id, cr02_exception("Décision", token), Locale.ENGLISH);
+
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.SIGNED);
+        assertThat(rx.getOverrideReason()).contains("Décision");
+        // Routine: the prescriber's decision stands alone, no review is opened.
+        assertThat(rx.isPediatricDoseReviewRequired()).isFalse();
+        assertThat(rx.getPediatricDoseUrgentExceptionAt()).isNull();
+        verify(basket, never()).createItemInNewTransaction(any());
+    }
+
+    @Test
+    void paed_anotherVersionOrFindingVoidsTheDecision() {
+        UUID user = UUID.randomUUID();
+        Prescription rx = cr01_childOrder(user, paed_aboveLimit("paedAbove:mgPerKg:20.0:15"));
+        UUID id = rx.getId();
+        String token = cr02_tokenOfARefusal(rx);
+        cr02_findings(paed_aboveLimit("paedAbove:mgPerKg:25.0:15"));
+        com.example.hms.payload.dto.SignPrescriptionRequestDTO stale = cr02_exception("Décision", token);
+
+        assertThatThrownBy(() -> prescriptionService.signPrescription(id, stale, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.cdshooks.CdsCriticalBlockException.class);
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.DRAFT);
+    }
+
+    /** A doctor alone: signed on the prescriber's own decision, and the review is asked for urgently afterwards. */
+    @Test
+    void paed_anUrgentDecisionSignsAloneAndAsksForTheReviewAfterwards() {
+        UUID user = UUID.randomUUID();
+        Prescription rx = cr01_childOrder(user, paed_aboveLimit("paedAbove:singleDose:900.0:500"));
+        UUID id = rx.getId();
+        cr02_mapsTheSave();
+        com.example.hms.service.InBasketService basket = mock(com.example.hms.service.InBasketService.class);
+        prescriptionService.setUrgentReviewBasket(basket);
+        when(urhaRepository.findLiveUsersAtHospitalWithRoleCodes(any(), any())).thenReturn(List.of());
+        String token = cr02_tokenOfARefusal(rx);
+
+        prescriptionService.signPrescription(id, cr01_urgent("Crise, seul sur place", token), Locale.ENGLISH);
+
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.SIGNED);
+        assertThat(rx.getPediatricDoseUrgentExceptionAt()).isEqualTo(rx.getSignedAt());
+        assertThat(rx.isPediatricDoseReviewRequired()).as("the reviewer can record it afterwards").isTrue();
+        // Nobody else on site: the signer is the one left the item can reach.
+        verify(basket).createItemInNewTransaction(org.mockito.ArgumentMatchers.argThat(item ->
+            user.equals(item.getRecipientUserId())
+                && item.getPriority() == com.example.hms.enums.InBasketPriority.URGENT));
+        verify(auditEventLogService).logEvent(org.mockito.ArgumentMatchers.argThat(e ->
+            "Urgent paediatric dose exception recorded at signature".equals(e.getEventDescription())));
+    }
 }

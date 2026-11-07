@@ -44,7 +44,7 @@ public class InBasketController {
      * can never read them. {@code InBasketRecipientGuardTest} holds it to every sender, and the
      * portal's route and nav link to it. PHYSICIAN and SURGEON reach this through ROLE_DOCTOR.
      */
-    static final String READERS = "hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN',"
+    static final String READERS = "hasAnyAuthority('ROLE_PHARMACIST','ROLE_PHARMACY_VERIFIER','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN',"
         + "'ROLE_LAB_TECHNICIAN','ROLE_LAB_MANAGER','ROLE_LAB_DIRECTOR','ROLE_SUPER_ADMIN')";
 
     private final InBasketService inBasketService;

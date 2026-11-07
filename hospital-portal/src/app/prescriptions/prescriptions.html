@@ -1752,6 +1752,18 @@
                 [(ngModel)]="signAllergyReason"
               ></textarea>
             </div>
+            @if (signAlertIsAboveLimit()) {
+              <label class="checkbox-label">
+                <input
+                  type="checkbox"
+                  name="signUrgent"
+                  data-testid="rx-sign-urgent"
+                  [ngModel]="signUrgent()"
+                  (ngModelChange)="signUrgent.set($event)"
+                />
+                {{ 'PRESCRIPTIONS.SIGN_EXCEPTION.URGENT_CHECK' | translate }}
+              </label>
+            }
           }
           @if (signNeedsSecret()) {
             <p>

@@ -345,7 +345,7 @@ public class CdsRuleEngine {
         ParacetamolFacts facts = readParacetamolFacts(patient, hospitalId, order.medicationName(), item,
             order.excludedPrescriptionId());
         if (facts == ParacetamolFacts.READ_FAILED) {
-            throw new IllegalStateException("The paracetamol facts could not be read");
+            throw new IllegalStateException();
         }
         return facts.applies() ? rule.atAdministration(buildContext(patient, hospitalId, order), doseJustRecorded) : List.of();
     }

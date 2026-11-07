@@ -368,7 +368,8 @@ public class PediatricDoseRule implements CdsRule {
             if (units > bandDose) {
                 cards.add(softStop(text.get("cds.pediatric.band.perDose.summary",
                     "{0}: {1} {2} per dose is above the {3} {2} of the weight band for {4} kg",
-                    medication(), number(units), unitOf(band), number(bandDose), number(weight))));
+                    medication(), number(units), unitOf(band), number(bandDose), number(weight)),
+                    "bandDose:" + units + ":" + bandDose));
             }
             if (dosesPerDay != null && band.getMaxDosesPerDay() != null) {
                 double daily = units * dosesPerDay;
@@ -376,7 +377,8 @@ public class PediatricDoseRule implements CdsRule {
                 if (daily > bandDaily) {
                     cards.add(softStop(text.get("cds.pediatric.band.daily.summary",
                         "{0}: {1} {2} per day is above the {3} {2} per day of the weight band for {4} kg",
-                        medication(), number(daily), unitOf(band), number(bandDaily), number(weight))));
+                        medication(), number(daily), unitOf(band), number(bandDaily), number(weight)),
+                        "bandDaily:" + daily + ":" + bandDaily));
                 }
             }
             return cards;
@@ -397,13 +399,13 @@ public class PediatricDoseRule implements CdsRule {
             if (perDose != null && mgPerKg > perDose.doubleValue()) {
                 cards.add(softStop(text.get("cds.pediatric.ceiling.summary",
                     "Pediatric dose exceeds ceiling: {0} mg/kg > {1} mg/kg max for {2}",
-                    number(mgPerKg), number(perDose), medication())));
+                    number(mgPerKg), number(perDose), medication()), "mgPerKg:" + mgPerKg + ":" + perDose));
             }
             BigDecimal single = item.getPediatricMaxSingleDoseMg();
             if (single != null && doseMg > single.doubleValue()) {
                 cards.add(softStop(text.get("cds.pediatric.singleDose.summary",
                     "{0}: {1} mg per dose is above the maximum of {2} mg per dose",
-                    medication(), number(doseMg), number(single))));
+                    medication(), number(doseMg), number(single)), "singleDose:" + doseMg + ":" + single));
             }
             BigDecimal perDay = item.getPediatricMaxDailyMgPerKg();
             if (dosesPerDay != null) {
@@ -411,7 +413,7 @@ public class PediatricDoseRule implements CdsRule {
                 if (perDay != null && dailyMgPerKg > perDay.doubleValue()) {
                     cards.add(softStop(text.get("cds.pediatric.dailyMgPerKg.summary",
                         "{0}: {1} mg/kg per day is above the usual maximum of {2} mg/kg per day",
-                        medication(), number(dailyMgPerKg), number(perDay))));
+                        medication(), number(dailyMgPerKg), number(perDay)), "dailyMgPerKg:" + dailyMgPerKg + ":" + perDay));
                 }
             } else if (!totalUnknown && (perDay != null || item.getPediatricMaxDailyMg() != null)) {
                 cards.add(frequencyUnreadCard());
@@ -419,11 +421,25 @@ public class PediatricDoseRule implements CdsRule {
             return cards;
         }
 
-        private CdsCard softStop(String summary) {
+        /**
+         * Above the usual maximum: critical at creation, as it has always been. Under an approved limit
+         * of a recorded route (CR-02, provisional, for the neonatal/paediatric lead and the pharmacist)
+         * it also asks the prescriber's fresh decision at the signature, tied by {@code key} to this
+         * finding and this version of the order. A limit that is not established raises no such
+         * decision by itself: it has its cannot-assess card.
+         */
+        private CdsCard softStop(String summary, String key) {
             String detail = text.get("cds.pediatric.softStop.detail",
                 "Child aged {0}, weight {1} kg. Reduce the dose, or override with a reason: the reason is recorded on the order and audited. Limit: {2}.",
                 ageText(), number(context.patientWeightKg()), limitBasis());
-            return card(summary, detail, CdsCard.Indicator.CRITICAL, null);
+            if (limitNotEstablished().isPresent()) {
+                return card(summary, detail, CdsCard.Indicator.CRITICAL, null);
+            }
+            return new CdsCard(summary, detail + " " + text.get("cds.pediatric.softStop.signature",
+                    "The signature asks for the prescriber's decision again, for this finding and this version of the order."),
+                CdsCard.Indicator.CRITICAL,
+                new Source(text.get("cds.source.pediatricDose", SOURCE_LABEL), null, null),
+                null, null, null, UUID.randomUUID().toString(), null, null, Boolean.TRUE, "paedAbove:" + key);
         }
 
         private String unitOf(PediatricWeightBand band) {

@@ -1065,6 +1065,44 @@ describe('PrescriptionsComponent — signing', () => {
       expect(component.signUrgent()).toBeFalse();
     });
 
+    it('A child above the limit: the prescriber decides alone, and the urgent box adds the flag', () => {
+      const aboveLimit = throwError(
+        () =>
+          new HttpErrorResponse({
+            status: 400,
+            error: {
+              message: 'Au-dessus du maximum',
+              cdsAdvisories: [
+                {
+                  summary: 'Dose au-dessus du maximum',
+                  indicator: 'critical',
+                  source: { label: 'x' },
+                  reasonAtSignature: true,
+                  exceptionKey: 'tok-a',
+                },
+              ],
+            },
+          }),
+      );
+      prescriptionService.sign.and.returnValues(aboveLimit, of(rx('rx-1', 'SIGNED')));
+      component.signPrescription(rx('rx-1', 'DRAFT'));
+      fixture.detectChanges();
+
+      expect(component.signAlertIsAboveLimit()).toBeTrue();
+      component.signAllergyReason = 'Crise, seul sur place';
+      component.signUrgent.set(true);
+      component.submitSignReauth();
+
+      expect(prescriptionService.sign.calls.mostRecent().args).toEqual([
+        'rx-1',
+        {
+          urgentDoseException: true,
+          allergyOverrideReason: 'Crise, seul sur place',
+          doseExceptionToken: 'tok-a',
+        },
+      ]);
+    });
+
     it('CR-01: a routine signature never sends the urgent flag, and the action is offered only for a due review', () => {
       prescriptionService.sign.and.returnValue(of(rx('rx-1', 'SIGNED')));
       component.signPrescription(rx('rx-1', 'DRAFT'));

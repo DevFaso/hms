@@ -1346,6 +1346,10 @@ export class PrescriptionsComponent implements OnInit {
   readonly signAlertIsException = computed(() =>
     this.signAllergyCards().some((c) => !!c.exceptionKey),
   );
+  /** A child's dose above the limit: the prescriber decides alone, and may mark it urgent so the review follows. */
+  readonly signAlertIsAboveLimit = computed(() =>
+    this.signAllergyCards().some((c) => c.indicator === 'critical' && !!c.exceptionKey),
+  );
   signAllergyReason = '';
   /** CR-01: this attempt is the prescriber's urgent exception to the second-person dose review. */
   readonly signUrgent = signal(false);

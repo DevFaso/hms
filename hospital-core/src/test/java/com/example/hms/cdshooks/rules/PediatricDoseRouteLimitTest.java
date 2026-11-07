@@ -203,4 +203,25 @@ class PediatricDoseRouteLimitTest {
                 assertThat(card.exceptionKey()).as("the review by age has no urgent exception").isNull();
             });
     }
+
+    @Test
+    void aDoseAboveAnApprovedLimitAsksForTheDecisionAtTheSignatureAndIsNoHardStop() {
+        assertThat(evaluate(limit("PO", PediatricDoseLimitStatus.APPROVED), "200 mg", "PO", null))
+            .isNotEmpty().allSatisfy(card -> {
+                assertThat(card.indicator()).isEqualTo(CdsCard.Indicator.CRITICAL);
+                assertThat(card.needsReasonAtSignature()).isTrue();
+                assertThat(card.exceptionKey()).startsWith("paedAbove:");
+                assertThat(card.blocksOverride()).isFalse();
+                assertThat(card.requiresReview()).isFalse();
+            });
+    }
+
+    /** A limit that is not established raises no decision by itself: the stop as it was, and the review. */
+    @Test
+    void aLimitNotEstablishedRaisesNoDecisionAtTheSignature() {
+        assertThat(evaluate(limit("PO", PediatricDoseLimitStatus.DEFAULT_PENDING_APPROVAL), "200 mg", "PO", null))
+            .noneMatch(CdsCard::needsReasonAtSignature);
+        assertThat(evaluate(limit(null, PediatricDoseLimitStatus.APPROVED), "200 mg", "PO", null))
+            .noneMatch(CdsCard::needsReasonAtSignature);
+    }
 }
