@@ -1,3 +1,4 @@
+@use '../../shared/styles/workspace-dashboard';
 :host {
   display: block;
 }
@@ -448,4 +449,245 @@
 /* ── Flow Tab ───────────────────────────── */
 .flow-tab {
   overflow-x: auto;
+}
+
+@include workspace-dashboard.layout;
+.cockpit-page {
+  max-width: none;
+  padding: 28px 32px;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+}
+.cockpit-header {
+  gap: 20px;
+  margin-bottom: 24px;
+}
+.cockpit-title {
+  gap: 0;
+}
+.cockpit-title > .material-symbols-outlined {
+  display: none;
+}
+.cockpit-title h1 {
+  font-size: clamp(26px, 2vw, 32px);
+  letter-spacing: -0.04em;
+}
+.cockpit-actions {
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.cockpit-actions button,
+.date-picker {
+  min-height: 42px;
+  border-radius: 9px;
+  padding: 10px 14px;
+  font: inherit;
+  font-size: 13px;
+}
+.cockpit-actions .btn-primary {
+  background: #0b7061;
+  color: #fff;
+  border-color: #0b7061;
+}
+.daily-overview {
+  padding: 22px;
+}
+.overview-heading {
+  margin-bottom: 20px;
+}
+.overview-heading > span {
+  font-size: 12px;
+  color: #52667b;
+  background: #f1f5f8;
+  border: 1px solid #e0e7ee;
+  padding: 7px 10px;
+  border-radius: 7px;
+}
+.summary-strip {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 0;
+}
+.sum-card {
+  text-align: left;
+  padding: 20px 16px;
+  background: #f7fafc;
+  border: 1px solid #e2eaf0;
+  border-radius: 12px;
+  align-items: flex-start;
+  gap: 7px;
+  min-width: 0;
+}
+.sum-card:first-child {
+  background: #102e3b;
+  border-color: #102e3b;
+}
+.sum-card:first-child .sum-num,
+.sum-card:first-child .sum-label {
+  color: #fff;
+}
+.sum-num {
+  font-size: 29px;
+  color: #172d43;
+  letter-spacing: -0.04em;
+  font-weight: 750;
+}
+.sum-label {
+  font-size: 11px;
+  line-height: 1.5;
+  color: #52667b;
+}
+.sum-card.warning {
+  background: #fff8e9;
+  border-color: #ebd2a0;
+}
+.sum-card.warning .sum-num {
+  color: #805012;
+}
+.sum-card.danger {
+  background: #fff4f5;
+  border-color: #eed0d5;
+}
+.sum-card.danger .sum-num {
+  color: #a32132;
+}
+.tab-bar {
+  padding: 16px 20px;
+  display: flex;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  gap: 7px;
+  border-bottom: 1px solid #e5edf2;
+  margin: 0;
+}
+.tab-bar button {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 12px;
+  border: 1px solid #e2e9ef;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #52667b;
+  background: #fff;
+}
+.tab-bar button.active {
+  color: #075d52;
+  background: #e7f4ef;
+  border-color: #8fc4b3;
+}
+.tab-bar .badge {
+  font-size: 10px;
+}
+.filter-bar {
+  padding: 18px 22px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+}
+.filter-btn {
+  padding: 7px 10px;
+  border-radius: 6px;
+  border: 1px solid #dce5ec;
+  font-size: 11px;
+  color: #52667b;
+}
+.filter-btn.active {
+  background: #0b7061;
+  border-color: #0b7061;
+  color: #fff;
+}
+.patient-link {
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  color: #08685b;
+  text-align: left;
+}
+.reason-cell {
+  max-width: 240px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.flag-chip.warn,
+.flag-chip.danger {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 650;
+  padding: 3px 6px;
+  margin: 0 3px 4px 0;
+  border-radius: 5px;
+  line-height: 1.5;
+}
+.flag-chip.warn {
+  color: #805012;
+  background: #fff4d8;
+}
+.flag-chip.danger {
+  color: #a32132;
+  background: #fff0f1;
+}
+.btn-icon {
+  border-radius: 7px;
+  background: #f5faf8;
+  border-color: #c8ded5;
+  color: #08685b;
+  width: 34px;
+  height: 34px;
+}
+@media (max-width: 1200px) {
+  .summary-strip {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 800px) {
+  .cockpit-page {
+    padding: 24px;
+  }
+}
+@media (max-width: 600px) {
+  .cockpit-page {
+    padding: 18px 12px;
+  }
+  .daily-overview {
+    padding: 16px;
+  }
+  .summary-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 9px;
+  }
+  .sum-card {
+    padding: 16px 12px;
+  }
+  .sum-num {
+    font-size: 25px;
+  }
+  .tab-bar {
+    padding: 14px;
+  }
+  .cockpit-actions {
+    width: 100%;
+  }
+}
+
+.sum-card .sum-label {
+  color: #52667b;
+}
+.btn-xs.btn-checkin {
+  background: #0b7061;
+  color: #fff;
+  border: 1px solid #0b7061;
+  border-radius: 6px;
+  padding: 7px 9px;
+  font-size: 11px;
+}
+.queue-table tr.has-issues td {
+  background: #fff;
+}
+.queue-table tr.has-issues:hover td {
+  background: #f6fbf9;
 }
