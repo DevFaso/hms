@@ -30,7 +30,7 @@ class AllergyActiveReadersGuardTest {
     private static final Path ROOT = Path.of("src/main/java/com/example/hms");
 
     private static final Pattern READS_ROWS = Pattern.compile(
-        "[aA]llergyRepository\\s*+\\.\\s*+(?:findByPatient_Id|findByPatient_IdAndHospital_Id|findVisibleAt)\\("
+        "[aA]llergyRepository\\s*+\\.\\s*+(?:findByPatient_Id|findByPatient_IdIn|findByPatient_IdAndHospital_Id|findVisibleAt)\\("
             + "|rowsVisibleAt\\(");
 
     /** The token the source must hold, and why that handles a deactivated row. */
@@ -50,6 +50,8 @@ class AllergyActiveReadersGuardTest {
             new Reader("identity.matchingAllergies", "AllergyDrugIdentity and the class matchers skip inactive rows")),
         Map.entry("service/impl/NurseTaskServiceImpl.java",
             new Reader("CrossReactivityAdvisory.card", "BetaLactamCrossReactivity skips inactive rows")),
+        Map.entry("service/emar/MarWardReader.java",
+            new Reader("findByPatient_IdIn", "hands every row to NurseTaskServiceImpl's CrossReactivityAdvisory.card, listed above: BetaLactamCrossReactivity skips inactive rows")),
         Map.entry("service/impl/NurseDashboardServiceImpl.java",
             new Reader("PatientAllergySummarySync.summarize", "the summary is built from active rows only")),
         Map.entry("service/allergy/PatientAllergySummarySync.java",

@@ -1310,7 +1310,36 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         } else {
             rows = tenantRows(hospitalId, filter, pageable);
         }
-        return rows.map(prescriptionMapper::toResponseDTO);
+        return responsePage(rows);
+    }
+
+    /** QA D1314: the page's rows mapped together, so the catalogue is read once for the page. */
+    private Page<PrescriptionResponseDTO> responsePage(Page<Prescription> rows) {
+        return new org.springframework.data.domain.PageImpl<>(
+            prescriptionMapper.toResponseDTOs(rows.getContent()), rows.getPageable(), rows.getTotalElements());
+    }
+
+    @Override
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public Page<PrescriptionResponseDTO> search(String term, List<PrescriptionStatus> statuses,
+                                                Pageable pageable, Locale locale) {
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        List<PrescriptionStatus> filter = normaliseStatusFilter(statuses);
+        String pattern = com.example.hms.utility.PatientMatchKeys.nameContainsPattern(term);
+        if (pattern == null) {
+            return responsePage(tenantRows(hospitalId, filter, pageable));
+        }
+        Page<Prescription> rows;
+        if (hospitalId == null) {
+            rows = filter.isEmpty()
+                ? prescriptionRepository.searchEveryHospital(pattern, pageable)
+                : prescriptionRepository.searchEveryHospitalInStatuses(filter, pattern, pageable);
+        } else {
+            rows = filter.isEmpty()
+                ? prescriptionRepository.searchAtHospital(hospitalId, pattern, pageable)
+                : prescriptionRepository.searchAtHospitalInStatuses(hospitalId, filter, pattern, pageable);
+        }
+        return responsePage(rows);
     }
 
     /**

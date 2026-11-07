@@ -37,12 +37,43 @@ public class PrescriptionControlledResolver {
         if (prescription == null) {
             return false;
         }
-        if (prescription.isControlledSubstance()) {
+        if (ticked(prescription)) {
             return true;
         }
         Hospital hospital = prescription.getHospital();
         return catalogControlled(hospital == null ? null : hospital.getId(),
             prescription.getMedicationCatalogItemId(), prescription.getMedicationCode());
+    }
+
+    private static boolean ticked(Prescription prescription) {
+        return prescription.isControlledSubstance();
+    }
+
+    /**
+     * QA D1314: {@link #isControlled} for many orders in one statement. The ids
+     * of those that are controlled.
+     */
+    public java.util.Set<UUID> controlledAmong(java.util.Collection<Prescription> orders) {
+        java.util.List<CatalogControlledIndex.Order> keys = new java.util.ArrayList<>();
+        for (Prescription order : orders) {
+            if (order.getHospital() != null) {
+                keys.add(new CatalogControlledIndex.Order(order.getHospital().getId(),
+                    order.getMedicationCatalogItemId(), order.getMedicationCode()));
+            }
+        }
+        CatalogControlledIndex index = CatalogControlledIndex.read(catalogRepository, keys);
+        java.util.Set<UUID> controlled = new java.util.HashSet<>();
+        for (Prescription order : orders) {
+            Hospital hospital = order.getHospital();
+            if (isControlled(order, hospital == null ? null : hospital.getId(), index)) {
+                controlled.add(order.getId());
+            }
+        }
+        return controlled;
+    }
+
+    private static boolean isControlled(Prescription order, UUID hospitalId, CatalogControlledIndex index) {
+        return ticked(order) || index.controlled(hospitalId, order.getMedicationCatalogItemId(), order.getMedicationCode());
     }
 
     /** The catalog's flag for the item picked, or for the code, at {@code hospitalId}. */

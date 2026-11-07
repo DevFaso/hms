@@ -283,6 +283,34 @@ public class PrescriptionController {
         );
     }
 
+    /**
+     * QA D1314: {@code GET /prescriptions?search=}. The search box searches the
+     * hospital's list, so a term with an id filter is refused: never silently a
+     * different list. A blank term is the plain list.
+     */
+    @GetMapping(params = "search")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_PHARMACIST',"
+        + "'ROLE_PHARMACY_VERIFIER','ROLE_SUPER_ADMIN')")
+    @Operation(summary = "Search Prescriptions",
+        description = "One page of the hospital's list narrowed to a drug, patient or prescriber name, "
+            + "accents ignored. `status` as on the list. Does not combine with patientId, staffId or encounterId.")
+    public ResponseEntity<Page<PrescriptionResponseDTO>> search(
+        @RequestParam(required = false) UUID patientId,
+        @RequestParam(required = false) UUID staffId,
+        @RequestParam(required = false) UUID encounterId,
+        @RequestParam(required = false) List<PrescriptionStatus> status,
+        @RequestParam String search,
+        @ParameterObject Pageable pageable,
+        Locale locale) {
+        if (search.isBlank()) {
+            return list(patientId, staffId, encounterId, status, pageable, locale);
+        }
+        if (patientId != null || staffId != null || encounterId != null) {
+            throw new com.example.hms.exception.FieldBusinessException("search", "prescription.list.searchWithFilter");
+        }
+        return ResponseEntity.ok(prescriptionService.search(search, status, pageable, locale));
+    }
+
     @PutMapping("/{id}")
     @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
     @Operation(summary = "Update Prescription", description = "Updates an existing prescription.")

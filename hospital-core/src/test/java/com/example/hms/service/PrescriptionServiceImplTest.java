@@ -218,8 +218,43 @@ class PrescriptionServiceImplTest {
 
         lenient().when(prescriptionMapper.toEntity(any(), any(), any(), any()))
             .thenReturn(new Prescription());
+        // QA D1314: the list maps a page at once; these tests state each row's answer.
+        lenient().when(prescriptionMapper.toResponseDTOs(any())).thenAnswer(inv ->
+            inv.<List<Prescription>>getArgument(0).stream().map(prescriptionMapper::toResponseDTO).toList());
         // The named prescriber holds a prescribing role unless a test says otherwise.
         lenient().when(roleValidator.canCreatePrescription(user.getId(), hospitalId)).thenReturn(true);
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({"true,false", "true,true", "false,false", "false,true"})
+    @org.junit.jupiter.api.DisplayName("QA D1314: the search box asks the query of its scope and tab, with the typed text folded")
+    void d1314SearchPicksTheQueryOfItsScopeAndTab(boolean atHospital, boolean inTab) {
+        Pageable page = PageRequest.of(0, 50);
+        List<com.example.hms.enums.PrescriptionStatus> statuses = inTab ? List.of(com.example.hms.enums.PrescriptionStatus.SIGNED) : List.of();
+        Page<Prescription> rows = new PageImpl<>(List.of());
+        when(roleValidator.requireActiveHospitalId()).thenReturn(atHospital ? hospitalId : null);
+        String folded = "%kiemde%";
+        if (atHospital && inTab) {
+            when(prescriptionRepository.searchAtHospitalInStatuses(hospitalId, statuses, folded, page)).thenReturn(rows);
+        } else if (atHospital) {
+            when(prescriptionRepository.searchAtHospital(hospitalId, folded, page)).thenReturn(rows);
+        } else if (inTab) {
+            when(prescriptionRepository.searchEveryHospitalInStatuses(statuses, folded, page)).thenReturn(rows);
+        } else {
+            when(prescriptionRepository.searchEveryHospital(folded, page)).thenReturn(rows);
+        }
+
+        assertThat(prescriptionService.search("  KIEMDÉ ", statuses, page, Locale.ENGLISH).getContent()).isEmpty();
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("QA D1314: a search with nothing to search for is the plain list")
+    void d1314BlankSearchIsTheList() {
+        Pageable page = PageRequest.of(0, 50);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findByHospital_Id(hospitalId, page)).thenReturn(new PageImpl<>(List.of()));
+
+        assertThat(prescriptionService.search("   ", null, page, Locale.ENGLISH).getContent()).isEmpty();
     }
 
     @Test

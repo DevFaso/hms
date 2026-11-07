@@ -98,6 +98,13 @@ public interface PrescriptionService {
                                        List<PrescriptionStatus> statuses,
                                        Pageable pageable, Locale locale);
 
+    /**
+     * QA D1314: one page of the hospital's list narrowed by what the search box
+     * holds: the drug, the patient's name or the prescriber's name, accents
+     * ignored. A blank term is the plain list.
+     */
+    Page<PrescriptionResponseDTO> search(String term, List<PrescriptionStatus> statuses, Pageable pageable, Locale locale);
+
     PrescriptionResponseDTO updatePrescription(UUID id, PrescriptionRequestDTO request, Locale locale);
 
     void deletePrescription(UUID id, Locale locale);

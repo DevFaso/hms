@@ -23,9 +23,12 @@ public interface EncounterRepository
     @org.springframework.data.jpa.repository.Query("""
         SELECT e FROM Encounter e
         JOIN FETCH e.patient p
-        JOIN FETCH p.user
+        JOIN FETCH p.user pu
+        LEFT JOIN FETCH pu.patientProfile
+        LEFT JOIN FETCH pu.staffProfile
         LEFT JOIN FETCH e.staff s
-        LEFT JOIN FETCH s.user
+        LEFT JOIN FETCH s.user su
+        LEFT JOIN FETCH su.patientProfile
         LEFT JOIN FETCH e.department d
         LEFT JOIN FETCH e.hospital h
         LEFT JOIN FETCH e.appointment a
@@ -37,9 +40,12 @@ public interface EncounterRepository
     @org.springframework.data.jpa.repository.Query("""
         SELECT e FROM Encounter e
         JOIN FETCH e.patient p
-        JOIN FETCH p.user
+        JOIN FETCH p.user pu
+        LEFT JOIN FETCH pu.patientProfile
+        LEFT JOIN FETCH pu.staffProfile
         JOIN FETCH e.staff s
-        JOIN FETCH s.user
+        JOIN FETCH s.user su
+        LEFT JOIN FETCH su.patientProfile
         LEFT JOIN FETCH e.department d
         LEFT JOIN FETCH e.hospital h
         LEFT JOIN FETCH e.appointment a
@@ -101,7 +107,8 @@ public interface EncounterRepository
     @Query("""
         SELECT e FROM Encounter e
         JOIN FETCH e.staff s
-        JOIN FETCH s.user
+        JOIN FETCH s.user su
+        LEFT JOIN FETCH su.patientProfile
         LEFT JOIN FETCH e.hospital
         WHERE e.patient.id = :patientId
           AND e.status NOT IN :closed
@@ -146,7 +153,8 @@ public interface EncounterRepository
         JOIN FETCH e.patient p
         LEFT JOIN FETCH p.hospitalRegistrations
         LEFT JOIN FETCH e.staff s
-        LEFT JOIN FETCH s.user
+        LEFT JOIN FETCH s.user su
+        LEFT JOIN FETCH su.patientProfile
         LEFT JOIN FETCH e.department d
         LEFT JOIN FETCH e.appointment a
         WHERE e.hospital.id = :hospitalId
@@ -168,7 +176,8 @@ public interface EncounterRepository
         JOIN FETCH e.patient p
         LEFT JOIN FETCH p.hospitalRegistrations
         LEFT JOIN FETCH e.staff s
-        LEFT JOIN FETCH s.user
+        LEFT JOIN FETCH s.user su
+        LEFT JOIN FETCH su.patientProfile
         LEFT JOIN FETCH e.department d
         LEFT JOIN FETCH e.appointment a
         WHERE e.hospital.id = :hospitalId
@@ -226,9 +235,12 @@ public interface EncounterRepository
     @Query("""
         SELECT e FROM Encounter e
         JOIN FETCH e.patient p
-        JOIN FETCH p.user
+        JOIN FETCH p.user pu
+        LEFT JOIN FETCH pu.patientProfile
+        LEFT JOIN FETCH pu.staffProfile
         LEFT JOIN FETCH e.staff s
-        LEFT JOIN FETCH s.user
+        LEFT JOIN FETCH s.user su
+        LEFT JOIN FETCH su.patientProfile
         LEFT JOIN FETCH e.department d
         LEFT JOIN FETCH e.hospital h
         LEFT JOIN FETCH e.appointment a
@@ -245,44 +257,20 @@ public interface EncounterRepository
      * hospital) so we avoid N+1 lookups on the rendered rows. Sort + limit
      * are applied at the DB level via the {@link Pageable} argument.
      */
-    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {
-        "patient",
-        "staff",
-        "staff.user",
-        "department",
-        "hospital"
-    })
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "department", "hospital"})
     Page<Encounter> findByPatient_IdOrderByEncounterDateDesc(UUID patientId, Pageable pageable);
 
     /** Hospital-scoped paged variant for the chart-review aggregator. */
-    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {
-        "patient",
-        "staff",
-        "staff.user",
-        "department",
-        "hospital"
-    })
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "department", "hospital"})
     Page<Encounter> findByPatient_IdAndHospital_IdOrderByEncounterDateDesc(
         UUID patientId, UUID hospitalId, Pageable pageable);
 
     /** E9 #59e — across the readable hospitals ({@code RecordAccessPolicy.readableHospitalIds}). */
-    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {
-        "patient",
-        "staff",
-        "staff.user",
-        "department",
-        "hospital"
-    })
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "department", "hospital"})
     List<Encounter> findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(UUID patientId, Collection<UUID> hospitalIds);
 
     /** E9 #60 — the paged sibling, for the chart review. */
-    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {
-        "patient",
-        "staff",
-        "staff.user",
-        "department",
-        "hospital"
-    })
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "department", "hospital"})
     Page<Encounter> findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(
         UUID patientId, Collection<UUID> hospitalIds, Pageable pageable);
 
@@ -352,26 +340,14 @@ public interface EncounterRepository
                                                        Pageable pageable);
 
     /** QA D791: the chart review's Encounters tab ("Revue de dossier"), visits only, newest first. */
-    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {
-        "patient",
-        "staff",
-        "staff.user",
-        "department",
-        "hospital"
-    })
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "department", "hospital"})
     @Query(value = "SELECT e FROM Encounter e WHERE e.patient.id = :patientId AND " + NOT_PRESCRIPTION_ANCHOR
             + " ORDER BY e.encounterDate DESC",
         countQuery = "SELECT COUNT(e) FROM Encounter e WHERE e.patient.id = :patientId AND " + NOT_PRESCRIPTION_ANCHOR)
     Page<Encounter> findVisitsByPatientId(@Param("patientId") UUID patientId, Pageable pageable);
 
     /** QA D791: the same across the readable hospitals ({@code RecordAccessPolicy.readableHospitalIds}). */
-    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {
-        "patient",
-        "staff",
-        "staff.user",
-        "department",
-        "hospital"
-    })
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "department", "hospital"})
     @Query(value = "SELECT e FROM Encounter e WHERE e.patient.id = :patientId AND e.hospital.id IN :hospitalIds AND "
             + NOT_PRESCRIPTION_ANCHOR + " ORDER BY e.encounterDate DESC",
         countQuery = "SELECT COUNT(e) FROM Encounter e WHERE e.patient.id = :patientId AND e.hospital.id IN :hospitalIds AND "

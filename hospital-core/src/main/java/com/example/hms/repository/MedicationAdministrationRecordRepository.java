@@ -33,6 +33,25 @@ public interface MedicationAdministrationRecordRepository extends JpaRepository<
     List<MedicationAdministrationRecord> findByPrescription_IdOrderByScheduledTimeDesc(
         @Param("prescriptionId") UUID prescriptionId);
 
+    /**
+     * QA D1314: {@link #findByPrescription_IdOrderByScheduledTimeDesc} for a
+     * whole ward, in that order, with what a row's dose history names (the
+     * nurse, the witness) in the same statement.
+     */
+    @Query("""
+        SELECT m FROM MedicationAdministrationRecord m
+        LEFT JOIN FETCH m.administeredByStaff s
+        LEFT JOIN FETCH s.user su
+        LEFT JOIN FETCH su.patientProfile
+        LEFT JOIN FETCH m.witnessUser wu
+        LEFT JOIN FETCH wu.patientProfile
+        LEFT JOIN FETCH wu.staffProfile
+        WHERE m.prescription.id IN :prescriptionIds
+        ORDER BY m.scheduledTime DESC, m.administeredAt DESC NULLS LAST, m.createdAt DESC, m.id DESC
+    """)
+    List<MedicationAdministrationRecord> findByPrescriptionIdsNewestSlotFirst(
+        @Param("prescriptionIds") java.util.Collection<UUID> prescriptionIds);
+
     @Query("""
         SELECT m FROM MedicationAdministrationRecord m
         JOIN FETCH m.prescription

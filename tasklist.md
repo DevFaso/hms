@@ -6312,3 +6312,12 @@ For the clinician list (proposed alert logic, pending sign-off):
 - D1489 class: the consent `try/catch` inside the check-in and pre-check-in transactions stays: both now refuse first, but any other failure of `TreatmentConsentService.record` would still mark the transaction rollback-only and answer 500.
 - Dispute: an in-basket item filed by the sweep, with no tenant context, keeps the patient's name and loses its patient link (`InBasketServiceImpl.fileItem`). Reminder and recall sweeps still skip a deceased patient under dispute (`AppointmentRepository`, `PatientRecallRepository`). Entered in error's audit does not name the disputes it ended; their rows do.
 - D1495: the refusal is on `hospitalId`, as booking's is, and that field is not on the reschedule form: it reads as a banner.
+
+## Standing debt — round 36 (fix/r36-memory)
+
+- **D1314, `UserProfileFetchGuardTest.NOT_YET`:** the repositories whose fetch of a User still costs one SELECT per row: lab results (`LabResultRepositoryEntityGraphTest` pins the exact graph, so change both), appointments, invoices, break-glass, treatment plans, treatments, staff lists, assignments, shifts and the like. Same one-line fix as the graphs of `PrescriptionRepository`, one file at a time; the guard's count falls with each.
+- **D1314, the root cause stays:** `User.patientProfile` and `User.staffProfile` are forced EAGER by `@NotFound`. Making them truly lazy (a `@OneToMany` read as first-or-null, or bytecode enhancement) would end the class at once, but 13 main-code readers run outside a guaranteed session and a `LazyInitializationException` at login is the wrong trade for this wave.
+- **D1314, `GET /patients?assignedTo=me` (`getPatientsForNurse`, the full read):** still one vitals read and one sharing read per registered patient, as measured in `WardLoadPostgresIT#nursePatients`. The ward's lists no longer use it. Batch it, or make the endpoint serve only the bed list.
+- **D1314, an unsigned order's prescriber:** `awaitingPhysicianSignature` is two role queries per distinct prescriber on a page: bounded by the page, not by the table.
+- **D1314, `HospitalAdminDashboardServiceImpl.buildStaffingMetrics`:** `staffAvailabilityRepository.findAll()` then a filter in memory, on every hospital's rows. Not measured.
+- **D1314, `allRows` readers:** `PrescriptionService.list` still reads every page where a caller needs the whole of one visit, and for a status this build has no name for (the attention tab only). Both are bounded by what they read; neither is a search any more.

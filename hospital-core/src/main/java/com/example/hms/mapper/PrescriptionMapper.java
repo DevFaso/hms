@@ -1,6 +1,7 @@
 package com.example.hms.mapper;
 
 import com.example.hms.enums.PrescriptionStatus;
+import com.example.hms.service.pharmacy.CatalogControlledIndex;
 import com.example.hms.model.Encounter;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
@@ -76,7 +77,49 @@ public class PrescriptionMapper {
        ============================ */
     public PrescriptionResponseDTO toResponseDTO(Prescription p) {
         if (p == null) return null;
+        Hospital hospital = safeInit(p.getHospital(), ENTITY, p.getId(), "hospital");
+        Encounter enc = safeInit(p.getEncounter(), ENTITY, p.getId(), "encounter");
+        // D654/D678: tick OR the catalog item at the order's hospital (the rule
+        // PrescriptionControlledResolver applies for verification, chart and history).
+        return toResponseDTO(p, ticked(p)
+            || catalogControlled(resolveHospitalId(hospital, enc),
+                p.getMedicationCatalogItemId(), p.getMedicationCode()), new java.util.HashMap<>());
+    }
 
+    /**
+     * QA D1314: {@link #toResponseDTO(Prescription)} for one page of orders.
+     * The catalogue is read once for the page, not once per row: a page of 200
+     * cost about 100 statements in catalogue reads alone. An unsigned order's
+     * prescriber is looked up once per prescriber, not once per order.
+     */
+    public java.util.List<PrescriptionResponseDTO> toResponseDTOs(java.util.List<Prescription> rows) {
+        java.util.List<CatalogControlledIndex.Order> keys = new java.util.ArrayList<>();
+        for (Prescription p : rows) {
+            java.util.UUID hospitalId = hospitalIdOf(p);
+            if (hospitalId != null) {
+                keys.add(new CatalogControlledIndex.Order(hospitalId, p.getMedicationCatalogItemId(), p.getMedicationCode()));
+            }
+        }
+        CatalogControlledIndex index = catalogRepository == null
+            ? CatalogControlledIndex.EMPTY : CatalogControlledIndex.read(catalogRepository, keys);
+        java.util.Map<String, Boolean> drafters = new java.util.HashMap<>();
+        return rows.stream()
+            .map(p -> toResponseDTO(p, ticked(p)
+                || index.controlled(hospitalIdOf(p), p.getMedicationCatalogItemId(), p.getMedicationCode()), drafters))
+            .toList();
+    }
+
+    private static boolean ticked(Prescription p) {
+        return p.isControlledSubstance();
+    }
+
+    private java.util.UUID hospitalIdOf(Prescription p) {
+        return resolveHospitalId(safeInit(p.getHospital(), ENTITY, p.getId(), "hospital"),
+            safeInit(p.getEncounter(), ENTITY, p.getId(), "encounter"));
+    }
+
+    private PrescriptionResponseDTO toResponseDTO(Prescription p, boolean controlled,
+                                                  java.util.Map<String, Boolean> drafters) {
         // Defensive: if a parent row was hard-deleted while a Prescription
         // still references it (dangling FK), `safeInit` returns null instead
         // of letting the lazy proxy throw EntityNotFoundException — which
@@ -86,11 +129,6 @@ public class PrescriptionMapper {
         Staff     staff    = safeInit(p.getStaff(),     ENTITY, p.getId(), "staff");
         Encounter enc      = safeInit(p.getEncounter(), ENTITY, p.getId(), "encounter");
         Hospital  hospital = safeInit(p.getHospital(),  ENTITY, p.getId(), "hospital");
-        // D654/D678: tick OR the catalog item at the order's hospital (the rule
-        // PrescriptionControlledResolver applies for verification, chart and history).
-        boolean controlled = p.isControlledSubstance()
-            || catalogControlled(resolveHospitalId(hospital, enc),
-                p.getMedicationCatalogItemId(), p.getMedicationCode());
 
         return PrescriptionResponseDTO.builder()
             .id(p.getId())
@@ -132,7 +170,7 @@ public class PrescriptionMapper {
             .status(p.getStatus() != null ? p.getStatus().name() : null)
             .controlledSubstance(controlled)
             .requiresCosign(p.isRequiresCosign())
-            .awaitingPhysicianSignature(awaitsPhysicianSignature(p, staff, resolveHospitalId(hospital, enc)))
+            .awaitingPhysicianSignature(awaitsPhysicianSignature(p, staff, resolveHospitalId(hospital, enc), drafters))
             .takeHome(p.isTakeHome())
             .twoFactorVerifiedAt(p.getTwoFactorVerifiedAt())
             .cosignedAt(p.getCosignedAt())
@@ -415,7 +453,8 @@ public class PrescriptionMapper {
      * the same rule {@code PrescriptionServiceImpl} applies when a doctor
      * signs it.
      */
-    private boolean awaitsPhysicianSignature(Prescription p, Staff staff, java.util.UUID hospitalId) {
+    private boolean awaitsPhysicianSignature(Prescription p, Staff staff, java.util.UUID hospitalId,
+                                             java.util.Map<String, Boolean> drafters) {
         if (roleValidator == null || hospitalId == null || p.getSignatureValue() != null
                 || (p.getStatus() != PrescriptionStatus.DRAFT && p.getStatus() != PrescriptionStatus.PENDING_SIGNATURE)) {
             return false;
@@ -424,7 +463,8 @@ public class PrescriptionMapper {
         if (userId == null) {
             return false;
         }
-        return roleValidator.draftsForPhysicianSignature(userId, hospitalId);
+        return drafters.computeIfAbsent(userId + "@" + hospitalId,
+            key -> roleValidator.draftsForPhysicianSignature(userId, hospitalId));
     }
 
     private java.util.UUID resolveHospitalId(Hospital hospital, Encounter enc) {

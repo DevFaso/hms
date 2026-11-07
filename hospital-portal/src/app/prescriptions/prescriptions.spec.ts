@@ -56,14 +56,19 @@ import { isSubmitBlocked } from '../shared/forms/submit-guard.testing';
  * state the tenant's rows through the `list` spy, and this answers each page and
  * count from them, filtered by status as the server does.
  */
+function matchesSearch(row: PrescriptionResponse, search: string | undefined): boolean {
+  const term = search?.trim().toLowerCase();
+  return !term || (row.medicationName ?? '').toLowerCase().includes(term);
+}
+
 function pageFromList(spy: jasmine.SpyObj<PrescriptionService>): void {
   spy.page.and.callFake((filters, page, size) =>
     spy.list().pipe(
       map((rows) => {
         const statuses = filters.statuses ?? [];
-        const kept = statuses.length
-          ? rows.filter((r) => statuses.includes(r.status as string))
-          : rows;
+        const kept = (
+          statuses.length ? rows.filter((r) => statuses.includes(r.status as string)) : rows
+        ).filter((r) => matchesSearch(r, filters.search));
         return {
           content: kept.slice(page * size, (page + 1) * size),
           totalElements: kept.length,
@@ -2513,6 +2518,18 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
     expect(counted.length).withContext('one count per tab').toBe(6);
   });
 
+  /** The search box, its wait for the next keystroke over. */
+  function search(term: string): void {
+    jasmine.clock().install();
+    try {
+      component.searchTerm = term;
+      component.onSearchInput();
+      jasmine.clock().tick(PrescriptionsComponent.SEARCH_DELAY_MS);
+    } finally {
+      jasmine.clock().uninstall();
+    }
+  }
+
   it('QA D1441: a search hides the unfiltered rows and says it is searching until the answer is known', async () => {
     const rows = Array.from({ length: 60 }, (_, i) =>
       makeRx({ id: 'rx-' + i, status: 'SIGNED', createdAt: '2026-09-20T08:00:00' }),
@@ -2521,18 +2538,17 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
     fixture.detectChanges();
     expect(component.filtered().length).toBe(50);
 
-    const whole$ = new Subject<PrescriptionResponse[]>();
-    prescriptionServiceSpy.list.and.returnValue(whole$);
-    component.searchTerm = 'zzzzzz';
-    component.onSearchInput();
+    const answer$ = new Subject<PrescriptionResponse[]>();
+    prescriptionServiceSpy.list.and.returnValue(answer$);
+    search('zzzzzz');
     fixture.detectChanges();
 
     expect(component.filtered()).withContext('no stale rows').toEqual([]);
     expect(el('[data-testid="rx-list-pager"]')).withContext('no stale total').toBeNull();
     expect(el('[data-testid="rx-list-loading"]')?.textContent).toContain('PRESCRIPTIONS.SEARCHING');
 
-    whole$.next(rows);
-    whole$.complete();
+    answer$.next(rows);
+    answer$.complete();
     fixture.detectChanges();
     expect(component.filtered()).toEqual([]);
     expect(component.listTotal()).toBe(0);
@@ -2548,12 +2564,46 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
     const total = component.listTotal();
 
     prescriptionServiceSpy.list.and.returnValue(throwError(() => new Error('down')));
-    component.searchTerm = 'zzzzzz';
-    component.onSearchInput();
+    search('zzzzzz');
     fixture.detectChanges();
 
     expect(component.filtered().length).toBe(50);
     expect(component.listTotal()).toBe(total);
+  });
+
+  it('QA D1314: a failed search puts back the page it hid, under the pager of that page', async () => {
+    const rows = Array.from({ length: 120 }, (_, i) => makeRx({ id: 'rx-' + i, status: 'SIGNED' }));
+    await setup({ list: rows });
+    component.onListPage(1);
+    const shown = component.filtered().map((p) => p.id);
+
+    prescriptionServiceSpy.list.and.returnValue(throwError(() => new Error('down')));
+    search('zzzzzz');
+
+    expect(component.filtered().map((p) => p.id)).toEqual(shown);
+    expect(component.listPage()).toBe(1);
+  });
+
+  it('QA D1314: a search at the last hospital never comes back under the next one', async () => {
+    const rows = Array.from({ length: 60 }, (_, i) => makeRx({ id: 'rx-' + i, status: 'SIGNED' }));
+    await setup({ list: rows });
+
+    jasmine.clock().install();
+    try {
+      component.searchTerm = 'zzzzzz';
+      component.onSearchInput();
+      prescriptionServiceSpy.list.and.returnValue(throwError(() => new Error('down')));
+      component.onScopeChange('other-hospital');
+      prescriptionServiceSpy.page.calls.reset();
+      jasmine.clock().tick(PrescriptionsComponent.SEARCH_DELAY_MS);
+    } finally {
+      jasmine.clock().uninstall();
+    }
+
+    expect(component.filtered()).withContext("none of the last hospital's rows").toEqual([]);
+    expect(prescriptionServiceSpy.page.calls.count())
+      .withContext('the delay was cancelled')
+      .toBe(0);
   });
 
   it('QA D1412: the pager shows the server total and every row is reachable', async () => {
@@ -2602,15 +2652,66 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
     await setup({ list: rows });
     expect(component.filtered().map((p) => p.id)).not.toContain('rx-110');
 
-    component.searchTerm = 'morph';
-    component.onSearchInput();
+    search('morph');
     expect(component.filtered().map((p) => p.id)).toEqual(['rx-110']);
     expect(component.listTotal()).toBe(1);
 
-    component.searchTerm = '';
-    component.onSearchInput();
+    search('');
     expect(component.filtered().length).toBe(50);
     expect(component.listTotal()).toBe(120);
+  });
+
+  it('QA D1314: a search asks the server for one page of matches, never the whole tab', async () => {
+    await setup({ list: [makeRx({ id: 'a', status: 'SIGNED', medicationName: 'Morphine' })] });
+    prescriptionServiceSpy.list.calls.reset();
+    prescriptionServiceSpy.page.calls.reset();
+
+    component.setTab('inPharmacy');
+    prescriptionServiceSpy.page.calls.reset();
+    search('Morph');
+
+    const [filters, page, size] = prescriptionServiceSpy.page.calls.mostRecent().args;
+    expect(filters.search).toBe('Morph');
+    expect(filters.statuses?.length).withContext("the tab's statuses").toBeGreaterThan(0);
+    expect(page).toBe(0);
+    expect(size).toBe(PrescriptionsComponent.PAGE_ROWS);
+    expect(prescriptionServiceSpy.page.calls.count()).toBe(1);
+  });
+
+  it('QA D1314: a burst of keystrokes asks once, for what was typed last', async () => {
+    await setup({ list: [makeRx({ id: 'a', status: 'SIGNED', medicationName: 'Morphine' })] });
+    prescriptionServiceSpy.page.calls.reset();
+
+    jasmine.clock().install();
+    try {
+      for (const typed of ['M', 'Mo', 'Mor']) {
+        component.searchTerm = typed;
+        component.onSearchInput();
+        jasmine.clock().tick(PrescriptionsComponent.SEARCH_DELAY_MS - 1);
+      }
+      expect(prescriptionServiceSpy.page.calls.count()).withContext('still typing').toBe(0);
+      jasmine.clock().tick(1);
+    } finally {
+      jasmine.clock().uninstall();
+    }
+    expect(prescriptionServiceSpy.page.calls.count()).toBe(1);
+    expect(prescriptionServiceSpy.page.calls.mostRecent().args[0].search).toBe('Mor');
+  });
+
+  it('QA D1314: a page move inside a search reads that page of the matches', async () => {
+    const rows = Array.from({ length: 60 }, (_, i) =>
+      makeRx({ id: 'rx-' + i, status: 'SIGNED', medicationName: 'Morphine' }),
+    );
+    await setup({ list: rows });
+    search('morph');
+    prescriptionServiceSpy.page.calls.reset();
+
+    component.onListPage(1);
+
+    const [filters, page] = prescriptionServiceSpy.page.calls.mostRecent().args;
+    expect(filters.search).toBe('morph');
+    expect(page).toBe(1);
+    expect(component.filtered().length).toBe(10);
   });
 
   it('QA D1412: a search past its last page shows the page that is left', async () => {
@@ -2618,8 +2719,7 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
       makeRx({ id: 'rx-' + i, status: 'SIGNED', medicationName: 'Morphine' }),
     );
     await setup({ list: rows });
-    component.searchTerm = 'morph';
-    component.onSearchInput();
+    search('morph');
     component.onListPage(1);
     expect(component.filtered().length).toBe(1);
 

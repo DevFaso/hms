@@ -138,10 +138,29 @@ public interface PatientHospitalRegistrationRepository extends JpaRepository<Pat
                 SELECT r FROM PatientHospitalRegistration r
                 JOIN FETCH r.patient p
                 LEFT JOIN FETCH p.user u
+                LEFT JOIN FETCH u.patientProfile
+                LEFT JOIN FETCH u.staffProfile
                 WHERE r.hospital.id = :hospitalId
                     AND r.active = true
         """)
         List<PatientHospitalRegistration> findActiveForHospitalWithPatient(@Param("hospitalId") UUID hospitalId);
+
+    /**
+     * QA D1314: who a nurse's lists are for, and nothing else. They built each
+     * row from {@link #findActiveForHospitalWithPatient}, which loads the
+     * patient and the account (and more statements per account), then enriched
+     * it with the vitals and the allergies: for every registered patient, on
+     * every read.
+     */
+    @Query("""
+        SELECT new com.example.hms.payload.dto.nurse.NursePatientNameRow(
+            p.id, p.firstName, p.middleName, p.lastName, r.patientFullName, r.registrationDate, r.readyByStaffId)
+        FROM PatientHospitalRegistration r
+        JOIN r.patient p
+        WHERE r.hospital.id = :hospitalId
+          AND r.active = true
+        """)
+    List<com.example.hms.payload.dto.nurse.NursePatientNameRow> findActiveNamesForHospital(@Param("hospitalId") UUID hospitalId);
 
     @Query("""
         SELECT new com.example.hms.payload.dto.PatientMultiHospitalSummaryDTO(

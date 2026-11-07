@@ -167,6 +167,9 @@ class NurseTaskServiceImplTest {
     private com.example.hms.repository.PatientAllergyRepository patientAllergyRepository;
     @Mock
     private com.example.hms.service.emar.ControlledAdministrationWitness administrationWitness;
+    /** QA D1314: reads the ward at once; here it answers from the per-patient stubs these tests set (see setUp). */
+    @Mock
+    private com.example.hms.service.emar.MarWardReader marWardReader;
     /** QA D1286: real, over the real bundles, so the inbox renders a keyed item for its reader. */
     private final com.example.hms.service.i18n.NotificationLocalizer notificationLocalizer =
         new com.example.hms.service.i18n.NotificationLocalizer(com.example.hms.i18n.TestMessageSources.bundles());
@@ -181,13 +184,15 @@ class NurseTaskServiceImplTest {
             nurseHandoffRepository, labOrderRepository, imagingOrderRepository, procedureOrderRepository,
             fiveRightsService, objectMapper, news2EscalationService,
             new com.example.hms.service.support.DischargedPatientGuard(admissionRepository, encounterRepository),
-            assignmentRepository, patientAllergyRepository, administrationWitness, notificationLocalizer));
+            assignmentRepository, patientAllergyRepository, administrationWitness, notificationLocalizer, marWardReader));
 
         // QA D220 narrowed the vitals rounds to admitted patients; the tests
         // below that are about windows, names and counts treat every listed
         // patient as admitted. The D220 tests call the real method.
         lenient().doReturn(EVERY_PATIENT).when(service).activelyAdmittedPatientIds(any());
         lenient().doReturn(EVERY_PATIENT_IN_A_STAY).when(service).activeStaysByPatient(any());
+
+        wardReadsAnswerFromPerPatientStubs();
 
         // Default stubs so synthetic/fallback paths activate in existing tests
         lenient().when(vitalSignRepository.findLatestObservationSet(any(), any()))
@@ -211,6 +216,71 @@ class NurseTaskServiceImplTest {
             .thenReturn(Page.empty());
         lenient().when(encounterRepository.findFirstByPatient_IdAndHospital_IdAndStatusOrderByEncounterDateDesc(
             any(), any(), any())).thenReturn(Optional.empty());
+    }
+
+    /**
+     * QA D1314: the ward's lists read everything at once, through
+     * {@code MarWardReader} and {@code getPatientNamesForNurse}. These tests are
+     * about what a row says, so they keep stating their data per patient and per
+     * order; each batch read answers from those stubs. The batch queries
+     * themselves run on PostgreSQL in {@code WardLoadPostgresIT}.
+     */
+    private void wardReadsAnswerFromPerPatientStubs() {
+        lenient().when(nurseDashboardService.getPatientNamesForNurse(any(), any())).thenAnswer(inv ->
+            nurseDashboardService.getPatientsForNurse(inv.getArgument(0), inv.getArgument(1), null));
+        lenient().when(marWardReader.ordersByPatient(any(), any())).thenAnswer(inv -> {
+            java.util.Map<UUID, List<Prescription>> byPatient = new java.util.HashMap<>();
+            UUID hospital = inv.getArgument(0);
+            if (hospital == null) {
+                return byPatient;
+            }
+            for (UUID patient : inv.<java.util.Collection<UUID>>getArgument(1)) {
+                List<Prescription> rows = prescriptionRepository.findByPatient_IdAndHospital_Id(patient, hospital);
+                if (!rows.isEmpty()) {
+                    byPatient.put(patient, rows);
+                }
+            }
+            return byPatient;
+        });
+        lenient().when(marWardReader.closedStaysByPatient(any(), any())).thenAnswer(inv -> {
+            java.util.Map<UUID, List<Admission>> byPatient = new java.util.HashMap<>();
+            for (UUID patient : inv.<java.util.Collection<UUID>>getArgument(1)) {
+                byPatient.put(patient, admissionRepository.findByPatient_IdAndHospital_Id(patient, inv.getArgument(0)).stream()
+                    .filter(a -> a.getActualDischargeDateTime() != null).toList());
+            }
+            return byPatient;
+        });
+        lenient().when(marWardReader.doseRowsByPrescription(any())).thenAnswer(inv -> {
+            java.util.Map<UUID, List<MedicationAdministrationRecord>> byOrder = new java.util.HashMap<>();
+            for (UUID order : inv.<java.util.Collection<UUID>>getArgument(0)) {
+                byOrder.put(order, marRepository.findByPrescription_IdOrderByScheduledTimeDesc(order));
+            }
+            return byOrder;
+        });
+        lenient().when(marWardReader.allergiesByPatient(any())).thenAnswer(inv -> {
+            java.util.Map<UUID, List<com.example.hms.model.PatientAllergy>> byPatient = new java.util.HashMap<>();
+            for (UUID patient : inv.<java.util.Collection<UUID>>getArgument(0)) {
+                byPatient.put(patient, patientAllergyRepository.findByPatient_Id(patient));
+            }
+            return byPatient;
+        });
+        lenient().when(marWardReader.latestObservationSets(any(), any())).thenAnswer(inv -> {
+            java.util.Map<UUID, PatientVitalSign> byPatient = new java.util.HashMap<>();
+            for (UUID patient : inv.<java.util.Collection<UUID>>getArgument(1)) {
+                vitalSignRepository.findLatestObservationSet(patient, inv.getArgument(0))
+                    .ifPresent(vitals -> byPatient.put(patient, vitals));
+            }
+            return byPatient;
+        });
+        lenient().when(marWardReader.controlledOrders(any())).thenAnswer(inv -> {
+            java.util.Set<UUID> controlled = new java.util.HashSet<>();
+            for (Prescription order : inv.<java.util.Collection<Prescription>>getArgument(0)) {
+                if (pharmacistVerificationService.isControlledSubstance(order)) {
+                    controlled.add(order.getId());
+                }
+            }
+            return controlled;
+        });
     }
 
     @Test
@@ -3518,7 +3588,7 @@ class NurseTaskServiceImplTest {
             nurseHandoffRepository, labOrderRepository, imagingOrderRepository, procedureOrderRepository,
             fiveRightsService, failingMapper, news2EscalationService,
             new com.example.hms.service.support.DischargedPatientGuard(admissionRepository, encounterRepository),
-            assignmentRepository, patientAllergyRepository, administrationWitness, notificationLocalizer);
+            assignmentRepository, patientAllergyRepository, administrationWitness, notificationLocalizer, marWardReader);
 
         UUID rxId = UUID.randomUUID();
         UUID nurseId = UUID.randomUUID();
