@@ -585,6 +585,10 @@ public class NurseTaskServiceImpl implements NurseTaskService {
 
         MedicationAdministrationRecord mar = loadOrMaterializeMar(marId, nurseUserId, hospitalId);
         validateHospitalMatch(mar.getHospital(), hospitalId);
+        // QA D1428 class: a recorded dose keeps its scans, override and nurse.
+        if (mar.getStatus() != MedicationAdministrationStatus.PENDING) {
+            throw new BusinessException("nurse.mar.alreadyRecorded");
+        }
 
         FiveRightsVerificationResult result = fiveRightsVerificationService.verify(
             mar,

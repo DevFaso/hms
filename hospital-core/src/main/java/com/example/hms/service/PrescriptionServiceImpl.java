@@ -61,6 +61,9 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     // Sonar S1192 (Pattern 5 of docs/SonarQubeInstructions.md): the
     // i18n key for "prescription not found" appears 5x in this file.
     private static final String PRESCRIPTION_NOT_FOUND = "prescription.notfound";
+    /** QA D1432: the statuses in which medicine has left the counter under this order. */
+    private static final java.util.Set<PrescriptionStatus> DISPENSED_FROM = java.util.EnumSet.of(
+        PrescriptionStatus.DISPENSED, PrescriptionStatus.PARTNER_DISPENSED, PrescriptionStatus.PARTIALLY_FILLED);
     /** QA D1368 (round 31): the request property a missing withdrawal reason is named by. */
     private static final String FIELD_WITHDRAWAL_REASON = "withdrawalReason";
     /**
@@ -1433,6 +1436,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         if (existing.getStatus() == PrescriptionStatus.SIGNED) {
             return withdrawSignedPrescription(existing, request);
         }
+        requireDispensedOrderKept(existing, request);
         // QA D1161 (round 21): withdrawing an order a signature led to (sent,
         // partly filled, at a partner, printed, awaiting a clarification) is
         // the withdrawal of a signed order, under the same rule: its author,
@@ -1679,6 +1683,41 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     }
 
     /**
+     * QA D1432 (round 34): what a PUT may do to an order the pharmacy has
+     * dispensed from, in the portal's own rule (D678). The medicine has left the
+     * counter: nothing reverses the dispense, so an order set to CANCELLED said
+     * it was withdrawn while the patient had it and the dispense stayed billable.
+     *
+     * <ul>
+     *   <li>CANCELLED ("never given") is refused, whole fill or part. What a
+     *       pharmacy does with a part fill is stop the balance: DISCONTINUED,
+     *       under the signed-order rule (a reason, audited). The fill and its
+     *       charge stand, and the rest is no longer dispensable. The same stop
+     *       ends a fully dispensed order's further use (D1161).</li>
+     *   <li>A wholly dispensed order takes no other write: its drug and dose
+     *       are what was handed over. A part fill's balance stays editable
+     *       (G13/G15: the edit voids a prepared fill).</li>
+     * </ul>
+     */
+    private static void requireDispensedOrderKept(Prescription existing, PrescriptionRequestDTO request) {
+        PrescriptionStatus current = existing.getStatus();
+        if (current == null || !DISPENSED_FROM.contains(current)) {
+            return;
+        }
+        if (request.getStatus() == PrescriptionStatus.CANCELLED) {
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_STATUS, "prescription.dispensed.noCancel");
+        }
+        if (current == PrescriptionStatus.PARTIALLY_FILLED) {
+            return;
+        }
+        boolean plainStop = request.getStatus() == PrescriptionStatus.DISCONTINUED && !changesSignedContent(existing, request);
+        if (!plainStop) {
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_STATUS, request.getStatus() == null
+                || request.getStatus().isWithdrawn() ? "prescription.dispensed.readOnly" : "prescription.status.notAssertable");
+        }
+    }
+
+    /**
      * QA D1161: a request that only withdraws an order a signature led to.
      * An edit of a sent or partly filled order's content keeps its own rules
      * (G13/G15: the author's edit voids a prepared fill and ends a queue claim).
@@ -1830,6 +1869,10 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                 && prescription.getHospital() != null
                 && !prescription.getHospital().getId().equals(hospitalId)) {
             throw new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND);
+        }
+        // QA D1432: the order a dispense was made from outlives any delete.
+        if (prescription.getStatus() != null && DISPENSED_FROM.contains(prescription.getStatus())) {
+            throw new BusinessException("prescription.dispensed.readOnly");
         }
 
         prescriptionRepository.deleteById(id);

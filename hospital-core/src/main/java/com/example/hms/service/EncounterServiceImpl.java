@@ -104,6 +104,8 @@ public class EncounterServiceImpl implements EncounterService {
     static final String UNSEEN_OUTCOME_FIELD = "unseenOutcome";
     static final String UNSEEN_REASON_FIELD = "unseenReason";
     static final String UNSEEN_CLOSED_AT_FIELD = "unseenClosedAt";
+    /** QA D1428: a closed visit's record is protected. */
+    private static final String ENCOUNTER_CLOSED_READ_ONLY = "encounter.closed.readOnly";
 
     private static final String CHECKOUT_FOLLOW_UP_TYPE = "FOLLOW_UP";
     private static final String NOTE_HISTORY_CREATED = "NOTE_CREATED";
@@ -507,6 +509,9 @@ public class EncounterServiceImpl implements EncounterService {
         // foreign encounter into the caller's tenant — after which all the
         // guards below would accept it.
         Encounter existing = requireEncounterInScope(id, isSuperAdmin, callerHospitalId);
+        if (isClosedStatus(existing.getStatus())) {
+            return lateDocumentationOnClosedVisit(existing, request, locale);
+        }
 
         EncounterResolution ctx = resolveEncounterResolution(request, locale, existing);
         // Keep a snapshot before merge for audit
@@ -586,6 +591,27 @@ public class EncounterServiceImpl implements EncounterService {
         return encounterMapper.toEncounterResponseDTO(saved);
     }
 
+    /**
+     * QA D1428 class (round 34): a PUT that kept the status of a closed visit
+     * rewrote its patient, clinician, date and notes under its summary and
+     * invoice; only a status change was refused. A closed visit takes one thing
+     * from this endpoint: the note it never had (late documentation; a note
+     * already there takes an addendum, D513). Nothing else in the body is read.
+     */
+    private EncounterResponseDTO lateDocumentationOnClosedVisit(Encounter closed, EncounterRequestDTO request, Locale locale) {
+        String label = closed.getStatus().localizedLabel();
+        if (request.getStatus() != null && request.getStatus() != closed.getStatus()) {
+            throw new com.example.hms.exception.FieldBusinessException("status", "encounter.status.closed", label);
+        }
+        EncounterNoteRequestDTO note = request.getNote();
+        if (note == null) {
+            throw new com.example.hms.exception.FieldBusinessException("note", ENCOUNTER_CLOSED_READ_ONLY, label);
+        }
+        upsertEncounterNoteInternal(closed, resolveSessionNoteAuthor(closed, note.getAuthorStaffId(),
+            note.getAuthorUserId(), note.getAuthorName(), locale), note, locale, request.getUpdatedBy(), closed.getStatus(), false);
+        return encounterMapper.toEncounterResponseDTO(closed);
+    }
+
     private static void logSummaryFailure(Encounter saved, RuntimeException ex) {
         log.warn(
             "Failed to persist DischargeSummary on COMPLETED transition for encounter {}, patient {}, hospital {}",
@@ -619,6 +645,11 @@ public class EncounterServiceImpl implements EncounterService {
         // QA r5 tenancy sweep: a delete loads under the read's tenant guard.
         if (existing != null) {
             com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(existing.getHospital(), MSG_ENCOUNTER_NOT_FOUND, id);
+        }
+        // QA D1428 class: a closed visit is the record of what happened (its
+        // summary, invoice and history hang on it); it is not deleted.
+        if (existing != null && isClosedStatus(existing.getStatus())) {
+            throw new BusinessException(ENCOUNTER_CLOSED_READ_ONLY, existing.getStatus().localizedLabel());
         }
         encounterRepository.deleteById(id);
         if (existing != null) {
@@ -3040,6 +3071,11 @@ public class EncounterServiceImpl implements EncounterService {
     ) {
         DischargeSummary summary = dischargeSummaryRepository.findByEncounter_Id(encounter.getId())
             .orElseGet(DischargeSummary::new);
+        // QA D1428 class: a finalized summary is signed; the checkout that comes
+        // after it (it may be finalized on an open visit) does not rewrite it.
+        if (Boolean.TRUE.equals(summary.getIsFinalized())) {
+            return;
+        }
 
         summary.setEncounter(encounter);
         summary.setPatient(encounter.getPatient());

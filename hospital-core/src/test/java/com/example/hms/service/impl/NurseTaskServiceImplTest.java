@@ -5249,4 +5249,24 @@ class NurseTaskServiceImplTest {
             assertThat(card.isVitalsDue()).as("overdue on its NEWS2 interval, as in the list").isTrue();
         });
     }
+
+    /** QA D1428 class: a recorded dose keeps its scans, its override and its nurse. */
+    @Test
+    void qaD1428_aRecordedDoseIsNotVerifiedAgain() {
+        UUID marId = UUID.randomUUID();
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        MedicationAdministrationRecord mar = seededMar(patientId, hospitalId, LocalDateTime.now());
+        mar.setStatus(com.example.hms.enums.MedicationAdministrationStatus.GIVEN);
+        mar.setPatientScanValue("as scanned");
+        when(marRepository.findById(marId)).thenReturn(Optional.of(mar));
+        MarVerificationRequestDTO req = new MarVerificationRequestDTO();
+        req.setPatientScanValue("rewritten");
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> service.verifyMedicationAdministration(marId, null, hospitalId, req))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .extracting("messageKey").isEqualTo("nurse.mar.alreadyRecorded");
+        assertThat(mar.getPatientScanValue()).isEqualTo("as scanned");
+    }
 }

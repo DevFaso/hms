@@ -256,39 +256,8 @@ public class OrderSetItemDispatcher {
         }
     }
 
-    /**
-     * QA D1396: the editor writes a dose as its range and unit
-     * ({@code doseRangeMin}, {@code doseRangeMax}, {@code doseUnit}); the order
-     * reads it as "2 mg", or "2-4 mg". A plain {@code dose} wins.
-     */
-    private static String doseOf(Map<String, Object> item) {
-        String dose = string(item.get("dose"));
-        if (dose != null) {
-            return dose;
-        }
-        String min = number(item.get("doseRangeMin"));
-        String max = number(item.get("doseRangeMax"));
-        if (min == null && max == null) {
-            return null;
-        }
-        String range = min == null ? max : min;
-        if (min != null && max != null && !min.equals(max)) {
-            range = min + "-" + max;
-        }
-        String unit = string(item.get("doseUnit"));
-        return unit == null ? range : range + " " + unit;
-    }
-
-    private static String number(Object value) {
-        if (value instanceof Number n) {
-            // In the reader's own writing, as a prescriber types a dose ("2,5 mg"); the dose reading takes both.
-            return com.example.hms.utility.DisplayNumbers.quantity(new java.math.BigDecimal(n.toString()));
-        }
-        return string(value);
-    }
-
     private static String combineDose(Map<String, Object> item) {
-        String dose = doseOf(item);
+        String dose = OrderSetItemDoseRules.doseOf(item);
         String route = string(item.get("route"));
         if (dose == null && route == null) return null;
         if (dose == null) return route;

@@ -218,6 +218,8 @@ public class AdmissionOrderSetServiceImpl implements AdmissionOrderSetService {
             .orElseThrow(() -> new ResourceNotFoundException("admission.notFound", admissionId));
         // QA r5 tenancy sweep: a write loads under the tenant guard.
         com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(admission.getHospital(), "admission.notFound", admissionId);
+        // QA D1428: a closed stay takes no new orders.
+        admission.requireOpen();
 
         // Resolve the ordering staff's active hospital assignment so the lab
         // fan-out can populate LabOrderRequestDTO.assignmentId (@NotNull).

@@ -94,6 +94,14 @@ test('QA D1079: no template or label string glues a colon, beyond the pinned fal
   assert.deepEqual(problems, []);
 });
 
+test('QA D1438: no template glues a colon to a closing tag (the scan reads tags as breaks)', () => {
+  const glued = [];
+  for (const { file, text } of templatesIn(appDir)) {
+    if (/<\/(?:strong|b|em|label|dt|span)\s*>\s*:(?:\s|$)/m.test(text)) glued.push(rel(file));
+  }
+  assert.deepEqual(glued, []);
+});
+
 test('QA D1079: no French translation glues a colon to the word before it', () => {
   const fr = JSON.parse(readFileSync(join(i18nDir, 'fr.json'), 'utf8'));
   const glued = [];

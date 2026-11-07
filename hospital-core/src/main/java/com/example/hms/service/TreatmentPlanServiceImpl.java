@@ -129,8 +129,8 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
         // QA D1127: the edit is the author's, so it never moves the plan to APPROVED.
         requireNotApprovedByWrite(plan.getStatus(), requestDTO.getStatus());
         // QA D1066 class (round 21, with D1162): a cancelled plan is closed to edits too.
-        com.example.hms.service.support.CancelledOrders.requireNotCancelled(plan.getStatus(),
-            "treatmentPlan.cancelled.locked");
+        // QA D1428 class: and an archived one.
+        requirePlanOpen(plan);
         validateEncounterContext(encounter, hospital, patient);
         // QA D401: the patient must be registered at the hospital the row is written in.
         patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
@@ -239,9 +239,19 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
         return page.map(treatmentPlanMapper::toResponseDTO);
     }
 
+    /** QA D1428 class: a cancelled or archived plan is closed, its follow-ups with it. */
+    private static void requirePlanOpen(TreatmentPlan plan) {
+        com.example.hms.service.support.CancelledOrders.requireNotCancelled(plan.getStatus(),
+            "treatmentPlan.cancelled.locked");
+        if (plan.getStatus() == com.example.hms.enums.TreatmentPlanStatus.ARCHIVED) {
+            throw new com.example.hms.exception.BusinessException("treatmentPlan.archived.locked");
+        }
+    }
+
     @Override
     public TreatmentPlanFollowUpDTO addFollowUp(UUID planId, TreatmentPlanFollowUpRequestDTO requestDTO) {
         TreatmentPlan plan = getPlanOrThrow(planId);
+        requirePlanOpen(plan);
         TreatmentPlanFollowUp followUp = TreatmentPlanFollowUp.builder()
             .treatmentPlan(plan)
             .label(requestDTO.getLabel())
@@ -258,6 +268,7 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
     public TreatmentPlanFollowUpDTO updateFollowUp(UUID planId, UUID followUpId, TreatmentPlanFollowUpRequestDTO requestDTO) {
         TreatmentPlanFollowUp followUp = treatmentPlanFollowUpRepository.findByIdAndTreatmentPlanId(followUpId, planId)
             .orElseThrow(() -> new ResourceNotFoundException("treatmentPlan.followUp.notFound", followUpId));
+        requirePlanOpen(getPlanOrThrow(planId));
         followUp.setLabel(requestDTO.getLabel());
         followUp.setInstructions(requestDTO.getInstructions());
         followUp.setDueOn(requestDTO.getDueOn());
@@ -282,8 +293,7 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
         }
         // QA D1066 class (round 20, D1127): a review moves the status now, so a
         // cancelled plan is refused before anything is written; it is never revived.
-        com.example.hms.service.support.CancelledOrders.requireNotCancelled(plan.getStatus(),
-            "treatmentPlan.cancelled.locked");
+        requirePlanOpen(plan);
         TreatmentPlanReview review = TreatmentPlanReview.builder()
             .treatmentPlan(plan)
             .reviewer(reviewer)

@@ -828,6 +828,11 @@ public class LabResultServiceImpl implements LabResultService {
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         requireResultInActiveHospital(labResult);
         requireNotReleased(labResult);
+        // QA D1428 class: a signature covers the value it was given to; a value
+        // changed after it would carry a signature nobody gave. Release, then supersede.
+        if (labResult.getSignedAt() != null) {
+            throw new BusinessException("labresult.signed.immutable");
+        }
 
         // Amending a result is entering one. Same gate — otherwise a bedside
         // role blocked from creating a lab-performed result could simply

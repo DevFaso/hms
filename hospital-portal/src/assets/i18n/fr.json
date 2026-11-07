@@ -1109,6 +1109,7 @@
     "NURSING_NOTE": "Note infirmière"
   },
   "ORDER_SETS": {
+    "QUANTITY_VALUE": "Quantité : {{value}} {{unit}}",
     "FIELD_CATALOG_ITEM": "Article exact du catalogue",
     "QUANTITY_HINT": "Obligatoire pour un stupéfiant.",
     "APPLIED_RESULT_ONE": "Appliqué. 1 prescription créée ({{skipped}} ignorée(s)).",
@@ -1232,6 +1233,7 @@
     "NOTES_REQUIRED_FOR": "(obligatoires pour refuser ou mettre en attente)"
   },
   "ADMISSIONS": {
+    "ROOM_BED_HELD_HINT": "La chambre suit le lit occupé par ce séjour. Pour déplacer le patient, attribuez un autre lit ou demandez un transfert.",
     "ACUITY": "Gravité",
     "ACUITY_CRITICAL": "Critique",
     "ACUITY_LEVEL": "Niveau de gravité",

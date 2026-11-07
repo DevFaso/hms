@@ -947,3 +947,12 @@ Rounds 27, 28 and 29 each found 20–30 new siblings of the required-field class
 | `architecture/ReceptionistClinicalReadGuardTest` (vocabulary widened: bloodgroup, abogroup, rhfactor, antibody, triage, isolation, highrisk), `controller/support/ReceptionistResponseShapingTest` (a test per field, receptionist against doctor and nurse) | RCPT-CLIN, user decision 2026-11-06: triage's chief complaint, the blood type and the high-risk flag out of what a receptionist reads, on the same endpoints | `THE_DESK_NEEDS_IT`, `THE_DESK_WRITES_IT` with a reason; stale entries fail |
 | `architecture/ReadOnlyAuthWritesGuardTest` (new) | Every write under `/auth` from Spring's mapping registry is classified open, refused, or open only when it blocks the sign-in, and goes through the real `ReadOnlyModeFilter`. A new one fails until classified | `CLASSIFIED`, each class stated; the filter's `OPEN_AUTH_WRITES` must equal it exactly |
 | `service/TransfusionRunningBagPostgresIT` (new), `service/TransfusionServiceImplTest` | An incompatible crossmatch on a bag out of the lab reaches the requester and the running nurse, after the commit; a running bag stays ISSUED and shows the result | none |
+
+## Guards added or widened by round 34 (fix/r34-stay-orders)
+
+| Guard | Catches | Scope / allowlist |
+|---|---|---|
+| `architecture/ClosedRecordWriteGuardTest#everyEditMethodRefusesAClosedRecordOrSaysWhyNot` (new) | D1428: a public `update*`, `edit*` or `amend*` of any service that does not refuse a record already in its terminal state. A new edit method is classified on purpose. | Every service; the allowlist says why each entry has no check (no terminal state, a designed reopen, or an open D1428 sibling named in tasklist.md) |
+| `architecture/ClosedRecordWriteGuardTest#theNamedWritesKeepTheirCheck` (new) | D1428 / D1432 / D1435: the writes not named as edits, each pinned to its check: the stay's order sets and bed release, a closed visit's PUT and delete, a finalized summary at checkout and on the portal read, a dispensed order, a recorded dose, every way a stay ends closing its nursing work. | 23 pins |
+| `architecture/CancelledOrderLockGuardTest` (widened) | The plan's cancelled lock now lives in `requirePlanOpen`, read as a lock. | Same |
+| `scripts/lib/glued-colon.test.mjs` (new rule) | D1438: a colon glued to a closing tag. The scan reads a tag as a break, so `<strong>…</strong>: x` passed it; `admin-assignments.html` had the same. | Every template; 0 |

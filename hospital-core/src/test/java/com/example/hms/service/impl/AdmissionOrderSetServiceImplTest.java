@@ -414,4 +414,23 @@ class AdmissionOrderSetServiceImplTest {
         assertThat(page.getContent()).hasSize(1);
         assertThat(page.getContent().get(0).getName()).isEqualTo("Sepsis bundle");
     }
+
+    /** QA D1428: a closed stay takes no new orders, before any item is read. */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = com.example.hms.enums.AdmissionStatus.class,
+        names = {"DISCHARGED", "CANCELLED", "TRANSFERRED", "DECEASED"})
+    void qaD1428_aClosedStayTakesNoOrderSet(com.example.hms.enums.AdmissionStatus closed) {
+        AdmissionOrderSet os = existing();
+        when(orderSetRepo.findById(ORDER_SET_ID)).thenReturn(Optional.of(os));
+        Admission admission = new Admission();
+        admission.setId(ADMISSION_ID);
+        admission.setHospital(hospital());
+        admission.setStatus(closed);
+        when(admissionRepo.findById(ADMISSION_ID)).thenReturn(Optional.of(admission));
+
+        ApplyOrderSetRequestDTO req = new ApplyOrderSetRequestDTO(UUID.randomUUID(), STAFF_ID, false);
+        assertThatThrownBy(() -> service.applyToAdmission(ADMISSION_ID, ORDER_SET_ID, req, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class);
+        verifyNoInteractions(dispatcher);
+    }
 }

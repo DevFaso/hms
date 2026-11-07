@@ -19,6 +19,7 @@ import {
   EncounterService,
   EncounterRequest,
   EncounterResponse,
+  isClosedEncounterStatus,
   EncounterType,
   EncounterNoteResponse,
   AfterVisitSummary,
@@ -509,6 +510,11 @@ export class EncountersComponent implements OnInit {
     }
 
     this.showModal.set(true);
+  }
+
+  /** QA D1428 class: a closed visit's record is protected: no edit or delete, as the server refuses both. */
+  isClosedVisit(enc: EncounterResponse): boolean {
+    return isClosedEncounterStatus(enc.status);
   }
 
   openEdit(enc: EncounterResponse): void {

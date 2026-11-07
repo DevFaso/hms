@@ -42,6 +42,9 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
 
     /** QA D1066: refused on any write to a cancelled order. */
     private static final String IMAGING_ORDER_CANCELLED_LOCKED = "imaging.order.cancelled.locked";
+    /** QA D1428 class: the study has been done. */
+    private static final java.util.Set<ImagingOrderStatus> RESULTED_STATUSES = java.util.EnumSet.of(
+        ImagingOrderStatus.COMPLETED, ImagingOrderStatus.RESULTS_AVAILABLE);
     /** QA D1098: an imaging order's resulted states, in lifecycle order. */
     private static final List<ImagingOrderStatus> RESULTED_STATES =
         List.of(ImagingOrderStatus.COMPLETED, ImagingOrderStatus.RESULTS_AVAILABLE);
@@ -152,6 +155,10 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         // QA D1066 class: a cancelled order is not edited back to life either.
         com.example.hms.service.support.CancelledOrders.requireNotCancelled(order.getStatus(),
             IMAGING_ORDER_CANCELLED_LOCKED);
+        // QA D1428 class: a study done is what was done; a correction is a new order.
+        if (RESULTED_STATUSES.contains(order.getStatus())) {
+            throw new com.example.hms.exception.BusinessException("imaging.order.resulted.locked");
+        }
 
         if (request.getPatientId() != null && (order.getPatient() == null || !request.getPatientId().equals(order.getPatient().getId()))) {
             Patient patient = patientRepository.findById(request.getPatientId())

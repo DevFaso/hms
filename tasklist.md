@@ -6183,3 +6183,19 @@ ships*, not for building — and check the shipped surface before trusting a
 - [ ] A CDS hook evaluation (`POST /cds-services/{id}`) leaves no audit row now that it is a declared read. Its old `DATA_CREATE` named no patient, so it was never an access trail; a real one would need the patient id from the hook context.
 - [ ] A crossmatch result on a bag already finished or stopped is still refused (`transfusion.unit.noLongerUsable`, and `transfusion.request.closed` once the request completes). An emergency bag can run out before its crossmatch comes back: an incompatible result then has nowhere to go and nobody is told. Out of the round-34 brief (issued or being transfused); needs the blood bank lead's view of what that result should do.
 - [ ] A request raised by a caller with no staff record has no `requestedBy`: an incompatible result then tells only the running nurse, and nobody when the bag is not hanging (logged by id). Hospital-level escalation is a decision for the blood bank lead.
+
+## Standing debt — round 34 (fix/r34-stay-orders)
+
+Siblings of D1428 (a closed record edited) left open, each on `ClosedRecordWriteGuardTest` or named here. None is the reported stay.
+
+- [ ] `ImmunizationServiceImpl#updateImmunization`: an entered-in-error dose can be edited back. `fix/r34-maternity-records` owns the file this round; the guard's allowlist names it.
+- [ ] `PostpartumCareServiceImpl#recordObservation`: a closed care plan named by id still takes an observation. Same owner.
+- [ ] `HighRiskPregnancyCarePlanServiceImpl#updatePlan` and its BP, medication, note and milestone writes on an inactive plan. The `active` flag on the same body is how a plan closes and reopens, so it needs a product rule first.
+- [ ] `LabResultServiceImpl#signLabResult`: a second signature overwrites the first signer. It is also the clinician's acknowledgment, so a refusal needs the acknowledgment path checked.
+- [ ] `ImagingOrderServiceImpl#updateOrderStatus`: a same-status write on a COMPLETED or RESULTS_AVAILABLE order overwrites the schedule fields.
+- [ ] `ObservationFhirWriteService#updateLabResult`: appends notes to a released result. Off by default (`FHIR_WRITE_ENABLED=false`).
+- [ ] `ConsultationServiceImpl#reassign` from DECLINED and `ObgynReferralServiceImpl#addMessage` on COMPLETED: possibly intended (re-routing, a thread message); kept as they are until a coordinator decides.
+- [ ] `DischargeSummaryServiceImpl#enrichSparseExistingSummaries` no longer writes a finalized summary, so one finalized before D744 keeps its gaps on the patient's page.
+- [ ] A partly filled order's content stays editable (G13/G15): the drug can be renamed over the part already handed over. The rule has its own test; changing it is a pharmacy decision.
+- [ ] D1432 data: the two QA orders cancelled after dispensing (14cd0c42, 52794b1a) stay CANCELLED on dev. No migration repairs them.
+- [ ] D1435: a nursing task or handoff names no stay, so "of this stay" is read from the creation time. A real `admission_id` on both would end the inference.

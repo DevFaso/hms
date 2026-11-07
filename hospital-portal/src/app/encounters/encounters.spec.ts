@@ -1095,4 +1095,11 @@ describe('EncountersComponent', () => {
     expect(reason?.textContent).toContain('APPOINTMENTS.PATIENT');
     expect(reason?.textContent).toContain('ENCOUNTERS.STAFF');
   });
+
+  it('QA D1428 class: a closed visit offers no edit and no delete', () => {
+    for (const status of ['COMPLETED', 'CANCELLED', 'LEFT_WITHOUT_BEING_SEEN']) {
+      expect(component.isClosedVisit(mockEncounter({ status }))).withContext(status).toBeTrue();
+    }
+    expect(component.isClosedVisit(mockEncounter({ status: 'IN_PROGRESS' }))).toBeFalse();
+  });
 });

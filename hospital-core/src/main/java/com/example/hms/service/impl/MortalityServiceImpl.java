@@ -96,6 +96,13 @@ public class MortalityServiceImpl implements MortalityService {
 
     private static final String CLOSURE_REASON = "Patient deceased";
 
+    private com.example.hms.service.AdmissionStayEncounterService stayEncounters;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setStayEncounters(com.example.hms.service.AdmissionStayEncounterService stayEncounters) {
+        this.stayEncounters = stayEncounters;
+    }
+
     private final Clock clock;
     private final DeathRecordRepository deathRecordRepository;
     private final PatientRepository patientRepository;
@@ -305,6 +312,10 @@ public class MortalityServiceImpl implements MortalityService {
             // reserved destination bed handed back.
             bedAssignmentService.releaseBed(admission);
             admissionRepository.save(admission);
+            // QA D1435: and no nurse keeps a task or a handoff for the patient.
+            if (stayEncounters != null) {
+                stayEncounters.closeNursingWorkOfEndedStay(admission);
+            }
             if (deathRecord.getAdmissionId() == null) {
                 deathRecord.setAdmissionId(admission.getId());
             }

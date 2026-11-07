@@ -214,6 +214,7 @@ public class AdmissionServiceImpl implements AdmissionService {
     public AdmissionResponseDTO updateAdmission(UUID admissionId, AdmissionUpdateRequestDTO request) {
         // QA D262: a write loads under the same tenant guard as the read.
         Admission admission = loadTenantScopedAdmission(admissionId);
+        requireWritableBy(admission, request);
 
         if (request.getDepartmentId() != null) {
             admission.setDepartment(loadDepartmentAt(request.getDepartmentId(), admission.getHospital().getId()));
@@ -228,7 +229,7 @@ public class AdmissionServiceImpl implements AdmissionService {
             admission.setAttendingPhysician(attending);
         }
 
-        if (request.getRoomBed() != null) admission.setRoomBed(request.getRoomBed());
+        applyRoomBed(admission, request.getRoomBed());
         if (request.getAcuityLevel() != null) admission.setAcuityLevel(request.getAcuityLevel());
         if (request.getExpectedDischargeDateTime() != null) admission.setExpectedDischargeDateTime(request.getExpectedDischargeDateTime());
         if (request.getAdmissionNotes() != null) admission.setAdmissionNotes(request.getAdmissionNotes());
@@ -245,11 +246,57 @@ public class AdmissionServiceImpl implements AdmissionService {
         return admissionMapper.toResponseDTO(admission);
     }
 
+    /**
+     * QA D1428 (round 34): a closed stay's record is protected, as D1393 says a
+     * cancelled stay never happened; the PUT answered 200 and rewrote its notes,
+     * acuity and room. The one edit kept after discharge is coding: a secondary
+     * diagnosis added with nothing else, which rewrites nothing. A cancelled
+     * stay has no coding. Late clinical documentation does not come through
+     * here: it is a note addendum or the discharge summary.
+     */
+    private static void requireWritableBy(Admission admission, AdmissionUpdateRequestDTO request) {
+        if (admission.getStatus() != AdmissionStatus.CANCELLED && isLateCodingOnly(request)) {
+            return;
+        }
+        admission.requireOpen();
+    }
+
+    private static boolean isLateCodingOnly(AdmissionUpdateRequestDTO request) {
+        return request.getSecondaryDiagnosesToAdd() != null
+            && request.getDepartmentId() == null && request.getRoomBed() == null
+            && request.getAcuityLevel() == null && request.getExpectedDischargeDateTime() == null
+            && request.getAdmissionNotes() == null && request.getAttendingPhysicianId() == null
+            && request.getConsultingPhysiciansToAdd() == null && request.getMetadata() == null;
+    }
+
+    /**
+     * QA D1428: the room of a stay that holds a bed is that bed, on every stay:
+     * QA put "MA-09" on a stay lying in MA-01. Moving the patient is the bed
+     * assignment or a transfer (BedAssignmentService keeps the two together).
+     * The form echoes what it read, so the bed's label and the stored text are
+     * not changes. A stay with no structured bed keeps its free text.
+     */
+    private static void applyRoomBed(Admission admission, String roomBed) {
+        if (roomBed == null) {
+            return;
+        }
+        if (admission.getBed() == null) {
+            admission.setRoomBed(roomBed);
+            return;
+        }
+        String held = BedAssignmentService.bedLabel(admission.getBed());
+        String written = roomBed.strip();
+        if (!written.equalsIgnoreCase(held) && !written.equalsIgnoreCase(admission.getRoomBed())) {
+            throw new com.example.hms.exception.FieldBusinessException("roomBed", "admission.roomBed.notHeldBed", held);
+        }
+    }
+
     @Override
     @Transactional
     public AdmissionResponseDTO applyOrderSets(UUID admissionId, AdmissionOrderExecutionRequestDTO request) {
         // QA D262: a write loads under the same tenant guard as the read.
         Admission admission = loadTenantScopedAdmission(admissionId);
+        admission.requireOpen();
 
         loadOrderSetsAt(request.getOrderSetIds(), admission.getHospital().getId())
             .forEach(admission::applyOrderSet);

@@ -175,6 +175,7 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         if (report.isSigned()) {
             throw new BusinessException("imaging.report.signedNoEdit");
         }
+        requireNotVoided(report);
 
         Hospital hospital = report.getHospital();
         ImagingOrder imagingOrder = report.getImagingOrder();
@@ -313,6 +314,7 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         if (report.isSigned()) {
             throw new BusinessException("imaging.report.signedNoVoid");
         }
+        requireNotVoided(report);
 
         Staff changedBy = currentStaff(report.getHospital());
         report.setReportStatus(request.getStatus());
@@ -524,6 +526,13 @@ public class ImagingReportServiceImpl implements ImagingReportService {
             throw new com.example.hms.exception.FieldBusinessException("reportStatus", "imaging.report.studyAlreadySigned");
         }
         report.setReportStatus(requested);
+    }
+
+    /** QA D1428 class: a voided read stays voided; a status write moved it back to PRELIMINARY. */
+    private static void requireNotVoided(ImagingReport report) {
+        if (ADMINISTRATIVE_STATUSES.contains(report.getReportStatus())) {
+            throw new BusinessException("imaging.report.voided.locked");
+        }
     }
 
     /**

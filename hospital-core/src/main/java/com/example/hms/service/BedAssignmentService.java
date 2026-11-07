@@ -193,6 +193,9 @@ public class BedAssignmentService {
      */
     @Transactional
     public void unassignBed(Admission admission) {
+        // QA D1428: a closed stay's bed is history (releaseBed) and may hold
+        // another patient by now; freeing it here would empty their bed.
+        admission.requireOpen();
         Bed bed = admission.getBed();
         if (bed == null) {
             return;

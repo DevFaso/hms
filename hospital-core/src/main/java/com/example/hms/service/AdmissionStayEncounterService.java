@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -33,6 +34,9 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class AdmissionStayEncounterService {
+
+    /** nursing_tasks.completed_by_name and nurse_handoffs.completed_by_name. */
+    private static final int CLOSER_MAX = 200;
 
     private final EncounterRepository encounterRepository;
     private final StaffRepository staffRepository;
@@ -159,6 +163,16 @@ public class AdmissionStayEncounterService {
     }
 
     /**
+     * QA D1435: every other way a stay ends without {@link #recordDischarge}
+     * (a death, an ADT^A03) ends its nursing work as a discharge does.
+     */
+    @Transactional
+    public void closeNursingWorkOfEndedStay(Admission admission) {
+        closePendingHandoffs(admission);
+        closePendingNursingTasks(admission);
+    }
+
+    /**
      * QA D1393: what a cancelled stay does to its orders. Deliberately not
      * {@link #recordDischarge(Admission)}: a cancelled stay never happened, so
      * it writes no discharge summary and carries no diagnosis.
@@ -168,6 +182,70 @@ public class AdmissionStayEncounterService {
         if (stayOrders != null) {
             stayOrders.discontinueOrdersOfCancelledStay(admission, actorUserId);
         }
+        closeNursingWorkOfCancelledStay(admission);
+    }
+
+    /**
+     * QA D1435 (round 34): the nursing work of a cancelled stay ends with it, or
+     * it stayed on the ward's boards for a patient who is not there. Neither a
+     * task nor a handoff names its stay; they name the patient, so "of this
+     * stay" is what was written since the stay opened. Work on the same patient
+     * from before the stay (the visit that preceded it) is left as it is. Both
+     * close as the discharge closes them (COMPLETED: the task board's default
+     * view hides nothing else), saying why in their closer; a task also keeps
+     * the stay's reason as its note.
+     */
+    private void closeNursingWorkOfCancelledStay(Admission admission) {
+        if (admission.getPatient() == null || admission.getHospital() == null) {
+            return;
+        }
+        UUID patientId = admission.getPatient().getId();
+        UUID hospitalId = admission.getHospital().getId();
+        LocalDateTime opened = stayOpenedAt(admission);
+        LocalDateTime now = LocalDateTime.now(java.time.ZoneId.systemDefault());
+        String reason = admission.getCancellationReason();
+        String closedBy = messageSource.getMessage("nurse.work.closedByStayCancel", new Object[] {reason},
+            "Closed: stay cancelled", org.springframework.context.i18n.LocaleContextHolder.getLocale());
+        String closer = truncate(closedBy, CLOSER_MAX);
+
+        List<com.example.hms.model.NursingTask> tasks = nursingTaskRepository
+            .findByPatient_IdAndHospital_IdAndStatus(patientId, hospitalId, "PENDING").stream()
+            .filter(task -> writtenSince(task.getCreatedAt(), opened))
+            .toList();
+        for (var task : tasks) {
+            task.setStatus("COMPLETED");
+            task.setCompletedAt(now);
+            task.setCompletedByName(closer);
+            task.setCompletionNote(reason);
+        }
+        if (!tasks.isEmpty()) {
+            nursingTaskRepository.saveAll(tasks);
+        }
+
+        var handoffs = nurseHandoffRepository.findByPatient_IdAndHospital_IdAndStatus(patientId, hospitalId, "PENDING")
+            .stream().filter(handoff -> writtenSince(handoff.getCreatedAt(), opened)).toList();
+        for (var handoff : handoffs) {
+            handoff.setStatus("COMPLETED");
+            handoff.setCompletedAt(now);
+            handoff.setCompletedByName(closer);
+        }
+        if (!handoffs.isEmpty()) {
+            nurseHandoffRepository.saveAll(handoffs);
+        }
+    }
+
+    /** The earlier of the stated admission time (it may be backdated) and the row's own creation. */
+    private static LocalDateTime stayOpenedAt(Admission admission) {
+        LocalDateTime admitted = admission.getAdmissionDateTime();
+        LocalDateTime created = admission.getCreatedAt();
+        if (admitted == null || created == null) {
+            return admitted != null ? admitted : created;
+        }
+        return admitted.isBefore(created) ? admitted : created;
+    }
+
+    private static boolean writtenSince(LocalDateTime createdAt, LocalDateTime opened) {
+        return createdAt == null || opened == null || !createdAt.isBefore(opened);
     }
 
     /**

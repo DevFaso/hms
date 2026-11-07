@@ -6509,4 +6509,91 @@ class PrescriptionServiceImplTest {
 
         verify(prescriptionMapper).toEntity(any(), any(), any(), eq(mine));
     }
+
+    // ═══════════════ QA D1432 (round 34): what a PUT may do to a dispensed order ═══════════════
+
+    private Prescription dispensedRow(UUID id, com.example.hms.enums.PrescriptionStatus status) {
+        Prescription rx = signedRow(id);
+        rx.setStatus(status);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(id, hospitalId)).thenReturn(Optional.of(rx));
+        return rx;
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = com.example.hms.enums.PrescriptionStatus.class,
+        names = {"DISPENSED", "PARTNER_DISPENSED", "PARTIALLY_FILLED"})
+    void qaD1432_anOrderDispensedFromIsNeverCancelled(com.example.hms.enums.PrescriptionStatus status) {
+        UUID id = UUID.randomUUID();
+        Prescription rx = dispensedRow(id, status);
+        PrescriptionRequestDTO cancel = buildRequest();
+        cancel.setStatus(com.example.hms.enums.PrescriptionStatus.CANCELLED);
+        cancel.setWithdrawalReason("Changed my mind");
+
+        assertThatThrownBy(() -> prescriptionService.updatePrescription(id, cancel, Locale.FRENCH))
+            .isInstanceOf(BusinessException.class)
+            .extracting("messageKey").isEqualTo("prescription.dispensed.noCancel");
+        assertThat(rx.getStatus()).isEqualTo(status);
+        assertThat(rx.getWithdrawalReason()).isNull();
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = com.example.hms.enums.PrescriptionStatus.class,
+        names = {"DISPENSED", "PARTNER_DISPENSED"})
+    void qaD1432_aWhollyDispensedOrderIsNotRewritten(com.example.hms.enums.PrescriptionStatus status) {
+        UUID id = UUID.randomUUID();
+        Prescription rx = dispensedRow(id, status);
+        PrescriptionRequestDTO edit = buildRequest();
+        edit.setDosage("9000 mg");
+
+        assertThatThrownBy(() -> prescriptionService.updatePrescription(id, edit, Locale.FRENCH))
+            .isInstanceOf(BusinessException.class)
+            .extracting("messageKey").isEqualTo("prescription.dispensed.readOnly");
+        assertThat(rx.getDosage()).isEqualTo(TEST_DOSAGE);
+
+        PrescriptionRequestDTO stopAndRewrite = buildRequest();
+        stopAndRewrite.setDosage("9000 mg");
+        stopAndRewrite.setStatus(com.example.hms.enums.PrescriptionStatus.DISCONTINUED);
+        stopAndRewrite.setWithdrawalReason("Stopped");
+        assertThatThrownBy(() -> prescriptionService.updatePrescription(id, stopAndRewrite, Locale.FRENCH))
+            .isInstanceOf(BusinessException.class)
+            .extracting("messageKey").isEqualTo("prescription.dispensed.readOnly");
+        assertThat(rx.getDosage()).isEqualTo(TEST_DOSAGE);
+    }
+
+    @Test
+    void qaD1432_aPartFillStopsItsBalanceWithAReason() {
+        UUID id = UUID.randomUUID();
+        Prescription rx = dispensedRow(id, com.example.hms.enums.PrescriptionStatus.PARTIALLY_FILLED);
+        UUID callerId = UUID.randomUUID();
+        when(authService.getCurrentUserId()).thenReturn(callerId);
+        lenient().when(roleValidator.getCurrentUserId()).thenReturn(callerId);
+        when(roleValidator.isDoctor(callerId, hospitalId)).thenReturn(true);
+        when(prescriptionRepository.save(rx)).thenReturn(rx);
+        when(prescriptionMapper.toResponseDTO(rx)).thenReturn(PrescriptionResponseDTO.builder().id(id).build());
+        PrescriptionRequestDTO stop = buildRequest();
+        stop.setStatus(com.example.hms.enums.PrescriptionStatus.DISCONTINUED);
+        stop.setWithdrawalReason("Rest no longer needed");
+
+        prescriptionService.updatePrescription(id, stop, Locale.FRENCH);
+
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.DISCONTINUED);
+        assertThat(rx.getWithdrawalReason()).isEqualTo("Rest no longer needed");
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = com.example.hms.enums.PrescriptionStatus.class,
+        names = {"DISPENSED", "PARTNER_DISPENSED", "PARTIALLY_FILLED"})
+    void qaD1432_anOrderDispensedFromIsNotDeleted(com.example.hms.enums.PrescriptionStatus status) {
+        UUID id = UUID.randomUUID();
+        Prescription rx = signedRow(id);
+        rx.setStatus(status);
+        when(prescriptionRepository.findById(id)).thenReturn(Optional.of(rx));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+
+        assertThatThrownBy(() -> prescriptionService.deletePrescription(id, Locale.FRENCH))
+            .isInstanceOf(BusinessException.class)
+            .extracting("messageKey").isEqualTo("prescription.dispensed.readOnly");
+        verify(prescriptionRepository, never()).deleteById(any());
+    }
 }

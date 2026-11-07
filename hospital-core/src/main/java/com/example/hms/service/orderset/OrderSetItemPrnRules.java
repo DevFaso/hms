@@ -58,6 +58,11 @@ public final class OrderSetItemPrnRules {
                 throw new FieldBusinessException(ITEMS_FIELD + "[" + i + "]." + refusal.field(), ITEM_REFUSED_KEY,
                     i + 1, nameOf(item), MessageUtil.resolve(refusal.key()));
             }
+            // QA D1436: the same place holds a dose to its unit, so each writer and the apply get it.
+            if (OrderSetItemDoseRules.lacksUnit(item)) {
+                throw new FieldBusinessException(ITEMS_FIELD + "[" + i + "]." + OrderSetItemDoseRules.DOSE_UNIT_KEY,
+                    ITEM_REFUSED_KEY, i + 1, nameOf(item), MessageUtil.resolve(OrderSetItemDoseRules.UNIT_REQUIRED_KEY));
+            }
         }
     }
 

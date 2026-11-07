@@ -222,7 +222,7 @@
                       </button>
                     }
                   }
-                  @if (canEditAdmission()) {
+                  @if (canEditAdmission() && isEditable(a)) {
                     <button
                       [attr.aria-label]="'COMMON.EDIT' | translate"
                       class="action-link edit-link"
@@ -500,7 +500,11 @@
               type="text"
               [(ngModel)]="form.roomBed"
               [placeholder]="'ADMISSIONS.ROOM_BED_PLACEHOLDER' | translate"
+              [readonly]="editing() && editingHoldsBed()"
             />
+            @if (editing() && editingHoldsBed()) {
+              <small class="no-beds-hint">{{ 'ADMISSIONS.ROOM_BED_HELD_HINT' | translate }}</small>
+            }
           </div>
         </div>
         <div class="form-row">

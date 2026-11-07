@@ -177,3 +177,15 @@ export class OrderSetService {
     );
   }
 }
+
+/** QA D1439: the orders an apply created, counted the same on the panel and in the toast. */
+export function appliedOrderCount(summary: AppliedOrderSetSummary): number {
+  return (
+    summary.prescriptionIds.length + summary.labOrderIds.length + summary.imagingOrderIds.length
+  );
+}
+
+/** QA D1439: the sentence that says so, singular for one. */
+export function appliedResultKey(count: number): string {
+  return count === 1 ? 'ORDER_SETS.APPLIED_RESULT_ONE' : 'ORDER_SETS.APPLIED_RESULT';
+}

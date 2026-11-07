@@ -740,4 +740,33 @@ describe('AdmissionsComponent row actions (rendered, D527)', () => {
     const cells = Array.from(el.querySelectorAll('td')).map((td) => td.textContent?.trim());
     expect(cells).toContain(expected);
   });
+
+  describe('QA D1428 / D1439', () => {
+    it('offers no edit on a closed stay, and one on every open stay', () => {
+      for (const status of ['DISCHARGED', 'CANCELLED', 'TRANSFERRED', 'DECEASED']) {
+        expect(component.isEditable(adm({ status } as Partial<AdmissionResponse>))).withContext(status).toBeFalse();
+      }
+      for (const status of ['PENDING', 'ACTIVE', 'ON_LEAVE', 'AWAITING_DISCHARGE']) {
+        expect(component.isEditable(adm({ status } as Partial<AdmissionResponse>))).withContext(status).toBeTrue();
+      }
+    });
+
+    it('the room follows the held bed: read-only while editing a stay that holds one', () => {
+      component.openEdit(adm({ bedId: 'b1' } as Partial<AdmissionResponse>));
+      expect(component.editingHoldsBed()).toBeTrue();
+      component.openEdit(adm({ bedId: undefined } as Partial<AdmissionResponse>));
+      expect(component.editingHoldsBed()).toBeFalse();
+    });
+
+    it('says one order in the singular, as the panel does', () => {
+      toast.success.calls.reset();
+      component.onOrderSetApplied({
+        prescriptionIds: ['x'],
+        labOrderIds: [],
+        imagingOrderIds: [],
+        skippedItemCount: 0,
+      } as unknown as AppliedOrderSetSummary);
+      expect(toast.success).toHaveBeenCalledWith('ORDER_SETS.APPLIED_RESULT_ONE');
+    });
+  });
 });

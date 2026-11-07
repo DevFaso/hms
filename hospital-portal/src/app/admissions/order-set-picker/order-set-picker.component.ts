@@ -18,15 +18,33 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Subject, Subscription, debounceTime, switchMap, takeUntil } from 'rxjs';
 
 import {
+  appliedOrderCount,
+  appliedResultKey,
   AppliedOrderSetSummary,
   OrderSetService,
   OrderSetSummary,
 } from '../../services/order-set.service';
+import { unTickedFrequencyVerdict } from '../../shared/as-needed-frequency';
 import { CdsCardListComponent } from '../../shared/cds-card/cds-card.component';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { refusalReason } from '../../shared/refusal-reason';
 
 type State = 'idle' | 'searching' | 'ready' | 'applying' | 'applied' | 'error';
+
+/**
+ * QA D1438: the words a stored item may name its route in, as the prescription
+ * form's codes (MedicationRoutes on the server knows the same words). Older and
+ * API-written items say ORAL where the editor writes PO.
+ */
+const ROUTE_CODES: Readonly<Record<string, string>> = {
+  ORAL: 'PO',
+  INTRAVENOUS: 'IV',
+  INTRAMUSCULAR: 'IM',
+  SUBCUTANEOUS: 'SC',
+  RECTAL: 'PR',
+  INHALATION: 'INH',
+  TOP: 'TOPICAL',
+};
 
 /**
  * Modal-style picker for applying a CPOE order set to an admission.
@@ -122,7 +140,7 @@ type State = 'idle' | 'searching' | 'ready' | 'applying' | 'applied' | 'error';
             @for (item of sel.orderItems; track item; let i = $index) {
               <li data-testid="order-set-picker-preview-item">
                 <strong>{{ orderItemType(item) }}</strong
-                >: {{ orderItemLabel(item) }}
+                >{{ 'COMMON.COLON' | translate }} {{ orderItemLabel(item) }}
                 @if (orderItemDetail(item); as detail) {
                   <small class="order-set-picker__item-detail">{{ detail }}</small>
                 }
@@ -149,10 +167,8 @@ type State = 'idle' | 'searching' | 'ready' | 'applying' | 'applied' | 'error';
         <section class="order-set-picker__applied" data-testid="order-set-picker-applied">
           <p>
             {{
-              (createdCount(summary) === 1
-                ? 'ORDER_SETS.APPLIED_RESULT_ONE'
-                : 'ORDER_SETS.APPLIED_RESULT'
-              ) | translate: { count: createdCount(summary), skipped: summary.skippedItemCount }
+              resultKey(summary)
+                | translate: { count: createdCount(summary), skipped: summary.skippedItemCount }
             }}
           </p>
           <app-cds-card-list [cards]="summary.cdsAdvisories" />
@@ -338,9 +354,11 @@ export class OrderSetPickerComponent implements OnChanges, OnDestroy {
   }
 
   protected createdCount(summary: AppliedOrderSetSummary): number {
-    return (
-      summary.prescriptionIds.length + summary.labOrderIds.length + summary.imagingOrderIds.length
-    );
+    return appliedOrderCount(summary);
+  }
+
+  protected resultKey(summary: AppliedOrderSetSummary): string {
+    return appliedResultKey(appliedOrderCount(summary));
   }
 
   /**
@@ -351,14 +369,14 @@ export class OrderSetPickerComponent implements OnChanges, OnDestroy {
     const interval = item['prnMinIntervalHours'];
     const parts = [
       this.doseText(item),
-      this.codedText('ORDER_SETS.ROUTE', item['route']),
+      this.routeText(item['route']),
       this.codedText('ORDER_SETS.FREQUENCY', item['frequency']),
-      item['asNeeded'] === true ? this.translate.instant('ORDER_SETS.FREQUENCY.PRN') : '',
+      this.asNeededText(item),
       interval
         ? this.translate.instant('PRESCRIPTIONS.PRN_MIN_INTERVAL_VALUE', { hours: interval })
         : '',
       item['quantity']
-        ? this.translate.instant('PRESCRIPTIONS.QUANTITY_VALUE', {
+        ? this.translate.instant('ORDER_SETS.QUANTITY_VALUE', {
             value: item['quantity'],
             unit: item['quantityUnit'] ?? '',
           })
@@ -370,8 +388,32 @@ export class OrderSetPickerComponent implements OnChanges, OnDestroy {
       .join(' · ');
   }
 
+  /** QA D1439: "as needed" is said once; a frequency that already says it is enough. */
+  private asNeededText(item: Record<string, unknown>): string {
+    if (item['asNeeded'] !== true) return '';
+    const frequency = item['frequency'];
+    const says =
+      typeof frequency === 'string' &&
+      (frequency.trim().toUpperCase() === 'PRN' ||
+        unTickedFrequencyVerdict(frequency) === 'CONDITIONAL');
+    return says ? '' : this.translate.instant('ORDER_SETS.FREQUENCY.PRN');
+  }
+
+  /** QA D1438: the route in the reader's language, whichever word the item stored it in. */
+  private routeText(route: unknown): string {
+    if (typeof route !== 'string') return '';
+    const code = route.trim().toUpperCase();
+    return this.codedText('ORDER_SETS.ROUTE', ROUTE_CODES[code] ?? code) || route.trim();
+  }
+
   private doseText(item: Record<string, unknown>): string {
-    if (typeof item['dose'] === 'string' && item['dose'].trim()) return item['dose'];
+    const dose = item['dose'];
+    if ((typeof dose === 'string' && dose.trim()) || typeof dose === 'number') {
+      // QA D1436: a bare number and its unit read together, as on the order.
+      const written = String(dose).trim();
+      const unit = item['doseUnit'];
+      return unit && /^[\d.,\s-]+$/.test(written) ? `${written} ${unit as string}` : written;
+    }
     const min = item['doseRangeMin'];
     const max = item['doseRangeMax'];
     const range = min != null && max != null && min !== max ? `${min}-${max}` : (min ?? max ?? '');

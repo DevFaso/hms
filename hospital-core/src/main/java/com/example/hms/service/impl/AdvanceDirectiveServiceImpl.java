@@ -109,6 +109,10 @@ public class AdvanceDirectiveServiceImpl implements AdvanceDirectiveService {
     @Transactional
     public AdvanceDirectiveResponseDTO update(UUID id, AdvanceDirectiveRequestDTO request) {
         AdvanceDirective directive = loadScoped(id);
+        // QA D1428 class: a body with no status rewrote a revoked directive's type.
+        if (request.getStatus() == null && directive.getStatus() == AdvanceDirectiveStatus.REVOKED) {
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_STATUS, "advanceDirective.revoked.locked");
+        }
         if (request.getStatus() != null) {
             // QA D1186 class (round 22, review round 1): a revocation is recorded
             // only by revoke(), with its reason, and is not undone by an edit -
