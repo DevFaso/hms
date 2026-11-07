@@ -1,5 +1,6 @@
 import {
   Component,
+  DestroyRef,
   OnInit,
   OnDestroy,
   inject,
@@ -9,8 +10,9 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Subscription, interval, of } from 'rxjs';
-import { exhaustMap, catchError } from 'rxjs/operators';
+import { Subscription, interval } from 'rxjs';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { RoleContextService } from '../core/role-context.service';
 import {
   PatientTrackerService,
   PatientTrackerBoard,
@@ -87,6 +89,56 @@ export class PatientTrackerComponent implements OnInit, OnDestroy {
   private static readonly POLL_ONLINE_MS = 120_000;
   private wsConnected = false;
 
+  private readonly roleContext = inject(RoleContextService);
+  private readonly destroyRef = inject(DestroyRef);
+  private boardRequest = 0;
+  readonly loadFailed = signal(false);
+  readonly searchTerm = signal('');
+  readonly departmentFilter = signal('');
+  readonly stageFilter = signal('');
+  readonly visibleColumns = computed(() =>
+    this.columns.filter((c) => !this.stageFilter() || c.key === this.stageFilter()),
+  );
+  readonly departments = computed(() =>
+    [
+      ...new Set(
+        this.columns
+          .flatMap((c) => this.getColumnItems(c.key))
+          .map((i) => i.departmentName)
+          .filter((v): v is string => !!v),
+      ),
+    ].sort(),
+  );
+  readonly visibleCount = computed(() =>
+    this.visibleColumns().reduce((sum, c) => sum + this.getVisibleColumnItems(c.key).length, 0),
+  );
+  getVisibleColumnItems(key: string): PatientTrackerItem[] {
+    const term = this.searchTerm().trim().toLocaleLowerCase();
+    return this.getColumnItems(key).filter(
+      (item) =>
+        (!this.departmentFilter() || item.departmentName === this.departmentFilter()) &&
+        (!term ||
+          [
+            item.patientName,
+            item.mrn,
+            item.assignedProvider,
+            item.roomAssignment,
+            item.departmentName,
+          ].some((v) => v?.toLocaleLowerCase().includes(term))),
+    );
+  }
+  clearFilters(): void {
+    this.searchTerm.set('');
+    this.departmentFilter.set('');
+    this.stageFilter.set('');
+  }
+  formatWait(minutes: number): string {
+    const value = Math.round(minutes);
+    return this.translate.instant(value >= 60 ? 'TRACKER.DURATION_HM' : 'TRACKER.DURATION_M', {
+      hours: Math.floor(value / 60),
+      minutes: value >= 60 ? value % 60 : value,
+    });
+  }
   board = signal<PatientTrackerBoard | null>(null);
   loading = signal(false);
   lastRefreshed = signal<Date | null>(null);
@@ -112,7 +164,7 @@ export class PatientTrackerComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.loadBoard();
 
-    const hospitalId = this.auth.getHospitalId();
+    const hospitalId = this.roleContext.effectiveHospitalIdForRequest();
     if (hospitalId) {
       this.wsStateSub = this.trackerWs.getConnectionState().subscribe((connected) => {
         this.wsConnected = connected;
@@ -137,37 +189,34 @@ export class PatientTrackerComponent implements OnInit, OnDestroy {
     const ms = this.wsConnected
       ? PatientTrackerComponent.POLL_ONLINE_MS
       : PatientTrackerComponent.POLL_OFFLINE_MS;
-    this.refreshSub = interval(ms)
-      .pipe(
-        exhaustMap(() => {
-          const hospitalId = this.auth.getHospitalId();
-          if (!hospitalId) return of(null);
-          return this.trackerService.getTrackerBoard(hospitalId).pipe(catchError(() => of(null)));
-        }),
-      )
-      .subscribe((data) => {
-        if (data) {
-          this.board.set(data);
-          this.lastRefreshed.set(new Date());
-        }
-      });
+    this.refreshSub = interval(ms).subscribe(() => {
+      if (!this.loading()) this.loadBoard();
+    });
   }
 
   loadBoard(): void {
-    const hospitalId = this.auth.getHospitalId();
+    const hospitalId = this.roleContext.effectiveHospitalIdForRequest();
     if (!hospitalId) return;
 
+    const request = ++this.boardRequest;
+    this.loadFailed.set(false);
     this.loading.set(true);
-    this.trackerService.getTrackerBoard(hospitalId).subscribe({
-      next: (data) => {
-        this.board.set(data);
-        this.lastRefreshed.set(new Date());
-        this.loading.set(false);
-      },
-      error: () => {
-        this.loading.set(false);
-      },
-    });
+    this.trackerService
+      .getTrackerBoard(hospitalId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (data) => {
+          if (request !== this.boardRequest) return;
+          this.board.set(data);
+          this.lastRefreshed.set(new Date());
+          this.loading.set(false);
+        },
+        error: () => {
+          if (request !== this.boardRequest) return;
+          this.loadFailed.set(true);
+          this.loading.set(false);
+        },
+      });
   }
 
   refresh(): void {

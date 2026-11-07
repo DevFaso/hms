@@ -1,4 +1,13 @@
-import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import {
+  Component,
+  computed,
+  DestroyRef,
+  inject,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -42,6 +51,35 @@ export class DischargeComponent implements OnInit {
   private readonly roleContext = inject(RoleContextService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly destroyRef = inject(DestroyRef);
+  private approvalRequest = 0;
+  private summaryRequest = 0;
+  readonly approvalsFailed = signal(false);
+  readonly summariesFailed = signal(false);
+  readonly searchTerm = signal('');
+  readonly visibleApprovals = computed(() => {
+    const term = this.searchTerm().trim().toLocaleLowerCase();
+    return this.approvals().filter(
+      (a) =>
+        !term ||
+        [a.patientName, a.nurseName, a.nurseSummary].some((s) =>
+          s?.toLocaleLowerCase().includes(term),
+        ),
+    );
+  });
+  readonly visibleSummaries = computed(() => {
+    const term = this.searchTerm().trim().toLocaleLowerCase();
+    return this.summaries().filter(
+      (s) =>
+        !term ||
+        [s.patientName, s.patientMrn, s.dischargingProviderName, s.dischargeDiagnosis].some((v) =>
+          v?.toLocaleLowerCase().includes(term),
+        ),
+    );
+  });
+  readonly pendingLoaded = computed(
+    () => this.approvals().filter((a) => a.status === 'PENDING').length,
+  );
 
   /* ── Context ── */
   private hospitalId: string | null = null;
@@ -193,27 +231,36 @@ export class DischargeComponent implements OnInit {
 
   setTab(tab: 'approvals' | 'summaries'): void {
     this.activeTab.set(tab);
+    this.searchTerm.set('');
   }
 
   /* ── Approvals ── */
 
   setApprovalFilter(filter: ApprovalFilter): void {
     this.approvalFilter.set(filter);
+    this.searchTerm.set('');
     this.loadApprovals();
   }
 
   loadApprovals(): void {
     if (!this.hospitalId) return;
+    const request = ++this.approvalRequest;
+    this.approvalsFailed.set(false);
     this.approvalsLoading.set(true);
     const filter = this.approvalFilter();
     this.dischargeService
       .approvalsByHospital(this.hospitalId, filter === 'ALL' ? undefined : filter)
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (list) => {
+          if (request !== this.approvalRequest) return;
           this.approvals.set(list ?? []);
           this.approvalsLoading.set(false);
         },
         error: () => {
+          if (request !== this.approvalRequest) return;
+          this.approvals.set([]);
+          this.approvalsFailed.set(true);
           this.toast.error(this.translate.instant('DISCHARGE.LOAD_APPROVALS_ERROR'));
           this.approvalsLoading.set(false);
         },
@@ -367,6 +414,7 @@ export class DischargeComponent implements OnInit {
 
   setSummaryFilter(filter: SummaryFilter): void {
     this.summaryFilter.set(filter);
+    this.searchTerm.set('');
     this.loadSummaries();
   }
 
@@ -374,6 +422,8 @@ export class DischargeComponent implements OnInit {
     if (!this.hospitalId || !this.canViewSummaries) return;
     const filter = this.summaryFilter();
     if (filter === 'unfinalized' && !this.canEditSummaries) return;
+    const request = ++this.summaryRequest;
+    this.summariesFailed.set(false);
     this.summariesLoading.set(true);
     const source =
       filter === 'unfinalized'
@@ -385,12 +435,16 @@ export class DischargeComponent implements OnInit {
               this.rangeStart,
               this.rangeEnd,
             );
-    source.subscribe({
+    source.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (list) => {
+        if (request !== this.summaryRequest) return;
         this.summaries.set(list ?? []);
         this.summariesLoading.set(false);
       },
       error: () => {
+        if (request !== this.summaryRequest) return;
+        this.summaries.set([]);
+        this.summariesFailed.set(true);
         this.toast.error(this.translate.instant('DISCHARGE.LOAD_SUMMARIES_ERROR'));
         this.summariesLoading.set(false);
       },
