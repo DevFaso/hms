@@ -33,7 +33,7 @@ class MarDoseScheduleTest {
 
     @ParameterizedTest
     @NullAndEmptySource
-    @ValueSource(strings = {"once", "STAT", "q4h PRN", "as needed", "after meals", "q0h", "5x daily",
+    @ValueSource(strings = {"once", "STAT", "q4h PRN", "as needed", "q0h", "5x daily",
         "une seule fois", "si besoin, une fois par jour", "Toutes les 4 heures (si besoin)",
         "Si besoin (PRN)", "cada 6 horas si es necesario"})
     void anythingElseIsASingleDose(String frequency) {
@@ -228,15 +228,19 @@ class MarDoseScheduleTest {
         assertThat(MarDoseSchedule.read("3/j").intervalMinutes()).isEqualTo(480);
     }
 
-    /** QA D1308: a bare count that is not a day's doses stays unread (nothing guessed). */
+    /**
+     * QA D1308: a bare count that is not a day's doses stays unread (nothing
+     * guessed). QA D1426 (changed): "2/semaine" and "500 mg/j" state a cadence,
+     * "24/24" an infusion: {@link #d1426_aCadenceAnywhereIsRead}.
+     */
     @ParameterizedTest
-    @ValueSource(strings = {"0/j", "25/j", "1/2 j", "2/semaine", "500 mg/j", "24/24"})
+    @ValueSource(strings = {"0/j", "25/j", "1/2 j"})
     void d1308_aBareCountThatIsNotADaysDosesStaysUnread(String frequency) {
         assertThat(MarDoseSchedule.read(frequency).kind()).as(frequency).isEqualTo(MarDoseSchedule.Kind.UNREAD);
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"0-0-0", "1-0", "1-0-1-0-1", "10-0-10", "1-a-1", "2 fois/semaine", "/jour"})
+    @ValueSource(strings = {"0-0-0", "1-0", "1-0-1-0-1", "10-0-10", "1-a-1", "/jour"})
     void d1291_anythingElseStaysUnread(String frequency) {
         assertThat(MarDoseSchedule.read(frequency).kind()).as(frequency).isEqualTo(MarDoseSchedule.Kind.UNREAD);
     }
@@ -375,8 +379,9 @@ class MarDoseScheduleTest {
         "una vez|ONE_OFF", "dosis única|ONE_OFF", "single dose|ONE_OFF",
         // QA D1378: the text alone is never AS_NEEDED; an unticked as-needed wording stays open (UNREAD).
         "PRN|UNREAD", "si besoin|UNREAD", "q4h PRN|UNREAD", "cada 6 horas si es necesario|UNREAD",
-        "after meals|UNREAD", "après les repas|UNREAD", "une fois par semaine|UNREAD", "q0h|UNREAD",
-        "24h/24|UNREAD", "2 fois|UNREAD", "toutes les 30 minutes|UNREAD"
+        // QA D1426 (changed): meals, a week and thirty minutes state a cadence, 24h/24 an infusion.
+        "after meals|REPEATING", "après les repas|REPEATING", "une fois par semaine|REPEATING", "q0h|UNREAD",
+        "24h/24|CONTINUOUS", "2 fois|UNREAD", "toutes les 30 minutes|REPEATING"
     })
     void d1237_readsWhatTheFrequencySays(String frequency, MarDoseSchedule.Kind kind) {
         assertThat(MarDoseSchedule.read(frequency).kind()).isEqualTo(kind);
@@ -387,6 +392,49 @@ class MarDoseScheduleTest {
     @ValueSource(strings = {"   "})
     void d1237_noFrequencyWrittenIsAOneOffOrder(String frequency) {
         assertThat(MarDoseSchedule.read(frequency).kind()).isEqualTo(MarDoseSchedule.Kind.ONE_OFF);
+    }
+
+    /** QA D1426: a cadence is read wherever it stands in the sentence, and what the fixture does not hold reads too. */
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', value = {
+        "2/semaine|5040", "2 fois/semaine|5040", "500 mg/j|1440", "q30min|30", "q2d|2880", "tous les mois|43200",
+        "cada mes|43200", "every week|10080", "8/8|480", "x 3|480", "3f/j|480", "at bedtime|1440", "matin et soir|720",
+        "take 1 tablet twice daily|720", "tomar 1 cada 8 horas|480", "08:00 14:00 20:00|480", "with food|480"})
+    void d1426_aCadenceAnywhereIsRead(String frequency, int minutes) {
+        assertThat(MarDoseSchedule.read(frequency).intervalMinutes()).as(frequency).isEqualTo(minutes);
+    }
+
+    /** QA D1426: a single-dose form ends after its dose, whatever stands beside it. */
+    @ParameterizedTest
+    @ValueSource(strings = {"Prise unique (TPI-SP 2)", "prise unique à la CPN", "en une prise", "SP dose unique", "ce soir",
+        "1 fois ce soir", "à la naissance", "avant l'intervention", "bolus", "en IVD lente", "dose de charge"})
+    void d1426_aSingleDoseFormIsOneDose(String frequency) {
+        assertThat(MarDoseSchedule.read(frequency).kind()).as(frequency).isEqualTo(MarDoseSchedule.Kind.ONE_OFF);
+    }
+
+    /** QA D1419: a ceiling, a range or a choice is not a schedule, but the daily limit still judges its highest count. */
+    @Test
+    void d1419_aCeilingIsNotAScheduleButItsCountStillMeetsTheDailyLimit() {
+        for (String ceiling : List.of("max 4/j", "1 à 3 fois par jour", "jusqu'à 4 fois par jour", "up to 4 times a day")) {
+            assertThat(MarDoseSchedule.read(ceiling).kind()).as(ceiling).isEqualTo(MarDoseSchedule.Kind.UNREAD);
+        }
+        assertThat(MarDoseSchedule.dosesPerDay("max 4/j")).isEqualTo(4d);
+        assertThat(MarDoseSchedule.dosesPerDay("1 à 3 fois par jour")).isEqualTo(3d);
+        assertThat(MarDoseSchedule.read("une fois par jour jusqu'à l'accouchement").intervalMinutes()).isEqualTo(1440);
+    }
+
+    /** QA D1419: the artemether-lumefantrine timing is six doses at their own moments; the daily limit counts the fullest day. */
+    @Test
+    void d1419_aCourseHasItsOwnMoments() {
+        MarDoseSchedule.Reading reading = MarDoseSchedule.read("H0 H8 H24 H36 H48 H60");
+        assertThat(reading.kind()).isEqualTo(MarDoseSchedule.Kind.COURSE);
+        assertThat(reading.courseOffsets()).containsExactly(0, 480, 1440, 2160, 2880, 3600);
+        assertThat(reading.gapAfter(1)).isEqualTo(480);
+        assertThat(reading.gapAfter(2)).isEqualTo(960);
+        assertThat(reading.gapAfter(6)).isNull();
+        assertThat(MarDoseSchedule.dosesPerDay("H0 H8 H24 H36 H48 H60")).isEqualTo(2d);
+        assertThat(MarDoseSchedule.read("J1 à J3").courseOffsets()).containsExactly(0, 1440, 2880);
+        assertThat(MarDoseSchedule.intervalHours("J1 J2 J3")).as("not a whole-hour regimen").isNull();
     }
 
     /** QA D1237: "5 fois par jour" repeats (every 4 h 48), though not in whole hours. */

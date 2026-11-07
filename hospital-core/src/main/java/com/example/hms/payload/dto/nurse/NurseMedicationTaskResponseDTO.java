@@ -38,6 +38,13 @@ public class NurseMedicationTaskResponseDTO {
      */
     private boolean frequencyUnread;
     /**
+     * QA D1419: a continuous infusion ("perfusion continue", "IVSE", "125 ml/h").
+     * Once started it has no next slot: the row stays open (status DUE, never
+     * OVERDUE, not counted as a dose waiting) so a new bag can be recorded with no
+     * reason, and {@link #prnLabel} says so.
+     */
+    private boolean continuousInfusion;
+    /**
      * QA round 30: an as-needed (PRN, "si besoin") order. It is always offered
      * (status DUE, never OVERDUE, not counted as a dose waiting), in a slot of
      * now; a dose before the prescriber's minimum interval has passed since

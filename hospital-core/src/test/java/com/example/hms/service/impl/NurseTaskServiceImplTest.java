@@ -4596,7 +4596,7 @@ class NurseTaskServiceImplTest {
     @Test
     void d1237_anUnreadFrequencyKeepsTheCourseOpenAndFlagged() {
         UUID hospitalId = UUID.randomUUID();
-        Prescription rx = scheduledRx(hospitalId, "après les repas");
+        Prescription rx = scheduledRx(hospitalId, "selon protocole");
         rx.setStatus(PrescriptionStatus.SIGNED);
         LocalDateTime slot = rx.getCreatedAt();
 
@@ -4611,7 +4611,7 @@ class NurseTaskServiceImplTest {
     @Test
     void d1237_anUnreadFrequencyAsksWhyEachLaterDoseIsGiven() {
         UUID hospitalId = UUID.randomUUID();
-        Prescription rx = scheduledRx(hospitalId, "après les repas");
+        Prescription rx = scheduledRx(hospitalId, "selon protocole");
         when(prescriptionRepository.findByIdForUpdate(rx.getId())).thenReturn(Optional.of(rx));
         when(marRepository.findByPrescription_IdOrderByScheduledTimeDesc(rx.getId()))
             .thenReturn(List.of(givenAt(rx, rx.getCreatedAt(), rx.getCreatedAt())));

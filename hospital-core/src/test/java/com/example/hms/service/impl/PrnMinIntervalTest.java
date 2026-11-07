@@ -217,9 +217,70 @@ class PrnMinIntervalTest {
         assertThat(PrnMinInterval.safetyNet("pour douleur"))
             .isEqualTo(new PrnMinInterval.Refusal(PrnMinInterval.AS_NEEDED_FIELD, PrnMinInterval.CONFIRM_KEY));
         assertThat(PrnMinInterval.safetyNet("selon prescription m\u00e9dicale"))
-            .isEqualTo(new PrnMinInterval.Refusal(PrnMinInterval.AS_NEEDED_FIELD, PrnMinInterval.UNREADABLE_KEY));
+            .isEqualTo(new PrnMinInterval.Refusal(PrnMinInterval.CONFIRMED_FIELD, PrnMinInterval.UNREADABLE_KEY));
         assertThat(PrnMinInterval.safetyNet("q6h")).isNull();
         assertThat(PrnMinInterval.safetyNet(null)).isNull();
+    }
+
+    /** QA D1419 / D1434: a wording the MAR cannot schedule is a question at create, controlled drug included. */
+    @ParameterizedTest
+    @ValueSource(strings = {"SP + AQ", "selon ordonnance", "CPS", "protocole national", "max 4/j", "1 à 3 fois par jour",
+        "5 jours", "pendant 3 jours", "par jour", "x3"})
+    void d1419_aWordingNotReadIsAskedOnceThenCreated(String frequency) {
+        Prescription rx = new Prescription();
+        rx.setMedicationName("Morphine");
+        rx.setControlledSubstance(true);
+        rx.setFrequency(frequency);
+        assertThatThrownBy(() -> PrnMinInterval.applyTo(rx)).as(frequency)
+            .isInstanceOf(FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", PrnMinInterval.CONFIRMED_FIELD)
+            .hasFieldOrPropertyWithValue("messageKey", PrnMinInterval.UNREADABLE_KEY);
+        PrnMinInterval.applyTo(rx, true);
+        assertThat(rx.isAsNeeded()).as("never nudged into as-needed").isFalse();
+
+        PrescriptionRequestDTO request = new PrescriptionRequestDTO();
+        request.setMedicationName("Morphine");
+        request.setFrequency(frequency);
+        request.setAsNeeded(false);
+        assertThat(paths(request, Default.class, OnCreate.class)).as(frequency)
+            .contains(PrnMinInterval.CONFIRMED_FIELD).doesNotContain(PrnMinInterval.AS_NEEDED_FIELD);
+        request.setFrequencyConfirmed(true);
+        assertThat(paths(request, Default.class, OnCreate.class)).as(frequency)
+            .doesNotContain(PrnMinInterval.CONFIRMED_FIELD, PrnMinInterval.AS_NEEDED_FIELD);
+    }
+
+    /** QA D1419: an edit that changes the frequency is asked; one that leaves it is not; a condition stays refused. */
+    @Test
+    void d1419_anEditIsAskedOnlyWhenItWritesTheWording() {
+        Prescription rx = new Prescription();
+        rx.setFrequency("selon protocole");
+        PrnMinInterval.applyToEdit(rx, "selon protocole", false);
+        assertThatThrownBy(() -> PrnMinInterval.applyToEdit(rx, "q6h", false))
+            .hasFieldOrPropertyWithValue("field", PrnMinInterval.CONFIRMED_FIELD);
+        PrnMinInterval.applyToEdit(rx, "q6h", false, true);
+        rx.setFrequency("pour douleur");
+        assertThatThrownBy(() -> PrnMinInterval.applyToEdit(rx, "q6h", false, true))
+            .hasFieldOrPropertyWithValue("field", PrnMinInterval.AS_NEEDED_FIELD);
+    }
+
+    /** QA D1433: a fraction is refused on the field, not cut down; no sibling Integer is read from a fraction. */
+    @ParameterizedTest
+    @ValueSource(strings = {"1.5", "2.9", "6.5", "0.5", "\"1.5\""})
+    void d1433_aFractionOfAnHourIsRefusedOnItsField(String json) {
+        PrescriptionRequestDTO read = tools.jackson.databind.json.JsonMapper.builder().build().readValue(
+            "{\"medicationName\":\"Paracetamol\",\"frequency\":\"si besoin\",\"asNeeded\":true,"
+                + "\"prnMinIntervalHours\":" + json + "}", PrescriptionRequestDTO.class);
+        assertThat(paths(read, Default.class, OnCreate.class)).as(json).contains(PrnMinInterval.FIELD);
+    }
+
+    @ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource(delimiter = '|', value = {"4|4", "2.0|2", "\"6\"|6", "72|72", "1|1"})
+    void d1433_aWholeNumberStaysAWholeNumber(String json, int hours) {
+        PrescriptionRequestDTO read = tools.jackson.databind.json.JsonMapper.builder().build().readValue(
+            "{\"medicationName\":\"Paracetamol\",\"frequency\":\"si besoin\",\"asNeeded\":true,"
+                + "\"prnMinIntervalHours\":" + json + "}", PrescriptionRequestDTO.class);
+        assertThat(read.getPrnMinIntervalHours()).isEqualTo(hours);
+        assertThat(paths(read, Default.class, OnCreate.class)).doesNotContain(PrnMinInterval.FIELD);
     }
 
     /** QA D1391 / D1395: an edit that writes no frequency is not asked about an old one; one that does is. */

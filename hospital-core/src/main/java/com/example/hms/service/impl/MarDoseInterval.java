@@ -104,6 +104,17 @@ public final class MarDoseInterval {
     public static String requireIntervalOrReason(Prescription rx, MedicationAdministrationStatus status,
                                                  Optional<LocalDateTime> lastGiven, LocalDateTime now,
                                                  Duration earlyWindow, String reason) {
+        return requireIntervalOrReason(rx, status, lastGiven, now, earlyWindow, reason, 1);
+    }
+
+    /**
+     * As above, for an order with {@code closedDoses} doses already closed: a
+     * course of fixed moments ("H0 H8 H24", QA D1419) has one gap per step. A
+     * continuous infusion and a single dose have no gap to keep.
+     */
+    public static String requireIntervalOrReason(Prescription rx, MedicationAdministrationStatus status,
+                                                 Optional<LocalDateTime> lastGiven, LocalDateTime now,
+                                                 Duration earlyWindow, String reason, int closedDoses) {
         if (status != MedicationAdministrationStatus.GIVEN || rx == null || lastGiven.isEmpty() || now == null) {
             return null;
         }
@@ -116,10 +127,11 @@ public final class MarDoseInterval {
         if (reading.kind() == MarDoseSchedule.Kind.AS_NEEDED) {
             return requireAsNeededIntervalOrReason(rx, lastGiven.get(), now, reason);
         }
-        if (!reading.repeating()) {
+        Integer gap = reading.gapAfter(closedDoses);
+        if (gap == null) {
             return null;
         }
-        Duration interval = Duration.ofMinutes(reading.intervalMinutes());
+        Duration interval = Duration.ofMinutes(gap);
         LocalDateTime earliest = earliestNext(lastGiven.get(), interval, earlyWindow);
         if (!now.isBefore(earliest)) {
             return null;

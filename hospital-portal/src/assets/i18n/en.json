@@ -7229,7 +7229,9 @@
     }
   },
   "PRESCRIPTIONS": {
-    "FREQUENCY_UNREADABLE": "This is not a schedule we can read: write a fixed schedule (“3 times a day”, “every 6 hours”, “single dose”), or tick “As needed (PRN)”.",
+    "FREQUENCY_UNREADABLE": "This wording cannot be scheduled: nurses will be asked a reason at each dose after the first. Write a schedule (“3 times a day”, “every 6 hours”, “single dose”), tick “As needed (PRN)”, or confirm it.",
+    "FREQUENCY_CONFIRM": "I confirm this wording: nurses will give a reason at each dose after the first",
+    "SEARCHING": "Searching all prescriptions…",
     "FREQUENCY_READS_AS_NEEDED": "This reads as “as needed”: tick “As needed (PRN)” and give the minimum interval, or write a fixed schedule.",
     "CLARIFICATION": {
       "ANSWER": "The prescriber's answer",

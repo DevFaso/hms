@@ -6183,3 +6183,9 @@ ships*, not for building — and check the shipped surface before trusting a
 - [ ] A CDS hook evaluation (`POST /cds-services/{id}`) leaves no audit row now that it is a declared read. Its old `DATA_CREATE` named no patient, so it was never an access trail; a real one would need the patient id from the hook context.
 - [ ] A crossmatch result on a bag already finished or stopped is still refused (`transfusion.unit.noLongerUsable`, and `transfusion.request.closed` once the request completes). An emergency bag can run out before its crossmatch comes back: an incompatible result then has nowhere to go and nobody is told. Out of the round-34 brief (issued or being transfused); needs the blood bank lead's view of what that result should do.
 - [ ] A request raised by a caller with no staff record has no `requestedBy`: an incompatible result then tells only the running nurse, and nobody when the bag is not hanging (logged by id). Hospital-level escalation is a decision for the blood bank lead.
+
+## Standing debt — round 34 (fix/r34-frequency-dose)
+
+- Adult paracetamol: `2 000 mg` 3 fois par jour (6 g/day) raises no card, because no adult daily maximum exists in the catalogue rule or in `reference-values-general-2026-10-30.md` / `reference-values-user-2026-10-29.md` (their 4 g is the paediatric table's cap). Needs the user's value; nothing was changed. D1264 is unrelated.
+- A dose in words with no number ("demi comprimé", "un demi cp") is still unknown to the limit check (null, so no card): it reads below nothing rather than below what was written, so D1420 does not cover it.
+- Jackson's float-to-int coercion is on globally: D1433 closed the one `Integer` of `PrescriptionRequestDTO`. Other request DTOs' `Integer` fields still truncate a JSON fraction; switching `ACCEPT_FLOAT_AS_INT` off globally needs its own PR and its own sweep.

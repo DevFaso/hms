@@ -7229,7 +7229,9 @@
     }
   },
   "PRESCRIPTIONS": {
-    "FREQUENCY_UNREADABLE": "Este no es un horario que podamos leer: escriba un horario fijo («3 veces al día», «cada 6 horas», «dosis única»), o marque «Si es necesario (PRN)».",
+    "FREQUENCY_UNREADABLE": "Esta redacción no se puede programar: se pedirá a enfermería un motivo en cada dosis después de la primera. Escriba un horario («3 veces al día», «cada 6 horas», «dosis única»), marque «Si es necesario (PRN)» o confírmela.",
+    "FREQUENCY_CONFIRM": "Confirmo esta redacción: enfermería dará un motivo en cada dosis después de la primera",
+    "SEARCHING": "Buscando en todas las recetas…",
     "FREQUENCY_READS_AS_NEEDED": "Esto se lee «si es necesario»: marque «Si es necesario (PRN)» e indique el intervalo mínimo, o escriba un horario fijo.",
     "CLARIFICATION": {
       "ANSWER": "Respuesta del prescriptor",

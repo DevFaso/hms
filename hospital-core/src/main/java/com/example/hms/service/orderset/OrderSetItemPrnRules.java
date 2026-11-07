@@ -21,8 +21,9 @@ import java.util.regex.Pattern;
  *   <li>{@code asNeeded} is the author's explicit tick on the item (V260
  *       ticked the older items the round-31 phrase list read);</li>
  *   <li>ticked: {@code prnMinIntervalHours} is required, 1 to 72 hours;</li>
- *   <li>not ticked: no interval, and a frequency that looks conditional is
- *       refused so the author confirms (the safety net).</li>
+ *   <li>not ticked: no interval, a condition is refused on the tick, and a
+ *       wording the MAR cannot schedule is asked about on the item's
+ *       {@code frequencyConfirmed} (QA D1419), once: the answer stays on the item.</li>
  * </ul>
  * {@link #requireValid} runs at save (create and every new version) and
  * again at apply, before any order is created, so an item stored before this
@@ -67,6 +68,15 @@ public final class OrderSetItemPrnRules {
         return Boolean.TRUE.equals(value) || (value instanceof String s && "true".equalsIgnoreCase(s.strip()));
     }
 
+    /**
+     * QA D1419: the author confirmed a wording the MAR cannot schedule. Kept on
+     * the item, so applying the set later is not asked again.
+     */
+    public static boolean frequencyConfirmed(Map<String, Object> item) {
+        Object value = item.get(PrnMinInterval.CONFIRMED_FIELD);
+        return Boolean.TRUE.equals(value) || (value instanceof String s && "true".equalsIgnoreCase(s.strip()));
+    }
+
     /** The item's minimum interval when it is a whole number of hours, else {@code null}. */
     public static Integer intervalHours(Map<String, Object> item) {
         Object value = item.get(PrnMinInterval.FIELD);
@@ -91,7 +101,8 @@ public final class OrderSetItemPrnRules {
             return new PrnMinInterval.Refusal(PrnMinInterval.FIELD, PrnMinInterval.RANGE_KEY);
         }
         Object frequency = item.get("frequency");
-        return PrnMinInterval.refusalOf(asNeeded(item), hours, frequency instanceof String f ? f : null);
+        return PrnMinInterval.refusalOf(asNeeded(item), hours, frequency instanceof String f ? f : null,
+            frequencyConfirmed(item));
     }
 
     private static boolean isMedication(Map<String, Object> item) {

@@ -59,6 +59,13 @@ import java.util.Optional;
  * without an interval stays open and is flagged like an unread frequency:
  * every later dose says why (no interval is ever invented).
  *
+ * <p>QA D1419 / D1426 (round 34): a wording the prescriber wrote as a schedule
+ * is read as one. A course of fixed moments ("H0 H8 H24", "J1 J3 J5",
+ * {@link MarDoseSchedule.Kind#COURSE}) takes each gap in turn and ends after its
+ * last dose. A continuous infusion ({@link MarDoseSchedule.Kind#CONTINUOUS}) has
+ * its first dose as any order; once started it has no next slot: the row stays
+ * open so a new bag can be recorded, with no reason asked and never overdue.
+ *
  * <p>Pure: the caller passes the clock reading and the order's rows.
  */
 public final class MarNextDose {
@@ -87,18 +94,25 @@ public final class MarNextDose {
      *                         every later dose asks why it is given now
      * @param asNeeded         QA round 30: an as-needed (PRN) order, given on demand:
      *                         always offered, never OVERDUE, not a pending task
+     * @param continuous       QA D1419: a continuous infusion; once started
+     *                         ({@link #running()}) it has no next slot
      */
     public record Due(LocalDateTime dueTime, LocalDateTime notBefore, LocalDateTime reasonUntil,
-                      LocalDateTime scheduledSlot, boolean frequencyUnread, boolean asNeeded) {
+                      LocalDateTime scheduledSlot, boolean frequencyUnread, boolean asNeeded, boolean continuous) {
 
         static Due none() {
-            return new Due(null, null, null, null, false, false);
+            return new Due(null, null, null, null, false, false, false);
         }
 
         /** A scheduled (not as-needed) next dose. */
         static Due scheduled(LocalDateTime dueTime, LocalDateTime notBefore, LocalDateTime reasonUntil,
                              LocalDateTime scheduledSlot, boolean frequencyUnread) {
-            return new Due(dueTime, notBefore, reasonUntil, scheduledSlot, frequencyUnread, false);
+            return new Due(dueTime, notBefore, reasonUntil, scheduledSlot, frequencyUnread, false, false);
+        }
+
+        /** QA D1419: an infusion already started: open for a new bag, never late, not a pending dose. */
+        public boolean running() {
+            return continuous && notBefore == null;
         }
 
         /** Nothing more to give: the course is finished. */
@@ -129,8 +143,13 @@ public final class MarNextDose {
             return asNeeded(rx, now, rows, earlyWindow);
         }
         Optional<MedicationAdministrationRecord> lastClosed = lastClosed(rows);
+        boolean infusion = reading.kind() == MarDoseSchedule.Kind.CONTINUOUS;
         if (rx.getId() == null || lastClosed.isEmpty()) {
-            return Due.scheduled(first, first.minus(earlyWindow), null, first, false);
+            return new Due(first, first.minus(earlyWindow), null, first, false, false, infusion);
+        }
+        if (infusion) {
+            LocalDateTime slot = openSlot(rows, lastClosed.get().getScheduledTime(), now, earlyWindow);
+            return new Due(slot, null, null, slot, false, false, true);
         }
         if (reading.kind() == MarDoseSchedule.Kind.UNREAD) {
             // The slot an unread order fills: its open (PENDING) row if the
@@ -139,10 +158,12 @@ public final class MarNextDose {
                 .orElse(now.truncatedTo(ChronoUnit.MINUTES));
             return Due.scheduled(slot, null, null, slot, true);
         }
-        if (!reading.repeating()) {
+        Integer gap = reading.gapAfter(closedCount(rows));
+        if (gap == null) {
+            // A single dose, or a course past its last one.
             return Due.none();
         }
-        Duration interval = Duration.ofMinutes(reading.intervalMinutes());
+        Duration interval = Duration.ofMinutes(gap);
         Optional<LocalDateTime> lastGiven = MarDoseInterval.lastGivenAt(rows, null);
         MedicationAdministrationRecord last = lastClosed.get();
         LocalDateTime lastSlot = last.getScheduledTime();
@@ -178,20 +199,34 @@ public final class MarNextDose {
     private static Due asNeeded(Prescription rx, LocalDateTime now, List<MedicationAdministrationRecord> rows,
                                 Duration earlyWindow) {
         List<MedicationAdministrationRecord> doses = rows == null ? List.of() : rows;
-        LocalDateTime openNow = now.truncatedTo(ChronoUnit.MINUTES);
         LocalDateTime closedSlot = lastClosed(doses).map(MedicationAdministrationRecord::getScheduledTime).orElse(null);
-        LocalDateTime slot = openSlotAfter(doses, closedSlot)
-            .filter(open -> !open.isBefore(openNow.minus(earlyWindow)))
-            .orElse(openNow);
+        LocalDateTime slot = openSlot(doses, closedSlot, now, earlyWindow);
         Optional<LocalDateTime> lastGiven = MarDoseInterval.lastGivenAt(doses, null);
         if (lastGiven.isEmpty()) {
-            return new Due(slot, null, null, slot, false, true);
+            return new Due(slot, null, null, slot, false, true, false);
         }
         Integer hours = rx.getPrnMinIntervalHours();
         if (hours == null) {
-            return new Due(slot, null, null, slot, true, true);
+            return new Due(slot, null, null, slot, true, true, false);
         }
-        return new Due(slot, null, lastGiven.get().plusHours(hours), slot, false, true);
+        return new Due(slot, null, lastGiven.get().plusHours(hours), slot, false, true, false);
+    }
+
+    /** The slot of a dose given when it is asked for: its open row while inside the time window, else now. */
+    private static LocalDateTime openSlot(List<MedicationAdministrationRecord> rows, LocalDateTime closedSlot,
+                                          LocalDateTime now, Duration earlyWindow) {
+        LocalDateTime openNow = now.truncatedTo(ChronoUnit.MINUTES);
+        return openSlotAfter(rows, closedSlot)
+            .filter(open -> !open.isBefore(openNow.minus(earlyWindow)))
+            .orElse(openNow);
+    }
+
+    /** How many doses of the order have an outcome: a course's next step (a held dose used its moment). */
+    private static int closedCount(List<MedicationAdministrationRecord> rows) {
+        return (int) rows.stream()
+            .filter(Objects::nonNull)
+            .filter(r -> r.getStatus() != MedicationAdministrationStatus.PENDING)
+            .count();
     }
 
     /**

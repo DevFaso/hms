@@ -93,6 +93,17 @@ test('the prescription form offers the explicit tick and shows the interval from
   assert.match(ts, /asNeeded: !!this\.form\.asNeeded/, 'the tick is sent');
 });
 
+test('QA D1419: the question is answered on its own field, in both forms', () => {
+  const rx = readFileSync(RX_HTML, 'utf8');
+  assert.match(rx, /id="rx-frequencyConfirmed"[\s\S]{0,120}data-server-field="frequencyConfirmed"/);
+  const os = readFileSync(OS_HTML, 'utf8');
+  assert.match(os, /data-server-field\]="'orderItems\[' \+ i \+ '\]\.frequencyConfirmed'"/);
+  // A question is never answered by ticking as needed: no form sets the tick from the refusal.
+  for (const file of [RX_TS, OS_TS]) {
+    assert.doesNotMatch(readFileSync(file, 'utf8'), /frequencyConfirmed[^;\n]*asNeeded\s*=[^=]/);
+  }
+});
+
 test('the order-set item editor offers the explicit tick and shows the interval from it', () => {
   const html = readFileSync(OS_HTML, 'utf8');
   const ts = readFileSync(OS_TS, 'utf8');

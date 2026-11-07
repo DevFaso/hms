@@ -70,6 +70,8 @@ export interface NurseMedicationTask {
    * restate the frequency.
    */
   frequencyUnread?: boolean;
+  /** QA D1419: a continuous infusion: `prnLabel` says so; once started it is never late. */
+  continuousInfusion?: boolean;
   /**
    * QA round 30 (user decision 2026-11-02): an as-needed (PRN) order, given on
    * demand: always offered (DUE, never OVERDUE); `earlyDose` flags a dose

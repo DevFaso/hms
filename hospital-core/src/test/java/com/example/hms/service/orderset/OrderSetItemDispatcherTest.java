@@ -181,6 +181,20 @@ class OrderSetItemDispatcherTest {
         assertThat(captor.getValue().getPrnMinIntervalHours()).isNull();
     }
 
+    /** QA D1419: the author's answer about a wording the MAR cannot schedule reaches the order the item creates. */
+    @Test
+    void anItemsConfirmedWordingReachesTheOrder() {
+        when(prescriptionService.createPrescription(any(), any())).thenReturn(new PrescriptionResponseDTO());
+        ArgumentCaptor<PrescriptionRequestDTO> captor = ArgumentCaptor.forClass(PrescriptionRequestDTO.class);
+        dispatcher.dispatch(Map.of("orderType", "MEDICATION", "medicationName", "Fansidar", "frequency", "SP + AQ",
+            "frequencyConfirmed", true), ctx(), Locale.ENGLISH);
+        dispatcher.dispatch(Map.of("orderType", "MEDICATION", "medicationName", "Fansidar", "frequency", "BID"),
+            ctx(), Locale.ENGLISH);
+        verify(prescriptionService, times(2)).createPrescription(captor.capture(), eq(Locale.ENGLISH));
+        assertThat(captor.getAllValues().get(0).getFrequencyConfirmed()).isTrue();
+        assertThat(captor.getAllValues().get(1).getFrequencyConfirmed()).isFalse();
+    }
+
     @Test
     void medicationCdsAdvisoriesArePropagated() {
         CdsCard card = new CdsCard("Mild interaction", null, CdsCard.Indicator.INFO,

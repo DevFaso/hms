@@ -6,7 +6,7 @@ import es from '../../../assets/i18n/es.json';
 import fr from '../../../assets/i18n/fr.json';
 import { ActivatedRoute, provideRouter, Router } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 
 import { OrderSetEditComponent } from './order-set-edit.component';
 import { OrderSetService, OrderSetSummary } from '../../services/order-set.service';
@@ -259,6 +259,51 @@ describe('OrderSetEditComponent', () => {
   });
 
   /** QA D1396: the editor writes the quantity; the server's refusal names this control. */
+  it('QA D1419: a wording the MAR cannot schedule asks on the item; a chosen value never asks', async () => {
+    await configure('new');
+    fixture = TestBed.createComponent(OrderSetEditComponent);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    const box = () => host.querySelector('[data-testid="order-set-item-frequency-confirmed-0"]');
+    expect(box()).withContext('nothing asked yet').toBeNull();
+
+    const c = fixture.componentInstance as unknown as {
+      form: { name: string };
+      items: () => Record<string, unknown>[];
+      save(): void;
+      onFrequencyChange(it: Record<string, unknown>, value: string): void;
+    };
+    c.form.name = 'TPI';
+    Object.assign(c.items()[0], { medicationName: 'Fansidar', frequency: 'SP + AQ' });
+    svc.create.and.returnValue(
+      throwError(() => ({
+        status: 400,
+        error: {
+          message: 'asked',
+          fieldErrors: { 'orderItems[0].frequencyConfirmed': 'asked' },
+        },
+      })),
+    );
+    c.save();
+    fixture.detectChanges();
+    expect(box()).withContext('the refusal shows the box').not.toBeNull();
+    expect(box()?.getAttribute('data-server-field')).toBe('orderItems[0].frequencyConfirmed');
+    expect(host.querySelector('[data-testid="order-set-item-frequency-0"]')?.textContent)
+      .withContext('the wording asked about is on screen')
+      .toContain('SP + AQ');
+
+    svc.create.and.returnValue(of(existing));
+    c.items()[0]['frequencyConfirmed'] = true;
+    c.save();
+    expect(svc.create.calls.mostRecent().args[0].orderItems[0].frequencyConfirmed).toBeTrue();
+
+    c.onFrequencyChange(c.items()[0], 'BID');
+    fixture.detectChanges();
+    expect(box()).withContext('a chosen value never asks').toBeNull();
+    c.save();
+    expect('frequencyConfirmed' in svc.create.calls.mostRecent().args[0].orderItems[0]).toBeFalse();
+  });
+
   it('QA D1396: the quantity and unit are saved with the item, and a blank one is not sent', async () => {
     await configure('new');
     fixture = TestBed.createComponent(OrderSetEditComponent);

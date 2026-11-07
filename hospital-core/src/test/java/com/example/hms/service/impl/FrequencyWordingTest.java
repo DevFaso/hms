@@ -1,5 +1,7 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.enums.MedicationAdministrationStatus;
+import com.example.hms.model.MedicationAdministrationRecord;
 import com.example.hms.model.Prescription;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -14,6 +16,7 @@ import java.lang.reflect.Modifier;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -21,17 +24,21 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * QA D1391 / D1395 (round 33): the rule on a frequency not ticked as needed.
- * Every case comes from the fixture the portal's mirror reads too
+ * QA D1391 / D1395 (round 33) and QA D1419 / D1426 / D1434 (round 34): the three
+ * outcomes of a frequency not ticked as needed, from one reader. Every case comes
+ * from the fixture the portal's mirror reads too
  * ({@code as-needed-frequency.cases.json}), which holds every fixed-schedule
  * set of the QA scripts, every filed wording, the dropdown, and the frequencies
- * of the repo's seeds and tests.
+ * of the repo's seeds and tests. The guard of the class is
+ * {@link #aWordingAcceptedAsAScheduleIsNeverUnreadOnTheMar}: the accepted-schedule
+ * reader and the MAR cannot disagree, because this fixture drives both.
  */
 class FrequencyWordingTest {
 
@@ -85,10 +92,106 @@ class FrequencyWordingTest {
 
     @ParameterizedTest
     @MethodSource("unreadableCases")
-    void aWordingThatStatesNoScheduleIsRefusedAsUnreadable(String wording) {
+    void aWordingThatStatesNoScheduleIsAQuestionNotARefusal(String wording) {
         assertThat(FrequencyWording.classify(wording)).as(wording).isEqualTo(FrequencyWording.Verdict.UNREADABLE);
         assertThat(PrnMinInterval.safetyNet(wording))
-            .isEqualTo(new PrnMinInterval.Refusal(PrnMinInterval.AS_NEEDED_FIELD, PrnMinInterval.UNREADABLE_KEY));
+            .isEqualTo(new PrnMinInterval.Refusal(PrnMinInterval.CONFIRMED_FIELD, PrnMinInterval.UNREADABLE_KEY));
+        assertThat(PrnMinInterval.safetyNet(wording, true)).as("confirmed").isNull();
+        assertThat(MarDoseSchedule.read(wording).kind()).as(wording).isEqualTo(MarDoseSchedule.Kind.UNREAD);
+    }
+
+    /** A condition is not answered by confirming it: only the tick and the interval answer it (D1395). */
+    @ParameterizedTest
+    @MethodSource("conditionalCases")
+    void aConfirmationDoesNotPassACondition(String wording) {
+        assertThat(PrnMinInterval.safetyNet(wording, true))
+            .isEqualTo(new PrnMinInterval.Refusal(PrnMinInterval.AS_NEEDED_FIELD, PrnMinInterval.CONFIRM_KEY));
+    }
+
+    static List<String> scheduleWordings() throws IOException {
+        return fixedCases().stream().filter(wording -> !wording.replace('\u00A0', ' ').isBlank()).toList();
+    }
+
+    /** The exact reading of every wording accepted: a repeat's minutes, a course's moments, a single dose, an infusion. */
+    @ParameterizedTest
+    @MethodSource("scheduleWordings")
+    void everyScheduleReadsAsTheFixtureSays(String wording) throws IOException {
+        JsonNode readings = new ObjectMapper().readTree(Files.readString(MarDoseScheduleTest.AS_NEEDED_CASES))
+            .get("readings");
+        assertThat(readings.has(wording)).as("the fixture states how \"%s\" is read", wording).isTrue();
+        MarDoseSchedule.Reading reading = MarDoseSchedule.read(wording);
+        String read = reading.kind()
+            + (reading.intervalMinutes() != null ? ":" + reading.intervalMinutes() : "")
+            + (reading.courseOffsets().isEmpty() ? "" : ":" + reading.courseOffsets().toString().replace(" ", ""));
+        assertThat(read).as(wording).isEqualTo(readings.get(wording).asText());
+    }
+
+    /**
+     * THE GUARD (QA D1419 + D1426, one class): the wording rule and the MAR
+     * cannot disagree. A wording accepted as a schedule is never
+     * {@code frequencyUnread} after its first dose, whatever it says; a wording
+     * asked about always is, and every later dose needs a reason.
+     */
+    @ParameterizedTest
+    @MethodSource("scheduleWordings")
+    void aWordingAcceptedAsAScheduleIsNeverUnreadOnTheMar(String wording) {
+        assertThat(FrequencyWording.classify(wording)).as(wording).isEqualTo(FrequencyWording.Verdict.FIXED);
+        assertThat(dueAfterOneDose(wording).frequencyUnread()).as(wording).isFalse();
+    }
+
+    @ParameterizedTest
+    @MethodSource("unreadableCases")
+    void aWordingConfirmedIsUnreadOnTheMar(String wording) {
+        assertThat(dueAfterOneDose(wording).frequencyUnread()).as(wording).isTrue();
+    }
+
+    private static MarNextDose.Due dueAfterOneDose(String wording) {
+        LocalDateTime start = LocalDateTime.of(2026, 11, 6, 8, 0);
+        Prescription rx = new Prescription();
+        rx.setId(UUID.randomUUID());
+        rx.setFrequency(wording);
+        rx.setSignedAt(start);
+        MedicationAdministrationRecord dose = new MedicationAdministrationRecord();
+        dose.setId(UUID.randomUUID());
+        dose.setStatus(MedicationAdministrationStatus.GIVEN);
+        dose.setScheduledTime(start);
+        dose.setAdministeredAt(start);
+        return MarNextDose.of(rx, start.plusMinutes(5), List.of(dose), NurseTaskServiceImpl.EARLY_ADMINISTRATION_WINDOW);
+    }
+
+    /** Every wording filed under D1419 and D1426 has its one outcome in the fixture, and no wording has two. */
+    @Test
+    void theFixtureGivesEveryFiledWordingOneOutcome() throws IOException {
+        List<String> fixed = fixedCases();
+        List<String> conditional = conditionalCases();
+        List<String> unreadable = unreadableCases();
+        JsonNode filed = new ObjectMapper().readTree(Files.readString(MarDoseScheduleTest.AS_NEEDED_CASES)).get("filed");
+        int counted = 0;
+        for (String defect : List.of("D1419", "D1426")) {
+            for (JsonNode node : filed.get(defect)) {
+                String wording = node.asText();
+                long outcomes = java.util.stream.Stream.of(fixed, conditional, unreadable)
+                    .filter(list -> list.contains(wording)).count();
+                assertThat(outcomes).as(defect + " " + wording).isEqualTo(1);
+                counted++;
+            }
+        }
+        assertThat(counted).as("the filed wordings").isGreaterThan(200);
+        assertThat(fixed).doesNotContainAnyElementsOf(conditional).doesNotContainAnyElementsOf(unreadable);
+        assertThat(conditional).doesNotContainAnyElementsOf(unreadable);
+    }
+
+    /** D1395, the re-test gate: its wordings are refused on the tick with the "reads as needed" message. */
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "pour douleur", "pour la fièvre", "contre la douleur", "à chaque crise", "lors des crises", "sibesoin", "SB",
+        "ad lib", "ad libitum", "à volonté", "au coup par coup", "à répéter", "occasionnellement", "ponctuellement",
+        "par intermittence", "para el dolor", "por fiebre", "a requerimiento", "a discreción", "in case of pain",
+        "should pain occur", "as req", "as directed", "pr n", "pain", "fever", "toutes les 6 h pour douleur", "SOS",
+        "for pain", "si douleur"})
+    void d1395_theFiledConditionsAreRefusedOnTheTick(String wording) {
+        assertThat(PrnMinInterval.safetyNet(wording))
+            .isEqualTo(new PrnMinInterval.Refusal(PrnMinInterval.AS_NEEDED_FIELD, PrnMinInterval.CONFIRM_KEY));
     }
 
     /** The two directions round 33 filed, named here so a fixture edit cannot quietly drop them. */
@@ -106,7 +209,7 @@ class FrequencyWordingTest {
         "toutes les 6 h pour douleur", "q6h si fièvre", "pour douleur", "para el dolor", "in case of pain",
         "max 4/j", "jusqu'à 4 fois par jour", "1 à 3 fois par jour", "up to 4 times a day", "douleur", "pain",
         "selon prescription médicale", "SP + AQ", "ad lib", "S/P", "s/p"})
-    void d1395_theFiledWordingsAreRefused(String wording) {
+    void d1395_noFiledWordingIsTakenAsASchedule(String wording) {
         assertThat(FrequencyWording.classify(wording)).as(wording).isNotEqualTo(FrequencyWording.Verdict.FIXED);
     }
 
@@ -135,33 +238,48 @@ class FrequencyWordingTest {
     void onlyTheSlashMakesSpConditional() {
         assertThat(FrequencyWording.classify("1 cp s/p")).isEqualTo(FrequencyWording.Verdict.CONDITIONAL);
         assertThat(FrequencyWording.classify("1 cp sp le matin")).isEqualTo(FrequencyWording.Verdict.FIXED);
-        assertThat(FrequencyWording.classify("SP/AQ 3 jours")).isEqualTo(FrequencyWording.Verdict.FIXED);
-    }
-
-    /** A word nobody listed is asked about, whatever schedule stands beside it. This is the inversion. */
-    @ParameterizedTest
-    @ValueSource(strings = {"q6h vertiges", "toutes les 6 h zzz", "3 fois par jour quand il tousse", "matin et soir ou plus"})
-    void anUnlistedWordBesideASchedule(String wording) {
-        assertThat(FrequencyWording.classify(wording)).as(wording).isEqualTo(FrequencyWording.Verdict.CONDITIONAL);
+        // QA D1434 (changed): a regimen and a duration state no cadence: a question, never a condition.
+        assertThat(FrequencyWording.classify("SP/AQ 3 jours")).isEqualTo(FrequencyWording.Verdict.UNREADABLE);
     }
 
     /**
-     * Obligation zero: the rule reads the text for one question. What the MAR
-     * read before round 33 it reads now, old wordings included: a conditional
-     * wording on an order not ticked stays UNREAD, a TPI order stays open.
+     * QA D1419 (changed assertion: round 33 read any word nobody listed as a
+     * condition, the wrong message that pushed regular courses into PRN): an
+     * unknown word never makes a condition. Beside a cadence it changes nothing;
+     * alone it is a question. A real condition word still reads as one.
      */
     @Test
-    void theMarReadsAnOldOrderExactlyAsBefore() {
+    void anUnknownWordIsNeverACondition() {
+        for (String wording : List.of("q6h vertiges", "toutes les 6 h zzz", "prendre 1 comprimé 3 fois par jour",
+            "1 cp par jour pour HTA", "3 fois par jour pour infection", "1 fois par jour à heure précise")) {
+            assertThat(FrequencyWording.classify(wording)).as(wording).isEqualTo(FrequencyWording.Verdict.FIXED);
+        }
+        for (String wording : List.of("zzz", "pour HTA", "selon ordonnance")) {
+            assertThat(FrequencyWording.classify(wording)).as(wording).isEqualTo(FrequencyWording.Verdict.UNREADABLE);
+        }
+        assertThat(FrequencyWording.classify("3 fois par jour quand il tousse")).isEqualTo(FrequencyWording.Verdict.CONDITIONAL);
+        assertThat(FrequencyWording.classify("matin et soir ou plus")).as("a ceiling").isEqualTo(FrequencyWording.Verdict.UNREADABLE);
+    }
+
+    /**
+     * What the MAR reads of an order already written (QA D1426, changed
+     * assertions, declared in the PR: "TPI-SP" and "Prise unique (TPI-SP 2)" were
+     * UNREAD, "max 4/j" REPEATING, "1 fois par mois" UNREAD): the reader that
+     * accepts a wording is the one the MAR reads. An older conditional wording on
+     * an order not ticked keeps what it had.
+     */
+    @Test
+    void theMarReadsWhatTheRuleAccepted() {
         Map<String, MarDoseSchedule.Kind> before = new HashMap<>();
-        before.put("TPI-SP", MarDoseSchedule.Kind.UNREAD);
-        before.put("Prise unique (TPI-SP 2)", MarDoseSchedule.Kind.UNREAD);
+        before.put("TPI-SP", MarDoseSchedule.Kind.ONE_OFF);
+        before.put("Prise unique (TPI-SP 2)", MarDoseSchedule.Kind.ONE_OFF);
         before.put("pour douleur", MarDoseSchedule.Kind.UNREAD);
-        before.put("max 4/j", MarDoseSchedule.Kind.REPEATING);
+        before.put("max 4/j", MarDoseSchedule.Kind.UNREAD);
         before.put("toutes les 6 h pour douleur", MarDoseSchedule.Kind.REPEATING);
         before.put("si douleur", MarDoseSchedule.Kind.UNREAD);
         before.put("q6h", MarDoseSchedule.Kind.REPEATING);
         before.put("Prise unique", MarDoseSchedule.Kind.ONE_OFF);
-        before.put("1 fois par mois", MarDoseSchedule.Kind.UNREAD);
+        before.put("1 fois par mois", MarDoseSchedule.Kind.REPEATING);
         before.forEach((wording, kind) -> {
             Prescription rx = new Prescription();
             rx.setFrequency(wording);
@@ -192,13 +310,15 @@ class FrequencyWordingTest {
             portal.put(list.group(1), new TreeSet<>(Arrays.asList(all.toString().trim().split("\\s+"))));
         }
         int compared = 0;
-        for (Field field : FrequencyWording.class.getDeclaredFields()) {
-            if (Modifier.isStatic(field.getModifiers()) && field.getType() == Set.class) {
-                Set<String> server = new TreeSet<>();
-                ((Set<?>) field.get(null)).forEach(word -> server.add(word.toString()));
-                server.remove("");
-                assertThat(portal.get(field.getName())).as(field.getName()).isEqualTo(server);
-                compared++;
+        for (Class<?> reader : List.of(FrequencyWording.class, FrequencyCadence.class)) {
+            for (Field field : reader.getDeclaredFields()) {
+                if (Modifier.isStatic(field.getModifiers()) && field.getType() == Set.class) {
+                    Set<String> server = new TreeSet<>();
+                    ((Set<?>) field.get(null)).forEach(word -> server.add(word.toString()));
+                    server.remove("");
+                    assertThat(portal.get(field.getName())).as(field.getName()).isEqualTo(server);
+                    compared++;
+                }
             }
         }
         assertThat(compared).as("the lists compared").isGreaterThan(10);

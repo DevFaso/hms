@@ -377,13 +377,25 @@ class AdmissionOrderSetServiceImplTest {
         when(hospitalRepo.findClinicalById(HOSPITAL_ID)).thenReturn(Optional.of(hospital()));
         when(staffRepo.findById(STAFF_ID)).thenReturn(Optional.of(staff()));
         when(orderSetRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        for (String refused : List.of("pour douleur", "max 4/j", "selon prescription m\u00e9dicale", "SP + AQ")) {
+        AdmissionOrderSetRequestDTO condition = sampleRequest();
+        condition.setOrderItems(List.of(Map.of("orderType", "MEDICATION", "medicationName", "Paracetamol",
+            "frequency", "pour douleur")));
+        assertThatThrownBy(() -> service.create(condition))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getField()).isEqualTo("orderItems[0].asNeeded"));
+        // QA D1419 (changed: these were refused outright on asNeeded): not a condition, a question on the
+        // item's own field, and the same item with the answer is saved.
+        for (String asked : List.of("max 4/j", "selon prescription m\u00e9dicale", "SP + AQ")) {
             AdmissionOrderSetRequestDTO request = sampleRequest();
             request.setOrderItems(List.of(Map.of("orderType", "MEDICATION", "medicationName", "Paracetamol",
-                "frequency", refused)));
-            assertThatThrownBy(() -> service.create(request)).as(refused)
+                "frequency", asked)));
+            assertThatThrownBy(() -> service.create(request)).as(asked)
                 .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
-                    ex -> assertThat(ex.getField()).isEqualTo("orderItems[0].asNeeded"));
+                    ex -> assertThat(ex.getField()).isEqualTo("orderItems[0].frequencyConfirmed"));
+            AdmissionOrderSetRequestDTO confirmed = sampleRequest();
+            confirmed.setOrderItems(List.of(Map.of("orderType", "MEDICATION", "medicationName", "Paracetamol",
+                "frequency", asked, "frequencyConfirmed", true)));
+            assertThat(service.create(confirmed).getVersion()).as(asked).isEqualTo(1);
         }
         for (String accepted : List.of("Q6H", "TPI-SP", "3 fois par jour selon ordonnance", "Prise unique (TPI-SP 2)")) {
             AdmissionOrderSetRequestDTO request = sampleRequest();

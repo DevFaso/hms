@@ -16,6 +16,29 @@ class DoseRangeTest {
 
     private static final double WEIGHT_KG = 20d;
 
+    /** QA D1420: a mixed number exactly, thousands with a separator; every single dose as it was. */
+    @ParameterizedTest(name = "\"{0}\" -> {1} mg")
+    @CsvSource(delimiter = '|', value = {
+        "2 1/2 cp|1250", "1 1/2 cp|750", "1 cp 1/2|750", "2 cp 1/2|1250", "1 cp et 1/2|750", "1 cp et demi|750",
+        "1 comprimé et demi|750", "1 tablet and a half|750", "1 comprimido y medio|750", "2½ cp|1250", "1 ½ cp|750",
+        "1 cp ½|750", "1 3/4 cp|875", "1,000 mg|1000", "1.000 mg|1000", "2,500 mg|2500", "1 000 mg|1000",
+        "1,000-2,000 mg|2000", "1.000 mg PO|1000",
+        // No valid single dose changes.
+        "1/2 cp|250", "3/4 cp|375", "1 cp|500", "2 cp|1000", "0.5 cp|250", "0,5 cp|250", "500 mg|500", "0,125 mg|0.125",
+        "0.125 mg|0.125", "1,5 mg|1.5", "1.25 mg|1.25", "1,25 mg|1.25", "12,500 mg|12.5", "1,250 g|1250", "1.5 g|1500",
+        "1,000 g|1000", "1,000,000 mg|1", "500/125 mg|500"})
+    void d1420_aMixedNumberAndAThousandReadAsWritten(String dose, double mg) {
+        assertThat(CdsRuleEngine.parseDoseMg(dose, WEIGHT_KG, fiveHundredMg()))
+            .as(dose).isCloseTo(mg, offset(0.0001d));
+    }
+
+    /** QA D1420: for a drug dosed by weight band, the count reads exactly too. */
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', value = {"2 1/2 cp|2.5", "1 cp 1/2|1.5", "1 cp et demi|1.5", "1/2 cp|0.5", "2|2", "2 cp|2"})
+    void d1420_theCountReadsExactly(String dose, double units) {
+        assertThat(CdsRuleEngine.parseDoseUnits(dose)).as(dose).isCloseTo(units, offset(0.0001d));
+    }
+
     private static MedicationCatalogItem fiveHundredMg() {
         return MedicationCatalogItem.builder().strength("500").strengthUnit("mg").build();
     }

@@ -19,7 +19,8 @@ class MarNextDoseTest {
 
     private static final Duration WINDOW = NurseTaskServiceImpl.EARLY_ADMINISTRATION_WINDOW;
     private static final LocalDateTime NOW = LocalDateTime.of(2026, 11, 2, 4, 54);
-    private static final String UNREAD = "après les repas";
+    /** QA D1426 (changed from "apres les repas", which is now read as a schedule). */
+    private static final String UNREAD = "selon protocole";
 
     /**
      * QA D1236 replay (nsgive.js): morphine q6h, slots missed since 31 Oct,
@@ -40,6 +41,52 @@ class MarNextDoseTest {
         // The slot rule still reads the schedule's own slot, so an early dose WITH a reason stays possible (D1210).
         assertThat(due.scheduledSlot()).isEqualTo(backlogSlot.plusHours(6));
         assertThat(due.frequencyUnread()).isFalse();
+    }
+
+    /** QA D1419: a course takes each gap in turn: H0 H8 H24 is 8 h, then 16 h, then it ends. */
+    @Test
+    void d1419_aCourseTakesItsOwnGapsAndEnds() {
+        LocalDateTime start = NOW.minusHours(30);
+        Prescription rx = rx("H0 H8 H24", start);
+        MedicationAdministrationRecord first = row(MedicationAdministrationStatus.GIVEN, start, start);
+        assertThat(MarNextDose.of(rx, NOW, List.of(first), WINDOW).scheduledSlot()).isEqualTo(start.plusHours(8));
+        MedicationAdministrationRecord second =
+            row(MedicationAdministrationStatus.GIVEN, start.plusHours(8), start.plusHours(8));
+        MarNextDose.Due third = MarNextDose.of(rx, NOW, List.of(second, first), WINDOW);
+        assertThat(third.scheduledSlot()).isEqualTo(start.plusHours(24));
+        assertThat(third.frequencyUnread()).isFalse();
+        MedicationAdministrationRecord last =
+            row(MedicationAdministrationStatus.GIVEN, start.plusHours(24), start.plusHours(24));
+        assertThat(MarNextDose.of(rx, NOW, List.of(last, second, first), WINDOW).finished()).isTrue();
+    }
+
+    /** QA D1419: an infusion has its first dose as any order; once started it stays open, never late. */
+    @Test
+    void d1419_aRunningInfusionStaysOpenAndIsNeverLate() {
+        LocalDateTime start = NOW.minusHours(3);
+        Prescription rx = rx("perfusion continue", start);
+        MarNextDose.Due before = MarNextDose.of(rx, NOW, List.of(), WINDOW);
+        assertThat(before.continuous()).isTrue();
+        assertThat(before.running()).isFalse();
+        assertThat(NurseTaskServiceImpl.resolveMarStatus(before, NOW)).as("the start can be late").isEqualTo("OVERDUE");
+
+        MarNextDose.Due running = MarNextDose.of(rx, NOW,
+            List.of(row(MedicationAdministrationStatus.GIVEN, start, start)), WINDOW);
+        assertThat(running.running()).isTrue();
+        assertThat(running.finished()).isFalse();
+        assertThat(running.frequencyUnread()).isFalse();
+        assertThat(running.earlyAt(NOW)).isFalse();
+        assertThat(NurseTaskServiceImpl.resolveMarStatus(running, NOW.plusDays(2))).isEqualTo("DUE");
+        assertThat(NurseTaskServiceImpl.slotRuleAllows(running, NOW)).isTrue();
+    }
+
+    /** QA D1426: a single-dose wording ends after its dose: no reason, no second dose. */
+    @ParameterizedTest
+    @ValueSource(strings = {"Prise unique (TPI-SP 2)", "prise unique à la CPN", "en une prise", "SP dose unique", "TPI-SP"})
+    void d1426_aSingleDoseFormEndsAfterItsDose(String frequency) {
+        LocalDateTime start = NOW.minusHours(1);
+        assertThat(MarNextDose.of(rx(frequency, start), NOW,
+            List.of(row(MedicationAdministrationStatus.GIVEN, start, start)), WINDOW).finished()).as(frequency).isTrue();
     }
 
     @Test

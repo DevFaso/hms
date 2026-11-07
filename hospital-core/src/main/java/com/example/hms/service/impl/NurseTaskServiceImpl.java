@@ -1229,7 +1229,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         }
         MarNextDose.Due next = nextDose(rx, now);
         String status = resolveMarStatus(next, now);
-        return next.asNeeded() && STATUS_DUE.equals(status) ? STATUS_AS_NEEDED : status;
+        // QA D1419: a running infusion is not a dose waiting either.
+        return (next.asNeeded() || next.running()) && STATUS_DUE.equals(status) ? STATUS_AS_NEEDED : status;
     }
 
     /* ═══════════════════════════════════════════════════════════════════
@@ -1246,7 +1247,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         if (dueBy == null) return STATUS_COMPLETED;
         // QA round 30: an as-needed dose is given on demand: always offered,
         // never late (earlyDose flags one inside the minimum interval).
-        if (due.asNeeded()) return STATUS_DUE;
+        // QA D1419: nor is a running infusion: it has no next slot, a new bag is recorded when it is hung.
+        if (due.asNeeded() || due.running()) return STATUS_DUE;
         // QA D1237: an unread frequency keeps the course open; the row is
         // flagged (frequencyUnread) and each later dose asks for a reason.
         if (due.frequencyUnread()) return STATUS_DUE;
@@ -1310,6 +1312,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
                                                              MarNextDose.Due due, LocalDateTime now) {
         boolean controlled = pharmacistVerificationService.isControlledSubstance(rx);
         task.setFrequencyUnread(due.frequencyUnread());
+        task.setContinuousInfusion(due.continuous());
         // QA round 30: an as-needed order, with the prescriber's minimum interval.
         task.setAsNeeded(due.asNeeded());
         task.setPrnMinIntervalHours(due.asNeeded() ? rx.getPrnMinIntervalHours() : null);
@@ -1384,10 +1387,12 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         if (rx == null || rx.getId() == null || status != MedicationAdministrationStatus.GIVEN) {
             return null;
         }
-        return MarDoseInterval.requireIntervalOrReason(rx, status,
-            MarDoseInterval.lastGivenAt(marRepository.findByPrescription_IdOrderByScheduledTimeDesc(rx.getId()),
-                finalisedRowId),
-            LocalDateTime.now(java.time.ZoneId.systemDefault()), EARLY_ADMINISTRATION_WINDOW, earlyDoseReason);
+        List<MedicationAdministrationRecord> rows = marRepository.findByPrescription_IdOrderByScheduledTimeDesc(rx.getId());
+        // QA D1419: the doses closed before this one are the step of a course.
+        int closedBefore = (int) closedDoses(rows).stream().filter(r -> !Objects.equals(r.getId(), finalisedRowId)).count();
+        return MarDoseInterval.requireIntervalOrReason(rx, status, MarDoseInterval.lastGivenAt(rows, finalisedRowId),
+            LocalDateTime.now(java.time.ZoneId.systemDefault()), EARLY_ADMINISTRATION_WINDOW, earlyDoseReason,
+            closedBefore);
     }
 
     /** The slot the next administration fills; refuses when the course has none left. */

@@ -188,9 +188,9 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         Prescription entity = prescriptionMapper.toEntity(request, patient, staff, encounter);
         entity.setAssignment(prescriberAssignment);
         // QA round 30: an as-needed order names its minimum interval, and QA
-        // D1391 / D1395 any other states a fixed schedule (order sets reach
+        // D1419 any other goes through the wording rule (order sets reach
         // here without the request constraints).
-        com.example.hms.service.impl.PrnMinInterval.applyTo(entity);
+        com.example.hms.service.impl.PrnMinInterval.applyTo(entity, Boolean.TRUE.equals(request.getFrequencyConfirmed()));
         requirePrescribedQuantityForControlled(entity, catalogItem);
         recordAllergyOverride(entity, allergyOverride);
         String cdsOverride = cdsOverrideReason(request, advisories);
@@ -1514,7 +1514,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // minimum interval; an edit to a fixed schedule drops it. QA D1391 /
         // D1395: the wording rule judges a frequency this edit wrote, never one
         // the order already carried.
-        com.example.hms.service.impl.PrnMinInterval.applyToEdit(existing, frequencyBefore, tickedBefore);
+        com.example.hms.service.impl.PrnMinInterval.applyToEdit(existing, frequencyBefore, tickedBefore,
+            Boolean.TRUE.equals(request.getFrequencyConfirmed()));
         // QA D706: no quantity check on an edit - a legacy controlled row must
         // stay withdrawable; the dispense refuses it until a quantity is set.
         applyAllergyOverrideOnUpdate(existing, allergyOverride, overrideBefore, currentUserId);
