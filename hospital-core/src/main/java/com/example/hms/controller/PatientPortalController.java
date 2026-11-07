@@ -35,6 +35,7 @@ import com.example.hms.payload.dto.portal.PatientPaymentRequestDTO;
 import com.example.hms.enums.PatientDocumentType;
 import com.example.hms.utility.MessageUtil;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.model.Notification;
 import com.example.hms.payload.dto.portal.NotificationPreferenceDTO;
 import com.example.hms.payload.dto.portal.NotificationPreferenceUpdateDTO;
@@ -782,7 +783,7 @@ public class PatientPortalController {
     public ResponseEntity<ApiResponseWrapper<PatientDocumentResponseDTO>> uploadDocument(
             Authentication auth,
             @RequestPart("file") MultipartFile file,
-            @RequestPart("documentType") String documentTypeStr,
+            @RequestPart(value = "documentType", required = false) String documentTypeStr,
             @RequestParam(required = false) String collectionDate,
             @RequestParam(required = false) String notes) throws IOException {
         PatientDocumentRequestDTO request = PatientDocumentRequestDTO.builder()
@@ -799,14 +800,16 @@ public class PatientPortalController {
      * never a 500 and never the Java enum's class name.
      */
     private static PatientDocumentType parseDocumentType(String raw) {
-        if (raw != null) {
-            for (PatientDocumentType candidate : PatientDocumentType.values()) {
-                if (candidate.name().equalsIgnoreCase(raw.trim())) {
-                    return candidate;
-                }
+        // QA D1470: a missing type was a bare 400, with no field the reader could be told about.
+        if (raw == null || raw.isBlank()) {
+            throw new FieldBusinessException("documentType", "portal.document.typeRequired");
+        }
+        for (PatientDocumentType candidate : PatientDocumentType.values()) {
+            if (candidate.name().equalsIgnoreCase(raw.trim())) {
+                return candidate;
             }
         }
-        throw new BusinessException(MessageUtil.resolve("portal.document.invalidType"));
+        throw new FieldBusinessException("documentType", "portal.document.invalidType");
     }
 
     private static java.time.LocalDate parseCollectionDate(String raw) {

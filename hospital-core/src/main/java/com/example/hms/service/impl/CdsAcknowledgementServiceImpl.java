@@ -65,7 +65,7 @@ public class CdsAcknowledgementServiceImpl implements CdsAcknowledgementService 
 
         if (request.getAction() == CdsAcknowledgementAction.OVERRIDDEN
                 && (request.getReason() == null || request.getReason().isBlank())) {
-            throw new com.example.hms.exception.FieldBusinessException("reason", "A reason is required when overriding a critical advisory.");
+            throw new com.example.hms.exception.FieldBusinessException("reason", "cds.acknowledgement.overrideReasonRequired");
         }
 
         UUID userId = authUtils.resolveUserId(auth)

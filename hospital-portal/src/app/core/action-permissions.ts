@@ -138,6 +138,43 @@ export const ACTION_PERMISSIONS = {
     endpoint: 'EncounterController#delete',
     roles: ['ROLE_SUPER_ADMIN'],
   },
+  /**
+   * QA D1463: the patient tracker's card actions. The triage form and the
+   * check-out dialog open on GET /encounters/{id}, so those two need this read too.
+   */
+  encounterRead: {
+    endpoint: 'EncounterController#getById',
+    roles: [
+      'ROLE_DOCTOR',
+      'ROLE_NURSE',
+      'ROLE_MIDWIFE',
+      'ROLE_PATIENT',
+      'ROLE_RADIOLOGIST',
+      'ROLE_ANESTHESIOLOGIST',
+      'ROLE_PHYSIOTHERAPIST',
+      'ROLE_SUPER_ADMIN',
+    ],
+  },
+  encounterTriage: {
+    endpoint: 'EncounterController#submitTriage',
+    roles: ['ROLE_SUPER_ADMIN', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_DOCTOR'],
+  },
+  encounterCompleteTriage: {
+    endpoint: 'EncounterController#completeTriage',
+    roles: ['ROLE_SUPER_ADMIN', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_DOCTOR'],
+  },
+  encounterCompleteExamination: {
+    endpoint: 'EncounterController#completeExamination',
+    roles: ['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
+  },
+  encounterReadyForDischarge: {
+    endpoint: 'EncounterController#markReadyForDischarge',
+    roles: ['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
+  },
+  encounterCheckout: {
+    endpoint: 'EncounterController#checkOut',
+    roles: ['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
+  },
   // QA D1015: the midwife starts the visits booked with her (the service
   // refuses her any other one).
   encounterStart: {

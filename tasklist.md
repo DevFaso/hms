@@ -6288,3 +6288,9 @@ For the clinician list (proposed alert logic, pending sign-off):
 - [ ] D1462, for the user: the "not on file" card informs on every free-text order no catalogue item or cited brand names, an INN such as amlodipine included, and such orders are named beside a paracetamol total. Narrowing it needs a list of INNs the repository does not hold.
 - [ ] D1451 guard: `@HostListener` and `host: {}` bindings are not scanned; a hand hunt found none returning false.
 - [ ] For the user: `MortalityComponent` has no route and no nav link in the portal, and never had one (`c4dd0f3c4`): the death register and its record dialog cannot be opened by anyone, though the API works. Found during D1451. Its boxes are fixed and proved in Karma; the route and who sees the link were left for a decision.
+
+## Standing debt — round 35 (fix/r35-desk-billing-portal)
+
+- D1466 sibling, apps: `refundDue` is on the web billing page, the patient's web billing page and the PDF; `patient-android-app` and `patient-ios-app` show the balance (0) and not the refund. They do not misbehave; the patient is not told there. App release needed.
+- D1466: a real refund flow does not exist; the excess is stated as owed. Reversing the whole payment is the only ledger action today.
+- D1476 sibling, decision needed: `AdmissionServiceImpl` opens a stay on a deactivated registration (an emergency admission must not be refused at the desk, so it needs a product decision like the walk-in's EMERGENCY exemption). `ConsultationServiceImpl:113` and `GeneralReferralServiceImpl:94` use the same registration check and were not judged to open a desk visit; re-check them with that decision.

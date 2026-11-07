@@ -30,7 +30,25 @@ import {
 import { RovingFocusDirective } from '../shared/a11y/roving-focus.directive';
 import { TriageFormComponent } from '../nurse-station/triage-form/triage-form.component';
 import { CloseUnseenDialogComponent } from '../reception/close-unseen-dialog/close-unseen-dialog.component';
-import { actionRoles } from '../core/action-permissions';
+import { ActionKey, actionRoles } from '../core/action-permissions';
+
+/**
+ * QA D1463 (D1431 NOT_FIXED for the admin): what a card offers, per action: every
+ * endpoint the action calls, whose roles `ActionPermissionsMirrorTest` holds to the
+ * server's. A flag naming one role (`frontDeskOnly`) left the hospital admin 54 cards
+ * of buttons that could only answer 403.
+ */
+export const TRACKER_ACTIONS = {
+  assessTriage: ['encounterRead', 'encounterTriage'],
+  completeTriage: ['encounterCompleteTriage'],
+  closeUnseen: ['encounterCloseUnseen'],
+  startVisit: ['encounterStart'],
+  completeExamination: ['encounterCompleteExamination'],
+  readyForDischarge: ['encounterReadyForDischarge'],
+  checkout: ['encounterRead', 'encounterCheckout'],
+} as const satisfies Record<string, readonly ActionKey[]>;
+
+export type TrackerAction = keyof typeof TRACKER_ACTIONS;
 
 export interface TrackerColumn {
   key: keyof Pick<
@@ -81,7 +99,14 @@ export class PatientTrackerComponent implements OnInit, OnDestroy {
    * the endpoint admits.
    */
   get canCloseUnseen(): boolean {
-    return this.auth.hasAnyRole(actionRoles('encounterCloseUnseen'));
+    return this.canOffer('closeUnseen');
+  }
+
+  /** QA D1463: an action shows only to a role every endpoint behind it admits. */
+  canOffer(action: TrackerAction): boolean {
+    return TRACKER_ACTIONS[action].every((endpoint: ActionKey) =>
+      this.roleContext.hasAnyActiveRole(actionRoles(endpoint)),
+    );
   }
   readonly closeUnseenItem = signal<PatientTrackerItem | null>(null);
   /** QA D1108: LWBS is offered until the patient is seen, the server's rule. */
@@ -97,13 +122,8 @@ export class PatientTrackerComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * QA D788: a visit IN_PROGRESS is checked out by its clinician (it closes their
-   * consultation); the desk waits until the examination is completed.
-   */
-  /**
    * RCPT-CLIN: the desk gets no acuity from the server, and an absent acuity must
-   * not read as "routine". The check-out dialog opens on GET /encounters/{id},
-   * which refuses this role, so the button only ever did nothing for it.
+   * not read as "routine". Only what the card DISPLAYS: what it offers is canOffer.
    */
   get frontDeskOnly(): boolean {
     return isFrontDeskOnly((roles) => this.roleContext.hasAnyActiveRole(roles));
@@ -293,7 +313,7 @@ export class PatientTrackerComponent implements OnInit, OnDestroy {
   /* ── Start — WAITING_FOR_PHYSICIAN → IN_PROGRESS (QA D1015) ─── */
   get canStartVisit(): boolean {
     // The role the user acts in, not every role held (D997 class).
-    return this.roleContext.hasAnyActiveRole(actionRoles('encounterStart'));
+    return this.canOffer('startVisit');
   }
 
   /**
@@ -321,6 +341,7 @@ export class PatientTrackerComponent implements OnInit, OnDestroy {
    * rule); a midwife was offered them on doctors' cards and the server accepted.
    */
   canEndExamItem(item: PatientTrackerItem): boolean {
+    if (!this.canOffer('completeExamination')) return false;
     return mayEndExamination(
       {
         superAdmin: this.roleContext.isSuperAdmin(),

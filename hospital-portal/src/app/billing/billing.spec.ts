@@ -83,7 +83,7 @@ describe('BillingComponent', () => {
     );
     billingSpy.searchInvoices.and.returnValue(of(mockPage([mockInvoice()])));
     billingSpy.getInvoiceItems.and.returnValue(of([]));
-    toastSpy = jasmine.createSpyObj('ToastService', ['success', 'error']);
+    toastSpy = jasmine.createSpyObj('ToastService', ['success', 'error', 'info']);
     const permissionSpy = jasmine.createSpyObj('PermissionService', ['hasAnyPermission']);
     permissionSpy.hasAnyPermission.and.returnValue(true);
     const roleCtx = {
@@ -1618,6 +1618,62 @@ describe('BillingComponent', () => {
     ).map((el) => (el.textContent ?? '').trim());
     expect(badges).toContain('—');
     expect(badges).not.toContain('');
+  });
+
+  describe('QA D1467: issuing with lines at 0 F CFA', () => {
+    const refusal = new HttpErrorResponse({
+      status: 400,
+      error: {
+        message: 'Ces lignes sont à 0 F CFA : TDR.',
+        fieldErrors: { confirmUnpricedLines: 'Ces lignes sont à 0 F CFA : TDR.' },
+      },
+    });
+
+    const issue = (): void => {
+      component.editing.set(true);
+      component.editingId.set('inv-1');
+      component.form = { ...component.form, status: 'SENT' };
+      component.submitForm();
+    };
+
+    it('asks, naming the lines; on yes the same issue goes out confirmed', fakeAsync(() => {
+      const ask = spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
+      billingSpy.updateInvoice.and.returnValues(
+        throwError(() => refusal),
+        of(mockInvoice({ id: 'inv-1' })),
+      );
+      issue();
+      tick();
+      expect(ask.calls.mostRecent().args[0].message).toContain('TDR');
+      expect(billingSpy.updateInvoice).toHaveBeenCalledTimes(2);
+      const sent = billingSpy.updateInvoice.calls.mostRecent().args[1];
+      expect(sent.confirmUnpricedLines).toBeTrue();
+    }));
+
+    it('on no, nothing more is sent', fakeAsync(() => {
+      spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(false);
+      billingSpy.updateInvoice.and.returnValue(throwError(() => refusal));
+      issue();
+      tick();
+      expect(billingSpy.updateInvoice).toHaveBeenCalledTimes(1);
+    }));
+  });
+
+  it('QA D1466: the cashier is told at issue what is owed back', () => {
+    billingSpy.updateInvoice.and.returnValue(of(mockInvoice({ id: 'inv-1', refundDue: 2000 })));
+    component.editing.set(true);
+    component.editingId.set('inv-1');
+    component.submitForm();
+    expect(toastSpy.info).toHaveBeenCalled();
+  });
+
+  it('QA D1466: no notice when the copay fitted the visit', () => {
+    toastSpy.info.calls.reset();
+    billingSpy.updateInvoice.and.returnValue(of(mockInvoice({ id: 'inv-1', refundDue: 0 })));
+    component.editing.set(true);
+    component.editingId.set('inv-1');
+    component.submitForm();
+    expect(toastSpy.info).not.toHaveBeenCalled();
   });
 });
 

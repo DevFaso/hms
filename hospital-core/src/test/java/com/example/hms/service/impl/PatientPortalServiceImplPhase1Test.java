@@ -976,4 +976,45 @@ class PatientPortalServiceImplPhase1Test {
             assertThat(out.getDescription()).isEqualTo("Doctor viewed patient record");
         }
     }
+
+    @Nested
+    @DisplayName("QA D1471: contact name, city and e-mail on the profile")
+    class ProfileContactRules {
+
+        private void savable() {
+            stubPatientResolution();
+        }
+
+        @Test
+        @DisplayName("digits only and a@b are refused on their fields")
+        void refused() {
+            savable();
+            for (var bad : List.of(
+                    java.util.Map.entry("emergencyContactName", PatientProfileUpdateDTO.builder().emergencyContactName("12345").build()),
+                    java.util.Map.entry("city", PatientProfileUpdateDTO.builder().city("12345").build()),
+                    java.util.Map.entry("email", PatientProfileUpdateDTO.builder().email("a@b").build()))) {
+                assertThatThrownBy(() -> service.updateMyProfile(auth, bad.getValue()))
+                        .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                            refused -> assertThat(refused.getField()).isEqualTo(bad.getKey()));
+            }
+            verify(patientRepository, never()).save(any(Patient.class));
+        }
+
+        @Test
+        @DisplayName("a row stored before the rule stays editable on its other fields, resent whole")
+        void existingRowsStayEditable() {
+            savable();
+            patient.setCity("12345");
+            patient.setEmergencyContactName("12345");
+            patient.setEmail("a@b");
+            when(patientRepository.save(any(Patient.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            PatientProfileDTO saved = service.updateMyProfile(auth, PatientProfileUpdateDTO.builder()
+                    .city("12345").emergencyContactName("12345").email("a@b").addressLine1("Secteur 15").build());
+
+            assertThat(saved.getAddressLine1()).isEqualTo("Secteur 15");
+            assertThat(saved.getCity()).isEqualTo("12345");
+            assertThat(saved.getEmail()).isEqualTo("a@b");
+        }
+    }
 }

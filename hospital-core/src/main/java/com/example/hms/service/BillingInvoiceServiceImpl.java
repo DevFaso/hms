@@ -215,7 +215,10 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
      * QA D210: once a visit's invoice is issued, the copay already paid at
      * check-in for that visit is moved onto it as a payment, and the
      * stand-alone copay invoice is closed, so the patient is not billed twice.
-     * A copay larger than what the invoice still owes stays where it is.
+     * QA D1466: a copay larger than what the invoice still owes folds whole
+     * too: it counts against the visit, nothing further is owed, and the
+     * excess is the refund due ({@code InvoiceBalance.refundDueOf}). It used to
+     * stay on its own invoice while the whole visit was billed again.
      */
     private void creditCheckInCopays(BillingInvoice target) {
         creditCheckInCopays(target, BigDecimal.ZERO);
@@ -246,6 +249,25 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
 
     /** The copay, locked and re-read, when it may be credited to the target; else null. */
     private BillingInvoice lockCreditableCopay(BillingInvoice candidate, BillingInvoice target, BigDecimal reserved) {
+        BillingInvoice copay = lockStandingCopay(candidate, target);
+        if (copay == null) {
+            return null;
+        }
+        BigDecimal credit = copayCredit(copay);
+        // Nothing is owed on an invoice already settled, so a second copay of the visit stays apart.
+        BigDecimal paid = target.getAmountPaid() != null ? target.getAmountPaid() : BigDecimal.ZERO;
+        BigDecimal owed = (target.getTotalAmount() != null ? target.getTotalAmount() : BigDecimal.ZERO).subtract(paid)
+            .subtract(reserved);
+        if (credit.signum() <= 0 || owed.signum() <= 0) {
+            return null;
+        }
+        // QA D724: a declared payment still waiting for the cashier must stay confirmable,
+        // so a copay above what is owed waits for that declaration to be settled.
+        return credit.compareTo(owed) <= 0 || (reserved.signum() == 0 && !hasPendingDeclaration(target)) ? copay : null;
+    }
+
+    /** The copay, locked and re-read, when it still stands paid for the target's patient; else null. */
+    private BillingInvoice lockStandingCopay(BillingInvoice candidate, BillingInvoice target) {
         if (candidate.getId() == null || candidate.getId().equals(target.getId())) {
             return null;
         }
@@ -260,11 +282,42 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
                 || target.getPatient() == null || !copay.getPatient().getId().equals(target.getPatient().getId())) {
             return null;
         }
-        BigDecimal credit = copayCredit(copay);
-        BigDecimal paid = target.getAmountPaid() != null ? target.getAmountPaid() : BigDecimal.ZERO;
-        BigDecimal owed = (target.getTotalAmount() != null ? target.getTotalAmount() : BigDecimal.ZERO).subtract(paid)
-            .subtract(reserved);
-        return credit.signum() <= 0 || credit.compareTo(owed) > 0 ? null : copay;
+        return copay;
+    }
+
+    /**
+     * QA D1466: a copay held back for a declaration (above). Once none is pending it folds, also
+     * onto a visit the declaration has just paid in full: that money is then all to refund, not a
+     * second invoice paid and silent.
+     */
+    private void creditCopaysAfterDeclarationSettled(BillingInvoice target) {
+        if (hasPendingDeclaration(target)) {
+            return;
+        }
+        if (target.getStatus() != InvoiceStatus.PAID) {
+            creditCheckInCopays(target);
+            return;
+        }
+        if (target.getEncounter() == null || target.getEncounter().getId() == null || target.isCheckInCopay()) {
+            return;
+        }
+        List<BillingInvoice> copays = invoiceRepository
+            .findByEncounter_IdAndCheckInCopayTrueAndStatus(target.getEncounter().getId(), InvoiceStatus.PAID);
+        if (copays == null) {
+            return;
+        }
+        for (BillingInvoice candidate : copays) {
+            BillingInvoice copay = lockStandingCopay(candidate, target);
+            if (copay != null && copayCredit(copay).signum() > 0) {
+                moveCopayOnto(copay, target);
+            }
+        }
+    }
+
+    private boolean hasPendingDeclaration(BillingInvoice invoice) {
+        BigDecimal pending = paymentTransactionRepository.sumAmountByInvoiceAndStatus(invoice.getId(),
+            PaymentStatus.PENDING);
+        return pending != null && pending.signum() > 0;
     }
 
     private static BigDecimal copayCredit(BillingInvoice copay) {
@@ -434,6 +487,33 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     private static void requireIssuableTotal(InvoiceStatus status, BigDecimal total) {
         if (status == InvoiceStatus.SENT && (total == null || total.signum() <= 0)) {
             throw new com.example.hms.exception.FieldBusinessException(FIELD_STATUS, "billing.invoice.zeroTotal");
+        }
+    }
+
+    /**
+     * QA D1467: lines at 0 F CFA lock when the invoice is issued, so a test or an
+     * X-ray left unpriced at checkout went out free, in silence. Issuing asks first:
+     * refused on {@code confirmUnpricedLines}, naming the lines, unless the request
+     * confirms them (a line that really is free stays possible). On the server, so
+     * an API call does not slip through either.
+     */
+    private void requireUnpricedLinesConfirmed(BillingInvoice invoice, InvoiceStatus nextStatus,
+                                               BillingInvoiceRequestDTO dto) {
+        if (nextStatus != InvoiceStatus.SENT || Boolean.TRUE.equals(dto.getConfirmUnpricedLines())
+                || invoiceItemRepository == null) {
+            return;
+        }
+        List<InvoiceItem> lines = invoiceItemRepository.findByBillingInvoiceId(invoice.getId());
+        if (lines == null) {
+            return;
+        }
+        String unpriced = lines.stream()
+            .filter(line -> nz(line.getTotalPrice()).signum() == 0)
+            .map(InvoiceItem::getItemDescription)
+            .collect(java.util.stream.Collectors.joining(", "));
+        if (!unpriced.isEmpty()) {
+            throw new com.example.hms.exception.FieldBusinessException("confirmUnpricedLines",
+                "billing.invoice.unpricedLines", unpriced);
         }
     }
 
@@ -924,6 +1004,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         // QA D91: amountPaid is never taken from the form.
         if (wasDraft) {
             requireIssuableTotal(nextStatus, invoice.getTotalAmount());
+            requireUnpricedLinesConfirmed(invoice, nextStatus, dto);
         }
         boolean cancelling = nextStatus == InvoiceStatus.CANCELLED && invoice.getStatus() != InvoiceStatus.CANCELLED;
         if (cancelling) {
@@ -964,7 +1045,10 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     private void applyTypedTotal(BillingInvoice invoice, UUID id, BillingInvoiceRequestDTO dto, BigDecimal paid) {
         if (dto.getTotalAmount() != null && !invoiceRepository.hasItems(id)) {
             requireWholeAmount(dto.getTotalAmount()); // QA D307
-            if (dto.getTotalAmount().compareTo(paid) < 0) {
+            // QA D1466: echoing the total of an invoice holding a refund due moves nothing.
+            boolean unchanged = invoice.getTotalAmount() != null
+                && dto.getTotalAmount().compareTo(invoice.getTotalAmount()) == 0;
+            if (!unchanged && dto.getTotalAmount().compareTo(paid) < 0) {
                 throw new com.example.hms.exception.FieldBusinessException("totalAmount", "billing.invoice.totalBelowPaid");
             }
             invoice.setTotalAmount(dto.getTotalAmount());
@@ -1164,7 +1248,10 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         BigDecimal sum = invoiceRepository.sumItemsByInvoiceId(invoiceId);
         BigDecimal total = sum != null ? sum : BigDecimal.ZERO;
         BigDecimal paid = invoice.getAmountPaid() != null ? invoice.getAmountPaid() : BigDecimal.ZERO;
-        if (total.compareTo(paid) < 0) {
+        // QA D1466: a line added to an invoice holding a refund due lowers that refund; only
+        // a total going DOWN under the money received is refused.
+        BigDecimal before = invoice.getTotalAmount() != null ? invoice.getTotalAmount() : BigDecimal.ZERO;
+        if (total.compareTo(paid) < 0 && total.compareTo(before) < 0) {
             throw new BusinessException("billing.invoice.totalBelowPaid");
         }
         invoice.setTotalAmount(total);
@@ -1785,6 +1872,15 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         return invoice;
     }
 
+    /** QA D1466: nothing is left to take: the copay just credited covers the visit. The credit stands. */
+    static final class CopayCoversVisitException extends FieldBusinessException {
+        private static final long serialVersionUID = 1L;
+
+        CopayCoversVisitException() {
+            super(FIELD_AMOUNT, "billing.payment.copayCoversVisit");
+        }
+    }
+
     /** Add a confirmed amount and settle the status. */
     private BillingInvoice settle(BillingInvoice invoice, BigDecimal amount) {
         BigDecimal currentPaid = invoice.getAmountPaid() != null ? invoice.getAmountPaid() : BigDecimal.ZERO;
@@ -1800,8 +1896,12 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         return invoiceRepository.save(invoice);
     }
 
+    /**
+     * QA D1466 (review): the copay credited first may leave nothing owed. The refusal must not undo
+     * that credit, or every retry would fold it again and be refused again with the visit still open.
+     */
     @Override
-    @Transactional
+    @Transactional(noRollbackFor = CopayCoversVisitException.class)
     public BillingInvoiceResponseDTO recordStaffPayment(UUID invoiceId,
             com.example.hms.payload.dto.StaffPaymentRequestDTO payment, UUID recordedBy, Locale locale) {
         BillingInvoice invoice = invoiceRepository.findLockedById(invoiceId)
@@ -1821,7 +1921,11 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         }
         rejectReusedReference(invoice, method, payment.getReference(), "reference");
         // QA D272: the copay already taken at check-in counts before the clerk's payment.
+        boolean wasOpen = invoice.getStatus() != InvoiceStatus.PAID;
         creditCheckInCopays(invoice);
+        if (wasOpen && invoice.getStatus() == InvoiceStatus.PAID) {
+            throw new CopayCoversVisitException();
+        }
         requireRoomBesidePendingDeclarations(invoice, payment.getAmount());
         BillingInvoice saved = applyPayment(invoiceId, invoice.getPatient().getId(), payment.getAmount());
         PaymentTransaction row = savePaymentRow(saved, payment.getAmount(), method, payment.getReference(),
@@ -1907,6 +2011,8 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         row.setInvoiceTotalAtReceipt(invoice.getTotalAmount()); // QA D228
         paymentTransactionRepository.save(row);
         auditPaymentAfterCommit(AuditEventType.PAYMENT_POSTED, staffId, saved, row.getId(), "Pending payment confirmed");
+        // QA D1466: the copay that waited for this declaration counts now.
+        creditCopaysAfterDeclarationSettled(saved);
         return invoiceMapper.toBillingInvoiceResponseDTO(saved);
     }
 
@@ -1927,6 +2033,8 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         row.setReversalReason(why);
         paymentTransactionRepository.save(row);
         auditPaymentAfterCommit(AuditEventType.PAYMENT_REJECTED, staffId, invoice, row.getId(), "Pending payment rejected");
+        // QA D1466: the copay that waited for this declaration counts now.
+        creditCopaysAfterDeclarationSettled(invoice);
         return invoiceMapper.toBillingInvoiceResponseDTO(invoice);
     }
 

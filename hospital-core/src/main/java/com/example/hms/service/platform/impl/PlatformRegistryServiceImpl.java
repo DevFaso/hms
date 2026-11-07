@@ -83,7 +83,7 @@ public class PlatformRegistryServiceImpl implements PlatformRegistryService {
                                                                   Locale locale) {
         Objects.requireNonNull(organizationId, ORGANIZATION_ID_REQUIRED);
         if (request == null || request.getServiceType() == null) {
-            throw new com.example.hms.exception.FieldBusinessException("serviceType", "Platform service type is required");
+            throw new com.example.hms.exception.FieldBusinessException("serviceType", "platform.serviceTypeRequired");
         }
 
         Organization organization = organizationRepository.findById(organizationId)
@@ -210,7 +210,7 @@ public class PlatformRegistryServiceImpl implements PlatformRegistryService {
         Objects.requireNonNull(hospitalId, HOSPITAL_ID_REQUIRED);
         Objects.requireNonNull(organizationServiceId, ORGANIZATION_SERVICE_ID_REQUIRED);
         if (request == null || request.getEnabled() == null) {
-            throw new com.example.hms.exception.FieldBusinessException("enabled", "enabled is required");
+            throw new com.example.hms.exception.FieldBusinessException("enabled", "platform.enabledRequired");
         }
 
         HospitalPlatformServiceLink link = hospitalPlatformServiceLinkRepository

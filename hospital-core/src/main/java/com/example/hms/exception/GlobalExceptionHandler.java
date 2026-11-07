@@ -773,6 +773,18 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
     }
 
+    @ExceptionHandler(org.springframework.web.multipart.support.MissingServletRequestPartException.class)
+    public ResponseEntity<Object> handleMissingPart(
+            org.springframework.web.multipart.support.MissingServletRequestPartException ex, WebRequest request) {
+        // QA D1470: a missing multipart part answered a bare 400, with no field named.
+        String message = localized("error.request.missingPart", "A required file or value is missing.");
+        Map<String, Object> body = errorBody(HttpStatus.BAD_REQUEST, message, request);
+        body.put(FIELD_CODE, CODE_MALFORMED_REQUEST);
+        body.put(FIELD_FIELD, ex.getRequestPartName());
+        body.put(FIELD_ERRORS, Map.of(ex.getRequestPartName(), message));
+        return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
+    }
+
     /**
      * Parameter-binding failures (e.g. an enum query param the deployed jar
      * does not know, a non-UUID path variable) are client errors. Without

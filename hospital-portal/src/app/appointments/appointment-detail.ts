@@ -149,6 +149,9 @@ export class AppointmentDetailComponent implements OnInit {
   showReschedule = signal(false);
   /** QA D1429: the new time is not a published free slot, so the dialog asks why. */
   rescheduleOffSlot = signal(false);
+  /** QA D1474: why the time typed cannot be booked at all, told at once, before any reason is asked. */
+  rescheduleTimeRefusal = signal<string | null>(null);
+  private rescheduleTimeRead?: Subscription;
   rescheduleOverbookReason = '';
   /** The latest read only: an older answer never decides for a time since changed. */
   private rescheduleSlotRead?: Subscription;
@@ -290,10 +293,26 @@ export class AppointmentDetailComponent implements OnInit {
       (this.rescheduleDate === appt.appointmentDate &&
         this.rescheduleStart?.slice(0, 5) === appt.startTime?.slice(0, 5) &&
         this.rescheduleStaffId === appt.staffId);
+    this.rescheduleTimeRead?.unsubscribe();
+    this.rescheduleTimeRefusal.set(null);
     if (unmoved) {
       this.rescheduleSlotRead?.unsubscribe();
       this.rescheduleOffSlot.set(false);
       return;
+    }
+    if (this.rescheduleStaffId && this.rescheduleDate && this.rescheduleStart) {
+      // Only the desk's warning: the server decides at the move, so a failed read says nothing.
+      this.rescheduleTimeRead = this.appointmentService
+        .bookingTimeCheck(
+          this.rescheduleStaffId,
+          this.rescheduleDate,
+          this.rescheduleStart,
+          appt.id,
+        )
+        .subscribe({
+          next: (answer) => this.rescheduleTimeRefusal.set(answer?.refusal ?? null),
+          error: () => this.rescheduleTimeRefusal.set(null),
+        });
     }
     this.rescheduleSlotRead?.unsubscribe();
     this.rescheduleSlotRead = isOffSlot(

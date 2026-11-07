@@ -111,6 +111,21 @@ export class AppointmentService {
     return this.http.post<AppointmentResponse>(this.baseUrl, req);
   }
 
+  /**
+   * QA D1474: why a booking at this time would be refused (past, off the clinician's schedule,
+   * overlapping a held visit), in the reader's language; absent when it can be booked.
+   */
+  bookingTimeCheck(
+    staffId: string,
+    date: string,
+    time: string,
+    movedAppointmentId?: string,
+  ): Observable<{ refusal?: string }> {
+    let params = new HttpParams().set('staffId', staffId).set('date', date).set('time', time);
+    if (movedAppointmentId) params = params.set('movedAppointmentId', movedAppointmentId);
+    return this.http.get<{ refusal?: string }>(`${this.baseUrl}/booking-time-check`, { params });
+  }
+
   update(id: string, req: AppointmentUpsertRequest): Observable<AppointmentResponse> {
     return this.http.put<AppointmentResponse>(`${this.baseUrl}/${id}`, req);
   }

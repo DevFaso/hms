@@ -132,6 +132,10 @@ public class PatientPortalServiceImpl implements PatientPortalService {
 
 
     private static final String PROXY_VIEW_LAB_RESULTS = "VIEW_LAB_RESULTS";
+    private static final String PROXY_VIEW_MEDICATIONS = "VIEW_MEDICATIONS";
+    private static final String PROXY_VIEW_APPOINTMENTS = "VIEW_APPOINTMENTS";
+    private static final String PROXY_VIEW_BILLING = "VIEW_BILLING";
+    private static final String PROXY_VIEW_RECORDS = "VIEW_RECORDS";
     private static final String APPOINTMENT_NOT_FOUND_KEY = "appointment.notFound";
     private static final String PROVIDER_UNAVAILABLE_KEY = "portal.booking.providerUnavailable";
     /** QA D717: the only states a patient may still cancel or reschedule from the portal. */
@@ -279,6 +283,10 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         // message, never stored as typed (QA D113: free text, another
         // patient's address, a blank phone failing as a 500).
         applySelfServiceIdentifiers(patient, dto);
+        // QA D1471: the same rule as the patient's names; only a CHANGE is judged.
+        com.example.hms.utility.PatientIdentityRules.requireNameWithLetters(
+                "emergencyContactName", dto.getEmergencyContactName(), patient.getEmergencyContactName());
+        com.example.hms.utility.PatientIdentityRules.requirePlaceWithLetters("city", dto.getCity(), patient.getCity());
         if (dto.getAddressLine1() != null)             patient.setAddressLine1(dto.getAddressLine1());
         if (dto.getAddressLine2() != null)             patient.setAddressLine2(dto.getAddressLine2());
         if (dto.getCity() != null)                     patient.setCity(dto.getCity());
@@ -345,6 +353,10 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         String email = raw.trim();
         if (email.isEmpty()) {
             return null;
+        }
+        // QA D1471: a@b was saved. An address stored before this rule stays, while other fields change.
+        if (!email.equalsIgnoreCase(patient.getEmail()) && !com.example.hms.utility.EmailAddresses.isDeliverable(email)) {
+            throw new com.example.hms.exception.FieldBusinessException("email", "patient.email.undeliverable");
         }
         // The signed-in patient always has an account (findPatient resolves it).
         boolean takenByAccount = patient.getUser() != null
@@ -1738,6 +1750,10 @@ public class PatientPortalServiceImpl implements PatientPortalService {
             throw new com.example.hms.exception.FieldBusinessException("proxyUsername", "portal.proxy.duplicate");
         });
 
+        // QA D1464: told "access granted" while the row was born EXPIRED and the grantee had nothing.
+        com.example.hms.utility.ExpiryRules.requireFuture("expiresAt", dto.getExpiresAt(), "portal.proxy.expiryInPast");
+        requireKnownPermissions(dto.getPermissions());
+
         PatientProxy proxy = PatientProxy.builder()
                 .grantorPatient(patient)
                 .proxyUser(proxyUser)
@@ -1847,11 +1863,11 @@ public class PatientPortalServiceImpl implements PatientPortalService {
      * VIEW_* form. Normalize so legacy grants keep working.
      */
     private static final Map<String, String> LEGACY_PERMISSION_ALIASES = Map.of(
-            "APPOINTMENTS", "VIEW_APPOINTMENTS",
-            "MEDICATIONS", "VIEW_MEDICATIONS",
+            "APPOINTMENTS", PROXY_VIEW_APPOINTMENTS,
+            "MEDICATIONS", PROXY_VIEW_MEDICATIONS,
             "LAB_RESULTS", PROXY_VIEW_LAB_RESULTS,
-            "BILLING", "VIEW_BILLING",
-            "RECORDS", "VIEW_RECORDS");
+            "BILLING", PROXY_VIEW_BILLING,
+            "RECORDS", PROXY_VIEW_RECORDS);
 
     private static Set<String> normalizedPermissions(String raw) {
         if (raw == null || raw.isBlank()) {
@@ -1864,6 +1880,22 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
     }
 
+    /** What a grant may name: the scopes {@code verifyProxyAccess} checks, and ALL. */
+    private static final Set<String> KNOWN_PROXY_PERMISSIONS = Set.of("ALL", PROXY_VIEW_APPOINTMENTS, PROXY_VIEW_MEDICATIONS,
+            PROXY_VIEW_LAB_RESULTS, PROXY_VIEW_BILLING, PROXY_VIEW_RECORDS);
+
+    /**
+     * QA D1468: BANANA was saved, and listed as a grant that opened nothing. Only a new grant is
+     * judged: {@link #normalizedPermissions} still reads whatever an older row holds.
+     */
+    private static void requireKnownPermissions(String raw) {
+        for (String token : normalizedPermissions(raw)) {
+            if (!KNOWN_PROXY_PERMISSIONS.contains(token)) {
+                throw new com.example.hms.exception.FieldBusinessException("permissions", "portal.proxy.permissionUnknown", token);
+            }
+        }
+    }
+
     /** Store grants in the canonical VIEW_* vocabulary regardless of client. */
     private static String canonicalPermissionsCsv(String raw) {
         Set<String> normalized = normalizedPermissions(raw);
@@ -1873,7 +1905,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Override
     @Transactional(readOnly = true)
     public List<AppointmentResponseDTO> getProxyAppointments(Authentication auth, UUID patientId, Locale locale) {
-        Patient patient = verifyProxyAccess(auth, patientId, "VIEW_APPOINTMENTS");
+        Patient patient = verifyProxyAccess(auth, patientId, PROXY_VIEW_APPOINTMENTS);
         // The verified-patient variant, NOT the username-scoped one: passing
         // null for username threw inside getUserOrThrow before any query ran,
         // so this tab returned 500 for every proxy while its unit test stubbed
@@ -1884,7 +1916,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Override
     @Transactional(readOnly = true)
     public List<PatientMedicationResponseDTO> getProxyMedications(Authentication auth, UUID patientId, int limit) {
-        Patient patient = verifyProxyAccess(auth, patientId, "VIEW_MEDICATIONS");
+        Patient patient = verifyProxyAccess(auth, patientId, PROXY_VIEW_MEDICATIONS);
         UUID hospitalId = resolvePatientHospitalId(patient);
         return medicationService.getMedicationsForPatientPortal(patient.getId(), hospitalId, limit);
     }
@@ -1892,7 +1924,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Override
     @Transactional(readOnly = true)
     public Page<PatientMedicationResponseDTO> getProxyMedicationsPage(Authentication auth, UUID patientId, Pageable pageable) {
-        Patient patient = verifyProxyAccess(auth, patientId, "VIEW_MEDICATIONS");
+        Patient patient = verifyProxyAccess(auth, patientId, PROXY_VIEW_MEDICATIONS);
         return medicationService.getMedicationsPageForPatientPortal(patient.getId(), pageable);
     }
 
@@ -1929,14 +1961,14 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Override
     @Transactional(readOnly = true)
     public Page<BillingInvoiceResponseDTO> getProxyBilling(Authentication auth, UUID patientId, Pageable pageable, Locale locale) {
-        Patient patient = verifyProxyAccess(auth, patientId, "VIEW_BILLING");
+        Patient patient = verifyProxyAccess(auth, patientId, PROXY_VIEW_BILLING);
         return billingInvoiceService.getInvoicesForPortalPatient(patient.getId(), pageable, locale);
     }
 
     @Override
     @Transactional(readOnly = true)
     public HealthSummaryDTO getProxyRecords(Authentication auth, UUID patientId, Locale locale) {
-        Patient patient = verifyProxyAccess(auth, patientId, "VIEW_RECORDS");
+        Patient patient = verifyProxyAccess(auth, patientId, PROXY_VIEW_RECORDS);
         UUID hospitalId = resolvePatientHospitalId(patient);
         return HealthSummaryDTO.builder()
                 .profile(toProfileDTO(patient))
@@ -2418,6 +2450,10 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         }
         if (dto.getAddressLine1() != null) { patient.setAddressLine1(dto.getAddressLine1()); changed = true; }
         if (dto.getAddressLine2() != null) { patient.setAddressLine2(dto.getAddressLine2()); changed = true; }
+        // QA D1471: pre-check-in writes the same fields as the profile, under the same rule.
+        com.example.hms.utility.PatientIdentityRules.requirePlaceWithLetters("city", dto.getCity(), patient.getCity());
+        com.example.hms.utility.PatientIdentityRules.requireNameWithLetters(
+                "emergencyContactName", dto.getEmergencyContactName(), patient.getEmergencyContactName());
         if (dto.getCity() != null) { patient.setCity(dto.getCity()); changed = true; }
         if (dto.getState() != null) { patient.setState(dto.getState()); changed = true; }
         if (dto.getZipCode() != null) { patient.setZipCode(dto.getZipCode()); changed = true; }

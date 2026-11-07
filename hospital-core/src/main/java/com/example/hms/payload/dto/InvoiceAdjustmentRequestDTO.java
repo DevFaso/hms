@@ -29,7 +29,9 @@ public class InvoiceAdjustmentRequestDTO {
 
     /** Whole francs CFA; required for a discount or a waiver. */
     @DecimalMin(value = "1", message = "{billing.adjustment.amountPositive}")
-    @Digits(integer = 10, fraction = 0, message = "{billing.payment.wholeAmountOnly}")
+    // QA D1484: the digit count only bounds what is parsed. A whole number too large for the
+    // invoice reaches the service, which says it is above the total; only decimals say decimals.
+    @Digits(integer = 30, fraction = 0, message = "{billing.payment.wholeAmountOnly}")
     private BigDecimal amount;
 
     @NotBlank(message = "{billing.adjustment.reasonRequired}")

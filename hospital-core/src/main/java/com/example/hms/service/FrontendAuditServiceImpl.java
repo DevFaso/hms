@@ -32,7 +32,7 @@ public class FrontendAuditServiceImpl implements FrontendAuditService {
         }
         String normalizedType = trimToNull(request.getType());
         if (normalizedType == null) {
-            throw new com.example.hms.exception.FieldBusinessException("type", "Event type is required.");
+            throw new com.example.hms.exception.FieldBusinessException("type", "frontendAudit.typeRequired");
         }
         LocalDateTime occurredAt = parseTimestamp(request.getTs());
         String metadata = serializeMeta(request.getMeta());

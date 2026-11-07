@@ -101,6 +101,8 @@ describe('PatientTrackerComponent', () => {
     }).compileComponents();
 
     fixture = TestBed.createComponent(PatientTrackerComponent);
+    // The tracker's actions ask the role acting (QA D1463): a clinician, unless a test says otherwise.
+    TestBed.inject(RoleContextService).setRoles(['ROLE_NURSE']);
     component = fixture.componentInstance;
   });
 
@@ -206,7 +208,8 @@ describe('PatientTrackerComponent', () => {
   });
 
   it('QA D954: an arrived patient who left unseen is closed from the tracker', () => {
-    authSpy.hasAnyRole.and.callFake((roles: string[]) => roles.includes('ROLE_NURSE'));
+    // QA D1463: the role the user acts in (the action map), not every role held.
+    TestBed.inject(RoleContextService).setRoles(['ROLE_NURSE']);
     fixture.detectChanges();
     const btn = fixture.nativeElement.querySelector(
       '[data-testid="tracker-lwbs"]',
@@ -284,7 +287,7 @@ describe('PatientTrackerComponent', () => {
   });
 
   it('QA D954: a role the endpoint refuses is not offered the LWBS action', () => {
-    authSpy.hasAnyRole.and.callFake((roles: string[]) => roles.includes('ROLE_LAB_TECHNICIAN'));
+    TestBed.inject(RoleContextService).setRoles(['ROLE_LAB_TECHNICIAN']);
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('[data-testid="tracker-lwbs"]')).toBeNull();
   });

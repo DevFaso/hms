@@ -72,7 +72,13 @@
                client offered a way to SET it — every web grant was permanent
                by omission. Optional: blank keeps the grant open-ended, which
                stays the right default for a parent/guardian. -->
-          <input type="date" [(ngModel)]="expiresOn" [min]="minExpiry" />
+          <input
+            id="proxy-expires"
+            type="date"
+            data-server-field="expiresAt"
+            [(ngModel)]="expiresOn"
+            [min]="minExpiry"
+          />
         </label>
         <label>
           {{ 'PORTAL.FAMILY.NOTES' | translate }}

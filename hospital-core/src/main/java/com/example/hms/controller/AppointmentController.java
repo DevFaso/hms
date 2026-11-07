@@ -140,6 +140,26 @@ public class AppointmentController {
         return auth.getName();
     }
 
+    /** QA D1474: the desk is told at once that a time cannot be booked, before it writes a reason. */
+    @GetMapping("/booking-time-check")
+    @PreAuthorize(APPOINTMENT_MANAGE_ROLES)
+    @Operation(summary = "Why a booking at this time would be refused",
+        description = "The past, schedule and overlap rules of a booking; `refusal` is absent when it can be booked.")
+    public ResponseEntity<java.util.Map<String, String>> bookingTimeCheck(
+        @RequestParam java.util.UUID staffId,
+        @RequestParam @org.springframework.format.annotation.DateTimeFormat(
+            iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate date,
+        @RequestParam @org.springframework.format.annotation.DateTimeFormat(
+            iso = org.springframework.format.annotation.DateTimeFormat.ISO.TIME) java.time.LocalTime time,
+        @RequestParam(required = false) java.util.UUID movedAppointmentId,
+        @RequestHeader(name = "Accept-Language", required = false) String lang,
+        Authentication authentication
+    ) {
+        String refusal = appointmentService.bookingTimeRefusal(staffId, date, time, movedAppointmentId,
+            parseLocale(lang), getUsername(authentication));
+        return ResponseEntity.ok(refusal == null ? java.util.Map.of() : java.util.Map.of("refusal", refusal));
+    }
+
     // ---- CREATE ----
     @PostMapping
     @PreAuthorize(APPOINTMENT_BOOK_ROLES)

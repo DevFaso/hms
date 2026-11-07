@@ -1023,3 +1023,15 @@ Rounds 27, 28 and 29 each found 20–30 new siblings of the required-field class
 | `service/maternity/NewbornAlertRulesTest#aLowValueAsksToRemeasure` (new) | D1482: the check flag at the low end. | none |
 | `scripts/lib/round35-clinical.test.mjs` (new) | D1479: a count of minutes written by hand in a template. D1480: a button built at run time with no global style. | none |
 | `e2e/dialog-checkboxes.spec.ts` (new) | D1451 in a browser: mouse, label and a trusted Space key, on the crossmatch box and the O-negative statement (the mortality boxes by click in Karma: the page has no route). | none |
+
+## Guards added or widened by round 35 (fix/r35-desk-billing-portal)
+
+| Guard | What it fails on | Scope / allowlist |
+|---|---|---|
+| `scripts/lib/tracker-action-map.test.mjs` (new) + `patient-tracker.component.spec.ts` (QA D1463, every route role × every card action) + `security/ActionPermissionsMirrorTest` (6 new entries) | D1463 (D1431 NOT_FIXED: `frontDeskOnly` named only the receptionist): a card button not under a gate of `TRACKER_ACTIONS`, a button gated by a flag naming one role, an action whose endpoint roles drift from the server | the tracker card; no allowlist |
+| `architecture/AccessExpiryGuardTest` (new) | D1464: a service storing a request's `expiresAt` / `expiresOn` that never compares it with the clock | every service; none |
+| `service/BillingInvoiceServiceImplTest#creditCopay_*` + `repository/CopayFoldSchemaPostgresIT` (new) | D1466: a copay above, equal to or below the visit total not folded once and whole; a CHECK on the real table holding `amount_paid` under the total | the fold; `@Check` removed from the entity (it existed only in the H2 schema) |
+| `i18n/ExceptionProseRatchetTest#noFieldRefusalCarriesASentence` (new, not a ratchet) + `FIELD_PROSE` widened to any field expression | D1469: `new FieldBusinessException(<any field>, "<sentence>")` anywhere in `src/main`; a sentence behind a `FIELD_*` constant was invisible | all of `src/main`; 0 allowed. Baseline lowered on 13 files; `RoiRequestService`, `ProResponseService`, `PatientPrimaryCareServiceImpl` joined `ZERO_PROSE_SCOPES` |
+| `architecture/PatientContactTextGuardTest` (new) | D1471: a service writing a patient's emergency contact name with no `PatientIdentityRules` call | every service; none |
+| `architecture/DeactivatedRegistrationGuardTest` (new) + `repository/RegistrationActiveFlagPostgresIT` (new) | D1476: a desk visit opener (booking, walk-in, waitlist) that does not refuse a deactivated registration; the question itself on real PostgreSQL | 3 openers, listed; add a new one here |
+| `scripts/lib/payment-method-names.test.mjs` (new) | D1485: two names for one payment method in a language, or a portal name unlike what the server prints on a document | every object of codes in `en/fr/es.json` against `pdf.payment.method.*`; none |

@@ -192,3 +192,32 @@
   color: #64748b;
   margin-top: 2px;
 }
+
+/* QA D1474: why this time cannot be booked. */
+.field-refusal {
+  display: block;
+  margin-top: 4px;
+  color: var(--danger, #b42318);
+}
+
+/* QA D1475: the clinician's free slots of the chosen day. */
+.free-slots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.free-slot {
+  padding: 4px 10px;
+  border: 1px solid var(--primary);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--primary);
+  cursor: pointer;
+
+  &.selected {
+    background: var(--primary);
+    color: #fff;
+  }
+}

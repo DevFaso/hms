@@ -41,7 +41,9 @@ public class InvoiceItemRequestDTO {
     private Integer quantity;
 
     @NotNull
-    @Digits(integer = 10, fraction = 2)
+    // QA D1483: too large and too precise are two reasons; the digit count only bounds what is parsed.
+    @jakarta.validation.constraints.DecimalMax(value = "9999999999.99", message = "{billing.amount.tooLarge}")
+    @Digits(integer = 30, fraction = 2, message = "{billing.payment.wholeAmountOnly}")
     @Positive
     private BigDecimal unitPrice;
 

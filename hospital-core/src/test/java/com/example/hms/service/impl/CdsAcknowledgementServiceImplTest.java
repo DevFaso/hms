@@ -175,7 +175,7 @@ class CdsAcknowledgementServiceImplTest {
 
         assertThatThrownBy(() -> service.acknowledge(auth, request))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("reason");
+                .extracting("messageKey").isEqualTo("cds.acknowledgement.overrideReasonRequired");
 
         verify(repository, never()).save(any());
     }

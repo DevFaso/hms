@@ -58,7 +58,7 @@ public class PatientPrimaryCareServiceImpl implements PatientPrimaryCareService 
 
         // Validate: assignment hospital must match requested hospital
         if (!assignment.getHospital().getId().equals(hospital.getId())) {
-            throw new com.example.hms.exception.FieldBusinessException("hospitalId", "Assignment hospital mismatch");
+            throw new com.example.hms.exception.FieldBusinessException("hospitalId", "primaryCare.assignmentHospitalMismatch");
         }
 
         // Validate role: must be a doctor (or allowed set)
@@ -99,7 +99,7 @@ public class PatientPrimaryCareServiceImpl implements PatientPrimaryCareService 
                 .orElseThrow(() -> new ResourceNotFoundException("roleAssignment.notFound", req.getAssignmentId()));
             // validate reassignment
             if (!a.getHospital().getId().equals(entity.getHospital().getId())) {
-                throw new com.example.hms.exception.FieldBusinessException("assignmentId", "Assignment hospital mismatch");
+                throw new com.example.hms.exception.FieldBusinessException("assignmentId", "primaryCare.assignmentHospitalMismatch");
             }
             roleValidator.validateRoleOrThrow(a.getId(), entity.getHospital().getId(), "ROLE_DOCTOR", Locale.getDefault(), messageSource);
             entity.setAssignment(a);
@@ -119,7 +119,7 @@ public class PatientPrimaryCareServiceImpl implements PatientPrimaryCareService 
         com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(entity.getHospital(), PRIMARY_CARE_LINK_NOT_FOUND_KEY, pcpId);
 
         if (entity.getStartDate() != null && endDate.isBefore(entity.getStartDate())) {
-            throw new BusinessException("PCP endDate cannot be before startDate");
+            throw new com.example.hms.exception.FieldBusinessException("endDate", "primaryCare.endBeforeStart");
         }
 
         entity.setEndDate(endDate);

@@ -19,6 +19,11 @@ import static org.mockito.Mockito.when;
 @DisplayName("GlobalExceptionHandler")
 class GlobalExceptionHandlerTest {
 
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> fieldErrorsOf(Map<String, Object> body) {
+        return (Map<String, Object>) body.get("fieldErrors");
+    }
+
     private GlobalExceptionHandler handler;
     private WebRequest request;
 
@@ -100,7 +105,7 @@ class GlobalExceptionHandlerTest {
             assertThat(body).containsEntry("status", 400).containsEntry("code", "INVALID_PARAMETER")
                 .containsEntry("field", "status");
             assertThat((String) body.get("message")).contains("statut").doesNotContain("BOGUS");
-            assertThat(((Map<?, ?>) body.get("fieldErrors")).get("status")).isEqualTo(body.get("message"));
+            assertThat(fieldErrorsOf(body)).containsEntry("status", body.get("message"));
         }
 
         @Test
@@ -1057,6 +1062,24 @@ class GlobalExceptionHandlerTest {
 
         public void setAdministrationDate(java.time.LocalDate administrationDate) {
             this.administrationDate = administrationDate;
+        }
+    }
+
+    @Nested
+    @DisplayName("QA D1470: a missing multipart part")
+    class MissingPart {
+
+        @Test
+        @DisplayName("names the part under fieldErrors")
+        void namesThePart() {
+            var ex = new org.springframework.web.multipart.support.MissingServletRequestPartException("file");
+            ResponseEntity<Object> response = handler.handleMissingPart(ex, request);
+
+            assertThat(response.getStatusCode().value()).isEqualTo(400);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> body = (Map<String, Object>) response.getBody();
+            assertThat(body).isNotNull().containsEntry("field", "file");
+            assertThat(fieldErrorsOf(body)).containsKey("file");
         }
     }
 }

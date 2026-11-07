@@ -104,6 +104,8 @@ public class BillingInvoiceMapper {
         // a cancelled invoice is owed by nobody, whatever was billed on it.
         BigDecimal balanceDue = com.example.hms.utility.InvoiceBalance.dueOf(invoice);
         dto.setBalanceDue(balanceDue);
+        // QA D1466: a copay above the visit total leaves money owed back.
+        dto.setRefundDue(com.example.hms.utility.InvoiceBalance.refundDueOf(invoice));
 
         // Calculate patient responsibility
         BigDecimal patientResponsibility = balanceDue.subtract(

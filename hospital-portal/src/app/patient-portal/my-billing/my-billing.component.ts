@@ -61,6 +61,8 @@ export class MyBillingComponent implements OnInit {
   invoices = signal<PortalInvoice[]>([]);
   loading = signal(true);
   totalBalance = signal(0);
+  /** QA D1466: what the hospital owes back on these invoices (a copay above the visit total). */
+  totalRefundDue = signal(0);
 
   /**
    * QA D982: the card opens on the invoice itself: its lines, every payment
@@ -158,6 +160,7 @@ export class MyBillingComponent implements OnInit {
         this.totalBalance.set(
           inv.filter((i) => this.isPayable(i)).reduce((sum, i) => sum + (i.balance ?? 0), 0),
         );
+        this.totalRefundDue.set(inv.reduce((sum, i) => sum + (i.refundDue ?? 0), 0));
         this.loading.set(false);
       },
       error: () => this.loading.set(false),

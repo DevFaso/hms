@@ -99,6 +99,9 @@ public interface PatientHospitalRegistrationRepository extends JpaRepository<Pat
     );
     boolean existsByPatientIdAndHospitalId(UUID patientId, UUID hospitalId);
 
+    /** QA D1476: the patient holds a registration here and the desk deactivated it. */
+    boolean existsByPatientIdAndHospitalIdAndActiveFalse(UUID patientId, UUID hospitalId);
+
     // 🔍 Add Spring Data fallback method
     Optional<PatientHospitalRegistration> findByPatientIdAndHospitalIdAndActiveTrue(UUID patientId, UUID hospitalId);
 

@@ -433,6 +433,12 @@ public class EncounterServiceImpl implements EncounterService {
         }
 
         EncounterResolution ctx = resolveEncounterResolution(request, locale);
+        // QA D1476: a walk-in is not opened on a deactivated registration. Emergency care is
+        // never refused at the desk: the registration is settled after the patient is treated.
+        if (request.getEncounterType() != com.example.hms.enums.EncounterType.EMERGENCY) {
+            com.example.hms.service.support.PatientRegistrationGuard.refuseDeactivatedRegistration(
+                patientHospitalRegistrationRepository, ctx.patient().getId(), ctx.hospital().getId());
+        }
 
         LocalDateTime encounterDate = Optional.ofNullable(request.getEncounterDate()).orElse(LocalDateTime.now());
         // QA D761: a new encounter is asked for as ARRIVED (a walk-in at the
@@ -3065,6 +3071,26 @@ public class EncounterServiceImpl implements EncounterService {
             .orElse(null);
     }
 
+    /**
+     * Review of #971 (D930): the summary belongs to the doctor who closes the visit when that is
+     * not its clinician of record (a nurse may have opened it); otherwise to the clinician of
+     * record, as before.
+     */
+    private void applyDischargingProvider(DischargeSummary summary, Encounter encounter) {
+        Staff closingDoctor = closingDoctorAt(encounter);
+        Staff current = summary.getDischargingProvider() != null ? summary.getDischargingProvider() : encounter.getStaff();
+        if (closingDoctor != null && !isPhysicianAt(current, encounter)) {
+            summary.setDischargingProvider(closingDoctor);
+            // Review of #971: the doctor's own assignment (her staff record's), never a nurse one she also holds.
+            // With none on her staff record, the visit's own (any active one she holds could be a nurse one).
+            summary.setAssignment(closingDoctor.getAssignment() != null ? closingDoctor.getAssignment()
+                : encounter.getAssignment());
+        } else if (summary.getDischargingProvider() == null) {
+            summary.setDischargingProvider(encounter.getStaff());
+            summary.setAssignment(encounter.getAssignment());
+        }
+    }
+
     private void upsertDischargeSummaryForCheckout(
         Encounter encounter,
         com.example.hms.payload.dto.clinical.CheckOutRequestDTO request,
@@ -3081,21 +3107,7 @@ public class EncounterServiceImpl implements EncounterService {
         summary.setEncounter(encounter);
         summary.setPatient(encounter.getPatient());
         summary.setHospital(encounter.getHospital());
-        // Review of #971 (D930): the summary belongs to the doctor who closes
-        // the visit when that is not its clinician of record (a nurse may
-        // have opened it); otherwise to the clinician of record, as before.
-        Staff closingDoctor = closingDoctorAt(encounter);
-        Staff current = summary.getDischargingProvider() != null ? summary.getDischargingProvider() : encounter.getStaff();
-        if (closingDoctor != null && !isPhysicianAt(current, encounter)) {
-            summary.setDischargingProvider(closingDoctor);
-            // Review of #971: the doctor's own assignment (her staff record's), never a nurse one she also holds.
-            // With none on her staff record, the visit's own (any active one she holds could be a nurse one).
-            summary.setAssignment(closingDoctor.getAssignment() != null ? closingDoctor.getAssignment()
-                : encounter.getAssignment());
-        } else if (summary.getDischargingProvider() == null) {
-            summary.setDischargingProvider(encounter.getStaff());
-            summary.setAssignment(encounter.getAssignment());
-        }
+        applyDischargingProvider(summary, encounter);
         summary.setDischargeDate(checkoutTime.toLocalDate());
         summary.setDischargeTime(checkoutTime);
         summary.setDisposition(DischargeDisposition.HOME);

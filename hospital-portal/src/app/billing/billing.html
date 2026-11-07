@@ -217,7 +217,15 @@
               </td>
               <td class="amount">{{ formatCurrency(inv.totalAmount) }}</td>
               <td class="amount paid-amount">{{ formatCurrency(inv.amountPaid) }}</td>
-              <td class="amount balance-amount">{{ formatCurrency(inv.balanceDue) }}</td>
+              <td class="amount balance-amount">
+                {{ formatCurrency(inv.balanceDue) }}
+                @if (inv.refundDue) {
+                  <!-- QA D1466: a copay above the visit total, owed back to the patient. -->
+                  <span class="field-hint" data-testid="refund-due-row">{{
+                    'BILLING.REFUND_DUE' | translate: { amount: formatCurrency(inv.refundDue) }
+                  }}</span>
+                }
+              </td>
               <td>
                 <span class="status-badge" [class]="getStatusClass(inv.status)">{{
                   (inv.status | enumLabel: 'invoiceStatus') || '—'
@@ -407,6 +415,12 @@
               ><span class="field-value amount-lg balance-amount">{{
                 formatCurrency(inv.balanceDue)
               }}</span>
+              @if (inv.refundDue) {
+                {{ ' '
+                }}<span class="field-hint" data-testid="refund-due-detail">{{
+                  'BILLING.REFUND_DUE' | translate: { amount: formatCurrency(inv.refundDue) }
+                }}</span>
+              }
             </div>
           </div>
           @if (inv.notes) {
@@ -622,6 +636,7 @@
                   <input
                     required
                     id="line-price"
+                    data-server-field="unitPrice"
                     type="number"
                     min="0"
                     step="1"

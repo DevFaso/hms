@@ -134,7 +134,7 @@ public class DigitalSignatureServiceImpl implements DigitalSignatureService {
             .ipAddress(request.getIpAddress())
             .deviceInfo(request.getDeviceInfo())
             .signatureNotes(request.getSignatureNotes())
-            .expiresAt(request.getExpiresAt())
+            .expiresAt(com.example.hms.utility.ExpiryRules.requireFuture("expiresAt", request.getExpiresAt(), "consent.expiryInPast"))
             .metadata(request.getMetadata())
             .verificationCount(0)
             .build();

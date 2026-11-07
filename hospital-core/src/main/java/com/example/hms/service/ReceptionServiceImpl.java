@@ -788,6 +788,9 @@ public class ReceptionServiceImpl implements ReceptionService {
         if (!registrationRepo.existsByPatientIdAndHospitalId(req.getPatientId(), hospitalId)) {
             throw new ResourceNotFoundException("patient.notfound", req.getPatientId());
         }
+        // QA D1476: nor is a deactivated registration put on the waitlist.
+        com.example.hms.service.support.PatientRegistrationGuard.refuseDeactivatedRegistration(
+                registrationRepo, req.getPatientId(), hospitalId);
         requireOfferableRange(req.getRequestedDateFrom(), req.getRequestedDateTo(), hospital);
         Staff provider = (req.getPreferredProviderId() != null)
                 ? staffRepo.findById(req.getPreferredProviderId()).orElse(null)
