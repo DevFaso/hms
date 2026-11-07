@@ -63,7 +63,7 @@ export class OrderReviewPanelComponent implements OnInit {
   private readonly roles = inject(RoleContextService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
-  readonly patientId = input.required<string>();
+  readonly patientId = input('');
 
   rows = signal<OrderReviewRow[]>([]);
   target = signal<OrderReviewRow | null>(null);
@@ -80,6 +80,7 @@ export class OrderReviewPanelComponent implements OnInit {
   }
 
   load(): void {
+    if (!this.patientId()) return;
     this.reviews.forPatient(this.patientId()).subscribe({
       next: (rows) => this.rows.set(rows),
       // A role that may not read the list sees no list; the server still refuses every held use.
@@ -110,9 +111,7 @@ export class OrderReviewPanelComponent implements OnInit {
 
   /** What the submit guard refuses: a reason always, the new order for a replacement. */
   incomplete(): boolean {
-    return (
-      !this.reason.trim() || (this.action() === 'replace' && !this.replacementOrderId)
-    );
+    return !this.reason.trim() || (this.action() === 'replace' && !this.replacementOrderId);
   }
 
   guardedFields(): string[] {

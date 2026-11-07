@@ -22,9 +22,11 @@
                 </div>
               </td>
               <td>
-                <span class="order-review-state" [class.standing]="row.status === 'HELD' || row.status === 'ASSESSMENT_DUE'">{{
-                  'ORDER_REVIEW.STATUS_' + row.status | translate
-                }}</span>
+                <span
+                  class="order-review-state"
+                  [class.standing]="row.status === 'HELD' || row.status === 'ASSESSMENT_DUE'"
+                  >{{ 'ORDER_REVIEW.STATUS_' + row.status | translate }}</span
+                >
               </td>
               <td>
                 @if (row.decidedAt) {
@@ -37,18 +39,34 @@
               <td>
                 <div class="action-group">
                   @if (canDecide(row)) {
-                    <button class="btn-secondary btn-sm" data-testid="order-review-continue" (click)="open(row, 'continue')">
+                    <button
+                      class="btn-secondary btn-sm"
+                      data-testid="order-review-continue"
+                      (click)="open(row, 'continue')"
+                    >
                       {{ 'ORDER_REVIEW.ACTION_CONTINUE' | translate }}
                     </button>
-                    <button class="btn-secondary btn-sm" data-testid="order-review-replace" (click)="open(row, 'replace')">
+                    <button
+                      class="btn-secondary btn-sm"
+                      data-testid="order-review-replace"
+                      (click)="open(row, 'replace')"
+                    >
                       {{ 'ORDER_REVIEW.ACTION_REPLACE' | translate }}
                     </button>
-                    <button class="btn-secondary btn-sm" data-testid="order-review-stop" (click)="open(row, 'stop')">
+                    <button
+                      class="btn-secondary btn-sm"
+                      data-testid="order-review-stop"
+                      (click)="open(row, 'stop')"
+                    >
                       {{ 'ORDER_REVIEW.ACTION_STOP' | translate }}
                     </button>
                   }
                   @if (canAssess(row)) {
-                    <button class="btn-secondary btn-sm" data-testid="order-review-assess" (click)="open(row, 'assessment')">
+                    <button
+                      class="btn-secondary btn-sm"
+                      data-testid="order-review-assess"
+                      (click)="open(row, 'assessment')"
+                    >
                       {{ 'ORDER_REVIEW.ACTION_ASSESSMENT' | translate }}
                     </button>
                   }
@@ -78,7 +96,9 @@
         <button class="modal-close" (click)="close()">&times;</button>
       </div>
       <div class="modal-body">
-        <p class="modal-hint warn">{{ 'ORDER_REVIEW.HINT_' + action().toUpperCase() | translate }}</p>
+        <p class="modal-hint warn">
+          {{ 'ORDER_REVIEW.HINT_' + action().toUpperCase() | translate }}
+        </p>
         <p>
           <strong>{{ row.orderLabel }}</strong>
         </p>
@@ -101,7 +121,12 @@
           <p class="modal-hint">{{ 'ORDER_REVIEW.STEP_UP_HINT' | translate }}</p>
           <div class="field">
             <label for="ore-password">{{ 'ORDER_REVIEW.PASSWORD' | translate }}</label>
-            <input id="ore-password" type="password" autocomplete="current-password" [(ngModel)]="password" />
+            <input
+              id="ore-password"
+              type="password"
+              autocomplete="current-password"
+              [(ngModel)]="password"
+            />
           </div>
           <div class="field">
             <label for="ore-mfa">{{ 'ORDER_REVIEW.MFA' | translate }}</label>

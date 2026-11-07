@@ -160,6 +160,7 @@
     "src/app/patients/micro/micro-tab.component.html::culture.specimenSource",
     "src/app/patients/micro/micro-tab.component.html::culture.status",
     "src/app/patients/micro/micro-tab.component.html::susc.method",
+    "src/app/patients/order-review-panel/order-review-panel.component.html::row.reason",
     "src/app/patients/patient-chart/patient-chart.component.html::<option>t",
     "src/app/patients/patient-chart/patient-chart.component.html::a.category",
     "src/app/patients/patient-chart/patient-chart.component.html::a.deactivationReason",
@@ -244,6 +245,7 @@
     "src/app/appointments/appointment-detail.html::appt.overbookReason": "False positive (round 34, D1429): the reason a person typed when booking outside the published slots; free text.",
     "src/app/registrations/registrations.html::r.deactivationReason": "False positive (round 34, D1430): the reason a person typed when deactivating the registration; free text.",
     "src/app/mortality/mortality.html::e.enteredInErrorReason": "free text the administrator typed (QA D1488), not a wire token",
-    "src/app/mortality/mortality.html::x.reason": "free text the doctor typed when disputing a death, not a wire token"
+    "src/app/mortality/mortality.html::x.reason": "free text the doctor typed when disputing a death, not a wire token",
+    "src/app/patients/order-review-panel/order-review-panel.component.html::row.reason": "free text the prescriber typed on a held order, not a wire token"
   }
 }

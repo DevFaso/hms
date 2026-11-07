@@ -622,7 +622,8 @@
                     }}</span>
                   }
                   @if (rx.alertOverridden) {
-                    <span class="cell-sub" [attr.data-testid]="'rx-alert-overridden-' + rx.id">{{
+                    {{ ' '
+                    }}<span class="cell-sub" [attr.data-testid]="'rx-alert-overridden-' + rx.id">{{
                       'PHARMACY.ALERT_OVERRIDDEN' | translate
                     }}</span>
                   }

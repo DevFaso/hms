@@ -49,7 +49,10 @@ describe('OrderReviewPanelComponent', () => {
       providers: [
         { provide: OrderReviewService, useValue: spy },
         { provide: ConfirmService, useValue: confirm },
-        { provide: ToastService, useValue: jasmine.createSpyObj('ToastService', ['success', 'error']) },
+        {
+          provide: ToastService,
+          useValue: jasmine.createSpyObj('ToastService', ['success', 'error']),
+        },
         { provide: RoleContextService, useValue: { hasAnyActiveRole: () => prescriber } },
       ],
     }).compileComponents();
@@ -98,10 +101,14 @@ describe('OrderReviewPanelComponent', () => {
     c.reason = ' Still indicated ';
     await c.submit();
     expect(confirm.ask).toHaveBeenCalled();
-    expect(spy.decide).toHaveBeenCalledWith('h1', 'continue', jasmine.objectContaining({
-      reason: 'Still indicated',
-      orderVersion: 4,
-    }));
+    expect(spy.decide).toHaveBeenCalledWith(
+      'h1',
+      'continue',
+      jasmine.objectContaining({
+        reason: 'Still indicated',
+        orderVersion: 4,
+      }),
+    );
   });
 
   it('replacing needs the new order', async () => {
@@ -113,7 +120,11 @@ describe('OrderReviewPanelComponent', () => {
 
     c.replacementOrderId = 'n1';
     await c.submit();
-    expect(spy.decide).toHaveBeenCalledWith('h1', 'replace', jasmine.objectContaining({ replacementOrderId: 'n1' }));
+    expect(spy.decide).toHaveBeenCalledWith(
+      'h1',
+      'replace',
+      jasmine.objectContaining({ replacementOrderId: 'n1' }),
+    );
   });
 
   it('asks a controlled drug for the step-up', () => {
@@ -124,7 +135,9 @@ describe('OrderReviewPanelComponent', () => {
 
   it('marks what the server refuses, and reads the order again', async () => {
     spy.decide.and.returnValue(
-      throwError(() => ({ error: { message: 'Changed', fieldErrors: { reason: 'Reason refused' } } })),
+      throwError(() => ({
+        error: { message: 'Changed', fieldErrors: { reason: 'Reason refused' } },
+      })),
     );
     const c = fixture.componentInstance;
     c.open(row(), 'continue');
