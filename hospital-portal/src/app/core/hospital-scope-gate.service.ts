@@ -54,7 +54,7 @@ export class HospitalScopeGateService {
     () =>
       this._required() &&
       !this.roleContext.hasHospitalScope() &&
-      !(this._allowsGlobal() && this.roleContext.isSuperAdmin()),
+      !(this._allowsGlobal() && this.roleContext.isSuperAdmin() && this.roleContext.globalView()),
   );
 
   /** The chip belongs above a gated page only for the one account that can switch: a super-admin. */

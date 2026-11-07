@@ -83,6 +83,15 @@ describe('HospitalScopeGateService', () => {
     expect(gate.blocked()).toBeTrue();
   });
 
+  it('waits for explicit global mode when a super-admin has no resolved hospital', async () => {
+    roleContext.setRoles(['ROLE_SUPER_ADMIN']);
+    await router.navigateByUrl('/network');
+    expect(roleContext.globalView()).toBeFalse();
+    expect(gate.blocked()).toBeTrue();
+    roleContext.markSuperAdminGlobalDefaults();
+    expect(gate.blocked()).toBeFalse();
+  });
+
   it('does not grant an unassigned non-super-admin the global capability', async () => {
     roleContext.setRoles(['ROLE_NURSE']);
     await router.navigateByUrl('/network');
