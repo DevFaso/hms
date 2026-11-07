@@ -11,7 +11,6 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
@@ -41,12 +40,6 @@ class AlertNeverRecordsTreatmentGuardTest {
 
     /** A flag set from anything but a submitted value: a computed indicator is the same defect as a constant. */
     private static final Pattern SET_FROM = Pattern.compile("\\.set[A-Z]" + TREATMENT_NAME + "\\s*\\(([^;\\n]*)\\)");
-
-    /** Removed by CR-06 itself on fix/cr-newborn: delete these entries when that branch is merged. */
-    private static final Set<String> FILED = Set.of(
-        ".setThermoregulationSupportInitiated(true)",
-        ".setRespiratorySupportInitiated(true)",
-        ".setGlucoseProtocolInitiated(true)");
 
     private static final List<String> CLINICAL_CODE =
         List.of("service", "cdshooks", "hl7", "fhir", "mapper", "model", "controller");
@@ -105,9 +98,7 @@ class AlertNeverRecordsTreatmentGuardTest {
                     String source = Files.readString(file);
                     Matcher forced = FORCED_TRUE.matcher(source);
                     while (forced.find()) {
-                        if (!FILED.contains(forced.group())) {
-                            offenders.add(MAIN.relativize(file) + ": " + forced.group());
-                        }
+                        offenders.add(MAIN.relativize(file) + ": " + forced.group());
                     }
                     Matcher set = SET_FROM.matcher(source);
                     while (set.find()) {
