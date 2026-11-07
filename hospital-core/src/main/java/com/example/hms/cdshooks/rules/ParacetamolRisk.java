@@ -50,14 +50,21 @@ public enum ParacetamolRisk {
         Set<ParacetamolRisk> risks = EnumSet.noneOf(ParacetamolRisk.class);
         for (PatientProblem problem : activeProblems) {
             if (!isIcd11(problem.getIcdVersion())) {
-                addFor(normalized(problem.getProblemCode()), problem.getSeverity(), risks);
-                otherCodesOf(problem).forEach(code -> addFor(code, null, risks));
+                String code = normalized(problem.getProblemCode());
+                addFor(code, problem.getSeverity(), risks);
+                otherCodesOf(problem)
+                    .filter(other -> !(isHepatic(code) && isHepatic(other)))
+                    .forEach(other -> addFor(other, null, risks));
             }
         }
         return risks;
     }
 
-    /** A row's severity is its own problem's: a secondary code's degree is not recorded. */
+    private static boolean isHepatic(String code) {
+        return HEPATIC.stream().anyMatch(code::startsWith);
+    }
+
+    /** A row's severity is its own problem's: a secondary code's degree is not recorded, unless the problem is hepatic too. */
     private static Stream<String> otherCodesOf(PatientProblem problem) {
         List<String> others = problem.getDiagnosisCodes() == null ? List.of() : problem.getDiagnosisCodes();
         return others.stream().map(ParacetamolRisk::normalized);
@@ -80,7 +87,7 @@ public enum ParacetamolRisk {
         } else if (code.startsWith(ALCOHOL_DEPENDENCE)) {
             risks.add(TWO_GRAM_GROUP);
             risks.add(CHRONIC_ALCOHOLISM);
-        } else if (HEPATIC.stream().anyMatch(code::startsWith)) {
+        } else if (isHepatic(code)) {
             addHepatic(severity, risks);
         }
     }

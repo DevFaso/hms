@@ -97,6 +97,7 @@ class PrescriptionEditAndWithdrawalIT extends BaseIT {
     @Autowired private PrescriptionRepository prescriptionRepository;
     @Autowired private AuditEventLogRepository auditEventLogRepository;
     @Autowired private com.example.hms.repository.PatientProblemRepository patientProblemRepository;
+    @Autowired private com.example.hms.repository.PatientAllergyRepository patientAllergyRepository;
     private List<String> lastSummaries = List.of();
     @Autowired private com.example.hms.cdshooks.service.MedicationPrescribeRulesCdsService medicationPrescribeRules;
 
@@ -547,6 +548,63 @@ class PrescriptionEditAndWithdrawalIT extends BaseIT {
             patientProblemRepository.deleteById(severe.getId());
             auditEventLogRepository.deleteAllInBatch(auditEventLogRepository.findAll().stream()
                 .filter(row -> draft.getId().toString().equals(row.getResourceId())).toList());
+            prescriptionRepository.deleteById(draft.getId());
+        }
+    }
+
+    /** A reason already on the order, from another card or before the condition, does not pass the contraindication. */
+    @Test
+    void aReasonOnRecordDoesNotPassTheContraindicationAtSignature() throws Exception {
+        Prescription draft = prescriptionRepository.save(Prescription.builder()
+            .patient(patient).staff(authorStaff).encounter(encounter).hospital(hospital)
+            .assignment(authorStaff.getAssignment())
+            .medicationName("Paracétamol").medicationDisplayName("Paracétamol")
+            .dosage("500 mg").frequency("3 fois par jour").quantity(BigDecimal.TEN).quantityUnit("cp")
+            .overrideReason("Interaction acceptée").status(PrescriptionStatus.DRAFT).build());
+        PatientProblem severe = patientProblemRepository.save(PatientProblem.builder()
+            .patient(patient).hospital(hospital).recordedBy(authorStaff)
+            .problemCode("K72.9").problemDisplay("Hepatic failure")
+            .severity(com.example.hms.enums.ProblemSeverity.SEVERE).build());
+        try {
+            mockMvc.perform(post(API_CONTEXT + "/prescriptions/{id}/sign", draft.getId()).contextPath(API_CONTEXT).with(as(authorUser)))
+                .andExpect(status().isBadRequest());
+            mockMvc.perform(post(API_CONTEXT + "/prescriptions/{id}/sign", draft.getId()).contextPath(API_CONTEXT).with(as(authorUser))
+                    .contentType(MediaType.APPLICATION_JSON).content("{\"allergyOverrideReason\":\"Décision du spécialiste\"}"))
+                .andExpect(status().is2xxSuccessful());
+            assertThat(prescriptionRepository.findById(draft.getId()).orElseThrow().getOverrideReason())
+                .isEqualTo("Interaction acceptée | Décision du spécialiste");
+        } finally {
+            patientProblemRepository.deleteById(severe.getId());
+            auditEventLogRepository.deleteAllInBatch(auditEventLogRepository.findAll().stream()
+                .filter(row -> draft.getId().toString().equals(row.getResourceId())).toList());
+            prescriptionRepository.deleteById(draft.getId());
+        }
+    }
+
+    /** One reason cannot pass an allergy stop nobody saw: both cards come back on the refusal. */
+    @Test
+    void anAllergyStopIsShownBesideTheContraindicationAtSignature() throws Exception {
+        Prescription draft = prescriptionRepository.save(Prescription.builder()
+            .patient(patient).staff(authorStaff).encounter(encounter).hospital(hospital)
+            .assignment(authorStaff.getAssignment())
+            .medicationName("Paracétamol").medicationDisplayName("Paracétamol")
+            .dosage("500 mg").frequency("3 fois par jour").quantity(BigDecimal.TEN).quantityUnit("cp")
+            .status(PrescriptionStatus.DRAFT).build());
+        PatientProblem severe = patientProblemRepository.save(PatientProblem.builder()
+            .patient(patient).hospital(hospital).recordedBy(authorStaff)
+            .problemCode("K72.9").problemDisplay("Hepatic failure")
+            .severity(com.example.hms.enums.ProblemSeverity.SEVERE).build());
+        com.example.hms.model.PatientAllergy allergy = patientAllergyRepository.save(com.example.hms.model.PatientAllergy.builder()
+            .patient(patient).hospital(hospital).allergenDisplay("Paracétamol").active(true).build());
+        try {
+            String answer = mockMvc.perform(post(API_CONTEXT + "/prescriptions/{id}/sign", draft.getId()).contextPath(API_CONTEXT).with(as(authorUser)))
+                .andExpect(status().isBadRequest())
+                .andReturn().getResponse().getContentAsString();
+            List<String> cards = com.jayway.jsonpath.JsonPath.read(answer, "$.cdsAdvisories[*].indicator");
+            assertThat(cards).hasSize(2);
+        } finally {
+            patientAllergyRepository.deleteById(allergy.getId());
+            patientProblemRepository.deleteById(severe.getId());
             prescriptionRepository.deleteById(draft.getId());
         }
     }

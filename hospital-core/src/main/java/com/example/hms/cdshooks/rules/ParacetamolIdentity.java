@@ -6,6 +6,7 @@ import com.example.hms.service.pharmacy.DispenseVerificationService;
 import com.example.hms.service.pharmacy.OrderedDrugIdentity;
 
 import java.util.Set;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
@@ -26,19 +27,26 @@ final class ParacetamolIdentity {
     private static final String ATC_PARACETAMOL = "N02BE01";
     private static final Set<String> SPELLINGS = Set.of(
         OrderedDrugIdentity.spellingForm("paracetamol"), OrderedDrugIdentity.spellingForm("acetaminophen"));
-    private static final Pattern WORD_ENDS = Pattern.compile("[\\s,()/+-]++");
-    /**
-     * Another ingredient: a plus, "500/30", a word linking two, a slash before anything but a
-     * unit ("500 mg/5 ml", "mg/ml", "1 g/sachet" are one ingredient), or an ingredient paracetamol
-     * is sold with, named with nothing between them ("Paracétamol codéine", "Efferalgan-codéine").
-     */
+    /** Between words, and between a word and its number ("Paracétamol500mg"). */
+    private static final Pattern WORD_ENDS = Pattern.compile("[\\s,()/+-]++|(?<=\\p{L})(?=\\d)");
+    /** Paracetamol named as what is being treated, not as what is ordered: "Acétylcystéine (intoxication au paracétamol)". */
+    private static final Pattern NOT_THE_ORDERED_DRUG = Pattern.compile(
+        "intoxication|intoxicacion|surdosage|sobredosis|overdose|poisoning|antidote|acetylcystein|acetilcistein");
+    /** Positively another ingredient anywhere: a plus, "500/30", or one paracetamol is sold with. */
     private static final Pattern ANOTHER_INGREDIENT = Pattern.compile(
         "\\+|\\d\\s*+/\\s*+\\d"
-            + "|/\\s*+(?!(?:ml|cp|comprimes?+|comprimidos?+|sachets?+|sobres?+|gelules?+|capsules?+|capsulas?+"
-            + "|tablets?+|doses?+|dosis|suppositoires?+|supositorios?+|ampoules?+|ampollas?+|flacons?+|unites?+)\\b)\\p{L}"
-            + "|\\b(?:et|and|y|con|avec|with)\\b"
             + "|codein|codeina|tramadol|cafein|caffein|ibuprof|dextropropox|opium|pseudoephed|phenylephr"
             + "|chlorphenam|aspirin|acetylsalicyl|diclofenac|oxycod|hydrocod");
+    /**
+     * A second name joined to the first, read only before the first number: after a dose, "et sirop",
+     * "avec eau" and "/kg" describe it. A slash before a form, route or unit joins nothing.
+     */
+    private static final Pattern JOINED_NAME = Pattern.compile(
+        "\\b(?:et|and|y|con|avec|with)\\b"
+            + "|/\\s*+(?!(?:ml|kg|j|jour|dia|day|iv|im|po|sc|cp|comprimes?+|comprimidos?+|tabletas?+|pastillas?+|sachets?+|sobres?+"
+            + "|gelules?+|capsules?+|capsulas?+|tablets?+|doses?+|dosis|suppositoires?+|supositorios?+|ampoules?+|ampollas?+"
+            + "|flacons?+|unites?+)\\b)\\p{L}");
+    private static final Pattern FIRST_NUMBER = Pattern.compile("\\d");
 
     private ParacetamolIdentity() {
     }
@@ -104,7 +112,7 @@ final class ParacetamolIdentity {
 
     private static boolean namesTheDrug(String name) {
         String text = DrugClassAllergy.normalize(name);
-        if (text.isEmpty()) {
+        if (text.isEmpty() || NOT_THE_ORDERED_DRUG.matcher(text).find()) {
             return false;
         }
         for (String word : WORD_ENDS.split(text)) {
@@ -116,6 +124,12 @@ final class ParacetamolIdentity {
     }
 
     private static boolean namesAnotherIngredient(String typedName) {
-        return ANOTHER_INGREDIENT.matcher(DrugClassAllergy.normalize(typedName)).find();
+        String text = DrugClassAllergy.normalize(typedName);
+        if (ANOTHER_INGREDIENT.matcher(text).find()) {
+            return true;
+        }
+        Matcher number = FIRST_NUMBER.matcher(text);
+        String beforeTheDose = number.find() ? text.substring(0, number.start()) : text;
+        return JOINED_NAME.matcher(beforeTheDose).find();
     }
 }

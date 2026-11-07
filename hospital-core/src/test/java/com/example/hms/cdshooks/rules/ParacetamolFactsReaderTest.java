@@ -233,12 +233,29 @@ class ParacetamolFactsReaderTest {
             ParacetamolRisk.TWO_GRAM_GROUP, ParacetamolRisk.HEPATIC_DEGREE_UNRECORDED);
     }
 
+    @Test
+    void anOrderNamedPastItsDoseIsStillRead() {
+        order("Paracétamol500mg", PrescriptionStatus.SIGNED);
+        assertThat(read().otherOrders()).hasSize(1);
+    }
+
+    /** A secondary code does not erase the degree a hepatic problem records. */
+    @ParameterizedTest(name = "{0}")
+    @CsvSource({"MILD, TWO_GRAM_GROUP", "SEVERE, SEVERE_HEPATIC"})
+    void aRepeatedHepaticCodeKeepsTheProblemsDegree(ProblemSeverity severity, ParacetamolRisk expected) {
+        PatientProblem row = problem("K72.9", ProblemStatus.ACTIVE, false);
+        row.setSeverity(severity);
+        row.setDiagnosisCodes(new ArrayList<>(List.of("K72.9", "K70.4")));
+        assertThat(read().risks()).containsExactly(expected);
+    }
+
     /** L5. */
     @Test
     void withheldRowsAndNoHospitalAreCounted() {
         problem("F10.2", ProblemStatus.ACTIVE, false)
             .setSensitivityCategory(com.example.hms.enums.SensitivityCategory.SUBSTANCE_USE);
-        assertThat(read().withheldProblems()).isEqualTo(1);
+        assertThat(read().noActingHospital()).isTrue();
+        assertThat(read().risks()).isEmpty();
         assertThat(reader.read(adult, null, "Paracétamol", null, null).noHospital()).isTrue();
         assertThat(read().noHospital()).isFalse();
     }
@@ -341,7 +358,8 @@ class ParacetamolFactsReaderTest {
             .containsExactly("Doliprane 1000 mg", "Acétaminophène", "Efferalgan", "Dafalgan");
         assertThat(read().otherOrders().get(0).item()).isSameAs(doliprane);
         assertThat(read().otherOrders().get(1).item()).isNull();
-        assertThat(read().otherOrders().get(2).item()).isSameAs(doliprane);
+        // Its name contradicts the item: it still counts, never with the item's strength (QA D1223).
+        assertThat(read().otherOrders().get(2).item()).isNull();
     }
 
     @Test
@@ -442,6 +460,16 @@ class ParacetamolFactsReaderTest {
         "Paracétamol 500 mg/cp | true",
         "Paracétamol 1 g/sachet | true",
         "Paracétamol-Sandoz | true",
+        "Paracétamol 500 mg/tableta | true",
+        "Paracétamol 500 mg/pastilla | true",
+        "Paracétamol 15 mg/kg | true",
+        "Paracétamol 1 g/j | true",
+        "Paracétamol IV/PO | true",
+        "Paracétamol 1 g comprimé et sirop | true",
+        "Paracétamol 1 g avec eau | true",
+        "Paracétamol500mg | true",
+        "Paracétamol/xyz | false",
+        "Acétylcystéine (intoxication au paracétamol) | false",
         "Doliprane (paracétamol) 1 g | true",
         "Comprimé de paracétamol 500 mg | true",
         "Perfalgan paracétamol 1 g | true",

@@ -7472,6 +7472,10 @@
       "ALLERGY_REASON": "Allergy override reason",
       "CDS_REASON": "Reason for overriding the critical alert"
     },
+    "SIGN_CRITICAL": {
+      "TITLE": "Critical alert: sign anyway?",
+      "REASON": "Reason for signing despite the alert"
+    },
     "SIGN_ALLERGY": {
       "TITLE": "Allergy warning: sign anyway?",
       "REASON": "Reason for signing despite the allergy warning"

@@ -19,20 +19,20 @@ import java.util.Set;
  * @param combinations  names of active orders that are combination products: not counted, their
  *                      paracetamol content cannot be read
  * @param proposedCombination the proposed order itself is a combination: its dose is not counted
- * @param withheldProblems active problem rows no card may use, as no hospital is acting
+ * @param noActingHospital no hospital is acting (global view): rows tagged sensitive are not read
  * @param noHospital    no hospital is known: no order or problem could be read at all
  */
 public record ParacetamolFacts(boolean applies, List<OtherOrder> otherOrders, Set<ParacetamolRisk> risks,
                                List<String> mayStillBeInUse, List<String> combinations,
-                               boolean proposedCombination, int withheldProblems, boolean noHospital) {
+                               boolean proposedCombination, boolean noActingHospital, boolean noHospital) {
 
-    /** The rule does not apply: another drug or a child. */
+    /** The rule does not apply: another drug. */
     public static final ParacetamolFacts NONE = new ParacetamolFacts(false, List.of(), Set.of());
 
     /** Facts of a proposed order that is paracetamol alone, read at a hospital. */
     public ParacetamolFacts(boolean applies, List<OtherOrder> otherOrders, Set<ParacetamolRisk> risks,
                             List<String> mayStillBeInUse, List<String> combinations) {
-        this(applies, otherOrders, risks, mayStillBeInUse, combinations, false, 0, false);
+        this(applies, otherOrders, risks, mayStillBeInUse, combinations, false, false, false);
     }
 
     /** Facts with nothing left out of the total. */

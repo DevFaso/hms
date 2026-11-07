@@ -25,4 +25,6 @@ export interface CdsCard {
    * absolute daily maximum); absent on every other card.
    */
   hardStop?: boolean | null;
+  /** True on a critical card that the signature also asks a reason for; absent on every other card. */
+  reasonAtSignature?: boolean | null;
 }

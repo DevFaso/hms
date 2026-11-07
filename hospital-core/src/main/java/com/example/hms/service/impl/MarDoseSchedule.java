@@ -418,24 +418,36 @@ public final class MarDoseSchedule {
             || PER_DAY_WORDS.matcher(f).region(from, f.length()).lookingAt();
     }
 
-    /** The count of a "3 fois par jour" (or "1-0-1") frequency, or {@code null}. */
-    /** {@link #timesPerDay}, reading every count of a sentence, not its first. */
+    /** {@link #timesPerDay}, reading every count and every "every n hours" of a sentence, not its first. */
     private static Integer highestTimesPerDay(String f) {
         Integer first = timesPerDay(f);
         if (first == null) {
             return null;
         }
         int highest = first;
-        Matcher m = TIMES.matcher(f);
-        while (m.find()) {
-            int count = Integer.parseInt(m.group(1));
-            if (perDayAt(f, m.end()) && count <= MAX_DOSES_PER_DAY) {
-                highest = Math.max(highest, count);
+        Matcher times = TIMES.matcher(f);
+        while (times.find()) {
+            if (perDayAt(f, times.end())) {
+                highest = higherCount(highest, times.group(1));
             }
+        }
+        Matcher bare = BARE_PER_DAY.matcher(f);
+        while (bare.find()) {
+            highest = higherCount(highest, bare.group(1));
+        }
+        Integer hours = hoursOf(f);
+        if (hours != null && hours <= HOURS_PER_DAY) {
+            highest = Math.max(highest, HOURS_PER_DAY / hours);
         }
         return highest;
     }
 
+    private static int higherCount(int highest, String written) {
+        int count = Integer.parseInt(written);
+        return count <= MAX_DOSES_PER_DAY ? Math.max(highest, count) : highest;
+    }
+
+    /** The count of a "3 fois par jour" (or "1-0-1") frequency, or {@code null}. */
     private static Integer timesPerDay(String f) {
         String compact = f.replace(" ", "");
         if (POSOLOGY.matcher(compact).matches()) {

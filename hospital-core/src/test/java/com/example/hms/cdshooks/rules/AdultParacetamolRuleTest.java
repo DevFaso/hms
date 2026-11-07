@@ -516,16 +516,16 @@ class AdultParacetamolRuleTest {
     @Test
     void aProposedCombinationIsJudgedWithItsDoseUnknown() {
         ParacetamolFacts severe = new ParacetamolFacts(true, List.of(), Set.of(ParacetamolRisk.SEVERE_HEPATIC),
-            List.of(), List.of(), true, 0, false);
+            List.of(), List.of(), true, false, false);
         assertThat(letters(evaluateWith(new Order("2 000 mg", "3 fois par jour"), severe))).isEqualTo("C");
 
         ParacetamolFacts withOthers = new ParacetamolFacts(true, List.of(other("1 g", "4 fois par jour"), other("1 g", "1 fois par jour")), Set.of(),
-            List.of(), List.of(), true, 0, false);
+            List.of(), List.of(), true, false, false);
         List<CdsCard> cards = evaluateWith(new Order("2 000 mg", "3 fois par jour"), withOthers);
         assertThat(letters(cards)).isEqualTo("O");
         assertThat(cards.get(0).summary()).contains("at least 5000 mg");
 
-        ParacetamolFacts alone = new ParacetamolFacts(true, List.of(), Set.of(), List.of(), List.of(), true, 0, false);
+        ParacetamolFacts alone = new ParacetamolFacts(true, List.of(), Set.of(), List.of(), List.of(), true, false, false);
         assertThat(letters(evaluateWith(new Order("1 cp", "3 fois par jour"), alone))).isEqualTo("P");
     }
 
@@ -533,6 +533,9 @@ class AdultParacetamolRuleTest {
     @Test
     void aSentenceWithSeveralCountsIsReadAtItsHighest() {
         assertThat(evaluate(new Order("1 g", "2 fois par jour puis 4 fois par jour")).get(0).summary()).contains("4000 mg per day");
+        assertThat(evaluate(new Order("1 g", "2/j puis 5/j")).get(0).summary()).contains("5000 mg per day");
+        assertThat(evaluate(new Order("1 g", "2 fois par jour puis 4/j")).get(0).summary()).contains("4000 mg per day");
+        assertThat(evaluate(new Order("1 g", "2 fois par jour puis toutes les 4 h")).get(0).summary()).contains("6000 mg per day");
         assertThat(evaluate(new Order("500 mg", "2 fois par jour puis 4 fois par jour"))).isEmpty();
     }
 
@@ -553,9 +556,11 @@ class AdultParacetamolRuleTest {
     /** L5. */
     @Test
     void whatCouldNotBeReadWithNoHospitalIsToldOnTheCard() {
-        ParacetamolFacts withheld = new ParacetamolFacts(true, List.of(), Set.of(), List.of(), List.of(), false, 2, false);
-        assertThat(evaluateWith(new Order("2 g", null), withheld).get(0).detail()).contains("2 sensitive problem row(s)");
-        ParacetamolFacts none = new ParacetamolFacts(true, List.of(), Set.of(), List.of(), List.of(), false, 0, true);
+        ParacetamolFacts withheld = new ParacetamolFacts(true, List.of(), Set.of(), List.of(), List.of(), false, true, false);
+        // Whatever the rows: no count, so the card discloses nothing about them.
+        assertThat(evaluateWith(new Order("2 g", null), withheld).get(0).detail())
+            .contains("problems tagged sensitive are not read").doesNotContainPattern("\\d+ sensitive");
+        ParacetamolFacts none = new ParacetamolFacts(true, List.of(), Set.of(), List.of(), List.of(), true, true, true);
         assertThat(evaluateWith(new Order("2 g", null), none).get(0).detail()).contains("No hospital is active");
     }
 

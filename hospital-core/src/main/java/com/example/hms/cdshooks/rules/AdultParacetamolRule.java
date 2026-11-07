@@ -424,10 +424,9 @@ public class AdultParacetamolRule implements CdsRule {
                 parts.add(text.get("cds.adultParacetamol.detail.noHospital",
                     "No hospital is active: no other order and no problem could be read, so a lower limit may apply."));
             }
-            if (facts.withheldProblems() > 0) {
+            if (facts.noActingHospital() && !facts.noHospital()) {
                 parts.add(text.get("cds.adultParacetamol.detail.withheld",
-                    "{0} sensitive problem row(s) are not read without an active hospital, so a lower limit may apply.",
-                    String.valueOf(facts.withheldProblems())));
+                    "No hospital is acting: problems tagged sensitive are not read, so a lower limit may apply."));
             }
             if (others.counted > 0) {
                 parts.add(text.get("cds.adultParacetamol.detail.counted",

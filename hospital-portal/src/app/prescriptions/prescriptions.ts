@@ -1293,6 +1293,10 @@ export class PrescriptionsComponent implements OnInit {
    * order could never be signed.
    */
   readonly signAllergyCards = signal<CdsCard[]>([]);
+  /** The same dialog, for a card that is not an allergy alone: it must not be called one. */
+  readonly signAlertIsCritical = computed(() =>
+    this.signAllergyCards().some((c) => !!c.reasonAtSignature),
+  );
   signAllergyReason = '';
 
   signPrescription(p: PrescriptionResponse): void {

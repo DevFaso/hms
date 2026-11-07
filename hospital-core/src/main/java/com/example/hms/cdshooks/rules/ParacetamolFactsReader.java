@@ -13,9 +13,9 @@ import com.example.hms.repository.PrescriptionRepository;
 import com.example.hms.service.InpatientOrderEnd;
 import com.example.hms.service.allergy.DrugClassAllergy;
 import com.example.hms.service.MedicationCourseStatus;
-import com.example.hms.security.context.HospitalContext;
-import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.service.impl.MarDoseSchedule;
+import com.example.hms.service.pharmacy.OrderedDrugIdentity;
 import com.example.hms.service.recordaccess.CrossHospitalRows;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -35,7 +35,8 @@ import java.util.regex.Pattern;
 /**
  * The persistence behind {@link AdultParacetamolRule}. In its own read-only transaction: a CDS
  * hook runs with no session (open-in-view is off), and whether an order ended with its stay reads
- * the order's LAZY encounter (QA D1121). Nothing is read for a child or for another drug.
+ * the order's LAZY encounter (QA D1121). Nothing is read for another drug, and a child's facts hold
+ * only the problems, for the contraindication.
  *
  * <p>Orders, problems and catalogue are read at the hospital acting on the request, when there is
  * one: a CDS hook passes {@code Patient.hospitalId}, the FIRST hospital that registered the patient,
@@ -84,7 +85,7 @@ public class ParacetamolFactsReader {
         }
         // RCP 4.3 is not limited by age: a child's facts hold the problems, for the contraindication only.
         boolean child = patient.getDateOfBirth() != null && !PediatricDoseRule.isAdult(patient);
-        UUID acting = actingHospital();
+        UUID acting = ActingScopeResolver.pinnedHospitalIdOrNull();
         UUID scope = acting != null ? acting : hospitalId;
         boolean named = ParacetamolIdentity.names(medicationName, item);
         boolean combination = ParacetamolIdentity.isCombinationOrder(medicationName, item);
@@ -109,7 +110,7 @@ public class ParacetamolFactsReader {
             .filter(p -> CrossHospitalRows.maySurface(scope, acting, p.getSensitivityCategory()))
             .toList();
         return new ParacetamolFacts(true, orders.counted, ParacetamolRisk.of(surfaced), orders.mayStillBeInUse,
-            orders.combinations, combination, live.size() - surfaced.size(), scope == null);
+            orders.combinations, combination, acting == null, scope == null);
     }
 
     private static boolean namesACombination(String name, List<MedicationCatalogItem> paracetamol,
@@ -125,11 +126,6 @@ public class ParacetamolFactsReader {
 
     /** What the order's dates say about it. */
     private enum Running { COUNTED, COUNTED_NO_DURATION, MAY_STILL_BE_IN_USE, ENDED }
-
-    private static UUID actingHospital() {
-        HospitalContext context = HospitalContextHolder.getContext().orElse(null);
-        return context == null ? null : context.getActiveHospitalId();
-    }
 
     /** This hospital's and the national list's active items. */
     private List<MedicationCatalogItem> activeCatalogue(UUID hospitalId) {
@@ -194,7 +190,11 @@ public class ParacetamolFactsReader {
     private static ParacetamolFacts.OtherOrder otherOrder(Prescription rx, List<MedicationCatalogItem> paracetamol) {
         List<MedicationCatalogItem> linked = paracetamol.stream().filter(i -> carries(rx, i)).toList();
         if (!linked.isEmpty()) {
-            return new ParacetamolFacts.OtherOrder(rx, linked.get(0));
+            // QA D1223: an older order whose name contradicts its item still counts, on what its dose
+            // says in mg: its strength is never read from an item its name does not name.
+            MedicationCatalogItem item = linked.get(0);
+            return new ParacetamolFacts.OtherOrder(rx,
+                OrderedDrugIdentity.contradicts(rx.getMedicationName(), item) ? null : item);
         }
         List<MedicationCatalogItem> named = paracetamol.stream()
             .filter(i -> ParacetamolIdentity.namesCatalogueItem(rx.getMedicationName(), i))

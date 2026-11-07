@@ -1004,6 +1004,12 @@ describe('PrescriptionsComponent — signing', () => {
       fixture.detectChanges();
 
       expect(component.signAllergyCards().length).toBe(1);
+      expect(component.signAlertIsCritical()).toBeFalse();
+      component.signAllergyCards.set([
+        { ...component.signAllergyCards()[0], reasonAtSignature: true },
+      ]);
+      expect(component.signAlertIsCritical()).toBeTrue();
+      component.signAllergyCards.set([{ ...component.signAllergyCards()[0], reasonAtSignature: null }]);
       expect(component.signReauthSecret).withContext('the secret is never kept').toBe('');
       expect(component.signDialogIncomplete()).toBeTrue();
       component.signReauthSecret = 's3cret';
