@@ -101,6 +101,7 @@
     "src/app/micro/microbiology.html::susc.method",
     "src/app/mortality/mortality.html::e.enteredInErrorReason",
     "src/app/mortality/mortality.html::rec.amendmentReason",
+    "src/app/mortality/mortality.html::x.reason",
     "src/app/notifications/notification-list.html::notif.type",
     "src/app/nurse-station/emar/emar.component.html::task.route",
     "src/app/nurse-station/mar-dose-history/mar-dose-history.component.ts::d.overrideReason",
@@ -242,6 +243,7 @@
     "src/app/admin/order-sets/order-set-edit.component.html::item.frequency": "QA D1419: free text a prescriber typed, shown only when it is off the list, so the author sees the wording the server asks about.",
     "src/app/appointments/appointment-detail.html::appt.overbookReason": "False positive (round 34, D1429): the reason a person typed when booking outside the published slots; free text.",
     "src/app/registrations/registrations.html::r.deactivationReason": "False positive (round 34, D1430): the reason a person typed when deactivating the registration; free text.",
-    "src/app/mortality/mortality.html::e.enteredInErrorReason": "free text the administrator typed (QA D1488), not a wire token"
+    "src/app/mortality/mortality.html::e.enteredInErrorReason": "free text the administrator typed (QA D1488), not a wire token",
+    "src/app/mortality/mortality.html::x.reason": "free text the doctor typed when disputing a death, not a wire token"
   }
 }

@@ -1,10 +1,10 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 
-import { MortalityService } from '../services/mortality.service';
+import { DeathDispute, MortalityService } from '../services/mortality.service';
 import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
-import { expectEmptySubmitRefusal } from '../testing/form-refusal-behaviour';
+import { expectEmptySubmitRefusal, expectFieldsMarked } from '../testing/form-refusal-behaviour';
 import { DeathDisputeDialogComponent } from './death-dispute-dialog.component';
 
 describe('DeathDisputeDialogComponent', () => {
@@ -14,7 +14,7 @@ describe('DeathDisputeDialogComponent', () => {
 
   beforeEach(async () => {
     spy = jasmine.createSpyObj('MortalityService', ['disputeDeath']);
-    spy.disputeDeath.and.returnValue(of({} as never));
+    spy.disputeDeath.and.returnValue(of({} as DeathDispute));
     confirm = jasmine.createSpyObj('ConfirmService', ['ask']);
     confirm.ask.and.resolveTo(true);
     await TestBed.configureTestingModule({
@@ -66,6 +66,21 @@ describe('DeathDisputeDialogComponent', () => {
       identityVerified: true,
     });
     expect(told).toHaveBeenCalled();
+  });
+
+  it('marks each field the server refuses with the server reason', async () => {
+    spy.disputeDeath.and.returnValue(
+      throwError(() => ({
+        error: { message: 'Refused', fieldErrors: { identityVerified: 'Confirm the identity' } },
+      })),
+    );
+    const c = fixture.componentInstance;
+    c.reason = 'Seen alive';
+    c.assessedAlive = true;
+    c.identityVerified = true;
+    await c.submit();
+    fixture.detectChanges();
+    expectFieldsMarked(fixture, { 'dd-identity': 'Confirm the identity' });
   });
 
   it('sends nothing when the confirmation is declined', async () => {

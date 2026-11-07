@@ -92,7 +92,8 @@
               </button>
             }
           } @else {
-            <span class="status-badge" [class.active]="p.active" [class.inactive]="!p.active">{{
+            {{ ' '
+            }}<span class="status-badge" [class.active]="p.active" [class.inactive]="!p.active">{{
               p.active ? ('COMMON.ACTIVE' | translate) : ('COMMON.INACTIVE' | translate)
             }}</span>
           }

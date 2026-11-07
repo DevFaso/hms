@@ -217,6 +217,36 @@ class MortalityServiceImplTest {
     // ── QA D1488: entered in error ────────────────────────────────
 
     @Test
+    void enteredInErrorEndsEveryOpenDisputeOfTheRecord() {
+        DeathRecord existing = recordedDeath();
+        com.example.hms.model.DeathDispute open = com.example.hms.model.DeathDispute.builder()
+            .deathRecordId(existing.getId()).patientId(patientId).hospitalId(UUID.randomUUID()).build();
+        open.setId(UUID.randomUUID());
+        when(disputeRepository.lockOpenForRecord(existing.getId())).thenReturn(List.of(open));
+
+        service.markEnteredInError(existing.getId(),
+            com.example.hms.payload.dto.mortality.DeathRecordEnteredInErrorDTO.builder().reason("Wrong patient").build());
+
+        assertThat(open.getStatus()).isEqualTo(com.example.hms.enums.DeathDisputeStatus.ENTERED_IN_ERROR);
+        assertThat(open.getResolutionReason()).isEqualTo("Wrong patient");
+        assertThat(open.getResolvedById()).isEqualTo(callerUserId);
+        verify(inBasketService).removeOpenItemsForReference(any(), org.mockito.ArgumentMatchers.eq("DEATH_DISPUTE"));
+    }
+
+    @Test
+    void aDisputedDeathStaysListedAndCountedAndIsFlagged() {
+        DeathRecord existing = recordedDeath();
+        when(deathRecordRepository.findRegister(any(), any(), any())).thenReturn(List.of(existing));
+        when(disputeRepository.findOpenRecordIds(any())).thenReturn(List.of(existing.getId()));
+
+        var register = service.getRegister(java.time.LocalDate.now().minusDays(3), java.time.LocalDate.now());
+
+        assertThat(register.getTotalDeaths()).isEqualTo(1);
+        assertThat(register.getDisputedDeaths()).isEqualTo(1);
+        assertThat(register.getDeaths().get(0).isDisputed()).isTrue();
+    }
+
+    @Test
     void anAdministratorOfAnotherHospitalWhoIsANurseHereIsRefused() {
         DeathRecord existing = recordedDeath();
         UUID id = existing.getId();

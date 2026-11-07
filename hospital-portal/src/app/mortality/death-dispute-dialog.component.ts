@@ -1,4 +1,12 @@
-import { ChangeDetectionStrategy, Component, inject, input, output, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  inject,
+  input,
+  output,
+  signal,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
@@ -8,7 +16,15 @@ import { BackdropCloseDirective } from '../shared/a11y/backdrop-close.directive'
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
-import { refusalReason } from '../shared/refusal-reason';
+import { refuseFields } from '../shared/forms/invalid-fields';
+import { refusalReason, refusedFieldReasons } from '../shared/refusal-reason';
+
+/** The request's fields, by the control that shows them. */
+const FIELD_IDS = {
+  reason: 'dd-reason',
+  assessedAlive: 'dd-alive',
+  identityVerified: 'dd-identity',
+};
 
 /**
  * The urgent dispute of a recorded death, from the deceased patient's chart: a doctor who has the patient in front
@@ -49,14 +65,16 @@ import { refusalReason } from '../shared/refusal-reason';
             <label for="dd-reason">{{ 'MORTALITY.DISPUTE_REASON' | translate }} *</label>
             <input required id="dd-reason" type="text" maxlength="1000" [(ngModel)]="reason" />
           </div>
-          <label class="checkbox-field" for="dd-alive">
+          <div class="checkbox-field">
             <input required id="dd-alive" type="checkbox" [(ngModel)]="assessedAlive" />
-            {{ 'MORTALITY.DISPUTE_ASSESSED_ALIVE' | translate }} *
-          </label>
-          <label class="checkbox-field" for="dd-identity">
+            <label for="dd-alive">{{ 'MORTALITY.DISPUTE_ASSESSED_ALIVE' | translate }} *</label>
+          </div>
+          <div class="checkbox-field">
             <input required id="dd-identity" type="checkbox" [(ngModel)]="identityVerified" />
-            {{ 'MORTALITY.DISPUTE_IDENTITY_VERIFIED' | translate }} *
-          </label>
+            <label for="dd-identity"
+              >{{ 'MORTALITY.DISPUTE_IDENTITY_VERIFIED' | translate }} *</label
+            >
+          </div>
         </div>
         <div class="modal-actions">
           <button class="btn-secondary" (click)="dismissed.emit()">
@@ -83,6 +101,7 @@ export class DeathDisputeDialogComponent {
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
   private readonly confirm = inject(ConfirmService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   readonly patientId = input.required<string>();
   readonly dismissed = output<void>();
@@ -121,6 +140,14 @@ export class DeathDisputeDialogComponent {
             refusalReason(err) ?? this.translate.instant('MORTALITY.DISPUTE_FAILED'),
           );
           this.submitting.set(false);
+          // Each field the server named carries its own reason.
+          const refused = refusedFieldReasons(err, FIELD_IDS);
+          if (refused.length > 0) {
+            refuseFields(this.host.nativeElement, [], Object.values(FIELD_IDS), '');
+            for (const [id, text] of [...refused].reverse()) {
+              refuseFields(this.host.nativeElement, [id], [id], text);
+            }
+          }
         },
       });
   }
