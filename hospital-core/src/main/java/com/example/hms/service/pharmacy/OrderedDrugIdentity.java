@@ -4,8 +4,6 @@ import com.example.hms.model.medication.MedicationCatalogItem;
 import com.example.hms.service.allergy.DrugClassAllergy;
 
 import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 /**
@@ -71,43 +69,8 @@ public final class OrderedDrugIdentity {
             && brandNamesGeneric(typedName, item.getGenericName());
     }
 
-    /**
-     * QA D1492: what each cited brand of {@link DrugClassAllergy#citedBrandPatterns} is, as whole ingredient lists,
-     * any one of which a lot's generic must equal: the brand's own map holds loose words for the allergy check
-     * ("penicillin v" reads "penicillin"), and a lot leaves the shelf on this. Spellings as {@link #ingredientsOf}
-     * reads them. Only what that map already holds, with no brand added.
-     */
-    private static final Map<String, List<Set<String>>> BRAND_DRUGS = brandDrugs();
-
     private static final Set<String> NOT_AN_INGREDIENT = Set.of(
         "et", "and", "y", "acide", "acid", "acido", "mg", "g", "mcg", "ug", "ml", "l", "ui", "iu");
-
-    private static Map<String, List<Set<String>>> brandDrugs() {
-        List<Set<String>> cotrimoxazole = List.of(Set.of("cotrimoxazol"), Set.of("sulfametoxazol", "trimetoprim"));
-        List<Set<String>> paracetamol = List.of(Set.of("paracetamol"), Set.of("acetaminofen"));
-        List<Set<String>> penicillinV = List.of(Set.of("fenoximetilpenicilin"), Set.of("penicilin", "v"));
-        return Map.ofEntries(
-            Map.entry("\\bbactrim\\b", cotrimoxazole),
-            Map.entry("\\bseptra\\b", cotrimoxazole),
-            Map.entry("\\bseptrin\\b", cotrimoxazole),
-            Map.entry("\\beusaprim\\b", cotrimoxazole),
-            Map.entry("\\bfansidar\\b", List.of(Set.of("sulfadoxin", "pirimetamin"))),
-            Map.entry("\\btotapen\\b", List.of(Set.of("ampicilin"))),
-            Map.entry("\\borbenine\\b", List.of(Set.of("cloxacilin"))),
-            Map.entry("\\bospen\\b", penicillinV),
-            Map.entry("\\boracilline\\b", penicillinV),
-            Map.entry("\\baugmentin\\b", List.of(Set.of("amoxicilin", "clavulanic"), Set.of("amoxicilin", "clavulanat"))),
-            Map.entry("\\bclamoxyl\\b", List.of(Set.of("amoxicilin"))),
-            Map.entry("\\bextencilline\\b",
-                List.of(Set.of("benzatin", "benzilpenicilin"), Set.of("penicilin", "benzatinic"))),
-            Map.entry("\\befferalgan(?:stix)?\\b", paracetamol),
-            Map.entry("\\btylenol\\b", paracetamol));
-    }
-
-    /** The brands {@link #citedBrandIsThisDrug} knows, by their pattern: every cited brand, or a guard fails. */
-    public static Set<String> brandsWithAKnownDrug() {
-        return BRAND_DRUGS.keySet();
-    }
 
     /**
      * QA D1492: the free-text order names a cited brand, and this lot's generic is exactly that brand's drug, so the
@@ -122,10 +85,7 @@ public final class OrderedDrugIdentity {
             return false;
         }
         Set<String> lot = ingredientsOf(item.getGenericName());
-        String typed = DrugClassAllergy.normalize(typedName);
-        return BRAND_DRUGS.entrySet().stream()
-            .filter(brand -> java.util.regex.Pattern.compile(brand.getKey()).matcher(typed).find())
-            .anyMatch(brand -> brand.getValue().contains(lot));
+        return DrugClassAllergy.drugsOfCitedBrands(typedName).contains(lot);
     }
 
     /**
@@ -133,7 +93,7 @@ public final class OrderedDrugIdentity {
      * dropped. "Amoxicilline 500 mg + Acide clavulanique 125 mg" and "Amoxicillin/clavulanic acid" read alike.
      */
     private static Set<String> ingredientsOf(String genericName) {
-        String generic = DrugClassAllergy.normalize(genericName).replace("co-trimoxazol", "cotrimoxazol");
+        String generic = DrugClassAllergy.normalize(genericName);
         Set<String> ingredients = new java.util.HashSet<>();
         for (String word : generic.split("[\\s+,/()\\-]+")) {
             if (word.isEmpty() || word.chars().anyMatch(Character::isDigit) || NOT_AN_INGREDIENT.contains(word)) {

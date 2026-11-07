@@ -62,7 +62,7 @@ class OrderedDrugIdentityTest {
 
     @org.junit.jupiter.api.Test
     void everyCitedBrandHasAKnownDrugAtThePharmacy() {
-        org.assertj.core.api.Assertions.assertThat(OrderedDrugIdentity.brandsWithAKnownDrug())
+        org.assertj.core.api.Assertions.assertThat(com.example.hms.service.allergy.DrugClassAllergy.brandsWithAKnownDrug())
             .containsExactlyInAnyOrderElementsOf(com.example.hms.service.allergy.DrugClassAllergy.citedBrandPatterns());
     }
 
