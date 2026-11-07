@@ -844,8 +844,9 @@ export class PrescriptionsComponent implements OnInit {
    */
   private answerWordingRefusal(err: unknown): boolean {
     const fields = [...serverFieldErrors(err).keys()];
-    if (fields.length === 0 || !fields.every((f) => RX_WORDING_FIELDS.has(f))) return false;
+    // Asked whatever else the refusal names: the box must be there for the interceptor to mark.
     this.frequencyConfirmAsked.set(fields.includes('frequencyConfirmed'));
+    if (fields.length === 0 || !fields.every((f) => RX_WORDING_FIELDS.has(f))) return false;
     this.wordingRefused.set(true);
     return true;
   }
@@ -1589,6 +1590,7 @@ export class PrescriptionsComponent implements OnInit {
           }
           this.loading.set(false);
           this.wholeTabRead = false;
+          this.rowsBeforeSearch = null;
           // Only now: a move that fails leaves the pager on the rows still shown.
           this.listPage.set(page);
           this.prescriptions.set(rows);
@@ -1613,6 +1615,7 @@ export class PrescriptionsComponent implements OnInit {
 
   setTab(tab: PrescriptionTab): void {
     this.activeTab.set(tab);
+    this.rowsBeforeSearch = null;
     this.listPage.set(0);
     this.wholeTabRead = false;
     this.wholeTabLoading = false;

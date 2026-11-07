@@ -201,7 +201,7 @@ public final class MarDoseSchedule {
     private static final Pattern NOT_ALPHANUMERIC = Pattern.compile("[^A-Z0-9]+");
 
     /** Any kind of space, read as one: "toutes  les", and the comma of "toutes, les" once it is a space. */
-    private static final Pattern SPACES = Pattern.compile("[\\s\\u00A0\\u202F]++");
+    private static final Pattern SPACES = Pattern.compile("[\\s\\p{Z}\\uFEFF]++");
 
     /** Frequencies (accents and spaces removed, counts as digits) that mean a single dose, in EN, FR and ES. */
     private static final Set<String> ONE_OFF_WORDS = Set.of(
@@ -239,10 +239,12 @@ public final class MarDoseSchedule {
         if (upper.contains("STAT")) {
             return Reading.ONE_OFF;
         }
-        if (isAsNeeded(frequency) || FrequencyCadence.statesNoFixedSchedule(frequency)) {
+        // The digits of a decimal or a fraction are part of a dose, never a count or a list.
+        String written = FrequencyCadence.withoutDoseParts(accentlessUpper(frequency));
+        if (isAsNeeded(frequency) || FrequencyCadence.statesNoFixedSchedule(written)) {
             return Reading.UNREAD;
         }
-        Integer minutes = intervalMinutesOf(frequency);
+        Integer minutes = intervalMinutesOf(written);
         if (minutes != null) {
             return Reading.every(minutes);
         }
@@ -250,7 +252,7 @@ public final class MarDoseSchedule {
             return Reading.ONE_OFF;
         }
         // QA D1419 / D1426: a cadence written any other way, wherever it stands in the sentence.
-        Reading cadence = FrequencyCadence.read(upper);
+        Reading cadence = FrequencyCadence.read(normalize(written));
         return cadence != null ? cadence : Reading.UNREAD;
     }
 
@@ -264,7 +266,7 @@ public final class MarDoseSchedule {
         if (frequency == null || frequency.isBlank() || isAsNeeded(frequency)) {
             return null;
         }
-        Integer perDay = timesPerDay(normalize(frequency));
+        Integer perDay = timesPerDay(normalize(FrequencyCadence.withoutDoseParts(accentlessUpper(frequency))));
         if (perDay != null) {
             return perDay > 0 ? (double) perDay : null;
         }

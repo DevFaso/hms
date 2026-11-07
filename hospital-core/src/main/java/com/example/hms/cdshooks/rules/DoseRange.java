@@ -51,20 +51,24 @@ public final class DoseRange {
     private static final Pattern LEADING_FRACTION =
         Pattern.compile("^\\s*+([1-3])\\s*+/\\s*+([2-4])(?![\\d.,/])");
     /**
-     * QA D1420: "1,000" and "1.000" for a limit; never "0,125", "1,5", "1.25", "1,000,000", "12,500", and never
-     * before a g ("1,250 g" is a valid dose of 1.25 g; 1250 g is nobody's reading).
+     * QA D1420: "1,000", "1.000" and "1,500" for a limit. Never "0,125", "1,5", "1.25", "1,000,000", "12,500";
+     * never a last digit other than 0 ("3,125 mg" is a real dose of carvedilol, "1,875 mg" too); and never before
+     * a g ("1,250 g" is a valid dose of 1.25 g; 1250 g is nobody's reading).
      */
     private static final Pattern SEPARATED_THOUSANDS = Pattern.compile(
-        "(?<![\\d.,])([1-9])[.,](\\d{3}+)(?![\\d.,])(?!\\s*+[gG](?!\\p{L}))");
-    /** QA D1420: a whole number and a part: "2 1/2", "1 1/2 cp". */
-    private static final Pattern LEADING_MIXED =
-        Pattern.compile("^\\s*+(\\d{1,3}+)\\s++([1-3])\\s*+/\\s*+([2-4])(?![\\d.,/])");
+        "(?<![\\d.,])([1-9])[.,](\\d{2}+0)(?![\\d.,])(?!\\s*+(?:g|gr|gramme|grammes|gram|grams|gramo|gramos)(?!\\p{L}))",
+        Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+    /** A part followed by an hour is a time, not a dose: "1 cp 1/2 h avant le repas". */
+    private static final String NOT_A_DOSE_AFTER = "\\s*+(?:h|hr|hrs|heures?+|horas?+|hours?+)(?!\\p{L})";
+    /** QA D1420: a whole number and a part: "2 1/2", "1 1/2 cp", also at the high end of a range. */
+    private static final Pattern MIXED =
+        Pattern.compile("(?<![\\d.,/])(\\d{1,3}+)\\s++([1-3])\\s*+/\\s*+([2-4])(?![\\d.,/])(?!" + NOT_A_DOSE_AFTER + ")");
     /** QA D1420: a whole number and a part sign: "2 \u00bd", "2\u00bd cp". */
-    private static final Pattern LEADING_MIXED_SIGN =
-        Pattern.compile("^\\s*+(\\d{1,3}+)\\s*+([\\u00bd\\u00bc\\u00be])");
+    private static final Pattern MIXED_SIGN =
+        Pattern.compile("(?<![\\d.,/])(\\d{1,3}+)\\s*+([\\u00bd\\u00bc\\u00be])");
     /** QA D1420: the part after the unit: "1 cp 1/2", "1 cp \u00bd", "1 cp et demi", "1 tablet and a half". */
     private static final Pattern UNIT_THEN_PART = Pattern.compile(
-        "^\\s*+(\\d{1,3}+)\\s*+(\\p{L}++)\\s++(?:(?:et\\s++)?+([1-3])\\s*+/\\s*+([2-4])(?![\\d.,/])"
+        "^\\s*+(\\d{1,3}+)\\s*+(\\p{L}++)\\s++(?:(?:et\\s++)?+([1-3])\\s*+/\\s*+([2-4])(?![\\d.,/])(?!" + NOT_A_DOSE_AFTER + ")"
             + "|(?:et\\s++)?+([\\u00bd\\u00bc\\u00be])|et\\s++demie?+\\b|y\\s++medi[oa]\\b|and\\s++a\\s++half\\b)",
         Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
     private static final double ONE_HALF = 0.5d;
@@ -116,6 +120,10 @@ public final class DoseRange {
         if (mixed != null) {
             return mixed;
         }
+        return withLeadingFraction(closed);
+    }
+
+    private static String withLeadingFraction(String closed) {
         Matcher sign = LEADING_FRACTION_SIGN.matcher(closed);
         if (sign.find()) {
             return FRACTION_SIGNS.get(sign.group(1)) + closed.substring(sign.end());
@@ -133,14 +141,14 @@ public final class DoseRange {
 
     /** QA D1420: "2 1/2 cp", "2\u00bd cp", "1 cp 1/2", "1 cp et demi" as a decimal, or {@code null} when it is none of them. */
     private static String withMixedNumber(String dose) {
-        Matcher mixed = LEADING_MIXED.matcher(dose);
-        if (mixed.find() && Integer.parseInt(mixed.group(2)) < Integer.parseInt(mixed.group(3))) {
-            return decimal(mixed.group(1), Double.parseDouble(mixed.group(2)) / Integer.parseInt(mixed.group(3)))
-                + dose.substring(mixed.end());
-        }
-        Matcher sign = LEADING_MIXED_SIGN.matcher(dose);
-        if (sign.find()) {
-            return decimal(sign.group(1), Double.parseDouble(FRACTION_SIGNS.get(sign.group(2)))) + dose.substring(sign.end());
+        String numbers = MIXED.matcher(dose).replaceAll(m -> Integer.parseInt(m.group(2)) < Integer.parseInt(m.group(3))
+            ? decimal(m.group(1), Double.parseDouble(m.group(2)) / Integer.parseInt(m.group(3)))
+            : Matcher.quoteReplacement(m.group()));
+        numbers = MIXED_SIGN.matcher(numbers).replaceAll(m ->
+            decimal(m.group(1), Double.parseDouble(FRACTION_SIGNS.get(m.group(2)))));
+        if (!numbers.equals(dose)) {
+            // The low end of a range can still be a plain part: "1/2 - 1 1/2 cp".
+            return withLeadingFraction(numbers);
         }
         Matcher part = UNIT_THEN_PART.matcher(dose);
         if (!part.find() || !CdsRuleEngine.COUNT_UNITS.contains(part.group(2).toLowerCase(Locale.ROOT))) {

@@ -39,13 +39,29 @@ const CONDITIONAL_WORDS = words(
     'MAL AGITATION CEPHALEE CEPHALEES CONSTIPATION EVA DOLOR DOLORES FIEBRE NAUSEAS ' +
     'VOMITO VOMITOS CRISIS PAIN FEVER NAUSEA NAUSEOUS NAUSEATED VOMITING ATTACK ' +
     'ATTACKS SLEEP HEADACHE HEADACHES TOUX TOS COUGH VOLONTE LIBITUM REQUERIMIENTO ' +
-    'DISCRECION OCCASIONNELLEMENT PONCTUELLEMENT INTERMITTENCE REPETER',
+    'DISCRECION OCCASIONNELLEMENT PONCTUELLEMENT INTERMITTENCE HYPERTHERMIE ANXIETY ' +
+    'ANXIETE ANSIEDAD ANGOISSE DIARRHEE DIARRHEA DIARREA DYSPNEE DYSPNEA DISNEA ' +
+    'VERTIGE VERTIGES VERTIGO PRURIT ITCH ITCHING WHEEZE SIFFLEMENT SPASME SPASMES ' +
+    'CONVULSION CONVULSIONS SAIGNEMENT BLEEDING HEMORRAGIE HEMORRHAGE GLYCEMIE ' +
+    'GLUCEMIA GLUCOSE DEXTRO EFFORT EXERCISE',
 );
 const DAY_WORDS = words('JOUR JOURS J JR JRS D DAY DAYS DIA DIAS');
 const WEEK_WORDS = words('SEMAINE SEMAINES SEM WEEK WEEKS SEMANA SEMANAS');
 const MONTH_WORDS = words('MOIS MONTH MONTHS MES MESES');
 const QUARTER_WORDS = words('TRIMESTRE TRIMESTRES TRIMESTER');
 const YEAR_WORDS = words('AN ANS ANNEE YEAR YEARS ANO ANOS');
+const DATE_BEFORE = words('LE DU AU DE EL DEL ON FROM TO UNTIL HASTA SINCE DESDE JUSQU PARTIR');
+const GOES_ON_WORDS = words('PARTIR DES PUIS THEN LUEGO DESDE STARTING');
+const AWAY_FROM_MEALS = words('DEHORS ENTRE DISTANCE AWAY BETWEEN FUERA');
+const ALL_MEALS_BEFORE = words('LES DES AUX CHAQUE CADA EACH EVERY LAS LOS');
+const MEALS_WORDS = words('MEALS COMIDAS AC PC');
+const A_MEAL_WORDS = words('REPAS MEAL COMIDA FOOD');
+const NAMED_MEAL_WORDS = words('DEJEUNER DINER BREAKFAST LUNCH DINNER DESAYUNO ALMUERZO CENA');
+const FASTING_WORDS = words('JEUN FASTING AYUNAS AYUNO');
+const INFUSION_WORDS = words(
+  'PERFUSION PERFUSIONS INFUSION IV PERF SERINGUE BOMBA POMPE PUMP DRIP',
+);
+const DROP_WORDS = words('GOUTTE GOUTTES GOTA GOTAS DROP DROPS');
 const PERIOD_JOINS = words('PAR PER POR AL A P /');
 const PERIOD_ARTICLES = words('LA LE EL');
 const MEASURE_UNITS = words(
@@ -86,13 +102,8 @@ const ONE_TIME_WORDS = words(
   'TONIGHT DEMAIN LENDEMAIN TOMORROW IMMEDIATEMENT IMMEDIATELY INMEDIATAMENTE ' +
     'MAINTENANT NOW AHORA',
 );
-const EVERY_MEAL_WORDS = words('REPAS MEAL MEALS COMIDA COMIDAS FOOD AC PC');
-const ONE_MEAL_WORDS = words(
-  'DEJEUNER DINER BREAKFAST LUNCH DINNER DESAYUNO ALMUERZO CENA JEUN FASTING ' + 'AYUNAS AYUNO',
-);
-const CONTINUOUS_WORDS = words(
-  'CONTINU CONTINUE CONTINUS CONTINUES CONTINUOUS CONTINUO CONTINUA IVSE PSE ' + 'DEBIT',
-);
+const CONTINUOUS_WORDS = words('CONTINU CONTINUE CONTINUS CONTINUES CONTINUOUS CONTINUO CONTINUA');
+const RUNNING_WORDS = words('IVSE PSE DEBIT');
 const SINGLE_WORDS = words('UNIQUE UNICA UNICO SINGLE SEUL SEULE SOLO SOLA');
 const DOSE_WORDS = words('DOSE DOSIS PRISE TOMA FOIS VEZ TIME');
 const INTAKE_WORDS = words('PRISE PRISES TOMA TOMAS');
@@ -112,6 +123,7 @@ const HOUR_WORDS = words('H HR HRS HOUR HOURS HEURE HEURES HORA HORAS');
 const SINGLE_HOUR_UNIT = words('H');
 const TIMES_WORDS = words('FOIS X VECES VEZ TIMES TIME');
 const RANGE_TO_WORDS = words('A AU TO');
+const LIST_JOINS = words('ET AND Y');
 const IN_A_ROW_WORDS = words(
   'SUITE CONSECUTIFS CONSECUTIVES CONSECUTIVOS SEGUIDOS CONSECUTIVE ROW',
 );
@@ -175,6 +187,21 @@ const CONDITIONAL_PHRASES: readonly string[] = [
   'AS REQ',
   'AS DIRECTED',
   'PR N',
+  'SELON TA',
+  'SELON LA TA',
+  'SEGUN TA',
+];
+/** `FrequencyWording.NOT_A_CONDITION`: a name holding a condition word. */
+const NOT_A_CONDITION: readonly string[] = [
+  'FIEVRE TYPHOIDE',
+  'FIEVRE JAUNE',
+  'TYPHOID FEVER',
+  'YELLOW FEVER',
+  'FIEBRE TIFOIDEA',
+  'FIEBRE AMARILLA',
+  'DU PAIN',
+  'AVEC PAIN',
+  'BEFORE SLEEP',
 ];
 const LIMIT_PHRASES: readonly string[] = [
   'UP TO',
@@ -213,11 +240,25 @@ const EVERY_MINUTES =
   /\b(?:EVERY|TOUTES LES|TTES LES|TTE LES|TT LES|CADA|CHAQUE|Q) ?(\d{1,3}) ?(?:MINUTES|MINUTE|MINUTOS|MIN|MN)\b/;
 const TT_LES_HOURS = /\b(?:TTES|TTE|TT) LES (\d{1,2}) ?(?:HEURES|HEURE|HRS|HR|H)\b/;
 const PAR_HOURS = /\bPAR (\d{1,2}) ?H\b/;
-const BARE_Q = /\bQ(\d{1,2})\b(?!-)/;
+const BARE_Q = /\bQ(\d{1,2})\b(?!-)(?! ?[A-Z])/;
 const DOSE_PER_HOURS = /(?<![0-9] ?H)(?<=[A-Z]) ?\/ ?(\d{1,2}) ?H\b/;
 const BARE_SLASH = /\b(\d{1,2}) ?\/ ?(\d{1,2})\b(?! ?\/)/g;
 const COUNT_PER_24 = /\b(\d{1,2}) ?(?:FOIS ?|X ?)?(?:\/|EN\b|PAR\b) ?24(?: ?H)?\b/;
-const Q_LONG = /\bQ ?(\d{1,2}) ?(D|J|W)\b/;
+const Q_LONG =
+  /\bQ ?(\d{1,2}) ?(D|DAYS?|J|JOURS?|DIAS?|W|WEEKS?|SEM|SEMAINES?|SEMANAS?|MOIS|MONTHS?|MES|MESES)\b/;
+const DASHED_COURSE = /\b([JH]\d{1,3}) ?- ?([JH]\d{1,3})\b/g;
+const RANGE_PER_24 = /\b\d{1,2} ?(?:-|A|OU|OR|TO) ?\d{1,2} ?\/ ?24(?!\d)/;
+const LAST_WORD = /([A-Z]+)[^A-Z0-9]*$/;
+const DOSE_PART = 'DOSEPART';
+const NOT_A_RATE =
+  '(?! ?\\d)(?! ?/)(?! ?(?:FOIS|X\\b|VECES|TIMES|H\\b|HEURE|HOUR|HORA|J\\b|JOUR|DAY|DIA))';
+const MIXED_DOSE = new RegExp(`(?<![\\d/:.,])\\d{1,3} (?:1/[234]|2/[34]|3/4)${NOT_A_RATE}`, 'g');
+const FRACTION_DOSE = new RegExp(
+  `(?<![\\d/:.,])(?:1 ?/ ?[234]|2 ?/ ?[34]|3 ?/ ?4)${NOT_A_RATE}`,
+  'g',
+);
+const FRACTION_SIGN = /\d{0,3} ?[\u00bd\u00bc\u00be]/g;
+const DECIMAL_DOSE = /(?<![\d:.,])\d{1,4}[.,]\d{1,3}(?![\d.,:])/g;
 const RATE = /\b(?:ML|CC|MG|MCG|UG|UI|IU|G|L) ?\/ ?(?:H|HR|HEURE|HORA|HOUR)\b/;
 const ALL_DAY = /\b24 ?H? ?\/ ?24\b/;
 const POSOLOGY_WORD = /(?<![\d-])\d(?:-\d){2,3}(?![\d-])/;
@@ -405,7 +446,7 @@ function endsARange(list: readonly string[], at: number, second: number): boolea
 }
 
 function rangeStartsAt(list: readonly string[], at: number): boolean {
-  const first = numberOf(list[at]);
+  const first = list[at] === DOSE_PART ? 0 : numberOf(list[at]);
   if (first === null || (at > 0 && numberOf(list[at - 1]) !== null)) return false;
   const end = RANGE_JOINS.has(list[at + 1] ?? '') ? at + 2 : at + 1;
   if (end >= list.length) return false;
@@ -415,9 +456,8 @@ function rangeStartsAt(list: readonly string[], at: number): boolean {
     return word !== null && word > first && endsARange(list, end + 1, word);
   }
   const second = Number(whole[1]);
-  const counted = whole[2]
-    ? whole[2] === 'X' || (!HOUR_WORDS.has(whole[2]) && isPer(list, end + 1))
-    : endsARange(list, end + 1, second);
+  const glued = HOUR_WORDS.has(whole[2]) ? second !== 24 : whole[2] === 'X' || isPer(list, end + 1);
+  const counted = whole[2] ? glued : endsARange(list, end + 1, second);
   return second > first && counted;
 }
 
@@ -428,12 +468,10 @@ function ceilingBeforeNumber(list: readonly string[], at: number): boolean {
 }
 
 function isChoiceAt(list: readonly string[], at: number): boolean {
+  if (at === 0 || at + 1 >= list.length || !CHOICE_WORDS.has(list[at])) return false;
   return (
-    at > 0 &&
-    at + 1 < list.length &&
-    CHOICE_WORDS.has(list[at]) &&
-    numberOf(list[at - 1]) === null &&
-    numberOf(list[at + 1]) === null
+    adverbCount(list[at - 1]) !== null ||
+    (numberOf(list[at - 1]) === null && numberOf(list[at + 1]) === null)
   );
 }
 
@@ -441,6 +479,7 @@ function isChoiceAt(list: readonly string[], at: number): boolean {
 function statesNoFixedSchedule(frequency: string): boolean {
   const list = wordsOf(frequency);
   return (
+    RANGE_PER_24.test(normalize(frequency)) ||
     list.some((word) => LIMIT_WORDS.has(word)) ||
     containsPhrase(list, LIMIT_PHRASES) ||
     list.some(
@@ -482,7 +521,8 @@ function everyHours({ f }: Text): FrequencyReading | null {
     if (m) return everyHoursOf(Number(m[1]));
   }
   for (const slash of f.matchAll(BARE_SLASH)) {
-    if (slash[1] === slash[2] && BARE_SLASH_HOURS.has(slash[1])) {
+    const before = LAST_WORD.exec(f.slice(0, slash.index))?.[1] ?? '';
+    if (slash[1] === slash[2] && BARE_SLASH_HOURS.has(slash[1]) && !DATE_BEFORE.has(before)) {
       return everyHoursOf(Number(slash[1]));
     }
   }
@@ -491,7 +531,9 @@ function everyHours({ f }: Text): FrequencyReading | null {
 
 function longQ({ f }: Text): FrequencyReading | null {
   const m = Q_LONG.exec(f);
-  return m ? every(Number(m[1]) * (m[2] === 'W' ? MINUTES_PER_WEEK : MINUTES_PER_DAY)) : null;
+  if (!m) return null;
+  const period = m[2] === 'W' ? MINUTES_PER_WEEK : periodOf(m[2]);
+  return period === null ? null : every(Number(m[1]) * period);
 }
 
 function posology({ f }: Text): FrequencyReading | null {
@@ -512,18 +554,25 @@ function statesHowLongAfter(t: readonly string[], at: number): boolean {
   return at < t.length && (periodOf(t[at]) !== null || HOUR_WORDS.has(t[at]));
 }
 
-function shorthand(left: number | null, right: number): FrequencyReading | null {
-  if (left === null || left === 1) return countOver(right, MINUTES_PER_DAY);
-  return right === 1 ? countOver(left, MINUTES_PER_DAY) : null;
+function shorthand(left: number | null, right: number, after: string): FrequencyReading | null {
+  if (left === null || left === 1) {
+    return right > 1 && right <= 4 && after === '' ? countOver(right, MINUTES_PER_DAY) : null;
+  }
+  return left <= 6 && (right === 1 || MEASURE_UNITS.has(after))
+    ? countOver(left, MINUTES_PER_DAY)
+    : null;
 }
 
 function timesShorthand({ t }: Text): FrequencyReading | null {
+  if (namesAnotherCadence(t)) return null;
   for (let i = 0; i < t.length; i++) {
     const glued = GLUED_TIMES.exec(t[i]);
-    if (glued) return shorthand(Number(glued[1]), Number(glued[2]));
-    const right = t[i] === 'X' && i + 1 < t.length ? numberOf(t[i + 1]) : null;
-    if (right !== null && !statesHowLongAfter(t, i + 2)) {
-      return shorthand(i > 0 ? numberOf(t[i - 1]) : null, right);
+    if (glued && i + 1 === t.length) return shorthand(Number(glued[1]), Number(glued[2]), '');
+    if (t[i] === 'X' && i + 1 < t.length && !statesHowLongAfter(t, i + 2)) {
+      const right = t[i + 1] === DOSE_PART ? 1 : numberOf(t[i + 1]);
+      if (right !== null) {
+        return shorthand(i > 0 ? numberOf(t[i - 1]) : null, right, t[i + 2] ?? '');
+      }
     }
   }
   return null;
@@ -553,6 +602,7 @@ function adverbCount(word: string): number | null {
 }
 
 function countOf(word: string): number | null {
+  if (word === DOSE_PART) return 1;
   const adverb = adverbCount(word);
   if (adverb !== null) return adverb;
   const glued = GLUED_COUNT.exec(word);
@@ -574,7 +624,8 @@ function perPeriod({ t }: Text): FrequencyReading | null {
   for (let i = 2; i < t.length; i++) {
     const period = periodOf(t[i]);
     const join = i > 2 && PERIOD_ARTICLES.has(t[i - 1]) ? i - 2 : i - 1;
-    if (period !== null && PERIOD_JOINS.has(t[join])) {
+    const aDayNumber = i + 1 < t.length && ONLY_DIGITS.test(t[i + 1]);
+    if (period !== null && !aDayNumber && PERIOD_JOINS.has(t[join])) {
       const reading = countBefore(t, join - 1, period);
       if (reading) return reading;
     }
@@ -630,20 +681,21 @@ function courseEntries(t: readonly string[]): number[] | null {
     if (letter !== null && letter !== m[1]) return null;
     letter = m[1];
     const to = rangeEnd(t, i, Number(m[2]), letter);
+    if (to !== Number(m[2]) && letter === 'H') return null;
     for (let v = Number(m[2]); v <= to && values.length <= MAX_COURSE_ENTRIES; v++) values.push(v);
   }
   return offsets(values, letter === 'H' ? MINUTES_PER_HOUR : MINUTES_PER_DAY);
 }
 
 function hoursList(t: readonly string[]): number[] | null {
+  const unit = t.findIndex((word) => HOUR_WORDS.has(word));
+  if (unit < 0) return null;
   const values: number[] = [];
-  for (const word of t) {
-    if (HOUR_WORDS.has(word)) {
-      return values.length > 0 && values[0] === 0 ? offsets(values, MINUTES_PER_HOUR) : null;
-    }
-    if (ONLY_DIGITS.test(word)) values.push(Number(word));
+  for (let i = unit - 1; i >= 0; i--) {
+    if (ONLY_DIGITS.test(t[i])) values.unshift(Number(t[i]));
+    else if (!LIST_JOINS.has(t[i])) break;
   }
-  return null;
+  return values.length > 2 && values[0] === 0 ? offsets(values, MINUTES_PER_HOUR) : null;
 }
 
 function daysInARow(t: readonly string[]): number[] | null {
@@ -745,7 +797,8 @@ function namedMinutes(word: string): number | null {
 function named({ t }: Text): FrequencyReading | null {
   for (let i = 0; i < t.length; i++) {
     const minutes = namedMinutes(t[i]);
-    if (minutes !== null) {
+    const rightEye = t[i] === 'OD' && containsAny(t, DROP_WORDS);
+    if (minutes !== null && !rightEye) {
       const adverb = i > 0 ? adverbCount(t[i - 1]) : null;
       return adverb === null ? every(minutes) : countOver(adverb, minutes);
     }
@@ -754,16 +807,32 @@ function named({ t }: Text): FrequencyReading | null {
 }
 
 function weekdays({ t }: Text): FrequencyReading | null {
+  for (let i = 0; i + 2 < t.length; i++) {
+    if (WEEKDAY_WORDS.has(t[i]) && RANGE_TO_WORDS.has(t[i + 1]) && WEEKDAY_WORDS.has(t[i + 2])) {
+      return null;
+    }
+  }
   const days = new Set(t.filter((word) => WEEKDAY_WORDS.has(word)));
   return days.size === 0 ? null : countOver(days.size, MINUTES_PER_WEEK);
+}
+
+function perLongerPeriodAfter(t: readonly string[], at: number): boolean {
+  if (at + 1 >= t.length || !PERIOD_JOINS.has(t[at])) return false;
+  const period = periodOf(t[at + 1]);
+  return period !== null && period !== MINUTES_PER_DAY;
 }
 
 function intakes({ t }: Text): FrequencyReading | null {
   for (let i = 1; i < t.length; i++) {
     const splitIn = t[i] === 'FOIS' && i > 1 && t[i - 2] === 'EN';
     const count = numberOf(t[i - 1]);
-    if (count !== null && (INTAKE_WORDS.has(t[i]) || splitIn)) {
-      return count === 1 ? ONE_OFF : countOver(count, MINUTES_PER_DAY);
+    if (
+      count !== null &&
+      count > 1 &&
+      (INTAKE_WORDS.has(t[i]) || splitIn) &&
+      !perLongerPeriodAfter(t, i + 1)
+    ) {
+      return countOver(count, MINUTES_PER_DAY);
     }
   }
   return null;
@@ -786,41 +855,68 @@ function containsAny(t: readonly string[], list: ReadonlySet<string>): boolean {
   return t.some((word) => list.has(word));
 }
 
+function partsOfDay(t: readonly string[]): number {
+  return [MORNING_WORDS, NOON_WORDS, EVENING_WORDS].filter((l) => containsAny(t, l)).length;
+}
+
 function timeOfDay({ t }: Text): FrequencyReading | null {
-  const parts = [MORNING_WORDS, NOON_WORDS, EVENING_WORDS].filter((l) => containsAny(t, l)).length;
+  const parts = partsOfDay(t);
   return parts === 0 ? null : countOver(parts, MINUTES_PER_DAY);
 }
 
+function namesAnotherCadence(t: readonly string[]): boolean {
+  return (
+    partsOfDay(t) > 0 ||
+    containsAny(t, MEALS_WORDS) ||
+    containsAny(t, A_MEAL_WORDS) ||
+    containsAny(t, NAMED_MEAL_WORDS) ||
+    containsAny(t, WEEKDAY_WORDS) ||
+    t.some((word) => namedMinutes(word) !== null)
+  );
+}
+
 function meals({ t }: Text): FrequencyReading | null {
-  if (containsAny(t, ONE_MEAL_WORDS)) return every(MINUTES_PER_DAY);
+  if (containsAny(t, AWAY_FROM_MEALS)) return null;
+  const named = new Set(t.filter((word) => NAMED_MEAL_WORDS.has(word)));
+  if (named.size > 0) return countOver(named.size, MINUTES_PER_DAY);
+  if (containsAny(t, FASTING_WORDS)) return every(MINUTES_PER_DAY);
   const lettered = t.length === 2 && t[1] === 'C' && (t[0] === 'A' || t[0] === 'P');
-  return containsAny(t, EVERY_MEAL_WORDS) || lettered ? countOver(3, MINUTES_PER_DAY) : null;
+  const everyMeal = t.some(
+    (word, i) => i > 0 && A_MEAL_WORDS.has(word) && ALL_MEALS_BEFORE.has(t[i - 1]),
+  );
+  if (lettered || containsAny(t, MEALS_WORDS) || everyMeal) return countOver(3, MINUTES_PER_DAY);
+  return containsAny(t, A_MEAL_WORDS) ? every(MINUTES_PER_DAY) : null;
+}
+
+function continuousInfusionNamed(t: readonly string[]): boolean {
+  if (!containsAny(t, CONTINUOUS_WORDS)) return false;
+  const alone = t.length === 1 && t[0] !== 'CONTINUE';
+  const enContinu = t.length === 2 && t[0] === 'EN';
+  return alone || enContinu || containsAny(t, INFUSION_WORDS);
 }
 
 function continuous({ f, t }: Text): FrequencyReading | null {
   const electric = t.includes('SERINGUE') && t.includes('ELECTRIQUE');
-  return electric || containsAny(t, CONTINUOUS_WORDS) || RATE.test(f) || ALL_DAY.test(f)
-    ? CONTINUOUS
-    : null;
+  const running = containsAny(t, RUNNING_WORDS) || RATE.test(f) || ALL_DAY.test(f);
+  return electric || running || continuousInfusionNamed(t) ? CONTINUOUS : null;
 }
 
-function saysOneBefore(t: readonly string[], at: number): boolean {
-  if (at + 1 < t.length && SINGLE_WORDS.has(t[at + 1])) return true;
-  return at > 0 && numberOf(t[at - 1]) === 1;
-}
-
-function singleDose({ t }: Text): FrequencyReading | null {
+function namedSingleDose({ t }: Text): FrequencyReading | null {
   if (containsAny(t, PREVENTIVE_DOSE_WORDS)) return ONE_OFF;
   const single = t.some(
     (word, i) =>
-      (DOSE_WORDS.has(word) && saysOneBefore(t, i)) ||
-      (SINGLE_WORDS.has(word) && i + 1 < t.length && DOSE_WORDS.has(t[i + 1])),
+      i + 1 < t.length &&
+      ((DOSE_WORDS.has(word) && SINGLE_WORDS.has(t[i + 1])) ||
+        (SINGLE_WORDS.has(word) && DOSE_WORDS.has(t[i + 1]))),
   );
+  return single ? ONE_OFF : null;
+}
+
+function singleDose({ t }: Text): FrequencyReading | null {
+  const single = t.some((word, i) => DOSE_WORDS.has(word) && i > 0 && numberOf(t[i - 1]) === 1);
   if (single) return ONE_OFF;
-  const once = t.includes('ONCE') || t.includes('1X');
-  return once || (t.includes('1') && t.includes('X') && t.indexOf('X') === t.indexOf('1') + 1)
-    ? ONE_OFF
-    : null;
+  const oneX = t.length === 2 && t[0] === '1' && t[1] === 'X';
+  return t.includes('ONCE') || t.includes('1X') || oneX ? ONE_OFF : null;
 }
 
 function onceEvent({ t }: Text): FrequencyReading | null {
@@ -842,9 +938,10 @@ function bolus({ t }: Text): FrequencyReading | null {
 }
 
 const STEPS: readonly ((text: Text) => FrequencyReading | null)[] = [
+  intakes,
   everyMinutes,
-  everyHours,
   longQ,
+  everyHours,
   posology,
   timesShorthand,
   timesThenDose,
@@ -855,8 +952,8 @@ const STEPS: readonly ((text: Text) => FrequencyReading | null)[] = [
   alternateDays,
   named,
   weekdays,
-  intakes,
   oneTime,
+  namedSingleDose,
   timeOfDay,
   meals,
   continuous,
@@ -865,8 +962,37 @@ const STEPS: readonly ((text: Text) => FrequencyReading | null)[] = [
   bolus,
 ];
 
+function goesOn(t: readonly string[]): boolean {
+  return containsAny(t, GOES_ON_WORDS) && !t.includes('NAISSANCE');
+}
+
+function statesADuration(t: readonly string[]): boolean {
+  return t.some((word, i) => {
+    const number = i + 1 < t.length ? numberOf(word) : null;
+    if (number === null) return false;
+    return periodOf(t[i + 1]) !== null || (HOUR_WORDS.has(t[i + 1]) && number >= 12);
+  });
+}
+
+/** `FrequencyCadence.saysMoreThan`: the rest of the sentence has its say. */
+function saysMoreThan(reading: FrequencyReading, t: readonly string[]): boolean {
+  if (reading.kind === 'COURSE') return namesAnotherCadence(t);
+  return reading.kind === 'ONE_OFF' && (goesOn(t) || statesADuration(t) || partsOfDay(t) > 1);
+}
+
+/** `FrequencyCadence.withoutDoseParts`: the digits of a decimal or a fraction are part of a dose. */
+function withoutDoseParts(upper: string): string {
+  const part = ` ${DOSE_PART} `;
+  return upper
+    .replaceAll(MIXED_DOSE, part)
+    .replaceAll(FRACTION_DOSE, part)
+    .replaceAll(FRACTION_SIGN, part)
+    .replaceAll(DECIMAL_DOSE, part);
+}
+
 function readCadence(f: string): FrequencyReading | null {
   const spaced = f
+    .replaceAll(DASHED_COURSE, '$1 A $2')
     .replaceAll(/\b(\d{1,2}):(\d{2})\b/g, '$1H$2')
     .replaceAll('/', ' / ')
     .replaceAll(/[^A-Z0-9/]+/g, ' ')
@@ -874,7 +1000,7 @@ function readCadence(f: string): FrequencyReading | null {
   const text: Text = { f, t: spaced ? spaced.split(' ') : [] };
   for (const step of STEPS) {
     const reading = step(text);
-    if (reading) return reading;
+    if (reading) return saysMoreThan(reading, text.t) ? null : reading;
   }
   return null;
 }
@@ -884,11 +1010,12 @@ export function frequencyReading(frequency: string | null | undefined): Frequenc
   if (!frequency?.trim()) return ONE_OFF;
   const upper = normalize(frequency);
   if (upper.includes('STAT')) return ONE_OFF;
-  if (readsRound31Phrase(frequency) || statesNoFixedSchedule(frequency)) return UNREAD;
-  const minutes = intervalMinutesOf(frequency);
+  const written = withoutDoseParts(accentlessUpper(frequency));
+  if (readsRound31Phrase(frequency) || statesNoFixedSchedule(written)) return UNREAD;
+  const minutes = intervalMinutesOf(written);
   if (minutes !== null) return { kind: 'REPEATING', intervalMinutes: minutes };
   if (ONE_OFF_WORDS.has(upper.replaceAll(' ', ''))) return ONE_OFF;
-  return readCadence(upper) ?? UNREAD;
+  return readCadence(normalize(written)) ?? UNREAD;
 }
 
 function joinSingleLetters(list: readonly string[]): string[] {
@@ -911,12 +1038,21 @@ function joinSingleLetters(list: readonly string[]): string[] {
 
 function readsConditional(text: string, list: readonly string[]): boolean {
   if (COMPARISON.test(text) || SLASH_SP.test(text) || readsRound31Phrase(text)) return true;
-  const joined = joinSingleLetters(list);
+  const named = withoutNames(list);
+  const joined = joinSingleLetters(named);
   return (
+    list.at(-1) === 'REPETER' ||
     joined.some((word) => CONDITIONAL_WORDS.has(word)) ||
-    containsPhrase(list, CONDITIONAL_PHRASES) ||
+    containsPhrase(named, CONDITIONAL_PHRASES) ||
     containsPhrase(joined, CONDITIONAL_PHRASES)
   );
+}
+
+function withoutNames(list: readonly string[]): string[] {
+  let spaced = ` ${list.join(' ')} `;
+  for (const name of NOT_A_CONDITION) spaced = spaced.replaceAll(` ${name} `, ' ');
+  const kept = spaced.trim();
+  return kept ? kept.split(' ') : [];
 }
 
 function wordsOf(text: string): string[] {
@@ -942,9 +1078,10 @@ function isWeightBand(bracketed: string): boolean {
  */
 export function unTickedFrequencyVerdict(frequency: string | null | undefined): FrequencyVerdict {
   if (!frequency?.trim()) return 'FIXED';
-  const text = accentlessUpper(frequency).replaceAll(/\([^()]*\)/g, (part) =>
-    isWeightBand(part) ? ' ' : part,
-  );
+  const text = accentlessUpper(frequency)
+    .replaceAll(/\([^()]*\)/g, (part) => (isWeightBand(part) ? ' ' : part))
+    .replaceAll(/[_.,\s]+/g, ' ')
+    .trim();
   if (readsConditional(text, wordsOf(text))) return 'CONDITIONAL';
   return frequencyReading(frequency).kind === 'UNREAD' ? 'UNREADABLE' : 'FIXED';
 }

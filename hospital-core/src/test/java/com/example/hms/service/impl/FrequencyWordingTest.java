@@ -181,6 +181,39 @@ class FrequencyWordingTest {
         assertThat(conditional).doesNotContainAnyElementsOf(unreadable);
     }
 
+    /**
+     * The independent review of round 34: the rest of the sentence has its say. Each of these was read as a
+     * dangerously shorter interval or as one dose ending a course; each is now read as written or asked about.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"1 g x 7", "1 cp x 14", "1x10", "1 x 5 ml", "x 6 cures", "4 cp x 6", "0,5 mg sur 8 h",
+        "1 prise pendant 5 jours", "4 cp matin et soir J1 à J3", "matin et soir 3 jours de suite", "H0 à H24", "H1-H6",
+        "à partir de demain matin et soir", "ce soir puis tous les soirs", "tonight then every night",
+        "pendant 5 jours après l'intervention", "48 h après chirurgie", "5 jours post-partum", "dès l'admission",
+        "1 g IVD pendant 5 jours", "1 dose pendant 5 jours", "dose de charge puis entretien", "le 12/12",
+        "du 12/12 au 15/12", "jusqu'au 8/8", "à partir du 6/6", "en dehors des repas", "à distance des repas",
+        "continue", "uso continuo", "1 cp uso continuo", "traitement continu", "toutes les 4 à 6h", "cada 6 a 8h",
+        "1 cp du lundi au vendredi", "Monday to Friday", "once or twice a day", "twice or three times a day", "2-3/24h",
+        "1 goutte OD", "1 cp à J 3"})
+    void reviewOfRound34_whatIsNotCertainIsAsked(String wording) {
+        assertThat(FrequencyWording.classify(wording)).as(wording).isEqualTo(FrequencyWording.Verdict.UNREADABLE);
+    }
+
+    /** The same review: a symptom or a measured value beside a cadence is a condition, not a schedule. */
+    @ParameterizedTest
+    @ValueSource(strings = {"toutes les 6 h pour hyperthermie", "q4h for anxiety", "toutes les 8 h pour diarrhée",
+        "3 fois par jour selon glycémie", "10 UI selon dextro matin et soir", "toutes les 6h selon TA"})
+    void reviewOfRound34_aMeasuredConditionIsNotASchedule(String wording) {
+        assertThat(FrequencyWording.classify(wording)).as(wording).isEqualTo(FrequencyWording.Verdict.CONDITIONAL);
+    }
+
+    /** The same review: a regular course is not told it reads as needed for a name that holds a condition word. */
+    @ParameterizedTest
+    @ValueSource(strings = {"3 fois par jour pour fièvre typhoïde", "1 cp à répéter à J8", "before sleep", "avec du pain"})
+    void reviewOfRound34_aNameIsNotACondition(String wording) {
+        assertThat(FrequencyWording.classify(wording)).as(wording).isNotEqualTo(FrequencyWording.Verdict.CONDITIONAL);
+    }
+
     /** D1395, the re-test gate: its wordings are refused on the tick with the "reads as needed" message. */
     @ParameterizedTest
     @ValueSource(strings = {

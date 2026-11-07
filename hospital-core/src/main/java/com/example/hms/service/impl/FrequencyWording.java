@@ -61,10 +61,10 @@ public final class FrequencyWording {
     private static final Pattern NOT_ALPHANUMERIC = Pattern.compile("[^A-Z0-9]+");
 
     /** Separators and any kind of space, read as one space, as the portal's mirror reads them. */
-    private static final Pattern SEPARATORS = Pattern.compile("[_.,\\s\\u00A0\\u202F]++");
+    private static final Pattern SEPARATORS = Pattern.compile("[_.,\\s\\p{Z}\\uFEFF]++");
 
     /** Nothing but spaces, of any kind. */
-    private static final Pattern NOTHING_WRITTEN = Pattern.compile("[\\s\\u00A0\\u202F]*+");
+    private static final Pattern NOTHING_WRITTEN = Pattern.compile("[\\s\\p{Z}\\uFEFF]*+");
 
     /**
      * Words that make a frequency a condition, in EN, FR and ES (upper case,
@@ -79,12 +79,24 @@ public final class FrequencyWording {
         + "INSOMNIE CRISE CRISES MAL AGITATION CEPHALEE CEPHALEES CONSTIPATION EVA DOLOR DOLORES FIEBRE NAUSEAS "
         + "VOMITO VOMITOS CRISIS PAIN FEVER NAUSEA NAUSEOUS NAUSEATED VOMITING ATTACK ATTACKS SLEEP HEADACHE "
         + "HEADACHES TOUX TOS COUGH VOLONTE LIBITUM REQUERIMIENTO DISCRECION OCCASIONNELLEMENT PONCTUELLEMENT "
-        + "INTERMITTENCE REPETER");
+        + "INTERMITTENCE HYPERTHERMIE ANXIETY ANXIETE ANSIEDAD ANGOISSE DIARRHEE DIARRHEA DIARREA DYSPNEE DYSPNEA "
+        + "DISNEA VERTIGE VERTIGES VERTIGO PRURIT ITCH ITCHING WHEEZE SIFFLEMENT SPASME SPASMES CONVULSION "
+        + "CONVULSIONS SAIGNEMENT BLEEDING HEMORRAGIE HEMORRHAGE GLYCEMIE GLUCEMIA GLUCOSE DEXTRO EFFORT EXERCISE");
+
+    /**
+     * A name holding a condition word, which is no condition: a diagnosis, a food,
+     * a time of day. Taken out before the words are read, so a regular course is
+     * not told it reads as needed ("3 fois par jour pour fievre typhoide").
+     */
+    private static final List<String> NOT_A_CONDITION = List.of(
+        "FIEVRE TYPHOIDE", "FIEVRE JAUNE", "TYPHOID FEVER", "YELLOW FEVER", "FIEBRE TIFOIDEA", "FIEBRE AMARILLA",
+        "DU PAIN", "AVEC PAIN", "BEFORE SLEEP");
 
     /** Phrases that make a frequency a condition (words separated by one space). */
     private static final List<String> CONDITIONAL_PHRASES = List.of(
         "PRO RE NATA", "S IL", "SIL YA", "EN CAS", "EN CASO", "ON REQUEST", "UPON REQUEST", "AU CAS", "IN CASE",
-        "IN THE EVENT", "AD LIB", "COUP PAR COUP", "AS REQ", "AS DIRECTED", "PR N");
+        "IN THE EVENT", "AD LIB", "COUP PAR COUP", "AS REQ", "AS DIRECTED", "PR N", "SELON TA", "SELON LA TA",
+        "SEGUN TA");
 
     private FrequencyWording() {
     }
@@ -135,9 +147,21 @@ public final class FrequencyWording {
         if (COMPARISON.matcher(text).find() || SLASH_SP.matcher(text).find() || MarDoseSchedule.isAsNeeded(text)) {
             return true;
         }
-        List<String> joined = joinSingleLetters(words);
-        return joined.stream().anyMatch(CONDITIONAL_WORDS::contains) || containsPhrase(words, CONDITIONAL_PHRASES)
-            || containsPhrase(joined, CONDITIONAL_PHRASES);
+        List<String> named = withoutNames(words);
+        List<String> joined = joinSingleLetters(named);
+        // "a repeter" alone repeats on demand; "a repeter a J8" names when.
+        boolean toRepeat = !words.isEmpty() && "REPETER".equals(words.get(words.size() - 1));
+        return toRepeat || joined.stream().anyMatch(CONDITIONAL_WORDS::contains)
+            || containsPhrase(named, CONDITIONAL_PHRASES) || containsPhrase(joined, CONDITIONAL_PHRASES);
+    }
+
+    private static List<String> withoutNames(List<String> words) {
+        String spaced = " " + String.join(" ", words) + " ";
+        for (String name : NOT_A_CONDITION) {
+            spaced = spaced.replace(" " + name + " ", " ");
+        }
+        String kept = spaced.trim();
+        return kept.isEmpty() ? List.of() : List.of(kept.split(" "));
     }
 
     private static boolean containsPhrase(List<String> words, List<String> phrases) {

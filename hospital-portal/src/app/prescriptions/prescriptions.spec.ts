@@ -1290,6 +1290,21 @@ describe('PrescriptionsComponent — signing', () => {
         expect(toast.error).not.toHaveBeenCalled();
       });
 
+      it('a refusal naming the question and another field still shows the box', () => {
+        prescriptionService.create.and.returnValue(
+          throwError(() => ({
+            status: 400,
+            error: {
+              message: 'both',
+              fieldErrors: { frequencyConfirmed: 'asked', dosage: 'dose' },
+            },
+          })),
+        );
+        submit('SP + AQ');
+        expect(component.frequencyConfirmAsked()).toBeTrue();
+        expect(component['formError']()).toBe('both');
+      });
+
       it('a refusal that names another field keeps its banner', () => {
         prescriptionService.create.and.returnValue(
           throwError(() => ({

@@ -17,6 +17,7 @@
     "src/app/admin-governance/security-tab.html::a.severity",
     "src/app/admin-governance/security-tab.html::b.enforcementLevel",
     "src/app/admin-governance/security-tab.html::template.category",
+    "src/app/admin/order-sets/order-set-edit.component.html::item.frequency",
     "src/app/admissions/admissions.html::a.acuityLevel",
     "src/app/appointments/appointment-detail.html::appt.reason",
     "src/app/appointments/appointment-detail.html::appt.statusReason",
@@ -99,13 +100,13 @@
     "src/app/micro/microbiology.html::susc.method",
     "src/app/mortality/mortality.html::rec.amendmentReason",
     "src/app/notifications/notification-list.html::notif.type",
+    "src/app/nurse-station/emar/emar.component.html::task.route",
     "src/app/nurse-station/mar-dose-history/mar-dose-history.component.ts::d.overrideReason",
     "src/app/nurse-station/mar-dose-history/mar-dose-history.component.ts::d.reason",
-    "src/app/nurse-station/nurse-station.html::m.lastReason",
-    "src/app/nurse-station/emar/emar.component.html::task.route",
     "src/app/nurse-station/nurse-station.html::a.acuityLevel",
     "src/app/nurse-station/nurse-station.html::a.category",
     "src/app/nurse-station/nurse-station.html::c.acuityLevel",
+    "src/app/nurse-station/nurse-station.html::m.lastReason",
     "src/app/nurse-station/nurse-station.html::m.route",
     "src/app/nurse-station/nurse-station.html::p.acuityLevel",
     "src/app/nurse-station/nurse-station.html::task.category",
@@ -190,9 +191,13 @@
     "src/app/prescriptions/prescriptions.html::p.frequency",
     "src/app/prescriptions/prescriptions.html::r.noShowReason",
     "src/app/prescriptions/prescriptions.html::r.reason",
+    "src/app/prescriptions/prescriptions.html::reviewRx.frequency",
     "src/app/prescriptions/prescriptions.html::rx.clarificationReason",
     "src/app/prescriptions/prescriptions.html::rx.frequency",
+    "src/app/prescriptions/prescriptions.html::rx.overrideReason",
+    "src/app/prescriptions/prescriptions.html::rx.pediatricDoseReviewReason",
     "src/app/prescriptions/prescriptions.html::verifyTarget()?.frequency",
+    "src/app/prescriptions/prescriptions.html::verifyTarget()?.overrideReason",
     "src/app/procedure-orders/procedure-orders.html::o.anesthesiaType",
     "src/app/procedure-orders/procedure-orders.html::o.cancellationReason",
     "src/app/procedure-orders/procedure-orders.html::o.sedationType",
@@ -224,14 +229,11 @@
     "src/app/transfusion/transfusion.html::a.stopReason",
     "src/app/transfusion/transfusion.html::g.correctionReason",
     "src/app/transfusion/transfusion.html::u.source",
-    "src/app/transfusion/transfusion.html::xm.incompatibilityReason",
-    "src/app/prescriptions/prescriptions.html::rx.pediatricDoseReviewReason",
-    "src/app/prescriptions/prescriptions.html::verifyTarget()?.overrideReason",
-    "src/app/prescriptions/prescriptions.html::reviewRx.frequency",
-    "src/app/prescriptions/prescriptions.html::rx.overrideReason"
+    "src/app/transfusion/transfusion.html::xm.incompatibilityReason"
   ],
   "reasons": {
     "src/app/transfusion/transfusion.html::xm.incompatibilityReason": "the laboratory's own free text: why this crossmatch came back incompatible",
-    "src/app/appointments/appointment-detail.html::appt.statusReason": "False positive (round 20, D1126 / D1132): the reason a person typed when cancelling an appointment or marking it a no-show (free text, at most 500 characters, kept as written in the new status_reason column), not an enum; there is no domain to pipe it through."
+    "src/app/appointments/appointment-detail.html::appt.statusReason": "False positive (round 20, D1126 / D1132): the reason a person typed when cancelling an appointment or marking it a no-show (free text, at most 500 characters, kept as written in the new status_reason column), not an enum; there is no domain to pipe it through.",
+    "src/app/admin/order-sets/order-set-edit.component.html::item.frequency": "QA D1419: free text a prescriber typed, shown only when it is off the list, so the author sees the wording the server asks about."
   }
 }

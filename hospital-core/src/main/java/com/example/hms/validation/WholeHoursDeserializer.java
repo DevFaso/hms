@@ -37,8 +37,11 @@ public class WholeHoursDeserializer extends StdDeserializer<Integer> {
     }
 
     private static Integer wholeOrRefused(BigDecimal value) {
-        boolean whole = value.stripTrailingZeros().scale() <= 0;
-        return whole ? Integer.valueOf(value.intValue()) : Integer.valueOf(NOT_WHOLE);
+        try {
+            return value.intValueExact();
+        } catch (ArithmeticException notAWholeInt) {
+            return NOT_WHOLE;
+        }
     }
 
     private Integer fromText(String text, DeserializationContext context) {

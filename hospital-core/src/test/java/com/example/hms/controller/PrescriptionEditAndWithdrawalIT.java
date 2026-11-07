@@ -506,8 +506,7 @@ class PrescriptionEditAndWithdrawalIT extends BaseIT {
                 .contextPath(API_CONTEXT)
                 .with(as(authorUser))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(body("Amoxicilline 500 mg", "DISCONTINUED", "Traitement terminé").replace("3x/day", "SOS")
-                    .replace("\"dosage\":\"500 mg\"", "\"dosage\":\"1 g\"")))
+                .content(body("Amoxicilline 500 mg", "DISCONTINUED", "Traitement terminé").replace("3x/day", "max 4/j")))
             .andExpect(status().isOk());
         assertThat(prescriptionRepository.findById(prescription.getId()).orElseThrow().getStatus())
             .isEqualTo(PrescriptionStatus.DISCONTINUED);

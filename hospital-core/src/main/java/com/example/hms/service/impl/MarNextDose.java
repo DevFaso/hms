@@ -148,8 +148,10 @@ public final class MarNextDose {
             return new Due(first, first.minus(earlyWindow), null, first, false, false, infusion);
         }
         if (infusion) {
+            // Started once a dose is GIVEN; an infusion held or refused is still a dose waiting.
             LocalDateTime slot = openSlot(rows, lastClosed.get().getScheduledTime(), now, earlyWindow);
-            return new Due(slot, null, null, slot, false, false, true);
+            boolean started = MarDoseInterval.lastGivenAt(rows, null).isPresent();
+            return new Due(slot, started ? null : slot.minus(earlyWindow), null, slot, false, false, true);
         }
         if (reading.kind() == MarDoseSchedule.Kind.UNREAD) {
             // The slot an unread order fills: its open (PENDING) row if the

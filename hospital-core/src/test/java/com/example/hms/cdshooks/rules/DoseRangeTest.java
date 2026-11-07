@@ -22,7 +22,12 @@ class DoseRangeTest {
         "2 1/2 cp|1250", "1 1/2 cp|750", "1 cp 1/2|750", "2 cp 1/2|1250", "1 cp et 1/2|750", "1 cp et demi|750",
         "1 comprimé et demi|750", "1 tablet and a half|750", "1 comprimido y medio|750", "2½ cp|1250", "1 ½ cp|750",
         "1 cp ½|750", "1 3/4 cp|875", "1,000 mg|1000", "1.000 mg|1000", "2,500 mg|2500", "1 000 mg|1000",
-        "1,000-2,000 mg|2000", "1.000 mg PO|1000",
+        "1,000-2,000 mg|2000", "1.000 mg PO|1000", "1,500 mg|1500", "1,250 mg|1250",
+        // The high end of a range is read as written too.
+        "1-2 1/2 cp|1250", "1 à 1 1/2 cp|750", "1/2 - 1 1/2 cp|750", "1½-2½ cp|1250",
+        // A real dose, half an hour, and grams are not thousands or parts of a tablet.
+        "3,125 mg|3.125", "3.125 mg|3.125", "1,875 mg|1.875", "1,500 gr|1500", "1,250 grammes|1250",
+        "1 cp 1/2 h avant le repas|500",
         // No valid single dose changes.
         "1/2 cp|250", "3/4 cp|375", "1 cp|500", "2 cp|1000", "0.5 cp|250", "0,5 cp|250", "500 mg|500", "0,125 mg|0.125",
         "0.125 mg|0.125", "1,5 mg|1.5", "1.25 mg|1.25", "1,25 mg|1.25", "12,500 mg|12.5", "1,250 g|1250", "1.5 g|1500",

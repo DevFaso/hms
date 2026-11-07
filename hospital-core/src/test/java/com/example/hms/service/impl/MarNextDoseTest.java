@@ -80,6 +80,20 @@ class MarNextDoseTest {
         assertThat(NurseTaskServiceImpl.slotRuleAllows(running, NOW)).isTrue();
     }
 
+    /** Review of round 34: an infusion held or refused was never started: it is still a dose waiting. */
+    @Test
+    void d1419_anInfusionNeverStartedIsNotRunning() {
+        LocalDateTime start = NOW.minusHours(3);
+        MedicationAdministrationRecord held = row(MedicationAdministrationStatus.HELD, start, start);
+        MarNextDose.Due due = MarNextDose.of(rx("125 ml/h", start), NOW, List.of(held), WINDOW);
+        assertThat(due.running()).isFalse();
+        assertThat(due.finished()).isFalse();
+        assertThat(NurseTaskServiceImpl.resolveMarStatus(due, NOW)).isEqualTo("DUE");
+        MarNextDose.Due later = MarNextDose.of(rx("125 ml/h", start), NOW, List.of(
+            row(MedicationAdministrationStatus.GIVEN, start.plusHours(1), start.plusHours(1)), held), WINDOW);
+        assertThat(later.running()).isTrue();
+    }
+
     /** QA D1426: a single-dose wording ends after its dose: no reason, no second dose. */
     @ParameterizedTest
     @ValueSource(strings = {"Prise unique (TPI-SP 2)", "prise unique à la CPN", "en une prise", "SP dose unique", "TPI-SP"})

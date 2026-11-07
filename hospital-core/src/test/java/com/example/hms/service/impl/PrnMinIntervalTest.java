@@ -265,7 +265,7 @@ class PrnMinIntervalTest {
 
     /** QA D1433: a fraction is refused on the field, not cut down; no sibling Integer is read from a fraction. */
     @ParameterizedTest
-    @ValueSource(strings = {"1.5", "2.9", "6.5", "0.5", "\"1.5\""})
+    @ValueSource(strings = {"1.5", "2.9", "6.5", "0.5", "\"1.5\"", "\"4294967297\"", "4294967297.0"})
     void d1433_aFractionOfAnHourIsRefusedOnItsField(String json) {
         PrescriptionRequestDTO read = tools.jackson.databind.json.JsonMapper.builder().build().readValue(
             "{\"medicationName\":\"Paracetamol\",\"frequency\":\"si besoin\",\"asNeeded\":true,"

@@ -45,6 +45,8 @@ final class FrequencyCadence {
     /** At least this many clock times or course entries are a schedule. */
     private static final int TWO = 2;
     private static final int NOON = 12;
+    /** "x 3": the most doses a day an "x" alone says; "x 7" is a duration or a total. */
+    private static final int MAX_SHORTHAND_COUNT = 4;
 
     /** Everything but a letter, a digit or a slash (one class, no backtracking). */
     private static final Pattern NOT_TOKEN = Pattern.compile("[^A-Z0-9/]+");
@@ -58,7 +60,7 @@ final class FrequencyCadence {
         "\\b(?:TTES|TTE|TT) LES (\\d{1,2}+) ?+(?:HEURES|HEURE|HRS|HR|H)\\b");
     private static final Pattern PAR_HOURS = Pattern.compile("\\bPAR (\\d{1,2}+) ?+H\\b");
     /** "q6" with nothing after it; never the "q4" of a range "q4-6h". */
-    private static final Pattern BARE_Q = Pattern.compile("\\bQ(\\d{1,2}+)\\b(?!-)");
+    private static final Pattern BARE_Q = Pattern.compile("\\bQ(\\d{1,2}+)\\b(?!-)(?! ?[A-Z])");
     /** "1 g/8h", "c/8h", "1 cp/8h": a dose every so many hours. */
     private static final Pattern DOSE_PER_HOURS = Pattern.compile("(?<![0-9] ?H)(?<=[A-Z]) ?/ ?(\\d{1,2}+) ?+H\\b");
     /** "8/8", "12/12": the French q8h without its h; not a date. */
@@ -66,8 +68,28 @@ final class FrequencyCadence {
     /** "3/24", "3/24h", "3x/24h", "3 fois/24h", "3 fois en 24 h". */
     private static final Pattern COUNT_PER_24 = Pattern.compile(
         "\\b(\\d{1,2}+) ?+(?:FOIS ?+|X ?+)?+(?:/|EN\\b|PAR\\b) ?+24(?: ?+H)?+\\b");
-    /** "q2d", "q2j", "q2w". */
-    private static final Pattern Q_LONG = Pattern.compile("\\bQ ?+(\\d{1,2}+) ?+(D|J|W)\\b");
+    /** "q2d", "q2j", "q2w", "q3 weeks", "q3 semaines", "q1 month". */
+    private static final Pattern Q_LONG = Pattern.compile(
+        "\\bQ ?+(\\d{1,2}+) ?+(D|DAYS?+|J|JOURS?+|DIAS?+|W|WEEKS?+|SEM|SEMAINES?+|SEMANAS?+|MOIS|MONTHS?+|MES|MESES)\\b");
+    /** "J1-J5", "H1 - H6": a range, as "J1 a J5". */
+    private static final Pattern DASHED_COURSE = Pattern.compile("\\b([JH]\\d{1,3}+) ?- ?([JH]\\d{1,3}+)\\b");
+    /** "2-3/24h", "2 a 3/24 h": a range over a day. */
+    private static final Pattern RANGE_PER_24 = Pattern.compile("\\b\\d{1,2}+ ?(?:-|A|OU|OR|TO) ?\\d{1,2}+ ?/ ?24(?!\\d)");
+    /** The last word before a bare "8/8": a date, not a cadence ("le 12/12", "jusqu'au 8/8"). */
+    private static final Pattern LAST_WORD = Pattern.compile("([A-Z]+)[^A-Z0-9]*+$");
+
+    /** QA D1419: a word standing for a part of a dose: the digits of a decimal or a fraction are no count. */
+    static final String DOSE_PART = "DOSEPART";
+    private static final String DOSE_PART_SPACED = " " + DOSE_PART + " ";
+    /** "1 1/2", not before a count of times or an hour. */
+    private static final String NOT_A_RATE = "(?! ?\\d)(?! ?/)(?! ?(?:FOIS|X\\b|VECES|TIMES|H\\b|HEURE|HOUR|HORA|J\\b|JOUR|DAY|DIA))";
+    private static final Pattern MIXED_DOSE =
+        Pattern.compile("(?<![\\d/:.,])\\d{1,3}+ (?:1/[234]|2/[34]|3/4)" + NOT_A_RATE);
+    private static final Pattern FRACTION_DOSE =
+        Pattern.compile("(?<![\\d/:.,])(?:1 ?/ ?[234]|2 ?/ ?[34]|3 ?/ ?4)" + NOT_A_RATE);
+    private static final Pattern FRACTION_SIGN = Pattern.compile("\\d{0,3}+ ?[\\u00bd\\u00bc\\u00be]");
+    /** "0,5", "2.5"; not "08:00,20:00" and not a list "0,8,24". */
+    private static final Pattern DECIMAL_DOSE = Pattern.compile("(?<![\\d:.,])\\d{1,4}+[.,]\\d{1,3}+(?![\\d.,:])");
     /** "125 ml/h", "2 mg/h": a rate. */
     private static final Pattern RATE = Pattern.compile("\\b(?:ML|CC|MG|MCG|UG|UI|IU|G|L) ?+/ ?+(?:H|HR|HEURE|HORA|HOUR)\\b");
     private static final Pattern ALL_DAY = Pattern.compile("\\b24 ?+H? ?+/ ?+24\\b");
@@ -96,6 +118,22 @@ final class FrequencyCadence {
     static final Set<String> MONTH_WORDS = words("MOIS MONTH MONTHS MES MESES");
     static final Set<String> QUARTER_WORDS = words("TRIMESTRE TRIMESTRES TRIMESTER");
     static final Set<String> YEAR_WORDS = words("AN ANS ANNEE YEAR YEARS ANO ANOS");
+    /** Before a bare "8/8": a date. */
+    static final Set<String> DATE_BEFORE = words("LE DU AU DE EL DEL ON FROM TO UNTIL HASTA SINCE DESDE JUSQU PARTIR");
+    /** A start, or what follows: not one dose ("a partir de ce soir", "des demain", "bolus puis ..."). */
+    static final Set<String> GOES_ON_WORDS = words("PARTIR DES PUIS THEN LUEGO DESDE STARTING");
+    /** Meals as a constraint on the time, no cadence: "en dehors des repas", "entre les repas". */
+    static final Set<String> AWAY_FROM_MEALS = words("DEHORS ENTRE DISTANCE AWAY BETWEEN FUERA");
+    /** Before a meal word: every meal. */
+    static final Set<String> ALL_MEALS_BEFORE = words("LES DES AUX CHAQUE CADA EACH EVERY LAS LOS");
+    /** Every meal whatever stands before: three doses a day. */
+    static final Set<String> MEALS_WORDS = words("MEALS COMIDAS AC PC");
+    /** One meal, unless what stands before says every one. */
+    static final Set<String> A_MEAL_WORDS = words("REPAS MEAL COMIDA FOOD");
+    static final Set<String> NAMED_MEAL_WORDS = words("DEJEUNER DINER BREAKFAST LUNCH DINNER DESAYUNO ALMUERZO CENA");
+    static final Set<String> FASTING_WORDS = words("JEUN FASTING AYUNAS AYUNO");
+    static final Set<String> INFUSION_WORDS = words("PERFUSION PERFUSIONS INFUSION IV PERF SERINGUE BOMBA POMPE PUMP DRIP");
+    static final Set<String> DROP_WORDS = words("GOUTTE GOUTTES GOTA GOTAS DROP DROPS");
     /** What joins a count to its period: "3 PAR jour", "1 AL dia", "3 A day", "3 P/jour", "3/j". */
     static final Set<String> PERIOD_JOINS = words("PAR PER POR AL A P /");
     static final Set<String> PERIOD_ARTICLES = words("LA LE EL");
@@ -132,13 +170,9 @@ final class FrequencyCadence {
     /** One dose at a time still to come: today or tomorrow. */
     static final Set<String> ONE_TIME_WORDS = words(
         "TONIGHT DEMAIN LENDEMAIN TOMORROW IMMEDIATEMENT IMMEDIATELY INMEDIATAMENTE MAINTENANT NOW AHORA");
-    /** Every meal: three doses a day, as "3 fois par jour" reads. */
-    static final Set<String> EVERY_MEAL_WORDS = words("REPAS MEAL MEALS COMIDA COMIDAS FOOD AC PC");
-    /** One named meal, or an empty stomach: once a day. */
-    static final Set<String> ONE_MEAL_WORDS = words(
-        "DEJEUNER DINER BREAKFAST LUNCH DINNER DESAYUNO ALMUERZO CENA JEUN FASTING AYUNAS AYUNO");
-    static final Set<String> CONTINUOUS_WORDS = words(
-        "CONTINU CONTINUE CONTINUS CONTINUES CONTINUOUS CONTINUO CONTINUA IVSE PSE DEBIT");
+    static final Set<String> CONTINUOUS_WORDS = words("CONTINU CONTINUE CONTINUS CONTINUES CONTINUOUS CONTINUO CONTINUA");
+    /** These say an infusion runs, alone. */
+    static final Set<String> RUNNING_WORDS = words("IVSE PSE DEBIT");
     static final Set<String> SINGLE_WORDS = words("UNIQUE UNICA UNICO SINGLE SEUL SEULE SOLO SOLA");
     static final Set<String> DOSE_WORDS = words("DOSE DOSIS PRISE TOMA FOIS VEZ TIME");
     static final Set<String> INTAKE_WORDS = words("PRISE PRISES TOMA TOMAS");
@@ -162,6 +196,8 @@ final class FrequencyCadence {
     static final Set<String> SINGLE_HOUR_UNIT = words("H");
     static final Set<String> TIMES_WORDS = words("FOIS X VECES VEZ TIMES TIME");
     static final Set<String> RANGE_TO_WORDS = words("A AU TO");
+    static final Set<String> LIST_JOINS = words("ET AND Y");
+    /** "J1 a J3" ends; hourly doses are not read from "H0 a H24". */
     static final Set<String> IN_A_ROW_WORDS = words("SUITE CONSECUTIFS CONSECUTIVES CONSECUTIVOS SEGUIDOS CONSECUTIVE ROW");
 
     /** Words that make a frequency a ceiling, not a schedule. */
@@ -186,11 +222,11 @@ final class FrequencyCadence {
 
     /** One way of writing a cadence after another: the first that finds one answers. */
     private static final List<Function<Text, Reading>> STEPS = List.of(
-        FrequencyCadence::everyMinutes, FrequencyCadence::everyHours, FrequencyCadence::longQ,
-        FrequencyCadence::posology,
-        FrequencyCadence::timesShorthand, FrequencyCadence::timesThenDose, FrequencyCadence::perPeriod, FrequencyCadence::everyPeriod,
-        FrequencyCadence::course, FrequencyCadence::clockTimes, FrequencyCadence::alternateDays,
-        FrequencyCadence::named, FrequencyCadence::weekdays, FrequencyCadence::intakes, FrequencyCadence::oneTime,
+        FrequencyCadence::intakes, FrequencyCadence::everyMinutes, FrequencyCadence::longQ, FrequencyCadence::everyHours,
+        FrequencyCadence::posology, FrequencyCadence::timesShorthand, FrequencyCadence::timesThenDose,
+        FrequencyCadence::perPeriod, FrequencyCadence::everyPeriod, FrequencyCadence::course,
+        FrequencyCadence::clockTimes, FrequencyCadence::alternateDays, FrequencyCadence::named,
+        FrequencyCadence::weekdays, FrequencyCadence::oneTime, FrequencyCadence::namedSingleDose,
         FrequencyCadence::timeOfDay, FrequencyCadence::meals, FrequencyCadence::continuous, FrequencyCadence::singleDose,
         FrequencyCadence::onceEvent, FrequencyCadence::bolus);
 
@@ -207,17 +243,71 @@ final class FrequencyCadence {
 
     /** What the text says beyond {@code MarDoseSchedule}'s own patterns, or {@code null}. */
     static Reading read(String normalized) {
-        String clocked = HH_COLON_MM.matcher(normalized).replaceAll("$1H$2");
+        String dashed = DASHED_COURSE.matcher(normalized).replaceAll("$1 A $2");
+        String clocked = HH_COLON_MM.matcher(dashed).replaceAll("$1H$2");
         String spaced = NOT_TOKEN.matcher(clocked.replace("/", " / ")).replaceAll(" ").trim();
         List<String> tokens = spaced.isEmpty() ? List.of() : List.of(spaced.split(" "));
         Text text = new Text(normalized, tokens);
         for (Function<Text, Reading> step : STEPS) {
             Reading reading = step.apply(text);
             if (reading != null) {
-                return reading;
+                return saysMoreThan(reading, tokens) ? null : reading;
             }
         }
         return null;
+    }
+
+    /**
+     * Review of round 34: each step answers on what it recognises, so the rest of
+     * the sentence has its say here. A single dose that also states a start, a
+     * duration or several parts of the day ("a partir de ce soir", "1 dose pendant
+     * 5 jours", "demain matin et soir") and a course that also states a cadence
+     * ("4 cp matin et soir J1 a J3") are not what they first read as. Not read is
+     * a question to the prescriber, and a question is safe; a course ended after
+     * one dose, or half a malaria treatment, is not.
+     */
+    private static boolean saysMoreThan(Reading reading, List<String> t) {
+        if (reading.kind() == MarDoseSchedule.Kind.COURSE) {
+            return namesAnotherCadence(t);
+        }
+        return reading.kind() == MarDoseSchedule.Kind.ONE_OFF
+            && (goesOn(t) || statesADuration(t) || partsOfDay(t) > 1);
+    }
+
+    private static boolean goesOn(List<String> t) {
+        // "en IM des la naissance": the birth is one moment.
+        return containsAny(t, GOES_ON_WORDS) && !t.contains("NAISSANCE");
+    }
+
+    /** "pendant 5 jours", "48 h apres": a number of days, weeks or months, or of hours from half a day up. */
+    private static boolean statesADuration(List<String> t) {
+        for (int i = 0; i + 1 < t.size(); i++) {
+            Integer number = numberOf(t.get(i));
+            if (number != null && (periodOf(t.get(i + 1)) != null
+                || (HOUR_WORDS.contains(t.get(i + 1)) && number >= NOON))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** A named code, a time of day, a meal, a weekday: a cadence in its own words. */
+    private static boolean namesAnotherCadence(List<String> t) {
+        return partsOfDay(t) > 0 || containsAny(t, MEALS_WORDS) || containsAny(t, A_MEAL_WORDS)
+            || containsAny(t, NAMED_MEAL_WORDS) || containsAny(t, WEEKDAY_WORDS)
+            || t.stream().anyMatch(word -> namedMinutes(word) != null);
+    }
+
+    /**
+     * QA D1419 (review): the digits of a decimal or a fraction are part of a dose,
+     * never a count or a list: "0,5 cp a 8 h" was three doses, "1 1/2 cp par jour"
+     * two. {@code upper} is upper case, without accents.
+     */
+    static String withoutDoseParts(String upper) {
+        String text = MIXED_DOSE.matcher(upper).replaceAll(DOSE_PART_SPACED);
+        text = FRACTION_DOSE.matcher(text).replaceAll(DOSE_PART_SPACED);
+        text = FRACTION_SIGN.matcher(text).replaceAll(DOSE_PART_SPACED);
+        return DECIMAL_DOSE.matcher(text).replaceAll(DOSE_PART_SPACED);
     }
 
     /**
@@ -226,6 +316,9 @@ final class FrequencyCadence {
      * even where it holds a cadence.
      */
     static boolean statesNoFixedSchedule(String frequency) {
+        if (RANGE_PER_24.matcher(MarDoseSchedule.normalize(frequency)).find()) {
+            return true;
+        }
         String normal = NOT_ALPHANUMERIC.matcher(MarDoseSchedule.normalize(frequency)).replaceAll(" ").trim();
         List<String> words = normal.isEmpty() ? List.of() : List.of(normal.split(" "));
         if (words.stream().anyMatch(LIMIT_WORDS::contains) || containsPhrase(words, LIMIT_PHRASES)) {
@@ -258,8 +351,12 @@ final class FrequencyCadence {
 
     /** "matin ou soir": a choice between two words; "1 ou 2 cp" is a dose, "3 ou 4 par jour" a range. */
     private static boolean isChoiceAt(List<String> words, int at) {
-        return at > 0 && at + 1 < words.size() && CHOICE_WORDS.contains(words.get(at))
-            && numberOf(words.get(at - 1)) == null && numberOf(words.get(at + 1)) == null;
+        if (at == 0 || at + 1 >= words.size() || !CHOICE_WORDS.contains(words.get(at))) {
+            return false;
+        }
+        // "once or twice a day": an adverb is no number here, though ONCE is Spanish eleven.
+        return adverbCount(words.get(at - 1)) != null
+            || (numberOf(words.get(at - 1)) == null && numberOf(words.get(at + 1)) == null);
     }
 
     /**
@@ -268,7 +365,8 @@ final class FrequencyCadence {
      * number before it, or no count after it).
      */
     private static boolean rangeStartsAt(List<String> words, int at) {
-        Integer first = numberOf(words.get(at));
+        // A part of a dose can open a range: "0,5 a 1 cp par jour".
+        Integer first = DOSE_PART.equals(words.get(at)) ? Integer.valueOf(0) : numberOf(words.get(at));
         if (first == null || (at > 0 && numberOf(words.get(at - 1)) != null)) {
             return false;
         }
@@ -286,12 +384,15 @@ final class FrequencyCadence {
         }
         int second = Integer.parseInt(whole.group(1));
         String glued = whole.group(2);
-        return second > first && (glued.isEmpty() ? endsARange(words, end + 1, second) : gluedRangeEnd(words, end, glued));
+        return second > first && (glued.isEmpty() ? endsARange(words, end + 1, second) : gluedRangeEnd(words, end, glued, second));
     }
 
-    /** "1-3x/j", "1-3cp/j"; never "3/24h", which is "per 24 hours". */
-    private static boolean gluedRangeEnd(List<String> words, int end, String glued) {
-        return "X".equals(glued) || (!HOUR_WORDS.contains(glued) && isPer(words, end + 1));
+    /** "1-3x/j", "1-3cp/j", "toutes les 4 a 6h"; never "3/24h", which is "per 24 hours". */
+    private static boolean gluedRangeEnd(List<String> words, int end, String glued, int second) {
+        if (HOUR_WORDS.contains(glued)) {
+            return second != HOURS_PER_DAY;
+        }
+        return "X".equals(glued) || isPer(words, end + 1);
     }
 
     /**
@@ -364,20 +465,27 @@ final class FrequencyCadence {
         }
         Matcher slash = BARE_SLASH.matcher(f);
         while (slash.find()) {
-            if (slash.group(1).equals(slash.group(2)) && BARE_SLASH_HOURS.contains(slash.group(1))) {
+            if (slash.group(1).equals(slash.group(2)) && BARE_SLASH_HOURS.contains(slash.group(1))
+                && !isADate(f.substring(0, slash.start()))) {
                 return everyHoursOf(Integer.parseInt(slash.group(1)));
             }
         }
         return null;
     }
 
-    /** "q2d", "q2w". */
+    private static boolean isADate(String before) {
+        Matcher word = LAST_WORD.matcher(before);
+        return word.find() && DATE_BEFORE.contains(word.group(1));
+    }
+
+    /** "q2d", "q2w", "q3 weeks", "q1 mois". */
     private static Reading longQ(Text text) {
         Matcher m = Q_LONG.matcher(text.text());
         if (!m.find()) {
             return null;
         }
-        return every(Integer.parseInt(m.group(1)) * ("W".equals(m.group(2)) ? MINUTES_PER_WEEK : MINUTES_PER_DAY));
+        Integer period = "W".equals(m.group(2)) ? Integer.valueOf(MINUTES_PER_WEEK) : periodOf(m.group(2));
+        return period == null ? null : every(Integer.parseInt(m.group(1)) * period);
     }
 
     /** "1-0-1 cp": the count of non-zero intakes a day. */
@@ -392,14 +500,20 @@ final class FrequencyCadence {
     /** "3 x 1 cp", "3x1", "1 cp x 3", "x 3": so many doses a day; never "x 3 jours", which is how long. */
     private static Reading timesShorthand(Text text) {
         List<String> t = text.tokens();
+        if (namesAnotherCadence(t)) {
+            // "BID x 7", "matin et soir x 5": the number says how many days or doses, the cadence is written.
+            return null;
+        }
         for (int i = 0; i < t.size(); i++) {
             Matcher glued = GLUED_TIMES.matcher(t.get(i));
-            if (glued.matches()) {
-                return shorthand(Integer.valueOf(glued.group(1)), Integer.parseInt(glued.group(2)));
+            if (glued.matches() && i + 1 == t.size()) {
+                return shorthand(Integer.valueOf(glued.group(1)), Integer.parseInt(glued.group(2)), "");
             }
-            if ("X".equals(t.get(i)) && i + 1 < t.size() && numberOf(t.get(i + 1)) != null
-                && !statesHowLongAfter(t, i + 2)) {
-                return shorthand(i > 0 ? numberOf(t.get(i - 1)) : null, numberOf(t.get(i + 1)));
+            if ("X".equals(t.get(i)) && i + 1 < t.size() && !statesHowLongAfter(t, i + 2)) {
+                Integer right = DOSE_PART.equals(t.get(i + 1)) ? Integer.valueOf(1) : numberOf(t.get(i + 1));
+                if (right != null) {
+                    return shorthand(i > 0 ? numberOf(t.get(i - 1)) : null, right, i + 2 < t.size() ? t.get(i + 2) : "");
+                }
             }
         }
         return null;
@@ -422,12 +536,19 @@ final class FrequencyCadence {
         return at < t.size() && (periodOf(t.get(at)) != null || HOUR_WORDS.contains(t.get(at)));
     }
 
-    /** "3 x 1": three doses of one; "1 x 3": the same; "2 x 3" says neither, so it is not read. */
-    private static Reading shorthand(Integer left, int right) {
-        if (left == null || left == 1) {
-            return countOver(right, MINUTES_PER_DAY);
+    /**
+     * "3 x 1 cp": three doses of one; "1 x 3", "1 cp x 3", "x 3": the same, a small
+     * count with nothing after it ("1 x 5 ml", "4 cp x 6", "x 6 cures" are a
+     * dose or a total, not read); "3 x 500 mg": three of a measure; "2 x 3" says
+     * neither, so it is not read.
+     */
+    private static Reading shorthand(Integer left, int right, String after) {
+        boolean firstIsADose = left == null || left == 1;
+        if (firstIsADose) {
+            return right > 1 && right <= MAX_SHORTHAND_COUNT && after.isEmpty() ? countOver(right, MINUTES_PER_DAY) : null;
         }
-        return right == 1 ? countOver(left, MINUTES_PER_DAY) : null;
+        return left <= MAX_SHORTHAND_COUNT + 2 && (right == 1 || MEASURE_UNITS.contains(after))
+            ? countOver(left, MINUTES_PER_DAY) : null;
     }
 
     private static Integer periodOf(String word) {
@@ -453,7 +574,9 @@ final class FrequencyCadence {
             Integer period = periodOf(t.get(i));
             // "una vez A LA semana": the article stands between the join and its period.
             int join = i > 2 && PERIOD_ARTICLES.contains(t.get(i - 1)) ? i - 2 : i - 1;
-            if (period != null && PERIOD_JOINS.contains(t.get(join))) {
+            // "a J 3" is a day of the course, not a period.
+            boolean aDayNumber = i + 1 < t.size() && ONLY_DIGITS.matcher(t.get(i + 1)).matches();
+            if (period != null && !aDayNumber && PERIOD_JOINS.contains(t.get(join))) {
                 Reading reading = countBefore(t, join - 1, period);
                 if (reading != null) {
                     return reading;
@@ -480,6 +603,9 @@ final class FrequencyCadence {
     }
 
     private static Integer countOf(String word) {
+        if (DOSE_PART.equals(word)) {
+            return 1;
+        }
         Integer adverb = adverbCount(word);
         if (adverb != null) {
             return adverb;
@@ -562,6 +688,10 @@ final class FrequencyCadence {
             letter = m.group(1);
             int value = Integer.parseInt(m.group(2));
             int to = rangeEnd(t, i, value);
+            if (to != value && "H".equals(letter)) {
+                // "H0 a H24" names no moments: not 25 hourly doses.
+                return null;
+            }
             for (int v = value; v <= to && values.size() <= MAX_COURSE_ENTRIES; v++) {
                 values.add(v);
             }
@@ -597,16 +727,25 @@ final class FrequencyCadence {
 
     /** "a 0, 8, 24, 36, 48 et 60 h": numbers from 0, then an hour unit. */
     private static List<Integer> hoursList(List<String> t) {
-        List<Integer> values = new ArrayList<>();
-        for (String word : t) {
-            if (HOUR_WORDS.contains(word)) {
-                return !values.isEmpty() && values.get(0) == 0 ? offsets(values, MINUTES_PER_HOUR) : null;
-            }
-            if (ONLY_DIGITS.matcher(word).matches()) {
-                values.add(Integer.valueOf(word));
+        for (int i = 0; i < t.size(); i++) {
+            if (HOUR_WORDS.contains(t.get(i))) {
+                return hoursListBefore(t, i);
             }
         }
         return null;
+    }
+
+    /** The unbroken list of numbers right before the hour unit, from 0, at least three of them. */
+    private static List<Integer> hoursListBefore(List<String> t, int unit) {
+        List<Integer> values = new ArrayList<>();
+        for (int i = unit - 1; i >= 0; i--) {
+            if (ONLY_DIGITS.matcher(t.get(i)).matches()) {
+                values.add(0, Integer.valueOf(t.get(i)));
+            } else if (!LIST_JOINS.contains(t.get(i))) {
+                break;
+            }
+        }
+        return values.size() > TWO && values.get(0) == 0 ? offsets(values, MINUTES_PER_HOUR) : null;
     }
 
     /** "3 jours de suite", "5 jours consecutifs". */
@@ -716,7 +855,9 @@ final class FrequencyCadence {
         List<String> t = text.tokens();
         for (int i = 0; i < t.size(); i++) {
             Integer minutes = namedMinutes(t.get(i));
-            if (minutes != null) {
+            // "1 goutte OD": the right eye, not once a day.
+            boolean rightEye = "OD".equals(t.get(i)) && containsAny(t, DROP_WORDS);
+            if (minutes != null && !rightEye) {
                 Integer adverb = i > 0 ? adverbCount(t.get(i - 1)) : null;
                 return adverb == null ? every(minutes) : countOver(adverb, minutes);
             }
@@ -759,22 +900,44 @@ final class FrequencyCadence {
 
     /** "le lundi", "lundi et jeudi": once a week each. */
     private static Reading weekdays(Text text) {
-        Set<String> days = new HashSet<>(text.tokens());
+        List<String> t = text.tokens();
+        for (int i = 0; i + 2 < t.size(); i++) {
+            if (WEEKDAY_WORDS.contains(t.get(i)) && RANGE_TO_WORDS.contains(t.get(i + 1))
+                && WEEKDAY_WORDS.contains(t.get(i + 2))) {
+                // "du lundi au vendredi" is every day of a span, not two days a week.
+                return null;
+            }
+        }
+        Set<String> days = new HashSet<>(t);
         days.retainAll(WEEKDAY_WORDS);
         return days.isEmpty() ? null : countOver(days.size(), MINUTES_PER_WEEK);
     }
 
-    /** "en 2 prises", "3 prises", "tres tomas", "en 2 fois": so many a day; "en une prise", "1 prise": one dose. */
+    /**
+     * "en 2 prises", "3 prises", "tres tomas", "en 2 fois", "500 mg/j en 2 prises":
+     * so many a day, whatever total stands beside them. One intake is
+     * {@link #singleDose}'s, after everything that can give it a cadence.
+     */
     private static Reading intakes(Text text) {
         List<String> t = text.tokens();
         for (int i = 1; i < t.size(); i++) {
             boolean splitIn = "FOIS".equals(t.get(i)) && i > 1 && "EN".equals(t.get(i - 2));
             Integer count = numberOf(t.get(i - 1));
-            if (count != null && (INTAKE_WORDS.contains(t.get(i)) || splitIn)) {
-                return count == 1 ? Reading.ONE_OFF : countOver(count, MINUTES_PER_DAY);
+            if (count != null && count > 1 && (INTAKE_WORDS.contains(t.get(i)) || splitIn)
+                && !perLongerPeriodAfter(t, i + 1)) {
+                return countOver(count, MINUTES_PER_DAY);
             }
         }
         return null;
+    }
+
+    /** "3 prises par semaine" is {@link #perPeriod}'s. */
+    private static boolean perLongerPeriodAfter(List<String> t, int at) {
+        if (at + 1 >= t.size() || !PERIOD_JOINS.contains(t.get(at))) {
+            return false;
+        }
+        Integer period = periodOf(t.get(at + 1));
+        return period != null && period != MINUTES_PER_DAY;
     }
 
     /** "ce soir", "cette nuit", "esta noche", "demain matin", "immediatement": one dose, not a daily one. */
@@ -795,57 +958,112 @@ final class FrequencyCadence {
 
     /** "le matin", "matin et soir", "matin, midi et soir", "au coucher", "au lever": a dose at each part of the day. */
     private static Reading timeOfDay(Text text) {
-        List<String> t = text.tokens();
-        int parts = (containsAny(t, MORNING_WORDS) ? 1 : 0) + (containsAny(t, NOON_WORDS) ? 1 : 0)
-            + (containsAny(t, EVENING_WORDS) ? 1 : 0);
+        int parts = partsOfDay(text.tokens());
         return parts == 0 ? null : countOver(parts, MINUTES_PER_DAY);
+    }
+
+    private static int partsOfDay(List<String> t) {
+        return (containsAny(t, MORNING_WORDS) ? 1 : 0) + (containsAny(t, NOON_WORDS) ? 1 : 0)
+            + (containsAny(t, EVENING_WORDS) ? 1 : 0);
     }
 
     private static boolean containsAny(List<String> tokens, Set<String> words) {
         return tokens.stream().anyMatch(words::contains);
     }
 
-    /** "avant les repas", "with food", "ac": with each of three meals; "a jeun", "au dejeuner": once a day. */
+    /**
+     * "avant les repas", "apres chaque repas", "before meals", "ac": each of three
+     * meals. "apres le repas", "with a meal", "with food": one a day, never three
+     * times what may be a daily dose (a dose sooner asks a reason). "au dejeuner et
+     * au diner": one each. "a jeun": once a day. "en dehors des repas" is a
+     * constraint, no cadence: not read.
+     */
     private static Reading meals(Text text) {
         List<String> t = text.tokens();
-        if (containsAny(t, ONE_MEAL_WORDS)) {
+        if (containsAny(t, AWAY_FROM_MEALS)) {
+            return null;
+        }
+        Set<String> named = new HashSet<>(t);
+        named.retainAll(NAMED_MEAL_WORDS);
+        if (!named.isEmpty()) {
+            return countOver(named.size(), MINUTES_PER_DAY);
+        }
+        if (containsAny(t, FASTING_WORDS)) {
             return every(MINUTES_PER_DAY);
         }
         boolean lettered = t.size() == TWO && "C".equals(t.get(1)) && ("A".equals(t.get(0)) || "P".equals(t.get(0)));
-        return containsAny(t, EVERY_MEAL_WORDS) || lettered ? countOver(3, MINUTES_PER_DAY) : null;
+        if (lettered || containsAny(t, MEALS_WORDS) || everyMealNamed(t)) {
+            return countOver(3, MINUTES_PER_DAY);
+        }
+        return containsAny(t, A_MEAL_WORDS) ? every(MINUTES_PER_DAY) : null;
+    }
+
+    private static boolean everyMealNamed(List<String> t) {
+        for (int i = 1; i < t.size(); i++) {
+            if (A_MEAL_WORDS.contains(t.get(i)) && ALL_MEALS_BEFORE.contains(t.get(i - 1))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** "perfusion continue", "IVSE", "seringue electrique", "debit 40 ml/h", "125 ml/h", "24h/24". */
     private static Reading continuous(Text text) {
         List<String> t = text.tokens();
         boolean electric = t.contains("SERINGUE") && t.contains("ELECTRIQUE");
-        return electric || containsAny(t, CONTINUOUS_WORDS) || RATE.matcher(text.text()).find()
-            || ALL_DAY.matcher(text.text()).find() ? Reading.CONTINUOUS : null;
+        boolean running = containsAny(t, RUNNING_WORDS) || RATE.matcher(text.text()).find()
+            || ALL_DAY.matcher(text.text()).find();
+        return electric || running || continuousInfusionNamed(t) ? Reading.CONTINUOUS : null;
     }
 
-    /** "Prise unique (TPI-SP 2)", "une seule dose", "1 dose a la CPN", "une fois", "TPI-SP": one dose. */
-    private static Reading singleDose(Text text) {
+    /**
+     * "perfusion continue", "en continu", "continu": an infusion. Not "uso continuo"
+     * nor "traitement continu", a chronic medicine, which would lose its schedule
+     * and its interval check.
+     */
+    private static boolean continuousInfusionNamed(List<String> t) {
+        if (!containsAny(t, CONTINUOUS_WORDS)) {
+            return false;
+        }
+        boolean alone = t.size() == 1 && !"CONTINUE".equals(t.get(0));
+        boolean enContinu = t.size() == TWO && "EN".equals(t.get(0));
+        return alone || enContinu || containsAny(t, INFUSION_WORDS);
+    }
+
+    /**
+     * "Prise unique (TPI-SP 2)", "une seule dose", "dose unique le soir", "TPI-SP":
+     * it says one dose in so many words, whatever part of the day it falls in.
+     */
+    private static Reading namedSingleDose(Text text) {
         List<String> t = text.tokens();
         if (containsAny(t, PREVENTIVE_DOSE_WORDS)) {
             return Reading.ONE_OFF;
         }
         for (int i = 0; i < t.size(); i++) {
+            boolean singleAfter = DOSE_WORDS.contains(t.get(i)) && i + 1 < t.size() && SINGLE_WORDS.contains(t.get(i + 1));
+            boolean singleBefore = SINGLE_WORDS.contains(t.get(i)) && i + 1 < t.size() && DOSE_WORDS.contains(t.get(i + 1));
+            if (singleAfter || singleBefore) {
+                return Reading.ONE_OFF;
+            }
+        }
+        return null;
+    }
+
+    /** "1 dose a la CPN", "une prise", "une fois": one dose, when nothing before gave it a cadence. */
+    private static Reading singleDose(Text text) {
+        List<String> t = text.tokens();
+        for (int i = 0; i < t.size(); i++) {
             if (DOSE_WORDS.contains(t.get(i)) && saysOneBefore(t, i)) {
                 return Reading.ONE_OFF;
             }
-            if (SINGLE_WORDS.contains(t.get(i)) && i + 1 < t.size() && DOSE_WORDS.contains(t.get(i + 1))) {
-                return Reading.ONE_OFF;
-            }
         }
-        boolean once = t.contains("ONCE") || t.contains("1X");
-        return once || t.contains("1") && t.contains("X") && t.indexOf("X") == t.indexOf("1") + 1 ? Reading.ONE_OFF : null;
+        // "1 x" alone; "1 x 5 ml" says a dose, not how often.
+        boolean oneX = t.size() == TWO && "1".equals(t.get(0)) && "X".equals(t.get(1));
+        return t.contains("ONCE") || t.contains("1X") || oneX ? Reading.ONE_OFF : null;
     }
 
-    /** "1 dose", "une prise", "prise unique". */
+    /** "1 dose", "une prise". */
     private static boolean saysOneBefore(List<String> t, int at) {
-        if (at + 1 < t.size() && SINGLE_WORDS.contains(t.get(at + 1))) {
-            return true;
-        }
         Integer count = at > 0 ? numberOf(t.get(at - 1)) : null;
         return count != null && count == 1;
     }
