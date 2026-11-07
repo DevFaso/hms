@@ -2919,7 +2919,7 @@ class BillingInvoiceServiceImplTest {
             () -> billingInvoiceService.addAdjustment(paid.getId(),
                 adjustment(com.example.hms.enums.InvoiceAdjustmentType.DISCOUNT, "100", "Remise", null),
                 UUID.randomUUID(), Locale.FRENCH));
-        assertEquals("billing.adjustment.notIssued", refused.getMessageKey());
+        assertEquals("billing.adjustment.paid", refused.getMessageKey());
     }
 
     @Test

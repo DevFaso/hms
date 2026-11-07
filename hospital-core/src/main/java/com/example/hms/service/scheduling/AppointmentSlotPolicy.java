@@ -43,6 +43,9 @@ public class AppointmentSlotPolicy {
      */
     public static final int DEFAULT_VISIT_MINUTES = 30;
 
+    /** QA D1429: the request field a missing overbooking reason is refused on. */
+    public static final String OVERBOOK_REASON_FIELD = "overbookReason";
+
     private final AppointmentSlotRepository slotRepository;
     private final SessionTemplateRepository templateRepository;
     private final Clock clock;
@@ -104,8 +107,8 @@ public class AppointmentSlotPolicy {
      * {@code departmentId}: a slot of another clinic is answered as no
      * published slot at all.
      *
-     * <p>The desk keeps its documented freedom (walk-ins, overbooking where
-     * the desk allows it): only the patient's own paths call this.
+     * <p>Only a patient's own paths call this: staff may overbook, with a
+     * reason ({@link #overbookReasonOffSlot}).
      */
     public AppointmentSlot requirePublishedFreeSlot(UUID staffId, LocalDateTime start, UUID hospitalId,
                                                     UUID departmentId) {
@@ -118,6 +121,30 @@ public class AppointmentSlotPolicy {
             throw new com.example.hms.exception.FieldBusinessException(com.example.hms.service.AppointmentSlotRules.BOOKED_TIME_FIELD, "portal.booking.slotNotFree");
         }
         return slot;
+    }
+
+    /**
+     * QA D1429, coordinator's decision, as in real hospitals: the desk may overbook,
+     * with a reason. A staff booking or move onto a published free slot of the
+     * clinician needs nothing and returns null. Anywhere else (no slot starts at that
+     * minute, a night, a closed day, a slot already taken or blocked) it needs a
+     * recorded reason, refused on the field when missing, and returns it trimmed.
+     * A slot held for an offer is refused by {@link #requireNoLiveHold} first.
+     */
+    public String overbookReasonOffSlot(UUID staffId, LocalDateTime start, UUID hospitalId, String reason) {
+        if (isPublishedFreeSlot(staffId, start, hospitalId)) {
+            return null;
+        }
+        if (reason == null || reason.isBlank()) {
+            throw new com.example.hms.exception.FieldBusinessException(OVERBOOK_REASON_FIELD, "appointment.overbook.reasonRequired");
+        }
+        return reason.trim();
+    }
+
+    private boolean isPublishedFreeSlot(UUID staffId, LocalDateTime start, UUID hospitalId) {
+        AppointmentSlot slot = staffId == null || start == null ? null
+            : slotRepository.findFirstByStaff_IdAndStartAt(staffId, start).orElse(null);
+        return slot != null && isOf(slot, hospitalId, null) && slot.isOfferable(LocalDateTime.now(clock));
     }
 
     private static boolean isOf(AppointmentSlot slot, UUID hospitalId, UUID departmentId) {

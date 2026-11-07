@@ -69,17 +69,20 @@ public class StockOutRoutingController {
     @ApiResponse(responseCode = "200", description = "PDF returned")
     @ApiResponse(responseCode = "400", description = "The prescription was not printed for the patient")
     public ResponseEntity<byte[]> printedCopy(@PathVariable UUID prescriptionId) {
-        return printedCopyResponse(prescriptionCopyPdfService.copyForStaff(prescriptionId), prescriptionId);
+        return printedCopyResponse(prescriptionCopyPdfService.copyForStaff(prescriptionId));
     }
 
+    /** QA D1443: a readable name, with no database id, as for receipts and invoices. */
+    private static final String PRINTED_COPY_FILE_NAME = "ordonnance.pdf";
+
     /** Inline, never cached (it carries the patient's name and their medication). */
-    public static ResponseEntity<byte[]> printedCopyResponse(byte[] pdf, UUID prescriptionId) {
+    public static ResponseEntity<byte[]> printedCopyResponse(byte[] pdf) {
         return ResponseEntity.ok()
                 .cacheControl(org.springframework.http.CacheControl.noStore())
                 .contentType(org.springframework.http.MediaType.APPLICATION_PDF)
                 .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
                         org.springframework.http.ContentDisposition.inline()
-                                .filename("ordonnance-" + prescriptionId + ".pdf").build().toString())
+                                .filename(PRINTED_COPY_FILE_NAME).build().toString())
                 .body(pdf);
     }
 

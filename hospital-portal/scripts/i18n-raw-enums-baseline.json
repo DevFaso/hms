@@ -230,12 +230,16 @@
     "src/app/prescriptions/prescriptions.html::verifyTarget()?.overrideReason",
     "src/app/prescriptions/prescriptions.html::reviewRx.frequency",
     "src/app/prescriptions/prescriptions.html::rx.overrideReason",
-    "src/app/admin/order-sets/order-set-edit.component.html::item.frequency"
+    "src/app/admin/order-sets/order-set-edit.component.html::item.frequency",
+    "src/app/appointments/appointment-detail.html::appt.overbookReason",
+    "src/app/registrations/registrations.html::r.deactivationReason"
   ],
   "reasons": {
     "src/app/transfusion/transfusion.html::xm.incompatibilityReason": "the laboratory's own free text: why this crossmatch came back incompatible",
     "src/app/transfusion/transfusion.html::r.reason": "free text the person issuing typed: why this emergency release was made",
     "src/app/appointments/appointment-detail.html::appt.statusReason": "False positive (round 20, D1126 / D1132): the reason a person typed when cancelling an appointment or marking it a no-show (free text, at most 500 characters, kept as written in the new status_reason column), not an enum; there is no domain to pipe it through.",
-    "src/app/admin/order-sets/order-set-edit.component.html::item.frequency": "QA D1419: free text a prescriber typed, shown only when it is off the list, so the author sees the wording the server asks about."
+    "src/app/admin/order-sets/order-set-edit.component.html::item.frequency": "QA D1419: free text a prescriber typed, shown only when it is off the list, so the author sees the wording the server asks about.",
+    "src/app/appointments/appointment-detail.html::appt.overbookReason": "False positive (round 34, D1429): the reason a person typed when booking outside the published slots; free text.",
+    "src/app/registrations/registrations.html::r.deactivationReason": "False positive (round 34, D1430): the reason a person typed when deactivating the registration; free text."
   }
 }

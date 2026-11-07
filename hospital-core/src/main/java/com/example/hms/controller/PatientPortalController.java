@@ -220,7 +220,7 @@ public class PatientPortalController {
                                                            @PathVariable UUID prescriptionId) {
         UUID patientId = portalService.resolvePatientId(auth);
         return com.example.hms.controller.pharmacy.StockOutRoutingController.printedCopyResponse(
-                prescriptionCopyPdfService.copyForPatient(prescriptionId, patientId), prescriptionId);
+                prescriptionCopyPdfService.copyForPatient(prescriptionId, patientId));
     }
 
     // ── Vital Signs ──────────────────────────────────────────────────────

@@ -25,6 +25,7 @@
                 id="date"
                 type="date"
                 [(ngModel)]="form.appointmentDate"
+                (ngModelChange)="checkSlot()"
                 name="appointmentDate"
                 required
               />
@@ -37,6 +38,7 @@
                 id="start"
                 type="time"
                 [(ngModel)]="form.startTime"
+                (ngModelChange)="checkSlot()"
                 name="startTime"
                 required
               />
@@ -46,6 +48,27 @@
               }}</small>
             </div>
           </div>
+          @if (offSlot()) {
+            <!-- QA D1429: the desk may overbook, with a reason the appointment keeps. -->
+            <div class="field-row">
+              <div class="field" data-testid="appt-overbook">
+                <label for="overbookReason"
+                  >{{ 'APPOINTMENTS.OVERBOOK_REASON' | translate }} *</label
+                >
+                <textarea
+                  id="overbookReason"
+                  name="overbookReason"
+                  rows="2"
+                  maxlength="500"
+                  required
+                  aria-required="true"
+                  data-server-field="overbookReason"
+                  [(ngModel)]="form.overbookReason"
+                ></textarea>
+                <small class="field-hint">{{ 'APPOINTMENTS.OVERBOOK_HINT' | translate }}</small>
+              </div>
+            </div>
+          }
         </div>
 
         <!-- Patient picker -->

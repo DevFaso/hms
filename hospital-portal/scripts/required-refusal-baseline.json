@@ -177,10 +177,6 @@
       "count": 1,
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
     },
-    "src/app/maternity/prenatal-tab.ts::unmarked-refusal::submitReschedule::PRENATAL.RESCHEDULE_REQUIRED": {
-      "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
-    },
     "src/app/medication-history/medication-history.ts::unmarked-refusal::submitFill::COMMON.SUBMIT_BLOCKED_REQUIRED": {
       "count": 1,
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only (key re-pinned by D1358: the toast now names the blank fields; the fallback key is what the scan reads)"
@@ -304,10 +300,6 @@
     "src/app/reception/checkin-dialog/checkin-dialog.component.ts::toast-only-refusal::submit::RECEPTION.NO_APPOINTMENT_SELECTED": {
       "count": 1,
       "why": "not a field: the appointment comes from the queue item the dialog was opened on"
-    },
-    "src/app/registrations/registrations.ts::unmarked-refusal::submitForm::REGISTRATIONS.PATIENT_REQUIRED": {
-      "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
     },
     "src/app/registries/registries.ts::unmarked-refusal::submitEnroll::REGISTRIES.ENROLL_FIELDS_REQUIRED": {
       "count": 1,

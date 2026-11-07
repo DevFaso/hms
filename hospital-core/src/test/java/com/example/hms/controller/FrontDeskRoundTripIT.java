@@ -109,6 +109,7 @@ class FrontDeskRoundTripIT extends BaseIT {
     @Autowired private PatientInsuranceRepository insuranceRepository;
     @Autowired private PatientRecallRepository recallRepository;
     @Autowired private com.example.hms.repository.EncounterRepository encounterRepository;
+    @Autowired private com.example.hms.repository.scheduling.AppointmentSlotRepository slotRepository;
 
     private Organization organization;
     private Hospital hospital;
@@ -156,6 +157,7 @@ class FrontDeskRoundTripIT extends BaseIT {
     }
 
     private void cleanUp() {
+        slotRepository.deleteAll();
         recallRepository.deleteAll();
         insuranceRepository.deleteAll();
         // The flow-board round trip writes an encounter (and its history).
@@ -266,6 +268,104 @@ class FrontDeskRoundTripIT extends BaseIT {
                 .content(appointmentBody(other, day, "14:00", "14:30", "Consultation"))
                 .with(asReceptionist()))
             .andExpect(status().isCreated());
+    }
+
+    /**
+     * QA D1429 (coordinator's decision): the desk may overbook, with a reason. Every shape QA booked (a free
+     * minute, a night, a Sunday) on the real endpoint, the slot path unchanged, the move too.
+     */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"09:07", "23:15", "03:15"})
+    @DisplayName("D1429: off the slots, the desk's booking is refused on the field, then kept with its reason")
+    void d1429_offTheSlotsNeedsAReasonAndKeepsIt(String time) throws Exception {
+        LocalDate sunday = LocalDate.now().plusDays(10).with(java.time.DayOfWeek.SUNDAY);
+        long before = appointmentRepository.count();
+        mockMvc.perform(post(API + "/appointments").contextPath(API).header("Accept-Language", "fr")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(appointmentBodyOnASlot(aicha, sunday, time, time, "x"))
+                .with(asReceptionist()))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.field").value("overbookReason"))
+            .andExpect(jsonPath("$.fieldErrors.overbookReason").value(org.hamcrest.Matchers.containsString("surbooking")));
+        assertThat(appointmentRepository.count()).isEqualTo(before);
+
+        String created = mockMvc.perform(post(API + "/appointments").contextPath(API)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(appointmentBody(aicha, sunday, time, time, "x"))
+                .with(asReceptionist()))
+            .andExpect(status().isCreated())
+            .andReturn().getResponse().getContentAsString();
+        UUID id = UUID.fromString(com.jayway.jsonpath.JsonPath.read(created, "$.id"));
+        mockMvc.perform(get(API + "/appointments/{id}", id).contextPath(API).with(asReceptionist()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.overbookReason").value("Demande du médecin"));
+    }
+
+    @Test
+    @DisplayName("D1429: a published free slot needs no reason; a slot already blocked is off the slots")
+    void d1429_aFreeSlotBooksAsBefore() throws Exception {
+        LocalDate day = LocalDate.now().plusDays(4);
+        publishedSlot(day, LocalTime.of(9, 0), com.example.hms.enums.SlotStatus.OPEN);
+        publishedSlot(day, LocalTime.of(9, 40), com.example.hms.enums.SlotStatus.BLOCKED);
+
+        String created = mockMvc.perform(post(API + "/appointments").contextPath(API)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(appointmentBodyOnASlot(aicha, day, "09:00", "09:20", "x"))
+                .with(asReceptionist()))
+            .andExpect(status().isCreated())
+            .andReturn().getResponse().getContentAsString();
+        UUID id = UUID.fromString(com.jayway.jsonpath.JsonPath.read(created, "$.id"));
+        assertThat(appointmentRepository.findById(id).orElseThrow().getOverbookReason()).isNull();
+
+        mockMvc.perform(post(API + "/appointments").contextPath(API)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(appointmentBodyOnASlot(aicha, day, "09:40", "10:00", "x"))
+                .with(asReceptionist()))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.field").value("overbookReason"));
+    }
+
+    @Test
+    @DisplayName("D1429: a move off the slots needs its reason; a move onto a slot drops it; a kept time asks nothing")
+    void d1429_aMoveIsHeldToTheSameRule() throws Exception {
+        LocalDate day = LocalDate.now().plusDays(6);
+        publishedSlot(day, LocalTime.of(9, 0), com.example.hms.enums.SlotStatus.OPEN);
+        String created = mockMvc.perform(post(API + "/appointments").contextPath(API)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(appointmentBodyOnASlot(aicha, day, "09:00", "09:20", "x"))
+                .with(asReceptionist()))
+            .andExpect(status().isCreated())
+            .andReturn().getResponse().getContentAsString();
+        UUID id = UUID.fromString(com.jayway.jsonpath.JsonPath.read(created, "$.id"));
+
+        mockMvc.perform(put(API + "/appointments/{id}", id).contextPath(API)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(appointmentBodyOnASlot(aicha, day, "11:07", "11:27", "moved"))
+                .with(asReceptionist()))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.field").value("overbookReason"));
+
+        mockMvc.perform(put(API + "/appointments/{id}", id).contextPath(API)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(appointmentBody(aicha, day, "11:07", "11:27", "moved"))
+                .with(asReceptionist()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.overbookReason").value("Demande du médecin"));
+
+        // The time stays: nothing to ask, and what is there stays.
+        mockMvc.perform(put(API + "/appointments/{id}", id).contextPath(API)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(appointmentBodyOnASlot(aicha, day, "11:07", "11:27", "note edited"))
+                .with(asReceptionist()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.overbookReason").value("Demande du médecin"));
+
+        mockMvc.perform(put(API + "/appointments/{id}", id).contextPath(API)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(appointmentBodyOnASlot(aicha, day, "09:00", "09:20", "back on the slot"))
+                .with(asReceptionist()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.overbookReason").doesNotExist());
     }
 
     /** QA D1126 / D1132: the desk's cancel without a reason is refused on the real endpoint; with one, it is kept. */
@@ -794,12 +894,24 @@ class FrontDeskRoundTripIT extends BaseIT {
 
     // ------------------------------------------------------------------ helpers
 
+    /** QA D1429: these visits are at times no slot is published for, so the desk says why. */
     private String appointmentBody(Patient patient, LocalDate date, String start, String end, String notes) {
+        return appointmentBodyOnASlot(patient, date, start, end, notes)
+            .replace("\"reason\"", "\"overbookReason\":\"Demande du médecin\",\"reason\"");
+    }
+
+    private String appointmentBodyOnASlot(Patient patient, LocalDate date, String start, String end, String notes) {
         return """
             {"patientId":"%s","appointmentDate":"%s","startTime":"%s","endTime":"%s","staffId":"%s",
              "hospitalId":"%s","departmentId":"%s","reason":"Consultation","notes":"%s"}
             """.formatted(patient.getId(), date, start, end, doctor.getId(), hospital.getId(),
             department.getId(), notes);
+    }
+
+    private void publishedSlot(LocalDate date, LocalTime start, com.example.hms.enums.SlotStatus status) {
+        slotRepository.save(com.example.hms.model.scheduling.AppointmentSlot.builder()
+            .hospital(hospital).department(department).staff(doctor).slotDate(date)
+            .startAt(date.atTime(start)).endAt(date.atTime(start).plusMinutes(20)).status(status).build());
     }
 
     private Appointment appointment(Patient patient, LocalDate date, LocalTime start, AppointmentStatus status) {

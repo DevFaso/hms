@@ -3386,4 +3386,11 @@
                  stripComments="false"/>
     </changeSet>
 
+    <changeSet id="V270-r34-overbook-and-registration-deactivation-reason" author="hms-team" runOnChange="false">
+        <sqlFile path="V270__r34_overbook_and_registration_deactivation_reason.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

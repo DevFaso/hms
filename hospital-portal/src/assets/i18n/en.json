@@ -1383,6 +1383,8 @@
     "TITLE": "e-Keneya"
   },
   "APPOINTMENTS": {
+    "OVERBOOK_REASON": "Overbooking reason",
+    "OVERBOOK_HINT": "This time is not a published free slot of this clinician. Say why the visit is overbooked.",
     "ADDRESS": "Address",
     "APPOINTMENT_DATE": "Appointment Date",
     "APPOINTMENT_DETAILS": "Appointment Details",
@@ -7479,6 +7481,7 @@
     "PRN_MIN_INTERVAL_VALUE": "At least {{hours}} h between doses"
   },
   "PROFILE": {
+    "RECOVERY_REMOVE_CONFIRM": "Remove this recovery contact?",
     "ACCOUNT_AGE": "Account Age",
     "ACCOUNT_DETAILS": "Account Details",
     "ACCOUNT_INFO": "Account Information",
@@ -10052,6 +10055,10 @@
     "PAST_DATE": "The planned date and time cannot be in the past."
   },
   "REGISTRATIONS": {
+    "DEACTIVATE_TITLE": "Deactivate this registration?",
+    "DEACTIVATE_BODY": "The patient leaves this hospital's active list. You can reactivate the registration later.",
+    "DEACTIVATE_REASON": "Reason for deactivation",
+    "DEACTIVATE_REASON_REQUIRED": "Say why this registration is deactivated.",
     "TITLE": "Hospital Registrations",
     "SUBTITLE": "Register patients and manage their hospital stays",
     "NEW": "New registration",

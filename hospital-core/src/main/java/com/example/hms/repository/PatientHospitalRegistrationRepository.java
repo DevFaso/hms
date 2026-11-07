@@ -61,7 +61,7 @@ public interface PatientHospitalRegistrationRepository extends JpaRepository<Pat
                r.registrationDate, r.active,
                r.stayStatus, r.stayStatusUpdatedAt,
                r.currentRoom, r.currentBed, r.attendingPhysicianName,
-               r.readyForDischargeNote, r.readyByStaffId
+               r.readyForDischargeNote, r.readyByStaffId, r.deactivationReason
            )
            FROM PatientHospitalRegistration r
            LEFT JOIN r.patient p

@@ -41,9 +41,17 @@
               <span class="material-symbols-outlined" aria-hidden="true">{{ tone.icon }}</span>
             </div>
             <div class="pli-body">
-              <span class="pli-title">{{
-                inv.description || inv.facility || ('PORTAL.BILLING.MEDICAL_SERVICES' | translate)
-              }}</span>
+              <span class="pli-title">
+                @if (inv.visitType) {
+                  <!-- QA D1421: the visit's type and day, never its clinical notes -->
+                  {{ inv.visitType | enumLabel: 'encounterType' }}
+                  @if (inv.visitDate) {
+                    · {{ inv.visitDate | serverTime | date: 'mediumDate' }}
+                  }
+                } @else {
+                  {{ inv.facility || ('PORTAL.BILLING.MEDICAL_SERVICES' | translate) }}
+                }
+              </span>
               {{ ' '
               }}<span class="pli-sub"
                 >{{ 'PORTAL.BILLING.INVOICE' | translate }} #{{ inv.invoiceNumber }} ·
@@ -54,7 +62,7 @@
                 >{{ 'PORTAL.BILLING.DUE' | translate }}
                 {{ inv.dueDate | serverTime | date: 'mediumDate' }}</span
               >
-              @if (inv.description && inv.facility) {
+              @if (inv.visitType && inv.facility) {
                 <!-- QA D1413: the title is the visit when it has one; the hospital is always named -->
                 {{ ' '
                 }}<span class="pli-meta" [attr.data-testid]="'invoice-hospital-' + inv.id">{{

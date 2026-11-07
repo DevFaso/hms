@@ -409,7 +409,7 @@ class PatientHospitalRegistrationServiceImplTest {
             hospitalId, "General Hospital", "GH", "1 Main St",
             LocalDate.now(), active,
             PatientStayStatus.ADMITTED, null,
-            null, null, null, null, null);
+            null, null, null, null, null, null);
     }
 
     @Test
@@ -480,6 +480,41 @@ class PatientHospitalRegistrationServiceImplTest {
         when(mapper.toResponseDTO(registration)).thenReturn(responseDTO);
 
         assertThat(service.updateRegistration(registrationId, dto)).isEqualTo(responseDTO);
+    }
+
+    /** QA D1430: ending a registration takes a reason, kept on the row and audited; reactivating clears it. */
+    @Test
+    void deactivatingNeedsAReasonKeepsItAndReactivatingClearsIt() {
+        registration.setActive(true);
+        when(registrationRepository.findById(registrationId)).thenReturn(Optional.of(registration));
+
+        for (String blank : new String[] {null, "", "  "}) {
+            PatientHospitalRegistrationRequestDTO refused = PatientHospitalRegistrationRequestDTO.builder()
+                .active(false).deactivationReason(blank).build();
+            assertThatThrownBy(() -> service.updateRegistration(registrationId, refused))
+                .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                    ex -> assertThat(ex.getField()).isEqualTo("deactivationReason"));
+            assertThat(registration.isActive()).isTrue();
+        }
+        when(registrationRepository.save(registration)).thenReturn(registration);
+        when(mapper.toResponseDTO(registration)).thenReturn(responseDTO);
+        service.updateRegistration(registrationId, PatientHospitalRegistrationRequestDTO.builder()
+            .active(false).deactivationReason("  Parti vivre ailleurs ").build());
+        assertThat(registration.isActive()).isFalse();
+        assertThat(registration.getDeactivationReason()).isEqualTo("Parti vivre ailleurs");
+        verify(auditService).logEvent(org.mockito.ArgumentMatchers.argThat(event ->
+            "Patient registration deactivated".equals(event.getEventDescription())));
+
+        // Still inactive, another field edited: nothing to ask, the reason stays.
+        service.updateRegistration(registrationId, PatientHospitalRegistrationRequestDTO.builder()
+            .active(false).currentRoom("12").build());
+        assertThat(registration.getDeactivationReason()).isEqualTo("Parti vivre ailleurs");
+
+        when(hospitalRepository.findClinicalById(registration.getHospital().getId()))
+            .thenReturn(Optional.of(registration.getHospital()));
+        service.updateRegistration(registrationId, PatientHospitalRegistrationRequestDTO.builder().active(true).build());
+        assertThat(registration.isActive()).isTrue();
+        assertThat(registration.getDeactivationReason()).isNull();
     }
 
     /** RCPT-CLIN: the desk's form no longer holds the note, and its PUT emptied what an administrator wrote. */

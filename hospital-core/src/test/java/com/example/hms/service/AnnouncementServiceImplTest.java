@@ -180,16 +180,75 @@ class AnnouncementServiceImplTest {
             verify(announcementRepository).findById(id);
         }
 
+        private void ofHospital(UUID id, UUID hospitalId) {
+            com.example.hms.model.Hospital hospital = new com.example.hms.model.Hospital();
+            hospital.setId(hospitalId);
+            Announcement announcement = buildAnnouncement(id, "Important", LocalDateTime.now());
+            announcement.setHospital(hospital);
+            when(announcementRepository.findById(id)).thenReturn(Optional.of(announcement));
+        }
+
+        private void actingAt(UUID hospitalId) {
+            HospitalContextHolder.setContext(HospitalContext.builder()
+                .activeHospitalId(hospitalId).permittedHospitalIds(java.util.Set.of(hospitalId)).build());
+        }
+
         @Test
-        @DisplayName("throws RuntimeException when not found")
+        @DisplayName("hospital A gets 404 for hospital B's announcement, and reads its own")
+        void anotherHospitalsAnnouncementIsNotFound() {
+            UUID hospitalA = UUID.randomUUID();
+            UUID theirs = UUID.randomUUID();
+            UUID ours = UUID.randomUUID();
+            ofHospital(theirs, UUID.randomUUID());
+            ofHospital(ours, hospitalA);
+            actingAt(hospitalA);
+
+            assertThrows(com.example.hms.exception.ResourceNotFoundException.class,
+                () -> service.getAnnouncement(theirs));
+            assertEquals(ours, service.getAnnouncement(ours).getId());
+        }
+
+        @Test
+        @DisplayName("a caller with no hospital to act at gets 404 for a hospital's announcement, not a refusal")
+        void noHospitalToActAtIsNotFound() {
+            UUID id = UUID.randomUUID();
+            ofHospital(id, UUID.randomUUID());
+            HospitalContextHolder.setContext(HospitalContext.builder()
+                .permittedHospitalIds(java.util.Set.of(UUID.randomUUID(), UUID.randomUUID())).build());
+
+            assertThrows(com.example.hms.exception.ResourceNotFoundException.class,
+                () -> service.getAnnouncement(id));
+        }
+
+        @Test
+        @DisplayName("a platform-wide announcement (no hospital) stays readable from any hospital")
+        void aPlatformAnnouncementStaysReadable() {
+            UUID id = UUID.randomUUID();
+            when(announcementRepository.findById(id))
+                .thenReturn(Optional.of(buildAnnouncement(id, "Maintenance", LocalDateTime.now())));
+            actingAt(UUID.randomUUID());
+
+            assertEquals(id, service.getAnnouncement(id).getId());
+        }
+
+        @Test
+        @DisplayName("a super-admin in global view reads any hospital's")
+        void globalViewReadsAny() {
+            UUID id = UUID.randomUUID();
+            ofHospital(id, UUID.randomUUID());
+            HospitalContextHolder.setContext(HospitalContext.builder().superAdmin(true).build());
+
+            assertEquals(id, service.getAnnouncement(id).getId());
+        }
+
+        @Test
+        @DisplayName("QA D1437: an unknown id is a 404, never a bare RuntimeException (500)")
         void notFound() {
             UUID id = UUID.randomUUID();
             when(announcementRepository.findById(id)).thenReturn(Optional.empty());
 
-            RuntimeException ex = assertThrows(RuntimeException.class,
+            assertThrows(com.example.hms.exception.ResourceNotFoundException.class,
                 () -> service.getAnnouncement(id));
-
-            assertEquals("Announcement not found", ex.getMessage());
         }
     }
 
@@ -308,15 +367,13 @@ class AnnouncementServiceImplTest {
         }
 
         @Test
-        @DisplayName("throws RuntimeException when not found")
+        @DisplayName("QA D1437: an unknown id is a 404, never a bare RuntimeException (500)")
         void notFound() {
             UUID id = UUID.randomUUID();
             when(announcementRepository.findById(id)).thenReturn(Optional.empty());
 
-            RuntimeException ex = assertThrows(RuntimeException.class,
+            assertThrows(com.example.hms.exception.ResourceNotFoundException.class,
                 () -> service.updateAnnouncement(id, "text"));
-
-            assertEquals("Announcement not found", ex.getMessage());
         }
     }
 

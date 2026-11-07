@@ -118,6 +118,43 @@ describe('PatientTrackerComponent', () => {
     expect(component.frontDeskOnly).toBeFalse();
   });
 
+  it('QA D1431 (RCPT-CLIN): the desk sees no triage action; a nurse keeps both', () => {
+    const card = {
+      encounterId: 'e1',
+      patientId: 'p1',
+      patientName: 'Awa',
+      currentStatus: 'ARRIVED',
+      arrivalTimestamp: '2026-11-06T08:00:00',
+    };
+    trackerSpy.getTrackerBoard.and.returnValue(
+      of({
+        arrived: [card],
+        triage: [],
+        waitingForPhysician: [],
+        inProgress: [],
+        awaitingResults: [{ ...card, encounterId: 'e2', currentStatus: 'AWAITING_RESULTS' }],
+        readyForDischarge: [],
+        totalPatients: 1,
+        averageWaitMinutes: 0,
+      } as unknown as PatientTrackerBoard),
+    );
+    const roles = TestBed.inject(RoleContextService);
+    const active = spyOn(roles, 'hasAnyActiveRole');
+    const triageButtons = (): number => {
+      component.ngOnInit();
+      fixture.detectChanges();
+      return (fixture.nativeElement as HTMLElement).querySelectorAll(
+        'button[title="TRIAGE.TITLE"], button[title="TRACKER.COMPLETE_TRIAGE"], button[title="TRACKER.READY_DISCHARGE"]',
+      ).length;
+    };
+
+    active.and.callFake((asked: string[]) => asked.includes('ROLE_RECEPTIONIST'));
+    expect(triageButtons()).toBe(0);
+
+    active.and.callFake((asked: string[]) => asked.includes('ROLE_NURSE'));
+    expect(triageButtons()).toBeGreaterThanOrEqual(3);
+  });
+
   it('should create', () => {
     expect(component).toBeTruthy();
   });

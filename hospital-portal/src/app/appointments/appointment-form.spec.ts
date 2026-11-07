@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
-import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
@@ -308,5 +308,82 @@ describe('AppointmentFormComponent — prefill from the prenatal calendar', () =
     expect((fixture.nativeElement as HTMLElement).textContent).toContain(
       'Pélagie Wendkouni Kiemdé',
     );
+  });
+
+  describe('QA D1429: the desk may overbook, with a reason', () => {
+    const offerAt = (component: AppointmentFormComponent, slotTimes: string[]): void => {
+      const http = TestBed.inject(HttpTestingController);
+      component.form.staffId = 's-1';
+      component.form.appointmentDate = inDays(5);
+      component.form.startTime = '23:15';
+      component.checkSlot();
+      tick(300);
+      const asked = http.expectOne((r) => r.url === '/slots/search/page');
+      expect(asked.request.params.get('staffId')).toBe('s-1');
+      asked.flush({
+        content: slotTimes.map((t, i) => ({ id: 's' + i, startAt: `${inDays(5)}T${t}:00` })),
+        totalElements: slotTimes.length,
+        totalPages: 1,
+        number: 0,
+        last: true,
+      });
+    };
+
+    it('a time that is no slot opens the reason; a slot asks nothing', fakeAsync(() => {
+      const component = create({});
+      offerAt(component, ['09:00']);
+      expect(component.offSlot()).toBeTrue();
+
+      offerAt(component, ['23:15']);
+      expect(component.offSlot()).toBeFalse();
+    }));
+
+    it('a failed read asks for nothing: the server decides', fakeAsync(() => {
+      const component = create({});
+      const http = TestBed.inject(HttpTestingController);
+      component.form.staffId = 's-1';
+      component.form.appointmentDate = inDays(5);
+      component.form.startTime = '09:00';
+      component.checkSlot();
+      tick(300);
+      http
+        .expectOne((r) => r.url === '/slots/search/page')
+        .flush('no', { status: 403, statusText: 'Forbidden' });
+      expect(component.offSlot()).toBeFalse();
+    }));
+
+    it("the server's refusal opens the field", fakeAsync(() => {
+      const component = create({});
+      const service = TestBed.inject(AppointmentService) as jasmine.SpyObj<AppointmentService>;
+      service.create.and.returnValue(
+        throwError(() => ({ status: 400, error: { field: 'overbookReason', message: 'x' } })),
+      );
+      component.form.appointmentDate = inDays(5);
+      component.form.startTime = '09:00';
+      component.form.patientId = 'p';
+      component.form.staffId = 's';
+      component.submit();
+      tick(300);
+      TestBed.inject(HttpTestingController)
+        .match((r) => r.url === '/slots/search/page')
+        .forEach((r) =>
+          r.flush({ content: [], totalElements: 0, totalPages: 1, number: 0, last: true }),
+        );
+      expect(component.offSlot()).toBeTrue();
+    }));
+
+    it('off the slots, the reason is required before the request', fakeAsync(() => {
+      const component = create({});
+      const service = TestBed.inject(AppointmentService) as jasmine.SpyObj<AppointmentService>;
+      component.offSlot.set(true);
+      component.form.appointmentDate = inDays(5);
+      component.form.startTime = '23:15';
+      component.form.patientId = 'p';
+      component.form.staffId = 's';
+      component.submit();
+      expect(service.create).not.toHaveBeenCalled();
+      tick(300);
+      TestBed.inject(HttpTestingController).match(() => true);
+    }));
   });
 });

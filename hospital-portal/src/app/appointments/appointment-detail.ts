@@ -1,4 +1,7 @@
 import { refusalReason } from '../shared/refusal-reason';
+import { Subscription } from 'rxjs';
+import { SlotInventoryService } from '../services/slot-inventory.service';
+import { OVERBOOK_REASON_FIELD, isOffSlot, refusesForOverbookReason } from './published-slot';
 import { focusFirstInvalid, refuseFields } from '../shared/forms/invalid-fields';
 import { StaffService, StaffResponse, isClinicalProvider } from '../services/staff.service';
 import { DialogFocusDirective } from '../shared/a11y/dialog-focus.directive';
@@ -95,6 +98,7 @@ export class AppointmentDetailComponent implements OnInit {
   protected readonly permissions = inject(PermissionService);
   private readonly auth = inject(AuthService);
   private readonly staffService = inject(StaffService);
+  private readonly slots = inject(SlotInventoryService);
 
   /**
    * QA D1018 / D923: the reschedule can move the visit to another clinician,
@@ -129,6 +133,7 @@ export class AppointmentDetailComponent implements OnInit {
   /** A clinician picked: the visit follows them to their department. */
   onRescheduleStaffChange(staffId: string): void {
     this.rescheduleStaffId = staffId;
+    this.checkRescheduleSlot();
     const picked = this.rescheduleStaffOptions().find((s) => s.id === staffId);
     if (picked?.departmentId) this.rescheduleDepartmentId = picked.departmentId;
   }
@@ -142,6 +147,11 @@ export class AppointmentDetailComponent implements OnInit {
 
   // Reschedule modal
   showReschedule = signal(false);
+  /** QA D1429: the new time is not a published free slot, so the dialog asks why. */
+  rescheduleOffSlot = signal(false);
+  rescheduleOverbookReason = '';
+  /** The latest read only: an older answer never decides for a time since changed. */
+  private rescheduleSlotRead?: Subscription;
   rescheduleDate = '';
   rescheduleStart = '';
   rescheduleNotes = '';
@@ -254,6 +264,9 @@ export class AppointmentDetailComponent implements OnInit {
     this.rescheduleStaffId = appt.staffId;
     this.rescheduleDepartmentId = appt.departmentId ?? '';
     this.rescheduleReason = appt.reason ?? '';
+    this.rescheduleOverbookReason = '';
+    this.rescheduleSlotRead?.unsubscribe();
+    this.rescheduleOffSlot.set(false);
     this.showReschedule.set(true);
     if (appt.hospitalId) {
       this.staffService.list(appt.hospitalId).subscribe({
@@ -265,7 +278,30 @@ export class AppointmentDetailComponent implements OnInit {
   }
 
   closeReschedule(): void {
+    this.rescheduleSlotRead?.unsubscribe();
     this.showReschedule.set(false);
+  }
+
+  /** The dialog's clinician, date or time changed: is it a published free slot? Unmoved asks nothing. */
+  checkRescheduleSlot(): void {
+    const appt = this.appointment();
+    const unmoved =
+      !appt ||
+      (this.rescheduleDate === appt.appointmentDate &&
+        this.rescheduleStart?.slice(0, 5) === appt.startTime?.slice(0, 5) &&
+        this.rescheduleStaffId === appt.staffId);
+    if (unmoved) {
+      this.rescheduleSlotRead?.unsubscribe();
+      this.rescheduleOffSlot.set(false);
+      return;
+    }
+    this.rescheduleSlotRead?.unsubscribe();
+    this.rescheduleSlotRead = isOffSlot(
+      this.slots,
+      this.rescheduleStaffId,
+      this.rescheduleDate,
+      this.rescheduleStart,
+    ).subscribe((off) => this.rescheduleOffSlot.set(off));
   }
 
   submitReschedule(): void {
@@ -324,6 +360,7 @@ export class AppointmentDetailComponent implements OnInit {
       departmentId: this.rescheduleDepartmentId || appt.departmentId || undefined,
       reason: this.rescheduleReason.trim() || appt.reason,
       notes: this.rescheduleNotes || appt.notes || undefined,
+      overbookReason: this.rescheduleOverbookReason.trim() || undefined,
     };
     this.appointmentService.update(this.appointmentId, req).subscribe({
       next: (updated) => {
@@ -333,6 +370,19 @@ export class AppointmentDetailComponent implements OnInit {
         this.saving.set(false);
       },
       error: (err) => {
+        // QA D1429: the field opens on the refusal, marked and focused.
+        if (refusesForOverbookReason(err)) {
+          this.rescheduleOffSlot.set(true);
+          const message = this.translate.instant('APPOINTMENTS.OVERBOOK_HINT');
+          setTimeout(() =>
+            refuseFields(
+              this.host.nativeElement,
+              [OVERBOOK_REASON_FIELD],
+              [OVERBOOK_REASON_FIELD],
+              message,
+            ),
+          );
+        }
         this.toast.error(
           refusalReason(err) ?? this.translate.instant('APPOINTMENTS.RESCHEDULE_FAILED'),
         );

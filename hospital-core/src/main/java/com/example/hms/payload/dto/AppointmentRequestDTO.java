@@ -83,6 +83,13 @@ public class AppointmentRequestDTO {
     private String statusReason;
 
     /**
+     * QA D1429: why staff book or move this visit outside any published free slot.
+     * Required then, ignored on a slot. A patient never overbooks.
+     */
+    @jakarta.validation.constraints.Size(max = 500)
+    private String overbookReason;
+
+    /**
      * QA D1318 (round 29): a booking by staff names its patient (QA D824); a
      * patient booking through this endpoint books for themselves. Read from
      * the caller's authorities, so the rule is checked with the other fields.

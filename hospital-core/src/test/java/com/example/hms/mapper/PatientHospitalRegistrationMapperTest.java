@@ -181,7 +181,7 @@ class PatientHospitalRegistrationMapperTest {
             hospital.getId(), hospital.getName(), hospital.getCode(), "Ouagadougou",
             LocalDate.of(2026, 8, 1), true,
             PatientStayStatus.ADMITTED, null,
-            "204", "B", "Dr Kabore", null, null);
+            "204", "B", "Dr Kabore", null, null, null);
     }
 
     @Test

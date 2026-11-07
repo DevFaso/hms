@@ -239,6 +239,21 @@
           <label for="pn-res-notes">{{ 'MATERNITY.CLINICAL_NOTES' | translate }}</label>
           <textarea id="pn-res-notes" rows="2" [(ngModel)]="rescheduleNotes"></textarea>
         </div>
+        @if (rescheduleOverbook()) {
+          <!-- QA D1429: the server refused the time as off the slots; the desk says why. -->
+          <div class="field">
+            <label for="pn-overbook">{{ 'APPOINTMENTS.OVERBOOK_REASON' | translate }} *</label>
+            <textarea
+              id="pn-overbook"
+              rows="2"
+              maxlength="500"
+              required
+              aria-required="true"
+              data-server-field="overbookReason"
+              [(ngModel)]="rescheduleOverbookReason"
+            ></textarea>
+          </div>
+        }
       </div>
       <div class="modal-actions">
         <button class="btn-secondary" (click)="closeReschedule()">
@@ -247,8 +262,12 @@
         <button
           class="btn-primary"
           [disabled]="rescheduleBusy()"
-          [appSubmitGuard]="!rescheduleDate || !rescheduleTime"
-          [submitGuardFields]="['pn-new-date', 'pn-new-time']"
+          [appSubmitGuard]="
+            !rescheduleDate ||
+            !rescheduleTime ||
+            (rescheduleOverbook() && !rescheduleOverbookReason.trim())
+          "
+          [submitGuardFields]="['pn-new-date', 'pn-new-time', 'pn-overbook']"
           (click)="submitReschedule()"
         >
           {{ 'COMMON.CONFIRM' | translate }}

@@ -1383,6 +1383,8 @@
     "TITLE": "e-Keneya"
   },
   "APPOINTMENTS": {
+    "OVERBOOK_REASON": "Motif du surbooking",
+    "OVERBOOK_HINT": "Cette heure n'est pas un créneau publié libre de ce praticien. Indiquez le motif du surbooking.",
     "ADDRESS": "Adresse",
     "APPOINTMENT_DATE": "Date du rendez-vous",
     "APPOINTMENT_DETAILS": "Détails du rendez-vous",
@@ -7479,6 +7481,7 @@
     "PRN_MIN_INTERVAL_VALUE": "Au moins {{hours}} h entre deux doses"
   },
   "PROFILE": {
+    "RECOVERY_REMOVE_CONFIRM": "Retirer ce contact de récupération ?",
     "ACCOUNT_AGE": "Ancienneté du compte",
     "ACCOUNT_DETAILS": "Détails du compte",
     "ACCOUNT_INFO": "Informations du compte",
@@ -10052,6 +10055,10 @@
     "PAST_DATE": "La date et l'heure prévues ne peuvent pas être dans le passé."
   },
   "REGISTRATIONS": {
+    "DEACTIVATE_TITLE": "Désactiver cet enregistrement ?",
+    "DEACTIVATE_BODY": "Le patient quitte la liste active de cet hôpital. Vous pourrez réactiver l'enregistrement plus tard.",
+    "DEACTIVATE_REASON": "Motif de la désactivation",
+    "DEACTIVATE_REASON_REQUIRED": "Indiquez le motif de la désactivation de cet enregistrement.",
     "TITLE": "Enregistrements hospitaliers",
     "SUBTITLE": "Enregistrer les patients et gérer leurs séjours",
     "NEW": "Nouvel enregistrement",

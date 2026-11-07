@@ -1156,6 +1156,7 @@
           <label for="email-message">{{ 'BILLING.EMAIL_MESSAGE' | translate }}</label>
           <textarea
             id="email-message"
+            maxlength="2000"
             rows="3"
             [ngModel]="emailMessage()"
             (ngModelChange)="emailMessage.set($event)"

@@ -1,3 +1,4 @@
+import { backgroundRequestOptions } from './ws-transport';
 import { unwrapDepartmentList } from './department-lookup.service';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
@@ -181,6 +182,7 @@ export class SlotInventoryService {
     filter: OpenSlotFilter,
     page: number,
     size: number = SLOT_PAGE_SIZE,
+    background = false,
   ): Observable<PageSlice<AppointmentSlotResponse>> {
     let params = new HttpParams().set('page', page).set('size', size);
     for (const [key, value] of Object.entries(filter)) {
@@ -188,7 +190,18 @@ export class SlotInventoryService {
         params = params.set(key, value);
       }
     }
-    return this.http.get<PageSlice<AppointmentSlotResponse>>('/slots/search/page', { params });
+    return this.http.get<PageSlice<AppointmentSlotResponse>>('/slots/search/page', {
+      params,
+      ...(background ? backgroundRequestOptions() : {}),
+    });
+  }
+
+  /**
+   * QA D1429: the same read as a hint to a form. A role the slot list refuses (ROLE_STAFF books
+   * but does not read slots) stays on its form: the 403 is the caller's, never a redirect.
+   */
+  searchAllOpenInBackground(filter: OpenSlotFilter): Observable<AllRows<AppointmentSlotResponse>> {
+    return allPages((page, size) => this.searchOpenPage(filter, page, size, true));
   }
 
   /** QA D1390: every open slot of the window (all pages), for a picker that lists them all. */

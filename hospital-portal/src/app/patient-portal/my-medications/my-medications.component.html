@@ -224,7 +224,7 @@
       <section class="portal-section">
         <h2 class="portal-section-title">{{ 'PORTAL.MEDICATIONS.PRESCRIPTIONS' | translate }}</h2>
         <div class="portal-list">
-          @for (rx of prescriptions(); track rx.id) {
+          @for (rx of prescriptionRows.shown(); track rx.id) {
             <div
               class="portal-list-item clickable"
               (click)="toggleRx(rx.id)"
@@ -335,6 +335,26 @@
             }
           }
         </div>
+        <!-- QA D1442: the total, and every prescription one click away -->
+        <p class="pli-meta" data-testid="rx-count">
+          {{
+            'PORTAL_PAGING.SHOWN_OF'
+              | translate
+                : { shown: prescriptionRows.shown().length, total: prescriptionRows.total() }
+          }}
+        </p>
+        @if (prescriptionRows.hasMore()) {
+          <div class="portal-load-more">
+            <button
+              type="button"
+              class="btn-secondary"
+              data-testid="rx-more"
+              (click)="prescriptionRows.showMore()"
+            >
+              {{ 'PORTAL_PAGING.SHOW_MORE' | translate }}
+            </button>
+          </div>
+        }
       </section>
     }
 

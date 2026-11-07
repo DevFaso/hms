@@ -446,6 +446,21 @@ describe('PatientPortalService invoices', () => {
   });
 });
 
+describe('mapPortalInvoice (QA D1421)', () => {
+  it('names the visit by type and day, and reads nothing else of the encounter', () => {
+    const planted = {
+      id: 'x',
+      encounterType: 'INPATIENT',
+      encounterDate: '2026-11-03T23:30:00',
+      encounterDescription: 'CLINICAL-SENTINEL',
+    };
+    const invoice = mapPortalInvoice(planted);
+    expect(invoice.visitType).toBe('INPATIENT');
+    expect(invoice.visitDate).toBe('2026-11-03T23:30:00');
+    expect(JSON.stringify(invoice)).not.toContain('CLINICAL-SENTINEL');
+  });
+});
+
 describe('formatTime (QA D255)', () => {
   it('writes a French time on the 24-hour clock, never "AM/PM"', () => {
     const fr = formatTime('09:00:00', 'fr-FR');

@@ -209,6 +209,22 @@ class AppointmentSlotRulesGuardTest {
     }
 
     /**
+     * QA D1429 (coordinator's decision): the two ways staff give a clinician's time at a chosen minute
+     * (create, move) ask for the reason off the slots, and a patient on POST /appointments takes a slot.
+     * The other booking writes choose no minute by hand: the slot writer books the slot row, the check-out
+     * follow-up takes the first free published slot, a referral's time is the referring clinician's.
+     */
+    @Test
+    void aStaffBookingOffTheSlotsNeedsItsReasonAndAPatientTakesASlot() {
+        String staff = com.example.hms.testsupport.SourceScan.stripComments(read(MAIN.resolve("service/AppointmentServiceImpl.java")));
+        assertThat(count(staff, "slotPolicy.overbookReasonOffSlot(")).as("staff create + move").isEqualTo(2);
+        assertThat(count(staff, "slotPolicy.requirePublishedFreeSlot(")).as("a patient on POST /appointments").isEqualTo(1);
+        String portal = com.example.hms.testsupport.SourceScan.stripComments(read(MAIN.resolve("service/impl/PatientPortalServiceImpl.java")));
+        assertThat(count(portal, "slotPolicy.requirePublishedFreeSlot(")).as("portal book + reschedule").isGreaterThanOrEqualTo(2);
+        assertThat(portal).doesNotContain("overbookReasonOffSlot");
+    }
+
+    /**
      * QA D1073 (class guard): every method that creates an appointment names
      * who booked it. The slot inventory (a slot or an accepted waitlist offer),
      * the referral and the check-out follow-up wrote no creator, so the list

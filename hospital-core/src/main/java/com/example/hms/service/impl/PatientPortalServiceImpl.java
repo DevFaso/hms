@@ -1077,6 +1077,8 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         // language), never glued into the notes as "Patient rescheduled: ...".
         // No reason given: the previous status reason does not describe this move.
         appointment.setStatusReason(patientReason(dto.getReason()));
+        // QA D1429: the visit now sits on a published slot: it is no longer overbooked.
+        appointment.setOverbookReason(null);
         appointmentRepository.save(appointment);
         // QA D1093: the old slot goes back on offer and the new one is taken.
         slotInventoryService.releaseForAppointment(appointment.getId());

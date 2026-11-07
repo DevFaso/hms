@@ -1383,6 +1383,8 @@
     "TITLE": "e-Keneya"
   },
   "APPOINTMENTS": {
+    "OVERBOOK_REASON": "Motivo de la sobrecita",
+    "OVERBOOK_HINT": "Esta hora no es una franja publicada libre de este profesional. Indique el motivo de la sobrecita.",
     "ADDRESS": "Dirección",
     "APPOINTMENT_DATE": "Fecha de la cita",
     "APPOINTMENT_DETAILS": "Detalles de la cita",
@@ -7479,6 +7481,7 @@
     "PRN_MIN_INTERVAL_VALUE": "Al menos {{hours}} h entre dosis"
   },
   "PROFILE": {
+    "RECOVERY_REMOVE_CONFIRM": "¿Quitar este contacto de recuperación?",
     "ACCOUNT_AGE": "Antigüedad de la cuenta",
     "ACCOUNT_DETAILS": "Detalles de la cuenta",
     "ACCOUNT_INFO": "Información de la cuenta",
@@ -10052,6 +10055,10 @@
     "PAST_DATE": "La fecha y la hora previstas no pueden estar en el pasado."
   },
   "REGISTRATIONS": {
+    "DEACTIVATE_TITLE": "¿Desactivar este registro?",
+    "DEACTIVATE_BODY": "El paciente sale de la lista activa de este hospital. Podrá reactivar el registro más adelante.",
+    "DEACTIVATE_REASON": "Motivo de la desactivación",
+    "DEACTIVATE_REASON_REQUIRED": "Indique el motivo de la desactivación de este registro.",
     "TITLE": "Registros hospitalarios",
     "SUBTITLE": "Registrar pacientes y gestionar sus estancias",
     "NEW": "Nuevo registro",

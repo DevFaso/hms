@@ -65,6 +65,8 @@ export interface PrenatalRescheduleRequest {
   durationMinutes?: number;
   newStaffId?: string;
   notes?: string;
+  /** QA D1429: why the visit moves outside any published free slot; required then. */
+  overbookReason?: string;
 }
 
 /**

@@ -558,7 +558,9 @@ export interface InvoiceApiResponse {
   balanceDue?: number | null;
   status?: string | null;
   hospitalName?: string | null;
-  encounterDescription?: string | null;
+  /** QA D1421: a visit is named by its type and date, never by the visit's clinical notes. */
+  encounterType?: string | null;
+  encounterDate?: string | null;
   notes?: string | null;
   /** QA D421: declared by the patient, not yet confirmed by staff. */
   pendingDeclaredAmount?: number | null;
@@ -585,7 +587,8 @@ export function mapPortalInvoice(api: InvoiceApiResponse): PortalInvoice {
           : Math.max(total - paid, 0),
     status: api.status ?? '',
     facility: api.hospitalName ?? '',
-    description: api.encounterDescription ?? '',
+    visitType: api.encounterType ?? null,
+    visitDate: api.encounterDate ?? null,
     pending: Number(api.pendingDeclaredAmount ?? 0),
     creditedTo: api.creditedToInvoiceNumber ?? null,
   };
@@ -637,7 +640,9 @@ export interface PortalInvoice {
   balance: number;
   status: string;
   facility: string;
-  description: string;
+  /** QA D1421: what titles the card when the invoice is of a visit. */
+  visitType?: string | null;
+  visitDate?: string | null;
   /** QA D421: already declared and awaiting confirmation; it counts against the balance. */
   pending?: number;
   /** QA D428: the invoice a folded check-in copay was credited to. */
@@ -1978,9 +1983,10 @@ export class PatientPortalService {
   }
 
   /** QA D966: the copy of a prescription the pharmacy printed for me (PDF, my own only). */
-  getMyPrintedPrescription(prescriptionId: string): Observable<Blob> {
+  getMyPrintedPrescription(prescriptionId: string): Observable<HttpResponse<Blob>> {
     return this.http.get(`${this.base}/prescriptions/${prescriptionId}/printed-copy`, {
       responseType: 'blob',
+      observe: 'response',
     });
   }
 

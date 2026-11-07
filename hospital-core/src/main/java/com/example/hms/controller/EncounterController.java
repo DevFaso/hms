@@ -338,8 +338,9 @@ public class EncounterController {
     // ----------------------------------------------------------
     // Complete Triage — Nurse advances TRIAGE → WAITING_FOR_PHYSICIAN
     // ----------------------------------------------------------
+    // QA D1431 (RCPT-CLIN): ending a triage is a clinical act; the desk neither reads nor records one.
     @PostMapping("/{encounterId}/complete-triage")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_RECEPTIONIST')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR')")
     @Operation(
         summary = "Complete triage (advance to waiting for physician)",
         description = "Transitions an ARRIVED or TRIAGE encounter to WAITING_FOR_PHYSICIAN."
@@ -381,8 +382,9 @@ public class EncounterController {
     // ----------------------------------------------------------
     // Ready for Discharge — Advance AWAITING_RESULTS → READY_FOR_DISCHARGE
     // ----------------------------------------------------------
+    // QA D1431 sibling (RCPT-CLIN): so is declaring a patient ready to leave.
     @PostMapping("/{encounterId}/ready-for-discharge")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_RECEPTIONIST')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
     @Operation(
         summary = "Mark encounter ready for discharge",
         description = "Transitions AWAITING_RESULTS → READY_FOR_DISCHARGE; from IN_PROGRESS for a doctor, nurse or midwife only."

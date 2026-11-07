@@ -1,5 +1,8 @@
+import { refuseFields } from '../shared/forms/invalid-fields';
+import { refusesForOverbookReason } from '../appointments/published-slot';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import {
+  ElementRef,
   ChangeDetectionStrategy,
   Component,
   computed,
@@ -77,6 +80,7 @@ export class PrenatalTabComponent implements OnInit {
   private readonly roleContext = inject(RoleContextService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   private hospitalId: string | null = null;
 
@@ -116,6 +120,9 @@ export class PrenatalTabComponent implements OnInit {
   rescheduleDate = '';
   rescheduleTime = '';
   rescheduleNotes = '';
+  /** QA D1429: the new time is off the published slots: the server asked why. */
+  rescheduleOverbook = signal(false);
+  rescheduleOverbookReason = '';
   rescheduleBusy = signal(false);
 
   /* ── Reminder modal ── */
@@ -213,6 +220,8 @@ export class PrenatalTabComponent implements OnInit {
     this.rescheduleDate = '';
     this.rescheduleTime = appointment.startTime?.substring(0, 5) ?? '';
     this.rescheduleNotes = '';
+    this.rescheduleOverbook.set(false);
+    this.rescheduleOverbookReason = '';
     this.showRescheduleModal.set(true);
   }
 
@@ -224,7 +233,16 @@ export class PrenatalTabComponent implements OnInit {
   submitReschedule(): void {
     const target = this.rescheduleTarget();
     if (!target || !this.rescheduleDate || !this.rescheduleTime) {
-      this.toast.error(this.translate.instant('PRENATAL.RESCHEDULE_REQUIRED'));
+      const message = this.translate.instant('PRENATAL.RESCHEDULE_REQUIRED');
+      refuseFields(
+        this.host.nativeElement,
+        [!this.rescheduleDate && 'pn-new-date', !this.rescheduleTime && 'pn-new-time'].filter(
+          (id): id is string => !!id,
+        ),
+        ['pn-new-date', 'pn-new-time'],
+        message,
+      );
+      this.toast.error(message);
       return;
     }
     this.rescheduleBusy.set(true);
@@ -234,6 +252,7 @@ export class PrenatalTabComponent implements OnInit {
         newAppointmentDate: this.rescheduleDate,
         newStartTime: this.rescheduleTime,
         notes: this.rescheduleNotes.trim() || undefined,
+        overbookReason: this.rescheduleOverbookReason.trim() || undefined,
       })
       .subscribe({
         next: () => {
@@ -261,6 +280,13 @@ export class PrenatalTabComponent implements OnInit {
           this.closeReschedule();
         },
         error: (err: unknown) => {
+          if (refusesForOverbookReason(err)) {
+            this.rescheduleOverbook.set(true);
+            const message = this.translate.instant('APPOINTMENTS.OVERBOOK_HINT');
+            setTimeout(() =>
+              refuseFields(this.host.nativeElement, ['pn-overbook'], ['pn-overbook'], message),
+            );
+          }
           this.toast.error(this.reasonOr(err, 'PRENATAL.RESCHEDULE_ERROR'));
           this.rescheduleBusy.set(false);
         },

@@ -511,6 +511,18 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     private static final java.util.Set<InvoiceStatus> ADJUSTABLE =
         java.util.EnumSet.of(InvoiceStatus.SENT, InvoiceStatus.PARTIALLY_PAID);
 
+    /** QA D1450: the refusal fits the state: a paid or cancelled invoice has no draft lines to edit. */
+    private static void requireAdjustable(InvoiceStatus status) {
+        if (ADJUSTABLE.contains(status)) {
+            return;
+        }
+        throw new BusinessException(switch (status) {
+            case PAID -> "billing.adjustment.paid";
+            case CANCELLED -> "billing.adjustment.cancelled";
+            case null, default -> "billing.adjustment.notIssued";
+        });
+    }
+
     @Override
     @Transactional
     public BillingInvoiceResponseDTO addAdjustment(UUID invoiceId,
@@ -518,9 +530,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
                                                    UUID staffId, Locale locale) {
         requireAdjustmentLedger();
         BillingInvoice invoice = loadInScopeForUpdate(invoiceId);
-        if (!ADJUSTABLE.contains(invoice.getStatus())) {
-            throw new BusinessException("billing.adjustment.notIssued");
-        }
+        requireAdjustable(invoice.getStatus());
         String reason = request.getReason() != null ? request.getReason().trim() : "";
         if (reason.isEmpty()) {
             throw new com.example.hms.exception.FieldBusinessException("reason", "billing.adjustment.reasonRequired");

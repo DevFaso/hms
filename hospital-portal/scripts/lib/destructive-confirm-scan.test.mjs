@@ -161,3 +161,57 @@ test('an event binding says whether a dialog encloses it', () => {
   assert.equal(open.enclosed, false);
   assert.equal(inside.enclosed, true);
 });
+
+const UPDATE_SERVICE = `
+import { HttpClient } from '@angular/common/http';
+@Injectable({ providedIn: 'root' })
+export class RegService {
+  private readonly http = inject(HttpClient);
+  update(id: string, body: unknown): Observable<void> {
+    return this.http.put<void>('/regs/' + id, body);
+  }
+  read(id: string): Observable<void> {
+    return this.http.get<void>('/regs/' + id);
+  }
+}`;
+
+test('QA D1430: a plain update that ends the record is reported: by the flag it sends, or by the name of the handler', () => {
+  const found = (ts) => {
+    const updates = destructiveServiceMethods([{ file: 'x', text: UPDATE_SERVICE }]);
+    const source = `
+export class RegComponent {
+  private readonly svc = inject(RegService);
+${ts}
+}`;
+    return destructiveConfirmFindings(
+      `<button (click)="go(r)">x</button><button (click)="deactivate(r)">y</button>`,
+      source,
+      updates,
+    ).map((f) => f.anchor);
+  };
+  assert.deepEqual(
+    found(`
+  go(r: Reg): void {
+    this.svc.update(r.id, { active: false }).subscribe();
+  }`),
+    ['go->RegService.update'],
+  );
+  assert.deepEqual(
+    found(`
+  deactivate(r: Reg): void {
+    this.svc.update(r.id, {}).subscribe();
+  }`),
+    ['deactivate->RegService.update'],
+  );
+  // An ordinary save is no such thing, nor is a read under an ending name.
+  assert.deepEqual(
+    found(`
+  go(r: Reg): void {
+    this.svc.update(r.id, { active: true }).subscribe();
+  }
+  deactivate(r: Reg): void {
+    this.svc.read(r.id).subscribe();
+  }`),
+    [],
+  );
+});
