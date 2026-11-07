@@ -240,6 +240,7 @@
             <button
               class="tab-btn"
               [class.active]="summaryFilter() === 'unfinalized'"
+              [attr.aria-pressed]="summaryFilter() === 'unfinalized'"
               (click)="setSummaryFilter('unfinalized')"
             >
               {{ 'DISCHARGE.FILTER_UNFINALIZED' | translate }}
@@ -248,6 +249,7 @@
           <button
             class="tab-btn"
             [class.active]="summaryFilter() === 'pending-results'"
+            [attr.aria-pressed]="summaryFilter() === 'pending-results'"
             (click)="setSummaryFilter('pending-results')"
           >
             {{ 'DISCHARGE.FILTER_PENDING_RESULTS' | translate }}
@@ -255,6 +257,7 @@
           <button
             class="tab-btn"
             [class.active]="summaryFilter() === 'range'"
+            [attr.aria-pressed]="summaryFilter() === 'range'"
             (click)="setSummaryFilter('range')"
           >
             {{ 'DISCHARGE.FILTER_BY_DATE' | translate }}

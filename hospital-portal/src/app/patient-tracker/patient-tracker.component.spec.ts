@@ -1,5 +1,5 @@
 import { RoleContextService } from '../core/role-context.service';
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, fakeAsync, TestBed, tick } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { of, throwError, Subject } from 'rxjs';
@@ -146,6 +146,56 @@ describe('PatientTrackerComponent', () => {
   it('should create', () => {
     expect(component).toBeTruthy();
   });
+
+  it('keeps the stale-board alert through retries until a current response succeeds', () => {
+    fixture.detectChanges();
+    trackerSpy.getTrackerBoard.and.returnValue(throwError(() => new Error('offline')));
+    component.refresh();
+    fixture.detectChanges();
+    const alert = fixture.nativeElement.querySelector('[role="alert"]');
+    const retry = new Subject<PatientTrackerBoard>();
+    trackerSpy.getTrackerBoard.and.returnValue(retry);
+    component.refresh();
+    fixture.detectChanges();
+    expect(component.loading()).toBeTrue();
+    expect(fixture.nativeElement.querySelector('[role="alert"]')).toBe(alert);
+    retry.error(new Error('still offline'));
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[role="alert"]')).toBe(alert);
+
+    const old = new Subject<PatientTrackerBoard>();
+    trackerSpy.getTrackerBoard.and.returnValue(old);
+    component.refresh();
+    const current = new Subject<PatientTrackerBoard>();
+    trackerSpy.getTrackerBoard.and.returnValue(current);
+    component.refresh();
+    old.next(mockBoard());
+    expect(component.loadFailed()).toBeTrue();
+    current.next(mockBoard());
+    fixture.detectChanges();
+    expect(component.loadFailed()).toBeFalse();
+    expect(fixture.nativeElement.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  it('keeps the selected department visible when its last patient leaves the board', fakeAsync(() => {
+    fixture.detectChanges();
+    component.departmentFilter.set('ER');
+    fixture.detectChanges();
+    tick();
+    trackerSpy.getTrackerBoard.and.returnValue(
+      of(mockBoard({ arrived: [], inProgress: [], totalPatients: 0 })),
+    );
+    component.refresh();
+    fixture.detectChanges();
+    tick();
+    const select: HTMLSelectElement = fixture.nativeElement.querySelector('select');
+    expect(select.selectedOptions[0].textContent).toBe('ER');
+    expect(component.visibleCount()).toBe(0);
+    component.clearFilters();
+    fixture.detectChanges();
+    expect(Array.from(select.options).some((option) => option.textContent === 'ER')).toBeFalse();
+    fixture.destroy();
+  }));
 
   it('should load board on init', () => {
     fixture.detectChanges();

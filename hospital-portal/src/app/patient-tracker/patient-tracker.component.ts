@@ -105,6 +105,7 @@ export class PatientTrackerComponent implements OnInit, OnDestroy {
         this.columns
           .flatMap((c) => this.getColumnItems(c.key))
           .map((i) => i.departmentName)
+          .concat(this.departmentFilter())
           .filter((v): v is string => !!v),
       ),
     ].sort(),
@@ -199,7 +200,6 @@ export class PatientTrackerComponent implements OnInit, OnDestroy {
     if (!hospitalId) return;
 
     const request = ++this.boardRequest;
-    this.loadFailed.set(false);
     this.loading.set(true);
     this.trackerService
       .getTrackerBoard(hospitalId)
@@ -208,6 +208,7 @@ export class PatientTrackerComponent implements OnInit, OnDestroy {
         next: (data) => {
           if (request !== this.boardRequest) return;
           this.board.set(data);
+          this.loadFailed.set(false);
           this.lastRefreshed.set(new Date());
           this.loading.set(false);
         },
