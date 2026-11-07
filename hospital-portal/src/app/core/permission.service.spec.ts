@@ -9,6 +9,10 @@ describe('PermissionService', () => {
   let service: PermissionService;
   let authStub: jasmine.SpyObj<AuthService>;
 
+  // Held roles are read from sessionStorage at creation, and Karma's order is random: a role
+  // another spec left there must not decide what this one proves.
+  beforeEach(() => sessionStorage.removeItem('hms.heldRoles'));
+
   function setup(roles: string[], authenticated = true): void {
     authStub = jasmine.createSpyObj('AuthService', ['getRoles', 'isAuthenticated']);
     authStub.getRoles.and.returnValue(roles);

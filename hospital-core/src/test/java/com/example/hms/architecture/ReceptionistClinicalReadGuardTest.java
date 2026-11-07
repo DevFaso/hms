@@ -1,5 +1,7 @@
 package com.example.hms.architecture;
 
+import com.example.hms.controller.MeController;
+import com.example.hms.controller.PatientPortalController;
 import com.example.hms.controller.support.ReceptionistResponseShaping;
 import com.example.hms.testsupport.ControllerMappingRegistry;
 import com.example.hms.testsupport.RoleExpression;
@@ -234,8 +236,8 @@ class ReceptionistClinicalReadGuardTest {
         Set<String> used = new HashSet<>();
         for (HandlerMethod handler : handlers().values()) {
             String admits = RoleExpression.admits(handler, RECEPTIONIST);
-            boolean ownRecord = handler.getBeanType().getSimpleName().equals("PatientPortalController")
-                || handler.getBeanType().getSimpleName().equals("MeController");
+            boolean ownRecord = PatientPortalController.class.isAssignableFrom(handler.getBeanType())
+                || MeController.class.isAssignableFrom(handler.getBeanType());
             if (ownRecord || !(RoleExpression.YES.equals(admits) || RoleExpression.NONE.equals(admits))) {
                 continue;
             }
@@ -266,8 +268,8 @@ class ReceptionistClinicalReadGuardTest {
         Set<String> unreached = new TreeSet<>();
         for (HandlerMethod handler : handlers().values()) {
             String admits = RoleExpression.admits(handler, RECEPTIONIST);
-            boolean ownRecord = handler.getBeanType().getSimpleName().equals("PatientPortalController")
-                || handler.getBeanType().getSimpleName().equals("MeController");
+            boolean ownRecord = PatientPortalController.class.isAssignableFrom(handler.getBeanType())
+                || MeController.class.isAssignableFrom(handler.getBeanType());
             if (!ownRecord && (RoleExpression.YES.equals(admits) || RoleExpression.NONE.equals(admits))) {
                 nested(handler.getMethod().getGenericReturnType(), new HashSet<>(), shaped, unreached);
             }
