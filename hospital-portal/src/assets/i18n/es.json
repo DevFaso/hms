@@ -4721,7 +4721,7 @@
     "CONTACT_DETAILS": "Datos de contacto",
     "CONTACT_RECORDED": "Contacto registrado",
     "LOADED_HOSPITALS": "Todos los hospitales cargados",
-    "MATCHING_RECORDS": "{{count}} expedientes coincidentes",
+    "MATCHING_RECORDS": "Expedientes coincidentes: {{count}}",
     "OPEN_RECORD": "Abrir expediente",
     "OPEN_PATIENT": "Abrir expediente de {{name}}",
     "REFRESH": "Actualizar",

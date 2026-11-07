@@ -4721,7 +4721,7 @@
     "CONTACT_DETAILS": "Coordonnées",
     "CONTACT_RECORDED": "Coordonnées renseignées",
     "LOADED_HOSPITALS": "Tous les hôpitaux chargés",
-    "MATCHING_RECORDS": "{{count}} dossiers patients correspondants",
+    "MATCHING_RECORDS": "Dossiers patients correspondants : {{count}}",
     "OPEN_RECORD": "Ouvrir le dossier",
     "OPEN_PATIENT": "Ouvrir le dossier de {{name}}",
     "REFRESH": "Actualiser",

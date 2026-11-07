@@ -97,7 +97,7 @@
         class="filter-toggle-btn"
         [class.has-filters]="activeFilterCount > 0"
         [attr.aria-expanded]="showFilters()"
-        aria-controls="patient-filters"
+        [attr.aria-controls]="showFilters() ? 'patient-filters' : null"
         (click)="showFilters.set(!showFilters())"
         [title]="'PATIENTS.TOGGLE_FILTERS' | translate"
       >
@@ -237,25 +237,23 @@
             </button>
           </span>
         }
+        @if (contactFilter) {
+          <span class="filter-chip"
+            >{{
+              (contactFilter === 'missing' ? 'PATIENTS.NO_CONTACT' : 'PATIENTS.CONTACT_RECORDED')
+                | translate
+            }}<button
+              class="chip-remove"
+              [attr.aria-label]="'COMMON.REMOVE' | translate"
+              (click)="removeFilter('contact')"
+            >
+              <span class="material-symbols-outlined" aria-hidden="true">close</span>
+            </button></span
+          >
+        }
       </div>
     }
 
-    @if (contactFilter) {
-      <div class="active-chips">
-        <span class="filter-chip"
-          >{{
-            (contactFilter === 'missing' ? 'PATIENTS.NO_CONTACT' : 'PATIENTS.CONTACT_RECORDED')
-              | translate
-          }}<button
-            class="chip-remove"
-            [attr.aria-label]="'COMMON.REMOVE' | translate"
-            (click)="removeFilter('contact')"
-          >
-            <span class="material-symbols-outlined" aria-hidden="true">close</span>
-          </button></span
-        >
-      </div>
-    }
     @if (!loading() && loadError()) {
       <div class="load-error" role="alert">
         <span class="material-symbols-outlined" aria-hidden="true">cloud_off</span>
@@ -371,13 +369,11 @@
                   <code class="mrn-code">{{ patient.mrn ?? '—' }}</code>
                 </td>
                 <td class="contact-cell">
-                  @if (patient.phoneNumberPrimary || patient.phoneNumberSecondary) {
-                    <span class="contact-primary">{{
-                      patient.phoneNumberPrimary || patient.phoneNumberSecondary
-                    }}</span>
+                  @if (displayPhone(patient); as phone) {
+                    <span class="contact-primary">{{ phone }}</span>
                   }
-                  @if (patient.email) {
-                    <span class="contact-secondary">{{ patient.email }}</span>
+                  @if (displayEmail(patient); as email) {
+                    <span class="contact-secondary">{{ email }}</span>
                   }
                   @if (!hasContact(patient)) {
                     <span class="contact-missing">{{ 'PATIENTS.NO_CONTACT' | translate }}</span>

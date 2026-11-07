@@ -2,7 +2,7 @@ import { signal } from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
-import { Subject, of, throwError } from 'rxjs';
+import { Observable, Subject, of, throwError } from 'rxjs';
 import { PatientListComponent } from './patient-list';
 import { PatientService, PatientResponse } from '../services/patient.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
@@ -132,11 +132,76 @@ describe('PatientListComponent directory', () => {
     c.genderFilter = 'FEMALE';
     c.bloodTypeFilter = 'O+';
     c.statusFilter = 'active';
-    for (const term of ['Cdx Test Example', 'cdx123', '778899']) {
+    for (const term of ['Cdx Test Example', 'Cdx Example', 'Example Cdx', 'cdx123', '778899']) {
       c.searchTerm = term;
       c.applyFilter();
       expect(c.filtered().map((p) => p.id)).toEqual(['cdx-1']);
     }
+  });
+
+  it('displays a secondary phone when the primary is blank and suppresses blank contact lines', () => {
+    patients.list.and.returnValue(
+      of([
+        row({ phoneNumberPrimary: ' ', phoneNumberSecondary: ' 456 ', email: ' ' }),
+        row({ id: 'blank', phoneNumberPrimary: ' ', email: ' ' }),
+      ]),
+    );
+    const fixture = make();
+    fixture.detectChanges();
+    const cells: NodeListOf<HTMLElement> = fixture.nativeElement.querySelectorAll('.contact-cell');
+    expect(cells[0].querySelector('.contact-primary')?.textContent?.trim()).toBe('456');
+    expect(cells[0].querySelector('.contact-secondary')).toBeNull();
+    expect(cells[0].querySelector('.contact-missing')).toBeNull();
+    expect(cells[1].querySelector('.contact-primary')).toBeNull();
+    expect(cells[1].querySelector('.contact-secondary')).toBeNull();
+    expect(cells[1].querySelector('.contact-missing')).not.toBeNull();
+  });
+
+  it('renders the retry state and disables metrics until a successful retry', () => {
+    patients.list.and.returnValue(throwError(() => new Error('offline')));
+    const fixture = make();
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    expect(el.querySelector('.load-error')?.getAttribute('role')).toBe('alert');
+    expect(
+      [...el.querySelectorAll<HTMLButtonElement>('.summary-card')].every((b) => b.disabled),
+    ).toBeTrue();
+    expect(toast.error).not.toHaveBeenCalled();
+    const pending = new Subject<PatientResponse[]>();
+    patients.list.and.returnValue(pending);
+    el.querySelector<HTMLButtonElement>('.load-error button')!.click();
+    fixture.detectChanges();
+    expect(patients.list).toHaveBeenCalledTimes(2);
+    expect(el.querySelector('.loading-state')).not.toBeNull();
+    expect(
+      [...el.querySelectorAll<HTMLButtonElement>('.summary-card')].every((b) => b.disabled),
+    ).toBeTrue();
+    pending.next([row()]);
+    fixture.detectChanges();
+    expect(el.querySelector('.load-error')).toBeNull();
+    expect(
+      [...el.querySelectorAll<HTMLButtonElement>('.summary-card')].every((b) => !b.disabled),
+    ).toBeTrue();
+  });
+
+  it('cancels a superseded list request', () => {
+    const pending = new Subject<PatientResponse[]>();
+    const cancelled = jasmine.createSpy('cancelled');
+    patients.list.and.returnValue(
+      new Observable<PatientResponse[]>((subscriber) => {
+        const subscription = pending.subscribe(subscriber);
+        return () => {
+          subscription.unsubscribe();
+          cancelled();
+        };
+      }),
+    );
+    const c = make().componentInstance;
+    c.loadPatients();
+    patients.list.and.returnValue(of([row()]));
+    c.loadPatients();
+    expect(cancelled).toHaveBeenCalledTimes(1);
+    expect(c.filtered().length).toBe(1);
   });
 
   it('reapplies a repeated search after clearing a metric without an extra request', fakeAsync(() => {

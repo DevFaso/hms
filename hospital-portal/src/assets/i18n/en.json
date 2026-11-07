@@ -4721,7 +4721,7 @@
     "CONTACT_DETAILS": "Contact details",
     "CONTACT_RECORDED": "Contact recorded",
     "LOADED_HOSPITALS": "All loaded hospitals",
-    "MATCHING_RECORDS": "{{count}} matching patient records",
+    "MATCHING_RECORDS": "Matching patient records: {{count}}",
     "OPEN_RECORD": "Open record",
     "OPEN_PATIENT": "Open record for {{name}}",
     "REFRESH": "Refresh",

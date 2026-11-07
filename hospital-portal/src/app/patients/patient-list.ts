@@ -4,18 +4,18 @@ import {
   OnDestroy,
   OnInit,
   signal,
+  computed,
   ChangeDetectionStrategy,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
-import { Subject, debounceTime, takeUntil } from 'rxjs';
+import { Subject, Subscription, debounceTime, takeUntil } from 'rxjs';
 import { PatientService, PatientResponse } from '../services/patient.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { PermissionService } from '../core/permission.service';
-import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
-import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { TranslateModule } from '@ngx-translate/core';
 
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 type SortField = 'name' | 'mrn' | 'gender' | 'status' | 'createdAt';
@@ -33,9 +33,7 @@ export class PatientListComponent implements OnInit, OnDestroy {
   private readonly patientService = inject(PatientService);
   private readonly hospitalService = inject(HospitalService);
   private readonly permissions = inject(PermissionService);
-  private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
-  private readonly translate = inject(TranslateService);
   private readonly destroy$ = new Subject<void>();
   private readonly searchInput$ = new Subject<string>();
 
@@ -49,11 +47,18 @@ export class PatientListComponent implements OnInit, OnDestroy {
   genderFilter = '';
   statusFilter = '';
   bloodTypeFilter = '';
-  hospitalFilter = '';
+  private readonly selectedHospital = signal('');
+  get hospitalFilter(): string {
+    return this.selectedHospital();
+  }
+  set hospitalFilter(value: string) {
+    this.selectedHospital.set(value);
+  }
   showFilters = signal(true);
   contactFilter = '';
   readonly loadError = signal(false);
   private listRequest = 0;
+  private listSubscription?: Subscription;
 
   get scopedPatients(): PatientResponse[] {
     return this.patients().filter(
@@ -61,13 +66,7 @@ export class PatientListComponent implements OnInit, OnDestroy {
     );
   }
 
-  get directoryMetrics(): {
-    id: string;
-    label: string;
-    icon: string;
-    count: number;
-    tone: string;
-  }[] {
+  private readonly metrics = computed(() => {
     const rows = this.scopedPatients;
     return [
       {
@@ -99,10 +98,22 @@ export class PatientListComponent implements OnInit, OnDestroy {
         tone: 'contact',
       },
     ];
+  });
+
+  get directoryMetrics() {
+    return this.metrics();
   }
 
   hasContact(p: PatientResponse): boolean {
-    return !!(p.phoneNumberPrimary?.trim() || p.phoneNumberSecondary?.trim() || p.email?.trim());
+    return !!(this.displayPhone(p) || this.displayEmail(p));
+  }
+
+  displayPhone(p: PatientResponse): string {
+    return p.phoneNumberPrimary?.trim() || p.phoneNumberSecondary?.trim() || '';
+  }
+
+  displayEmail(p: PatientResponse): string {
+    return p.email?.trim() || '';
   }
 
   metricSelected(id: string): boolean {
@@ -182,9 +193,10 @@ export class PatientListComponent implements OnInit, OnDestroy {
 
   loadPatients(): void {
     const request = ++this.listRequest;
+    this.listSubscription?.unsubscribe();
     this.loading.set(true);
     this.loadError.set(false);
-    this.patientService
+    this.listSubscription = this.patientService
       .list()
       .pipe(takeUntil(this.destroy$))
       .subscribe({
@@ -200,7 +212,6 @@ export class PatientListComponent implements OnInit, OnDestroy {
           this.filtered.set([]);
           this.currentPage.set(0);
           this.loadError.set(true);
-          this.toast.error(this.translate.instant('PATIENTS.LOAD_FAILED'));
           this.loading.set(false);
         },
       });
@@ -227,13 +238,16 @@ export class PatientListComponent implements OnInit, OnDestroy {
 
     const term = this.searchTerm.toLowerCase().trim();
     if (term) {
+      const tokens = term.split(/\s+/);
       result = result.filter(
         (p) =>
-          [p.firstName, p.middleName, p.lastName]
-            .filter(Boolean)
-            .join(' ')
-            .toLowerCase()
-            .includes(term) ||
+          tokens.every((token) =>
+            [p.firstName, p.middleName, p.lastName]
+              .filter(Boolean)
+              .join(' ')
+              .toLowerCase()
+              .includes(token),
+          ) ||
           (p.email?.toLowerCase().includes(term) ?? false) ||
           (p.mrn?.toLowerCase().includes(term) ?? false) ||
           (p.phoneNumberPrimary?.includes(term) ?? false) ||
