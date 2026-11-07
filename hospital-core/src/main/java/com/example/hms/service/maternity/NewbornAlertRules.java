@@ -26,7 +26,12 @@ import java.util.List;
  *       original): concern at a respiratory rate of 60 or more, a persistent heart
  *       rate of 160 or more or below 100, SpO2 below 90 % in air, a temperature below 36 °C
  *       or of 38 °C or more unexplained by the environment. These are possible-infection
- *       indicators, not a complete neonatal protocol.</li>
+ *       indicators, not a complete neonatal protocol, and a different context from the WHO
+ *       pathway below: where both speak, the stricter stays.</li>
+ *   <li>{@value #SELECTED_PATHWAY}: WHO recommendations on maternal and newborn care for a
+ *       positive postnatal experience (2022), the pathway selected for the newborn's danger signs.
+ *       PROVISIONAL (CR-04): not clinically approved, awaiting the named approver. The method of
+ *       measurement is not recorded on the assessment.</li>
  *   <li>Canadian Paediatric Society statement (posted Nov 20, 2019, updated Mar 28, 2025): glucose below 2.6 mmol/L (about
  *       47 mg/dL) in the first 72 h of life, framed for at-risk newborns under its pathway,
  *       and below 3.3 mmol/L (about 59 mg/dL) after 72 h.</li>
@@ -48,8 +53,14 @@ public final class NewbornAlertRules {
     public static final int CONCERN_HEART_RATE_HIGH = 160;
     public static final int CONCERN_RESPIRATORY_HIGH = 60;
     public static final int CONCERN_SPO2 = 90;
-    public static final double CONCERN_TEMPERATURE_LOW = 36.0;
-    public static final double CONCERN_TEMPERATURE_HIGH = 38.0;
+    /** NICE's infection indicators: a different context from {@link #SELECTED_PATHWAY}. Below 36.0 stays urgent. */
+    public static final double NICE_INFECTION_TEMPERATURE_LOW = 36.0;
+    public static final double NICE_INFECTION_TEMPERATURE_HIGH = 38.0;
+
+    /** The selected danger-sign pathway. PROVISIONAL: awaiting the named clinical approver. */
+    public static final String SELECTED_PATHWAY = "WHO_POSTNATAL_2022_PROVISIONAL";
+    /** CR-04, {@link #SELECTED_PATHWAY}: above this is a danger sign. 37.5 itself is not. PROVISIONAL. */
+    public static final double WHO_DANGER_TEMPERATURE_ABOVE = 37.5;
 
     public static final int GLUCOSE_HOURS_FIRST_PERIOD = 72;
     public static final double GLUCOSE_FIRST_PERIOD_MMOL = 2.6;
@@ -133,10 +144,13 @@ public final class NewbornAlertRules {
         if (temperature == null) {
             return;
         }
-        if (temperature < CONCERN_TEMPERATURE_LOW || temperature >= CONCERN_TEMPERATURE_HIGH) {
+        if (temperature < NICE_INFECTION_TEMPERATURE_LOW || temperature >= NICE_INFECTION_TEMPERATURE_HIGH) {
             findings.add(new Finding(NewbornAlertType.THERMOREGULATION, NewbornAlertSeverity.URGENT,
                 "newborn-temperature-critical", NewbornFollowUpAction.THERMAL_SUPPORT));
-        } else if (temperature < CAUTION_TEMPERATURE_LOW || temperature > CAUTION_TEMPERATURE_HIGH) {
+        } else if (temperature > WHO_DANGER_TEMPERATURE_ABOVE) {
+            findings.add(new Finding(NewbornAlertType.THERMOREGULATION, NewbornAlertSeverity.URGENT,
+                "newborn-temperature-who-danger", NewbornFollowUpAction.PEDIATRICIAN_NOTIFICATION));
+        } else if (temperature < CAUTION_TEMPERATURE_LOW) {
             findings.add(Finding.of(NewbornAlertType.THERMOREGULATION, NewbornAlertSeverity.CAUTION, "newborn-temperature"));
         }
     }

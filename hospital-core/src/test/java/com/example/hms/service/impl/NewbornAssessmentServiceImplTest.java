@@ -493,6 +493,27 @@ class NewbornAssessmentServiceImplTest {
         org.junit.jupiter.api.Assertions.assertFalse(response.isRespiratorySupportInitiated(), "an alert is not support somebody started");
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(doubles = {37.6, 37.9})
+    void cr04_aTemperatureAbove37_5SavesAndEscalatesLikeAnUrgentFinding(double temperature) {
+        NewbornAssessmentResponseDTO response = service.recordAssessment(patientId, NewbornAssessmentRequestDTO.builder()
+            .hospitalId(hospitalId).temperatureCelsius(temperature).build(), recorderId);
+
+        verify(assessmentRepository).save(any(NewbornAssessment.class));
+        assertTrue(codesOf(response).contains("newborn-temperature-who-danger"));
+        assertTrue(response.isEscalationRecommended());
+        verify(obstetricAlertEscalation).raiseAfterCommit(any());
+    }
+
+    @Test
+    void cr04_37_5ItselfDoesNotEscalate() {
+        NewbornAssessmentResponseDTO response = service.recordAssessment(patientId, NewbornAssessmentRequestDTO.builder()
+            .hospitalId(hospitalId).temperatureCelsius(37.5).build(), recorderId);
+
+        org.junit.jupiter.api.Assertions.assertFalse(response.isEscalationRecommended());
+        assertTrue(codesOf(response).isEmpty());
+    }
+
     /** The values that used to flip a flag, either side of every band the rules had. */
     private static java.util.stream.Stream<NewbornAssessmentRequestDTO.NewbornAssessmentRequestDTOBuilder> readingsThatUsedToFlipAFlag() {
         return java.util.stream.Stream.of(

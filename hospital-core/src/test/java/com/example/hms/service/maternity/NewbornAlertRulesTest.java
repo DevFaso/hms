@@ -110,8 +110,10 @@ class NewbornAlertRulesTest {
 
     @ParameterizedTest(name = "T {0}: {1}")
     @CsvSource({
-        "35.9,newborn-temperature-critical", "36.0,none", "36.1,none",
-        "37.9,none", "38.0,newborn-temperature-critical", "38.1,newborn-temperature-critical"
+        "35.4,newborn-temperature-critical", "35.5,newborn-temperature-critical", "35.9,newborn-temperature-critical",
+        "36.0,none", "36.1,none", "37.5,none",
+        "37.6,newborn-temperature-who-danger", "37.9,newborn-temperature-who-danger",
+        "38.0,newborn-temperature-critical", "38.1,newborn-temperature-critical"
     })
     void temperature(double value, String urgent) {
         assertExactly(codes(new NewbornAlertRules.Reading(value, null, null, null, null, null, null, null, 1L, false, false)),
@@ -119,12 +121,39 @@ class NewbornAlertRulesTest {
     }
 
     @ParameterizedTest(name = "T {0} still cautions: {1}")
-    @CsvSource({"36.4,true", "36.5,false", "37.5,false", "37.6,true"})
-    @DisplayName("the older caution band stays")
+    @CsvSource({"36.0,true", "36.4,true", "36.5,false", "37.5,false", "37.6,false", "37.9,false"})
+    @DisplayName("the older caution band stays below; CR-04: above 37.5 is urgent instead, never both")
     void temperatureCaution(double value, boolean caution) {
         Map<String, NewbornAlertSeverity> actual =
             codes(new NewbornAlertRules.Reading(value, null, null, null, null, null, null, null, 1L, false, false));
         assertThat(actual.containsKey("newborn-temperature")).isEqualTo(caution);
+    }
+
+    @ParameterizedTest(name = "T {0} requests prompt assessment")
+    @CsvSource({"37.6", "37.9"})
+    @DisplayName("CR-04: the provisional WHO band requests assessment; it asks for no thermal treatment")
+    void theWhoBandRequestsAssessment(double value) {
+        assertThat(NewbornAlertRules.evaluate(new NewbornAlertRules.Reading(value, null, null, null, null, null, null, null, 1L, false, false)))
+            .singleElement()
+            .satisfies(f -> {
+                assertThat(f.severity()).isEqualTo(NewbornAlertSeverity.URGENT);
+                assertThat(f.followUp()).isEqualTo(com.example.hms.enums.NewbornFollowUpAction.PEDIATRICIAN_NOTIFICATION);
+            });
+    }
+
+    @Test
+    @DisplayName("CR-04: the wording names the provisional WHO pathway and keeps NICE as another context, in every language")
+    void theWordingNamesThePathway() {
+        var messages = com.example.hms.i18n.TestMessageSources.bundles();
+        assertThat(NewbornAlertRules.SELECTED_PATHWAY).contains("WHO", "PROVISIONAL");
+        Map<java.util.Locale, List<String>> pathway = Map.of(
+            java.util.Locale.ENGLISH, List.of("provisional WHO", "NICE", "37.5"),
+            java.util.Locale.FRENCH, List.of("OMS provisoire", "NICE", "37,5"),
+            java.util.Locale.forLanguageTag("es"), List.of("provisional de la OMS", "NICE", "37,5"));
+        pathway.forEach((locale, words) -> {
+            assertThat(messages.getMessage("newborn.alert.msg.newborn-temperature-who-danger", null, locale)).contains(words);
+            assertThat(messages.getMessage("newborn.alert.msg.newborn-temperature-critical", null, locale)).contains(words);
+        });
     }
 
     @ParameterizedTest(name = "{0} mg/dL at {1} h: {2} {3}")
@@ -292,7 +321,7 @@ class NewbornAlertRulesTest {
     @DisplayName("every code the rules raise has its sentence and trigger in EN, FR and ES")
     void everyCodeIsWordedInEveryLanguage() {
         var messages = com.example.hms.i18n.TestMessageSources.bundles();
-        List<String> codes = List.of("newborn-temperature-critical", "newborn-temperature", "newborn-heart-rate",
+        List<String> codes = List.of("newborn-temperature-critical", "newborn-temperature-who-danger", "newborn-temperature", "newborn-heart-rate",
             "newborn-heart-rate-repeated", "newborn-respiratory", "newborn-oxygenation", "newborn-glucose",
             "newborn-glucose-first-72h", "newborn-glucose-unknown-age", "newborn-glucose-after-72h",
             "newborn-reference-heart-rate", "newborn-reference-heart-rate-preterm", "newborn-reference-respiratory",
