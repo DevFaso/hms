@@ -284,6 +284,35 @@ public final class MarDoseSchedule {
         return reading.repeating() ? (double) MINUTES_PER_DAY / reading.intervalMinutes() : null;
     }
 
+    /**
+     * The shortest time written between two doses: a repeat's interval, a course's smallest step;
+     * {@code null} for anything else. Beside {@link #dosesPerDay}, for a limit on the interval.
+     */
+    public static Integer shortestMinutesBetweenDoses(String frequency) {
+        Reading reading = read(frequency);
+        if (reading.repeating()) {
+            return reading.intervalMinutes();
+        }
+        if (reading.kind() != Kind.COURSE) {
+            return null;
+        }
+        Integer shortest = null;
+        List<Integer> offsets = reading.courseOffsets();
+        for (int i = 1; i < offsets.size(); i++) {
+            int gap = offsets.get(i) - offsets.get(i - 1);
+            if (shortest == null || gap < shortest) {
+                shortest = gap;
+            }
+        }
+        return shortest;
+    }
+
+    /** A frequency is written, and it says no count of doses: a limit on the day cannot be judged from it. */
+    public static boolean writtenWithNoCount(String frequency) {
+        Kind kind = read(frequency).kind();
+        return kind == Kind.UNREAD || kind == Kind.CONTINUOUS;
+    }
+
     /** QA D1419: the most doses of a course inside any 24 hours ("H0 H8 H24" is 2), what a daily limit judges. */
     private static int mostDosesInADay(List<Integer> offsets) {
         int most = 0;

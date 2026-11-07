@@ -94,12 +94,9 @@ public class AdultParacetamolRule implements CdsRule {
         private final String medication;
         private final Double doseMg;
         private final Double dosesPerDay;
-        /** The order as written: not ticked, its interval is {@code proposedPrnDosesPerDay} (QA D1378). */
-        private final Prescription written;
 
         Check(CdsRuleContext context) {
             this.context = context;
-            this.written = Prescription.builder().frequency(context.proposedFrequency()).build();
             this.risks = context.paracetamolFacts().risks();
             this.medication = context.proposedMedicationName() == null ? "" : context.proposedMedicationName().trim();
             // parseDoseUnits reads a count or a bare number; when it equals the mg reading no
@@ -137,7 +134,7 @@ public class AdultParacetamolRule implements CdsRule {
                 cards.add(alert(text.get("cds.adultParacetamol.daily.summary",
                     "{0}: {1} mg per day of paracetamol from all active orders is above the adult maximum of {2} mg per day",
                     medication, number(total), number(ceiling)), dailyDetail(ceiling, others)));
-            } else if (dosesPerDay == null && frequencyWrittenButUnread()) {
+            } else if (dosesPerDay == null && MarDoseSchedule.writtenWithNoCount(context.proposedFrequency())) {
                 cards.add(alert(text.get("cds.adultParacetamol.unread.summary",
                     "{0}: the daily total could not be read from the frequency \"{1}\" - check paracetamol from all active orders against the maximum of {2} mg per day",
                     medication, context.proposedFrequency(), number(ceiling)), dailyDetail(ceiling, others)));
@@ -214,20 +211,11 @@ public class AdultParacetamolRule implements CdsRule {
                     PrnMinInterval.highestDosesPerDay(PrnMinInterval.isAsNeeded(rx), rx.getPrnMinIntervalHours()));
                 totals.mg += mg * (perDay == null ? 1d : perDay);
                 totals.counted++;
-                if (perDay == null && unread(rx)) {
+                if (perDay == null && MarDoseSchedule.writtenWithNoCount(rx.getFrequency())) {
                     totals.unreadFrequency++;
                 }
             }
             return totals;
-        }
-
-        private boolean frequencyWrittenButUnread() {
-            return unread(written);
-        }
-
-        private boolean unread(Prescription rx) {
-            MarDoseSchedule.Kind kind = MarDoseSchedule.read(rx).kind();
-            return kind == MarDoseSchedule.Kind.UNREAD || kind == MarDoseSchedule.Kind.CONTINUOUS;
         }
 
         /** The shortest time between two doses the order allows, or {@code null} when none is written. */
@@ -237,27 +225,9 @@ public class AdultParacetamolRule implements CdsRule {
             if (prnPerDay != null && prnPerDay > 0d) {
                 shortest = (int) Math.round(MINUTES_PER_DAY / prnPerDay);
             }
-            Integer read = writtenMinutes(MarDoseSchedule.read(written));
+            Integer read = MarDoseSchedule.shortestMinutesBetweenDoses(context.proposedFrequency());
             if (read != null && (shortest == null || read < shortest)) {
                 shortest = read;
-            }
-            return shortest;
-        }
-
-        private Integer writtenMinutes(MarDoseSchedule.Reading reading) {
-            if (reading.repeating()) {
-                return reading.intervalMinutes();
-            }
-            if (reading.kind() != MarDoseSchedule.Kind.COURSE) {
-                return null;
-            }
-            Integer shortest = null;
-            List<Integer> offsets = reading.courseOffsets();
-            for (int i = 1; i < offsets.size(); i++) {
-                int gap = offsets.get(i) - offsets.get(i - 1);
-                if (shortest == null || gap < shortest) {
-                    shortest = gap;
-                }
             }
             return shortest;
         }
