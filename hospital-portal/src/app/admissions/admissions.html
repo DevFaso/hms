@@ -687,7 +687,8 @@
   <div
     class="modal-backdrop"
     tabindex="-1"
-    (click)="$event.target === $event.currentTarget && closeUnassignBed()"
+    appBackdropClose
+    (backdropClose)="closeUnassignBed()"
     (keydown.escape)="closeUnassignBed()"
   >
     <div

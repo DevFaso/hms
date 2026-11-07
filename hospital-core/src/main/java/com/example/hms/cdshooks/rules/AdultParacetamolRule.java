@@ -86,6 +86,9 @@ public class AdultParacetamolRule implements CdsRule {
 
     @Override
     public List<CdsCard> evaluate(CdsRuleContext context) {
+        if (context.patient() != null && context.paracetamolFacts().nameNotRecognised()) {
+            return List.of(notRecognised(context.proposedMedicationName()));
+        }
         if (context.patient() == null || !context.paracetamolFacts().applies()) {
             return List.of();
         }
@@ -106,6 +109,20 @@ public class AdultParacetamolRule implements CdsRule {
         check.interval(cards);
         check.leftOutOfTheTotal(cards);
         return cards;
+    }
+
+    /** QA D1462: what the check does not know is said. A name it cannot read may be a brand of this drug. */
+    private CdsCard notRecognised(String medicationName) {
+        String name = medicationName == null ? "" : medicationName.trim();
+        return new CdsCard(
+            text.get("cds.adultParacetamol.notRecognised.summary",
+                "{0} is not in the catalogue and is not a brand on file. If it holds paracetamol, no paracetamol limit was judged and it is left out of the daily total",
+                name),
+            text.get("cds.adultParacetamol.notRecognised.detail",
+                "Choose the drug from the catalogue, or have the pharmacy add this brand to its catalogue item, so the limits and the total apply. This notice does not block the order.",
+                name),
+            CdsCard.Indicator.INFO, new Source(text.get("cds.source.adultParacetamol", SOURCE_LABEL), null, null),
+            null, null, null, UUID.randomUUID().toString());
     }
 
     /** One evaluation's facts, so each check reads them the same way. */
@@ -275,7 +292,11 @@ public class AdultParacetamolRule implements CdsRule {
             List<String> names = new ArrayList<>(facts.mayStillBeInUse());
             names.addAll(facts.combinations());
             names.addAll(others.uncountedNames);
-            if (facts.proposedCombination()) {
+            names.addAll(facts.notRecognised());
+            // QA D1462: "4 cp" of a cited brand: its strength is on no item, and its name is all there is.
+            boolean countUnread = context.proposedDoseMg() == null && context.proposedDoseUnits() != null
+                && com.example.hms.service.allergy.DrugClassAllergy.carriesBrand(medication);
+            if (facts.proposedCombination() || countUnread) {
                 names.add(medication);
             }
             if (!names.isEmpty()) {
@@ -408,6 +429,11 @@ public class AdultParacetamolRule implements CdsRule {
             String named = facts.combinations().isEmpty() ? ""
                 : " (" + String.join(NAME_SEPARATOR, facts.combinations()) + ")";
             parts.add(text.get(COMBINATIONS_KEY, COMBINATIONS_TEXT, named));
+            if (!facts.notRecognised().isEmpty()) {
+                parts.add(text.get("cds.adultParacetamol.detail.notRecognised",
+                    "Not in the catalogue and not a known brand, so not counted if they hold paracetamol: {0}.",
+                    String.join(NAME_SEPARATOR, facts.notRecognised())));
+            }
             parts.add(scopeSentence());
             parts.add(reconcileSentence());
             return String.join(" ", parts);

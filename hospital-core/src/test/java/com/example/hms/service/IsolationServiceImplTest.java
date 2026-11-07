@@ -63,6 +63,7 @@ class IsolationServiceImplTest {
     @Mock private StaffRepository staffRepository;
     @Mock private PatientChartAccess patientChartAccess;
     @Mock private RoleValidator roleValidator;
+    @Mock private com.example.hms.service.support.DischargedPatientGuard dischargedPatientGuard;
     @Spy private IsolationMapper mapper = new IsolationMapper();
 
     @InjectMocks private IsolationServiceImpl service;
@@ -384,5 +385,16 @@ class IsolationServiceImplTest {
 
         assertThatThrownBy(() -> service.startPrecaution(request))
             .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    /** QA D1477: no new precaution on a patient who has gone; lifting one stays open. */
+    @org.junit.jupiter.api.Test
+    void aPrecautionIsNotStartedOnAPatientWhoHasLeft() {
+        org.mockito.Mockito.doThrow(new com.example.hms.exception.BusinessException("isolation.precaution.patientDischarged"))
+            .when(dischargedPatientGuard).requireNotDischargedWithoutVisit(patientId, hospitalId, "isolation.precaution.patientDischarged");
+        IsolationPrecautionRequestDTO request = base().build();
+        assertThatThrownBy(() -> service.startPrecaution(request))
+            .hasFieldOrPropertyWithValue("messageKey", "isolation.precaution.patientDischarged");
+        org.mockito.Mockito.verify(precautionRepository, org.mockito.Mockito.never()).save(org.mockito.ArgumentMatchers.any());
     }
 }

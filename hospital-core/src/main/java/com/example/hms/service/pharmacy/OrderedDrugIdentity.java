@@ -58,6 +58,17 @@ public final class OrderedDrugIdentity {
     }
 
     /**
+     * The typed name reaches this item through a cited brand and no name of the item's own: the
+     * brand's INN is the item's, and nothing says its strength is. "Efferalgan" on a Paracétamol
+     * 500 mg item: two tablets are not read as 1000 mg (QA D1462).
+     */
+    public static boolean namesOnlyThroughCitedBrand(String typedName, MedicationCatalogItem item) {
+        return agrees(typedName, item)
+            && !DispenseVerificationService.namesCatalogItem(typedName, item)
+            && brandNamesGeneric(typedName, item.getGenericName());
+    }
+
+    /**
      * The catalogue name, in its spelling form, is the whole first part of the
      * typed name's spelling form, ending on a word boundary - the
      * {@code namesCatalogItem} rule, read through {@link #spellingForm}.
@@ -121,6 +132,12 @@ public final class OrderedDrugIdentity {
      * brand adds.
      */
     private static boolean brandNamesGeneric(String typedName, String genericName) {
+        // "Efferalgan codéine" is not the Paracétamol item, and plain "Efferalgan" is not the
+        // "Paracétamol + codéine" one: the brand's INN list says nothing of the second drug.
+        if (com.example.hms.cdshooks.rules.ParacetamolIdentity.isCombinationName(typedName)
+                || com.example.hms.cdshooks.rules.ParacetamolIdentity.isCombinationName(genericName)) {
+            return false;
+        }
         String typed = DrugClassAllergy.normalize(typedName);
         String expanded = DrugClassAllergy.withGenericNames(typedName);
         if (expanded.length() <= typed.length()) {

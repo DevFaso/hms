@@ -38,6 +38,15 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class InBasketController {
 
+    /**
+     * Who opens an in-basket. It answers only the items addressed to the caller, so the list is
+     * everyone an item is filed for (QA D1461): a role left out has its urgent items filed where it
+     * can never read them. {@code InBasketRecipientGuardTest} holds it to every sender, and the
+     * portal's route and nav link to it. PHYSICIAN and SURGEON reach this through ROLE_DOCTOR.
+     */
+    static final String READERS = "hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE',"
+        + "'ROLE_LAB_TECHNICIAN','ROLE_LAB_MANAGER','ROLE_LAB_DIRECTOR','ROLE_SUPER_ADMIN')";
+
     private final InBasketService inBasketService;
     private final ControllerAuthUtils authUtils;
 
@@ -45,7 +54,7 @@ public class InBasketController {
     // List items (paged, filtered by type / status)
     // ----------------------------------------------------------
     @GetMapping(consumes = MediaType.ALL_VALUE)
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_LAB_TECHNICIAN','ROLE_LAB_MANAGER','ROLE_SUPER_ADMIN')")
+    @PreAuthorize(READERS)
     @Operation(summary = "List In-Basket items", description = "Returns paginated In-Basket items for the current user, ordered by priority then date.")
     public ResponseEntity<Page<InBasketItemDTO>> list(
             @RequestParam(required = false) InBasketItemType type,
@@ -74,7 +83,7 @@ public class InBasketController {
     // Unread count summary
     // ----------------------------------------------------------
     @GetMapping(value = "/summary", consumes = MediaType.ALL_VALUE)
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_LAB_TECHNICIAN','ROLE_LAB_MANAGER','ROLE_SUPER_ADMIN')")
+    @PreAuthorize(READERS)
     @Operation(summary = "Get In-Basket unread summary", description = "Returns unread counts grouped by item type.")
     public ResponseEntity<InBasketSummaryDTO> summary(
             @RequestParam(required = false) UUID hospitalId,
@@ -99,7 +108,7 @@ public class InBasketController {
     // Mark as read
     // ----------------------------------------------------------
     @PutMapping(value = "/{id}/read", consumes = MediaType.ALL_VALUE)
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_LAB_TECHNICIAN','ROLE_LAB_MANAGER','ROLE_SUPER_ADMIN')")
+    @PreAuthorize(READERS)
     @Operation(summary = "Mark item as read")
     public ResponseEntity<InBasketItemDTO> markAsRead(
             @PathVariable UUID id,
@@ -114,7 +123,7 @@ public class InBasketController {
     // Acknowledge
     // ----------------------------------------------------------
     @PutMapping(value = "/{id}/acknowledge", consumes = MediaType.ALL_VALUE)
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_LAB_TECHNICIAN','ROLE_LAB_MANAGER','ROLE_SUPER_ADMIN')")
+    @PreAuthorize(READERS)
     @Operation(summary = "Acknowledge an In-Basket item")
     public ResponseEntity<InBasketItemDTO> acknowledge(
             @PathVariable UUID id,

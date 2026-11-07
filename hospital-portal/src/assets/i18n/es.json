@@ -2319,6 +2319,11 @@
     "SUBTITLE_PATIENT": "Escriba a su equipo de atención",
     "SEND": "Enviar el mensaje"
   },
+  "ELAPSED": {
+    "MINUTES": "{{minutes}} min",
+    "HOURS": "{{hours}} h {{minutes}} min",
+    "DAYS": "{{days}} d {{hours}} h"
+  },
   "COMMON": {
     "ACTION": "Acción",
     "ACTIONS": "Acciones",
@@ -10519,6 +10524,11 @@
     "URGENCY_ATTACHMENT_REQUIRED": "Las derivaciones prioritarias y urgentes requieren al menos un adjunto de respaldo, que este formulario aún no admite. Cree la derivación como «Rutinaria» por ahora.",
     "VERSIONS_LOAD_ERROR": "Error al cargar el historial de versiones",
     "NO_VERSIONS": "Sin versiones anteriores",
+    "EDD_BEFORE_LMP": "La fecha probable de parto no puede ser anterior o igual a la última menstruación.",
+    "TERM_PRETERM_ABOVE_PARA": "Los partos a término y prematuros juntos no pueden superar la paridad (P): cada uno es un parto contado en P.",
+    "CESAREANS_ABOVE_PARA": "Las cesáreas no pueden superar la paridad (P): cada una terminó un parto contado en P.",
+    "LIVING_ABOVE_PARA": "Los hijos vivos no pueden superar la paridad (P) salvo que se indique un parto múltiple anterior: un parto gemelar cuenta una vez en P.",
+    "MULTIPLE_BIRTH": "Parto múltiple anterior (gemelos o más)",
     "PARA_ABOVE_GRAVIDA": "La paridad (P) no puede ser mayor que la gravidez (G): cada parto contado en P es también un embarazo contado en G.",
     "OUTCOMES_ABOVE_GRAVIDA": "La paridad (P) más los abortos (A) no pueden ser mayores que la gravidez (G): cada embarazo termina como máximo en uno de ellos.",
     "RECORDED_FUTURE": "Registrado: la fecha no puede estar en el futuro.",

@@ -148,7 +148,10 @@ public class PediatricDoseRule implements CdsRule {
 
         Check(CdsRuleContext context, Period age, long ageMonths) {
             this.context = context;
-            this.item = context.proposedCatalogItem();
+            // QA D1462: a free-text brand of paracetamol is judged against the hospital's limits for
+            // the drug, like a brand its catalogue item names. Its strength is not read from them.
+            this.item = context.proposedCatalogItem() != null
+                ? context.proposedCatalogItem() : context.paracetamolFacts().limits();
             this.age = age;
             this.ageMonths = ageMonths;
             // Review of round 18: the doses given on a dosing day - at least the

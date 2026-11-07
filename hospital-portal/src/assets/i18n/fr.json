@@ -2319,6 +2319,11 @@
     "SUBTITLE_PATIENT": "Écrire à votre équipe soignante",
     "SEND": "Envoyer le message"
   },
+  "ELAPSED": {
+    "MINUTES": "{{minutes}} min",
+    "HOURS": "{{hours}} h {{minutes}} min",
+    "DAYS": "{{days}} j {{hours}} h"
+  },
   "COMMON": {
     "ACTION": "Action",
     "ACTIONS": "Actions",
@@ -10519,6 +10524,11 @@
     "URGENCY_ATTACHMENT_REQUIRED": "Les orientations prioritaires et urgentes exigent au moins une pièce jointe justificative, que ce formulaire ne prend pas encore en charge. Créez l'orientation avec l'urgence « Routine » pour le moment.",
     "VERSIONS_LOAD_ERROR": "Échec du chargement de l'historique des versions",
     "NO_VERSIONS": "Aucune version antérieure",
+    "EDD_BEFORE_LMP": "La date prévue d'accouchement ne peut pas être antérieure ou égale aux dernières règles.",
+    "TERM_PRETERM_ABOVE_PARA": "Les accouchements à terme et prématurés réunis ne peuvent pas dépasser la parité (P) : chacun est un accouchement compté dans P.",
+    "CESAREANS_ABOVE_PARA": "Les césariennes ne peuvent pas dépasser la parité (P) : chacune a mis fin à un accouchement compté dans P.",
+    "LIVING_ABOVE_PARA": "Les enfants vivants ne peuvent pas dépasser la parité (P) sauf si un accouchement multiple antérieur est indiqué : un accouchement gémellaire compte une fois dans P.",
+    "MULTIPLE_BIRTH": "Accouchement multiple antérieur (jumeaux ou plus)",
     "PARA_ABOVE_GRAVIDA": "La parité (P) ne peut pas dépasser la gestité (G) : chaque accouchement compté dans P est aussi une grossesse comptée dans G.",
     "OUTCOMES_ABOVE_GRAVIDA": "La parité (P) plus les avortements (A) ne peuvent pas dépasser la gestité (G) : chaque grossesse se termine par au plus l'un des deux.",
     "RECORDED_FUTURE": "Enregistré : la date ne peut pas être dans le futur.",

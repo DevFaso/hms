@@ -34,4 +34,32 @@ public final class ObstetricCounts {
             throw new FieldBusinessException(prefix + "abortions", "maternity.obstetric.outcomesAboveGravida");
         }
     }
+
+    /**
+     * QA D1465: what parity bounds, by logic alone. Term and preterm births are births, and a caesarean
+     * ended one. A blank P is not compared. Living children above P is possible only after a multiple
+     * birth, since a twin birth counts once in P: it is refused until the form says so, and no number
+     * caps it. Gravidity has no ceiling here: no source in the repository gives one.
+     *
+     * @param multipleBirth the clinician stated a previous multiple birth (not stored)
+     */
+    public static void requireConsistentWithParity(Integer para, Integer termBirths, Integer pretermBirths,
+                                                   Integer livingChildren, Integer cesareans,
+                                                   boolean multipleBirth, String fieldPrefix) {
+        if (para == null) {
+            return;
+        }
+        String prefix = fieldPrefix == null ? "" : fieldPrefix;
+        int term = termBirths == null ? 0 : termBirths;
+        int preterm = pretermBirths == null ? 0 : pretermBirths;
+        if (term + preterm > para) {
+            throw new FieldBusinessException(prefix + "termBirths", "maternity.obstetric.termPretermAbovePara");
+        }
+        if (cesareans != null && cesareans > para) {
+            throw new FieldBusinessException(prefix + "previousCesareanSections", "maternity.obstetric.cesareansAbovePara");
+        }
+        if (livingChildren != null && livingChildren > para && !multipleBirth) {
+            throw new FieldBusinessException(prefix + "livingChildren", "maternity.obstetric.livingAbovePara");
+        }
+    }
 }

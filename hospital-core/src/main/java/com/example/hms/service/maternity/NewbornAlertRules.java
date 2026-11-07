@@ -222,25 +222,27 @@ public final class NewbornAlertRules {
     }
 
     /**
-     * Above what every other vitals form accepts: saved, with a flag asking to remeasure. The
-     * numbers only choose when to ask; none of them refuses anything on this form.
+     * Outside what every other vitals form accepts, at either end (QA D1482): saved, with a flag
+     * asking to remeasure. The numbers only choose when to ask; none of them refuses anything here.
      */
     private static void checkTheValue(Reading reading, List<Finding> findings) {
         if (reading.temperatureCelsius() != null
-            && reading.temperatureCelsius() > Double.parseDouble(VitalSignLimits.TEMPERATURE_MAX_C)) {
+            && (reading.temperatureCelsius() > Double.parseDouble(VitalSignLimits.TEMPERATURE_MAX_C)
+                || reading.temperatureCelsius() < Double.parseDouble(VitalSignLimits.TEMPERATURE_MIN_C))) {
             findings.add(Finding.of(NewbornAlertType.THERMOREGULATION, NewbornAlertSeverity.CAUTION, "newborn-check-temperature"));
         }
-        check(reading.heartRateBpm(), VitalSignLimits.HEART_RATE_MAX, NewbornAlertType.CARDIOVASCULAR, "newborn-check-heart-rate", findings);
-        check(reading.respirationsPerMin(), VitalSignLimits.RESPIRATORY_RATE_MAX, NewbornAlertType.RESPIRATORY, "newborn-check-respiratory", findings);
-        check(reading.glucoseMgDl(), VitalSignLimits.GLUCOSE_MAX, NewbornAlertType.GLUCOSE, "newborn-check-glucose", findings);
-        check(reading.systolicBpMmHg(), VitalSignLimits.SYSTOLIC_MAX, NewbornAlertType.CARDIOVASCULAR, "newborn-check-pressure", findings);
-        if (reading.systolicBpMmHg() == null || reading.systolicBpMmHg() <= VitalSignLimits.SYSTOLIC_MAX) {
-            check(reading.diastolicBpMmHg(), VitalSignLimits.DIASTOLIC_MAX, NewbornAlertType.CARDIOVASCULAR, "newborn-check-pressure", findings);
+        check(reading.heartRateBpm(), VitalSignLimits.HEART_RATE_MIN, VitalSignLimits.HEART_RATE_MAX, NewbornAlertType.CARDIOVASCULAR, "newborn-check-heart-rate", findings);
+        check(reading.respirationsPerMin(), VitalSignLimits.RESPIRATORY_RATE_MIN, VitalSignLimits.RESPIRATORY_RATE_MAX, NewbornAlertType.RESPIRATORY, "newborn-check-respiratory", findings);
+        check(reading.glucoseMgDl(), VitalSignLimits.GLUCOSE_MIN, VitalSignLimits.GLUCOSE_MAX, NewbornAlertType.GLUCOSE, "newborn-check-glucose", findings);
+        check(reading.systolicBpMmHg(), VitalSignLimits.SYSTOLIC_MIN, VitalSignLimits.SYSTOLIC_MAX, NewbornAlertType.CARDIOVASCULAR, "newborn-check-pressure", findings);
+        if (reading.systolicBpMmHg() == null || (reading.systolicBpMmHg() <= VitalSignLimits.SYSTOLIC_MAX
+                && reading.systolicBpMmHg() >= VitalSignLimits.SYSTOLIC_MIN)) {
+            check(reading.diastolicBpMmHg(), VitalSignLimits.DIASTOLIC_MIN, VitalSignLimits.DIASTOLIC_MAX, NewbornAlertType.CARDIOVASCULAR, "newborn-check-pressure", findings);
         }
     }
 
-    private static void check(Integer value, int ceiling, NewbornAlertType type, String code, List<Finding> findings) {
-        if (value != null && value > ceiling) {
+    private static void check(Integer value, int floor, int ceiling, NewbornAlertType type, String code, List<Finding> findings) {
+        if (value != null && (value > ceiling || value < floor)) {
             findings.add(Finding.of(type, NewbornAlertSeverity.CAUTION, code));
         }
     }

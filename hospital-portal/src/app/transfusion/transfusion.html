@@ -633,7 +633,8 @@
     <div
       class="modal-backdrop"
       tabindex="-1"
-      (click)="$event.target === $event.currentTarget && closeNewRequest()"
+      appBackdropClose
+      (backdropClose)="closeNewRequest()"
       (keydown.escape)="closeNewRequest()"
     >
       <div
@@ -754,7 +755,8 @@
     <div
       class="modal-backdrop"
       tabindex="-1"
-      (click)="$event.target === $event.currentTarget && closeGroupModal()"
+      appBackdropClose
+      (backdropClose)="closeGroupModal()"
       (keydown.escape)="closeGroupModal()"
     >
       <div
@@ -839,7 +841,8 @@
     <div
       class="modal-backdrop"
       tabindex="-1"
-      (click)="$event.target === $event.currentTarget && closeUnitModal()"
+      appBackdropClose
+      (backdropClose)="closeUnitModal()"
       (keydown.escape)="closeUnitModal()"
     >
       <div
@@ -936,7 +939,8 @@
     <div
       class="modal-backdrop"
       tabindex="-1"
-      (click)="$event.target === $event.currentTarget && closeCrossmatch()"
+      appBackdropClose
+      (backdropClose)="closeCrossmatch()"
       (keydown.escape)="closeCrossmatch()"
     >
       <div
@@ -1013,7 +1017,8 @@
     <div
       class="modal-backdrop"
       tabindex="-1"
-      (click)="$event.target === $event.currentTarget && closeEmergencyRelease()"
+      appBackdropClose
+      (backdropClose)="closeEmergencyRelease()"
       (keydown.escape)="closeEmergencyRelease()"
     >
       <div
@@ -1128,7 +1133,8 @@
     <div
       class="modal-backdrop"
       tabindex="-1"
-      (click)="$event.target === $event.currentTarget && closeIncompatibleRelease()"
+      appBackdropClose
+      (backdropClose)="closeIncompatibleRelease()"
       (keydown.escape)="closeIncompatibleRelease()"
     >
       <div
@@ -1238,7 +1244,8 @@
     <div
       class="modal-backdrop"
       tabindex="-1"
-      (click)="$event.target === $event.currentTarget && closeHang()"
+      appBackdropClose
+      (backdropClose)="closeHang()"
       (keydown.escape)="closeHang()"
     >
       <div
@@ -1302,7 +1309,8 @@
     <div
       class="modal-backdrop"
       tabindex="-1"
-      (click)="$event.target === $event.currentTarget && closeReaction()"
+      appBackdropClose
+      (backdropClose)="closeReaction()"
       (keydown.escape)="closeReaction()"
     >
       <div

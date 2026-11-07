@@ -22,6 +22,8 @@ export interface ObstetricHistory {
   pretermBirths?: number;
   abortions?: number;
   livingChildren?: number;
+  /** QA D1465: a previous multiple birth; lets living children stand above parity. Not stored. */
+  multipleBirth?: boolean;
   previousCesareanSections?: number;
   previousPregnancyOutcomes?: string;
   previousPregnancyComplications?: string;

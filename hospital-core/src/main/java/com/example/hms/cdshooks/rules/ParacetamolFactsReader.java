@@ -11,6 +11,7 @@ import com.example.hms.repository.MedicationCatalogItemRepository;
 import com.example.hms.repository.PatientProblemRepository;
 import com.example.hms.repository.PrescriptionRepository;
 import com.example.hms.service.InpatientOrderEnd;
+import com.example.hms.service.allergy.AllergyDrugIdentity;
 import com.example.hms.service.allergy.DrugClassAllergy;
 import com.example.hms.service.MedicationCourseStatus;
 import com.example.hms.security.tenant.ActingScopeResolver;
@@ -101,16 +102,49 @@ public class ParacetamolFactsReader {
             combination = namesACombination(medicationName, paracetamol, combinations);
         }
         if (!named && !combination) {
-            return ParacetamolFacts.NONE;
+            return scope != null && !recognised(medicationName, active)
+                ? ParacetamolFacts.NOT_RECOGNISED : ParacetamolFacts.NONE;
         }
-        Orders orders = child ? new Orders(List.of(), List.of(), List.of())
-            : otherOrders(patient.getId(), scope, editedOrderId, paracetamol, combinations);
+        Orders orders = child ? new Orders(List.of(), List.of(), List.of(), List.of())
+            : otherOrders(patient.getId(), scope, editedOrderId, paracetamol, combinations, active);
         List<PatientProblem> live = liveProblems(patient.getId(), scope);
         List<PatientProblem> surfaced = live.stream()
             .filter(p -> CrossHospitalRows.maySurface(scope, acting, p.getSensitivityCategory()))
             .toList();
         return new ParacetamolFacts(true, orders.counted, ParacetamolRisk.of(surfaced), orders.mayStillBeInUse,
-            orders.combinations, combination, acting == null, scope == null);
+            orders.combinations, combination, acting == null, scope == null,
+            item == null && named ? freeTextLimits(paracetamol) : null, orders.notRecognised, false);
+    }
+
+    /** A catalogue item or a cited brand names it, or it carries a class member's INN stem. */
+    private static boolean recognised(String name, List<MedicationCatalogItem> active) {
+        return AllergyDrugIdentity.of(name, List.of()).resolved()
+            || active.stream().anyMatch(i -> OrderedDrugIdentity.agrees(name, i));
+    }
+
+    /**
+     * QA D1462: the limits a free-text brand is judged against, in mg only. Nothing says which of the
+     * drug's items it is, so an item's bands and review age are not read, and the absolute daily
+     * maximum, which no override passes, stands only when every item that has one agrees: a syrup's
+     * cap never stops a tablet. Not a catalogue row: it is never saved or linked.
+     */
+    private static MedicationCatalogItem freeTextLimits(List<MedicationCatalogItem> items) {
+        List<java.math.BigDecimal> caps = items.stream()
+            .map(MedicationCatalogItem::getPediatricMaxDailyMg).filter(Objects::nonNull).toList();
+        boolean oneCap = !caps.isEmpty() && caps.stream().allMatch(cap -> cap.compareTo(caps.get(0)) == 0);
+        return items.stream()
+            .filter(i -> i.getPediatricMaxDailyMg() != null || i.getPediatricMaxDoseMgPerKg() != null
+                || i.getPediatricMaxDailyMgPerKg() != null || i.getPediatricMaxSingleDoseMg() != null)
+            .findFirst()
+            .map(i -> MedicationCatalogItem.builder()
+                .pediatricMaxDailyMg(oneCap ? caps.get(0) : null)
+                .pediatricMaxDoseMgPerKg(i.getPediatricMaxDoseMgPerKg())
+                .pediatricMaxDailyMgPerKg(i.getPediatricMaxDailyMgPerKg())
+                .pediatricMaxSingleDoseMg(i.getPediatricMaxSingleDoseMg())
+                .pediatricDoseSource(i.getPediatricDoseSource())
+                .pediatricDoseStatus(i.getPediatricDoseStatus())
+                .build())
+            .orElse(null);
     }
 
     private static boolean namesACombination(String name, List<MedicationCatalogItem> paracetamol,
@@ -121,7 +155,8 @@ public class ParacetamolFactsReader {
     }
 
     /** The orders, by what the total does with them. */
-    private record Orders(List<ParacetamolFacts.OtherOrder> counted, List<String> mayStillBeInUse, List<String> combinations) {
+    private record Orders(List<ParacetamolFacts.OtherOrder> counted, List<String> mayStillBeInUse, List<String> combinations,
+                          List<String> notRecognised) {
     }
 
     /** What the order's dates say about it. */
@@ -137,9 +172,10 @@ public class ParacetamolFactsReader {
     }
 
     private Orders otherOrders(UUID patientId, UUID hospitalId, UUID editedOrderId,
-                               List<MedicationCatalogItem> paracetamol, List<MedicationCatalogItem> combinations) {
+                               List<MedicationCatalogItem> paracetamol, List<MedicationCatalogItem> combinations,
+                               List<MedicationCatalogItem> active) {
         if (hospitalId == null) {
-            return new Orders(List.of(), List.of(), List.of());
+            return new Orders(List.of(), List.of(), List.of(), List.of());
         }
         List<Prescription> live = prescriptions.findByPatient_IdAndHospital_Id(patientId, hospitalId).stream()
             .filter(rx -> rx.getStatus() != null && !CdsRuleEngine.isTerminal(rx.getStatus()))
@@ -151,8 +187,13 @@ public class ParacetamolFactsReader {
             .map(rx -> otherOrder(rx, paracetamol))
             .filter(Objects::nonNull)
             .toList();
-        if (alone.isEmpty() && combined.isEmpty()) {
-            return new Orders(List.of(), List.of(), List.of());
+        List<Prescription> unnamed = live.stream()
+            .filter(rx -> !combined.contains(rx) && rx.getMedicationCatalogItemId() == null)
+            .filter(rx -> alone.stream().noneMatch(other -> other.order() == rx))
+            .filter(rx -> rx.getMedicationName() != null && !recognised(rx.getMedicationName(), active))
+            .toList();
+        if (alone.isEmpty() && combined.isEmpty() && unnamed.isEmpty()) {
+            return new Orders(List.of(), List.of(), List.of(), List.of());
         }
         List<Admission> closedStays = admissions.findByPatientIdOrderByAdmissionDateTimeDesc(patientId).stream()
             .filter(a -> a.getActualDischargeDateTime() != null)
@@ -172,7 +213,12 @@ public class ParacetamolFactsReader {
             .map(Prescription::getMedicationName)
             .distinct()
             .toList();
-        return new Orders(counted, List.copyOf(mayStillBeInUse), combinedNames);
+        List<String> notRecognised = unnamed.stream()
+            .filter(rx -> running(rx, closedStays) != Running.ENDED)
+            .map(Prescription::getMedicationName)
+            .distinct()
+            .toList();
+        return new Orders(counted, List.copyOf(mayStillBeInUse), combinedNames, notRecognised);
     }
 
     private static boolean isCombination(Prescription rx, List<MedicationCatalogItem> paracetamol,
@@ -193,8 +239,9 @@ public class ParacetamolFactsReader {
             // QA D1223: an older order whose name contradicts its item still counts, on what its dose
             // says in mg: its strength is never read from an item its name does not name.
             MedicationCatalogItem item = linked.get(0);
-            return new ParacetamolFacts.OtherOrder(rx,
-                OrderedDrugIdentity.contradicts(rx.getMedicationName(), item) ? null : item);
+            boolean strengthIsItsOwn = !OrderedDrugIdentity.contradicts(rx.getMedicationName(), item)
+                && !OrderedDrugIdentity.namesOnlyThroughCitedBrand(rx.getMedicationName(), item);
+            return new ParacetamolFacts.OtherOrder(rx, strengthIsItsOwn ? item : null);
         }
         List<MedicationCatalogItem> named = paracetamol.stream()
             .filter(i -> ParacetamolIdentity.namesCatalogueItem(rx.getMedicationName(), i))

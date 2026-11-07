@@ -104,6 +104,45 @@ describe('MortalityComponent', () => {
     expect(component.register()).toBeNull();
   });
 
+  it('QA D1451: the three boxes answer a real click, and the backdrop still closes the dialog', async () => {
+    const fixture = TestBed.createComponent(MortalityComponent);
+    const root = fixture.nativeElement as HTMLElement;
+    const settle = async () => {
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+    };
+    fixture.componentInstance.openRecord();
+    await settle();
+    const boxes = () => [
+      ...root.querySelectorAll<HTMLInputElement>('.modal-body input[type="checkbox"]'),
+    ];
+    expect(boxes().length).toBe(3);
+    for (const index of [0, 1, 2]) {
+      boxes()[index].click();
+      await settle();
+      expect(boxes()[index].checked).withContext(`box ${index}`).toBeTrue();
+      boxes()[index].closest('label')!.click();
+      await settle();
+      expect(boxes()[index].checked).withContext(`label ${index}`).toBeFalse();
+      boxes()[index].click();
+      await settle();
+    }
+    const form = fixture.componentInstance.form;
+    expect([form.maternalDeath, form.perinatalDeath, form.autopsyRequested]).toEqual([
+      true,
+      true,
+      true,
+    ]);
+
+    root.querySelector<HTMLElement>('.modal-header')!.click();
+    await settle();
+    expect(root.querySelector('.modal-backdrop')).not.toBeNull();
+    root.querySelector<HTMLElement>('.modal-backdrop')!.click();
+    await settle();
+    expect(root.querySelector('.modal-backdrop')).toBeNull();
+  });
+
   it('asks before recording a death and does nothing when declined', async () => {
     spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(false);
     component.openRecord();

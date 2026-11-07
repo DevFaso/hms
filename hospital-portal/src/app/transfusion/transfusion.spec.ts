@@ -1087,6 +1087,159 @@ describe('TransfusionComponent: a transfusion in progress (QA CX-008)', () => {
         fixture.detectChanges();
       };
 
+      describe('QA D1451: every box of the #1056 flow answers a real click', () => {
+        const root = () => fixture.nativeElement as HTMLElement;
+        const settle = async () => {
+          fixture.detectChanges();
+          await fixture.whenStable();
+          fixture.detectChanges();
+        };
+        const pick = async (selector: string, value: string) => {
+          const select = root().querySelector<HTMLSelectElement>(selector)!;
+          select.value = value;
+          select.dispatchEvent(new Event('change'));
+          await settle();
+        };
+        const type = async (selector: string, value: string) => {
+          const field = root().querySelector<HTMLInputElement | HTMLTextAreaElement>(selector)!;
+          field.value = value;
+          field.dispatchEvent(new Event('input'));
+          await settle();
+        };
+        const box = (selector: string) => root().querySelector<HTMLInputElement>(selector)!;
+        /** The box itself (a Space key activates it the same way), then its label. */
+        const expectToggles = async (selector: string) => {
+          const before = box(selector).checked;
+          box(selector).click();
+          await settle();
+          expect(box(selector).checked).withContext('a click on the box').toBe(!before);
+          box(selector).closest('label')!.click();
+          await settle();
+          expect(box(selector).checked).withContext('a click on its label').toBe(before);
+          box(selector).click();
+          await settle();
+          expect(box(selector).checked).withContext('and back').toBe(!before);
+        };
+        const buttonOf = (key: string) =>
+          [...root().querySelectorAll('button')].find((b) => b.textContent!.includes(key))!;
+
+        it('the crossmatch box can record an incompatible result, and that is what is sent', async () => {
+          await open(['ROLE_LAB_DIRECTOR']);
+          txSpy.listAssignableUnits.and.returnValue(
+            of([mockUnit({ id: 'bag', status: 'AVAILABLE' })]),
+          );
+          txSpy.recordCrossmatch = jasmine
+            .createSpy()
+            .and.returnValue(of({ id: 'x1' } as CrossmatchResponse));
+          buttonOf('TRANSFUSION.RECORD_CROSSMATCH').click();
+          await settle();
+          await pick('#xm-unit', 'bag');
+          const compatible = '.modal-body input[type="checkbox"]';
+          expect(box(compatible).checked).toBeTrue();
+          expect(root().querySelector('#xm-reason')).toBeNull();
+
+          box(compatible).click();
+          await settle();
+          expect(box(compatible).checked).toBeFalse();
+          await type('#xm-reason', 'Anti-K');
+          root().querySelector<HTMLButtonElement>('.modal-actions .btn-primary')!.click();
+          expect(txSpy.recordCrossmatch).toHaveBeenCalledWith('req-1', {
+            bloodUnitId: 'bag',
+            compatible: false,
+            method: undefined,
+            incompatibilityReason: 'Anti-K',
+          });
+        });
+
+        it('the O-negative statement can be ticked, and the release then goes out', async () => {
+          await open(['ROLE_LAB_DIRECTOR']);
+          stubOptions({
+            negativeStock: [unitOption('ONEG-1')],
+            units: [{ ...unitOption('opos', true), statementRequired: true }, unitOption('ONEG-1')],
+          });
+          txSpy.emergencyRelease = jasmine
+            .createSpy()
+            .and.returnValue(of(mockUnit({ id: 'opos', status: 'ISSUED' })));
+          el('emergency-release')!.click();
+          await settle();
+          await pick('#em-unit', 'opos');
+          await pick('#em-decider', 'doc');
+          await type('#em-reason', 'Hémorragie');
+          await expectToggles('#em-statement');
+          expect(component.emergencyNegativeStated).toBeTrue();
+
+          el('submit-emergency-release')!.click();
+          expect(txSpy.emergencyRelease).toHaveBeenCalledWith('req-1', {
+            bloodUnitId: 'opos',
+            releaseType: 'O_POSITIVE_DECISION',
+            reason: 'Hémorragie',
+            authoriserUserId: 'doc',
+            negativeUnobtainable: true,
+          });
+        });
+
+        it('the statement of the incompatible form can be ticked, and the release then goes out', async () => {
+          await openWithResult(['ROLE_LAB_DIRECTOR']);
+          stubOptions({
+            negativeStock: [unitOption('ONEG-1')],
+            incompatibleUnits: [
+              {
+                id: 'bag',
+                unitNumber: 'BAG',
+                aboGroup: 'O',
+                rhFactor: 'POSITIVE',
+                incompatibilityReason: 'Anti-K',
+                releasable: true,
+                statementRequired: true,
+              },
+            ],
+          });
+          txSpy.emergencyRelease = jasmine
+            .createSpy()
+            .and.returnValue(of(mockUnit({ id: 'bag', status: 'ISSUED' })));
+          el('incompatible-release')!.click();
+          await settle();
+          await pick('#si-unit', 'bag');
+          await pick('#si-authoriser', 'dir');
+          await type('#si-reason', 'Rien de compatible à temps');
+          await expectToggles('#si-statement');
+
+          el('submit-incompatible-release')!.click();
+          expect(txSpy.emergencyRelease).toHaveBeenCalledWith('req-1', {
+            bloodUnitId: 'bag',
+            releaseType: 'SEROLOGICALLY_INCOMPATIBLE',
+            reason: 'Rien de compatible à temps',
+            authoriserUserId: 'dir',
+            negativeUnobtainable: true,
+          });
+        });
+
+        it('"Unit returned" can be ticked on a reaction', async () => {
+          await open(['ROLE_NURSE']);
+          component.openReaction('adm-1');
+          await settle();
+          const before = component.reactionForm.unitReturnedToLab;
+          await expectToggles('.modal-body input[type="checkbox"]');
+          expect(component.reactionForm.unitReturnedToLab).toBe(!before);
+        });
+
+        it('a click inside the dialog leaves it open and is not cancelled; one on the backdrop closes it', async () => {
+          await open(['ROLE_LAB_DIRECTOR']);
+          txSpy.listAssignableUnits.and.returnValue(of([]));
+          component.openCrossmatch();
+          await settle();
+          const inside = new MouseEvent('click', { bubbles: true, cancelable: true });
+          root().querySelector('.modal-body')!.dispatchEvent(inside);
+          await settle();
+          expect(inside.defaultPrevented).toBeFalse();
+          expect(component.showCrossmatchModal()).toBeTrue();
+
+          root().querySelector<HTMLElement>('.modal-backdrop')!.click();
+          await settle();
+          expect(component.showCrossmatchModal()).toBeFalse();
+        });
+      });
+
       it('is its own action, offered only with an incompatible result on the request', async () => {
         await open(['ROLE_LAB_TECHNICIAN']);
         expect(el('incompatible-release')).toBeNull();

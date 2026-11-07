@@ -844,4 +844,35 @@ class MaternalHistoryServiceImplTest {
         assertThat(captor.getValue().getGravida()).isEqualTo(3);
         assertThat(captor.getValue().getPara()).isEqualTo(2);
     }
+
+    /** QA D1465, through the service: the three the round reported, on their fields. */
+    @Test
+    void impossibleValuesAreRefusedOnTheField() {
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(userRepository.findByUsername(username)).thenReturn(Optional.of(user));
+        when(staffRepository.findByUserIdAndHospitalId(userId, hospitalId)).thenReturn(Optional.of(staff));
+        when(maternalHistoryRepository.existsByPatient_Id(patientId)).thenReturn(false);
+
+        org.mockito.Mockito.doAnswer(call -> {
+            com.example.hms.model.MaternalHistory h = call.getArgument(0);
+            h.setLastMenstrualPeriod(java.time.LocalDate.of(2026, 6, 10));
+            h.setEstimatedDueDate(java.time.LocalDate.of(2026, 1, 10));
+            return null;
+        }).when(maternalHistoryMapper).updateEntityFromRequest(any(), any());
+        assertThatThrownBy(() -> maternalHistoryService.createMaternalHistory(requestDTO, username))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> org.assertj.core.api.Assertions.assertThat(ex.getField()).isEqualTo("menstrualHistory.estimatedDueDate"));
+
+        org.mockito.Mockito.doAnswer(call -> {
+            com.example.hms.model.MaternalHistory h = call.getArgument(0);
+            h.setGravida(2);
+            h.setPara(1);
+            h.setLivingChildren(7);
+            return null;
+        }).when(maternalHistoryMapper).updateEntityFromRequest(any(), any());
+        assertThatThrownBy(() -> maternalHistoryService.createMaternalHistory(requestDTO, username))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> org.assertj.core.api.Assertions.assertThat(ex.getField()).isEqualTo("obstetricHistory.livingChildren"));
+    }
 }

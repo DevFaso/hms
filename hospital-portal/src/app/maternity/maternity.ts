@@ -19,6 +19,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   MaternityService,
   MaternalHistoryRequest,
+  ObstetricHistory,
   MaternalHistoryResponse,
   PageResponse,
 } from '../services/maternity.service';
@@ -69,6 +70,7 @@ import { missingRequiredMessage } from '../shared/required-fields';
 const HISTORY_LABELS: Record<string, string> = {
   recordedDate: 'MATERNITY.RECORDED',
   'menstrualHistory.lastMenstrualPeriod': 'MATERNITY.LMP',
+  'menstrualHistory.estimatedDueDate': 'MATERNITY.EDD',
   'obstetricHistory.gravida': 'MATERNITY.GRAVIDA',
   'obstetricHistory.para': 'MATERNITY.PARA',
   'obstetricHistory.termBirths': 'MATERNITY.TERM_BIRTHS',
@@ -82,11 +84,19 @@ const HISTORY_PATIENT_ID = 'history-patient';
 const HISTORY_RECORDED_ID = 'history-recorded';
 const HISTORY_PARA_ID = 'ob-para';
 const HISTORY_ABORTIONS_ID = 'ob-abortions';
+const HISTORY_EDD_ID = 'history-edd';
+const HISTORY_TERM_ID = 'ob-term';
+const HISTORY_LIVING_ID = 'ob-living';
+const HISTORY_CSECTIONS_ID = 'ob-csections';
 /** QA D1306 (round 28): the history field each historyFormProblem() key refuses. */
 const HISTORY_PROBLEM_FIELD: Readonly<Record<string, string>> = {
   'MATERNITY.RECORDED_FUTURE': HISTORY_RECORDED_ID,
   'MATERNITY.PARA_ABOVE_GRAVIDA': HISTORY_PARA_ID,
   'MATERNITY.OUTCOMES_ABOVE_GRAVIDA': HISTORY_ABORTIONS_ID,
+  'MATERNITY.EDD_BEFORE_LMP': HISTORY_EDD_ID,
+  'MATERNITY.TERM_PRETERM_ABOVE_PARA': HISTORY_TERM_ID,
+  'MATERNITY.CESAREANS_ABOVE_PARA': HISTORY_CSECTIONS_ID,
+  'MATERNITY.LIVING_ABOVE_PARA': HISTORY_LIVING_ID,
 };
 /** Every history field submitHistory() may refuse. */
 const HISTORY_FIELD_IDS = [
@@ -94,6 +104,10 @@ const HISTORY_FIELD_IDS = [
   HISTORY_RECORDED_ID,
   HISTORY_PARA_ID,
   HISTORY_ABORTIONS_ID,
+  HISTORY_EDD_ID,
+  HISTORY_TERM_ID,
+  HISTORY_LIVING_ID,
+  HISTORY_CSECTIONS_ID,
 ];
 
 /** The charting-device clock allowance the server grants a clinical time (NotInClinicalFuture). */
@@ -104,8 +118,9 @@ const CLOCK_SKEW_MS = 10 * 60 * 1000;
  * key, or null. QA D821: a record dated in the future (the server refuses it
  * beyond its clock allowance). QA D809: "G1 P3" was saved; parity counts
  * births, each of which ended a pregnancy counted in gravidity, and a
- * pregnancy ends in at most one birth or one abortion. The server refuses the
- * same, on the same fields.
+ * pregnancy ends in at most one birth or one abortion. QA D1465: a due date on
+ * or before the LMP; births and living children against parity. The server
+ * refuses the same, on the same fields.
  */
 export function historyFormProblem(
   form: MaternalHistoryRequest,
@@ -115,7 +130,15 @@ export function historyFormProblem(
   if (recorded && recorded.getTime() > now.getTime() + CLOCK_SKEW_MS) {
     return 'MATERNITY.RECORDED_FUTURE';
   }
+  const lmp = form.menstrualHistory?.lastMenstrualPeriod;
+  const edd = form.menstrualHistory?.estimatedDueDate;
+  if (lmp && edd && edd <= lmp) return 'MATERNITY.EDD_BEFORE_LMP';
   const counts = form.obstetricHistory ?? {};
+  return gravidaProblem(counts) ?? parityProblem(counts);
+}
+
+/** P and A against G; a blank gravidity is not compared. */
+function gravidaProblem(counts: ObstetricHistory): string | null {
   const gravida = counts.gravida;
   if (gravida === undefined || gravida === null) return null;
   const para = counts.para ?? 0;
@@ -126,6 +149,20 @@ export function historyFormProblem(
     para + counts.abortions > gravida
   ) {
     return 'MATERNITY.OUTCOMES_ABOVE_GRAVIDA';
+  }
+  return null;
+}
+
+/** What parity bounds (ObstetricCounts on the server); a blank parity is not compared. */
+function parityProblem(counts: ObstetricHistory): string | null {
+  const para = counts.para;
+  if (para === undefined || para === null) return null;
+  if ((counts.termBirths ?? 0) + (counts.pretermBirths ?? 0) > para) {
+    return 'MATERNITY.TERM_PRETERM_ABOVE_PARA';
+  }
+  if ((counts.previousCesareanSections ?? 0) > para) return 'MATERNITY.CESAREANS_ABOVE_PARA';
+  if ((counts.livingChildren ?? 0) > para && !counts.multipleBirth) {
+    return 'MATERNITY.LIVING_ABOVE_PARA';
   }
   return null;
 }

@@ -306,4 +306,18 @@ class NewbornAlertRulesTest {
             assertThat(messages.getMessage("newborn.alert.msg.newborn-reference-heart-rate", null, locale)).contains("120-170");
         }
     }
+
+    /** QA D1482: the check flag reads both ends of what the other forms accept. */
+    @org.junit.jupiter.api.Test
+    @DisplayName("a value below what other forms accept asks to remeasure too")
+    void aLowValueAsksToRemeasure() {
+        assertThat(codes(new NewbornAlertRules.Reading(10.0, null, null, null, null, null, null, null, 1L, false, false)))
+            .containsKeys("newborn-check-temperature", "newborn-temperature-critical");
+        assertThat(codes(new NewbornAlertRules.Reading(25.0, null, null, null, null, null, null, null, 1L, false, false)))
+            .doesNotContainKey("newborn-check-temperature");
+        assertThat(codes(heart(5, false, false))).containsKey("newborn-check-heart-rate");
+        assertThat(codes(heart(20, false, false))).doesNotContainKey("newborn-check-heart-rate");
+        assertThat(codes(breaths(2, false))).containsKey("newborn-check-respiratory");
+        assertThat(codes(glucose(5, null, 100L))).containsKey("newborn-check-glucose");
+    }
 }

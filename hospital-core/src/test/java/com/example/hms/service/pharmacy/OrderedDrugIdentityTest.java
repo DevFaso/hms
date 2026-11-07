@@ -189,4 +189,35 @@ class OrderedDrugIdentityTest {
         lot.setId(UUID.randomUUID());
         return lot;
     }
+
+    /** QA D1462: a cited paracetamol brand on the Paracétamol item. It closes that half of D1264 for Efferalgan. */
+    @org.junit.jupiter.api.Test
+    void aCitedParacetamolBrandAgreesWithTheItemAndGivesItNoStrength() {
+        MedicationCatalogItem plain = item("Paracétamol", "Paracétamol", null);
+        org.assertj.core.api.Assertions.assertThat(OrderedDrugIdentity.agrees("Efferalgan 1 g", plain)).isTrue();
+        org.assertj.core.api.Assertions.assertThat(OrderedDrugIdentity.namesOnlyThroughCitedBrand("Efferalgan 1 g", plain)).isTrue();
+        org.assertj.core.api.Assertions.assertThat(OrderedDrugIdentity.namesOnlyThroughCitedBrand("Paracétamol 1 g", plain)).isFalse();
+        org.assertj.core.api.Assertions.assertThat(OrderedDrugIdentity.namesOnlyThroughCitedBrand("Doliprane 1 g", PARACETAMOL)).isFalse();
+        org.assertj.core.api.Assertions.assertThat(OrderedDrugIdentity.namesOnlyThroughCitedBrand(null, plain)).isFalse();
+        org.assertj.core.api.Assertions.assertThat(OrderedDrugIdentity.namesOnlyThroughCitedBrand("Efferalgan", null)).isFalse();
+    }
+
+    /** Review: a slash strength is not a second drug, and a brand keeps its strength reading off paracetamol. */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({"Augmentin 500/62.5, Amoxicilline", "Bactrim 400/80, Sulfamethoxazole", "Fansidar 500/25, Sulfadoxine"})
+    void aCitedBrandWithASlashStrengthStillAgrees(String typed, String generic) {
+        org.assertj.core.api.Assertions.assertThat(OrderedDrugIdentity.agrees(typed, item(generic, generic, null))).isTrue();
+    }
+
+    @org.junit.jupiter.api.Test
+    void aParacetamolBrandDoesNotNameACombinationItem() {
+        org.assertj.core.api.Assertions.assertThat(
+            OrderedDrugIdentity.contradicts("Efferalgan", item("Paracétamol + codéine", "Paracétamol + codéine", null))).isTrue();
+    }
+
+    @org.junit.jupiter.api.Test
+    void aCitedBrandWithASecondDrugDoesNotNameTheItemAlone() {
+        org.assertj.core.api.Assertions.assertThat(
+            OrderedDrugIdentity.contradicts("Efferalgan codéine", item("Paracétamol", "Paracétamol", null))).isTrue();
+    }
 }

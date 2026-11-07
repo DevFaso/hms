@@ -749,6 +749,19 @@
               min="0"
               [(ngModel)]="historyForm.obstetricHistory!.livingChildren"
             />
+            @if (
+              (historyForm.obstetricHistory!.livingChildren ?? 0) >
+              (historyForm.obstetricHistory!.para ?? 0)
+            ) {
+              <label class="checkbox-field">
+                <input
+                  id="ob-multiple"
+                  type="checkbox"
+                  [(ngModel)]="historyForm.obstetricHistory!.multipleBirth"
+                />
+                {{ 'MATERNITY.MULTIPLE_BIRTH' | translate }}
+              </label>
+            }
           </div>
           <div class="field">
             <label for="ob-csections">{{ 'MATERNITY.CSECTIONS' | translate }}</label>

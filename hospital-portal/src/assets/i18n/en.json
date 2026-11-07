@@ -2319,6 +2319,11 @@
     "SUBTITLE_PATIENT": "Write to your care team",
     "SEND": "Send message"
   },
+  "ELAPSED": {
+    "MINUTES": "{{minutes}} min",
+    "HOURS": "{{hours}} h {{minutes}} min",
+    "DAYS": "{{days}} d {{hours}} h"
+  },
   "COMMON": {
     "ACTION": "Action",
     "ACTIONS": "Actions",
@@ -10519,6 +10524,11 @@
     "URGENCY_ATTACHMENT_REQUIRED": "Priority and urgent referrals require at least one supporting attachment, which this form does not support yet. Create the referral as Routine for now.",
     "VERSIONS_LOAD_ERROR": "Failed to load version history",
     "NO_VERSIONS": "No earlier versions",
+    "EDD_BEFORE_LMP": "The due date cannot be on or before the last menstrual period.",
+    "TERM_PRETERM_ABOVE_PARA": "Term and preterm births together cannot be more than parity (P): each is a birth counted in P.",
+    "CESAREANS_ABOVE_PARA": "Caesarean sections cannot be more than parity (P): each ended a birth counted in P.",
+    "LIVING_ABOVE_PARA": "Living children cannot be more than parity (P) unless a previous multiple birth is stated: a twin birth counts once in P.",
+    "MULTIPLE_BIRTH": "Previous multiple birth (twins or more)",
     "PARA_ABOVE_GRAVIDA": "Parity (P) cannot be higher than gravidity (G): every birth counted in P is also a pregnancy counted in G.",
     "OUTCOMES_ABOVE_GRAVIDA": "Parity (P) plus abortions (A) cannot be higher than gravidity (G): each pregnancy ends in at most one of them.",
     "RECORDED_FUTURE": "Recorded: the date cannot be in the future.",

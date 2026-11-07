@@ -14,14 +14,15 @@ import java.util.regex.Pattern;
  * Never one input hiding the other (QA D1223): the typed name or the catalogue item may say so.
  *
  * <p>The names are the INN and the name the FDA guidance uses, in the English, French and
- * Spanish spellings {@link OrderedDrugIdentity#spellingForm} reads alike. A brand is known only
- * through a catalogue item: {@code DrugClassAllergy.BRAND_GENERICS} holds no paracetamol brand.
+ * Spanish spellings {@link OrderedDrugIdentity#spellingForm} reads alike. A brand is known through
+ * a catalogue item, or through {@code DrugClassAllergy.BRAND_GENERICS} (QA D1462), the one list of
+ * cited brands. Any other name is not read as this drug, and the card says it could not be checked.
  *
  * <p>A combination ("Paracétamol + codéine", "Tramadol/paracétamol", "500/30") is NOT this drug:
  * the catalogue records one strength text with no label per ingredient, so its paracetamol
  * content cannot be read, and it is not guessed. Pure functions.
  */
-final class ParacetamolIdentity {
+public final class ParacetamolIdentity {
 
     /** WHO ATC paracetamol, alone. */
     private static final String ATC_PARACETAMOL = "N02BE01";
@@ -97,12 +98,12 @@ final class ParacetamolIdentity {
     }
 
     /** The text names the drug as a word, wherever it stands, and no second ingredient. */
-    static boolean nameIsParacetamolAlone(String name) {
+    public static boolean nameIsParacetamolAlone(String name) {
         return namesTheDrug(name) && !namesAnotherIngredient(name);
     }
 
     /** The text names the drug as a word AND positively names another ingredient. */
-    static boolean isCombinationName(String name) {
+    public static boolean isCombinationName(String name) {
         return namesTheDrug(name) && namesAnotherIngredient(name);
     }
 
@@ -115,7 +116,7 @@ final class ParacetamolIdentity {
         if (text.isEmpty() || NOT_THE_ORDERED_DRUG.matcher(text).find()) {
             return false;
         }
-        for (String word : WORD_ENDS.split(text)) {
+        for (String word : WORD_ENDS.split(DrugClassAllergy.withGenericNames(text))) {
             if (SPELLINGS.contains(OrderedDrugIdentity.spellingForm(word))) {
                 return true;
             }

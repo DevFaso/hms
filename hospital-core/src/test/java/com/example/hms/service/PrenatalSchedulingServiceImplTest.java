@@ -622,4 +622,20 @@ class PrenatalSchedulingServiceImplTest {
         });
         assertThat(response.getAlerts()).anySatisfy(alert -> assertThat(alert).startsWith("Grossesse à haut risque"));
     }
+
+    /** QA D1465: a due date before the LMP, beside a gestational age of 21 weeks. */
+    @Test
+    void aDueDateThatContradictsTheLmpIsRefusedOnTheField() {
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        // 21 weeks on the fixed clock date.
+        LocalDate lmp = LocalDate.of(2024, 4, 1).minusWeeks(21);
+        PrenatalScheduleRequestDTO request = PrenatalScheduleRequestDTO.builder()
+            .patientId(patientId).hospitalId(hospitalId)
+            .lastMenstrualPeriodDate(lmp).estimatedDueDate(lmp.minusMonths(5)).build();
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> service.generateSchedule(request, Locale.US, SCHEDULER_USERNAME))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> org.assertj.core.api.Assertions.assertThat(ex.getField()).isEqualTo("estimatedDueDate"));
+    }
 }

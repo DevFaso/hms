@@ -684,8 +684,10 @@ function dialogClosers(tag) {
     if (name) out.add(name);
   }
   if (isCover(tag)) {
-    const name = calledMethod(tag.attrs.get('(click)'));
-    if (name) out.add(name);
+    for (const closes of ['(click)', '(backdropClose)']) {
+      const name = calledMethod(tag.attrs.get(closes));
+      if (name) out.add(name);
+    }
   }
   return out;
 }

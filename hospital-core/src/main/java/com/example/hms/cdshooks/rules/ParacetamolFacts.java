@@ -21,13 +21,33 @@ import java.util.Set;
  * @param proposedCombination the proposed order itself is a combination: its dose is not counted
  * @param noActingHospital no hospital is acting (global view): rows tagged sensitive are not read
  * @param noHospital    no hospital is known: no order or problem could be read at all
+ * @param limits        QA D1462: the paediatric mg limits of this drug for a free-text order, built by
+ *                      the reader; the strength of a count is never read from it
+ * @param notRecognised QA D1462: names of the other active orders that no catalogue item and no
+ *                      cited brand names: if one holds paracetamol it is not counted, and that is said
+ * @param nameNotRecognised QA D1462: the proposed name is of no catalogue item and no cited brand, so
+ *                      this rule could not tell whether it holds paracetamol
  */
 public record ParacetamolFacts(boolean applies, List<OtherOrder> otherOrders, Set<ParacetamolRisk> risks,
                                List<String> mayStillBeInUse, List<String> combinations,
-                               boolean proposedCombination, boolean noActingHospital, boolean noHospital) {
+                               boolean proposedCombination, boolean noActingHospital, boolean noHospital,
+                               MedicationCatalogItem limits, List<String> notRecognised,
+                               boolean nameNotRecognised) {
 
     /** The rule does not apply: another drug. */
     public static final ParacetamolFacts NONE = new ParacetamolFacts(false, List.of(), Set.of());
+
+    /** The rule cannot tell: the name is of nothing it knows. */
+    public static final ParacetamolFacts NOT_RECOGNISED = new ParacetamolFacts(false, List.of(), Set.of(), List.of(),
+        List.of(), false, false, false, null, List.of(), true);
+
+    /** Facts with no free-text limits and nothing unrecognised beside them. */
+    public ParacetamolFacts(boolean applies, List<OtherOrder> otherOrders, Set<ParacetamolRisk> risks,
+                            List<String> mayStillBeInUse, List<String> combinations,
+                            boolean proposedCombination, boolean noActingHospital, boolean noHospital) {
+        this(applies, otherOrders, risks, mayStillBeInUse, combinations, proposedCombination, noActingHospital,
+            noHospital, null, List.of(), false);
+    }
 
     /** Facts of a proposed order that is paracetamol alone, read at a hospital. */
     public ParacetamolFacts(boolean applies, List<OtherOrder> otherOrders, Set<ParacetamolRisk> risks,

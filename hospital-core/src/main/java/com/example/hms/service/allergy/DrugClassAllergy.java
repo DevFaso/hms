@@ -78,6 +78,9 @@ public final class DrugClassAllergy {
 
     private static final String COTRIMOXAZOLE_INN = "sulfamethoxazole trimethoprim co-trimoxazole";
 
+    /** QA D1462: the names {@code ParacetamolIdentity} reads as the drug. */
+    private static final String PARACETAMOL_INN = "paracetamol acetaminophen acetaminophene acetaminofen";
+
     private static final String PENICILLIN_V_INN =
         "phenoxymethylpenicillin phenoxymethylpenicilline fenoximetilpenicilina penicillin v";
 
@@ -109,7 +112,14 @@ public final class DrugClassAllergy {
         Map.entry(Pattern.compile("\\baugmentin\\b"), "amoxicillin amoxicilline amoxicilina clavulanic acid"),
         Map.entry(Pattern.compile("\\bclamoxyl\\b"), "amoxicillin amoxicilline amoxicilina"),
         Map.entry(Pattern.compile("\\bextencilline\\b"),
-            "benzathine benzylpenicillin benzathine benzylpenicilline penicilina benzatinica"));
+            "benzathine benzylpenicillin benzathine benzylpenicilline penicilina benzatinica"),
+        // QA D1462: only what a source in the repository holds. Efferalgan: the EFFERALGANSTIX 1000 mg
+        // RCP the user supplied (reference-values-general-2026-10-30.md). Tylenol: the order-set form's
+        // own example of a paracetamol synonym (order-set.service.ts). Dafalgan, Panadol and Paralgan
+        // have no source here: a hospital names them on its catalogue item, or the card says it could
+        // not check them (AdultParacetamolRule).
+        Map.entry(Pattern.compile("\\befferalgan(?:stix)?\\b"), PARACETAMOL_INN),
+        Map.entry(Pattern.compile("\\btylenol\\b"), PARACETAMOL_INN));
 
     private DrugClassAllergy() {
     }
