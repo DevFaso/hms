@@ -87,8 +87,10 @@ public class OrderReviewHold extends BaseEntity {
     @Column(name = "decided_at")
     private LocalDateTime decidedAt;
 
+    /** Clinical narrative, encrypted as the order's own withdrawal reason is. */
     @Size(max = 1000)
-    @Column(name = "reason", length = 1000)
+    @Column(name = "reason", columnDefinition = "TEXT")
+    @jakarta.persistence.Convert(converter = com.example.hms.security.EncryptedStringConverter.class)
     private String reason;
 
     @Column(name = "replacement_order_id")

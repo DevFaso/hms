@@ -158,4 +158,34 @@ describe('OrderReviewPanelComponent', () => {
     await c.submit();
     expect(spy.decide).not.toHaveBeenCalled();
   });
+
+  it('offers a prescription to the role that signs it, and a blood request to those who may request blood', () => {
+    const roles = TestBed.inject(RoleContextService) as unknown as {
+      hasAnyActiveRole: (r: string[]) => boolean;
+    };
+    roles.hasAnyActiveRole = (r) => r.includes('ROLE_MIDWIFE');
+    const c = fixture.componentInstance;
+    expect(c.canDecide(row())).toBeFalse();
+    expect(c.canDecide(row({ orderType: 'TRANSFUSION_REQUEST' }))).toBeTrue();
+  });
+
+  it('does not ask for the list without a clinical role', () => {
+    const roles = TestBed.inject(RoleContextService) as unknown as {
+      hasAnyActiveRole: (r: string[]) => boolean;
+    };
+    roles.hasAnyActiveRole = () => false;
+    spy.forPatient.calls.reset();
+    fixture.componentInstance.load();
+    expect(spy.forPatient).not.toHaveBeenCalled();
+  });
+
+  it('says so when there is no new order yet, and an order just written becomes a choice on reopening', () => {
+    const c = fixture.componentInstance;
+    c.open(row({ replacementCandidates: [] }), 'replace');
+    expect(c.target()?.replacementCandidates?.length).toBe(1);
+    spy.forPatient.and.returnValue(of([row({ replacementCandidates: [] })]));
+    c.open(row({ replacementCandidates: [] }), 'replace');
+    fixture.detectChanges();
+    expect(host().querySelector('[data-testid="order-review-no-replacement"]')).not.toBeNull();
+  });
 });

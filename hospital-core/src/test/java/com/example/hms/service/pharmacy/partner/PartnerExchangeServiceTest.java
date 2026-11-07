@@ -749,4 +749,61 @@ class PartnerExchangeServiceTest {
         verify(channel, never()).notifyPatientDispensed(any(), any());
         verify(prescriberNotifier).notifyPrescriberOfDispenseAfterWithdrawal(prescription);
     }
+
+    @Test
+    @DisplayName("a partner's accept of a held order recalls the offer: no acceptance, and the patient is not told to collect")
+    void aHeldOrderIsNotAcceptedByReply() {
+        com.example.hms.service.support.OrderReviewHoldGuard.useHolds((type, id) -> id.equals(prescription.getId()));
+        try {
+            stubPrefixLookup(decision);
+            stubSaves();
+
+            service.handleInboundReply(PARTNER_PHONE, "1 " + token);
+
+            assertThat(decision.getStatus()).isEqualTo(RoutingDecisionStatus.CANCELLED);
+            assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PARTNER_REJECTED);
+            verify(channel, times(0)).notifyPatientAccepted(any(), any());
+        } finally {
+            com.example.hms.service.support.OrderReviewHoldGuard.useHolds(null);
+        }
+    }
+
+    @Test
+    @DisplayName("a partner's refusal of a held order is an answer, not a use")
+    void aHeldOrderCanBeRefusedByReply() {
+        com.example.hms.service.support.OrderReviewHoldGuard.useHolds((type, id) -> id.equals(prescription.getId()));
+        try {
+            stubPrefixLookup(decision);
+            stubSaves();
+
+            service.handleInboundReply(PARTNER_PHONE, "2 " + token);
+
+            assertThat(decision.getStatus()).isEqualTo(RoutingDecisionStatus.REJECTED);
+        } finally {
+            com.example.hms.service.support.OrderReviewHoldGuard.useHolds(null);
+        }
+    }
+
+    @Test
+    @DisplayName("a partner's hand-over of a held order is recorded, because it happened, and raised for a person")
+    void aHandOverOfAHeldOrderIsRaised() {
+        com.example.hms.service.support.OrderReviewHoldGuard.useHolds((type, id) -> id.equals(prescription.getId()));
+        try {
+            decision.setStatus(RoutingDecisionStatus.ACCEPTED);
+            prescription.setStatus(PrescriptionStatus.PARTNER_ACCEPTED);
+            stubPrefixLookup(decision);
+            stubSaves();
+
+            service.handleInboundReply(PARTNER_PHONE, "3 " + token);
+
+            assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PARTNER_DISPENSED);
+            org.mockito.ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> event =
+                org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+            verify(auditEventLogService, org.mockito.Mockito.atLeastOnce()).logEvent(event.capture());
+            assertThat(event.getAllValues()).anyMatch(e -> e.getEventType() == com.example.hms.enums.AuditEventType.SECURITY_ALERT_TRIGGERED
+                && e.getEventDescription().contains("held for review"));
+        } finally {
+            com.example.hms.service.support.OrderReviewHoldGuard.useHolds(null);
+        }
+    }
 }

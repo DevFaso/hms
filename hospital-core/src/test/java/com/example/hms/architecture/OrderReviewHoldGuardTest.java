@@ -55,6 +55,7 @@ class OrderReviewHoldGuardTest {
         Transfusion#emergencyRelease | TransfusionServiceImpl#emergencyRelease
         Transfusion#startAdministration | TransfusionServiceImpl#startAdministration
         StockOutRouting#routeToPartner | StockOutRoutingServiceImpl#validateRoutableStatus
+        StockOutRouting#partnerRespond | StockOutRoutingServiceImpl#partnerRespond
         StockOutRouting#printForPatient | StockOutRoutingServiceImpl#validateRoutableStatus
         StockOutRouting#backOrder | StockOutRoutingServiceImpl#validateRoutableStatus
         RefillApproval#approve | RefillApprovalServiceImpl#decide
@@ -73,7 +74,7 @@ class OrderReviewHoldGuardTest {
         Transfusion#receiveUnit,discardUnit | blood bank stock
         Transfusion#cancelRequest | stops the request
         Transfusion#completeAdministration,stopAdministration,recordReaction | treatment already running: never held, stop and complete stay available
-        StockOutRouting#partnerRespond,confirmPartnerDispense,partnerNoShow | a partner's outcome of a routing made before the hold
+        StockOutRouting#confirmPartnerDispense,partnerNoShow | a partner's outcome of a routing made before the hold: a hand-over that happened is recorded and raised, the hold stands
         RefillApproval#reject,pause | refuses a refill
         OrderReviewHold#continueOrder,replaceOrder,stopOrder,recordAssessment | the review itself
         """;
@@ -117,6 +118,29 @@ class OrderReviewHoldGuardTest {
         assertThat(bodyOf(source, "updatePrescription")).contains("OrderReviewHoldGuard.reviewAgainAfterChange(");
     }
 
+    @Test
+    @DisplayName("a blood request moved onto another screen invalidates its reconfirmation")
+    void aMovedRequestIsHeldAgain() throws IOException {
+        String source = SourceScan.stripComments(Files.readString(services().get("TransfusionServiceImpl"), StandardCharsets.UTF_8));
+        assertThat(bodyOf(source, "moveOpenRequestsOnto")).contains("OrderReviewHoldGuard.reviewRequestAgainAfterChange(");
+        assertThat(bodyOf(source, "currentScreen")).contains("OrderReviewHoldGuard.reviewRequestAgainAfterChange(");
+    }
+
+    @Test
+    @DisplayName("a partner's reply by SMS asks too: a held order is not accepted, and a hand-over is raised")
+    void aPartnersReplyAsksTheGuard() throws IOException {
+        String source = SourceScan.stripComments(Files.readString(services().get("PartnerExchangeService"), StandardCharsets.UTF_8));
+        assertThat(bodyOf(source, "applyReply")).contains("OrderReviewHoldGuard.isHeld(").contains("withdrawnOrders.recallOffer(")
+            .contains("withdrawnOrders.raiseDispenseOfHeld(");
+    }
+
+    @Test
+    @DisplayName("the review list is clinical: a hospital administrator with no clinical role does not read it")
+    void anAdministratorDoesNotReadTheList() throws IOException {
+        String source = SourceScan.stripComments(Files.readString(CONTROLLERS.resolve("OrderReviewHoldController.java"), StandardCharsets.UTF_8));
+        assertThat(source).doesNotContain("HOSPITAL_ADMIN").doesNotContain("SUPER_ADMIN");
+    }
+
     /** A service that moves an order on, or a bag out, sits behind a classified controller. */
     @Test
     @DisplayName("nothing outside these services moves an order's fill, dose or bag on")
@@ -124,11 +148,11 @@ class OrderReviewHoldGuardTest {
         List<String> others = new ArrayList<>();
         Set<String> known = Set.of("PrescriptionServiceImpl", "PharmacistVerificationService", "PrescriptionSmsDispatchServiceImpl",
             "DispenseServiceImpl", "NurseTaskServiceImpl", "TransfusionServiceImpl", "StockOutRoutingServiceImpl",
-            "RefillApprovalServiceImpl", "PrescriptionWithdrawal", "PartnerExchangeService", "PartnerResponseTimeoutScheduler",
+            "RefillApprovalServiceImpl", "PrescriptionWithdrawal", "PartnerExchangeService",
             "AdmissionStayEncounterService", "MllpInboundAdtVisitProjectionServiceImpl", "FiveRightsVerificationService",
             "OrderSetItemDispatcher", "PartnerSmsWebhookService");
         Pattern moves = Pattern.compile("setStatus\\(\\s*+(?:\\w++\\.)*+(?:BloodUnitStatus\\.(?:ISSUED|TRANSFUSED)|DispenseStatus\\.COMPLETED"
-            + "|PrescriptionStatus\\.(?:SIGNED|DISPENSED)|MedicationAdministrationStatus\\.GIVEN)");
+            + "|PrescriptionStatus\\.(?:SIGNED|DISPENSED|PARTNER_ACCEPTED)|MedicationAdministrationStatus\\.GIVEN)");
         for (Map.Entry<String, Path> service : services().entrySet()) {
             String source = SourceScan.stripComments(Files.readString(service.getValue(), StandardCharsets.UTF_8));
             if (!known.contains(service.getKey()) && moves.matcher(source).find()) {

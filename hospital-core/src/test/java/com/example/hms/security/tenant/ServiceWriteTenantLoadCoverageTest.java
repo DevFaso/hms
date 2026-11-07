@@ -109,7 +109,7 @@ class ServiceWriteTenantLoadCoverageTest {
         entry("CareGapTraceService.traceOne#findById", SYSTEM),
         entry("OrderReviewHoldServiceImpl.lockRequest#findById", "the order the hold row names; loadHeld answered the row at the acting hospital, and a row holds only its own hospital's order"),
         entry("OrderReviewHoldServiceImpl.replaceOrder#findById", "the named new order, refused unless it is this patient's at this hospital (belongsTo), as a missing one is"),
-        entry("OrderReviewHoldServiceImpl.reviewAgainAfterChange#findById", CALLER_CHECKS + " (updatePrescription locked the order in the acting hospital)"),
+        entry("OrderReviewHoldServiceImpl.currentVersion#findById", CALLER_CHECKS + " (only the version of an order its own write just scoped, updatePrescription or the blood group screen)"),
         entry("OrderReviewHoldServiceImpl.toRow#findById", "the order the hold row names, read to label a row already scoped to the acting hospital"),
         entry("DeathDisputeServiceImpl.escalateUnreviewed#findById", SYSTEM + "; the death record named by the dispute row"),
         entry("DeathDisputeServiceImpl.escalateUnreviewed#findByIdUnscoped", SYSTEM + "; the patient named by the dispute row"),

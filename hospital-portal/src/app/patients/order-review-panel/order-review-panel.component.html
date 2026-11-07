@@ -104,7 +104,7 @@
         </p>
         <div class="field">
           <label for="ore-reason">{{ 'ORDER_REVIEW.REASON' | translate }} *</label>
-          <input required id="ore-reason" type="text" maxlength="1000" [(ngModel)]="reason" />
+          <input required id="ore-reason" type="text" maxlength="400" [(ngModel)]="reason" />
         </div>
         @if (action() === 'replace') {
           <div class="field">
@@ -115,6 +115,11 @@
                 <option [value]="c.id">{{ c.label }}</option>
               }
             </select>
+            @if (!row.replacementCandidates?.length) {
+              <p class="modal-hint" data-testid="order-review-no-replacement">
+                {{ 'ORDER_REVIEW.REPLACEMENT_NONE' | translate }}
+              </p>
+            }
           </div>
         }
         @if (action() === 'continue' && row.controlled) {

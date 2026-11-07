@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS clinical.order_review_holds (
     decided_by_id           UUID,
     decided_by_name         VARCHAR(255),
     decided_at              TIMESTAMP,
-    reason                  VARCHAR(1000),
+    reason                  TEXT,
     replacement_order_id    UUID,
     created_at              TIMESTAMP     NOT NULL DEFAULT now(),
     updated_at              TIMESTAMP     NOT NULL DEFAULT now(),

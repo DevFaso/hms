@@ -29,7 +29,7 @@ public class OrderReviewHoldGuard implements InitializingBean {
     public static final String BLOOD_KEY = "order.review.held.bloodRequest";
 
     private static volatile BiPredicate<OrderReviewType, UUID> held;
-    private static volatile java.util.function.Consumer<UUID> reviewAgain;
+    private static volatile java.util.function.BiConsumer<OrderReviewType, UUID> reviewAgain;
 
     private final OrderReviewHoldRepository holds;
 
@@ -45,14 +45,21 @@ public class OrderReviewHoldGuard implements InitializingBean {
     }
 
     /** Set at startup by the review service, which owns the row; none means a test with no store. */
-    public static void useReviewAgain(java.util.function.Consumer<UUID> action) {
+    public static void useReviewAgain(java.util.function.BiConsumer<OrderReviewType, UUID> action) {
         reviewAgain = action;
     }
 
     /** A relevant change after a reconfirmation invalidates it. Called in the transaction of the change. */
     public static void reviewAgainAfterChange(UUID prescriptionId) {
         if (reviewAgain != null) {
-            reviewAgain.accept(prescriptionId);
+            reviewAgain.accept(OrderReviewType.PRESCRIPTION, prescriptionId);
+        }
+    }
+
+    /** As {@link #reviewAgainAfterChange}, for a blood request moved onto another blood group screen. */
+    public static void reviewRequestAgainAfterChange(UUID requestId) {
+        if (reviewAgain != null) {
+            reviewAgain.accept(OrderReviewType.TRANSFUSION_REQUEST, requestId);
         }
     }
 

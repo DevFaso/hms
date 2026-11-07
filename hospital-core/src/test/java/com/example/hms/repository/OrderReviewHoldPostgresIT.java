@@ -69,6 +69,7 @@ import static org.mockito.Mockito.when;
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
+@org.springframework.context.annotation.Import(com.example.hms.security.EncryptionKeyHolder.class)
 @org.junit.jupiter.api.Timeout(120)
 class OrderReviewHoldPostgresIT {
 
@@ -124,7 +125,8 @@ class OrderReviewHoldPostgresIT {
         AuditEventLogService audit = mock(AuditEventLogService.class);
         review = new OrderReviewHoldServiceImpl(Clock.systemDefaultZone(), holds, prescriptions, requests, administrations,
             chartAccess, roles, mock(PrescriptionControlledResolver.class), mock(PrescriberReauthenticationService.class),
-            mock(PrescriptionService.class), mock(TransfusionService.class), inBasket, audit);
+            mock(PrescriptionService.class), mock(TransfusionService.class), inBasket, audit,
+            mock(com.example.hms.service.pharmacy.partner.WithdrawnOrderPartnerHandler.class));
         disputeService = new DeathDisputeServiceImpl(Clock.systemDefaultZone(), disputes, records, patients, chartAccess, roles,
             assignments, inBasket, audit, review);
         new OrderReviewHoldGuard(holds).afterPropertiesSet();
@@ -145,6 +147,7 @@ class OrderReviewHoldPostgresIT {
         when(chartAccess.require(patient, hospital)).thenReturn(chart);
         when(roles.requireActiveHospitalId()).thenReturn(hospital);
         when(roles.getCurrentUserId()).thenReturn(actor);
+        when(roles.isDoctor(actor, hospital)).thenReturn(true);
         when(roles.isSigningPhysician(actor, hospital)).thenReturn(true);
         when(roles.isHospitalAdmin(actor, hospital)).thenReturn(true);
         User admin = new User();
@@ -272,12 +275,16 @@ class OrderReviewHoldPostgresIT {
         UUID takeHome = order(hospital, "DISPENSED", "B", true);
         UUID ward = order(hospital, "DISPENSED", "C", false);
         UUID elsewhere = order(insert("hospital.hospitals", Map.of()), "SIGNED", "D", false);
+        UUID refused = order(hospital, "PARTNER_REJECTED", "E", false);
+        UUID refillLeft = order(hospital, "DISPENSED", "F", true);
+        jdbc.update("UPDATE clinical.prescriptions SET refills_remaining = 2 WHERE id = ?", refillLeft);
+        UUID partnerSpent = order(hospital, "PARTNER_DISPENSED", "G", false);
 
         dispute();
 
         assertThat(holds.findByPatientIdAndHospitalIdOrderByCreatedAtDesc(patient, hospital))
-            .extracting(OrderReviewHold::getOrderId).containsExactly(ward)
-            .doesNotContain(cancelled, takeHome, elsewhere);
+            .extracting(OrderReviewHold::getOrderId).containsExactlyInAnyOrder(ward, refused, refillLeft)
+            .doesNotContain(cancelled, takeHome, elsewhere, partnerSpent);
     }
 
     @Test
@@ -430,13 +437,25 @@ class OrderReviewHoldPostgresIT {
         tx.executeWithoutResult(status -> review.continueOrder(holdOf(morphine).getId(), reconfirm(morphine, 0)));
         assertThatCode(() -> OrderReviewHoldGuard.refusePrescriptionIfHeld(morphine, "prescriptionId")).doesNotThrowAnyException();
 
-        tx.executeWithoutResult(status -> review.reviewAgainAfterChange(morphine));
+        tx.executeWithoutResult(status -> review.reviewAgainAfterChange(com.example.hms.enums.OrderReviewType.PRESCRIPTION, morphine));
 
         assertThatThrownBy(() -> OrderReviewHoldGuard.refusePrescriptionIfHeld(morphine, "prescriptionId"))
             .isInstanceOf(FieldBusinessException.class);
         assertThat(holds.findByPatientIdAndHospitalIdOrderByCreatedAtDesc(patient, hospital))
             .extracting(OrderReviewHold::getStatus)
             .containsExactlyInAnyOrder(OrderReviewStatus.HELD, OrderReviewStatus.CONTINUED);
+    }
+
+    @Test
+    @DisplayName("the decision's reason is encrypted at rest, and reads back whole")
+    void theReasonIsEncryptedAtRest() {
+        UUID morphine = signedMorphine();
+        dispute();
+        UUID row = holdOf(morphine).getId();
+        tx.executeWithoutResult(status -> review.continueOrder(row, reconfirm(morphine, 0)));
+
+        assertThat(jdbc.queryForObject("SELECT reason FROM clinical.order_review_holds WHERE id = ?", String.class, row)).startsWith("gcm1:");
+        assertThat(holds.findById(row).orElseThrow().getReason()).doesNotStartWith("gcm1:").isNotBlank();
     }
 
     private void atTheDeathEvent() {

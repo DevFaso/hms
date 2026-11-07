@@ -25,7 +25,7 @@ public interface OrderReviewHoldService {
     void snapshot(DeathDispute dispute);
 
     /** A relevant change after a reconfirmation invalidates it: the order is held again, the history kept. */
-    void reviewAgainAfterChange(UUID prescriptionId);
+    void reviewAgainAfterChange(com.example.hms.enums.OrderReviewType type, UUID orderId);
 
     /** The chart's list at the acting hospital, standing or decided. */
     List<OrderReviewRowDTO> forPatient(UUID patientId);

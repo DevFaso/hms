@@ -69,12 +69,23 @@ public class OrderReviewHoldServiceImpl implements OrderReviewHoldService, org.s
     private static final String RUNNING_TITLE_KEY = "order.review.running.title";
     private static final String RUNNING_BODY_KEY = "order.review.running.body";
 
-    /** Uncompleted: everything from a draft to an order still waiting on a fill or a dose. */
+    /**
+     * Every status an existing order can still be used from. A partner's refusal is one: that order is back in the
+     * in-house queue. A finished order is asked again by {@link #stillToBeUsed}.
+     */
     private static final Set<PrescriptionStatus> UNCOMPLETED = Set.of(
         PrescriptionStatus.DRAFT, PrescriptionStatus.PENDING_SIGNATURE, PrescriptionStatus.SIGNED,
         PrescriptionStatus.TRANSMITTED, PrescriptionStatus.TRANSMISSION_FAILED, PrescriptionStatus.PENDING_CLARIFICATION,
         PrescriptionStatus.PARTIALLY_FILLED, PrescriptionStatus.PENDING_STOCK, PrescriptionStatus.SENT_TO_PARTNER,
-        PrescriptionStatus.PARTNER_ACCEPTED);
+        PrescriptionStatus.PARTNER_ACCEPTED, PrescriptionStatus.PARTNER_REJECTED);
+
+    /** Finished, unless a refill is left on it or, for a ward dispense, a dose may still be given on its open visit. */
+    private static final Set<PrescriptionStatus> FINISHED = Set.of(
+        PrescriptionStatus.DISPENSED, PrescriptionStatus.PARTNER_DISPENSED, PrescriptionStatus.PRINTED_FOR_PATIENT);
+
+    private static final Set<PrescriptionStatus> LOCKED_FOR_REVIEW = java.util.stream.Stream
+        .concat(UNCOMPLETED.stream(), FINISHED.stream())
+        .collect(java.util.stream.Collectors.toUnmodifiableSet());
 
     private final Clock clock;
     private final OrderReviewHoldRepository holdRepository;
@@ -89,6 +100,7 @@ public class OrderReviewHoldServiceImpl implements OrderReviewHoldService, org.s
     private final TransfusionService transfusionService;
     private final InBasketService inBasketService;
     private final AuditEventLogService auditEventLogService;
+    private final com.example.hms.service.pharmacy.partner.WithdrawnOrderPartnerHandler partnerOffers;
 
     @Override
     public void afterPropertiesSet() {
@@ -99,7 +111,7 @@ public class OrderReviewHoldServiceImpl implements OrderReviewHoldService, org.s
     @Override
     public void snapshotAtDeath(DeathRecord record) {
         UUID patient = record.getPatient().getId();
-        for (Prescription order : prescriptionRepository.lockUncompletedForReview(patient, UNCOMPLETED)) {
+        for (Prescription order : prescriptionRepository.lockUncompletedForReview(patient, LOCKED_FOR_REVIEW)) {
             holdPrescription(order, record.getId(), null);
         }
         for (TransfusionRequest request : requestRepository.lockOpenForPatient(patient)) {
@@ -112,7 +124,7 @@ public class OrderReviewHoldServiceImpl implements OrderReviewHoldService, org.s
     public void snapshot(DeathDispute dispute) {
         UUID patient = dispute.getPatientId();
         UUID hospital = dispute.getHospitalId();
-        for (Prescription order : prescriptionRepository.lockUncompletedForReview(patient, UNCOMPLETED)) {
+        for (Prescription order : prescriptionRepository.lockUncompletedForReview(patient, LOCKED_FOR_REVIEW)) {
             if (order.getHospital() != null && hospital.equals(order.getHospital().getId())) {
                 holdPrescription(order, dispute.getDeathRecordId(), dispute.getId());
             }
@@ -126,35 +138,59 @@ public class OrderReviewHoldServiceImpl implements OrderReviewHoldService, org.s
     }
 
     @Override
-    public void reviewAgainAfterChange(UUID prescriptionId) {
-        for (OrderReviewHold approved : holdRepository.findByOrderTypeAndOrderIdAndStatus(
-                OrderReviewType.PRESCRIPTION, prescriptionId, OrderReviewStatus.CONTINUED)) {
-            Prescription order = prescriptionRepository.findById(prescriptionId).orElse(null);
-            boolean heldNow = holdRepository.existsByOrderTypeAndOrderIdAndStatus(
-                OrderReviewType.PRESCRIPTION, prescriptionId, OrderReviewStatus.HELD);
-            if (order != null && !heldNow) {
+    public void reviewAgainAfterChange(OrderReviewType type, UUID orderId) {
+        for (OrderReviewHold approved : holdRepository.findByOrderTypeAndOrderIdAndStatus(type, orderId, OrderReviewStatus.CONTINUED)) {
+            boolean heldNow = holdRepository.existsByOrderTypeAndOrderIdAndStatus(type, orderId, OrderReviewStatus.HELD);
+            if (!heldNow) {
                 OrderReviewHold again = holdRepository.save(OrderReviewHold.builder()
                     .deathRecordId(approved.getDeathRecordId())
                     .disputeId(approved.getDisputeId())
                     .hospitalId(approved.getHospitalId())
                     .patientId(approved.getPatientId())
-                    .orderType(OrderReviewType.PRESCRIPTION)
-                    .orderId(prescriptionId)
-                    .orderVersion(order.getVersion() != null ? order.getVersion() : 0L)
+                    .orderType(type)
+                    .orderId(orderId)
+                    .orderVersion(currentVersion(type, orderId))
                     .status(OrderReviewStatus.HELD)
                     .build());
-                audit(again, "Order held again after a change: " + again.getOrderType() + " " + prescriptionId
+                audit(again, "Order held again after a change: " + again.getOrderType() + " " + orderId
                     + " changed after its reconfirmation, dispute " + again.getDisputeId());
             }
         }
     }
 
-    /** A stay-ended order is already unusable, and stays so: nothing to review. */
+    private long currentVersion(OrderReviewType type, UUID orderId) {
+        Long version = type == OrderReviewType.PRESCRIPTION
+            ? prescriptionRepository.findById(orderId).map(Prescription::getVersion).orElse(null)
+            : requestRepository.findById(orderId).map(TransfusionRequest::getVersion).orElse(null);
+        return version != null ? version : 0L;
+    }
+
+    /**
+     * A stay-ended order is already unusable, and stays so: nothing to review. A partner holding the offer of a newly
+     * held order is told not to dispense it, or nothing here could stop it.
+     */
     private void holdPrescription(Prescription order, UUID recordId, UUID disputeId) {
-        if (order.getHospital() != null && !InpatientOrderEnd.endedWithItsStay(order)) {
-            hold(recordId, disputeId, order.getHospital().getId(), order.getPatient().getId(), OrderReviewType.PRESCRIPTION,
-                order.getId(), order.getVersion(), OrderReviewStatus.HELD);
+        if (order.getHospital() != null && stillToBeUsed(order) && !InpatientOrderEnd.endedWithItsStay(order)
+                && hold(recordId, disputeId, order.getHospital().getId(), order.getPatient().getId(), OrderReviewType.PRESCRIPTION,
+                    order.getId(), order.getVersion(), OrderReviewStatus.HELD) != null) {
+            partnerOffers.recallForReview(order);
         }
+    }
+
+    /**
+     * A finished order is history, unless a refill can still be released from it (never for a controlled drug, which
+     * takes a new signature) or a dose can still be given: a dispense for a visit still open, not one for home.
+     * A refill approved past the prescribed allowance is that prescriber's own new decision, not an existing order.
+     */
+    private static boolean stillToBeUsed(Prescription order) {
+        PrescriptionStatus status = order.getStatus();
+        if (status == null || !FINISHED.contains(status)) {
+            return true;
+        }
+        boolean refillLeft = !order.isControlledSubstance() && order.getRefillsRemaining() != null && order.getRefillsRemaining() > 0;
+        boolean visitOpen = order.getEncounter() == null || order.getEncounter().getStatus() == null
+            || !order.getEncounter().getStatus().isClosed();
+        return refillLeft || (status == PrescriptionStatus.DISPENSED && !order.isTakeHome() && visitOpen);
     }
 
     private void holdRequest(TransfusionRequest request, UUID recordId, UUID disputeId) {
@@ -169,26 +205,31 @@ public class OrderReviewHoldServiceImpl implements OrderReviewHoldService, org.s
         for (TransfusionAdministration running : administrationRepository.findByPatient_IdAndStatus(
                 patient, TransfusionAdministrationStatus.IN_PROGRESS)) {
             UUID hospital = running.getHospital() != null ? running.getHospital().getId() : null;
-            if (hospital != null && (onlyHospital == null || onlyHospital.equals(hospital))
-                    && hold(recordId, disputeId, hospital, patient, OrderReviewType.RUNNING_TRANSFUSION, running.getId(), 0L,
-                        OrderReviewStatus.ASSESSMENT_DUE)) {
-                tellTheTreatingClinician(running, hospital);
+            if (hospital != null && (onlyHospital == null || onlyHospital.equals(hospital))) {
+                OrderReviewHold flag = hold(recordId, disputeId, hospital, patient, OrderReviewType.RUNNING_TRANSFUSION,
+                    running.getId(), 0L, OrderReviewStatus.ASSESSMENT_DUE);
+                if (flag != null) {
+                    tellTheTreatingClinician(running, hospital, flag.getId());
+                }
             }
         }
     }
 
-    /** One standing row per order: a later event binds the row it finds to its dispute, and adds nothing. */
-    private boolean hold(UUID recordId, UUID disputeId, UUID hospital, UUID patient, OrderReviewType type, UUID orderId,
-                         Long version, OrderReviewStatus status) {
+    /**
+     * One standing row per order: a later event binds the row it finds to its dispute, the latest one, and adds nothing.
+     * Answers the row only when it wrote one.
+     */
+    private OrderReviewHold hold(UUID recordId, UUID disputeId, UUID hospital, UUID patient, OrderReviewType type, UUID orderId,
+                                 Long version, OrderReviewStatus status) {
         OrderReviewHold standing = holdRepository.findByOrderTypeAndOrderIdAndStatusAndHospitalId(type, orderId, status, hospital)
             .orElse(null);
         if (standing != null) {
-            if (standing.getDisputeId() == null) {
+            if (disputeId != null) {
                 standing.setDisputeId(disputeId);
             }
-            return false;
+            return null;
         }
-        holdRepository.save(OrderReviewHold.builder()
+        return holdRepository.save(OrderReviewHold.builder()
             .deathRecordId(recordId)
             .disputeId(disputeId)
             .hospitalId(hospital)
@@ -198,10 +239,10 @@ public class OrderReviewHoldServiceImpl implements OrderReviewHoldService, org.s
             .orderVersion(version != null ? version : 0L)
             .status(status)
             .build());
-        return true;
     }
 
-    private void tellTheTreatingClinician(TransfusionAdministration running, UUID hospital) {
+    /** Filed on this flag's own row: a later dispute's flag on the same bag reaches the clinician again. */
+    private void tellTheTreatingClinician(TransfusionAdministration running, UUID hospital, UUID flagId) {
         Set<UUID> clinicians = new LinkedHashSet<>();
         addUser(clinicians, running.getAdministeredBy());
         if (running.getRequest() != null) {
@@ -215,7 +256,7 @@ public class OrderReviewHoldServiceImpl implements OrderReviewHoldService, org.s
             item.setHospitalId(hospital);
             item.setItemType(InBasketItemType.TASK);
             item.setPriority(InBasketPriority.URGENT);
-            item.setReferenceId(running.getId());
+            item.setReferenceId(flagId);
             item.setReferenceType(REFERENCE_TYPE);
             item.setPatientId(running.getPatient() != null ? running.getPatient().getId() : null);
             item.setPatientName(running.getPatient() != null ? running.getPatient().getFullName() : null);
@@ -286,14 +327,16 @@ public class OrderReviewHoldServiceImpl implements OrderReviewHoldService, org.s
             Prescription held = lockPrescription(hold);
             requireReplacement(replacement, hold, prescriptionRepository.findById(replacement)
                 .map(rx -> belongsTo(hold, rx.getPatient() != null ? rx.getPatient().getId() : null,
-                    rx.getHospital() != null ? rx.getHospital().getId() : null)).orElse(false));
+                    rx.getHospital() != null ? rx.getHospital().getId() : null)
+                    && replaces(hold, rx)).orElse(false));
             hold.setReviewedOrderVersion(held.getVersion());
             prescriptionService.stopHeldOrder(held.getId(), "Replaced by order " + replacement + ": " + reason);
         } else {
             TransfusionRequest held = lockRequest(hold);
             requireReplacement(replacement, hold, requestRepository.findById(replacement)
                 .map(rq -> belongsTo(hold, rq.getPatient() != null ? rq.getPatient().getId() : null,
-                    rq.getHospital() != null ? rq.getHospital().getId() : null)).orElse(false));
+                    rq.getHospital() != null ? rq.getHospital().getId() : null)
+                    && replaces(hold, rq)).orElse(false));
             hold.setReviewedOrderVersion(held.getVersion());
             transfusionService.stopHeldRequest(held.getId(), "Replaced by request " + replacement + ": " + reason);
         }
@@ -348,7 +391,7 @@ public class OrderReviewHoldServiceImpl implements OrderReviewHoldService, org.s
         hold.setReason(reason);
         OrderReviewHold saved = holdRepository.save(hold);
         audit(saved, what + ": " + hold.getOrderType() + " " + hold.getOrderId() + " version "
-            + hold.getReviewedOrderVersion() + ", dispute " + hold.getDisputeId() + ", by " + actor + ". Reason: " + reason);
+            + hold.getReviewedOrderVersion() + ", dispute " + hold.getDisputeId() + ", by " + actor, reasonDigest(reason));
         return toRow(saved);
     }
 
@@ -372,11 +415,11 @@ public class OrderReviewHoldServiceImpl implements OrderReviewHoldService, org.s
     }
 
     /**
-     * Current prescribing authority for this order at this hospital, by the check of signing it: not merely a clinical
-     * role, so a pharmacist's review grants nothing. They need not be the original prescriber.
+     * Current prescribing authority for this order at this hospital, as the sign endpoint asks it (a doctor): not merely
+     * a clinical role, so a pharmacist's review grants nothing. They need not be the original prescriber.
      */
     private void requirePrescriber(UUID actor, UUID hospital) {
-        if (actor == null || !roleValidator.isSigningPhysician(actor, hospital)) {
+        if (actor == null || !roleValidator.isDoctor(actor, hospital)) {
             throw new AccessDeniedException("Only a prescriber of this hospital can review this order.");
         }
     }
@@ -425,6 +468,22 @@ public class OrderReviewHoldServiceImpl implements OrderReviewHoldService, org.s
         }
     }
 
+    /** Written since the hold, signed and live: a draft has not been through signing, and a stopped order replaces nothing. */
+    private static boolean replaces(OrderReviewHold hold, Prescription order) {
+        PrescriptionStatus status = order.getStatus();
+        return writtenSince(hold, order.getCreatedAt()) && status != null && !status.isWithdrawn()
+            && status != PrescriptionStatus.DRAFT && status != PrescriptionStatus.PENDING_SIGNATURE
+            && !InpatientOrderEnd.endedWithItsStay(order);
+    }
+
+    private static boolean replaces(OrderReviewHold hold, TransfusionRequest request) {
+        return writtenSince(hold, request.getCreatedAt()) && !request.isTerminal();
+    }
+
+    private static boolean writtenSince(OrderReviewHold hold, LocalDateTime written) {
+        return hold.getCreatedAt() == null || (written != null && !written.isBefore(hold.getCreatedAt()));
+    }
+
     private Prescription lockPrescription(OrderReviewHold hold) {
         return prescriptionRepository.findByIdAndHospitalIdForUpdate(hold.getOrderId(), hold.getHospitalId())
             .orElseThrow(() -> new ResourceNotFoundException(NOT_FOUND_KEY, hold.getId()));
@@ -456,7 +515,7 @@ public class OrderReviewHoldServiceImpl implements OrderReviewHoldService, org.s
             if (hold.getStatus() == OrderReviewStatus.HELD) {
                 row.replacementCandidates(prescriptionRepository.findWrittenSince(hold.getPatientId(), hold.getHospitalId(),
                         hold.getCreatedAt()).stream()
-                    .filter(rx -> !rx.getId().equals(hold.getOrderId()))
+                    .filter(rx -> !rx.getId().equals(hold.getOrderId()) && replaces(hold, rx))
                     .map(rx -> OrderReviewRowDTO.Candidate.builder().id(rx.getId()).label(rx.getMedicationName()).build())
                     .toList());
             }
@@ -467,7 +526,7 @@ public class OrderReviewHoldServiceImpl implements OrderReviewHoldService, org.s
             if (hold.getStatus() == OrderReviewStatus.HELD) {
                 row.replacementCandidates(requestRepository.findWrittenSince(hold.getPatientId(), hold.getHospitalId(),
                         hold.getCreatedAt()).stream()
-                    .filter(rq -> !rq.getId().equals(hold.getOrderId()))
+                    .filter(rq -> !rq.getId().equals(hold.getOrderId()) && replaces(hold, rq))
                     .map(rq -> OrderReviewRowDTO.Candidate.builder().id(rq.getId())
                         .label(rq.getProductType() != null ? rq.getProductType().name() : null).build())
                     .toList());
@@ -476,7 +535,21 @@ public class OrderReviewHoldServiceImpl implements OrderReviewHoldService, org.s
         return row.build();
     }
 
+    /** The audit row is not encrypted: it holds a digest of the reason, and the reason stays on the encrypted row. */
+    private static String reasonDigest(String reason) {
+        try {
+            byte[] digest = java.security.MessageDigest.getInstance("SHA-256").digest(reason.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            return "{\"reasonSha256\":\"" + java.util.HexFormat.of().formatHex(digest) + "\"}";
+        } catch (java.security.NoSuchAlgorithmException ex) {
+            throw new IllegalStateException(ex);
+        }
+    }
+
     private void audit(OrderReviewHold hold, String description) {
+        audit(hold, description, null);
+    }
+
+    private void audit(OrderReviewHold hold, String description, String details) {
         try {
             auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                 .eventType(AuditEventType.PATIENT_UPDATE)
@@ -488,6 +561,7 @@ public class OrderReviewHoldServiceImpl implements OrderReviewHoldService, org.s
                 .userId(hold.getDecidedById())
                 .userName(hold.getDecidedByName())
                 .eventDescription(description)
+                .details(details)
                 .build());
         } catch (RuntimeException ex) {
             log.warn("Failed to audit order review {}: {}", hold.getId(), ex.getMessage());

@@ -29,7 +29,7 @@ import java.util.UUID;
 @RequestMapping("/order-review-holds")
 @Validated
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('DOCTOR','SURGEON','MIDWIFE','NURSE','PHARMACIST','HOSPITAL_ADMIN')")
+@PreAuthorize("hasAnyRole('DOCTOR','SURGEON','MIDWIFE','NURSE','PHARMACIST')")
 @Tag(name = "Order review", description = "Orders held for a prescriber's review after a recorded death was disputed")
 public class OrderReviewHoldController {
 

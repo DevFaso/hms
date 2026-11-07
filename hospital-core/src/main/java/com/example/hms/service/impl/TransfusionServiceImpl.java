@@ -235,6 +235,7 @@ public class TransfusionServiceImpl implements TransfusionService {
             .forEach(open -> {
                 open.setBloodGroup(screen);
                 requestRepository.save(open);
+                com.example.hms.service.support.OrderReviewHoldGuard.reviewRequestAgainAfterChange(open.getId());
             });
     }
 
@@ -253,6 +254,7 @@ public class TransfusionServiceImpl implements TransfusionService {
         if (current != request.getBloodGroup()) {
             request.setBloodGroup(current);
             requestRepository.save(request);
+            com.example.hms.service.support.OrderReviewHoldGuard.reviewRequestAgainAfterChange(request.getId());
         }
         return current;
     }

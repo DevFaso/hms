@@ -1006,26 +1006,26 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
   },
   {
     key: 'AUDIT.DESC.ORDER_REVIEW_CONTINUED',
-    re: /^Order reconfirmed unchanged: (\S+) (\S+) version (\S+), dispute (\S+), by (\S+)\. Reason: ([\s\S]*)$/,
-    params: ['type', 'order', 'version', 'dispute', 'actor', 'reason'],
+    re: /^Order reconfirmed unchanged: (\S+) (\S+) version (\S+), dispute (\S+), by (\S+)$/,
+    params: ['type', 'order', 'version', 'dispute', 'actor'],
     localise: { type: 'enum' },
   },
   {
     key: 'AUDIT.DESC.ORDER_REVIEW_REPLACED',
-    re: /^Order replaced by (\S+): (\S+) (\S+) version (\S+), dispute (\S+), by (\S+)\. Reason: ([\s\S]*)$/,
-    params: ['replacement', 'type', 'order', 'version', 'dispute', 'actor', 'reason'],
+    re: /^Order replaced by (\S+): (\S+) (\S+) version (\S+), dispute (\S+), by (\S+)$/,
+    params: ['replacement', 'type', 'order', 'version', 'dispute', 'actor'],
     localise: { type: 'enum' },
   },
   {
     key: 'AUDIT.DESC.ORDER_REVIEW_STOPPED',
-    re: /^Order stopped: (\S+) (\S+) version (\S+), dispute (\S+), by (\S+)\. Reason: ([\s\S]*)$/,
-    params: ['type', 'order', 'version', 'dispute', 'actor', 'reason'],
+    re: /^Order stopped: (\S+) (\S+) version (\S+), dispute (\S+), by (\S+)$/,
+    params: ['type', 'order', 'version', 'dispute', 'actor'],
     localise: { type: 'enum' },
   },
   {
     key: 'AUDIT.DESC.ORDER_REVIEW_ASSESSED',
-    re: /^Running treatment assessed: (\S+) (\S+) version (\S+), dispute (\S+), by (\S+)\. Reason: ([\s\S]*)$/,
-    params: ['type', 'order', 'version', 'dispute', 'actor', 'reason'],
+    re: /^Running treatment assessed: (\S+) (\S+) version (\S+), dispute (\S+), by (\S+)$/,
+    params: ['type', 'order', 'version', 'dispute', 'actor'],
     localise: { type: 'enum' },
   },
   {
@@ -1232,6 +1232,17 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     re: /^(.+) on prescription (\S+), which is (\S+): the prescription was not changed; offer closed$/,
     params: ['what', 'rx', 'status'],
     localise: { what: 'phrase:PARTNER_EVENT', status: 'enum' },
+  },
+  {
+    key: 'AUDIT.DESC.PARTNER_DISPENSE_OF_HELD_RX',
+    re: /^(.+) confirmed dispensing prescription (\S+), which is held for review; the hold stands\. A person must check with the patient and the partner\.$/,
+    params: ['what', 'rx'],
+    localise: { what: 'phrase:PARTNER_EVENT' },
+  },
+  {
+    key: 'AUDIT.DESC.PARTNER_OFFER_RECALLED',
+    re: /^Partner offer recalled: prescription (\S+) is held for review$/,
+    params: ['rx'],
   },
   {
     key: 'AUDIT.DESC.PARTNER_DISPENSE_ON_CLOSED_RX',

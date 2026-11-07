@@ -31,8 +31,11 @@ const FIELD_IDS = {
   disputeId: 'ore-reason',
 };
 
-const PRESCRIBER_ROLES = ['ROLE_DOCTOR', 'ROLE_SURGEON', 'ROLE_MIDWIFE'];
-const CLINICIAN_ROLES = [...PRESCRIBER_ROLES, 'ROLE_NURSE'];
+/** The role of signing a prescription; a blood request takes the roles that may request blood. */
+const PRESCRIPTION_ROLES = ['ROLE_DOCTOR'];
+const BLOOD_ROLES = ['ROLE_DOCTOR', 'ROLE_SURGEON', 'ROLE_MIDWIFE'];
+const CLINICIAN_ROLES = [...BLOOD_ROLES, 'ROLE_NURSE'];
+const READER_ROLES = [...CLINICIAN_ROLES, 'ROLE_PHARMACIST'];
 
 /**
  * The review list on a chart: orders that existed when a recorded death was disputed, each continued, replaced or
@@ -80,16 +83,22 @@ export class OrderReviewPanelComponent implements OnInit {
   }
 
   load(): void {
-    if (!this.patientId()) return;
+    if (!this.patientId() || !this.roles.hasAnyActiveRole(READER_ROLES)) return;
     this.reviews.forPatient(this.patientId()).subscribe({
-      next: (rows) => this.rows.set(rows),
+      next: (rows) => {
+        this.rows.set(rows);
+        // An order just written becomes a choice in the window already open.
+        const open = this.target();
+        if (open) this.target.set(rows.find((row) => row.id === open.id) ?? open);
+      },
       // A role that may not read the list sees no list; the server still refuses every held use.
       error: () => this.rows.set([]),
     });
   }
 
   canDecide(row: OrderReviewRow): boolean {
-    return row.status === 'HELD' && this.roles.hasAnyActiveRole(PRESCRIBER_ROLES);
+    const roles = row.orderType === 'PRESCRIPTION' ? PRESCRIPTION_ROLES : BLOOD_ROLES;
+    return row.status === 'HELD' && this.roles.hasAnyActiveRole(roles);
   }
 
   canAssess(row: OrderReviewRow): boolean {
@@ -103,6 +112,7 @@ export class OrderReviewPanelComponent implements OnInit {
     this.mfaCode = '';
     this.action.set(action);
     this.target.set(row);
+    if (action === 'replace') this.load();
   }
 
   close(): void {

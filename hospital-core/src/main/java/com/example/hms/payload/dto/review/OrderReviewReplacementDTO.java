@@ -18,7 +18,8 @@ import java.util.UUID;
 public class OrderReviewReplacementDTO {
 
     @NotBlank
-    @Size(max = 1000)
+    /** It goes on the order too: a blood request's stop takes 500, less what names a replacement. */
+    @Size(max = 400)
     private String reason;
 
     @NotNull
