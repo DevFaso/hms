@@ -194,7 +194,6 @@
     "src/app/profile/profile.html::mfa.channel",
     "src/app/profile/profile.html::mfa.method",
     "src/app/profile/profile.html::rc.contactType",
-    "src/app/reception/empi-candidates-panel/empi-candidates-panel.component.ts::<option>opt",
     "src/app/reception/insurance-issues-panel/insurance-issues-panel.component.html::issue.issueType",
     "src/app/reception/recalls-panel/recalls-panel.component.html::recall.reason",
     "src/app/reception/reception-cockpit/reception-cockpit.component.html::item.appointmentReason",

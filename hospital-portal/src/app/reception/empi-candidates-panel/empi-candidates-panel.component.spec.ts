@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { HttpErrorResponse } from '@angular/common/http';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 
 import { EmpiCandidatesPanelComponent } from './empi-candidates-panel.component';
 import { EmpiCandidateMatch, EmpiService } from '../../services/empi.service';
@@ -197,5 +197,38 @@ describe('EmpiCandidatesPanelComponent', () => {
     fixture = TestBed.createComponent(EmpiCandidatesPanelComponent);
     searchWithResults([sample]);
     expect(fixture.nativeElement.querySelector('[data-testid="empi-select-p-1"]')).toBeNull();
+  });
+  it('reset discards an in-flight response and clears merge state', () => {
+    const response = new Subject<EmpiCandidateMatch[]>();
+    empi.findCandidates.and.returnValue(response);
+    const component = fixture.componentInstance as unknown as {
+      form: Record<string, string>;
+      search: (e: Event) => void;
+      reset: () => void;
+      toggleMergeSelection: (m: EmpiCandidateMatch) => void;
+    };
+    component.form['lastName'] = 'Cdx';
+    component.search(new Event('submit'));
+    component.reset();
+    response.next([sample]);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-testid="empi-results"]')).toBeNull();
+    expect(fixture.nativeElement.querySelector('[data-testid="empi-search"]').disabled).toBeFalse();
+  });
+
+  it('a new search clears the previous identity merge selection', () => {
+    const component = searchWithResults([sample, second]) as ReturnType<
+      typeof searchWithResults
+    > & {
+      search: (e: Event) => void;
+    };
+    component.toggleMergeSelection(sample);
+    component.toggleMergeSelection(second);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-testid="empi-merge-bar"]')).not.toBeNull();
+    component.search(new Event('submit'));
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-testid="empi-merge-bar"]')).toBeNull();
+    expect(empi.mergeByPatient).not.toHaveBeenCalled();
   });
 });

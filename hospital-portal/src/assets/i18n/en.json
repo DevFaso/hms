@@ -2950,6 +2950,27 @@
       "MERGED": "Identities merged — {{name}} survives",
       "MERGE_FAILED": "Failed to merge identities",
       "NEW_PATIENT_HANDOFF": "Hand-off to new-patient form (follow-on)."
+    },
+    "WORKSPACE": {
+      "EYEBROW": "PATIENT IDENTITY",
+      "IDENTITY": "Search identity",
+      "IDENTITY_HINT": "Enter the known details. At least one field is required.",
+      "GUIDE_TITLE": "One person. The right record.",
+      "GUIDE_TEXT": "Compare the available details before opening a patient record or creating a new one.",
+      "SCORE_HINT": "The score helps comparison; it does not confirm identity automatically.",
+      "CANDIDATES": "Candidate comparison",
+      "CANDIDATES_HINT": "Review each field before confirming a match.",
+      "RESULT_COUNT": "{{count}} candidates",
+      "READY_TITLE": "Ready to search",
+      "READY_HINT": "Enter identity details above to find possible existing records.",
+      "AGREES": "Agrees",
+      "NOT_AGREED": "Not marked as matching",
+      "MERGE_TITLE": "Administrative merge"
+    },
+    "SEX": {
+      "F": "Female",
+      "M": "Male",
+      "X": "X"
     }
   },
   "ENCOUNTERS": {
@@ -12062,5 +12083,10 @@
     "RANGE": "{{field}}: the value must be between {{min}} and {{max}}.",
     "MIN": "{{field}}: the value must be at least {{min}}.",
     "FIELD_REASON": "{{field}}: {{reason}}"
+  },
+  "CHUNK_RECOVERY": {
+    "TITLE": "This page could not be loaded",
+    "MESSAGE": "A required application file is unavailable. Reload to try the current version. If this continues, contact support.",
+    "RELOAD": "Reload page"
   }
 }
