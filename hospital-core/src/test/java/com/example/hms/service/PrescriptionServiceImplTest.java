@@ -6769,6 +6769,7 @@ class PrescriptionServiceImplTest {
                 && user.equals(e.getUserId())
                 && String.valueOf(e.getDetails()).contains("\"orderVersion\":3")
                 && String.valueOf(e.getDetails()).contains(token)
+                && String.valueOf(e.getDetails()).contains("\"findings\":\"single\"")
                 && !String.valueOf(e.getDetails()).contains("Single loading dose")));
     }
 
@@ -6953,8 +6954,8 @@ class PrescriptionServiceImplTest {
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(authService.getCurrentUserId()).thenReturn(currentUser);
         when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
-        when(prescriptionRepository.save(existing)).thenReturn(existing);
-        when(prescriptionMapper.toResponseDTO(existing)).thenReturn(PrescriptionResponseDTO.builder().build());
+        lenient().when(prescriptionRepository.save(existing)).thenReturn(existing);
+        lenient().when(prescriptionMapper.toResponseDTO(existing)).thenReturn(PrescriptionResponseDTO.builder().build());
         return existing;
     }
 
@@ -6986,5 +6987,62 @@ class PrescriptionServiceImplTest {
 
         verify(cdsRuleEngine).evaluateProposedPrescription(any(), any(), org.mockito.ArgumentMatchers.argThat(
             o -> "PR".equals(o.route())));
+    }
+
+    /** The review of this wave: an order past its signature gets no second signature, so a held edit is refused. */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = com.example.hms.enums.PrescriptionStatus.class,
+        names = {"PENDING_CLARIFICATION", "TRANSMITTED", "PENDING_STOCK", "PARTIALLY_FILLED"})
+    void cr02_anEditOutsideTheLimitsOfAnOrderPastItsSignatureIsRefused(com.example.hms.enums.PrescriptionStatus status) {
+        UUID id = UUID.randomUUID();
+        Prescription existing = cr01_editable(id, "PO");
+        existing.setStatus(status);
+        existing.setDosage("500 mg");
+        existing.setFrequency(TEST_FREQUENCY);
+        cr02_findings(cr02_heldFinding("single:5000.0:1000.0"));
+        PrescriptionRequestDTO request = buildRequest();
+        request.setDosage("5000 mg");
+
+        assertThatThrownBy(() -> prescriptionService.updatePrescription(id, request, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .extracting("messageKey").isEqualTo("prescription.cds.exceptionNewOrder");
+        assertThat(existing.getDosage()).isEqualTo("500 mg");
+        verify(prescriptionRepository, never()).save(any());
+    }
+
+    @Test
+    void cr02_anEditThatLeavesWhatIsOrderedPassesEvenWithAFindingOnFile() {
+        UUID id = UUID.randomUUID();
+        Prescription existing = cr01_editable(id, "PO");
+        existing.setStatus(com.example.hms.enums.PrescriptionStatus.PENDING_CLARIFICATION);
+        existing.setDosage(TEST_DOSAGE);
+        existing.setFrequency(TEST_FREQUENCY);
+        cr02_findings(cr02_heldFinding("single:5000.0:1000.0"));
+
+        prescriptionService.updatePrescription(id, buildRequest(), Locale.ENGLISH);
+
+        verify(prescriptionRepository).save(existing);
+    }
+
+    /** One reason answers both, so an allergy recorded since the refusal voids the token and is shown. */
+    @Test
+    void cr02_anAllergyRecordedSinceTheRefusalVoidsTheException() {
+        UUID user = UUID.randomUUID();
+        Prescription rx = cr02_order(user, "single:1500.0:1000.0");
+        String token = cr02_tokenOfARefusal(rx);
+        PatientAllergy allergy = new PatientAllergy();
+        allergy.setActive(true);
+        allergy.setAllergenDisplay("Paracetamol");
+        when(patientAllergyRepository.findByPatient_Id(rx.getPatient().getId())).thenReturn(List.of(allergy));
+        UUID id = rx.getId();
+        com.example.hms.payload.dto.SignPrescriptionRequestDTO retry = cr02_exception("Decided before the allergy", token);
+
+        com.example.hms.cdshooks.CdsCriticalBlockException refused = catchThrowableOfType(
+            com.example.hms.cdshooks.CdsCriticalBlockException.class,
+            () -> prescriptionService.signPrescription(id, retry, Locale.ENGLISH));
+
+        assertThat(refused.getCards()).hasSize(2);
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.DRAFT);
+        assertThat(rx.isAllergiesReviewed()).isFalse();
     }
 }

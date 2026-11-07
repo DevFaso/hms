@@ -1,5 +1,6 @@
 package com.example.hms.cdshooks.rules;
 
+import com.example.hms.cdshooks.CdsCardText;
 import com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard;
 import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.model.Patient;
@@ -69,6 +70,9 @@ public class CdsRuleEngine {
         Pattern.CASE_INSENSITIVE
     );
 
+    /** The rules whose silence reads as a dose within its limits. */
+    private static final Set<String> DOSE_RULES = Set.of("adult-paracetamol", "pediatric-dose");
+
     private final List<CdsRule> rules;
     private final PrescriptionRepository prescriptionRepository;
     private final MedicationCatalogItemRepository catalogRepository;
@@ -85,6 +89,14 @@ public class CdsRuleEngine {
      * noticed, because the engine only logged a WARN.
      */
     private boolean failFast;
+
+    /** The wording of a dose check that could not run, in the caller's language; English when built outside Spring. */
+    private CdsCardText cardText = CdsCardText.ENGLISH;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setCardText(CdsCardText cardText) {
+        this.cardText = cardText;
+    }
 
     @org.springframework.beans.factory.annotation.Value("${hms.cds.rules.fail-fast:false}")
     public void setFailFast(boolean failFast) {
@@ -113,6 +125,14 @@ public class CdsRuleEngine {
         this.catalogRepository = catalogRepository;
         this.vitalSignRepository = vitalSignRepository;
         this.paracetamolFacts = paracetamolFacts;
+    }
+
+    /** The catalogue item a saved order carries: its link, else its code; {@code null} when neither resolves here. */
+    public MedicationCatalogItem itemOf(Prescription order, UUID hospitalId) {
+        if (order.getMedicationCatalogItemId() != null && hospitalId != null) {
+            return catalogRepository.findByIdAndHospital_Id(order.getMedicationCatalogItemId(), hospitalId).orElse(null);
+        }
+        return resolveCatalogItem(hospitalId, order.getMedicationCode());
     }
 
     /** Whether a status ends an order for the active-medication checks. */
@@ -238,7 +258,7 @@ public class CdsRuleEngine {
                 throw ex;
             }
             logger.error("CDS paracetamol facts threw {}: {}", ex.getClass().getSimpleName(), ex.getMessage(), ex);
-            return ParacetamolFacts.NONE;
+            return ParacetamolFacts.READ_FAILED;
         }
     }
 
@@ -259,9 +279,26 @@ public class CdsRuleEngine {
                 }
                 logger.error("CDS rule {} threw {}: {}", rule.id(),
                     ex.getClass().getSimpleName(), ex.getMessage(), ex);
+                // CR-02: a dose check that did not run is no clean check: the signature stays held.
+                if (DOSE_RULES.contains(rule.id())) {
+                    cards.add(doseCheckFailed(cardText, context.proposedMedicationName(), rule.id()));
+                }
             }
         }
         return cards;
+    }
+
+    /** The card of a dose check that could not run: held as a finding is, with its own key. */
+    static CdsCard doseCheckFailed(CdsCardText text, String medicationName, String ruleId) {
+        return new CdsCard(
+            text.get("cds.doseCheck.failed.summary",
+                "{0}: the dose check could not run: cannot assess, review required",
+                medicationName == null ? "" : medicationName),
+            text.get("cds.doseCheck.failed.detail",
+                "Nothing was judged, which is not a clean check. The order is signed only with the prescriber's explicit exception."),
+            CdsCard.Indicator.WARNING,
+            new com.example.hms.cdshooks.dto.CdsHookDtos.Source(text.get("cds.source.doseCheck", "e-Keneya Dose Check"), null, null),
+            null, null, null, UUID.randomUUID().toString(), null, null, Boolean.TRUE, "checkFailed:" + ruleId);
     }
 
     /** Convenience: build context + evaluate. */
@@ -299,7 +336,7 @@ public class CdsRuleEngine {
      * failed read, as a rule that throws costs its cards, never the dose (QA D1121).
      */
     public List<CdsCard> paracetamolAtAdministration(Patient patient, UUID hospitalId, ProposedOrder order,
-                                                     Runnable beforeReadingDoses) {
+                                                     boolean doseJustRecorded, Runnable beforeReadingDoses) {
         AdultParacetamolRule rule = rules.stream().filter(AdultParacetamolRule.class::isInstance)
             .map(AdultParacetamolRule.class::cast).findFirst().orElse(null);
         if (rule == null || patient == null) {
@@ -314,7 +351,7 @@ public class CdsRuleEngine {
                 return List.of();
             }
             beforeReadingDoses.run();
-            return rule.atAdministration(buildContext(patient, hospitalId, order));
+            return rule.atAdministration(buildContext(patient, hospitalId, order), doseJustRecorded);
         } catch (RuntimeException ex) {
             if (failFast) {
                 throw ex;

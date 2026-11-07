@@ -161,12 +161,21 @@ public class ParacetamolFactsReader {
             if (alone != null) {
                 doses.add(new ParacetamolFacts.Dose(given.getAdministeredAt(), rx.getMedicationName(),
                     readableDose(given, rx), alone.item()));
-            } else if (rx.getMedicationCatalogItemId() == null && rx.getMedicationName() != null
-                    && !recognised(rx.getMedicationName(), active)) {
+            } else if (cannotBePlaced(rx, active)) {
                 unreadable.add(rx.getMedicationName());
             }
         }
         return new ParacetamolFacts.Documented(true, List.copyOf(doses), List.copyOf(unreadable));
+    }
+
+    /** A name nothing knows, or a link to an item no longer active: it may hold paracetamol, so it is named. */
+    private static boolean cannotBePlaced(Prescription rx, List<MedicationCatalogItem> active) {
+        if (rx.getMedicationName() == null) {
+            return false;
+        }
+        UUID linked = rx.getMedicationCatalogItemId();
+        return linked == null ? !recognised(rx.getMedicationName(), active)
+            : active.stream().noneMatch(i -> linked.equals(i.getId()));
     }
 
     /** What the row says was given; the order's dose when the row has only "See order". */

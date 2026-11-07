@@ -164,4 +164,26 @@ class PediatricDoseRouteLimitTest {
             assertThat(card.requiresReview()).isFalse();
         });
     }
+
+    @Test
+    void paracetamolWithNoLimitOnFileIsReviewedAnyRoute() {
+        ParacetamolFacts paracetamol = new ParacetamolFacts(true, List.of(), java.util.Set.of());
+        for (String route : new String[] {"PO", "IV", null}) {
+            assertThat(rule.evaluate(new CdsRuleContext(childAgedMonths(6), UUID.randomUUID(), "Paracétamol", null, null,
+                    100d, null, SIX_MONTH_KG, List.of(), List.of(), "3 fois par jour", null,
+                    LocalDateTime.now(ZoneId.systemDefault()), null, paracetamol).withRoute(route, null)))
+                .singleElement().satisfies(card -> {
+                    assertThat(card.summary()).contains(CANNOT_ASSESS).contains("no paracetamol limit");
+                    assertThat(card.requiresReview()).isTrue();
+                });
+        }
+    }
+
+    @Test
+    void aFailedReadOfTheFactsHoldsAChildsOrderToo() {
+        assertThat(rule.evaluate(new CdsRuleContext(childAgedMonths(6), UUID.randomUUID(), "Paracétamol", null, null,
+                100d, null, SIX_MONTH_KG, List.of(), List.of(), "3 fois par jour", null, null, null,
+                ParacetamolFacts.READ_FAILED).withRoute("PO", null)))
+            .singleElement().satisfies(card -> assertThat(card.needsReasonAtSignature()).isTrue());
+    }
 }

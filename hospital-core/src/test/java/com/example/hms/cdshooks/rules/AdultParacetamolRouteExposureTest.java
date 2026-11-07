@@ -224,7 +224,7 @@ class AdultParacetamolRouteExposureTest {
     @Test
     void atTheDoseTheTotalIsAWarningAndHoldsNothing() {
         List<CdsCard> cards = rule.atAdministration(order("1 g", "4 fois par jour", "PO", null,
-            facts(doses(given("1 g", 5), given("1 g", 10), given("1 g", 15), given("500 mg", 20)))));
+            facts(doses(given("1 g", 5), given("1 g", 10), given("1 g", 15), given("500 mg", 20)))), false);
 
         assertThat(cards).singleElement().satisfies(card -> {
             assertThat(card.summary()).contains("3500 mg recorded as given").contains("one more dose makes 4500 mg");
@@ -238,7 +238,7 @@ class AdultParacetamolRouteExposureTest {
 
     @Test
     void atTheDoseADoseOfAnotherOrderTooSoonIsSaid() {
-        assertThat(rule.atAdministration(order("500 mg", "4 fois par jour", "PO", null, facts(doses(given("500 mg", 2))))))
+        assertThat(rule.atAdministration(order("500 mg", "4 fois par jour", "PO", null, facts(doses(given("500 mg", 2)))), false))
             .singleElement().satisfies(card -> assertThat(card.summary())
                 .contains("from any order, was 2 h ago").contains("minimum between doses is 4 h"));
     }
@@ -246,7 +246,7 @@ class AdultParacetamolRouteExposureTest {
     @Test
     void atAnIvDoseTheFigureIsShownAndNoOralLimitIsJudged() {
         assertThat(rule.atAdministration(order("1 g", "4 fois par jour", "IV", null,
-                facts(doses(given("2 g", 1), given("2 g", 1))))))
+                facts(doses(given("2 g", 1), given("2 g", 1)))), false))
             .singleElement().satisfies(card -> assertThat(card.summary())
                 .contains("no paracetamol limit judged").contains("4000 mg recorded as given")
                 .doesNotContain("above the maximum"));
@@ -254,10 +254,54 @@ class AdultParacetamolRouteExposureTest {
 
     @Test
     void atTheDoseNothingOnRecordAndNoUnknownSaysNothingAndAChildIsLeftToThePaediatricRule() {
-        assertThat(rule.atAdministration(order("500 mg", "4 fois par jour", "PO", null, facts(doses())))).isEmpty();
+        assertThat(rule.atAdministration(order("500 mg", "4 fois par jour", "PO", null, facts(doses())), false)).isEmpty();
         Patient child = Patient.builder().dateOfBirth(LocalDate.now(ZoneId.systemDefault()).minusYears(6)).build();
         assertThat(rule.atAdministration(new CdsRuleContext(child, UUID.randomUUID(), "Paracétamol", null, null, 500d,
-            null, 20d, List.of(), List.of(), "4 fois par jour", null, null, null, facts(doses(given("1 g", 1))))))
+            null, 20d, List.of(), List.of(), "4 fois par jour", null, null, null, facts(doses(given("1 g", 1)))), false))
             .isEmpty();
+    }
+
+    /** The review of this wave: the dose just written is on record, and it is not "0 h ago". */
+    @Test
+    void afterARecordedDoseTheIntervalIsToThePreviousDoseNotToItself() {
+        assertThat(rule.atAdministration(order("500 mg", "4 fois par jour", "PO", null,
+                facts(doses(given("500 mg", 0), given("500 mg", 6)))), true))
+            .noneMatch(card -> card.summary().contains("h after the previous dose"))
+            .noneMatch(card -> card.summary().contains("h ago"));
+        assertThat(rule.atAdministration(order("500 mg", "4 fois par jour", "PO", null,
+                facts(doses(given("500 mg", 0), given("500 mg", 2)))), true))
+            .anySatisfy(card -> assertThat(card.summary()).contains("recorded 2 h after the previous dose"));
+    }
+
+    @Test
+    void atTheDoseWhatCouldNotBeReadIsNeverAZeroInTheSummary() {
+        ParacetamolFacts.Documented combination =
+            new ParacetamolFacts.Documented(true, List.of(), List.of("Codoliprane"));
+        assertThat(rule.atAdministration(order("500 mg", "4 fois par jour", "PO", null, facts(combination)), false))
+            .singleElement().satisfies(card -> assertThat(card.summary()).contains("at least 0 mg"));
+        assertThat(rule.atAdministration(order("500 mg", "4 fois par jour", "IV", null,
+                facts(ParacetamolFacts.Documented.NOT_READ)), false))
+            .singleElement().satisfies(card -> assertThat(card.summary())
+                .contains("an unknown amount").doesNotContain("0 mg"));
+    }
+
+    @Test
+    void atTheDoseAnUnreadNextDoseIsSaid() {
+        assertThat(rule.atAdministration(order("10 ml", "4 fois par jour", "PO", null,
+                facts(doses(given("500 mg", 6)))), false))
+            .anySatisfy(card -> assertThat(card.summary()).contains("could not be read in mg")
+                .contains("total after it is unknown"));
+    }
+
+    /** A failed read is no clean check: held, with a key, whatever the drug. */
+    @Test
+    void aFailedReadOfTheFactsHoldsTheSignature() {
+        assertThat(rule.evaluate(new CdsRuleContext(adult(), UUID.randomUUID(), "Paracétamol", null, null, 500d, null,
+                70d, List.of(), List.of(), "3 fois par jour", null, null, null, ParacetamolFacts.READ_FAILED)
+                .withRoute("PO", null)))
+            .singleElement().satisfies(card -> {
+                assertThat(card.needsReasonAtSignature()).isTrue();
+                assertThat(card.exceptionKey()).startsWith("checkFailed:");
+            });
     }
 }

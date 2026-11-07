@@ -42,10 +42,12 @@ import java.util.UUID;
  *
  * <p>CR-02 (proposed policy, provisional, awaiting the named clinical approver; this replaces the
  * earlier statement that nothing here holds an order): a single dose, a daily total or an interval
- * outside these limits, and an order these limits cannot judge, stays a {@code warning} on the draft
- * and holds the routine signature. It is signed only with the prescriber's explicit exception, tied to
- * those findings and that version of the order ({@code PrescriptionServiceImpl.requireReasonAtSigning}).
- * Nothing here is a hard stop, and nothing adds a refusal at administration.
+ * outside these limits, and an order whose route these oral limits do not apply to, stays a
+ * {@code warning} on the draft and holds the routine signature. It is signed only with the prescriber's
+ * explicit exception, tied to those findings and that version of the order
+ * ({@code PrescriptionServiceImpl.requireReasonAtSigning}). A dose or a frequency that could not be
+ * read on an oral order is said on a card and does not hold it (tasklist.md). Nothing here is a hard
+ * stop, and nothing adds a refusal at administration.
  *
  * <p>CR-01: the numeric limits below are oral. They judge an order stated as oral and no other: a
  * missing, unknown or other route gives "cannot assess, review required", never an oral verdict, and no
@@ -102,6 +104,9 @@ public class AdultParacetamolRule implements CdsRule {
 
     @Override
     public List<CdsCard> evaluate(CdsRuleContext context) {
+        if (context.paracetamolFacts() == ParacetamolFacts.READ_FAILED) {
+            return List.of(CdsRuleEngine.doseCheckFailed(text, context.proposedMedicationName(), id()));
+        }
         if (context.patient() != null && context.paracetamolFacts().nameNotRecognised()) {
             return List.of(notRecognised(context.proposedMedicationName()));
         }
@@ -138,12 +143,12 @@ public class AdultParacetamolRule implements CdsRule {
      * honesty as the order's, for the nurse. They hold nothing and refuse nothing (D1210 stays the
      * only refusal at administration).
      */
-    public List<CdsCard> atAdministration(CdsRuleContext context) {
+    public List<CdsCard> atAdministration(CdsRuleContext context, boolean doseJustRecorded) {
         if (context.patient() == null || !context.paracetamolFacts().applies()
             || (context.patient().getDateOfBirth() != null && !PediatricDoseRule.isAdult(context.patient()))) {
             return List.of();
         }
-        return new Check(context).administration();
+        return new Check(context).administration(doseJustRecorded);
     }
 
     /** QA D1462: what the check does not know is said. A name it cannot read may be a brand of this drug. */
@@ -360,14 +365,14 @@ public class AdultParacetamolRule implements CdsRule {
             double next = doseMg == null ? 0d : doseMg;
             if (given.mg > 0d && given.mg + next > limit.mg) {
                 cards.add(finding(text.get("cds.adultParacetamol.documented.summary",
-                    "{0}: {1} mg of paracetamol recorded as given in the last 24 hours at this hospital; with one dose of this order that is {2} mg, above the maximum of {3} mg per 24 h",
-                    medication, number(given.mg), number(given.mg + next), number(limit.mg)), null,
+                    "{0}: {1} of paracetamol recorded as given in the last 24 hours at this hospital; with one dose of this order that is {2} mg, above the maximum of {3} mg per 24 h",
+                    medication, recordedAmount(), number(given.mg + next), number(limit.mg)), null,
                     "documented:" + given.mg + ":" + next + ":" + limit.mg));
             }
         }
 
         /** What the nurse reads at a dose. See {@link AdultParacetamolRule#atAdministration}. */
-        List<CdsCard> administration() {
+        List<CdsCard> administration(boolean doseJustRecorded) {
             List<CdsCard> cards = new ArrayList<>();
             String figures = String.join(" ", documentedSentence(), scopeSentence(), reconcileSentence(),
                 text.get("cds.adultParacetamol.administration.footer",
@@ -375,29 +380,58 @@ public class AdultParacetamolRule implements CdsRule {
             Optional<RouteProblem> problem = routeProblem();
             if (context.patient().getDateOfBirth() == null || problem.isPresent()) {
                 cards.add(build(text.get("cds.adultParacetamol.administration.noVerdict.summary",
-                    "{0}: no paracetamol limit judged for this dose; {1} mg recorded as given in the last 24 hours at this hospital",
-                    medication, number(given.mg)), figures, ALERT));
+                    "{0}: no paracetamol limit judged for this dose; {1} recorded as given in the last 24 hours at this hospital",
+                    medication, recordedAmount()), figures, ALERT));
                 return cards;
+            }
+            if (doseMg == null) {
+                cards.add(build(text.get("cds.adultParacetamol.administration.doseUnread.summary",
+                    "{0}: {1} recorded as given in the last 24 hours at this hospital; the dose of this order could not be read in mg, so the total after it is unknown",
+                    medication, recordedAmount()), figures, ALERT));
             }
             double next = doseMg == null ? 0d : doseMg;
             if (given.mg + next > limit.mg) {
                 cards.add(build(text.get("cds.adultParacetamol.administration.total.summary",
-                    "{0}: {1} mg recorded as given in the last 24 hours at this hospital; one more dose makes {2} mg, above the maximum of {3} mg per 24 h",
-                    medication, number(given.mg), number(given.mg + next), number(limit.mg)), figures, ALERT));
+                    "{0}: {1} recorded as given in the last 24 hours at this hospital; one more dose makes {2} mg, above the maximum of {3} mg per 24 h",
+                    medication, recordedAmount(), number(given.mg + next), number(limit.mg)), figures, ALERT));
             }
-            int least = risks.contains(ParacetamolRisk.CHRONIC_ALCOHOLISM)
-                ? ALCOHOLISM_MIN_MINUTES_BETWEEN_DOSES : MIN_MINUTES_BETWEEN_DOSES;
-            if (given.minutesSinceLast != null && given.minutesSinceLast < least) {
-                cards.add(build(text.get("cds.adultParacetamol.administration.interval.summary",
-                    "{0}: the last dose of paracetamol on record, from any order, was {1} h ago; the minimum between doses is {2} h",
-                    medication, hours(given.minutesSinceLast.intValue()), hours(least)), figures, ALERT));
-            }
-            if (cards.isEmpty() && (given.mg > 0d || !given.unknownNames.isEmpty())) {
+            interval(doseJustRecorded, figures).ifPresent(cards::add);
+            if (cards.isEmpty() && (given.mg > 0d || !given.unknownNames.isEmpty() || !given.read)) {
                 cards.add(build(text.get("cds.adultParacetamol.administration.figure.summary",
-                    "{0}: {1} mg of paracetamol recorded as given in the last 24 hours at this hospital",
-                    medication, number(given.mg)), figures, CdsCard.Indicator.INFO));
+                    "{0}: {1} of paracetamol recorded as given in the last 24 hours at this hospital",
+                    medication, recordedAmount()), figures, CdsCard.Indicator.INFO));
             }
             return cards;
+        }
+
+        /**
+         * The time to the last dose on record, or with a dose just recorded (it is on record itself,
+         * zero hours ago) the time between that dose and the one before it, from any order.
+         */
+        private Optional<CdsCard> interval(boolean doseJustRecorded, String figures) {
+            int least = risks.contains(ParacetamolRisk.CHRONIC_ALCOHOLISM)
+                ? ALCOHOLISM_MIN_MINUTES_BETWEEN_DOSES : MIN_MINUTES_BETWEEN_DOSES;
+            Long gap = doseJustRecorded ? given.minutesBetweenLastTwo : given.minutesSinceLast;
+            if (gap == null || gap >= least) {
+                return Optional.empty();
+            }
+            return Optional.of(build(doseJustRecorded
+                ? text.get("cds.adultParacetamol.administration.intervalRecorded.summary",
+                    "{0}: this dose was recorded {1} h after the previous dose of paracetamol on record, from any order; the minimum between doses is {2} h",
+                    medication, hours(gap.intValue()), hours(least))
+                : text.get("cds.adultParacetamol.administration.interval.summary",
+                    "{0}: the last dose of paracetamol on record, from any order, was {1} h ago; the minimum between doses is {2} h",
+                    medication, hours(gap.intValue()), hours(least)), figures, ALERT));
+        }
+
+        /** CR-03: the amount a summary states: never a bare zero, or a total, for what could not be read. */
+        private String recordedAmount() {
+            if (!given.read) {
+                return text.get("cds.adultParacetamol.documented.amount.unknown", "an unknown amount");
+            }
+            return given.unknownNames.isEmpty()
+                ? text.get("cds.adultParacetamol.documented.amount", "{0} mg", number(given.mg))
+                : text.get("cds.adultParacetamol.documented.amount.atLeast", "at least {0} mg", number(given.mg));
         }
 
         /** The MAR's doses in mg, as this order's are read: a bare number or an unread unit is unknown. */
@@ -407,6 +441,11 @@ public class AdultParacetamolRule implements CdsRule {
             exposure.read = documented.read();
             exposure.unknownNames.addAll(documented.unreadable());
             LocalDateTime now = LocalDateTime.now(ZoneId.systemDefault());
+            List<LocalDateTime> times = documented.doses().stream().map(ParacetamolFacts.Dose::givenAt)
+                .sorted(java.util.Comparator.reverseOrder()).toList();
+            if (times.size() > 1) {
+                exposure.minutesBetweenLastTwo = ChronoUnit.MINUTES.between(times.get(1), times.get(0));
+            }
             for (ParacetamolFacts.Dose dose : documented.doses()) {
                 Double mg = CdsRuleEngine.parseLabelledDoseMg(dose.dose(), weightKg(), dose.item());
                 if (mg == null) {
@@ -432,8 +471,8 @@ public class AdultParacetamolRule implements CdsRule {
             }
             List<String> parts = new ArrayList<>();
             parts.add(text.get("cds.adultParacetamol.documented",
-                "Documented administered exposure: {0} mg recorded as given in the last 24 hours at this hospital ({1} dose(s), from any order and any route, including orders that have ended).",
-                number(given.mg), String.valueOf(given.counted)));
+                "Documented administered exposure: {0} recorded as given in the last 24 hours at this hospital ({1} dose(s), from any order and any route, including orders that have ended).",
+                recordedAmount(), String.valueOf(given.counted)));
             if (!given.unknownNames.isEmpty()) {
                 parts.add(text.get("cds.adultParacetamol.documented.unreadable",
                     "Given, with a paracetamol content that cannot be read, so not counted: {0}.",
@@ -764,7 +803,7 @@ public class AdultParacetamolRule implements CdsRule {
 
         private String heldFooter() {
             return text.get("cds.adultParacetamol.exception.footer",
-                "The draft is saved. It is signed only with the prescriber''s explicit exception, tied to this alert and this version of the order: the reason, the prescriber and the time are recorded and audited. A pharmacist''s review does not grant it. Sources: FDA acetaminophen guidance; EFFERALGANSTIX 1000 mg RCP 4.2, 4.3; provisional policy, pending clinician sign-off.");
+                "The draft is saved. It is signed only with the prescriber's explicit exception, tied to this alert and this version of the order: the reason, the prescriber and the time are recorded and audited. A pharmacist's review does not grant it. Sources: FDA acetaminophen guidance; EFFERALGANSTIX 1000 mg RCP 4.2, 4.3; provisional policy, pending clinician sign-off.");
         }
 
         private String number(double value) {
@@ -814,6 +853,7 @@ public class AdultParacetamolRule implements CdsRule {
         private double mg;
         private int counted;
         private Long minutesSinceLast;
+        private Long minutesBetweenLastTwo;
         private final List<String> unknownNames = new ArrayList<>();
     }
 

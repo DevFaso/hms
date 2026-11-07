@@ -5394,8 +5394,8 @@ class NurseTaskServiceImplTest {
         com.example.hms.cdshooks.rules.CdsRuleEngine engine = mock(com.example.hms.cdshooks.rules.CdsRuleEngine.class);
         service.setCdsRuleEngine(engine);
         com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard card = cr03_exposureCard();
-        when(engine.paracetamolAtAdministration(any(), any(), any(), any())).thenAnswer(inv -> {
-            ((Runnable) inv.getArgument(3)).run();
+        when(engine.paracetamolAtAdministration(any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any())).thenAnswer(inv -> {
+            ((Runnable) inv.getArgument(4)).run();
             return List.of(card);
         });
         MarVerificationRequestDTO req = new MarVerificationRequestDTO();
@@ -5410,7 +5410,7 @@ class NurseTaskServiceImplTest {
         assertThat(resp.isAllPassed()).isTrue();
         verify(patientRepository, never()).lockByIdUnscoped(any());
         verify(engine).paracetamolAtAdministration(any(), eq(hospitalId), org.mockito.ArgumentMatchers.argThat(
-            order -> "PO".equals(order.route())), any());
+            order -> "PO".equals(order.route())), eq(false), any());
     }
 
     @Test
@@ -5431,9 +5431,9 @@ class NurseTaskServiceImplTest {
         com.example.hms.cdshooks.rules.CdsRuleEngine engine = mock(com.example.hms.cdshooks.rules.CdsRuleEngine.class);
         service.setCdsRuleEngine(engine);
         com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard card = cr03_exposureCard();
-        when(engine.paracetamolAtAdministration(any(), any(), any(), any())).thenAnswer(inv -> {
+        when(engine.paracetamolAtAdministration(any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any())).thenAnswer(inv -> {
             verify(patientRepository, never()).lockByIdUnscoped(any());
-            ((Runnable) inv.getArgument(3)).run();
+            ((Runnable) inv.getArgument(4)).run();
             verify(patientRepository).lockByIdUnscoped(patientId);
             // The dose this answer is about was written before the exposure was read.
             verify(marRepository).save(mar);

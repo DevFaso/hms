@@ -138,4 +138,17 @@ class ParacetamolDocumentedExposureReadTest {
         assertThat(reader.read(child, hospitalId, "Paracétamol 500 mg", tablet, null).documented().read()).isFalse();
         verifyNoInteractions(mar);
     }
+
+    /** The review of this wave: an item taken off the list since must not make the dose vanish. */
+    @Test
+    void aDoseLinkedToAnItemNoLongerActiveIsNamedNotDropped() {
+        MedicationAdministrationRecord row = given("Doliprane 1 g", "1 g", PrescriptionStatus.SIGNED,
+            LocalDateTime.now(ZoneId.systemDefault()));
+        row.getPrescription().setMedicationCatalogItemId(UUID.randomUUID());
+        when(mar.findGivenSince(any(), any(), any())).thenReturn(List.of(row));
+
+        ParacetamolFacts.Documented documented = read();
+
+        assertThat(documented.doses().size() + documented.unreadable().size()).isEqualTo(1);
+    }
 }

@@ -43,6 +43,13 @@ public record ParacetamolFacts(boolean applies, List<OtherOrder> otherOrders, Se
     public static final ParacetamolFacts NOT_RECOGNISED = new ParacetamolFacts(false, List.of(), Set.of(), List.of(),
         List.of(), false, false, false, null, List.of(), true);
 
+    /**
+     * CR-01: the read itself failed, so nothing is known about this order: the rule says it could not
+     * judge and holds the signature, and never reads that as another drug.
+     */
+    public static final ParacetamolFacts READ_FAILED = new ParacetamolFacts(false, List.of(), Set.of(), List.of(),
+        List.of(), false, false, false, null, List.of(), false);
+
     /** Facts with no record of the doses given: {@link Documented#NOT_READ}, which is unknown, not zero. */
     public ParacetamolFacts(boolean applies, List<OtherOrder> otherOrders, Set<ParacetamolRisk> risks,
                             List<String> mayStillBeInUse, List<String> combinations,

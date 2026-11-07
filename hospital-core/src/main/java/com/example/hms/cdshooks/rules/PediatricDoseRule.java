@@ -84,6 +84,10 @@ public class PediatricDoseRule implements CdsRule {
 
     @Override
     public List<CdsCard> evaluate(CdsRuleContext context) {
+        if (context.paracetamolFacts() == ParacetamolFacts.READ_FAILED && context.patient() != null
+                && !isAdult(context.patient())) {
+            return List.of(CdsRuleEngine.doseCheckFailed(text, context.proposedMedicationName(), id()));
+        }
         if (context.patient() == null) return List.of();
         LocalDate dob = context.patient().getDateOfBirth();
         if (dob == null) return List.of();
@@ -109,6 +113,12 @@ public class PediatricDoseRule implements CdsRule {
             return List.of(reviewRequired(text.get("cds.pediatric.manualReview.summary",
                 "{0}: child under {1} months - no automatic mg/kg check; a pharmacist or physician must review the dose",
                 check.medication(), String.valueOf(check.manualReviewUnderMonths())), check.limitBasis()));
+        }
+        // CR-01: paracetamol with no limit on file for this order: nothing clears it. Another drug keeps its advice.
+        if (context.paracetamolFacts().applies() && !check.hasLimits()) {
+            return List.of(reviewRequired(text.get("cds.pediatric.limit.none.summary",
+                "{0}: cannot assess, review required: no paracetamol limit on file applies to this order",
+                check.medication()), check.limitBasis()));
         }
         Optional<String> noVerdict = check.noVerdictOnThisRoute();
         if (noVerdict.isPresent()) {
@@ -213,7 +223,7 @@ public class PediatricDoseRule implements CdsRule {
             return item == null ? null : com.example.hms.service.emar.MedicationRoutes.canonical(item.getRoute());
         }
 
-        private boolean hasLimits() {
+        boolean hasLimits() {
             return hasBands() || hasMgLimit();
         }
 
