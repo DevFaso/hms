@@ -84,10 +84,12 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
         Set.of("ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE", "ROLE_SUPER_ADMIN");
     /** A care plan's risk level is free text: these words, accents stripped, name a high level (EN/FR/ES). */
     private static final Set<String> PLAN_LEVEL_HIGH = Set.of("HIGH", "CRITICAL", "SEVERE", "ELEVATED",
-        "HAUT", "ELEVE", "CRITIQUE", "ALTO", "ELEVADO", "CRITICO", "GRAVE");
+        "HAUT", "HAUTE", "ELEVE", "ELEVEE", "CRITIQUE",
+        "ALTO", "ALTA", "ELEVADO", "ELEVADA", "CRITICO", "CRITICA", "GRAVE");
     /** These words name a level below high (EN/FR/ES): such a plan does not make the pregnancy high risk. */
     private static final Set<String> PLAN_LEVEL_BELOW_HIGH = Set.of("LOW", "MODERATE", "MEDIUM",
-        "FAIBLE", "BAS", "MODERE", "MOYEN", "BAJO", "MODERADO", "MEDIO");
+        "FAIBLE", "BAS", "BASSE", "MODERE", "MODEREE", "MOYEN", "MOYENNE",
+        "BAJO", "BAJA", "MODERADO", "MODERADA", "MEDIO", "MEDIA");
 
     private final AppointmentRepository appointmentRepository;
     private final PatientRepository patientRepository;
@@ -286,10 +288,10 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
      * The maternal history is versioned per woman and the risk is scored on a version
      * ({@code calculate-risk}, which changes that version in place). Two things follow.
      * Editing the history writes a new version with no score, so the assessment in force is the newest
-     * version that has one: correcting a typo does not retract a HIGH, while a new score does, LOW
-     * included. And the score belongs to the pregnancy it was made in (the D796 rule of
-     * {@code MaternalHistoryMapper#carryForwardHistory}): one last touched before this pregnancy's LMP
-     * is about an earlier pregnancy.
+     * version that has one: correcting a typo does not retract a HIGH, while a score on a newer version
+     * does, LOW included. And the score belongs to the pregnancy it was made in (the D796 rule of
+     * {@code MaternalHistoryMapper#carryForwardHistory}): one made before this pregnancy's LMP is about
+     * an earlier pregnancy.
      */
     private boolean historySaysHighRisk(UUID patientId, UUID hospitalId, LocalDate lmp) {
         return maternalHistoryRepository
@@ -298,7 +300,7 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
             .filter(history -> history.getRiskCategory() != null && !history.getRiskCategory().isBlank())
             .findFirst()
             .filter(history -> RECORDED_HIGH.equalsIgnoreCase(history.getRiskCategory().trim()))
-            .map(MaternalHistory::getUpdatedAt)
+            .map(MaternalHistory::getRiskAssessedAt)
             .filter(assessedAt -> madeInThisPregnancy(assessedAt, lmp))
             .isPresent();
     }

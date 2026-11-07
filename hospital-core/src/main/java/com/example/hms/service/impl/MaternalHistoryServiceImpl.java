@@ -430,6 +430,7 @@ public class MaternalHistoryServiceImpl implements MaternalHistoryService {
         }
         
         maternalHistory.setRiskCategory(riskCategory);
+        maternalHistory.setRiskAssessedAt(LocalDateTime.now(java.time.ZoneId.systemDefault()));
         
         MaternalHistory saved = maternalHistoryRepository.save(maternalHistory);
         

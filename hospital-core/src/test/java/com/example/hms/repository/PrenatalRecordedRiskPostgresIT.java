@@ -35,8 +35,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * The two reads the prenatal planner takes the recorded risk from, on a real PostgreSQL built by
  * Liquibase, for what the planner relies on: a read names one hospital and returns no other's rows; the
  * versions come newest first; only an active plan comes back, newest first; a patient with nothing comes
- * back empty; and scoring a version in place moves its {@code updated_at}, the date that says which
- * pregnancy the score belongs to.
+ * back empty; and the date that says which pregnancy a score belongs to is the column V267 added, which
+ * a write that does not score leaves alone, and which a score equal to the old one still moves.
  */
 @Testcontainers
 @DataJpaTest
@@ -101,7 +101,7 @@ class PrenatalRecordedRiskPostgresIT {
                     """).setParameter("id", row).setParameter("u", UUID.randomUUID()).executeUpdate();
             }
             history(hospitalA, 1, "HIGH");
-            newestAtA = history(hospitalA, 2, null);
+            newestAtA = history(hospitalA, 2, "HIGH");
             history(hospitalB, 3, "LOW");
             plan(hospitalA, false, "HIGH", LONG_AGO.plusDays(2));
             plan(hospitalA, true, "MODERATE", LONG_AGO.plusDays(1));
@@ -113,8 +113,8 @@ class PrenatalRecordedRiskPostgresIT {
         UUID id = UUID.randomUUID();
         entityManager.createNativeQuery("""
             INSERT INTO clinical.maternal_history (id, patient_id, hospital_id, version_number, recorded_date, risk_category,
-                created_at, updated_at)
-            VALUES (:id, :p, :h, :v, :at, :risk, :at, :at)
+                risk_assessed_at, created_at, updated_at)
+            VALUES (:id, :p, :h, :v, :at, :risk, CAST(:at AS timestamp), :at, :at)
             """).setParameter("id", id).setParameter("p", patient).setParameter("h", hospital).setParameter("v", version)
             .setParameter("at", LONG_AGO).setParameter("risk", risk).executeUpdate();
         historyRows.add(id);
@@ -150,10 +150,10 @@ class PrenatalRecordedRiskPostgresIT {
     }
 
     @Test
-    @DisplayName("history: one hospital's versions only, newest first, the unscored one included; nothing is empty")
+    @DisplayName("history: one hospital's versions only, newest first, with their assessment date; nothing is empty")
     void theHistoryRead() {
         assertThat(versions(patient, hospitalA)).extracting(MaternalHistory::getVersionNumber).containsExactly(2, 1);
-        assertThat(versions(patient, hospitalA)).extracting(MaternalHistory::getRiskCategory).containsExactly(null, "HIGH");
+        assertThat(versions(patient, hospitalA)).extracting(MaternalHistory::getRiskAssessedAt).containsOnly(LONG_AGO);
         assertThat(versions(patient, hospitalB)).extracting(MaternalHistory::getRiskCategory).containsExactly("LOW");
         assertThat(versions(patientWithNothing, hospitalA)).isEmpty();
     }
@@ -170,15 +170,24 @@ class PrenatalRecordedRiskPostgresIT {
     }
 
     @Test
-    @DisplayName("scoring a version in place moves its updated_at and leaves its recorded date, as the planner assumes")
-    void scoringMovesTheDateThePlannerReads() {
+    @DisplayName("a review moves updated_at and not the assessment date; a score equal to the old one moves it")
+    void onlyAScoreMovesTheDateThePlannerReads() {
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            MaternalHistory version = histories.findById(newestAtA).orElseThrow();
+            version.setReviewedByProvider(true);
+            histories.save(version);
+        });
+        MaternalHistory reviewed = histories.findById(newestAtA).orElseThrow();
+        assertThat(reviewed.getUpdatedAt().toLocalDate()).isAfter(LocalDate.of(2020, 1, 1));
+        assertThat(reviewed.getRiskAssessedAt()).isEqualTo(LONG_AGO);
+
+        LocalDateTime rescoredAt = LONG_AGO.plusYears(6);
         new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
             MaternalHistory version = histories.findById(newestAtA).orElseThrow();
             version.setRiskCategory("HIGH");
+            version.setRiskAssessedAt(rescoredAt);
             histories.save(version);
         });
-        MaternalHistory scored = histories.findById(newestAtA).orElseThrow();
-        assertThat(scored.getUpdatedAt().toLocalDate()).isAfter(LocalDate.of(2020, 1, 1));
-        assertThat(scored.getRecordedDate()).isEqualTo(LONG_AGO);
+        assertThat(histories.findById(newestAtA).orElseThrow().getRiskAssessedAt()).isEqualTo(rescoredAt);
     }
 }

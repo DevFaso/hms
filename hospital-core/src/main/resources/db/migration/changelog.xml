@@ -3372,4 +3372,11 @@
                  stripComments="false"/>
     </changeSet>
 
+    <changeSet id="V267-r34-maternal-risk-assessed-at" author="hms-team" runOnChange="false">
+        <sqlFile path="V267__r34_maternal_risk_assessed_at.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

@@ -338,11 +338,12 @@ class ReceptionistClinicalReadGuardTest {
      * A high-risk flag the role can send: the desk's box does not count, and refusing to count it must not
      * leave the decision on a value nobody can correct. Each one names the class that decides from what
      * clinicians recorded instead; that class reads the flag only with the role taken out, and passes the
-     * recorded value on to the decision. Nothing else in the application reads such a flag from a request.
+     * recorded value on to the decision. No other class calls such a flag's getter, by name or by method
+     * reference. This holds the inventory and the wiring; {@code PrenatalRecordedRiskCadenceTest} holds the
+     * behaviour.
      */
     private static final Map<String, String> THE_RECORD_DECIDES_INSTEAD = Map.of(
         "PrenatalScheduleRequestDTO#highRisk", "service/PrenatalSchedulingServiceImpl.java");
-    private static final Pattern READS_THE_REQUEST_FLAG = Pattern.compile("\\.getHighRisk\\(\\)");
     private static final java.nio.file.Path MAIN = java.nio.file.Paths.get("src/main/java/com/example/hms");
 
     @Test
@@ -364,10 +365,17 @@ class ReceptionistClinicalReadGuardTest {
         assertThat(flags).as("a flag the desk sends, and where the record decides instead")
             .isEqualTo(new TreeSet<>(THE_RECORD_DECIDES_INSTEAD.keySet()));
 
+        StringBuilder getters = new StringBuilder();
+        for (String flag : flags) {
+            String field = flag.substring(flag.indexOf('#') + 1);
+            String capital = Character.toUpperCase(field.charAt(0)) + field.substring(1);
+            getters.append(getters.isEmpty() ? "" : "|").append("get").append(capital).append("|is").append(capital);
+        }
+        Pattern readsTheFlag = Pattern.compile("(?:\\.|::)(?:" + getters + ")\\b");
         Set<String> readers = new TreeSet<>();
         try (java.util.stream.Stream<java.nio.file.Path> files = java.nio.file.Files.walk(MAIN)) {
             for (java.nio.file.Path file : files.filter(path -> path.toString().endsWith(".java")).toList()) {
-                if (READS_THE_REQUEST_FLAG.matcher(java.nio.file.Files.readString(file)).find()) {
+                if (readsTheFlag.matcher(java.nio.file.Files.readString(file)).find()) {
                     readers.add(MAIN.relativize(file).toString().replace('\\', '/'));
                 }
             }

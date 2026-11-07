@@ -93,6 +93,8 @@ class PrenatalRecordedRiskCadenceTest {
         HISTORY_HIGH_ANY_CASE(true),
         /** Scored in an earlier pregnancy and not touched since. */
         HISTORY_HIGH_BEFORE_THIS_PREGNANCY(false),
+        /** Scored in an earlier pregnancy and only reviewed since: a review is not a new assessment. */
+        HISTORY_HIGH_BEFORE_THIS_PREGNANCY_REVIEWED_IN_IT(false),
         /** A later edit wrote a version with no score: the HIGH is still the assessment in force. */
         HISTORY_HIGH_THEN_AN_UNSCORED_EDIT(true),
         /** A later score replaces it. */
@@ -156,9 +158,10 @@ class PrenatalRecordedRiskCadenceTest {
         SecurityContextHolder.clearContext();
     }
 
-    private static MaternalHistory history(int version, String risk, LocalDateTime touchedAt) {
-        MaternalHistory history = MaternalHistory.builder().versionNumber(version).riskCategory(risk).build();
-        history.setUpdatedAt(touchedAt);
+    private static MaternalHistory history(int version, String risk, LocalDateTime assessedAt) {
+        MaternalHistory history = MaternalHistory.builder().versionNumber(version).riskCategory(risk)
+            .riskAssessedAt(risk == null ? null : assessedAt).build();
+        history.setUpdatedAt(assessedAt);
         return history;
     }
 
@@ -182,6 +185,11 @@ class PrenatalRecordedRiskCadenceTest {
             case HISTORY_HIGH_ON_THE_LMP -> here.add(history(1, "HIGH", ON_THE_LMP));
             case HISTORY_HIGH_ANY_CASE -> here.add(history(1, " high ", IN_THIS_PREGNANCY));
             case HISTORY_HIGH_BEFORE_THIS_PREGNANCY -> here.add(history(1, "HIGH", BEFORE_THIS_PREGNANCY));
+            case HISTORY_HIGH_BEFORE_THIS_PREGNANCY_REVIEWED_IN_IT -> {
+                MaternalHistory reviewed = history(1, "HIGH", BEFORE_THIS_PREGNANCY);
+                reviewed.setUpdatedAt(IN_THIS_PREGNANCY);
+                here.add(reviewed);
+            }
             case HISTORY_HIGH_THEN_AN_UNSCORED_EDIT -> here.addAll(List.of(
                 history(2, null, IN_THIS_PREGNANCY.plusWeeks(1)), history(1, "HIGH", IN_THIS_PREGNANCY)));
             case HISTORY_HIGH_THEN_SCORED_LOW -> here.addAll(List.of(
@@ -324,8 +332,10 @@ class PrenatalRecordedRiskCadenceTest {
     @CsvSource(nullValues = "NULL", value = {
         "NULL,true", "'  ',true", "HIGH,true", "high,true", "Critical,true", "Haut risque,true", "Risque élevé,true",
         "Alto riesgo,true", "Moderate to high,true", "modéré-élevé,true", "Under review,true",
+        "Haute,true", "modérée à élevée,true", "Alta,true", "Crítica,true",
         "LOW,false", "MODERATE,false", "moderate,false", "Risque modéré,false", "Faible,false", "bas,false",
-        "Riesgo moderado,false", "Medium,false"})
+        "Riesgo moderado,false", "Medium,false",
+        "Modérée,false", "Basse,false", "Moyenne,false", "Moderada,false", "Baja,false", "Media,false"})
     @DisplayName("a care plan counts unless its free-text level names something below high and nothing high")
     void aPlansFreeTextLevel(String level, boolean high) {
         assertThat(PrenatalSchedulingServiceImpl.planLevelReadsHigh(level)).isEqualTo(high);
