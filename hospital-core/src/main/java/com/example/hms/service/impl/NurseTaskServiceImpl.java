@@ -1918,7 +1918,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .map(Admission::getPatient).filter(Objects::nonNull).map(Patient::getId).filter(Objects::nonNull)
             .collect(Collectors.toCollection(java.util.LinkedHashSet::new));
         java.util.Map<UUID, PatientVitalSign> latest = marWardReader.latestObservationSets(hospitalId, patientIds);
-        WardOrders ward = readWardOrders(patientIds, hospitalId, activeStaysByPatient(hospitalId));
+        // Each card reads its order against its own stay, so no map of stays here.
+        WardOrders ward = readWardOrders(patientIds, hospitalId, java.util.Map.of());
 
         List<NurseWorkboardPatientDTO> result = new ArrayList<>();
         for (Admission a : admissions) {

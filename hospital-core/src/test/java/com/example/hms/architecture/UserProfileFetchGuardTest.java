@@ -47,6 +47,7 @@ class UserProfileFetchGuardTest {
         Map.entry("BillingInvoiceRepository.java", 1),
         Map.entry("BreakGlassSessionRepository.java", 3),
         Map.entry("HospitalRepository.java", 1),
+        Map.entry("LabResultRepository.java", 32),
         Map.entry("ProgramEnrollmentRepository.java", 2),
         Map.entry("StaffAvailabilityRepository.java", 1),
         Map.entry("StaffLeaveRequestRepository.java", 1),

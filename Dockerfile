@@ -115,12 +115,15 @@ fi
 # else bounded, heap 2.8 GB + an unbounded metaspace + direct memory (default:
 # as much as the heap) + code cache + stacks + GC tables could pass 4 GB, and
 # did: "Killed", then CRASHED, with no OutOfMemoryError in the log. With the
-# native parts bounded, a spike ends in an OutOfMemoryError that fails that one
-# request, which is the decision below. The sum, per limit:
+# native parts bounded, a heap spike ends in an OutOfMemoryError that fails that
+# one request, which is the decision below. The metaspace bound is no such
+# limit to reach: running out of it leaves classes unloadable until a restart,
+# so it sits well above the 300 MB measured without the OpenTelemetry agent. The
+# sum, per limit:
 # docs/runbooks/railway-env-matrix.md §3a; JvmContainerBudgetGuardTest checks it.
 #
 # Heap = JVM_HEAP_PERCENT (clamped to 10-90) of the container's memory limit,
-# which the JVM reads from cgroups. Default 60; 50 under a 3 GB limit, where the
+# which the JVM reads from cgroups. Default 60; 50 under a 3.5 GB limit, where the
 # fixed native bounds weigh more. The service's memory limit is the control:
 # every service must have one, or the JVM sizes from the platform's per-service
 # maximum (docs/runbooks/railway-env-matrix.md §3a). -Xlog:gc+init logs the
@@ -132,7 +135,7 @@ fi
 LIMIT_MB=0
 for LIMIT_FILE in /sys/fs/cgroup/memory.max /sys/fs/cgroup/memory/memory.limit_in_bytes; do
   if [ -r "${LIMIT_FILE}" ]; then
-    LIMIT_BYTES="$(cat "${LIMIT_FILE}")"
+    LIMIT_BYTES="$(cat "${LIMIT_FILE}" 2>/dev/null || true)"
     case "${LIMIT_BYTES}" in
       ''|*[!0-9]*) ;;
       *) LIMIT_MB=$((LIMIT_BYTES / 1048576)); break ;;
@@ -140,7 +143,7 @@ for LIMIT_FILE in /sys/fs/cgroup/memory.max /sys/fs/cgroup/memory/memory.limit_i
   fi
 done
 DEFAULT_HEAP_PCT=60
-if [ "${LIMIT_MB}" -gt 0 ] && [ "${LIMIT_MB}" -lt 3072 ]; then DEFAULT_HEAP_PCT=50; fi
+if [ "${LIMIT_MB}" -gt 0 ] && [ "${LIMIT_MB}" -lt 3584 ]; then DEFAULT_HEAP_PCT=50; fi
 HEAP_PCT="${JVM_HEAP_PERCENT:-${DEFAULT_HEAP_PCT}}"
 case "${HEAP_PCT}" in
   [0-9]|[0-9][0-9]|[0-9][0-9][0-9]) ;;
@@ -148,10 +151,11 @@ case "${HEAP_PCT}" in
 esac
 if [ "${HEAP_PCT}" -lt 10 ]; then HEAP_PCT=10; fi
 if [ "${HEAP_PCT}" -gt 90 ]; then HEAP_PCT=90; fi
-JVM_NATIVE_BOUNDS="-XX:MaxMetaspaceSize=384m -XX:ReservedCodeCacheSize=192m -XX:MaxDirectMemorySize=128m -Xss768k"
+JVM_NATIVE_BOUNDS="-XX:MaxMetaspaceSize=512m -XX:ReservedCodeCacheSize=192m -XX:MaxDirectMemorySize=128m -Xss768k"
 # glibc keeps one malloc arena per thread by default: native memory nothing above bounds.
 export MALLOC_ARENA_MAX=2
 JVM_MEMORY_OPTS="-XX:MaxRAMPercentage=${HEAP_PCT} ${JVM_NATIVE_BOUNDS} -Xlog:gc+init"
+echo "[entrypoint] Container limit ${LIMIT_MB} MB (0: none seen), heap ${HEAP_PCT}%"
 
 exec su -s /bin/sh appuser -c "exec ${JAVA_BIN} ${JVM_MEMORY_OPTS} ${OTEL_AGENT} -Dserver.port=${PORT} -jar /app/app.jar"
 ENTRYPOINT_SH

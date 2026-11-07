@@ -2571,6 +2571,41 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
     expect(component.listTotal()).toBe(total);
   });
 
+  it('QA D1314: a failed search puts back the page it hid, under the pager of that page', async () => {
+    const rows = Array.from({ length: 120 }, (_, i) => makeRx({ id: 'rx-' + i, status: 'SIGNED' }));
+    await setup({ list: rows });
+    component.onListPage(1);
+    const shown = component.filtered().map((p) => p.id);
+
+    prescriptionServiceSpy.list.and.returnValue(throwError(() => new Error('down')));
+    search('zzzzzz');
+
+    expect(component.filtered().map((p) => p.id)).toEqual(shown);
+    expect(component.listPage()).toBe(1);
+  });
+
+  it('QA D1314: a search at the last hospital never comes back under the next one', async () => {
+    const rows = Array.from({ length: 60 }, (_, i) => makeRx({ id: 'rx-' + i, status: 'SIGNED' }));
+    await setup({ list: rows });
+
+    jasmine.clock().install();
+    try {
+      component.searchTerm = 'zzzzzz';
+      component.onSearchInput();
+      prescriptionServiceSpy.list.and.returnValue(throwError(() => new Error('down')));
+      component.onScopeChange('other-hospital');
+      prescriptionServiceSpy.page.calls.reset();
+      jasmine.clock().tick(PrescriptionsComponent.SEARCH_DELAY_MS);
+    } finally {
+      jasmine.clock().uninstall();
+    }
+
+    expect(component.filtered()).withContext("none of the last hospital's rows").toEqual([]);
+    expect(prescriptionServiceSpy.page.calls.count())
+      .withContext('the delay was cancelled')
+      .toBe(0);
+  });
+
   it('QA D1412: the pager shows the server total and every row is reachable', async () => {
     const rows = Array.from({ length: 120 }, (_, i) =>
       makeRx({ id: 'rx-' + i, status: 'SIGNED', createdAt: '2026-09-20T08:00:00' }),

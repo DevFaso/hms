@@ -115,7 +115,11 @@ class WardLoadPostgresIT {
     static final int WORKBOARD_STATEMENTS = 25;
     static final int WHOLE_TAB_STATEMENTS = 1_500;
     /** The orders of {@code shapesTheRuleTellsApart} written at this hospital. */
-    static final int SHAPE_ORDERS = 10;
+    static final int SHAPE_ORDERS = 12;
+    static final int STAFF_WITH_ANOTHER_NAME = 3;
+    static final int PATIENT_WITH_A_MIDDLE_NAME = 8;
+    /** The seed gives every fifth ward patient a penicillin allergy; the next one has none. */
+    static final int ALLERGIC_WARD_PATIENT = 5;
 
     private static final UUID HOSPITAL = UUID.fromString("bbbbbbbb-0000-0000-0000-000000000001");
     private static final UUID OTHER_HOSPITAL = UUID.fromString("bbbbbbbb-0000-0000-0000-000000000002");
@@ -267,7 +271,7 @@ class WardLoadPostgresIT {
     @DisplayName("the nurse's patient list, with its vitals and allergies")
     void nursePatients() {
         Measured m = measure("nurse-patients", () -> nurseDashboard.getPatientsForNurse(nurseUser, HOSPITAL, null).size() + 0L);
-        assertThat(m.rows()).isEqualTo(REGISTERED_PATIENTS + 0L);
+        assertThat(m.rows()).as("all but another nurse's patient").isEqualTo(REGISTERED_PATIENTS - 1L);
     }
 
     @Test
@@ -317,6 +321,16 @@ class WardLoadPostgresIT {
                 assertThat(task.getDoseHistory()).allSatisfy(h -> assertThat(h.getAdministeredBy()).isNotBlank());
                 assertThat(task.getCdsAdvisories()).isNotNull();
             }
+            // The allergy reaches the row of the patient who has it, and only that row (D799).
+            List<NurseMedicationTaskResponseDTO> cephalosporins = listed.stream()
+                .filter(t -> "Ceftriaxone".equals(t.getMedication())).toList();
+            assertThat(cephalosporins).hasSize(2);
+            assertThat(cephalosporins).filteredOn(t -> !t.getCdsAdvisories().isEmpty()).hasSize(1);
+            // The tiles count these same rows (D1402).
+            var tiles = nurseTasks.getDashboardSummary(nurseUser, HOSPITAL);
+            assertThat(tiles.getMedicationsOverdue()).isEqualTo(listed.stream().filter(t -> "OVERDUE".equals(t.getStatus())).count());
+            assertThat(tiles.getMedicationsDue() + tiles.getMedicationsAsNeeded())
+                .isEqualTo(listed.stream().filter(t -> "DUE".equals(t.getStatus())).count());
             // Soonest due first, and a finished course's row keeps its place at the end.
             assertThat(listed).extracting(NurseMedicationTaskResponseDTO::getDueTime)
                 .isSortedAccordingTo(java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder()));
@@ -368,7 +382,11 @@ class WardLoadPostgresIT {
         assertThat(found("kiemde0")).as("patient, accent ignored").isPositive();
         assertThat(found("PÉLAGIE KIEMDÉ0")).as("first then last").isPositive();
         assertThat(found("kiemde0 pelagie")).as("last then first").isPositive();
-        assertThat(found("awa docteur3")).as("the prescriber").isPositive();
+        assertThat(found("awa docteur4")).as("the prescriber's account").isPositive();
+        assertThat(found("ancien nom")).as("the prescriber's staff row, the name the list shows").isPositive();
+        assertThat(found("wendkouni")).as("a middle name").isPositive();
+        assertThat(found("prenom8 wendkouni kiemde8")).as("the full name as shown").isPositive();
+        assertThat(found("prenom8 kiemde8")).as("first then last, a middle name between").isPositive();
         assertThat(found("paracetamol")).as("the drug, accent ignored").isPositive();
         assertThat(found("nadia")).as("a nurse wrote none").isZero();
         // A blank search is the list.
@@ -603,9 +621,14 @@ class WardLoadPostgresIT {
                 insert("\"security\".user_role_hospital_assignment", Map.of("id", assignment, "user_id", user,
                     "role_id", role, "hospital_id", HOSPITAL, "is_active", true));
                 UUID staff = UUID.randomUUID();
-                insert("hospital.staff", Map.of("id", staff, "user_id", user, "hospital_id", HOSPITAL,
+                Map<String, Object> staffRow = new LinkedHashMap<>(Map.of("id", staff, "user_id", user, "hospital_id", HOSPITAL,
                     "assignment_id", assignment, "active", true, "employment_type", "FULL_TIME",
                     "job_title", doctor ? "DOCTOR" : "NURSE"));
+                // The name the list shows first, written once: the account's was corrected since.
+                if (i == STAFF_WITH_ANOTHER_NAME) {
+                    staffRow.put("name", "Ancien Nom");
+                }
+                insert("hospital.staff", staffRow);
                 if (doctor) {
                     doctors.add(staff);
                     doctorAssignments.add(assignment);
@@ -634,13 +657,22 @@ class WardLoadPostgresIT {
                 UUID user = UUID.randomUUID();
                 insert("\"security\".users", Map.of("id", user, "username", "patient" + i, "email", "patient" + i + "@load.test",
                     "first_name", i % 7 == 0 ? "Pélagie" : "Prénom" + i, "last_name", "Kiemdé" + i, "is_active", true));
-                insert("clinical.patients", Map.of("id", patient, "user_id", user,
+                Map<String, Object> patientRow = new LinkedHashMap<>(Map.of("id", patient, "user_id", user,
                     "first_name", i % 7 == 0 ? "Pélagie" : "Prénom" + i, "last_name", "Kiemdé" + i,
                     "date_of_birth", LocalDate.of(1980, 1, 1).plusDays(i), "email", "patient" + i + "@load.test",
                     "phone_number_primary", "+2267" + (1000000 + i)));
-                insert("clinical.patient_hospital_registrations", Map.of("id", UUID.randomUUID(), "patient_id", patient,
+                if (i == PATIENT_WITH_A_MIDDLE_NAME) {
+                    patientRow.put("middle_name", "Wendkouni");
+                }
+                insert("clinical.patients", patientRow);
+                Map<String, Object> registration = new LinkedHashMap<>(Map.of("id", UUID.randomUUID(), "patient_id", patient,
                     "hospital_id", HOSPITAL, "mrn", "MRN" + i, "is_active", true, "stay_status", "REGISTERED",
                     "registration_date", now.toLocalDate().minusDays(i % 300)));
+                // Another nurse's patient: not on this nurse's lists.
+                if (i == REGISTERED_PATIENTS - 1) {
+                    registration.put("ready_by_staff_id", UUID.randomUUID());
+                }
+                insert("clinical.patient_hospital_registrations", registration);
             }
         }
 
@@ -732,6 +764,14 @@ class WardLoadPostgresIT {
             Map<String, Object> takeHome = rxRow(inBed, HOSPITAL, closedEncounter, 7, "SIGNED", now.minusDays(38));
             takeHome.put("take_home", true);
             insert("clinical.prescriptions", takeHome);
+            // A cephalosporin for a patient with a penicillin allergy (D799), and for one without.
+            for (UUID patient : List.of(patients.get(ALLERGIC_WARD_PATIENT), patients.get(ALLERGIC_WARD_PATIENT + 1))) {
+                UUID ward = encounter(patient, HOSPITAL, null, "INPATIENT", "IN_PROGRESS");
+                Map<String, Object> cef = rxRow(patient, HOSPITAL, ward, 23, "SIGNED", now.minusDays(1));
+                cef.put("medication_name", "Ceftriaxone");
+                insert("clinical.prescriptions", cef);
+                wardRowsExpected++;
+            }
             // On leave is still a stay.
             UUID onLeave = patients.get(WARD_PATIENTS + 20);
             UUID leaveStay = admission(onLeave, "ON_LEAVE", now.minusDays(2), null);

@@ -74,8 +74,8 @@ public interface PrescriptionRepository extends JpaRepository<Prescription, UUID
      * QA D1314: the search box of the prescription list. The page read every
      * row of the tab into the browser to filter it there: 26,706 statements,
      * 46 s and 3.2 GB allocated on 15,000 rows, for each search. What the box
-     * matches: the drug, the patient's name, the prescriber's name, accents
-     * ignored. {@code :namePattern} comes from {@code PatientMatchKeys.nameContainsPattern}.
+     * matches: the drug, the patient's name, the prescriber's name (the staff
+     * row's, which the list shows first, and the account's), accents ignored. {@code :namePattern} comes from {@code PatientMatchKeys.nameContainsPattern}.
      */
     String SEARCH_JOINS = " LEFT JOIN rx.patient p LEFT JOIN rx.staff s LEFT JOIN s.user u ";
     /**
@@ -90,7 +90,9 @@ public interface PrescriptionRepository extends JpaRepository<Prescription, UUID
         + PatientRepository.FOLD_CLOSE + SEARCH_LIKE
         + " OR " + PatientRepository.FOLD_OPEN + "CONCAT(p.firstName, ' ', p.lastName)" + PatientRepository.FOLD_CLOSE + SEARCH_LIKE
         + " OR " + PatientRepository.FOLD_OPEN + "CONCAT(p.lastName, ' ', p.firstName)" + PatientRepository.FOLD_CLOSE + SEARCH_LIKE
-        + " OR " + PatientRepository.FOLD_OPEN + "CONCAT(u.firstName, ' ', u.lastName)" + PatientRepository.FOLD_CLOSE + SEARCH_LIKE + ")";
+        + " OR " + PatientRepository.FOLD_OPEN + "s.name" + PatientRepository.FOLD_CLOSE + SEARCH_LIKE
+        + " OR " + PatientRepository.FOLD_OPEN + "CONCAT(COALESCE(u.firstName, ''), ' ', COALESCE(u.lastName, ''))"
+        + PatientRepository.FOLD_CLOSE + SEARCH_LIKE + ")";
 
     /** The search box at one hospital, every status. */
     @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "encounter", "encounter.hospital"})

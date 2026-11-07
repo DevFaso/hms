@@ -1466,6 +1466,8 @@ export class PrescriptionsComponent implements OnInit {
   onScopeChange(_hospitalId: string | null): void {
     this.listPage.set(0);
     // Never another hospital's rows under the new chip, even while it reads or if it fails.
+    clearTimeout(this.searchDelay);
+    this.rowsBeforeSearch = null;
     this.prescriptions.set([]);
     this.filtered.set([]);
     this.wholeTabRead = false;
@@ -1511,7 +1513,8 @@ export class PrescriptionsComponent implements OnInit {
   /** True while `prescriptions` holds the WHOLE tab, read for the search box. */
   private wholeTabRead = false;
   /** QA D1441: the rows a search hid while it reads, shown again if the read fails. */
-  private rowsBeforeSearch: { rows: PrescriptionResponse[]; total: number } | null = null;
+  private rowsBeforeSearch: { rows: PrescriptionResponse[]; total: number; page: number } | null =
+    null;
   /** That read is in flight: the keystrokes meanwhile are applied when it lands. */
   private wholeTabLoading = false;
   /** The list holds a status this build does not know: "Needs attention" is read whole, and narrowed here. */
@@ -1642,6 +1645,7 @@ export class PrescriptionsComponent implements OnInit {
     if (this.rowsBeforeSearch) {
       this.filtered.set(this.rowsBeforeSearch.rows);
       this.listTotal.set(this.rowsBeforeSearch.total);
+      this.listPage.set(this.rowsBeforeSearch.page);
       this.rowsBeforeSearch = null;
     }
     this.toast.error(this.translate.instant('PRESCRIPTIONS.TOAST.LOAD_FAILED'));
@@ -1713,6 +1717,7 @@ export class PrescriptionsComponent implements OnInit {
 
   /** The search box: `(input)` here. Starting or clearing a search changes what is read. */
   onSearchInput(): void {
+    const pageShown = this.listPage();
     this.listPage.set(0);
     if (this.needsWholeTab()) {
       this.applyFilter();
@@ -1721,7 +1726,7 @@ export class PrescriptionsComponent implements OnInit {
     // QA D1441: until the answer is known the rows on screen say nothing about
     // this search: they go, and the list says it is searching.
     if (this.filtered().length > 0) {
-      this.rowsBeforeSearch = { rows: this.filtered(), total: this.listTotal() };
+      this.rowsBeforeSearch = { rows: this.filtered(), total: this.listTotal(), page: pageShown };
     }
     this.filtered.set([]);
     this.loading.set(true);
@@ -1753,7 +1758,11 @@ export class PrescriptionsComponent implements OnInit {
       // QA D1441: until the answer is known the page's rows say nothing about this
       // search: they go, and the list says it is searching.
       if (this.filtered().length > 0) {
-        this.rowsBeforeSearch = { rows: this.filtered(), total: this.listTotal() };
+        this.rowsBeforeSearch = {
+          rows: this.filtered(),
+          total: this.listTotal(),
+          page: this.listPage(),
+        };
       }
       this.filtered.set([]);
       if (!this.wholeTabLoading) this.loadRows();
