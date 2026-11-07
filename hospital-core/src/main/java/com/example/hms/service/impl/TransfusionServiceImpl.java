@@ -118,6 +118,7 @@ public class TransfusionServiceImpl implements TransfusionService {
     private static final String FIELD_AUTHORISER = "authoriserUserId";
     private static final String FIELD_COMPATIBLE = "compatible";
     private static final String FIELD_NEGATIVE_UNOBTAINABLE = "negativeUnobtainable";
+    private static final int MAX_AUDIT_SHOWN_IDS = 20;
     private static final Set<String> LAB_DIRECTOR_ROLE_CODES = Set.of(SecurityConstants.ROLE_LAB_DIRECTOR);
 
     /** Default life of an antibody screen and of a crossmatch reservation. */
@@ -839,6 +840,16 @@ public class TransfusionServiceImpl implements TransfusionService {
         return saved;
     }
 
+    /**
+     * The audit column holds 2048 characters and an overlong row is lost, not cut: a long stock list
+     * names its first bags and how many more. The release row keeps every bag.
+     */
+    private static String shownIds(List<BloodUnit> negativeShown) {
+        String ids = negativeShown.stream().limit(MAX_AUDIT_SHOWN_IDS).map(bag -> bag.getId().toString())
+            .collect(java.util.stream.Collectors.joining(","));
+        return negativeShown.size() > MAX_AUDIT_SHOWN_IDS ? ids + ",+" + (negativeShown.size() - MAX_AUDIT_SHOWN_IDS) : ids;
+    }
+
     /** Each type its own sentence: the audit screen renders them in the reader's language by pattern. */
     private static String releaseAuditDescription(EmergencyReleaseType type, UUID unitId, UUID requestId, List<BloodUnit> negativeShown) {
         String release = switch (type) {
@@ -848,8 +859,7 @@ public class TransfusionServiceImpl implements TransfusionService {
         };
         String description = release + " of blood unit " + unitId + " against transfusion request " + requestId;
         return negativeShown.isEmpty() ? description
-            : description + ", O negative stated not obtainable in time, stock shown "
-                + negativeShown.stream().map(bag -> bag.getId().toString()).collect(java.util.stream.Collectors.joining(","));
+            : description + ", O negative stated not obtainable in time, stock shown " + shownIds(negativeShown);
     }
 
     @Override

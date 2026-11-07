@@ -11719,7 +11719,7 @@
     "O_POSITIVE_DECISION_HINT": "This O positive unit needs a documented emergency decision: a reason and the person making it.",
     "O_NEGATIVE_FIRST": "The system shows O negative of this product in stock: {{units}}. Use it if it can be reached in time.",
     "NEGATIVE_UNOBTAINABLE_STATEMENT": "I state that this O negative cannot be obtained in time for this patient.",
-    "RELEASE_NEGATIVE_STATEMENT": "O negative showing in stock was stated not obtainable in time. Units shown: {{units}}",
+    "RELEASE_NEGATIVE_STATEMENT": "O negative in stock was stated not obtainable in time. In stock at release: {{units}}",
     "ANTIBODY_REVIEW_WARNING": "This patient has a positive antibody screen on record: this release needs transfusion-service review.",
     "SWITCH_TO_TYPE_SPECIFIC": "Blood was released in an emergency on this request: switch to type-specific blood when testing permits.",
     "EMERGENCY_RELEASES": "Emergency releases",

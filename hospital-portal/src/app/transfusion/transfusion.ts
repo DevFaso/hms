@@ -711,9 +711,22 @@ export class TransfusionComponent implements OnInit {
   private refreshEmergencyOptions(request: TransfusionRequestResponse): void {
     this.transfusion.emergencyReleaseOptions(request.id).subscribe({
       next: (options) => {
-        if (this.selectedRequest()?.id === request.id) this.emergencyOptions.set(options);
+        if (this.selectedRequest()?.id !== request.id) return;
+        // A statement is about the bags it named: another list asks again.
+        const before = (this.emergencyOptions()?.negativeStock ?? []).map((u) => u.id).join();
+        if (before !== options.negativeStock.map((u) => u.id).join()) {
+          this.emergencyNegativeStated = false;
+        }
+        this.emergencyOptions.set(options);
       },
+      // The form keeps what it has: the server still decides on the next submit.
+      error: () => this.toast.error(this.translate.instant('TRANSFUSION.LOAD_ERROR')),
     });
+  }
+
+  /** A statement is made for one bag: picking another asks again. */
+  onEmergencyUnitPicked(): void {
+    this.emergencyNegativeStated = false;
   }
 
   private loadEmergencyOptions(request: TransfusionRequestResponse): void {

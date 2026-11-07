@@ -1048,7 +1048,12 @@
           }
           <div class="field">
             <label for="em-unit">{{ 'TRANSFUSION.UNIT_NUMBER' | translate }} *</label>
-            <select required id="em-unit" [(ngModel)]="emergencyUnitId">
+            <select
+              required
+              id="em-unit"
+              [(ngModel)]="emergencyUnitId"
+              (ngModelChange)="onEmergencyUnitPicked()"
+            >
               <option value="">{{ 'COMMON.SELECT' | translate }}</option>
               @for (u of emergencyOptions()?.units ?? []; track u.id) {
                 <option [value]="u.id">
@@ -1153,7 +1158,12 @@
           }
           <div class="field">
             <label for="si-unit">{{ 'TRANSFUSION.UNIT_NUMBER' | translate }} *</label>
-            <select required id="si-unit" [(ngModel)]="emergencyUnitId">
+            <select
+              required
+              id="si-unit"
+              [(ngModel)]="emergencyUnitId"
+              (ngModelChange)="onEmergencyUnitPicked()"
+            >
               <option value="">{{ 'COMMON.SELECT' | translate }}</option>
               @for (u of emergencyOptions()?.incompatibleUnits ?? []; track u.id) {
                 <option [value]="u.id" [disabled]="!u.releasable">

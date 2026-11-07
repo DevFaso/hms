@@ -958,8 +958,88 @@ describe('TransfusionComponent: a transfusion in progress (QA CX-008)', () => {
       stubOptions({ units: [unitOption('opos', true)] });
       component.openEmergencyRelease(emergency);
       component.emergencyUnitId = 'opos';
+      component.emergencyAuthoriserId = 'doc';
+      component.emergencyReason = 'Hémorragie';
+      txSpy.emergencyRelease = jasmine
+        .createSpy()
+        .and.returnValue(of(mockUnit({ id: 'opos', status: 'ISSUED' })));
       fixture.detectChanges();
       expect(el('negative-statement')).toBeNull();
+      component.submitEmergencyRelease();
+      expect(txSpy.emergencyRelease).toHaveBeenCalledWith('req-1', {
+        bloodUnitId: 'opos',
+        releaseType: 'O_POSITIVE_DECISION',
+        reason: 'Hémorragie',
+        authoriserUserId: 'doc',
+      });
+    });
+
+    it('a statement is made for one bag and one list: another bag or another list asks again', async () => {
+      await open(['ROLE_LAB_TECHNICIAN']);
+      stubOptions({
+        negativeStock: [unitOption('ONEG-1')],
+        units: [{ ...unitOption('opos', true), statementRequired: true }],
+      });
+      txSpy.emergencyRelease = jasmine
+        .createSpy()
+        .and.returnValue(throwError(() => ({ status: 400, error: { message: 'Non' } })));
+      component.openEmergencyRelease(emergency);
+      component.emergencyUnitId = 'opos';
+      component.emergencyNegativeStated = true;
+      component.onEmergencyUnitPicked();
+      expect(component.emergencyNegativeStated).toBeFalse();
+
+      component.emergencyNegativeStated = true;
+      component.emergencyAuthoriserId = 'doc';
+      component.emergencyReason = 'Hémorragie';
+      stubOptions({
+        negativeStock: [unitOption('ONEG-1'), unitOption('ONEG-2')],
+        units: [{ ...unitOption('opos', true), statementRequired: true }],
+      });
+      component.submitEmergencyRelease();
+      expect(component.emergencyNegativeStated).toBeFalse();
+      expect(component.negativeStockNumbers()).toBe('ONEG-1, ONEG-2');
+    });
+
+    it('the incompatible form asks for the statement on the bag that needs it, and sends it', async () => {
+      await open(['ROLE_LAB_TECHNICIAN']);
+      stubOptions({
+        negativeStock: [unitOption('ONEG-1')],
+        incompatibleUnits: [
+          {
+            id: 'opos',
+            unitNumber: 'OPOS',
+            aboGroup: 'O',
+            rhFactor: 'POSITIVE',
+            incompatibilityReason: 'Anti-K',
+            releasable: true,
+            statementRequired: true,
+          },
+        ],
+      });
+      txSpy.emergencyRelease = jasmine
+        .createSpy()
+        .and.returnValue(of(mockUnit({ id: 'opos', status: 'ISSUED' })));
+      component.openIncompatibleRelease(emergency);
+      component.emergencyUnitId = 'opos';
+      component.emergencyAuthoriserId = 'dir';
+      component.emergencyReason = 'Rien à temps';
+      fixture.detectChanges();
+      expect(el('si-o-negative-first')).not.toBeNull();
+      expect(fixture.nativeElement.querySelector('#si-statement')).not.toBeNull();
+
+      component.submitIncompatibleRelease();
+      expect(txSpy.emergencyRelease).not.toHaveBeenCalled();
+
+      component.emergencyNegativeStated = true;
+      component.submitIncompatibleRelease();
+      expect(txSpy.emergencyRelease).toHaveBeenCalledWith('req-1', {
+        bloodUnitId: 'opos',
+        releaseType: 'SEROLOGICALLY_INCOMPATIBLE',
+        reason: 'Rien à temps',
+        authoriserUserId: 'dir',
+        negativeUnobtainable: true,
+      });
     });
 
     it('says O negative goes first and warns of a positive screen, without blocking the form', async () => {

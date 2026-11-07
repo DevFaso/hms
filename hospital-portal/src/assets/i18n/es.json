@@ -11719,7 +11719,7 @@
     "O_POSITIVE_DECISION_HINT": "Esta unidad O positivo necesita una decisión de urgencia documentada: un motivo y la persona que la toma.",
     "O_NEGATIVE_FIRST": "El sistema indica O negativo de este producto en existencias: {{units}}. Úselo si puede obtenerse a tiempo.",
     "NEGATIVE_UNOBTAINABLE_STATEMENT": "Declaro que este O negativo no puede obtenerse a tiempo para este paciente.",
-    "RELEASE_NEGATIVE_STATEMENT": "El O negativo que figuraba en existencias se declaró imposible de obtener a tiempo. Unidades indicadas: {{units}}",
+    "RELEASE_NEGATIVE_STATEMENT": "El O negativo en existencias se declaró imposible de obtener a tiempo. En existencias al entregar: {{units}}",
     "ANTIBODY_REVIEW_WARNING": "Este paciente tiene un escrutinio de anticuerpos positivo registrado: esta entrega necesita la revisión del servicio de transfusión.",
     "SWITCH_TO_TYPE_SPECIFIC": "Se entregó sangre de urgencia en esta solicitud: cambie a sangre de grupo específico cuando las pruebas lo permitan.",
     "EMERGENCY_RELEASES": "Entregas de urgencia",

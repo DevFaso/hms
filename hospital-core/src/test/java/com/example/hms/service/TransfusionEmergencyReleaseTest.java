@@ -571,6 +571,78 @@ class TransfusionEmergencyReleaseTest {
         String json = new tools.jackson.databind.json.JsonMapper().writeValueAsString(EmergencyReleaseOptionsDTO.builder()
             .negativeStock(List.of()).units(List.of(EmergencyReleaseOptionsDTO.Unit.builder().build())).build());
         assertThat(json).contains("\"negativeStock\"").contains("\"statementRequired\"").contains("\"decisionRequired\"");
+        tools.jackson.databind.json.JsonMapper mapper = new tools.jackson.databind.json.JsonMapper();
+        assertThat(mapper.writeValueAsString(com.example.hms.payload.dto.transfusion.EmergencyBloodReleaseResponseDTO.builder().build()))
+            .contains("\"negativeUnobtainableStated\"").contains("\"negativeUnitsShown\"");
+        assertThat(mapper.readValue("{\"negativeUnobtainable\":true}", EmergencyReleaseRequestDTO.class).getNegativeUnobtainable()).isTrue();
+    }
+
+    @Test
+    @DisplayName("a long stock list does not lose the audit row: the sentence fits its column, the release row keeps every bag")
+    void aLongStockListFitsTheAudit() {
+        List<BloodUnit> many = new ArrayList<>();
+        for (int i = 0; i < 60; i++) {
+            BloodUnit shown = bag(AboGroup.O, RhFactor.NEGATIVE, BloodUnitStatus.AVAILABLE);
+            shown.setUnitNumber("ONEG-" + i);
+            many.add(shown);
+        }
+        when(unitRepository.findStockForPatient(hospitalId, patient.getId(), BloodProductType.PACKED_RED_CELLS, AboGroup.O, RhFactor.NEGATIVE,
+            LocalDate.now())).thenReturn(many);
+        TransfusionRequest request = emergency();
+        BloodUnit unit = bag(AboGroup.O, RhFactor.POSITIVE, BloodUnitStatus.AVAILABLE);
+
+        service.emergencyRelease(request.getId(), stated(decision(unit)));
+
+        ArgumentCaptor<AuditEventRequestDTO> audit = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(audit.capture());
+        assertThat(audit.getValue().getEventDescription()).hasSizeLessThanOrEqualTo(2048).endsWith(",+40")
+            .matches(".* stock shown \\S+$");
+        assertThat(rows).singleElement().satisfies(row -> assertThat(row.getNegativeUnitsShown()).contains("ONEG-0").contains("ONEG-59"));
+    }
+
+    @Test
+    @DisplayName("the adult male who needs no step goes out on plain issue with O negative in stock, no statement")
+    void aPlainAdultMaleIgnoresTheStock() {
+        adultMale();
+        oNegativeInStock();
+        TransfusionRequest request = emergency();
+        BloodUnit unit = bag(AboGroup.O, RhFactor.POSITIVE, BloodUnitStatus.AVAILABLE);
+        service.issueUnit(request.getId(), unit.getId());
+        assertThat(unit.getStatus()).isEqualTo(BloodUnitStatus.ISSUED);
+        assertThat(rows).singleElement().satisfies(row -> {
+            assertThat(row.getReleaseType()).isEqualTo(EmergencyReleaseType.UNCROSSMATCHED);
+            assertThat(row.getNegativeUnobtainableStated()).isFalse();
+        });
+    }
+
+    @Test
+    @DisplayName("an adult male typed Rh negative takes the statement too while O negative shows")
+    void aTypedRhNegativeMaleTakesTheStatement() {
+        adultMale();
+        typed(AboGroup.A, RhFactor.NEGATIVE, AntibodyScreenResult.NEGATIVE);
+        oNegativeInStock();
+        TransfusionRequest request = emergency();
+        UUID requestId = request.getId();
+        BloodUnit unit = bag(AboGroup.O, RhFactor.POSITIVE, BloodUnitStatus.AVAILABLE);
+        EmergencyReleaseRequestDTO silent = decision(unit);
+        assertThatThrownBy(() -> service.emergencyRelease(requestId, silent)).hasMessageContaining("cannot be obtained in time");
+        service.emergencyRelease(requestId, stated(decision(unit)));
+        assertThat(unit.getStatus()).isEqualTo(BloodUnitStatus.ISSUED);
+    }
+
+    @Test
+    @DisplayName("the options tell the incompatible form which bag needs the statement, so the server's refusal can always be answered")
+    void incompatibleOptionsAskForTheStatement() {
+        oNegativeInStock();
+        TransfusionRequest request = emergency();
+        BloodUnit positive = bag(AboGroup.O, RhFactor.POSITIVE, BloodUnitStatus.RETURNED);
+        BloodUnit negative = bag(AboGroup.O, RhFactor.NEGATIVE, BloodUnitStatus.RETURNED);
+        List<TransfusionCrossmatch> results = List.of(resultOnFile(request, positive, false), resultOnFile(request, negative, false));
+        when(crossmatchRepository.findByRequest_IdOrderByPerformedAtDesc(request.getId())).thenReturn(results);
+
+        assertThat(service.emergencyReleaseOptions(request.getId()).getIncompatibleUnits())
+            .extracting(EmergencyReleaseOptionsDTO.IncompatibleUnit::isStatementRequired, EmergencyReleaseOptionsDTO.IncompatibleUnit::isReleasable)
+            .containsExactly(org.assertj.core.groups.Tuple.tuple(true, true), org.assertj.core.groups.Tuple.tuple(false, true));
     }
 
     @Test

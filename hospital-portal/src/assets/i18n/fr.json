@@ -11719,7 +11719,7 @@
     "O_POSITIVE_DECISION_HINT": "Cette unité O positif nécessite une décision d'urgence documentée : un motif et la personne qui la prend.",
     "O_NEGATIVE_FIRST": "Le système indique du O négatif de ce produit en stock : {{units}}. Utilisez-le s'il peut être obtenu à temps.",
     "NEGATIVE_UNOBTAINABLE_STATEMENT": "Je déclare que ce O négatif ne peut pas être obtenu à temps pour ce patient.",
-    "RELEASE_NEGATIVE_STATEMENT": "Le O négatif figurant en stock a été déclaré impossible à obtenir à temps. Poches indiquées : {{units}}",
+    "RELEASE_NEGATIVE_STATEMENT": "Le O négatif en stock a été déclaré impossible à obtenir à temps. En stock à la délivrance : {{units}}",
     "ANTIBODY_REVIEW_WARNING": "Ce patient a une recherche d'agglutinines irrégulières positive au dossier : cette délivrance nécessite l'avis du service de transfusion.",
     "SWITCH_TO_TYPE_SPECIFIC": "Du sang a été délivré en urgence sur cette demande : passez à du sang isogroupe dès que les analyses le permettent.",
     "EMERGENCY_RELEASES": "Délivrances d'urgence",
