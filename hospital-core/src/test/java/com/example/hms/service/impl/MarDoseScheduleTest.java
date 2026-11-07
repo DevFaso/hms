@@ -409,7 +409,7 @@ class MarDoseScheduleTest {
 
     /** QA D1426: a single-dose form ends after its dose. */
     @ParameterizedTest
-    @ValueSource(strings = {"Prise unique (TPI-SP 2)", "en une prise", "SP dose unique", "bolus", "dose de charge"})
+    @ValueSource(strings = {"Prise unique (TPI-SP 2)", "dose unique", "SP dose unique", "bolus", "dose de charge"})
     void d1426_aSingleDoseFormIsOneDose(String frequency) {
         assertThat(MarDoseSchedule.read(frequency).kind()).as(frequency).isEqualTo(MarDoseSchedule.Kind.ONE_OFF);
     }
@@ -422,9 +422,32 @@ class MarDoseScheduleTest {
     @ParameterizedTest
     @ValueSource(strings = {"Toutes les six heures pendant 2 jours", "500 mg/j", "q30min", "x 3", "tomar 1 cada 8 horas",
         "avant les repas", "with food", "prise unique à la CPN", "ce soir", "1 fois ce soir", "à la naissance",
-        "avant l'intervention", "en IVD lente", "une fois par jour jusqu'à l'accouchement"})
+        "avant l'intervention", "en IVD lente", "une fois par jour jusqu'à l'accouchement",
+        // Coordinator ruling on PR 1065: when in doubt, ask.
+        "OD", "od", "en une prise", "en 1 prise", "2/2", "3/3"})
     void d1452_whatIsNotExactlyAFormIsNotRead(String frequency) {
         assertThat(MarDoseSchedule.read(frequency).kind()).as(frequency).isEqualTo(MarDoseSchedule.Kind.UNREAD);
+    }
+
+    /**
+     * Coordinator ruling on PR 1065: what stays read beside what is now asked. "OD" and "en une prise" have no count,
+     * so no limit reads them; 24/24 is a continuous infusion (D1419), not every 24 hours.
+     */
+    @Test
+    void r35_whatStaysReadBesideWhatIsAsked() {
+        for (String code : List.of("QD", "BID", "TID", "QID")) {
+            assertThat(MarDoseSchedule.read(code).repeating()).as(code).isTrue();
+        }
+        assertThat(MarDoseSchedule.read("6/6").intervalMinutes()).isEqualTo(360);
+        assertThat(MarDoseSchedule.read("8/8").intervalMinutes()).isEqualTo(480);
+        assertThat(MarDoseSchedule.read("12/12").intervalMinutes()).isEqualTo(720);
+        assertThat(MarDoseSchedule.read("24/24").kind()).isEqualTo(MarDoseSchedule.Kind.CONTINUOUS);
+        assertThat(MarDoseSchedule.read("2h/2h").intervalMinutes()).as("the hour is written").isEqualTo(120);
+        for (String asked : List.of("OD", "en une prise", "2/2", "3/3")) {
+            assertThat(MarDoseSchedule.dosesPerDay(asked)).as(asked).isNull();
+            assertThat(MarDoseSchedule.shortestMinutesBetweenDoses(asked)).as(asked).isNull();
+            assertThat(MarDoseSchedule.writtenWithNoCount(asked)).as(asked).isTrue();
+        }
     }
 
     /** QA D1419: a ceiling, a range or a choice is not a schedule, but the daily limit still judges its highest count. */

@@ -407,7 +407,8 @@ class FrequencyWordingTest {
         List<String> out = new ArrayList<>();
         FrequencyCadence.GRAMMAR.lines().map(line -> line.split(" \\| ")[1]).forEach(tokens -> out.add(Arrays.stream(
             tokens.split(" ")).map(token -> switch (token) {
-                case "#" -> "3";
+                // The bare "3/3" is asked: the bare slash reads only 4, 6, 8 and 12.
+                case "#" -> "# / #".equals(tokens) ? "6" : "3";
                 case "~" -> "125";
                 default -> oneWord.getOrDefault(token, token);
             }).collect(java.util.stream.Collectors.joining(" "))));

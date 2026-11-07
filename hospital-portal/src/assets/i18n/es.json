@@ -7242,6 +7242,7 @@
   "PRESCRIPTIONS": {
     "FREQUENCY_UNREADABLE": "Esta redacción no se puede programar: se pedirá a enfermería un motivo en cada dosis después de la primera. Mejor elija un horario de la lista o marque «Si es necesario (PRN)». Si no, confírmela.",
     "FREQUENCY_CONFIRM": "Confirmo esta redacción: enfermería dará un motivo en cada dosis después de la primera. Un horario de la lista, o «Si es necesario (PRN)», se lo evitaría",
+    "FREQUENCY_UNREAD_NOTE": "No se lee como un horario: enfermería da un motivo en cada dosis después de la primera.",
     "FREQUENCY_CHOICES": {
       "ONCE_DAILY": "1 vez al día",
       "TWICE_DAILY": "2 veces al día",

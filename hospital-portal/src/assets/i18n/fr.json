@@ -7242,6 +7242,7 @@
   "PRESCRIPTIONS": {
     "FREQUENCY_UNREADABLE": "Cette formulation ne peut pas être planifiée : les infirmiers devront donner un motif à chaque dose après la première. Mieux vaut choisir un horaire dans la liste ou cocher « Si besoin (PRN) ». Sinon, confirmez-la.",
     "FREQUENCY_CONFIRM": "Je confirme cette formulation : les infirmiers donneront un motif à chaque dose après la première. Un horaire de la liste, ou « Si besoin (PRN) », le leur éviterait",
+    "FREQUENCY_UNREAD_NOTE": "Non lue comme un horaire : les infirmiers donnent un motif à chaque dose après la première.",
     "FREQUENCY_CHOICES": {
       "ONCE_DAILY": "1 fois par jour",
       "TWICE_DAILY": "2 fois par jour",

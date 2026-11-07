@@ -2656,6 +2656,21 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
     expect(component.filtered()).toEqual([]);
   });
 
+  it('QA D1452: a draft the MAR cannot schedule says so to its prescriber', async () => {
+    await setup({
+      list: [
+        makeRx({ id: 'asked', status: 'DRAFT', frequencyUnread: true }),
+        makeRx({ id: 'read', status: 'DRAFT', frequencyUnread: false }),
+      ],
+    });
+    fixture.detectChanges();
+
+    const notes = (fixture.nativeElement as HTMLElement).querySelectorAll(
+      '[data-testid="rx-row-frequency-unread"]',
+    );
+    expect(notes.length).toBe(1);
+  });
+
   it('QA D1412: when the only row of a page leaves its tab, the tab is read again', async () => {
     const rows = [makeRx({ id: 'd1', status: 'DRAFT' }), makeRx({ id: 'd2', status: 'DRAFT' })];
     await setup({ list: rows });

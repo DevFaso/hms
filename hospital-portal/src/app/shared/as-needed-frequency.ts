@@ -77,7 +77,7 @@ const LIST_JOINS = words('ET AND Y');
 const BEFORE_BARE_CLOCK = words('AT LAS');
 const BEFORE_CLOCK = words('A AT LAS VERS');
 const AFTER_SPANISH_ELEVEN = words('VECES HORA HORAS');
-const BARE_SLASH_HOURS = words('2 3 4 6 8 12');
+const BARE_SLASH_HOURS = words('4 6 8 12');
 /* word-lists:end */
 
 /* grammar:start (`FrequencyCadence.GRAMMAR`, held equal by FrequencyWordingTest) */
@@ -158,7 +158,6 @@ P24 | # / 24
 *1440 | DIARIA
 =1440 | QD
 =1440 | Q D
-!=1440 | OD
 =1440 | QAM
 =1440 | QPM
 =1440 | NIGHTLY
@@ -235,8 +234,6 @@ ONE | UNE SEULE DOSE
 ONE | UNE SEULE PRISE
 ONE | UNE FOIS SEULEMENT
 ONE | 1 FOIS SEULEMENT
-!ONE | EN UNE PRISE
-!ONE | EN 1 PRISE
 ONE | SINGLE DOSE
 ONE | ONCE ONLY
 ONE | ONE TIME
@@ -554,9 +551,8 @@ function matched(form: readonly string[], tokens: readonly string[]): number[] |
   return numbers;
 }
 
-function readingOf(line: string, numbers: readonly number[]): FrequencyReading | null {
+function readingOf(meaning: string, numbers: readonly number[]): FrequencyReading | null {
   const n = numbers[0] ?? 0;
-  const meaning = line.startsWith('!') ? line.slice(1) : line;
   switch (meaning) {
     case 'ONE':
       return ONE_OFF;
@@ -745,17 +741,13 @@ function isAmountOverAPeriod(rest: readonly string[]): boolean {
   return FORMS.some((form) => form.meaning.startsWith('*') && matched(form.tokens, rest) !== null);
 }
 
-function standsAlone(rest: readonly string[]): boolean {
-  return FORMS.some((form) => form.meaning.startsWith('!') && matched(form.tokens, rest) !== null);
-}
-
 function readWithDose(tokens: readonly string[]): FrequencyReading | null {
   const whole = readForm(tokens);
   if (whole) return whole;
   const after = afterDose(tokens);
   if (after === 0 || after === tokens.length) return null;
   const rest = tokens.slice(after);
-  if (standsAlone(rest) || (doseOfSeveral(tokens, after) && isAmountOverAPeriod(rest))) return null;
+  if (doseOfSeveral(tokens, after) && isAmountOverAPeriod(rest)) return null;
   const behind = readForm(rest);
   return behind?.kind === 'CONTINUOUS' ? null : behind;
 }

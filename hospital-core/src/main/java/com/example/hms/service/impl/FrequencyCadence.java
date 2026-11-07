@@ -74,8 +74,11 @@ final class FrequencyCadence {
      * week, month; =n every n minutes, and *n too, but "3 cp daily" may be three doses, so
      * *n stands behind no dose of several; ONE a single dose; CONT a continuous infusion; P24
      * # doses a day from "#/24", at most {@value #MAX_COUNT_OVER_24}: "16/24" is sixteen hours out of
-     * twenty-four. A reading after "!" stands behind no dose at all: "1 ml OD" is the right eye,
-     * "3 cp en 1 prise" may be a day's total. Nor does a continuous infusion: "1 cp en continu" is no pump.
+     * twenty-four. A continuous infusion stands behind no dose: "1 cp en continu" is no pump.
+     *
+     * <p>Left out on purpose, when in doubt ask (coordinator ruling on PR 1065): "OD", which in French
+     * can be the right eye; "en une prise", a single dose or a daily single intake, and a wrong reading
+     * ends the course; the bare "2/2" and "3/3".
      * A form holds no optional word: what is not on a line is not read.
      */
     static final String GRAMMAR = """
@@ -155,7 +158,6 @@ final class FrequencyCadence {
         *1440 | DIARIA
         =1440 | QD
         =1440 | Q D
-        !=1440 | OD
         =1440 | QAM
         =1440 | QPM
         =1440 | NIGHTLY
@@ -232,8 +234,6 @@ final class FrequencyCadence {
         ONE | UNE SEULE PRISE
         ONE | UNE FOIS SEULEMENT
         ONE | 1 FOIS SEULEMENT
-        !ONE | EN UNE PRISE
-        !ONE | EN 1 PRISE
         ONE | SINGLE DOSE
         ONE | ONCE ONLY
         ONE | ONE TIME
@@ -352,7 +352,7 @@ final class FrequencyCadence {
     /** The hour of a rate; never HS, the bedtime of "10 UI/HS". */
     static final Set<String> RATE_HOUR_WORDS = words("H HR HOUR HEURE HORA");
     static final Set<String> WEEKLY_WORDS = words("WEEKLY HEBDOMADAIRE SEMANAL");
-    /** A dose in front of a form, which says how much and not how often. No drops: "1 goutte OD" is the right eye. */
+    /** A dose in front of a form, which says how much and not how often. */
     static final Set<String> DOSE_WORDS = words(
         "CP CPS COMPRIME COMPRIMES TAB TABS TABLET TABLETS COMPRIMIDO COMPRIMIDOS GELULE GELULES CAPSULE CAPSULES "
         + "CAPSULA CAPSULAS SACHET SACHETS SOBRE SOBRES AMPOULE AMPOULES AMP AMPOLLA AMPOLLAS MG G MCG ML UI IU");
@@ -369,7 +369,7 @@ final class FrequencyCadence {
     private static final List<String> INTERVAL_OPENERS = List.of("EVERY", "TOUTES", "CADA", "Q");
     private static final List<String> INTERVAL_JOINS = List.of("-", "/", "A", "TO", "OU", "OR");
     /** The bare "8/8" read as hours; "7/7" is every day of the week, "1/1" says nothing. */
-    static final Set<String> BARE_SLASH_HOURS = words("2 3 4 6 8 12");
+    static final Set<String> BARE_SLASH_HOURS = words("4 6 8 12");
 
     private static final Map<String, Set<String>> WORD_LISTS = Map.of(
         "HOUR", HOUR_WORDS, "DAY", DAY_WORDS, "WEEK", WEEK_WORDS, "MONTH", MONTH_WORDS, "TIMES", TIMES_WORDS,
@@ -464,15 +464,11 @@ final class FrequencyCadence {
             return null;
         }
         List<String> rest = tokens.subList(after, tokens.size());
-        if (standsAlone(rest) || (doseOfSeveral(tokens, after) && isAmountOverAPeriod(rest))) {
+        if (doseOfSeveral(tokens, after) && isAmountOverAPeriod(rest)) {
             return null;
         }
         Reading behind = readForm(rest);
         return behind != null && behind.kind() == MarDoseSchedule.Kind.CONTINUOUS ? null : behind;
-    }
-
-    private static boolean standsAlone(List<String> rest) {
-        return FORMS.stream().anyMatch(form -> form.meaning().startsWith("!") && matched(form.tokens(), rest).isPresent());
     }
 
     /** "3 cp", "500 mg" in front; not "1 cp", and not "0,5 cp", which are one dose whatever the period. */
@@ -581,9 +577,8 @@ final class FrequencyCadence {
         return DECIMAL.equals(token) || ONLY_DIGITS.matcher(token).matches() || wholeNumber(token) != null;
     }
 
-    private static Reading readingOf(String line, List<Integer> numbers) {
+    private static Reading readingOf(String meaning, List<Integer> numbers) {
         int n = numbers.isEmpty() ? 0 : numbers.get(0);
-        String meaning = line.startsWith("!") ? line.substring(1) : line;
         return switch (meaning) {
             case "ONE" -> Reading.ONE_OFF;
             case "CONT" -> Reading.CONTINUOUS;

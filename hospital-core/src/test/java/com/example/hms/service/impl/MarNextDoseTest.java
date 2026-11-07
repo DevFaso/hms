@@ -96,7 +96,7 @@ class MarNextDoseTest {
 
     /** QA D1426: a single-dose wording ends after its dose: no reason, no second dose. */
     @ParameterizedTest
-    @ValueSource(strings = {"Prise unique (TPI-SP 2)", "en une prise", "SP dose unique", "TPI-SP"})
+    @ValueSource(strings = {"Prise unique (TPI-SP 2)", "dose unique", "SP dose unique", "TPI-SP"})
     void d1426_aSingleDoseFormEndsAfterItsDose(String frequency) {
         LocalDateTime start = NOW.minusHours(1);
         assertThat(MarNextDose.of(rx(frequency, start), NOW,
@@ -255,7 +255,7 @@ class MarNextDoseTest {
      */
     @ParameterizedTest
     @ValueSource(strings = {"once", "prise unique \u00e0 la CPN", "1 fois par heure", "une fois par semaine 2 cp",
-        "8 hourly", "3 fois chaque jour", "1 fois par jour le lundi", "3 fois par 48h"})
+        "8 hourly", "3 fois chaque jour", "1 fois par jour le lundi", "3 fois par 48h", "en une prise", "OD"})
     void d1457_aStoredWordingNotReadStaysOpenAndFlagged(String frequency) {
         LocalDateTime slot = NOW.minusHours(1);
         MarNextDose.Due due = MarNextDose.of(rx(frequency, slot), NOW,

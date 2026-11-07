@@ -7,11 +7,13 @@ import com.example.hms.enums.AdmissionType;
 import com.example.hms.enums.EmploymentType;
 import com.example.hms.enums.EncounterType;
 import com.example.hms.enums.JobTitle;
+import com.example.hms.enums.MedicationAdministrationStatus;
 import com.example.hms.enums.OrganizationType;
 import com.example.hms.model.Admission;
 import com.example.hms.model.AdmissionOrderSet;
 import com.example.hms.model.Encounter;
 import com.example.hms.model.Hospital;
+import com.example.hms.model.MedicationAdministrationRecord;
 import com.example.hms.model.Organization;
 import com.example.hms.model.Patient;
 import com.example.hms.model.PatientHospitalRegistration;
@@ -37,6 +39,7 @@ import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.CustomUserDetails;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.service.impl.MarNextDose;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -52,6 +55,7 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -64,6 +68,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -214,6 +219,43 @@ class OrderSetControlledApplyIT extends BaseIT {
         assertThat(draft.getQuantityUnit()).isEqualTo("ampoules");
         assertThat(draft.getDosage()).isEqualTo("2 mg IV");
         assertThat(draft.getMedicationCatalogItemId()).isNotNull();
+    }
+
+    /**
+     * QA D1452, coordinator ruling on PR 1065: a set saved when "3 fois par jour pendant 5 jours" was accepted is
+     * created at apply, where nobody can answer, only because the flag really shows: on the prescriber's draft,
+     * over the real read endpoint, and on the MAR, through the row's own next-dose reading.
+     */
+    @Test
+    @DisplayName("QA D1452: a stored wording now asked is created at apply, flagged on the draft and on the MAR")
+    void aStoredWordingNowAskedIsFlaggedOnTheDraftAndTheMar() throws Exception {
+        world();
+        drug("10");
+
+        String answer = apply(stored(Map.of("orderType", MEDICATION, "medicationName", "Morphine", "doseRangeMin", 2,
+            "doseUnit", "mg", "route", "IV", "frequency", "3 fois par jour pendant 5 jours", "quantity", 6,
+            "quantityUnit", "ampoules")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.prescriptionIds.length()").value(1))
+            .andExpect(jsonPath("$.skippedItemCount").value(0))
+            .andReturn().getResponse().getContentAsString();
+
+        UUID created = UUID.fromString(com.jayway.jsonpath.JsonPath.read(answer, "$.prescriptionIds[0]"));
+        mockMvc.perform(get(API_CONTEXT + "/prescriptions/{id}", created).contextPath(API_CONTEXT).with(asDoctor()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.frequency").value("3 fois par jour pendant 5 jours"))
+            .andExpect(jsonPath("$.frequencyUnread").value(true));
+
+        Prescription draft = prescriptions.findById(created).orElseThrow();
+        LocalDateTime given = LocalDateTime.now().minusHours(1);
+        MedicationAdministrationRecord dose = new MedicationAdministrationRecord();
+        dose.setId(UUID.randomUUID());
+        dose.setStatus(MedicationAdministrationStatus.GIVEN);
+        dose.setScheduledTime(given);
+        dose.setAdministeredAt(given);
+        MarNextDose.Due due = MarNextDose.of(draft, LocalDateTime.now(), List.of(dose), Duration.ofMinutes(30));
+        assertThat(due.frequencyUnread()).isTrue();
+        assertThat(due.finished()).isFalse();
     }
 
     @Test

@@ -52,6 +52,9 @@ public class PrescriptionResponseDTO {
 
     /** QA D1378 / D1360 (round 32): the order is as-needed (PRN), as the prescriber ticked it. */
     private boolean asNeeded;
+
+    /** QA D1452: the MAR cannot schedule this order's wording; nurses give a reason at each later dose. Shown to the prescriber. */
+    private boolean frequencyUnread;
     private String duration;
     private String route;
     private String instructions;
