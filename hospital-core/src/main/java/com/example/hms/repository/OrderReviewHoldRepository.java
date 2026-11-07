@@ -18,6 +18,21 @@ public interface OrderReviewHoldRepository extends JpaRepository<OrderReviewHold
     /** The one question {@code OrderReviewHoldGuard} asks, at every use of an order. */
     boolean existsByOrderTypeAndOrderIdAndStatus(OrderReviewType orderType, UUID orderId, OrderReviewStatus status);
 
+    /** One question for a whole screen: the standing rows are few, whatever the rows of the screen. */
+    @Query("SELECT h.orderId FROM OrderReviewHold h WHERE h.orderType = :type AND h.status = :status AND h.hospitalId = :hospital")
+    java.util.Set<UUID> findStandingAtHospital(@Param("type") OrderReviewType type, @Param("status") OrderReviewStatus status,
+                                               @Param("hospital") UUID hospital);
+
+    /** {@link #findStandingAtHospital} for a global view. */
+    @Query("SELECT h.orderId FROM OrderReviewHold h WHERE h.orderType = :type AND h.status = :status")
+    java.util.Set<UUID> findStanding(@Param("type") OrderReviewType type, @Param("status") OrderReviewStatus status);
+
+    List<OrderReviewHold> findByPatientIdAndStatusIn(UUID patientId, java.util.Collection<OrderReviewStatus> statuses);
+
+    List<OrderReviewHold> findByDisputeIdAndStatusIn(UUID disputeId, java.util.Collection<OrderReviewStatus> statuses);
+
+    List<OrderReviewHold> findByOrderTypeAndOrderId(OrderReviewType orderType, UUID orderId);
+
     /** Locked: two decisions on one order take turns, and the second reads what the first did. */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT h FROM OrderReviewHold h WHERE h.id = :id")

@@ -69,9 +69,12 @@ class InBasketRecipientGuardTest {
         // The urgent dispute of a death: the administrators of both hospitals, who decide it.
         "DeathDisputeServiceImpl.java", codes(setConstant(com.example.hms.service.impl.DeathDisputeServiceImpl.class, "ADMIN_ROLE_CODES")),
         // The treating clinicians of a running treatment, who assess it.
-        "OrderReviewHoldServiceImpl.java", union(
+        // A held order's prescriber, who may have drafted it as a nurse or a midwife, and with nobody known the
+        // hospital's doctors.
+        "OrderReviewAfterCommit.java", union(
             rolesOf(constant(TransfusionController.class, "PRESCRIBER")),
-            rolesOf(constant(TransfusionController.class, "BEDSIDE"))),
+            rolesOf(constant(TransfusionController.class, "BEDSIDE")),
+            codes(setConstant(com.example.hms.service.impl.OrderReviewAfterCommit.class, "FALLBACK_ROLE_CODES"))),
         // The review after an urgent dose exception (CR-01): the pharmacy, else a physician.
         "PrescriptionServiceImpl.java", union(
             codes(setConstant(com.example.hms.service.PrescriptionServiceImpl.class, "URGENT_REVIEW_PHARMACY_ROLES")),

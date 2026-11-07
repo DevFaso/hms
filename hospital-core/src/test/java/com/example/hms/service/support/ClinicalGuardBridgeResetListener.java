@@ -31,6 +31,6 @@ public class ClinicalGuardBridgeResetListener extends AbstractTestExecutionListe
     public void afterTestClass(TestContext testContext) {
         DeceasedPatientGuard.useDisputes(null);
         OrderReviewHoldGuard.useHolds(null);
-        OrderReviewHoldGuard.useReviewAgain(null);
+        OrderReviewHoldGuard.useReview(null);
     }
 }

@@ -348,6 +348,9 @@ export interface MedicationAdministrationRequest {
   witnessUserId?: string;
   /** QA D1210: why a dose is given before the minimum interval since the last one. */
   earlyDoseReason?: string;
+  /** A dose given before an order was held for review: when, and why it is charted now. */
+  givenBeforeHoldAt?: string;
+  givenBeforeHoldReason?: string;
 }
 
 @Injectable({ providedIn: 'root' })

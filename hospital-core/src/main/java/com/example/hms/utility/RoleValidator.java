@@ -256,6 +256,10 @@ public class RoleValidator {
     public boolean isSurgeon(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, SURGEON_ROLE); }
     public boolean isNurse(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, NURSE_ROLE); }
     public boolean isMidwife(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, MIDWIFE_ROLE); }
+    /** One query: a clinician or a pharmacist at {@code hospitalId}, not the union of the caller's assignments. */
+    public boolean isClinicianOrPharmacist(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, DOCTOR_ROLE, PHYSICIAN_ROLE, SURGEON_ROLE, NURSE_ROLE, MIDWIFE_ROLE, "PHARMACIST");
+    }
     public boolean isHospitalAdmin(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, HOSPITAL_ADMIN_ROLE); }
     public boolean isLabScientist(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, "LAB_SCIENTIST"); }
     public boolean isLabTechnician(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, "LAB_TECHNICIAN"); }

@@ -438,7 +438,7 @@ public class TransfusionServiceImpl implements TransfusionService {
             ? requestRepository.findByHospital_IdAndStatusOrderByRequestedAtDesc(
                 hospitalId, parseRequestStatus(status))
             : requestRepository.findByHospital_IdOrderByRequestedAtDesc(hospitalId);
-        return requests.stream().map(r -> mapper.toDto(r, List.of(), List.of())).toList();
+        return rowsWithHolds(requests, hospitalId);
     }
 
     @Override
@@ -446,8 +446,18 @@ public class TransfusionServiceImpl implements TransfusionService {
     public List<TransfusionRequestResponseDTO> listRequestsForPatient(UUID patientId) {
         UUID hospitalId = requireHospital();
         patientChartAccess.require(patientId, hospitalId);
-        return requestRepository.findByPatient_IdAndHospital_IdOrderByRequestedAtDesc(patientId, hospitalId)
-            .stream().map(r -> mapper.toDto(r, List.of(), List.of())).toList();
+        return rowsWithHolds(requestRepository.findByPatient_IdAndHospital_IdOrderByRequestedAtDesc(patientId, hospitalId), hospitalId);
+    }
+
+    /** The rows' hold flags, in one question for the list. */
+    private List<TransfusionRequestResponseDTO> rowsWithHolds(List<TransfusionRequest> requests, UUID hospitalId) {
+        Set<UUID> held = com.example.hms.service.support.OrderReviewHoldGuard.heldAmong(
+            com.example.hms.enums.OrderReviewType.TRANSFUSION_REQUEST, hospitalId, requests.stream().map(TransfusionRequest::getId).toList());
+        return requests.stream().map(request -> {
+            TransfusionRequestResponseDTO row = mapper.toDto(request, List.of(), List.of());
+            row.setHeldForReview(held.contains(request.getId()));
+            return row;
+        }).toList();
     }
 
     @Override
@@ -1473,14 +1483,15 @@ public class TransfusionServiceImpl implements TransfusionService {
     public List<TransfusionAdministrationResponseDTO> listAdministrationsForPatient(UUID patientId) {
         UUID hospitalId = requireHospital();
         patientChartAccess.require(patientId, hospitalId);
-        return administrationRepository
-            .findByPatient_IdAndHospital_IdOrderByStartedAtDesc(patientId, hospitalId)
-            .stream()
+        List<TransfusionAdministration> administrations =
+            administrationRepository.findByPatient_IdAndHospital_IdOrderByStartedAtDesc(patientId, hospitalId);
+        Set<UUID> due = com.example.hms.service.support.OrderReviewHoldGuard.heldAmong(
+            com.example.hms.enums.OrderReviewType.RUNNING_TRANSFUSION, hospitalId, administrations.stream().map(TransfusionAdministration::getId).toList());
+        return administrations.stream()
             .map(a -> {
                 TransfusionAdministrationResponseDTO row =
                     toDetail(a, reactionRepository.findByAdministration_IdOrderByOnsetAtDesc(a.getId()));
-                row.setAssessmentDue(com.example.hms.service.support.OrderReviewHoldGuard.isHeld(
-                    com.example.hms.enums.OrderReviewType.RUNNING_TRANSFUSION, a.getId()));
+                row.setAssessmentDue(due.contains(a.getId()));
                 return row;
             })
             .toList();

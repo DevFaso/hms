@@ -221,7 +221,15 @@ class DeathDisputeEmergencyPathwayTest {
                 order.setStatus(PrescriptionStatus.DRAFT);
             }
         });
-        steps.put("MAR", () -> nursing.recordMedicationAdministration(order.getId(), doctorId, hospitalId, dose));
+        // A dose is of a signed order: a draft is refused as one, before the hold is asked.
+        steps.put("MAR", () -> {
+            order.setStatus(PrescriptionStatus.SIGNED);
+            try {
+                nursing.recordMedicationAdministration(order.getId(), doctorId, hospitalId, dose);
+            } finally {
+                order.setStatus(PrescriptionStatus.DRAFT);
+            }
+        });
         steps.put("transfusion request", () -> transfusions.createRequest(blood));
         steps.put("transfusion issue", () -> transfusions.issueUnit(bloodRequest.getId(), UUID.randomUUID()));
         return steps;

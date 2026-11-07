@@ -160,6 +160,7 @@ public class DeathDisputeServiceImpl implements DeathDisputeService {
             throw new BusinessException("mortality.dispute.closed");
         }
         close(dispute, DeathDisputeStatus.UPHELD, actorId, currentUsername(), reason, LocalDateTime.now(clock));
+        orderReview.disputeClosed(dispute.getId());
         audit(dispute, scope != null ? scope : dispute.getHospitalId(), actorId, "Death upheld: dispute " + dispute.getId() + " closed by " + actorId
             + ", the block on care is back at hospital " + dispute.getHospitalId() + ". Reason: " + reason);
         return toDto(dispute, patientRepository.findByIdUnscoped(dispute.getPatientId()).orElse(null), scope);

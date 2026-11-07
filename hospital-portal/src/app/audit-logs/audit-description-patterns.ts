@@ -1005,6 +1005,12 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     localise: { type: 'enum' },
   },
   {
+    key: 'AUDIT.DESC.ORDER_REVIEW_DOSE_BEFORE_HOLD',
+    re: /^Dose charted as given before the hold: (\S+) (\S+) at (\S+), dispute (\S+), by (\S+)$/,
+    params: ['type', 'order', 'at', 'dispute', 'actor'],
+    localise: { type: 'enum' },
+  },
+  {
     key: 'AUDIT.DESC.ORDER_REVIEW_CONTINUED',
     re: /^Order reconfirmed unchanged: (\S+) (\S+) version (\S+), dispute (\S+), by (\S+)$/,
     params: ['type', 'order', 'version', 'dispute', 'actor'],

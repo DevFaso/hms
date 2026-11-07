@@ -1545,6 +1545,8 @@ public class DispenseServiceImpl implements DispenseService {
             // would have ended it. The prescription lock is held (above).
             stayOrderDiscontinuation.discontinueIfStayEnded(prescription,
                     roleValidator.getCurrentUserId(), "dispense cancelled");
+            // A finished order was no use to hold when the event was recorded. Undoing its fill makes it one.
+            com.example.hms.service.support.OrderReviewHoldGuard.holdIfEventStands(prescription);
         }
 
         logAudit(AuditEventType.DISPENSE_CANCELLED,
@@ -1597,12 +1599,15 @@ public class DispenseServiceImpl implements DispenseService {
         Map<UUID, LocalDateTime> lastActions = lastPharmacyActionsFor(rows, latestDecisions);
         Map<UUID, Dispense> preparedFills = openPreparationsFor(rows);
         Map<UUID, BigDecimal> committed = committedQuantitiesFor(rows);
+        Set<UUID> heldForReview = com.example.hms.service.support.OrderReviewHoldGuard.heldAmong(
+                com.example.hms.enums.OrderReviewType.PRESCRIPTION, hospitalId, rows.stream().map(Prescription::getId).toList());
         LocalDateTime uncollectedBefore = LocalDateTime.now(clock).minus(uncollectedAfter);
         return page.map(p -> {
             Dispense prepared = preparedFills.get(p.getId());
             WorkQueuePrescriptionDTO dto = toWorkQueueDTO(p, latestRefills.get(p.getId()),
                     latestDecisions.get(p.getId()), lastActions.get(p.getId()),
                     outstandingBackOrders.contains(p.getId()));
+            dto.setHeldForReview(heldForReview.contains(p.getId()));
             dto.setClaim(claims.get(p.getId()));
             // QA D1001: the same remainder requireWithinPrescribedQuantity caps a fill at.
             dto.setRemainingQuantity(FillAccounting.remaining(p, committed.getOrDefault(p.getId(), BigDecimal.ZERO)));
@@ -1967,8 +1972,6 @@ public class DispenseServiceImpl implements DispenseService {
         LocalDateTime unactedAnswer = unactedClarificationAnswer(p, lastPharmacyAction);
         String attentionReason = attentionReason(p, unactedAnswer, backOrderOutstanding);
         return WorkQueuePrescriptionDTO.builder()
-                .heldForReview(com.example.hms.service.support.OrderReviewHoldGuard.isHeld(
-                    com.example.hms.enums.OrderReviewType.PRESCRIPTION, p.getId()))
                 .id(p.getId())
                 .medicationName(p.getMedicationName())
                 .dosage(p.getDosage())

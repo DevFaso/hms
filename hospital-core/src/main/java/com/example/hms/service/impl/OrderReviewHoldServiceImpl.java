@@ -68,6 +68,10 @@ public class OrderReviewHoldServiceImpl implements OrderReviewHoldService, org.s
     private static final String AUDIT_ENTITY = "ORDER_REVIEW";
     private static final String RUNNING_TITLE_KEY = "order.review.running.title";
     private static final String RUNNING_BODY_KEY = "order.review.running.body";
+    static final String HELD_REFERENCE_TYPE = "ORDER_REVIEW_HELD";
+    private static final String HELD_TITLE_KEY = "order.review.notice.title";
+    private static final String HELD_BODY_KEY = "order.review.notice.body";
+    private static final Set<OrderReviewStatus> STANDING = Set.of(OrderReviewStatus.HELD, OrderReviewStatus.ASSESSMENT_DUE);
 
     /**
      * Every status an existing order can still be used from. A partner's refusal is one: that order is back in the
@@ -100,41 +104,183 @@ public class OrderReviewHoldServiceImpl implements OrderReviewHoldService, org.s
     private final TransfusionService transfusionService;
     private final InBasketService inBasketService;
     private final AuditEventLogService auditEventLogService;
-    private final com.example.hms.service.pharmacy.partner.WithdrawnOrderPartnerHandler partnerOffers;
+    private final OrderReviewAfterCommit afterCommit;
+    private final com.example.hms.repository.DeathRecordRepository deathRecords;
+    private final com.example.hms.repository.DeathDisputeRepository disputes;
+    private final com.example.hms.repository.MedicationAdministrationRecordRepository doses;
 
     @Override
     public void afterPropertiesSet() {
         // The prescription service cannot take this bean: this one stops orders through it.
-        com.example.hms.service.support.OrderReviewHoldGuard.useReviewAgain(this::reviewAgainAfterChange);
+        com.example.hms.service.support.OrderReviewHoldGuard.useReview(this);
     }
 
     @Override
     public void snapshotAtDeath(DeathRecord record) {
         UUID patient = record.getPatient().getId();
+        rebindStanding(patient, null, record.getId(), null);
+        Affected affected = new Affected();
         for (Prescription order : prescriptionRepository.lockUncompletedForReview(patient, LOCKED_FOR_REVIEW)) {
-            holdPrescription(order, record.getId(), null);
+            holdPrescription(order, record.getId(), null, affected);
         }
         for (TransfusionRequest request : requestRepository.lockOpenForPatient(patient)) {
-            holdRequest(request, record.getId(), null);
+            holdRequest(request, record.getId(), null, affected);
         }
         flagRunning(patient, record.getId(), null, null);
+        affected.tell(patient, record.getId(), this);
     }
 
     @Override
     public void snapshot(DeathDispute dispute) {
         UUID patient = dispute.getPatientId();
         UUID hospital = dispute.getHospitalId();
+        rebindStanding(patient, hospital, dispute.getDeathRecordId(), dispute.getId());
+        Affected affected = new Affected();
         for (Prescription order : prescriptionRepository.lockUncompletedForReview(patient, LOCKED_FOR_REVIEW)) {
             if (order.getHospital() != null && hospital.equals(order.getHospital().getId())) {
-                holdPrescription(order, dispute.getDeathRecordId(), dispute.getId());
+                holdPrescription(order, dispute.getDeathRecordId(), dispute.getId(), affected);
             }
         }
         for (TransfusionRequest request : requestRepository.lockOpenForPatient(patient)) {
             if (request.getHospital() != null && hospital.equals(request.getHospital().getId())) {
-                holdRequest(request, dispute.getDeathRecordId(), dispute.getId());
+                holdRequest(request, dispute.getDeathRecordId(), dispute.getId(), affected);
             }
         }
         flagRunning(patient, dispute.getDeathRecordId(), dispute.getId(), hospital);
+        affected.tell(patient, dispute.getId(), this);
+    }
+
+    /**
+     * Every event takes over the rows still standing, an order since finished or stopped included: none stays bound to
+     * a voided death or a closed dispute. A dispute is its own hospital's; a death is everyone's.
+     */
+    private void rebindStanding(UUID patient, UUID onlyHospital, UUID recordId, UUID disputeId) {
+        for (OrderReviewHold standing : holdRepository.findByPatientIdAndStatusIn(patient, STANDING)) {
+            if (onlyHospital == null || onlyHospital.equals(standing.getHospitalId())) {
+                standing.setDeathRecordId(recordId);
+                standing.setDisputeId(disputeId);
+            }
+        }
+    }
+
+    @Override
+    public void disputeClosed(UUID disputeId) {
+        for (OrderReviewHold standing : holdRepository.findByDisputeIdAndStatusIn(disputeId, STANDING)) {
+            standing.setDisputeId(null);
+        }
+    }
+
+    @Override
+    public void holdIfEventStands(Prescription order) {
+        Event event = eventOver(order);
+        if (event != null && stillToBeUsed(order)) {
+            Affected affected = new Affected();
+            holdPrescription(order, event.recordId(), event.disputeId(), affected);
+            affected.tell(order.getPatient().getId(), event.disputeId() != null ? event.disputeId() : event.recordId(), this);
+        }
+    }
+
+    @Override
+    public LocalDateTime pendingSince(Prescription order) {
+        OrderReviewHold standing = standingRow(order);
+        if (standing != null) {
+            return standing.getCreatedAt() != null ? standing.getCreatedAt() : LocalDateTime.MAX;
+        }
+        if (order.getStatus() != null && FINISHED.contains(order.getStatus())) {
+            Event event = eventOver(order);
+            return event != null ? event.at() : null;
+        }
+        return null;
+    }
+
+    @Override
+    public void doseGivenBeforeHold(Prescription order, LocalDateTime at, String why) {
+        OrderReviewHold row = standingRow(order);
+        if (row == null) {
+            // A finished order has no row until now: the prescriber sees this dose on the list, as any other.
+            Event event = eventOver(order);
+            if (event != null && order.getHospital() != null) {
+                row = hold(event.recordId(), event.disputeId(), order.getHospital().getId(), order.getPatient().getId(),
+                    OrderReviewType.PRESCRIPTION, order.getId(), order.getVersion(), OrderReviewStatus.HELD);
+            }
+        }
+        if (row != null) {
+            audit(row, "Dose charted as given before the hold: " + row.getOrderType() + " " + order.getId() + " at " + at
+                + ", dispute " + row.getDisputeId() + ", by " + roleValidator.getCurrentUserId(), reasonDigest(why));
+        }
+    }
+
+    private OrderReviewHold standingRow(Prescription order) {
+        List<OrderReviewHold> rows = holdRepository.findByOrderTypeAndOrderIdAndStatus(
+            OrderReviewType.PRESCRIPTION, order.getId(), OrderReviewStatus.HELD);
+        return rows.isEmpty() ? null : rows.get(0);
+    }
+
+    private record Event(UUID recordId, UUID disputeId, LocalDateTime at) {
+    }
+
+    /**
+     * The death event standing over an order that existed before it, unless this event's dispute already has it
+     * reconfirmed. An order written after the event follows the normal workflow.
+     */
+    private Event eventOver(Prescription order) {
+        if (order.getPatient() == null || order.getHospital() == null) {
+            return null;
+        }
+        com.example.hms.model.DeathRecord live = deathRecords.findByPatient_Id(order.getPatient().getId()).orElse(null);
+        if (live == null) {
+            return null;
+        }
+        DeathDispute open = disputes.findOpen(live.getId(), order.getHospital().getId()).orElse(null);
+        LocalDateTime at = open != null ? open.getDisputedAt() : live.getCreatedAt();
+        if (at == null || order.getCreatedAt() == null || !order.getCreatedAt().isBefore(at)) {
+            return null;
+        }
+        UUID disputeId = open != null ? open.getId() : null;
+        boolean reconfirmed = holdRepository.findByOrderTypeAndOrderId(OrderReviewType.PRESCRIPTION, order.getId()).stream()
+            .anyMatch(row -> row.getStatus() == OrderReviewStatus.CONTINUED && Objects.equals(row.getDisputeId(), disputeId));
+        return reconfirmed ? null : new Event(live.getId(), disputeId, at);
+    }
+
+    /** Who to tell of this event's new holds, one item per hospital. Reading a clinician must never abort the event. */
+    private static final class Affected {
+        private final java.util.Map<UUID, Set<UUID>> readers = new java.util.LinkedHashMap<>();
+        private String patientName;
+
+        void add(UUID hospital, Staff clinician, com.example.hms.model.Patient patient) {
+            Set<UUID> atHospital = readers.computeIfAbsent(hospital, h -> new LinkedHashSet<>());
+            try {
+                if (patientName == null && patient != null) {
+                    patientName = patient.getFullName();
+                }
+                if (clinician != null && clinician.isActive()) {
+                    addUser(atHospital, clinician);
+                }
+            } catch (RuntimeException ex) {
+                log.warn("Could not read who to tell of a held order at hospital {}: {}", hospital, ex.getMessage());
+            }
+        }
+
+        void tell(UUID patient, UUID eventId, OrderReviewHoldServiceImpl service) {
+            readers.forEach((hospital, recipients) -> service.afterCommit(new OrderReviewAfterCommit.Notice(hospital, patient, patientName,
+                UUID.nameUUIDFromBytes((eventId + "@" + hospital).getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+                HELD_REFERENCE_TYPE, HELD_TITLE_KEY, HELD_BODY_KEY, new Object[] {patientName}, recipients)));
+        }
+    }
+
+    private void afterCommit(OrderReviewAfterCommit.Notice notice) {
+        afterCommit(() -> afterCommit.file(notice), "notice " + notice.reference());
+    }
+
+    /** After the event has committed, and never able to undo it. */
+    private static void afterCommit(Runnable action, String what) {
+        com.example.hms.utility.TransactionCallbacks.afterCommit(() -> {
+            try {
+                action.run();
+            } catch (RuntimeException ex) {
+                log.error("Order review: {} failed after commit; the holds stand: {}", what, ex.getMessage());
+            }
+        });
     }
 
     @Override
@@ -154,6 +300,9 @@ public class OrderReviewHoldServiceImpl implements OrderReviewHoldService, org.s
                     .build());
                 audit(again, "Order held again after a change: " + again.getOrderType() + " " + orderId
                     + " changed after its reconfirmation, dispute " + again.getDisputeId());
+                if (type == OrderReviewType.PRESCRIPTION) {
+                    recallAfterCommit(orderId);
+                }
             }
         }
     }
@@ -167,14 +316,20 @@ public class OrderReviewHoldServiceImpl implements OrderReviewHoldService, org.s
 
     /**
      * A stay-ended order is already unusable, and stays so: nothing to review. A partner holding the offer of a newly
-     * held order is told not to dispense it, or nothing here could stop it.
+     * held order is told not to dispense it, or nothing here could stop it; its prescriber is told of the hold.
      */
-    private void holdPrescription(Prescription order, UUID recordId, UUID disputeId) {
+    private void holdPrescription(Prescription order, UUID recordId, UUID disputeId, Affected affected) {
         if (order.getHospital() != null && stillToBeUsed(order) && !InpatientOrderEnd.endedWithItsStay(order)
                 && hold(recordId, disputeId, order.getHospital().getId(), order.getPatient().getId(), OrderReviewType.PRESCRIPTION,
                     order.getId(), order.getVersion(), OrderReviewStatus.HELD) != null) {
-            partnerOffers.recallForReview(order);
+            affected.add(order.getHospital().getId(), order.getStaff(), order.getPatient());
+            recallAfterCommit(order.getId());
         }
+    }
+
+    /** The hold row alone already stops an accept: this only tells the partner, and a legacy row may not save. */
+    private void recallAfterCommit(UUID orderId) {
+        afterCommit(() -> afterCommit.recallPartnerOffers(orderId), "partner recall of order " + orderId);
     }
 
     /**
@@ -193,10 +348,11 @@ public class OrderReviewHoldServiceImpl implements OrderReviewHoldService, org.s
         return refillLeft || (status == PrescriptionStatus.DISPENSED && !order.isTakeHome() && visitOpen);
     }
 
-    private void holdRequest(TransfusionRequest request, UUID recordId, UUID disputeId) {
-        if (request.getHospital() != null) {
-            hold(recordId, disputeId, request.getHospital().getId(), request.getPatient().getId(),
-                OrderReviewType.TRANSFUSION_REQUEST, request.getId(), request.getVersion(), OrderReviewStatus.HELD);
+    private void holdRequest(TransfusionRequest request, UUID recordId, UUID disputeId, Affected affected) {
+        if (request.getHospital() != null
+                && hold(recordId, disputeId, request.getHospital().getId(), request.getPatient().getId(),
+                    OrderReviewType.TRANSFUSION_REQUEST, request.getId(), request.getVersion(), OrderReviewStatus.HELD) != null) {
+            affected.add(request.getHospital().getId(), request.getRequestedBy(), request.getPatient());
         }
     }
 
@@ -224,9 +380,8 @@ public class OrderReviewHoldServiceImpl implements OrderReviewHoldService, org.s
         OrderReviewHold standing = holdRepository.findByOrderTypeAndOrderIdAndStatusAndHospitalId(type, orderId, status, hospital)
             .orElse(null);
         if (standing != null) {
-            if (disputeId != null) {
-                standing.setDisputeId(disputeId);
-            }
+            standing.setDeathRecordId(recordId);
+            standing.setDisputeId(disputeId);
             return null;
         }
         return holdRepository.save(OrderReviewHold.builder()
@@ -244,28 +399,22 @@ public class OrderReviewHoldServiceImpl implements OrderReviewHoldService, org.s
     /** Filed on this flag's own row: a later dispute's flag on the same bag reaches the clinician again. */
     private void tellTheTreatingClinician(TransfusionAdministration running, UUID hospital, UUID flagId) {
         Set<UUID> clinicians = new LinkedHashSet<>();
-        addUser(clinicians, running.getAdministeredBy());
+        addIfActive(clinicians, running.getAdministeredBy());
         if (running.getRequest() != null) {
-            addUser(clinicians, running.getRequest().getRequestedBy());
+            addIfActive(clinicians, running.getRequest().getRequestedBy());
         }
         String unit = running.getBloodUnit() != null ? running.getBloodUnit().getUnitNumber() : null;
-        Object[] bodyArgs = {unit};
-        for (UUID clinician : clinicians) {
-            CreateInBasketItemRequest item = new CreateInBasketItemRequest();
-            item.setRecipientUserId(clinician);
-            item.setHospitalId(hospital);
-            item.setItemType(InBasketItemType.TASK);
-            item.setPriority(InBasketPriority.URGENT);
-            item.setReferenceId(flagId);
-            item.setReferenceType(REFERENCE_TYPE);
-            item.setPatientId(running.getPatient() != null ? running.getPatient().getId() : null);
-            item.setPatientName(running.getPatient() != null ? running.getPatient().getFullName() : null);
-            item.setTitleKey(RUNNING_TITLE_KEY);
-            item.setTitle(MessageUtil.resolve(NotificationLocales.STAFF, RUNNING_TITLE_KEY));
-            item.setBodyKey(RUNNING_BODY_KEY);
-            item.setBodyArgs(bodyArgs);
-            item.setBody(MessageUtil.resolve(NotificationLocales.STAFF, RUNNING_BODY_KEY, bodyArgs));
-            inBasketService.createItem(item);
+        // Read here, in the event's transaction: the notice carries ids and text only.
+        com.example.hms.model.Patient chart = running.getPatient();
+        UUID patientId = chart != null ? chart.getId() : null;
+        String patientName = chart != null ? chart.getFullName() : null;
+        afterCommit(new OrderReviewAfterCommit.Notice(hospital, patientId, patientName, flagId, REFERENCE_TYPE,
+            RUNNING_TITLE_KEY, RUNNING_BODY_KEY, new Object[] {unit}, clinicians));
+    }
+
+    private static void addIfActive(Set<UUID> users, Staff staff) {
+        if (staff != null && staff.isActive()) {
+            addUser(users, staff);
         }
     }
 
@@ -279,6 +428,11 @@ public class OrderReviewHoldServiceImpl implements OrderReviewHoldService, org.s
     @Transactional(readOnly = true)
     public List<OrderReviewRowDTO> forPatient(UUID patientId) {
         UUID hospital = requireHospital();
+        // The role at THIS hospital: the controller's check reads the union of the caller's assignments.
+        UUID actor = roleValidator.getCurrentUserId();
+        if (actor == null || !roleValidator.isClinicianOrPharmacist(actor, hospital)) {
+            throw new AccessDeniedException("Only a clinician or pharmacist of this hospital can read the review list.");
+        }
         patientChartAccess.require(patientId, hospital);
         return holdRepository.findByPatientIdAndHospitalIdOrderByCreatedAtDesc(patientId, hospital).stream()
             .map(this::toRow)
@@ -439,9 +593,15 @@ public class OrderReviewHoldServiceImpl implements OrderReviewHoldService, org.s
         return reason;
     }
 
-    /** A reconfirmation names the dispute and the order version it read: neither may have moved since. */
-    private static void requireBoundTo(OrderReviewHold hold, OrderReviewDecisionDTO decision, Long current) {
-        if (hold.getDisputeId() != null && !hold.getDisputeId().equals(decision.getDisputeId())) {
+    /**
+     * A reconfirmation names the dispute and the order version it read: neither may have moved since. A row bound to a
+     * dispute now closed, or a page that read a dispute the row has left, reconfirms nothing.
+     */
+    private void requireBoundTo(OrderReviewHold hold, OrderReviewDecisionDTO decision, Long current) {
+        boolean sameDispute = Objects.equals(hold.getDisputeId(), decision.getDisputeId());
+        boolean stillOpen = hold.getDisputeId() == null
+            || disputes.findById(hold.getDisputeId()).map(DeathDispute::isOpen).orElse(false);
+        if (!sameDispute || !stillOpen) {
             throw new FieldBusinessException("disputeId", "order.review.disputeChanged");
         }
         long now = current != null ? current : 0L;
@@ -512,6 +672,7 @@ public class OrderReviewHoldServiceImpl implements OrderReviewHoldService, org.s
                 .orderLabel(rx.getMedicationName())
                 .currentOrderVersion(rx.getVersion())
                 .controlled(controlledResolver.isControlled(rx)));
+            row.dosesGivenBeforeHold(dosesGivenBefore(hold));
             if (hold.getStatus() == OrderReviewStatus.HELD) {
                 row.replacementCandidates(prescriptionRepository.findWrittenSince(hold.getPatientId(), hold.getHospitalId(),
                         hold.getCreatedAt()).stream()
@@ -543,6 +704,19 @@ public class OrderReviewHoldServiceImpl implements OrderReviewHoldService, org.s
         } catch (java.security.NoSuchAlgorithmException ex) {
             throw new IllegalStateException(ex);
         }
+    }
+
+    /** Given earlier, charted since: the prescriber deciding this order must see them. */
+    private List<OrderReviewRowDTO.PriorDose> dosesGivenBefore(OrderReviewHold hold) {
+        if (hold.getCreatedAt() == null) {
+            return List.of();
+        }
+        return doses.findByPrescription_IdOrderByScheduledTimeDesc(hold.getOrderId()).stream()
+            .filter(dose -> dose.getStatus() == com.example.hms.enums.MedicationAdministrationStatus.GIVEN
+                && dose.getAdministeredAt() != null && dose.getAdministeredAt().isBefore(hold.getCreatedAt())
+                && dose.getUpdatedAt() != null && !dose.getUpdatedAt().isBefore(hold.getCreatedAt()))
+            .map(dose -> OrderReviewRowDTO.PriorDose.builder().givenAt(dose.getAdministeredAt()).note(dose.getNotes()).build())
+            .toList();
     }
 
     private void audit(OrderReviewHold hold, String description) {

@@ -59,6 +59,8 @@ import static org.mockito.Mockito.when;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class DeathDisputeServiceImplTest {
 
+    private final OrderReviewHoldService orderReview = org.mockito.Mockito.mock(OrderReviewHoldService.class);
+
     private static final LocalDateTime NOW = LocalDateTime.of(2026, 11, 7, 10, 0);
 
     @Mock private DeathDisputeRepository disputes;
@@ -83,7 +85,7 @@ class DeathDisputeServiceImplTest {
         com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
         LocaleContextHolder.setLocale(Locale.ENGLISH);
         service = new DeathDisputeServiceImpl(Clock.fixed(Instant.parse("2026-11-07T10:00:00Z"), ZoneOffset.UTC),
-            disputes, records, patients, chartAccess, roles, assignments, inBasket, audit, org.mockito.Mockito.mock(OrderReviewHoldService.class));
+            disputes, records, patients, chartAccess, roles, assignments, inBasket, audit, orderReview);
         patient = new Patient();
         patient.setId(patientId);
         patient.setDeceasedAt(NOW.minusDays(2));
@@ -242,6 +244,7 @@ class DeathDisputeServiceImplTest {
         assertThat(open.getResolutionReason()).isEqualTo("Family confirmed");
         assertThat(open.getResolvedAt()).isEqualTo(NOW);
         assertThat(result.getStatusMessage()).as("no longer disputed").isNull();
+        org.mockito.Mockito.verify(orderReview).disputeClosed(open.getId());
         verify(inBasket, atLeastOnce()).removeOpenItemsForReference(any(), anyString());
         verify(audit).logEvent(any());
         verify(records, never()).save(any());

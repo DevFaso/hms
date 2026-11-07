@@ -245,6 +245,7 @@ class MortalityServiceImplTest {
         assertThat(open.getResolutionReason()).isEqualTo("Wrong patient");
         assertThat(open.getResolvedById()).isEqualTo(callerUserId);
         verify(inBasketService).removeOpenItemsForReference(any(), org.mockito.ArgumentMatchers.eq("DEATH_DISPUTE"));
+        verify(orderReview).disputeClosed(open.getId());
     }
 
     @Test

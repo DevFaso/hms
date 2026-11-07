@@ -1261,6 +1261,30 @@
     <p class="form-error" role="alert" data-testid="early-dose-why">{{ early.why }}</p>
   </app-reason-dialog>
 }
+<!-- The order is held for review: only a dose given before the hold can be charted. -->
+@if (givenBeforeHold(); as prior) {
+  <app-reason-dialog
+    titleKey="ORDER_REVIEW.GIVEN_BEFORE_TITLE"
+    labelKey="ORDER_REVIEW.GIVEN_BEFORE_REASON"
+    confirmKey="ORDER_REVIEW.GIVEN_BEFORE_CONFIRM"
+    dismissKey="COMMON.BACK"
+    [busy]="!!actionInProgress()"
+    (confirmed)="confirmGivenBeforeHold($event)"
+    (cancelled)="givenBeforeHold.set(null)"
+  >
+    <p class="form-error" role="alert" data-testid="given-before-why">{{ prior.why }}</p>
+    <div class="field">
+      <label for="given-before-at">{{ 'ORDER_REVIEW.GIVEN_BEFORE_AT' | translate }}</label>
+      <input
+        id="given-before-at"
+        type="datetime-local"
+        data-testid="given-before-at"
+        [ngModel]="givenBeforeAt()"
+        (ngModelChange)="givenBeforeAt.set($event)"
+      />
+    </div>
+  </app-reason-dialog>
+}
 
 <!-- ── Inline Vitals Capture Modal ───────────────────────── -->
 @if (vitalsCaptureFor()) {
