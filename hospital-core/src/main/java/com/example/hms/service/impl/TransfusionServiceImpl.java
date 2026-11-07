@@ -852,14 +852,16 @@ public class TransfusionServiceImpl implements TransfusionService {
 
     /** Each type its own sentence: the audit screen renders them in the reader's language by pattern. */
     private static String releaseAuditDescription(EmergencyReleaseType type, UUID unitId, UUID requestId, List<BloodUnit> negativeShown) {
-        String release = switch (type) {
-            case UNCROSSMATCHED -> "Emergency uncrossmatched release";
-            case O_POSITIVE_DECISION -> "Emergency release on a documented O positive decision";
-            case SEROLOGICALLY_INCOMPATIBLE -> "Emergency release, serologically incompatible,";
-        };
-        String description = release + " of blood unit " + unitId + " against transfusion request " + requestId;
-        return negativeShown.isEmpty() ? description
-            : description + ", O negative stated not obtainable in time, stock shown " + shownIds(negativeShown);
+        String target = " of blood unit " + unitId + " against transfusion request " + requestId;
+        if (type == EmergencyReleaseType.UNCROSSMATCHED) {
+            return "Emergency uncrossmatched release" + target;
+        }
+        String release = type == EmergencyReleaseType.O_POSITIVE_DECISION
+            ? "Emergency release on a documented O positive decision"
+            : "Emergency release, serologically incompatible,";
+        return negativeShown.isEmpty()
+            ? release + target
+            : release + target + ", O negative stated not obtainable in time, stock shown " + shownIds(negativeShown);
     }
 
     @Override
