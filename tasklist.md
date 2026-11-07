@@ -6325,3 +6325,14 @@ For the clinician list (proposed alert logic, pending sign-off):
 ## Round 36 Lows left for later
 
 From docs/qa/dev-qa-run-2026-11-07-round36.md (steps and likely code there). They do not block: D1493, D1496, D1497, D1498, D1499, D1500, D1501, D1502, D1503, D1504, D1506, D1509, D1510, D1511, D1513.
+
+## Standing debt — round 36 (fix/r36-order-review-hold)
+
+- **Clinical approval, before prod:** the hold policy and the handling of treatment in progress are NOT clinically approved. Nor is the partner SMS wording `sms.partner.heldForReview`, or holding a finished order because a refill is left on it.
+- **Lock order, Low:** a decision takes the hold row and then the order; a snapshot takes the order and then the hold row when it binds one. A decision racing a dispute can deadlock: PostgreSQL aborts one side, so it is safe but an error.
+- **Row flags, Low (efficiency):** `heldForReview` and `assessmentDue` ask per row, on the pharmacy queue too, which otherwise batches. Bounded by the page.
+- **Partner, after a reconfirmation:** a partner told not to dispense an accepted order is not told when a prescriber continues it. The order stays PARTNER_ACCEPTED until a no-show puts it back in the queue. A partner holding the paper can still hand it over: that is recorded and raised, not prevented. A printed prescription cannot be recalled at all.
+- **Pathway on real persistence:** sign, dispense, MAR and transfusion are walked with mocked persistence; the real database covers the snapshot, the guard, reconfirmation, a stale version, the races and the outcomes. The cascade followed by the stay-ended filter is pinned by a mock order only. Round 37 walks it on a running system.
+- **Guard reach:** `OrderReviewHoldGuardTest` checks the helper named in its table contains the call, not that the endpoint reaches that helper.
+- **`DeathDispute.reason`** is stored in the clear, as the decision reason on a hold no longer is.
+- **"Expired":** the prescription model has no expired status. Lot and blood-unit expiry checks stay in place at use.
