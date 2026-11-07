@@ -730,6 +730,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           'ROLE_MIDWIFE',
           'ROLE_LAB_TECHNICIAN',
           'ROLE_LAB_MANAGER',
+          'ROLE_LAB_DIRECTOR',
           'ROLE_SUPER_ADMIN',
         ],
       },

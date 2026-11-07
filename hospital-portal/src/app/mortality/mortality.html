@@ -282,7 +282,8 @@
     <div
       class="modal-backdrop"
       tabindex="-1"
-      (click)="$event.target === $event.currentTarget && closeRecord()"
+      appBackdropClose
+      (backdropClose)="closeRecord()"
       (keydown.escape)="closeRecord()"
     >
       <div
@@ -424,7 +425,8 @@
     <div
       class="modal-backdrop"
       tabindex="-1"
-      (click)="$event.target === $event.currentTarget && closeAmend()"
+      appBackdropClose
+      (backdropClose)="closeAmend()"
       (keydown.escape)="closeAmend()"
     >
       <div

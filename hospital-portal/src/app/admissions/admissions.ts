@@ -42,6 +42,7 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { fromServerDateTime, toLocalInputValue, toServerDateTime } from '../shared/date-utils';
 import { BedService, BedResponse } from '../services/bed.service';
 import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
+import { BackdropCloseDirective } from '../shared/a11y/backdrop-close.directive';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { refusalReason } from '../shared/refusal-reason';
@@ -78,6 +79,7 @@ const OPEN_STATUSES: ReadonlySet<string> = new Set([
     ListEscapeDirective,
     SubmitGuardDirective,
     ModalDialogDirective,
+    BackdropCloseDirective,
     PersonNamePipe,
     PatientSublinePipe,
     CommonModule,

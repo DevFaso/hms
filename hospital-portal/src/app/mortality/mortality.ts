@@ -20,6 +20,7 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { toServerDateTime } from '../shared/date-utils';
+import { BackdropCloseDirective } from '../shared/a11y/backdrop-close.directive';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
@@ -41,6 +42,7 @@ import { DateTimePipe } from '../shared/pipes/date-time.pipe';
     DateTimePipe,
     SubmitGuardDirective,
     ModalDialogDirective,
+    BackdropCloseDirective,
     ServerTimePipe,
     CommonModule,
     FormsModule,

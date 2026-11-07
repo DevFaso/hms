@@ -41,6 +41,7 @@ import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { localDateString, nowLocalDatetime, toServerDateTime } from '../shared/date-utils';
 import { refusalReason } from '../shared/refusal-reason';
+import { BackdropCloseDirective } from '../shared/a11y/backdrop-close.directive';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { AuthorshipService } from '../shared/authorship.service';
 
@@ -68,6 +69,7 @@ type Tab = 'requests' | 'units';
     ReasonDialogComponent,
     SubmitGuardDirective,
     ModalDialogDirective,
+    BackdropCloseDirective,
     ServerTimePipe,
     CommonModule,
     FormsModule,
