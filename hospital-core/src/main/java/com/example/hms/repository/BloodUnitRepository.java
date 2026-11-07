@@ -49,17 +49,18 @@ public interface BloodUnitRepository extends JpaRepository<BloodUnit, UUID> {
 
     /** The same lock on every bag held by a request. */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("SELECT u FROM BloodUnit u WHERE u.request.id = :requestId")
+    @Query("SELECT u FROM BloodUnit u WHERE u.request.id = :requestId ORDER BY u.id")
     List<BloodUnit> lockByRequestId(@Param("requestId") UUID requestId);
 
     /**
-     * An AVAILABLE, unexpired bag of this kind at this hospital that could go to this patient: one
-     * already found incompatible for them is not available to them. A bag's last day counts as
-     * expired, as everywhere here.
+     * A bag of this kind in stock at this hospital that could go to this patient: on hand and in
+     * date as {@link #findAssignable} has it, so a bag returned to the lab counts. One already found
+     * incompatible for them is not available to them. A bag's last day counts as expired.
      */
     @Query("SELECT (COUNT(u) > 0) FROM BloodUnit u WHERE u.hospital.id = :hospitalId "
         + "AND u.productType = :product AND u.aboGroup = :abo AND u.rhFactor = :rh "
-        + "AND u.status = com.example.hms.enums.BloodUnitStatus.AVAILABLE AND u.expiresOn > :today "
+        + "AND u.status IN (com.example.hms.enums.BloodUnitStatus.AVAILABLE, "
+        + "com.example.hms.enums.BloodUnitStatus.RETURNED) AND u.expiresOn > :today "
         + "AND NOT EXISTS (SELECT c.id FROM TransfusionCrossmatch c WHERE c.bloodUnit = u "
         + "AND c.request.patient.id = :patientId AND c.compatible = FALSE)")
     boolean existsAvailable(@Param("hospitalId") UUID hospitalId,

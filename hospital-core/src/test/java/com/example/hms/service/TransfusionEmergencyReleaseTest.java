@@ -391,6 +391,32 @@ class TransfusionEmergencyReleaseTest {
     }
 
     @Test
+    @DisplayName("nor crossmatch it, nor hang it, in global view")
+    void noOtherHospitalsBagOnCrossmatchOrHang() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        TransfusionRequest request = emergency();
+        UUID requestId = request.getId();
+        BloodUnit unit = bag(AboGroup.O, RhFactor.NEGATIVE, BloodUnitStatus.ISSUED);
+        Hospital other = new Hospital();
+        other.setId(UUID.randomUUID());
+        unit.setHospital(other);
+        CrossmatchRequestDTO crossmatch = result(unit, false);
+        assertThatThrownBy(() -> service.recordCrossmatch(requestId, crossmatch))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        assertThatThrownBy(() -> hang(request, unit)).isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("a bag left issued on a cancelled request is not hung")
+    void noHangOnACancelledRequest() {
+        TransfusionRequest request = emergency();
+        BloodUnit unit = bag(AboGroup.O, RhFactor.NEGATIVE, BloodUnitStatus.ISSUED);
+        unit.setRequest(request);
+        request.setStatus(TransfusionRequestStatus.CANCELLED);
+        assertThatThrownBy(() -> hang(request, unit)).hasMessageContaining("closed");
+    }
+
+    @Test
     @DisplayName("a caller nobody can name cannot make a documented release")
     void anUnnamedCaller() {
         when(roleValidator.getCurrentUserId()).thenReturn(null);

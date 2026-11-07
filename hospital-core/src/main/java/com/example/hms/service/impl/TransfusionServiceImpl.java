@@ -106,6 +106,7 @@ public class TransfusionServiceImpl implements TransfusionService {
     public static final String INCOMPATIBLE_TITLE_KEY = "transfusion.crossmatch.incompatible.inBasketTitle";
     public static final String INCOMPATIBLE_RUNNING_BODY_KEY = "transfusion.crossmatch.incompatible.running.inBasketBody";
     public static final String INCOMPATIBLE_ISSUED_BODY_KEY = "transfusion.crossmatch.incompatible.issued.inBasketBody";
+    /** The item's reference names the result, not the row: see fileIncompatibleResultAfterCommit. */
     static final String CROSSMATCH_REFERENCE_TYPE = "TRANSFUSION_CROSSMATCH";
     private static final String REQUEST_ENTITY_TYPE = "TRANSFUSION_REQUEST";
     public static final String INCOMPATIBLE_FINISHED_BODY_KEY = "transfusion.crossmatch.incompatible.finished.inBasketBody";
@@ -445,6 +446,7 @@ public class TransfusionServiceImpl implements TransfusionService {
         if (!StringUtils.hasText(reason)) {
             throw new com.example.hms.exception.FieldBusinessException("reason", "transfusion.request.cancelReasonRequired");
         }
+        requestRepository.lockById(requestId);
         TransfusionRequest request = loadRequestScoped(requestId);
         if (request.isTerminal()) {
             throw new BusinessException("transfusion.request.closed");
@@ -486,9 +488,11 @@ public class TransfusionServiceImpl implements TransfusionService {
 
     @Override
     public CrossmatchResponseDTO recordCrossmatch(UUID requestId, CrossmatchRequestDTO request) {
+        requestRepository.lockById(requestId);
         unitRepository.lockById(request.getBloodUnitId());
         TransfusionRequest transfusionRequest = loadRequestScoped(requestId);
         BloodUnit unit = loadUnitScoped(request.getBloodUnitId());
+        requireSameHospital(unit, transfusionRequest);
         boolean claimsCompatible = Boolean.TRUE.equals(request.getCompatible());
 
         // The bag's administration for THIS request, running or ended. What was transfused for this
@@ -719,12 +723,16 @@ public class TransfusionServiceImpl implements TransfusionService {
             .toList(), releaseId);
     }
 
-    /** Composing a notification runs in the transaction of what it reports, and must not undo it. */
+    /**
+     * Composing runs in the transaction of what it reports, and a failure of its own (a message that
+     * will not render) must not undo that. A failed database read has already doomed the transaction:
+     * then the whole write fails and is reported as failed, leaving no record without its notice.
+     */
     private static void notifySafely(Runnable compose, UUID referenceId) {
         try {
             compose.run();
         } catch (RuntimeException ex) {
-            log.warn("Notification not composed for {}: {}", referenceId, ex.getClass().getSimpleName());
+            log.error("Notification not composed for {}: {}", referenceId, ex.getClass().getSimpleName());
         }
     }
 
@@ -843,6 +851,7 @@ public class TransfusionServiceImpl implements TransfusionService {
 
     @Override
     public BloodUnitResponseDTO issueUnit(UUID requestId, UUID unitId) {
+        requestRepository.lockById(requestId);
         unitRepository.lockById(unitId);
         TransfusionRequest request = loadRequestScoped(requestId);
         BloodUnit unit = issuableUnit(request, unitId);
@@ -881,6 +890,7 @@ public class TransfusionServiceImpl implements TransfusionService {
             // A documented release names who issued it: an actor nobody can name cannot make one.
             throw new AccessDeniedException("A documented emergency release needs an identified caller.");
         }
+        requestRepository.lockById(requestId);
         unitRepository.lockById(release.getBloodUnitId());
         TransfusionRequest request = loadRequestScoped(requestId);
         if (!request.isEmergency()) {
@@ -916,11 +926,7 @@ public class TransfusionServiceImpl implements TransfusionService {
             throw new BusinessException("transfusion.request.closed");
         }
         BloodUnit unit = loadUnitScoped(unitId);
-        // A global-view caller has no scope to stop it: a bag only goes out at its own hospital.
-        if (unit.getHospital() != null && request.getHospital() != null
-                && !Objects.equals(unit.getHospital().getId(), request.getHospital().getId())) {
-            throw new ResourceNotFoundException(MSG_UNIT_NOT_FOUND, unitId);
-        }
+        requireSameHospital(unit, request);
         if (unit.isExpiredOn(LocalDate.now(clock))) {
             throw new FieldBusinessException(FIELD_BLOOD_UNIT_ID, "transfusion.unit.expired", unit.getUnitNumber(),
                 DisplayDates.date(unit.getExpiresOn()));
@@ -942,6 +948,14 @@ public class TransfusionServiceImpl implements TransfusionService {
             throw new FieldBusinessException(FIELD_BLOOD_UNIT_ID, "transfusion.unit.alreadyHung", unit.getUnitNumber());
         }
         return unit;
+    }
+
+    /** A global-view caller has no scope to stop it: a bag is only worked on for a request of its own hospital. */
+    private static void requireSameHospital(BloodUnit unit, TransfusionRequest request) {
+        if (unit.getHospital() != null && request.getHospital() != null
+                && !Objects.equals(unit.getHospital().getId(), request.getHospital().getId())) {
+            throw new ResourceNotFoundException(MSG_UNIT_NOT_FOUND, unit.getId());
+        }
     }
 
     /** Why the crossmatch on file does not let this bag go out by itself; null when it does. */
@@ -1226,10 +1240,15 @@ public class TransfusionServiceImpl implements TransfusionService {
         if (request.getVerifiedByStaffId() == null && request.getVerifiedByUserId() == null) {
             throw new FieldBusinessException("verifiedByStaffId", "transfusion.administration.verifierRequired");
         }
+        requestRepository.lockById(request.getRequestId());
         unitRepository.lockById(request.getBloodUnitId());
         TransfusionRequest transfusionRequest = loadRequestScoped(request.getRequestId());
+        if (transfusionRequest.isTerminal()) {
+            throw new BusinessException("transfusion.request.closed");
+        }
         UUID hospitalId = transfusionRequest.getHospital().getId();
         BloodUnit unit = loadUnitScoped(request.getBloodUnitId());
+        requireSameHospital(unit, transfusionRequest);
 
         if (unit.getStatus() != BloodUnitStatus.ISSUED) {
             throw new com.example.hms.exception.FieldBusinessException(FIELD_BLOOD_UNIT_ID, "transfusion.unit.notIssued", unit.getUnitNumber());
@@ -1488,11 +1507,10 @@ public class TransfusionServiceImpl implements TransfusionService {
     }
 
     /**
-     * The O negative release, as it always was (O positive has its own rules, in
-     * {@link EmergencyReleasePolicy}). O Rh-negative is the universal RED CELL donor. It is not a universal donor of
-     * plasma or platelets, so a pairing the ABO/Rh rules reject for a known group does
-     * not go out on urgency. O negative red cells pass every group, so this blocks no
-     * resuscitation. Nor does urgency overrule what was found: an incompatible result
+     * The O negative release (O positive has its own rules, in {@link EmergencyReleasePolicy}).
+     * O Rh-negative is the universal RED CELL donor. It is not a universal donor of plasma or
+     * platelets, so those never go out uncrossmatched, typed patient or not. O negative red cells
+     * pass every group, so this blocks no resuscitation. Nor does urgency overrule what was found: an incompatible result
      * for this bag, or a crossmatch older than antibodies found since, stops it here
      * at the lab, not at the bedside.
      */

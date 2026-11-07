@@ -388,6 +388,59 @@ class TransfusionEmergencyReleasePostgresIT {
     }
 
     @Test
+    @DisplayName("independent review: an O negative bag returned to the lab is still in stock, and holds O positive back")
+    void aReturnedONegativeCounts() {
+        TransfusionRequestResponseDTO first = emergencyRequest();
+        UUID negative = bag(AboGroup.O, RhFactor.NEGATIVE).getId();
+        service.issueUnit(first.getId(), negative);
+        signedInAsDoctor(() -> service.cancelRequest(first.getId(), "Bleeding controlled"));
+        assertThat(status(negative)).isEqualTo("RETURNED");
+
+        TransfusionRequestResponseDTO second = emergencyRequest();
+        UUID secondId = second.getId();
+        UUID positive = bag(AboGroup.O, RhFactor.POSITIVE).getId();
+        EmergencyReleaseRequestDTO decision = documented(positive, EmergencyReleaseType.O_POSITIVE_DECISION);
+        assertThat(service.emergencyReleaseOptions(secondId).isONegativeFirst()).isTrue();
+        assertThatThrownBy(() -> service.emergencyRelease(secondId, decision)).hasMessageContaining("first");
+    }
+
+    @Test
+    @DisplayName("independent review: a release of a stock bag waits for a cancel of the request, then finds it closed")
+    void aReleaseWaitsForTheCancel() throws Exception {
+        TransfusionRequestResponseDTO request = emergencyRequest();
+        UUID requestId = request.getId();
+        UUID bagId = bag(AboGroup.O, RhFactor.NEGATIVE).getId();
+        java.util.concurrent.ExecutorService other = java.util.concurrent.Executors.newSingleThreadExecutor();
+        try {
+            java.util.concurrent.atomic.AtomicReference<java.util.concurrent.Future<?>> release = new java.util.concurrent.atomic.AtomicReference<>();
+            signedInAsDoctor(() -> new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+                service.cancelRequest(requestId, "Bleeding controlled");
+                release.set(other.submit(() -> service.issueUnit(requestId, bagId)));
+                assertThatThrownBy(() -> release.get().get(1, java.util.concurrent.TimeUnit.SECONDS))
+                    .as("waits on the request's lock").isInstanceOf(java.util.concurrent.TimeoutException.class);
+            }));
+            assertThatThrownBy(() -> release.get().get(20, java.util.concurrent.TimeUnit.SECONDS))
+                .hasCauseInstanceOf(BusinessException.class).hasMessageContaining("closed");
+        } finally {
+            other.shutdownNow();
+        }
+        assertThat(status(bagId)).isEqualTo("AVAILABLE");
+        assertThat(service.getRequest(requestId).getStatus().name()).isEqualTo("CANCELLED");
+    }
+
+    private void signedInAsDoctor(Runnable work) {
+        com.example.hms.model.User requester = new com.example.hms.model.User();
+        requester.setId(doctorUser);
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(requester, null, List.of()));
+        try {
+            work.run();
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+    }
+
+    @Test
     @DisplayName("cancelling a request takes the bag locks with its held bags and still returns them")
     void cancelTakesTheLocks() {
         TransfusionRequestResponseDTO request = emergencyRequest();
