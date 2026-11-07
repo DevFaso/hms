@@ -120,6 +120,82 @@ class ImmunizationServiceImplTest {
     }
 
     @Test
+    void qaD1003_aDoseFromTheVaccinationCardIsNotCreditedToTheRecordingClinician() {
+        ImmunizationRequestDTO dto = new ImmunizationRequestDTO();
+        dto.setPatientId(patientId);
+        dto.setHospitalId(hospitalId);
+        dto.setAdministrationDate(java.time.LocalDate.of(2021, 3, 10));
+        dto.setSourceOfRecord("VACCINATION_CARD");
+        dto.setAdministeredByStaffId(staffId); // the portal used to send the caller's own id
+        Staff caller = new Staff(); caller.setId(staffId); caller.setHospital(hospital);
+        com.example.hms.security.CallerIdentityTestSupport.actAs(caller, hospital);
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(caller));
+        PatientImmunization entity = new PatientImmunization();
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(immunizationMapper.toEntity(any(), eq(patient), eq(hospital), isNull(), isNull())).thenReturn(entity);
+        when(immunizationRepository.save(entity)).thenReturn(entity);
+        when(immunizationMapper.toResponseDTO(entity)).thenReturn(new ImmunizationResponseDTO());
+
+        service.createImmunization(dto);
+
+        // The claim is still checked (it is the caller), but no vaccinator is kept.
+        verify(immunizationMapper).toEntity(any(), eq(patient), eq(hospital), isNull(), isNull());
+    }
+
+    @Test
+    void qaD1003_anEditThatSendsNoSourceKeepsTheStoredSourceAndVaccinator() {
+        Staff vaccinator = new Staff(); vaccinator.setId(staffId);
+        PatientImmunization existing = new PatientImmunization();
+        existing.setId(immunizationId);
+        existing.setHospital(hospital);
+        existing.setAdministeredBy(vaccinator);
+        existing.setSourceOfRecord("Given here"); // a legacy free-text value
+        existing.setAdministrationDate(java.time.LocalDate.now().minusWeeks(1));
+        ImmunizationRequestDTO dto = new ImmunizationRequestDTO();
+        dto.setAdministrationDate(existing.getAdministrationDate());
+        dto.setLotNumber("LOT-2");
+        when(immunizationRepository.findById(immunizationId)).thenReturn(Optional.of(existing));
+        when(immunizationRepository.save(existing)).thenReturn(existing);
+        when(immunizationMapper.toResponseDTO(existing)).thenReturn(new ImmunizationResponseDTO());
+
+        service.updateImmunization(immunizationId, dto);
+
+        assertThat(existing.getAdministeredBy()).isEqualTo(vaccinator);
+        assertThat(dto.getSourceOfRecord()).isEqualTo("Given here");
+    }
+
+    @Test
+    void qaD1003_anEditOfATranscribedDoseNeverCreditsTheEditor() {
+        PatientImmunization existing = new PatientImmunization();
+        existing.setId(immunizationId);
+        existing.setHospital(hospital);
+        existing.setSourceOfRecord("VACCINATION_CARD");
+        ImmunizationRequestDTO dto = new ImmunizationRequestDTO();
+        dto.setSourceOfRecord("VACCINATION_CARD");
+        dto.setAdministeredByStaffId(staffId); // an edit form resending the caller's id
+        when(immunizationRepository.findById(immunizationId)).thenReturn(Optional.of(existing));
+        when(immunizationRepository.save(existing)).thenReturn(existing);
+        when(immunizationMapper.toResponseDTO(existing)).thenReturn(new ImmunizationResponseDTO());
+
+        service.updateImmunization(immunizationId, dto);
+
+        assertThat(existing.getAdministeredBy()).isNull();
+        verify(staffRepository, never()).findById(any());
+    }
+
+    @Test
+    void qaD1003_onlyTheFormsTranscriptionCodesDropTheVaccinator() {
+        assertThat(ImmunizationServiceImpl.isTranscribed("VACCINATION_CARD")).isTrue();
+        assertThat(ImmunizationServiceImpl.isTranscribed("EXTERNAL_RECORD")).isTrue();
+        assertThat(ImmunizationServiceImpl.isTranscribed("PATIENT_REPORT")).isTrue();
+        // A missing, GIVEN_HERE or legacy free-text source keeps the previous behaviour.
+        assertThat(ImmunizationServiceImpl.isTranscribed(null)).isFalse();
+        assertThat(ImmunizationServiceImpl.isTranscribed("GIVEN_HERE")).isFalse();
+        assertThat(ImmunizationServiceImpl.isTranscribed("Administered at clinic")).isFalse();
+    }
+
+    @Test
     void createImmunization_patientNotFound() {
         ImmunizationRequestDTO dto = new ImmunizationRequestDTO();
         dto.setPatientId(patientId);

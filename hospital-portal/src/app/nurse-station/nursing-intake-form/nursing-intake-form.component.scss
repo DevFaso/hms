@@ -171,6 +171,42 @@
     }
   }
 
+  .documented {
+    margin-bottom: 8px;
+    padding: 8px 10px;
+    border-radius: 4px;
+    background: var(--surface-alt, #f0f5ff);
+    font-size: 0.85rem;
+
+    &__title {
+      margin: 0 0 4px;
+      font-weight: 600;
+    }
+
+    &__list {
+      margin: 0;
+      padding-left: 18px;
+
+      li {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 2px 0;
+      }
+    }
+
+    &__hint {
+      margin: 4px 0 0;
+      color: var(--text-secondary, #555);
+    }
+  }
+
+  .btn-add--inline {
+    padding: 2px 8px;
+    font-size: 0.8rem;
+  }
+
   .btn-remove {
     background: none;
     border: none;

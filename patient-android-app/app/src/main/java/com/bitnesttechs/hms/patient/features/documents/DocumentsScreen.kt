@@ -436,7 +436,9 @@ private fun DocumentRow(
                     style = MaterialTheme.typography.bodyMedium)
                 Text(
                     // A type this build does not know yet is shown as the server sent it, like the web.
-                    doc.documentType?.let { t -> if (t in DocumentsViewModel.DOCUMENT_TYPES) stringResource(documentTypeLabel(t)) else t }
+                    doc.documentType?.let { t ->
+                        if (t in DocumentsViewModel.DOCUMENT_TYPES || t == MEDICAL_CERTIFICATE) stringResource(documentTypeLabel(t)) else t
+                    }
                         ?: stringResource(R.string.document),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -468,7 +470,7 @@ private fun DocumentRow(
                 Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(Modifier.size(18.dp), color = ErrorRed, strokeWidth = 2.dp)
                 }
-            } else {
+            } else if (doc.documentType != MEDICAL_CERTIFICATE) {
                 IconButton(onClick = onDelete, enabled = deleteEnabled && !isOpening) {
                     Icon(Icons.Default.Delete, stringResource(R.string.delete_document), tint = ErrorRed)
                 }
@@ -489,8 +491,12 @@ private fun documentTypeLabel(type: String): Int = when (type) {
     "INSURANCE_DOCUMENT" -> R.string.doc_type_insurance_document
     "INVOICE" -> R.string.doc_type_invoice
     "IMMUNIZATION_RECORD" -> R.string.doc_type_immunization_record
+    MEDICAL_CERTIFICATE -> R.string.doc_type_medical_certificate
     else -> R.string.doc_type_other
 }
+
+/** QA D961: issued by a doctor (not an upload choice); the server refuses its deletion by the patient. */
+private const val MEDICAL_CERTIFICATE = "MEDICAL_CERTIFICATE"
 
 private fun docIcon(kind: String?) = when (kind?.uppercase()) {
     "PDF" -> Icons.Default.PictureAsPdf

@@ -8,7 +8,7 @@
   </div>
   @if (patient() && !activeEpisode() && !episodesLoading()) {
     <button class="btn-primary" (click)="openStartForm()">
-      <span class="material-symbols-outlined">add</span>
+      <span class="material-symbols-outlined" aria-hidden="true">add</span>
       {{ 'LABOR.START_EPISODE' | translate }}
     </button>
   }
@@ -122,11 +122,11 @@
         <h3 class="section-heading">{{ 'LABOR.ACTIVE_EPISODE' | translate }}</h3>
         <div>
           <button class="btn-secondary" (click)="entryFormOpen.set(true)">
-            <span class="material-symbols-outlined">add</span>
+            <span class="material-symbols-outlined" aria-hidden="true">add</span>
             {{ 'LABOR.NEW_ENTRY' | translate }}
           </button>
           <button class="btn-primary" (click)="openDeliveryForm()">
-            <span class="material-symbols-outlined">child_care</span>
+            <span class="material-symbols-outlined" aria-hidden="true">child_care</span>
             {{ 'LABOR.RECORD_DELIVERY' | translate }}
           </button>
         </div>
@@ -308,6 +308,7 @@
   >
     <div
       class="modal modal-lg"
+      aria-labelledby="labor-tab-dialog-1-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
@@ -315,13 +316,13 @@
       (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ 'LABOR.NEW_ENTRY' | translate }}</h2>
+        <h2 id="labor-tab-dialog-1-title">{{ 'LABOR.NEW_ENTRY' | translate }}</h2>
         <button
           class="modal-close"
           (click)="entryFormOpen.set(false)"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
@@ -501,6 +502,7 @@
   >
     <div
       class="modal modal-lg"
+      aria-labelledby="labor-tab-dialog-2-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
@@ -508,13 +510,13 @@
       (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ 'LABOR.RECORD_DELIVERY' | translate }}</h2>
+        <h2 id="labor-tab-dialog-2-title">{{ 'LABOR.RECORD_DELIVERY' | translate }}</h2>
         <button
           class="modal-close"
           (click)="cancelDelivery()"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">

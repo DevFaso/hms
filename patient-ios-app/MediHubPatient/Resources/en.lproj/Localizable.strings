@@ -426,6 +426,7 @@
 "document_type_prescription" = "Prescription";
 "document_type_insurance_document" = "Insurance Document";
 "document_type_invoice" = "Invoice";
+"document_type_medical_certificate" = "Medical certificate";
 "document_type_immunization_record" = "Immunization Record";
 "document_type_other" = "Other";
 "preparing_file" = "Preparing…";

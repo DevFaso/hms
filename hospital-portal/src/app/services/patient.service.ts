@@ -165,6 +165,8 @@ export interface PatientProblem {
   supportingEvidence?: string;
   chronic?: boolean;
   diagnosisCodes?: string[];
+  /** When the problem was last recorded or reviewed (server time). */
+  lastReviewedAt?: string | null;
 }
 
 export interface PatientDiagnosisRequest {

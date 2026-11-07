@@ -92,6 +92,7 @@ public class EncounterController {
     private final EncounterService encounterService;
     private final ControllerAuthUtils authUtils;
     private final RecordsWithheldHeaders recordsWithheld;
+    private final com.example.hms.service.MedicalCertificateService medicalCertificateService;
 
     // ----------------------------------------------------------
     // Create (Receptionist can check-in → default ARRIVED)
@@ -102,7 +103,9 @@ public class EncounterController {
         summary = "Create a new encounter",
         description = "Creates a new patient encounter. " +
             "Receptionists use this as the walk-in check-in endpoint: the hospitalId is always " +
-            "the active hospital of the request context (cannot be overridden) and the initial status defaults to ARRIVED. " +
+            "the active hospital of the request context (cannot be overridden). The initial status is the one requested " +
+            "(ARRIVED or IN_PROGRESS; the reception walk-in sends ARRIVED); with none, an EMERGENCY visit dated today " +
+            "starts ARRIVED and any other visit IN_PROGRESS. " +
             "For receptionist walk-ins, omit appointmentId; supply patientId and chiefComplaint. " +
             "Doctors, nurses, and midwives may also create encounters; their hospitalId defaults " +
             "to the active hospital of the request context but can be overridden in the request body."
@@ -261,8 +264,10 @@ public class EncounterController {
     // ----------------------------------------------------------
     // MVP 2 — Triage Submission
     // ----------------------------------------------------------
+    // QA D933: the midwife triages her own ANC patients (BP, weight), as the
+    // tracker already offers her; vitals elsewhere admit ROLE_MIDWIFE too.
     @PostMapping(value = "/{encounterId}/triage", consumes = MediaType.APPLICATION_JSON_VALUE)
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_NURSE','ROLE_DOCTOR')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR')")
     @Operation(
         summary = "Submit triage data for an encounter (MVP 2)",
         description = "Atomically records vitals, chief complaint, ESI acuity, room assignment, "
@@ -280,6 +285,26 @@ public class EncounterController {
         TriageSubmissionResponseDTO response =
             encounterService.submitTriage(encounterId, request, username, isSuperAdmin, hospitalId);
         return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED).body(response);
+    }
+
+    // ----------------------------------------------------------
+    // QA D961 — Medical certificate / sick-leave note from a visit
+    // ----------------------------------------------------------
+    @PostMapping(value = "/{encounterId}/medical-certificate", consumes = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR')")
+    @Operation(
+        summary = "Issue a medical certificate or sick-leave note for a visit",
+        description = "Generates a dated, signed PDF in FR/EN/ES from the visit, files it in the "
+            + "patient's documents (staff chart and patient portal) and returns the document."
+    )
+    public ResponseEntity<com.example.hms.payload.dto.portal.PatientDocumentResponseDTO> issueMedicalCertificate(
+        @PathVariable UUID encounterId,
+        @Valid @RequestBody com.example.hms.payload.dto.clinical.MedicalCertificateRequestDTO request
+    ) {
+        // The scope is the one resolver's (the service checks the visit's
+        // hospital against the acting hospital); the signer is the caller.
+        return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED)
+            .body(medicalCertificateService.issue(encounterId, request));
     }
 
     // ----------------------------------------------------------
@@ -306,7 +331,7 @@ public class EncounterController {
     // Complete Triage — Nurse advances TRIAGE → WAITING_FOR_PHYSICIAN
     // ----------------------------------------------------------
     @PostMapping("/{encounterId}/complete-triage")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_NURSE','ROLE_DOCTOR','ROLE_RECEPTIONIST')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_RECEPTIONIST')")
     @Operation(
         summary = "Complete triage (advance to waiting for physician)",
         description = "Transitions an ARRIVED or TRIAGE encounter to WAITING_FOR_PHYSICIAN."

@@ -8,7 +8,7 @@
   </div>
   @if (canOrder) {
     <button class="btn-primary" (click)="openCreateOrder()">
-      <span class="material-symbols-outlined">add</span>
+      <span class="material-symbols-outlined" aria-hidden="true">add</span>
       {{ 'ULTRASOUND.NEW_ORDER' | translate }}
     </button>
   }
@@ -69,26 +69,29 @@
               </td>
               <td class="actions-cell">
                 <button
+                  [attr.aria-label]="'COMMON.VIEW' | translate"
                   class="btn-secondary btn-sm"
                   [title]="'COMMON.VIEW' | translate"
                   (click)="openOrder(o)"
                 >
-                  <span class="material-symbols-outlined">visibility</span>
+                  <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
                 </button>
                 @if (canOrder && o.status !== 'CANCELLED') {
                   <button
+                    [attr.aria-label]="'COMMON.EDIT' | translate"
                     class="btn-secondary btn-sm"
                     [title]="'COMMON.EDIT' | translate"
                     (click)="openEditOrder(o)"
                   >
-                    <span class="material-symbols-outlined">edit</span>
+                    <span class="material-symbols-outlined" aria-hidden="true">edit</span>
                   </button>
                   <button
+                    [attr.aria-label]="'ULTRASOUND.RECORD_REPORT' | translate"
                     class="btn-secondary btn-sm"
                     [title]="'ULTRASOUND.RECORD_REPORT' | translate"
                     (click)="openReport(o)"
                   >
-                    <span class="material-symbols-outlined">description</span>
+                    <span class="material-symbols-outlined" aria-hidden="true">description</span>
                   </button>
                 }
               </td>
@@ -139,22 +142,24 @@
               <td class="actions-cell">
                 @if (canReviewReport && !r.reportReviewedByProvider) {
                   <button
+                    [attr.aria-label]="'ULTRASOUND.MARK_REVIEWED' | translate"
                     class="btn-secondary btn-sm"
                     [disabled]="reportActionBusy()"
                     [title]="'ULTRASOUND.MARK_REVIEWED' | translate"
                     (click)="reviewReport(r)"
                   >
-                    <span class="material-symbols-outlined">task_alt</span>
+                    <span class="material-symbols-outlined" aria-hidden="true">task_alt</span>
                   </button>
                 }
                 @if (canOrder && !r.patientNotified) {
                   <button
+                    [attr.aria-label]="'ULTRASOUND.NOTIFY_PATIENT' | translate"
                     class="btn-secondary btn-sm"
                     [disabled]="reportActionBusy()"
                     [title]="'ULTRASOUND.NOTIFY_PATIENT' | translate"
                     (click)="notifyPatient(r)"
                   >
-                    <span class="material-symbols-outlined">notifications</span>
+                    <span class="material-symbols-outlined" aria-hidden="true">notifications</span>
                   </button>
                 }
               </td>
@@ -171,6 +176,7 @@
   <div class="modal-backdrop" tabindex="-1" (click)="closeOrder()" (keydown.escape)="closeOrder()">
     <div
       class="modal modal-lg"
+      aria-labelledby="ultrasound-tab-dialog-1-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
@@ -178,7 +184,7 @@
       (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>
+        <h2 id="ultrasound-tab-dialog-1-title">
           {{ o.patientDisplayName || ('MATERNITY.PATIENT' | translate) }}
           <span class="{{ statusClass(o.status) }}">
             {{ 'ULTRASOUND.STATUS_' + o.status | translate }}
@@ -189,7 +195,7 @@
           (click)="closeOrder()"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
@@ -312,6 +318,7 @@
   >
     <div
       class="modal modal-lg"
+      aria-labelledby="ultrasound-tab-dialog-2-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
@@ -319,7 +326,7 @@
       (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>
+        <h2 id="ultrasound-tab-dialog-2-title">
           {{ (editingOrderId() ? 'ULTRASOUND.EDIT_ORDER' : 'ULTRASOUND.NEW_ORDER') | translate }}
         </h2>
         <button
@@ -327,7 +334,7 @@
           (click)="closeOrderModal()"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
@@ -446,6 +453,7 @@
   >
     <div
       class="modal modal-lg"
+      aria-labelledby="ultrasound-tab-dialog-3-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
@@ -453,13 +461,15 @@
       (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ 'ULTRASOUND.RECORD_REPORT' | translate }} — {{ order.patientDisplayName }}</h2>
+        <h2 id="ultrasound-tab-dialog-3-title">
+          {{ 'ULTRASOUND.RECORD_REPORT' | translate }} — {{ order.patientDisplayName }}
+        </h2>
         <button
           class="modal-close"
           (click)="closeReportModal()"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">

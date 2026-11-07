@@ -116,6 +116,12 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
         if (plan.getAuthor() == null || !java.util.Objects.equals(plan.getAuthor().getId(), author.getId())) {
             com.example.hms.security.CallerIdentity.requireCallerUnlessSuperAdmin(author);
         }
+        // QA D930 class: sending back the plan's own authorStaffId skipped the
+        // check above, so any colleague could rewrite the plan. The plan is
+        // rewritten by its author only (or a super-admin in global view).
+        if (plan.getAuthor() != null) {
+            com.example.hms.security.CallerIdentity.requireCallerUnlessSuperAdmin(plan.getAuthor());
+        }
         validateEncounterContext(encounter, hospital, patient);
         // QA D401: the patient must be registered at the hospital the row is written in.
         patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
@@ -217,6 +223,16 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
     public TreatmentPlanReviewDTO addReview(UUID planId, TreatmentPlanReviewRequestDTO requestDTO) {
         TreatmentPlan plan = getPlanOrThrow(planId);
     Staff reviewer = fetchStaff(requestDTO.getReviewerStaffId());
+        // QA D503 class: the reviewer is the signed-in clinician, not a name in the body.
+        com.example.hms.security.CallerIdentity.requireCallerUnlessSuperAdmin(reviewer);
+        // QA D955 class: a plan is approved or signed off by someone other than its author.
+        boolean approves = requestDTO.getAction() == com.example.hms.enums.TreatmentPlanReviewAction.APPROVED
+            || requestDTO.getAction() == com.example.hms.enums.TreatmentPlanReviewAction.SIGNED_OFF;
+        if (approves && plan.getAuthor() != null && (java.util.Objects.equals(plan.getAuthor().getId(), reviewer.getId())
+                || com.example.hms.security.CallerIdentity.sameUser(plan.getAuthor(), reviewer))) {
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("treatmentPlan.review.notAuthor"));
+        }
         TreatmentPlanReview review = TreatmentPlanReview.builder()
             .treatmentPlan(plan)
             .reviewer(reviewer)

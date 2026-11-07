@@ -482,10 +482,26 @@ class MaternalHistoryServiceImplTest {
     void deleteMaternalHistory_shouldDeleteSuccessfully() {
         UUID historyId = UUID.randomUUID();
         when(maternalHistoryRepository.findById(historyId)).thenReturn(Optional.of(maternalHistory));
+        com.example.hms.security.CallerIdentityTestSupport.actAs(staff, hospital);
 
         maternalHistoryService.deleteMaternalHistory(historyId, username);
 
         verify(maternalHistoryRepository).delete(maternalHistory);
+    }
+
+    @Test
+    void qaD930_aColleagueCannotDeleteTheRecordersHistory() {
+        UUID historyId = UUID.randomUUID();
+        when(maternalHistoryRepository.findById(historyId)).thenReturn(Optional.of(maternalHistory));
+        Staff colleague = new Staff();
+        colleague.setId(UUID.randomUUID());
+        colleague.setHospital(hospital);
+        com.example.hms.security.CallerIdentityTestSupport.actAs(colleague, hospital);
+
+        assertThatThrownBy(() -> maternalHistoryService.deleteMaternalHistory(historyId, "colleague"))
+                .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        verify(maternalHistoryRepository, never()).delete(any());
+        com.example.hms.security.CallerIdentityTestSupport.clear();
     }
 
     @Test

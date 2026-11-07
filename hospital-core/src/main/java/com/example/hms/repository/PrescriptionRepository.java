@@ -42,6 +42,13 @@ public interface PrescriptionRepository extends JpaRepository<Prescription, UUID
     @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital"})
     Page<Prescription> findByEncounter_Id(UUID encounterId, Pageable pageable);
 
+    /** QA D972 hand-off: a visit's prescription ids, withdrawn ones left out (checkout event). */
+    @org.springframework.data.jpa.repository.Query(
+        "select p.id from Prescription p where p.encounter.id = :encounterId and p.status not in :excluded")
+    List<UUID> findIdsByEncounterIdAndStatusNotIn(
+        @org.springframework.data.repository.query.Param("encounterId") UUID encounterId,
+        @org.springframework.data.repository.query.Param("excluded") java.util.Collection<com.example.hms.enums.PrescriptionStatus> excluded);
+
     @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital"})
     List<Prescription> findByPatient_IdAndHospital_Id(UUID patientId, UUID hospitalId);
 

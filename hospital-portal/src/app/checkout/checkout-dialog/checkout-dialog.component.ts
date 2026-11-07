@@ -6,7 +6,12 @@ import {
   inject,
   signal,
   ChangeDetectionStrategy,
+  DestroyRef,
+  WritableSignal,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { forkJoin, of } from 'rxjs';
+import { catchError, map } from 'rxjs/operators';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -17,6 +22,11 @@ import {
   AfterVisitSummary,
 } from '../../services/encounter.service';
 import { ToastService } from '../../core/toast.service';
+import { serverLocalDate } from '../../shared/date-utils';
+import { AuthService } from '../../auth/auth.service';
+import { PatientService, PatientProblem } from '../../services/patient.service';
+import { PrescriptionService, PrescriptionResponse } from '../../services/prescription.service';
+import { ReferralService, ReferralResponse } from '../../services/referral.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
@@ -29,13 +39,44 @@ import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
   styleUrl: './checkout-dialog.component.scss',
 })
 export class CheckoutDialogComponent {
-  @Input() encounter: EncounterResponse | null = null;
+  /**
+   * QA D960: the dialog opened blank, so the visit summary held only what the
+   * doctor retyped. It now starts from the visit's own record for the doctor
+   * to review: the diagnoses recorded during the visit (or the note's
+   * assessment), its prescriptions and the referrals written that day.
+   */
+  @Input() set encounter(value: EncounterResponse | null) {
+    const changed = value?.id !== this._encounter?.id;
+    this._encounter = value;
+    if (changed && value) this.prefill(value);
+  }
+  get encounter(): EncounterResponse | null {
+    return this._encounter;
+  }
+  private _encounter: EncounterResponse | null = null;
   @Output() dismissed = new EventEmitter<void>();
   @Output() checkoutCompleted = new EventEmitter<AfterVisitSummary>();
 
   private readonly encounterService = inject(EncounterService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly auth = inject(AuthService);
+  private readonly patientService = inject(PatientService);
+  private readonly prescriptionService = inject(PrescriptionService);
+  private readonly referralService = inject(ReferralService);
+  private readonly destroyRef = inject(DestroyRef);
+
+  /** Roles all three reads admit (diagnoses, prescriptions, referrals by patient). */
+  private static readonly PREFILL_ROLES = ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'];
+  /** Not prescribed (unsigned) or taken back: never on the patient's summary. */
+  private static readonly WITHDRAWN_RX = new Set([
+    'DRAFT',
+    'PENDING_SIGNATURE',
+    'CANCELLED',
+    'DISCONTINUED',
+    'PARTNER_REJECTED',
+  ]);
+  private static readonly CLOSED_REFERRAL = new Set(['CANCELLED', 'REJECTED']);
 
   /* ── Form fields ──────────────────────── */
   followUpInstructions = signal('');
@@ -100,5 +141,85 @@ export class CheckoutDialogComponent {
 
   close(): void {
     this.dismissed.emit();
+  }
+
+  private prefill(enc: EncounterResponse): void {
+    const assessment = enc.note?.assessment?.trim() ?? '';
+    if (!enc.patientId || !this.auth.hasAnyRole(CheckoutDialogComponent.PREFILL_ROLES)) {
+      if (assessment) this.fillIfEmpty(this.dischargeDiagnosesText, assessment);
+      return;
+    }
+    // The reader's calendar day of the visit (server times are UTC).
+    const visitDay = serverLocalDate(enc.arrivalTimestamp || enc.encounterDate);
+    forkJoin({
+      problems: this.patientService
+        .listDiagnoses(enc.patientId, { hospitalId: enc.hospitalId || undefined })
+        .pipe(
+          map((r) => r.items),
+          catchError(() => of([] as PatientProblem[])),
+        ),
+      // Review of #971: this visit's prescriptions, not one page of the patient's.
+      prescriptions: this.prescriptionService
+        .list({ encounterId: enc.id })
+        .pipe(catchError(() => of([] as PrescriptionResponse[]))),
+      referrals: this.referralService
+        .getByPatient(enc.patientId)
+        .pipe(catchError(() => of([] as ReferralResponse[]))),
+    })
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(({ problems, prescriptions, referrals }) => {
+        if (this._encounter?.id !== enc.id) return;
+        const diagnoses = problems
+          .filter((p) => p.status !== 'RESOLVED' && p.status !== 'INACTIVE')
+          // Recorded or reviewed during the visit (not the illness's onset).
+          .filter(
+            (p) =>
+              !!visitDay && !!p.lastReviewedAt && serverLocalDate(p.lastReviewedAt) >= visitDay,
+          )
+          .map((p) =>
+            p.problemCode ? `${p.problemDisplay} (${p.problemCode})` : p.problemDisplay,
+          );
+        this.fillIfEmpty(
+          this.dischargeDiagnosesText,
+          diagnoses.length ? diagnoses.join('\n') : assessment,
+        );
+        this.fillIfEmpty(
+          this.prescriptionSummary,
+          prescriptions
+            .filter((rx) => rx.encounterId === enc.id)
+            .filter((rx) => !CheckoutDialogComponent.WITHDRAWN_RX.has(rx.status))
+            .map((rx) =>
+              [rx.medicationDisplayName || rx.medicationName, rx.dosage, rx.frequency, rx.duration]
+                .filter((x) => !!x && String(x).trim())
+                .join(' '),
+            )
+            .join('\n'),
+        );
+        this.fillIfEmpty(
+          this.referralSummary,
+          referrals
+            .filter((r) => !CheckoutDialogComponent.CLOSED_REFERRAL.has(r.status))
+            .filter((r) => {
+              const day = serverLocalDate(r.createdAt);
+              // The visit's day; any day since admission for a stay.
+              return (
+                !!visitDay &&
+                day >= visitDay &&
+                (enc.encounterType === 'INPATIENT' || day === visitDay)
+              );
+            })
+            .map((r) =>
+              [r.targetDepartmentName || r.targetSpecialty, r.referralReason]
+                .filter((x) => !!x && String(x).trim())
+                .join(' — '),
+            )
+            .join('\n'),
+        );
+      });
+  }
+
+  /** Never overwrite what the doctor already typed. */
+  private fillIfEmpty(field: WritableSignal<string>, value: string): void {
+    if (value && !field().trim()) field.set(value);
   }
 }

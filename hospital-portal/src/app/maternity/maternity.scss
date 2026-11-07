@@ -606,3 +606,11 @@
     margin: 0;
   }
 }
+
+/* QA D1005: the gestational age under the due date. */
+.field-hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.8rem;
+  color: var(--text-secondary, #555);
+}

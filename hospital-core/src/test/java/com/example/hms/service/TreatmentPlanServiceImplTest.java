@@ -49,6 +49,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -613,11 +614,67 @@ class TreatmentPlanServiceImplTest {
         when(staffRepository.findById(reviewerId)).thenReturn(Optional.of(reviewer));
         when(treatmentPlanReviewRepository.save(any(TreatmentPlanReview.class))).thenReturn(review);
         when(treatmentPlanMapper.toReviewDTO(review)).thenReturn(reviewDTO);
+        // QA D503 class: the reviewer is the signed-in clinician.
+        reviewer.setHospital(hospital);
+        com.example.hms.security.CallerIdentityTestSupport.actAs(reviewer, hospital);
 
         TreatmentPlanReviewDTO result = service.addReview(planId, reviewReq);
 
         assertThat(result).isNotNull();
         verify(treatmentPlanReviewRepository).save(any(TreatmentPlanReview.class));
+    }
+
+    @Test
+    void qaD955_theAuthorCannotApproveHerOwnPlan() {
+        TreatmentPlanReviewRequestDTO reviewReq = TreatmentPlanReviewRequestDTO.builder()
+                .reviewerStaffId(authorId)
+                .action(TreatmentPlanReviewAction.APPROVED)
+                .build();
+        when(treatmentPlanRepository.findById(planId)).thenReturn(Optional.of(plan));
+        when(staffRepository.findById(authorId)).thenReturn(Optional.of(author));
+
+        assertThatThrownBy(() -> service.addReview(planId, reviewReq))
+                .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        verify(treatmentPlanReviewRepository, never()).save(any());
+    }
+
+    @Test
+    void qaD503_aReviewCannotBeFiledInAColleaguesName() {
+        UUID colleagueId = UUID.randomUUID();
+        Staff colleague = new Staff();
+        colleague.setId(colleagueId);
+        colleague.setHospital(hospital);
+        colleague.setUser(new com.example.hms.model.User());
+        colleague.getUser().setId(UUID.randomUUID());
+        TreatmentPlanReviewRequestDTO reviewReq = TreatmentPlanReviewRequestDTO.builder()
+                .reviewerStaffId(colleagueId)
+                .action(TreatmentPlanReviewAction.CHANGES_REQUESTED)
+                .build();
+        when(treatmentPlanRepository.findById(planId)).thenReturn(Optional.of(plan));
+        when(staffRepository.findById(colleagueId)).thenReturn(Optional.of(colleague));
+
+        assertThatThrownBy(() -> service.addReview(planId, reviewReq))
+                .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+    }
+
+    @Test
+    void qaD930_aColleagueCannotRewriteThePlanBySendingBackItsAuthor() {
+        Staff colleague = new Staff();
+        colleague.setId(UUID.randomUUID());
+        colleague.setHospital(hospital);
+        com.example.hms.security.CallerIdentityTestSupport.actAs(colleague, hospital);
+        when(treatmentPlanRepository.findById(planId)).thenReturn(Optional.of(plan));
+        org.mockito.Mockito.lenient().when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        org.mockito.Mockito.lenient().when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        org.mockito.Mockito.lenient().when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        org.mockito.Mockito.lenient().when(assignmentRepository.findById(assignmentId)).thenReturn(Optional.of(assignment));
+        org.mockito.Mockito.lenient().when(staffRepository.findById(authorId)).thenReturn(Optional.of(author));
+        org.mockito.Mockito.lenient().when(staffRepository.findById(supervisingId)).thenReturn(Optional.of(supervising));
+        org.mockito.Mockito.lenient().when(staffRepository.findById(signOffId)).thenReturn(Optional.of(signOff));
+
+        assertThatThrownBy(() -> service.update(planId, requestDTO))
+                .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        verify(treatmentPlanRepository, never()).save(any());
     }
 
     @Test

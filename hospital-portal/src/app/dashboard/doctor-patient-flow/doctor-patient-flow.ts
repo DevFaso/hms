@@ -133,10 +133,19 @@ export class DoctorPatientFlowComponent implements OnInit, OnDestroy {
     this.patientSelected.emit(patientId);
   }
 
+  /**
+   * QA D994: every encounter card read "Ambulatoire", urgences included. An
+   * admission or an inpatient visit is hospitalised, an emergency visit is
+   * "Urgences", the rest ambulatory.
+   */
   getSourceLabel(item: PatientFlowItem): string {
-    return item.flowSource === 'ADMISSION'
-      ? this.translate.instant('DASHBOARD.PATIENT_FLOW_INPATIENT')
-      : this.translate.instant('DASHBOARD.PATIENT_FLOW_OUTPATIENT');
+    if (item.flowSource === 'ADMISSION' || item.encounterType === 'INPATIENT') {
+      return this.translate.instant('DASHBOARD.PATIENT_FLOW_INPATIENT');
+    }
+    if (item.encounterType === 'EMERGENCY') {
+      return this.translate.instant('DASHBOARD.PATIENT_FLOW_EMERGENCY');
+    }
+    return this.translate.instant('DASHBOARD.PATIENT_FLOW_OUTPATIENT');
   }
 
   getElapsedClass(minutes: number): string {

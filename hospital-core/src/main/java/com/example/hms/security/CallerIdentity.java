@@ -31,6 +31,12 @@ public final class CallerIdentity {
         return PrincipalUserIds.of(auth).orElse(null);
     }
 
+    /** True when the two staff records belong to the same user (QA D955 class: requester vs approver). */
+    public static boolean sameUser(Staff a, Staff b) {
+        return a != null && b != null && a.getUser() != null && b.getUser() != null
+            && a.getUser().getId() != null && a.getUser().getId().equals(b.getUser().getId());
+    }
+
     /** True when {@code staff} is the caller's own staff record. */
     public static boolean isCaller(Staff staff) {
         UUID caller = currentUserId();

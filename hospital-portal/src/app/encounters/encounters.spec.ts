@@ -120,7 +120,12 @@ describe('EncountersComponent', () => {
     );
     const patientSpy = jasmine.createSpyObj('PatientService', ['list']);
     patientSpy.list.and.returnValue(of([]));
-    const authSpy = jasmine.createSpyObj('AuthService', ['hasAnyRole', 'getHospitalId']);
+    const authSpy = jasmine.createSpyObj('AuthService', [
+      'hasAnyRole',
+      'getHospitalId',
+      'getUserId',
+    ]);
+    authSpy.getUserId.and.returnValue(null);
     authSpy.hasAnyRole.and.returnValue(false);
     const scopeUrlSpy = jasmine.createSpyObj('HospitalScopeUrlService', ['applyUrlScopeSync']);
     activeRoles = ['ROLE_DOCTOR'];
@@ -555,6 +560,30 @@ describe('EncountersComponent', () => {
     documentedAt: '2026-10-26T08:00:00',
     signedAt: null,
   } as unknown as EncounterNoteResponse;
+
+  it('QA D995: a draft is offered for signature to its author only, and co-signature to others', () => {
+    const auth = TestBed.inject(AuthService) as jasmine.SpyObj<AuthService>;
+    auth.getUserId.and.returnValue('user-2');
+    const theirs = { ...entryB, authorUserId: 'user-1' } as EncounterNoteResponse;
+    const fixture = TestBed.createComponent(EncountersComponent);
+    fixture.componentInstance.selectEncounter(
+      mockEncounter({ note: theirs, noteEntries: [theirs] }),
+    );
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[data-testid="sign-note"]')).toBeNull();
+    expect(host.querySelector('[data-testid="sign-note-author-only"]')).not.toBeNull();
+
+    auth.getUserId.and.returnValue('user-1');
+    const signedOwn = {
+      ...theirs,
+      signedAt: '2026-10-26T09:00:00',
+      requiresCosign: true,
+      cosignedAt: null,
+    } as unknown as EncounterNoteResponse;
+    expect(fixture.componentInstance.isNoteAuthor(theirs)).toBeTrue();
+    expect(fixture.componentInstance.isOtherClinicianNote(signedOwn)).toBeFalse();
+  });
 
   it("QA D831: the first doctor's draft is listed as its own entry beside the second doctor's", () => {
     component.selectEncounter(mockEncounter({ note: entryB, noteEntries: [draftA, entryB] }));

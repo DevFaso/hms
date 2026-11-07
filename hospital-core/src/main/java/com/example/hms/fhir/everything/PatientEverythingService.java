@@ -321,10 +321,11 @@ public class PatientEverythingService {
 
     private void appendDocumentReferenceSection(Bundle bundle, SectionContext ctx) {
         if (!ctx.includes("DocumentReference")) return;
-        // Uploaded documents are patient-anchored (no hospital column); the
-        // registration gate in loadAndVerifyTenantOwnedPatient already ran.
+        // Uploaded documents follow the patient (the registration gate in
+        // loadAndVerifyTenantOwnedPatient already ran); a document another
+        // hospital issued, such as its medical certificate, does not (QA D961).
         Page<PatientUploadedDocument> docs = uploadedDocumentRepository
-            .findByPatient_IdAndDeletedAtIsNullOrderByCreatedAtDesc(ctx.patientId(), ctx.pageRequest());
+            .findForStaffNewestFirst(ctx.patientId(), ctx.hospitalId(), ctx.pageRequest());
         ctx.notePageOverflow(docs);
         docs.forEach(d -> {
             if (ctx.passesSinceFilter(d.getUpdatedAt())) {

@@ -103,6 +103,8 @@
     "src/app/nurse-station/nurse-station.html::m.route",
     "src/app/nurse-station/nurse-station.html::p.acuityLevel",
     "src/app/nurse-station/nurse-station.html::task.category",
+    "src/app/nurse-station/nursing-intake-form/nursing-intake-form.component.html::a.reaction",
+    "src/app/nurse-station/nursing-intake-form/nursing-intake-form.component.html::rx.frequency",
     "src/app/organizations/organization-detail.html::lc.archiveReason",
     "src/app/organizations/organization-detail.html::lc.purgeReason",
     "src/app/organizations/organization-detail.html::lc.suspensionReason",

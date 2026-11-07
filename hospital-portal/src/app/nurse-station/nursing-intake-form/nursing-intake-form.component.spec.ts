@@ -9,7 +9,9 @@ import {
   NursingIntakeResponse,
 } from '../../services/encounter.service';
 import { ToastService } from '../../core/toast.service';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
+import { PatientAllergy, PatientService } from '../../services/patient.service';
+import { PrescriptionResponse, PrescriptionService } from '../../services/prescription.service';
 
 describe('NursingIntakeFormComponent', () => {
   let component: NursingIntakeFormComponent;
@@ -157,5 +159,130 @@ describe('NursingIntakeFormComponent', () => {
 
   it('should track items by index', () => {
     expect(component.trackByIndex(5)).toBe(5);
+  });
+});
+
+describe('NursingIntakeFormComponent — carried-in chart data (QA D951/D992)', () => {
+  let fixture: ComponentFixture<NursingIntakeFormComponent>;
+  let component: NursingIntakeFormComponent;
+  let patientService: jasmine.SpyObj<PatientService>;
+  let prescriptionService: jasmine.SpyObj<PrescriptionService>;
+
+  beforeEach(async () => {
+    patientService = jasmine.createSpyObj('PatientService', ['listAllergies']);
+    prescriptionService = jasmine.createSpyObj('PrescriptionService', ['list']);
+    patientService.listAllergies.and.returnValue(
+      of({
+        items: [
+          { id: 'a1', patientId: 'p1', allergenDisplay: 'Pénicilline', active: true },
+          { id: 'a2', patientId: 'p1', allergenDisplay: 'Old', active: false },
+        ] as PatientAllergy[],
+        withheld: false,
+      }),
+    );
+    prescriptionService.list.and.returnValue(
+      of([
+        {
+          id: 'rx1',
+          medicationName: 'Amoxicilline',
+          dosage: '500 mg',
+          frequency: '3x/j',
+          route: 'PO',
+        } as PrescriptionResponse,
+      ]),
+    );
+    await TestBed.configureTestingModule({
+      imports: [NursingIntakeFormComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        { provide: PatientService, useValue: patientService },
+        { provide: PrescriptionService, useValue: prescriptionService },
+        {
+          provide: ToastService,
+          useValue: jasmine.createSpyObj('ToastService', ['success', 'error']),
+        },
+      ],
+    }).compileComponents();
+    fixture = TestBed.createComponent(NursingIntakeFormComponent);
+    component = fixture.componentInstance;
+    component.encounter = {
+      id: 'enc-9',
+      code: 'ENC-20261027-51B828',
+      patientId: 'p1',
+      hospitalId: 'h1',
+      chiefComplaint: 'Douleur thoracique',
+    } as EncounterResponse;
+    fixture.detectChanges();
+  });
+
+  it('starts with the chief complaint given at check-in or triage', () => {
+    expect(component.chiefComplaint()).toBe('Douleur thoracique');
+  });
+
+  it("takes the next encounter's complaint when the form is reused (review of #971)", () => {
+    component.encounter = {
+      id: 'enc-10',
+      patientId: 'p2',
+      chiefComplaint: 'Toux',
+    } as EncounterResponse;
+    expect(component.chiefComplaint()).toBe('Toux');
+  });
+
+  it('never shows a late answer for the previous patient under the next one (review of #971)', () => {
+    const lateRx = new Subject<PrescriptionResponse[]>();
+    const lateAllergies = new Subject<{ items: PatientAllergy[]; withheld: boolean }>();
+    prescriptionService.list.and.returnValue(lateRx);
+    patientService.listAllergies.and.returnValue(lateAllergies);
+    component.encounter = { id: 'enc-a', patientId: 'pA' } as EncounterResponse;
+    prescriptionService.list.and.returnValue(of([]));
+    patientService.listAllergies.and.returnValue(of({ items: [], withheld: false }));
+    component.encounter = { id: 'enc-b', patientId: 'pB' } as EncounterResponse;
+
+    lateRx.next([{ id: 'rxA', medicationName: 'Medicine of A' } as PrescriptionResponse]);
+    lateAllergies.next({
+      items: [
+        { id: 'aA', patientId: 'pA', allergenDisplay: 'Allergy of A', active: true },
+      ] as PatientAllergy[],
+      withheld: false,
+    });
+
+    expect(component.documentedMedications()).toEqual([]);
+    expect(component.documentedAllergies()).toEqual([]);
+  });
+
+  it('lists the active documented allergies and the current prescriptions', () => {
+    expect(patientService.listAllergies).toHaveBeenCalledWith('p1', 'h1');
+    expect(component.documentedAllergies().map((a) => a.allergenDisplay)).toEqual(['Pénicilline']);
+    expect(component.documentedMedications().length).toBe(1);
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('Pénicilline');
+    expect(text).toContain('Amoxicilline');
+  });
+
+  it('never re-sends a documented allergy, which the server would duplicate', () => {
+    expect(component.allergies().length).toBe(0);
+  });
+
+  it('copies a prescription into the reconciliation once', () => {
+    const rx = component.documentedMedications()[0];
+    component.reconcilePrescription(rx);
+    component.reconcilePrescription(rx);
+    expect(component.medications().length).toBe(1);
+    expect(component.medications()[0].medicationName).toBe('Amoxicilline');
+    expect(component.isReconciled(rx)).toBeTrue();
+  });
+
+  it('names the encounter by its visit code, never a UUID fragment', () => {
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('ENC-20261027-51B828');
+    expect(text).not.toContain('enc-9');
+  });
+
+  it('is a labelled modal dialog', () => {
+    const dialog = (fixture.nativeElement as HTMLElement).querySelector('.intake-dialog');
+    expect(dialog?.getAttribute('role')).toBe('dialog');
+    expect(dialog?.getAttribute('aria-modal')).toBe('true');
+    expect(dialog?.getAttribute('aria-labelledby')).toBe('intake-dialog-title');
   });
 });

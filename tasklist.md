@@ -2376,6 +2376,106 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   push during a run can be labelled with the newer head; (5) a PR with only
   generated files still calls the model; (6) tests for those cases.
 
+- **QA D972 — clinic-to-billing hand-off at checkout (round 16, branch B
+  prepared the producer; the consumer is owed).** A checked-out visit creates
+  no charge: only the copay invoice exists, and only maternity delivery posts
+  lines automatically. `EncounterServiceImpl.checkOut` now publishes
+  `com.example.hms.event.EncounterCheckedOutEvent` (ids and scalars only:
+  encounter, code, patient, hospital, department, provider staff, encounter
+  type, checkout time, the visit's non-withdrawn prescription ids, its lab
+  order ids and procedure order ids). Owed: a billing listener
+  (`@TransactionalEventListener(phase = AFTER_COMMIT)` + `REQUIRES_NEW`, the
+  `DeliveryChargeService` idiom) that turns it into draft charges on the
+  visit's invoice from the hospital's price list, idempotent per encounter
+  (a unique key on the encounter id so a replayed event never bills twice),
+  and a test that a failed charge never rolls the checkout back.
+- **Round 16 branch B follow-ups that live in other branches' files.**
+  (1) The nursing-notes panel (`encounters/nursing-notes-panel`, D927) is in
+  the encounter detail only; the patient chart (`patients/patient-detail`)
+  should embed `<app-nursing-notes-panel [patientId]>` too. (2) The ward
+  vitals dialog in `nurse-station.html` has no pain field (D989 note), and
+  the chart's vitals list shows the localised `notes` text, not a structured
+  pain score (a `pain_score` column like `postpartum_observations` would let
+  every screen format it). (3) The treatment-plans page still offers Edit on
+  a colleague's plan; the server now refuses it (D930 class), so the button
+  should be hidden for non-authors. (4) Author checks still missing on
+  documents owned by other branches, found in the D930 audit: an unsigned
+  prescription draft can be rewritten or deleted by any prescriber
+  (`PrescriptionServiceImpl.update/deletePrescription`), a lab order can be
+  hard-deleted by anyone at the ordering hospital
+  (`LabOrderServiceImpl.deleteLabOrder`), an imaging report draft can be
+  edited, signed or voided by any clinician (`ImagingReportServiceImpl`), an
+  imaging order can be cancelled through `updateOrderStatus` by anyone in
+  scope, and an ultrasound order update has no author check. Procedure
+  orders, admissions, problems, allergies and family/social history are left
+  team-owned on purpose (the surgical/ward team acts on them); that is a
+  product decision to confirm, not an oversight. (5) D1003: the CVX code
+  stays a required typed field because the DHIS2 ADX export counts doses by
+  it; the PEV vaccine list offers names only. A vetted PEV-vaccine to CVX
+  table (supplied by the user, never invented) would let the form fill the
+  code. (6) D930: a draft discharge summary is editable by the visit's
+  treating doctor, but finalize still requires the discharging provider
+  (QA D503), who is the visit's clinician of record and may be the nurse
+  who opened it; the Résumés tab shows the buttons to the discharging
+  provider only. Checkout should name the treating doctor as discharging
+  provider. (7) D961: the certificate's examination date is the visit's
+  date on the server clock (UTC); right for UTC+0 hospitals, a day early
+  for a past-day visit at a UTC+1 hospital until hospitals carry a zone.
+  (8) Review round 7 of #971, deferred (not logic or security breaks):
+  the certificate button is offered to every doctor on a seen visit while
+  the server lets only the treating clinician sign (the refusal is readable
+  in the dialog; an exact gate needs a server-computed flag on the
+  encounter); a sick-leave start date has no upper bound (the maximum
+  offset after the visit is a clinical policy for the user to set); the
+  checkout diagnosis prefill takes problems reviewed on or after the visit
+  day with no upper bound (problems carry no encounter link; the prefill is
+  editable); efficiency: `DischargeSummaryServiceImpl.toDto` runs the
+  author rule per list row (role lookups and an exists query per draft),
+  `publishCheckedOut` runs three id queries with no listener yet, and
+  `BpaRuleEngine.buildContext` loads the due date for every non-male
+  patient even when no BP reading is hypertensive; "who is a physician"
+  is computed in `EncounterServiceImpl.isPhysicianAt`,
+  `DischargeSummaryServiceImpl.isPhysician` and the token-based
+  `callerIsDoctor`, which should share one helper.
+  (9) Review round 9 of #971, deferred: `issuing_hospital_id` (V240) has
+  no foreign key or index, so a removed hospital would leave a dangling id
+  and a 500 on the document read; V240 may already have run on dev from an
+  integration branch, so the FK needs its own migration (next free number)
+  rather than an edit; the certificate endpoint admits ROLE_DOCTOR only,
+  while checkout ownership counts physicians and surgeons as doctors
+  (whether surgeons and physicians sign certificates is a product call);
+  the maternity screens show a gestational age up to 44 weeks while the
+  pregnancy-hypertension card stops at the due date + 14 days (42 weeks);
+  the nursing-notes panel on a closed visit reads the 50 newest notes and
+  keeps the visit's days, so a visit followed by more than 50 later notes
+  shows none of its own until `GET /nurse/notes` takes a date range.
+  qSOFA scores the worst reading in its window for mentation, as it
+  already did for RR and sBP (a rule-wide design, not changed here).
+  (10) Review round 10 of #971, deferred: the EMERGENCY "dated today"
+  test and the certificate's examination day compare the server's date
+  (UTC) with a form date sent as local midnight, so at a UTC+1 hospital a
+  visit for today reads as yesterday (Burkina Faso is UTC+0; the fix is a
+  zone per hospital, as in (7)); a discharge-summary draft keeps its
+  provider when the visit's clinician of record is reassigned and the visit
+  is completed again (before #971 checkout re-homed it every time; who owns
+  a draft after a reassignment is a rule to decide, not re-homing that
+  would undo a covering doctor's ownership).
+  (11) Review round 11 of #971: a treatment plan's author still cannot hand
+  it to a colleague (the D503 rule on develop already refused naming
+  someone else as author; #971 only stopped a colleague from taking a plan
+  over), so the plan form's author picker can only fail: hide it, or decide
+  a hand-over rule.
+  (12) Review round 12 of #971, deferred: checkout still writes the visit's
+  closing fields (diagnoses, follow-up, summaries) into an existing draft
+  held by another doctor, as it did before #971 (it no longer changes the
+  draft's owner); whether checkout should leave another doctor's draft
+  alone, or append, is a workflow decision, and refusing it would break
+  checkout. A transcribed vaccine dose (D1003) records no staff member,
+  since `administered_by` was its only actor column; a `recorded_by`
+  column (new migration) would keep who entered it, beyond the write-audit
+  row. The certificate dialog's default start date is the browser's day of
+  the arrival, the server checks its own (the zone item in (10)).
+
 ### Execution plan (2026-09-26)
 
 The roadmap above is done except #46 (deferred by the user). What remains is
