@@ -29,8 +29,19 @@ public interface PostpartumObservationRepository extends JpaRepository<Postpartu
 
     Optional<PostpartumObservation> findFirstByCarePlan_IdOrderByObservationTimeDesc(UUID carePlanId);
 
-    /** QA D268: a haemorrhage was already recorded on this plan. */
-    boolean existsByCarePlan_IdAndHemorrhageProtocolActivatedTrue(UUID carePlanId);
+    /**
+     * QA D268, CR-06 class: a haemorrhage is on this plan when a row carries a HEMORRHAGE alert (the
+     * indicators) or a clinician attested the protocol. Either one keeps the 15-minute checks; a past
+     * row holding a true keeps them too, whatever set it.
+     */
+    @Query("""
+        select count(o) > 0 from PostpartumObservation o
+        where o.carePlan.id = :carePlanId
+          and (o.hemorrhageProtocolActivated = true
+               or exists (select 1 from o.alerts a
+                          where a.type = com.example.hms.enums.PostpartumAlertType.HEMORRHAGE))
+    """)
+    boolean existsHaemorrhageOnPlan(@Param("carePlanId") UUID carePlanId);
 
     Optional<PostpartumObservation> findByIdAndPatient_IdAndHospital_Id(UUID id, UUID patientId, UUID hospitalId);
 
