@@ -53,6 +53,7 @@ public class PatientPrimaryCareServiceImpl implements PatientPrimaryCareService 
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", req.getHospitalId()));
         patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
 
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
         UserRoleHospitalAssignment assignment = assignmentRepo.findById(req.getAssignmentId())
             .orElseThrow(() -> new ResourceNotFoundException("roleAssignment.notFound", req.getAssignmentId()));
 

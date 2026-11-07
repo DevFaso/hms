@@ -84,6 +84,7 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         requireActingHospital(request.getHospitalId());
         requirePatientRegisteredAtActingHospital(request.getPatientId());
 
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
         requireNotInThePast(request.getScheduledDate(), null);
         ImagingOrder imagingOrder = imagingOrderMapper.toEntity(request, patient, hospital);
         imagingOrder.setOrderedAt(LocalDateTime.now());

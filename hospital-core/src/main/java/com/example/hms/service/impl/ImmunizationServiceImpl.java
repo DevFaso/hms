@@ -63,6 +63,7 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         // QA D401: the patient must be registered at the hospital the row is written in.
         patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
 
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
         // QA D503 class: the vaccinator is the caller, not a colleague named in the body.
         // QA D1003: a dose transcribed from a vaccination card or another
         // facility's record was not given by the clinician who records it;

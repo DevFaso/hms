@@ -192,6 +192,15 @@ describe('ReceptionCockpitComponent', () => {
 
   // ── Check-In Dialog Tests ─────────────────────────────────────
 
+  it('QA D1489: does not offer a check-in that could only be refused', () => {
+    const base = { appointmentId: 'a1', patientId: 'p1', patientName: 'A', status: 'SCHEDULED' };
+    expect(component.canCheckIn({ ...base, registrationInactive: true } as any)).toBeFalse();
+    expect(component.canCheckIn({ ...base, patientDeceased: true } as any)).toBeFalse();
+    expect(
+      component.canCheckIn({ ...base, registrationInactive: false, patientDeceased: false } as any),
+    ).toBeTrue();
+  });
+
   it('should allow check-in for SCHEDULED items with an appointmentId', () => {
     const item = {
       appointmentId: 'a1',

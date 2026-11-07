@@ -6299,3 +6299,16 @@ For the clinician list (proposed alert logic, pending sign-off):
 - [ ] Round 35 frequency grammar: meals (`avant les repas`), minutes (`toutes les 30 min`), `once`, `une fois`, and any duration after a schedule (`3 fois par jour pendant 5 jours`) are asked once. If the extra tick costs prescribers too much, each is a line to add, with its fixture and a clinician's reading.
 - [ ] Round 35 frequency grammar, for a clinician (independent review): `bolus` reads as a single dose and ends the course after it, though it states a route. Bare `continu` / `en continu` reads as an infusion, with no next dose and no overdue. Each is one line to remove.
 - [ ] Round 35 frequency grammar: clock lists read by their count, as built in round 34: `8 h et 12 h` and `8h, 14h, 20h` read every 12 h and every 8 h, so a dose at the second time asks a reason, and a limit on the interval judges that interval, not the real gap. Bare `4/4` still reads every 4 h and `12/12` could be a date: confirm with a clinician.
+
+## Standing debt — round 36 (fix/r36-clinical-registration)
+
+- **NOT clinically approved:** `DeathClassificationRules.PERINATAL_PERIOD_COMPLETED_DAYS` (WHO, seven completed days) awaits the obstetric/neonatal lead and the responsible coding authority. QA passing is not approval.
+- D1490: `LATE_NEONATAL` keeps the enum's 7-28 days, or the type could not be used, yet it still counts in `perinatalDeaths`, which the WHO period does not include. It has no lower bound either. For the same sign-off.
+- D1490: a stillbirth with no chart of its own has no way into the mortality register: the delivery record holds it (`LaborOutcome.STILLBIRTH`), and the register counts only `death_records`.
+- D1488: inbound ADT (`MllpInboundAdtVisitProjectionServiceImpl`) can still create a stay or visit on a deceased patient: classified as a fact another system reports. Needs a product decision.
+- D1488: the cascade cancels appointments after the day of death, at the recording hospital, so a later same-day visit and another hospital's visits stay live. Their new-care writes are refused, but they stay on the desk's list.
+- D1488: the chart still offers actions the server now refuses for a deceased patient; the refusal is clean and localized.
+- D1489: `appointment-detail.html:59` still offers check-in on a deactivated registration or a deceased patient (branch 3's file); the refusal is clean.
+- D1489 class: the consent `try/catch` inside the check-in and pre-check-in transactions stays: both now refuse first, but any other failure of `TreatmentConsentService.record` would still mark the transaction rollback-only and answer 500.
+- Dispute: an in-basket item filed by the sweep, with no tenant context, keeps the patient's name and loses its patient link (`InBasketServiceImpl.fileItem`). Reminder and recall sweeps still skip a deceased patient under dispute (`AppointmentRepository`, `PatientRecallRepository`). Entered in error's audit does not name the disputes it ended; their rows do.
+- D1495: the refusal is on `hospitalId`, as booking's is, and that field is not on the reschedule form: it reads as a banner.

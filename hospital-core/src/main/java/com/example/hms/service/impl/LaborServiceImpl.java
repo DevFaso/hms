@@ -208,6 +208,7 @@ public class LaborServiceImpl implements LaborService {
         com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(hospital, "hospital.notFound", hospital.getId());
         patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
 
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
         if (episodeRepository.existsByPatient_IdAndHospital_IdAndStatus(patientId, hospital.getId(), LaborStatus.ACTIVE)) {
             throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, "maternity.labor.alreadyActive");
         }
@@ -416,6 +417,7 @@ public class LaborServiceImpl implements LaborService {
             throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, "maternity.partograph.laborNotActive");
         }
 
+        com.example.hms.service.support.DeceasedPatientGuard.refuseCareAfterDeath(episode.getPatient(), request.getObservationTime(), "observationTime");
         // QA D714: an observation cannot be charted in the future. A small
         // allowance covers device clock skew; anything beyond it is rejected
         // before it can raise an alert or be drawn on the partograph.

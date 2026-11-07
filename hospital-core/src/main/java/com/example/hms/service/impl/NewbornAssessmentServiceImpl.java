@@ -128,6 +128,10 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
         // body's hospital id is a claim), for a patient registered there.
         com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(hospital, HOSPITAL_NOT_FOUND, hospital.getId());
         patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
+        // A newborn assessed on the chart of a mother who died is the living baby: only the newborn's own chart is gated.
+        if (recordedOnNewbornChart) {
+            com.example.hms.service.support.DeceasedPatientGuard.refuseCareAfterDeath(patient, request.getAssessmentTime(), "assessmentTime");
+        }
         Staff staff = resolveRecorderStaff(request.getRecordedByStaffId(), recorderUserId, hospital);
         User documentedBy = resolveRecorderUser(recorderUserId);
 

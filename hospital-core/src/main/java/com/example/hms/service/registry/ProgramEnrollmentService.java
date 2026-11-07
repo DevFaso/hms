@@ -88,6 +88,7 @@ public class ProgramEnrollmentService {
         UUID hospitalId = requireHospital();
         Patient patient = requirePatientInTenant(patientId, hospitalId);
 
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
         enrollmentRepository.findByPatientIdAndHospitalIdAndProgramAndStatus(
                 patientId, hospitalId, request.getProgram(), ProgramEnrollmentStatus.ACTIVE)
             .ifPresent(existing -> {
@@ -187,6 +188,8 @@ public class ProgramEnrollmentService {
 
         LocalDate visitDate = request != null && request.getVisitDate() != null
             ? request.getVisitDate() : LocalDate.now(clock);
+        // QA D1488: a visit made before the death can still be entered, with its real date.
+        com.example.hms.service.support.DeceasedPatientGuard.refuseCareAfterDeathDay(enrollment.getPatient(), visitDate, "visitDate");
         if (visitDate.isBefore(enrollment.getEnrolledOn())) {
             throw new com.example.hms.exception.FieldBusinessException("visitDate", "program.enrollment.visitBeforeEnrolment");
         }

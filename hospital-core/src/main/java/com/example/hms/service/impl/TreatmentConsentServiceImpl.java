@@ -80,6 +80,7 @@ public class TreatmentConsentServiceImpl implements TreatmentConsentService {
             throw new BusinessException("consent.patientNotRegistered");
         }
 
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
         Appointment appointment = resolveAppointment(request.getAppointmentId(), patientId, hospitalId);
         Encounter encounter = resolveEncounter(request.getEncounterId(), patientId, hospitalId);
 

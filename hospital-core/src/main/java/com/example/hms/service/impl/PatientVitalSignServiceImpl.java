@@ -71,6 +71,7 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
         // A hospital named in the body (no registration found) is a claim: the
         // patient must be registered there, as for every other chart write.
         patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital == null ? null : hospital.getId());
+        com.example.hms.service.support.DeceasedPatientGuard.refuseCareAfterDeath(patient, request.getRecordedAt(), "recordedAt");
         // QA D525: the chart's vitals endpoint skipped the nurse station's
         // discharged-patient check; both now go through the same guard. A
         // patient reporting their own home reading (the portal path) is not

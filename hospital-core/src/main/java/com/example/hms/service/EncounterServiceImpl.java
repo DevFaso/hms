@@ -433,6 +433,7 @@ public class EncounterServiceImpl implements EncounterService {
         }
 
         EncounterResolution ctx = resolveEncounterResolution(request, locale);
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(ctx.patient());
         // QA D1476: a walk-in is not opened on a deactivated registration. Emergency care is
         // never refused at the desk: the registration is settled after the patient is treated.
         if (request.getEncounterType() != com.example.hms.enums.EncounterType.EMERGENCY) {
@@ -2204,6 +2205,7 @@ public class EncounterServiceImpl implements EncounterService {
 
         Encounter encounter = requireEncounterInScope(encounterId, isSuperAdmin, callerHospitalId);
 
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(encounter.getPatient());
         // Guard: only ARRIVED or TRIAGE encounters may receive triage
         EncounterStatus current = encounter.getStatus();
         if (current != EncounterStatus.ARRIVED && current != EncounterStatus.TRIAGE) {
@@ -2393,6 +2395,7 @@ public class EncounterServiceImpl implements EncounterService {
 
         Encounter encounter = requireEncounterInScope(encounterId, isSuperAdmin, callerHospitalId);
 
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(encounter.getPatient());
         // Guard: intake is allowed for encounters that have been triaged or are waiting
         EncounterStatus current = encounter.getStatus();
         if (current != EncounterStatus.WAITING_FOR_PHYSICIAN
@@ -3475,6 +3478,7 @@ public class EncounterServiceImpl implements EncounterService {
                                                 boolean mustBeAssignedClinician) {
         Encounter encounter = requireEncounterInScope(encounterId, isSuperAdmin, callerHospitalId);
 
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(encounter.getPatient());
         if (!isSuperAdmin) {
 
             // Verify the caller is the assigned staff
@@ -3520,6 +3524,7 @@ public class EncounterServiceImpl implements EncounterService {
     public EncounterResponseDTO completeTriage(UUID encounterId, boolean isSuperAdmin, UUID callerHospitalId) {
         Encounter encounter = requireEncounterInScope(encounterId, isSuperAdmin, callerHospitalId);
 
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(encounter.getPatient());
         EncounterStatus current = encounter.getStatus();
         if (current != EncounterStatus.TRIAGE && current != EncounterStatus.ARRIVED) {
             throw new BusinessException("encounter.triage.completeWrongStatus", EncounterStatus.labelOf(current));

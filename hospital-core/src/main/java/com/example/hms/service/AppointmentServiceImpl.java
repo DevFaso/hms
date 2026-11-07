@@ -67,6 +67,11 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class AppointmentServiceImpl implements AppointmentService {
+
+    /** QA D1488: a status that keeps a visit going, refused for a patient who has died. */
+    private static final Set<AppointmentStatus> STATUSES_THAT_KEEP_A_VISIT_LIVE = Set.of(
+        AppointmentStatus.CONFIRMED, AppointmentStatus.SCHEDULED, AppointmentStatus.PENDING,
+        AppointmentStatus.RESCHEDULED, AppointmentStatus.IN_PROGRESS);
     /** Request properties a refusal names (QA D1352 class, round 30). */
     private static final String FIELD_STAFF_ID = "staffId";
     private static final String FIELD_START_TIME = "startTime";
@@ -525,6 +530,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         if (isStaffOrAdmin) {
             patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
         }
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
         patientRegistrationGuard.refuseDeactivatedRegistration(patient.getId(), hospital.getId());
 
         // --- Staff resolution ---
@@ -915,6 +921,9 @@ public class AppointmentServiceImpl implements AppointmentService {
         AppointmentStatus statusBefore = existing.getStatus();
         requireValidStatusChange(statusBefore, request.getStatus());
         boolean statusMoved = request.getStatus() != null && request.getStatus() != statusBefore;
+        if (statusMoved && STATUSES_THAT_KEEP_A_VISIT_LIVE.contains(request.getStatus())) {
+            com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
+        }
         if (statusMoved) {
             // The same temporal guard as the status action (review round 8).
             // Both the visit's own time and the time it is moved to must have
@@ -930,6 +939,7 @@ public class AppointmentServiceImpl implements AppointmentService {
             // above, which names the worse fault first). Giving a visit under way to another
             // clinician keeps its time, and stays possible.
             requireNotAlreadyPast(requestedStart, hospital);
+            com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
             // QA D1476: nor moved on for a registration the desk deactivated; keeping its time,
             // it can still take a note, another clinician or a cancellation.
             patientRegistrationGuard.refuseDeactivatedRegistration(patient.getId(), hospital.getId());
@@ -1219,6 +1229,11 @@ public class AppointmentServiceImpl implements AppointmentService {
             case "fail"       -> newStatus = AppointmentStatus.FAILED;
             // QA D1374 (round 31): the query parameter is named.
             default -> throw new com.example.hms.exception.FieldBusinessException("action", "appointment.invalidAction", action);
+        }
+
+        // QA D1488: closing a dead patient's visit stays open; putting it back into play does not.
+        if (STATUSES_THAT_KEEP_A_VISIT_LIVE.contains(newStatus)) {
+            com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(appointment.getPatient());
         }
 
         // ── Validate status transition ──

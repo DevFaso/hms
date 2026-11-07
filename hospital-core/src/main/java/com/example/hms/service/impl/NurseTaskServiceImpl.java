@@ -905,6 +905,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         if (!patient.isRegisteredInHospital(hospitalId)) {
             throw new com.example.hms.exception.FieldBusinessException("patientId", "nurse.patient.notRegisteredHere");
         }
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
         // QA D1477: nobody hands over a patient who has gone: the visit or the stay has ended.
         requireNotDischargedWithoutVisit(patient.getId(), hospitalId, "nurse.handoff.patientDischarged");
 
@@ -1725,6 +1726,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
      * Doses already recorded are not touched.
      */
     private void requireOrderStillStands(Prescription rx, UUID hospitalId) {
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(rx != null ? rx.getPatient() : null);
         requireOrderNotEndedByDischarge(rx, hospitalId);
         if (com.example.hms.service.InpatientOrderEnd.endedWithItsStay(rx)) {
             throw new com.example.hms.exception.ConflictException("nurse.mar.stayEnded");
@@ -2011,6 +2013,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         if (!patient.isRegisteredInHospital(hospitalId)) {
             throw new BusinessException("nurse.patient.notRegisteredHere");
         }
+        com.example.hms.service.support.DeceasedPatientGuard.refuseCareAfterDeath(patient, null, "recordedAt");
         requireNotDischargedWithoutVisit(patientId, hospitalId);
         // QA D1077: a head circumference is a child's measure (the growth tab's age rule).
         com.example.hms.service.support.PatientMeasureRules.requireHeadCircumferenceApplicable(
@@ -2212,6 +2215,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         if (!patient.isRegisteredInHospital(hospitalId)) {
             throw new com.example.hms.exception.FieldBusinessException("patientId", "nurse.patient.notRegisteredHere");
         }
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
         // QA D525: a ward task for a patient who went home sat in the list.
         requireNotDischargedWithoutVisit(patient.getId(), hospitalId, "nurse.task.patientDischarged");
 

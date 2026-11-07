@@ -536,6 +536,7 @@ class RequiredRequestIdGuardTest {
      */
     private static final Map<String, String> CONDITIONALLY_REQUIRED = Map.ofEntries(
         Map.entry("StaffPaymentRequestDTO.reference", "only for mobile money, insurance or transfer"),
+        Map.entry("CrossmatchRequestDTO.incompatibilityReason", "only when the verdict is incompatible (QA D1507)"),
         Map.entry("DeathRecordRequestDTO.maternalDeathTiming", "only when the death is a maternal death"),
         Map.entry("DeathRecordRequestDTO.perinatalType", "only when the death is a perinatal death"),
         Map.entry("ObgynReferralCreateRequestDTO.attachments", "only for an urgent referral"),

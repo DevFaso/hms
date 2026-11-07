@@ -369,6 +369,7 @@ public class TransfusionServiceImpl implements TransfusionService {
         UUID hospitalId = requireHospital();
         Patient patient = patientChartAccess.require(request.getPatientId(), hospitalId);
 
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
         TransfusionUrgency urgency = request.getUrgency() != null
             ? request.getUrgency() : TransfusionUrgency.ROUTINE;
 
@@ -536,6 +537,11 @@ public class TransfusionServiceImpl implements TransfusionService {
                 productLabel(unit.getProductType()), productLabel(transfusionRequest.getProductType()));
         }
         requireNotHeldElsewhere(unit, requestId, hung);
+        // QA CX-012: nor is a result that stands got round by a new request of the same patient.
+        if (claimsCompatible && crossmatchRepository.existsStandingIncompatibleForPatient(
+                unit.getId(), transfusionRequest.getPatient().getId(), requestId)) {
+            throw new FieldBusinessException(FIELD_COMPATIBLE, "transfusion.crossmatch.incompatibleStands", unit.getUnitNumber());
+        }
         requireInFuture(request.getExpiresAt());
 
         // QA CX-011: the patient's current screen. A request raised before a
@@ -594,6 +600,11 @@ public class TransfusionServiceImpl implements TransfusionService {
                 unit.getUnitNumber(), transfusionRequest.getId());
         }
 
+        // QA D1507: an incompatible crossmatch records why (the user's rule).
+        if (Boolean.FALSE.equals(request.getCompatible()) && !hasText(request.getIncompatibilityReason())) {
+            throw new FieldBusinessException("incompatibilityReason", "transfusion.crossmatch.reasonRequired");
+        }
+
         LocalDateTime now = LocalDateTime.now(clock);
         TransfusionCrossmatch crossmatch = onFile != null ? onFile : TransfusionCrossmatch.builder()
             .request(transfusionRequest)
@@ -602,6 +613,13 @@ public class TransfusionServiceImpl implements TransfusionService {
             .build();
         boolean alreadyIncompatible = crossmatch.getId() != null && !Boolean.TRUE.equals(crossmatch.getCompatible());
 
+        // QA CX-012: a result written on a bag out for this request carries that fact, because the bag's status moves
+        // on just below. Enough with the checks around it: a bag back at the lab came by a result here or a cancelled
+        // request, which takes no compatible result; discarded and given bags are terminal or have an administration;
+        // a false row on file at a knowing release is read from the release, as a release leaves the row alone.
+        if (hung != null || (unit.getStatus() == BloodUnitStatus.ISSUED && issuedTo(unit, requestId))) {
+            crossmatch.setUnitIssued(true);
+        }
         crossmatch.setCompatible(request.getCompatible());
         crossmatch.setMethod(request.getMethod());
         crossmatch.setIncompatibilityReason(request.getIncompatibilityReason());
@@ -642,16 +660,21 @@ public class TransfusionServiceImpl implements TransfusionService {
         return mapper.toDto(saved);
     }
 
+    private static boolean issuedTo(BloodUnit unit, UUID requestId) {
+        return unit.getRequest() != null && requestId.equals(unit.getRequest().getId());
+    }
+
     /**
-     * The result is settled for this bag: an incompatible result stands once the bag was hung for
-     * this request, or released knowing it. Before that the laboratory may still repeat the test.
+     * The result is settled for this bag: an incompatible result stands once the bag was issued to
+     * this request (QA CX-012), whatever its status says since, hung for it, or released knowing it.
+     * Before that the laboratory may still repeat the test.
      */
     private boolean incompatibleResultIsFixed(UUID requestId, BloodUnit unit, TransfusionAdministration hung,
                                               TransfusionCrossmatch onFile) {
         if (onFile == null || Boolean.TRUE.equals(onFile.getCompatible())) {
             return false;
         }
-        return hung != null || releaseRepository.existsByRequest_IdAndBloodUnit_IdAndReleaseType(
+        return hung != null || onFile.isUnitIssued() || releaseRepository.existsByRequest_IdAndBloodUnit_IdAndReleaseType(
             requestId, unit.getId(), EmergencyReleaseType.SEROLOGICALLY_INCOMPATIBLE);
     }
 
@@ -877,6 +900,7 @@ public class TransfusionServiceImpl implements TransfusionService {
         requestRepository.lockById(requestId);
         unitRepository.lockById(unitId);
         TransfusionRequest request = loadRequestScoped(requestId);
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(request.getPatient());
         BloodUnit unit = issuableUnit(request, unitId);
 
         TransfusionCrossmatch crossmatch = crossmatchRepository
@@ -916,6 +940,7 @@ public class TransfusionServiceImpl implements TransfusionService {
         requestRepository.lockById(requestId);
         unitRepository.lockById(release.getBloodUnitId());
         TransfusionRequest request = loadRequestScoped(requestId);
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(request.getPatient());
         if (!request.isEmergency()) {
             throw new BusinessException("transfusion.emergency.notEmergency");
         }
@@ -1276,6 +1301,7 @@ public class TransfusionServiceImpl implements TransfusionService {
         if (transfusionRequest.isTerminal()) {
             throw new FieldBusinessException("requestId", "transfusion.request.closed");
         }
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(transfusionRequest.getPatient());
         UUID hospitalId = transfusionRequest.getHospital().getId();
         BloodUnit unit = loadUnitScoped(request.getBloodUnitId());
         requireSameHospital(unit, transfusionRequest);

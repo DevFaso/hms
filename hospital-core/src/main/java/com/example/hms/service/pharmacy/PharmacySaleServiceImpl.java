@@ -96,6 +96,7 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
                     .orElseThrow(() -> new ResourceNotFoundException("patient.notfound", dto.getPatientId()));
         }
 
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
         User soldBy = resolveCurrentUser();
 
         PharmacySale sale = PharmacySale.builder()

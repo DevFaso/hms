@@ -1,7 +1,9 @@
 package com.example.hms.service.allergy;
 
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
@@ -142,6 +144,55 @@ public final class DrugClassAllergy {
             }
         }
         return out.toString();
+    }
+
+    /**
+     * QA D1492: what each cited brand of {@link #BRAND_GENERICS} is, as whole ingredient lists,
+     * any one of which a lot's generic must equal: the brand's own map holds loose words for the allergy check
+     * ("penicillin v" reads "penicillin"), and a lot leaves the shelf on this. Spellings as {@code OrderedDrugIdentity} reads a
+     * generic. Only what that map already holds, with no brand added.
+     */
+    private static final Map<String, List<Set<String>>> BRAND_DRUGS = brandDrugs();
+
+    private static Map<String, List<Set<String>>> brandDrugs() {
+        List<Set<String>> cotrimoxazole = List.of(Set.of("cotrimoxazol"), Set.of("co", "trimoxazol"), Set.of("sulfametoxazol", "trimetoprim"));
+        List<Set<String>> paracetamol = List.of(Set.of("paracetamol"), Set.of("acetaminofen"));
+        List<Set<String>> penicillinV = List.of(Set.of("fenoximetilpenicilin"), Set.of("penicilin", "v"));
+        return Map.ofEntries(
+            Map.entry("\\bbactrim\\b", cotrimoxazole),
+            Map.entry("\\bseptra\\b", cotrimoxazole),
+            Map.entry("\\bseptrin\\b", cotrimoxazole),
+            Map.entry("\\beusaprim\\b", cotrimoxazole),
+            Map.entry("\\bfansidar\\b", List.of(Set.of("sulfadoxin", "pirimetamin"))),
+            Map.entry("\\btotapen\\b", List.of(Set.of("ampicilin"))),
+            Map.entry("\\borbenine\\b", List.of(Set.of("cloxacilin"))),
+            Map.entry("\\bospen\\b", penicillinV),
+            Map.entry("\\boracilline\\b", penicillinV),
+            Map.entry("\\baugmentin\\b", List.of(Set.of("amoxicilin", "clavulanic"), Set.of("amoxicilin", "clavulanat"))),
+            Map.entry("\\bclamoxyl\\b", List.of(Set.of("amoxicilin"))),
+            Map.entry("\\bextencilline\\b",
+                List.of(Set.of("benzatin", "benzilpenicilin"), Set.of("penicilin", "benzatinic"))),
+            Map.entry("\\befferalgan(?:stix)?\\b", paracetamol),
+            Map.entry("\\btylenol\\b", paracetamol));
+    }
+
+    /** The ingredient lists a lot's generic may be for the cited brands this name carries; none when it carries none. */
+    public static List<Set<String>> drugsOfCitedBrands(String medication) {
+        String med = normalize(medication);
+        return BRAND_DRUGS.entrySet().stream()
+            .filter(brand -> Pattern.compile(brand.getKey()).matcher(med).find())
+            .flatMap(brand -> brand.getValue().stream())
+            .toList();
+    }
+
+    /** The brands with a known drug, by pattern: every cited brand, or a guard fails. */
+    public static Set<String> brandsWithAKnownDrug() {
+        return BRAND_DRUGS.keySet();
+    }
+
+    /** QA D1492: the cited brands, by pattern, for the guard that each has a known drug at the pharmacy. */
+    public static java.util.Set<String> citedBrandPatterns() {
+        return BRAND_GENERICS.keySet().stream().map(Pattern::pattern).collect(java.util.stream.Collectors.toSet());
     }
 
     /** Whether the name carries one of the cited brands ({@link #BRAND_GENERICS}). */

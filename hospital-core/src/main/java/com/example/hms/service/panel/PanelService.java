@@ -70,6 +70,7 @@ public class PanelService {
     public PanelAssignmentResponseDTO assign(UUID patientId, PanelAssignmentRequestDTO request) {
         UUID hospitalId = requireHospital();
         Patient patient = requirePatientInTenant(patientId, hospitalId);
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
         Staff provider = requireStaffInTenant(request.getProviderStaffId(), hospitalId);
 
         LocalDate today = LocalDate.now(clock);

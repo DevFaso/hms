@@ -338,6 +338,9 @@ public class LabOrderServiceImpl implements LabOrderService {
             throw new BusinessException("lab.order.patientNotRegistered");
         }
 
+        if (isNew) {
+            com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
+        }
         Staff staff = keptOrderingStaff(base, request.getOrderingStaffId(), hospital);
         if (staff == null) {
             staff = resolveOrderingStaff(request.getOrderingStaffId(), hospital);

@@ -172,6 +172,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // also rolls back an encounter resolveEncounterContext auto-created.
         patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospitalId);
 
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
         if (!roleValidator.canCreatePrescription(currentUserId, hospitalId)) {
             throw new BusinessException("prescription.only.doctor.admin");
         }
@@ -467,6 +468,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                                                     Locale locale) {
         Prescription prescription = loadSignable(id);
 
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(prescription.getPatient());
         PrescriptionStatus status = prescription.getStatus();
         if (status != null && status != PrescriptionStatus.DRAFT
                 && status != PrescriptionStatus.PENDING_SIGNATURE) {
@@ -897,6 +899,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             throw new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND);
         }
 
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(prescription.getPatient());
         // Resolved BEFORE the workflow-state checks: their messages tell the
         // caller whether an order requires a co-signature, whether it already
         // has one and what status it is in, and someone with no prescribing

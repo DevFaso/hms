@@ -4,6 +4,7 @@ import com.example.hms.model.medication.MedicationCatalogItem;
 import com.example.hms.service.allergy.DrugClassAllergy;
 
 import java.util.Arrays;
+import java.util.Set;
 
 /**
  * QA D1223 (round 24, D1149/D1183 class): an order names its drug twice - the
@@ -66,6 +67,42 @@ public final class OrderedDrugIdentity {
         return agrees(typedName, item)
             && !DispenseVerificationService.namesCatalogItem(typedName, item)
             && brandNamesGeneric(typedName, item.getGenericName());
+    }
+
+    private static final Set<String> NOT_AN_INGREDIENT = Set.of(
+        "et", "and", "y", "acide", "acid", "acido", "mg", "g", "mcg", "ug", "ml", "l", "ui", "iu");
+
+    /**
+     * QA D1492: the free-text order names a cited brand, and this lot's generic is exactly that brand's drug, so the
+     * lot may be dispensed against it. Stricter than {@link #agrees}, whose reading only says two inputs do not
+     * contradict each other: Augmentin is not filled from amoxicillin alone, Clamoxyl not from a combination, Ospen
+     * (penicillin V) not from penicillin G, Extencilline (benzathine) not from benzylpenicillin. Anything unread is
+     * refused, as it is today.
+     */
+    public static boolean citedBrandIsThisDrug(String typedName, MedicationCatalogItem item) {
+        if (item == null || typedName == null || typedName.contains("+")
+                || com.example.hms.cdshooks.rules.ParacetamolIdentity.isCombinationName(typedName)) {
+            return false;
+        }
+        Set<String> lot = ingredientsOf(item.getGenericName());
+        return DrugClassAllergy.drugsOfCitedBrands(typedName).contains(lot);
+    }
+
+    /**
+     * A generic name read as its ingredients, whatever joins them and whichever language spells them; strengths are
+     * dropped. "Amoxicilline 500 mg + Acide clavulanique 125 mg" and "Amoxicillin/clavulanic acid" read alike.
+     */
+    private static Set<String> ingredientsOf(String genericName) {
+        String generic = DrugClassAllergy.normalize(genericName);
+        Set<String> ingredients = new java.util.HashSet<>();
+        for (String word : generic.split("[\\s+,/()\\-]+")) {
+            if (word.isEmpty() || word.chars().anyMatch(Character::isDigit) || NOT_AN_INGREDIENT.contains(word)) {
+                continue;
+            }
+            String spelled = spellingOfWord(word).replace("th", "t");
+            ingredients.add(spelled.endsWith("iqu") ? spelled.substring(0, spelled.length() - 3) + "ic" : spelled);
+        }
+        return ingredients;
     }
 
     /**

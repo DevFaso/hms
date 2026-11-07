@@ -985,8 +985,9 @@
           </div>
           @if (!crossmatchForm.compatible) {
             <div class="field">
-              <label for="xm-reason">{{ 'TRANSFUSION.INCOMPAT_REASON' | translate }}</label>
+              <label for="xm-reason">{{ 'TRANSFUSION.INCOMPAT_REASON' | translate }} *</label>
               <input
+                required
                 id="xm-reason"
                 type="text"
                 [(ngModel)]="crossmatchForm.incompatibilityReason"
@@ -1002,8 +1003,11 @@
             class="btn-primary"
             (click)="submitCrossmatch()"
             [disabled]="crossmatchSubmitting()"
-            [appSubmitGuard]="!crossmatchForm.bloodUnitId"
-            [submitGuardFields]="['xm-unit']"
+            [appSubmitGuard]="
+              !crossmatchForm.bloodUnitId ||
+              (!crossmatchForm.compatible && !crossmatchForm.incompatibilityReason.trim())
+            "
+            [submitGuardFields]="crossmatchForm.compatible ? ['xm-unit'] : ['xm-unit', 'xm-reason']"
           >
             {{ 'COMMON.SAVE' | translate }}
           </button>

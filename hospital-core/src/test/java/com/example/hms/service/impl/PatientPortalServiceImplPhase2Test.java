@@ -446,6 +446,28 @@ class PatientPortalServiceImplPhase2Test {
     class RescheduleMyAppointment {
 
         @Test
+        @DisplayName("QA D1495: refused once the desk deactivated the registration, as a new booking is")
+        void aDeactivatedRegistrationIsRefused() {
+            stubPatientResolution();
+            UUID apptId = UUID.randomUUID();
+            Appointment appointment = buildAppointment(apptId, AppointmentStatus.SCHEDULED);
+            Hospital hospital = new Hospital();
+            hospital.setId(UUID.randomUUID());
+            appointment.setHospital(hospital);
+            when(appointmentRepository.findById(apptId)).thenReturn(Optional.of(appointment));
+            when(registrationRepository.existsByPatientIdAndHospitalIdAndActiveFalse(patientId, hospital.getId()))
+                    .thenReturn(true);
+            RescheduleAppointmentRequestDTO dto = RescheduleAppointmentRequestDTO.builder()
+                    .appointmentId(apptId).newDate(RESCHEDULE_DATE)
+                    .newStartTime(LocalTime.of(14, 0)).newEndTime(LocalTime.of(14, 30)).build();
+
+            assertThatThrownBy(() -> service.rescheduleMyAppointment(auth, dto, Locale.ENGLISH))
+                    .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                            e -> assertThat(e.getField()).isEqualTo("hospitalId"));
+            verify(appointmentRepository, org.mockito.Mockito.never()).save(any());
+        }
+
+        @Test
         @DisplayName("a hospital-backed portal reschedule announces APPOINTMENT_RESCHEDULED to item 45's outbox")
         void rescheduleEmitsTheRescheduledWebhook() {
             stubPatientResolution();

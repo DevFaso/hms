@@ -155,6 +155,7 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
         Prescription rx = prescriptionRepository.findByIdForUpdate(prescriptionId)
                 .orElseThrow(() -> new ResourceNotFoundException("prescription.notFound", prescriptionId));
         requireCallerHospital(auth, rx);
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(rx.getPatient());
         // G15 AC-10: not while a fill is prepared at the counter (checked
         // under the lock above, so a preparation cannot slip in beside it).
         if (dispenseRepository.existsByPrescription_IdAndStatus(rx.getId(),

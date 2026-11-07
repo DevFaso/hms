@@ -1451,6 +1451,19 @@ class PrescriptionServiceImplTest {
     }
 
     @Test
+    void d1488_aDraftIsNotSignedForAPatientWhoHasDied() {
+        UUID prescriberUserId = UUID.randomUUID();
+        Prescription rx = signablePrescription(prescriberUserId);
+        rx.getPatient().setDeceasedAt(java.time.LocalDateTime.now().minusHours(1));
+        when(prescriptionRepository.findById(rx.getId())).thenReturn(java.util.Optional.of(rx));
+        UUID rxId = rx.getId();
+
+        assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, null, Locale.FRENCH))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.DRAFT);
+    }
+
+    @Test
     void d1183_aTotapenDraftSavedBeforeTheRuleIsNotSignedWithoutAnAcknowledgement() {
         UUID prescriberUserId = UUID.randomUUID();
         Prescription rx = signablePrescription(prescriberUserId);

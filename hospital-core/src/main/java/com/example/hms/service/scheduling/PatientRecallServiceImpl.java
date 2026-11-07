@@ -79,6 +79,7 @@ public class PatientRecallServiceImpl implements PatientRecallService {
         if (!patient.isRegisteredInHospital(hospitalId)) {
             throw new com.example.hms.exception.FieldBusinessException("patientId", "recall.patient.notRegistered");
         }
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
         requireRecentDueDate(request.getDueDate(), com.example.hms.utility.HospitalCalendar.today(hospital, clock));
 
         Department department = null;

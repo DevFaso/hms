@@ -3393,4 +3393,11 @@
                  stripComments="false"/>
     </changeSet>
 
+    <changeSet id="V275-r36-death-record-entered-in-error" author="hms-team" runOnChange="false">
+        <sqlFile path="V275__r36_death_record_entered_in_error.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

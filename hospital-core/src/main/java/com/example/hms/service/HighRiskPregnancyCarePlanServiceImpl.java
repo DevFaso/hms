@@ -98,6 +98,7 @@ public class HighRiskPregnancyCarePlanServiceImpl implements HighRiskPregnancyCa
 
         ensurePatientBelongsToHospital(patient, hospital.getId());
 
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
         HighRiskPregnancyCarePlan plan = new HighRiskPregnancyCarePlan();
         plan.setPatient(patient);
         plan.setHospital(hospital);
@@ -205,6 +206,7 @@ public class HighRiskPregnancyCarePlanServiceImpl implements HighRiskPregnancyCa
 
         HighRiskPregnancyCarePlan plan = findPlanInReach(user, planId, MSG_LOG_ACCESS_DENIED);
 
+        com.example.hms.service.support.DeceasedPatientGuard.refuseCareAfterDeathDay(plan.getPatient(), request.getReadingDate(), "readingDate");
         HighRiskBloodPressureLog logEntry = mapper.toEntityBloodPressureLog(request);
         List<HighRiskBloodPressureLog> logs = new ArrayList<>(plan.getBloodPressureLogs());
         logs.add(logEntry);
@@ -227,6 +229,7 @@ public class HighRiskPregnancyCarePlanServiceImpl implements HighRiskPregnancyCa
 
         HighRiskPregnancyCarePlan plan = findPlanInReach(user, planId, MSG_LOG_ACCESS_DENIED);
 
+        com.example.hms.service.support.DeceasedPatientGuard.refuseCareAfterDeath(plan.getPatient(), request.getTakenAt(), "takenAt");
         HighRiskMedicationLog logEntry = mapper.toEntityMedicationLog(request);
         List<HighRiskMedicationLog> logs = new ArrayList<>(plan.getMedicationLogs());
         logs.add(logEntry);

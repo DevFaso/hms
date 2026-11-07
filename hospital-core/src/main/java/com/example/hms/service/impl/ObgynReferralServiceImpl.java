@@ -87,6 +87,7 @@ public class ObgynReferralServiceImpl implements ObgynReferralService {
         // QA D401: the patient must be registered at the hospital the row is written in.
         patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
 
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
         User midwife = resolveUserByUsername(username);
 
         validateAttachmentsForUrgency(request);
@@ -184,6 +185,7 @@ public class ObgynReferralServiceImpl implements ObgynReferralService {
     @Override
     public ObgynReferralResponseDTO startReferral(UUID referralId, String username) {
         ObgynReferral referral = findReferral(referralId);
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(referral.getPatient());
         referral.start();
         referral.setUpdatedBy(username);
 

@@ -677,6 +677,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         // Verify patient is registered at this hospital
         requireBookingRegistration(patientId, dto.getHospitalId());
 
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patientEntity);
         Hospital hospital = hospitalRepository.findClinicalById(dto.getHospitalId())
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", dto.getHospitalId()));
 
@@ -1053,7 +1054,10 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .orElseThrow(() -> new ResourceNotFoundException(APPOINTMENT_NOT_FOUND_KEY, dto.getAppointmentId()));
 
         requirePatientOwnership(appointment, patientId);
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(appointment.getPatient());
         requirePatientReschedulable(appointment);
+        // QA D1495: refused as the patient's own booking is, once the desk has deactivated the registration.
+        refuseDeactivatedRegistration(patientId, appointment);
         java.time.LocalDateTime newStart = java.time.LocalDateTime.of(dto.getNewDate(), dto.getNewStartTime());
         // QA D1093: the new time is a published, free slot of the same
         // clinician at the same hospital, as a new booking must be.
@@ -1155,6 +1159,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
             throw new ResourceNotFoundException("prescription.notFound", dto.getPrescriptionId());
         }
 
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
         // Refuse up front what approval would refuse anyway. Without this the
         // patient's request is accepted, the whole care team is emailed, and the
         // prescriber only discovers the prescription is dead when they try to
@@ -1522,6 +1527,17 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     }
 
     /** QA D128: the booking's own refusal, in the patient's language (it used the consent text). */
+    /**
+     * QA D1495: a visit already booked is not moved on, in the words a new booking is refused in, once the desk has
+     * deactivated the registration. A row with no registration at all is not this: it keeps working as it did.
+     */
+    private void refuseDeactivatedRegistration(UUID patientId, Appointment appointment) {
+        if (appointment.getHospital() != null && registrationRepository.existsByPatientIdAndHospitalIdAndActiveFalse(
+                patientId, appointment.getHospital().getId())) {
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, MessageUtil.resolve("portal.booking.notRegistered"));
+        }
+    }
+
     private void requireBookingRegistration(UUID patientId, UUID hospitalId) {
         if (!isRegisteredAt(patientId, hospitalId)) {
             throw new com.example.hms.exception.FieldBusinessException(FIELD_HOSPITAL_ID, MessageUtil.resolve("portal.booking.notRegistered"));
@@ -2348,6 +2364,14 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         if (!appointment.getPatient().getId().equals(patientId)) {
             throw new ResourceNotFoundException(APPOINTMENT_NOT_FOUND_KEY, dto.getAppointmentId());
         }
+
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
+        // QA D1494: the desk read a pre-checked-in visit that carried no consent; the form always required it.
+        if (!Boolean.TRUE.equals(dto.getConsentAcknowledged())) {
+            throw new com.example.hms.exception.FieldBusinessException("consentAcknowledged", "portal.precheckin.consentRequired");
+        }
+        // QA D1489 class: the consent below fails on a deactivated registration, so it is refused first.
+        refuseDeactivatedRegistration(patientId, appointment);
 
         // Only allow pre-check-in for upcoming SCHEDULED/CONFIRMED appointments
         if (appointment.getStatus() != com.example.hms.enums.AppointmentStatus.SCHEDULED

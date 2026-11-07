@@ -63,6 +63,7 @@ class StoredAlertReaderLanguageGuardTest {
         Map.entry("service/impl/PostpartumCareServiceImpl.java", ALERT + "; the escalation reason is never returned"),
         Map.entry("service/impl/PatientPortalServiceImpl.java", "the refill e-mail to staff; the bell is keyed (D665)"),
         Map.entry("service/impl/TransfusionServiceImpl.java", NOTICE),
+        Map.entry("service/impl/DeathDisputeServiceImpl.java", NOTICE),
         Map.entry("service/lab/LabResultReleaseNotifier.java", NOTICE),
         Map.entry("service/lab/LabSpecimenRejectionNotifier.java", NOTICE),
         Map.entry("service/LabResultServiceImpl.java", NOTICE),

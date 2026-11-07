@@ -79,6 +79,7 @@ public class MaternalHistoryServiceImpl implements MaternalHistoryService {
         com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(hospital, HOSPITAL_NOT_FOUND_WITH_ID, request.getHospitalId());
         patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
 
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
         // Check if maternal history already exists for this patient
         if (maternalHistoryRepository.existsByPatient_Id(request.getPatientId())) {
             // QA D826: translated, 409 on patientId, so the form can offer to

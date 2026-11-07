@@ -58,5 +58,14 @@ public class DeathRecordResponseDTO {
 
     private String notes;
     private String recordedByName;
+
+    /** Under an open dispute: still counted, until the outcome. */
+    private boolean disputed;
+
+    /** QA D1488: marked entered in error, with who, when and why. Such a row counts as no death. */
+    private boolean enteredInError;
+    private LocalDateTime enteredInErrorAt;
+    private String enteredInErrorByName;
+    private String enteredInErrorReason;
     private LocalDateTime createdAt;
 }

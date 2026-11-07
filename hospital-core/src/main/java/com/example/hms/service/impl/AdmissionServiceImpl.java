@@ -134,6 +134,7 @@ public class AdmissionServiceImpl implements AdmissionService {
             throw new ResourceNotFoundException("patient.notFound", request.getPatientId());
         }
         
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
         Staff admittingProvider = staffRepository.findById(request.getAdmittingProviderId())
             .orElseThrow(() -> new ResourceNotFoundException("admission.admittingProvider.notFound", request.getAdmittingProviderId()));
 

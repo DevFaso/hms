@@ -98,6 +98,7 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
             throw new com.example.hms.exception.FieldBusinessException("collectedAt", "lab.specimen.collectedInFuture");
         }
 
+        com.example.hms.service.support.DeceasedPatientGuard.refuseCareAfterDeath(labOrder.getPatient(), collectedAt, "collectedAt");
         String accessionNumber = generateAccessionNumber();
         String barcodeValue = "LAB-" + accessionNumber;
 

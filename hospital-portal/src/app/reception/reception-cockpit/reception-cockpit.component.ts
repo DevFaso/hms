@@ -246,6 +246,12 @@ export class ReceptionCockpitComponent implements OnInit {
   }
 
   canCheckIn(item: ReceptionQueueItem): boolean {
-    return !!item.appointmentId && (item.status === 'SCHEDULED' || item.status === 'CONFIRMED');
+    return (
+      !!item.appointmentId &&
+      (item.status === 'SCHEDULED' || item.status === 'CONFIRMED') &&
+      // QA D1489: an action that could only be refused is not offered.
+      !item.patientDeceased &&
+      !item.registrationInactive
+    );
   }
 }

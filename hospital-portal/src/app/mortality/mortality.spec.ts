@@ -6,6 +6,7 @@ import { of, throwError } from 'rxjs';
 
 import { MortalityComponent } from './mortality';
 import {
+  DeathDispute,
   DeathRecordResponse,
   MortalityRegister,
   MortalityService,
@@ -15,6 +16,7 @@ import { PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
+import { expectEmptySubmitRefusal } from '../testing/form-refusal-behaviour';
 
 function mockDeath(overrides: Partial<DeathRecordResponse> = {}): DeathRecordResponse {
   return {
@@ -48,6 +50,128 @@ function mockRegister(overrides: Partial<MortalityRegister> = {}): MortalityRegi
   } as MortalityRegister;
 }
 
+describe('MortalityComponent, QA D1488 / D1490', () => {
+  let fixtureComponent: MortalityComponent;
+  let spy: jasmine.SpyObj<MortalityService>;
+  let confirmSpy: jasmine.SpyObj<ConfirmService>;
+
+  beforeEach(async () => {
+    spy = jasmine.createSpyObj('MortalityService', [
+      'getRegister',
+      'recordDeath',
+      'amendDeathRecord',
+      'getForPatient',
+      'markEnteredInError',
+      'openDisputes',
+      'upholdDeath',
+    ]);
+    spy.openDisputes.and.returnValue(of([]));
+    spy.upholdDeath.and.returnValue(of({} as DeathDispute));
+    spy.getRegister.and.returnValue(of(mockRegister()));
+    spy.markEnteredInError.and.returnValue(of(mockDeath()));
+    confirmSpy = jasmine.createSpyObj('ConfirmService', ['ask']);
+    confirmSpy.ask.and.resolveTo(true);
+    await TestBed.configureTestingModule({
+      imports: [MortalityComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        { provide: MortalityService, useValue: spy },
+        { provide: ConfirmService, useValue: confirmSpy },
+        {
+          provide: RoleContextService,
+          useValue: {
+            hasAnyActiveRole: () => true,
+            isSuperAdmin: () => false,
+            activeHospitalId: 'h1',
+          },
+        },
+      ],
+    }).compileComponents();
+    fixtureComponent = TestBed.createComponent(MortalityComponent).componentInstance;
+  });
+
+  it('hides and clears the maternal classification for a patient recorded male, unknown sex keeps it', () => {
+    fixtureComponent.form.maternalDeath = true;
+    fixtureComponent.onPatientPicked({ id: 'p1', gender: 'M' } as PatientResponse);
+    expect(fixtureComponent.maternalHidden()).toBeTrue();
+    expect(fixtureComponent.form.maternalDeath).toBeFalse();
+
+    fixtureComponent.onPatientPicked({ id: 'p2' } as PatientResponse);
+    expect(fixtureComponent.maternalHidden()).toBeFalse();
+  });
+
+  it('marks a record entered in error only with a reason and a confirmation', async () => {
+    fixtureComponent.openEnteredInError(mockDeath());
+    fixtureComponent.errorReason = '   ';
+    await fixtureComponent.submitEnteredInError();
+    expect(spy.markEnteredInError).not.toHaveBeenCalled();
+
+    fixtureComponent.errorReason = ' Wrong patient ';
+    await fixtureComponent.submitEnteredInError();
+    expect(confirmSpy.ask).toHaveBeenCalled();
+    expect(spy.markEnteredInError).toHaveBeenCalledWith(mockDeath().id, 'Wrong patient');
+    expect(fixtureComponent.errorRecord()).toBeNull();
+  });
+
+  it('an empty reason is starred and marked, and nothing is sent', () => {
+    const fixture = TestBed.createComponent(MortalityComponent);
+    document.body.appendChild(fixture.nativeElement);
+    fixture.detectChanges();
+    fixture.componentInstance.openEnteredInError(mockDeath());
+    fixture.detectChanges();
+    const marked = expectEmptySubmitRefusal(fixture, {
+      button: '[data-testid="mort-entered-in-error-submit"]',
+      sent: spy.markEnteredInError,
+    });
+    expect(marked).toContain('e-reason');
+    fixture.nativeElement.remove();
+  });
+
+  it('entered in error from a dispute reaches a death outside the period shown', () => {
+    fixtureComponent.register.set(mockRegister({ deaths: [] }));
+    spy.getForPatient.and.returnValue(of(mockDeath()));
+    fixtureComponent.openEnteredInErrorFor({
+      patientId: 'p1',
+      deathRecordId: 'd1',
+    } as DeathDispute);
+    expect(spy.getForPatient).toHaveBeenCalledWith('p1');
+    expect(fixtureComponent.errorRecord()?.id).toBe('d1');
+  });
+
+  it('upholding needs a reason: empty is marked and nothing is sent', () => {
+    const fixture = TestBed.createComponent(MortalityComponent);
+    document.body.appendChild(fixture.nativeElement);
+    fixture.detectChanges();
+    fixture.componentInstance.openUphold({ id: 'x1', patientName: 'Awa' } as DeathDispute);
+    fixture.detectChanges();
+    const marked = expectEmptySubmitRefusal(fixture, {
+      button: '[data-testid="mort-uphold-submit"]',
+      sent: spy.upholdDeath,
+    });
+    expect(marked).toContain('u-reason');
+    fixture.nativeElement.remove();
+  });
+
+  it('upholds with the reason after the confirmation, and reloads the disputes', async () => {
+    fixtureComponent.openUphold({ id: 'x1' } as DeathDispute);
+    fixtureComponent.upholdReason = ' Family confirmed ';
+    spy.openDisputes.calls.reset();
+    await fixtureComponent.submitUphold();
+    expect(confirmSpy.ask).toHaveBeenCalled();
+    expect(spy.upholdDeath).toHaveBeenCalledWith('x1', 'Family confirmed');
+    expect(spy.openDisputes).toHaveBeenCalled();
+  });
+
+  it('sends nothing when the confirmation is declined', async () => {
+    confirmSpy.ask.and.resolveTo(false);
+    fixtureComponent.openEnteredInError(mockDeath());
+    fixtureComponent.errorReason = 'Wrong patient';
+    await fixtureComponent.submitEnteredInError();
+    expect(spy.markEnteredInError).not.toHaveBeenCalled();
+  });
+});
+
 describe('MortalityComponent', () => {
   let component: MortalityComponent;
   let mortalitySpy: jasmine.SpyObj<MortalityService>;
@@ -59,7 +183,9 @@ describe('MortalityComponent', () => {
       'recordDeath',
       'amendDeathRecord',
       'getForPatient',
+      'openDisputes',
     ]);
+    mortalitySpy.openDisputes.and.returnValue(of([]));
     mortalitySpy.getRegister.and.returnValue(of(mockRegister()));
 
     toastSpy = jasmine.createSpyObj('ToastService', ['success', 'error']);

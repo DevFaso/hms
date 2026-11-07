@@ -126,6 +126,26 @@ class DispenseVerificationServiceTest {
     }
 
     @Test
+    void qaD1492AFreeTextCitedBrandIsDispensableFromALotOfItsGeneric() {
+        StockLot paracetamol = lotOf(null, "Paracetamol", TODAY.plusMonths(6));
+        MedicationCatalogItem item = paracetamol.getInventoryItem().getMedicationCatalogItem();
+        prescription.setMedicationCode(null);
+        prescription.setMedicationCatalogItemId(null);
+
+        for (String brand : java.util.List.of("Efferalgan", "Tylenol 500 mg")) {
+            prescription.setMedicationName(brand);
+            assertThat(service.matchesPrescribedDrug(prescription, item)).as(brand).isTrue();
+        }
+        // A brand with no mapping stays refused, as today.
+        prescription.setMedicationName("Dafalgan");
+        assertThat(service.matchesPrescribedDrug(prescription, item)).isFalse();
+        // A combination brand is not filled from one of its ingredients.
+        prescription.setMedicationName("Augmentin");
+        assertThat(service.matchesPrescribedDrug(prescription,
+            lotOf(null, "Amoxicilline", TODAY.plusMonths(6)).getInventoryItem().getMedicationCatalogItem())).isFalse();
+    }
+
+    @Test
     void qaD899TheCatalogItemPickedAtOrderTimeIsTheDrugWhateverItsName() {
         // A UI-created catalog item has no code; the order names it by brand.
         StockLot picked = lotOf(null, "Amoxicilline", TODAY.plusMonths(6));

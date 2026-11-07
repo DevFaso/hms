@@ -120,6 +120,7 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
         Staff staff = resolveStaffIfPresent(request.getStaffId(), hospital.getId());
         validateHospitalScope(hospital.getId(), username);
         ensurePatientBelongsToHospital(patient, hospital.getId());
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
 
         LocalDate lmp = request.getLastMenstrualPeriodDate();
         LocalDate today = LocalDate.now(clock);
@@ -205,6 +206,7 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
 
         validateHospitalScope(appointment.getHospital().getId(), username);
 
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(appointment.getPatient());
         int durationMinutes = resolveDuration(request.getDurationMinutes(), appointment.getReason());
         LocalTime endTime = request.getNewStartTime().plusMinutes(durationMinutes);
 
@@ -251,6 +253,7 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
 
         validateHospitalScope(appointment.getHospital().getId(), username);
 
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(appointment.getPatient());
         LocalDate today = LocalDate.now(clock);
         if (appointment.getAppointmentDate().isBefore(today)) {
             throw new com.example.hms.exception.FieldBusinessException("appointmentId", "maternity.reminder.appointmentInPast");

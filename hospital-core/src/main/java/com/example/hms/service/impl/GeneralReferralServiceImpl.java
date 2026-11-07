@@ -95,6 +95,7 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
             throw new ResourceNotFoundException("patient.notFound", request.getPatientId());
         }
 
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
         Staff referringProvider = staffRepository.findById(request.getReferringProviderId())
             .orElseThrow(() -> new ResourceNotFoundException("generalReferral.referringProvider.notFound", request.getReferringProviderId()));
 
@@ -182,6 +183,7 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
     public GeneralReferralResponseDTO submitReferral(UUID referralId) {
         GeneralReferral referral = findReferral(referralId);
         requireCallerIsReferrer(referral);
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(referral.getPatient());
         ReferralStatus before = referral.getStatus();
         referral.submit();
         referral = referralRepository.save(referral);
@@ -218,6 +220,7 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
     public GeneralReferralResponseDTO scheduleReferral(UUID referralId, ScheduleReferralRequestDTO request) {
         GeneralReferral referral = findReferral(referralId);
         requireReceivingSide(referral);
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(referral.getPatient());
         ReferralStatus before = referral.getStatus();
         referral.schedule(request.getAppointmentTime(), request.getLocation());
 
@@ -340,6 +343,7 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
     public GeneralReferralResponseDTO startReferral(UUID referralId) {
         GeneralReferral referral = findReferral(referralId);
         requireReceivingSide(referral);
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(referral.getPatient());
         ReferralStatus before = referral.getStatus();
         referral.start();
         referral = referralRepository.save(referral);
