@@ -1,0 +1,217 @@
+@mixin layout {
+  :host {
+    display: block;
+    min-width: 0;
+    color: #172d43;
+  }
+  .dashboard-eyebrow {
+    margin: 0 0 7px;
+    color: #08685b;
+    font-size: 11px;
+    font-weight: 750;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .page-subtitle {
+    margin: 8px 0 0;
+    color: #52667b;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+  .daily-overview,
+  .care-overview,
+  .reception-workspace,
+  .care-workspace {
+    background: #fff;
+    border: 1px solid #dfe7ef;
+    border-radius: 16px;
+    min-width: 0;
+    margin-bottom: 22px;
+  }
+  .overview-heading,
+  .workspace-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .overview-heading h2,
+  .workspace-heading h2 {
+    margin: 0;
+    color: #172d43;
+    font-size: 17px;
+    letter-spacing: -0.02em;
+  }
+  .overview-heading p,
+  .workspace-heading p {
+    margin: 7px 0 0;
+    color: #52667b;
+    font-size: 12px;
+    line-height: 1.6;
+  }
+  .queue-toolbar,
+  .task-toolbar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 18px 22px;
+    background: #fafcfd;
+    border-bottom: 1px solid #e5edf2;
+  }
+  .queue-search,
+  .task-search {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    flex: 1 1 280px;
+    padding: 0 12px;
+    border: 1px solid #cbd9e2;
+    border-radius: 9px;
+    background: #fff;
+  }
+  .queue-search .material-symbols-outlined,
+  .task-search .material-symbols-outlined {
+    color: #52667b;
+    font-size: 20px;
+  }
+  .queue-search input,
+  .task-search input {
+    min-width: 0;
+    width: 100%;
+    padding: 12px 0;
+    border: 0;
+    background: transparent;
+    color: #172d43;
+    font: inherit;
+    font-size: 13px;
+    outline: none;
+  }
+  .queue-search:focus-within,
+  .task-search:focus-within {
+    outline: 2px solid #128575;
+    outline-offset: 2px;
+  }
+  .queue-toolbar select {
+    border: 1px solid #cbd9e2;
+    border-radius: 9px;
+    padding: 12px;
+    color: #172d43;
+    background: #fff;
+    font: inherit;
+    font-size: 13px;
+  }
+  .dashboard-error {
+    margin: 18px 22px;
+    padding: 16px;
+    border: 1px solid #ebd2a0;
+    border-radius: 10px;
+    color: #805012;
+    background: #fff8e9;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+  .dashboard-error p {
+    margin: 0;
+  }
+  .panel-loading {
+    padding: 30px 22px;
+    color: #52667b;
+    font-size: 13px;
+  }
+  .queue-caption {
+    margin: 0;
+    padding: 12px 22px;
+    color: #52667b;
+    font-size: 11px;
+    border-bottom: 1px solid #e5edf2;
+  }
+  .queue-scroll {
+    overflow: auto;
+    max-height: 65vh;
+    min-width: 0;
+  }
+  .queue-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .queue-table th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    text-align: left;
+    background: #f5f8fb;
+    color: #52667b;
+    padding: 15px 18px;
+    font-size: 10px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .queue-table td {
+    padding: 17px 18px;
+    font-size: 12px;
+    line-height: 1.6;
+    color: #172d43;
+    border-bottom: 1px solid #edf2f6;
+    vertical-align: top;
+  }
+  .queue-table tbody tr:hover {
+    background: #f6fbf9;
+  }
+  .queue-table tr.has-issues {
+    background: #fff;
+  }
+  .queue-table tr.has-issues td:first-child {
+    box-shadow: inset 3px 0 #d7a34e;
+  }
+  .patient-mrn {
+    display: block;
+    width: fit-content;
+    margin-top: 6px;
+    padding: 1px 5px;
+    color: #52667b;
+    font-size: 10px;
+    border-radius: 4px;
+    background: #eef3f7;
+    font-family: ui-monospace, monospace;
+  }
+  .empty-state {
+    padding: 40px 22px;
+    text-align: center;
+    color: #52667b;
+  }
+  .empty-state h3 {
+    color: #172d43;
+    font-size: 15px;
+  }
+  button:focus-visible,
+  select:focus-visible,
+  [tabindex]:focus-visible {
+    outline: 3px solid #128575;
+    outline-offset: 3px;
+  }
+  @media (max-width: 600px) {
+    .queue-toolbar,
+    .task-toolbar {
+      padding: 16px;
+    }
+    .queue-toolbar > label,
+    .queue-toolbar select {
+      width: 100%;
+    }
+    .queue-table {
+      min-width: 1050px;
+    }
+    .queue-table td,
+    .queue-table th {
+      padding: 14px;
+    }
+  }
+}
