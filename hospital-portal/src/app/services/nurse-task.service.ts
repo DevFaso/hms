@@ -40,6 +40,8 @@ export interface MarDoseHistoryEntry {
 }
 
 export interface NurseMedicationTask {
+  /** Existing when a recorded death was disputed: a prescriber reviews it first. */
+  heldForReview?: boolean;
   id: string;
   patientId: string;
   patientName: string;

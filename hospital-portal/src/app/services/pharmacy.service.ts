@@ -581,6 +581,8 @@ export interface WorkQueuePrescription {
    * alert with a reason. A cue only; the reason is read on the prescription.
    */
   alertOverridden?: boolean;
+  /** Existing when a recorded death was disputed: a prescriber reviews it first. */
+  heldForReview?: boolean;
 }
 
 /**

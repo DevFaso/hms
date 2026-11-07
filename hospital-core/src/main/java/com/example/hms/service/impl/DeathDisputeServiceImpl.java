@@ -77,6 +77,7 @@ public class DeathDisputeServiceImpl implements DeathDisputeService {
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final InBasketService inBasketService;
     private final AuditEventLogService auditEventLogService;
+    private final com.example.hms.service.OrderReviewHoldService orderReview;
 
     @Override
     public DeathDisputeResponseDTO dispute(UUID patientId, DeathDisputeRequestDTO request) {
@@ -90,7 +91,7 @@ public class DeathDisputeServiceImpl implements DeathDisputeService {
         Patient patient = patientChartAccess.require(patientId, hospitalId);
         // Locked and first read here, so entered in error, or a second dispute, is seen as it was committed.
         DeathRecord record = deathRecordRepository.lockLiveByPatientId(patientId)
-            .orElseThrow(() -> new FieldBusinessException("patientId", "mortality.dispute.notDeceased"));
+            .orElseThrow(() -> new BusinessException("mortality.dispute.notDeceased"));
 
         DeathDispute open = disputeRepository.findOpen(record.getId(), hospitalId).orElse(null);
         if (open != null) {
@@ -109,6 +110,10 @@ public class DeathDisputeServiceImpl implements DeathDisputeService {
             .assessedAlive(true)
             .identityVerified(true)
             .build());
+
+        // In this transaction, against this event and not the death date: what exists now is held for a prescriber.
+        // The doctor's reason here reconfirms no order.
+        orderReview.snapshot(dispute);
 
         // In this transaction: a dispute that commits has its review item, and one with nobody to tell is the sweep's.
         if (file(dispute, record.getHospital().getId(), patient, false) > 0) {
@@ -196,7 +201,7 @@ public class DeathDisputeServiceImpl implements DeathDisputeService {
 
     /** The role at the acting hospital: the controller's check reads the union of the caller's assignments. */
     private void requireDecider(UUID actorId, UUID scope) {
-        if (!roleValidator.isSuperAdminFromAuth() && (scope == null || !roleValidator.isHospitalAdmin(actorId, scope))) {
+        if (!com.example.hms.security.CallerIdentity.isGlobalSuperAdmin() && (scope == null || !roleValidator.isHospitalAdmin(actorId, scope))) {
             throw new AccessDeniedException("Only a hospital administrator of this hospital can review a dispute.");
         }
     }

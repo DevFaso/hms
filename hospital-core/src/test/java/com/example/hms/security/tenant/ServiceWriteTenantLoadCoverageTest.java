@@ -107,6 +107,8 @@ class ServiceWriteTenantLoadCoverageTest {
             + " acting hospital does not know; the caller is checked as privileged at the hospital, and the"
             + " declaration is audited and, after an opt-out, notified to the patient"),
         entry("CareGapTraceService.traceOne#findById", SYSTEM),
+        entry("DeathDisputeServiceImpl.escalateUnreviewed#findById", SYSTEM + "; the death record named by the dispute row"),
+        entry("DeathDisputeServiceImpl.escalateUnreviewed#findByIdUnscoped", SYSTEM + "; the patient named by the dispute row"),
         entry("ChatMessageServiceImpl.sendMessage#findById", "resolves the message recipient; no clinical row is written"),
         entry("ConsultationServiceImpl.getConsultationEntity#findById", CALLER_CHECKS + " (getConsultationInScope)"),
         entry("ConsultationServiceImpl.resolveStaff#findById", ACTOR),

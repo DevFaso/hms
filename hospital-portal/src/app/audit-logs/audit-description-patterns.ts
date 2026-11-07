@@ -984,6 +984,45 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     params: ['rx'],
   },
   {
+    key: 'AUDIT.DESC.DEATH_RECORD_ENTERED_IN_ERROR',
+    re: /^Death record (\S+) marked entered in error; the patient is no longer recorded as deceased\. Stays, visits and appointments the death closed were not reopened\. Reason: ([\s\S]*)$/,
+    params: ['record', 'reason'],
+  },
+  {
+    key: 'AUDIT.DESC.DEATH_DISPUTED',
+    re: /^Death status disputed at hospital (\S+) by doctor (\S+), death record (\S+) version (\S+): assessed alive and identity verified\. Care permitted pending review\. Reason: ([\s\S]*)$/,
+    params: ['hospital', 'doctor', 'record', 'version', 'reason'],
+  },
+  {
+    key: 'AUDIT.DESC.DEATH_UPHELD',
+    re: /^Death upheld: dispute (\S+) closed by (\S+), the block on care is back at hospital (\S+)\. Reason: ([\s\S]*)$/,
+    params: ['dispute', 'actor', 'hospital', 'reason'],
+  },
+  {
+    key: 'AUDIT.DESC.ORDER_REVIEW_CONTINUED',
+    re: /^Order reconfirmed unchanged: (\S+) (\S+) version (\S+), dispute (\S+), by (\S+)\. Reason: ([\s\S]*)$/,
+    params: ['type', 'order', 'version', 'dispute', 'actor', 'reason'],
+    localise: { type: 'enum' },
+  },
+  {
+    key: 'AUDIT.DESC.ORDER_REVIEW_REPLACED',
+    re: /^Order replaced by (\S+): (\S+) (\S+) version (\S+), dispute (\S+), by (\S+)\. Reason: ([\s\S]*)$/,
+    params: ['replacement', 'type', 'order', 'version', 'dispute', 'actor', 'reason'],
+    localise: { type: 'enum' },
+  },
+  {
+    key: 'AUDIT.DESC.ORDER_REVIEW_STOPPED',
+    re: /^Order stopped: (\S+) (\S+) version (\S+), dispute (\S+), by (\S+)\. Reason: ([\s\S]*)$/,
+    params: ['type', 'order', 'version', 'dispute', 'actor', 'reason'],
+    localise: { type: 'enum' },
+  },
+  {
+    key: 'AUDIT.DESC.ORDER_REVIEW_ASSESSED',
+    re: /^Running treatment assessed: (\S+) (\S+) version (\S+), dispute (\S+), by (\S+)\. Reason: ([\s\S]*)$/,
+    params: ['type', 'order', 'version', 'dispute', 'actor', 'reason'],
+    localise: { type: 'enum' },
+  },
+  {
     key: 'AUDIT.DESC.RX_SIGNED_WITHDRAWN_BY_PRESCRIBER',
     re: /^Signed prescription withdrawn by its prescriber$/,
   },

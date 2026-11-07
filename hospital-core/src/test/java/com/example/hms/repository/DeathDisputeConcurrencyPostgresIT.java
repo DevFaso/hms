@@ -102,7 +102,7 @@ class DeathDisputeConcurrencyPostgresIT {
     @BeforeEach
     void setUp() {
         service = new DeathDisputeServiceImpl(Clock.systemDefaultZone(), disputes, records, patients, chartAccess, roles,
-            assignments, inBasket, mock(AuditEventLogService.class));
+            assignments, inBasket, mock(AuditEventLogService.class), mock(com.example.hms.service.OrderReviewHoldService.class));
         tx = new TransactionTemplate(transactions);
         patient = UUID.randomUUID();
         hospital = UUID.randomUUID();

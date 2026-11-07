@@ -211,6 +211,7 @@ class GuardDriftRatchetTest {
         listed.put("MedicationHistoryController.createPharmacyFill", MEDICATIONHISTORYCONTROLLER_REASON);
         listed.put("MedicationHistoryController.updatePharmacyFill", MEDICATIONHISTORYCONTROLLER_REASON);
         listed.put("MortalityController.amendDeathRecord", MORTALITYCONTROLLER_REASON);
+        listed.put("MortalityController.disputeDeath", "The user's ruling: only a doctor at that hospital disputes a recorded death");
         listed.put("MortalityController.recordDeath", MORTALITYCONTROLLER_REASON);
         listed.put("ObgynReferralController.acknowledgeReferral", OBGYNREFERRALCONTROLLER_REASON);
         listed.put("ObgynReferralController.addMessage", OBGYNREFERRALCONTROLLER_REASON);

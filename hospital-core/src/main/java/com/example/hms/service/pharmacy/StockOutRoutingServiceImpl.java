@@ -724,6 +724,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
 
     private void validateRoutableStatus(Prescription prescription) {
         com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(prescription.getPatient());
+        com.example.hms.service.support.OrderReviewHoldGuard.refusePrescriptionIfHeld(prescription.getId(), "prescriptionId");
         if (!ROUTABLE_STATUSES.contains(prescription.getStatus())) {
             throw new BusinessException("stock.routing.notRoutable", prescription.getStatus() == null ? "" : prescription.getStatus().localizedLabel());
         }

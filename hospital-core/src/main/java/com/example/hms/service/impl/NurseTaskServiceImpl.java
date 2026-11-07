@@ -423,6 +423,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             String marStatus = resolveMarStatus(due, now);
             if (!isFilteredOut(statusFilter, marStatus)) {
                 result.add(withDoseHistory(withOrderReading(NurseMedicationTaskResponseDTO.builder()
+                    .heldForReview(com.example.hms.service.support.OrderReviewHoldGuard.isHeld(
+                        com.example.hms.enums.OrderReviewType.PRESCRIPTION, rx.getId()))
                     .id(rx.getId())
                     .patientId(ctx.patientId())
                     .patientName(ctx.displayName())
@@ -1777,6 +1779,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
      */
     private void requireOrderStillStands(Prescription rx, UUID hospitalId) {
         com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(rx != null ? rx.getPatient() : null);
+        com.example.hms.service.support.OrderReviewHoldGuard.refusePrescriptionIfHeld(rx != null ? rx.getId() : null, "medicationTaskId");
         requireOrderNotEndedByDischarge(rx, hospitalId);
         if (com.example.hms.service.InpatientOrderEnd.endedWithItsStay(rx)) {
             throw new com.example.hms.exception.ConflictException("nurse.mar.stayEnded");

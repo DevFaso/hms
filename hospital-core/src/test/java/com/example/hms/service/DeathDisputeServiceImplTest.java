@@ -83,7 +83,7 @@ class DeathDisputeServiceImplTest {
         com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
         LocaleContextHolder.setLocale(Locale.ENGLISH);
         service = new DeathDisputeServiceImpl(Clock.fixed(Instant.parse("2026-11-07T10:00:00Z"), ZoneOffset.UTC),
-            disputes, records, patients, chartAccess, roles, assignments, inBasket, audit);
+            disputes, records, patients, chartAccess, roles, assignments, inBasket, audit, org.mockito.Mockito.mock(OrderReviewHoldService.class));
         patient = new Patient();
         patient.setId(patientId);
         patient.setDeceasedAt(NOW.minusDays(2));
@@ -159,7 +159,6 @@ class DeathDisputeServiceImplTest {
         when(roles.isSigningPhysician(doctor, hospitalB)).thenReturn(false);
         when(roles.isHospitalAdmin(doctor, hospitalB)).thenReturn(true);
         when(roles.isSigningPhysician(doctor, hospitalA)).thenReturn(true);
-        when(roles.isSuperAdminFromAuth()).thenReturn(true);
         DeathDisputeRequestDTO body = statement();
 
         assertThatThrownBy(() -> service.dispute(patientId, body)).isInstanceOf(AccessDeniedException.class);
@@ -203,7 +202,7 @@ class DeathDisputeServiceImplTest {
         DeathDisputeRequestDTO body = statement();
 
         assertThatThrownBy(() -> service.dispute(patientId, body))
-            .isInstanceOfSatisfying(FieldBusinessException.class, e -> assertThat(e.getField()).isEqualTo("patientId"));
+            .isInstanceOf(BusinessException.class).isNotInstanceOf(FieldBusinessException.class);
     }
 
     @Test

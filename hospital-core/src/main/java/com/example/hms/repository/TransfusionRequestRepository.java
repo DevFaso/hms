@@ -29,6 +29,20 @@ public interface TransfusionRequestRepository extends JpaRepository<TransfusionR
     List<UUID> findOpenIds(@Param("patientId") UUID patientId, @Param("hospitalId") UUID hospitalId);
 
     /** QA D972: a visit's transfusion requests in the given statuses, for the checkout charge. */
+    /** Order review: this patient's open requests here, under their locks, in id order. */
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT r FROM TransfusionRequest r WHERE r.patient.id = :patientId AND r.hospital.id = :hospitalId "
+        + "AND r.status NOT IN (com.example.hms.enums.TransfusionRequestStatus.COMPLETED, "
+        + "com.example.hms.enums.TransfusionRequestStatus.CANCELLED) ORDER BY r.id")
+    List<TransfusionRequest> lockOpenForPatient(@Param("patientId") UUID patientId, @Param("hospitalId") UUID hospitalId);
+
+    /** Order review: what can replace a held request: written since, not cancelled. */
+    @Query("SELECT r FROM TransfusionRequest r WHERE r.patient.id = :patientId AND r.hospital.id = :hospitalId "
+        + "AND r.createdAt >= :since AND r.status <> com.example.hms.enums.TransfusionRequestStatus.CANCELLED "
+        + "ORDER BY r.createdAt DESC")
+    List<TransfusionRequest> findWrittenSince(@Param("patientId") UUID patientId, @Param("hospitalId") UUID hospitalId,
+                                              @Param("since") java.time.LocalDateTime since);
+
     List<TransfusionRequest> findByEncounter_IdAndStatusIn(UUID encounterId, java.util.Collection<TransfusionRequestStatus> statuses);
 
     List<TransfusionRequest> findByHospital_IdOrderByRequestedAtDesc(UUID hospitalId);

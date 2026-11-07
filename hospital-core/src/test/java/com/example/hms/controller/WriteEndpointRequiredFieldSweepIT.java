@@ -301,6 +301,7 @@ class WriteEndpointRequiredFieldSweepIT extends BaseIT {
         Map.entry("POST /patients/{patientId}/postpartum/newborn-assessments",
             "state: no delivery recorded in the last 28 days"),
         Map.entry("POST /patients/{patientId}/primary-care", "a looked-up reference (the sample role id) not found"),
+        Map.entry("POST /mortality/patients/{patientId}/disputes", "state: no death on record for the sample patient"),
         Map.entry("POST /security-policies",
             "the sample code collides with the policy the organization bootstrap seeds (integrity, D1301 standing debt)"),
         Map.entry("POST /super-admin/audit-search/saved", "the sample filter is not JSON; the column is jsonb (integrity)"),
@@ -318,6 +319,8 @@ class WriteEndpointRequiredFieldSweepIT extends BaseIT {
         Map.entry("POST /me/patient/billing/invoices/{invoiceId}/pay", Set.of("transactionReference")),
         // only for an active DNR / POLST (the sample type and status are the first constants)
         Map.entry("POST /advance-directives/patient/{patientId}", Set.of("physicianName", "effectiveDate")),
+        // the ask-once question of a frequency nobody can read as a schedule, not a required field (round 35)
+        Map.entry("POST /prescriptions", Set.of("frequencyConfirmed")),
         // only when the chosen time is not a published free slot (QA D1429, round 34)
         Map.entry("POST /appointments", Set.of("overbookReason"))
     );

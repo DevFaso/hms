@@ -1393,3 +1393,14 @@ a.list-item {
     flex-shrink: 0;
   }
 }
+
+.review-hold-flag {
+  display: inline-block;
+  margin: 2px 0 2px 6px;
+  padding: 1px 7px;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  background: #fff3e0;
+  color: #b45309;
+}

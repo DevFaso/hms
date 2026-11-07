@@ -20,6 +20,9 @@ import java.util.UUID;
 @AllArgsConstructor
 public class TransfusionRequestResponseDTO {
 
+    /** Existing when a recorded death was disputed: a prescriber's review comes first. */
+    private boolean heldForReview;
+
     private UUID id;
     private UUID patientId;
     private String patientName;

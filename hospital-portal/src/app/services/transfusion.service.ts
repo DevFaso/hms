@@ -155,6 +155,8 @@ export interface TransfusionReactionRequest {
 }
 
 export interface TransfusionAdministrationResponse {
+  /** Running when a recorded death was disputed: not stopped, waiting for an assessment. */
+  assessmentDue?: boolean;
   id: string;
   requestId: string;
   bloodUnitId: string;
@@ -255,6 +257,8 @@ export interface TransfusionAdministrationRequest {
 }
 
 export interface TransfusionRequestResponse {
+  /** Existing when a recorded death was disputed: a prescriber reviews it first. */
+  heldForReview?: boolean;
   /** QA D1081: the user the server's author check compares with (shared/authorship.service). */
   authorUserId?: string | null;
 

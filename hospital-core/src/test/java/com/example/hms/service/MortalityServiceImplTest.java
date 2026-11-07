@@ -275,10 +275,14 @@ class MortalityServiceImplTest {
     void aSuperAdminMayMarkItWithNoRoleAtTheHospital() {
         DeathRecord existing = recordedDeath();
         when(roleValidator.isHospitalAdmin(callerUserId, hospitalId)).thenReturn(false);
-        when(roleValidator.isSuperAdminFromAuth()).thenReturn(true);
-
-        service.markEnteredInError(existing.getId(),
-            com.example.hms.payload.dto.mortality.DeathRecordEnteredInErrorDTO.builder().reason("Wrong").build());
+        com.example.hms.security.context.HospitalContextHolder.setContext(
+            com.example.hms.security.context.HospitalContext.builder().superAdmin(true).build());
+        try {
+            service.markEnteredInError(existing.getId(),
+                com.example.hms.payload.dto.mortality.DeathRecordEnteredInErrorDTO.builder().reason("Wrong").build());
+        } finally {
+            com.example.hms.security.context.HospitalContextHolder.clear();
+        }
 
         assertThat(patient.isDeceased()).isFalse();
     }

@@ -105,6 +105,9 @@ public interface PrescriptionService {
      */
     Page<PrescriptionResponseDTO> search(String term, List<PrescriptionStatus> statuses, Pageable pageable, Locale locale);
 
+    /** A held order stopped from the order review: by a prescriber of its hospital, with a reason, audited. */
+    void stopHeldOrder(UUID id, String reason);
+
     PrescriptionResponseDTO updatePrescription(UUID id, PrescriptionRequestDTO request, Locale locale);
 
     void deletePrescription(UUID id, Locale locale);

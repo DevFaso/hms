@@ -45,6 +45,11 @@
               >
                 <span class="emar__queue-patient">{{ task.patientName }}</span>
                 <span class="emar__queue-med">{{ task.medication }}</span>
+                @if (task.heldForReview) {
+                  <span class="review-hold-flag" data-testid="emar-review-hold">{{
+                    'ORDER_REVIEW.HELD_FLAG' | translate
+                  }}</span>
+                }
                 @if (task.controlledSubstance) {
                   {{ ' '
                   }}<span

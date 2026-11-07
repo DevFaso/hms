@@ -1,0 +1,33 @@
+package com.example.hms.service;
+
+import com.example.hms.model.DeathDispute;
+import com.example.hms.payload.dto.review.OrderReviewDecisionDTO;
+import com.example.hms.payload.dto.review.OrderReviewRowDTO;
+
+import java.util.List;
+import java.util.UUID;
+
+/**
+ * The review of orders that existed when a recorded death was disputed (user ruling, round 36; NOT clinically
+ * approved until the clinical lead signs it off). See {@code OrderReviewHoldGuard} for the rule that holds them.
+ */
+public interface OrderReviewHoldService {
+
+    /** In the dispute's own transaction: holds its hospital's existing orders, flags its running treatment. */
+    void snapshot(DeathDispute dispute);
+
+    /** The chart's list at the acting hospital, standing or decided. */
+    List<OrderReviewRowDTO> forPatient(UUID patientId);
+
+    /** Reconfirmed unchanged: audited, against the version read. The role and step-up of signing that order. */
+    OrderReviewRowDTO continueOrder(UUID holdId, OrderReviewDecisionDTO decision);
+
+    /** Closes the held order and links the new one, written and signed the normal way. */
+    OrderReviewRowDTO replaceOrder(UUID holdId, OrderReviewDecisionDTO decision);
+
+    /** Stops the order through its own stop path. */
+    OrderReviewRowDTO stopOrder(UUID holdId, OrderReviewDecisionDTO decision);
+
+    /** The treating clinician's assessment of a running treatment, which lifts its flag and changes nothing else. */
+    OrderReviewRowDTO recordAssessment(UUID holdId, OrderReviewDecisionDTO decision);
+}
