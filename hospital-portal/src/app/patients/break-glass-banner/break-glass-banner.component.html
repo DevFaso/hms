@@ -2,7 +2,7 @@
   <section
     class="bg-banner"
     [class.bg-active]="mySession()?.live"
-    [class.bg-compact]="compactWhenIdle() && !mySession()?.live"
+    [class.bg-compact]="compactWhenIdle() && state() === 'ready' && !mySession()"
   >
     @if (mySession()?.live) {
       <div class="bg-banner__row">

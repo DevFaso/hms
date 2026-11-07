@@ -55,7 +55,7 @@
           @if (p.dateOfBirth) {
             <span class="meta-tag" data-testid="header-dob"
               ><span class="material-symbols-outlined">cake</span>
-              {{ p.dateOfBirth | date: 'mediumDate' }}</span
+              {{ p.dateOfBirth | serverTime | date: 'mediumDate' }}</span
             >
           }
           @if (p.bloodType) {
@@ -247,10 +247,14 @@
               minlength="5"
               required
               data-testid="restriction-reason"
+              aria-describedby="restriction-reason-help"
               [ngModel]="restrictionReason()"
               (ngModelChange)="restrictionReason.set($event)"
             />
           </label>
+          <p id="restriction-reason-help">
+            {{ 'PATIENTS.CHART_RESTRICTION_REASON_REQUIRED' | translate }}
+          </p>
           <button
             type="button"
             class="btn-primary"
@@ -319,6 +323,11 @@
               {{ 'PATIENTS.CLINICAL_ESSENTIALS' | translate }}
             </h3>
             <p class="medical-text">{{ 'PATIENTS.CLINICAL_SUMMARY_HELP' | translate }}</p>
+            @if (p.recordsWithheld) {
+              <p role="note" data-testid="overview-records-withheld">
+                {{ 'CHART.LIST_WITHHELD' | translate }}
+              </p>
+            }
             <div class="info-rows clinical-summary">
               <div class="info-row">
                 <span class="label">{{ 'PATIENTS.BLOOD_TYPE' | translate }}</span>
@@ -371,7 +380,7 @@
               <div class="info-row">
                 <span class="label">{{ 'PATIENTS.DOB' | translate }}</span
                 ><span class="value">{{
-                  p.dateOfBirth ? (p.dateOfBirth | date: 'mediumDate') : '—'
+                  p.dateOfBirth ? (p.dateOfBirth | serverTime | date: 'mediumDate') : '—'
                 }}</span>
               </div>
               <div class="info-row">
@@ -525,10 +534,12 @@
             <div class="info-row">
               <span class="label">{{ 'PATIENTS.ALLERGIES' | translate }}</span
               ><span class="value">{{
-                p.allergies || ('PATIENTS.NOT_DOCUMENTED' | translate)
+                p.allergies ||
+                  ((p.allergiesWithheld ? 'CHART.ALLERGIES_WITHHELD' : 'PATIENTS.NOT_DOCUMENTED')
+                    | translate)
               }}</span>
             </div>
-            @if (p.allergiesWithheld) {
+            @if (p.allergiesWithheld && p.allergies) {
               <p class="info-row" role="note">{{ 'CHART.ALLERGIES_WITHHELD' | translate }}</p>
             }
           </div>

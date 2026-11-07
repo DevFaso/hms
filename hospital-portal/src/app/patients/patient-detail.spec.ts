@@ -262,6 +262,7 @@ describe('PatientDetailComponent', () => {
     expect(fixture.nativeElement.querySelector('[data-testid="micro-tab-button"]')).toBeNull();
     component.setSection('care');
     expect(component.activeTab()).toBe('medical');
+    component.setTab('appointments');
     expect(appointmentServiceSpy.list).not.toHaveBeenCalled();
   });
 
@@ -282,6 +283,30 @@ describe('PatientDetailComponent', () => {
     fixture.detectChanges();
     expect(contact.textContent).toContain('PATIENTS.NOT_DOCUMENTED');
     expect(contact.querySelector('a')).toBeNull();
+  });
+
+  it('explains narrowed records without hiding the documented global history summary', () => {
+    patientServiceSpy.getById.and.returnValue(
+      of({
+        ...mockPatient,
+        recordsWithheld: true,
+        allergiesWithheld: true,
+        allergies: '',
+        medicalHistorySummary: 'Documented history',
+      }),
+    );
+    fixture.detectChanges();
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="overview-records-withheld"]').textContent,
+    ).toContain('CHART.LIST_WITHHELD');
+    expect(fixture.nativeElement.querySelector('.essentials-card').textContent).toContain(
+      'Documented history',
+    );
+    component.setTab('medical');
+    fixture.detectChanges();
+    const medical = fixture.nativeElement.querySelector('.info-grid');
+    expect(medical.textContent).toContain('CHART.ALLERGIES_WITHHELD');
+    expect(medical.textContent).not.toContain('PATIENTS.NOT_DOCUMENTED');
   });
 
   it('should load patient on init', () => {

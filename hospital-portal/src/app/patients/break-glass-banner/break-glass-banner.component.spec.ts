@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
-import { of, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 
 import { BreakGlassBannerComponent } from './break-glass-banner.component';
 import { BreakGlassService, BreakGlassSession } from '../../services/break-glass.service';
@@ -101,6 +101,21 @@ describe('BreakGlassBannerComponent', () => {
     bgSpy.findMyLiveSession.and.returnValue(of(liveSession));
     setInputs('p2');
     expect(fixture.nativeElement.querySelector('.bg-active')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('.bg-compact')).toBeNull();
+  });
+
+  it('keeps loading and failed session lookups prominent in compact mode', () => {
+    init(['ROLE_DOCTOR']);
+    fixture.componentRef.setInput('compactWhenIdle', true);
+    const lookup = new Subject<BreakGlassSession | null>();
+    bgSpy.findMyLiveSession.and.returnValue(lookup);
+    setInputs('p1');
+    expect(fixture.nativeElement.querySelector('.bg-banner')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('.bg-compact')).toBeNull();
+
+    lookup.error(new Error('network'));
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.bg-banner')).toBeTruthy();
     expect(fixture.nativeElement.querySelector('.bg-compact')).toBeNull();
   });
 
