@@ -125,7 +125,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
         }
         AlertEvaluation evaluation = evaluateObservation(observation);
 
-        ScheduleSnapshot snapshot = applyObservationToPlan(carePlan, observation, request, evaluation.escalateMonitoring());
+        ScheduleSnapshot snapshot = applyObservationToPlan(carePlan, observation, request, evaluation);
         observation.setSchedulePhaseAtEntry(snapshot.phase());
         observation.setNextDueAtSnapshot(snapshot.nextDueAt());
         observation.setOverdueSinceSnapshot(snapshot.overdueSince());
@@ -491,7 +491,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
                 "postpartum-hemorrhage",
                 alertText("postpartum-hemorrhage"),
                 "Bleeding Assessment"));
-            observation.setHemorrhageProtocolActivated(true);
+            // CR-06 class: the alert asks for the protocol; it does not record that anyone started it.
             escalateMonitoring = true;
             hemorrhageAlert = true;
         }
@@ -594,7 +594,8 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
     private ScheduleSnapshot applyObservationToPlan(PostpartumCarePlan plan,
                                                     PostpartumObservation observation,
                                                     PostpartumObservationRequestDTO request,
-                                                    boolean escalateMonitoring) {
+                                                    AlertEvaluation evaluation) {
+        boolean escalateMonitoring = evaluation.escalateMonitoring();
         plan.setLastObservationAt(observation.getObservationTime());
         if (plan.getDeliveryOccurredAt() == null) {
             plan.setDeliveryOccurredAt(resolveDeliveryTimestamp(request));
@@ -617,9 +618,10 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
             // QA D268: a haemorrhage on this plan, now or earlier in the window,
             // keeps the 15-minute checks until the midwife confirms
             // stabilization; the clock and the check count alone do not end them.
-            boolean haemorrhageOnPlan = observation.isHemorrhageProtocolActivated()
-                || (plan.getId() != null
-                    && observationRepository.existsByCarePlan_IdAndHemorrhageProtocolActivatedTrue(plan.getId()));
+            // CR-06 class: indicators keep them whether or not anyone attested the protocol.
+            boolean haemorrhageOnPlan = evaluation.hemorrhageDetected()
+                || observation.isHemorrhageProtocolActivated()
+                || (plan.getId() != null && observationRepository.existsHaemorrhageOnPlan(plan.getId()));
             applyImmediatePhaseScheduling(plan, observation, request, haemorrhageOnPlan);
             // QA D104: a critical alert that closes the immediate window (e.g. a
             // haemorrhage with stabilization confirmed) must land in enhanced
