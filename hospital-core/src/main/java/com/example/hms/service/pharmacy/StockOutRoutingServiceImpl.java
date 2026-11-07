@@ -415,6 +415,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         }
 
         if (accepted) {
+            com.example.hms.service.support.OrderReviewHoldGuard.refusePrescriptionIfHeld(prescription.getId(), "accepted");
             decision.setStatus(RoutingDecisionStatus.ACCEPTED);
             prescription.setStatus(PrescriptionStatus.PARTNER_ACCEPTED);
         } else {
@@ -474,6 +475,10 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         // it would leave the pharmacist's question unanswerable for good.
         if (prescription.getStatus() == PrescriptionStatus.PENDING_CLARIFICATION) {
             throw new BusinessException("stock.routing.awaitingClarification");
+        }
+        if (com.example.hms.service.support.OrderReviewHoldGuard.isHeld(
+                com.example.hms.enums.OrderReviewType.PRESCRIPTION, prescription.getId())) {
+            withdrawnOrders.raiseDispenseOfHeld(decision, prescription, "Pharmacist-recorded partner dispense");
         }
         prescription.setStatus(PrescriptionStatus.PARTNER_DISPENSED);
         prescriptionRepository.save(prescription);
@@ -724,6 +729,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
 
     private void validateRoutableStatus(Prescription prescription) {
         com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(prescription.getPatient());
+        com.example.hms.service.support.OrderReviewHoldGuard.refusePrescriptionIfHeld(prescription.getId(), "prescriptionId");
         if (!ROUTABLE_STATUSES.contains(prescription.getStatus())) {
             throw new BusinessException("stock.routing.notRoutable", prescription.getStatus() == null ? "" : prescription.getStatus().localizedLabel());
         }

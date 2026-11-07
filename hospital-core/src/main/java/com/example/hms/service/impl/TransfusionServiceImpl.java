@@ -235,6 +235,7 @@ public class TransfusionServiceImpl implements TransfusionService {
             .forEach(open -> {
                 open.setBloodGroup(screen);
                 requestRepository.save(open);
+                com.example.hms.service.support.OrderReviewHoldGuard.reviewRequestAgainAfterChange(open.getId());
             });
     }
 
@@ -253,6 +254,7 @@ public class TransfusionServiceImpl implements TransfusionService {
         if (current != request.getBloodGroup()) {
             request.setBloodGroup(current);
             requestRepository.save(request);
+            com.example.hms.service.support.OrderReviewHoldGuard.reviewRequestAgainAfterChange(request.getId());
         }
         return current;
     }
@@ -470,6 +472,24 @@ public class TransfusionServiceImpl implements TransfusionService {
             throw new com.example.hms.exception.ClientSafeAccessDeniedException(
                 com.example.hms.utility.MessageUtil.resolveOrRaw("transfusion.request.cancel.requesterOnly"));
         }
+        return toDetail(cancelRequestRow(request, requestId, reason));
+    }
+
+    @Override
+    public void stopHeldRequest(UUID requestId, String reason) {
+        requestRepository.lockById(requestId);
+        TransfusionRequest request = loadRequestScoped(requestId);
+        if (!request.isTerminal()) {
+            cancelRequestRow(request, requestId, reason);
+        }
+    }
+
+    /** The one way a request closes: its bags go back, unless blood is running, which closes nothing. */
+    private TransfusionRequest cancelRequestRow(TransfusionRequest request, UUID requestId, String reason) {
+        com.example.hms.service.support.CancelledOrders.requireCancelReason(reason, FIELD_REASON);
+        if (request.isTerminal()) {
+            throw new BusinessException("transfusion.request.closed");
+        }
         // The bags on this request take turns with a hang or a release of them.
         unitRepository.lockByRequestId(requestId);
         // QA CX-008 sibling: blood is running. Cancelling would close the request
@@ -488,7 +508,7 @@ public class TransfusionServiceImpl implements TransfusionService {
         }
         request.setStatus(TransfusionRequestStatus.CANCELLED);
         request.setCancelReason(reason);
-        return toDetail(requestRepository.save(request));
+        return requestRepository.save(request);
     }
 
     // ── Crossmatch and issue ────────────────────────────────────────────
@@ -901,6 +921,7 @@ public class TransfusionServiceImpl implements TransfusionService {
         unitRepository.lockById(unitId);
         TransfusionRequest request = loadRequestScoped(requestId);
         com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(request.getPatient());
+        com.example.hms.service.support.OrderReviewHoldGuard.refuseBloodRequestIfHeld(requestId, "requestId");
         BloodUnit unit = issuableUnit(request, unitId);
 
         TransfusionCrossmatch crossmatch = crossmatchRepository
@@ -941,6 +962,7 @@ public class TransfusionServiceImpl implements TransfusionService {
         unitRepository.lockById(release.getBloodUnitId());
         TransfusionRequest request = loadRequestScoped(requestId);
         com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(request.getPatient());
+        com.example.hms.service.support.OrderReviewHoldGuard.refuseBloodRequestIfHeld(requestId, "requestId");
         if (!request.isEmergency()) {
             throw new BusinessException("transfusion.emergency.notEmergency");
         }
@@ -1302,6 +1324,7 @@ public class TransfusionServiceImpl implements TransfusionService {
             throw new FieldBusinessException("requestId", "transfusion.request.closed");
         }
         com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(transfusionRequest.getPatient());
+        com.example.hms.service.support.OrderReviewHoldGuard.refuseBloodRequestIfHeld(transfusionRequest.getId(), "requestId");
         UUID hospitalId = transfusionRequest.getHospital().getId();
         BloodUnit unit = loadUnitScoped(request.getBloodUnitId());
         requireSameHospital(unit, transfusionRequest);
@@ -1453,7 +1476,13 @@ public class TransfusionServiceImpl implements TransfusionService {
         return administrationRepository
             .findByPatient_IdAndHospital_IdOrderByStartedAtDesc(patientId, hospitalId)
             .stream()
-            .map(a -> toDetail(a, reactionRepository.findByAdministration_IdOrderByOnsetAtDesc(a.getId())))
+            .map(a -> {
+                TransfusionAdministrationResponseDTO row =
+                    toDetail(a, reactionRepository.findByAdministration_IdOrderByOnsetAtDesc(a.getId()));
+                row.setAssessmentDue(com.example.hms.service.support.OrderReviewHoldGuard.isHeld(
+                    com.example.hms.enums.OrderReviewType.RUNNING_TRANSFUSION, a.getId()));
+                return row;
+            })
             .toList();
     }
 
@@ -1788,10 +1817,13 @@ public class TransfusionServiceImpl implements TransfusionService {
     }
 
     private TransfusionRequestResponseDTO toDetail(TransfusionRequest request) {
-        return mapper.toDto(request,
+        TransfusionRequestResponseDTO detail = mapper.toDto(request,
             unitRepository.findByRequest_IdOrderByUnitNumberAsc(request.getId()),
             crossmatchRepository.findByRequest_IdOrderByPerformedAtDesc(request.getId()),
             releaseRepository.findByRequest_IdOrderByIssuedAtDesc(request.getId()));
+        detail.setHeldForReview(com.example.hms.service.support.OrderReviewHoldGuard.isHeld(
+            com.example.hms.enums.OrderReviewType.TRANSFUSION_REQUEST, request.getId()));
+        return detail;
     }
 
     /** 404-not-403 — a request at another hospital is indistinguishable from a missing one. */

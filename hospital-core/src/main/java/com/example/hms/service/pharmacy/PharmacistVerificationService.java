@@ -146,6 +146,7 @@ public class PharmacistVerificationService {
      */
     @Transactional
     public Prescription verify(UUID prescriptionId, String note) {
+        com.example.hms.service.support.OrderReviewHoldGuard.refusePrescriptionIfHeld(prescriptionId, "prescriptionId");
         Prescription prescription = prescriptionRepository.findById(prescriptionId)
             .orElseThrow(() -> new ResourceNotFoundException("prescription.notfound"));
 

@@ -298,4 +298,28 @@ class InBasketServiceImplTest {
                     .isInstanceOf(ResourceNotFoundException.class);
         }
     }
+
+    /** The exception to E9 #67: an administrator touches only the dispute review addressed to them. */
+    @Test
+    void aDisputeReviewItemIsOnlyTheOneAddressedToThem() {
+        UUID me = UUID.randomUUID();
+        UUID itemId = UUID.randomUUID();
+        com.example.hms.model.User recipient = new com.example.hms.model.User();
+        recipient.setId(me);
+        InBasketItem item = new InBasketItem();
+        item.setRecipientUser(recipient);
+        item.setReferenceType("DEATH_DISPUTE");
+        when(inBasketItemRepository.findById(itemId)).thenReturn(Optional.of(item));
+
+        service.requireDisputeReviewItem(itemId, me);
+
+        item.setReferenceType("LAB_RESULT");
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.requireDisputeReviewItem(itemId, me))
+            .isInstanceOf(ResourceNotFoundException.class);
+
+        item.setReferenceType("DEATH_DISPUTE");
+        UUID other = UUID.randomUUID();
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.requireDisputeReviewItem(itemId, other))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class);
+    }
 }

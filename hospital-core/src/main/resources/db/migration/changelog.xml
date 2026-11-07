@@ -3414,4 +3414,11 @@
                  stripComments="false"/>
     </changeSet>
 
+    <changeSet id="V277-r36-order-review-holds" author="hms-team" runOnChange="false">
+        <sqlFile path="V277__r36_order_review_holds.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

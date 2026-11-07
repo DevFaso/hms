@@ -616,8 +616,14 @@
                 <td>{{ rx.patient | personName }}</td>
                 <td>
                   {{ rx.medicationName }}
+                  @if (rx.heldForReview) {
+                    <span class="review-hold-flag" data-testid="queue-review-hold">{{
+                      'ORDER_REVIEW.HELD_FLAG' | translate
+                    }}</span>
+                  }
                   @if (rx.alertOverridden) {
-                    <span class="cell-sub" [attr.data-testid]="'rx-alert-overridden-' + rx.id">{{
+                    {{ ' '
+                    }}<span class="cell-sub" [attr.data-testid]="'rx-alert-overridden-' + rx.id">{{
                       'PHARMACY.ALERT_OVERRIDDEN' | translate
                     }}</span>
                   }

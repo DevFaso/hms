@@ -149,6 +149,9 @@
       }
     </div>
 
+    <!-- Orders held by a disputed death: rendered when there is a row, and it outlives the dispute. -->
+    <app-order-review-panel [patientId]="p.id" />
+
     @if (showDeathDispute()) {
       <app-death-dispute-dialog
         [patientId]="p.id"

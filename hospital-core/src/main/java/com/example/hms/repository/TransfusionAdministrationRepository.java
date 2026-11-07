@@ -32,4 +32,7 @@ public interface TransfusionAdministrationRepository extends JpaRepository<Trans
 
     List<TransfusionAdministration> findByPatient_IdAndHospital_IdOrderByStartedAtDesc(
         UUID patientId, UUID hospitalId);
+
+    /** Order review: what is running for this patient, at any hospital. */
+    List<TransfusionAdministration> findByPatient_IdAndStatus(UUID patientId, com.example.hms.enums.TransfusionAdministrationStatus status);
 }

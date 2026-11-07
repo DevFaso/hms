@@ -47,6 +47,9 @@ public class InBasketController {
     static final String READERS = "hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN',"
         + "'ROLE_LAB_TECHNICIAN','ROLE_LAB_MANAGER','ROLE_LAB_DIRECTOR','ROLE_SUPER_ADMIN')";
 
+    private static final java.util.List<String> CLINICAL_READERS = java.util.List.of("ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE",
+        "ROLE_LAB_TECHNICIAN", "ROLE_LAB_MANAGER", "ROLE_LAB_DIRECTOR", "ROLE_SUPER_ADMIN");
+
     private final InBasketService inBasketService;
     private final ControllerAuthUtils authUtils;
 
@@ -75,6 +78,9 @@ public class InBasketController {
             throw new BusinessException("Hospital context is required. Pass hospitalId or ensure your token has a hospital scope.");
         }
 
+        if (disputeReviewOnly(auth)) {
+            return ResponseEntity.ok(inBasketService.getDisputeReviewItems(userId, resolvedHospitalId, status, pageable));
+        }
         Page<InBasketItemDTO> page = inBasketService.getItems(userId, resolvedHospitalId, type, status, pageable);
         return ResponseEntity.ok(page);
     }
@@ -100,7 +106,9 @@ public class InBasketController {
             throw new BusinessException("Hospital context is required. Pass hospitalId or ensure your token has a hospital scope.");
         }
 
-        InBasketSummaryDTO summary = inBasketService.getSummary(userId, resolvedHospitalId);
+        InBasketSummaryDTO summary = disputeReviewOnly(auth)
+            ? inBasketService.getDisputeReviewSummary(userId, resolvedHospitalId)
+            : inBasketService.getSummary(userId, resolvedHospitalId);
         return ResponseEntity.ok(summary);
     }
 
@@ -115,6 +123,9 @@ public class InBasketController {
             Authentication auth) {
 
         UUID userId = requireUserId(auth);
+        if (disputeReviewOnly(auth)) {
+            inBasketService.requireDisputeReviewItem(id, userId);
+        }
         InBasketItemDTO dto = inBasketService.markAsRead(id, userId);
         return ResponseEntity.ok(dto);
     }
@@ -130,8 +141,20 @@ public class InBasketController {
             Authentication auth) {
 
         UUID userId = requireUserId(auth);
+        if (disputeReviewOnly(auth)) {
+            inBasketService.requireDisputeReviewItem(id, userId);
+        }
         InBasketItemDTO dto = inBasketService.acknowledge(id, userId);
         return ResponseEntity.ok(dto);
+    }
+
+    /**
+     * A hospital administrator is off the clinical chart (E9 #67). Holding that role and no reader role of a clinician,
+     * they read one thing here: the urgent review of a disputed death addressed to them, nothing else filed for them.
+     */
+    private boolean disputeReviewOnly(Authentication auth) {
+        return authUtils.hasAuthority(auth, "ROLE_HOSPITAL_ADMIN")
+            && CLINICAL_READERS.stream().noneMatch(role -> authUtils.hasAuthority(auth, role));
     }
 
     // ─── helpers ──────────────────────────────────────────────

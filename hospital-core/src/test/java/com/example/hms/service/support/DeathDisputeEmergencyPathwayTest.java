@@ -149,6 +149,7 @@ class DeathDisputeEmergencyPathwayTest {
     void tearDown() {
         HospitalContextHolder.clear();
         DeceasedPatientGuard.useDisputes(null);
+        OrderReviewHoldGuard.useHolds(null);
     }
 
     /** Runs a step and tells whether the death refused it. */
@@ -241,6 +242,46 @@ class DeathDisputeEmergencyPathwayTest {
 
         when(disputes.existsOpen(patient.getId(), hospitalId)).thenReturn(false);
         steps.forEach((name, step) -> assertThat(refusedByTheDeath(step)).as("upheld: " + name).isTrue());
+    }
+
+    @Test
+    @DisplayName("under the dispute, an existing morphine and blood request are refused naming the review until reconfirmed")
+    void existingOrdersAreHeldUntilReconfirmed() throws ReflectiveOperationException {
+        when(disputes.existsOpen(patient.getId(), hospitalId)).thenReturn(true);
+        java.util.Set<UUID> held = new java.util.HashSet<>(java.util.List.of(order.getId(), bloodRequest.getId()));
+        OrderReviewHoldGuard.useHolds((type, id) -> held.contains(id));
+        Map<String, ThrowingStep> steps = thePathway();
+        steps.remove("admit");
+        steps.remove("prescribe");
+        steps.remove("transfusion request");
+
+        steps.forEach((name, step) -> assertThat(refusedByTheHold(step)).as("held: " + name).isTrue());
+
+        held.clear();
+        steps.forEach((name, step) -> assertThat(refusedByTheHold(step)).as("reconfirmed: " + name).isFalse());
+    }
+
+    @Test
+    @DisplayName("what is new under the dispute has no hold: admit, prescribe and a new blood request")
+    void newOrdersAreNotHeld() throws ReflectiveOperationException {
+        when(disputes.existsOpen(patient.getId(), hospitalId)).thenReturn(true);
+        OrderReviewHoldGuard.useHolds((type, id) -> id.equals(order.getId()) || id.equals(bloodRequest.getId()));
+        Map<String, ThrowingStep> steps = thePathway();
+
+        for (String step : java.util.List.of("admit", "prescribe", "transfusion request")) {
+            assertThat(refusedByTheHold(steps.get(step))).as(step).isFalse();
+        }
+    }
+
+    private static boolean refusedByTheHold(ThrowingStep step) {
+        try {
+            step.run();
+            return false;
+        } catch (FieldBusinessException e) {
+            return String.valueOf(e.getMessage()).contains("review");
+        } catch (Exception | AssertionError e) {
+            return false;
+        }
     }
 
     @Test

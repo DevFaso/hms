@@ -94,6 +94,22 @@ public interface PrescriptionRepository extends JpaRepository<Prescription, UUID
         + " OR " + PatientRepository.FOLD_OPEN + "CONCAT(COALESCE(u.firstName, ''), ' ', COALESCE(u.lastName, ''))"
         + PatientRepository.FOLD_CLOSE + SEARCH_LIKE + ")";
 
+    /**
+     * Order review: every order that might still be used, under its lock, in id order. A dispense holding the lock
+     * finishes first and is read as it left the row; the review service then asks which of them are.
+     */
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT rx FROM Prescription rx WHERE rx.patient.id = :patientId AND rx.status IN :statuses ORDER BY rx.id")
+    List<Prescription> lockUncompletedForReview(@Param("patientId") UUID patientId,
+                                                @Param("statuses") java.util.Collection<com.example.hms.enums.PrescriptionStatus> statuses);
+
+    /** Order review: what can replace a held order: written since, not withdrawn. */
+    @Query("SELECT rx FROM Prescription rx WHERE rx.patient.id = :patientId AND rx.hospital.id = :hospitalId "
+        + "AND rx.createdAt >= :since AND rx.status NOT IN (com.example.hms.enums.PrescriptionStatus.CANCELLED, "
+        + "com.example.hms.enums.PrescriptionStatus.DISCONTINUED) ORDER BY rx.createdAt DESC")
+    List<Prescription> findWrittenSince(@Param("patientId") UUID patientId, @Param("hospitalId") UUID hospitalId,
+                                        @Param("since") java.time.LocalDateTime since);
+
     /** The search box at one hospital, every status. */
     @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "encounter", "encounter.hospital"})
     @Query(value = "SELECT rx FROM Prescription rx" + SEARCH_JOINS

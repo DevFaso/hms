@@ -1,0 +1,36 @@
+package com.example.hms.payload.dto.review;
+
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.util.UUID;
+
+/**
+ * A prescriber's decision on a held order. The reason is always this decision's own: the reason given when disputing
+ * the death reconfirms no order.
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class OrderReviewDecisionDTO {
+
+    @NotBlank
+    /** It goes on the order too: a blood request's stop takes 500, less what names a replacement. */
+    @Size(max = 400)
+    private String reason;
+
+    /** The version of the order the prescriber read: continuing an older one is refused. */
+    private Long orderVersion;
+
+    /** The dispute it was read under: a reconfirmation is bound to it. */
+    private UUID disputeId;
+
+    /** The step-up a controlled drug's signature takes. */
+    private String password;
+    private String mfaCode;
+}

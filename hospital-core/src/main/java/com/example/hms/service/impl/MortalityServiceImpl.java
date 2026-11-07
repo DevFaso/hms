@@ -134,6 +134,7 @@ public class MortalityServiceImpl implements MortalityService {
     private final RoleValidator roleValidator;
     private final com.example.hms.service.BedAssignmentService bedAssignmentService;
     private final com.example.hms.repository.DeathDisputeRepository disputeRepository;
+    private final com.example.hms.service.OrderReviewHoldService orderReview;
     private final com.example.hms.service.InBasketService inBasketService;
     /** CR-08: the way from a newborn's chart to the delivery that holds its birth time. */
     private final com.example.hms.repository.NewbornAssessmentRepository newbornAssessmentRepository;
@@ -196,6 +197,9 @@ public class MortalityServiceImpl implements MortalityService {
 
         DeathRecord saved = deathRecordRepository.save(deathRecord);
         DeathClosureSummaryDTO closure = closeOpenRecords(patient, hospitalId, saved);
+        // After the cascade, so an order that ended with its stay is left as it is. Against this event, not the date
+        // on the record: correcting that date later cannot evade the hold, and no correction clears it.
+        orderReview.snapshotAtDeath(saved);
 
         if (saved.isWhoMaternalDeath()) {
             log.warn("MATERNAL DEATH recorded for patient {} at hospital {} — timing {}",
@@ -289,7 +293,7 @@ public class MortalityServiceImpl implements MortalityService {
         UUID actorId = roleValidator.getCurrentUserId();
         // The controller's role check reads the union of the caller's assignments: an administrator of
         // hospital A who is a nurse at B, acting at B, must not reach B's records through it.
-        if (!roleValidator.isSuperAdminFromAuth()
+        if (!com.example.hms.security.CallerIdentity.isGlobalSuperAdmin()
                 && !roleValidator.isHospitalAdmin(actorId, deathRecord.getHospital().getId())) {
             throw new org.springframework.security.access.AccessDeniedException(
                 "Only a hospital administrator of this hospital can mark a death record entered in error.");

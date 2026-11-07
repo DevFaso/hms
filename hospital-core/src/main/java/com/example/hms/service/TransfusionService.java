@@ -90,6 +90,9 @@ public interface TransfusionService {
     List<CrossmatchResponseDTO> listCrossmatches(UUID requestId);
 
     /** Release a crossmatched unit from the lab to the ward. */
+    /** A held request stopped from the order review: the requester need not be the reviewer. */
+    void stopHeldRequest(UUID requestId, String reason);
+
     BloodUnitResponseDTO issueUnit(UUID requestId, UUID unitId);
 
     /**

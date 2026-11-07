@@ -128,6 +128,11 @@
                   <span class="status-badge {{ statusClass(r.status) }}">{{
                     'TRANSFUSION.REQUEST_STATUS_' + r.status | translate
                   }}</span>
+                  @if (r.heldForReview) {
+                    <span class="review-hold-flag" data-testid="request-review-hold">{{
+                      'ORDER_REVIEW.HELD_FLAG' | translate
+                    }}</span>
+                  }
                 </td>
                 <td>{{ r.requestedAt | serverTime | date: 'short' }}</td>
                 <td>
@@ -377,6 +382,11 @@
                 [class.in-progress]="isInProgress(a)"
                 [attr.data-testid]="'administration-' + a.id"
               >
+                @if (a.assessmentDue) {
+                  <div class="review-hold-flag" data-testid="running-assessment-due">
+                    {{ 'ORDER_REVIEW.ASSESSMENT_DUE_FLAG' | translate }}
+                  </div>
+                }
                 <div class="administration-head">
                   <span class="mono">{{ a.unitNumber }}</span>
                   {{ ' '

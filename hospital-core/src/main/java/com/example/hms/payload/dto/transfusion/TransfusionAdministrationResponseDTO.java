@@ -17,6 +17,8 @@ import java.util.UUID;
 public class TransfusionAdministrationResponseDTO {
 
     private UUID id;
+    /** Running when a recorded death was disputed: not stopped, waiting for the treating clinician's assessment. */
+    private boolean assessmentDue;
     private UUID requestId;
     private UUID bloodUnitId;
     private String unitNumber;

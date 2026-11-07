@@ -201,6 +201,7 @@ class DeceasedPatientCareGuardTest {
         Map.entry("DischargeApproval", "discharge and stay close-out"),
         Map.entry("DischargeSummary", "discharge and stay close-out"),
         Map.entry("Mortality", "the death record, and its dispute, which is what lifts the block"),
+        Map.entry("OrderReviewHold", "the review of orders held by a dispute; using one goes through the guarded entry points"),
         Map.entry("ImagingResult", RESULTS), Map.entry("LabResult", RESULTS), Map.entry("MicroCulture", RESULTS),
         Map.entry("BreakGlass", RECORDS), Map.entry("CdsAcknowledgement", RECORDS), Map.entry("DigitalSignature", RECORDS),
         Map.entry("Empi", RECORDS), Map.entry("FileUpload", RECORDS), Map.entry("MedicationHistory", RECORDS),

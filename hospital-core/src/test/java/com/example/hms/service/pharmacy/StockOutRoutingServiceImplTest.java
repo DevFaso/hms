@@ -1574,4 +1574,29 @@ class StockOutRoutingServiceImplTest {
             verifyNoInteractions(prescriberNotifier);
         }
     }
+
+    @Test
+    @DisplayName("a pharmacist cannot record a partner's acceptance of a held order; a refusal stays open")
+    void partnerRespondRefusesAcceptingAHeldOrder() {
+        PrescriptionRoutingDecision decision = PrescriptionRoutingDecision.builder()
+                .prescription(prescription)
+                .targetPharmacy(partnerPharmacy)
+                .decidedByUser(currentUser)
+                .decidedForPatient(patient)
+                .routingType(RoutingType.PARTNER)
+                .status(RoutingDecisionStatus.PENDING)
+                .build();
+        UUID decisionId = UUID.randomUUID();
+        decision.setId(decisionId);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(routingDecisionRepository.findById(decisionId)).thenReturn(Optional.of(decision));
+        com.example.hms.service.support.OrderReviewHoldGuard.useHolds((type, id) -> true);
+        try {
+            assertThatThrownBy(() -> service.partnerRespond(decisionId, true))
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
+            assertThat(decision.getStatus()).isEqualTo(RoutingDecisionStatus.PENDING);
+        } finally {
+            com.example.hms.service.support.OrderReviewHoldGuard.useHolds(null);
+        }
+    }
 }

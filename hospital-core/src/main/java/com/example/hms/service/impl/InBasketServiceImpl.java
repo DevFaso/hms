@@ -33,6 +33,9 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class InBasketServiceImpl implements InBasketService {
 
+    /** The one kind of item a hospital administrator with no clinical role reads. */
+    private static final String DISPUTE_REVIEW_TYPE = "DEATH_DISPUTE";
+
     private final InBasketItemRepository inBasketItemRepository;
     private final UserRepository userRepository;
     private final HospitalRepository hospitalRepository;
@@ -47,6 +50,27 @@ public class InBasketServiceImpl implements InBasketService {
         return inBasketItemRepository
                 .findByRecipientFiltered(userId, hospitalId, type, status, pageable)
                 .map(inBasketMapper::toDto);
+    }
+
+    @Override
+    public Page<InBasketItemDTO> getDisputeReviewItems(UUID userId, UUID hospitalId, InBasketItemStatus status, Pageable pageable) {
+        return inBasketItemRepository
+                .findByRecipientAndReferenceType(userId, hospitalId, DISPUTE_REVIEW_TYPE, status, pageable)
+                .map(inBasketMapper::toDto);
+    }
+
+    @Override
+    public InBasketSummaryDTO getDisputeReviewSummary(UUID userId, UUID hospitalId) {
+        long unread = inBasketItemRepository.countByRecipientAndReferenceType(
+                userId, hospitalId, DISPUTE_REVIEW_TYPE, InBasketItemStatus.UNREAD);
+        return InBasketSummaryDTO.builder().totalUnread(unread).taskUnread(unread).build();
+    }
+
+    @Override
+    public void requireDisputeReviewItem(UUID itemId, UUID userId) {
+        if (!DISPUTE_REVIEW_TYPE.equals(findItemOwnedBy(itemId, userId).getReferenceType())) {
+            throw new com.example.hms.exception.ResourceNotFoundException("error.inBasketItem.notFound", itemId);
+        }
     }
 
     @Override

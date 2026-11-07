@@ -43,6 +43,18 @@ public interface InBasketService {
     InBasketItemDTO createItem(CreateInBasketItemRequest request);
 
     /**
+     * What a hospital administrator with no clinical role reads: only the urgent review of a disputed death addressed
+     * to them. An administrator is otherwise off the clinical chart (E9 #67), so nothing else of this store reaches them.
+     */
+    org.springframework.data.domain.Page<InBasketItemDTO> getDisputeReviewItems(java.util.UUID userId, java.util.UUID hospitalId,
+        com.example.hms.enums.InBasketItemStatus status, org.springframework.data.domain.Pageable pageable);
+
+    com.example.hms.payload.dto.clinical.InBasketSummaryDTO getDisputeReviewSummary(java.util.UUID userId, java.util.UUID hospitalId);
+
+    /** Answers as a missing item unless this is a dispute review addressed to this user. */
+    void requireDisputeReviewItem(java.util.UUID itemId, java.util.UUID userId);
+
+    /**
      * {@link #createItem} in a transaction of its own, for a caller that files
      * the item after its own transaction committed (QA D178: a released lab
      * result). A failure here never undoes the caller's clinical write.

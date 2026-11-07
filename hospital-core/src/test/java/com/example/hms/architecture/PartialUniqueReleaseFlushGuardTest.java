@@ -55,6 +55,7 @@ class PartialUniqueReleaseFlushGuardTest {
     private static final Map<String, String> ENTITY_OF_TABLE = Map.ofEntries(
         Map.entry("death_records", "DeathRecord"),
         Map.entry("death_disputes", "DeathDispute"),
+        Map.entry("order_review_holds", "OrderReviewHold"),
         Map.entry("patient_blood_groups", "PatientBloodGroup"),
         Map.entry("transfer_orders", "TransferOrder"),
         Map.entry("patient_recalls", "PatientRecall"),

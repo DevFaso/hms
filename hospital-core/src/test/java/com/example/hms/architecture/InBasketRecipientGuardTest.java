@@ -68,8 +68,24 @@ class InBasketRecipientGuardTest {
             codes(setConstant(ObstetricAlertEscalationWorker.class, "REMINDER_ROLES"))),
         // The urgent dispute of a death: the administrators of both hospitals, who decide it.
         "DeathDisputeServiceImpl.java", codes(setConstant(com.example.hms.service.impl.DeathDisputeServiceImpl.class, "ADMIN_ROLE_CODES")),
+        // The treating clinicians of a running treatment, who assess it.
+        "OrderReviewHoldServiceImpl.java", union(
+            rolesOf(constant(TransfusionController.class, "PRESCRIBER")),
+            rolesOf(constant(TransfusionController.class, "BEDSIDE"))),
         // The store itself: every sender above reaches it through createItem.
         "InBasketServiceImpl.java", Set.of());
+
+    /** The exception to E9 #67 stays one exception: no other sender files an item for a hospital administrator. */
+    @Test
+    void onlyTheDisputeReviewIsFiledForAHospitalAdministrator() {
+        List<String> senders = new ArrayList<>();
+        RECIPIENTS.forEach((sender, roles) -> {
+            if (roles.stream().anyMatch(role -> role.contains("HOSPITAL_ADMIN"))) {
+                senders.add(sender);
+            }
+        });
+        org.assertj.core.api.Assertions.assertThat(senders).containsExactly("DeathDisputeServiceImpl.java");
+    }
 
     @Test
     void everyClassThatFilesAnItemIsListedWithItsRecipients() throws IOException {

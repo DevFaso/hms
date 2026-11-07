@@ -63,6 +63,7 @@ class StoredReasonExposureGuardTest {
     static final Map<String, List<String>> READ_MODELS = Map.ofEntries(
         Map.entry("MedicationAdministrationRecord", List.of("MarDoseHistoryDTO")),
         Map.entry("AppointmentWaitlist", List.of("WaitlistEntryResponseDTO")),
+        Map.entry("OrderReviewHold", List.of("OrderReviewRowDTO")),
         Map.entry("ImagingReportStatusHistory", List.of("ImagingReportStatusDTO")),
         Map.entry("MicroCultureResult", List.of("MicroCultureResponseDTO")),
         Map.entry("MicroCultureCorrection", List.of("MicroCultureResponseDTO")),

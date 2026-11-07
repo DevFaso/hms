@@ -91,6 +91,7 @@ class MortalityServiceImplTest {
     @Mock private RoleValidator roleValidator;
     @Mock private com.example.hms.service.BedAssignmentService bedAssignmentService;
     @Mock private com.example.hms.repository.DeathDisputeRepository disputeRepository;
+    @Mock private com.example.hms.service.OrderReviewHoldService orderReview;
     @Mock private com.example.hms.service.InBasketService inBasketService;
     @Mock private com.example.hms.repository.NewbornAssessmentRepository newbornAssessmentRepository;
     @Mock private org.springframework.context.ApplicationEventPublisher eventPublisher;
@@ -276,10 +277,14 @@ class MortalityServiceImplTest {
     void aSuperAdminMayMarkItWithNoRoleAtTheHospital() {
         DeathRecord existing = recordedDeath();
         when(roleValidator.isHospitalAdmin(callerUserId, hospitalId)).thenReturn(false);
-        when(roleValidator.isSuperAdminFromAuth()).thenReturn(true);
-
-        service.markEnteredInError(existing.getId(),
-            com.example.hms.payload.dto.mortality.DeathRecordEnteredInErrorDTO.builder().reason("Wrong").build());
+        com.example.hms.security.context.HospitalContextHolder.setContext(
+            com.example.hms.security.context.HospitalContext.builder().superAdmin(true).build());
+        try {
+            service.markEnteredInError(existing.getId(),
+                com.example.hms.payload.dto.mortality.DeathRecordEnteredInErrorDTO.builder().reason("Wrong").build());
+        } finally {
+            com.example.hms.security.context.HospitalContextHolder.clear();
+        }
 
         assertThat(patient.isDeceased()).isFalse();
     }
@@ -363,6 +368,15 @@ class MortalityServiceImplTest {
         assertThatThrownBy(() -> service.markEnteredInError(id, body)).isInstanceOf(BusinessException.class);
         DeathRecordAmendmentDTO amendment = DeathRecordAmendmentDTO.builder().amendmentReason("Autopsy").build();
         assertThatThrownBy(() -> service.amendDeathRecord(id, amendment)).isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    void theDeathEventSnapshotsOutstandingOrdersAfterItsCascade() {
+        service.recordDeath(base().build());
+
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(recallRepository, orderReview);
+        order.verify(recallRepository).findByPatient_IdAndStatusIn(any(), any());
+        order.verify(orderReview).snapshotAtDeath(any());
     }
 
     @Test

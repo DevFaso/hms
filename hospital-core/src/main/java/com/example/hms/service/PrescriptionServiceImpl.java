@@ -469,6 +469,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         Prescription prescription = loadSignable(id);
 
         com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(prescription.getPatient());
+        com.example.hms.service.support.OrderReviewHoldGuard.refusePrescriptionIfHeld(prescription.getId(), "prescriptionId");
         PrescriptionStatus status = prescription.getStatus();
         if (status != null && status != PrescriptionStatus.DRAFT
                 && status != PrescriptionStatus.PENDING_SIGNATURE) {
@@ -900,6 +901,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         }
 
         com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(prescription.getPatient());
+        com.example.hms.service.support.OrderReviewHoldGuard.refusePrescriptionIfHeld(prescription.getId(), "prescriptionId");
         // Resolved BEFORE the workflow-state checks: their messages tell the
         // caller whether an order requires a co-signature, whether it already
         // has one and what status it is in, and someone with no prescribing
@@ -1626,6 +1628,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         releaseQueueClaimOnEdit(existing, currentUserId);
 
         Prescription saved = prescriptionRepository.save(existing);
+        com.example.hms.service.support.OrderReviewHoldGuard.reviewAgainAfterChange(saved.getId());
         PrescriptionResponseDTO response = prescriptionMapper.toResponseDTO(saved);
         response.setCdsAdvisories(advisories);
         return response;
@@ -1696,6 +1699,32 @@ public class PrescriptionServiceImpl implements PrescriptionService {
      * a field that equals the stored value (or is absent) is not a change;
      * any other value is refused before anything is written.
      */
+    @Override
+    public void stopHeldOrder(UUID id, String reason) {
+        UUID actingHospitalId = roleValidator.requireActiveHospitalId();
+        Prescription existing = lockForUpdateInActingHospital(id, actingHospitalId);
+        PrescriptionStatus statusBefore = existing.getStatus();
+        com.example.hms.service.support.CancelledOrders.requireNotCancelled(statusBefore, "prescription.withdrawn.readOnly");
+        if (statusBefore != null && statusBefore.isWithdrawn()) {
+            return;
+        }
+        UUID currentUserId = authService.getCurrentUserId();
+        UUID hospitalId = existing.getHospital() != null ? existing.getHospital().getId() : null;
+        // The rule of withdrawing a signed order: any prescriber of its hospital, with a reason, audited. The review
+        // applies it to a draft too: the reviewer need not be its author.
+        boolean byPrescriber = requireMayWithdrawSigned(existing, currentUserId, hospitalId);
+        if (statusBefore == PrescriptionStatus.PENDING_CLARIFICATION) {
+            closeClarificationOnWithdrawal(existing);
+        }
+        existing.setStatus(hasBeenDispensedFrom(existing) ? PrescriptionStatus.DISCONTINUED : PrescriptionStatus.CANCELLED);
+        existing.setWithdrawalReason(reason);
+        closePartnerOffersOnWithdrawal(existing, statusBefore);
+        voidPreparedFillOnEdit(existing, statusBefore);
+        releaseQueueClaimOnEdit(existing, currentUserId);
+        Prescription saved = prescriptionRepository.save(existing);
+        auditSignedWithdrawalAfterCommit(saved, currentUserId, statusBefore, byPrescriber, reason);
+    }
+
     private PrescriptionResponseDTO withdrawSignedPrescription(Prescription existing,
                                                                PrescriptionRequestDTO request) {
         PrescriptionStatus requested = request.getStatus();

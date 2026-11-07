@@ -323,6 +323,11 @@
                     </td>
                     <td>
                       <strong>{{ m.medication }}</strong>
+                      @if (m.heldForReview) {
+                        <span class="review-hold-flag" data-testid="mar-review-hold">{{
+                          'ORDER_REVIEW.HELD_FLAG' | translate
+                        }}</span>
+                      }
                       @if (m.controlledSubstance) {
                         {{ ' '
                         }}<span

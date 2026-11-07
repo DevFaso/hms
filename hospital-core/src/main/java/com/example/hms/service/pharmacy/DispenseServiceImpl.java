@@ -523,6 +523,7 @@ public class DispenseServiceImpl implements DispenseService {
         requireNotesFit(dispense, request);
 
         com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(prescription.getPatient());
+        com.example.hms.service.support.OrderReviewHoldGuard.refusePrescriptionIfHeld(prescription.getId(), "prescriptionId");
         // AC-6: the order, re-read under the lock, must still be dispensable.
         if (!DISPENSABLE_STATUSES.contains(prescription.getStatus())) {
             throw new ConflictException(MessageUtil.resolve("dispense.ready.prescriptionNotDispensable"));
@@ -851,6 +852,7 @@ public class DispenseServiceImpl implements DispenseService {
         dto.setUnit(requireUnit(dto.getUnit(), prescription));
         // Checked under the prescription lock taken just above.
         com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(prescription.getPatient());
+        com.example.hms.service.support.OrderReviewHoldGuard.refusePrescriptionIfHeld(prescription.getId(), "prescriptionId");
         requireNoOpenPreparation(prescription, openPreparationKey);
         requireWithinPrescribedQuantity(prescription, dto);
 
@@ -1965,6 +1967,8 @@ public class DispenseServiceImpl implements DispenseService {
         LocalDateTime unactedAnswer = unactedClarificationAnswer(p, lastPharmacyAction);
         String attentionReason = attentionReason(p, unactedAnswer, backOrderOutstanding);
         return WorkQueuePrescriptionDTO.builder()
+                .heldForReview(com.example.hms.service.support.OrderReviewHoldGuard.isHeld(
+                    com.example.hms.enums.OrderReviewType.PRESCRIPTION, p.getId()))
                 .id(p.getId())
                 .medicationName(p.getMedicationName())
                 .dosage(p.getDosage())

@@ -108,6 +108,15 @@ public class SmsPartnerNotificationChannel implements PartnerNotificationChannel
     }
 
     @Override
+    public void sendHeldForReview(PrescriptionRoutingDecision decision, Pharmacy partner) {
+        String phone = partner != null ? partner.getPhoneNumber() : null;
+        if (phone == null || phone.isBlank()) {
+            return;
+        }
+        trySend(phone, templates.heldForReview(buildRefToken(decision)));
+    }
+
+    @Override
     public void notifyPatientAccepted(Patient patient, Pharmacy partner) {
         String phone = patientPhone(patient);
         if (phone == null || partner == null) {

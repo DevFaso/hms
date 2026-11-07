@@ -1,0 +1,158 @@
+@if (rows().length) {
+  <section class="order-review" data-testid="order-review-panel">
+    <h2>{{ 'ORDER_REVIEW.TITLE' | translate }}</h2>
+    <p class="order-review-hint">{{ 'ORDER_REVIEW.HINT' | translate }}</p>
+    <div class="data-table">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">{{ 'ORDER_REVIEW.ORDER' | translate }}</th>
+            <th scope="col">{{ 'ORDER_REVIEW.STATE' | translate }}</th>
+            <th scope="col">{{ 'ORDER_REVIEW.DECIDED' | translate }}</th>
+            <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of rows(); track row.id) {
+            <tr class="data-row" [attr.data-testid]="'order-review-' + row.status">
+              <td>
+                <div class="cell-primary">{{ row.orderLabel || '—' }}</div>
+                <div class="cell-secondary">
+                  {{ 'ORDER_REVIEW.TYPE_' + row.orderType | translate }}
+                </div>
+              </td>
+              <td>
+                <span
+                  class="order-review-state"
+                  [class.standing]="row.status === 'HELD' || row.status === 'ASSESSMENT_DUE'"
+                  >{{ 'ORDER_REVIEW.STATUS_' + row.status | translate }}</span
+                >
+              </td>
+              <td>
+                @if (row.decidedAt) {
+                  {{ row.decidedByName || '—' }}, {{ row.decidedAt | serverTime | date: 'short' }}
+                  <div class="cell-secondary">
+                    {{ 'COMMON.REASON_VALUE' | translate: { reason: row.reason } }}
+                  </div>
+                }
+              </td>
+              <td>
+                <div class="action-group">
+                  @if (canDecide(row)) {
+                    <button
+                      class="btn-secondary btn-sm"
+                      data-testid="order-review-continue"
+                      (click)="open(row, 'continue')"
+                    >
+                      {{ 'ORDER_REVIEW.ACTION_CONTINUE' | translate }}
+                    </button>
+                    <button
+                      class="btn-secondary btn-sm"
+                      data-testid="order-review-replace"
+                      (click)="open(row, 'replace')"
+                    >
+                      {{ 'ORDER_REVIEW.ACTION_REPLACE' | translate }}
+                    </button>
+                    <button
+                      class="btn-secondary btn-sm"
+                      data-testid="order-review-stop"
+                      (click)="open(row, 'stop')"
+                    >
+                      {{ 'ORDER_REVIEW.ACTION_STOP' | translate }}
+                    </button>
+                  }
+                  @if (canAssess(row)) {
+                    <button
+                      class="btn-secondary btn-sm"
+                      data-testid="order-review-assess"
+                      (click)="open(row, 'assessment')"
+                    >
+                      {{ 'ORDER_REVIEW.ACTION_ASSESSMENT' | translate }}
+                    </button>
+                  }
+                </div>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  </section>
+}
+
+@if (target(); as row) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    appBackdropClose
+    (backdropClose)="close()"
+    (keydown.escape)="close()"
+  >
+    <div class="modal" appModalDialog aria-labelledby="order-review-title" (escaped)="close()">
+      <div class="modal-header">
+        <h2 id="order-review-title">
+          {{ 'ORDER_REVIEW.ACTION_' + action().toUpperCase() | translate }}
+        </h2>
+        <button class="modal-close" (click)="close()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-hint warn">
+          {{ 'ORDER_REVIEW.HINT_' + action().toUpperCase() | translate }}
+        </p>
+        <p>
+          <strong>{{ row.orderLabel }}</strong>
+        </p>
+        <div class="field">
+          <label for="ore-reason">{{ 'ORDER_REVIEW.REASON' | translate }} *</label>
+          <input required id="ore-reason" type="text" maxlength="400" [(ngModel)]="reason" />
+        </div>
+        @if (action() === 'replace') {
+          <div class="field">
+            <label for="ore-replacement">{{ 'ORDER_REVIEW.REPLACEMENT' | translate }} *</label>
+            <select required id="ore-replacement" [(ngModel)]="replacementOrderId">
+              <option value="">{{ 'ORDER_REVIEW.REPLACEMENT_CHOOSE' | translate }}</option>
+              @for (c of row.replacementCandidates ?? []; track c.id) {
+                <option [value]="c.id">{{ c.label }}</option>
+              }
+            </select>
+            @if (!row.replacementCandidates?.length) {
+              <p class="modal-hint" data-testid="order-review-no-replacement">
+                {{ 'ORDER_REVIEW.REPLACEMENT_NONE' | translate }}
+              </p>
+            }
+          </div>
+        }
+        @if (action() === 'continue' && row.controlled) {
+          <p class="modal-hint">{{ 'ORDER_REVIEW.STEP_UP_HINT' | translate }}</p>
+          <div class="field">
+            <label for="ore-password">{{ 'ORDER_REVIEW.PASSWORD' | translate }}</label>
+            <input
+              id="ore-password"
+              type="password"
+              autocomplete="current-password"
+              [(ngModel)]="password"
+            />
+          </div>
+          <div class="field">
+            <label for="ore-mfa">{{ 'ORDER_REVIEW.MFA' | translate }}</label>
+            <input id="ore-mfa" type="text" autocomplete="one-time-code" [(ngModel)]="mfaCode" />
+          </div>
+        }
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="close()">{{ 'COMMON.CANCEL' | translate }}</button>
+        <button
+          submitGuardRequired
+          class="btn-primary"
+          data-testid="order-review-submit"
+          (click)="submit()"
+          [disabled]="submitting()"
+          [appSubmitGuard]="incomplete()"
+          [submitGuardFields]="guardedFields()"
+        >
+          {{ 'ORDER_REVIEW.ACTION_' + action().toUpperCase() | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}

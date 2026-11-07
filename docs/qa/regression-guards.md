@@ -1088,3 +1088,14 @@ Rounds 27, 28 and 29 each found 20–30 new siblings of the required-field class
 | `repository/DeathRecordEnteredInErrorPostgresIT#thePerinatalNumerator` (new) | CR-07: on PostgreSQL, the query and `DeathRecord#isInWhoPerinatalNumerator` give the same rows, across the types and gestations. | none |
 | `architecture/PregnancyDatingGuardTest#everyGestationalAgeOfARequestHasACeiling` (one exception, CR-08) | `DeathRecordRequestDTO#gestationalAgeWeeks` holds no `@Max`, because a bean-validation bound would refuse the death itself against the user's ruling. Its ceiling is in `DeathClassificationRules`, tested by `theRequestLeftToTheRulesHasItsCeilingThere`. | `CEILING_IN_THE_RULES`, this one site |
 | `service/MortalityServiceImplTest#eachRefusalNamesItsOwnFieldSaysTheDeathCanBeRecordedAndTheDeathSavesWithoutIt` (new) | The user's ruling: every classification refusal on its own field, saying the death can be recorded, and the same death saving without it. | none |
+
+## Guards added or widened by round 36 (fix/r36-order-review-hold)
+
+| Guard | What it catches | Allowlist |
+|---|---|---|
+| `architecture/OrderReviewHoldGuardTest` (new) | A write endpoint of a controller acting on an existing order that nobody classified; a gated endpoint whose named service method stopped asking `OrderReviewHoldGuard`; an edit, or a blood request moved onto another screen, that does not invalidate a reconfirmation; a partner's SMS reply that does not ask; a new service moving an order on, a partner's acceptance included; the review list opened to an administrator. | `NOT_A_USE`, each with its reason. It checks the helper named in the table, not that the endpoint reaches it. |
+| `repository/OrderReviewHoldPostgresIT` (new) | On PostgreSQL: the snapshot, the standing-row index, the guard, reconfirmation, a stale version, the race with a fill's lock, a decision race, what is not held, and the reason encrypted at rest. The race fakes the fill with raw JDBC. | none |
+| `service/support/DeathDisputeEmergencyPathwayTest#existingOrdersAreHeldUntilReconfirmed`, `#newOrdersAreNotHeld` (new) | A step of the emergency pathway that lets an existing order through. Mocked persistence: QA walks it on a running system. | none |
+| `service/OrderReviewHoldServiceImplTest` (new) | Who may decide, the binding to a dispute and a version, what a finished order counts as, what may replace an order, and that the audit row holds a digest of the reason. | none |
+| `architecture/HospitalAdminOffChartTest` (narrowed) | A hospital administrator with no clinical role reaching the in-basket for anything but the dispute reviews addressed to them. | That one exception, with its reason. |
+| `service/support/ClinicalGuardBridgeResetListener` (new, test-only) | A plain unit test asking a stopped test context, and a class on a cached context running with a guard failing open. | none |

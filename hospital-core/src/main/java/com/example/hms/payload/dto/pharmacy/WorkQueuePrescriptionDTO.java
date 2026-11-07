@@ -24,6 +24,9 @@ import java.util.UUID;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class WorkQueuePrescriptionDTO {
 
+    /** Existing when a recorded death was disputed: a prescriber's review comes first. */
+    private boolean heldForReview;
+
     private UUID id;
     private String medicationName;
     private String dosage;
