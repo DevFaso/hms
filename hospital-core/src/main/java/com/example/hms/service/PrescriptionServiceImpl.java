@@ -575,7 +575,9 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         if (reason.isEmpty()) {
             List<CdsCard> refused = new java.util.ArrayList<>(List.of(card.get()));
             pendingAllergyStop(prescription).ifPresent(refused::add);
-            throw new CdsCriticalBlockException(card.get().summary(), refused);
+            throw new CdsCriticalBlockException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("prescription.cds.criticalOverrideRequired", card.get().summary()),
+                refused);
         }
         return reason;
     }
