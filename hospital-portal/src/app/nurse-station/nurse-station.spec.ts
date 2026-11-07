@@ -144,6 +144,32 @@ describe('NurseStationComponent — two-tier polling', () => {
     fixture.detectChanges();
     expect(trackerWsSpy.connect).toHaveBeenCalledWith('h2');
   });
+  it('uses the server overdue total when the MAR fails, and shows unavailable without a summary', () => {
+    nurseServiceSpy.getMedicationMAR.and.returnValue(throwError(() => new Error('offline')));
+    nurseServiceSpy.getDashboardSummary.and.returnValue(
+      of({
+        assignedPatients: 1,
+        vitalsDue: 0,
+        medicationsDue: 2,
+        medicationsOverdue: 3,
+        ordersPending: 0,
+        handoffsPending: 0,
+        announcements: 0,
+      }),
+    );
+    fixture.detectChanges();
+    const overdueValue = () =>
+      fixture.nativeElement.querySelectorAll('.summary-card .card-value')[3].textContent.trim();
+    expect(component.medicationsFailed()).toBeTrue();
+    expect(overdueValue()).toBe('3');
+    component.searchTerm.set('missing');
+    fixture.detectChanges();
+    expect(overdueValue()).toBe('3');
+    nurseServiceSpy.getDashboardSummary.and.returnValue(throwError(() => new Error('offline')));
+    component.refresh();
+    fixture.detectChanges();
+    expect(overdueValue()).toBe('—');
+  });
   it('keeps the latest assignee response and distinguishes a failed vital list from an empty one', () => {
     const old = new Subject<import('../services/nurse-task.service').NurseVitalTask[]>();
     nurseServiceSpy.getVitalsDue.and.returnValue(old);

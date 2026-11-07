@@ -35,6 +35,7 @@ import { WaitlistPanelComponent } from '../waitlist-panel/waitlist-panel.compone
 import { RecallsPanelComponent } from '../recalls-panel/recalls-panel.component';
 import { CheckinDialogComponent } from '../checkin-dialog/checkin-dialog.component';
 import { localDateString } from '../../shared/date-utils';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
 type Tab = 'queue' | 'insurance' | 'payments' | 'flowboard' | 'waitlist' | 'recalls';
 type StatusFilter =
@@ -58,6 +59,7 @@ function todayIso(): string {
     CommonModule,
     FormsModule,
     TranslateModule,
+    ServerTimePipe,
     PatientSnapshotDrawerComponent,
     InsuranceIssuesPanelComponent,
     PaymentPendingPanelComponent,

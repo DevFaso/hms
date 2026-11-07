@@ -40,7 +40,7 @@
     <section class="daily-overview">
       <div class="overview-heading">
         <h2>{{ 'RECEPTION.DAILY_OVERVIEW' | translate }}</h2>
-        <span>{{ selectedDate() | date: 'mediumDate' }}</span>
+        <span>{{ selectedDate() | serverTime | date: 'mediumDate' }}</span>
       </div>
       <div class="summary-strip">
         <button class="sum-card" (click)="statusFilter.set('ALL'); activeTab.set('queue')">

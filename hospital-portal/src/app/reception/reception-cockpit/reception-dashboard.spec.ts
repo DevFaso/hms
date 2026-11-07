@@ -98,6 +98,14 @@ describe('Reception dashboard', () => {
     c.clearQueueFilters();
     expect(c.filteredQueue().length).toBe(2);
   });
+  it('keeps the selected calendar day in the overview heading', () => {
+    const fixture = TestBed.createComponent(ReceptionCockpitComponent);
+    fixture.componentInstance.selectedDate.set('2026-11-07');
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.overview-heading span').textContent).toContain(
+      'Nov 7, 2026',
+    );
+  });
   it('refuses late responses from an earlier date across all dashboard sources', () => {
     const oldQueue = new Subject<ReceptionQueueItem[]>(),
       oldSummary = new Subject<ReceptionDashboardSummary>(),
