@@ -2,8 +2,10 @@ package com.example.hms.payload.dto.clinical.newborn;
 
 import com.example.hms.payload.dto.VitalSignLimits;
 import jakarta.validation.constraints.DecimalMin;
+import com.example.hms.enums.NewbornDangerSignObservation;
 import com.example.hms.enums.NewbornEducationTopic;
 import com.example.hms.enums.NewbornFollowUpAction;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import lombok.AllArgsConstructor;
@@ -23,6 +25,11 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 public class NewbornAssessmentRequestDTO {
+
+    private static final String DANGER_SIGN_DOC = "Danger sign, provisional WHO postnatal pathway (not every sign of it). "
+        + "Omitted, null or NOT_ASSESSED means not assessed, never absent. PRESENT raises its own urgent finding. Never required.";
+    private static final String SUPPORT_ATTESTATION = "True only when the clinician attests that this support was "
+        + "actually started. Stored as submitted: an alert never sets it; alerts only recommend and request follow-up.";
 
     private UUID hospitalId;
     private UUID registrationId;
@@ -95,6 +102,15 @@ public class NewbornAssessmentRequestDTO {
     private String examMusculoskeletal;
     private String examNotes;
 
+    @Schema(description = DANGER_SIGN_DOC)
+    private NewbornDangerSignObservation poorFeeding;
+    @Schema(description = DANGER_SIGN_DOC)
+    private NewbornDangerSignObservation convulsions;
+    @Schema(description = DANGER_SIGN_DOC)
+    private NewbornDangerSignObservation severeChestIndrawing;
+    @Schema(description = DANGER_SIGN_DOC + " PRESENT here means the baby makes no spontaneous movement.")
+    private NewbornDangerSignObservation absentSpontaneousMovement;
+
     private String followUpNotes;
 
     @Builder.Default
@@ -107,8 +123,11 @@ public class NewbornAssessmentRequestDTO {
     private Boolean parentEducationCompleted;
 
     private Boolean escalationRecommended;
+    @Schema(description = SUPPORT_ATTESTATION)
     private Boolean respiratorySupportInitiated;
+    @Schema(description = SUPPORT_ATTESTATION)
     private Boolean glucoseProtocolInitiated;
+    @Schema(description = SUPPORT_ATTESTATION)
     private Boolean thermoregulationSupportInitiated;
 
     /** QA D1424: 5.6 means nothing without its unit, and the alerts read the number. */

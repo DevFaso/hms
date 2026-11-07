@@ -5,6 +5,7 @@ import { of, Subject, throwError } from 'rxjs';
 import { PostpartumTabComponent } from './postpartum-tab';
 import { expectFieldsMarked, fieldErrorsResponse } from '../testing/form-refusal-behaviour';
 import {
+  NewbornAssessmentRequest,
   NewbornAssessmentResponse,
   PostpartumObservationResponse,
   PostpartumSchedule,
@@ -235,6 +236,123 @@ describe('PostpartumTabComponent — screening', () => {
     expect(cmp.newbornValueToCheck('heartRateBpm')).toBeFalse();
     expect(cmp.newbornValueToCheck('respiratoryRateBpm')).toBeFalse();
     expect(cmp.newbornValueToCheck('temperatureCelsius')).toBeFalse();
+  });
+
+  it('CR-05: a blank danger sign is not sent and is no finding; present or absent alone saves', () => {
+    const fixture = TestBed.createComponent(PostpartumTabComponent);
+    const cmp = fixture.componentInstance;
+    cmp.onPatientPicked({ id: 'p1' } as PatientResponse);
+    cmp.openAssessment();
+    fixture.detectChanges();
+    postpartumSpy.createNewbornAssessment.and.returnValue(of({ alerts: [] }) as never);
+    cmp.submitAssessment();
+    expect(postpartumSpy.createNewbornAssessment).not.toHaveBeenCalled();
+    for (const field of [
+      'poorFeeding',
+      'convulsions',
+      'severeChestIndrawing',
+      'absentSpontaneousMovement',
+    ] as const) {
+      for (const observation of ['PRESENT', 'ABSENT'] as const) {
+        postpartumSpy.createNewbornAssessment.calls.reset();
+        cmp.openAssessment();
+        cmp.assessmentForm = { [field]: observation };
+        cmp.submitAssessment();
+        expect(postpartumSpy.createNewbornAssessment).withContext(field).toHaveBeenCalledTimes(1);
+        const body = postpartumSpy.createNewbornAssessment.calls.mostRecent().args[1];
+        expect((body as NewbornAssessmentRequest)[field]).toBe(observation);
+      }
+    }
+  });
+
+  it('CR-05, CR-06: the form offers each sign as not assessed by default, says what it leaves out, and that an alert ticks nothing', async () => {
+    const fixture = TestBed.createComponent(PostpartumTabComponent);
+    const cmp = fixture.componentInstance;
+    cmp.onPatientPicked({ id: 'p1' } as PatientResponse);
+    cmp.openAssessment();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    for (const id of [
+      '#nb-danger-feeding',
+      '#nb-danger-convulsions',
+      '#nb-danger-indrawing',
+      '#nb-danger-movement',
+    ]) {
+      const select = host.querySelector(id) as HTMLSelectElement;
+      expect(select).withContext(id).not.toBeNull();
+      expect(select.options.length).toBe(3);
+      expect(select.selectedOptions[0].textContent).toContain('POSTPARTUM.DANGER_NOT_ASSESSED');
+    }
+    expect(host.querySelector('[data-testid="newborn-danger-hint"]')?.textContent).toContain(
+      'POSTPARTUM.DANGER_SIGNS_HINT',
+    );
+    expect(host.querySelector('[data-testid="newborn-interventions-hint"]')).not.toBeNull();
+    expect(cmp.assessmentForm.convulsions).toBeUndefined();
+  });
+
+  it('CR-04: an urgent temperature reads as its sentence too, at the WHO band and beyond it', () => {
+    const cmp = TestBed.createComponent(PostpartumTabComponent).componentInstance;
+    const read = (code: string) =>
+      cmp.newbornAlertsToRead({
+        id: 'a',
+        patientId: 'p',
+        alerts: [{ type: 'THERMOREGULATION', severity: 'URGENT', code, message: code }],
+      } as NewbornAssessmentResponse).length;
+    expect(read('newborn-temperature-who-danger')).toBe(1);
+    expect(read('newborn-temperature-critical')).toBe(1);
+    expect(read('newborn-heart-rate')).toBe(0);
+  });
+
+  it('CR-05: the chart shows each sign as recorded, and a row nobody looked at never reads as absent', () => {
+    postpartumSpy.recentNewbornAssessments.and.returnValue(
+      of([
+        {
+          id: 'a1',
+          patientId: 'p1',
+          convulsions: 'PRESENT',
+          poorFeeding: 'ABSENT',
+          severeChestIndrawing: 'NOT_ASSESSED',
+          absentSpontaneousMovement: 'NOT_ASSESSED',
+          alerts: [
+            {
+              type: 'DANGER_SIGN',
+              severity: 'URGENT',
+              code: 'newborn-danger-convulsions',
+              message: 'Convulsions',
+            },
+          ],
+        } as NewbornAssessmentResponse,
+        {
+          id: 'a2',
+          patientId: 'p1',
+          poorFeeding: 'NOT_ASSESSED',
+          convulsions: 'NOT_ASSESSED',
+          severeChestIndrawing: 'NOT_ASSESSED',
+          absentSpontaneousMovement: 'NOT_ASSESSED',
+        } as NewbornAssessmentResponse,
+      ]),
+    );
+    const fixture = TestBed.createComponent(PostpartumTabComponent);
+    const cmp = fixture.componentInstance;
+    cmp.onPatientPicked({ id: 'p1' } as PatientResponse);
+    fixture.detectChanges();
+    cmp.setSection('newborn');
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const rows = Array.from(el.querySelectorAll('[data-testid="newborn-danger-sign"]'));
+    expect(rows.length).toBe(4);
+    const shown = rows.map((row) => row.textContent ?? '');
+    expect(shown[0]).toContain('POSTPARTUM.DANGER_POOR_FEEDING');
+    expect(shown[0]).toContain('POSTPARTUM.DANGER_ABSENT');
+    expect(shown[1]).toContain('POSTPARTUM.DANGER_PRESENT');
+    expect(rows[1].classList.contains('risk-high')).toBeTrue();
+    expect(shown[2]).toContain('POSTPARTUM.DANGER_NOT_ASSESSED');
+    expect(el.querySelectorAll('[data-testid="newborn-danger-none"]').length).toBe(1);
+    expect(el.querySelector('[data-testid="newborn-alert-sentence"]')?.textContent).toContain(
+      'Convulsions',
+    );
   });
 
   it('QA D1424: a glucose with no unit is refused on the unit field; with its unit it is sent as entered', () => {

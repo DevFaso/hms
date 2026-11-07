@@ -2,6 +2,7 @@ package com.example.hms.service.maternity;
 
 import com.example.hms.enums.GlucoseUnit;
 import com.example.hms.enums.NewbornAlertSeverity;
+import com.example.hms.enums.NewbornDangerSignObservation;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -91,13 +92,14 @@ class NewbornAlertRulesTest {
         assertExactly(codes(breaths(value, false)), urgent, notice);
     }
 
-    @ParameterizedTest(name = "RR {0} says support started: {1}")
-    @CsvSource({"29,true", "30,false", "60,false", "70,false", "71,true"})
-    @DisplayName("the record claims support only in the bands where it always did")
-    void respiratorySupportFlag(int value, boolean started) {
+    @ParameterizedTest(name = "RR {0} asks for respiratory support as follow-up")
+    @CsvSource({"29", "60", "70", "71"})
+    @DisplayName("CR-06: an abnormal rate requests the follow-up; it records nothing as done")
+    void respiratoryFollowUpIsARequest(int value) {
         assertThat(NewbornAlertRules.evaluate(breaths(value, false)))
             .filteredOn(f -> "newborn-respiratory".equals(f.code()))
-            .allSatisfy(f -> assertThat(f.startsSupport()).isEqualTo(started));
+            .singleElement()
+            .satisfies(f -> assertThat(f.followUp()).isEqualTo(com.example.hms.enums.NewbornFollowUpAction.RESPIRATORY_SUPPORT));
     }
 
     @ParameterizedTest(name = "SpO2 {0}: {1}")
@@ -109,8 +111,10 @@ class NewbornAlertRulesTest {
 
     @ParameterizedTest(name = "T {0}: {1}")
     @CsvSource({
-        "35.9,newborn-temperature-critical", "36.0,none", "36.1,none",
-        "37.9,none", "38.0,newborn-temperature-critical", "38.1,newborn-temperature-critical"
+        "35.4,newborn-temperature-critical", "35.5,newborn-temperature-critical", "35.9,newborn-temperature-critical",
+        "36.0,none", "36.1,none", "37.5,none",
+        "37.6,newborn-temperature-who-danger", "37.9,newborn-temperature-who-danger",
+        "38.0,newborn-temperature-critical", "38.1,newborn-temperature-critical"
     })
     void temperature(double value, String urgent) {
         assertExactly(codes(new NewbornAlertRules.Reading(value, null, null, null, null, null, null, null, 1L, false, false)),
@@ -118,12 +122,39 @@ class NewbornAlertRulesTest {
     }
 
     @ParameterizedTest(name = "T {0} still cautions: {1}")
-    @CsvSource({"36.4,true", "36.5,false", "37.5,false", "37.6,true"})
-    @DisplayName("the older caution band stays")
+    @CsvSource({"36.0,true", "36.4,true", "36.5,false", "37.5,false", "37.6,false", "37.9,false"})
+    @DisplayName("the older caution band stays below; CR-04: above 37.5 is urgent instead, never both")
     void temperatureCaution(double value, boolean caution) {
         Map<String, NewbornAlertSeverity> actual =
             codes(new NewbornAlertRules.Reading(value, null, null, null, null, null, null, null, 1L, false, false));
         assertThat(actual.containsKey("newborn-temperature")).isEqualTo(caution);
+    }
+
+    @ParameterizedTest(name = "T {0} requests prompt assessment")
+    @CsvSource({"37.6", "37.9"})
+    @DisplayName("CR-04: the provisional WHO band requests assessment; it asks for no thermal treatment")
+    void theWhoBandRequestsAssessment(double value) {
+        assertThat(NewbornAlertRules.evaluate(new NewbornAlertRules.Reading(value, null, null, null, null, null, null, null, 1L, false, false)))
+            .singleElement()
+            .satisfies(f -> {
+                assertThat(f.severity()).isEqualTo(NewbornAlertSeverity.URGENT);
+                assertThat(f.followUp()).isEqualTo(com.example.hms.enums.NewbornFollowUpAction.PEDIATRICIAN_NOTIFICATION);
+            });
+    }
+
+    @Test
+    @DisplayName("CR-04: the wording names the provisional WHO pathway and keeps NICE as another context, in every language")
+    void theWordingNamesThePathway() {
+        var messages = com.example.hms.i18n.TestMessageSources.bundles();
+        assertThat(NewbornAlertRules.SELECTED_PATHWAY).contains("WHO", "PROVISIONAL");
+        Map<java.util.Locale, List<String>> pathway = Map.of(
+            java.util.Locale.ENGLISH, List.of("provisional WHO", "NICE", "37.5"),
+            java.util.Locale.FRENCH, List.of("OMS provisoire", "NICE", "37,5"),
+            java.util.Locale.forLanguageTag("es"), List.of("provisional de la OMS", "NICE", "37,5"));
+        pathway.forEach((locale, words) -> {
+            assertThat(messages.getMessage("newborn.alert.msg.newborn-temperature-who-danger", null, locale)).contains(words);
+            assertThat(messages.getMessage("newborn.alert.msg.newborn-temperature-critical", null, locale)).contains(words);
+        });
     }
 
     @ParameterizedTest(name = "{0} mg/dL at {1} h: {2} {3}")
@@ -180,14 +211,84 @@ class NewbornAlertRulesTest {
         assertThat(codes(glucose(GlucoseUnit.MMOL_L.toMgDl(2.49), 2.49, 100L))).containsEntry("newborn-glucose", NewbornAlertSeverity.URGENT);
     }
 
-    @ParameterizedTest(name = "T {0} says support started: {1}")
-    @CsvSource({"35.9,true", "38.0,false", "38.1,true"})
-    @DisplayName("38.0 is urgent, and the record does not claim support started")
-    void temperatureSupportFlag(double value, boolean started) {
+    @ParameterizedTest(name = "T {0} asks for thermal support as follow-up")
+    @CsvSource({"35.9", "38.0", "38.1"})
+    @DisplayName("CR-06: an urgent temperature requests the follow-up; it records nothing as done")
+    void temperatureFollowUpIsARequest(double value) {
         assertThat(NewbornAlertRules.evaluate(new NewbornAlertRules.Reading(value, null, null, null, null, null, null, null, 1L, false, false)))
             .filteredOn(f -> "newborn-temperature-critical".equals(f.code()))
             .singleElement()
-            .satisfies(f -> assertThat(f.startsSupport()).isEqualTo(started));
+            .satisfies(f -> assertThat(f.followUp()).isEqualTo(com.example.hms.enums.NewbornFollowUpAction.THERMAL_SUPPORT));
+    }
+
+    private static final NewbornAlertRules.Reading NO_VITALS =
+        new NewbornAlertRules.Reading(null, null, null, null, null, null, null, null, 1L, false, false);
+    private static final NewbornAlertRules.Reading NORMAL_VITALS =
+        new NewbornAlertRules.Reading(36.8, 140, 40, 98, 70, null, null, null, 1L, false, false);
+
+    /** One sign at the given observation, the others not assessed, built by position so a new sign cannot be missed. */
+    private static NewbornAlertRules.DangerSigns signAt(int position, NewbornDangerSignObservation observation) throws ReflectiveOperationException {
+        var components = NewbornAlertRules.DangerSigns.class.getRecordComponents();
+        Object[] args = new Object[components.length];
+        java.util.Arrays.fill(args, NewbornDangerSignObservation.NOT_ASSESSED);
+        args[position] = observation;
+        return (NewbornAlertRules.DangerSigns) NewbornAlertRules.DangerSigns.class
+            .getDeclaredConstructor(java.util.Arrays.stream(components).map(java.lang.reflect.RecordComponent::getType).toArray(Class[]::new))
+            .newInstance(args);
+    }
+
+    private static final int DANGER_SIGNS = NewbornAlertRules.DangerSigns.class.getRecordComponents().length;
+
+    @Test
+    @DisplayName("CR-05: every sign present alone raises its own urgent finding, with its own code, on normal or no vitals")
+    void eachDangerSignStandsAlone() throws ReflectiveOperationException {
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        for (int i = 0; i < DANGER_SIGNS; i++) {
+            for (NewbornAlertRules.Reading vitals : List.of(NO_VITALS, NORMAL_VITALS)) {
+                assertThat(NewbornAlertRules.evaluate(vitals, signAt(i, NewbornDangerSignObservation.PRESENT)))
+                    .singleElement()
+                    .satisfies(f -> {
+                        assertThat(f.severity()).isEqualTo(NewbornAlertSeverity.URGENT);
+                        assertThat(f.type()).isEqualTo(com.example.hms.enums.NewbornAlertType.DANGER_SIGN);
+                        assertThat(f.followUp()).isNotNull();
+                        seen.add(f.code());
+                    });
+            }
+        }
+        assertThat(seen).as("one code per sign").hasSize(DANGER_SIGNS).hasSize(4);
+    }
+
+    @Test
+    @DisplayName("CR-05: absent, not assessed and blank raise nothing")
+    void aSignNotPresentRaisesNothing() throws ReflectiveOperationException {
+        for (int i = 0; i < DANGER_SIGNS; i++) {
+            assertThat(NewbornAlertRules.evaluate(NORMAL_VITALS, signAt(i, NewbornDangerSignObservation.ABSENT))).isEmpty();
+            assertThat(NewbornAlertRules.evaluate(NORMAL_VITALS, signAt(i, NewbornDangerSignObservation.NOT_ASSESSED))).isEmpty();
+            assertThat(NewbornAlertRules.evaluate(NORMAL_VITALS, signAt(i, null))).isEmpty();
+        }
+    }
+
+    @Test
+    @DisplayName("CR-05: all present are four findings; the vitals' own findings stand beside them")
+    void theSignsDoNotReplaceEachOtherOrTheVitals() {
+        NewbornDangerSignObservation present = NewbornDangerSignObservation.PRESENT;
+        NewbornAlertRules.Reading hot = new NewbornAlertRules.Reading(38.5, null, null, null, null, null, null, null, 1L, false, false);
+        assertThat(NewbornAlertRules.evaluate(hot, new NewbornAlertRules.DangerSigns(present, present, present, present)))
+            .extracting(NewbornAlertRules.Finding::code)
+            .containsExactlyInAnyOrder("newborn-temperature-critical", "newborn-danger-poor-feeding", "newborn-danger-convulsions",
+                "newborn-danger-chest-indrawing", "newborn-danger-no-movement");
+    }
+
+    @Test
+    @DisplayName("CR-05: no sentence claims every WHO danger sign is covered")
+    void noWordingClaimsFullCoverage() {
+        var messages = com.example.hms.i18n.TestMessageSources.bundles();
+        for (java.util.Locale locale : List.of(java.util.Locale.ENGLISH, java.util.Locale.FRENCH, java.util.Locale.forLanguageTag("es"))) {
+            for (String code : List.of("poor-feeding", "convulsions", "chest-indrawing", "no-movement")) {
+                assertThat(messages.getMessage("newborn.alert.msg.newborn-danger-" + code, null, locale).toLowerCase(locale))
+                    .doesNotContain("all ", "every ", "complete", "tous ", "complet", "todos ", "completa");
+            }
+        }
     }
 
     @Test
@@ -291,12 +392,13 @@ class NewbornAlertRulesTest {
     @DisplayName("every code the rules raise has its sentence and trigger in EN, FR and ES")
     void everyCodeIsWordedInEveryLanguage() {
         var messages = com.example.hms.i18n.TestMessageSources.bundles();
-        List<String> codes = List.of("newborn-temperature-critical", "newborn-temperature", "newborn-heart-rate",
+        List<String> codes = List.of("newborn-temperature-critical", "newborn-temperature-who-danger", "newborn-temperature", "newborn-heart-rate",
             "newborn-heart-rate-repeated", "newborn-respiratory", "newborn-oxygenation", "newborn-glucose",
             "newborn-glucose-first-72h", "newborn-glucose-unknown-age", "newborn-glucose-after-72h",
             "newborn-reference-heart-rate", "newborn-reference-heart-rate-preterm", "newborn-reference-respiratory",
             "newborn-reference-respiratory-preterm", "newborn-check-heart-rate", "newborn-check-respiratory",
-            "newborn-check-glucose", "newborn-check-pressure", "newborn-check-temperature");
+            "newborn-check-glucose", "newborn-check-pressure", "newborn-check-temperature",
+            "newborn-danger-poor-feeding", "newborn-danger-convulsions", "newborn-danger-chest-indrawing", "newborn-danger-no-movement");
         for (java.util.Locale locale : List.of(java.util.Locale.ENGLISH, java.util.Locale.FRENCH, java.util.Locale.forLanguageTag("es"))) {
             for (String code : codes) {
                 assertThat(messages.getMessage("newborn.alert.msg." + code, null, locale)).as(code).isNotBlank();

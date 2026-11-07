@@ -2,6 +2,7 @@ package com.example.hms.model.neonatal;
 
 import com.example.hms.enums.NewbornAlertSeverity;
 import com.example.hms.enums.NewbornAlertType;
+import com.example.hms.enums.NewbornDangerSignObservation;
 import com.example.hms.enums.NewbornEducationTopic;
 import com.example.hms.enums.NewbornFollowUpAction;
 import com.example.hms.model.BaseEntity;
@@ -177,17 +178,47 @@ public class NewbornAssessment extends BaseEntity {
     @Column(name = "escalation_recommended", nullable = false)
     private boolean escalationRecommended = false;
 
+    /*
+     * CR-06: the three flags below hold only what the clinician submitted with this assessment,
+     * so they are set once, by the builder, and have no setter. They carry no actor or time of
+     * their own: the attestation is the assessment's, by documentedBy / recordedByStaff at
+     * documentedAt. Rows saved before CR-06 may hold a true set by a numeric alert instead.
+     */
     @Builder.Default
+    @Setter(lombok.AccessLevel.NONE)
     @Column(name = "respiratory_support_initiated", nullable = false)
     private boolean respiratorySupportInitiated = false;
 
     @Builder.Default
+    @Setter(lombok.AccessLevel.NONE)
     @Column(name = "glucose_protocol_initiated", nullable = false)
     private boolean glucoseProtocolInitiated = false;
 
     @Builder.Default
+    @Setter(lombok.AccessLevel.NONE)
     @Column(name = "thermoregulation_support_initiated", nullable = false)
     private boolean thermoregulationSupportInitiated = false;
+
+    /** CR-05: blank is not assessed, never absent. Each one present raises its own urgent finding. */
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(name = "poor_feeding", nullable = false, length = 16)
+    private NewbornDangerSignObservation poorFeeding = NewbornDangerSignObservation.NOT_ASSESSED;
+
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(name = "convulsions", nullable = false, length = 16)
+    private NewbornDangerSignObservation convulsions = NewbornDangerSignObservation.NOT_ASSESSED;
+
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(name = "severe_chest_indrawing", nullable = false, length = 16)
+    private NewbornDangerSignObservation severeChestIndrawing = NewbornDangerSignObservation.NOT_ASSESSED;
+
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(name = "absent_spontaneous_movement", nullable = false, length = 16)
+    private NewbornDangerSignObservation absentSpontaneousMovement = NewbornDangerSignObservation.NOT_ASSESSED;
 
     @Column(name = "follow_up_notes", columnDefinition = "TEXT")
     private String followUpNotes;

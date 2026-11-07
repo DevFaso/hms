@@ -180,6 +180,11 @@ export interface NewbornAssessmentRequest {
   glucoseUnit?: GlucoseUnit;
   examGeneralAppearance?: string;
   examNotes?: string;
+  /** CR-05: left out means not assessed, never absent. */
+  poorFeeding?: NewbornDangerSignObservation;
+  convulsions?: NewbornDangerSignObservation;
+  severeChestIndrawing?: NewbornDangerSignObservation;
+  absentSpontaneousMovement?: NewbornDangerSignObservation;
   followUpNotes?: string;
   followUpActions?: NewbornFollowUpAction[];
   parentEducationNotes?: string;
@@ -189,6 +194,8 @@ export interface NewbornAssessmentRequest {
   glucoseProtocolInitiated?: boolean;
   thermoregulationSupportInitiated?: boolean;
 }
+
+export type NewbornDangerSignObservation = 'PRESENT' | 'ABSENT' | 'NOT_ASSESSED';
 
 export interface NewbornAssessmentResponse {
   id: string;
@@ -210,6 +217,10 @@ export interface NewbornAssessmentResponse {
   glucoseMgDl?: number | null;
   examGeneralAppearance?: string;
   examNotes?: string;
+  poorFeeding?: NewbornDangerSignObservation;
+  convulsions?: NewbornDangerSignObservation;
+  severeChestIndrawing?: NewbornDangerSignObservation;
+  absentSpontaneousMovement?: NewbornDangerSignObservation;
   escalationRecommended?: boolean;
   respiratorySupportInitiated?: boolean;
   glucoseProtocolInitiated?: boolean;
