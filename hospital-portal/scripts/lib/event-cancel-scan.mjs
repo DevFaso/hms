@@ -164,7 +164,12 @@ export function eventCancelFindings(html, source = '') {
       if (!CANCELABLE_EVENT.test(attr) || !value || !canBeFalse(value, methods)) continue;
       const inner = innerHtml(html, tokens, index) ?? '';
       const submits = tag.name === 'button' && tag.attrs.get('type') !== 'button';
-      if (!submits && !CONTROL_TAG.test(tag.name) && !tag.name.includes('-') && !HOLDS_CONTROL.test(inner)) {
+      if (
+        !submits &&
+        !CONTROL_TAG.test(tag.name) &&
+        !tag.name.includes('-') &&
+        !HOLDS_CONTROL.test(inner)
+      ) {
         continue;
       }
       out.push({
