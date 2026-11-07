@@ -2079,6 +2079,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         }
         existing.setStatus(hasBeenDispensedFrom(existing) ? PrescriptionStatus.DISCONTINUED : PrescriptionStatus.CANCELLED);
         existing.setWithdrawalReason(reason);
+        closeUrgentReviewItems(existing);
         closePartnerOffersOnWithdrawal(existing, statusBefore);
         voidPreparedFillOnEdit(existing, statusBefore);
         releaseQueueClaimOnEdit(existing, currentUserId);
