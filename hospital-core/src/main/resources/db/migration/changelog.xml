@@ -3400,4 +3400,11 @@
                  stripComments="false"/>
     </changeSet>
 
+    <changeSet id="V278-cr05-newborn-danger-signs" author="hms-team" runOnChange="false">
+        <sqlFile path="V278__cr05_newborn_danger_signs.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

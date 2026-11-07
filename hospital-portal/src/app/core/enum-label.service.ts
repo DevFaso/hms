@@ -865,6 +865,7 @@ export class EnumLabelService implements OnDestroy {
     newbornAlertType: {
       APGAR: 'Apgar',
       CARDIOVASCULAR: 'Cardiovascular',
+      DANGER_SIGN: 'Danger sign',
       GENERAL: 'General',
       GLUCOSE: 'Glucose',
       OXYGENATION: 'Oxygenation',

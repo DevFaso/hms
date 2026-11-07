@@ -1,5 +1,6 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.enums.NewbornDangerSignObservation;
 import com.example.hms.enums.NewbornAlertSeverity;
 import com.example.hms.enums.NewbornAlertType;
 import com.example.hms.enums.NewbornFollowUpAction;
@@ -31,6 +32,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -465,7 +467,7 @@ class NewbornAssessmentServiceImplTest {
         verify(notificationService).created(message.capture(), anyString(), org.mockito.ArgumentMatchers.any());
         assertTrue(message.getValue().startsWith("Alerte nouveau-né (glycémie)"), message.getValue());
         assertTrue(message.getValue().contains("Hypoglycémie critique"), message.getValue());
-        org.junit.jupiter.api.Assertions.assertFalse(message.getValue().contains("GLUCOSE"), message.getValue());
+        assertFalse(message.getValue().contains("GLUCOSE"), message.getValue());
         assertEquals("Glycémie", response.getAlerts().get(0).getTriggeredBy());
     }
 
@@ -490,7 +492,149 @@ class NewbornAssessmentServiceImplTest {
         NewbornAssessmentResponseDTO response = service.recordAssessment(patientId, NewbornAssessmentRequestDTO.builder()
             .hospitalId(hospitalId).respirationsPerMin(85).build(), recorderId);
         assertTrue(codesOf(response).contains("newborn-respiratory"));
+        assertFalse(response.isRespiratorySupportInitiated(), "an alert is not support somebody started");
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(doubles = {37.6, 37.9})
+    void cr04_aTemperatureAbove37_5SavesAndEscalatesLikeAnUrgentFinding(double temperature) {
+        NewbornAssessmentResponseDTO response = service.recordAssessment(patientId, NewbornAssessmentRequestDTO.builder()
+            .hospitalId(hospitalId).temperatureCelsius(temperature).build(), recorderId);
+
+        verify(assessmentRepository).save(any(NewbornAssessment.class));
+        assertTrue(codesOf(response).contains("newborn-temperature-who-danger"));
+        assertTrue(response.isEscalationRecommended());
+        verify(obstetricAlertEscalation).raiseAfterCommit(any());
+    }
+
+    @Test
+    void cr04_37_5ItselfDoesNotEscalate() {
+        NewbornAssessmentResponseDTO response = service.recordAssessment(patientId, NewbornAssessmentRequestDTO.builder()
+            .hospitalId(hospitalId).temperatureCelsius(37.5).build(), recorderId);
+
+        assertFalse(response.isEscalationRecommended());
+        assertTrue(codesOf(response).isEmpty());
+    }
+
+    private NewbornAssessmentRequestDTO.NewbornAssessmentRequestDTOBuilder oneSign(String sign, NewbornDangerSignObservation observation) {
+        NewbornAssessmentRequestDTO.NewbornAssessmentRequestDTOBuilder builder = NewbornAssessmentRequestDTO.builder().hospitalId(hospitalId);
+        switch (sign) {
+            case "poorFeeding" -> builder.poorFeeding(observation);
+            case "convulsions" -> builder.convulsions(observation);
+            case "severeChestIndrawing" -> builder.severeChestIndrawing(observation);
+            default -> builder.absentSpontaneousMovement(observation);
+        }
+        return builder;
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({
+        "poorFeeding,newborn-danger-poor-feeding",
+        "convulsions,newborn-danger-convulsions",
+        "severeChestIndrawing,newborn-danger-chest-indrawing",
+        "absentSpontaneousMovement,newborn-danger-no-movement"
+    })
+    void cr05_oneSignPresentAloneSavesAndEscalatesOnItsOwn(String sign, String code) {
+        NewbornAssessmentResponseDTO response = service.recordAssessment(patientId,
+            oneSign(sign, NewbornDangerSignObservation.PRESENT).build(), recorderId);
+
+        assertEquals(java.util.Set.of(code), codesOf(response));
+        assertTrue(response.isEscalationRecommended());
+        verify(assessmentRepository).save(any(NewbornAssessment.class));
+        org.mockito.ArgumentCaptor<com.example.hms.service.maternity.ObstetricAlertEscalationService.UrgentAlert> raised =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.service.maternity.ObstetricAlertEscalationService.UrgentAlert.class);
+        verify(obstetricAlertEscalation).raiseAfterCommit(raised.capture());
+        assertEquals("DANGER_SIGN", raised.getValue().alertType());
+        assertEquals("newborn.alert.msg." + code, raised.getValue().alertMessageKey());
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"poorFeeding", "convulsions", "severeChestIndrawing", "absentSpontaneousMovement"})
+    void cr05_oneSignAbsentAloneSavesAndRaisesNothing(String sign) {
+        NewbornAssessmentResponseDTO response = service.recordAssessment(patientId,
+            oneSign(sign, NewbornDangerSignObservation.ABSENT).build(), recorderId);
+
+        assertTrue(codesOf(response).isEmpty());
+        assertFalse(response.isEscalationRecommended());
+        verify(obstetricAlertEscalation, never()).raiseAfterCommit(any());
+    }
+
+    @Test
+    void cr05_allFourPresentRaiseFourAlerts() {
+        NewbornDangerSignObservation present = NewbornDangerSignObservation.PRESENT;
+        service.recordAssessment(patientId, NewbornAssessmentRequestDTO.builder().hospitalId(hospitalId)
+            .poorFeeding(present).convulsions(present).severeChestIndrawing(present).absentSpontaneousMovement(present).build(), recorderId);
+        verify(obstetricAlertEscalation, times(4)).raiseAfterCommit(any());
+    }
+
+    @Test
+    void cr05_blankReadsNotAssessed_neverAbsent_andNeedsNoSign() {
+        NewbornAssessmentResponseDTO response = service.recordAssessment(patientId, NewbornAssessmentRequestDTO.builder()
+            .hospitalId(hospitalId).temperatureCelsius(36.8).build(), recorderId);
+
+        assertEquals(NewbornDangerSignObservation.NOT_ASSESSED, response.getPoorFeeding());
+        assertEquals(NewbornDangerSignObservation.NOT_ASSESSED, response.getConvulsions());
+        assertEquals(NewbornDangerSignObservation.NOT_ASSESSED, response.getSevereChestIndrawing());
+        assertEquals(NewbornDangerSignObservation.NOT_ASSESSED, response.getAbsentSpontaneousMovement());
+        assertFalse(response.isEscalationRecommended());
+    }
+
+    @Test
+    void cr05_freeTextIsNeverReadForASign() {
+        NewbornAssessmentResponseDTO response = service.recordAssessment(patientId, NewbornAssessmentRequestDTO.builder()
+            .hospitalId(hospitalId).examNotes("convulsions, poor feeding, severe chest indrawing, no spontaneous movement")
+            .examNeurological("convulsions").followUpNotes("poor feeding").build(), recorderId);
+
+        assertTrue(codesOf(response).isEmpty());
+        assertEquals(NewbornDangerSignObservation.NOT_ASSESSED, response.getConvulsions());
+    }
+
+    /** The values that used to flip a flag, either side of every band the rules had. */
+    private static java.util.stream.Stream<NewbornAssessmentRequestDTO.NewbornAssessmentRequestDTOBuilder> readingsThatUsedToFlipAFlag() {
+        return java.util.stream.Stream.of(
+            NewbornAssessmentRequestDTO.builder().temperatureCelsius(35.9),
+            NewbornAssessmentRequestDTO.builder().temperatureCelsius(38.1),
+            NewbornAssessmentRequestDTO.builder().respirationsPerMin(29),
+            NewbornAssessmentRequestDTO.builder().respirationsPerMin(71),
+            NewbornAssessmentRequestDTO.builder().glucoseMgDl(44),
+            NewbornAssessmentRequestDTO.builder().glucoseValue(2.4).glucoseUnit(com.example.hms.enums.GlucoseUnit.MMOL_L));
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.MethodSource("readingsThatUsedToFlipAFlag")
+    void cr06_aSubmittedFalseStaysFalse_andTheRecommendationStays(NewbornAssessmentRequestDTO.NewbornAssessmentRequestDTOBuilder reading) {
+        NewbornAssessmentResponseDTO response = service.recordAssessment(patientId, reading.hospitalId(hospitalId)
+            .respiratorySupportInitiated(false).glucoseProtocolInitiated(false).thermoregulationSupportInitiated(false)
+            .build(), recorderId);
+
+        assertFalse(response.isRespiratorySupportInitiated());
+        assertFalse(response.isGlucoseProtocolInitiated());
+        assertFalse(response.isThermoregulationSupportInitiated());
+        assertTrue(response.isEscalationRecommended(), "the alert still escalates");
+        assertFalse(response.getFollowUpActions().isEmpty(), "the follow-up is still requested");
+        assertFalse(response.getAlerts().isEmpty(), "the alert still stands");
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.MethodSource("readingsThatUsedToFlipAFlag")
+    void cr06_noSubmittedValueIsReadAsFalse(NewbornAssessmentRequestDTO.NewbornAssessmentRequestDTOBuilder reading) {
+        NewbornAssessmentResponseDTO response = service.recordAssessment(patientId, reading.hospitalId(hospitalId).build(), recorderId);
+
+        assertFalse(response.isRespiratorySupportInitiated());
+        assertFalse(response.isGlucoseProtocolInitiated());
+        assertFalse(response.isThermoregulationSupportInitiated());
+    }
+
+    @Test
+    void cr06_aSubmittedTrueIsKept_withNoAlertAtAll() {
+        NewbornAssessmentResponseDTO response = service.recordAssessment(patientId, NewbornAssessmentRequestDTO.builder()
+            .hospitalId(hospitalId).temperatureCelsius(36.8)
+            .respiratorySupportInitiated(true).glucoseProtocolInitiated(true).thermoregulationSupportInitiated(true)
+            .build(), recorderId);
+
         assertTrue(response.isRespiratorySupportInitiated());
+        assertTrue(response.isGlucoseProtocolInitiated());
+        assertTrue(response.isThermoregulationSupportInitiated());
     }
 
     @Test
@@ -500,7 +644,7 @@ class NewbornAssessmentServiceImplTest {
         assertEquals(47, response.getGlucoseMgDl());
         assertTrue(codesOf(response).stream().anyMatch(c -> c.startsWith("newborn-glucose-")),
             "2.59 mmol/L rounds to 47 mg/dL and is still below 2.6");
-        org.junit.jupiter.api.Assertions.assertFalse(response.isGlucoseProtocolInitiated(), "an alert is not a protocol somebody started");
+        assertFalse(response.isGlucoseProtocolInitiated(), "an alert is not a protocol somebody started");
     }
 
     private void previousReading(com.example.hms.model.labor.DeliveryRecord delivery, int heartRate) {

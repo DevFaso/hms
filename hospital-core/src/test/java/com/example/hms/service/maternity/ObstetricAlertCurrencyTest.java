@@ -177,6 +177,19 @@ class ObstetricAlertCurrencyTest {
     }
 
     @Test
+    @org.junit.jupiter.api.DisplayName("CR-05: no later reading closes a danger sign, not even a normal one; only a person does")
+    void aDangerSignNeverClosesOnALaterReading() {
+        Patient baby = new Patient();
+        baby.setId(UUID.randomUUID());
+        NewbornAssessment source = assessment(baby, T0, NewbornAlertSeverity.URGENT);
+        when(newbornRepository.findById(source.getId())).thenReturn(Optional.of(source));
+        org.mockito.Mockito.lenient().when(newbornRepository
+                .findByPatient_IdAndAssessmentTimeAfterOrderByAssessmentTimeDesc(baby.getId(), T0))
+            .thenReturn(List.of(assessment(baby, T0.plusHours(1), null)));
+        assertThat(currency.noLongerUrgent(row(ObstetricAlertEscalationService.SOURCE_NEWBORN, source.getId(), "DANGER_SIGN"))).isFalse();
+    }
+
+    @Test
     @org.junit.jupiter.api.DisplayName("Review of D1424: a singleton's own later reading closes the alert; another delivery's baby does not")
     void aSingletonIsJudgedOnItsOwnDelivery() {
         Patient mother = new Patient();
