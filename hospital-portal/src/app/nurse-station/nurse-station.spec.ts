@@ -56,7 +56,13 @@ describe('NurseStationComponent — two-tier polling', () => {
       'getAdministrationWitnessCandidates',
       'createCareNote',
     ]);
-    toastSpy = jasmine.createSpyObj('ToastService', ['info', 'success', 'error', 'warn', 'warning']);
+    toastSpy = jasmine.createSpyObj('ToastService', [
+      'info',
+      'success',
+      'error',
+      'warn',
+      'warning',
+    ]);
     routerSpy = jasmine.createSpyObj('Router', ['navigate']);
     encounterSpy = jasmine.createSpyObj('EncounterService', ['list']);
     encounterSpy.list.and.returnValue(
@@ -691,7 +697,9 @@ describe('NurseStationComponent — two-tier polling', () => {
     it('warns on the exposure the answer carries', () => {
       nurseServiceSpy.administerMedication.and.returnValue(
         of({
-          cdsAdvisories: [{ summary: '3500 mg enregistrés', indicator: 'warning', source: { label: 'x' } }],
+          cdsAdvisories: [
+            { summary: '3500 mg enregistrés', indicator: 'warning', source: { label: 'x' } },
+          ],
         } as any),
       );
       component.reasonPrompt.set({ taskId: 'm3', action: 'HELD' });

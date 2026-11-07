@@ -222,6 +222,15 @@ class MarAndOpenStayQueriesPostgresIT {
         }
     }
 
+    private void order(String status) {
+        replica("INSERT INTO clinical.prescriptions (id, patient_id, staff_id, encounter_id, hospital_id, assignment_id, "
+            + "medication_name, refills_used, controlled_substance, inpatient_order, take_home, allergies_reviewed, "
+            + "interactions_reviewed, contraindications_reviewed, requires_cosign, pediatric_dose_review_required, "
+            + "status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'Paracetamol', 0, false, false, false, false, "
+            + "false, false, false, false, ?, now(), now())",
+            RX, PATIENT, STAFF, UUID.randomUUID(), HOSPITAL, ASSIGNMENT, status);
+    }
+
     /** CR-03: every shape the one caller meets: the window across midnight, status, hospital and patient. */
     @Test
     void cr03_theDosesGivenSinceAMomentAcrossMidnight() {
@@ -234,10 +243,7 @@ class MarAndOpenStayQueriesPostgresIT {
         dose("MISSED", "2026-11-06 23:00:00", "2026-11-06 23:00:00", "2026-11-06 23:00:00");
         dose("PENDING", "2026-11-06 23:00:00", null, "2026-11-06 23:00:00");
         // The order behind the doses, discontinued: its doses still count.
-        replica("INSERT INTO clinical.prescriptions (id, patient_id, staff_id, encounter_id, assignment_id, hospital_id, "
-            + "medication_name, dosage, frequency, duration, status, created_at, updated_at) "
-            + "VALUES (?, ?, ?, ?, ?, ?, 'Paracetamol', '500 mg', '4 fois par jour', '3 jours', 'DISCONTINUED', now(), now())",
-            RX, PATIENT, STAFF, UUID.randomUUID(), ASSIGNMENT, HOSPITAL);
+        order("DISCONTINUED");
         replica("INSERT INTO clinical.medication_administration_records (id, prescription_id, patient_id, hospital_id, "
             + "medication_name, scheduled_time, administered_at, status, created_at, updated_at) "
             + "VALUES (?, ?, ?, ?, 'X', now(), '2026-11-06 23:00:00'::timestamp, 'GIVEN', now(), now())",
@@ -266,6 +272,7 @@ class MarAndOpenStayQueriesPostgresIT {
         replica("INSERT INTO clinical.patients (id, user_id, first_name, last_name, date_of_birth, phone_number_primary, "
             + "is_active, created_at, updated_at) VALUES (?, ?, 'Awa', 'Kabore', DATE '1990-06-15', '+226 70 00 00 31', true, now(), now())",
             PATIENT, UUID.randomUUID());
+        order("SIGNED");
         org.springframework.transaction.support.TransactionTemplate tx =
             new org.springframework.transaction.support.TransactionTemplate(transactions);
         java.util.concurrent.CountDownLatch firstHolds = new java.util.concurrent.CountDownLatch(1);

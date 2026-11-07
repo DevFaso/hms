@@ -43,7 +43,12 @@ describe('EmarComponent (P1 #8 — five-rights barcode-scan loop)', () => {
     nurseSpy.getAdministrationWitnessCandidates.and.returnValue(
       of([{ userId: 'u-witness', displayName: 'Awa Kaboré' }]),
     );
-    toastSpy = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error', 'info', 'warning']);
+    toastSpy = jasmine.createSpyObj<ToastService>('ToastService', [
+      'success',
+      'error',
+      'info',
+      'warning',
+    ]);
 
     await TestBed.configureTestingModule({
       imports: [EmarComponent, TranslateModule.forRoot()],

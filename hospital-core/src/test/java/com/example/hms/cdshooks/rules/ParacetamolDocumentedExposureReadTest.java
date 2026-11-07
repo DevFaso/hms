@@ -41,8 +41,9 @@ class ParacetamolDocumentedExposureReadTest {
     private final PatientProblemRepository problems = mock(PatientProblemRepository.class);
     private final AdmissionRepository admissions = mock(AdmissionRepository.class);
     private final MedicationAdministrationRecordRepository mar = mock(MedicationAdministrationRecordRepository.class);
+    private final ParacetamolDosesGiven dosesGiven = new ParacetamolDosesGiven(mar);
     private final ParacetamolFactsReader reader =
-        new ParacetamolFactsReader(prescriptions, catalogue, problems, admissions, mar);
+        new ParacetamolFactsReader(prescriptions, catalogue, problems, admissions, dosesGiven);
 
     private final UUID hospitalId = UUID.randomUUID();
     private Patient adult;
@@ -97,7 +98,7 @@ class ParacetamolDocumentedExposureReadTest {
 
     @Test
     void theWindowIsTheLastTwentyFourHoursAcrossMidnightNotTheCalendarDay() {
-        reader.setClock(Clock.fixed(LocalDateTime.of(2026, 11, 7, 0, 30).toInstant(ZoneOffset.UTC), ZoneOffset.UTC));
+        dosesGiven.setClock(Clock.fixed(LocalDateTime.of(2026, 11, 7, 0, 30).toInstant(ZoneOffset.UTC), ZoneOffset.UTC));
         when(mar.findGivenSince(any(), any(), any())).thenReturn(List.of());
 
         read();
