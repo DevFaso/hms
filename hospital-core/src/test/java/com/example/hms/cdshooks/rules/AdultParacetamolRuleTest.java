@@ -280,6 +280,20 @@ class AdultParacetamolRuleTest {
     }
 
     @Test
+    void onlyTheContraindicationIsCriticalAndItIsNoHardStop() {
+        List<CdsCard> cards = evaluate(new Order("2 000 mg", "toutes les 2 heures").risks(ParacetamolRisk.SEVERE_HEPATIC));
+        assertThat(letters(cards)).isEqualTo("CDIS");
+        assertThat(cards).filteredOn(card -> card.indicator() == CdsCard.Indicator.CRITICAL)
+            .singleElement()
+            .satisfies(card -> {
+                assertThat(card.summary()).contains(CONTRA);
+                assertThat(card.detail()).contains("only with a reason").doesNotContain("does not block");
+                assertThat(card.blocksOverride()).isFalse();
+                assertThat(card.reviewRequired()).isNull();
+            });
+    }
+
+    @Test
     void aDegreeNotRecordedSaysWhatSevereWouldMean() {
         List<CdsCard> cards = evaluate(new Order("501 mg", "4 fois par jour")
             .risks(ParacetamolRisk.TWO_GRAM_GROUP, ParacetamolRisk.HEPATIC_DEGREE_UNRECORDED));
@@ -373,7 +387,7 @@ class AdultParacetamolRuleTest {
         all.addAll(evaluate(new Order("2 000 mg", "3 fois par jour")));
         all.addAll(evaluate(new Order("1 g", "si besoin").prn(1)));
         all.addAll(evaluate(new Order("1 g", "selon la douleur")));
-        all.addAll(evaluate(new Order("1 g", "4 fois par jour").risks(ParacetamolRisk.SEVERE_HEPATIC,
+        all.addAll(evaluate(new Order("1 g", "4 fois par jour").risks(ParacetamolRisk.TWO_GRAM_GROUP,
             ParacetamolRisk.CHRONIC_ALCOHOLISM)));
         assertThat(all).hasSizeGreaterThanOrEqualTo(6);
         assertThat(all).allSatisfy(card -> {

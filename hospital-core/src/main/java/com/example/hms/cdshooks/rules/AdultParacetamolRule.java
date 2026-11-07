@@ -34,9 +34,10 @@ import java.util.UUID;
  *       contraindicated in severe hepatocellular insufficiency.</li>
  * </ul>
  *
- * <p>Every card is an alert: {@code warning} or {@code info}, never {@code critical}, so the
- * order is saved and the prescriber reads the card on the form ({@link #ALERT} is the one place
- * to change that). Nothing here adds a hard stop. A dose that cannot be read in mg is silent,
+ * <p>Every card is an alert, {@code warning} or {@code info}: the order is saved and the prescriber
+ * reads the card on the form ({@link #ALERT} is the one place to change that). The one exception is
+ * the contraindication, {@code critical}: the existing override, so the order saves only with a
+ * reason, recorded and audited. Nothing here adds a hard stop. A dose that cannot be read in mg is silent,
  * never read as mg, and that includes a bare number ("2" is more likely two tablets); the checks
  * of the interval and of the contraindication do not need a dose.
  */
@@ -109,9 +110,11 @@ public class AdultParacetamolRule implements CdsRule {
 
         void contraindication(List<CdsCard> cards) {
             if (risks.contains(ParacetamolRisk.SEVERE_HEPATIC)) {
-                cards.add(alert(text.get("cds.adultParacetamol.contraindication.summary",
+                cards.add(build(text.get("cds.adultParacetamol.contraindication.summary",
                     "{0}: paracetamol is contraindicated in severe hepatocellular insufficiency, recorded on the problem list",
-                    medication), footer()));
+                    medication), text.get("cds.adultParacetamol.contraindication.detail",
+                    "The order saves only with a reason, which is recorded on the order and audited. Sources: FDA acetaminophen guidance; EFFERALGANSTIX 1000 mg RCP 4.2, 4.3; proposed logic, pending clinician sign-off."),
+                    CdsCard.Indicator.CRITICAL));
             }
         }
 

@@ -482,6 +482,42 @@ class PrescriptionEditAndWithdrawalIT extends BaseIT {
         }
     }
 
+    /** The contraindication goes through the existing override: refused, then saved with a recorded reason. */
+    @Test
+    void severeHepaticInsufficiencySavesOnlyWithARecordedReason() throws Exception {
+        PatientProblem severe = patientProblemRepository.save(PatientProblem.builder()
+            .patient(patient).hospital(hospital).recordedBy(authorStaff)
+            .problemCode("K72.9").problemDisplay("Hepatic failure")
+            .severity(com.example.hms.enums.ProblemSeverity.SEVERE).build());
+        String refused = "{\"patientId\":\"" + patient.getId() + "\",\"staffId\":\"" + authorStaff.getId()
+            + "\",\"encounterId\":\"" + encounter.getId() + "\",\"medicationName\":\"Paracétamol\","
+            + "\"dosage\":\"500 mg\",\"frequency\":\"3 fois par jour\",\"route\":\"PO\",\"quantity\":3}";
+        try {
+            mockMvc.perform(post(API_CONTEXT + "/prescriptions").contextPath(API_CONTEXT).with(as(authorUser))
+                    .contentType(MediaType.APPLICATION_JSON).content(refused))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.cdsAdvisories[0].indicator").value("critical"));
+            String noReason = refused.replace("\"quantity\":3", "\"quantity\":3,\"forceOverride\":true");
+            mockMvc.perform(post(API_CONTEXT + "/prescriptions").contextPath(API_CONTEXT).with(as(authorUser))
+                    .contentType(MediaType.APPLICATION_JSON).content(noReason))
+                .andExpect(status().isBadRequest());
+            String reasoned = refused.replace("\"quantity\":3",
+                "\"quantity\":3,\"forceOverride\":true,\"overrideReason\":\"Décision du spécialiste\"");
+            String answer = mockMvc.perform(post(API_CONTEXT + "/prescriptions").contextPath(API_CONTEXT).with(as(authorUser))
+                    .contentType(MediaType.APPLICATION_JSON).content(reasoned))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+            UUID created = UUID.fromString(com.jayway.jsonpath.JsonPath.read(answer, "$.id"));
+            assertThat(prescriptionRepository.findById(created).orElseThrow().getOverrideReason())
+                .isEqualTo("Décision du spécialiste");
+            auditEventLogRepository.deleteAllInBatch(auditEventLogRepository.findAll().stream()
+                .filter(row -> created.toString().equals(row.getResourceId())).toList());
+            prescriptionRepository.deleteById(created);
+        } finally {
+            patientProblemRepository.deleteById(severe.getId());
+        }
+    }
+
     private List<String> paracetamolCards(String dose, String frequency, String more) throws Exception {
         String body = "{\"patientId\":\"" + patient.getId() + "\",\"staffId\":\"" + authorStaff.getId()
             + "\",\"encounterId\":\"" + encounter.getId() + "\",\"medicationName\":\"Paracétamol\","

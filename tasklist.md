@@ -6248,7 +6248,7 @@ The "adult paracetamol" line under fix/r34-frequency-dose is answered: the user 
 - EFFERALGANSTIX 1000 mg, RCP sections 4.2 and 4.3 (Base de données publique des médicaments, France): 3 g/day usual dose from 50 kg; up to 4 g/day only on medical advice, without additional hepatotoxicity risk factors; 1 g per administration; at least 4 hours apart. Under 50 kg, chronic malnutrition or dehydration: 60 mg/kg/day or 3,000 mg/day, whichever is lower (45 kg gives 2,700 mg/day). Mild to moderate hepatocellular insufficiency, Gilbert syndrome or chronic alcoholism: 2,000 mg/day; chronic alcoholism at least 8 hours between doses. Severe hepatocellular insufficiency: contraindicated. When several apply, the lowest ceiling.
 
 For the clinician list (proposed alert logic, pending sign-off):
-- [ ] Every card is an alert (`warning`, or `info` from 3 g to 4 g): the order saves. Should the daily, single-dose or contraindication card become a soft stop (reason required, audited)? One constant, `AdultParacetamolRule.ALERT`.
+- [ ] The severe-hepatocellular contraindication is `critical`: the order saves only with a recorded, audited reason (the existing override), not a hard stop. Every other card is an alert (`warning`, or `info` from 3 g to 4 g), and the order saves. Should the daily or single-dose card become a soft stop too? One constant, `AdultParacetamolRule.ALERT`.
 - [ ] The problem codes behind each group (`ParacetamolRisk`): malnutrition E40-E46 (ICD-10 does not say chronic, so any coded malnutrition counts); dehydration E86 without E86.1; Gilbert E80.4; chronic alcoholism F10.2; hepatocellular insufficiency K72, K70.4, K71.1, with its degree from the row's severity (SEVERE, LIFE_THREATENING contraindicate; none recorded takes 2,000 mg/day and says so).
 - [ ] "Other liver risk factors" have no number: no rule, no card beyond the groups named in the text.
 - [ ] Combination products (paracetamol + codeine, tramadol): not counted. The catalogue's strength ("500/30") has no label per ingredient, so their paracetamol content cannot be read. Needs a structured content field to count them.
@@ -6259,6 +6259,9 @@ For the clinician list (proposed alert logic, pending sign-off):
 - [ ] A bare number (`2`, `2000`) is read as neither mg nor tablets: no dose card. The form does not require a unit, so `2000` 3 fois par jour raises nothing here. Should the form require a unit?
 - [ ] A combination is recognised by a separator or by naming a partner ingredient (`ParacetamolIdentity`: codeine, tramadol, caffeine, ibuprofen and the like). A brand of a combination is known only if the catalogue's generic name says so.
 - [ ] A patient with no date of birth gets no card from either rule.
+- [ ] `MedicationCourseStatus` reads durations only in English, so a course written "5 jours" never ends in the patient's medication list or the staff snapshot. `ParacetamolFactsReader` reads French and Spanish itself for now.
+- [ ] `PharmacyRefillReminderScheduler.parseDurationDays` returns null for any text containing "an", such as "pendant 5 jours", so that course gets no refill reminder.
+- [ ] A bare dosage number with no unit (`2000`) raises no paracetamol card, because the form does not require a unit.
 
 ## Standing debt — round 34 (fix/r34-maternity-records)
 

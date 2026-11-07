@@ -20,8 +20,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * path, the CDS hooks and the signature run the one engine, and the engine is the one place a rule
  * context is built, so no path can reach the rules without the paracetamol facts. (A CDS hook sends
  * no frequency, so there the daily total counts one dose of its draft: tasklist.md.) The rule stays
- * what the guidance calls it, an alert: the source says "alert", no hard stop or review was asked,
- * and raising it is a clinician's decision, not a side effect.
+ * what the guidance calls it, an alert, with one card above that: the contraindication, which saves
+ * only with a reason. No hard stop or review was asked, and raising another card is a clinician's
+ * decision, not a side effect.
  */
 @DisplayName("Adult paracetamol: one engine reaches every path, and its cards stay alerts")
 class AdultParacetamolGuardTest {
@@ -61,7 +62,8 @@ class AdultParacetamolGuardTest {
     void theRuleOnlyEverAlerts() throws IOException {
         assertThat(code(RULE))
             .contains("ALERT = CdsCard.Indicator.WARNING")
-            .doesNotContain("Indicator.CRITICAL")
+            .containsOnlyOnce("Indicator.CRITICAL")
+            .contains("contraindication.detail")
             .doesNotContain("Boolean.TRUE")
             // The eight-argument card: no hardStop, no reviewRequired.
             .contains("null, null, null, UUID.randomUUID().toString());");
