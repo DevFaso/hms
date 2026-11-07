@@ -62,7 +62,25 @@ public class AnnouncementServiceImpl implements AnnouncementService {
     public AnnouncementResponseDTO getAnnouncement(UUID id) {
         Announcement announcement = announcementRepository.findById(id)
             .orElseThrow(() -> new com.example.hms.exception.ResourceNotFoundException(ANNOUNCEMENT_NOT_FOUND_KEY, id));
+        requireReadable(announcement, id);
         return toDTO(announcement);
+    }
+
+    /**
+     * Another hospital's announcement answers as an unknown id (404), under the same guard as the writes. A
+     * platform-wide one (no hospital) is for everybody. A caller with no hospital to act at (several held and
+     * none named, a patient) holds nobody's: the list answers them nothing, and this says no more than it does.
+     */
+    private static void requireReadable(Announcement announcement, UUID id) {
+        if (announcement.getHospital() == null) {
+            return;
+        }
+        try {
+            com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(
+                announcement.getHospital(), ANNOUNCEMENT_NOT_FOUND_KEY, id);
+        } catch (BusinessException | com.example.hms.exception.HospitalScopeRefusedException noScope) {
+            throw new com.example.hms.exception.ResourceNotFoundException(ANNOUNCEMENT_NOT_FOUND_KEY, id);
+        }
     }
 
     @Override
