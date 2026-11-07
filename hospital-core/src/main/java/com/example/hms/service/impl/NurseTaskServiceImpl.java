@@ -1726,7 +1726,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
      * Doses already recorded are not touched.
      */
     private void requireOrderStillStands(Prescription rx, UUID hospitalId) {
-        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(rx.getPatient());
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(rx != null ? rx.getPatient() : null);
         requireOrderNotEndedByDischarge(rx, hospitalId);
         if (com.example.hms.service.InpatientOrderEnd.endedWithItsStay(rx)) {
             throw new com.example.hms.exception.ConflictException("nurse.mar.stayEnded");

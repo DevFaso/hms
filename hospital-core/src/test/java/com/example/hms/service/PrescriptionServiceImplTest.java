@@ -1455,7 +1455,7 @@ class PrescriptionServiceImplTest {
         UUID prescriberUserId = UUID.randomUUID();
         Prescription rx = signablePrescription(prescriberUserId);
         rx.getPatient().setDeceasedAt(java.time.LocalDateTime.now().minusHours(1));
-        stubSignable(rx, prescriberUserId);
+        when(prescriptionRepository.findById(rx.getId())).thenReturn(java.util.Optional.of(rx));
         UUID rxId = rx.getId();
 
         assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, null, Locale.FRENCH))

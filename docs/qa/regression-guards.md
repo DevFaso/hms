@@ -1046,3 +1046,12 @@ Rounds 27, 28 and 29 each found 20–30 new siblings of the required-field class
 | `service/impl/FrequencyWordingTest#d1472_everyChoiceOfThePrescriptionFormIsASchedule` (new) and `scripts/lib/as-needed-frequency.test.mjs` (widened) | A choice of the form's list that asks, or reads differently in another language, or has no label in one. | none |
 | `cdshooks/rules/PediatricDoseRuleRound18Test#d1455_*`, `AdultParacetamolRuleTest#d1455_*` (new) | An unread frequency judged as one dose a day, or a limit card that does not say the total is unknown. | none |
 | `service/impl/MarNextDoseTest#d1457_aStoredWordingNotReadStaysOpenAndFlagged` (new) | A stored order the grammar does not read ended, or given a cadence. | none |
+
+## Guards added or widened by round 36 (fix/r36-clinical-registration)
+
+| Guard | What it catches | Allowlist |
+|---|---|---|
+| `architecture/DeceasedPatientCareGuardTest` (new) | D1488: every POST, PUT, PATCH and DELETE endpoint of every controller is classified: it refuses new care through `DeceasedPatientGuard` (the named service method must call it), or it stays open with why, or its whole controller is not patient care. A new endpoint or controller fails until classified. | `STAYS_OPEN` and `WHOLE_CONTROLLER`, each with its reason; stale rows fail |
+| `architecture/DeactivatedRegistrationGuardTest` (widened) | D1489, D1495: the check-in and the patient's own reschedule and pre-check-in join the list, and the check-in refuses before its consent call, with no try around it. | none |
+| `repository/DeathRecordEnteredInErrorPostgresIT` (new) | D1488: on PostgreSQL, a row entered in error in any query of the register, and V275's partial index holding one live row per patient. | none |
+| `service/pharmacy/OrderedDrugIdentityTest#aCitedBrandIsThisDrugOnlyForItsOwnGeneric` (new) | D1492: a cited brand dispensed from anything but its own generic, a combination brand from one ingredient above all. | none |
