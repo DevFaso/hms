@@ -279,6 +279,36 @@ class ImagingOrderServiceImplTest {
         assertThat(result).isSameAs(responseDTO);
     }
 
+    /** QA D970 (sibling): an edited imaging order is not flagged a duplicate of itself. */
+    @Test
+    void d970_anEditedOrderIsNotADuplicateOfItself() {
+        ImagingOrder order = new ImagingOrder();
+        order.setId(orderId);
+        order.setPatient(patient);
+        order.setHospital(hospital);
+        order.setModality(ImagingModality.XRAY);
+        ImagingOrderRequestDTO request = ImagingOrderRequestDTO.builder()
+            .patientId(patientId)
+            .hospitalId(hospitalId)
+            .modality(ImagingModality.XRAY)
+            .studyType("XR Knee")
+            .priority(ImagingOrderPriority.ROUTINE)
+            .build();
+        ImagingOrderResponseDTO responseDTO = ImagingOrderResponseDTO.builder().id(orderId).build();
+
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        doNothing().when(imagingOrderMapper).updateEntityFromRequest(order, request);
+        when(imagingOrderRepository.findPotentialDuplicates(eq(patientId), eq(ImagingModality.XRAY), isNull(), any(LocalDateTime.class)))
+            .thenReturn(List.of(order));
+        when(imagingOrderRepository.save(order)).thenReturn(order);
+        when(imagingOrderMapper.toResponseDTO(order, Collections.emptyList())).thenReturn(responseDTO);
+
+        imagingOrderService.updateOrder(orderId, request, null);
+
+        assertThat(order.getDuplicateOfRecentOrder()).isFalse();
+        assertThat(order.getDuplicateReferenceOrderId()).isNull();
+    }
+
     @Test
     void qaD501_aSignedOrderIsNeverEditedInPlace() {
         UUID signerId = UUID.randomUUID();

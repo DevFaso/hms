@@ -66,6 +66,14 @@ public class DispenseRequestDTO {
     @Size(max = 1000)
     private String cdsOverrideReason;
 
+    /**
+     * QA D964: why the chosen lot was taken although a shorter-dated usable
+     * lot of the same item could serve this movement ({@code FefoLotPolicy}).
+     * Required only then; recorded with the movement.
+     */
+    @Size(max = 300)
+    private String fefoOverrideReason;
+
     private DispenseStatus status;
 
     @Size(max = 1000)

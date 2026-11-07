@@ -118,6 +118,20 @@ public class InBasketServiceImpl implements InBasketService {
         return fileItem(request);
     }
 
+    @Override
+    @Transactional
+    public int removeOpenItemsForReference(UUID referenceId, String referenceType) {
+        if (referenceId == null || referenceType == null) {
+            return 0;
+        }
+        int removed = inBasketItemRepository.deleteOpenByReference(referenceId, referenceType);
+        if (removed > 0) {
+            log.info("In-Basket: {} open item(s) removed for superseded reference {} ({})",
+                removed, referenceId, referenceType);
+        }
+        return removed;
+    }
+
     /** The one body of both entry points; each brings its own transaction. */
     private InBasketItemDTO fileItem(CreateInBasketItemRequest request) {
         // Deduplicate — don't create a second item for the same reference + recipient

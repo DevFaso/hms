@@ -150,7 +150,9 @@
                   r.status | enumLabel: 'mtmReviewStatus'
                 }}</span>
               </td>
-              <td>{{ r.followUpDate || '—' }}</td>
+              <td>
+                {{ r.followUpDate ? (r.followUpDate | serverTime | date: 'mediumDate') : '—' }}
+              </td>
               <td>
                 @if (canEdit(r)) {
                   <button

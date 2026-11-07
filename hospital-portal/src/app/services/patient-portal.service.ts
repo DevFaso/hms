@@ -1629,6 +1629,13 @@ export class PatientPortalService {
       .pipe(map(() => void 0));
   }
 
+  /** QA D966: the copy of a prescription the pharmacy printed for me (PDF, my own only). */
+  getMyPrintedPrescription(prescriptionId: string): Observable<Blob> {
+    return this.http.get(`${this.base}/prescriptions/${prescriptionId}/printed-copy`, {
+      responseType: 'blob',
+    });
+  }
+
   /**
    * Document bytes stream only through this authenticated,
    * ownership-checked endpoint — the public /uploads mapping is gone,

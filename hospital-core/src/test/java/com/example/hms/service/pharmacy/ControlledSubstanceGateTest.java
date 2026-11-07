@@ -45,7 +45,7 @@ class ControlledSubstanceGateTest {
 
         assertThatThrownBy(() -> guard.requireDispensable(rx))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("CONTROLLED_SUBSTANCE");
+            .extracting("messageKey").isEqualTo("prescription.safeguard.CONTROLLED_SUBSTANCE.dispense");
     }
 
     @Test
@@ -65,7 +65,7 @@ class ControlledSubstanceGateTest {
 
         assertThatThrownBy(() -> guard.requireDispensable(rx))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("COSIGN_REQUIRED");
+            .extracting("messageKey").isEqualTo("prescription.safeguard.COSIGN_REQUIRED.dispense");
     }
 
     @Test
@@ -114,7 +114,7 @@ class ControlledSubstanceGateTest {
 
         assertThatThrownBy(() -> guard.requireSafeguardsFor(rx, PrescriptionStatus.SIGNED))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("CONTROLLED_SUBSTANCE");
+            .extracting("messageKey").isEqualTo("prescription.safeguard.CONTROLLED_SUBSTANCE.status");
     }
 
     @Test
@@ -125,7 +125,7 @@ class ControlledSubstanceGateTest {
 
         assertThatThrownBy(() -> guard.requireSafeguardsFor(rx, PrescriptionStatus.TRANSMITTED))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("CONTROLLED_SUBSTANCE");
+            .extracting("messageKey").isEqualTo("prescription.safeguard.CONTROLLED_SUBSTANCE.status");
     }
 
     @Test
@@ -134,7 +134,8 @@ class ControlledSubstanceGateTest {
 
         assertThatThrownBy(() -> guard.requireSafeguardsFor(rx, PrescriptionStatus.SIGNED))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("SIGNED");
+            .extracting("args").asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.ARRAY)
+            .containsExactly(PrescriptionStatus.SIGNED.localizedLabel());
     }
 
     @Test
@@ -146,7 +147,7 @@ class ControlledSubstanceGateTest {
 
         assertThatThrownBy(() -> guard.requireSafeguardsFor(rx, PrescriptionStatus.SIGNED))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("COSIGN_REQUIRED");
+            .extracting("messageKey").isEqualTo("prescription.safeguard.COSIGN_REQUIRED.status");
     }
 
     @Test

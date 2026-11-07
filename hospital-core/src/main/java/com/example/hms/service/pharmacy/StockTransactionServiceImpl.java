@@ -68,6 +68,8 @@ public class StockTransactionServiceImpl implements StockTransactionService {
     private final ControlledStockWitness controlledStockWitness;
     /** Re-reads the lot and item after the atomic quantity UPDATEs (#825 round 5). */
     private final EntityManager entityManager;
+    /** QA D964: a transfer out follows first expired, first out. */
+    private final FefoLotPolicy fefoLotPolicy;
 
     @Override
     @Transactional
@@ -81,6 +83,7 @@ public class StockTransactionServiceImpl implements StockTransactionService {
                 : null;
 
         requireMovementIsAccountable(dto, item, lot);
+        requireFefoForTransfer(dto, lot);
         // QA D668 (returns), D779 (every movement): an item counted in whole
         // units never moves by a fraction, or its stock shows decimals.
         if (!correctsALegacyFraction(dto, item, lot)) {
@@ -184,6 +187,101 @@ public class StockTransactionServiceImpl implements StockTransactionService {
                 .toList();
     }
 
+    /** QA D932: the states a fill can be returned against (the same as requireReturnWithinDispense). */
+    private static final List<com.example.hms.enums.DispenseStatus> RETURNABLE_FILL_STATES = List.of(
+            com.example.hms.enums.DispenseStatus.COMPLETED, com.example.hms.enums.DispenseStatus.PARTIAL);
+    /** QA D932: the most fills the return form lists. */
+    static final int RETURNABLE_LIST_MAX = 50;
+
+    /**
+     * QA D932: a return of dispensed stock must name its dispense, and the
+     * form had no way to: it cleared the reference and the server refused
+     * every return ("Un retour de stock délivré doit indiquer sa délivrance").
+     * The fills listed are those {@link #requireReturnWithinDispense} accepts
+     * for this item and lot, with what each can still take back.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<com.example.hms.payload.dto.pharmacy.ReturnableDispenseDTO> listReturnableDispenses(
+            UUID inventoryItemId, UUID stockLotId) {
+        InventoryItem item = resolveInventoryItem(inventoryItemId);
+        enforceHospitalScope(item.getPharmacy());
+        List<com.example.hms.model.pharmacy.Dispense> fills = returnableFills(item, stockLotId);
+        if (fills == null || fills.isEmpty()) {
+            return List.of();
+        }
+        List<com.example.hms.model.pharmacy.Dispense> recent = fills.stream().limit(RETURNABLE_LIST_MAX).toList();
+        Map<UUID, BigDecimal> returned = returnedSoFar(recent);
+        // Review of #975 (minimum necessary): the patient's name is for the
+        // roles that dispense; an inventory clerk picks the fill by its date,
+        // quantity and lot.
+        boolean showsPatient = roleValidator.hasAnyAuthority(
+                "ROLE_PHARMACIST", "ROLE_STORE_MANAGER", "ROLE_HOSPITAL_ADMIN", "ROLE_SUPER_ADMIN");
+        List<com.example.hms.payload.dto.pharmacy.ReturnableDispenseDTO> out = new java.util.ArrayList<>();
+        for (com.example.hms.model.pharmacy.Dispense d : recent) {
+            BigDecimal returnable = nz(d.getQuantityDispensed()).subtract(nz(returned.get(d.getId())));
+            if (returnable.signum() <= 0) {
+                continue;
+            }
+            out.add(new com.example.hms.payload.dto.pharmacy.ReturnableDispenseDTO(
+                    d.getId(),
+                    d.getPrescription() != null ? d.getPrescription().getId() : null,
+                    showsPatient ? patientName(d.getPatient()) : null,
+                    d.getMedicationName(),
+                    d.getDispensedAt(),
+                    d.getQuantityDispensed(),
+                    returnable,
+                    d.getUnit(),
+                    d.getStockLot() != null ? d.getStockLot().getLotNumber() : null));
+        }
+        return out;
+    }
+
+    /** The latest fills of the item (of the lot, when one is named) a return may be booked against. */
+    private List<com.example.hms.model.pharmacy.Dispense> returnableFills(InventoryItem item, UUID stockLotId) {
+        if (stockLotId != null) {
+            StockLot lot = stockLotRepository.findById(stockLotId)
+                    .orElseThrow(() -> new ResourceNotFoundException("stockLot.notFound", stockLotId));
+            if (lot.getInventoryItem() == null || !item.getId().equals(lot.getInventoryItem().getId())) {
+                throw new BusinessException(MessageUtil.resolve("stockTransaction.lot.wrongItem"));
+            }
+            return dispenseRepository.findTop50ByStockLot_IdAndStatusInOrderByCreatedAtDesc(stockLotId,
+                    RETURNABLE_FILL_STATES);
+        }
+        if (item.getMedicationCatalogItem() == null || item.getPharmacy() == null) {
+            return List.of();
+        }
+        return dispenseRepository
+                .findTop50ByPharmacy_IdAndMedicationCatalogItem_IdAndStockLotIsNullAndStatusInOrderByCreatedAtDesc(
+                        item.getPharmacy().getId(), item.getMedicationCatalogItem().getId(),
+                        RETURNABLE_FILL_STATES);
+    }
+
+    /** What has already been returned against each fill, in one query. */
+    private Map<UUID, BigDecimal> returnedSoFar(List<com.example.hms.model.pharmacy.Dispense> fills) {
+        Map<UUID, BigDecimal> returned = new java.util.HashMap<>();
+        List<Object[]> rows = stockTransactionRepository.sumQuantityByReferences(
+                fills.stream().map(com.example.hms.model.pharmacy.Dispense::getId).toList(), RETURNED_TYPES);
+        if (rows == null) {
+            return returned;
+        }
+        for (Object[] row : rows) {
+            if (row != null && row.length == 2 && row[0] instanceof UUID id && row[1] instanceof BigDecimal sum) {
+                returned.put(id, sum);
+            }
+        }
+        return returned;
+    }
+
+    private static String patientName(com.example.hms.model.Patient patient) {
+        if (patient == null) {
+            return null;
+        }
+        String full = (Objects.toString(patient.getFirstName(), "").trim() + " "
+                + Objects.toString(patient.getLastName(), "").trim()).trim();
+        return full.isEmpty() ? null : full;
+    }
+
     // ── Private helpers ──────────────────────────────────────────────────
 
     /**
@@ -232,6 +330,31 @@ public class StockTransactionServiceImpl implements StockTransactionService {
             throw new BusinessException(MessageUtil.resolve("stockTransaction.lot.required"));
         }
     }
+
+    /**
+     * QA D964: a transfer sends the shortest-dated usable lot unless a reason
+     * says otherwise; the reason is kept on the ledger row after the movement's
+     * own reason ("... | FEFO: ..."). A write-off (negative adjustment) names
+     * its lot on purpose (that lot is damaged or expiring) and is not FEFO.
+     */
+    private void requireFefoForTransfer(StockTransactionRequestDTO dto, StockLot lot) {
+        if (dto.getTransactionType() != StockTransactionType.TRANSFER || lot == null) {
+            return;
+        }
+        String reason = fefoLotPolicy.requireFefoOrReason(lot, dto.getQuantity(), dto.getFefoOverrideReason());
+        if (reason != null) {
+            String combined = dto.getReason().trim() + FEFO_LEDGER_SEPARATOR + reason;
+            if (combined.length() > 500) {
+                throw new BusinessException("pharmacy.fefo.reasonTooLong",
+                        String.valueOf(Math.max(0, 500 - dto.getReason().trim().length()
+                                - FEFO_LEDGER_SEPARATOR.length())));
+            }
+            dto.setReason(combined);
+        }
+    }
+
+    /** How a FEFO override follows a ledger reason; the ledger screen splits on it. */
+    static final String FEFO_LEDGER_SEPARATOR = " | FEFO: ";
 
     /** Movements that take stock off a lot or item, which a return may put back. */
     private static final Set<StockTransactionType> ISSUED_TYPES =

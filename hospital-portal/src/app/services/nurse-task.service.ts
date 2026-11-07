@@ -20,8 +20,15 @@ export interface NurseMedicationTask {
   medication: string;
   dose: string;
   route: string;
+  /** QA D950: the route as a form code (PO, IV…) whatever way it was stored; null when unknown. */
+  routeCode?: string | null;
   dueTime: string;
+  /** DUE, OVERDUE, UPCOMING (next slot not yet open, QA D949) or COMPLETED (no dose left). */
   status: string;
+  /** QA D929: GIVEN, HELD, REFUSED or MISSED for the last closed dose; null when none. */
+  lastOutcome?: string | null;
+  /** QA D922: a controlled substance (prescriber's tick or the catalogue's flag). */
+  controlledSubstance?: boolean;
   /**
    * Pharmacist verification (Tier 2 item 33). Both flags come from the server
    * on the task itself rather than being derived in the UI, so a nurse sees

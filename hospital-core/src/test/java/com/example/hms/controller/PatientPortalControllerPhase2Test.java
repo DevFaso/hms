@@ -114,10 +114,16 @@ class PatientPortalControllerPhase2Test {
         public PharmacyClaimService pharmacyClaimService() {
             return mock(PharmacyClaimService.class);
         }
+
+        @Bean
+        public com.example.hms.service.pharmacy.PrescriptionCopyPdfService prescriptionCopyPdfService() {
+            return mock(com.example.hms.service.pharmacy.PrescriptionCopyPdfService.class);
+        }
     }
 
     @Autowired private MockMvc mockMvc;
     @Autowired private PatientPortalService portalService;
+    @Autowired private com.example.hms.service.pharmacy.PrescriptionCopyPdfService prescriptionCopyPdfService;
 
     private ObjectMapper objectMapper;
     private Authentication auth;
@@ -130,6 +136,22 @@ class PatientPortalControllerPhase2Test {
         auth = new UsernamePasswordAuthenticationToken(
                 "patient.jane", "password",
                 List.of(new SimpleGrantedAuthority("ROLE_PATIENT")));
+    }
+
+    @Test
+    @DisplayName("QA D966: the patient downloads the printed copy of their own prescription, as a PDF")
+    void printedCopyIsServedForTheCallersOwnPatient() throws Exception {
+        UUID patientId = UUID.randomUUID();
+        UUID prescriptionId = UUID.randomUUID();
+        byte[] pdf = "%PDF-1.4 copy".getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+        when(portalService.resolvePatientId(any(Authentication.class))).thenReturn(patientId);
+        when(prescriptionCopyPdfService.copyForPatient(prescriptionId, patientId)).thenReturn(pdf);
+
+        mockMvc.perform(get("/me/patient/prescriptions/" + prescriptionId + "/printed-copy").principal(auth))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content()
+                        .contentType(MediaType.APPLICATION_PDF))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().bytes(pdf));
     }
 
     // ══════════════════════════════════════════════════════════════════════

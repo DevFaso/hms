@@ -60,17 +60,17 @@ public class PharmacyClaimServiceImpl implements PharmacyClaimService {
 
         // SUPER_ADMIN may have no active hospital; require one to create a claim.
         if (hospitalId == null) {
-            throw new BusinessException("Active hospital context is required to create a claim");
+            throw new BusinessException("pharmacy.claim.hospitalRequired");
         }
         if (!hospitalId.equals(dto.getHospitalId())) {
-            throw new BusinessException("Claim hospital does not match the active hospital");
+            throw new BusinessException("pharmacy.claim.hospitalMismatch");
         }
 
         Dispense dispense = dispenseRepository.findById(dto.getDispenseId())
                 .orElseThrow(() -> new ResourceNotFoundException("dispense.notfound"));
         if (dispense.getPatient() == null
                 || !dispense.getPatient().getId().equals(dto.getPatientId())) {
-            throw new BusinessException("Patient does not match the dispense record");
+            throw new BusinessException("pharmacy.claim.patientMismatch");
         }
         if (dispense.getPharmacy() == null
                 || dispense.getPharmacy().getHospital() == null
@@ -104,7 +104,7 @@ public class PharmacyClaimServiceImpl implements PharmacyClaimService {
     public PharmacyClaimResponseDTO submitClaim(UUID id) {
         PharmacyClaim claim = loadInScope(id);
         if (claim.getClaimStatus() != PharmacyClaimStatus.DRAFT) {
-            throw new BusinessException("Only DRAFT claims can be submitted");
+            throw new BusinessException("pharmacy.claim.submitDraftOnly");
         }
         User currentUser = resolveCurrentUser();
         claim.setClaimStatus(PharmacyClaimStatus.SUBMITTED);
@@ -132,7 +132,7 @@ public class PharmacyClaimServiceImpl implements PharmacyClaimService {
     @Transactional
     public PharmacyClaimResponseDTO markRejected(UUID id, String rejectionReason) {
         if (rejectionReason == null || rejectionReason.isBlank()) {
-            throw new BusinessException("Rejection reason is required");
+            throw new BusinessException("pharmacy.claim.rejectionReasonRequired");
         }
         return transition(id, PharmacyClaimStatus.REJECTED,
                 EnumSet.of(PharmacyClaimStatus.SUBMITTED),
@@ -155,8 +155,10 @@ public class PharmacyClaimServiceImpl implements PharmacyClaimService {
                                                 String verb) {
         PharmacyClaim claim = loadInScope(id);
         if (!allowedFrom.contains(claim.getClaimStatus())) {
-            throw new BusinessException("Cannot mark " + verb
-                    + " from status " + claim.getClaimStatus());
+            // QA D1000: both statuses read in the caller's language.
+            throw new BusinessException("pharmacy.claim.transitionRefused",
+                    com.example.hms.utility.MessageUtil.resolve("pharmacy.claim.status." + target.name()),
+                    com.example.hms.utility.MessageUtil.resolve("pharmacy.claim.status." + claim.getClaimStatus().name()));
         }
         claim.setClaimStatus(target);
         if (notes != null && !notes.isBlank()) {
@@ -240,7 +242,7 @@ public class PharmacyClaimServiceImpl implements PharmacyClaimService {
     private User resolveCurrentUser() {
         UUID uid = roleValidator.getCurrentUserId();
         if (uid == null) {
-            throw new BusinessException("Unable to determine current user");
+            throw new BusinessException("pharmacy.currentUserUnknown");
         }
         return userRepository.findById(uid)
                 .orElseThrow(() -> new ResourceNotFoundException("user.current.notfound"));
@@ -248,10 +250,10 @@ public class PharmacyClaimServiceImpl implements PharmacyClaimService {
 
     private void validateRequest(PharmacyClaimRequestDTO dto) {
         if (dto == null) {
-            throw new BusinessException("Claim request is required");
+            throw new BusinessException("pharmacy.claim.requestRequired");
         }
         if (dto.getAmount() == null || dto.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
-            throw new BusinessException("Claim amount must be positive");
+            throw new BusinessException("pharmacy.claim.amountPositive");
         }
     }
 }

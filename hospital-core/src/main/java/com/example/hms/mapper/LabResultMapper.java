@@ -60,6 +60,7 @@ public class LabResultMapper {
             .labOrderId(result.getLabOrder() != null && result.getLabOrder().getId() != null
                 ? result.getLabOrder().getId().toString() : null)
             .labOrderCode(context.labOrderCode())
+            .orderPriority(result.getLabOrder() != null ? result.getLabOrder().getPriority() : null)
             .labTestCode(context.labTestCode())
             .patientId(result.getLabOrder() != null && result.getLabOrder().getPatient() != null
                 && result.getLabOrder().getPatient().getId() != null

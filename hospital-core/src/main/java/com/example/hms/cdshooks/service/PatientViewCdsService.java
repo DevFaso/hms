@@ -111,7 +111,7 @@ public class PatientViewCdsService implements CdsHookService {
             summary,
             detail,
             anyHigh ? CdsCard.Indicator.WARNING : CdsCard.Indicator.INFO,
-            new Source(SOURCE_LABEL, null, null),
+            new Source(text.get("cds.source.clinicalSummary", SOURCE_LABEL), null, null),
             null, null, null, java.util.UUID.randomUUID().toString()
         ));
     }
@@ -136,7 +136,7 @@ public class PatientViewCdsService implements CdsHookService {
             summary,
             detail,
             CdsCard.Indicator.INFO,
-            new Source(SOURCE_LABEL, null, null),
+            new Source(text.get("cds.source.clinicalSummary", SOURCE_LABEL), null, null),
             null, null, null, java.util.UUID.randomUUID().toString()
         ));
     }

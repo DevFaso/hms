@@ -33,6 +33,8 @@ public class MedicationCatalogItemResponseDTO {
     private String category;
     private boolean essentialList;
     private boolean controlled;
+    /** QA D935: mg per kg per dose, or null when the catalogue holds no ceiling. */
+    private java.math.BigDecimal pediatricMaxDoseMgPerKg;
     private boolean active;
     private String description;
     private UUID hospitalId;

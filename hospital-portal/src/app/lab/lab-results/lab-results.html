@@ -130,10 +130,7 @@
               </td>
               <td>{{ r.labTestName || '—' }}</td>
               <td>
-                <strong>{{ r.resultValue || '—' }}</strong>
-                @if (r.resultUnit) {
-                  <span class="unit-text">{{ r.resultUnit }}</span>
-                }
+                <strong>{{ r.resultValue | labValue: r.resultUnit }}</strong>
               </td>
               <td>
                 @if (r.unitMismatch) {
@@ -165,6 +162,15 @@
                       [title]="'LAB_RESULTS.SUPERSEDED_HINT' | translate"
                       [attr.data-testid]="'superseded-' + r.id"
                       >{{ 'LAB_RESULTS.SUPERSEDED' | translate }}</span
+                    >
+                  }
+                  @if (r.supersedesResultId) {
+                    <!-- QA D931: a released correction stays marked as one. -->
+                    <span
+                      class="status-badge status-correction"
+                      [title]="'LAB_RESULTS.CORRECTED_HINT' | translate"
+                      [attr.data-testid]="'corrected-' + r.id"
+                      >{{ 'LAB_RESULTS.CORRECTED' | translate }}</span
                     >
                   }
                   @if (r.selfReleased) {
@@ -304,9 +310,17 @@
   <!-- ═══ DETAIL PANEL ═══ -->
   @if (selectedResult(); as r) {
     <div class="detail-overlay" tabindex="-1" (keydown.escape)="closeDetail()">
-      <div class="detail-panel">
+      <div
+        class="detail-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="lab-results-dialog-title-1"
+        cdkTrapFocus
+        [cdkTrapFocusAutoCapture]="true"
+        (keydown.escape)="closeDetail(); $event.stopPropagation()"
+      >
         <div class="panel-header">
-          <h2>
+          <h2 id="lab-results-dialog-title-1">
             {{ 'LAB_RESULTS.DETAIL_TITLE' | translate }} — {{ shortOrderCode(r.labOrderCode) }}
           </h2>
           <button
@@ -330,7 +344,7 @@
             <div class="detail-field">
               <span class="field-label">{{ 'LAB_RESULTS.VALUE' | translate }}</span>
               <span class="field-value"
-                >{{ r.resultValue }}
+                >{{ r.resultValue | labValue }}
                 {{ r.resultUnit || ('LAB_RESULTS.UNIT_UNKNOWN' | translate) }}</span
               >
             </div>
@@ -361,6 +375,12 @@
                 r.released ? ('COMMON.YES' | translate) : ('COMMON.NO' | translate)
               }}</span>
             </div>
+            @if (r.supersedesResultId) {
+              <div class="detail-field" data-testid="detail-corrected">
+                <span class="field-label">{{ 'LAB_RESULTS.CORRECTED' | translate }}</span>
+                <span class="field-value">{{ 'LAB_RESULTS.CORRECTED_HINT' | translate }}</span>
+              </div>
+            }
             @if (r.releasedAt) {
               <div class="detail-field">
                 <span class="field-label">{{ 'LAB_RESULTS.RELEASED_AT' | translate }}</span>
@@ -423,11 +443,11 @@
                     <div class="range-main">{{ formatReferenceRange(rr) }}</div>
                     <div class="range-meta">
                       <span
-                        >{{ 'LAB_RESULTS.GENDER' | translate }}:
+                        >{{ 'LAB_RESULTS.GENDER' | translate }}{{ 'COMMON.COLON' | translate }}
                         {{ rr.gender || 'ALL' | enumLabel: 'gender' }}</span
                       >
                       <span
-                        >{{ 'LAB_RESULTS.AGE_RANGE' | translate }}:
+                        >{{ 'LAB_RESULTS.AGE_RANGE' | translate }}{{ 'COMMON.COLON' | translate }}
                         {{ formatReferenceRangeAge(rr) }}</span
                       >
                     </div>
@@ -462,7 +482,7 @@
                 @for (tp of sortedTrendHistory(r); track $index) {
                   <div class="trend-row">
                     <span>{{ tp.resultDate | serverTime | date: 'medium' }}</span>
-                    <span>{{ tp.resultValue }} {{ tp.resultUnit || '' }}</span>
+                    <span>{{ tp.resultValue | labValue: tp.resultUnit }}</span>
                     <span>{{ formatTrendDelta(sortedTrendHistory(r), $index) }}</span>
                   </div>
                 }
@@ -501,12 +521,17 @@
   <div class="modal-backdrop" tabindex="-1" (click)="closeModal()" (keydown.escape)="closeModal()">
     <div
       class="modal modal-lg"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="lab-results-dialog-title-2"
+      cdkTrapFocus
+      [cdkTrapFocusAutoCapture]="true"
+      (keydown.escape)="closeModal(); $event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="closeModal()"
     >
       <div class="modal-header">
-        <h2>
+        <h2 id="lab-results-dialog-title-2">
           {{
             editing()
               ? ('LAB_RESULTS.EDIT_RESULT' | translate)
@@ -525,7 +550,10 @@
             {{
               'LAB_RESULTS.CORRECTION_OF'
                 | translate
-                  : { test: c.labTestName || c.labTestCode || '—', value: c.resultValue || '—' }
+                  : {
+                      test: c.labTestName || c.labTestCode || '—',
+                      value: (c.resultValue | labValue: c.resultUnit),
+                    }
             }}
           </p>
         } @else if (!editing()) {
@@ -637,10 +665,12 @@
       class="modal"
       role="dialog"
       aria-modal="true"
+      cdkTrapFocus
+      [cdkTrapFocusAutoCapture]="true"
+      (keydown.escape)="cancelSelfRelease(); $event.stopPropagation()"
       [attr.aria-label]="'LAB_RESULTS.SELF_RELEASE_TITLE' | translate"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="cancelSelfRelease()"
       data-testid="self-release-modal"
     >
       <div class="modal-header">
@@ -684,12 +714,17 @@
   >
     <div
       class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="lab-results-dialog-title-3"
+      cdkTrapFocus
+      [cdkTrapFocusAutoCapture]="true"
+      (keydown.escape)="cancelDelete(); $event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="cancelDelete()"
     >
       <div class="modal-header">
-        <h2>{{ 'LAB_RESULTS.DELETE_TITLE' | translate }}</h2>
+        <h2 id="lab-results-dialog-title-3">{{ 'LAB_RESULTS.DELETE_TITLE' | translate }}</h2>
         <button class="modal-close" (click)="cancelDelete()">
           <span class="material-symbols-outlined">close</span>
         </button>
@@ -723,12 +758,17 @@
   <div class="modal-backdrop" tabindex="-1" (click)="closeSign()" (keydown.escape)="closeSign()">
     <div
       class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="lab-results-dialog-title-4"
+      cdkTrapFocus
+      [cdkTrapFocusAutoCapture]="true"
+      (keydown.escape)="closeSign(); $event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>
+        <h2 id="lab-results-dialog-title-4">
           {{ 'LAB_RESULTS.SIGN_TITLE' | translate }} —
           {{ shortOrderCode(signTarget()?.labOrderCode) }}
         </h2>
@@ -773,12 +813,19 @@
   >
     <div
       class="modal modal-lg"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="lab-results-dialog-title-5"
+      cdkTrapFocus
+      [cdkTrapFocusAutoCapture]="true"
+      (keydown.escape)="closeCompare(); $event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ 'LAB_RESULTS.COMPARE_TITLE' | translate }} — {{ cmp.testName }}</h2>
+        <h2 id="lab-results-dialog-title-5">
+          {{ 'LAB_RESULTS.COMPARE_TITLE' | translate }} — {{ cmp.testName }}
+        </h2>
         <button class="modal-close" (click)="closeCompare()">
           <span class="material-symbols-outlined">close</span>
         </button>
@@ -789,7 +836,7 @@
           <div class="compare-card">
             <h4>{{ 'LAB_RESULTS.CURRENT_RESULT' | translate }}</h4>
             @if (cmp.currentResult; as cur) {
-              <p class="compare-value">{{ cur.resultValue }} {{ cur.resultUnit }}</p>
+              <p class="compare-value">{{ cur.resultValue | labValue: cur.resultUnit }}</p>
               <p class="compare-date">{{ cur.resultDate | serverTime | date: 'medium' }}</p>
             } @else {
               <p>—</p>
@@ -798,7 +845,7 @@
           <div class="compare-card">
             <h4>{{ 'LAB_RESULTS.PREVIOUS_RESULT' | translate }}</h4>
             @if (cmp.previousResult; as prev) {
-              <p class="compare-value">{{ prev.resultValue }} {{ prev.resultUnit }}</p>
+              <p class="compare-value">{{ prev.resultValue | labValue: prev.resultUnit }}</p>
               <p class="compare-date">{{ prev.resultDate | serverTime | date: 'medium' }}</p>
             } @else {
               <p>{{ 'LAB_RESULTS.BASELINE' | translate }}</p>
@@ -844,7 +891,7 @@
                 @for (pt of cmp.trendHistory; track pt.labResultId) {
                   <tr>
                     <td>{{ pt.resultDate | serverTime | date: 'medium' }}</td>
-                    <td>{{ pt.resultValue }} {{ pt.resultUnit }}</td>
+                    <td>{{ pt.resultValue | labValue: pt.resultUnit }}</td>
                     <td>
                       {{ pt.severityFlag ? (pt.severityFlag | enumLabel: 'labSeverityFlag') : '—' }}
                     </td>
@@ -876,12 +923,15 @@
       class="modal"
       role="dialog"
       aria-modal="true"
+      aria-labelledby="lab-results-dialog-title-6"
+      cdkTrapFocus
+      [cdkTrapFocusAutoCapture]="true"
+      (keydown.escape)="closeReadBack(); $event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ 'LAB_RESULTS.READ_BACK' | translate }}</h2>
+        <h2 id="lab-results-dialog-title-6">{{ 'LAB_RESULTS.READ_BACK' | translate }}</h2>
         <button
           type="button"
           class="modal-close"

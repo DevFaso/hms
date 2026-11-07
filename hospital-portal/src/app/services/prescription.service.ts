@@ -58,6 +58,10 @@ export interface PrescriptionResponse {
   /** Safeguard state (P2 #15) — why a sign/dispense was refused, made visible. */
   controlledSubstance?: boolean;
   requiresCosign?: boolean;
+  /** QA D934: a nurse's or midwife's unsigned draft, which a doctor of the hospital signs. */
+  awaitingPhysicianSignature?: boolean;
+  /** QA D922: the catalogue item the order was written from, or resolved to. */
+  medicationCatalogItemId?: string | null;
   /** QA D757: a take-home order outlives its stay. */
   takeHome?: boolean;
   twoFactorVerifiedAt?: string | null;
@@ -195,6 +199,12 @@ export interface PrescriptionRequest {
    */
   controlledSubstance?: boolean;
   requiresCosign?: boolean;
+  /**
+   * QA D922/D935: the catalogue item picked in the form, so the catalogue's
+   * controlled flag and paediatric ceiling apply. The server also resolves a
+   * typed name to the hospital's item when this is absent.
+   */
+  medicationCatalogItemId?: string | null;
   /** QA D757: the order goes home with the patient; every other stay order ends at discharge. */
   takeHome?: boolean;
   /** QA D660: mandatory when a SIGNED prescription is cancelled or discontinued. */

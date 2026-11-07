@@ -148,7 +148,8 @@ public class FiveRightsVerificationService {
             b.fail(FiveRightsCheck.ROUTE, reason("emar.fiveRights.route.notPrescribed"));
             return;
         }
-        if (normalize(rx.getRoute()).equals(normalize(scan))) {
+        // QA D950: "IV", "Intraveineuse" and "INTRAVENOUS" are the same route.
+        if (MedicationRoutes.sameRoute(rx.getRoute(), scan)) {
             b.pass(FiveRightsCheck.ROUTE);
         } else {
             b.fail(FiveRightsCheck.ROUTE, reason("emar.fiveRights.route.mismatch"));

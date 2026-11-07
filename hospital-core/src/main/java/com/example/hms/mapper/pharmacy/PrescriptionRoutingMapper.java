@@ -42,7 +42,9 @@ public class PrescriptionRoutingMapper {
                 // Both have columns of their own since V167, which also moved
                 // every row written under the two older encodings (an English
                 // literal, then a marker inside the reason) onto them.
-                .reason(entity.getReason())
+                // QA D1000: stored keys and the English sentences older rows
+                // carry are rendered in the reader's language.
+                .reason(RoutingReasonText.readable(entity.getReason()))
                 .partnerNoShow(entity.isPartnerNoShow())
                 .noShowReason(entity.isPartnerNoShow() ? entity.getNoShowReason() : null)
                 .estimatedRestockDate(entity.getEstimatedRestockDate())

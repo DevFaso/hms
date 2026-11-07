@@ -27,6 +27,7 @@ public class RoleValidator {
     private static final String PHYSICIAN_ROLE = "PHYSICIAN";
     private static final String SURGEON_ROLE = "SURGEON";
     private static final String NURSE_ROLE = "NURSE";
+    private static final String MIDWIFE_ROLE = "MIDWIFE";
     private static final String ROLE_PREFIX = SecurityConstants.ROLE_PREFIX;
 
     /**
@@ -106,7 +107,7 @@ public class RoleValidator {
 
     /** Quick check for “can act as staff/admin” */
     public boolean isStaffOrAdminFromAuth() {
-        return hasAnyAuthority(HOSPITAL_ADMIN_ROLE, DOCTOR_ROLE, PHYSICIAN_ROLE, NURSE_ROLE,"MIDWIFE","STAFF","RECEPTIONIST","SUPER_ADMIN");
+        return hasAnyAuthority(HOSPITAL_ADMIN_ROLE, DOCTOR_ROLE, PHYSICIAN_ROLE, NURSE_ROLE, MIDWIFE_ROLE,"STAFF","RECEPTIONIST","SUPER_ADMIN");
     }
 
     /* =========================================
@@ -186,11 +187,37 @@ public class RoleValidator {
             userId, hospitalId, expandCodesForDb(baseCode));
     }
 
+    /** Any of several base codes, in ONE query (the repository takes the whole set). */
+    private boolean hasAnyCode(UUID userId, UUID hospitalId, String... baseCodes) {
+        var wanted = new HashSet<String>();
+        for (var base : baseCodes) wanted.addAll(expandCodesForDb(base));
+        return assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(userId, hospitalId, wanted);
+    }
+
+    /**
+     * QA D934: a doctor, physician or surgeon at {@code hospitalId} - the roles
+     * whose signature a prescription carries. One query over the three codes.
+     */
+    public boolean isSigningPhysician(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, DOCTOR_ROLE, PHYSICIAN_ROLE, SURGEON_ROLE);
+    }
+
+    /**
+     * QA D934: a nurse or a midwife at {@code hospitalId} who is not also a
+     * signing physician there: her draft waits for a doctor of that hospital
+     * to sign. Deliberately NOT "anyone who is not a physician" (review of
+     * #975): a doctor credentialed elsewhere, or a prescriber outside these
+     * two roles, keeps "only the prescribing clinician signs".
+     */
+    public boolean draftsForPhysicianSignature(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, NURSE_ROLE, MIDWIFE_ROLE) && !isSigningPhysician(userId, hospitalId);
+    }
+
     public boolean isDoctor(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, DOCTOR_ROLE); }
     public boolean isPhysician(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, PHYSICIAN_ROLE); }
     public boolean isSurgeon(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, SURGEON_ROLE); }
     public boolean isNurse(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, NURSE_ROLE); }
-    public boolean isMidwife(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, "MIDWIFE"); }
+    public boolean isMidwife(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, MIDWIFE_ROLE); }
     public boolean isHospitalAdmin(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, HOSPITAL_ADMIN_ROLE); }
     public boolean isLabScientist(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, "LAB_SCIENTIST"); }
     public boolean isLabTechnician(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, "LAB_TECHNICIAN"); }

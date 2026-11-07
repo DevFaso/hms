@@ -44,7 +44,7 @@
                 <span class="pli-sub">{{ 'PORTAL.LAB_RESULTS.PENDING_RESULT' | translate }}</span>
               } @else {
                 <span class="pli-sub">
-                  {{ 'PORTAL.LAB_RESULTS.RESULT' | translate }}:
+                  {{ 'PORTAL.LAB_RESULTS.RESULT_PREFIX' | translate }}
                   <strong>{{ displayResult(lab.result) }}</strong>
                   @if (lab.referenceRange) {
                     &nbsp;({{ 'PORTAL.LAB_RESULTS.NORMAL_PREFIX' | translate }}

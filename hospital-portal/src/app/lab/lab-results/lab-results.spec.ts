@@ -166,6 +166,35 @@ describe('LabResultsComponent', () => {
     expect(component.filtered()[0].patientFullName).toBe('Alice Smith');
   });
 
+  it('QA D968: the detail panel takes focus, keeps Tab inside, closes on Escape and gives focus back', async () => {
+    fixture.detectChanges();
+    flushInit();
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    const trigger = host.querySelector<HTMLButtonElement>('.view-link')!;
+    trigger.focus();
+    trigger.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    await new Promise((resolve) => setTimeout(resolve));
+
+    const dialog = host.querySelector<HTMLElement>('.detail-panel[role="dialog"]')!;
+    expect(dialog.getAttribute('aria-modal')).toBe('true');
+    expect(dialog.getAttribute('aria-labelledby')).toBeTruthy();
+    expect(dialog.contains(document.activeElement)).withContext('focus moved in').toBeTrue();
+    // cdkTrapFocus wraps the dialog in tab anchors: Tab from the last element
+    // comes back to the first instead of walking to the page behind.
+    expect(dialog.previousElementSibling?.classList.contains('cdk-focus-trap-anchor')).toBeTrue();
+
+    (document.activeElement as HTMLElement).dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+    );
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(component.selectedResult()).toBeNull();
+    expect(document.activeElement).withContext('focus returned to the trigger').toBe(trigger);
+  });
+
   describe('D81: released results', () => {
     function allowEntry(): void {
       spyOn(
@@ -208,6 +237,20 @@ describe('LabResultsComponent', () => {
       const host = fixture.nativeElement as HTMLElement;
       expect(host.querySelector('[data-testid="superseded-result-1"]')).not.toBeNull();
       expect(host.querySelector('[data-testid="correct-result-1"]')).toBeNull();
+    });
+
+    it('QA D931: keeps a released correction marked "Corrected", in the list and the detail', () => {
+      fixture.detectChanges();
+      flushInit([mockResult({ released: true, supersedesResultId: 'result-0' })]);
+      fixture.detectChanges();
+
+      const host = fixture.nativeElement as HTMLElement;
+      expect(host.querySelector('[data-testid="corrected-result-1"]')?.textContent).toContain(
+        'LAB_RESULTS.CORRECTED',
+      );
+      component.viewResult(component.results()[0]);
+      fixture.detectChanges();
+      expect(host.querySelector('[data-testid="detail-corrected"]')).not.toBeNull();
     });
   });
 

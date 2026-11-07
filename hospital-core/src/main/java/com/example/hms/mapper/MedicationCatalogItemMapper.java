@@ -25,6 +25,7 @@ public class MedicationCatalogItemMapper {
                 .category(entity.getCategory())
                 .essentialList(entity.isEssentialList())
                 .controlled(entity.isControlled())
+                .pediatricMaxDoseMgPerKg(entity.getPediatricMaxDoseMgPerKg())
                 .active(entity.isActive())
                 .description(entity.getDescription())
                 .hospitalId(entity.getHospital() != null ? entity.getHospital().getId() : null)
@@ -50,6 +51,7 @@ public class MedicationCatalogItemMapper {
                 .category(dto.getCategory())
                 .essentialList(dto.isEssentialList())
                 .controlled(dto.isControlled())
+                .pediatricMaxDoseMgPerKg(dto.getPediatricMaxDoseMgPerKg())
                 .active(dto.isActive())
                 .description(dto.getDescription())
                 .build();

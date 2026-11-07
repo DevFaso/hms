@@ -60,6 +60,32 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
     private final com.example.hms.mapper.LabResultMapper labResultMapper;
 
     /**
+     * QA D938: an observation auto-released here tells the patient, as a
+     * release from the worklist does. Setter-injected (optional), so the
+     * positional constructor calls in the tests stay as they are.
+     */
+    private com.example.hms.service.lab.LabResultReleaseNotifier releaseNotifier;
+
+    /**
+     * Review of #975: the patient notice alone left the ordering clinician's
+     * in-basket empty for an analyzer-released result (D178), while a worklist
+     * release filed it. The service's announce is the one choke point; when it
+     * is wired (it is not in the positional-constructor unit tests) it does
+     * everything, the notifier field above being its fallback.
+     */
+    private com.example.hms.service.LabResultService labResultService;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setReleaseNotifier(com.example.hms.service.lab.LabResultReleaseNotifier releaseNotifier) {
+        this.releaseNotifier = releaseNotifier;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setLabResultService(com.example.hms.service.LabResultService labResultService) {
+        this.labResultService = labResultService;
+    }
+
+    /**
      * B14 — the switch PR #716 introduces for manual entry
      * ({@code hms.lab.auto-verification.enabled}, declared once in its
      * application.properties; read here by the same key so the merge is
@@ -152,6 +178,7 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
         // hospital-scoped order in the receiving hospital or the whole
         // message is rejected.
         Map<String, LabOrder> ordersByPlacer = new LinkedHashMap<>();
+        Map<String, java.util.UUID> specimenIdByPlacer = new java.util.HashMap<>();
         for (ParsedObservation observation : observations) {
             String placer = observation.placerOrderNumber().trim();
             if (ordersByPlacer.containsKey(placer)) {
@@ -205,7 +232,36 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
                     IntegrationMessageStatus.FAILED, "order entered in error");
                 return MllpInboundOutcome.REJECTED_INVALID;
             }
+            if (specimen.get().getStatus() == com.example.hms.enums.LabSpecimenStatus.REJECTED) {
+                // QA D962 (review of #975): the lab refused this tube and the
+                // order went back to collection; the analyser that still ran it
+                // is told so (AE) instead of resulting - and releasing to the
+                // patient - a value from a sample nobody accepted.
+                log.warn("MLLP ORU^R01 placer={} maps to a rejected specimen", quotedPlacer);
+                recordInboundMessage(integrationId, organizationId, rawMessageBody,
+                    IntegrationMessageStatus.FAILED, "specimen rejected");
+                return MllpInboundOutcome.REJECTED_INVALID;
+            }
             ordersByPlacer.put(placer, order);
+            specimenIdByPlacer.put(placer, specimen.get().getId());
+        }
+        // Review of #975: the rejection above was judged on the specimen as
+        // loaded; a rejection that committed since is seen here, under the
+        // order lock every specimen writer takes, before any result is saved.
+        // Locked in order-id order, so two messages naming the same orders in
+        // a different order cannot deadlock each other.
+        List<Map.Entry<String, LabOrder>> byOrderId = new ArrayList<>(ordersByPlacer.entrySet());
+        byOrderId.sort(Map.Entry.comparingByValue(java.util.Comparator.comparing(LabOrder::getId)));
+        for (Map.Entry<String, LabOrder> entry : byOrderId) {
+            labOrderRepository.findWithLockById(entry.getValue().getId());
+            if (specimenRepository.findStatusById(specimenIdByPlacer.get(entry.getKey()))
+                    == com.example.hms.enums.LabSpecimenStatus.REJECTED) {
+                log.warn("MLLP ORU^R01 placer={} maps to a specimen rejected while the message was read",
+                    Hl7SenderText.quote(entry.getKey()));
+                recordInboundMessage(integrationId, organizationId, rawMessageBody,
+                    IntegrationMessageStatus.FAILED, "specimen rejected");
+                return MllpInboundOutcome.REJECTED_INVALID;
+            }
         }
 
         List<String> setIds = normalizedSetIds(observations);
@@ -265,6 +321,13 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
             // replay guard recognises the retransmission rather than
             // doubling the batch.
             criticalValueNotificationService.notifyIfCritical(savedResult);
+            if (savedResult.isReleased()) {
+                if (labResultService != null) {
+                    labResultService.announceReleasedResult(savedResult);
+                } else if (releaseNotifier != null) {
+                    releaseNotifier.patientResultReleased(savedResult);
+                }
+            }
         }
         return MllpInboundOutcome.ACCEPTED;
     }

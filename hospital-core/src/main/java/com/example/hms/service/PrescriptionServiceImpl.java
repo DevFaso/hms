@@ -149,11 +149,12 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // DECISION SUPPORT: Check allergies before prescribing
         String allergyOverride = checkAllergyConflicts(patient, request);
 
-        applyCatalogPick(request, hospitalId);
+        com.example.hms.model.medication.MedicationCatalogItem catalogItem =
+            applyCatalogPick(request, hospitalId, false);
 
         // CDS rule engine: drug-drug, duplicate-order, pediatric-dose
         List<CdsCard> advisories = withCrossReactivityAdvisory(patient, request.getMedicationName(),
-            runCdsRuleEngine(patient, hospitalId, request));
+            runCdsRuleEngine(patient, hospitalId, request, catalogItem, null));
 
         Prescription entity = prescriptionMapper.toEntity(request, patient, staff, encounter);
         entity.setAssignment(prescriberAssignment);
@@ -404,20 +405,22 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // identity test so that "this is already signed" is the answer even when
         // the caller is not the prescriber.
         if (prescription.getSignatureValue() != null) {
-            throw new BusinessException(
-                "This prescription has already been signed. A signature cannot be reissued; "
-                    + "cancel it and write a new prescription instead.");
+            throw new BusinessException("prescription.sign.alreadySigned");
         }
 
         PrescriptionStatus status = prescription.getStatus();
         if (status != null && status != PrescriptionStatus.DRAFT
                 && status != PrescriptionStatus.PENDING_SIGNATURE) {
-            throw new BusinessException(
-                "Only a prescription in DRAFT or PENDING_SIGNATURE can be signed; this one is "
-                    + status + ".");
+            throw new BusinessException("prescription.sign.wrongStatus", status.localizedLabel());
         }
 
         Staff signer = resolveSigningPrescriber(prescription);
+        // Review of #975 (D934): a doctor may now sign a nurse's or a
+        // midwife's draft, so the clinician who co-signed it must not also be
+        // the one who signs it - two signatures, one judgment.
+        if (sameClinician(prescription.getCosignedBy(), signer)) {
+            throw new BusinessException("prescription.sign.ownCosign");
+        }
 
         // Checked against the status we are about to move to, not the one the
         // row still holds — a controlled substance must not become signable
@@ -475,27 +478,23 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         Staff cosigner = resolveCosignerAtHospital(prescription);
 
         if (!prescription.isRequiresCosign()) {
-            throw new BusinessException(
-                "This prescription does not declare a co-signature requirement.");
+            // QA D934: in the reader's language.
+            throw new BusinessException("prescription.cosign.notRequired");
         }
         if (prescription.getCosignedAt() != null || prescription.getCosignedBy() != null) {
-            throw new BusinessException("This prescription has already been co-signed.");
+            throw new BusinessException("prescription.cosign.alreadyCosigned");
         }
 
         PrescriptionStatus status = prescription.getStatus();
         if (status != null && status != PrescriptionStatus.DRAFT
                 && status != PrescriptionStatus.PENDING_SIGNATURE) {
-            throw new BusinessException(
-                "Only a prescription in DRAFT or PENDING_SIGNATURE can be co-signed; this one is "
-                    + status + ".");
+            throw new BusinessException("prescription.cosign.wrongStatus", status.localizedLabel());
         }
 
         Staff prescriber = prescription.getStaff();
         if (prescriber != null && prescriber.getId() != null
                 && prescriber.getId().equals(cosigner.getId())) {
-            throw new BusinessException(
-                "A prescription cannot be co-signed by its own prescriber; the co-signature "
-                    + "exists to put a second clinician's judgment on record.");
+            throw new BusinessException("prescription.cosign.ownPrescriber");
         }
 
         prescription.setCosignedBy(cosigner);
@@ -563,12 +562,11 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // the caller would need, not anything about the record.
         if (!prescriberHere) {
             throw new com.example.hms.exception.ClientSafeAccessDeniedException(
-                "Only a clinician with an active prescribing assignment at the prescribing "
-                    + "hospital can co-sign a prescription.");
+                com.example.hms.utility.MessageUtil.resolveOrRaw("prescription.cosign.prescriberOnly"));
         }
         return staffRepository.findFirstByUserIdOrderByCreatedAtAsc(currentUserId)
             .orElseThrow(() -> new com.example.hms.exception.ClientSafeAccessDeniedException(
-                "Only a clinician with a staff profile can co-sign a prescription."));
+                com.example.hms.utility.MessageUtil.resolveOrRaw("prescription.cosign.staffProfileRequired")));
     }
 
     /**
@@ -592,14 +590,26 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             : null;
 
         UUID currentUserId = roleValidator.getCurrentUserId();
-        if (currentUserId == null || prescriberUserId == null
-                || !prescriberUserId.equals(currentUserId)) {
-            // Client-safe: signPrescription resolved the row in the caller's
-            // scope first; "you are not its prescriber" reveals nothing more.
-            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
-                "Only the prescribing clinician can sign this prescription.");
+        if (currentUserId != null && prescriberUserId != null && prescriberUserId.equals(currentUserId)) {
+            return prescriber;
         }
-        return prescriber;
+        // QA D934: a nurse or a midwife may draft a prescription (D611/D677)
+        // but holds no signature, so her order could never be signed by anyone
+        // and never reached the pharmacy. A doctor of the order's hospital signs
+        // it: the drafter stays the prescriber of record, the doctor is the
+        // signer. A doctor's own draft is still signed by that doctor only.
+        UUID rxHospitalId = prescription.getHospital() != null ? prescription.getHospital().getId() : null;
+        if (currentUserId != null && prescriberUserId != null && rxHospitalId != null
+                && roleValidator.draftsForPhysicianSignature(prescriberUserId, rxHospitalId)
+                && roleValidator.isSigningPhysician(currentUserId, rxHospitalId)) {
+            return staffRepository.findByUserIdAndHospitalId(currentUserId, rxHospitalId)
+                .orElseThrow(() -> new com.example.hms.exception.ClientSafeAccessDeniedException(
+                    com.example.hms.utility.MessageUtil.resolveOrRaw("prescription.sign.staffProfileRequired")));
+        }
+        // Client-safe: signPrescription resolved the row in the caller's
+        // scope first; "you are not its prescriber" reveals nothing more.
+        throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+            com.example.hms.utility.MessageUtil.resolveOrRaw("prescription.sign.prescriberOnly"));
     }
 
     /**
@@ -707,9 +717,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             return;
         }
         throw new ConflictException(
-            "This prescription is awaiting the prescriber's clarification; edit it and answer with "
-                + "POST /prescriptions/{id}/resolve-clarification, or cancel it, rather than changing "
-                + "its status.");
+            com.example.hms.utility.MessageUtil.resolveOrRaw("prescription.clarification.statusLocked"));
     }
 
     /**
@@ -925,6 +933,55 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             : prescriptionRepository.findByHospital_IdAndStatusIn(hospitalId, filter, pageable);
     }
 
+    /** The same person: the same staff row, or two staff rows of one user account. */
+    private static boolean sameClinician(Staff a, Staff b) {
+        if (a == null || b == null) {
+            return false;
+        }
+        if (a.getId() != null && a.getId().equals(b.getId())) {
+            return true;
+        }
+        return a.getUser() != null && b.getUser() != null && a.getUser().getId() != null
+            && a.getUser().getId().equals(b.getUser().getId());
+    }
+
+    /**
+     * Review of #975: an edit that names the same drug but sends neither id
+     * nor code keeps the item the order was written from, BEFORE any
+     * resolution runs (the mapper would write the null over the link,
+     * dropping the controlled flag and the paediatric ceiling it carries).
+     * An edit of a legacy, unlinked order keeping its name is resolved
+     * leniently by {@code applyCatalogPick}: one match links it, several
+     * leave it as it was. Returns whether the edit names the same drug.
+     */
+    private static boolean keepCatalogLinkBeforeResolution(Prescription existing, PrescriptionRequestDTO request) {
+        boolean sameDrugEdit = !textDiffers(request.getMedicationName(), existing.getMedicationName());
+        if (existing.getMedicationCatalogItemId() != null && sameDrugEdit
+                && request.getMedicationCatalogItemId() == null && isBlank(request.getMedicationCode())) {
+            request.setMedicationCatalogItemId(existing.getMedicationCatalogItemId());
+        }
+        return sameDrugEdit;
+    }
+
+    /**
+     * Review of #975: a code that resolves to nothing, then several name
+     * matches, must not unlink a same-drug edit either: whatever path left
+     * the request without an id after {@code applyCatalogPick}, the order
+     * keeps the item it had.
+     */
+    private com.example.hms.model.medication.MedicationCatalogItem keepCatalogLinkAfterResolution(
+            Prescription existing, PrescriptionRequestDTO request, UUID hospitalId, boolean sameDrugEdit,
+            com.example.hms.model.medication.MedicationCatalogItem resolved) {
+        UUID linkedItemId = existing.getMedicationCatalogItemId();
+        if (linkedItemId == null || !sameDrugEdit || request.getMedicationCatalogItemId() != null) {
+            return resolved;
+        }
+        request.setMedicationCatalogItemId(linkedItemId);
+        return medicationCatalogItemRepository == null ? resolved : medicationCatalogItemRepository
+            .findByIdAndHospital_Id(linkedItemId, hospitalId)
+            .orElse(resolved);
+    }
+
     /**
      * QA D706: a controlled substance states how much may be handed over,
      * on every path that creates one (the form, order sets), because
@@ -1010,11 +1067,14 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // DECISION SUPPORT: Check allergies before updating prescription
         String allergyOverride = checkAllergyConflicts(patient, request);
 
-        applyCatalogPick(request, hospitalId);
+        boolean sameDrugEdit = keepCatalogLinkBeforeResolution(existing, request);
+        com.example.hms.model.medication.MedicationCatalogItem catalogItem = keepCatalogLinkAfterResolution(
+            existing, request, hospitalId, sameDrugEdit, applyCatalogPick(request, hospitalId, sameDrugEdit));
 
-        // CDS rule engine: drug-drug, duplicate-order, pediatric-dose
+        // CDS rule engine: drug-drug, duplicate-order, pediatric-dose. QA D970:
+        // the order being edited is not a duplicate of itself.
         List<CdsCard> advisories = withCrossReactivityAdvisory(patient, request.getMedicationName(),
-            runCdsRuleEngine(patient, hospitalId, request));
+            runCdsRuleEngine(patient, hospitalId, request, catalogItem, existing.getId()));
 
         PrescriptionStatus statusBefore = existing.getStatus();
         String overrideBefore = existing.isAllergiesReviewed() ? existing.getOverrideReason() : null;
@@ -1118,7 +1178,9 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             !isBlank(request.getMedicationCode()) && textDiffers(request.getMedicationCode(), existing.getMedicationCode()),
             textDiffers(request.getDosage(), existing.getDosage()),
             textDiffers(request.getFrequency(), existing.getFrequency()),
-            !isBlank(request.getRoute()) && !request.getRoute().trim().equalsIgnoreCase(String.valueOf(existing.getRoute())),
+            // QA D950: "IV" echoed over a stored "INTRAVENOUS" is the same route.
+            !isBlank(request.getRoute())
+                && !com.example.hms.service.emar.MedicationRoutes.sameRoute(existing.getRoute(), request.getRoute()),
             textDiffers(request.getDuration(), existing.getDuration()),
             textDiffers(request.getNotes(), existing.getNotes()),
             flagDiffers(request.getControlledSubstance(), existing.isControlledSubstance()),
@@ -1780,7 +1842,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             String message = com.example.hms.utility.MessageUtil.resolveOrRaw("prescription.allergy.conflict",
                 allergy.getAllergenDisplay(), severityLabel, medicationName);
             CdsCard card = new CdsCard(message, null, CdsCard.Indicator.CRITICAL,
-                new com.example.hms.cdshooks.dto.CdsHookDtos.Source("HMS allergy check", null, null),
+                new com.example.hms.cdshooks.dto.CdsHookDtos.Source(
+                    com.example.hms.service.allergy.CrossReactivityAdvisory.sourceLabel(), null, null),
                 null, null, null, UUID.randomUUID().toString());
             throw new CdsCriticalBlockException(message, List.of(card));
         }
@@ -1802,12 +1865,16 @@ public class PrescriptionServiceImpl implements PrescriptionService {
      * structured payload instead of having to parse the message text.
      */
     private List<CdsCard> runCdsRuleEngine(Patient patient, UUID hospitalId,
-                                           PrescriptionRequestDTO request) {
+                                           PrescriptionRequestDTO request,
+                                           com.example.hms.model.medication.MedicationCatalogItem catalogItem,
+                                           UUID editedPrescriptionId) {
         List<CdsCard> advisories = cdsRuleEngine.evaluateProposedPrescription(
             patient, hospitalId,
             request.getMedicationName(),
             request.getMedicationCode(),
-            request.getDosage());
+            request.getDosage(),
+            catalogItem,
+            editedPrescriptionId);
         if (advisories.isEmpty() || Boolean.TRUE.equals(request.getForceOverride())) {
             return advisories;
         }
@@ -1828,21 +1895,103 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
 
     /**
-     * D654: a prescription created from a catalog pick (medicationCatalogItemId
-     * without medicationCode) takes the item's code, so the response reads the
-     * catalog's controlled flag. The item must belong to the order's hospital.
+     * The catalogue item behind the order, at the order's hospital, so that
+     * the catalogue's controlled flag and paediatric ceiling apply to it.
+     *
+     * <ul>
+     *   <li>D654: a catalogue pick ({@code medicationCatalogItemId}) must be
+     *       this hospital's item; it lends its code to an order sent without
+     *       one.</li>
+     *   <li>QA D922/D935: an order sent with neither id nor code (the
+     *       prescribing form typed the name; any API client may) is resolved
+     *       by NAME among this hospital's active items, with the dispense DRUG
+     *       check's name rule. One match is the item: its id is written on the
+     *       order, so the controlled flag reaches verification, the MAR and
+     *       the patient's refill. Several matches are refused when any of them
+     *       is controlled (the prescriber must pick the exact item: guessing
+     *       would either drop the flag or tie the order to one strength) -
+     *       except on an edit of an unlinked order that keeps its name
+     *       ({@code lenientAmbiguity}), which stays as it was rather than
+     *       becoming uneditable (review of #975). Several uncontrolled
+     *       matches leave the order unlinked; the CDS check then uses the
+     *       strictest paediatric ceiling among them.</li>
+     *   <li>A code no catalogue item carries (an external RxNorm, an order
+     *       set's own code) falls through to the name: the code alone must
+     *       not let a controlled drug escape the flag.</li>
+     * </ul>
+     *
+     * @return the item the CDS rules evaluate against, or {@code null} to let
+     *         the engine resolve one from the code (or none)
      */
-    private void applyCatalogPick(PrescriptionRequestDTO request, UUID hospitalId) {
+    private com.example.hms.model.medication.MedicationCatalogItem applyCatalogPick(
+            PrescriptionRequestDTO request, UUID hospitalId, boolean lenientAmbiguity) {
+        if (medicationCatalogItemRepository == null) {
+            return null;
+        }
         UUID itemId = request.getMedicationCatalogItemId();
-        if (itemId == null || medicationCatalogItemRepository == null) {
-            return;
+        if (itemId != null) {
+            com.example.hms.model.medication.MedicationCatalogItem item = medicationCatalogItemRepository
+                .findByIdAndHospital_Id(itemId, hospitalId)
+                .orElseThrow(() -> new ResourceNotFoundException("medication.catalog.notfound"));
+            if ((request.getMedicationCode() == null || request.getMedicationCode().isBlank())
+                && item.getCode() != null && !item.getCode().isBlank()) {
+                request.setMedicationCode(item.getCode());
+            }
+            return item;
         }
-        com.example.hms.model.medication.MedicationCatalogItem item = medicationCatalogItemRepository
-            .findByIdAndHospital_Id(itemId, hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException("medication.catalog.notfound"));
-        if ((request.getMedicationCode() == null || request.getMedicationCode().isBlank())
-            && item.getCode() != null && !item.getCode().isBlank()) {
-            request.setMedicationCode(item.getCode());
+        if (request.getMedicationCode() != null && !request.getMedicationCode().isBlank()) {
+            // Review of #975: a code names this hospital's item as well as an
+            // id does; the item is written on the order so an edit sending the
+            // code alone does not drop the link (the mapper copies the id).
+            com.example.hms.model.medication.MedicationCatalogItem coded = medicationCatalogItemRepository
+                .findByHospitalIdAndCode(hospitalId, request.getMedicationCode().trim())
+                .orElse(null);
+            if (coded != null) {
+                request.setMedicationCatalogItemId(coded.getId());
+                return coded;
+            }
         }
+        List<com.example.hms.model.medication.MedicationCatalogItem> named =
+            catalogItemsNamed(request.getMedicationName(), hospitalId);
+        if (named.isEmpty()) {
+            return null;
+        }
+        if (named.size() == 1) {
+            request.setMedicationCatalogItemId(named.get(0).getId());
+            return named.get(0);
+        }
+        if (!lenientAmbiguity
+                && named.stream().anyMatch(com.example.hms.model.medication.MedicationCatalogItem::isControlled)) {
+            throw new BusinessException("prescription.catalog.ambiguousControlled");
+        }
+        return strictestPediatricCeiling(named);
+    }
+
+    /** QA D922: this hospital's active catalogue items the typed name names. */
+    private List<com.example.hms.model.medication.MedicationCatalogItem> catalogItemsNamed(
+            String medicationName, UUID hospitalId) {
+        if (medicationName == null || medicationName.isBlank() || hospitalId == null) {
+            return List.of();
+        }
+        return medicationCatalogItemRepository
+            .findByHospital_IdAndActiveTrue(hospitalId, org.springframework.data.domain.Pageable.unpaged())
+            .getContent().stream()
+            .filter(item -> com.example.hms.service.pharmacy.DispenseVerificationService
+                .namesCatalogItem(medicationName, item))
+            .toList();
+    }
+
+    /** QA D935: the item with the lowest paediatric ceiling on file, else the first. */
+    private static com.example.hms.model.medication.MedicationCatalogItem strictestPediatricCeiling(
+            List<com.example.hms.model.medication.MedicationCatalogItem> items) {
+        com.example.hms.model.medication.MedicationCatalogItem strictest = items.get(0);
+        for (com.example.hms.model.medication.MedicationCatalogItem item : items) {
+            java.math.BigDecimal ceiling = item.getPediatricMaxDoseMgPerKg();
+            java.math.BigDecimal best = strictest.getPediatricMaxDoseMgPerKg();
+            if (ceiling != null && (best == null || ceiling.compareTo(best) < 0)) {
+                strictest = item;
+            }
+        }
+        return strictest;
     }
 }

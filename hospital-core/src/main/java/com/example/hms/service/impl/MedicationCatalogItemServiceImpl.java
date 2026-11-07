@@ -134,15 +134,22 @@ public class MedicationCatalogItemServiceImpl implements MedicationCatalogItemSe
     @Override
     @Transactional(readOnly = true)
     public Page<MedicationCatalogItemResponseDTO> search(UUID hospitalId, String query, Pageable pageable) {
-        return catalogRepository.searchByHospital(hospitalId, query, pageable)
-                .map(mapper::toResponseDTO);
+        // A null scope is the verified super-admin's global view (the controller
+        // refuses it for everyone else), searched as the list endpoint lists.
+        Page<MedicationCatalogItem> page = hospitalId == null
+                ? catalogRepository.searchAllActive(query, pageable)
+                : catalogRepository.searchByHospital(hospitalId, query, pageable);
+        return page.map(mapper::toResponseDTO);
     }
 
     @Override
     @Transactional(readOnly = true)
     public Page<MedicationCatalogItemResponseDTO> listByCategory(UUID hospitalId, String category, Pageable pageable) {
-        return catalogRepository.findByHospital_IdAndCategoryAndActiveTrue(hospitalId, category, pageable)
-                .map(mapper::toResponseDTO);
+        // A null scope is the verified super-admin's global view, as on list and search.
+        Page<MedicationCatalogItem> page = hospitalId == null
+                ? catalogRepository.findByCategoryAndActiveTrue(category, pageable)
+                : catalogRepository.findByHospital_IdAndCategoryAndActiveTrue(hospitalId, category, pageable);
+        return page.map(mapper::toResponseDTO);
     }
 
     @Override
@@ -165,6 +172,7 @@ public class MedicationCatalogItemServiceImpl implements MedicationCatalogItemSe
         existing.setCategory(dto.getCategory());
         existing.setEssentialList(dto.isEssentialList());
         existing.setControlled(dto.isControlled());
+        existing.setPediatricMaxDoseMgPerKg(dto.getPediatricMaxDoseMgPerKg());
         existing.setActive(dto.isActive());
         existing.setDescription(dto.getDescription());
 

@@ -97,6 +97,8 @@ public class DispenseServiceImpl implements DispenseService {
     private final RoleValidator roleValidator;
     private final PharmacyServiceSupport support;
     private final DispenseVerificationService dispenseVerificationService;
+    /** QA D964: first expired, first out, on the one-step and the prepared fill. */
+    private final FefoLotPolicy fefoLotPolicy;
 
     /**
      * From config/TimeConfig. Server clock, injectable — a test that has to
@@ -861,6 +863,7 @@ public class DispenseServiceImpl implements DispenseService {
         if (stockLot == null && inventoryItemRepository.existsByPharmacyIdAndActiveTrue(pharmacy.getId())) {
             throw new BusinessException(MessageUtil.resolve("dispense.lot.required"));
         }
+        recordFefoOverride(dto, stockLot);
         DispenseVerificationResult verification =
                 dispenseVerificationService.verify(prescription, stockLot,
                         dto.getPatientScanValue(), dto.getProductScanValue());
@@ -906,6 +909,31 @@ public class DispenseServiceImpl implements DispenseService {
         }
         return second != null && !second.isBlank() ? second : null;
     }
+
+    /**
+     * QA D964: a fill from a later-dated lot while a shorter-dated one could
+     * serve it is refused without a reason; the reason is kept in the fill's
+     * notes ("FEFO: ..."), so the dispense record says why.
+     */
+    private void recordFefoOverride(DispenseRequestDTO dto, StockLot stockLot) {
+        String reason = fefoLotPolicy.requireFefoOrReason(stockLot, dto.getQuantityDispensed(),
+                dto.getFefoOverrideReason());
+        if (reason == null) {
+            return;
+        }
+        String existing = dto.getNotes() == null || dto.getNotes().isBlank() ? null : dto.getNotes().trim();
+        String note = FEFO_NOTE_PREFIX + reason;
+        String combined = existing == null ? note : existing + "\n" + note;
+        if (combined.length() > NOTES_MAX) {
+            throw new BusinessException("pharmacy.fefo.reasonTooLong",
+                    String.valueOf(Math.max(0, NOTES_MAX - (existing == null ? 0 : existing.length() + 1)
+                            - FEFO_NOTE_PREFIX.length())));
+        }
+        dto.setNotes(combined);
+    }
+
+    /** The marker of a FEFO override in a fill's notes (an acronym, the same in every language). */
+    static final String FEFO_NOTE_PREFIX = "FEFO: ";
 
     /** What {@link #validateFill} established, for the half that writes. */
     private record FillContext(Prescription prescription, Patient patient, Pharmacy pharmacy,
@@ -1505,6 +1533,7 @@ public class DispenseServiceImpl implements DispenseService {
         Set<UUID> outstandingBackOrders = outstandingBackOrdersFor(rows);
         Map<UUID, LocalDateTime> lastActions = lastPharmacyActionsFor(rows, latestDecisions);
         Map<UUID, Dispense> preparedFills = openPreparationsFor(rows);
+        Map<UUID, BigDecimal> committed = committedQuantitiesFor(rows);
         LocalDateTime uncollectedBefore = LocalDateTime.now(clock).minus(uncollectedAfter);
         return page.map(p -> {
             Dispense prepared = preparedFills.get(p.getId());
@@ -1512,6 +1541,8 @@ public class DispenseServiceImpl implements DispenseService {
                     latestDecisions.get(p.getId()), lastActions.get(p.getId()),
                     outstandingBackOrders.contains(p.getId()));
             dto.setClaim(claims.get(p.getId()));
+            // QA D1001: the same remainder requireWithinPrescribedQuantity caps a fill at.
+            dto.setRemainingQuantity(FillAccounting.remaining(p, committed.getOrDefault(p.getId(), BigDecimal.ZERO)));
             if (prepared != null) {
                 dto.setReadyForCollection(toReadyForCollection(prepared));
                 // G15 AC-11: the lowest-precedence reason. A status or an
@@ -1548,6 +1579,24 @@ public class DispenseServiceImpl implements DispenseService {
                     queueClaimService.activeAfter(), pageable);
             case ALL -> prescriptionRepository.findWorkQueue(hospitalId, statuses, pageable);
         };
+    }
+
+    /** QA D1001: what each order on the page has committed (fills not cancelled), one query. */
+    private Map<UUID, BigDecimal> committedQuantitiesFor(List<Prescription> prescriptions) {
+        if (prescriptions.isEmpty()) {
+            return Map.of();
+        }
+        List<UUID> ids = prescriptions.stream().map(Prescription::getId).toList();
+        Map<UUID, BigDecimal> committed = new HashMap<>();
+        List<Object[]> rows = dispenseRepository.sumQuantityCommittedByPrescriptionIds(ids);
+        if (rows != null) {
+            for (Object[] row : rows) {
+                if (row != null && row.length == 2 && row[0] instanceof UUID id && row[1] instanceof BigDecimal sum) {
+                    committed.put(id, sum);
+                }
+            }
+        }
+        return committed;
     }
 
     /** G15: the open preparation of each order on the page, one query. */

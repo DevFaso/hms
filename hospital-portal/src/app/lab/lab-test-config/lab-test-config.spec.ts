@@ -2,7 +2,7 @@ import { TestBed, ComponentFixture } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { LabTestConfigComponent } from './lab-test-config';
 
 function mockDefinition(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -415,5 +415,20 @@ describe('LabTestConfigComponent', () => {
     component.cancelDeleteDef();
     expect(component.showDeleteDefConfirm()).toBeFalse();
     expect(component.deletingDef()).toBeNull();
+  });
+
+  it('review of #975: a reflex threshold that is not a number is shown as stored, never as NaN', () => {
+    const translate = TestBed.inject(TranslateService);
+    const instant = spyOn(translate, 'instant').and.callThrough();
+    component.describeCondition({
+      condition: JSON.stringify({ thresholdOperator: '>', thresholdValue: 'abc' }),
+    } as never);
+    expect((instant.calls.mostRecent().args[1] as { value: string }).value).toBe('abc');
+    component.describeCondition({ condition: JSON.stringify({ thresholdOperator: '>' }) } as never);
+    expect((instant.calls.mostRecent().args[1] as { value: string }).value).toBe('');
+    component.describeCondition({
+      condition: JSON.stringify({ thresholdOperator: '>', thresholdValue: 7.5 }),
+    } as never);
+    expect((instant.calls.mostRecent().args[1] as { value: string }).value).not.toContain('NaN');
   });
 });

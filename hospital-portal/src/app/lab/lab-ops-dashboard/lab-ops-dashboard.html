@@ -6,7 +6,10 @@
     </h1>
     @if (summary()) {
       <p class="subtitle">
-        {{ 'LAB_OPS.SNAPSHOT_AS_OF' | translate: { date: summary()!.asOfDate } }}
+        {{
+          'LAB_OPS.SNAPSHOT_AS_OF'
+            | translate: { date: summary()!.asOfDate | serverTime | date: 'mediumDate' }
+        }}
       </p>
     }
   </header>

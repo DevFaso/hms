@@ -48,6 +48,12 @@ public interface PharmacyRepository extends JpaRepository<Pharmacy, UUID> {
             @Param("search") String search,
             Pageable pageable);
 
+    /** Review of #975: the super-admin's global-view search, every tenant's active pharmacies. */
+    @Query("SELECT p FROM Pharmacy p WHERE p.active = true " +
+           "AND (LOWER(p.name) LIKE LOWER(CONCAT('%', :search, '%')) " +
+           "OR LOWER(p.city) LIKE LOWER(CONCAT('%', :search, '%')))")
+    Page<Pharmacy> searchAllActive(@Param("search") String search, Pageable pageable);
+
     Optional<Pharmacy> findByIdAndHospital_Id(UUID id, UUID hospitalId);
 
     Optional<Pharmacy> findByLicenseNumberAndHospital_Id(String licenseNumber, UUID hospitalId);

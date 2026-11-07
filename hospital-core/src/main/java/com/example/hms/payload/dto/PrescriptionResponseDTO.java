@@ -94,6 +94,14 @@ public class PrescriptionResponseDTO {
      */
     private boolean controlledSubstance;
     private boolean requiresCosign;
+    /**
+     * QA D934: drafted by a nurse or a midwife (no signature of her own) and
+     * still unsigned, so a doctor of the order's hospital signs it. Lets the
+     * prescribing screen offer that doctor the Sign action.
+     */
+    private boolean awaitingPhysicianSignature;
+    /** QA D922: the catalogue item the order was written from (or resolved to), so an edit keeps it. */
+    private java.util.UUID medicationCatalogItemId;
     /** QA D757: a take-home order outlives its stay; every other stay order ends at discharge. */
     private boolean takeHome;
     private java.time.LocalDateTime twoFactorVerifiedAt;

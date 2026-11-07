@@ -43,7 +43,12 @@ import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.
 import { PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { fromServerDateTime, localDateString, toServerDateTime } from '../shared/date-utils';
+import {
+  fromServerDateTime,
+  isServerTimeToday,
+  localDateString,
+  toServerDateTime,
+} from '../shared/date-utils';
 import {
   EncounterService,
   EncounterResponse,
@@ -56,6 +61,8 @@ import { NursingIntakeFormComponent } from './nursing-intake-form/nursing-intake
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { CdsCardListComponent } from '../shared/cds-card/cds-card.component';
 import { CdsCard } from '../shared/cds-card/cds-card.model';
+import { MedicationRoutePipe } from '../shared/pipes/medication-route.pipe';
+import { CloseUnseenDialogComponent } from '../reception/close-unseen-dialog/close-unseen-dialog.component';
 
 type FilterMode = 'me' | 'unit' | 'all';
 type SectionType =
@@ -83,11 +90,13 @@ export function localInputToUtcIso(value: string | undefined | null): string | u
   selector: 'app-nurse-station',
   standalone: true,
   imports: [
+    MedicationRoutePipe,
     CommonModule,
     FormsModule,
     RouterLink,
     TranslateModule,
     TriageFormComponent,
+    CloseUnseenDialogComponent,
     NursingIntakeFormComponent,
     EnumLabelPipe,
     PatientPickerComponent,
@@ -977,6 +986,34 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
         [...arrived, ...triage].filter((e) => e.encounterType !== 'INPATIENT'),
       ),
     );
+  }
+
+  /**
+   * QA D954: the visit the nurse is closing as "left without being seen"
+   * (the reception's close-unseen dialog, reused; the endpoint admits the nurse).
+   */
+  readonly closeUnseenEncounter = signal<EncounterResponse | null>(null);
+
+  openCloseUnseen(encounter: EncounterResponse): void {
+    this.closeUnseenEncounter.set(encounter);
+  }
+
+  onUnseenVisitClosed(): void {
+    this.closeUnseenEncounter.set(null);
+    this.loadAll();
+  }
+
+  /**
+   * QA D949: a dose whose slot is not today shows its date, so tomorrow's
+   * 23:04 never reads as a time to give today.
+   */
+  isDueToday(dueTime: string | null | undefined): boolean {
+    return isServerTimeToday(dueTime);
+  }
+
+  /** QA D929/D949: Give/Hold/Refuse only on a dose that can be recorded now. */
+  canRecordDose(m: NurseMedicationTask): boolean {
+    return m.status === 'DUE' || m.status === 'OVERDUE';
   }
 
   /** Open the triage form on the exact encounter listed (no lookup needed). */

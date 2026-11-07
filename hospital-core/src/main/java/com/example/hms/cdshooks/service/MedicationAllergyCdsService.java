@@ -226,7 +226,7 @@ public class MedicationAllergyCdsService implements CdsHookService {
             summary,
             detail,
             CdsCard.Indicator.CRITICAL,
-            new Source(SOURCE_LABEL, null, null),
+            new Source(text.get("cds.source.allergy", SOURCE_LABEL), null, null),
             null, null, null, java.util.UUID.randomUUID().toString()
         );
     }
@@ -241,7 +241,7 @@ public class MedicationAllergyCdsService implements CdsHookService {
                         + "Check what the reaction was before giving it. This is an advisory: the order is not blocked.",
                     medication, allergen),
                 CdsCard.Indicator.WARNING,
-                new Source(SOURCE_LABEL, null, null),
+                new Source(text.get("cds.source.allergy", SOURCE_LABEL), null, null),
                 null, null, null, java.util.UUID.randomUUID().toString()));
     }
 

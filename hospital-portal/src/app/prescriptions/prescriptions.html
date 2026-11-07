@@ -828,14 +828,33 @@
         </div>
         <div class="field">
           <label for="rx-medName">{{ 'PRESCRIPTIONS.MEDICATION_NAME' | translate }} *</label>
+          <!-- QA D922/D935: picking a catalogue item sends its id, so the
+               catalogue's controlled flag and paediatric ceiling apply. -->
           <input
             id="rx-medName"
             type="text"
-            [(ngModel)]="form.medicationName"
+            list="rx-med-catalog"
+            autocomplete="off"
+            [ngModel]="form.medicationName"
+            (ngModelChange)="onMedicationNameChange($event)"
             [readonly]="editingSigned()"
             [placeholder]="'PRESCRIPTIONS.MEDICATION_PLACEHOLDER' | translate"
             required
           />
+          <datalist id="rx-med-catalog">
+            @for (item of catalogOptions(); track item.id) {
+              <option [value]="catalogLabel(item)"></option>
+            }
+          </datalist>
+          @if (pickedCatalogItem()?.controlled) {
+            <p
+              class="field-hint field-hint-controlled"
+              data-testid="rx-controlled-hint"
+              role="status"
+            >
+              {{ 'PRESCRIPTIONS.CONTROLLED_PICKED_HINT' | translate }}
+            </p>
+          }
         </div>
         <div class="form-row">
           <div class="field">

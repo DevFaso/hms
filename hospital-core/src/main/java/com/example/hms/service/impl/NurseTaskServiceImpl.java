@@ -140,6 +140,11 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     static final Set<String> HANDOFF_DIRECTIONS = Set.of("SHIFT_CHANGE", "WARD_TRANSFER", ORDER_TYPE_PROCEDURE, "BREAK_COVER");
     private static final String STATUS_OVERDUE = "OVERDUE";
     private static final String STATUS_DUE = "DUE";
+    /**
+     * QA D949: the next dose exists but its slot is more than the early
+     * window away (tomorrow's dose of a daily order). Not due, not counted.
+     */
+    private static final String STATUS_UPCOMING = "UPCOMING";
     private static final String STATUS_COMPLETED = "COMPLETED";
     private static final String STATUS_PENDING = "PENDING";
     /** How far before now a new task may be dated (a shift's worth of back-entry). */
@@ -322,11 +327,16 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         for (Prescription rx : prescriptions) {
             if (!onWardMar(rx, closedStays, stay)) continue;
 
-            String marStatus = resolveMarStatus(rx, now);
+            // Review of #975: the closed-dose history is read once per row and
+            // answers the due time, the status and the last outcome.
+            Optional<MedicationAdministrationRecord> lastClosed = lastClosedDose(rx);
+            LocalDateTime dueTime = computeMedicationDueTime(rx, now, lastClosed);
+            String marStatus = resolveMarStatus(dueTime, now);
             if (!isFilteredOut(statusFilter, marStatus)) {
                 if (allergies == null) {
                     allergies = patientAllergyRepository.findByPatient_Id(ctx.patientId());
                 }
+                boolean controlled = pharmacistVerificationService.isControlledSubstance(rx);
                 result.add(NurseMedicationTaskResponseDTO.builder()
                     .id(rx.getId())
                     .patientId(ctx.patientId())
@@ -334,10 +344,13 @@ public class NurseTaskServiceImpl implements NurseTaskService {
                     .medication(rx.getMedicationName())
                     .dose(buildDoseDisplay(rx))
                     .route(rx.getRoute())
-                    .dueTime(computeMedicationDueTime(rx, now))
+                    .routeCode(com.example.hms.service.emar.MedicationRoutes.canonical(rx.getRoute()))
+                    .dueTime(dueTime)
                     .status(marStatus)
+                    .lastOutcome(lastClosed.map(r -> r.getStatus().name()).orElse(null))
+                    .controlledSubstance(controlled)
                     .requiresPharmacistVerification(
-                        pharmacistVerificationService.requiresVerification(rx))
+                        pharmacistVerificationService.requiresVerification(rx, controlled))
                     .pharmacistVerified(pharmacistVerificationService.isVerified(rx))
                     .cdsAdvisories(allergyAdvisories(rx.getMedicationName(), allergies))
                     .build());
@@ -398,6 +411,11 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     /** QA D136: the shared rule ({@link com.example.hms.service.InpatientOrderEnd}). */
     static boolean endedWithAStay(Prescription rx, List<Admission> closedStays) {
         return com.example.hms.service.InpatientOrderEnd.endedWithAStay(rx, closedStays);
+    }
+
+    /** DUE or OVERDUE: a dose the nurse can record now (QA D949). */
+    private static boolean isDueStatus(String marStatus) {
+        return STATUS_DUE.equals(marStatus) || STATUS_OVERDUE.equals(marStatus);
     }
 
     /** Returns true when a status filter is active and the given status does not match it. */
@@ -469,6 +487,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
                 .medication(marRecord.getMedicationName())
                 .dose(marRecord.getDose())
                 .route(marRecord.getRoute())
+                .routeCode(com.example.hms.service.emar.MedicationRoutes.canonical(marRecord.getRoute()))
                 .dueTime(marRecord.getScheduledTime())
                 .status(normalizedStatus)
                 .build();
@@ -645,6 +664,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .medication(task.getMedication())
             .dose(task.getDose())
             .route(task.getRoute())
+            .routeCode(task.getRouteCode())
             .dueTime(task.getDueTime())
             .status(status)
             .build();
@@ -1124,7 +1144,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
                 switch (marStatus) {
                     case STATUS_DUE -> due++;
                     case STATUS_OVERDUE -> overdue++;
-                    default -> { /* COMPLETED — not counted */ }
+                    default -> { /* COMPLETED or UPCOMING — not counted (QA D949) */ }
                 }
             }
         }
@@ -1137,11 +1157,30 @@ public class NurseTaskServiceImpl implements NurseTaskService {
 
     /** Determine MAR status from a Prescription's creation time (simplified schedule). */
     private String resolveMarStatus(Prescription rx, LocalDateTime now) {
-        LocalDateTime dueBy = computeMedicationDueTime(rx, now);
+        return resolveMarStatus(computeMedicationDueTime(rx, now), now);
+    }
+
+    private static String resolveMarStatus(LocalDateTime dueBy, LocalDateTime now) {
         if (dueBy == null) return STATUS_COMPLETED;
         // A dose may be given up to an hour either side of its slot (D154).
         if (dueBy.plus(EARLY_ADMINISTRATION_WINDOW).isBefore(now)) return STATUS_OVERDUE;
+        // QA D949: a slot beyond the early window cannot be given yet (the
+        // administer call refuses it), so it is not "due".
+        if (dueBy.isAfter(now.plus(EARLY_ADMINISTRATION_WINDOW))) return STATUS_UPCOMING;
         return STATUS_DUE;
+    }
+
+    /**
+     * QA D929: the outcome of the last closed dose (GIVEN, HELD, REFUSED,
+     * MISSED), or null when none was recorded. A COMPLETED row only says no
+     * dose is left; this says what happened to the last one, so a held or
+     * refused dose is never read as given.
+     */
+    private Optional<MedicationAdministrationRecord> lastClosedDose(Prescription rx) {
+        if (rx.getId() == null) return Optional.empty();
+        return marRepository.findByPrescription_IdOrderByScheduledTimeDesc(rx.getId()).stream()
+            .filter(r -> r.getStatus() != MedicationAdministrationStatus.PENDING)
+            .findFirst();
     }
 
     /**
@@ -1157,16 +1196,16 @@ public class NurseTaskServiceImpl implements NurseTaskService {
      * same dose being recorded again.
      */
     private LocalDateTime computeMedicationDueTime(Prescription rx, LocalDateTime now) {
+        return computeMedicationDueTime(rx, now, lastClosedDose(rx));
+    }
+
+    private static LocalDateTime computeMedicationDueTime(Prescription rx, LocalDateTime now,
+                                                          Optional<MedicationAdministrationRecord> lastClosed) {
         // QA D154: the first dose is due when the order starts, which is its
         // signature (or, failing that, its creation), not four hours later.
         LocalDateTime start = rx.getSignedAt() != null ? rx.getSignedAt() : rx.getCreatedAt();
         LocalDateTime first = start != null ? start : now.plusHours(1);
-        if (rx.getId() == null) return first;
-        Optional<MedicationAdministrationRecord> lastClosed = marRepository
-            .findByPrescription_IdOrderByScheduledTimeDesc(rx.getId()).stream()
-            .filter(r -> r.getStatus() != MedicationAdministrationStatus.PENDING)
-            .findFirst();
-        if (lastClosed.isEmpty()) return first;
+        if (rx.getId() == null || lastClosed.isEmpty()) return first;
         Integer interval = MarDoseSchedule.intervalHours(rx.getFrequency());
         if (interval == null) return null;
         return lastClosed.get().getScheduledTime().plusHours(interval);
@@ -1331,6 +1370,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .medication(rx.getMedicationName())
             .dose(buildDoseDisplay(rx))
             .route(rx.getRoute())
+            .routeCode(com.example.hms.service.emar.MedicationRoutes.canonical(rx.getRoute()))
             .dueTime(saved.getScheduledTime())
             .status(status.name())
             .build();
@@ -1359,6 +1399,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .medication(rx.getMedicationName())
             .dose(saved.getDose())
             .route(saved.getRoute())
+            .routeCode(com.example.hms.service.emar.MedicationRoutes.canonical(saved.getRoute()))
             .dueTime(saved.getScheduledTime())
             .status(status.name())
             .build();
@@ -1563,7 +1604,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .findByPatient_IdAndHospital_Id(patient.getId(), hospitalId)
             .stream()
             .filter(rx -> ACTIVE_RX_STATUSES.contains(rx.getStatus()))
-            .filter(rx -> !STATUS_COMPLETED.equals(resolveMarStatus(rx, now)))
+            // QA D949: due means DUE or OVERDUE, never a later slot or a finished course.
+            .filter(rx -> isDueStatus(resolveMarStatus(rx, now)))
             .count();
 
         Department department = JpaProxyUtils.safeInit(

@@ -4,7 +4,12 @@ import { Router } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, Subject, Subscription, throwError } from 'rxjs';
 import { localInputToUtcIso, NurseStationComponent } from './nurse-station';
-import { NurseTaskService, NurseFlowBoard, NurseHandoff } from '../services/nurse-task.service';
+import {
+  NurseTaskService,
+  NurseFlowBoard,
+  NurseHandoff,
+  NurseMedicationTask,
+} from '../services/nurse-task.service';
 import { PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { EncounterService } from '../services/encounter.service';
@@ -370,6 +375,23 @@ describe('NurseStationComponent — two-tier polling', () => {
         .toBeTruthy();
     });
 
+    it('QA D954: the nurse closes an unseen visit from the triage card', () => {
+      authSpy.hasAnyRole.and.callFake((r: string[]) => r.includes('ROLE_NURSE'));
+      component.loadFlow$().subscribe();
+      component['pendingLoads'].set(0);
+      fixture.detectChanges();
+      const btn = fixture.nativeElement.querySelector(
+        '[data-testid="awaiting-triage-lwbs"]',
+      ) as HTMLButtonElement;
+      expect(btn).withContext('LWBS action on the triage card').toBeTruthy();
+      btn.click();
+      fixture.detectChanges();
+      expect(component.closeUnseenEncounter()?.id).toBe('e1');
+      expect(fixture.nativeElement.querySelector('app-close-unseen-dialog')).toBeTruthy();
+      component.onUnseenVisitClosed();
+      expect(component.closeUnseenEncounter()).toBeNull();
+    });
+
     it('a non-nurse gets no triage list and no encounter query', () => {
       component.loadFlow$().subscribe();
       expect(encounterSpy.list).not.toHaveBeenCalled();
@@ -378,6 +400,105 @@ describe('NurseStationComponent — two-tier polling', () => {
   });
 
   /* ── P0 #1: real SBAR handoffs ─────────────────────────────── */
+
+  describe('MAR rows (QA D929, D949, D950, D922, D993)', () => {
+    // No patientId: the name renders as text, not a router link (the spec has no router).
+    const rows = [
+      {
+        id: 'm1',
+        patientName: 'Awa',
+        medication: 'Aspirine',
+        dose: '250 mg',
+        route: 'ORAL',
+        dueTime: '2030-01-02T23:04:00',
+        status: 'UPCOMING',
+        lastOutcome: 'HELD',
+      },
+      {
+        id: 'm2',
+        patientName: 'Awa',
+        medication: 'Morphine',
+        dose: '2 mg',
+        route: 'INTRAVENOUS',
+        dueTime: '2030-01-01T10:00:00',
+        status: 'COMPLETED',
+        lastOutcome: 'REFUSED',
+        controlledSubstance: true,
+      },
+      {
+        id: 'm3',
+        patientName: 'Awa',
+        medication: 'Paracétamol',
+        dose: '1 g',
+        route: 'PO',
+        dueTime: '2030-01-01T10:00:00',
+        status: 'DUE',
+      },
+    ];
+
+    function render(): HTMLElement {
+      nurseServiceSpy.getMedicationMAR.and.returnValue(
+        of(rows as unknown as NurseMedicationTask[]),
+      );
+      component.refresh();
+      component.activeSection.set('medications');
+      component['pendingLoads'].set(0);
+      fixture.detectChanges();
+      return fixture.nativeElement as HTMLElement;
+    }
+
+    it('only a dose that can be recorded now offers Give, Hold and Refuse', () => {
+      const el = render();
+      const actionCells = Array.from(el.querySelectorAll('tr.data-row td.action-cell'));
+      expect(actionCells.map((td) => !!td.querySelector('.action-give'))).toEqual([
+        false,
+        false,
+        true,
+      ]);
+      expect(actionCells[1].textContent).toContain('NURSE.COURSE_ENDED');
+      expect(actionCells[1].textContent).not.toContain('NURSE.DONE');
+    });
+
+    it('a held or refused last dose is shown as such, never as given', () => {
+      const el = render();
+      expect(el.querySelector('[data-testid="med-last-outcome-m1"]')?.textContent).toContain(
+        'NURSE.LAST_DOSE',
+      );
+      expect(component.canRecordDose(rows[0] as never)).toBeFalse();
+      expect(component.canRecordDose(rows[2] as never)).toBeTrue();
+    });
+
+    it('the route reads as its translated label, whatever way it was stored', () => {
+      const el = render();
+      const text = el.textContent ?? '';
+      expect(text).toContain('PRESCRIPTIONS.ROUTES.IV');
+      expect(text).toContain('PRESCRIPTIONS.ROUTES.PO');
+      expect(text).not.toContain('INTRAVENOUS');
+    });
+
+    it('a controlled substance is marked on its row', () => {
+      const el = render();
+      expect(el.querySelector('[data-testid="med-controlled-m2"]')).toBeTruthy();
+      expect(el.querySelector('[data-testid="med-controlled-m3"]')).toBeNull();
+    });
+
+    it('a dose due on another day shows its date', () => {
+      expect(component.isDueToday('2030-01-02T23:04:00')).toBeFalse();
+      const now = new Date();
+      const pad = (n: number) => String(n).padStart(2, '0');
+      const todayUtc = `${now.getUTCFullYear()}-${pad(now.getUTCMonth() + 1)}-${pad(now.getUTCDate())}T${pad(now.getUTCHours())}:${pad(now.getUTCMinutes())}:00`;
+      expect(component.isDueToday(todayUtc)).toBeTrue();
+    });
+
+    it('the hold/refuse reason box has a label', () => {
+      component.promptHoldRefuse('m3', 'HELD');
+      fixture.detectChanges();
+      const el = fixture.nativeElement as HTMLElement;
+      const box = el.querySelector('#mar-reason-input');
+      expect(box).toBeTruthy();
+      expect(el.querySelector('label[for="mar-reason-input"]')).toBeTruthy();
+    });
+  });
 
   it('submitCreateHandoff requires patient and direction before posting', () => {
     component.openHandoffCreate();

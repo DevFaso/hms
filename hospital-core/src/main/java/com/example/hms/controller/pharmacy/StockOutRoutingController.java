@@ -35,6 +35,8 @@ import java.util.UUID;
 public class StockOutRoutingController {
 
     private final StockOutRoutingService stockOutRoutingService;
+    /** QA D966: the copy "Imprimer pour le patient" hands over. */
+    private final com.example.hms.service.pharmacy.PrescriptionCopyPdfService prescriptionCopyPdfService;
 
     @GetMapping("/stock-check/{prescriptionId}")
     @PreAuthorize("hasAnyRole('PHARMACIST', 'PHARMACY_VERIFIER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
@@ -57,6 +59,28 @@ public class StockOutRoutingController {
             @Valid @RequestBody RoutingDecisionRequestDTO dto) {
         RoutingDecisionResponseDTO result = stockOutRoutingService.routeToPartner(dto.getPrescriptionId(), dto);
         return ResponseEntity.status(201).body(ApiResponseWrapper.success(result));
+    }
+
+    @GetMapping(value = "/print-for-patient/{prescriptionId}/document",
+            produces = org.springframework.http.MediaType.APPLICATION_PDF_VALUE)
+    @PreAuthorize("hasAnyRole('PHARMACIST', 'PHARMACY_VERIFIER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    @Operation(summary = "Printed prescription copy",
+            description = "QA D966: the PDF the patient takes to an outside pharmacy, once printed for them")
+    @ApiResponse(responseCode = "200", description = "PDF returned")
+    @ApiResponse(responseCode = "400", description = "The prescription was not printed for the patient")
+    public ResponseEntity<byte[]> printedCopy(@PathVariable UUID prescriptionId) {
+        return printedCopyResponse(prescriptionCopyPdfService.copyForStaff(prescriptionId), prescriptionId);
+    }
+
+    /** Inline, never cached (it carries the patient's name and their medication). */
+    public static ResponseEntity<byte[]> printedCopyResponse(byte[] pdf, UUID prescriptionId) {
+        return ResponseEntity.ok()
+                .cacheControl(org.springframework.http.CacheControl.noStore())
+                .contentType(org.springframework.http.MediaType.APPLICATION_PDF)
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
+                        org.springframework.http.ContentDisposition.inline()
+                                .filename("ordonnance-" + prescriptionId + ".pdf").build().toString())
+                .body(pdf);
     }
 
     @PostMapping("/print-for-patient/{prescriptionId}")

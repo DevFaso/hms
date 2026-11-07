@@ -204,6 +204,18 @@
                   {{ 'PORTAL.MEDICATIONS.PRESCRIBED_BY' | translate }}
                   {{ rx.prescribedBy || ('PORTAL.MEDICATIONS.PROVIDER' | translate) }}
                 </span>
+                @if (rx.status === 'PRINTED_FOR_PATIENT') {
+                  <!-- QA D966: the copy the pharmacy printed, to take to a pharmacy -->
+                  <button
+                    type="button"
+                    class="refill-btn"
+                    [attr.data-testid]="'rx-printed-copy-' + rx.id"
+                    (click)="openPrintedCopy(rx.id, $event)"
+                    (keydown.enter)="$event.stopPropagation()"
+                  >
+                    {{ 'PORTAL.MEDICATIONS.PRINTED_COPY' | translate }}
+                  </button>
+                }
               </div>
               <span class="portal-status-chip" [attr.data-status]="rx.status">{{
                 rx.status | enumLabel: 'prescriptionStatus'

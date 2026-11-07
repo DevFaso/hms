@@ -29,6 +29,7 @@ import {
   StockWitnessCandidate,
 } from '../services/pharmacy.service';
 import { AuthService } from '../auth/auth.service';
+import { PrintLabelService } from '../services/print-label.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { OfflineDispenseQueueService } from './offline-dispense-queue.service';
 import { PrescriptionClarificationComponent } from '../shared/prescription-clarification/prescription-clarification.component';
@@ -141,6 +142,8 @@ export const UNRECOGNISED_ATTENTION = {
 })
 export class DispensingComponent implements OnInit, OnDestroy {
   private readonly svc = inject(PharmacyService);
+  /** QA D966: opens a fetched PDF for printing. */
+  private readonly printService = inject(PrintLabelService);
   private readonly auth = inject(AuthService);
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
@@ -570,7 +573,9 @@ export class DispensingComponent implements OnInit, OnDestroy {
     this.svc.listDispensableLots(rxId, this.selectedPharmacyId).subscribe({
       next: (res) => {
         // A late answer for a prescription that is no longer open is dropped.
-        if (this.selectedPrescription?.id === rxId) this.stockLots.set(res?.data ?? []);
+        if (this.selectedPrescription?.id !== rxId) return;
+        this.stockLots.set(res?.data ?? []);
+        this.preselectFefoLot();
       },
       error: () => this.stockLots.set([]),
     });
@@ -587,6 +592,49 @@ export class DispensingComponent implements OnInit, OnDestroy {
       .filter((lot) => lot.remainingQuantity > 0 && !this.isExpired(lot))
       .sort((a, b) => a.expiryDate.localeCompare(b.expiryDate)),
   );
+
+  /**
+   * QA D964: first expired, first out. The shortest-dated usable lot that
+   * covers the fill, else the shortest-dated one; pre-selected when the lots
+   * arrive, unless the pharmacist already chose.
+   */
+  fefoLot(): StockLotResponse | undefined {
+    const lots = this.dispensableLots();
+    const qty = Number(this.form.quantityDispensed) || 0;
+    return lots.find((lot) => lot.remainingQuantity >= qty) ?? lots[0];
+  }
+
+  private preselectFefoLot(): void {
+    const lot = this.fefoLot();
+    if (lot && !this.form.stockLotId) {
+      this.form.stockLotId = lot.id;
+      this.onLotChange();
+    }
+  }
+
+  /**
+   * QA D964: the shorter-dated lot of the same item that could serve this
+   * fill instead of the chosen one (the server's FefoLotPolicy rule). While
+   * it exists the fill needs a reason. A method, not a computed: it reads the
+   * quantity typed in the form, which is not a signal.
+   */
+  earlierLot(): StockLotResponse | undefined {
+    const chosen = this.selectedLot();
+    if (!chosen) return undefined;
+    const qty = Number(this.form.quantityDispensed) || 0;
+    return this.dispensableLots().find(
+      (lot) =>
+        lot.id !== chosen.id &&
+        lot.inventoryItemId === chosen.inventoryItemId &&
+        lot.expiryDate < chosen.expiryDate &&
+        lot.remainingQuantity >= qty,
+    );
+  }
+
+  /** QA D964: a FEFO skip with no reason keeps Dispense and Ready disabled. */
+  fefoReasonMissing(): boolean {
+    return !!this.earlierLot() && !this.form.fefoOverrideReason?.trim();
+  }
 
   isExpired(lot: StockLotResponse): boolean {
     if (!lot?.expiryDate) return false;
@@ -628,7 +676,12 @@ export class DispensingComponent implements OnInit, OnDestroy {
   printLotLabel(): void {
     const lotId = this.form.stockLotId;
     if (!lotId) return;
-    window.open(`/pharmacy/stock-lots/${lotId}/label.pdf`, '_blank', 'noopener');
+    // QA D966: fetched with the session (the interceptors add /api and the
+    // token), then opened for printing; a refusal is said, not a blank tab.
+    this.svc.getStockLotLabel(lotId).subscribe({
+      next: (blob) => this.printService.openForPrint(blob),
+      error: () => this.toast.error(this.translate.instant('PHARMACY.PRINT_LABEL_FAILED')),
+    });
   }
 
   onPharmacyChange(): void {
@@ -767,6 +820,18 @@ export class DispensingComponent implements OnInit, OnDestroy {
     });
   }
 
+  /** QA D1001: what is still owed on the order; the prescribed amount only when the server sent none. */
+  remainingQuantity(rx: WorkQueuePrescription): number {
+    return rx.remainingQuantity ?? rx.quantity ?? 0;
+  }
+
+  /** QA D1001: true when part of the order was already dispensed, so the queue shows both figures. */
+  isPartlyDispensed(rx: WorkQueuePrescription): boolean {
+    return (
+      rx.remainingQuantity != null && rx.quantity != null && rx.remainingQuantity < rx.quantity
+    );
+  }
+
   private openForm(rx: WorkQueuePrescription): void {
     this.selectedPrescription = rx;
     this.form = this.emptyForm();
@@ -774,10 +839,12 @@ export class DispensingComponent implements OnInit, OnDestroy {
     this.form.patientId = rx.patient?.id ?? '';
     this.form.pharmacyId = this.selectedPharmacyId;
     this.form.medicationName = rx.medicationName ?? '';
-    this.form.quantityRequested = rx.quantity ?? 0;
-    // QA D432: the fill starts at what was prescribed, not at 0 (which kept
-    // Dispense disabled until the pharmacist retyped the quantity).
-    this.form.quantityDispensed = rx.quantity ?? 0;
+    // QA D432 then D1001: the fill starts at what is still owed on the order
+    // (the server's ceiling), not at 0 and not at the full prescribed amount,
+    // which a partly filled order refuses ("il reste au plus 10").
+    const owed = this.remainingQuantity(rx);
+    this.form.quantityRequested = owed;
+    this.form.quantityDispensed = owed;
     this.form.dispensedBy = this.auth.currentProfile()?.id ?? '';
     this.verifyAttested.set(false);
     this.showForm.set(true);
@@ -797,6 +864,12 @@ export class DispensingComponent implements OnInit, OnDestroy {
     }
     if (this.verifyAttested()) {
       body.verifiedBy = this.form.dispensedBy;
+    }
+    // QA D964: the reason travels only when a shorter-dated lot was skipped.
+    if (this.earlierLot()) {
+      body.fefoOverrideReason = this.form.fefoOverrideReason?.trim();
+    } else {
+      delete body.fefoOverrideReason;
     }
     return body;
   }

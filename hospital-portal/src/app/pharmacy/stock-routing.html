@@ -169,15 +169,29 @@
           </span>
         </div>
       </div>
-      <!-- Routing options (only when out of stock) -->
-      @if (!stockResult()!.sufficient) {
+      <!-- QA D966: an order printed for the patient offers its copy, not the
+           routing buttons that would now be refused -->
+      @if (isPrinted()) {
+        <div class="routing-options" data-testid="printed-copy-panel">
+          <p>{{ 'PHARMACY.PRINTED_COPY_HINT' | translate }}</p>
+          <button class="btn btn-secondary" (click)="reprintCopy()" data-testid="reprint-copy">
+            {{ 'PHARMACY.REPRINT_COPY' | translate }}
+          </button>
+        </div>
+      } @else if (stockResult()!.routable === false) {
+        <p class="muted" data-testid="not-routable">
+          {{ 'PHARMACY.NOT_ROUTABLE_HINT' | translate }}
+        </p>
+      }
+      <!-- Routing options (only when out of stock and the order can still be routed) -->
+      @if (!stockResult()!.sufficient && stockResult()!.routable !== false) {
         <div class="routing-options">
           <h3>{{ 'PHARMACY.ROUTING_OPTIONS' | translate }}</h3>
           <div class="option-buttons">
             <button
               class="btn btn-warning"
               (click)="openBackOrderForm()"
-              [disabled]="saving() || !scopeReady()"
+              [disabled]="saving() || !canRoute()"
               data-testid="open-back-order"
             >
               {{ 'PHARMACY.BACK_ORDER' | translate }}
@@ -185,7 +199,7 @@
             <button
               class="btn btn-secondary"
               (click)="printForPatient()"
-              [disabled]="saving() || !scopeReady()"
+              [disabled]="saving() || !canRoute()"
               data-testid="print-for-patient"
             >
               {{ 'PHARMACY.PRINT_FOR_PATIENT' | translate }}
@@ -228,7 +242,7 @@
                         <button
                           class="btn btn-sm btn-primary"
                           (click)="openPartnerForm(partner)"
-                          [disabled]="saving() || !partner.hasOnFormulary || !scopeReady()"
+                          [disabled]="saving() || !partner.hasOnFormulary || !canRoute()"
                           [attr.data-testid]="'route-here-' + partner.pharmacyId"
                         >
                           {{ 'PHARMACY.ROUTE_HERE' | translate }}
@@ -370,7 +384,16 @@
                   {{ d.routingType | enumLabel: 'routingType' }}
                 </span>
               </td>
-              <td>{{ d.targetPharmacyName || '—' }}</td>
+              <td>
+                {{ d.targetPharmacyName || '—' }}
+                <!-- QA D1001: how much this decision routed, printed or back-ordered
+                     (the remainder at the time, never the full prescribed amount). -->
+                @if (d.remainingQuantity !== null && d.remainingQuantity !== undefined) {
+                  <span class="cell-sub" [attr.data-testid]="'routing-qty-' + d.id">{{
+                    'PHARMACY.ROUTED_QUANTITY' | translate: { qty: d.remainingQuantity }
+                  }}</span>
+                }
+              </td>
               <td>
                 <span class="badge" [ngClass]="statusBadgeClass(d.status)">
                   {{ d.status | enumLabel: 'status' }}

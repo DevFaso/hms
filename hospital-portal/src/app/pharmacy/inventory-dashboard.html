@@ -148,12 +148,18 @@
 
   <!-- Reorder Alerts Tab -->
   @if (activeTab() === 'alerts') {
-    <div class="alerts-header">
-      <button class="btn-secondary" (click)="triggerReorderAlerts()">
-        <span class="material-symbols-outlined">notifications_active</span>
-        {{ 'PHARMACY.TRIGGER_ALERTS' | translate }}
-      </button>
-    </div>
+    @if (canTriggerAlerts()) {
+      <div class="alerts-header">
+        <button
+          class="btn-secondary"
+          data-testid="trigger-reorder-alerts"
+          (click)="triggerReorderAlerts()"
+        >
+          <span class="material-symbols-outlined">notifications_active</span>
+          {{ 'PHARMACY.TRIGGER_ALERTS' | translate }}
+        </button>
+      </div>
+    }
     @if (alertsLoading()) {
       <div class="loading-state">
         <div class="spinner"></div>

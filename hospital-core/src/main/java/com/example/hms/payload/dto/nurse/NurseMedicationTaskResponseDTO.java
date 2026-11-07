@@ -20,13 +20,30 @@ public class NurseMedicationTaskResponseDTO {
     private String medication;
     private String dose;
     private String route;
+    /**
+     * QA D950: the route as one of the prescribing form's codes (PO, IV, IM,
+     * SC, SL, PR, TOP, INH, NEB) whatever way it was stored ("ORAL",
+     * "INTRAVENOUS"), so the screen shows it in the reader's language; null
+     * when the stored text is not a known route.
+     */
+    private String routeCode;
     private LocalDateTime dueTime;
+    /** DUE, OVERDUE, UPCOMING (next slot not yet open, QA D949) or COMPLETED (no dose left). */
     private String status;
+    /** QA D929: GIVEN, HELD, REFUSED or MISSED for the last closed dose; null when none. */
+    private String lastOutcome;
 
     /* ── Pharmacist verification (Tier 2 item 33) ───────────────────────── */
     //
     // Both flags are on the task, not derived in the UI, so the nurse sees
     // WHY a dose is blocked before pressing the button rather than after.
+
+    /**
+     * QA D922: a controlled substance (the prescriber's tick or the hospital
+     * catalogue's flag), shown on the MAR row so it is never given as an
+     * ordinary drug.
+     */
+    private boolean controlledSubstance;
 
     /** True when this medication cannot be given until a pharmacist verifies it. */
     private boolean requiresPharmacistVerification;

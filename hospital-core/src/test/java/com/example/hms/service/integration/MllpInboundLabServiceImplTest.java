@@ -54,6 +54,8 @@ class MllpInboundLabServiceImplTest {
     @Mock private IntegrationMessageRecorder messageRecorder;
     @Mock private AuditEventLogService auditEventLogService;
     @Mock private com.example.hms.service.CriticalValueNotificationService criticalValueNotificationService;
+    /** Review of #975: the HL7 auto-release announces through the service's one choke point. */
+    @Mock private com.example.hms.service.LabResultService labResultService;
     // The real unit-matching rule, not a stub: the auto-release gate asks it.
     @org.mockito.Spy private com.example.hms.mapper.LabResultMapper labResultMapper =
         new com.example.hms.mapper.LabResultMapper();
@@ -317,6 +319,73 @@ class MllpInboundLabServiceImplTest {
     }
 
     @Test
+    @DisplayName("QA D962 — a tube the lab rejected takes no result from the analyser that still ran it")
+    void rejectedWhenTheSpecimenWasRejected() {
+        specimen.setStatus(com.example.hms.enums.LabSpecimenStatus.REJECTED);
+        when(specimenRepository.findByAccessionNumber("ACC-1")).thenReturn(Optional.of(specimen));
+
+        MllpInboundOutcome outcome = service.processOruR01(
+            List.of(observation("ACC-1", "5.4")), hospital, "APP", "FAC",
+            "MSG-CTRL-REJ", "MSH|...\r");
+
+        assertThat(outcome).isEqualTo(MllpInboundOutcome.REJECTED_INVALID);
+        verify(labResultRepository, never()).save(any());
+        verify(messageRecorder).recordMessage(
+            any(), any(), any(), any(), any(),
+            eq(IntegrationMessageStatus.FAILED), eq("specimen rejected"));
+    }
+
+    @Test
+    @DisplayName("Review of #975 — a tube rejected while the ORU was being read takes no result either")
+    void rejectedWhenTheSpecimenWasRejectedSinceItWasRead() {
+        specimen.setStatus(com.example.hms.enums.LabSpecimenStatus.RECEIVED);
+        when(specimenRepository.findByAccessionNumber("ACC-1")).thenReturn(Optional.of(specimen));
+        when(specimenRepository.findStatusById(specimen.getId()))
+            .thenReturn(com.example.hms.enums.LabSpecimenStatus.REJECTED);
+
+        MllpInboundOutcome outcome = service.processOruR01(
+            List.of(observation("ACC-1", "5.4")), hospital, "APP", "FAC",
+            "MSG-CTRL-REJ2", "MSH|...\r");
+
+        assertThat(outcome).isEqualTo(MllpInboundOutcome.REJECTED_INVALID);
+        verify(labOrderRepository).findWithLockById(labOrder.getId());
+        verify(labResultRepository, never()).save(any());
+        verify(messageRecorder).recordMessage(
+            any(), any(), any(), any(), any(),
+            eq(IntegrationMessageStatus.FAILED), eq("specimen rejected"));
+    }
+
+    @Test
+    @DisplayName("Review of #975 — the orders of one message are locked in id order, whatever order the message names them in")
+    void theOrdersOfAMessageAreLockedInIdOrder() {
+        LabOrder later = new LabOrder();
+        later.setId(new UUID(0, 2));
+        later.setHospital(hospital);
+        LabSpecimen laterTube = new LabSpecimen();
+        laterTube.setId(UUID.randomUUID());
+        laterTube.setLabOrder(later);
+        LabOrder earlier = new LabOrder();
+        earlier.setId(new UUID(0, 1));
+        earlier.setHospital(hospital);
+        LabSpecimen earlierTube = new LabSpecimen();
+        earlierTube.setId(UUID.randomUUID());
+        earlierTube.setLabOrder(earlier);
+        when(specimenRepository.findByAccessionNumber("ACC-LATER")).thenReturn(Optional.of(laterTube));
+        when(specimenRepository.findByAccessionNumber("ACC-EARLIER")).thenReturn(Optional.of(earlierTube));
+        // The first order locked is found rejected, so nothing else is locked.
+        when(specimenRepository.findStatusById(earlierTube.getId()))
+            .thenReturn(com.example.hms.enums.LabSpecimenStatus.REJECTED);
+
+        MllpInboundOutcome outcome = service.processOruR01(
+            List.of(observation("ACC-LATER", "5.4"), observation("ACC-EARLIER", "6.1")), hospital, "APP", "FAC",
+            "MSG-CTRL-ORDER", "MSH|...\r");
+
+        assertThat(outcome).isEqualTo(MllpInboundOutcome.REJECTED_INVALID);
+        verify(labOrderRepository).findWithLockById(earlier.getId());
+        verify(labOrderRepository, never()).findWithLockById(later.getId());
+    }
+
+    @Test
     @DisplayName("QA D820 — an order voided as entered in error takes no result from the analyser")
     void rejectedWhenTheOrderWasVoided() {
         labOrder.setStatus(com.example.hms.enums.LabOrderStatus.ENTERED_IN_ERROR);
@@ -394,6 +463,8 @@ class MllpInboundLabServiceImplTest {
     @DisplayName("B14 — auto-release on: a NORMAL observation is released as Autoverification, an abnormal one is not")
     void autoReleaseReleasesOnlyNormalRows() {
         ReflectionTestUtils.setField(service, "autoReleaseEnabled", true);
+        // @InjectMocks fills the constructor only; the announce collaborator is a field.
+        ReflectionTestUtils.setField(service, "labResultService", labResultService);
         when(specimenRepository.findByAccessionNumber("ACC-1")).thenReturn(Optional.of(specimen));
         when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -412,6 +483,14 @@ class MllpInboundLabServiceImplTest {
         assertThat(saved.get(0).getReleasedByDisplay()).isEqualTo("Autoverification");
         assertThat(saved.get(1).isReleased()).isFalse();
         assertThat(saved.get(2).isReleased()).isFalse();
+
+        // Review of #975 (QA D178/D938 class): the released row is announced once,
+        // through the service, so the clinician's in-basket item is filed as a
+        // worklist release files it; the two unreleased rows are not.
+        // (identity, not equals: unsaved rows share a null id and compare equal)
+        ArgumentCaptor<LabResult> announced = ArgumentCaptor.forClass(LabResult.class);
+        verify(labResultService, times(1)).announceReleasedResult(announced.capture());
+        assertThat(announced.getValue()).isSameAs(saved.get(0));
 
         // The system release leaves its own audit row: 3 ingest events + 1 release, SYSTEM actor, no value.
         ArgumentCaptor<AuditEventRequestDTO> auditCaptor = ArgumentCaptor.forClass(AuditEventRequestDTO.class);

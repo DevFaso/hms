@@ -127,12 +127,13 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         requireNotInThePast(request.getScheduledDate(), order.getScheduledDate());
         imagingOrderMapper.updateEntityFromRequest(order, request);
 
+        // QA D970 (sibling): the order being edited is not a duplicate of itself.
         List<ImagingOrder> duplicateMatches = loadDuplicateMatches(
             order.getPatient() != null ? order.getPatient().getId() : null,
             order.getModality(),
             order.getBodyRegion(),
             request.getDuplicateLookbackDays()
-        );
+        ).stream().filter(match -> order.getId() == null || !order.getId().equals(match.getId())).toList();
         if (!duplicateMatches.isEmpty()) {
             order.setDuplicateOfRecentOrder(true);
             order.setDuplicateReferenceOrderId(duplicateMatches.get(0).getId());

@@ -24,7 +24,9 @@ describe('StockAdjustmentComponent (D82 / D108)', () => {
       'recordTransaction',
       'receiveStock',
       'listWitnessCandidates',
+      'listReturnableDispenses',
     ]);
+    svc.listReturnableDispenses.and.returnValue(of({ data: [] }) as never);
     svc.listWitnessCandidates.and.returnValue(
       of({ data: [{ userId: 'u-2', displayName: 'Awa Traore' }] } as unknown as ReturnType<
         PharmacyService['listWitnessCandidates']
@@ -180,6 +182,14 @@ describe('StockAdjustmentComponent (D82 / D108)', () => {
       'PHARMACY.LEDGER_REASON_DISPENSE',
     );
     expect(label('RETURN ref QA-RET-001')).toBe('PHARMACY.LEDGER_REASON_RETURN');
+    // QA D1000: every ledger shape PharmacyUserFacingTextGuardTest#LEDGER_REASON_PREFIXES
+    // lets the server store is translated here.
+    expect(label('Dispense cancelled — stock returned for prescription 3105c0de')).toBe(
+      'PHARMACY.LEDGER_REASON_DISPENSE_CANCELLED',
+    );
+    expect(label('Prepared fill cancelled — stock returned for prescription unknown')).toBe(
+      'PHARMACY.LEDGER_REASON_PREPARED_CANCELLED',
+    );
     expect(label('CYCLE_COUNT_VARIANCE: recount')).toBe(
       'PHARMACY.ADJ_REASON_CYCLE_COUNT_VARIANCE : recount',
     );
@@ -206,5 +216,120 @@ describe('StockAdjustmentComponent (D82 / D108)', () => {
 
     expect(toast.error).toHaveBeenCalledWith('PHARMACY.LOT_REQUIRED_FOR_MOVEMENT');
     expect(svc.recordTransaction).not.toHaveBeenCalled();
+  });
+
+  describe('QA D932: a return is booked against its dispense', () => {
+    const fill = {
+      dispenseId: '3105c0de-1111-4000-8000-000000000000',
+      patientName: 'Awa Ouedraogo',
+      dispensedAt: '2026-10-27T09:00:00',
+      quantityDispensed: 10,
+      returnableQuantity: 6,
+      lotNumber: 'R16-MOR-01',
+    };
+
+    function openReturn(c: StockAdjustmentComponent): void {
+      svc.listReturnableDispenses.and.returnValue(of({ data: [fill] }) as never);
+      c.openForm();
+      c.onTypeChange('RETURN');
+      c.onItemChange('item-1');
+      c.form.stockLotId = 'lot-1';
+      c.onLotChange();
+      c.form.quantity = 2;
+    }
+
+    it('forgets the chosen dispense when the item changes', () => {
+      const c = create();
+      openReturn(c);
+      c.returnDispenseId = fill.dispenseId;
+      c.onItemChange('item-2');
+      expect(c.returnDispenseId).toBe('');
+    });
+
+    it('lists the fills of the chosen item and lot', () => {
+      const c = create();
+      openReturn(c);
+      expect(svc.listReturnableDispenses).toHaveBeenCalledWith('item-1', 'lot-1');
+      expect(c.returnableDispenses()).toEqual([fill] as never);
+    });
+
+    it('sends the dispense as the reference, so the stock goes back on the lot', () => {
+      const c = create();
+      openReturn(c);
+      svc.recordTransaction.and.returnValue(NEVER);
+      c.returnDispenseId = fill.dispenseId;
+
+      c.submitForm();
+
+      const body = svc.recordTransaction.calls.mostRecent().args[0];
+      expect(body.transactionType).toBe('RETURN');
+      expect(body.referenceId).toBe(fill.dispenseId);
+      expect(body.stockLotId).toBe('lot-1');
+      expect(body.reason).toBe('RETURN ref D-3105c0de');
+    });
+
+    it('asks for the dispense when one exists and none is chosen, and caps the quantity', () => {
+      const c = create();
+      openReturn(c);
+      c.submitForm();
+      expect(toast.error).toHaveBeenCalledWith('PHARMACY.RETURN_DISPENSE_REQUIRED');
+
+      c.returnDispenseId = fill.dispenseId;
+      c.form.quantity = 7;
+      c.submitForm();
+      expect(toast.error).toHaveBeenCalledWith('PHARMACY.RETURN_EXCEEDS_DISPENSE');
+      expect(svc.recordTransaction).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('QA D964: a transfer sends first expired, first out', () => {
+    function withTwoLots(c: StockAdjustmentComponent): void {
+      svc.listLotsByInventoryItem.and.returnValue(
+        of({
+          data: {
+            content: [
+              { id: 'long', lotNumber: 'LONG', remainingQuantity: 200, expiryDate: '2099-06-30' },
+              { id: 'court', lotNumber: 'COURT', remainingQuantity: 100, expiryDate: '2098-01-31' },
+            ],
+          },
+        } as unknown as LotsPage),
+      );
+      c.openForm();
+      c.form.quantity = 20;
+      c.onTypeChange('TRANSFER');
+      c.onItemChange('item-1');
+      c.transferDestinationPharmacyId = 'ph-2';
+    }
+
+    it('pre-selects the shortest-dated lot', () => {
+      const c = create();
+      withTwoLots(c);
+      expect(c.form.stockLotId).toBe('court');
+      expect(c.earlierTransferLot()).toBeUndefined();
+    });
+
+    it('a later-dated lot needs a reason, which is sent with the transfer', () => {
+      const c = create();
+      withTwoLots(c);
+      c.form.stockLotId = 'long';
+
+      c.submitForm();
+      expect(toast.error).toHaveBeenCalledWith('PHARMACY.FEFO_REASON_REQUIRED');
+      expect(svc.recordTransaction).not.toHaveBeenCalled();
+
+      svc.recordTransaction.and.returnValue(NEVER);
+      c.fefoReason = ' lot court promis au CSPS ';
+      c.submitForm();
+      expect(svc.recordTransaction.calls.mostRecent().args[0].fefoOverrideReason).toBe(
+        'lot court promis au CSPS',
+      );
+    });
+
+    it('the ledger reads the FEFO override after the destination', () => {
+      const c = create();
+      expect(c.reasonLabel({ reason: 'TRANSFER to CSPS | FEFO: promis' } as never)).toBe(
+        'PHARMACY.LEDGER_REASON_TRANSFER · PHARMACY.LEDGER_REASON_FEFO',
+      );
+    });
   });
 });

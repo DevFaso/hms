@@ -62,6 +62,15 @@ public class MedicationCatalogItemRequestDTO {
 
     private boolean controlled;
 
+    /**
+     * QA D935: the paediatric ceiling, in mg per kg per dose, the
+     * PediatricDoseRule checks a child's dose against. Optional; nothing could
+     * write it before, so the hard ceiling never fired.
+     */
+    @jakarta.validation.constraints.DecimalMin(value = "0.001")
+    @jakarta.validation.constraints.Digits(integer = 5, fraction = 3)
+    private java.math.BigDecimal pediatricMaxDoseMgPerKg;
+
     @Builder.Default
     private boolean active = true;
 

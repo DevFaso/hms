@@ -26,6 +26,8 @@ import {
 import { ToastService } from '../../core/toast.service';
 import { CdsCardListComponent } from '../../shared/cds-card/cds-card.component';
 import { CdsCard } from '../../shared/cds-card/cds-card.model';
+import { MedicationRoutePipe } from '../../shared/pipes/medication-route.pipe';
+import { isServerTimeToday } from '../../shared/date-utils';
 
 type LoadState = 'loading' | 'ready' | 'empty' | 'error';
 type ScanField = 'patient' | 'medication';
@@ -62,7 +64,14 @@ const FIVE_RIGHTS_LABEL_KEYS: Record<FiveRightsCheck, string> = {
 @Component({
   selector: 'app-emar',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, ServerTimePipe, CdsCardListComponent],
+  imports: [
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    ServerTimePipe,
+    CdsCardListComponent,
+    MedicationRoutePipe,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './emar.component.html',
   styleUrl: './emar.component.scss',
@@ -157,6 +166,11 @@ export class EmarComponent implements OnInit, OnDestroy {
     this.loadSub?.unsubscribe();
     this.destroyed$.next();
     this.destroyed$.complete();
+  }
+
+  /** QA D949: an overdue dose from another day shows its date, not the time alone. */
+  protected isDueToday(dueTime: string | null | undefined): boolean {
+    return isServerTimeToday(dueTime);
   }
 
   protected loadTasks(): void {

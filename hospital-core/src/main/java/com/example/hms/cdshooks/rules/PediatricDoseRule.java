@@ -94,7 +94,7 @@ public class PediatricDoseRule implements CdsRule {
             String.valueOf(ageYears), format(context.proposedDoseMg()), format(context.patientWeightKg()));
         return new CdsCard(
             summary, detail, CdsCard.Indicator.CRITICAL,
-            new Source(SOURCE_LABEL, null, null),
+            new Source(text.get("cds.source.pediatricDose", SOURCE_LABEL), null, null),
             null, null, null, UUID.randomUUID().toString()
         );
     }
@@ -113,7 +113,7 @@ public class PediatricDoseRule implements CdsRule {
                 String.valueOf(ageYears), format(context.patientWeightKg()));
         return new CdsCard(
             summary, detail, CdsCard.Indicator.WARNING,
-            new Source(SOURCE_LABEL, null, null),
+            new Source(text.get("cds.source.pediatricDose", SOURCE_LABEL), null, null),
             null, null, null, UUID.randomUUID().toString()
         );
     }

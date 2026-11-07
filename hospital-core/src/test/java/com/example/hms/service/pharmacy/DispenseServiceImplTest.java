@@ -146,6 +146,8 @@ class DispenseServiceImplTest {
     @Mock private com.example.hms.service.StayOrderDiscontinuation stayOrderDiscontinuation;
 
 
+    /** QA D964: FEFO is followed unless a test says otherwise (null = no override recorded). */
+    @org.mockito.Mock private FefoLotPolicy fefoLotPolicy;
     @InjectMocks
     private DispenseServiceImpl service;
 
@@ -352,6 +354,30 @@ class DispenseServiceImplTest {
             assertThat(rows.get(0).getClaim().getClaimedByName()).isEqualTo("Awa Sanou");
             assertThat(rows.get(0).getClaim().isMine()).isFalse();
             assertThat(rows.get(1).getClaim()).isNull();
+        }
+
+        @Test
+        @DisplayName("QA D1001: each row carries what remains to dispense (prescribed minus fills not cancelled), one query")
+        void queueRowsCarryTheRemainingQuantity() {
+            Pageable pageable = PageRequest.of(0, 20);
+            prescription.setQuantity(new BigDecimal("20"));
+            Prescription untouched = new Prescription();
+            untouched.setId(UUID.randomUUID());
+            untouched.setStatus(PrescriptionStatus.SIGNED);
+            untouched.setQuantity(new BigDecimal("40"));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findWorkQueue(eq(hospitalId), any(), eq(pageable)))
+                    .thenReturn(new PageImpl<>(List.of(prescription, untouched)));
+            when(dispenseRepository.sumQuantityCommittedByPrescriptionIds(any()))
+                    .thenReturn(List.<Object[]>of(new Object[] {prescriptionId, new BigDecimal("10")}));
+
+            List<com.example.hms.payload.dto.pharmacy.WorkQueuePrescriptionDTO> rows =
+                    service.getWorkQueue(pageable, com.example.hms.enums.QueueClaimFilter.ALL).getContent();
+
+            verify(dispenseRepository, times(1)).sumQuantityCommittedByPrescriptionIds(any());
+            assertThat(rows.get(0).getQuantity()).isEqualByComparingTo("20");
+            assertThat(rows.get(0).getRemainingQuantity()).isEqualByComparingTo("10");
+            assertThat(rows.get(1).getRemainingQuantity()).isEqualByComparingTo("40");
         }
 
         @Test
@@ -726,6 +752,58 @@ class DispenseServiceImplTest {
             verify(stockLotRepository).decrementRemaining(eq(stockLotId), eq(BigDecimal.TEN), any());
             verify(inventoryItemRepository).decrementOnHand(eq(inventoryItem.getId()), eq(BigDecimal.TEN), any());
             verify(stockTransactionRepository).save(any());
+        }
+
+        @Test
+        @DisplayName("QA D964: a fill that skips a shorter-dated lot with no reason is refused before any stock moves")
+        void aFillSkippingTheShorterDatedLotWithoutAReasonIsRefused() {
+            DispenseRequestDTO dto = buildRequest();
+            dto.setStockLotId(stockLotId);
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            org.mockito.Mockito.lenient().when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            org.mockito.Mockito.lenient().when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+            when(fefoLotPolicy.requireFefoOrReason(eq(stockLot), eq(BigDecimal.TEN), org.mockito.ArgumentMatchers.isNull()))
+                    .thenThrow(new BusinessException("pharmacy.fefo.reasonRequired", "R16-PCM-COURT", "10 nov. 2026"));
+
+            assertThatThrownBy(() -> service.createDispense(dto))
+                    .isInstanceOf(BusinessException.class)
+                    .extracting("messageKey").isEqualTo("pharmacy.fefo.reasonRequired");
+            verify(stockLotRepository, never()).decrementRemaining(any(), any(), any());
+            verify(dispenseRepository, never()).save(any(Dispense.class));
+        }
+
+        @Test
+        @DisplayName("QA D964: the reason for skipping the shorter-dated lot is kept in the fill's notes")
+        void aFefoOverrideReasonIsRecordedOnTheFill() {
+            DispenseRequestDTO dto = buildRequest();
+            dto.setStockLotId(stockLotId);
+            dto.setNotes("Patient habituel");
+            dto.setFefoOverrideReason("lot court réservé au service des urgences");
+            Dispense entity = buildDispense(DispenseStatus.COMPLETED);
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+            when(fefoLotPolicy.requireFefoOrReason(stockLot, BigDecimal.TEN, "lot court réservé au service des urgences"))
+                    .thenReturn("lot court réservé au service des urgences");
+            when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
+            when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
+            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseRepository.NOT_A_FILL))
+                    .thenReturn(BigDecimal.TEN);
+            when(prescriptionRepository.save(any())).thenReturn(prescription);
+            when(dispenseMapper.toResponseDTO(entity)).thenReturn(DispenseResponseDTO.builder().id(dispenseId).build());
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+
+            service.createDispense(dto);
+
+            assertThat(dto.getNotes()).isEqualTo("Patient habituel\nFEFO: lot court réservé au service des urgences");
+            verify(stockLotRepository).decrementRemaining(eq(stockLotId), eq(BigDecimal.TEN), any());
         }
 
         @Test

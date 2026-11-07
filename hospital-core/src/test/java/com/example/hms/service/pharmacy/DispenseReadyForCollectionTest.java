@@ -134,6 +134,8 @@ class DispenseReadyForCollectionTest {
     @Mock private com.example.hms.service.StayOrderDiscontinuation stayOrderDiscontinuation;
 
 
+    /** QA D964: FEFO is followed unless a test says otherwise (null = no override recorded). */
+    @org.mockito.Mock private FefoLotPolicy fefoLotPolicy;
     @InjectMocks
     private DispenseServiceImpl service;
 
@@ -321,6 +323,29 @@ class DispenseReadyForCollectionTest {
     class MarkReady {
 
         @Test
+        @DisplayName("QA D964: a prepared fill that skips a shorter-dated lot with no reason is refused; nothing is set aside")
+        void aPreparationSkippingTheShorterDatedLotIsRefused() {
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            org.mockito.Mockito.lenient().when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any()))
+                    .thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            org.mockito.Mockito.lenient().when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+            DispenseRequestDTO dto = request();
+            dto.setStockLotId(stockLotId);
+            when(fefoLotPolicy.requireFefoOrReason(eq(stockLot), any(), org.mockito.ArgumentMatchers.isNull()))
+                    .thenThrow(new BusinessException("pharmacy.fefo.reasonRequired", "R16-MOR-COURT", "1 déc. 2026"));
+
+            assertThatThrownBy(() -> service.markReadyForCollection(dto))
+                    .isInstanceOf(BusinessException.class)
+                    .extracting("messageKey").isEqualTo("pharmacy.fefo.reasonRequired");
+            verify(stockLotRepository, never()).decrementRemaining(any(), any(), any());
+            verify(dispenseRepository, never()).save(any());
+        }
+
+        @Test
         @DisplayName("AC-1: a PENDING row, not handed over, prepared and dispensed by the caller; stock moves, the order does not")
         void preparesAPendingFill() {
             stubReadyPath(true);
@@ -392,7 +417,7 @@ class DispenseReadyForCollectionTest {
             DispenseRequestDTO req = request();
             assertThatThrownBy(() -> service.markReadyForCollection(req))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("CONTROLLED_SUBSTANCE");
+                    .extracting("messageKey").isEqualTo("prescription.safeguard.CONTROLLED_SUBSTANCE.dispense");
             assertNothingPrepared();
         }
 
@@ -783,7 +808,7 @@ class DispenseReadyForCollectionTest {
 
             assertThatThrownBy(() -> service.handOver(dispenseId, null))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("CONTROLLED_SUBSTANCE");
+                    .extracting("messageKey").isEqualTo("prescription.safeguard.CONTROLLED_SUBSTANCE.dispense");
             verify(dispenseRepository, never()).completePreparedFill(any(), any(), any(), any(), any(), any());
         }
 

@@ -41,9 +41,18 @@
               >
                 <span class="emar__queue-patient">{{ task.patientName }}</span>
                 <span class="emar__queue-med">{{ task.medication }}</span>
+                @if (task.controlledSubstance) {
+                  <span
+                    class="emar__queue-chip emar__queue-chip--controlled"
+                    [attr.data-testid]="'emar-controlled-chip-' + task.id"
+                    >{{ 'NURSE.CONTROLLED_SUBSTANCE' | translate }}</span
+                  >
+                }
                 <span class="emar__queue-meta">
-                  {{ task.dose }} · {{ task.route }} ·
-                  {{ task.dueTime | serverTime | date: 'HH:mm' }}
+                  {{ task.dose }} · {{ task.route | medicationRoute }} ·
+                  {{
+                    task.dueTime | serverTime | date: (isDueToday(task.dueTime) ? 'HH:mm' : 'short')
+                  }}
                 </span>
                 <!-- Marked in the queue, not only in the detail: a nurse
                      planning a round needs to see which doses they cannot give
@@ -73,7 +82,7 @@
               <div>
                 <h2>{{ task.patientName }}</h2>
                 <p class="emar__detail-meta">
-                  {{ task.medication }} · {{ task.dose }} · {{ task.route }}
+                  {{ task.medication }} · {{ task.dose }} · {{ task.route | medicationRoute }}
                 </p>
               </div>
               <button type="button" class="emar__btn emar__btn--ghost" (click)="closeTask()">
@@ -118,6 +127,7 @@
                   type="text"
                   class="emar__input"
                   data-testid="emar-patient-scan"
+                  [attr.aria-label]="'EMAR.PATIENT_SCAN_PLACEHOLDER' | translate"
                   [placeholder]="'EMAR.PATIENT_SCAN_PLACEHOLDER' | translate"
                   [value]="patientScan()"
                   (input)="onScanInput('patient', $any($event.target).value)"
@@ -138,6 +148,7 @@
                   type="text"
                   class="emar__input"
                   data-testid="emar-med-scan"
+                  [attr.aria-label]="'EMAR.MEDICATION_SCAN_PLACEHOLDER' | translate"
                   [placeholder]="'EMAR.MEDICATION_SCAN_PLACEHOLDER' | translate"
                   [value]="medicationScan()"
                   (input)="onScanInput('medication', $any($event.target).value)"
@@ -158,6 +169,7 @@
                   type="text"
                   class="emar__input"
                   data-testid="emar-dose"
+                  [attr.aria-label]="'NURSE.DOSE' | translate"
                   [placeholder]="'NURSE.DOSE' | translate"
                   [value]="doseScan()"
                   (input)="onDoseInput($any($event.target).value)"
@@ -166,6 +178,7 @@
                   type="text"
                   class="emar__input"
                   data-testid="emar-route"
+                  [attr.aria-label]="'NURSE.ROUTE' | translate"
                   [placeholder]="'NURSE.ROUTE' | translate"
                   [value]="routeScan()"
                   (input)="onRouteInput($any($event.target).value)"

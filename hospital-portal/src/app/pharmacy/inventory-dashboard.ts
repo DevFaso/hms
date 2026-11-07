@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
+import { actionRoles } from '../core/action-permissions';
 import {
   PharmacyService,
   PharmacyResponse,
@@ -31,6 +32,15 @@ export class InventoryDashboardComponent implements OnInit {
   private readonly translate = inject(TranslateService);
 
   activeTab = signal<'stock' | 'alerts' | 'expiry'>('stock');
+
+  /**
+   * QA D965: "Trigger alerts" only for the roles the endpoint admits (store
+   * manager, hospital admin, super-admin); the pharmacist and the inventory
+   * clerk were offered it and got a 403 and the 403 page.
+   */
+  canTriggerAlerts(): boolean {
+    return this.roleContext.hasAnyActiveRoleExactly(actionRoles('inventoryReorderTrigger'));
+  }
 
   // Pharmacy selection
   pharmacies = signal<PharmacyResponse[]>([]);
