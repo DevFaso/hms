@@ -40,15 +40,18 @@ import { walk } from './walk.mjs';
  * spec that renders `{{ row.status }}` to assert the raw token is not a raw
  * render on anybody's screen.
  *
+ * @param {string} dir
+ * @param {Map<string, string>} [sources] `.ts` texts by absolute path a caller
+ *   already read (the round-16 gate runner), so they are not read a second time
  * @returns {{ file: string, text: string, lineOffset: number }[]}
  */
-export function templatesIn(dir) {
+export function templatesIn(dir, sources = new Map()) {
   const out = [];
   for (const file of walk(dir, ['.html', '.ts'])) {
     if (file.endsWith('.html')) {
       out.push({ file, text: readFileSync(file, 'utf8'), lineOffset: 0 });
     } else if (!file.endsWith('.spec.ts')) {
-      const source = readFileSync(file, 'utf8');
+      const source = sources.get(file) ?? readFileSync(file, 'utf8');
       // Cheap pre-filter: parsing all ~900 .ts files costs seconds, and only
       // a file that says `template` can hold one.
       if (!source.includes('template')) continue;
@@ -115,7 +118,19 @@ function propName(prop) {
 function literalText(node) {
   if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) return node.text;
   if (ts.isTemplateExpression(node)) {
-    return node.head.text + node.templateSpans.map((span) => ` ${span.literal.text}`).join('');
+    // Each `${…}` becomes a space plus the newlines it spans, so the lines below a
+    // multi-line substitution keep the numbers the `.ts` scan gives them (dedupe
+    // keys a site on id@line).
+    const text = node.getSourceFile().text;
+    const newlines = (span) =>
+      '\n'.repeat(
+        (text.slice(span.expression.getFullStart(), span.literal.getStart()).match(/\n/g) ?? [])
+          .length,
+      );
+    return (
+      node.head.text +
+      node.templateSpans.map((span) => ` ${newlines(span)}${span.literal.text}`).join('')
+    );
   }
   return null;
 }

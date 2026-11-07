@@ -1,0 +1,37 @@
+{
+  "$comment": [
+    "UUID fragments shown on screen, as they stand today.",
+    "Each key is \"file::rule::anchor\"; \"why\" is the QA defect id or the reason.",
+    "A site not listed fails the build; show the human code, then delete its pin."
+  ],
+  "pinned": {
+    "src/app/break-glass-review/break-glass-review.html::slice-pipe::s.patientId | slice": {
+      "count": 1,
+      "why": "pre-existing (class D992): UUID fragment on screen; show the human code"
+    },
+    "src/app/maternity/maternity.ts::slice-call::patientId.substring": {
+      "count": 1,
+      "why": "pre-existing (class D992): UUID fragment on screen; show the human code"
+    },
+    "src/app/nurse-station/nursing-intake-form/nursing-intake-form.component.html::slice-pipe::encounter.id | slice": {
+      "count": 1,
+      "why": "D992: triage and intake forms show a raw encounter UUID fragment"
+    },
+    "src/app/nurse-station/triage-form/triage-form.component.html::slice-pipe::encounter.id | slice": {
+      "count": 1,
+      "why": "D992: triage and intake forms show a raw encounter UUID fragment"
+    },
+    "src/app/pharmacy/pharmacy-claims.html::slice-call::c.patientId.substring": {
+      "count": 1,
+      "why": "pre-existing (class D992): UUID fragment on screen; show the human code"
+    },
+    "src/app/scheduling/scheduling.html::slice-pipe::selectedStaff()!.hospitalId | slice": {
+      "count": 1,
+      "why": "pre-existing (class D992): UUID fragment on screen; show the human code"
+    },
+    "src/app/super-admin/super-admin.ts::slice-call::idValue.slice": {
+      "count": 1,
+      "why": "pre-existing (class D992): UUID fragment on screen; show the human code"
+    }
+  }
+}
