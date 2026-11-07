@@ -21,14 +21,14 @@ import { balanced, endOfLiteralOrComment } from './js-scan.mjs';
 
 /** The DOM events whose default action a `false` cancels and a reader would miss. */
 const CANCELABLE_EVENT =
-  /^\((?:click|dblclick|auxclick|contextmenu|mousedown|mouseup|pointerdown|pointerup|touchstart|touchend|keydown|keyup|keypress)(?:\.[\w.]+)?\)$/;
+  /^\((?:click|dblclick|auxclick|contextmenu|mousedown|mouseup|pointerdown|pointerup|touchstart|touchend|keydown|keyup|keypress|paste|cut)(?:\.[\w.]+)?\)$/;
 
 /** An element whose own default action matters. */
 const CONTROL_TAG = /^(?:input|select|textarea|label|a|summary|details|option)$/;
 
 /** Something inside the element whose default action a bubbling event would lose. */
 const HOLDS_CONTROL =
-  /<(?:input|select|textarea|label|a|button|summary|details|[a-z]+-[a-z-]+)[\s/>]/;
+  /<(?:input|select|textarea|label|a|button|summary|details|[a-z]+-[a-z0-9-]+)[\s/>]/;
 
 /** Offsets of `expr` that are at depth 0 and outside a string literal. */
 function topLevel(expr) {
@@ -163,7 +163,8 @@ export function eventCancelFindings(html, source = '') {
     for (const [attr, value] of tag.attrs) {
       if (!CANCELABLE_EVENT.test(attr) || !value || !canBeFalse(value, methods)) continue;
       const inner = innerHtml(html, tokens, index) ?? '';
-      if (!CONTROL_TAG.test(tag.name) && !tag.name.includes('-') && !HOLDS_CONTROL.test(inner)) {
+      const submits = tag.name === 'button' && tag.attrs.get('type') !== 'button';
+      if (!submits && !CONTROL_TAG.test(tag.name) && !tag.name.includes('-') && !HOLDS_CONTROL.test(inner)) {
         continue;
       }
       out.push({

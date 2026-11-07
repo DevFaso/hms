@@ -24,10 +24,11 @@ import java.util.UUID;
  * admitted (an outpatient) is not affected. Shared by the nurse station and
  * the chart's own vitals endpoint so the two cannot drift.
  *
- * <p>QA D1477 (round 35): the same for a patient never admitted whose last visit ended unseen (left
- * without being seen, or cancelled) with nothing opened since: nobody is caring for them here. A visit
- * that ended with a consultation does not count: a nurse may still see that patient, and late
- * documentation of care given stays open through a care note, which this guard does not gate.
+ * <p>QA D1477 (round 35): the same for a patient never admitted whose last visit ended with them
+ * leaving unseen, with nothing opened since: nobody is caring for them here. A visit that ended with a
+ * consultation does not count, nor a cancelled one, often a booking mistake or a duplicate: a nurse may
+ * still see that patient. Late documentation of care given stays open through a care note, which this
+ * guard does not gate.
  */
 @Component
 @RequiredArgsConstructor
@@ -45,7 +46,7 @@ public class DischargedPatientGuard {
         List<Admission> stays = admissionRepository.findByPatient_IdAndHospital_IdAndStatusIn(
             patientId, hospitalId, EnumSet.allOf(AdmissionStatus.class));
         if (stays.isEmpty()) {
-            requireLastVisitNotEndedUnseen(patientId, hospitalId, messageKey);
+            requireLastVisitNotLeftUnseen(patientId, hospitalId, messageKey);
             return;
         }
         if (stays.stream().anyMatch(a -> OPEN_STAY.contains(a.getStatus()))) {
@@ -66,7 +67,7 @@ public class DischargedPatientGuard {
         }
     }
 
-    private void requireLastVisitNotEndedUnseen(UUID patientId, UUID hospitalId, String messageKey) {
+    private void requireLastVisitNotLeftUnseen(UUID patientId, UUID hospitalId, String messageKey) {
         // A prescription's anchor is not a visit: it says nothing of who is under care.
         List<Encounter> visits = encounterRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId).stream()
             .filter(visit -> !visit.isPrescriptionAnchor())
@@ -76,7 +77,7 @@ public class DischargedPatientGuard {
         }
         visits.stream()
             .max(Comparator.comparing(DischargedPatientGuard::startOf, Comparator.nullsFirst(Comparator.naturalOrder())))
-            .filter(last -> EncounterStatus.ENDED_UNSEEN.contains(last.getStatus()))
+            .filter(last -> last.getStatus() == EncounterStatus.LEFT_WITHOUT_BEING_SEEN)
             .ifPresent(last -> {
                 throw new BusinessException(messageKey);
             });

@@ -558,16 +558,35 @@ class ParacetamolFactsReaderTest {
         assertThat(read().notRecognised()).containsExactly("Dafalgan 2 g");
     }
 
-    /** QA D1462: a child's free-text brand reads the hospital's limits for the drug. */
+    /** QA D1462: a child's free-text brand reads the hospital's mg limits for the drug, and no more. */
     @Test
-    void aFreeTextBrandReadsTheStrictestLimitsOfTheDrug() {
-        MedicationCatalogItem loose = item("Paracétamol", "Sirop", "120");
-        loose.setPediatricMaxDailyMg(java.math.BigDecimal.valueOf(4000));
-        MedicationCatalogItem strict = item("Paracétamol", "Comprimé", "500");
-        strict.setPediatricMaxDailyMg(java.math.BigDecimal.valueOf(3000));
-        items.add(loose);
-        items.add(strict);
-        assertThat(reader.read(adult, hospitalId, "Efferalgan 1 g", null, null).limits()).isSameAs(strict);
+    void aFreeTextBrandReadsTheCapItsItemsAgreeOnAndNoBandOrReviewAge() {
+        MedicationCatalogItem tablet = item("Paracétamol", "Comprimé", "500");
+        tablet.setPediatricMaxDailyMg(java.math.BigDecimal.valueOf(3000));
+        tablet.setPediatricMaxDoseMgPerKg(java.math.BigDecimal.valueOf(15));
+        tablet.setPediatricManualReviewUnderMonths(1);
+        tablet.setPediatricWeightBands(List.of());
+        items.add(tablet);
+        MedicationCatalogItem limits = reader.read(adult, hospitalId, "Efferalgan 1 g", null, null).limits();
+        assertThat(limits.getPediatricMaxDailyMg()).isEqualByComparingTo("3000");
+        assertThat(limits.getPediatricMaxDoseMgPerKg()).isEqualByComparingTo("15");
+        assertThat(limits.getPediatricManualReviewUnderMonths()).isNull();
+        assertThat(limits.getPediatricWeightBands()).isNullOrEmpty();
         assertThat(reader.read(adult, hospitalId, "Efferalgan 1 g", doliprane, null).limits()).isNull();
+    }
+
+    /** A syrup's cap does not stop a tablet: no override passes that stop. */
+    @Test
+    void aFreeTextBrandHasNoAbsoluteCapWhenTheItemsDisagree() {
+        MedicationCatalogItem syrup = item("Paracétamol", "Sirop", "120");
+        syrup.setPediatricMaxDailyMg(java.math.BigDecimal.valueOf(1000));
+        syrup.setPediatricMaxDoseMgPerKg(java.math.BigDecimal.valueOf(15));
+        MedicationCatalogItem tablet = item("Paracétamol", "Comprimé", "500");
+        tablet.setPediatricMaxDailyMg(java.math.BigDecimal.valueOf(3000));
+        items.add(syrup);
+        items.add(tablet);
+        MedicationCatalogItem limits = reader.read(adult, hospitalId, "Efferalgan 1 g", null, null).limits();
+        assertThat(limits.getPediatricMaxDailyMg()).isNull();
+        assertThat(limits.getPediatricMaxDoseMgPerKg()).isEqualByComparingTo("15");
     }
 }

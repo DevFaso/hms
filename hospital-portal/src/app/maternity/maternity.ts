@@ -607,12 +607,7 @@ export class MaternityComponent implements OnInit {
       recordedDate: nowLocalDatetime(),
       updateReason: '',
       menstrualHistory: { ...(history.menstrualHistory ?? {}) },
-      // QA D1465: a record already holding more living children than births said why when it was saved.
-      obstetricHistory: {
-        ...(history.obstetricHistory ?? {}),
-        multipleBirth:
-          (history.obstetricHistory?.livingChildren ?? 0) > (history.obstetricHistory?.para ?? 0),
-      },
+      obstetricHistory: { ...(history.obstetricHistory ?? {}) },
       complicationsHistory: { ...(history.complicationsHistory ?? {}) },
       medicalHistory: { ...(history.medicalHistory ?? {}) },
       medicationsImmunizations: history.medicationsImmunizations

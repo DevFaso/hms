@@ -388,8 +388,6 @@ public class MaternalHistoryServiceImpl implements MaternalHistoryService {
             multipleBirth, "obstetricHistory.");
         GestationalDating.requireDueDateFitsLmp(history.getLastMenstrualPeriod(), history.getEstimatedDueDate(),
             "menstrualHistory.estimatedDueDate");
-        GestationalDating.requireDueDateFitsLmp(history.getLastMenstrualPeriod(),
-            history.getEstimatedDueDateByUltrasound(), "menstrualHistory.estimatedDueDateByUltrasound");
     }
 
     /**

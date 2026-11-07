@@ -202,6 +202,19 @@ class OrderedDrugIdentityTest {
         org.assertj.core.api.Assertions.assertThat(OrderedDrugIdentity.namesOnlyThroughCitedBrand("Efferalgan", null)).isFalse();
     }
 
+    /** Review: a slash strength is not a second drug, and a brand keeps its strength reading off paracetamol. */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({"Augmentin 500/62.5, Amoxicilline", "Bactrim 400/80, Sulfamethoxazole", "Fansidar 500/25, Sulfadoxine"})
+    void aCitedBrandWithASlashStrengthStillAgrees(String typed, String generic) {
+        org.assertj.core.api.Assertions.assertThat(OrderedDrugIdentity.agrees(typed, item(generic, generic, null))).isTrue();
+    }
+
+    @org.junit.jupiter.api.Test
+    void aParacetamolBrandDoesNotNameACombinationItem() {
+        org.assertj.core.api.Assertions.assertThat(
+            OrderedDrugIdentity.contradicts("Efferalgan", item("Paracétamol + codéine", "Paracétamol + codéine", null))).isTrue();
+    }
+
     @org.junit.jupiter.api.Test
     void aCitedBrandWithASecondDrugDoesNotNameTheItemAlone() {
         org.assertj.core.api.Assertions.assertThat(

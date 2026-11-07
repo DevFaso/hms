@@ -79,7 +79,7 @@ public final class DrugClassAllergy {
     private static final String COTRIMOXAZOLE_INN = "sulfamethoxazole trimethoprim co-trimoxazole";
 
     /** QA D1462: the names {@code ParacetamolIdentity} reads as the drug. */
-    private static final String PARACETAMOL_INN = "paracetamol acetaminophen";
+    private static final String PARACETAMOL_INN = "paracetamol acetaminophen acetaminophene acetaminofen";
 
     private static final String PENICILLIN_V_INN =
         "phenoxymethylpenicillin phenoxymethylpenicilline fenoximetilpenicilina penicillin v";

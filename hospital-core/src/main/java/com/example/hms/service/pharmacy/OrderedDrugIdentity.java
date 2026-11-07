@@ -132,8 +132,10 @@ public final class OrderedDrugIdentity {
      * brand adds.
      */
     private static boolean brandNamesGeneric(String typedName, String genericName) {
-        // "Efferalgan codéine" is not the Paracétamol item: its INN list says nothing of the second drug.
-        if (com.example.hms.cdshooks.rules.ParacetamolIdentity.namesAnotherIngredient(typedName)) {
+        // "Efferalgan codéine" is not the Paracétamol item, and plain "Efferalgan" is not the
+        // "Paracétamol + codéine" one: the brand's INN list says nothing of the second drug.
+        if (com.example.hms.cdshooks.rules.ParacetamolIdentity.isCombinationName(typedName)
+                || com.example.hms.cdshooks.rules.ParacetamolIdentity.isCombinationName(genericName)) {
             return false;
         }
         String typed = DrugClassAllergy.normalize(typedName);

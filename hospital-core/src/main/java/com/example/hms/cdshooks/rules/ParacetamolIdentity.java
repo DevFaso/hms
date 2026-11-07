@@ -98,12 +98,12 @@ public final class ParacetamolIdentity {
     }
 
     /** The text names the drug as a word, wherever it stands, and no second ingredient. */
-    static boolean nameIsParacetamolAlone(String name) {
+    public static boolean nameIsParacetamolAlone(String name) {
         return namesTheDrug(name) && !namesAnotherIngredient(name);
     }
 
     /** The text names the drug as a word AND positively names another ingredient. */
-    static boolean isCombinationName(String name) {
+    public static boolean isCombinationName(String name) {
         return namesTheDrug(name) && namesAnotherIngredient(name);
     }
 
@@ -124,8 +124,7 @@ public final class ParacetamolIdentity {
         return false;
     }
 
-    /** Whether the text positively names a second ingredient: a plus, "500/30", "et codéine". */
-    public static boolean namesAnotherIngredient(String typedName) {
+    private static boolean namesAnotherIngredient(String typedName) {
         String text = DrugClassAllergy.normalize(typedName);
         if (ANOTHER_INGREDIENT.matcher(text).find()) {
             return true;

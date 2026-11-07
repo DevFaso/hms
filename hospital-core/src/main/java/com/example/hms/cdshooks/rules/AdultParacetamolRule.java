@@ -116,12 +116,12 @@ public class AdultParacetamolRule implements CdsRule {
         String name = medicationName == null ? "" : medicationName.trim();
         return new CdsCard(
             text.get("cds.adultParacetamol.notRecognised.summary",
-                "{0} is not in the catalogue and is not a known brand: it could not be checked as paracetamol, so no paracetamol limit was judged and it is left out of the daily total",
+                "{0} is not in the catalogue and is not a brand on file. If it holds paracetamol, no paracetamol limit was judged and it is left out of the daily total",
                 name),
             text.get("cds.adultParacetamol.notRecognised.detail",
-                "If it holds paracetamol, choose the drug from the catalogue, or have the pharmacy add this brand to its catalogue item, so the limits and the total apply. This alert does not block the order.",
+                "Choose the drug from the catalogue, or have the pharmacy add this brand to its catalogue item, so the limits and the total apply. This notice does not block the order.",
                 name),
-            ALERT, new Source(text.get("cds.source.adultParacetamol", SOURCE_LABEL), null, null),
+            CdsCard.Indicator.INFO, new Source(text.get("cds.source.adultParacetamol", SOURCE_LABEL), null, null),
             null, null, null, UUID.randomUUID().toString());
     }
 
@@ -293,7 +293,10 @@ public class AdultParacetamolRule implements CdsRule {
             names.addAll(facts.combinations());
             names.addAll(others.uncountedNames);
             names.addAll(facts.notRecognised());
-            if (facts.proposedCombination()) {
+            // QA D1462: "4 cp" of a cited brand: its strength is on no item, and its name is all there is.
+            boolean countUnread = context.proposedDoseMg() == null && context.proposedDoseUnits() != null
+                && com.example.hms.service.allergy.DrugClassAllergy.carriesBrand(medication);
+            if (facts.proposedCombination() || countUnread) {
                 names.add(medication);
             }
             if (!names.isEmpty()) {

@@ -89,7 +89,11 @@ test('only the events a false cancels, on what holds or is a control', () => {
   assert.equal(on('<div (click)="a && b()"><app-thing></app-thing></div>'), 1);
   assert.equal(on('<app-thing (click)="a && b()"></app-thing>'), 1);
   assert.equal(on('<div (click)="a && b()"><button type="button">x</button></div>'), 1);
-  // A button of its own holds nothing a cancelled click could lose.
+  assert.equal(on('<button type="submit" (click)="a && b()">x</button>'), 1);
+  assert.equal(on('<button (click)="a && b()">x</button>'), 1);
+  assert.equal(on('<div (click)="a && b()"><app-step2></app-step2></div>'), 1);
+  assert.equal(on('<input (paste)="a && b()" />'), 1);
+  // A plain button holds nothing a cancelled click could lose.
   assert.equal(on('<button type="button" (click)="open = !open">x</button>'), 0);
   assert.equal(on('<div (click)="a && b()"><span>x</span></div>'), 0);
   // An output, not a DOM event: Angular cancels nothing.

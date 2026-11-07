@@ -113,7 +113,7 @@ public class ParacetamolFactsReader {
             .toList();
         return new ParacetamolFacts(true, orders.counted, ParacetamolRisk.of(surfaced), orders.mayStillBeInUse,
             orders.combinations, combination, acting == null, scope == null,
-            item == null && named ? strictest(paracetamol) : null, orders.notRecognised, false);
+            item == null && named ? freeTextLimits(paracetamol) : null, orders.notRecognised, false);
     }
 
     /** A catalogue item or a cited brand names it, or it carries a class member's INN stem. */
@@ -122,13 +122,28 @@ public class ParacetamolFactsReader {
             || active.stream().anyMatch(i -> OrderedDrugIdentity.agrees(name, i));
     }
 
-    /** QA D1462: the lowest absolute daily maximum on file, else the first item with any limit. */
-    private static MedicationCatalogItem strictest(List<MedicationCatalogItem> items) {
+    /**
+     * QA D1462: the limits a free-text brand is judged against, in mg only. Nothing says which of the
+     * drug's items it is, so an item's bands and review age are not read, and the absolute daily
+     * maximum, which no override passes, stands only when every item that has one agrees: a syrup's
+     * cap never stops a tablet. Not a catalogue row: it is never saved or linked.
+     */
+    private static MedicationCatalogItem freeTextLimits(List<MedicationCatalogItem> items) {
+        List<java.math.BigDecimal> caps = items.stream()
+            .map(MedicationCatalogItem::getPediatricMaxDailyMg).filter(Objects::nonNull).toList();
+        boolean oneCap = !caps.isEmpty() && caps.stream().allMatch(cap -> cap.compareTo(caps.get(0)) == 0);
         return items.stream()
-            .filter(i -> i.getPediatricMaxDailyMg() != null)
-            .min(java.util.Comparator.comparing(MedicationCatalogItem::getPediatricMaxDailyMg))
-            .or(() -> items.stream().filter(i -> i.getPediatricMaxDoseMgPerKg() != null
-                || i.getPediatricMaxDailyMgPerKg() != null || i.getPediatricMaxSingleDoseMg() != null).findFirst())
+            .filter(i -> i.getPediatricMaxDailyMg() != null || i.getPediatricMaxDoseMgPerKg() != null
+                || i.getPediatricMaxDailyMgPerKg() != null || i.getPediatricMaxSingleDoseMg() != null)
+            .findFirst()
+            .map(i -> MedicationCatalogItem.builder()
+                .pediatricMaxDailyMg(oneCap ? caps.get(0) : null)
+                .pediatricMaxDoseMgPerKg(i.getPediatricMaxDoseMgPerKg())
+                .pediatricMaxDailyMgPerKg(i.getPediatricMaxDailyMgPerKg())
+                .pediatricMaxSingleDoseMg(i.getPediatricMaxSingleDoseMg())
+                .pediatricDoseSource(i.getPediatricDoseSource())
+                .pediatricDoseStatus(i.getPediatricDoseStatus())
+                .build())
             .orElse(null);
     }
 

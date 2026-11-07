@@ -78,9 +78,10 @@ class DischargedPatientGuardTest {
     }
 
     @Test
-    void aLastVisitCancelledIsRefused() {
+    void aLastVisitCancelledIsNotLeaving() {
+        visit(EncounterStatus.COMPLETED, LAST_WEEK.minusHours(2));
         visit(EncounterStatus.CANCELLED, LAST_WEEK);
-        assertRefused();
+        assertAllowed();
     }
 
     @Test

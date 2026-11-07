@@ -103,7 +103,8 @@ public class DuplicateMedicationOrderRule implements CdsRule {
         ParacetamolFacts facts = context.paracetamolFacts();
         return facts.applies() && !facts.proposedCombination()
             && (ParacetamolIdentity.nameIsParacetamolAlone(existingName)
-                || facts.otherOrders().stream().anyMatch(other -> other.order() == existing));
+                || (existing.getId() != null && facts.otherOrders().stream()
+                    .anyMatch(other -> existing.getId().equals(other.order().getId()))));
     }
 
     private CdsCard buildCard(Prescription existing, UUID hospitalId) {

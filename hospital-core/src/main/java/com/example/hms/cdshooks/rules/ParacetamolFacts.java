@@ -21,8 +21,8 @@ import java.util.Set;
  * @param proposedCombination the proposed order itself is a combination: its dose is not counted
  * @param noActingHospital no hospital is acting (global view): rows tagged sensitive are not read
  * @param noHospital    no hospital is known: no order or problem could be read at all
- * @param limits        QA D1462: the items of this drug the paediatric limits come from when the
- *                      order is free text; the strength of a count is never read from it
+ * @param limits        QA D1462: the paediatric mg limits of this drug for a free-text order, built by
+ *                      the reader; the strength of a count is never read from it
  * @param notRecognised QA D1462: names of the other active orders that no catalogue item and no
  *                      cited brand names: if one holds paracetamol it is not counted, and that is said
  * @param nameNotRecognised QA D1462: the proposed name is of no catalogue item and no cited brand, so

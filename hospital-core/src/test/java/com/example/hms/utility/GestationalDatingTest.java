@@ -28,16 +28,14 @@ class GestationalDatingTest {
         assertThat(GestationalDating.isPlausibleCurrentLmp(TODAY.minusWeeks(12), TODAY)).isTrue();
     }
 
-    /** QA D1465: a due date on either side of what the LMP allows. */
+    /** QA D1465: on or before the LMP, by logic; no number stands between them. */
     @org.junit.jupiter.params.ParameterizedTest(name = "{0} weeks after the LMP: {1}")
     @org.junit.jupiter.params.provider.CsvSource({
         "-20, maternity.dating.dueDateBeforeLmp",
         "0, maternity.dating.dueDateBeforeLmp",
-        "19, maternity.dating.dueDateContradictsLmp",
-        "20, ",
+        "1, ",
         "40, ",
-        "44, ",
-        "45, maternity.dating.dueDateContradictsLmp",
+        "60, ",
     })
     void aDueDateMustFitTheLmp(int weeks, String refusal) {
         LocalDate lmp = LocalDate.of(2026, 6, 10);

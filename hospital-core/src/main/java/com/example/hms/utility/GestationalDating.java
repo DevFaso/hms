@@ -24,9 +24,6 @@ public final class GestationalDating {
     /** The most weeks a gestational age is recorded at: the labour admission's ceiling and the forms'. */
     public static final int MAX_RECORDED_WEEKS = 45;
 
-    /** Below this many weeks from the LMP nothing is a birth (labour admission's floor), let alone term. */
-    private static final int MIN_WEEKS_TO_DUE_DATE = 20;
-
     private static final int REFERENCE_CYCLE_DAYS = 28;
     private static final int MIN_CYCLE_DAYS = 21;
     private static final int MAX_CYCLE_DAYS = 45;
@@ -43,19 +40,12 @@ public final class GestationalDating {
     }
 
     /**
-     * QA D1465: refuses a due date that contradicts the LMP. On or before it, by logic. Otherwise the
-     * date must fall where the code already reads a pregnancy: not before {@link #MIN_WEEKS_TO_DUE_DATE}
-     * weeks and not past {@link #MAX_PLAUSIBLE_WEEKS}. An ultrasound may move a date; not by that much.
+     * QA D1465: a pregnancy cannot end on or before it began. By logic alone: how far a date may stand
+     * from the LMP is a clinical number no source here gives, and an uncertain LMP moves it a long way.
      */
     public static void requireDueDateFitsLmp(LocalDate lmp, LocalDate dueDate, String field) {
-        if (lmp == null || dueDate == null) {
-            return;
-        }
-        if (!dueDate.isAfter(lmp)) {
+        if (lmp != null && dueDate != null && !dueDate.isAfter(lmp)) {
             throw new FieldBusinessException(field, "maternity.dating.dueDateBeforeLmp");
-        }
-        if (dueDate.isBefore(lmp.plusWeeks(MIN_WEEKS_TO_DUE_DATE)) || dueDate.isAfter(lmp.plusWeeks(MAX_PLAUSIBLE_WEEKS))) {
-            throw new FieldBusinessException(field, "maternity.dating.dueDateContradictsLmp");
         }
     }
 
