@@ -182,6 +182,12 @@ class DrugAllergyBrandEntryPointsTest {
 
     /** Readers of an order's catalogue item that are not an identity decision, and why. */
     private static final Map<String, String> NOT_IDENTITY_CHECKS = Map.ofEntries(
+        Map.entry("cdshooks/rules/AdultParacetamolRule.java", "reads the route and form of the context's item, only to"
+            + " withhold an oral verdict; the drug and its strength come from ParacetamolFactsReader and the engine,"
+            + " both on OrderedDrugIdentity, and OrderedDrugIdentityRule flags a name that contradicts the item"),
+        Map.entry("cdshooks/rules/ParacetamolDosesGiven.java", "places each dose through ParacetamolFactsReader.otherOrder"
+            + " and isCombination, on OrderedDrugIdentity: a strength is never read from an item the typed name"
+            + " contradicts. It reads the link only to name a dose whose item has left the active list"),
         Map.entry("cdshooks/rules/CdsRuleEngine.java", "builds the rule context; OrderedDrugIdentityRule, a rule of"
             + " every engine, flags a name that contradicts the item it resolved"),
         Map.entry("cdshooks/rules/PediatricDoseRule.java", "reads the ceiling of the context's item; the engine's"

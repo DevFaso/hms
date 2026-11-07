@@ -1704,6 +1704,7 @@
       "REGISTRATION_DEACTIVATED": "Enregistrement du patient désactivé",
       "CDS_CRITICAL_OVERRIDDEN_AT_SIGNATURE": "Alerte critique d’aide à la décision outrepassée à la signature",
       "DOSE_EXCEPTION_AT_SIGNATURE": "Exception de dose enregistrée à la signature",
+      "SIGNATURE_EXCEPTION_ENDED": "Exception de signature terminée : la prescription a été modifiée",
       "URGENT_DOSE_EXCEPTION_AT_SIGNATURE": "Exception urgente de dose pédiatrique enregistrée à la signature",
       "ENCOUNTER_CANCELLED_WITH_ADMISSION": "Consultation clôturée : l’hospitalisation {{admission}} a été annulée (était {{previous}})",
       "ENCOUNTER_DISCHARGE_COMPLETED": "Consultation clôturée à la sortie de l’hospitalisation {{admission}} (était {{previous}})",

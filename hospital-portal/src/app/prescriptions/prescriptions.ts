@@ -1226,6 +1226,8 @@ export class PrescriptionsComponent implements OnInit {
     if (!this.awaitsDoseReview(p)) return false;
     const own = this.ownPrescriberStaffId();
     if (own && p.staffId === own) return false;
+    // CR-01: the signer of an urgent exception is not its second pair of eyes.
+    if (own && p.pediatricDoseUrgentExceptionAt && p.signedByStaffId === own) return false;
     return this.roleContext.hasAnyActiveRole(PrescriptionsComponent.DOSE_REVIEWER_ROLES);
   }
 

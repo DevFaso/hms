@@ -1704,6 +1704,7 @@
       "REGISTRATION_DEACTIVATED": "Patient registration deactivated",
       "CDS_CRITICAL_OVERRIDDEN_AT_SIGNATURE": "Critical decision-support alert overridden at signature",
       "DOSE_EXCEPTION_AT_SIGNATURE": "Dose exception recorded at signature",
+      "SIGNATURE_EXCEPTION_ENDED": "Signature exception ended: what is ordered was changed",
       "URGENT_DOSE_EXCEPTION_AT_SIGNATURE": "Urgent paediatric dose exception recorded at signature",
       "ENCOUNTER_CANCELLED_WITH_ADMISSION": "Encounter closed: admission {{admission}} was cancelled (was {{previous}})",
       "ENCOUNTER_DISCHARGE_COMPLETED": "Encounter closed at the discharge of admission {{admission}} (was {{previous}})",

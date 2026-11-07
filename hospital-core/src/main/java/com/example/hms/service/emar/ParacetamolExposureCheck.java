@@ -38,16 +38,27 @@ public class ParacetamolExposureCheck {
         this.text = text;
     }
 
-    /** Throws when the read fails: the caller answers {@link #unknownCard} and the dose stands. */
-    @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
+    /**
+     * Throws when the read fails: the caller answers {@link #unknownCard} and the dose stands. Not
+     * marked read-only: it must see the commit just made, whatever a read-only transaction is routed to.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public List<CdsCard> cards(UUID prescriptionId, UUID hospitalId, boolean doseJustRecorded) {
         Prescription rx = prescriptions.findById(prescriptionId).orElse(null);
         if (rx == null) {
             return List.of();
         }
-        return engine.paracetamolAtAdministration(rx.getPatient(), hospitalId,
+        // The dose's own write has checked the order's hospital. Read again in a new transaction, an order of
+        // another hospital is read for nobody: no cards, and never a failure of the dose. In the global view the
+        // order's own hospital is the scope.
+        UUID orderHospital = rx.getHospital() == null ? null : rx.getHospital().getId();
+        UUID scope = hospitalId != null ? hospitalId : orderHospital;
+        if (scope == null || !java.util.Objects.equals(scope, orderHospital)) {
+            return List.of();
+        }
+        return engine.paracetamolAtAdministration(rx.getPatient(), scope,
             new CdsRuleEngine.ProposedOrder(rx.getMedicationName(), rx.getMedicationCode(), rx.getDosage(),
-                rx.getFrequency(), engine.itemOf(rx, hospitalId), rx.getId(),
+                rx.getFrequency(), engine.itemOf(rx, scope), rx.getId(),
                 PrnMinInterval.highestDosesPerDay(PrnMinInterval.isAsNeeded(rx), rx.getPrnMinIntervalHours()),
                 rx.getRoute(), null),
             doseJustRecorded);

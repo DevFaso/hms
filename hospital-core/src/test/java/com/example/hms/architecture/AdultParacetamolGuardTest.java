@@ -81,7 +81,8 @@ class AdultParacetamolGuardTest {
     @Test
     void theExposureIsReadOutsideTheDoseAndTheMarTakesNoPatientLock() throws IOException {
         assertThat(code(MAIN.resolve("service/emar/ParacetamolExposureCheck.java")))
-            .contains("propagation = Propagation.REQUIRES_NEW");
+            .contains("propagation = Propagation.REQUIRES_NEW")
+            .doesNotContain("readOnly");
         assertThat(code(MAIN.resolve("service/impl/NurseTaskServiceImpl.java")))
             .contains("TransactionCallbacks.afterCommit(")
             .doesNotContain("lockByIdUnscoped");

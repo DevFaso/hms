@@ -195,6 +195,11 @@ public class CdsRuleEngine {
      * it uses, so an old weight is flagged.
      */
     public CdsRuleContext buildContext(Patient patient, UUID hospitalId, ProposedOrder order) {
+        return buildContext(patient, hospitalId, order, null);
+    }
+
+    /** {@code factsRead}: the facts when the caller has read them already; {@code null} reads them here. */
+    private CdsRuleContext buildContext(Patient patient, UUID hospitalId, ProposedOrder order, ParacetamolFacts factsRead) {
         String proposedMedicationName = order.medicationName();
         String proposedMedicationCode = order.medicationCode();
         String proposedDosage = order.dosage();
@@ -239,7 +244,8 @@ public class CdsRuleEngine {
             parseDoseUnits(proposedDosage),
             weighedAt,
             order.prnDosesPerDay(),
-            readParacetamolFacts(patient, hospitalId, proposedMedicationName, catalogItem, excludedPrescriptionId),
+            factsRead != null ? factsRead
+                : readParacetamolFacts(patient, hospitalId, proposedMedicationName, catalogItem, excludedPrescriptionId),
             OrderedRoute.of(order.route(),
                 order.formulation() != null || catalogItem == null ? order.formulation() : catalogItem.getForm())
         );
@@ -347,7 +353,7 @@ public class CdsRuleEngine {
         if (facts == ParacetamolFacts.READ_FAILED) {
             throw new IllegalStateException();
         }
-        return facts.applies() ? rule.atAdministration(buildContext(patient, hospitalId, order), doseJustRecorded) : List.of();
+        return facts.applies() ? rule.atAdministration(buildContext(patient, hospitalId, order, facts), doseJustRecorded) : List.of();
     }
 
     /* =====================================================================

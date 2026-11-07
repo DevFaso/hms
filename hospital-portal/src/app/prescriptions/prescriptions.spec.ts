@@ -1103,6 +1103,19 @@ describe('PrescriptionsComponent — signing', () => {
       ]);
     });
 
+    it('CR-01: the signer of an urgent exception is not offered its review', () => {
+      spyOn<any>(component, 'ownPrescriberStaffId').and.returnValue('staff-a');
+      spyOn((component as any).roleContext, 'hasAnyActiveRole').and.returnValue(true);
+      const urgent = {
+        ...rx('rx-1', 'SIGNED'),
+        staffId: 'staff-nurse',
+        pediatricDoseReviewRequired: true,
+        pediatricDoseUrgentExceptionAt: '2026-11-07T02:00:00',
+      };
+      expect(component.canRecordDoseReview({ ...urgent, signedByStaffId: 'staff-a' })).toBeFalse();
+      expect(component.canRecordDoseReview({ ...urgent, signedByStaffId: 'staff-b' })).toBeTrue();
+    });
+
     it('CR-01: a routine signature never sends the urgent flag, and the action is offered only for a due review', () => {
       prescriptionService.sign.and.returnValue(of(rx('rx-1', 'SIGNED')));
       component.signPrescription(rx('rx-1', 'DRAFT'));
