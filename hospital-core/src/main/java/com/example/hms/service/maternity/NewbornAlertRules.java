@@ -120,7 +120,7 @@ public final class NewbornAlertRules {
         if (birth == null || assessmentTime == null) {
             return null;
         }
-        return Math.max(0, Duration.between(birth, assessmentTime).toHours());
+        return Math.max(0, Duration.between(birth.atOffset(java.time.ZoneOffset.UTC), assessmentTime.atOffset(java.time.ZoneOffset.UTC)).toHours());
     }
 
     public static boolean heartRateOfConcern(Integer heartRate) {
@@ -218,7 +218,7 @@ public final class NewbornAlertRules {
         if (reading.enteredMmol() != null) {
             return GlucoseUnit.MMOL_L.toExactMgDl(reading.enteredMmol());
         }
-        return reading.enteredMgDl() != null ? reading.enteredMgDl() : reading.glucoseMgDl();
+        return reading.enteredMgDl() != null ? reading.enteredMgDl().doubleValue() : reading.glucoseMgDl().doubleValue();
     }
 
     /**

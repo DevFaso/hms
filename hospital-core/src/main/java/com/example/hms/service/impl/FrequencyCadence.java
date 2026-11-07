@@ -75,7 +75,7 @@ final class FrequencyCadence {
         "\\bQ ?+(\\d{1,2}+) ?+(D|DAYS?+|J|JOURS?+|DIAS?+|W|WEEKS?+|SEM|SEMAINES?+|SEMANAS?+|MOIS|MONTHS?+|MES|MESES)\\b");
     /** "toutes les 4h a 6h", "every 4 hours to 6 hours", "q4h-q6h", "q4h/q6h": two intervals, unless they are one ("6 h/6 h"). */
     private static final Pattern EVERY_TWO_NUMBERS = Pattern.compile(
-        "\\b(?:EVERY|TOUTES LES|TOUS LES|CADA|Q) ?(\\d{1,2}+) ?(?:HEURES?+|HOURS?+|HRS?+|HORAS?+|HS|H)? ?(?:-|/|\\bA\\b|\\bTO\\b|\\bOU\\b|\\bOR\\b) ?Q? ?(\\d{1,2}+)\\b?");
+        "\\b(?:EVERY|TOUTES LES|TOUS LES|CADA|Q) ?(\\d{1,2}+) ?(?:HEURES?+|HOURS?+|HRS?+|HORAS?+|HS|H)? ?(?:-|/|\\bA\\b|\\bTO\\b|\\bOU\\b|\\bOR\\b) ?Q? ?(\\d{1,2}+)");
     /** "toutes les 1 h 30", "every hour and a half", "toutes les 8h00": minutes the hour patterns would drop. */
     private static final Pattern EVERY_HOURS_AND_PART = Pattern.compile(
         "\\b(?:EVERY|TOUTES LES|CADA|Q) ?(?:\\d{1,2}+ ?)?(?:HEURES?+|HOURS?+|HORAS?+|H) ?(?:(?:ET|AND|Y) )?(?:\\d{2}+\\b|DEMIE|A HALF|MEDIA)");
