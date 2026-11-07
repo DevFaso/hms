@@ -116,6 +116,12 @@ public class AdultParacetamolRule implements CdsRule {
         private final String medication;
         private final Double doseMg;
         private final Double dosesPerDay;
+        /**
+         * QA D1455: a frequency the reader does not read has no known daily total, whatever
+         * {@link #dosesPerDay} holds: the count the sentence states, a minimum, or nothing, then
+         * counted as one dose. A ticked interval is known: it is the most the order allows.
+         */
+        private final boolean totalUnknown;
         private final Limit limit;
         private final Totals others;
         private final Double total;
@@ -132,9 +138,12 @@ public class AdultParacetamolRule implements CdsRule {
             this.doseMg = noUnit || facts.proposedCombination() ? null : context.proposedDoseMg();
             this.dosesPerDay = PediatricDoseRule.dosesOnADosingDay(
                 context.proposedFrequency(), context.proposedPrnDosesPerDay());
+            this.totalUnknown = context.proposedPrnDosesPerDay() == null
+                && MarDoseSchedule.writtenWithNoCount(context.proposedFrequency());
             this.limit = dailyLimit();
             this.others = otherOrders();
-            this.total = doseMg == null ? null : doseMg * (dosesPerDay == null ? 1d : dosesPerDay) + others.mg;
+            double doses = dosesPerDay == null ? 1d : dosesPerDay;
+            this.total = doseMg == null ? null : doseMg * doses + others.mg;
         }
 
         /** No date of birth: neither the adult nor the paediatric limits can be judged, and it says so. */
@@ -199,10 +208,14 @@ public class AdultParacetamolRule implements CdsRule {
                 return;
             }
             if (total > ceiling) {
-                cards.add(alert(text.get("cds.adultParacetamol.daily.summary",
-                    "{0}: {1} mg per day of paracetamol from active orders at this hospital is above the adult maximum of {2} mg per day",
-                    medication, number(total), number(ceiling)), null));
-            } else if (dosesPerDay == null && MarDoseSchedule.writtenWithNoCount(context.proposedFrequency())) {
+                cards.add(alert(totalUnknown
+                    ? text.get("cds.adultParacetamol.dailyAtLeast.summary",
+                        "{0}: at least {1} mg per day of paracetamol from active orders at this hospital is above the adult maximum of {2} mg per day; the daily total could not be read from the frequency \"{3}\"",
+                        medication, number(total), number(ceiling), context.proposedFrequency())
+                    : text.get("cds.adultParacetamol.daily.summary",
+                        "{0}: {1} mg per day of paracetamol from active orders at this hospital is above the adult maximum of {2} mg per day",
+                        medication, number(total), number(ceiling)), null));
+            } else if (totalUnknown) {
                 cards.add(alert(text.get("cds.adultParacetamol.unread.summary",
                     "{0}: the daily total could not be read from the frequency \"{1}\" - check paracetamol from active orders at this hospital against the maximum of {2} mg per day",
                     medication, context.proposedFrequency(), number(ceiling)), null));
@@ -339,6 +352,8 @@ public class AdultParacetamolRule implements CdsRule {
                 totals.counted++;
                 if (perDay == null && MarDoseSchedule.writtenWithNoCount(rx.getFrequency())) {
                     totals.unreadFrequency++;
+                } else if (!PrnMinInterval.isAsNeeded(rx) && MarDoseSchedule.writtenWithNoCount(rx.getFrequency())) {
+                    totals.statedCountOnly++;
                 }
             }
             return totals;
@@ -380,6 +395,11 @@ public class AdultParacetamolRule implements CdsRule {
                         number(others.mg))
                     : text.get("cds.adultParacetamol.total.unknown",
                         "The 24-hour total could not be calculated: the dose of this order could not be read in mg.");
+            }
+            if (totalUnknown) {
+                return text.get("cds.adultParacetamol.total.frequencyUnread",
+                    "The 24-hour total could not be calculated from this frequency: at least {0} mg. It counts prescribed orders, not actual use.",
+                    number(total));
             }
             boolean noFrequency = context.proposedPrnDosesPerDay() == null
                 && (context.proposedFrequency() == null || context.proposedFrequency().isBlank());
@@ -436,6 +456,11 @@ public class AdultParacetamolRule implements CdsRule {
                 parts.add(text.get("cds.adultParacetamol.detail.oneDose",
                     "{0} of them counted as one dose: the frequency could not be read.",
                     String.valueOf(others.unreadFrequency)));
+            }
+            if (others.statedCountOnly > 0) {
+                parts.add(text.get("cds.adultParacetamol.detail.statedCountOnly",
+                    "{0} of them counted at the number of doses a day their frequency states, which could not be read in full: it may be more.",
+                    String.valueOf(others.statedCountOnly)));
             }
             if (others.noDuration > 0) {
                 parts.add(text.get("cds.adultParacetamol.detail.noDuration",
@@ -544,6 +569,7 @@ public class AdultParacetamolRule implements CdsRule {
         private int counted;
         private int uncounted;
         private int unreadFrequency;
+        private int statedCountOnly;
         private int noDuration;
         private final List<String> uncountedNames = new ArrayList<>();
     }

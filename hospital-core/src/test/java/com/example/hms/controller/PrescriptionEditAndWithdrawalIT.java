@@ -380,7 +380,10 @@ class PrescriptionEditAndWithdrawalIT extends BaseIT {
                 .andExpect(jsonPath("$.fieldErrors.asNeeded").exists());
         }
         String[] asked = {"max 4/j", "jusqu'à 4 fois par jour", "1 à 3 fois par jour", "up to 4 times a day",
-            "selon prescription médicale", "SP + AQ", "selon ordonnance", "CPS", "protocole national", "5 jours", "x3"};
+            "selon prescription médicale", "SP + AQ", "selon ordonnance", "CPS", "protocole national", "5 jours", "x3",
+            // QA D1452 (changed: these five were accepted): more than a form of the grammar.
+            "SP-AQ 1 fois par jour", "SMC : SP + AQ, 1 fois par mois", "4 cp 2 fois par jour (poids > 35 kg)",
+            "3 fois par jour selon ordonnance", "2 fois par jour selon protocole"};
         for (String wording : asked) {
             mockMvc.perform(post(API_CONTEXT + "/prescriptions")
                     .contextPath(API_CONTEXT)
@@ -398,9 +401,7 @@ class PrescriptionEditAndWithdrawalIT extends BaseIT {
                 "\"quantity\":3,\"controlledSubstance\":true,\"frequencyConfirmed\":true"));
         }
 
-        for (String wording : new String[] {"Prise unique (TPI-SP 2)", "TPI-SP", "SP dose unique",
-            "SP-AQ 1 fois par jour", "SMC : SP + AQ, 1 fois par mois", "4 cp 2 fois par jour (poids > 35 kg)",
-            "3 fois par jour selon ordonnance", "2 fois par jour selon protocole", "Q6H", "cada 6 horas",
+        for (String wording : new String[] {"Prise unique (TPI-SP 2)", "TPI-SP", "SP dose unique", "Q6H", "cada 6 horas",
             "3 times a day", "prendre 1 comprimé 3 fois par jour", "take 1 tablet twice daily", "H0 H8 H24 H36 H48 H60",
             "J1 J2 J3", "au coucher", "chaque semaine", "perfusion continue", "bolus"}) {
             createdOnce(createBody(wording));

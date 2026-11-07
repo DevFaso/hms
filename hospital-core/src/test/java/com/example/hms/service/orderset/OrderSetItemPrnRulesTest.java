@@ -33,9 +33,29 @@ class OrderSetItemPrnRulesTest {
 
     @Test
     void aWordingNotReadIsAskedOnTheItemsOwnField() {
-        assertThatThrownBy(() -> OrderSetItemPrnRules.requireValid(List.of(item("QD"), item("SP + AQ"))))
+        List<Map<String, Object>> items = List.of(item("QD"), item("SP + AQ"));
+        assertThatThrownBy(() -> OrderSetItemPrnRules.requireValid(items))
             .isInstanceOf(FieldBusinessException.class)
             .hasFieldOrPropertyWithValue("field", "orderItems[1].frequencyConfirmed");
+    }
+
+    /**
+     * QA D1452: a set saved when "3 fois par jour pendant 5 jours" was accepted is not stopped at apply, where nobody
+     * can answer: its order is created and flagged on the MAR. A save is still asked, and a condition still refused.
+     */
+    @Test
+    void aSavedSetIsNotStoppedAtApplyByAQuestion() {
+        Map<String, Object> saved = item("3 fois par jour pendant 5 jours");
+        List<Map<String, Object>> set = List.of(saved);
+        assertThatThrownBy(() -> OrderSetItemPrnRules.requireValid(set))
+            .hasFieldOrPropertyWithValue("field", "orderItems[0].frequencyConfirmed");
+        assertThatCode(() -> OrderSetItemPrnRules.requireValidToApply(set)).doesNotThrowAnyException();
+        assertThat(OrderSetItemPrnRules.frequencyAnsweredAtApply(saved)).isTrue();
+        assertThat(OrderSetItemPrnRules.frequencyAnsweredAtApply(item("BID"))).isFalse();
+        assertThat(OrderSetItemPrnRules.frequencyAnsweredAtApply(item("pour douleur"))).isFalse();
+        List<Map<String, Object>> condition = List.of(item("pour douleur"));
+        assertThatThrownBy(() -> OrderSetItemPrnRules.requireValidToApply(condition))
+            .hasFieldOrPropertyWithValue("field", "orderItems[0].asNeeded");
     }
 
     @Test

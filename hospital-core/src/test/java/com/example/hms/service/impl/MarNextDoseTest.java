@@ -96,7 +96,7 @@ class MarNextDoseTest {
 
     /** QA D1426: a single-dose wording ends after its dose: no reason, no second dose. */
     @ParameterizedTest
-    @ValueSource(strings = {"Prise unique (TPI-SP 2)", "prise unique à la CPN", "en une prise", "SP dose unique", "TPI-SP"})
+    @ValueSource(strings = {"Prise unique (TPI-SP 2)", "en une prise", "SP dose unique", "TPI-SP"})
     void d1426_aSingleDoseFormEndsAfterItsDose(String frequency) {
         LocalDateTime start = NOW.minusHours(1);
         assertThat(MarNextDose.of(rx(frequency, start), NOW,
@@ -241,12 +241,27 @@ class MarNextDoseTest {
      * round 25 ended them after one dose.
      */
     @ParameterizedTest
-    @ValueSource(strings = {"once", "STAT", "une seule fois"})
+    @ValueSource(strings = {"once only", "STAT", "une seule fois"})
     void aOneOffOrderEndsAfterItsFirstOutcome(String frequency) {
         LocalDateTime slot = NOW.minusHours(1);
         MarNextDose.Due due = MarNextDose.of(rx(frequency, slot), NOW,
             List.of(row(MedicationAdministrationStatus.GIVEN, slot, slot)), WINDOW);
         assertThat(due.finished()).isTrue();
+    }
+
+    /**
+     * QA D1457 (changed: "once" ended the course): a stored order the grammar does not read, a recurring one
+     * ended after its first dose in round 35, stays open and flagged. Each later dose asks a reason, never a wrong cadence.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"once", "prise unique \u00e0 la CPN", "1 fois par heure", "une fois par semaine 2 cp",
+        "8 hourly", "3 fois chaque jour", "1 fois par jour le lundi", "3 fois par 48h"})
+    void d1457_aStoredWordingNotReadStaysOpenAndFlagged(String frequency) {
+        LocalDateTime slot = NOW.minusHours(1);
+        MarNextDose.Due due = MarNextDose.of(rx(frequency, slot), NOW,
+            List.of(row(MedicationAdministrationStatus.GIVEN, slot, slot)), WINDOW);
+        assertThat(due.finished()).as(frequency).isFalse();
+        assertThat(due.frequencyUnread()).as(frequency).isTrue();
     }
 
     /**

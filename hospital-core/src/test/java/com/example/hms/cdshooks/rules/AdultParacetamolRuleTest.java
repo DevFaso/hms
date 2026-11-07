@@ -387,8 +387,8 @@ class AdultParacetamolRuleTest {
     @Test
     void theTextNamesTheGroupsAndSaysWhenNoWeightIsOnFile() {
         String noWeight = evaluate(new Order("1 g", "5 fois par jour").weight(null)).get(0).detail();
-        assertThat(noWeight).contains("No weight on file: a lower limit applies under 50 kg");
-        assertThat(noWeight).contains("Gilbert syndrome").contains("chronic alcoholism").contains("chronic malnutrition")
+        assertThat(noWeight).contains("No weight on file: a lower limit applies under 50 kg")
+            .contains("Gilbert syndrome").contains("chronic alcoholism").contains("chronic malnutrition")
             .contains("contraindicated in severe hepatocellular insufficiency");
         assertThat(evaluate(new Order("1 g", "5 fois par jour")).get(0).detail()).doesNotContain("No weight on file");
     }
@@ -411,10 +411,8 @@ class AdultParacetamolRuleTest {
         all.addAll(evaluate(new Order("1 g", "selon la douleur")));
         all.addAll(evaluate(new Order("1 g", "4 fois par jour").risks(ParacetamolRisk.TWO_GRAM_GROUP,
             ParacetamolRisk.CHRONIC_ALCOHOLISM)));
-        assertThat(all).hasSizeGreaterThanOrEqualTo(6);
         assertThat(evaluate(new Order("1 g", null).risks(ParacetamolRisk.SEVERE_HEPATIC)).get(0).needsReasonAtSignature()).isTrue();
-        assertThat(all).noneMatch(CdsCard::needsReasonAtSignature);
-        assertThat(all).allSatisfy(card -> {
+        assertThat(all).hasSizeGreaterThanOrEqualTo(6).noneMatch(CdsCard::needsReasonAtSignature).allSatisfy(card -> {
             assertThat(card.indicator()).isNotEqualTo(CdsCard.Indicator.CRITICAL);
             assertThat(card.blocksOverride()).isFalse();
             assertThat(card.reviewRequired()).isNull();
@@ -508,8 +506,8 @@ class AdultParacetamolRuleTest {
     @Test
     void theScopeIsNamedOnEveryCard() {
         List<CdsCard> cards = evaluate(new Order("2 g", "toutes les 2 heures").risks(ParacetamolRisk.SEVERE_HEPATIC));
-        assertThat(cards).isNotEmpty().allSatisfy(card -> assertThat(card.detail()).contains("this hospital only: check other facilities"));
-        assertThat(cards).noneMatch(card -> card.summary().contains("all active orders"));
+        assertThat(cards).isNotEmpty().allSatisfy(card -> assertThat(card.detail()).contains("this hospital only: check other facilities"))
+            .noneMatch(card -> card.summary().contains("all active orders"));
     }
 
     /** M5. */
@@ -529,6 +527,39 @@ class AdultParacetamolRuleTest {
         assertThat(letters(evaluateWith(new Order("1 cp", "3 fois par jour"), alone))).isEqualTo("P");
     }
 
+    /**
+     * QA D1455: the adult 2 g with "3 fois par jour" is judged at 6000 mg; "3 fois chaque jour" is not read, and the
+     * card says the total could not be calculated. It never reads as a known total of one dose a day.
+     */
+    @Test
+    void d1455_anUnreadCountIsNeverOneDoseADay() {
+        assertThat(evaluate(new Order("2 g", "3 fois par jour")).stream().map(CdsCard::summary))
+            .anyMatch(summary -> summary.contains("6000 mg per day"));
+        List<CdsCard> cards = evaluate(new Order("2 g", "3 fois chaque jour"));
+        assertThat(cards.stream().map(CdsCard::summary))
+            .anyMatch(summary -> summary.contains("the daily total could not be read from the frequency \"3 fois chaque jour\""))
+            .noneMatch(summary -> summary.contains("2000 mg per day"));
+        assertThat(cards.stream().map(CdsCard::detail))
+            .allMatch(detail -> detail.contains("could not be calculated from this frequency: at least 2000 mg"))
+            .noneMatch(detail -> detail.contains("Calculated 24-hour total"));
+    }
+
+    /** QA D1455: another order counted at what its unread sentence states says it may be more. */
+    @Test
+    void d1455_anotherOrderAtItsStatedCountIsTold() {
+        String detail = evaluate(new Order("1 g", "3 fois par jour").others(other("1 g", "3 fois par jour et 1 fois la nuit")))
+            .get(0).detail();
+        assertThat(detail).contains("counted at the number of doses a day their frequency states");
+    }
+
+    /** QA D1455: over the ceiling on what the sentence states: "at least", and the total is unknown. */
+    @Test
+    void d1455_aStatedCountOverTheCeilingSaysAtLeast() {
+        String summary = evaluate(new Order("2 g", "3 fois par jour pendant 5 jours")).stream().map(CdsCard::summary)
+            .filter(s -> s.contains("6000 mg per day")).findFirst().orElseThrow();
+        assertThat(summary).contains("at least 6000 mg per day").contains("could not be read");
+    }
+
     /** L1, L2. */
     @Test
     void aSentenceWithSeveralCountsIsReadAtItsHighest() {
@@ -536,7 +567,10 @@ class AdultParacetamolRuleTest {
         assertThat(evaluate(new Order("1 g", "2/j puis 5/j")).get(0).summary()).contains("5000 mg per day");
         assertThat(evaluate(new Order("1 g", "2 fois par jour puis 4/j")).get(0).summary()).contains("4000 mg per day");
         assertThat(evaluate(new Order("1 g", "2 fois par jour puis toutes les 4 h")).get(0).summary()).contains("6000 mg per day");
-        assertThat(evaluate(new Order("500 mg", "2 fois par jour puis 4 fois par jour"))).isEmpty();
+        // QA D1455 (changed: this was silent): no card reads a sentence the MAR does not read as a known total.
+        assertThat(evaluate(new Order("500 mg", "2 fois par jour puis 4 fois par jour")).get(0).summary())
+            .contains("the daily total could not be read");
+        assertThat(evaluate(new Order("500 mg", "4 fois par jour"))).isEmpty();
     }
 
     @Test

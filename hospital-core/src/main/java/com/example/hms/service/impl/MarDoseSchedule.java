@@ -6,7 +6,6 @@ import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -40,8 +39,7 @@ import java.util.regex.Pattern;
  * ({@link FrequencyWording}, QA D1391 / D1395).
  *
  * <p>QA D1419 / D1426 (round 34, coordinator decision 2026-11-06): this reader
- * and that rule give one answer. What is read here ({@link FrequencyCadence}
- * for every way of writing a cadence the patterns below do not take) is a
+ * and that rule give one answer. What is read here is a
  * schedule for the prescriber AND for the MAR, so a wording accepted as a
  * schedule never shows {@code frequencyUnread}; what is not read asks the
  * prescriber once, then stays open on the MAR. A ceiling, a range or a choice
@@ -49,6 +47,14 @@ import java.util.regex.Pattern;
  * either, though {@link #dosesPerDay} still counts its highest number for a
  * daily limit. Two more {@link Kind}s say what the MAR does with a continuous
  * infusion and with a course of fixed moments.
+ *
+ * <p>QA D1452-D1460 (round 35, coordinator decision 2026-11-07): {@link FrequencyCadence}
+ * reads a schedule only when the WHOLE text is one form of a closed grammar, and
+ * this class no longer reads a text in any other way. The patterns left below are
+ * not a reader of a schedule: they find in a sentence the MAR does not read the
+ * count ({@link #dosesPerDay}) and the gap ({@link #shortestMinutesBetweenDoses}) a
+ * limit must at least judge, and the limit's card says the total is unknown
+ * ({@link #writtenWithNoCount}).
  */
 public final class MarDoseSchedule {
 
@@ -200,16 +206,8 @@ public final class MarDoseSchedule {
     /** Any run of characters that is not a letter or a digit (one class, no backtracking). */
     private static final Pattern NOT_ALPHANUMERIC = Pattern.compile("[^A-Z0-9]+");
 
-    private static final Pattern STAT_WORD = Pattern.compile("\\bSTAT\\b");
-
     /** Any kind of space, read as one: "toutes  les", and the comma of "toutes, les" once it is a space. */
     private static final Pattern SPACES = Pattern.compile("[\\s\\p{Z}\\uFEFF]++");
-
-    /** Frequencies (accents and spaces removed, counts as digits) that mean a single dose, in EN, FR and ES. */
-    private static final Set<String> ONE_OFF_WORDS = Set.of(
-        "ONCE", "ONCEONLY", "ONETIME", "SINGLEDOSE", "IMMEDIATELY", "NOW", "1X", "1FOIS",
-        "UNESEULEFOIS", "1FOISSEULEMENT", "DOSEUNIQUE", "ENDOSEUNIQUE", "PRISEUNIQUE",
-        "IMMEDIATEMENT", "MAINTENANT", "1VEZ", "UNASOLAVEZ", "DOSISUNICA", "AHORA", "INMEDIATAMENTE");
 
     private MarDoseSchedule() {
     }
@@ -237,29 +235,8 @@ public final class MarDoseSchedule {
         if (frequency == null || SPACES.matcher(frequency).replaceAll("").isEmpty()) {
             return Reading.ONE_OFF;
         }
-        String upper = normalize(frequency);
-        // The digits of a decimal or a fraction are part of a dose, never a count or a list.
-        String written = FrequencyCadence.withoutDoseParts(accentlessUpper(frequency));
-        // Before STAT: "1 g stat puis 500 mg toutes les 8 h" is more than one dose.
-        if (FrequencyCadence.statesNoFixedSchedule(written)) {
-            return Reading.UNREAD;
-        }
-        // A word: atorvastatine and nystatine are not one dose.
-        if (STAT_WORD.matcher(upper).find()) {
-            return Reading.ONE_OFF;
-        }
-        if (isAsNeeded(frequency)) {
-            return Reading.UNREAD;
-        }
-        Integer minutes = intervalMinutesOf(written);
-        if (minutes != null) {
-            return Reading.every(minutes);
-        }
-        if (ONE_OFF_WORDS.contains(upper.replace(" ", ""))) {
-            return Reading.ONE_OFF;
-        }
-        // QA D1419 / D1426: a cadence written any other way, wherever it stands in the sentence.
-        Reading cadence = FrequencyCadence.read(normalize(written));
+        // QA D1452: all of the text is one form of the grammar, or it is not read.
+        Reading cadence = FrequencyCadence.read(frequency);
         return cadence != null ? cadence : Reading.UNREAD;
     }
 
@@ -269,6 +246,11 @@ public final class MarDoseSchedule {
      * that does not divide the day ("5 fois par jour") is still read, and an
      * interval longer than a day gives a fraction ("q48h" = 0.5). A sentence with several
      * counts ("2 fois par jour puis 4 fois par jour") gives the highest, for a limit.
+     *
+     * <p>QA D1455: a sentence the reader does not read gives only the count it states
+     * per day, what a limit must at least judge, or {@code null}; never one dose a day
+     * by default ("3 fois chaque jour" is {@code null}). Its total is unknown
+     * ({@link #writtenWithNoCount}) and the limit's card says so.
      */
     public static Double dosesPerDay(String frequency) {
         if (frequency == null || frequency.isBlank() || isAsNeeded(frequency)) {
@@ -295,8 +277,7 @@ public final class MarDoseSchedule {
             return reading.intervalMinutes();
         }
         if (reading.kind() == Kind.UNREAD) {
-            // "toutes les 2 a 3 h" is no schedule, but it allows the shorter gap.
-            return FrequencyCadence.shorterOfTwoHourIntervals(normalize(accentlessUpper(frequency)));
+            return shortestStatedMinutes(frequency);
         }
         if (reading.kind() != Kind.COURSE) {
             return null;
@@ -312,7 +293,28 @@ public final class MarDoseSchedule {
         return shortest;
     }
 
-    /** A frequency is written, and it says no count of doses: a limit on the day cannot be judged from it. */
+    /**
+     * No schedule, but what a limit on the interval must still judge: the shorter gap of "toutes
+     * les 2 a 3 h", the stated gap of "toutes les 2 h pendant 3 jours"; {@code null} for an as-needed wording.
+     */
+    private static Integer shortestStatedMinutes(String frequency) {
+        if (isAsNeeded(frequency)) {
+            return null;
+        }
+        String upper = normalize(accentlessUpper(frequency));
+        Integer shorter = FrequencyCadence.shorterOfTwoHourIntervals(upper);
+        if (shorter != null) {
+            return shorter;
+        }
+        Integer hours = hoursOf(upper);
+        return hours == null ? null : hours * MINUTES_PER_HOUR;
+    }
+
+    /**
+     * A frequency is written, and the reader does not read a count of doses from it: the daily total is
+     * unknown. Beside it {@link #dosesPerDay} may hold what the sentence states, a limit to judge at
+     * least, or nothing; a card says the total could not be calculated in both cases (QA D1455).
+     */
     public static boolean writtenWithNoCount(String frequency) {
         Kind kind = read(frequency).kind();
         return kind == Kind.UNREAD || kind == Kind.CONTINUOUS;
@@ -341,38 +343,6 @@ public final class MarDoseSchedule {
             return null;
         }
         return reading.intervalMinutes() / MINUTES_PER_HOUR;
-    }
-
-    private static Integer intervalMinutesOf(String frequency) {
-        // QA D928: a label that carries its code, "Once daily (QD)" or
-        // "Deux fois par jour (BID)", reads as its words, else as its code.
-        int open = frequency.indexOf('(');
-        int close = frequency.indexOf(')', open + 1);
-        if (open >= 0 && close > open) {
-            Integer words = readMinutes(frequency.substring(0, open) + ' ' + frequency.substring(close + 1));
-            return words != null ? words : readMinutes(frequency.substring(open + 1, close));
-        }
-        return readMinutes(frequency);
-    }
-
-    private static Integer readMinutes(String frequency) {
-        if (frequency.isBlank()) {
-            return null;
-        }
-        if (isAsNeeded(frequency)) {
-            return null;
-        }
-        String f = normalize(frequency);
-        Integer hours = hoursOf(f);
-        if (hours != null) {
-            return hours * MINUTES_PER_HOUR;
-        }
-        Integer perDay = timesPerDay(f);
-        if (perDay != null) {
-            return perDay > 0 ? MINUTES_PER_DAY / perDay : null;
-        }
-        Integer named = namedHours(f.replace(" ", ""));
-        return named == null ? null : named * MINUTES_PER_HOUR;
     }
 
     /** The hours of a "q6h", "every 6 hours", "toutes les heures", "6h/6h" or "tous les 2 jours" frequency. */
@@ -466,22 +436,6 @@ public final class MarDoseSchedule {
             return count <= MAX_DOSES_PER_DAY ? count : null;
         }
         return null;
-    }
-
-    private static Integer namedHours(String compact) {
-        return switch (compact) {
-            case "QD", "OD", "DAILY", "ONCEDAILY", "ONCEADAY", "QAM", "QPM", "QHS", "HS", "1XDAILY", "EVERYDAY",
-                 // QA D928: the French and Spanish ways of writing "daily".
-                 "TOUSLESJOURS", "CHAQUEJOUR", "QUOTIDIEN", "QUOTIDIENNE", "QUOTIDIENNEMENT",
-                 "DIARIO", "DIARIA", "CADADIA", "TODOSLOSDIAS" -> 24;
-            case "BID", "BD", "TWICEDAILY", "TWICEADAY", "MATINETSOIR", "MANANAYNOCHE" -> 12;
-            case "TID", "TDS", "THREETIMESDAILY", "THREETIMESADAY", "MATINMIDIETSOIR", "MANANAMEDIODIAYNOCHE" -> 8;
-            case "QID", "QDS", "FOURTIMESDAILY", "FOURTIMESADAY" -> 6;
-            // QA D1237: hourly, and every other day.
-            case "QH", "HOURLY" -> 1;
-            case "EVERYOTHERDAY", "QOD", "UNJOURSURDEUX", "TOUSLESDEUXJOURS", "CADADOSDIAS", "DIASALTERNOS" -> 48;
-            default -> null;
-        };
     }
 
     /** Upper case, accents removed, separators read as spaces, number words read as digits. */

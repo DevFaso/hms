@@ -137,9 +137,11 @@ test('the shared fixture holds every wording QA filed under D1360 and D1378', ()
   }
   assert.ok(fixture.fixedSchedule.includes('3 fois par jour'));
   // QA D1391 and D1395 (round 33): both directions, word for word.
-  for (const wording of ['TPI-SP', 'Prise unique (TPI-SP 2)', '3 fois par jour selon ordonnance']) {
+  // QA D1452 (changed): "3 fois par jour selon ordonnance" says more than a form of the grammar: asked once.
+  for (const wording of ['TPI-SP', 'Prise unique (TPI-SP 2)', 'SP dose unique']) {
     assert.ok(fixture.fixedSchedule.includes(wording), `fixture lost "${wording}"`);
   }
+  assert.ok(fixture.unreadable.includes('3 fois par jour selon ordonnance'));
   for (const wording of ['pour douleur', 'toutes les 6 h pour douleur', 'q6h si fièvre']) {
     assert.ok(fixture.conditional.includes(wording), `fixture lost "${wording}"`);
   }
@@ -150,6 +152,24 @@ test('the shared fixture holds every wording QA filed under D1360 and D1378', ()
     'SP + AQ',
   ]) {
     assert.ok(fixture.unreadable.includes(wording), `fixture lost "${wording}"`);
+  }
+});
+
+test('QA D1472: the form offers the schedules of the grammar, the same in every language', () => {
+  const html = readFileSync(RX_HTML, 'utf8');
+  const ts = readFileSync(RX_TS, 'utf8');
+  assert.match(html, /id="rx-frequency"[\s\S]{0,300}list="rx-frequency-choices"/);
+  assert.match(html, /<datalist id="rx-frequency-choices"/);
+  const list = /const FREQUENCY_CHOICES = \[([\s\S]*?)\]/.exec(ts);
+  assert.ok(list, 'the list of choices exists');
+  const offered = [...list[1].matchAll(/'([A-Z0-9_]+)'/g)].map((m) => m[1]).sort();
+  assert.ok(offered.length > 10);
+  for (const language of ['en', 'fr', 'es']) {
+    const bundle = JSON.parse(
+      readFileSync(join(here, '..', '..', 'src', 'assets', 'i18n', `${language}.json`), 'utf8'),
+    );
+    // FrequencyWordingTest holds each of these to a schedule, and to the same one in every language.
+    assert.deepEqual(Object.keys(bundle.PRESCRIPTIONS.FREQUENCY_CHOICES).sort(), offered, language);
   }
 });
 
