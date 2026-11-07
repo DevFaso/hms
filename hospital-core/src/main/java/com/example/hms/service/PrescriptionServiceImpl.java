@@ -1859,7 +1859,9 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         requireKnownRouteOnEdit(existing, request);
         String frequencyBefore = existing.getFrequency();
         boolean tickedBefore = com.example.hms.service.impl.PrnMinInterval.isAsNeeded(existing);
-        boolean orderChanged = changesWhatIsOrdered(existing, request);
+        List<String> orderChanges = whatIsOrderedChanges(existing, request);
+        boolean orderChanged = !orderChanges.isEmpty();
+        String signedReason = existing.getSignedAt() == null ? null : existing.getOverrideReason();
         prescriptionMapper.updateEntity(existing, request, patient, staff, encounter);
         existing.setAssignment(prescriberAssignment);
         // QA round 30: an edit of an as-needed order keeps (or names) its
@@ -1872,6 +1874,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // stay withdrawable; the dispense refuses it until a quantity is set.
         applyAllergyOverrideOnUpdate(existing, allergyOverride, overrideBefore, currentUserId);
         applyCdsOverrideOnUpdate(existing, request, advisories, currentUserId);
+        settleSignatureReasonOnEdit(existing, signedReason, orderChanges, currentUserId);
         applyDoseReviewOnUpdate(existing, advisories, orderChanged);
         closePartnerOffersOnWithdrawal(existing, statusBefore);
         // Tier 2 item 33: an edit invalidates any pharmacist verification.
@@ -1910,15 +1913,34 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     }
 
     private static boolean changesWhatIsOrdered(Prescription existing, PrescriptionRequestDTO request) {
-        boolean routeChanged = request.getRoute() != null && (isBlank(request.getRoute())
-            ? !isBlank(existing.getRoute())
-            : !com.example.hms.service.emar.MedicationRoutes.sameRoute(existing.getRoute(), request.getRoute()));
-        return routeChanged || textDiffers(request.getMedicationName(), existing.getMedicationName())
-            || textDiffers(request.getDosage(), existing.getDosage())
-            || textDiffers(request.getFrequency(), existing.getFrequency())
-            || (request.getPrnMinIntervalHours() != null
-                && !request.getPrnMinIntervalHours().equals(existing.getPrnMinIntervalHours()))
-            || flagDiffers(request.getAsNeeded(), existing.isAsNeeded());
+        return !whatIsOrderedChanges(existing, request).isEmpty();
+    }
+
+    /** The names of the fields of what is ordered that this edit changes; empty when it changes none. */
+    private static List<String> whatIsOrderedChanges(Prescription existing, PrescriptionRequestDTO request) {
+        List<String> changes = new java.util.ArrayList<>();
+        if (request.getRoute() != null && (isBlank(request.getRoute())
+                ? !isBlank(existing.getRoute())
+                : !com.example.hms.service.emar.MedicationRoutes.sameRoute(existing.getRoute(), request.getRoute()))) {
+            changes.add("route");
+        }
+        if (textDiffers(request.getMedicationName(), existing.getMedicationName())) {
+            changes.add("medicationName");
+        }
+        if (textDiffers(request.getDosage(), existing.getDosage())) {
+            changes.add("dosage");
+        }
+        if (textDiffers(request.getFrequency(), existing.getFrequency())) {
+            changes.add("frequency");
+        }
+        if (request.getPrnMinIntervalHours() != null
+                && !request.getPrnMinIntervalHours().equals(existing.getPrnMinIntervalHours())) {
+            changes.add("prnMinIntervalHours");
+        }
+        if (flagDiffers(request.getAsNeeded(), existing.isAsNeeded())) {
+            changes.add("asNeeded");
+        }
+        return changes;
     }
 
     /**
@@ -1975,6 +1997,55 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             auditCdsOverrideAfterCommit(existing, currentUserId, cdsOverride, advisories,
                 "Critical decision-support alert overridden on edit");
         }
+    }
+
+    /**
+     * The reason given at a signature (an exception, a contraindication). An edit that leaves what is
+     * ordered as it was keeps it readable on the order, with the edit's own reason beside it when both
+     * fit; the edit's reason is audited as a digest either way. An edit that changes what is ordered
+     * ends what the reason answered, and the audit says so and names what changed, never its values.
+     */
+    private void settleSignatureReasonOnEdit(Prescription existing, String signedReason, List<String> orderChanges,
+                                             UUID actorId) {
+        if (signedReason == null || signedReason.isBlank()) {
+            return;
+        }
+        if (!orderChanges.isEmpty()) {
+            auditSignatureReasonEndedAfterCommit(existing, actorId, signedReason, orderChanges);
+            return;
+        }
+        String now = existing.getOverrideReason();
+        boolean bothFit = now != null && !now.isBlank() && !signedReason.contains(now)
+            && signedReason.length() + now.length() + SIGNATURE_REASON_SEPARATOR.length() <= OVERRIDE_REASON_MAX;
+        existing.setOverrideReason(bothFit ? signedReason + SIGNATURE_REASON_SEPARATOR + now : signedReason);
+    }
+
+    /** After commit: ids, a digest of the reason that ended and the names of the fields changed (the row is not encrypted). */
+    private void auditSignatureReasonEndedAfterCommit(Prescription prescription, UUID actorId, String reason,
+                                                      List<String> orderChanges) {
+        UUID prescriptionId = prescription.getId();
+        UUID patientId = prescription.getPatient() != null ? prescription.getPatient().getId() : null;
+        UUID assignmentId = prescription.getAssignment() != null ? prescription.getAssignment().getId() : null;
+        String details = REASON_DIGEST_PREFIX + computeSignatureDigest(reason) + "\",\"changed\":\""
+            + String.join(",", orderChanges) + "\",\"urgent\":"
+            + (prescription.getPediatricDoseUrgentExceptionAt() != null) + "}";
+        com.example.hms.utility.TransactionCallbacks.afterCommit(() -> {
+            try {
+                auditEventLogService.logEvent(com.example.hms.payload.dto.AuditEventRequestDTO.builder()
+                    .eventType(com.example.hms.enums.AuditEventType.PRESCRIPTION_CDS_OVERRIDDEN)
+                    .status(com.example.hms.enums.AuditStatus.SUCCESS)
+                    .userId(actorId)
+                    .assignmentId(assignmentId)
+                    .patientId(patientId)
+                    .eventDescription("Signature exception ended: what is ordered was changed")
+                    .details(details)
+                    .entityType(AUDIT_ENTITY_PRESCRIPTION)
+                    .resourceId(prescriptionId != null ? prescriptionId.toString() : null)
+                    .build());
+            } catch (RuntimeException ex) {
+                logger.warn("Signature exception audit not written for prescription {}: {}", prescriptionId, ex.getClass().getSimpleName());
+            }
+        });
     }
 
     /**

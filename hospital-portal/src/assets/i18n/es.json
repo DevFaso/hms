@@ -1694,6 +1694,7 @@
       "REGISTRATION_DEACTIVATED": "Registro del paciente desactivado",
       "CDS_CRITICAL_OVERRIDDEN_AT_SIGNATURE": "Alerta crítica de ayuda a la decisión anulada en la firma",
       "DOSE_EXCEPTION_AT_SIGNATURE": "Excepción de dosis registrada en la firma",
+      "SIGNATURE_EXCEPTION_ENDED": "Excepción de firma terminada: se cambió lo ordenado",
       "URGENT_DOSE_EXCEPTION_AT_SIGNATURE": "Excepción urgente de dosis pediátrica registrada en la firma",
       "ENCOUNTER_CANCELLED_WITH_ADMISSION": "Encuentro cerrado: la hospitalización {{admission}} fue cancelada (estaba {{previous}})",
       "ENCOUNTER_DISCHARGE_COMPLETED": "Consulta cerrada en el alta del ingreso {{admission}} (estaba {{previous}})",

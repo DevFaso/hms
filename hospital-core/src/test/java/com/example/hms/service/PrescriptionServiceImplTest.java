@@ -7445,4 +7445,97 @@ class PrescriptionServiceImplTest {
         assertThat(rx.getPediatricDoseUrgentExceptionAt()).isNull();
         verify(basket, never()).createItemInNewTransaction(any());
     }
+
+    /* ── The reason given at a signature, on a later edit ───────────────────────────────── */
+
+    private Prescription reason_signedOrder(UUID id, String reason) {
+        Prescription existing = cr01_editable(id, "PO");
+        existing.setStatus(com.example.hms.enums.PrescriptionStatus.PENDING_CLARIFICATION);
+        existing.setDosage(TEST_DOSAGE);
+        existing.setFrequency(TEST_FREQUENCY);
+        existing.setSignedAt(java.time.LocalDateTime.now());
+        existing.setOverrideReason(reason);
+        return existing;
+    }
+
+    /** A note with no override, on an order signed as an urgent exception: the reason stays. */
+    @Test
+    void reason_aNoteOnlyEditKeepsTheSignaturesReason() {
+        UUID id = UUID.randomUUID();
+        Prescription existing = reason_signedOrder(id, "Sepsis, personne sur place");
+        existing.setPediatricDoseReviewRequired(true);
+        existing.setPediatricDoseUrgentExceptionAt(java.time.LocalDateTime.now());
+        PrescriptionRequestDTO noteOnly = buildRequest();
+        noteOnly.setNotes("Please call the ward");
+
+        prescriptionService.updatePrescription(id, noteOnly, Locale.ENGLISH);
+
+        assertThat(existing.getOverrideReason()).isEqualTo("Sepsis, personne sur place");
+    }
+
+    /** The edit passes a critical stop with its own reason: both are readable. */
+    @Test
+    void reason_anEditsOwnReasonSitsBesideTheSignaturesAndNeverReplacesIt() {
+        UUID id = UUID.randomUUID();
+        Prescription existing = reason_signedOrder(id, "Sepsis, personne sur place");
+        existing.setPediatricDoseUrgentExceptionAt(java.time.LocalDateTime.now());
+        cr02_findings(paed_aboveLimit("paedAbove:singleDose:900.0:500"));
+        PrescriptionRequestDTO noteOnly = buildRequest();
+        noteOnly.setForceOverride(true);
+        noteOnly.setOverrideReason("Toujours au-dessus");
+
+        prescriptionService.updatePrescription(id, noteOnly, Locale.ENGLISH);
+
+        assertThat(existing.getOverrideReason()).startsWith("Sepsis, personne sur place").endsWith("Toujours au-dessus");
+    }
+
+    /** When both do not fit, the signature's reason is the one kept whole. */
+    @Test
+    void reason_whenBothDoNotFitTheSignaturesIsKeptWhole() {
+        UUID id = UUID.randomUUID();
+        String signed = "s".repeat(1000);
+        Prescription existing = reason_signedOrder(id, signed);
+        cr02_findings(paed_aboveLimit("paedAbove:singleDose:900.0:500"));
+        PrescriptionRequestDTO noteOnly = buildRequest();
+        noteOnly.setForceOverride(true);
+        noteOnly.setOverrideReason("Une raison assez longue pour ne pas tenir a cote");
+
+        prescriptionService.updatePrescription(id, noteOnly, Locale.ENGLISH);
+
+        assertThat(existing.getOverrideReason()).isEqualTo(signed);
+    }
+
+    /** An edit of what is ordered may end it, and the audit says why, with no value and no text. */
+    @Test
+    void reason_anEditOfWhatIsOrderedEndsItAndTheAuditSaysWhy() {
+        UUID id = UUID.randomUUID();
+        Prescription existing = reason_signedOrder(id, "Sepsis, personne sur place");
+        existing.setDosage("900 mg");
+        existing.setPediatricDoseUrgentExceptionAt(java.time.LocalDateTime.now());
+
+        prescriptionService.updatePrescription(id, buildRequest(), Locale.ENGLISH);
+
+        assertThat(existing.getOverrideReason()).isNull();
+        assertThat(existing.getPediatricDoseUrgentExceptionAt()).isNull();
+        verify(auditEventLogService).logEvent(org.mockito.ArgumentMatchers.argThat(e ->
+            "Signature exception ended: what is ordered was changed".equals(e.getEventDescription())
+                && String.valueOf(e.getDetails()).contains("\"changed\":\"dosage\"")
+                && String.valueOf(e.getDetails()).contains("\"urgent\":true")
+                && !String.valueOf(e.getDetails()).contains("Sepsis")
+                && !String.valueOf(e.getDetails()).contains("900")));
+    }
+
+    /** A draft has no signature's reason: an edit still drops a stale override, as it did. */
+    @Test
+    void reason_aDraftsStaleReasonIsStillDropped() {
+        UUID id = UUID.randomUUID();
+        Prescription existing = cr01_editable(id, "PO");
+        existing.setOverrideReason("Stale");
+
+        prescriptionService.updatePrescription(id, buildRequest(), Locale.ENGLISH);
+
+        assertThat(existing.getOverrideReason()).isNull();
+        verify(auditEventLogService, never()).logEvent(org.mockito.ArgumentMatchers.argThat(e ->
+            "Signature exception ended: what is ordered was changed".equals(e.getEventDescription())));
+    }
 }
