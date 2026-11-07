@@ -468,4 +468,95 @@ class NewbornAssessmentServiceImplTest {
         org.junit.jupiter.api.Assertions.assertFalse(message.getValue().contains("GLUCOSE"), message.getValue());
         assertEquals("Glycémie", response.getAlerts().get(0).getTriggeredBy());
     }
+
+    private java.util.Set<String> codesOf(NewbornAssessmentResponseDTO response) {
+        return response.getAlerts().stream().map(a -> a.getCode()).collect(java.util.stream.Collectors.toSet());
+    }
+
+    @Test
+    void d1424_extremesSaveAndEscalate() {
+        NewbornAssessmentResponseDTO response = service.recordAssessment(patientId, NewbornAssessmentRequestDTO.builder()
+            .hospitalId(hospitalId).heartRateBpm(1000).respirationsPerMin(200).glucoseMgDl(18).build(), recorderId);
+
+        assertTrue(codesOf(response).containsAll(java.util.List.of("newborn-heart-rate", "newborn-check-heart-rate",
+            "newborn-respiratory", "newborn-check-respiratory", "newborn-glucose")));
+        assertTrue(response.isEscalationRecommended());
+        verify(assessmentRepository).save(any(NewbornAssessment.class));
+        verify(obstetricAlertEscalation, times(3)).raiseAfterCommit(any());
+    }
+
+    @Test
+    void d1424_rr85SavesAndTriggersTheRespiratoryAlert() {
+        NewbornAssessmentResponseDTO response = service.recordAssessment(patientId, NewbornAssessmentRequestDTO.builder()
+            .hospitalId(hospitalId).respirationsPerMin(85).build(), recorderId);
+        assertTrue(codesOf(response).contains("newborn-respiratory"));
+        assertTrue(response.isRespiratorySupportInitiated());
+    }
+
+    @Test
+    void d1424_aValueInMmolIsStoredInMgDlAndJudgedAsEntered() {
+        NewbornAssessmentResponseDTO response = service.recordAssessment(patientId, NewbornAssessmentRequestDTO.builder()
+            .hospitalId(hospitalId).glucoseValue(2.59).glucoseUnit(com.example.hms.enums.GlucoseUnit.MMOL_L).build(), recorderId);
+        assertEquals(47, response.getGlucoseMgDl());
+        assertTrue(codesOf(response).stream().anyMatch(c -> c.startsWith("newborn-glucose-")),
+            "2.59 mmol/L rounds to 47 mg/dL and is still below 2.6");
+        org.junit.jupiter.api.Assertions.assertFalse(response.isGlucoseProtocolInitiated(), "an alert is not a protocol somebody started");
+    }
+
+    private void previousReading(com.example.hms.model.labor.DeliveryRecord delivery, int heartRate) {
+        NewbornAssessment previous = NewbornAssessment.builder().heartRateBpm(heartRate).build();
+        previous.setDeliveryRecord(delivery);
+        lenient().when(assessmentRepository
+            .findFirstByPatient_IdAndHospital_IdAndHeartRateBpmIsNotNullAndAssessmentTimeLessThanEqualOrderByAssessmentTimeDesc(
+                eq(patientId), eq(hospitalId), any()))
+            .thenReturn(Optional.of(previous));
+    }
+
+    private com.example.hms.model.labor.DeliveryRecord onTheMothersChart(int infants) {
+        patient.setDateOfBirth(LocalDate.of(1995, 5, 1));
+        patient.setGender("F");
+        com.example.hms.model.labor.DeliveryRecord delivery = deliveryRecordAt(hospitalId);
+        delivery.setPatient(patient);
+        delivery.setBirthDateTime(java.time.LocalDateTime.now().minusDays(2));
+        delivery.setNumberOfInfants(infants);
+        when(deliveryRecordRepository.findFirstByPatient_IdAndHospital_IdOrderByBirthDateTimeDesc(patientId, hospitalId))
+            .thenReturn(Optional.of(delivery));
+        return delivery;
+    }
+
+    private NewbornAssessmentResponseDTO heartRate165() {
+        return service.recordAssessment(patientId, NewbornAssessmentRequestDTO.builder()
+            .hospitalId(hospitalId).heartRateBpm(165).build(), recorderId);
+    }
+
+    @Test
+    void d1424_aPreviousReadingOfConcernOnTheBabysOwnChartIsNamed() {
+        previousReading(null, 170);
+        assertTrue(codesOf(heartRate165()).contains("newborn-heart-rate-repeated"));
+    }
+
+    @Test
+    void d1424_aNormalPreviousReadingOnlyAsksForARecheck() {
+        previousReading(null, 140);
+        assertTrue(codesOf(heartRate165()).contains("newborn-heart-rate"));
+    }
+
+    @Test
+    void d1424_onTheMothersChartASingletonsPreviousReadingCounts() {
+        previousReading(onTheMothersChart(1), 170);
+        assertTrue(codesOf(heartRate165()).contains("newborn-heart-rate-repeated"));
+    }
+
+    @Test
+    void d1424_aTwinsReadingProvesNothingAboutThisBaby() {
+        previousReading(onTheMothersChart(2), 170);
+        assertTrue(codesOf(heartRate165()).contains("newborn-heart-rate"));
+    }
+
+    @Test
+    void d1424_aPreviousBabysReadingProvesNothingAboutThisOne() {
+        onTheMothersChart(1);
+        previousReading(deliveryRecordAt(hospitalId), 170);
+        assertTrue(codesOf(heartRate165()).contains("newborn-heart-rate"));
+    }
 }

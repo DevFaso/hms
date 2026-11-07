@@ -234,7 +234,6 @@
             <!-- QA D797: a CAUTION (an implausible weight to check) is not shown as urgent. -->
             <span
               class="risk-badge {{ alert.severity === 'URGENT' ? 'risk-high' : 'risk-moderate' }}"
-              [title]="alert.triggeredBy"
               >{{ alert.message }}</span
             >
           </p>
@@ -480,15 +479,21 @@
         <div class="form-row gtpal-row">
           <div class="field">
             <label for="pe-pulse">{{ 'LABOR.PULSE' | translate }}</label>
-            <input id="pe-pulse" type="number" min="0" max="300" [(ngModel)]="entryForm.pulseBpm" />
+            <input
+              id="pe-pulse"
+              type="number"
+              min="20"
+              max="300"
+              [(ngModel)]="entryForm.pulseBpm"
+            />
           </div>
           <div class="field">
             <label for="pe-sys">{{ 'LABOR.SYSTOLIC' | translate }}</label>
             <input
               id="pe-sys"
               type="number"
-              min="0"
-              max="350"
+              min="40"
+              max="300"
               [(ngModel)]="entryForm.systolicBpMmHg"
             />
           </div>
@@ -497,8 +502,8 @@
             <input
               id="pe-dia"
               type="number"
-              min="0"
-              max="250"
+              min="20"
+              max="200"
               [(ngModel)]="entryForm.diastolicBpMmHg"
             />
           </div>

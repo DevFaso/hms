@@ -628,7 +628,15 @@
               timelineIcon(e.category)
             }}</span>
             <div>
-              <div class="timeline-summary">{{ e.summary }}</div>
+              <div class="timeline-summary">
+                {{ e.summary }}
+                <!-- QA D1423: a deactivated allergy stays in the history, marked as such. -->
+                @if (e.category === 'ALLERGY' && e.metadata?.active === false) {
+                  <span class="provenance-badge" data-testid="timeline-allergy-inactive">{{
+                    'COMMON.INACTIVE' | translate
+                  }}</span>
+                }
+              </div>
               <div class="timeline-date">
                 @let kind = timelineKind(e);
                 {{ kind.value | enumLabel: kind.domain }} ·

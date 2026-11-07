@@ -27,6 +27,10 @@ public interface NewbornAssessmentRepository extends JpaRepository<NewbornAssess
 
     Optional<NewbornAssessment> findFirstByPatient_IdOrderByAssessmentTimeDesc(UUID patientId);
 
+    /** QA D1424: the last heart rate on the chart at or before this assessment; a row that did not measure one is skipped. */
+    Optional<NewbornAssessment> findFirstByPatient_IdAndHospital_IdAndHeartRateBpmIsNotNullAndAssessmentTimeLessThanEqualOrderByAssessmentTimeDesc(
+        UUID patientId, UUID hospitalId, LocalDateTime assessmentTime);
+
     /** Earliest assessment with a delivery back-link — the growth chart's birth-weight seed. */
     Optional<NewbornAssessment> findFirstByPatient_IdAndDeliveryRecordIsNotNullOrderByAssessmentTimeAsc(UUID patientId);
 

@@ -298,10 +298,15 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
                 patientAllergyRepository, recordAccessPolicy,
                 com.example.hms.security.context.HospitalContextHolder.getContextOrEmpty().getPrincipalUserId(),
                 patientId, hospitalId);
-            rows.forEach(a -> allergies.add(a.getAllergenDisplay()));
+            // QA D1423: this list is read as "the patient's allergies", so only the active
+            // rows go on it; a deactivated one stays on the chart's history table, marked.
+            // Whether rows exist is still asked of all of them: a patient whose allergies
+            // were all deactivated must not fall back to the summary text below.
+            List<PatientAllergy> active = rows.stream().filter(PatientAllergy::isActive).toList();
+            active.forEach(a -> allergies.add(a.getAllergenDisplay()));
             hasStructuredRows = !rows.isEmpty()
                 || (hospitalId != null && !patientAllergyRepository.findByPatient_Id(patientId).isEmpty());
-            account(reach, hospitalId, rows.stream().map(a -> CrossHospitalReachRecorder.hospitalIdOf(a.getHospital())).toList());
+            account(reach, hospitalId, active.stream().map(a -> CrossHospitalReachRecorder.hospitalIdOf(a.getHospital())).toList());
         } catch (Exception e) {
             log.debug("Allergy query error", e);
         }

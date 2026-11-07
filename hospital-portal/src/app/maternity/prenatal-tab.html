@@ -12,7 +12,14 @@
     </div>
     <div class="field">
       <label for="pn-lmp">{{ 'MATERNITY.LMP' | translate }} *</label>
-      <input required id="pn-lmp" type="date" [max]="today" [(ngModel)]="lmpDate" />
+      <input
+        required
+        id="pn-lmp"
+        data-server-field="lastMenstrualPeriodDate"
+        type="date"
+        [max]="today"
+        [(ngModel)]="lmpDate"
+      />
     </div>
   </div>
   <div class="form-row">
@@ -228,11 +235,23 @@
         <div class="form-row">
           <div class="field">
             <label for="pn-new-date">{{ 'PRENATAL.NEW_DATE' | translate }} *</label>
-            <input required id="pn-new-date" type="date" [(ngModel)]="rescheduleDate" />
+            <input
+              required
+              id="pn-new-date"
+              data-server-field="newAppointmentDate"
+              type="date"
+              [(ngModel)]="rescheduleDate"
+            />
           </div>
           <div class="field">
             <label for="pn-new-time">{{ 'PRENATAL.NEW_TIME' | translate }} *</label>
-            <input required id="pn-new-time" type="time" [(ngModel)]="rescheduleTime" />
+            <input
+              required
+              id="pn-new-time"
+              data-server-field="newStartTime"
+              type="time"
+              [(ngModel)]="rescheduleTime"
+            />
           </div>
         </div>
         <div class="field">

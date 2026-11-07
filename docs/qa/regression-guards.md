@@ -989,3 +989,15 @@ Rounds 27, 28 and 29 each found 20–30 new siblings of the required-field class
 | `scripts/lib/destructive-confirm-scan.mjs` (widened), `.test.mjs` | D1430, why the gate missed it: it judged the SERVICE method's name, and `/registrations` deactivated through `update(id, { active: false })`. A component method named as ending something, or sending `active: false`, through any writing service method now counts. It also caught `/profile`'s recovery-contact removal, fixed | 3 pins, unchanged |
 | `scripts/lib/identity-refusal.test.mjs` (new) | D1422 (a regression): a form reading the identity rules outside `identityRefusals`, or taking refusals without `refuseFields`. `required-refusal.test.mjs` could not see it: the method called `refuseFields` for the blank fields | `patient-form.ts`, whose template binds a message per field |
 | `controller/support/PatientResponseShapingTest#noResponseNestsAnAppointment` (new) | D1429: a response type embedding `AppointmentResponseDTO` where `PatientResponseShaping` does not walk, which would send the desk's overbooking reason to a patient or proxy | none |
+
+
+## Guards added or widened by round 34 (fix/r34-maternity-records)
+
+| Guard | Catches | Baseline |
+|---|---|---|
+| `architecture/AllergyActiveReadersGuardTest` (new) | A class that reads the allergy rows and is not listed with what a deactivated row does there (active only, or history with a mark); a listed reader that lost its filter; the snapshot's problem, diagnosis and medication filters, the storyboard's directive filter | 12 readers, each with its reason |
+| `validation/BloodPressurePairGuardTest` (new) | A request payload with a systolic and a diastolic without `isBloodPressureOrdered` (`VitalSignLimits.bloodPressureOrdered`, `@ReportedOn`) or without both pressures bounded inside `VitalSignLimits` (the newborn form refuses only a negative pressure; `NewbornAlertRules` warns instead); the scan reads every class under `payload` | none (read-only `*Response*` payloads placed by name) |
+| `i18n/StoredAlertReaderLanguageGuardTest` (new) | A mapper handing a stored alert sentence to the reader; a class writing `NotificationLocales.STAFF` text that is not listed with who reads it; a labour alert code of the bundle that cannot be rendered again from its row in EN, FR and ES | 17 classes, each with its reason |
+| `scripts/lib/maternity-date-server-marks.test.mjs` (new) | A date or time input of the maternity screens that the server's `fieldErrors` key cannot reach (no `data-server-field`, no field map) | none |
+| `service/maternity/NewbornAlertRulesTest` (new) | Every sourced newborn number at and either side of its boundary, in both glucose units: a threshold moved, a rule dropped, an older stricter urgent alert lost. Each rule was moved by one step and the test failed | none |
+| `validation/ClinicalTimestampFutureValidationTest#d1449_*` | A date-only field refused with the wording about a time of day | none |

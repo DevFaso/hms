@@ -459,4 +459,44 @@ class ImmunizationServiceImplTest {
         verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), eq(requesterId), isNull(),
             eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
     }
+
+    @Test
+    void d1425_theCreateRefusesADoseBeforeBirthBeforeAnythingIsStored() {
+        patient.setDateOfBirth(java.time.LocalDate.of(2022, 2, 2));
+        ImmunizationRequestDTO dto = new ImmunizationRequestDTO();
+        dto.setPatientId(patientId);
+        dto.setHospitalId(hospitalId);
+        dto.setAdministrationDate(java.time.LocalDate.of(2019, 5, 5));
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+
+        assertThat(org.assertj.core.api.Assertions.catchThrowableOfType(
+            com.example.hms.exception.FieldBusinessException.class, () -> service.createImmunization(dto)).getField())
+            .isEqualTo("administrationDate");
+        org.mockito.Mockito.verify(immunizationRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    @Test
+    void d1425_anEditOfAStoredWrongDoseOnAnotherFieldSaves_andChangingTheDoseToAWrongOneDoesNot() {
+        PatientImmunization stored = new PatientImmunization();
+        stored.setId(immunizationId);
+        stored.setPatient(patient);
+        stored.setHospital(hospital);
+        stored.setDoseNumber(-1);
+        stored.setAdministrationDate(java.time.LocalDate.now(java.time.ZoneOffset.UTC).plusDays(30));
+        when(immunizationRepository.findById(immunizationId)).thenReturn(Optional.of(stored));
+        org.mockito.Mockito.lenient().when(immunizationRepository.save(stored)).thenReturn(stored);
+        org.mockito.Mockito.lenient().when(immunizationMapper.toResponseDTO(stored)).thenReturn(new ImmunizationResponseDTO());
+        ImmunizationRequestDTO echo = new ImmunizationRequestDTO();
+        echo.setDoseNumber(-1);
+        echo.setAdministrationDate(stored.getAdministrationDate());
+        echo.setNotes("a note added later");
+
+        assertThat(service.updateImmunization(immunizationId, echo)).isNotNull();
+
+        echo.setDoseNumber(0);
+        assertThat(org.assertj.core.api.Assertions.catchThrowableOfType(
+            com.example.hms.exception.FieldBusinessException.class, () -> service.updateImmunization(immunizationId, echo)).getField())
+            .isEqualTo("doseNumber");
+    }
 }

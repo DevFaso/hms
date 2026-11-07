@@ -348,7 +348,9 @@
                 <td>
                   {{ a.temperatureCelsius | measure: '°C' }} ·
                   {{ a.heartRateBpm | measure: 'bpm' }} ·
-                  {{ a.oxygenSaturationPercent | measure: '%' }}
+                  {{ a.oxygenSaturationPercent | measure: '%' }} ·
+                  {{ a.respirationsPerMin | measure: '/min' }} ·
+                  {{ a.glucoseMgDl | measure: 'mg/dL' }}
                 </td>
                 <td>
                   @if (a.escalationRecommended) {
@@ -362,6 +364,17 @@
                     <span class="{{ alertClass(alert.severity) }}" [title]="alert.message">
                       {{ alert.type | enumLabel: 'newbornAlertType' }}
                     </span>
+                  }
+                  <!-- QA D1424: what asks to remeasure, or names the acceptable range, is read, not hovered. -->
+                  @for (alert of newbornAlertsToRead(a); track $index) {
+                    <p
+                      class="saved-note"
+                      [class.risk-badge]="isNewbornValueCheck(alert)"
+                      [class.risk-high]="isNewbornValueCheck(alert)"
+                      data-testid="newborn-alert-sentence"
+                    >
+                      {{ alert.message }}
+                    </p>
                   }
                 </td>
                 <!-- QA D1068: appearance, exam and follow-up notes, as typed. -->
@@ -706,23 +719,42 @@
             <label for="nb-temp">{{ 'POSTPARTUM.TEMPERATURE' | translate }}</label>
             <input
               id="nb-temp"
+              min="0"
               type="number"
               step="0.1"
-              min="25"
-              max="44"
               [(ngModel)]="assessmentForm.temperatureCelsius"
             />
+            @if (newbornValueToCheck('temperatureCelsius')) {
+              <p class="risk-badge risk-high" role="alert" data-testid="nb-temp-check">
+                {{ 'POSTPARTUM.CHECK_VALUE' | translate }}
+              </p>
+            }
           </div>
           <div class="field">
             <label for="nb-hr">{{ 'POSTPARTUM.PULSE' | translate }}</label>
-            <input id="nb-hr" type="number" [(ngModel)]="assessmentForm.heartRateBpm" />
+            <input id="nb-hr" type="number" min="0" [(ngModel)]="assessmentForm.heartRateBpm" />
+            @if (newbornValueToCheck('heartRateBpm')) {
+              <p class="risk-badge risk-high" role="alert" data-testid="nb-hr-check">
+                {{ 'POSTPARTUM.CHECK_VALUE' | translate }}
+              </p>
+            }
           </div>
           <div class="field">
             <label for="nb-resp">{{ 'POSTPARTUM.RESP' | translate }}</label>
-            <input id="nb-resp" type="number" [(ngModel)]="assessmentForm.respirationsPerMin" />
+            <input
+              id="nb-resp"
+              type="number"
+              min="0"
+              [(ngModel)]="assessmentForm.respirationsPerMin"
+            />
+            @if (newbornValueToCheck('respiratoryRateBpm')) {
+              <p class="risk-badge risk-high" role="alert" data-testid="nb-resp-check">
+                {{ 'POSTPARTUM.CHECK_VALUE' | translate }}
+              </p>
+            }
           </div>
           <div class="field">
-            <label for="nb-spo2">SpO2 %</label>
+            <label for="nb-spo2">{{ 'NURSE.SPO2' | translate }}</label>
             <input
               id="nb-spo2"
               type="number"
@@ -732,8 +764,30 @@
             />
           </div>
           <div class="field">
-            <label for="nb-glucose">{{ 'POSTPARTUM.GLUCOSE' | translate }}</label>
-            <input id="nb-glucose" type="number" min="0" [(ngModel)]="assessmentForm.glucoseMgDl" />
+            <label for="nb-glucose">{{ 'POSTPARTUM.GLUCOSE_VALUE' | translate }}</label>
+            <input
+              id="nb-glucose"
+              type="number"
+              min="0"
+              step="any"
+              [(ngModel)]="assessmentForm.glucoseValue"
+            />
+            @if (newbornValueToCheck('glucose')) {
+              <p class="risk-badge risk-high" role="alert" data-testid="nb-check-glucose">
+                {{ 'POSTPARTUM.CHECK_VALUE' | translate }}
+              </p>
+            }
+          </div>
+          <div class="field">
+            <label for="nb-glucose-unit">{{ 'POSTPARTUM.GLUCOSE_UNIT' | translate }}</label>
+            <select id="nb-glucose-unit" [(ngModel)]="assessmentForm.glucoseUnit">
+              <option [ngValue]="undefined">—</option>
+              @for (unit of glucoseUnits; track unit) {
+                <option [ngValue]="unit">
+                  {{ glucoseUnitLabels[unit] }}
+                </option>
+              }
+            </select>
           </div>
         </div>
         <div class="field">
@@ -845,7 +899,12 @@
           <div class="form-row">
             <div class="field">
               <label for="pro-time">{{ 'PRO.ADMINISTERED_AT' | translate }}</label>
-              <input id="pro-time" type="datetime-local" [(ngModel)]="screeningAdministeredAt" />
+              <input
+                id="pro-time"
+                data-server-field="administeredAt"
+                type="datetime-local"
+                [(ngModel)]="screeningAdministeredAt"
+              />
             </div>
             @if (instrument.availableLanguages.length > 1) {
               <div class="field">

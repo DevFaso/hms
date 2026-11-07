@@ -654,6 +654,7 @@
             <input
               required
               id="history-recorded"
+              data-server-field="recordedDate"
               type="datetime-local"
               [(ngModel)]="historyForm.recordedDate"
             />
@@ -670,6 +671,7 @@
             <label for="history-lmp">{{ 'MATERNITY.LMP' | translate }}</label>
             <input
               id="history-lmp"
+              data-server-field="lastMenstrualPeriod"
               type="date"
               [ngModel]="historyForm.menstrualHistory!.lastMenstrualPeriod"
               (ngModelChange)="onLmpChange($event)"
@@ -679,6 +681,7 @@
             <label for="history-edd">{{ 'MATERNITY.EDD' | translate }}</label>
             <input
               id="history-edd"
+              data-server-field="estimatedDueDate"
               type="date"
               aria-describedby="history-ga"
               [(ngModel)]="historyForm.menstrualHistory!.estimatedDueDate"

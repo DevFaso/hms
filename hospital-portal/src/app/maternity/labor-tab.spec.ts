@@ -3,7 +3,8 @@ import { TestBed } from '@angular/core/testing';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 
-import { LaborTabComponent } from './labor-tab';
+import { LaborTabComponent, PARTOGRAPH_LIMITS } from './labor-tab';
+import { VITAL_SIGN_LIMITS } from '../shared/vital-sign-limits';
 import {
   expectEmptySubmitRefusal,
   expectFieldsMarked,
@@ -746,6 +747,58 @@ describe('LaborTabComponent recent-delivery override (rendered, QA D1339 / D1340
       sent: laborSpy.recordDelivery,
     });
     expect(marked).toContain('dl-override');
+  });
+
+  it('QA D1446: the server refusing the time marks the time field, as on the delivery form', async () => {
+    laborSpy.addEntry.and.returnValue(
+      throwError(() =>
+        fieldErrorsResponse({ observationTime: 'Cette heure ne peut pas être dans le futur.' }),
+      ),
+    );
+    const fixture = render([episode('e1', 'ACTIVE')]);
+    fixture.componentInstance.entryFormOpen.set(true);
+    fixture.componentInstance.entryForm = { fetalHeartRateBpm: 140 };
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.componentInstance.submitEntry();
+    fixture.detectChanges();
+    expectFieldsMarked(fixture, { 'pe-time': 'Cette heure ne peut pas être dans le futur.' });
+  });
+
+  it('QA D1424: 70/120 is refused on the diastolic and never sent; 120/70 and a pressure alone are', async () => {
+    laborSpy.addEntry.and.returnValue(of({ alerts: [] }) as never);
+    const fixture = render([episode('e1', 'ACTIVE')]);
+    const cmp = fixture.componentInstance;
+    cmp.entryFormOpen.set(true);
+    cmp.entryForm = { systolicBpMmHg: 70, diastolicBpMmHg: 120 };
+    fixture.detectChanges();
+    await fixture.whenStable();
+    cmp.submitEntry();
+    fixture.detectChanges();
+    expect(laborSpy.addEntry).not.toHaveBeenCalled();
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('#pe-dia')?.getAttribute('aria-invalid')).toBe('true');
+
+    cmp.entryForm = { systolicBpMmHg: 120, diastolicBpMmHg: 70 };
+    cmp.submitEntry();
+    expect(laborSpy.addEntry).toHaveBeenCalledTimes(1);
+
+    cmp.entryFormOpen.set(true);
+    cmp.entryForm = { systolicBpMmHg: 170 };
+    cmp.submitEntry();
+    expect(laborSpy.addEntry).toHaveBeenCalledTimes(2);
+  });
+
+  it('QA D1424: the partograph vitals carry the bounds of every other vitals form', () => {
+    for (const [field, limit] of [
+      ['pulseBpm', VITAL_SIGN_LIMITS.heartRateBpm],
+      ['systolicBpMmHg', VITAL_SIGN_LIMITS.systolicBpMmHg],
+      ['diastolicBpMmHg', VITAL_SIGN_LIMITS.diastolicBpMmHg],
+    ] as const) {
+      const row = PARTOGRAPH_LIMITS.find((l) => l.field === field);
+      expect(row?.min).withContext(field).toBe(limit.min);
+      expect(row?.max).withContext(field).toBe(limit.max);
+    }
   });
 
   it('QA D1340: the delivery card shows the birth time without seconds', () => {

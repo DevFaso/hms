@@ -75,6 +75,7 @@ public class UltrasoundServiceImpl implements UltrasoundService {
 
         // Validate gestational age for scan type
         validateGestationalAgeForScanType(request.getScanType(), request.getGestationalAgeAtOrder());
+        requirePlausibleSchedule(request, null);
 
         // Use mapper to create entity
         UltrasoundOrder entity = ultrasoundMapper.toOrderEntity(request, patient, hospital);
@@ -104,6 +105,38 @@ public class UltrasoundServiceImpl implements UltrasoundService {
         return ultrasoundMapper.toOrderResponseDTO(saved);
     }
 
+    /**
+     * QA D1447: an appointment is not booked in the past, its time is a time of
+     * day, and a scan count starts at 1. A value an edit only echoes is not
+     * judged (the imaging order's rule): an order whose appointment has passed,
+     * or stored before this check, stays editable on its other fields.
+     */
+    public static void requirePlausibleSchedule(UltrasoundOrderRequestDTO request, UltrasoundOrder current) {
+        java.time.LocalDate date = request.getScheduledDate();
+        if (date != null && !date.equals(current == null ? null : current.getScheduledDate())
+            && date.isBefore(java.time.LocalDate.now(java.time.ZoneId.systemDefault()))) {
+            throw new com.example.hms.exception.FieldBusinessException("scheduledDate", "ultrasound.order.scheduledDatePast");
+        }
+        String time = request.getScheduledTime();
+        if (time != null && !time.isBlank() && !time.equals(current == null ? null : current.getScheduledTime())
+            && !isTimeOfDay(time.trim())) {
+            throw new com.example.hms.exception.FieldBusinessException("scheduledTime", "ultrasound.order.scheduledTimeInvalid");
+        }
+        Integer count = request.getScanCountForPregnancy();
+        if (count != null && count < 1 && !count.equals(current == null ? null : current.getScanCountForPregnancy())) {
+            throw new com.example.hms.exception.FieldBusinessException("scanCountForPregnancy", "ultrasound.order.scanCountInvalid");
+        }
+    }
+
+    private static boolean isTimeOfDay(String value) {
+        try {
+            java.time.LocalTime.parse(value);
+            return true;
+        } catch (java.time.format.DateTimeParseException ex) {
+            return false;
+        }
+    }
+
     @Override
     public UltrasoundOrderResponseDTO updateOrder(UUID orderId, UltrasoundOrderRequestDTO request) {
         UltrasoundOrder order = getOrderInScope(orderId);
@@ -131,6 +164,7 @@ public class UltrasoundServiceImpl implements UltrasoundService {
             order.setHospital(newHospital);
         }
 
+        requirePlausibleSchedule(request, order);
         ultrasoundMapper.updateOrderFromRequest(order, request);
 
         UltrasoundOrder saved = orderRepository.save(order);
