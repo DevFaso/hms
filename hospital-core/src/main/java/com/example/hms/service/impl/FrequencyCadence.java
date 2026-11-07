@@ -76,6 +76,9 @@ final class FrequencyCadence {
     /** "toutes les 4h a 6h", "every 4 hours to 6 hours", "q4h-q6h", "q4h/q6h": two intervals, unless they are one ("6 h/6 h"). */
     private static final Pattern EVERY_TWO_NUMBERS = Pattern.compile(
         "\\b(?:EVERY|TOUTES LES|TOUS LES|CADA|Q) ?(\\d{1,2}+) ?(?:HEURES?+|HOURS?+|HRS?+|HORAS?+|HS|H)? ?(?:-|/|\\bA\\b|\\bTO\\b|\\bOU\\b|\\bOR\\b) ?Q? ?(\\d{1,2}+)\\b?");
+    /** {@link #EVERY_TWO_NUMBERS} ending in hours: "toutes les 2 a 3 jours" is not one. */
+    private static final Pattern TWO_HOUR_INTERVALS = Pattern.compile(
+        "\\b(?:EVERY|TOUTES LES|CADA|Q) ?(\\d{1,2}+) ?(?:HEURES?+|HOURS?+|HRS?+|HORAS?+|H)? ?(?:-|/|\\bA\\b|\\bTO\\b|\\bOU\\b|\\bOR\\b) ?Q? ?(\\d{1,2}+) ?(?:HEURES?+|HOURS?+|HRS?+|HORAS?+|H)\\b");
     /** "toutes les 1 h 30", "every hour and a half", "toutes les 8h00": minutes the hour patterns would drop. */
     private static final Pattern EVERY_HOURS_AND_PART = Pattern.compile(
         "\\b(?:EVERY|TOUTES LES|CADA|Q) ?(?:\\d{1,2}+ ?)?(?:HEURES?+|HOURS?+|HORAS?+|H) ?(?:(?:ET|AND|Y) )?(?:\\d{2}+\\b|DEMIE|A HALF|MEDIA)");
@@ -415,6 +418,16 @@ final class FrequencyCadence {
             }
         }
         return false;
+    }
+
+    /** The shorter of "toutes les 2 a 3 h", "q2h-q3h", in minutes; {@code null} when it writes no such range. */
+    static Integer shorterOfTwoHourIntervals(String text) {
+        Matcher two = TWO_HOUR_INTERVALS.matcher(text);
+        if (!two.find()) {
+            return null;
+        }
+        int shorter = Math.min(Integer.parseInt(two.group(1)), Integer.parseInt(two.group(2)));
+        return shorter > 0 ? shorter * MINUTES_PER_HOUR : null;
     }
 
     private static boolean namesTwoIntervals(String text) {

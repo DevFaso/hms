@@ -50,20 +50,27 @@ public enum ParacetamolRisk {
         Set<ParacetamolRisk> risks = EnumSet.noneOf(ParacetamolRisk.class);
         for (PatientProblem problem : activeProblems) {
             if (!isIcd11(problem.getIcdVersion())) {
-                codesOf(problem).forEach(code -> addFor(code, problem.getSeverity(), risks));
+                addFor(normalized(problem.getProblemCode()), problem.getSeverity(), risks);
+                otherCodesOf(problem).forEach(code -> addFor(code, null, risks));
             }
         }
         return risks;
     }
 
-    private static Stream<String> codesOf(PatientProblem problem) {
+    /** A row's severity is its own problem's: a secondary code's degree is not recorded. */
+    private static Stream<String> otherCodesOf(PatientProblem problem) {
         List<String> others = problem.getDiagnosisCodes() == null ? List.of() : problem.getDiagnosisCodes();
-        return Stream.concat(Stream.of(problem.getProblemCode()), others.stream())
-            .filter(code -> code != null && !code.isBlank())
-            .map(code -> code.trim().replace(".", "").toUpperCase(Locale.ROOT));
+        return others.stream().map(ParacetamolRisk::normalized);
+    }
+
+    private static String normalized(String code) {
+        return code == null ? "" : code.trim().replace(".", "").toUpperCase(Locale.ROOT);
     }
 
     private static void addFor(String code, ProblemSeverity severity, Set<ParacetamolRisk> risks) {
+        if (code.isEmpty()) {
+            return;
+        }
         boolean malnutrition = code.length() >= 3 && MALNUTRITION.contains(code.substring(0, 3));
         boolean dehydration = code.startsWith(DEHYDRATION) && !code.startsWith(HYPOVOLAEMIA);
         if (malnutrition || dehydration) {

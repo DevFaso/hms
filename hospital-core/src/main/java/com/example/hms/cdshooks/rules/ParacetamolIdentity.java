@@ -26,7 +26,7 @@ final class ParacetamolIdentity {
     private static final String ATC_PARACETAMOL = "N02BE01";
     private static final Set<String> SPELLINGS = Set.of(
         OrderedDrugIdentity.spellingForm("paracetamol"), OrderedDrugIdentity.spellingForm("acetaminophen"));
-    private static final Pattern FIRST_WORD_ENDS = Pattern.compile("[\\s,(-]");
+    private static final Pattern WORD_ENDS = Pattern.compile("[\\s,()/+-]++");
     /**
      * Another ingredient: a plus, "500/30", a word linking two, a slash before anything but a
      * unit ("500 mg/5 ml", "mg/ml", "1 g/sachet" are one ingredient), or an ingredient paracetamol
@@ -39,63 +39,83 @@ final class ParacetamolIdentity {
             + "|\\b(?:et|and|y|con|avec|with)\\b"
             + "|codein|codeina|tramadol|cafein|caffein|ibuprof|dextropropox|opium|pseudoephed|phenylephr"
             + "|chlorphenam|aspirin|acetylsalicyl|diclofenac|oxycod|hydrocod");
-    private static final Pattern NAMED_ANYWHERE = Pattern.compile("paracetamol|acetaminoph|acetaminof");
 
     private ParacetamolIdentity() {
     }
 
-    /** Whether this order is paracetamol alone, by its typed name or its catalogue item. */
+    /**
+     * Whether this order is paracetamol alone. A catalogue item that is paracetamol alone (by its
+     * ATC code or generic name) wins over reading the typed name; a combination item never is.
+     */
     static boolean names(String typedName, MedicationCatalogItem item) {
-        if (namesAnotherIngredient(typedName) || (item != null && isCombination(item))) {
+        if (isParacetamolAlone(item)) {
+            return true;
+        }
+        return (item == null || !isCombination(item)) && nameIsParacetamolAlone(typedName);
+    }
+
+    /** Whether this order is a combination holding paracetamol, by the same reading. */
+    static boolean isCombinationOrder(String typedName, MedicationCatalogItem item) {
+        if (isParacetamolAlone(item)) {
             return false;
         }
-        return nameIsParacetamolAlone(typedName) || isParacetamolAlone(item);
+        return (item != null && isCombination(item)) || isCombinationName(typedName);
     }
 
     /**
-     * Free text names this catalogue item (paracetamol alone) and nothing beside it: the
-     * catalogue's name rule alone reads "Paracétamol + codéine" as naming "Paracétamol".
+     * Free text names this catalogue item and nothing beside it: the catalogue's name rule
+     * alone reads "Paracétamol + codéine" as naming "Paracétamol".
      */
     static boolean namesCatalogueItem(String typedName, MedicationCatalogItem item) {
         return !namesAnotherIngredient(typedName) && DispenseVerificationService.namesCatalogItem(typedName, item);
     }
 
-    private static boolean namesAnotherIngredient(String typedName) {
-        return ANOTHER_INGREDIENT.matcher(DrugClassAllergy.normalize(typedName)).find();
-    }
-
-    /** The catalogue item is paracetamol alone: its ATC code, or its generic name. */
-    static boolean isParacetamolAlone(MedicationCatalogItem item) {
-        if (item == null || isCombination(item)) {
-            return false;
-        }
-        return ATC_PARACETAMOL.equalsIgnoreCase(item.getAtcCode()) || nameIsParacetamolAlone(item.getGenericName());
-    }
-
-    /** The text starts with the drug's name, and names no second ingredient after it. */
-    static boolean nameIsParacetamolAlone(String name) {
-        String text = DrugClassAllergy.normalize(name);
-        if (text.isEmpty()) {
-            return false;
-        }
-        String[] parts = FIRST_WORD_ENDS.split(text, 2);
-        return SPELLINGS.contains(OrderedDrugIdentity.spellingForm(parts[0]))
-            && (parts.length == 1 || !ANOTHER_INGREDIENT.matcher(parts[1]).find());
-    }
-
-    /** The text names paracetamol, or an item of it, together with another ingredient. */
-    static boolean isCombinationName(String typedName) {
-        String text = DrugClassAllergy.normalize(typedName);
-        return NAMED_ANYWHERE.matcher(text).find() && !nameIsParacetamolAlone(text);
-    }
-
-    /** Free text names this item alone with another ingredient beside it: "Doliprane codéine". */
+    /** Free text names this item with another ingredient beside it: "Doliprane codéine". */
     static boolean namesItWithAnother(String typedName, MedicationCatalogItem item) {
         return namesAnotherIngredient(typedName) && DispenseVerificationService.namesCatalogItem(typedName, item);
     }
 
+    /** The catalogue item is paracetamol alone: its ATC code wins, else its generic name. */
+    static boolean isParacetamolAlone(MedicationCatalogItem item) {
+        if (item == null) {
+            return false;
+        }
+        return hasParacetamolAtc(item) || nameIsParacetamolAlone(item.getGenericName());
+    }
+
+    /** The catalogue item holds paracetamol and positively names another ingredient. */
     static boolean isCombination(MedicationCatalogItem item) {
-        String generic = DrugClassAllergy.normalize(item.getGenericName());
-        return NAMED_ANYWHERE.matcher(generic).find() && !nameIsParacetamolAlone(generic);
+        return !hasParacetamolAtc(item) && isCombinationName(item.getGenericName());
+    }
+
+    /** The text names the drug as a word, wherever it stands, and no second ingredient. */
+    static boolean nameIsParacetamolAlone(String name) {
+        return namesTheDrug(name) && !namesAnotherIngredient(name);
+    }
+
+    /** The text names the drug as a word AND positively names another ingredient. */
+    static boolean isCombinationName(String name) {
+        return namesTheDrug(name) && namesAnotherIngredient(name);
+    }
+
+    private static boolean hasParacetamolAtc(MedicationCatalogItem item) {
+        return ATC_PARACETAMOL.equalsIgnoreCase(item.getAtcCode());
+    }
+
+    private static boolean namesTheDrug(String name) {
+        String text = DrugClassAllergy.normalize(name);
+        if (text.isEmpty()) {
+            return false;
+        }
+        for (String word : WORD_ENDS.split(text)) {
+            if (SPELLINGS.contains(OrderedDrugIdentity.spellingForm(word))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean namesAnotherIngredient(String typedName) {
+        return ANOTHER_INGREDIENT.matcher(DrugClassAllergy.normalize(typedName)).find();
     }
 }

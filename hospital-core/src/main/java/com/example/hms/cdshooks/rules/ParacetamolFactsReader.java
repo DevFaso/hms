@@ -79,27 +79,44 @@ public class ParacetamolFactsReader {
     @Transactional(readOnly = true, noRollbackFor = RuntimeException.class)
     public ParacetamolFacts read(Patient patient, UUID hospitalId, String medicationName,
                                  MedicationCatalogItem item, UUID editedOrderId) {
-        // No date of birth is not a child: the rule says the age is unknown.
-        if (patient == null || (patient.getDateOfBirth() != null && !PediatricDoseRule.isAdult(patient))) {
+        if (patient == null) {
             return ParacetamolFacts.NONE;
         }
+        // RCP 4.3 is not limited by age: a child's facts hold the problems, for the contraindication only.
+        boolean child = patient.getDateOfBirth() != null && !PediatricDoseRule.isAdult(patient);
         UUID acting = actingHospital();
         UUID scope = acting != null ? acting : hospitalId;
         boolean named = ParacetamolIdentity.names(medicationName, item);
+        boolean combination = ParacetamolIdentity.isCombinationOrder(medicationName, item);
         // An item that names another drug settles it, with no catalogue read.
-        if (!named && (item != null || medicationName == null || medicationName.isBlank())) {
+        if (!named && !combination && (item != null || medicationName == null || medicationName.isBlank())) {
             return ParacetamolFacts.NONE;
         }
         List<MedicationCatalogItem> active = activeCatalogue(scope);
         List<MedicationCatalogItem> paracetamol = active.stream().filter(ParacetamolIdentity::isParacetamolAlone).toList();
         List<MedicationCatalogItem> combinations = active.stream().filter(ParacetamolIdentity::isCombination).toList();
-        if (!named && paracetamol.stream()
-                .noneMatch(i -> ParacetamolIdentity.namesCatalogueItem(medicationName, i))) {
+        if (!named && !combination) {
+            named = paracetamol.stream().anyMatch(i -> ParacetamolIdentity.namesCatalogueItem(medicationName, i));
+            combination = namesACombination(medicationName, paracetamol, combinations);
+        }
+        if (!named && !combination) {
             return ParacetamolFacts.NONE;
         }
-        Orders orders = otherOrders(patient.getId(), scope, editedOrderId, paracetamol, combinations);
-        return new ParacetamolFacts(true, orders.counted, ParacetamolRisk.of(activeProblems(patient.getId(), scope, acting)),
-            orders.mayStillBeInUse, orders.combinations);
+        Orders orders = child ? new Orders(List.of(), List.of(), List.of())
+            : otherOrders(patient.getId(), scope, editedOrderId, paracetamol, combinations);
+        List<PatientProblem> live = liveProblems(patient.getId(), scope);
+        List<PatientProblem> surfaced = live.stream()
+            .filter(p -> CrossHospitalRows.maySurface(scope, acting, p.getSensitivityCategory()))
+            .toList();
+        return new ParacetamolFacts(true, orders.counted, ParacetamolRisk.of(surfaced), orders.mayStillBeInUse,
+            orders.combinations, combination, live.size() - surfaced.size(), scope == null);
+    }
+
+    private static boolean namesACombination(String name, List<MedicationCatalogItem> paracetamol,
+                                             List<MedicationCatalogItem> combinations) {
+        return paracetamol.stream().anyMatch(i -> ParacetamolIdentity.namesItWithAnother(name, i))
+            || combinations.stream().anyMatch(i -> ParacetamolIdentity.namesCatalogueItem(name, i)
+                || ParacetamolIdentity.namesItWithAnother(name, i));
     }
 
     /** The orders, by what the total does with them. */
@@ -164,11 +181,13 @@ public class ParacetamolFactsReader {
 
     private static boolean isCombination(Prescription rx, List<MedicationCatalogItem> paracetamol,
                                          List<MedicationCatalogItem> combinations) {
+        // A link to paracetamol alone wins over reading the name.
+        if (paracetamol.stream().anyMatch(i -> carries(rx, i))) {
+            return false;
+        }
         String name = rx.getMedicationName();
-        return ParacetamolIdentity.isCombinationName(name)
-            || paracetamol.stream().anyMatch(i -> ParacetamolIdentity.namesItWithAnother(name, i))
-            || combinations.stream().anyMatch(i -> carries(rx, i) || ParacetamolIdentity.namesCatalogueItem(name, i)
-                || ParacetamolIdentity.namesItWithAnother(name, i));
+        return ParacetamolIdentity.isCombinationName(name) || combinations.stream().anyMatch(i -> carries(rx, i))
+            || namesACombination(name, paracetamol, combinations);
     }
 
     /** The order as a paracetamol order, or {@code null} when it is another drug. */
@@ -243,14 +262,13 @@ public class ParacetamolFactsReader {
         return rx.getEncounter() != null && rx.getEncounter().getAdmissionId() != null;
     }
 
-    /** Active rows at this hospital, never one removed as entered in error or one the acting hospital may not see. */
-    private List<PatientProblem> activeProblems(UUID patientId, UUID hospitalId, UUID acting) {
+    /** Active rows at this hospital, never one removed as entered in error. */
+    private List<PatientProblem> liveProblems(UUID patientId, UUID hospitalId) {
         if (hospitalId == null) {
             return List.of();
         }
         return problems.findByPatient_IdAndHospital_Id(patientId, hospitalId).stream()
             .filter(p -> !p.isEnteredInError())
-            .filter(p -> CrossHospitalRows.maySurface(hospitalId, acting, p.getSensitivityCategory()))
             .filter(p -> p.getStatus() == null || p.getStatus() == ProblemStatus.ACTIVE
                 || p.getStatus() == ProblemStatus.RECURRENCE)
             .toList();

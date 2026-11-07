@@ -88,7 +88,7 @@ class ParacetamolFactsReaderTest {
     void aChildAndAnotherDrugReadNothing() {
         Patient child = Patient.builder().dateOfBirth(LocalDate.now().minusYears(17)).build();
         child.setId(UUID.randomUUID());
-        assertThat(reader.read(child, hospitalId, "Paracétamol", null, null)).isEqualTo(ParacetamolFacts.NONE);
+        assertThat(reader.read(child, hospitalId, "Amoxicilline", items.get(2), null)).isEqualTo(ParacetamolFacts.NONE);
         assertThat(reader.read(adult, hospitalId, "Amoxicilline", items.get(2), null)).isEqualTo(ParacetamolFacts.NONE);
         verifyNoInteractions(prescriptions, catalogue, problems, admissions);
     }
@@ -98,9 +98,10 @@ class ParacetamolFactsReaderTest {
         "Paracétamol 500 mg, true",
         "Acetaminophen 500 mg, true",
         "Doliprane 1000 mg, true",
-        "Codoliprane, false",
+        "Codoliprane, true",
         "Totapen, false",
-        "Paracétamol + codéine, false",
+        "Paracétamol + codéine, true",
+        "Comprimé de paracétamol 1 g, true",
     })
     void aFreeTextNameIsJudgedThroughTheCatalogue(String typed, boolean applies) {
         assertThat(reader.read(adult, hospitalId, typed, null, null).applies()).isEqualTo(applies);
@@ -109,7 +110,10 @@ class ParacetamolFactsReaderTest {
     @Test
     void aBrandPickedFromTheCatalogueApplies() {
         assertThat(reader.read(adult, hospitalId, "Doliprane", doliprane, null).applies()).isTrue();
-        assertThat(reader.read(adult, hospitalId, "Codoliprane", items.get(1), null).applies()).isFalse();
+        ParacetamolFacts combination = reader.read(adult, hospitalId, "Codoliprane", items.get(1), null);
+        assertThat(combination.applies()).isTrue();
+        assertThat(combination.proposedCombination()).isTrue();
+        assertThat(reader.read(adult, hospitalId, "Doliprane", doliprane, null).proposedCombination()).isFalse();
     }
 
     @ParameterizedTest(name = "{0}: counted = {1}")
@@ -192,6 +196,51 @@ class ParacetamolFactsReaderTest {
         ParacetamolFacts facts = read();
         assertThat(facts.combinations()).containsExactly("Paracétamol + codéine 500/30", "Codoliprane", "Doliprane codéine");
         assertThat(facts.otherOrders()).isEmpty();
+    }
+
+    /** H2: a paracetamol order is named as such wherever the name stands, and a link to it wins. */
+    @Test
+    void theNameShapeDoesNotMakeACombination() {
+        order("Doliprane (paracétamol) 1 g", PrescriptionStatus.SIGNED);
+        order("Comprimé de paracétamol 500 mg", PrescriptionStatus.SIGNED);
+        order("Perfalgan paracétamol 1 g", PrescriptionStatus.SIGNED);
+        Prescription linked = order("Paracétamol + codéine", PrescriptionStatus.SIGNED);
+        linked.setMedicationCatalogItemId(doliprane.getId());
+        ParacetamolFacts facts = read();
+        assertThat(facts.combinations()).isEmpty();
+        assertThat(facts.otherOrders()).hasSize(4);
+    }
+
+    /** M3: a child's facts hold the problems for the contraindication, and read no orders. */
+    @Test
+    void aChildReadsTheProblemsAndNoOrders() {
+        Patient child = Patient.builder().dateOfBirth(LocalDate.now().minusYears(10)).build();
+        child.setId(adult.getId());
+        problem("K72.9", ProblemStatus.ACTIVE, false).setSeverity(ProblemSeverity.SEVERE);
+        order("Paracétamol", PrescriptionStatus.SIGNED);
+        ParacetamolFacts facts = reader.read(child, hospitalId, "Paracétamol", null, null);
+        assertThat(facts.risks()).contains(ParacetamolRisk.SEVERE_HEPATIC);
+        assertThat(facts.otherOrders()).isEmpty();
+    }
+
+    /** The row's severity is its own problem's, never a secondary code's. */
+    @Test
+    void aSecondaryHepaticCodeHasNoRecordedDegree() {
+        PatientProblem row = problem("A41.9", ProblemStatus.ACTIVE, false);
+        row.setSeverity(ProblemSeverity.SEVERE);
+        row.setDiagnosisCodes(new ArrayList<>(List.of("K72.9")));
+        assertThat(read().risks()).containsExactlyInAnyOrder(
+            ParacetamolRisk.TWO_GRAM_GROUP, ParacetamolRisk.HEPATIC_DEGREE_UNRECORDED);
+    }
+
+    /** L5. */
+    @Test
+    void withheldRowsAndNoHospitalAreCounted() {
+        problem("F10.2", ProblemStatus.ACTIVE, false)
+            .setSensitivityCategory(com.example.hms.enums.SensitivityCategory.SUBSTANCE_USE);
+        assertThat(read().withheldProblems()).isEqualTo(1);
+        assertThat(reader.read(adult, null, "Paracétamol", null, null).noHospital()).isTrue();
+        assertThat(read().noHospital()).isFalse();
     }
 
     @Test
@@ -393,6 +442,9 @@ class ParacetamolFactsReaderTest {
         "Paracétamol 500 mg/cp | true",
         "Paracétamol 1 g/sachet | true",
         "Paracétamol-Sandoz | true",
+        "Doliprane (paracétamol) 1 g | true",
+        "Comprimé de paracétamol 500 mg | true",
+        "Perfalgan paracétamol 1 g | true",
         "Paracétamol et codéine | false",
         "Paracetamol 500/30 mg | false",
         "Tramadol/paracétamol | false",
@@ -412,12 +464,18 @@ class ParacetamolFactsReaderTest {
         assertThat(ParacetamolIdentity.names("Paracétamol", items.get(2))).isTrue();
         assertThat(ParacetamolIdentity.names("Efferalgan", byAtc)).isTrue();
         assertThat(ParacetamolIdentity.names("Paracétamol", combo)).isFalse();
+        // H2: ATC wins over the shape of the generic name, and a link to paracetamol alone over the typed name.
+        MedicationCatalogItem atcOddName = MedicationCatalogItem.builder().genericName("Paracétamol et excipient").atcCode("N02BE01").build();
+        assertThat(ParacetamolIdentity.isParacetamolAlone(atcOddName)).isTrue();
+        assertThat(ParacetamolIdentity.isCombination(atcOddName)).isFalse();
+        assertThat(ParacetamolIdentity.isCombinationName("Doliprane (paracétamol) 1 g")).isFalse();
+        assertThat(ParacetamolIdentity.isCombinationName("Paracétamol + codéine")).isTrue();
         assertThat(ParacetamolIdentity.names(null, null)).isFalse();
-        // What the prescriber wrote beside the drug is read even when the item is paracetamol alone.
-        assertThat(ParacetamolIdentity.names("Paracétamol + codéine", doliprane)).isFalse();
-        assertThat(ParacetamolIdentity.names("Paracétamol-codéine", doliprane)).isFalse();
+        assertThat(ParacetamolIdentity.names("Paracétamol + codéine", doliprane)).isTrue();
+        assertThat(ParacetamolIdentity.names("Paracétamol + codéine", null)).isFalse();
+        assertThat(ParacetamolIdentity.isCombinationOrder("Paracétamol + codéine", null)).isTrue();
+        assertThat(ParacetamolIdentity.isCombinationOrder("Paracétamol + codéine", doliprane)).isFalse();
         assertThat(ParacetamolIdentity.names("Paracétamol 500 mg - comprimé", null)).isTrue();
-        assertThat(ParacetamolIdentity.names("Doliprane codéine", doliprane)).isFalse();
         assertThat(ParacetamolIdentity.names("Efferalgan-Odis", doliprane)).isTrue();
         assertThat(ParacetamolIdentity.namesCatalogueItem("Doliprane codéine", doliprane)).isFalse();
     }

@@ -519,6 +519,38 @@ class PrescriptionEditAndWithdrawalIT extends BaseIT {
         }
     }
 
+    /** L4: a draft saved before the condition was coded is signed only with a reason. Its other critical cards are not read. */
+    @Test
+    void aDraftSavedBeforeTheContraindicationIsSignedOnlyWithAReason() throws Exception {
+        Prescription draft = prescriptionRepository.save(Prescription.builder()
+            .patient(patient).staff(authorStaff).encounter(encounter).hospital(hospital)
+            .assignment(authorStaff.getAssignment())
+            .medicationName("Paracétamol").medicationDisplayName("Paracétamol")
+            .dosage("500 mg").frequency("3 fois par jour").quantity(BigDecimal.TEN).quantityUnit("cp")
+            .status(PrescriptionStatus.DRAFT).build());
+        PatientProblem severe = patientProblemRepository.save(PatientProblem.builder()
+            .patient(patient).hospital(hospital).recordedBy(authorStaff)
+            .problemCode("K72.9").problemDisplay("Hepatic failure")
+            .severity(com.example.hms.enums.ProblemSeverity.SEVERE).build());
+        try {
+            mockMvc.perform(post(API_CONTEXT + "/prescriptions/{id}/sign", draft.getId()).contextPath(API_CONTEXT).with(as(authorUser)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.cdsAdvisories[0].indicator").value("critical"));
+            assertThat(prescriptionRepository.findById(draft.getId()).orElseThrow().getStatus()).isEqualTo(PrescriptionStatus.DRAFT);
+            mockMvc.perform(post(API_CONTEXT + "/prescriptions/{id}/sign", draft.getId()).contextPath(API_CONTEXT).with(as(authorUser))
+                    .contentType(MediaType.APPLICATION_JSON).content("{\"allergyOverrideReason\":\"Décision du spécialiste\"}"))
+                .andExpect(status().is2xxSuccessful());
+            Prescription signed = prescriptionRepository.findById(draft.getId()).orElseThrow();
+            assertThat(signed.getOverrideReason()).isEqualTo("Décision du spécialiste");
+            assertThat(signed.getStatus()).isEqualTo(PrescriptionStatus.SIGNED);
+        } finally {
+            patientProblemRepository.deleteById(severe.getId());
+            auditEventLogRepository.deleteAllInBatch(auditEventLogRepository.findAll().stream()
+                .filter(row -> draft.getId().toString().equals(row.getResourceId())).toList());
+            prescriptionRepository.deleteById(draft.getId());
+        }
+    }
+
     private List<String> paracetamolCards(String dose, String frequency, String more) throws Exception {
         String body = "{\"patientId\":\"" + patient.getId() + "\",\"staffId\":\"" + authorStaff.getId()
             + "\",\"encounterId\":\"" + encounter.getId() + "\",\"medicationName\":\"Paracétamol\","

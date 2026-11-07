@@ -37,14 +37,16 @@ import java.util.UUID;
  * <p>Every card is an alert, {@code warning} or {@code info}: the order is saved and the prescriber
  * reads the card on the form ({@link #ALERT} is the one place to change that). The one exception is
  * the contraindication, {@code critical}: the existing override, so the order saves only with a
- * reason, recorded and audited. Nothing here adds a hard stop. A dose that cannot be read in mg is
+ * reason, recorded and audited, at creation, edit and signature. Nothing here adds a hard stop. A dose that cannot be read in mg is
  * silent, never read as mg, and that includes a bare number ("2" is more likely two tablets); the
  * checks of the interval and of the contraindication do not need a dose.
  *
  * <p>What the check does not know is said, never read as an absence (user, 2026-11-07). Every card
  * carries the calculated total, the limit and the rule that set it, what is missing, and a request
  * to reconcile. A missing code is not an absent risk, so a total above the lowest ceiling names the
- * lower-limit groups even with nothing coded. The total counts prescribed orders, not actual use.
+ * lower-limit groups even with nothing coded. The total counts prescribed orders at this hospital,
+ * not actual use. The contraindication is not limited by age; a child gets only that card, and the
+ * paediatric rule, a separate rule of the engine, keeps every limit it has.
  */
 @Component
 public class AdultParacetamolRule implements CdsRule {
@@ -87,15 +89,18 @@ public class AdultParacetamolRule implements CdsRule {
         if (context.patient() == null || !context.paracetamolFacts().applies()) {
             return List.of();
         }
-        if (context.patient().getDateOfBirth() == null) {
-            return List.of(new Check(context).ageUnknown());
-        }
-        if (!PediatricDoseRule.isAdult(context.patient())) {
-            return List.of();
-        }
         Check check = new Check(context);
         List<CdsCard> cards = new ArrayList<>();
+        boolean noBirthDate = context.patient().getDateOfBirth() == null;
+        if (!noBirthDate && !PediatricDoseRule.isAdult(context.patient())) {
+            check.childContraindication(cards);
+            return cards;
+        }
         check.contraindication(cards);
+        if (noBirthDate) {
+            cards.add(check.ageUnknown());
+            return cards;
+        }
         check.singleDose(cards);
         check.dailyTotal(cards);
         check.interval(cards);
@@ -122,8 +127,9 @@ public class AdultParacetamolRule implements CdsRule {
             this.medication = context.proposedMedicationName() == null ? "" : context.proposedMedicationName().trim();
             // parseDoseUnits reads a count or a bare number; when it equals the mg reading no
             // unit made it mg, whatever the number (CdsRuleEngine.parseLabelledDoseMg, for other orders).
-            this.doseMg = context.proposedDoseMg() != null && context.proposedDoseMg().equals(context.proposedDoseUnits())
-                ? null : context.proposedDoseMg();
+            boolean noUnit = context.proposedDoseMg() != null && context.proposedDoseMg().equals(context.proposedDoseUnits());
+            // A combination's own paracetamol content cannot be read: never read as mg.
+            this.doseMg = noUnit || facts.proposedCombination() ? null : context.proposedDoseMg();
             this.dosesPerDay = PediatricDoseRule.dosesOnADosingDay(
                 context.proposedFrequency(), context.proposedPrnDosesPerDay());
             this.limit = dailyLimit();
@@ -145,16 +151,35 @@ public class AdultParacetamolRule implements CdsRule {
 
         void contraindication(List<CdsCard> cards) {
             if (risks.contains(ParacetamolRisk.SEVERE_HEPATIC)) {
-                String detail = String.join(" ", totalSentence(),
-                    text.get("cds.adultParacetamol.contraindication.judged",
-                        "Judged against the contraindication in severe hepatocellular insufficiency (RCP 4.3), read from a coded problem and its recorded severity."),
-                    sentences(),
-                    text.get("cds.adultParacetamol.contraindication.detail",
-                        "The order saves only with a reason, which is recorded on the order and audited. Sources: FDA acetaminophen guidance; EFFERALGANSTIX 1000 mg RCP 4.2, 4.3; proposed logic, pending clinician sign-off."));
-                cards.add(build(text.get("cds.adultParacetamol.contraindication.summary",
-                    "{0}: paracetamol is contraindicated in severe hepatocellular insufficiency, recorded on the problem list",
-                    medication), detail, CdsCard.Indicator.CRITICAL));
+                cards.add(contraindicationCard(String.join(" ", totalSentence(), contraindicationJudged(), sentences(),
+                    contraindicationFooter())));
             }
+        }
+
+        /** A child: this card alone, with no adult limit in its text. */
+        void childContraindication(List<CdsCard> cards) {
+            if (risks.contains(ParacetamolRisk.SEVERE_HEPATIC)) {
+                cards.add(contraindicationCard(String.join(" ", contraindicationJudged(), scopeSentence(),
+                    reconcileSentence(), contraindicationFooter())));
+            }
+        }
+
+        private String contraindicationJudged() {
+            return text.get("cds.adultParacetamol.contraindication.judged",
+                "Judged against the contraindication in severe hepatocellular insufficiency (RCP 4.3), read from a coded problem and its recorded severity.");
+        }
+
+        private String contraindicationFooter() {
+            return text.get("cds.adultParacetamol.contraindication.detail",
+                "The order saves only with a reason, which is recorded on the order and audited. Sources: FDA acetaminophen guidance; EFFERALGANSTIX 1000 mg RCP 4.2, 4.3; proposed logic, pending clinician sign-off.");
+        }
+
+        private CdsCard contraindicationCard(String detail) {
+            return new CdsCard(text.get("cds.adultParacetamol.contraindication.summary",
+                "{0}: paracetamol is contraindicated in severe hepatocellular insufficiency, recorded on the problem list",
+                medication), detail, CdsCard.Indicator.CRITICAL,
+                new Source(text.get("cds.source.adultParacetamol", SOURCE_LABEL), null, null),
+                null, null, null, UUID.randomUUID().toString(), null, null, Boolean.TRUE);
         }
 
         void singleDose(List<CdsCard> cards) {
@@ -168,24 +193,35 @@ public class AdultParacetamolRule implements CdsRule {
         }
 
         void dailyTotal(List<CdsCard> cards) {
+            double ceiling = limit.mg;
             if (total == null) {
+                fromOtherOrders(cards, ceiling);
                 return;
             }
-            double ceiling = limit.mg;
             if (total > ceiling) {
                 cards.add(alert(text.get("cds.adultParacetamol.daily.summary",
-                    "{0}: {1} mg per day of paracetamol from all active orders is above the adult maximum of {2} mg per day",
+                    "{0}: {1} mg per day of paracetamol from active orders at this hospital is above the adult maximum of {2} mg per day",
                     medication, number(total), number(ceiling)), null));
             } else if (dosesPerDay == null && MarDoseSchedule.writtenWithNoCount(context.proposedFrequency())) {
                 cards.add(alert(text.get("cds.adultParacetamol.unread.summary",
-                    "{0}: the daily total could not be read from the frequency \"{1}\" - check paracetamol from all active orders against the maximum of {2} mg per day",
+                    "{0}: the daily total could not be read from the frequency \"{1}\" - check paracetamol from active orders at this hospital against the maximum of {2} mg per day",
                     medication, context.proposedFrequency(), number(ceiling)), null));
             } else if (others.unreadFrequency > 0) {
                 cards.add(alert(text.get("cds.adultParacetamol.unreadOther.summary",
-                    "{0}: {1} other active order(s) have a frequency that could not be read, counted as one dose - check paracetamol from all active orders against the maximum of {2} mg per day",
+                    "{0}: {1} other active order(s) have a frequency that could not be read, counted as one dose - check paracetamol from active orders at this hospital against the maximum of {2} mg per day",
                     medication, String.valueOf(others.unreadFrequency), number(ceiling)), null));
             } else if (!risks.contains(ParacetamolRisk.SEVERE_HEPATIC)) {
                 information(cards, ceiling);
+            }
+        }
+
+        /** This order's dose is unread: the other orders are still judged, and their total is a floor. */
+        private void fromOtherOrders(List<CdsCard> cards, double ceiling) {
+            if (others.mg > 0d) {
+                cards.add(build(text.get("cds.adultParacetamol.dailyOthers.summary",
+                    "{0}: at least {1} mg per 24 h from other active orders at this hospital, against a maximum of {2} mg per 24 h; the dose of this order could not be read",
+                    medication, number(others.mg), number(ceiling)), detail(null),
+                    others.mg > ceiling ? ALERT : CdsCard.Indicator.INFO));
             }
         }
 
@@ -193,12 +229,12 @@ public class AdultParacetamolRule implements CdsRule {
         private void information(List<CdsCard> cards, double ceiling) {
             if (ceiling >= MAX_MG_PER_DAY && total > USUAL_MG_PER_DAY) {
                 cards.add(build(text.get("cds.adultParacetamol.info.summary",
-                    "{0}: {1} mg per day of paracetamol from all active orders. The usual adult dose is {2} mg per day; up to {3} mg per day only on medical advice, without additional hepatotoxicity risk factors",
+                    "{0}: {1} mg per day of paracetamol from active orders at this hospital. The usual adult dose is {2} mg per day; up to {3} mg per day only on medical advice, without additional hepatotoxicity risk factors",
                     medication, number(total), number(USUAL_MG_PER_DAY), number(MAX_MG_PER_DAY)),
                     detail(null), CdsCard.Indicator.INFO));
             } else if (ceiling > TWO_GRAM_GROUP_MG_PER_DAY && total > TWO_GRAM_GROUP_MG_PER_DAY) {
                 cards.add(build(text.get("cds.adultParacetamol.lowerGroups.summary",
-                    "{0}: {1} mg per 24 h of paracetamol from all active orders. A lower limit, down to {2} mg per 24 h, may apply: a condition that is not coded may still be present",
+                    "{0}: {1} mg per 24 h of paracetamol from active orders at this hospital. A lower limit, down to {2} mg per 24 h, may apply: a condition that is not coded may still be present",
                     medication, number(total), number(TWO_GRAM_GROUP_MG_PER_DAY)),
                     detail(null), CdsCard.Indicator.INFO));
             }
@@ -225,16 +261,28 @@ public class AdultParacetamolRule implements CdsRule {
                 "Judged against at least {0} h between doses, set by RCP 4.2.", hours(least))));
         }
 
-        /** With no other card, an order left out of the total is still never dropped in silence. */
+        /** With no other card, what the check could not judge is still never passed in silence. */
         void leftOutOfTheTotal(List<CdsCard> cards) {
-            if (!cards.isEmpty() || (facts.mayStillBeInUse().isEmpty() && facts.combinations().isEmpty())) {
+            if (!cards.isEmpty()) {
+                return;
+            }
+            if (risks.contains(ParacetamolRisk.HEPATIC_DEGREE_UNRECORDED)) {
+                cards.add(build(text.get("cds.adultParacetamol.degree.summary",
+                    "{0}: hepatocellular insufficiency on the problem list with no degree recorded: paracetamol is contraindicated if it is severe",
+                    medication), detail(null), CdsCard.Indicator.INFO));
                 return;
             }
             List<String> names = new ArrayList<>(facts.mayStillBeInUse());
             names.addAll(facts.combinations());
-            cards.add(build(text.get("cds.adultParacetamol.leftOut.summary",
-                "{0}: other paracetamol orders are not counted in the total: {1}",
-                medication, String.join(NAME_SEPARATOR, names)), detail(null), CdsCard.Indicator.INFO));
+            names.addAll(others.uncountedNames);
+            if (facts.proposedCombination()) {
+                names.add(medication);
+            }
+            if (!names.isEmpty()) {
+                cards.add(build(text.get("cds.adultParacetamol.leftOut.summary",
+                    "{0}: not counted in the paracetamol total: {1}",
+                    medication, String.join(NAME_SEPARATOR, names)), detail(null), CdsCard.Indicator.INFO));
+            }
         }
 
         /** The lowest ceiling of every group that applies, and the rule that set it. */
@@ -249,6 +297,10 @@ public class AdultParacetamolRule implements CdsRule {
             if (risks.contains(ParacetamolRisk.MALNUTRITION_OR_DEHYDRATION)) {
                 lowest = lowest.orLower(lowReserveCeiling(weight), text.get("cds.adultParacetamol.rule.lowReserve",
                     "coded malnutrition or dehydration (RCP 4.2)"));
+            }
+            if (risks.contains(ParacetamolRisk.SEVERE_HEPATIC)) {
+                lowest = lowest.orLower(TWO_GRAM_GROUP_MG_PER_DAY, text.get("cds.adultParacetamol.rule.severe",
+                    "the contraindication in severe hepatocellular insufficiency (RCP 4.3): the lowest ceiling is shown, and no dose is endorsed"));
             }
             if (risks.contains(ParacetamolRisk.TWO_GRAM_GROUP)) {
                 lowest = lowest.orLower(TWO_GRAM_GROUP_MG_PER_DAY, text.get("cds.adultParacetamol.rule.twoGram",
@@ -278,6 +330,7 @@ public class AdultParacetamolRule implements CdsRule {
                 }
                 if (mg == null) {
                     totals.uncounted++;
+                    totals.uncountedNames.add(rx.getMedicationName());
                     continue;
                 }
                 Double perDay = PediatricDoseRule.dosesOnADosingDay(rx.getFrequency(),
@@ -320,11 +373,32 @@ public class AdultParacetamolRule implements CdsRule {
         }
 
         private String totalSentence() {
-            return total == null
-                ? text.get("cds.adultParacetamol.total.unknown",
-                    "The 24-hour total could not be calculated: the dose of this order could not be read in mg.")
+            if (total == null) {
+                return others.mg > 0d
+                    ? text.get("cds.adultParacetamol.total.atLeast",
+                        "24-hour total: at least {0} mg from other orders; the dose of this order could not be read in mg. It counts prescribed orders, not actual use.",
+                        number(others.mg))
+                    : text.get("cds.adultParacetamol.total.unknown",
+                        "The 24-hour total could not be calculated: the dose of this order could not be read in mg.");
+            }
+            boolean noFrequency = context.proposedPrnDosesPerDay() == null
+                && (context.proposedFrequency() == null || context.proposedFrequency().isBlank());
+            return noFrequency
+                ? text.get("cds.adultParacetamol.total.noFrequency",
+                    "24-hour total with one dose of this order, as no frequency was sent: {0} mg. It counts prescribed orders, not actual use.",
+                    number(total))
                 : text.get("cds.adultParacetamol.total",
                     "Calculated 24-hour total: {0} mg. It counts prescribed orders, not actual use.", number(total));
+        }
+
+        private String scopeSentence() {
+            return text.get("cds.adultParacetamol.scope",
+                "Orders and problems are read at this hospital only: check other facilities.");
+        }
+
+        private String reconcileSentence() {
+            return text.get("cds.adultParacetamol.reconcile",
+                "Please reconcile: check combination products, nonprescription medicines, actual use and risk factors.");
         }
 
         /** What applied, what is missing, what was left out, and the request to reconcile. */
@@ -334,13 +408,27 @@ public class AdultParacetamolRule implements CdsRule {
             String named = facts.combinations().isEmpty() ? ""
                 : " (" + String.join(NAME_SEPARATOR, facts.combinations()) + ")";
             parts.add(text.get(COMBINATIONS_KEY, COMBINATIONS_TEXT, named));
-            parts.add(text.get("cds.adultParacetamol.reconcile",
-                "Please reconcile: check combination products, nonprescription medicines, actual use and risk factors."));
+            parts.add(scopeSentence());
+            parts.add(reconcileSentence());
             return String.join(" ", parts);
         }
 
         private List<String> orderSentences() {
             List<String> parts = new ArrayList<>();
+            if (total != null && dosesPerDay == null && MarDoseSchedule.writtenWithNoCount(context.proposedFrequency())) {
+                parts.add(text.get("cds.adultParacetamol.detail.proposedOneDose",
+                    "This order is counted as one dose: its frequency \"{0}\" could not be read.",
+                    context.proposedFrequency()));
+            }
+            if (facts.noHospital()) {
+                parts.add(text.get("cds.adultParacetamol.detail.noHospital",
+                    "No hospital is active: no other order and no problem could be read, so a lower limit may apply."));
+            }
+            if (facts.withheldProblems() > 0) {
+                parts.add(text.get("cds.adultParacetamol.detail.withheld",
+                    "{0} sensitive problem row(s) are not read without an active hospital, so a lower limit may apply.",
+                    String.valueOf(facts.withheldProblems())));
+            }
             if (others.counted > 0) {
                 parts.add(text.get("cds.adultParacetamol.detail.counted",
                     "The total counts {0} other active order(s).", String.valueOf(others.counted)));
@@ -378,6 +466,8 @@ public class AdultParacetamolRule implements CdsRule {
                     "Lower limit: the weight on file is {0} kg, under {1} kg: {2} mg/kg per day or {3} mg per day, whichever is lower.",
                     number(weight), number(LOW_WEIGHT_UNDER_KG), number(LOW_RESERVE_MG_PER_KG_PER_DAY),
                     number(LOW_RESERVE_MG_PER_DAY)));
+            }
+            if (weight != null) {
                 staleWeight().ifPresent(basis::add);
             }
             if (risks.contains(ParacetamolRisk.MALNUTRITION_OR_DEHYDRATION)) {
@@ -415,7 +505,7 @@ public class AdultParacetamolRule implements CdsRule {
             long days = ChronoUnit.DAYS.between(weighedAt.toLocalDate(), LocalDate.now(ZoneId.systemDefault()));
             return days <= PediatricDoseRule.WEIGHT_MAX_AGE_DAYS ? Optional.empty()
                 : Optional.of(text.get("cds.adultParacetamol.basis.staleWeight",
-                    "That weight was recorded {0} days ago.", String.valueOf(days)));
+                    "The weight on file was recorded {0} days ago.", String.valueOf(days)));
         }
 
         private String footer() {
@@ -456,5 +546,6 @@ public class AdultParacetamolRule implements CdsRule {
         private int uncounted;
         private int unreadFrequency;
         private int noDuration;
+        private final List<String> uncountedNames = new ArrayList<>();
     }
 }

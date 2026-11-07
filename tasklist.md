@@ -6262,6 +6262,10 @@ For the clinician list (proposed alert logic, pending sign-off):
 - [ ] `MedicationCourseStatus` reads durations only in English, so a course written "5 jours" never ends in the patient's medication list or the staff snapshot. `ParacetamolFactsReader` reads French and Spanish itself for now.
 - [ ] `PharmacyRefillReminderScheduler.parseDurationDays` returns null for any text containing "an", such as "pendant 5 jours", so that course gets no refill reminder.
 - [ ] A bare dosage number with no unit (`2000`) raises no paracetamol card, because the form does not require a unit.
+- [ ] Orders and problems are read at the acting hospital only, so the paracetamol total is not "all active orders": the cards say "at this hospital; check other facilities". A patient's orders at another facility are not counted.
+- [ ] Pre-existing: `PrescriptionServiceImpl.recordCdsOverride` does not store a CDS override reason when an allergy override already holds `overrideReason`, so a paracetamol contraindication reason given beside an allergy override is audited but not stored, and that allergy reason then passes the signature's check.
+- [ ] A child with a coded severe hepatocellular insufficiency gets the contraindication card beside the paediatric rule's cards. No adult limit applies to a child, and no paediatric limit changes. For clinician sign-off: RCP 4.3 is not age-limited, but the RCP cited is an adult product's.
+- [ ] A typed combination that the catalogue resolves to a paracetamol-alone item (`Paracétamol + codéine` with one item naming it) is judged as paracetamol alone, because the link wins over reading the name.
 
 ## Standing debt — round 34 (fix/r34-maternity-records)
 

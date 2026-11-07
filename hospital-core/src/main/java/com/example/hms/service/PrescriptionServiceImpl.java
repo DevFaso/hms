@@ -493,6 +493,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // the signature; a hard stop is never signed. Before the
         // re-authentication, so no code is spent on a refusal.
         List<CdsCard> signingCards = refuseHardStopAtSigning(prescription);
+        // A contraindication recorded after the draft was saved is signed only with a reason on record.
+        String contraindicationReason = requireReasonAtSigning(prescription, signingCards, reauthentication);
         // Round 19 (QA D1096): a dose the check could not judge is signed
         // only once a pharmacist or another physician recorded the review.
         // Before the re-authentication, so no code is spent on a refusal.
@@ -534,6 +536,10 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             auditAllergyOverrideAfterCommit(prescription, signer.getUser() != null ? signer.getUser().getId() : null,
                 allergyAcknowledgement, "Allergy override recorded at signature");
         }
+        if (contraindicationReason != null) {
+            auditCdsOverrideAfterCommit(prescription, signer.getUser() != null ? signer.getUser().getId() : null,
+                contraindicationReason, signingCards, "Critical decision-support alert overridden at signature");
+        }
         // QA D793: the signature is the last look before the pharmacy and the
         // ward act on the order, so the cross-reactivity advisory is repeated
         // here (it never blocks the signature).
@@ -543,6 +549,27 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             signed.setCdsAdvisories(advisories);
         }
         return signed;
+    }
+
+    /**
+     * A card that asks for it ({@code CdsCard.reasonAtSignature}, the paracetamol contraindication)
+     * is signed only with a reason: on record from the creation or edit, or given now in the field
+     * the signature dialog already sends. The other critical cards are passed at creation and are
+     * not read here. The reason is recorded on the order; returns it when it was given now.
+     */
+    private static String requireReasonAtSigning(Prescription prescription, List<CdsCard> cards,
+            com.example.hms.payload.dto.SignPrescriptionRequestDTO request) {
+        Optional<CdsCard> card = cards.stream().filter(CdsCard::needsReasonAtSignature).findFirst();
+        if (card.isEmpty() || (prescription.getOverrideReason() != null && !prescription.getOverrideReason().isBlank())) {
+            return null;
+        }
+        String reason = request == null || request.getAllergyOverrideReason() == null
+            ? "" : request.getAllergyOverrideReason().trim();
+        if (reason.isEmpty()) {
+            throw new CdsCriticalBlockException(card.get().summary(), List.of(card.get()));
+        }
+        recordCdsOverride(prescription, reason);
+        return reason;
     }
 
     /**
