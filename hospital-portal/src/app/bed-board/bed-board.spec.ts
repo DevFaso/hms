@@ -3,7 +3,8 @@ import { provideRouter } from '@angular/router';
 import { HttpErrorResponse, provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { of, throwError } from 'rxjs';
+import { of, throwError, Subject } from 'rxjs';
+import { HospitalService, HospitalResponse } from '../services/hospital.service';
 
 import { BedBoardComponent } from './bed-board';
 import {
@@ -154,7 +155,7 @@ describe('BedBoardComponent', () => {
 
     // Default: the eligibility lookup fails, so the picker is unfiltered
     // (the server's refusal is the backstop) and older specs keep their beds.
-    bedSpy = jasmine.createSpyObj('BedService', ['getAvailableBeds']);
+    bedSpy = jasmine.createSpyObj('BedService', ['getAvailableBeds', 'getWards']);
     bedSpy.getAvailableBeds.and.returnValue(throwError(() => new Error('offline')));
 
     toastSpy = jasmine.createSpyObj('ToastService', ['success', 'error']);
@@ -187,6 +188,118 @@ describe('BedBoardComponent', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  it('loads only inventory in global view and aggregates weighted hospital capacity', () => {
+    roleCtx.set({ superAdmin: true, hospitalId: null, roles: ['ROLE_SUPER_ADMIN'] });
+    spyOn(TestBed.inject(HospitalService), 'list').and.returnValue(
+      of([
+        { id: 'h1', name: 'Cdx Hospital' },
+        { id: 'h2', name: 'Cdx Clinic' },
+      ] as HospitalResponse[]),
+    );
+    bedSpy.getWards.and.returnValue(
+      of([
+        { id: 'w1', hospitalId: 'h1', totalBeds: 10, availableBeds: 4, occupiedBeds: 6 },
+        { id: 'w2', hospitalId: 'h1', totalBeds: 20, availableBeds: 15, occupiedBeds: 5 },
+        { id: 'w3', hospitalId: 'h2', totalBeds: 5, availableBeds: 0, occupiedBeds: 5 },
+      ] as import('../services/bed.service').WardResponse[]),
+    );
+    component.ngOnInit();
+    expect(boardSpy.getBoard).not.toHaveBeenCalled();
+    expect(transferSpy.getPending).not.toHaveBeenCalled();
+    expect(component.networkTotals()).toEqual({ total: 35, available: 19, occupied: 16 });
+    expect(component.networkRows().find((h) => h.hospitalId === 'h1')?.wards).toBe(2);
+    expect(component.occupancy(16, 35)).toBe(45.7);
+    component.searchTerm.set('Clinic');
+    expect(component.visibleHospitals().length).toBe(1);
+    expect(component.networkTotals().total).toBe(35);
+    expect(component.occupancy(0, 0)).toBe(0);
+  });
+
+  it('waits for hospital names before exposing inventory cards and preserves the names-failure fallback', () => {
+    roleCtx.set({ superAdmin: true, hospitalId: null, roles: ['ROLE_SUPER_ADMIN'] });
+    const names = new Subject<HospitalResponse[]>();
+    const hospitals = spyOn(TestBed.inject(HospitalService), 'list').and.returnValue(names);
+    bedSpy.getWards.and.returnValue(
+      of([
+        { id: 'w1', hospitalId: 'h1', totalBeds: 10, availableBeds: 4, occupiedBeds: 6 },
+      ] as import('../services/bed.service').WardResponse[]),
+    );
+    component.ngOnInit();
+    expect(component.loading()).toBeTrue();
+    expect(component.networkRows()).toEqual([]);
+    names.next([{ id: 'h1', name: 'Cdx Hospital' }] as HospitalResponse[]);
+    names.complete();
+    expect(component.loading()).toBeFalse();
+    expect(component.networkRows()[0].name).toBe('Cdx Hospital');
+    expect(bedSpy.getWards).toHaveBeenCalledWith(false);
+    hospitals.and.returnValue(throwError(() => new Error('directory unavailable')));
+    component.refresh();
+    expect(component.loading()).toBeFalse();
+    expect(component.hospitalNamesError()).toBeTrue();
+    expect(component.networkTotals().total).toBe(10);
+    expect(component.networkRows()[0].name).toBe('h1');
+  });
+
+  it('shows a retryable network error instead of a zero-capacity success', () => {
+    roleCtx.set({ superAdmin: true, hospitalId: null, roles: ['ROLE_SUPER_ADMIN'] });
+    spyOn(TestBed.inject(HospitalService), 'list').and.returnValue(of([]));
+    bedSpy.getWards.and.returnValue(throwError(() => new Error('offline')));
+    component.ngOnInit();
+    expect(component.loadError()).toBeTrue();
+    expect(component.loading()).toBeFalse();
+    expect(boardSpy.getBoard).not.toHaveBeenCalled();
+    bedSpy.getWards.and.returnValue(of([]));
+    component.refresh();
+    expect(component.loadError()).toBeFalse();
+  });
+
+  it('keeps scoped reloads current and clears stale census on error', () => {
+    const first = new Subject<BedBoard>();
+    const second = new Subject<BedBoard>();
+    boardSpy.getBoard.and.returnValues(first, second);
+    component.loadBoard();
+    component.loadBoard();
+    second.next(board({ hospitalId: 'new' }));
+    first.next(board({ hospitalId: 'old' }));
+    first.complete();
+    expect(component.board()?.hospitalId).toBe('new');
+    boardSpy.getBoard.and.returnValue(throwError(() => new Error('offline')));
+    component.loadBoard();
+    expect(component.board()).toBeNull();
+    expect(component.loadError()).toBeTrue();
+  });
+
+  it('searches beds by patient, MRN, room and unit without changing the census', () => {
+    component.board.set(
+      board({
+        wards: [
+          ward({
+            wardName: 'Cdx Ward',
+            rooms: [
+              {
+                roomNumber: 'Cdx Room',
+                beds: [
+                  bed({
+                    bedNumber: 'Cdx Bed',
+                    occupant: occupant({ patientName: 'Cdx Patient', mrn: 'CDX123' }),
+                  }),
+                  bed({ bedId: 'empty', bedNumber: 'Other' }),
+                ],
+              },
+            ],
+          }),
+        ],
+      }),
+    );
+    for (const term of ['Cdx Patient', 'cdx123', 'Cdx Bed']) {
+      component.searchTerm.set(term);
+      expect(component.visibleWards()[0].rooms[0].beds.length).toBe(1);
+    }
+    component.searchTerm.set('Cdx Room');
+    expect(component.visibleWards()[0].rooms[0].beds.length).toBe(2);
+    expect(component.board()?.census.totalBeds).toBe(1);
   });
 
   it('carries no scope chip or hint of its own: the route gate owns them', () => {

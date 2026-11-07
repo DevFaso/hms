@@ -954,6 +954,7 @@ export const routes: Routes = [
         canActivate: [RoleGuard],
         data: {
           requiresHospitalScope: true,
+          supportsGlobalHospitalView: true,
           roles: [
             'ROLE_HOSPITAL_ADMIN',
             'ROLE_SUPER_ADMIN',
