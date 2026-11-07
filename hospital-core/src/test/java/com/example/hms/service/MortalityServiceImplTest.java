@@ -214,7 +214,33 @@ class MortalityServiceImplTest {
 
     // ── QA D1488: entered in error ────────────────────────────────
 
+    @Test
+    void anAdministratorOfAnotherHospitalWhoIsANurseHereIsRefused() {
+        DeathRecord existing = recordedDeath();
+        UUID id = existing.getId();
+        when(roleValidator.isHospitalAdmin(callerUserId, hospitalId)).thenReturn(false);
+        var body = com.example.hms.payload.dto.mortality.DeathRecordEnteredInErrorDTO.builder().reason("Wrong").build();
+
+        assertThatThrownBy(() -> service.markEnteredInError(id, body))
+            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        assertThat(patient.isDeceased()).isTrue();
+        assertThat(existing.isEnteredInError()).isFalse();
+    }
+
+    @Test
+    void aSuperAdminMayMarkItWithNoRoleAtTheHospital() {
+        DeathRecord existing = recordedDeath();
+        when(roleValidator.isHospitalAdmin(callerUserId, hospitalId)).thenReturn(false);
+        when(roleValidator.isSuperAdminFromAuth()).thenReturn(true);
+
+        service.markEnteredInError(existing.getId(),
+            com.example.hms.payload.dto.mortality.DeathRecordEnteredInErrorDTO.builder().reason("Wrong").build());
+
+        assertThat(patient.isDeceased()).isFalse();
+    }
+
     private DeathRecord recordedDeath() {
+        when(roleValidator.isHospitalAdmin(callerUserId, hospitalId)).thenReturn(true);
         patient.setDeceasedAt(LocalDateTime.now().minusDays(1));
         DeathRecord existing = DeathRecord.builder().patient(patient).hospital(hospital)
             .diedAt(patient.getDeceasedAt()).immediateCause("x").build();

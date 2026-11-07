@@ -43,6 +43,7 @@ class DeceasedPatientCareGuardTest {
         AdvanceDirective#create | AdvanceDirectiveServiceImpl#create
         Appointment#createAppointment | AppointmentServiceImpl#createAppointment
         Appointment#updateAppointment | AppointmentServiceImpl#updateAppointment
+        Appointment#updateAppointmentStatus | AppointmentServiceImpl#confirmOrCancelAppointment
         BirthPlan#createBirthPlan | BirthPlanServiceImpl#createBirthPlan
         Consultation#createConsultation | ConsultationServiceImpl#createConsultation
         Consultation#scheduleConsultation | ConsultationServiceImpl#scheduleConsultation
@@ -55,8 +56,11 @@ class DeceasedPatientCareGuardTest {
         Encounter#startEncounter | EncounterServiceImpl#startEncounter
         Encounter#completeTriage | EncounterServiceImpl#completeTriage
         Encounter#submitNursingIntake | EncounterServiceImpl#submitNursingIntake
+        EncounterTreatment#addTreatmentToEncounter | EncounterTreatmentServiceImpl#addTreatmentToEncounter
         GeneralReferral#createReferral | GeneralReferralServiceImpl#createReferral
         GeneralReferral#submitReferral | GeneralReferralServiceImpl#submitReferral
+        GeneralReferral#scheduleReferral | GeneralReferralServiceImpl#scheduleReferral
+        GeneralReferral#startReferral | GeneralReferralServiceImpl#startReferral
         HighRiskPregnancyCarePlan#createPlan | HighRiskPregnancyCarePlanServiceImpl#createPlan
         HighRiskPregnancyCarePlan#addBloodPressureLog | HighRiskPregnancyCarePlanServiceImpl#addBloodPressureLog
         HighRiskPregnancyCarePlan#addMedicationLog | HighRiskPregnancyCarePlanServiceImpl#addMedicationLog
@@ -77,6 +81,7 @@ class DeceasedPatientCareGuardTest {
         NurseTask#captureVitals | NurseTaskServiceImpl#captureVitals
         NurseTask#createNursingTask | NurseTaskServiceImpl#createNursingTask
         ObgynReferral#createReferral | ObgynReferralServiceImpl#createReferral
+        ObgynReferral#startReferral | ObgynReferralServiceImpl#startReferral
         PatientPanel#assign | PanelService#assign
         PatientPortal#scheduleMyAppointment | PatientPortalServiceImpl#scheduleMyAppointment
         PatientPortal#rescheduleMyAppointment | PatientPortalServiceImpl#rescheduleMyAppointment
@@ -127,7 +132,7 @@ class DeceasedPatientCareGuardTest {
         AdmissionOrderSet#create,update,deactivate | master data, no patient
         AdmissionOrderSet#apply | a stay the death closed refuses it (requireOpen)
         AdvanceDirective#update,revoke | an existing document, late documentation
-        Appointment#updateAppointmentStatus,deleteAppointment | closes or cancels a visit; a check-in goes through Reception, refused there
+        Appointment#deleteAppointment | removes a visit
         Appointment#runReminderSweep | the sweep already skips the deceased
         Appointment#searchAppointments | a read over POST
         BirthPlan#updateBirthPlan,providerReview,deleteBirthPlan | an existing record, late documentation
@@ -137,8 +142,7 @@ class DeceasedPatientCareGuardTest {
         Encounter#update,delete,completeExamination,markReadyForDischarge,checkOut,closeUnseen | late documentation and visit close-out
         Encounter#upsertEncounterNote,addEncounterNoteAddendum,signEncounterNote,cosignEncounterNote | notes about care before the death, with their real time
         Encounter#issueMedicalCertificate | certificates
-        EncounterTreatment#addTreatmentToEncounter | a late entry of a treatment given in that visit
-        GeneralReferral#acknowledgeReferral,scheduleReferral,startReferral,completeReferral,rejectReferral,cancelReferral,expireOverdueReferrals | closes or follows a referral made before the death; submitting one is refused
+        GeneralReferral#acknowledgeReferral,completeReferral,rejectReferral,cancelReferral,expireOverdueReferrals | closes or follows a referral made before the death; submitting one is refused
         HighRiskPregnancyCarePlan#updatePlan,addCareTeamNote,markMilestoneComplete | late documentation
         ImagingOrder#updateOrder,updateStatus,captureSignature | closes or documents an order made before the death
         Isolation#discontinuePrecaution | lifting a precaution
@@ -151,7 +155,7 @@ class DeceasedPatientCareGuardTest {
         MtmReview#update | an existing review, late documentation
         NurseTask#completeHandoff,completeNursingTask,markInboxRead | closes work
         NurseTask#createCareNote | notes about care before the death, with their real time
-        ObgynReferral#acknowledgeReferral,startReferral,completeReferral,cancelReferral,addMessage | closes or follows a referral made before the death
+        ObgynReferral#acknowledgeReferral,completeReferral,cancelReferral,addMessage | closes or follows a referral made before the death
         Patient#createPatientByReceptionist,updatePatient,setChartRestriction,patchPatient,deletePatient | the patient record itself, not care
         Patient#getDoctorRecord,getDoctorTimeline | reads over POST
         Patient#createPatientAllergy,updatePatientAllergy,deactivatePatientAllergy,createPatientDiagnosis,updatePatientDiagnosis,deletePatientDiagnosis,createPatientChartUpdate | late documentation: a final diagnosis is routinely written after a death

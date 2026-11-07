@@ -60,6 +60,12 @@ class OrderedDrugIdentityTest {
 
     private static final MedicationCatalogItem PARACETAMOL = item("Paracétamol", "Paracétamol", "Doliprane");
 
+    @org.junit.jupiter.api.Test
+    void everyCitedBrandHasAKnownDrugAtThePharmacy() {
+        org.assertj.core.api.Assertions.assertThat(OrderedDrugIdentity.brandsWithAKnownDrug())
+            .containsExactlyInAnyOrderElementsOf(com.example.hms.service.allergy.DrugClassAllergy.citedBrandPatterns());
+    }
+
     /** QA D1492: the pharmacy reads a cited brand as its generic; a lot leaves the shelf only for the same drug. */
     @ParameterizedTest(name = "\"{0}\" from a {1} lot: {2}")
     @CsvSource({
@@ -76,6 +82,25 @@ class OrderedDrugIdentityTest {
         "Dafalgan, Paracétamol, false",
         "Panadol, Paracétamol, false",
         "Efferalgan, Ibuprofène, false",
+        "Efferalgan, Paracétamol 500 mg, true",
+        "Clamoxyl, Amoxicilline 250 mg/5 ml, true",
+        "Augmentin, Amoxicilline acide clavulanique, true",
+        "Augmentin, Amoxicillin/clavulanic acid, true",
+        "Augmentin, Amoxicilline 500 mg + Acide clavulanique 125 mg, true",
+        "Clamoxyl, Amoxicilline acide clavulanique, false",
+        "Clamoxyl, Amoxicilline 500 mg + Acide clavulanique 125 mg, false",
+        "Totapen, Ampicilline cloxacilline, false",
+        "Fansidar, Sulfadoxine-pyriméthamine, true",
+        "Fansidar, Sulfadoxine, false",
+        "Bactrim, Sulfaméthoxazole-triméthoprime, true",
+        "Bactrim, Cotrimoxazole, true",
+        "Extencilline, Benzylpénicilline, false",
+        "Extencilline, Benzathine benzylpénicilline, true",
+        "Ospen, Penicillin G, false",
+        "Ospen, Pénicilline V, true",
+        "Ospen, Phénoxyméthylpénicilline, true",
+        "Extencilline, Penicilina V, false",
+        "Clamoxyl + acide clavulanique, Amoxicilline, false",
     })
     void aCitedBrandIsThisDrugOnlyForItsOwnGeneric(String typed, String generic, boolean expected) {
         org.assertj.core.api.Assertions.assertThat(

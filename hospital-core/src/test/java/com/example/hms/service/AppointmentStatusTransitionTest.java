@@ -138,6 +138,20 @@ class AppointmentStatusTransitionTest {
         when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appointment));
     }
 
+    @Test
+    void d1488_aDeadPatientsVisitIsNotPutBackIntoPlay() {
+        appointment.setStatus(AppointmentStatus.SCHEDULED);
+        com.example.hms.model.Patient dead = new com.example.hms.model.Patient();
+        dead.setDeceasedAt(java.time.LocalDateTime.now().minusHours(1));
+        appointment.setPatient(dead);
+
+        for (String action : java.util.List.of("confirm", "in_progress")) {
+            assertThatThrownBy(() ->
+                appointmentService.confirmOrCancelAppointment(appointmentId, action, null, "doctor_b"))
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
+        }
+    }
+
     // ── Temporal guard: cannot complete a future appointment ──
 
     @Test

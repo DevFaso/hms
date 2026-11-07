@@ -48,72 +48,72 @@ function mockRegister(overrides: Partial<MortalityRegister> = {}): MortalityRegi
   } as MortalityRegister;
 }
 
-describe('MortalityComponent', () => {
-  describe('QA D1488 / D1490', () => {
-    let fixtureComponent: MortalityComponent;
-    let spy: jasmine.SpyObj<MortalityService>;
-    let confirmSpy: jasmine.SpyObj<ConfirmService>;
+describe('MortalityComponent, QA D1488 / D1490', () => {
+  let fixtureComponent: MortalityComponent;
+  let spy: jasmine.SpyObj<MortalityService>;
+  let confirmSpy: jasmine.SpyObj<ConfirmService>;
 
-    beforeEach(async () => {
-      spy = jasmine.createSpyObj('MortalityService', [
-        'getRegister',
-        'recordDeath',
-        'amendDeathRecord',
-        'getForPatient',
-        'markEnteredInError',
-      ]);
-      spy.getRegister.and.returnValue(of(mockRegister()));
-      spy.markEnteredInError.and.returnValue(of(mockDeath()));
-      confirmSpy = jasmine.createSpyObj('ConfirmService', ['ask']);
-      confirmSpy.ask.and.resolveTo(true);
-      await TestBed.configureTestingModule({
-        imports: [MortalityComponent, TranslateModule.forRoot()],
-        providers: [
-          provideHttpClient(withXhr()),
-          provideHttpClientTesting(),
-          { provide: MortalityService, useValue: spy },
-          { provide: ConfirmService, useValue: confirmSpy },
-          {
-            provide: RoleContextService,
-            useValue: { hasAnyActiveRole: () => true, isSuperAdmin: () => false, activeHospitalId: 'h1' },
-          },
-        ],
-      }).compileComponents();
-      fixtureComponent = TestBed.createComponent(MortalityComponent).componentInstance;
-    });
-
-    it('hides and clears the maternal classification for a patient recorded male, unknown sex keeps it', () => {
-      fixtureComponent.form.maternalDeath = true;
-      fixtureComponent.onPatientPicked({ id: 'p1', gender: 'M' } as PatientResponse);
-      expect(fixtureComponent.maternalHidden()).toBeTrue();
-      expect(fixtureComponent.form.maternalDeath).toBeFalse();
-
-      fixtureComponent.onPatientPicked({ id: 'p2' } as PatientResponse);
-      expect(fixtureComponent.maternalHidden()).toBeFalse();
-    });
-
-    it('marks a record entered in error only with a reason and a confirmation', async () => {
-      fixtureComponent.openEnteredInError(mockDeath());
-      fixtureComponent.errorReason = '   ';
-      await fixtureComponent.submitEnteredInError();
-      expect(spy.markEnteredInError).not.toHaveBeenCalled();
-
-      fixtureComponent.errorReason = ' Wrong patient ';
-      await fixtureComponent.submitEnteredInError();
-      expect(confirmSpy.ask).toHaveBeenCalled();
-      expect(spy.markEnteredInError).toHaveBeenCalledWith(mockDeath().id, 'Wrong patient');
-      expect(fixtureComponent.errorRecord()).toBeNull();
-    });
-
-    it('sends nothing when the confirmation is declined', async () => {
-      confirmSpy.ask.and.resolveTo(false);
-      fixtureComponent.openEnteredInError(mockDeath());
-      fixtureComponent.errorReason = 'Wrong patient';
-      await fixtureComponent.submitEnteredInError();
-      expect(spy.markEnteredInError).not.toHaveBeenCalled();
-    });
+  beforeEach(async () => {
+    spy = jasmine.createSpyObj('MortalityService', [
+      'getRegister',
+      'recordDeath',
+      'amendDeathRecord',
+      'getForPatient',
+      'markEnteredInError',
+    ]);
+    spy.getRegister.and.returnValue(of(mockRegister()));
+    spy.markEnteredInError.and.returnValue(of(mockDeath()));
+    confirmSpy = jasmine.createSpyObj('ConfirmService', ['ask']);
+    confirmSpy.ask.and.resolveTo(true);
+    await TestBed.configureTestingModule({
+      imports: [MortalityComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        { provide: MortalityService, useValue: spy },
+        { provide: ConfirmService, useValue: confirmSpy },
+        {
+          provide: RoleContextService,
+          useValue: { hasAnyActiveRole: () => true, isSuperAdmin: () => false, activeHospitalId: 'h1' },
+        },
+      ],
+    }).compileComponents();
+    fixtureComponent = TestBed.createComponent(MortalityComponent).componentInstance;
   });
 
+  it('hides and clears the maternal classification for a patient recorded male, unknown sex keeps it', () => {
+    fixtureComponent.form.maternalDeath = true;
+    fixtureComponent.onPatientPicked({ id: 'p1', gender: 'M' } as PatientResponse);
+    expect(fixtureComponent.maternalHidden()).toBeTrue();
+    expect(fixtureComponent.form.maternalDeath).toBeFalse();
+
+    fixtureComponent.onPatientPicked({ id: 'p2' } as PatientResponse);
+    expect(fixtureComponent.maternalHidden()).toBeFalse();
+  });
+
+  it('marks a record entered in error only with a reason and a confirmation', async () => {
+    fixtureComponent.openEnteredInError(mockDeath());
+    fixtureComponent.errorReason = '   ';
+    await fixtureComponent.submitEnteredInError();
+    expect(spy.markEnteredInError).not.toHaveBeenCalled();
+
+    fixtureComponent.errorReason = ' Wrong patient ';
+    await fixtureComponent.submitEnteredInError();
+    expect(confirmSpy.ask).toHaveBeenCalled();
+    expect(spy.markEnteredInError).toHaveBeenCalledWith(mockDeath().id, 'Wrong patient');
+    expect(fixtureComponent.errorRecord()).toBeNull();
+  });
+
+  it('sends nothing when the confirmation is declined', async () => {
+    confirmSpy.ask.and.resolveTo(false);
+    fixtureComponent.openEnteredInError(mockDeath());
+    fixtureComponent.errorReason = 'Wrong patient';
+    await fixtureComponent.submitEnteredInError();
+    expect(spy.markEnteredInError).not.toHaveBeenCalled();
+  });
+});
+
+describe('MortalityComponent', () => {
   let component: MortalityComponent;
   let mortalitySpy: jasmine.SpyObj<MortalityService>;
   let toastSpy: jasmine.SpyObj<ToastService>;

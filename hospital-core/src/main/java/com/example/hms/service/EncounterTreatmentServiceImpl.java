@@ -46,6 +46,8 @@ public class EncounterTreatmentServiceImpl implements EncounterTreatmentService 
         if (com.example.hms.enums.EncounterStatus.ENDED_UNSEEN.contains(encounter.getStatus())) {
             throw new com.example.hms.exception.FieldBusinessException("encounterId", "encounter.treatment.endedUnseen", encounter.getStatus().localizedLabel());
         }
+        // QA D1488: a late entry of a treatment given stays open; one timed after the death does not.
+        com.example.hms.service.support.DeceasedPatientGuard.refuseCareAfterDeath(encounter.getPatient(), dto.getPerformedAt(), "performedAt");
         // QA D503 class: the clinician who gave the treatment is the caller.
         Staff staff = com.example.hms.security.CallerIdentity.resolveActor(staffRepository, dto.getStaffId(),
                 com.example.hms.security.CallerIdentity.hospitalIdOf(encounter.getHospital()));

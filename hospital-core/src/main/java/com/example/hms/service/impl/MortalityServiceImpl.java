@@ -273,6 +273,13 @@ public class MortalityServiceImpl implements MortalityService {
             throw new BusinessException("mortality.enteredInError.closed");
         }
         UUID actorId = roleValidator.getCurrentUserId();
+        // The controller's role check reads the union of the caller's assignments: an administrator of
+        // hospital A who is a nurse at B, acting at B, must not reach B's records through it.
+        if (!roleValidator.isSuperAdminFromAuth()
+                && !roleValidator.isHospitalAdmin(actorId, deathRecord.getHospital().getId())) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                "Only a hospital administrator of this hospital can mark a death record entered in error.");
+        }
         String actorName = currentUsername();
         deathRecord.setEnteredInErrorAt(LocalDateTime.now(clock));
         deathRecord.setEnteredInErrorById(actorId);

@@ -220,6 +220,7 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
     public GeneralReferralResponseDTO scheduleReferral(UUID referralId, ScheduleReferralRequestDTO request) {
         GeneralReferral referral = findReferral(referralId);
         requireReceivingSide(referral);
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(referral.getPatient());
         ReferralStatus before = referral.getStatus();
         referral.schedule(request.getAppointmentTime(), request.getLocation());
 
@@ -342,6 +343,7 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
     public GeneralReferralResponseDTO startReferral(UUID referralId) {
         GeneralReferral referral = findReferral(referralId);
         requireReceivingSide(referral);
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(referral.getPatient());
         ReferralStatus before = referral.getStatus();
         referral.start();
         referral = referralRepository.save(referral);

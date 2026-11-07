@@ -57,7 +57,7 @@ public class MortalityController {
     private static final String RECORDER =
         "hasAnyRole('SUPER_ADMIN','DOCTOR','SURGEON','MIDWIFE')";
 
-    /** QA D1488: who may mark a death record entered in error; the service holds it to their own hospital. */
+    /** QA D1488: who may mark a death record entered in error; the service asks for the role at the record's hospital. */
     private static final String CORRECTOR = "hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN')";
 
     /** Who may read the register and individual records. */

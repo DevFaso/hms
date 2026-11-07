@@ -185,6 +185,7 @@ public class ObgynReferralServiceImpl implements ObgynReferralService {
     @Override
     public ObgynReferralResponseDTO startReferral(UUID referralId, String username) {
         ObgynReferral referral = findReferral(referralId);
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(referral.getPatient());
         referral.start();
         referral.setUpdatedBy(username);
 

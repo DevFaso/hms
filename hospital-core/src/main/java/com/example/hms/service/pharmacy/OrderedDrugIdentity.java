@@ -4,6 +4,9 @@ import com.example.hms.model.medication.MedicationCatalogItem;
 import com.example.hms.service.allergy.DrugClassAllergy;
 
 import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * QA D1223 (round 24, D1149/D1183 class): an order names its drug twice - the
@@ -69,24 +72,77 @@ public final class OrderedDrugIdentity {
     }
 
     /**
-     * QA D1492: the free-text order names a cited brand, and this lot is that brand's generic: the same drug, so
-     * the lot may be dispensed against it. Stricter than {@link #agrees}, whose first-INN reading only says two
-     * inputs do not contradict each other: a lot leaves the shelf on this, so a combination brand (Augmentin,
-     * Bactrim, Fansidar) is never filled from one of its ingredients alone, nor a single-ingredient brand from a
-     * combination.
+     * QA D1492: what each cited brand of {@link DrugClassAllergy#citedBrandPatterns} is, as whole ingredient lists,
+     * any one of which a lot's generic must equal: the brand's own map holds loose words for the allergy check
+     * ("penicillin v" reads "penicillin"), and a lot leaves the shelf on this. Spellings as {@link #ingredientsOf}
+     * reads them. Only what that map already holds, with no brand added.
      */
-    public static boolean citedBrandIsThisDrug(String typedName, MedicationCatalogItem item) {
-        if (item == null || !brandNamesGeneric(typedName, item.getGenericName())) {
-            return false;
-        }
-        return DrugClassAllergy.carriesCombinationBrand(typedName) == isCombinationGeneric(item.getGenericName());
+    private static final Map<String, List<Set<String>>> BRAND_DRUGS = brandDrugs();
+
+    private static final Set<String> NOT_AN_INGREDIENT = Set.of(
+        "et", "and", "y", "acide", "acid", "acido", "mg", "g", "mcg", "ug", "ml", "l", "ui", "iu");
+
+    private static Map<String, List<Set<String>>> brandDrugs() {
+        List<Set<String>> cotrimoxazole = List.of(Set.of("cotrimoxazol"), Set.of("sulfametoxazol", "trimetoprim"));
+        List<Set<String>> paracetamol = List.of(Set.of("paracetamol"), Set.of("acetaminofen"));
+        List<Set<String>> penicillinV = List.of(Set.of("fenoximetilpenicilin"), Set.of("penicilin", "v"));
+        return Map.ofEntries(
+            Map.entry("\\bbactrim\\b", cotrimoxazole),
+            Map.entry("\\bseptra\\b", cotrimoxazole),
+            Map.entry("\\bseptrin\\b", cotrimoxazole),
+            Map.entry("\\beusaprim\\b", cotrimoxazole),
+            Map.entry("\\bfansidar\\b", List.of(Set.of("sulfadoxin", "pirimetamin"))),
+            Map.entry("\\btotapen\\b", List.of(Set.of("ampicilin"))),
+            Map.entry("\\borbenine\\b", List.of(Set.of("cloxacilin"))),
+            Map.entry("\\bospen\\b", penicillinV),
+            Map.entry("\\boracilline\\b", penicillinV),
+            Map.entry("\\baugmentin\\b", List.of(Set.of("amoxicilin", "clavulanic"), Set.of("amoxicilin", "clavulanat"))),
+            Map.entry("\\bclamoxyl\\b", List.of(Set.of("amoxicilin"))),
+            Map.entry("\\bextencilline\\b",
+                List.of(Set.of("benzatin", "benzilpenicilin"), Set.of("penicilin", "benzatinic"))),
+            Map.entry("\\befferalgan(?:stix)?\\b", paracetamol),
+            Map.entry("\\btylenol\\b", paracetamol));
     }
 
-    private static boolean isCombinationGeneric(String genericName) {
-        String generic = DrugClassAllergy.normalize(genericName);
-        return generic.contains("+") || generic.contains("/") || generic.contains(",")
-            || generic.contains(" et ") || generic.contains(" and ") || generic.contains(" y ")
-            || generic.contains("trimoxazol");
+    /** The brands {@link #citedBrandIsThisDrug} knows, by their pattern: every cited brand, or a guard fails. */
+    public static Set<String> brandsWithAKnownDrug() {
+        return BRAND_DRUGS.keySet();
+    }
+
+    /**
+     * QA D1492: the free-text order names a cited brand, and this lot's generic is exactly that brand's drug, so the
+     * lot may be dispensed against it. Stricter than {@link #agrees}, whose reading only says two inputs do not
+     * contradict each other: Augmentin is not filled from amoxicillin alone, Clamoxyl not from a combination, Ospen
+     * (penicillin V) not from penicillin G, Extencilline (benzathine) not from benzylpenicillin. Anything unread is
+     * refused, as it is today.
+     */
+    public static boolean citedBrandIsThisDrug(String typedName, MedicationCatalogItem item) {
+        if (item == null || typedName == null || typedName.contains("+")
+                || com.example.hms.cdshooks.rules.ParacetamolIdentity.isCombinationName(typedName)) {
+            return false;
+        }
+        Set<String> lot = ingredientsOf(item.getGenericName());
+        String typed = DrugClassAllergy.normalize(typedName);
+        return BRAND_DRUGS.entrySet().stream()
+            .filter(brand -> java.util.regex.Pattern.compile(brand.getKey()).matcher(typed).find())
+            .anyMatch(brand -> brand.getValue().contains(lot));
+    }
+
+    /**
+     * A generic name read as its ingredients, whatever joins them and whichever language spells them; strengths are
+     * dropped. "Amoxicilline 500 mg + Acide clavulanique 125 mg" and "Amoxicillin/clavulanic acid" read alike.
+     */
+    private static Set<String> ingredientsOf(String genericName) {
+        String generic = DrugClassAllergy.normalize(genericName).replace("co-trimoxazol", "cotrimoxazol");
+        Set<String> ingredients = new java.util.HashSet<>();
+        for (String word : generic.split("[\\s+,/()\\-]+")) {
+            if (word.isEmpty() || word.chars().anyMatch(Character::isDigit) || NOT_AN_INGREDIENT.contains(word)) {
+                continue;
+            }
+            String spelled = spellingOfWord(word).replace("th", "t");
+            ingredients.add(spelled.endsWith("iqu") ? spelled.substring(0, spelled.length() - 3) + "ic" : spelled);
+        }
+        return ingredients;
     }
 
     /**
