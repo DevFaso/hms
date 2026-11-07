@@ -2,6 +2,7 @@ package com.example.hms.service.maternity;
 
 import com.example.hms.enums.GlucoseUnit;
 import com.example.hms.enums.NewbornAlertSeverity;
+import com.example.hms.enums.NewbornDangerSignObservation;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -220,6 +221,76 @@ class NewbornAlertRulesTest {
             .satisfies(f -> assertThat(f.followUp()).isEqualTo(com.example.hms.enums.NewbornFollowUpAction.THERMAL_SUPPORT));
     }
 
+    private static final NewbornAlertRules.Reading NO_VITALS =
+        new NewbornAlertRules.Reading(null, null, null, null, null, null, null, null, 1L, false, false);
+    private static final NewbornAlertRules.Reading NORMAL_VITALS =
+        new NewbornAlertRules.Reading(36.8, 140, 40, 98, 70, null, null, null, 1L, false, false);
+
+    /** One sign at the given observation, the others not assessed, built by position so a new sign cannot be missed. */
+    private static NewbornAlertRules.DangerSigns signAt(int position, NewbornDangerSignObservation observation) throws ReflectiveOperationException {
+        var components = NewbornAlertRules.DangerSigns.class.getRecordComponents();
+        Object[] args = new Object[components.length];
+        java.util.Arrays.fill(args, NewbornDangerSignObservation.NOT_ASSESSED);
+        args[position] = observation;
+        return (NewbornAlertRules.DangerSigns) NewbornAlertRules.DangerSigns.class
+            .getDeclaredConstructor(java.util.Arrays.stream(components).map(java.lang.reflect.RecordComponent::getType).toArray(Class[]::new))
+            .newInstance(args);
+    }
+
+    private static final int DANGER_SIGNS = NewbornAlertRules.DangerSigns.class.getRecordComponents().length;
+
+    @Test
+    @DisplayName("CR-05: every sign present alone raises its own urgent finding, with its own code, on normal or no vitals")
+    void eachDangerSignStandsAlone() throws ReflectiveOperationException {
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        for (int i = 0; i < DANGER_SIGNS; i++) {
+            for (NewbornAlertRules.Reading vitals : List.of(NO_VITALS, NORMAL_VITALS)) {
+                assertThat(NewbornAlertRules.evaluate(vitals, signAt(i, NewbornDangerSignObservation.PRESENT)))
+                    .singleElement()
+                    .satisfies(f -> {
+                        assertThat(f.severity()).isEqualTo(NewbornAlertSeverity.URGENT);
+                        assertThat(f.type()).isEqualTo(com.example.hms.enums.NewbornAlertType.DANGER_SIGN);
+                        assertThat(f.followUp()).isNotNull();
+                        seen.add(f.code());
+                    });
+            }
+        }
+        assertThat(seen).as("one code per sign").hasSize(DANGER_SIGNS).hasSize(4);
+    }
+
+    @Test
+    @DisplayName("CR-05: absent, not assessed and blank raise nothing")
+    void aSignNotPresentRaisesNothing() throws ReflectiveOperationException {
+        for (int i = 0; i < DANGER_SIGNS; i++) {
+            assertThat(NewbornAlertRules.evaluate(NORMAL_VITALS, signAt(i, NewbornDangerSignObservation.ABSENT))).isEmpty();
+            assertThat(NewbornAlertRules.evaluate(NORMAL_VITALS, signAt(i, NewbornDangerSignObservation.NOT_ASSESSED))).isEmpty();
+            assertThat(NewbornAlertRules.evaluate(NORMAL_VITALS, signAt(i, null))).isEmpty();
+        }
+    }
+
+    @Test
+    @DisplayName("CR-05: all present are four findings; the vitals' own findings stand beside them")
+    void theSignsDoNotReplaceEachOtherOrTheVitals() {
+        NewbornDangerSignObservation present = NewbornDangerSignObservation.PRESENT;
+        NewbornAlertRules.Reading hot = new NewbornAlertRules.Reading(38.5, null, null, null, null, null, null, null, 1L, false, false);
+        assertThat(NewbornAlertRules.evaluate(hot, new NewbornAlertRules.DangerSigns(present, present, present, present)))
+            .extracting(NewbornAlertRules.Finding::code)
+            .containsExactlyInAnyOrder("newborn-temperature-critical", "newborn-danger-poor-feeding", "newborn-danger-convulsions",
+                "newborn-danger-chest-indrawing", "newborn-danger-no-movement");
+    }
+
+    @Test
+    @DisplayName("CR-05: no sentence claims every WHO danger sign is covered")
+    void noWordingClaimsFullCoverage() {
+        var messages = com.example.hms.i18n.TestMessageSources.bundles();
+        for (java.util.Locale locale : List.of(java.util.Locale.ENGLISH, java.util.Locale.FRENCH, java.util.Locale.forLanguageTag("es"))) {
+            for (String code : List.of("poor-feeding", "convulsions", "chest-indrawing", "no-movement")) {
+                assertThat(messages.getMessage("newborn.alert.msg.newborn-danger-" + code, null, locale).toLowerCase(locale))
+                    .doesNotContain("all ", "every ", "complete", "tous ", "complet", "todos ", "completa");
+            }
+        }
+    }
+
     @Test
     @DisplayName("a temperature above what other forms accept asks to remeasure, and stays urgent")
     void aHighTemperatureAsksToRemeasure() {
@@ -326,7 +397,8 @@ class NewbornAlertRulesTest {
             "newborn-glucose-first-72h", "newborn-glucose-unknown-age", "newborn-glucose-after-72h",
             "newborn-reference-heart-rate", "newborn-reference-heart-rate-preterm", "newborn-reference-respiratory",
             "newborn-reference-respiratory-preterm", "newborn-check-heart-rate", "newborn-check-respiratory",
-            "newborn-check-glucose", "newborn-check-pressure", "newborn-check-temperature");
+            "newborn-check-glucose", "newborn-check-pressure", "newborn-check-temperature",
+            "newborn-danger-poor-feeding", "newborn-danger-convulsions", "newborn-danger-chest-indrawing", "newborn-danger-no-movement");
         for (java.util.Locale locale : List.of(java.util.Locale.ENGLISH, java.util.Locale.FRENCH, java.util.Locale.forLanguageTag("es"))) {
             for (String code : codes) {
                 assertThat(messages.getMessage("newborn.alert.msg." + code, null, locale)).as(code).isNotBlank();

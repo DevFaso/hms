@@ -3,6 +3,7 @@ package com.example.hms.service.maternity;
 import com.example.hms.enums.GlucoseUnit;
 import com.example.hms.enums.NewbornAlertSeverity;
 import com.example.hms.enums.NewbornAlertType;
+import com.example.hms.enums.NewbornDangerSignObservation;
 import com.example.hms.enums.NewbornFollowUpAction;
 import com.example.hms.payload.dto.VitalSignLimits;
 
@@ -97,6 +98,16 @@ public final class NewbornAlertRules {
     }
 
     /**
+     * CR-05: what was observed about the non-vital danger signs of {@link #SELECTED_PATHWAY}. These
+     * are not all of its signs: early jaundice is not recorded, so nothing here may claim full
+     * coverage. Read only from these structured values, never from free text. PROVISIONAL.
+     */
+    public record DangerSigns(NewbornDangerSignObservation poorFeeding, NewbornDangerSignObservation convulsions,
+                              NewbornDangerSignObservation severeChestIndrawing,
+                              NewbornDangerSignObservation absentSpontaneousMovement) {
+    }
+
+    /**
      * One warning, and the follow-up it requests. CR-06: a finding recommends; it never records
      * that treatment was given. Whether support was started is only what the clinician submitted
      * (NewbornSupportFlagGuardTest).
@@ -109,6 +120,23 @@ public final class NewbornAlertRules {
     }
 
     private NewbornAlertRules() {
+    }
+
+    public static List<Finding> evaluate(Reading reading, DangerSigns signs) {
+        List<Finding> findings = evaluate(reading);
+        dangerSign(signs.poorFeeding(), "newborn-danger-poor-feeding", findings);
+        dangerSign(signs.convulsions(), "newborn-danger-convulsions", findings);
+        dangerSign(signs.severeChestIndrawing(), "newborn-danger-chest-indrawing", findings);
+        dangerSign(signs.absentSpontaneousMovement(), "newborn-danger-no-movement", findings);
+        return findings;
+    }
+
+    /** Each sign stands alone: only PRESENT raises anything, whatever the others and the vitals say. */
+    private static void dangerSign(NewbornDangerSignObservation observation, String code, List<Finding> findings) {
+        if (observation == NewbornDangerSignObservation.PRESENT) {
+            findings.add(new Finding(NewbornAlertType.DANGER_SIGN, NewbornAlertSeverity.URGENT, code,
+                NewbornFollowUpAction.PEDIATRICIAN_NOTIFICATION));
+        }
     }
 
     public static List<Finding> evaluate(Reading reading) {

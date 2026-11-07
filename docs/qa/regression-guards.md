@@ -1070,3 +1070,10 @@ Rounds 27, 28 and 29 each found 20–30 new siblings of the required-field class
 | `filed.D1486`, `filed.D1487`, `filed.D1512`, `filed.R36-slots` in the shared fixture (new, run by every list test of `FrequencyWordingTest` and the spec) | The slots outside the table: clock times joined by "à" or "vers", impossible hours, a lone "1h30", course moments, posology intakes, N/24, zero doses and rates, a number word of another language than its form. Each is asked on both sides and flagged on the MAR. | none |
 | `service/impl/FrequencyWordingTest#d1491_aBlankFrequencyIsRefusedAndNeverEndsACourse`, `PrnMinIntervalTest#d1491_*`, `OrderSetItemDispatcherTest#anItem*NoFrequency*`, `PrescriptionEditAndWithdrawalIT#d1491_*` (new) | D1491: no frequency accepted on a new order, or read as a single dose on an older one. Each path that writes an order is named: create, constraint, edit, emptying edit, untick, withdrawal, order-set save, order-set apply. | none |
 | `service/impl/NurseTaskServiceImplTest#d1508_*` (new) | D1508: an unread order with no `frequencyUnread` on the MAR until its first dose. | none |
+
+## Guards added by the clinical-rules wave (fix/cr-newborn)
+
+| Guard | What it catches | Allowlist |
+|---|---|---|
+| `architecture/NewbornSupportFlagGuardTest` (new) | CR-06: a rule output that could record newborn support as started: a boolean on `Finding`, a setter on the three initiated flags, a flag built from anything but the clinician's own value, or the rules naming a flag. | none |
+| `service/maternity/NewbornAlertRulesTest#eachDangerSignStandsAlone` (new) | CR-05: a danger sign added to `DangerSigns` that raises no finding, shares a code with another, or depends on the vitals. It walks the record's components. | none |

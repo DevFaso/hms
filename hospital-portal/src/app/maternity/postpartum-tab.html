@@ -369,8 +369,8 @@
                   @for (alert of newbornAlertsToRead(a); track $index) {
                     <p
                       class="saved-note"
-                      [class.risk-badge]="isNewbornValueCheck(alert)"
-                      [class.risk-high]="isNewbornValueCheck(alert)"
+                      [class.risk-badge]="isNewbornValueCheck(alert) || isNewbornDangerSign(alert)"
+                      [class.risk-high]="isNewbornValueCheck(alert) || isNewbornDangerSign(alert)"
                       data-testid="newborn-alert-sentence"
                     >
                       {{ alert.message }}
@@ -394,8 +394,22 @@
                       {{ a.followUpNotes }}
                     </div>
                   }
-                  @if (!a.examGeneralAppearance && !a.examNotes && !a.followUpNotes) {
-                    —
+                  <!-- CR-05: nobody looked is said out loud, and never reads as absent. -->
+                  @if (anyDangerSignLookedAt(a)) {
+                    @for (sign of newbornDangerSigns; track sign.field) {
+                      <div
+                        data-testid="newborn-danger-sign"
+                        [class.risk-badge]="a[sign.field] === 'PRESENT'"
+                        [class.risk-high]="a[sign.field] === 'PRESENT'"
+                      >
+                        {{ sign.label | translate }}{{ 'COMMON.COLON' | translate }}
+                        {{ dangerSignObservationKey(a[sign.field]) | translate }}
+                      </div>
+                    }
+                  } @else {
+                    <div class="muted" data-testid="newborn-danger-none">
+                      {{ 'POSTPARTUM.DANGER_SIGNS_NONE_ASSESSED' | translate }}
+                    </div>
                   }
                 </td>
               </tr>
@@ -802,7 +816,28 @@
           <label for="nb-exam-notes">{{ 'POSTPARTUM.EXAM_NOTES' | translate }}</label>
           <textarea id="nb-exam-notes" rows="2" [(ngModel)]="assessmentForm.examNotes"></textarea>
         </div>
+        <h3 class="section-heading">{{ 'POSTPARTUM.DANGER_SIGNS' | translate }}</h3>
+        <p class="muted" data-testid="newborn-danger-hint">
+          {{ 'POSTPARTUM.DANGER_SIGNS_HINT' | translate }}
+        </p>
+        <div class="form-row">
+          @for (sign of newbornDangerSigns; track sign.field) {
+            <div class="field">
+              <label [for]="sign.id">{{ sign.label | translate }}</label>
+              <select [id]="sign.id" [(ngModel)]="assessmentForm[sign.field]">
+                <option [ngValue]="undefined">
+                  {{ 'POSTPARTUM.DANGER_NOT_ASSESSED' | translate }}
+                </option>
+                <option [ngValue]="'PRESENT'">{{ 'POSTPARTUM.DANGER_PRESENT' | translate }}</option>
+                <option [ngValue]="'ABSENT'">{{ 'POSTPARTUM.DANGER_ABSENT' | translate }}</option>
+              </select>
+            </div>
+          }
+        </div>
         <h3 class="section-heading">{{ 'POSTPARTUM.INTERVENTIONS' | translate }}</h3>
+        <p class="muted" data-testid="newborn-interventions-hint">
+          {{ 'POSTPARTUM.INTERVENTIONS_HINT' | translate }}
+        </p>
         <div class="checkbox-grid">
           <label>
             <input type="checkbox" [(ngModel)]="assessmentForm.escalationRecommended" />

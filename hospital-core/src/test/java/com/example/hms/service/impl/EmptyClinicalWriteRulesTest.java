@@ -106,6 +106,20 @@ class EmptyClinicalWriteRulesTest {
     }
 
     @Test
+    void cr05_aDangerSignLookedAtIsAFinding_notAssessedIsNot() {
+        NewbornAssessmentRequestDTO notAssessed = new NewbornAssessmentRequestDTO();
+        notAssessed.setConvulsions(com.example.hms.enums.NewbornDangerSignObservation.NOT_ASSESSED);
+        assertThatThrownBy(() -> NewbornAssessmentServiceImpl.requireAssessmentFindings(notAssessed))
+            .extracting("messageKey").isEqualTo("maternity.newborn.findingsRequired");
+        for (com.example.hms.enums.NewbornDangerSignObservation looked : java.util.List.of(
+                com.example.hms.enums.NewbornDangerSignObservation.PRESENT, com.example.hms.enums.NewbornDangerSignObservation.ABSENT)) {
+            NewbornAssessmentRequestDTO one = new NewbornAssessmentRequestDTO();
+            one.setSevereChestIndrawing(looked);
+            assertThatCode(() -> NewbornAssessmentServiceImpl.requireAssessmentFindings(one)).doesNotThrowAnyException();
+        }
+    }
+
+    @Test
     void aBlankNewbornAssessmentIsRefused_D1151() {
         NewbornAssessmentRequestDTO blank = new NewbornAssessmentRequestDTO();
         assertThatThrownBy(() -> NewbornAssessmentServiceImpl.requireAssessmentFindings(blank))

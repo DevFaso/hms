@@ -18,6 +18,7 @@ import {
   NewbornAssessmentRequest,
   NewbornAssessmentResponse,
   NewbornAlert,
+  NewbornDangerSignObservation,
   GlucoseUnit,
   NewbornFollowUpAction,
   PostpartumBladderStatus,
@@ -121,6 +122,10 @@ const OBSERVATION_SERVER_FIELD_IDS: Readonly<Record<string, string>> = {
 const NEWBORN_SERVER_FIELD_IDS: Readonly<Record<string, string>> = {
   ...NEWBORN_FIELD_IDS,
   assessmentTime: 'nb-time',
+  poorFeeding: 'nb-danger-feeding',
+  convulsions: 'nb-danger-convulsions',
+  severeChestIndrawing: 'nb-danger-indrawing',
+  absentSpontaneousMovement: 'nb-danger-movement',
 };
 const OBSERVATION_IDS = Object.values(OBSERVATION_SERVER_FIELD_IDS);
 const NEWBORN_IDS = Object.values(NEWBORN_SERVER_FIELD_IDS);
@@ -168,11 +173,33 @@ export const NEWBORN_FINDINGS = [
   'glucoseValue',
   'examGeneralAppearance',
   'examNotes',
+  // CR-05: a sign looked at, present or absent, is a finding. The form sends nothing for "not assessed".
+  'poorFeeding',
+  'convulsions',
+  'severeChestIndrawing',
+  'absentSpontaneousMovement',
+] as const;
+
+/** CR-05: part of the provisional WHO postnatal pathway, not all of it: early jaundice is not here. */
+const NEWBORN_DANGER_SIGNS = [
+  { field: 'poorFeeding', id: 'nb-danger-feeding', label: 'POSTPARTUM.DANGER_POOR_FEEDING' },
+  { field: 'convulsions', id: 'nb-danger-convulsions', label: 'POSTPARTUM.DANGER_CONVULSIONS' },
+  {
+    field: 'severeChestIndrawing',
+    id: 'nb-danger-indrawing',
+    label: 'POSTPARTUM.DANGER_CHEST_INDRAWING',
+  },
+  {
+    field: 'absentSpontaneousMovement',
+    id: 'nb-danger-movement',
+    label: 'POSTPARTUM.DANGER_NO_MOVEMENT',
+  },
 ] as const;
 
 const NEWBORN_LABELS: Record<string, string> = {
   ...labelKeysOf(NEWBORN_LIMITS),
   assessmentTime: 'POSTPARTUM.TIME',
+  ...Object.fromEntries(NEWBORN_DANGER_SIGNS.map((sign) => [sign.field, sign.label])),
 };
 const OBSERVATION_LABELS: Record<string, string> = {
   ...labelKeysOf(OBSERVATION_LIMITS),
@@ -767,11 +794,34 @@ export class PostpartumTabComponent {
     return !!alert.code?.startsWith('newborn-check-');
   }
 
+  /** CR-04, CR-05: a danger sign stands out, and its sentence names the provisional pathway. */
+  isNewbornDangerSign(alert: NewbornAlert): boolean {
+    return alert.type === 'DANGER_SIGN' || alert.code === 'newborn-temperature-who-danger';
+  }
+
   /** QA D1424: a request to remeasure, or an acceptable-range notice, reads as its sentence on the chart. */
   newbornAlertsToRead(a: NewbornAssessmentResponse): NewbornAlert[] {
     return (a.alerts ?? []).filter(
-      (alert) => this.isNewbornValueCheck(alert) || alert.severity === 'INFO',
+      (alert) =>
+        this.isNewbornValueCheck(alert) ||
+        this.isNewbornDangerSign(alert) ||
+        alert.severity === 'INFO',
     );
+  }
+
+  readonly newbornDangerSigns = NEWBORN_DANGER_SIGNS;
+
+  /** CR-05: a row where nobody looked says so; it never reads as "absent". */
+  anyDangerSignLookedAt(a: NewbornAssessmentResponse): boolean {
+    return NEWBORN_DANGER_SIGNS.some(
+      (sign) => a[sign.field] === 'PRESENT' || a[sign.field] === 'ABSENT',
+    );
+  }
+
+  dangerSignObservationKey(observation: NewbornDangerSignObservation | undefined): string {
+    if (observation === 'PRESENT') return 'POSTPARTUM.DANGER_PRESENT';
+    if (observation === 'ABSENT') return 'POSTPARTUM.DANGER_ABSENT';
+    return 'POSTPARTUM.DANGER_NOT_ASSESSED';
   }
 
   /** Marks each field a refusal names under `fieldErrors` with the server's reason. */

@@ -3,6 +3,7 @@ package com.example.hms.service.impl;
 import com.example.hms.service.i18n.NotificationLocalizer;
 import com.example.hms.enums.NewbornAlertSeverity;
 import com.example.hms.enums.NewbornAlertType;
+import com.example.hms.enums.NewbornDangerSignObservation;
 import com.example.hms.enums.NewbornFollowUpAction;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
@@ -91,7 +92,14 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
             request.getExamGeneralAppearance(),
             request.getExamHeadNeck(), request.getExamChestLungs(), request.getExamCardiac(),
             request.getExamAbdomen(), request.getExamGenitourinary(), request.getExamSkin(),
-            request.getExamNeurological(), request.getExamMusculoskeletal(), request.getExamNotes());
+            request.getExamNeurological(), request.getExamMusculoskeletal(), request.getExamNotes(),
+            dangerSignFinding(request.getPoorFeeding()), dangerSignFinding(request.getConvulsions()),
+            dangerSignFinding(request.getSevereChestIndrawing()), dangerSignFinding(request.getAbsentSpontaneousMovement()));
+    }
+
+    /** CR-05: a sign looked at is a finding, present or absent; not assessed records nothing. */
+    private static NewbornDangerSignObservation dangerSignFinding(NewbornDangerSignObservation observation) {
+        return NewbornDangerSignObservation.isRecorded(observation) ? observation : null;
     }
 
     /** The whole mg/dL the column stores: the value as entered in its unit, else the mg/dL field. */
@@ -260,6 +268,10 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
             .examNeurological(request.getExamNeurological())
             .examMusculoskeletal(request.getExamMusculoskeletal())
             .examNotes(request.getExamNotes())
+            .poorFeeding(NewbornDangerSignObservation.orNotAssessed(request.getPoorFeeding()))
+            .convulsions(NewbornDangerSignObservation.orNotAssessed(request.getConvulsions()))
+            .severeChestIndrawing(NewbornDangerSignObservation.orNotAssessed(request.getSevereChestIndrawing()))
+            .absentSpontaneousMovement(NewbornDangerSignObservation.orNotAssessed(request.getAbsentSpontaneousMovement()))
             .followUpNotes(request.getFollowUpNotes())
             .parentEducationNotes(request.getParentEducationNotes())
             .parentEducationCompleted(Boolean.TRUE.equals(request.getParentEducationCompleted()))
@@ -280,7 +292,9 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
     private void evaluateAssessment(NewbornAssessment assessment, NewbornAssessmentRequestDTO request, boolean ownChart) {
         List<NewbornAssessmentAlert> alerts = new ArrayList<>();
         boolean urgentDetected = evaluateApgar(assessment, alerts);
-        for (NewbornAlertRules.Finding finding : NewbornAlertRules.evaluate(readingOf(assessment, request, ownChart))) {
+        NewbornAlertRules.DangerSigns dangerSigns = new NewbornAlertRules.DangerSigns(assessment.getPoorFeeding(),
+            assessment.getConvulsions(), assessment.getSevereChestIndrawing(), assessment.getAbsentSpontaneousMovement());
+        for (NewbornAlertRules.Finding finding : NewbornAlertRules.evaluate(readingOf(assessment, request, ownChart), dangerSigns)) {
             alerts.add(buildAlert(finding.type(), finding.severity(), finding.code(), alertText(finding.code()),
                 finding.code()));
             if (finding.followUp() != null) {
