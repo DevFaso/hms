@@ -111,6 +111,40 @@ class DeathRecordEnteredInErrorPostgresIT {
         assertThat(repository.findEnteredInError(hospital, FROM, TO)).isEmpty();
     }
 
+    private void insertPerinatal(UUID hospital, String type, Integer gestationWeeks) {
+        jdbc.execute("ALTER TABLE clinical.death_records DISABLE TRIGGER ALL");
+        try {
+            jdbc.update("""
+                INSERT INTO clinical.death_records (id, patient_id, hospital_id, died_at, immediate_cause,
+                    perinatal_death, perinatal_type, gestational_age_weeks)
+                VALUES (?, ?, ?, ?, 'Cause', true, ?, ?)
+                """, UUID.randomUUID(), UUID.randomUUID(), hospital, Timestamp.valueOf(DIED), type, gestationWeeks);
+        } finally {
+            jdbc.execute("ALTER TABLE clinical.death_records ENABLE TRIGGER ALL");
+        }
+    }
+
+    @Test
+    @DisplayName("CR-07: the perinatal numerator leaves out a late neonatal death and a known gestation under 22 weeks")
+    void thePerinatalNumerator() {
+        UUID hospital = UUID.randomUUID();
+        insertPerinatal(hospital, "LATE_NEONATAL", null);
+        insertPerinatal(hospital, "LATE_NEONATAL", 38);
+        insertPerinatal(hospital, "EARLY_NEONATAL", 21);
+        insertPerinatal(hospital, "STILLBIRTH", 21);
+        insertPerinatal(hospital, "STILLBIRTH", 18);
+        insertPerinatal(hospital, "EARLY_NEONATAL", 22);
+        insertPerinatal(hospital, "STILLBIRTH", null);
+        insertPerinatal(hospital, "EARLY_NEONATAL", null);
+
+        List<DeathRecord> numerator = repository.findPerinatalDeaths(hospital, FROM, TO);
+
+        assertThat(numerator).hasSize(3).allMatch(DeathRecord::isInWhoPerinatalNumerator);
+        // The query and the entity's definition give the same rows.
+        assertThat(ids(numerator)).containsExactlyInAnyOrderElementsOf(ids(
+            repository.findRegister(hospital, FROM, TO).stream().filter(DeathRecord::isInWhoPerinatalNumerator).toList()));
+    }
+
     @Test
     @DisplayName("after a row entered in error the patient can have a real record, but only one")
     void thePartialIndexAllowsOneLiveRow() {

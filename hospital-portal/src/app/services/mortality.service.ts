@@ -12,6 +12,12 @@ export type MaternalDeathTiming =
 
 export type PerinatalDeathType = 'STILLBIRTH' | 'EARLY_NEONATAL' | 'LATE_NEONATAL';
 
+export type PerinatalBirthStatus = 'LIVE_BIRTH' | 'STILLBIRTH' | 'UNKNOWN';
+
+export type PerinatalAgeBasis = 'ELAPSED_TIME' | 'DATE_ONLY' | 'DATE_ONLY_BOUNDARY' | 'UNKNOWN';
+
+export type PerinatalReportingEligibility = 'ELIGIBLE' | 'NOT_ELIGIBLE' | 'UNKNOWN';
+
 export interface DeathRecordResponse {
   id: string;
   patientId: string;
@@ -35,6 +41,13 @@ export interface DeathRecordResponse {
   whoMaternalDeath: boolean;
   perinatalDeath: boolean;
   perinatalType: PerinatalDeathType | null;
+  bornAt?: string | null;
+  birthStatus?: PerinatalBirthStatus;
+  gestationalAgeWeeks?: number | null;
+  /** What the age at death rests on: elapsed time, dates only, or unknown. */
+  perinatalAgeBasis?: PerinatalAgeBasis;
+  /** Measured against WHO's perinatal definition. Null with no perinatal classification. */
+  perinatalEligibility?: PerinatalReportingEligibility | null;
   autopsyRequested: boolean;
   certifiedByName: string | null;
   certifiedAt: string | null;
@@ -69,6 +82,9 @@ export interface DeathRecordRequest {
   perinatalDeath?: boolean;
   /** Required by the backend when perinatalDeath is true. */
   perinatalType?: PerinatalDeathType;
+  bornAt?: string;
+  birthStatus?: PerinatalBirthStatus;
+  gestationalAgeWeeks?: number;
   autopsyRequested?: boolean;
   certifiedByStaffId?: string;
   notes?: string;
@@ -87,6 +103,9 @@ export interface DeathRecordAmendment {
   maternalDeathTiming?: MaternalDeathTiming;
   perinatalDeath?: boolean;
   perinatalType?: PerinatalDeathType;
+  bornAt?: string;
+  birthStatus?: PerinatalBirthStatus;
+  gestationalAgeWeeks?: number;
   notes?: string;
 }
 
@@ -110,8 +129,16 @@ export interface MortalityRegister {
   /** WHO definition — late maternal deaths are counted separately. */
   maternalDeaths: number;
   lateMaternalDeaths: number;
+  /** WHO definition (provisional): stillbirths and days 0-6, without a known gestation under 22 weeks. */
   perinatalDeaths: number;
+  /** Of perinatalDeaths: counted on the clinician's classification, with a fact it rests on missing. */
+  perinatalEligibilityUnknown: number;
+  /** Known gestation under 22 weeks: not in perinatalDeaths. */
+  perinatalBelowGestation: number;
   stillbirths: number;
+  earlyNeonatalDeaths: number;
+  /** Days 7-27: past the perinatal period, in no perinatal figure. */
+  lateNeonatalDeaths: number;
   deaths: DeathRecordResponse[];
   /** QA D1488: kept and shown, in none of the counts above. */
   enteredInError?: DeathRecordResponse[];

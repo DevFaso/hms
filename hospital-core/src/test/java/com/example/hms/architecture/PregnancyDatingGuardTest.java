@@ -39,6 +39,18 @@ class PregnancyDatingGuardTest {
         MAIN.resolve("service/impl/MaternalHistoryServiceImpl.java"),
         MAIN.resolve("service/PrenatalSchedulingServiceImpl.java"));
 
+    /**
+     * CR-08: the one request whose ceiling is not a bean-validation bound, by the user's ruling that a classification
+     * never stops a death from being recorded: an @Max here would refuse the death itself. The rule holds the ceiling.
+     */
+    private static final Set<String> CEILING_IN_THE_RULES = Set.of("DeathRecordRequestDTO#gestationalAgeWeeks");
+
+    @Test
+    void theRequestLeftToTheRulesHasItsCeilingThere() {
+        assertThat(com.example.hms.service.support.DeathClassificationRules.isPlausibleGestation(45)).isTrue();
+        assertThat(com.example.hms.service.support.DeathClassificationRules.isPlausibleGestation(46)).isFalse();
+    }
+
     private static final Validator VALIDATOR = Validation.buildDefaultValidatorFactory().getValidator();
 
     @Test
@@ -85,8 +97,9 @@ class PregnancyDatingGuardTest {
         for (Field field : type.getDeclaredFields()) {
             String name = field.getName();
             boolean weeks = field.getType() == Integer.class && name.toLowerCase(java.util.Locale.ROOT).contains("gestationalage");
-            if (weeks && !field.isAnnotationPresent(Max.class)) {
-                open.add(type.getSimpleName() + "#" + name);
+            String site = type.getSimpleName() + "#" + name;
+            if (weeks && !field.isAnnotationPresent(Max.class) && !CEILING_IN_THE_RULES.contains(site)) {
+                open.add(site);
             }
         }
     }

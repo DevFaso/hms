@@ -106,13 +106,40 @@
         <div class="card-info">
           <span class="card-value">{{ reg.perinatalDeaths }}</span>
           <span class="card-label">{{ 'MORTALITY.PERINATAL_DEATHS' | translate }}</span>
+          <small class="card-note" data-testid="perinatal-definition">{{
+            'MORTALITY.PERINATAL_DEFINITION' | translate
+          }}</small>
           <small class="card-note"
             >{{ 'MORTALITY.STILLBIRTHS' | translate }}{{ 'COMMON.COLON' | translate }}
             {{ reg.stillbirths }}</small
           >
+          <small class="card-note"
+            >{{ 'MORTALITY.EARLY_NEONATAL_DEATHS' | translate }}{{ 'COMMON.COLON' | translate }}
+            {{ reg.earlyNeonatalDeaths }}</small
+          >
+        </div>
+      </div>
+      <div class="summary-card" data-testid="late-neonatal-card">
+        <div class="card-info">
+          <span class="card-value">{{ reg.lateNeonatalDeaths }}</span>
+          <span class="card-label">{{ 'MORTALITY.LATE_NEONATAL_DEATHS' | translate }}</span>
+          <small class="card-note">{{ 'MORTALITY.LATE_NEONATAL_NOTE' | translate }}</small>
         </div>
       </div>
     </div>
+
+    @if (reg.perinatalEligibilityUnknown) {
+      <p class="disputed-count" data-testid="perinatal-eligibility-unknown">
+        {{ reg.perinatalEligibilityUnknown }}
+        {{ 'MORTALITY.PERINATAL_ELIGIBILITY_UNKNOWN_COUNT' | translate }}
+      </p>
+    }
+    @if (reg.perinatalBelowGestation) {
+      <p class="disputed-count" data-testid="perinatal-below-gestation">
+        {{ reg.perinatalBelowGestation }}
+        {{ 'MORTALITY.PERINATAL_BELOW_GESTATION_COUNT' | translate }}
+      </p>
+    }
 
     @if (reg.disputedDeaths) {
       <p class="disputed-count" data-testid="register-disputed-count">
@@ -159,6 +186,15 @@
                     <span class="flag perinatal">{{
                       'MORTALITY.PERINATAL_' + d.perinatalType | translate
                     }}</span>
+                    @if (d.perinatalEligibility === 'NOT_ELIGIBLE') {
+                      <span class="flag late" data-testid="register-not-in-perinatal">{{
+                        'MORTALITY.ELIGIBILITY_NOT_ELIGIBLE' | translate
+                      }}</span>
+                    } @else if (d.perinatalEligibility === 'UNKNOWN') {
+                      <span class="flag late" data-testid="register-eligibility-unknown">{{
+                        'MORTALITY.ELIGIBILITY_UNKNOWN' | translate
+                      }}</span>
+                    }
                   }
                   @if (d.amended) {
                     <span class="flag amended">{{ 'MORTALITY.AMENDED' | translate }}</span>
@@ -345,6 +381,67 @@
               <span class="field-label">{{ 'MORTALITY.CERTIFIED_BY' | translate }}</span>
               <span class="field-value">{{ rec.certifiedByName || '—' }}</span>
             </div>
+            @if (rec.perinatalDeath) {
+              <div class="detail-field">
+                <span class="field-label">{{ 'MORTALITY.PERINATAL_TYPE' | translate }}</span>
+                <span class="field-value">{{
+                  'MORTALITY.PERINATAL_' + rec.perinatalType | translate
+                }}</span>
+              </div>
+              <div class="detail-field">
+                <span class="field-label">{{ 'MORTALITY.BIRTH_STATUS' | translate }}</span>
+                <span class="field-value" data-testid="detail-birth-status">
+                  @switch (rec.birthStatus) {
+                    @case ('LIVE_BIRTH') {
+                      {{ 'MORTALITY.BIRTH_STATUS_LIVE_BIRTH' | translate }}
+                    }
+                    @case ('STILLBIRTH') {
+                      {{ 'MORTALITY.BIRTH_STATUS_STILLBIRTH' | translate }}
+                    }
+                    @default {
+                      {{ 'MORTALITY.BIRTH_STATUS_UNKNOWN' | translate }}
+                    }
+                  }
+                </span>
+              </div>
+              <div class="detail-field">
+                <span class="field-label">{{ 'MORTALITY.GESTATIONAL_AGE' | translate }}</span>
+                <span class="field-value">{{
+                  rec.gestationalAgeWeeks ?? ('MORTALITY.BIRTH_STATUS_UNKNOWN' | translate)
+                }}</span>
+              </div>
+              <div class="detail-field">
+                <span class="field-label">{{ 'MORTALITY.BORN_AT' | translate }}</span>
+                @if (rec.bornAt) {
+                  <span class="field-value" data-testid="detail-born-at">{{
+                    rec.bornAt | serverTime | dateTime
+                  }}</span>
+                } @else {
+                  <span class="field-value" data-testid="detail-born-at">{{
+                    'MORTALITY.BIRTH_STATUS_UNKNOWN' | translate
+                  }}</span>
+                }
+              </div>
+              <div class="detail-field">
+                <span class="field-label">{{ 'MORTALITY.AGE_BASIS' | translate }}</span>
+                <span class="field-value" data-testid="detail-age-basis">
+                  @switch (rec.perinatalAgeBasis) {
+                    @case ('ELAPSED_TIME') {
+                      {{ 'MORTALITY.AGE_BASIS_ELAPSED_TIME' | translate }}
+                    }
+                    @case ('DATE_ONLY') {
+                      {{ 'MORTALITY.AGE_BASIS_DATE_ONLY' | translate }}
+                    }
+                    @case ('DATE_ONLY_BOUNDARY') {
+                      {{ 'MORTALITY.AGE_BASIS_DATE_ONLY_BOUNDARY' | translate }}
+                    }
+                    @default {
+                      {{ 'MORTALITY.AGE_BASIS_UNKNOWN' | translate }}
+                    }
+                  }
+                </span>
+              </div>
+            }
           </div>
 
           <div class="detail-notes">
@@ -496,6 +593,31 @@
                 }
               </select>
               <small class="field-hint">{{ 'MORTALITY.PERINATAL_TYPE_HINT' | translate }}</small>
+            </div>
+            <div class="field">
+              <label for="d-birth-status">{{ 'MORTALITY.BIRTH_STATUS' | translate }}</label>
+              <select id="d-birth-status" [(ngModel)]="form.birthStatus">
+                @for (s of birthStatuses; track s) {
+                  <option [value]="s">{{ 'MORTALITY.BIRTH_STATUS_' + s | translate }}</option>
+                }
+              </select>
+            </div>
+            <div class="field">
+              <label for="d-gestational-age">{{ 'MORTALITY.GESTATIONAL_AGE' | translate }}</label>
+              <input
+                id="d-gestational-age"
+                type="number"
+                min="1"
+                max="45"
+                step="1"
+                [(ngModel)]="form.gestationalAgeWeeks"
+              />
+              <small class="field-hint">{{ 'MORTALITY.GESTATIONAL_AGE_HINT' | translate }}</small>
+            </div>
+            <div class="field">
+              <label for="d-born-at">{{ 'MORTALITY.BORN_AT' | translate }}</label>
+              <input id="d-born-at" type="datetime-local" [(ngModel)]="form.bornAt" />
+              <small class="field-hint">{{ 'MORTALITY.BORN_AT_HINT' | translate }}</small>
             </div>
           }
 

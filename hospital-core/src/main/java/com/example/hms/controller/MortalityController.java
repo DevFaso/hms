@@ -154,7 +154,9 @@ public class MortalityController {
     @PreAuthorize(READER)
     @Operation(summary = "The mortality register for a period",
                description = "Total deaths with maternal (WHO definition), late maternal, perinatal "
-                   + "and stillbirth counts broken out — the numbers the facility is measured on. "
+                   + "(WHO definition: stillbirths and days 0-6, from 22 weeks of gestation), stillbirth, "
+                   + "early neonatal and late neonatal counts broken out — the numbers the facility is "
+                   + "measured on. Late neonatal deaths are outside the perinatal count. "
                    + "Late maternal deaths are counted separately because including them would "
                    + "overstate the maternal mortality ratio.")
     public ResponseEntity<MortalityRegisterDTO> getRegister(

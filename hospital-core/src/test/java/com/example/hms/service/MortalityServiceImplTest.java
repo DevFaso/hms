@@ -92,6 +92,7 @@ class MortalityServiceImplTest {
     @Mock private com.example.hms.service.BedAssignmentService bedAssignmentService;
     @Mock private com.example.hms.repository.DeathDisputeRepository disputeRepository;
     @Mock private com.example.hms.service.InBasketService inBasketService;
+    @Mock private com.example.hms.repository.NewbornAssessmentRepository newbornAssessmentRepository;
     @Mock private org.springframework.context.ApplicationEventPublisher eventPublisher;
     @Spy private Clock clock = Clock.systemDefaultZone();
     @Spy private MortalityMapper mapper = new MortalityMapper();
@@ -551,8 +552,7 @@ class MortalityServiceImplTest {
 
     @Test
     void aPerinatalDeathMustSayWhetherItWasAStillbirth() {
-        // A stillborn infant was never born alive, so it has no neonatal
-        // period and the two are never summed.
+        // A stillborn infant was never born alive, so it has no neonatal period: separate categories.
         DeathRecordRequestDTO request = base().perinatalDeath(Boolean.TRUE).build();
 
         assertThatThrownBy(() -> service.recordDeath(request))
@@ -668,6 +668,313 @@ class MortalityServiceImplTest {
         assertThat(register.getLateMaternalDeaths()).isEqualTo(1);
         assertThat(register.getPerinatalDeaths()).isEqualTo(2);
         assertThat(register.getStillbirths()).isEqualTo(1);
+    }
+
+    // ── CR-07: the WHO perinatal numerator ──────────────────────────────
+
+    private DeathRecord classified(PerinatalDeathType type, Integer gestationWeeks,
+                                   com.example.hms.enums.PerinatalBirthStatus status,
+                                   com.example.hms.enums.PerinatalAgeBasis basis) {
+        DeathRecord row = death(null, type);
+        row.setGestationalAgeWeeks(gestationWeeks);
+        row.setBirthStatus(status);
+        row.setPerinatalAgeBasis(basis);
+        return row;
+    }
+
+    @Test
+    void aLateNeonatalDeathIsReportedApartAndNotInThePerinatalNumerator() {
+        var live = com.example.hms.enums.PerinatalBirthStatus.LIVE_BIRTH;
+        var elapsed = com.example.hms.enums.PerinatalAgeBasis.ELAPSED_TIME;
+        DeathRecord flagOffWithAType = death(null, PerinatalDeathType.LATE_NEONATAL);
+        flagOffWithAType.setPerinatalDeath(Boolean.FALSE);
+        when(deathRecordRepository.findRegister(any(), any(), any())).thenReturn(List.of(
+            classified(PerinatalDeathType.LATE_NEONATAL, 38, live, elapsed),
+            death(null, PerinatalDeathType.LATE_NEONATAL),
+            classified(PerinatalDeathType.EARLY_NEONATAL, 38, live, elapsed),
+            death(null, PerinatalDeathType.STILLBIRTH),
+            classified(PerinatalDeathType.STILLBIRTH, 21, com.example.hms.enums.PerinatalBirthStatus.STILLBIRTH, elapsed),
+            flagOffWithAType,
+            death(null, null)));
+
+        MortalityRegisterDTO register = service.getRegister(LocalDate.now().minusDays(30), LocalDate.now());
+
+        assertThat(register.getTotalDeaths()).isEqualTo(7);
+        assertThat(register.getLateNeonatalDeaths()).isEqualTo(2);
+        assertThat(register.getEarlyNeonatalDeaths()).isEqualTo(1);
+        assertThat(register.getStillbirths()).isEqualTo(2);
+        // The early neonatal death and the stillbirth of unknown gestation.
+        assertThat(register.getPerinatalDeaths()).isEqualTo(2);
+        assertThat(register.getPerinatalEligibilityUnknown()).isEqualTo(1);
+        assertThat(register.getPerinatalBelowGestation()).isEqualTo(1);
+    }
+
+    @Test
+    void aRowFromBeforeTheFactsStaysCountedAndReadsUnconfirmedWithoutARewrite() {
+        DeathRecord historic = death(null, PerinatalDeathType.EARLY_NEONATAL);
+        when(deathRecordRepository.findRegister(any(), any(), any())).thenReturn(List.of(historic));
+
+        MortalityRegisterDTO register = service.getRegister(LocalDate.now().minusDays(30), LocalDate.now());
+
+        assertThat(register.getPerinatalDeaths()).isEqualTo(1);
+        assertThat(register.getPerinatalEligibilityUnknown()).isEqualTo(1);
+        var row = register.getDeaths().get(0);
+        assertThat(row.getPerinatalEligibility()).isEqualTo(com.example.hms.enums.PerinatalReportingEligibility.UNKNOWN);
+        assertThat(row.getPerinatalAgeBasis()).isEqualTo(com.example.hms.enums.PerinatalAgeBasis.UNKNOWN);
+        assertThat(row.getBirthStatus()).isEqualTo(com.example.hms.enums.PerinatalBirthStatus.UNKNOWN);
+        verify(deathRecordRepository, never()).save(any());
+    }
+
+    // ── CR-08: the facts behind the classification ──────────────────────
+
+    /** A past date on purpose, and fixed: the reported pair, 1 November 23:50 and 8 November 00:10. */
+    private static final LocalDateTime BORN_AT = LocalDateTime.of(2025, 11, 1, 23, 50);
+    private static final LocalDateTime DIED_AT = LocalDateTime.of(2025, 11, 8, 0, 10);
+
+    private DeathRecordRequestDTO.DeathRecordRequestDTOBuilder newbornDeath(PerinatalDeathType type) {
+        patient.setDateOfBirth(BORN_AT.toLocalDate());
+        return base().diedAt(DIED_AT).perinatalDeath(true).perinatalType(type);
+    }
+
+    private void deliveryOnFile(int infants, Hospital at, boolean liveBirth) {
+        com.example.hms.model.labor.DeliveryRecord delivery = com.example.hms.model.labor.DeliveryRecord.builder()
+            .birthDateTime(BORN_AT).birthTimeStated(true).numberOfInfants(infants).liveBirth(liveBirth).gestationalAgeWeeksAtBirth(36).build();
+        com.example.hms.model.neonatal.NewbornAssessment assessment = com.example.hms.model.neonatal.NewbornAssessment.builder()
+            .hospital(at).deliveryRecord(delivery).build();
+        when(newbornAssessmentRepository.findFirstByPatient_IdAndDeliveryRecordIsNotNullOrderByAssessmentTimeAsc(patientId))
+            .thenReturn(Optional.of(assessment));
+    }
+
+    @Test
+    void aSingleBirthOnFileGivesTheElapsedAgeAndAnswersWhatWasLeftUnknown() {
+        deliveryOnFile(1, hospital, true);
+
+        var saved = service.recordDeath(newbornDeath(PerinatalDeathType.EARLY_NEONATAL).build()).getDeathRecord();
+
+        assertThat(saved.getBornAt()).isEqualTo(BORN_AT);
+        assertThat(saved.getPerinatalAgeBasis()).isEqualTo(com.example.hms.enums.PerinatalAgeBasis.ELAPSED_TIME);
+        assertThat(saved.getBirthStatus()).isEqualTo(com.example.hms.enums.PerinatalBirthStatus.LIVE_BIRTH);
+        assertThat(saved.getGestationalAgeWeeks()).isEqualTo(36);
+        assertThat(saved.getPerinatalEligibility()).isEqualTo(com.example.hms.enums.PerinatalReportingEligibility.ELIGIBLE);
+    }
+
+    @Test
+    void theBirthOnFileRefusesLateNeonatalWhereTheDatesAloneWouldHaveKeptIt() {
+        DeathRecordRequestDTO late = newbornDeath(PerinatalDeathType.LATE_NEONATAL).build();
+
+        // The dates cannot decide: seven days apart, under seven completed days.
+        assertThat(service.recordDeath(late).getDeathRecord().getPerinatalAgeBasis())
+            .isEqualTo(com.example.hms.enums.PerinatalAgeBasis.DATE_ONLY_BOUNDARY);
+
+        deliveryOnFile(1, hospital, true);
+        patient.setDeceasedAt(null);
+        assertThatThrownBy(() -> service.recordDeath(late))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                e -> assertThat(e.getField()).isEqualTo("perinatalType"));
+    }
+
+    @Test
+    void aDeliveryOfSeveralInfantsOrAtAnotherHospitalDoesNotSpeakForThisChart() {
+        Hospital elsewhere = new Hospital();
+        elsewhere.setId(UUID.randomUUID());
+        for (Runnable onFile : List.<Runnable>of(() -> deliveryOnFile(2, hospital, true), () -> deliveryOnFile(1, elsewhere, true))) {
+            onFile.run();
+            var saved = service.recordDeath(newbornDeath(PerinatalDeathType.LATE_NEONATAL).build()).getDeathRecord();
+            assertThat(saved.getBornAt()).isNull();
+            assertThat(saved.getGestationalAgeWeeks()).isNull();
+            assertThat(saved.getBirthStatus()).isEqualTo(com.example.hms.enums.PerinatalBirthStatus.UNKNOWN);
+            assertThat(saved.getPerinatalAgeBasis()).isEqualTo(com.example.hms.enums.PerinatalAgeBasis.DATE_ONLY_BOUNDARY);
+        }
+    }
+
+    @Test
+    void aDeliveryDocumentedWithItsTimeLeftBlankGivesNoExactAge() {
+        deliveryOnFile(1, hospital, true);
+        newbornAssessmentRepository
+            .findFirstByPatient_IdAndDeliveryRecordIsNotNullOrderByAssessmentTimeAsc(patientId)
+            .orElseThrow().getDeliveryRecord().setBirthTimeStated(false);
+
+        var saved = service.recordDeath(newbornDeath(PerinatalDeathType.LATE_NEONATAL).build()).getDeathRecord();
+
+        // The stored time is the moment of documenting: it must not refuse this type, nor read as exact.
+        assertThat(saved.getBornAt()).isNull();
+        assertThat(saved.getPerinatalAgeBasis()).isEqualTo(com.example.hms.enums.PerinatalAgeBasis.DATE_ONLY_BOUNDARY);
+        assertThat(saved.getBirthStatus()).isEqualTo(com.example.hms.enums.PerinatalBirthStatus.LIVE_BIRTH);
+        assertThat(saved.getGestationalAgeWeeks()).isEqualTo(36);
+    }
+
+    @Test
+    void aMothersOwnDeliveryIsNotReadAsHerBirth() {
+        deliveryOnFile(1, hospital, false);
+        patient.setDateOfBirth(LocalDate.of(1990, 1, 1));
+        DeathRecordRequestDTO stillbirth = base().diedAt(DIED_AT).perinatalDeath(true)
+            .perinatalType(PerinatalDeathType.STILLBIRTH).build();
+
+        assertThatThrownBy(() -> service.recordDeath(stillbirth))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                e -> assertThat(e.getMessage()).contains("delivery record"));
+        assertThat(patient.isDeceased()).isFalse();
+    }
+
+    @Test
+    void whatTheRecorderStatesStandsOverTheDeliveryOnFile() {
+        deliveryOnFile(1, hospital, false);
+        LocalDateTime stated = BORN_AT.minusMinutes(30);
+
+        var saved = service.recordDeath(newbornDeath(PerinatalDeathType.EARLY_NEONATAL)
+            .bornAt(stated).birthStatus(com.example.hms.enums.PerinatalBirthStatus.LIVE_BIRTH).gestationalAgeWeeks(30).build())
+            .getDeathRecord();
+
+        assertThat(saved.getBornAt()).isEqualTo(stated);
+        assertThat(saved.getBirthStatus()).isEqualTo(com.example.hms.enums.PerinatalBirthStatus.LIVE_BIRTH);
+        assertThat(saved.getGestationalAgeWeeks()).isEqualTo(30);
+    }
+
+    @Test
+    void missingGestationLeavesEligibilityUnknownAndKeepsTheTimingFromALiveBirthAndKnownTimes() {
+        var saved = service.recordDeath(newbornDeath(PerinatalDeathType.EARLY_NEONATAL)
+            .bornAt(BORN_AT).birthStatus(com.example.hms.enums.PerinatalBirthStatus.LIVE_BIRTH).build()).getDeathRecord();
+
+        assertThat(saved.getPerinatalType()).isEqualTo(PerinatalDeathType.EARLY_NEONATAL);
+        assertThat(saved.getPerinatalAgeBasis()).isEqualTo(com.example.hms.enums.PerinatalAgeBasis.ELAPSED_TIME);
+        assertThat(saved.getGestationalAgeWeeks()).isNull();
+        assertThat(saved.getPerinatalEligibility()).isEqualTo(com.example.hms.enums.PerinatalReportingEligibility.UNKNOWN);
+    }
+
+    @Test
+    void noDateOfBirthSavesAndReadsUnknownNotConfirmed() {
+        var saved = service.recordDeath(base().perinatalDeath(true).perinatalType(PerinatalDeathType.EARLY_NEONATAL)
+            .birthStatus(com.example.hms.enums.PerinatalBirthStatus.LIVE_BIRTH).gestationalAgeWeeks(38).build())
+            .getDeathRecord();
+
+        assertThat(saved.getPerinatalAgeBasis()).isEqualTo(com.example.hms.enums.PerinatalAgeBasis.UNKNOWN);
+        assertThat(saved.getPerinatalEligibility()).isEqualTo(com.example.hms.enums.PerinatalReportingEligibility.UNKNOWN);
+        assertThat(patient.isDeceased()).isTrue();
+    }
+
+    @Test
+    void aStillbirthWithNoDateOfBirthReadsUnknownEvenWithEveryOtherFact() {
+        var saved = service.recordDeath(base().perinatalDeath(true).perinatalType(PerinatalDeathType.STILLBIRTH)
+            .birthStatus(com.example.hms.enums.PerinatalBirthStatus.STILLBIRTH).gestationalAgeWeeks(38).build())
+            .getDeathRecord();
+
+        assertThat(saved.getPerinatalAgeBasis()).isEqualTo(com.example.hms.enums.PerinatalAgeBasis.UNKNOWN);
+        assertThat(saved.getPerinatalEligibility()).isEqualTo(com.example.hms.enums.PerinatalReportingEligibility.UNKNOWN);
+    }
+
+    @Test
+    void withNoClassificationAFactThatCannotBeTrueRefusesNothingAndIsNotKept() {
+        patient.setDateOfBirth(BORN_AT.toLocalDate());
+
+        var saved = service.recordDeath(base().diedAt(DIED_AT).gestationalAgeWeeks(60).bornAt(DIED_AT.plusHours(1)).build())
+            .getDeathRecord();
+
+        assertThat(patient.isDeceased()).isTrue();
+        assertThat(saved.getGestationalAgeWeeks()).isNull();
+        assertThat(saved.getBornAt()).isNull();
+    }
+
+    @Test
+    void factsWithNoClassificationAreKeptAndNotReadAgainstTheDeliveryOrTheType() {
+        deliveryOnFile(1, hospital, false);
+        patient.setDateOfBirth(BORN_AT.toLocalDate());
+
+        var saved = service.recordDeath(base().diedAt(DIED_AT).gestationalAgeWeeks(30).build()).getDeathRecord();
+
+        assertThat(saved.getGestationalAgeWeeks()).isEqualTo(30);
+        assertThat(saved.getBornAt()).isNull();
+        assertThat(saved.getPerinatalAgeBasis()).isEqualTo(com.example.hms.enums.PerinatalAgeBasis.UNKNOWN);
+        assertThat(saved.getPerinatalEligibility()).isNull();
+    }
+
+    @Test
+    void eachRefusalNamesItsOwnFieldSaysTheDeathCanBeRecordedAndTheDeathSavesWithoutIt() {
+        var live = com.example.hms.enums.PerinatalBirthStatus.LIVE_BIRTH;
+        var stillborn = com.example.hms.enums.PerinatalBirthStatus.STILLBIRTH;
+        patient.setDateOfBirth(BORN_AT.toLocalDate());
+        patient.setGender("M");
+        List<java.util.Map.Entry<String, DeathRecordRequestDTO>> refused = List.of(
+            java.util.Map.entry("maternalDeath", base().diedAt(DIED_AT).maternalDeath(true)
+                .maternalDeathTiming(MaternalDeathTiming.DURING_PREGNANCY).build()),
+            java.util.Map.entry("maternalDeathTiming", base().diedAt(DIED_AT).maternalDeath(true).build()),
+            java.util.Map.entry("perinatalType", base().diedAt(DIED_AT).perinatalDeath(true).build()),
+            java.util.Map.entry("perinatalType", newbornDeath(PerinatalDeathType.LATE_NEONATAL).bornAt(BORN_AT).build()),
+            java.util.Map.entry("perinatalType", base().diedAt(BORN_AT.plusDays(2)).perinatalDeath(true)
+                .perinatalType(PerinatalDeathType.LATE_NEONATAL).build()),
+            java.util.Map.entry("perinatalType", base().diedAt(BORN_AT.plusDays(10)).perinatalDeath(true)
+                .perinatalType(PerinatalDeathType.EARLY_NEONATAL).build()),
+            java.util.Map.entry("perinatalType", base().diedAt(BORN_AT.plusDays(40)).perinatalDeath(true)
+                .perinatalType(PerinatalDeathType.LATE_NEONATAL).build()),
+            java.util.Map.entry("perinatalType", newbornDeath(PerinatalDeathType.STILLBIRTH).birthStatus(live).build()),
+            java.util.Map.entry("perinatalType", newbornDeath(PerinatalDeathType.EARLY_NEONATAL).birthStatus(stillborn).build()),
+            java.util.Map.entry("gestationalAgeWeeks", newbornDeath(PerinatalDeathType.EARLY_NEONATAL).gestationalAgeWeeks(60).build()),
+            java.util.Map.entry("bornAt", newbornDeath(PerinatalDeathType.EARLY_NEONATAL).bornAt(DIED_AT.plusHours(1)).build()));
+
+        for (var entry : refused) {
+            assertThatThrownBy(() -> service.recordDeath(entry.getValue()))
+                .as(entry.getKey())
+                .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class, e -> {
+                    assertThat(e.getField()).isEqualTo(entry.getKey());
+                    assertThat(e.getMessage()).contains("can be recorded without");
+                });
+            assertThat(patient.isDeceased()).isFalse();
+        }
+        verify(deathRecordRepository, never()).save(any());
+
+        for (var entry : refused) {
+            DeathRecordRequestDTO without = base().diedAt(entry.getValue().getDiedAt()).build();
+            service.recordDeath(without);
+            assertThat(patient.isDeceased()).isTrue();
+            patient.setDeceasedAt(null);
+        }
+    }
+
+    @Test
+    void anAmendmentIsJudgedOnWhatItSetsAndNeverOverAnOlderRowsFlags() {
+        DeathRecord older = persisted();
+        patient.setDateOfBirth(older.getDiedAt().toLocalDate().minusDays(2));
+        older.setPerinatalDeath(Boolean.TRUE);
+        older.setPerinatalType(PerinatalDeathType.LATE_NEONATAL);
+        UUID id = older.getId();
+
+        service.amendDeathRecord(id, DeathRecordAmendmentDTO.builder().amendmentReason("Autopsy")
+            .underlyingCause("Sepsis").gestationalAgeWeeks(30).build());
+
+        assertThat(older.getUnderlyingCause()).isEqualTo("Sepsis");
+        assertThat(older.getGestationalAgeWeeks()).isEqualTo(30);
+        assertThat(older.getPerinatalType()).isEqualTo(PerinatalDeathType.LATE_NEONATAL);
+
+        DeathRecordAmendmentDTO status = DeathRecordAmendmentDTO.builder().amendmentReason("Review")
+            .birthStatus(com.example.hms.enums.PerinatalBirthStatus.LIVE_BIRTH).build();
+        assertThatThrownBy(() -> service.amendDeathRecord(id, status))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                e -> assertThat(e.getField()).isEqualTo("perinatalType"));
+    }
+
+    @Test
+    void anAmendmentReachesTheSameRulesAndRecordsTheBasis() {
+        DeathRecord deathRecord = persisted();
+        patient.setDateOfBirth(deathRecord.getDiedAt().toLocalDate().minusDays(2));
+        UUID id = deathRecord.getId();
+        DeathRecordAmendmentDTO late = DeathRecordAmendmentDTO.builder().amendmentReason("Review")
+            .perinatalDeath(true).perinatalType(PerinatalDeathType.LATE_NEONATAL).build();
+        DeathRecordAmendmentDTO wrongWeeks = DeathRecordAmendmentDTO.builder().amendmentReason("Review")
+            .gestationalAgeWeeks(99).build();
+
+        assertThatThrownBy(() -> service.amendDeathRecord(id, late))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                e -> assertThat(e.getField()).isEqualTo("perinatalType"));
+        assertThatThrownBy(() -> service.amendDeathRecord(id, wrongWeeks))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                e -> assertThat(e.getField()).isEqualTo("gestationalAgeWeeks"));
+
+        service.amendDeathRecord(id, DeathRecordAmendmentDTO.builder().amendmentReason("Review")
+            .perinatalDeath(true).perinatalType(PerinatalDeathType.EARLY_NEONATAL).build());
+        assertThat(deathRecord.getPerinatalAgeBasis()).isEqualTo(com.example.hms.enums.PerinatalAgeBasis.DATE_ONLY);
+
+        service.amendDeathRecord(id, DeathRecordAmendmentDTO.builder().amendmentReason("Review").perinatalDeath(false).build());
+        assertThat(deathRecord.getPerinatalType()).isNull();
+        assertThat(deathRecord.getPerinatalAgeBasis()).isEqualTo(com.example.hms.enums.PerinatalAgeBasis.UNKNOWN);
     }
 
     @Test
