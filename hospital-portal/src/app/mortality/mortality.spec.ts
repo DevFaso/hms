@@ -44,7 +44,11 @@ function mockRegister(overrides: Partial<MortalityRegister> = {}): MortalityRegi
     maternalDeaths: 0,
     lateMaternalDeaths: 0,
     perinatalDeaths: 0,
+    perinatalEligibilityUnknown: 0,
+    perinatalBelowGestation: 0,
     stillbirths: 0,
+    earlyNeonatalDeaths: 0,
+    lateNeonatalDeaths: 0,
     deaths: [mockDeath()],
     ...overrides,
   } as MortalityRegister;
@@ -349,6 +353,95 @@ describe('MortalityComponent', () => {
 
     const [payload] = mortalitySpy.recordDeath.calls.mostRecent().args;
     expect(payload.maternalDeathTiming).toBe('WITHIN_42_DAYS_POSTPARTUM');
+  });
+
+  it('CR-08: sends the birth facts only with the classification, and leaves empty ones absent', async () => {
+    spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
+    mortalitySpy.recordDeath.and.returnValue(
+      of({ deathRecord: mockDeath(), closure: {} } as RecordDeathResponse),
+    );
+    component.openRecord();
+    component.form.patientId = 'p1';
+    component.form.diedAt = '2026-08-24T10:00';
+    component.form.immediateCause = 'Sepsis';
+    component.form.bornAt = '2026-08-20T10:00';
+    component.form.gestationalAgeWeeks = 38;
+    component.form.birthStatus = 'LIVE_BIRTH';
+    await component.submitRecord();
+    let [payload] = mortalitySpy.recordDeath.calls.mostRecent().args;
+    expect([payload.bornAt, payload.birthStatus, payload.gestationalAgeWeeks]).toEqual([
+      undefined,
+      undefined,
+      undefined,
+    ]);
+
+    component.openRecord();
+    component.form.patientId = 'p1';
+    component.form.diedAt = '2026-08-24T10:00';
+    component.form.immediateCause = 'Sepsis';
+    component.form.perinatalDeath = true;
+    component.form.perinatalType = 'EARLY_NEONATAL';
+    await component.submitRecord();
+    [payload] = mortalitySpy.recordDeath.calls.mostRecent().args;
+    expect(payload.bornAt).toBeUndefined();
+    expect(payload.gestationalAgeWeeks).toBeUndefined();
+    expect(payload.birthStatus).toBe('UNKNOWN');
+
+    component.openRecord();
+    component.form.patientId = 'p1';
+    component.form.diedAt = '2026-08-24T10:00';
+    component.form.immediateCause = 'Sepsis';
+    component.form.perinatalDeath = true;
+    component.form.perinatalType = 'EARLY_NEONATAL';
+    component.form.bornAt = '2026-08-20T10:00';
+    component.form.gestationalAgeWeeks = 38;
+    component.form.birthStatus = 'LIVE_BIRTH';
+    await component.submitRecord();
+    [payload] = mortalitySpy.recordDeath.calls.mostRecent().args;
+    expect(payload.bornAt).toBe(new Date(2026, 7, 20, 10, 0).toISOString().slice(0, 19));
+    expect(payload.gestationalAgeWeeks).toBe(38);
+    expect(payload.birthStatus).toBe('LIVE_BIRTH');
+  });
+
+  it('CR-07: states the perinatal definition, and shows late neonatal deaths and unconfirmed rows apart', () => {
+    mortalitySpy.getRegister.and.returnValue(
+      of(
+        mockRegister({
+          perinatalDeaths: 2,
+          stillbirths: 1,
+          earlyNeonatalDeaths: 1,
+          lateNeonatalDeaths: 3,
+          perinatalEligibilityUnknown: 1,
+          perinatalBelowGestation: 1,
+          deaths: [
+            mockDeath({
+              id: 'late',
+              perinatalDeath: true,
+              perinatalType: 'LATE_NEONATAL',
+              perinatalEligibility: 'NOT_ELIGIBLE',
+            }),
+            mockDeath({
+              id: 'early',
+              perinatalDeath: true,
+              perinatalType: 'EARLY_NEONATAL',
+              perinatalEligibility: 'UNKNOWN',
+            }),
+          ],
+        }),
+      ),
+    );
+    const fixture = TestBed.createComponent(MortalityComponent);
+    fixture.detectChanges();
+    const page: HTMLElement = fixture.nativeElement;
+    const text = (id: string) => page.querySelector(`[data-testid="${id}"]`)?.textContent ?? null;
+
+    expect(text('perinatal-definition')).toContain('MORTALITY.PERINATAL_DEFINITION');
+    expect(text('late-neonatal-card')).toContain('3');
+    expect(text('late-neonatal-card')).toContain('MORTALITY.LATE_NEONATAL_NOTE');
+    expect(text('perinatal-eligibility-unknown')).toContain('1');
+    expect(text('perinatal-below-gestation')).toContain('1');
+    expect(text('register-not-in-perinatal')).toContain('MORTALITY.ELIGIBILITY_NOT_ELIGIBLE');
+    expect(text('register-eligibility-unknown')).toContain('MORTALITY.ELIGIBILITY_UNKNOWN');
   });
 
   it('reports a rejected recording rather than pretending it worked', async () => {

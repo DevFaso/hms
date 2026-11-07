@@ -53,8 +53,9 @@ public interface MortalityService {
 
     /**
      * The register for a period, with maternal (WHO definition), late maternal,
-     * perinatal and stillbirth counts broken out — the numbers the facility is
-     * measured on and the ones the DHIS2 export needs.
+     * perinatal (WHO definition, without late neonatal deaths), stillbirth, early
+     * neonatal and late neonatal counts broken out: the numbers the facility is
+     * measured on.
      */
     MortalityRegisterDTO getRegister(LocalDate from, LocalDate to);
 }

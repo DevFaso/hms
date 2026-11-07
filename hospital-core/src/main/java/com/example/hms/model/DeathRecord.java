@@ -2,7 +2,10 @@ package com.example.hms.model;
 
 import com.example.hms.enums.MannerOfDeath;
 import com.example.hms.enums.MaternalDeathTiming;
+import com.example.hms.enums.PerinatalAgeBasis;
+import com.example.hms.enums.PerinatalBirthStatus;
 import com.example.hms.enums.PerinatalDeathType;
+import com.example.hms.enums.PerinatalReportingEligibility;
 import com.example.hms.enums.PlaceOfDeath;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -133,6 +136,25 @@ public class DeathRecord extends BaseEntity {
     @Column(name = "perinatal_type", length = 30)
     private PerinatalDeathType perinatalType;
 
+    /** CR-08: the birth time the age at death was counted from, stated or found on the delivery record. */
+    @Column(name = "born_at")
+    private LocalDateTime bornAt;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "birth_status", nullable = false, length = 20)
+    @Builder.Default
+    private PerinatalBirthStatus birthStatus = PerinatalBirthStatus.UNKNOWN;
+
+    /** Completed weeks; null is unknown, which leaves gestation-dependent reporting eligibility unknown. */
+    @Column(name = "gestational_age_weeks")
+    private Integer gestationalAgeWeeks;
+
+    /** Written when the perinatal classification is judged. A row from before that stays UNKNOWN. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "perinatal_age_basis", nullable = false, length = 20)
+    @Builder.Default
+    private PerinatalAgeBasis perinatalAgeBasis = PerinatalAgeBasis.UNKNOWN;
+
     @Column(name = "autopsy_requested", nullable = false)
     @Builder.Default
     private Boolean autopsyRequested = Boolean.FALSE;
@@ -192,6 +214,44 @@ public class DeathRecord extends BaseEntity {
         return Boolean.TRUE.equals(maternalDeath)
             && maternalDeathTiming != null
             && maternalDeathTiming != MaternalDeathTiming.LATE_MATERNAL;
+    }
+
+    /**
+     * CR-07: the classification measured against WHO's perinatal definition, derived on read so that an amendment
+     * cannot leave it stale. Null with no classification.
+     *
+     * <p>NOT CLINICALLY APPROVED: awaits the obstetric/neonatal lead and the responsible coding authority.
+     */
+    public PerinatalReportingEligibility getPerinatalEligibility() {
+        if (!Boolean.TRUE.equals(perinatalDeath) || perinatalType == null) {
+            return null;
+        }
+        if (!perinatalType.inWhoPerinatalPeriod() || isBelowWhoPerinatalGestation()) {
+            return PerinatalReportingEligibility.NOT_ELIGIBLE;
+        }
+        return gestationalAgeWeeks != null && birthFactsSupportTheType()
+            ? PerinatalReportingEligibility.ELIGIBLE : PerinatalReportingEligibility.UNKNOWN;
+    }
+
+    /** A known gestation under WHO's start. Unknown gestation is not below it. */
+    public boolean isBelowWhoPerinatalGestation() {
+        return gestationalAgeWeeks != null && gestationalAgeWeeks < PerinatalDeathType.WHO_PERINATAL_MIN_GESTATION_WEEKS;
+    }
+
+    /**
+     * The WHO perinatal numerator: stillbirths and early neonatal deaths, without a late neonatal death or a known
+     * gestation under the start. Missing facts keep a death in, shown as unconfirmed: the clinician classified it.
+     */
+    public boolean isInWhoPerinatalNumerator() {
+        PerinatalReportingEligibility eligibility = getPerinatalEligibility();
+        return eligibility != null && eligibility != PerinatalReportingEligibility.NOT_ELIGIBLE;
+    }
+
+    private boolean birthFactsSupportTheType() {
+        PerinatalBirthStatus expected = perinatalType == PerinatalDeathType.STILLBIRTH
+            ? PerinatalBirthStatus.STILLBIRTH : PerinatalBirthStatus.LIVE_BIRTH;
+        return birthStatus == expected
+            && (perinatalAgeBasis == PerinatalAgeBasis.ELAPSED_TIME || perinatalAgeBasis == PerinatalAgeBasis.DATE_ONLY);
     }
 
     public boolean isAmended() {

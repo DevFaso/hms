@@ -6325,3 +6325,17 @@ For the clinician list (proposed alert logic, pending sign-off):
 ## Round 36 Lows left for later
 
 From docs/qa/dev-qa-run-2026-11-07-round36.md (steps and likely code there). They do not block: D1493, D1496, D1497, D1498, D1499, D1500, D1501, D1502, D1503, D1504, D1506, D1509, D1510, D1511, D1513.
+
+## Standing debt — clinical rules (fix/cr-perinatal)
+
+CR-07 and CR-08 close the D1490 line above about `LATE_NEONATAL`: it left the perinatal figure and has a lower bound.
+
+- **NOT clinically approved:** seven and 28 completed days, the 22-week start, and the 1-45 week range accepted on this record await the obstetric/neonatal lead and the responsible coding authority. The code comments name them.
+- For the same approvers: a row with a fact missing stays in `perinatalDeaths` and is counted in `perinatalEligibilityUnknown`. Only a late neonatal death or a known gestation under 22 weeks leaves the figure. Rows from before V280 therefore stay counted, unconfirmed.
+- A date-only record on a boundary (day 7 or day 28) keeps the clinician's selection and counts on it, as `DATE_ONLY_BOUNDARY`.
+- An amendment can replace a stated gestation or birth time, but not clear it back to unknown: a blank field means "keep". The portal's amend form does not offer these fields at all.
+- The date-only age compares a wall-clock date of birth with `diedAt` on the server's clock. They agree at UTC+0, where the hospitals are today. Further east, a death just after midnight reads a day younger.
+- The record form still preselects `STILLBIRTH` when the box is ticked. The status and date checks now catch a wrong one only if a fact contradicts it.
+- A delivery's `live_birth` defaults to true when its form leaves it out, and this record reads it as the birth status when the recorder states none. A single-infant delivery only.
+- `delivery_records.birth_time_stated` is false for every delivery written before V280, so those births count from dates only, even where a time was typed.
+- With no classification selected, a birth fact that cannot be true is not kept and nothing tells the caller. The portal never sends one, since it drops the facts when the box is unticked. A malformed value (text for a number, an unknown status) is still a 400 from JSON parsing, which the portal cannot send either.

@@ -2,7 +2,10 @@ package com.example.hms.payload.dto.mortality;
 
 import com.example.hms.enums.MannerOfDeath;
 import com.example.hms.enums.MaternalDeathTiming;
+import com.example.hms.enums.PerinatalAgeBasis;
+import com.example.hms.enums.PerinatalBirthStatus;
 import com.example.hms.enums.PerinatalDeathType;
+import com.example.hms.enums.PerinatalReportingEligibility;
 import com.example.hms.enums.PlaceOfDeath;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -47,6 +50,13 @@ public class DeathRecordResponseDTO {
 
     private Boolean perinatalDeath;
     private PerinatalDeathType perinatalType;
+    private LocalDateTime bornAt;
+    private PerinatalBirthStatus birthStatus;
+    private Integer gestationalAgeWeeks;
+    /** What the age at death rests on: elapsed time, dates only, or unknown. */
+    private PerinatalAgeBasis perinatalAgeBasis;
+    /** Measured against WHO's perinatal definition. Null with no perinatal classification. */
+    private PerinatalReportingEligibility perinatalEligibility;
 
     private Boolean autopsyRequested;
     private String certifiedByName;

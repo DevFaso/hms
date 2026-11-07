@@ -62,8 +62,16 @@ public interface DeathRecordRepository extends JpaRepository<DeathRecord, UUID> 
                                          @Param("from") LocalDateTime from,
                                          @Param("to") LocalDateTime to);
 
+    /**
+     * The WHO perinatal numerator (CR-07), the query's copy of {@link DeathRecord#isInWhoPerinatalNumerator()}. A late
+     * neonatal death is past the period and a known gestation under 22 weeks is before it. Unknown gestation stays in.
+     */
     @Query("SELECT d FROM DeathRecord d WHERE d.hospital.id = :hospitalId AND d.enteredInErrorAt IS NULL "
         + "AND d.perinatalDeath = true "
+        + "AND d.perinatalType IN (com.example.hms.enums.PerinatalDeathType.STILLBIRTH, "
+        + "com.example.hms.enums.PerinatalDeathType.EARLY_NEONATAL) "
+        + "AND (d.gestationalAgeWeeks IS NULL OR d.gestationalAgeWeeks >= "
+        + com.example.hms.enums.PerinatalDeathType.WHO_PERINATAL_MIN_GESTATION_WEEKS + ") "
         + "AND d.diedAt >= :from AND d.diedAt < :to ORDER BY d.diedAt DESC")
     List<DeathRecord> findPerinatalDeaths(@Param("hospitalId") UUID hospitalId,
                                           @Param("from") LocalDateTime from,

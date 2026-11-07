@@ -6,11 +6,13 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   DeathClosureSummary,
   DeathDispute,
+  DeathRecordRequest,
   DeathRecordResponse,
   MannerOfDeath,
   MaternalDeathTiming,
   MortalityRegister,
   MortalityService,
+  PerinatalBirthStatus,
   PerinatalDeathType,
   PlaceOfDeath,
 } from '../services/mortality.service';
@@ -104,6 +106,7 @@ export class MortalityComponent implements OnInit {
     'LATE_MATERNAL',
   ];
   readonly perinatalTypes: PerinatalDeathType[] = ['STILLBIRTH', 'EARLY_NEONATAL', 'LATE_NEONATAL'];
+  readonly birthStatuses: PerinatalBirthStatus[] = ['UNKNOWN', 'LIVE_BIRTH', 'STILLBIRTH'];
 
   /* ── Record modal ── */
   showRecordModal = signal(false);
@@ -266,6 +269,8 @@ export class MortalityComponent implements OnInit {
         maternalDeathTiming: this.form.maternalDeath ? this.form.maternalDeathTiming : undefined,
         perinatalDeath: this.form.perinatalDeath,
         perinatalType: this.form.perinatalDeath ? this.form.perinatalType : undefined,
+        // CR-08: optional facts, sent only with the classification they support.
+        ...(this.form.perinatalDeath ? this.birthFacts() : {}),
         autopsyRequested: this.form.autopsyRequested,
         notes: this.form.notes.trim() || undefined,
       })
@@ -284,6 +289,15 @@ export class MortalityComponent implements OnInit {
           this.recording.set(false);
         },
       });
+  }
+
+  /** Empty stays absent, which the server reads as unknown. */
+  private birthFacts(): Pick<DeathRecordRequest, 'bornAt' | 'birthStatus' | 'gestationalAgeWeeks'> {
+    return {
+      bornAt: this.form.bornAt ? toServerDateTime(this.form.bornAt) : undefined,
+      birthStatus: this.form.birthStatus,
+      gestationalAgeWeeks: this.form.gestationalAgeWeeks ?? undefined,
+    };
   }
 
   openDetail(record: DeathRecordResponse): void {
@@ -411,6 +425,9 @@ export class MortalityComponent implements OnInit {
       maternalDeathTiming: 'WITHIN_42_DAYS_POSTPARTUM' as MaternalDeathTiming,
       perinatalDeath: false,
       perinatalType: 'STILLBIRTH' as PerinatalDeathType,
+      birthStatus: 'UNKNOWN' as PerinatalBirthStatus,
+      gestationalAgeWeeks: null as number | null,
+      bornAt: '',
       autopsyRequested: false,
       notes: '',
     };

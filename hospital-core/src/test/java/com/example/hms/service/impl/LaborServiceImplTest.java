@@ -493,6 +493,28 @@ class LaborServiceImplTest {
         assertThat(episode.getOutcome()).isEqualTo(LaborOutcome.CAESAREAN_SECTION);
     }
 
+    /** CR-08: a blank time stores the moment of documenting, and the record says it was not stated. */
+    @Test
+    void recordDeliverySaysWhetherTheBirthTimeWasStated() {
+        DeliveryRecordRequestDTO blank = deliveryRequest();
+        blank.setBirthDateTime(null);
+        service.recordDelivery(patientId, episodeId, recorderUserId, blank);
+        ArgumentCaptor<DeliveryRecord> saved = ArgumentCaptor.forClass(DeliveryRecord.class);
+        verify(deliveryRecordRepository, org.mockito.Mockito.atLeastOnce()).save(saved.capture());
+        assertThat(saved.getValue().getBirthDateTime()).isNotNull();
+        assertThat(saved.getValue().isBirthTimeStated()).isFalse();
+    }
+
+    @Test
+    void recordDeliveryWithATimeSaysItWasStated() {
+        DeliveryRecordRequestDTO stated = deliveryRequest();
+        stated.setBirthDateTime(java.time.LocalDateTime.now());
+        service.recordDelivery(patientId, episodeId, recorderUserId, stated);
+        ArgumentCaptor<DeliveryRecord> saved = ArgumentCaptor.forClass(DeliveryRecord.class);
+        verify(deliveryRecordRepository, org.mockito.Mockito.atLeastOnce()).save(saved.capture());
+        assertThat(saved.getValue().isBirthTimeStated()).isTrue();
+    }
+
     /** QA D516: recording a birth posts its charge, filed by the recorder. */
     @Test
     void recordDeliveryPostsTheDeliveryCharge() {

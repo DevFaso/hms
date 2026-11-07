@@ -1079,3 +1079,12 @@ Rounds 27, 28 and 29 each found 20–30 new siblings of the required-field class
 | `service/maternity/NewbornAlertRulesTest#eachDangerSignStandsAlone` (new) | CR-05: a danger sign added to `DangerSigns` that raises no finding, shares a code with another, or depends on the vitals. It walks the record's components. | none |
 
 | `architecture/AlertNeverRecordsTreatmentGuardTest` (new) | CR-06 class: a rule or alert that records treatment as performed. `hemorrhageProtocolActivated` has no setter and is built only from the request; the schedule reads the indicators and the attestation; across clinical code no initiated, activated, started, given, performed, administered, treated or transfused flag is forced to true or set from anything but a submitted value | the three `set*Initiated(true)` calls of `NewbornAssessmentServiceImpl`, removed by CR-06 on fix/cr-newborn: delete the entries when that branch is merged |
+
+## Guards added or widened by the clinical rules wave (fix/cr-perinatal)
+
+| Guard | What it catches | Allowlist |
+|---|---|---|
+| `architecture/PerinatalNumeratorGuardTest` (new) | CR-07: a perinatal count that reads the broad `perinatalDeath` flag and so takes in a late neonatal death. Any stream filter on the flag without the type, any new query on the flag or the native column, a query naming `LATE_NEONATAL`, the register not reading the record's own definition, and a new `PerinatalDeathType` that does not answer `inWhoPerinatalPeriod`. | none; the one query on the flag is named and must list its categories |
+| `repository/DeathRecordEnteredInErrorPostgresIT#thePerinatalNumerator` (new) | CR-07: on PostgreSQL, the query and `DeathRecord#isInWhoPerinatalNumerator` give the same rows, across the types and gestations. | none |
+| `architecture/PregnancyDatingGuardTest#everyGestationalAgeOfARequestHasACeiling` (one exception, CR-08) | `DeathRecordRequestDTO#gestationalAgeWeeks` holds no `@Max`, because a bean-validation bound would refuse the death itself against the user's ruling. Its ceiling is in `DeathClassificationRules`, tested by `theRequestLeftToTheRulesHasItsCeilingThere`. | `CEILING_IN_THE_RULES`, this one site |
+| `service/MortalityServiceImplTest#eachRefusalNamesItsOwnFieldSaysTheDeathCanBeRecordedAndTheDeathSavesWithoutIt` (new) | The user's ruling: every classification refusal on its own field, saying the death can be recorded, and the same death saving without it. | none |
