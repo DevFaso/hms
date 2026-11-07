@@ -79,6 +79,7 @@ export const NAV_GROUP_BY_ROUTE: Readonly<Record<string, NavGroupId>> = {
   '/registrations': 'PATIENTS_FLOW',
   '/encounters': 'PATIENTS_FLOW',
   '/admissions': 'PATIENTS_FLOW',
+  '/mortality': 'PATIENTS_FLOW',
   '/bed-board': 'PATIENTS_FLOW',
   '/bed-management': 'PATIENTS_FLOW',
   '/discharge': 'PATIENTS_FLOW',

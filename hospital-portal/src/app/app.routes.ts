@@ -617,6 +617,26 @@ export const routes: Routes = [
           import('./transfusion/transfusion').then((m) => m.TransfusionComponent),
       },
       {
+        // Roles mirror MortalityController's READER set; recording is gated in-component.
+        // The screen and its API existed with no route, so nobody could open it (QA round 35).
+        path: 'mortality',
+        canActivate: [RoleGuard],
+        data: {
+          requiresHospitalScope: true,
+          roles: [
+            'ROLE_DOCTOR',
+            'ROLE_SURGEON',
+            'ROLE_MIDWIFE',
+            'ROLE_NURSE',
+            'ROLE_QUALITY_MANAGER',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () => import('./mortality/mortality').then((m) => m.MortalityComponent),
+      },
+      {
         // Roles mirror MicroCultureController.READ_ROLES exactly (P3 #19) —
         // resulting/finalize buttons are gated in-component to the narrower
         // ENTRY/FINALIZE role sets.

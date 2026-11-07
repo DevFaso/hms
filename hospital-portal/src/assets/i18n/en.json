@@ -4257,6 +4257,7 @@
     "DRUG_INTERACTIONS": "Drug Interactions",
     "ON_CALL": "On-Call",
     "SLOT_ADMIN": "Slot Administration",
+    "MORTALITY": "Mortality register",
     "TRANSFUSIONS": "Blood Bank",
     "BED_BOARD": "Bed Board",
     "GROUP": {

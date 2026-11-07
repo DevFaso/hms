@@ -4257,6 +4257,7 @@
     "DRUG_INTERACTIONS": "Interactions médicamenteuses",
     "ON_CALL": "Gardes",
     "SLOT_ADMIN": "Administration des créneaux",
+    "MORTALITY": "Registre des décès",
     "TRANSFUSIONS": "Banque de sang",
     "BED_BOARD": "Tableau des lits",
     "GROUP": {

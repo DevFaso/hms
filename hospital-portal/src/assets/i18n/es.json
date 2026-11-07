@@ -4257,6 +4257,7 @@
     "DRUG_INTERACTIONS": "Interacciones medicamentosas",
     "ON_CALL": "Guardias",
     "SLOT_ADMIN": "Administración de espacios",
+    "MORTALITY": "Registro de defunciones",
     "TRANSFUSIONS": "Banco de sangre",
     "BED_BOARD": "Tablero de camas",
     "GROUP": {
