@@ -1022,4 +1022,4 @@ Rounds 27, 28 and 29 each found 20–30 new siblings of the required-field class
 | `cdshooks/rules/ParacetamolFactsReaderTest`, `DuplicateMedicationOrderRuleTest`, `AdultParacetamolRuleTest`, `PediatricDoseRuleRound18Test` (widened) | D1462 + D1478: a cited brand is the drug; a name nothing names is said, for the order and beside the total; the same drug under another name is a duplicate. | none |
 | `service/maternity/NewbornAlertRulesTest#aLowValueAsksToRemeasure` (new) | D1482: the check flag at the low end. | none |
 | `scripts/lib/round35-clinical.test.mjs` (new) | D1479: a count of minutes written by hand in a template. D1480: a button built at run time with no global style. | none |
-| `e2e/dialog-checkboxes.spec.ts` (new) | D1451 in a browser: mouse, label and a trusted Space key, on the crossmatch box, the O-negative statement and the mortality boxes. | none |
+| `e2e/dialog-checkboxes.spec.ts` (new) | D1451 in a browser: mouse, label and a trusted Space key, on the crossmatch box and the O-negative statement (the mortality boxes by click in Karma: the page has no route). | none |
