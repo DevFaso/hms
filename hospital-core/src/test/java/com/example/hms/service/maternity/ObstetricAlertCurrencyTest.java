@@ -167,6 +167,12 @@ class ObstetricAlertCurrencyTest {
         NewbornAssessment source = assessment(mother, T0, NewbornAlertSeverity.URGENT);
         source.setDeliveryRecord(twins);
         when(newbornRepository.findById(source.getId())).thenReturn(Optional.of(source));
+        // The other twin's later, normal reading: same chart, same delivery.
+        NewbornAssessment otherTwin = assessment(mother, T0.plusHours(1), null);
+        otherTwin.setDeliveryRecord(twins);
+        org.mockito.Mockito.lenient().when(newbornRepository
+                .findByPatient_IdAndAssessmentTimeAfterOrderByAssessmentTimeDesc(mother.getId(), T0))
+            .thenReturn(List.of(otherTwin));
         assertThat(currency.noLongerUrgent(row(ObstetricAlertEscalationService.SOURCE_NEWBORN, source.getId(), "RESPIRATORY"))).isFalse();
     }
 
