@@ -37,7 +37,8 @@ import java.util.UUID;
  * <p>Every card is an alert: {@code warning} or {@code info}, never {@code critical}, so the
  * order is saved and the prescriber reads the card on the form ({@link #ALERT} is the one place
  * to change that). Nothing here adds a hard stop. A dose that cannot be read in mg is silent,
- * never read as mg; the checks of the interval and of the contraindication do not need a dose.
+ * never read as mg, and that includes a bare number ("2" is more likely two tablets); the checks
+ * of the interval and of the contraindication do not need a dose.
  */
 @Component
 public class AdultParacetamolRule implements CdsRule {
@@ -54,7 +55,6 @@ public class AdultParacetamolRule implements CdsRule {
 
     private static final String ID = "adult-paracetamol";
     private static final String SOURCE_LABEL = "e-Keneya Adult Paracetamol Check";
-    private static final String SOURCES = "FDA acetaminophen guidance; EFFERALGANSTIX 1000 mg RCP 4.2, 4.3";
     private static final CdsCard.Indicator ALERT = CdsCard.Indicator.WARNING;
     private static final double MINUTES_PER_DAY = 1440d;
     private static final double MINUTES_PER_HOUR = 60d;
@@ -94,12 +94,18 @@ public class AdultParacetamolRule implements CdsRule {
         private final String medication;
         private final Double doseMg;
         private final Double dosesPerDay;
+        /** The order as written: not ticked, its interval is {@code proposedPrnDosesPerDay} (QA D1378). */
+        private final Prescription written;
 
         Check(CdsRuleContext context) {
             this.context = context;
+            this.written = Prescription.builder().frequency(context.proposedFrequency()).build();
             this.risks = context.paracetamolFacts().risks();
             this.medication = context.proposedMedicationName() == null ? "" : context.proposedMedicationName().trim();
-            this.doseMg = context.proposedDoseMg();
+            // parseDoseUnits reads a count or a bare number; when it equals the mg reading no
+            // unit made it mg, whatever the number (CdsRuleEngine.parseLabelledDoseMg, for other orders).
+            this.doseMg = context.proposedDoseMg() != null && context.proposedDoseMg().equals(context.proposedDoseUnits())
+                ? null : context.proposedDoseMg();
             this.dosesPerDay = PediatricDoseRule.dosesOnADosingDay(
                 context.proposedFrequency(), context.proposedPrnDosesPerDay());
         }
@@ -135,7 +141,12 @@ public class AdultParacetamolRule implements CdsRule {
                 cards.add(alert(text.get("cds.adultParacetamol.unread.summary",
                     "{0}: the daily total could not be read from the frequency \"{1}\" - check paracetamol from all active orders against the maximum of {2} mg per day",
                     medication, context.proposedFrequency(), number(ceiling)), dailyDetail(ceiling, others)));
-            } else if (ceiling == MAX_MG_PER_DAY && total > USUAL_MG_PER_DAY) {
+            } else if (others.unreadFrequency > 0) {
+                cards.add(alert(text.get("cds.adultParacetamol.unreadOther.summary",
+                    "{0}: {1} other active order(s) have a frequency that could not be read, counted as one dose - check paracetamol from all active orders against the maximum of {2} mg per day",
+                    medication, String.valueOf(others.unreadFrequency), number(ceiling)), dailyDetail(ceiling, others)));
+            } else if (ceiling >= MAX_MG_PER_DAY && total > USUAL_MG_PER_DAY
+                && !risks.contains(ParacetamolRisk.SEVERE_HEPATIC)) {
                 cards.add(build(text.get("cds.adultParacetamol.info.summary",
                     "{0}: {1} mg per day of paracetamol from all active orders. The usual adult dose is {2} mg per day; up to {3} mg per day only on medical advice, without additional hepatotoxicity risk factors",
                     medication, number(total), number(USUAL_MG_PER_DAY), number(MAX_MG_PER_DAY)),
@@ -155,10 +166,10 @@ public class AdultParacetamolRule implements CdsRule {
             }
             String summary = alcoholism
                 ? text.get("cds.adultParacetamol.interval.alcoholism.summary",
-                    "{0}: {1} hours between doses is shorter than the {2} hours required in chronic alcoholism, recorded on the problem list",
+                    "{0}: {1} h between doses is shorter than the minimum of {2} h required in chronic alcoholism, recorded on the problem list",
                     medication, hours(minutes), hours(least))
                 : text.get("cds.adultParacetamol.interval.summary",
-                    "{0}: {1} hours between doses is shorter than the adult minimum of {2} hours",
+                    "{0}: {1} h between doses is shorter than the adult minimum of {2} h",
                     medication, hours(minutes), hours(least));
             cards.add(alert(summary, alcoholism ? footer() : lowerLimits() + " " + footer()));
         }
@@ -194,7 +205,7 @@ public class AdultParacetamolRule implements CdsRule {
             Totals totals = new Totals();
             for (ParacetamolFacts.OtherOrder other : context.paracetamolFacts().otherOrders()) {
                 Prescription rx = other.order();
-                Double mg = CdsRuleEngine.parseDoseMg(rx.getDosage(), weightKg(), other.item());
+                Double mg = CdsRuleEngine.parseLabelledDoseMg(rx.getDosage(), weightKg(), other.item());
                 if (mg == null) {
                     totals.uncounted++;
                     continue;
@@ -203,12 +214,19 @@ public class AdultParacetamolRule implements CdsRule {
                     PrnMinInterval.highestDosesPerDay(PrnMinInterval.isAsNeeded(rx), rx.getPrnMinIntervalHours()));
                 totals.mg += mg * (perDay == null ? 1d : perDay);
                 totals.counted++;
+                if (perDay == null && unread(rx)) {
+                    totals.unreadFrequency++;
+                }
             }
             return totals;
         }
 
         private boolean frequencyWrittenButUnread() {
-            MarDoseSchedule.Kind kind = MarDoseSchedule.read(context.proposedFrequency()).kind();
+            return unread(written);
+        }
+
+        private boolean unread(Prescription rx) {
+            MarDoseSchedule.Kind kind = MarDoseSchedule.read(rx).kind();
             return kind == MarDoseSchedule.Kind.UNREAD || kind == MarDoseSchedule.Kind.CONTINUOUS;
         }
 
@@ -219,9 +237,9 @@ public class AdultParacetamolRule implements CdsRule {
             if (prnPerDay != null && prnPerDay > 0d) {
                 shortest = (int) Math.round(MINUTES_PER_DAY / prnPerDay);
             }
-            Integer written = writtenMinutes(MarDoseSchedule.read(context.proposedFrequency()));
-            if (written != null && (shortest == null || written < shortest)) {
-                shortest = written;
+            Integer read = writtenMinutes(MarDoseSchedule.read(written));
+            if (read != null && (shortest == null || read < shortest)) {
+                shortest = read;
             }
             return shortest;
         }
@@ -255,6 +273,11 @@ public class AdultParacetamolRule implements CdsRule {
                     "{0} other active order(s) could not be counted: the dose could not be read in mg.",
                     String.valueOf(others.uncounted)));
             }
+            if (others.unreadFrequency > 0) {
+                sentences.add(text.get("cds.adultParacetamol.detail.oneDose",
+                    "{0} of them counted as one dose: the frequency could not be read.",
+                    String.valueOf(others.unreadFrequency)));
+            }
             sentences.add(footer());
             return String.join(" ", sentences);
         }
@@ -262,7 +285,8 @@ public class AdultParacetamolRule implements CdsRule {
         /** Why this ceiling: every lower limit that applies, else the general one and the groups. */
         private List<String> basis(double ceiling) {
             List<String> basis = new ArrayList<>();
-            if (ceiling == MAX_MG_PER_DAY) {
+            boolean general = ceiling >= MAX_MG_PER_DAY;
+            if (general) {
                 basis.add(text.get("cds.adultParacetamol.basis.general",
                     "General adult ceiling: {0} mg in 24 hours, from all medicines combined.", number(MAX_MG_PER_DAY)));
             }
@@ -292,7 +316,7 @@ public class AdultParacetamolRule implements CdsRule {
                     "The degree of the hepatocellular insufficiency is not recorded: {0} mg per day assumes mild to moderate, and paracetamol is contraindicated if it is severe.",
                     number(TWO_GRAM_GROUP_MG_PER_DAY)));
             }
-            if (ceiling == MAX_MG_PER_DAY) {
+            if (general) {
                 basis.add(lowerLimits());
             }
             return basis;
@@ -319,8 +343,7 @@ public class AdultParacetamolRule implements CdsRule {
 
         private String footer() {
             return text.get("cds.adultParacetamol.footer",
-                "This alert does not block the order. Sources: {0}; proposed logic, pending clinician sign-off.",
-                SOURCES);
+                "This alert does not block the order. Sources: FDA acetaminophen guidance; EFFERALGANSTIX 1000 mg RCP 4.2, 4.3; proposed logic, pending clinician sign-off.");
         }
 
         private String number(double value) {
@@ -347,5 +370,6 @@ public class AdultParacetamolRule implements CdsRule {
         private double mg;
         private int counted;
         private int uncounted;
+        private int unreadFrequency;
     }
 }

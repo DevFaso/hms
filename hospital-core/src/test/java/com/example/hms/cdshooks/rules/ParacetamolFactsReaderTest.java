@@ -72,7 +72,8 @@ class ParacetamolFactsReaderTest {
     }
 
     private Prescription order(String name, PrescriptionStatus status) {
-        Prescription rx = Prescription.builder().medicationName(name).dosage("1 g").status(status).build();
+        Prescription rx = Prescription.builder().medicationName(name).dosage("1 g").frequency("3 fois par jour")
+            .status(status).build();
         rx.setId(UUID.randomUUID());
         rx.setCreatedAt(LocalDateTime.now().minusDays(2));
         orders.add(rx);
@@ -139,16 +140,82 @@ class ParacetamolFactsReaderTest {
         "5 days, 6, false",
         "5 jours, 5, true",
         "5 jours, 6, false",
+        "pendant 5 jours, 6, false",
+        "durante 5 días, 5, true",
+        "durante 5 días, 6, false",
         "1 semaine, 7, true",
         "1 semaine, 8, false",
-        "3 mois, 400, true",
-        "'', 400, true",
+        "2 semanas, 14, true",
+        "2 semanas, 15, false",
+        "3 mois, 80, true",
+        "3 mois, 100, false",
+        "1 mes, 40, false",
+        // No readable duration: the window the duplicate-order check uses.
+        "'', 6, true",
+        "'', 8, false",
+        "au long cours, 6, true",
+        "au long cours, 8, false",
     })
     void aPastCourseIsNotActive(String duration, int daysAgo, boolean counted) {
         Prescription rx = order("Paracétamol", PrescriptionStatus.DISPENSED);
         rx.setDuration(duration);
         rx.setCreatedAt(LocalDateTime.now().minusDays(daysAgo));
         assertThat(read().otherOrders()).hasSize(counted ? 1 : 0);
+    }
+
+    @Test
+    void anOrderWithNoDurationOnAnOpenStayRunsOn() {
+        Prescription rx = order("Paracétamol", PrescriptionStatus.SIGNED);
+        rx.setCreatedAt(LocalDateTime.now().minusDays(30));
+        assertThat(read().otherOrders()).isEmpty();
+        rx.setEncounter(com.example.hms.model.Encounter.builder().admissionId(UUID.randomUUID()).build());
+        assertThat(read().otherOrders()).hasSize(1);
+    }
+
+    @ParameterizedTest(name = "one-off {0}, written {1} h ago: counted = {2}")
+    @CsvSource({"STAT, 23, true", "STAT, 25, false", "'', 23, true", "'', 25, false"})
+    void aOneOffCountsForItsDay(String frequency, int hoursAgo, boolean counted) {
+        Prescription rx = order("Paracétamol", PrescriptionStatus.DISPENSED);
+        rx.setFrequency(frequency);
+        rx.setCreatedAt(LocalDateTime.now().minusHours(hoursAgo));
+        assertThat(read().otherOrders()).hasSize(counted ? 1 : 0);
+    }
+
+    @Test
+    void anActingHospitalIsReadNotThePatientsFirstHospital() {
+        UUID acting = UUID.randomUUID();
+        Prescription here = Prescription.builder().medicationName("Paracétamol").dosage("1 g").frequency("q6h")
+            .status(PrescriptionStatus.SIGNED).build();
+        here.setId(UUID.randomUUID());
+        here.setCreatedAt(LocalDateTime.now());
+        when(prescriptions.findByPatient_IdAndHospital_Id(adult.getId(), acting)).thenReturn(List.of(here));
+        when(problems.findByPatient_IdAndHospital_Id(adult.getId(), acting)).thenReturn(List.of());
+        when(catalogue.findActivePage(eq(acting), any(Pageable.class))).thenAnswer(i -> new PageImpl<>(List.of()));
+        order("Paracétamol", PrescriptionStatus.SIGNED);
+        problem("F10.2", ProblemStatus.ACTIVE, false);
+        com.example.hms.security.context.HospitalContextHolder.setContext(
+            com.example.hms.security.context.HospitalContext.builder().activeHospitalId(acting).build());
+        try {
+            ParacetamolFacts facts = read();
+            assertThat(facts.otherOrders()).extracting(ParacetamolFacts.OtherOrder::order).containsExactly(here);
+            assertThat(facts.risks()).isEmpty();
+        } finally {
+            com.example.hms.security.context.HospitalContextHolder.clear();
+        }
+    }
+
+    @Test
+    void noActingHospitalWithholdsASensitiveRowAndNoHospitalReadsNothing() {
+        problem("F10.2", ProblemStatus.ACTIVE, false)
+            .setSensitivityCategory(com.example.hms.enums.SensitivityCategory.SUBSTANCE_USE);
+        assertThat(read().risks()).isEmpty();
+        problem("E80.4", ProblemStatus.ACTIVE, false);
+        assertThat(read().risks()).containsExactly(ParacetamolRisk.TWO_GRAM_GROUP);
+        order("Paracétamol", PrescriptionStatus.SIGNED);
+        ParacetamolFacts none = reader.read(adult, null, "Paracétamol", null, null);
+        assertThat(none.applies()).isTrue();
+        assertThat(none.otherOrders()).isEmpty();
+        assertThat(none.risks()).isEmpty();
     }
 
     @Test
@@ -281,6 +348,13 @@ class ParacetamolFactsReaderTest {
         "Paracétamol + codéine | false",
         "Paracétamol/codéine | false",
         "Paracétamol-codéine | false",
+        "Paracétamol codéine 500 mg | false",
+        "Paracétamol, codéine | false",
+        "Paracetamol caféine | false",
+        "Paracétamol 500 mg/codéine 30 mg | false",
+        "Paracétamol 500 mg/cp | true",
+        "Paracétamol 1 g/sachet | true",
+        "Paracétamol-Sandoz | true",
         "Paracétamol et codéine | false",
         "Paracetamol 500/30 mg | false",
         "Tramadol/paracétamol | false",
@@ -305,5 +379,8 @@ class ParacetamolFactsReaderTest {
         assertThat(ParacetamolIdentity.names("Paracétamol + codéine", doliprane)).isFalse();
         assertThat(ParacetamolIdentity.names("Paracétamol-codéine", doliprane)).isFalse();
         assertThat(ParacetamolIdentity.names("Paracétamol 500 mg - comprimé", null)).isTrue();
+        assertThat(ParacetamolIdentity.names("Doliprane codéine", doliprane)).isFalse();
+        assertThat(ParacetamolIdentity.names("Efferalgan-Odis", doliprane)).isTrue();
+        assertThat(ParacetamolIdentity.namesCatalogueItem("Doliprane codéine", doliprane)).isFalse();
     }
 }

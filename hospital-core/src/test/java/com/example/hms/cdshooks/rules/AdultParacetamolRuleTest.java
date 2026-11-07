@@ -36,7 +36,7 @@ class AdultParacetamolRuleTest {
     private static final String INTERVAL = "between doses";
     private static final String INFO = "The usual adult dose";
     private static final String CONTRA = "is contraindicated";
-    private static final String UNREAD = "could not be read from the frequency";
+    private static final String UNREAD = "could not be read";
 
     private final AdultParacetamolRule rule = new AdultParacetamolRule();
 
@@ -170,6 +170,11 @@ class AdultParacetamolRuleTest {
         "1 g | si besoin | 72 | ''",
         // A frequency nobody can read: says so, and still judges the dose it knows.
         "1 g | selon la douleur | null | U",
+        // A bare number is no unit: never read as mg, in either direction.
+        "2 | 4 fois par jour | null | ''",
+        "2000 | 3 fois par jour | null | ''",
+        "1/2 | 3 fois par jour | null | ''",
+        "2 | toutes les 2 heures | null | I",
         "2 g | selon la douleur | null | SU",
         "5 g | selon la douleur | null | DS",
         // A dose that is not mg is silent, never read as mg; the interval needs no dose.
@@ -260,7 +265,7 @@ class AdultParacetamolRuleTest {
         List<CdsCard> cards = evaluate(new Order(dose, frequency).prn(prnHours)
             .risks(ParacetamolRisk.TWO_GRAM_GROUP, ParacetamolRisk.CHRONIC_ALCOHOLISM));
         assertThat(letters(cards)).isEqualTo(expected);
-        cards.forEach(card -> assertThat(card.summary()).contains("8 hours required in chronic alcoholism"));
+        cards.forEach(card -> assertThat(card.summary()).contains("8 h required in chronic alcoholism"));
     }
 
     @Test
@@ -269,7 +274,8 @@ class AdultParacetamolRuleTest {
         assertThat(letters(evaluate(any))).isEqualTo("C");
         // A dose nobody can read is still contraindicated; the general ceiling stands beside it.
         assertThat(letters(evaluate(new Order("5 ml", "3 fois par jour").risks(ParacetamolRisk.SEVERE_HEPATIC)))).isEqualTo("C");
-        assertThat(letters(evaluate(new Order("1 g", "4 fois par jour").risks(ParacetamolRisk.SEVERE_HEPATIC)))).isEqualTo("CN");
+        // No "up to 4 g on medical advice" beside a contraindication.
+        assertThat(letters(evaluate(new Order("1 g", "4 fois par jour").risks(ParacetamolRisk.SEVERE_HEPATIC)))).isEqualTo("C");
         assertThat(letters(evaluate(new Order("1 g", "5 fois par jour").risks(ParacetamolRisk.SEVERE_HEPATIC)))).isEqualTo("CD");
     }
 
@@ -291,8 +297,11 @@ class AdultParacetamolRuleTest {
         // A count of tablets on the other order, through its strength.
         "1 g | 3 fois par jour | 3 cp | 1 fois par jour | D | 4500",
         // An unread frequency on the other order counts one dose at least.
-        "1 g | 3 fois par jour | 1 g | selon la douleur | N | null",
+        "1 g | 3 fois par jour | 1 g | selon la douleur | U | null",
+        "500 mg | 3 fois par jour | 1 g | selon la douleur | U | null",
         "1 g | 4 fois par jour | 1 g | selon la douleur | D | 5000",
+        // A bare number on the other order is not counted as mg.
+        "1 g | 4 fois par jour | 2 | 1 fois par jour | N | null",
     })
     void countsTheOtherActiveOrders(String dose, String frequency, String otherDose, String otherFrequency,
                                     String expected, String total) {
@@ -317,6 +326,18 @@ class AdultParacetamolRuleTest {
         List<CdsCard> cards = evaluate(new Order("1 g", null).others(prnOther));
         assertThat(letters(cards)).isEqualTo("D");
         assertThat(cards.get(0).summary()).contains("5000 mg per day");
+    }
+
+    @Test
+    void theIntervalCardReadsInHoursWithNoPlural() {
+        assertThat(evaluate(new Order("500 mg", "si besoin").prn(1)).stream().map(CdsCard::summary))
+            .anyMatch(summary -> summary.contains("1 h between doses") && summary.contains("minimum of 4 h"));
+    }
+
+    @Test
+    void anOtherOrderWhoseFrequencyIsUnreadIsTold() {
+        List<CdsCard> cards = evaluate(new Order("1 g", "4 fois par jour").others(other("1 g", "selon la douleur")));
+        assertThat(cards.get(0).detail()).contains("1 of them counted as one dose");
     }
 
     @Test
@@ -398,6 +419,8 @@ class AdultParacetamolRuleTest {
         source.setBasenames(com.example.hms.config.MessageBundles.basenames());
         source.setDefaultEncoding("UTF-8");
         source.setFallbackToSystemLocale(false);
+        // As LocaleConfig builds it: a doubled apostrophe is one apostrophe, with or without arguments.
+        source.setAlwaysUseMessageFormat(true);
         rule.setCardText(new CdsCardText(source));
         try {
             for (Locale reader : List.of(Locale.FRENCH, Locale.forLanguageTag("es"))) {
@@ -408,11 +431,15 @@ class AdultParacetamolRuleTest {
                 cards.addAll(evaluate(new Order("1 g", "selon la douleur")));
                 cards.addAll(evaluate(new Order("1 g", "toutes les 2 heures").weight(45d).others(other("20 cp", null))));
                 cards.addAll(evaluate(new Order("501 mg", "4 fois par jour").risks(ParacetamolRisk.values())));
+                cards.addAll(evaluate(new Order("500 mg", "3 fois par jour").others(other("1 g", "selon la douleur"))));
                 assertThat(cards).hasSizeGreaterThanOrEqualTo(8).allSatisfy(card -> {
                     assertThat(card.summary() + " " + card.detail())
                         .doesNotContain("per day").doesNotContain("between doses").doesNotContain("does not block")
-                        .doesNotContain("''").doesNotContain("{");
+                        .doesNotContain("''").doesNotContain("{").doesNotContain("guidance").doesNotContain("order(s)");
                     assertThat(card.source().label()).doesNotContain("Check");
+                    if (reader.equals(Locale.FRENCH)) {
+                        assertThat(card.source().label()).contains("l'adulte");
+                    }
                 });
             }
         } finally {

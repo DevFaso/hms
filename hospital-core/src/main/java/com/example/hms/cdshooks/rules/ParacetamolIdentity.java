@@ -26,10 +26,19 @@ final class ParacetamolIdentity {
     private static final String ATC_PARACETAMOL = "N02BE01";
     private static final Set<String> SPELLINGS = Set.of(
         OrderedDrugIdentity.spellingForm("paracetamol"), OrderedDrugIdentity.spellingForm("acetaminophen"));
-    private static final Pattern FIRST_WORD_ENDS = Pattern.compile("[\\s,(]");
-    /** Another ingredient after the name; "500 mg/5 ml" and "mg/ml" are one ingredient's concentration. */
+    private static final Pattern FIRST_WORD_ENDS = Pattern.compile("[\\s,(-]");
+    /**
+     * Another ingredient: a plus, "500/30", a word linking two, a slash before anything but a
+     * unit ("500 mg/5 ml", "mg/ml", "1 g/sachet" are one ingredient), or an ingredient paracetamol
+     * is sold with, named with nothing between them ("Paracétamol codéine", "Efferalgan-codéine").
+     */
     private static final Pattern ANOTHER_INGREDIENT = Pattern.compile(
-        "\\+|\\d\\s*+/\\s*+\\d|/\\s*+(?!ml\\b)\\p{L}|\\p{L}-\\p{L}|\\b(?:et|and|y|con|avec|with)\\b");
+        "\\+|\\d\\s*+/\\s*+\\d"
+            + "|/\\s*+(?!(?:ml|cp|comprimes?+|comprimidos?+|sachets?+|sobres?+|gelules?+|capsules?+|capsulas?+"
+            + "|tablets?+|doses?+|dosis|suppositoires?+|supositorios?+|ampoules?+|ampollas?+|flacons?+|unites?+)\\b)\\p{L}"
+            + "|\\b(?:et|and|y|con|avec|with)\\b"
+            + "|codein|codeina|tramadol|cafein|caffein|ibuprof|dextropropox|opium|pseudoephed|phenylephr"
+            + "|chlorphenam|aspirin|acetylsalicyl|diclofenac|oxycod|hydrocod");
     private static final Pattern NAMED_ANYWHERE = Pattern.compile("paracetamol|acetaminoph|acetaminof");
 
     private ParacetamolIdentity() {

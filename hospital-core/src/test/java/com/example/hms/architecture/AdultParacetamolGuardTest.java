@@ -18,7 +18,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * QA round 34 (adult paracetamol, class: a dose limit one path does not reach). Every prescribing
  * path, the CDS hooks and the signature run the one engine, and the engine is the one place a rule
- * context is built, so no path can reach the rules without the paracetamol facts. The rule stays
+ * context is built, so no path can reach the rules without the paracetamol facts. (A CDS hook sends
+ * no frequency, so there the daily total counts one dose of its draft: tasklist.md.) The rule stays
  * what the guidance calls it, an alert: the source says "alert", no hard stop or review was asked,
  * and raising it is a clinician's decision, not a side effect.
  */
@@ -52,7 +53,8 @@ class AdultParacetamolGuardTest {
 
     @Test
     void theEngineReadsTheFactsForEveryContext() throws IOException {
-        assertThat(code(ENGINE)).contains("paracetamolFacts.read(patient, hospitalId, proposedMedicationName, catalogItem, excludedPrescriptionId)");
+        assertThat(code(ENGINE)).contains("readParacetamolFacts(patient, hospitalId, proposedMedicationName, catalogItem, excludedPrescriptionId)")
+            .contains("return paracetamolFacts.read(patient, hospitalId, name, item, editedOrderId);");
     }
 
     @Test

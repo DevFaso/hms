@@ -435,15 +435,15 @@ class PrescriptionEditAndWithdrawalIT extends BaseIT {
         try {
             // 2 g already: the ceiling is 2,000 mg with the coded Gilbert syndrome, and this is over it.
             paracetamolCards("500 mg", "1 fois par jour", "");
-            assertThat(lastSummaries).anyMatch(s -> s.contains("2500 mg") && s.contains("maximum of 2000 mg"));
+            assertThat(lastSummaries).anyMatch(s -> s.contains("2500 mg") && s.contains("2000 mg"));
             patientProblemRepository.deleteById(gilbert.getId());
             gilbert = null;
             // No group now: 2.5 g in all, under the general ceiling and under the usual dose.
             paracetamolCards("500 mg", "1 fois par jour", "");
-            assertThat(lastSummaries).noneMatch(s -> s.contains("all active orders"));
+            assertThat(lastSummaries).noneMatch(s -> s.contains("2500 mg"));
             // Each order alone is fine; 5 g together is over the general ceiling.
             paracetamolCards("1 g", "3 fois par jour", "");
-            assertThat(lastSummaries).anyMatch(s -> s.contains("5000 mg") && s.contains("maximum of 4000 mg"));
+            assertThat(lastSummaries).anyMatch(s -> s.contains("5000 mg") && s.contains("4000 mg"));
         } finally {
             if (gilbert != null) {
                 patientProblemRepository.deleteById(gilbert.getId());
@@ -476,7 +476,7 @@ class PrescriptionEditAndWithdrawalIT extends BaseIT {
             var response = medicationPrescribeRules.evaluate(new com.example.hms.cdshooks.dto.CdsHookDtos.CdsHookRequest(
                 "medication-prescribe", "i", null, null, "Practitioner/x", context, null));
             assertThat(response.cards()).extracting(com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard::summary)
-                .anyMatch(summary -> summary.contains("5000 mg") && summary.contains("all active orders"));
+                .anyMatch(summary -> summary.contains("5000 mg") && summary.contains("4000 mg"));
         } finally {
             prescriptionRepository.deleteById(other.getId());
         }
