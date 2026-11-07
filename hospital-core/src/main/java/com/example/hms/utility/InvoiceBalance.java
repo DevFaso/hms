@@ -34,7 +34,8 @@ public final class InvoiceBalance {
      * copay above the visit's total folds whole onto the visit invoice (the money
      * was received, its row moves unsplit), so the amount paid may pass the total.
      * Nothing further is owed, and this is the refund due. No refund workflow
-     * exists: it is stated as owed, on every surface that shows the invoice.
+     * exists: it is stated as owed on the billing page, the patient's billing page and the PDF
+     * (the mobile apps show the balance, which is 0: tasklist standing debt).
      * Nothing on a cancelled invoice.
      */
     public static BigDecimal refundDueOf(BillingInvoice invoice) {

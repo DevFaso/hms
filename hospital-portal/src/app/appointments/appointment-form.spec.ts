@@ -419,6 +419,14 @@ describe('AppointmentFormComponent — prefill from the prenatal calendar', () =
       tick();
     };
 
+    it('a time typed before the clinician is chosen asks no reason (no clinician yet)', fakeAsync(() => {
+      const component = create({});
+      component.form.startTime = '09:07';
+      component.checkSlot();
+      tick(300);
+      expect(component.offSlot()).toBeFalse();
+    }));
+
     it('a taken time says so at once and asks no overbook reason', fakeAsync(() => {
       const component = create({});
       askAt(component, 'Le personnel n’est pas disponible', ['09:20']);

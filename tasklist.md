@@ -6275,3 +6275,9 @@ For the clinician list (proposed alert logic, pending sign-off):
 - [ ] D1447 legacy rows: a stored scheduled time that is free text shows blank in the `type="time"` input on edit and is re-sent unchanged; the list still shows it. Typing a real time replaces it. The past-date check compares with the server's day, as the imaging order's does, with no grace for a browser west of the server.
 - [ ] D1427 siblings kept as records, not translated: billing line descriptions (`BedDaysChargeSource`, `ConsultationChargeSource`, `TransfusionChargeSource`, `EncounterCheckoutChargeListener`) and the labour notes that join a system sentence with typed text (`maternity.labor.unbookedPregnancyNote`, `labor.episode.recentDeliveryOverrideNote`) stay in the staff language for a reader in EN or ES. Each is a written record; `StoredAlertReaderLanguageGuardTest` lists them.
 - [ ] D1425 legacy rows: a vaccination saved before this rule with an impossible value stays as it is until someone edits that value. No data correction was run.
+
+## Standing debt — round 35 (fix/r35-desk-billing-portal)
+
+- D1466 sibling, apps: `refundDue` is on the web billing page, the patient's web billing page and the PDF; `patient-android-app` and `patient-ios-app` show the balance (0) and not the refund. They do not misbehave; the patient is not told there. App release needed.
+- D1466: a real refund flow does not exist; the excess is stated as owed. Reversing the whole payment is the only ledger action today.
+- D1476 sibling, decision needed: `AdmissionServiceImpl` opens a stay on a deactivated registration (an emergency admission must not be refused at the desk, so it needs a product decision like the walk-in's EMERGENCY exemption). `ConsultationServiceImpl:113` and `GeneralReferralServiceImpl:94` use the same registration check and were not judged to open a desk visit; re-check them with that decision.

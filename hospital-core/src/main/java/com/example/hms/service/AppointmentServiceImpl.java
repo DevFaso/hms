@@ -887,9 +887,6 @@ public class AppointmentServiceImpl implements AppointmentService {
         LocalDateTime requestedStart = LocalDateTime.of(request.getAppointmentDate(), request.getStartTime());
         LocalDateTime requestedEnd = LocalDateTime.of(request.getAppointmentDate(), request.getEndTime());
         if (moved) {
-            // QA D1476: a visit is not moved on for a registration the desk deactivated;
-            // keeping its time, it can still take a note or a cancellation.
-            patientRegistrationGuard.refuseDeactivatedRegistration(patient.getId(), hospital.getId());
             // QA D1063: nor is it moved onto a slot held for a waitlist offer.
             slotPolicy.requireNoLiveHold(staff.getId(), requestedStart, requestedEnd);
         }
@@ -927,10 +924,15 @@ public class AppointmentServiceImpl implements AppointmentService {
                 LocalDateTime.of(existing.getAppointmentDate(), existing.getStartTime()), hospital);
             requireStartedFor(request.getStatus(), requestedStart, hospital);
         }
-        if (moved) {
-            // QA D1473: nor is a visit moved to a time already gone (after the status
-            // judgement above, which names the worse fault first).
+        if (!request.getAppointmentDate().equals(existing.getAppointmentDate())
+                || !request.getStartTime().equals(existing.getStartTime())) {
+            // QA D1473: nor is a visit moved to a time already gone (after the status judgement
+            // above, which names the worse fault first). Giving a visit under way to another
+            // clinician keeps its time, and stays possible.
             requireNotAlreadyPast(requestedStart, hospital);
+            // QA D1476: nor moved on for a registration the desk deactivated; keeping its time,
+            // it can still take a note, another clinician or a cancellation.
+            patientRegistrationGuard.refuseDeactivatedRegistration(patient.getId(), hospital.getId());
         }
         // QA D1126: the edit form drops a visit only with a reason, like the status action.
         String statusReason = statusMoved ? requireStatusReason(request.getStatus(), request.getStatusReason()) : null;
@@ -1017,9 +1019,20 @@ public class AppointmentServiceImpl implements AppointmentService {
      * hospital's clock, so the minute the desk reads on the wall is still bookable.
      */
     private static void requireNotAlreadyPast(LocalDateTime start, Hospital hospital) {
-        if (start.isBefore(nowAt(hospital).truncatedTo(java.time.temporal.ChronoUnit.MINUTES))) {
+        if (isAlreadyPast(start, hospital)) {
             throw new com.example.hms.exception.FieldBusinessException(FIELD_START_TIME, "portal.booking.pastTime");
         }
+    }
+
+    private static boolean isAlreadyPast(LocalDateTime start, Hospital hospital) {
+        return start.isBefore(nowAt(hospital).truncatedTo(java.time.temporal.ChronoUnit.MINUTES));
+    }
+
+    /** The visit being moved keeps its time: only another clinician is asked about, not the past. */
+    private boolean keepsItsTime(UUID movedAppointmentId, java.time.LocalDate date, java.time.LocalTime time) {
+        return movedAppointmentId != null && appointmentRepository.findById(movedAppointmentId)
+            .filter(moved -> date.equals(moved.getAppointmentDate()) && time.equals(moved.getStartTime()))
+            .isPresent();
     }
 
     /**
@@ -1036,11 +1049,14 @@ public class AppointmentServiceImpl implements AppointmentService {
         Staff staff = staffRepository.findById(staffId)
             .orElseThrow(() -> new ResourceNotFoundException("staff.notfound", staffId));
         Hospital hospital = staff.getHospital();
-        requireHospitalScope(currentUser, hospital.getId(), locale);
+        // A clinician of another hospital answers as an unknown one: this read names no one's existence.
+        if (!hasHospitalAccess(currentUser, hospital.getId())) {
+            throw new ResourceNotFoundException("staff.notfound", staffId);
+        }
         LocalTime endTime = slotPolicy.endFor(staffId, date, time);
         LocalDateTime start = LocalDateTime.of(date, time);
         LocalDateTime end = LocalDateTime.of(date, endTime);
-        if (start.isBefore(nowAt(hospital).truncatedTo(java.time.temporal.ChronoUnit.MINUTES))) {
+        if (isAlreadyPast(start, hospital) && !keepsItsTime(movedAppointmentId, date, time)) {
             return messageSource.getMessage("portal.booking.pastTime", null, locale);
         }
         Object[] args = {staffId, DisplayDates.date(date, locale), DisplayDates.time(time, locale),

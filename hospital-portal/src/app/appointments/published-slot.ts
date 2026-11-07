@@ -12,8 +12,8 @@ export function refusesForOverbookReason(err: unknown): boolean {
 }
 
 /**
- * QA D1475: the clinician's free published times of a day ("HH:mm", in order), or null when the
- * read failed, which asks for nothing: the server decides.
+ * QA D1475: the clinician's free published times of a day ("HH:mm", in order), or null when there
+ * is nothing to read yet or the read failed, which asks for nothing: the server decides.
  */
 export function freeSlotTimes(
   slots: SlotInventoryService,
@@ -21,7 +21,7 @@ export function freeSlotTimes(
   date: string | null | undefined,
 ): Observable<string[] | null> {
   if (!staffId || !date) {
-    return of([]);
+    return of(null);
   }
   return slots.searchAllOpenInBackground({ staffId, from: date, to: date }).pipe(
     map(({ rows }) =>

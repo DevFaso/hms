@@ -306,4 +306,28 @@ class AppointmentBookingSlotRuleTest {
         assertThat(
             service.bookingTimeRefusal(staff.getId(), DAY, TIME, held.getId(), Locale.FRENCH, "desk")).isNull();
     }
+
+    @Test
+    @DisplayName("QA D1474 review: a clinician of another hospital answers as unknown, not as refused")
+    void anotherHospitalsClinicianIsUnknown() {
+        Hospital other = new Hospital();
+        other.setId(UUID.randomUUID());
+        staff.setHospital(other);
+
+        assertThatThrownBy(() -> service.bookingTimeRefusal(staff.getId(), DAY, TIME, null, Locale.FRENCH, "desk"))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("QA D1473 review: a visit under way given to another clinician keeps its time, and is not told it is past")
+    void aReassignmentKeepingTheTimeIsNotPast() {
+        LocalDate yesterday = LocalDate.now(java.time.ZoneId.systemDefault()).minusDays(1);
+        com.example.hms.model.Appointment kept = new com.example.hms.model.Appointment();
+        kept.setId(UUID.randomUUID());
+        kept.setAppointmentDate(yesterday);
+        kept.setStartTime(TIME);
+        when(appointmentRepository.findById(kept.getId())).thenReturn(Optional.of(kept));
+
+        assertThat(service.bookingTimeRefusal(staff.getId(), yesterday, TIME, kept.getId(), Locale.FRENCH, "desk")).isNull();
+    }
 }

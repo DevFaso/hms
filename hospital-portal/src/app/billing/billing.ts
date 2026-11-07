@@ -1258,6 +1258,8 @@ export class BillingComponent implements OnInit {
       error: (err: HttpErrorResponse) => {
         this.paymentSaving.set(false);
         this.toast.error(err.error?.message ?? this.translate.instant('BILLING.PAYMENT_FAILED'));
+        // QA D1466: a refusal may have credited the copay: the row must say what stands now.
+        this.loadInvoices(this.page());
       },
     });
   }

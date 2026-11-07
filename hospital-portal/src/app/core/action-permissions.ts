@@ -138,8 +138,6 @@ export const ACTION_PERMISSIONS = {
     endpoint: 'EncounterController#delete',
     roles: ['ROLE_SUPER_ADMIN'],
   },
-  // QA D1015: the midwife starts the visits booked with her (the service
-  // refuses her any other one).
   /**
    * QA D1463: the patient tracker's card actions. The triage form and the
    * check-out dialog open on GET /encounters/{id}, so those two need this read too.
@@ -177,6 +175,8 @@ export const ACTION_PERMISSIONS = {
     endpoint: 'EncounterController#checkOut',
     roles: ['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
   },
+  // QA D1015: the midwife starts the visits booked with her (the service
+  // refuses her any other one).
   encounterStart: {
     endpoint: 'EncounterController#startEncounter',
     roles: ['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR', 'ROLE_MIDWIFE'],

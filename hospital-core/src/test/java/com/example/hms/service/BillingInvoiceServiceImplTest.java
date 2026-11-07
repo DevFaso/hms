@@ -3375,4 +3375,63 @@ class BillingInvoiceServiceImplTest {
         billingInvoiceService.updateInvoice(stillDraft.getId(), editOf().notes("n").build(), Locale.ENGLISH);
         assertEquals(InvoiceStatus.DRAFT, stillDraft.getStatus());
     }
+
+    // ── QA D1466 review: the moments a copay above what is owed is credited ──
+
+    @Test
+    void recordStaffPayment_onAVisitTheCopayCovers_isRefusedAndTheCreditStands_D1466() throws Exception {
+        BillingInvoice[] pair = issuedVisitOf("2000");
+        when(invoiceRepository.findLockedById(pair[0].getId())).thenReturn(Optional.of(pair[0]));
+        com.example.hms.payload.dto.StaffPaymentRequestDTO payment =
+            new com.example.hms.payload.dto.StaffPaymentRequestDTO(new BigDecimal("500"), "cash", null, null);
+        UUID invoiceId = pair[0].getId();
+        UUID clerk = UUID.randomUUID();
+
+        com.example.hms.exception.FieldBusinessException refused = assertThrows(
+            com.example.hms.exception.FieldBusinessException.class,
+            () -> billingInvoiceService.recordStaffPayment(invoiceId, payment, clerk, Locale.ENGLISH));
+
+        assertEquals("billing.payment.copayCoversVisit", refused.getMessageKey());
+        assertEquals(0, new BigDecimal("500").compareTo(com.example.hms.utility.InvoiceBalance.refundDueOf(pair[0])));
+        assertEquals(InvoiceStatus.CANCELLED, pair[1].getStatus());
+        // The refusal keeps the credit: no rollback, or every retry would fold and refuse again.
+        org.springframework.transaction.annotation.Transactional tx = BillingInvoiceServiceImpl.class.getMethod(
+                "recordStaffPayment", UUID.class, com.example.hms.payload.dto.StaffPaymentRequestDTO.class, UUID.class,
+                Locale.class)
+            .getAnnotation(org.springframework.transaction.annotation.Transactional.class);
+        assertEquals(List.of(refused.getClass()), List.of(tx.noRollbackFor()));
+    }
+
+    private PaymentTransaction pendingOn(BillingInvoice visit, String amount) {
+        PaymentTransaction row = PaymentTransaction.builder().invoice(visit).amount(new BigDecimal(amount))
+            .status(PaymentStatus.PENDING).build();
+        row.setId(UUID.randomUUID());
+        when(invoiceRepository.findLockedById(visit.getId())).thenReturn(Optional.of(visit));
+        when(paymentTransactionRepository.findByIdAndInvoice_Id(row.getId(), visit.getId())).thenReturn(Optional.of(row));
+        return row;
+    }
+
+    @Test
+    void rejectingTheDeclaration_lets_theCopayWaitingForItFold_D1466() {
+        BillingInvoice[] pair = issuedVisitOf("2000");
+        PaymentTransaction row = pendingOn(pair[0], "500");
+        when(paymentTransactionRepository.transitionStatus(any(), any(), any(), any())).thenReturn(1);
+
+        billingInvoiceService.rejectPayment(pair[0].getId(), row.getId(), "Non reçu", UUID.randomUUID(), Locale.ENGLISH);
+
+        assertEquals(InvoiceStatus.PAID, pair[0].getStatus());
+        assertEquals(0, new BigDecimal("500").compareTo(com.example.hms.utility.InvoiceBalance.refundDueOf(pair[0])));
+    }
+
+    @Test
+    void confirmingADeclarationThatClearsTheVisit_stillCreditsTheCopay_allOfItToRefund_D1466() {
+        BillingInvoice[] pair = issuedVisitOf("2000");
+        PaymentTransaction row = pendingOn(pair[0], "2000");
+        when(paymentTransactionRepository.transitionStatus(any(), any(), any(), any())).thenReturn(1);
+
+        billingInvoiceService.confirmPayment(pair[0].getId(), row.getId(), UUID.randomUUID(), Locale.ENGLISH);
+
+        assertEquals(InvoiceStatus.CANCELLED, pair[1].getStatus());
+        assertEquals(0, new BigDecimal("2500").compareTo(com.example.hms.utility.InvoiceBalance.refundDueOf(pair[0])));
+    }
 }

@@ -62,7 +62,9 @@ public class BillingInvoiceRequestDTO {
      * The amount of an invoice with no lines. Once the invoice has lines the
      * total is their sum and this is ignored (QA D72).
      */
-    @Digits(integer = 10, fraction = 2, message = "{billing.amount.tooLarge}")
+    // QA D1483: too large and too precise are two reasons; the digit count only bounds what is parsed.
+    @jakarta.validation.constraints.DecimalMax(value = "9999999999.99", message = "{billing.amount.tooLarge}")
+    @Digits(integer = 30, fraction = 2, message = "{billing.payment.wholeAmountOnly}")
     @PositiveOrZero
     private BigDecimal totalAmount;
 
