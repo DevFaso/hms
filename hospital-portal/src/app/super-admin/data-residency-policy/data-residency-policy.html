@@ -55,7 +55,7 @@
                 {{ row.region }}
               </span>
               <span class="region-label">
-                {{ 'ORG_REGION.CODE.' + row.region | translate }}
+                {{ row.region | keyLabel: 'ORG_REGION.CODE.' }}
               </span>
             </td>
             <td>
@@ -101,7 +101,16 @@
     </table>
 
     @if (editing(); as edit) {
-      <div class="edit-panel" data-test="edit-panel">
+      <!-- QA D1230 class (round 24): the edit form closes on Escape as on
+           Cancel, asks before dropping typed values, takes the keyboard when
+           it opens and gives it back to the row's Edit. -->
+      <div
+        class="edit-panel"
+        data-test="edit-panel"
+        appInlineSubForm
+        #editForm="inlineSubForm"
+        (dismissed)="edit.busy || cancelEdit()"
+      >
         <h2>{{ 'REGION_POLICY.EDIT_TITLE' | translate: { region: edit.region } }}</h2>
 
         <label class="field">
@@ -162,6 +171,7 @@
           <p class="form-error">{{ edit.errorKey | translate }}</p>
         }
 
+        <app-inline-discard-ask [form]="editForm" />
         <div class="form-actions">
           <button type="button" class="cancel-btn" [disabled]="edit.busy" (click)="cancelEdit()">
             {{ 'COMMON.CANCEL' | translate }}

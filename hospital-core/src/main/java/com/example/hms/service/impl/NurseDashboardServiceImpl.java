@@ -5,6 +5,7 @@ import com.example.hms.mapper.PatientMapper;
 import com.example.hms.model.Patient;
 import com.example.hms.model.PatientHospitalRegistration;
 import com.example.hms.payload.dto.PatientResponseDTO;
+import com.example.hms.payload.dto.nurse.NursePatientNameRow;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.service.NurseDashboardService;
 import com.example.hms.service.PatientVitalSignService;
@@ -46,11 +47,39 @@ public class NurseDashboardServiceImpl implements NurseDashboardService {
             .toList();
     }
 
+    @Override
+    public List<PatientResponseDTO> getPatientNamesForNurse(UUID nurseUserId, UUID hospitalId) {
+        return registrationRepository.findActiveNamesForHospital(hospitalId).stream()
+            .filter(row -> matchesAssignment(row.readyByStaffId(), nurseUserId))
+            .sorted(Comparator.comparing(NursePatientNameRow::registrationDate,
+                Comparator.nullsLast(Comparator.reverseOrder())))
+            .map(NurseDashboardServiceImpl::nameOnly)
+            .toList();
+    }
+
+    /** The name {@link #enrichRegistration} shows: the live name first, the registration's copy as a fallback. */
+    private static PatientResponseDTO nameOnly(NursePatientNameRow row) {
+        String live = java.util.stream.Stream.of(row.firstName(), row.middleName(), row.lastName())
+            .filter(part -> part != null && !part.isBlank())
+            .map(String::trim)
+            .collect(java.util.stream.Collectors.joining(" "));
+        return PatientResponseDTO.builder()
+            .id(row.patientId())
+            .firstName(row.firstName())
+            .middleName(row.middleName())
+            .lastName(row.lastName())
+            .displayName(live.isEmpty() ? row.registrationName() : live)
+            .build();
+    }
+
     private boolean matchesAssignment(PatientHospitalRegistration registration, UUID nurseUserId) {
+        return matchesAssignment(registration.getReadyByStaffId(), nurseUserId);
+    }
+
+    private boolean matchesAssignment(UUID readyBy, UUID nurseUserId) {
         if (nurseUserId == null) {
             return true;
         }
-        UUID readyBy = registration.getReadyByStaffId();
         if (readyBy != null) {
             return nurseUserId.equals(readyBy);
         }
@@ -93,8 +122,9 @@ public class NurseDashboardServiceImpl implements NurseDashboardService {
         String patientFullName = Optional.ofNullable(patient)
             .map(Patient::getFullName)
             .orElse(null);
-        dto.setDisplayName(firstNonNull(trimToNull(registration.getPatientFullName()),
-            trimToNull(patientFullName),
+        // QA D1036 (sibling): the live name first, the registration's copy as a fallback.
+        dto.setDisplayName(firstNonNull(trimToNull(patientFullName),
+            trimToNull(registration.getPatientFullName()),
             dto.getPatientName()));
         dto.setRoom(firstNonNull(trimToNull(registration.getCurrentBed()), trimToNull(registration.getCurrentRoom())));
         dto.setBed(trimToNull(registration.getCurrentBed()));

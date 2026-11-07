@@ -26,6 +26,9 @@ import {
 import { ToastService } from '../../core/toast.service';
 import { currentLocale } from '../../shared/i18n/app-locale';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { blobRefusalReason } from '../../shared/blob-refusal';
+import { DashPipe } from '../../shared/pipes/dash.pipe';
+import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
 
 /** Same order as the patient's own upload form; labels reuse its keys. */
 export const DOCUMENT_TYPE_OPTIONS: { value: PatientDocumentType; labelKey: string }[] = [
@@ -37,6 +40,8 @@ export const DOCUMENT_TYPE_OPTIONS: { value: PatientDocumentType; labelKey: stri
   { value: 'INSURANCE_DOCUMENT', labelKey: 'PORTAL.DOCUMENTS.TYPE_INSURANCE_DOCUMENT' },
   { value: 'INVOICE', labelKey: 'PORTAL.DOCUMENTS.TYPE_INVOICE' },
   { value: 'IMMUNIZATION_RECORD', labelKey: 'PORTAL.DOCUMENTS.TYPE_IMMUNIZATION_RECORD' },
+  // QA D961: certificates a doctor issued from a visit.
+  { value: 'MEDICAL_CERTIFICATE', labelKey: 'PORTAL.DOCUMENTS.TYPE_MEDICAL_CERTIFICATE' },
   { value: 'OTHER', labelKey: 'PORTAL.DOCUMENTS.TYPE_OTHER' },
 ];
 
@@ -63,7 +68,7 @@ type ListOutcome = { ok: true; page: PatientDocumentPage } | { ok: false; messag
 @Component({
   selector: 'app-documents-tab',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule],
+  imports: [DateTimePipe, DashPipe, ServerTimePipe, CommonModule, FormsModule, TranslateModule],
   templateUrl: './documents-tab.component.html',
   styleUrl: './documents-tab.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -190,9 +195,12 @@ export class DocumentsTabComponent implements OnInit, OnChanges {
         // Defer revoke so Safari/WebKit has time to start reading the blob.
         setTimeout(() => URL.revokeObjectURL(url), 0);
       },
-      error: () => {
+      error: (err: unknown) => {
         this.downloading.set(null);
-        this.toast.error(this.translate.instant('PATIENT_DOCUMENTS.DOWNLOAD_FAILED'));
+        // QA D1184: a file the disk no longer holds says so, in the reader's language.
+        void blobRefusalReason(err).then((reason) =>
+          this.toast.error(reason ?? this.translate.instant('PATIENT_DOCUMENTS.DOWNLOAD_FAILED')),
+        );
       },
     });
   }

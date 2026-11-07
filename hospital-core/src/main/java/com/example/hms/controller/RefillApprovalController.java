@@ -74,13 +74,15 @@ public class RefillApprovalController {
     }
 
     @Operation(summary = "Reject a refill request",
-            description = "Marks the request DENIED and notifies the patient. Provider notes (reason) recommended.")
+            description = "Marks the request DENIED and notifies the patient. Provider notes (the reason the "
+                    + "patient is told) are required.")
     @PutMapping("/{refillId}/reject")
     @PreAuthorize(PROVIDER_ROLES)
     public ResponseEntity<ApiResponseWrapper<MedicationRefillResponseDTO>> reject(
             Authentication auth,
             @PathVariable UUID refillId,
-            @Valid @RequestBody(required = false) RefillDecisionRequestDTO decision) {
+            @org.springframework.validation.annotation.Validated({jakarta.validation.groups.Default.class,
+                com.example.hms.validation.OnRefusal.class}) @RequestBody RefillDecisionRequestDTO decision) {
         MedicationRefillResponseDTO result = service.reject(auth, refillId, decision);
         return ResponseEntity.ok(ApiResponseWrapper.success(result));
     }
@@ -94,7 +96,8 @@ public class RefillApprovalController {
     public ResponseEntity<ApiResponseWrapper<MedicationRefillResponseDTO>> pause(
             Authentication auth,
             @PathVariable UUID refillId,
-            @Valid @RequestBody RefillDecisionRequestDTO decision) {
+            @org.springframework.validation.annotation.Validated({jakarta.validation.groups.Default.class,
+                com.example.hms.validation.OnRefusal.class}) @RequestBody RefillDecisionRequestDTO decision) {
         MedicationRefillResponseDTO result = service.pause(auth, refillId, decision);
         return ResponseEntity.ok(ApiResponseWrapper.success(result));
     }

@@ -21,6 +21,12 @@ public interface NursingNoteRepository extends JpaRepository<NursingNote, UUID> 
     /** E9 #59 — the readable set from {@code RecordAccessPolicy.readableHospitalIds}. */
     List<NursingNote> findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(UUID patientId, Collection<UUID> hospitalIds);
 
+    /**
+     * QA D1076: the chart review's global (super-admin, no acting hospital) read.
+     * QA D1380: every note (was the 50 newest), so the Notes tab counts them all.
+     */
+    List<NursingNote> findByPatient_IdOrderByCreatedAtDesc(UUID patientId);
+
     @EntityGraph(attributePaths = {"educationEntries", "interventionEntries", "addenda"})
     Optional<NursingNote> findByIdAndHospital_Id(UUID id, UUID hospitalId);
 }

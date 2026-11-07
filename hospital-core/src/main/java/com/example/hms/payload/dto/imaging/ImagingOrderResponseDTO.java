@@ -95,6 +95,11 @@ public class ImagingOrderResponseDTO {
     private String orderingProviderNpi;
 
     private UUID orderingProviderUserId;
+    /**
+     * QA D1081 (D995 class): the user the server's author check compares the caller with, so a
+     * list offers the author-only actions (cancel, edit, sign) on this row only to its author.
+     */
+    private java.util.UUID authorUserId;
 
     private LocalDateTime providerSignedAt;
 

@@ -1,4 +1,15 @@
-<div class="chart-container">
+<!-- QA D1297 (round 28): a row action that leaves with its list (a diagnosis
+     deleted, an allergy deactivated) gives focus to the active tab, a named
+     control, not to this anonymous container. -->
+<div class="chart-container" data-focus-return="app-patient-chart .chart-tab.active">
+  <!-- QA D1005: the ongoing pregnancy is read on every tab of the chart. -->
+  @if (pregnancy(); as pg) {
+    <p class="chart-pregnancy" data-testid="chart-pregnancy">
+      <span class="material-symbols-outlined" aria-hidden="true">pregnant_woman</span>
+      {{ 'CHART.PREGNANCY' | translate: { weeks: pg.weeks, days: pg.days } }} ·
+      {{ 'MATERNITY.EDD' | translate }} {{ pg.dueDate | serverTime | date: 'mediumDate' }}
+    </p>
+  }
   <div class="chart-tabs">
     @if (canViewAllergies()) {
       <button
@@ -108,6 +119,27 @@
                 <td>{{ a.onsetDate ? (a.onsetDate | serverTime | date: 'mediumDate') : '—' }}</td>
                 <td>
                   {{ (a.active === false ? 'COMMON.INACTIVE' : 'COMMON.ACTIVE') | translate }}
+                  <!-- QA D1242: the reason the server requires is shown where the row is read. -->
+                  @if (a.active === false && (a.deactivationReason || a.deactivatedAt)) {
+                    <div
+                      class="deactivation-note"
+                      [attr.data-testid]="'allergy-deactivation-' + a.id"
+                    >
+                      @if (a.deactivatedAt) {
+                        <span>{{ a.deactivatedAt | serverTime | date: 'short' }}</span>
+                      }
+                      @if (a.deactivationReason) {
+                        <!-- QA D1288: the time and the reason are two spans; the whitespace
+                             between elements is dropped, so they are spaced and joined by a dot. -->
+                        {{ ' '
+                        }}<span
+                          >{{ a.deactivatedAt ? '· ' : ''
+                          }}{{ 'CHART.DEACTIVATION_REASON' | translate
+                          }}{{ 'COMMON.COLON' | translate }} {{ a.deactivationReason }}</span
+                        >
+                      }
+                    </div>
+                  }
                 </td>
                 <td class="hospital-cell">{{ a.hospitalName || '—' }}</td>
                 @if (canEditAllergies()) {
@@ -119,6 +151,7 @@
                           class="action-link"
                           (click)="openEditAllergy(a)"
                           [title]="'COMMON.EDIT' | translate"
+                          [attr.aria-label]="'COMMON.EDIT' | translate"
                         >
                           <span class="material-symbols-outlined">edit</span>
                         </button>
@@ -128,6 +161,7 @@
                             class="action-link delete-link"
                             (click)="openDeactivateAllergy(a)"
                             [title]="'CHART.DEACTIVATE' | translate"
+                            [attr.aria-label]="'CHART.DEACTIVATE' | translate"
                           >
                             <span class="material-symbols-outlined">block</span>
                           </button>
@@ -179,7 +213,7 @@
               <th scope="col">{{ 'CHART.ONSET' | translate }}</th>
               <th scope="col">{{ 'CHART.CHRONIC' | translate }}</th>
               <th scope="col">{{ 'HOSPITAL_SCOPE.HOSPITAL_COLUMN' | translate }}</th>
-              @if (canEditProblems()) {
+              @if (showProblemActions()) {
                 <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
               }
             </tr>
@@ -207,25 +241,31 @@
                 <td>{{ p.onsetDate ? (p.onsetDate | serverTime | date: 'mediumDate') : '—' }}</td>
                 <td>{{ (p.chronic ? 'COMMON.YES' : 'COMMON.NO') | translate }}</td>
                 <td class="hospital-cell">{{ p.hospitalName || '—' }}</td>
-                @if (canEditProblems()) {
+                @if (showProblemActions()) {
                   <td>
                     <div class="action-group">
-                      <button
-                        type="button"
-                        class="action-link"
-                        (click)="openEditProblem(p)"
-                        [title]="'COMMON.EDIT' | translate"
-                      >
-                        <span class="material-symbols-outlined">edit</span>
-                      </button>
-                      <button
-                        type="button"
-                        class="action-link delete-link"
-                        (click)="openDeleteProblem(p)"
-                        [title]="'COMMON.DELETE' | translate"
-                      >
-                        <span class="material-symbols-outlined">delete</span>
-                      </button>
+                      @if (canEditProblems()) {
+                        <button
+                          type="button"
+                          class="action-link"
+                          (click)="openEditProblem(p)"
+                          [title]="'COMMON.EDIT' | translate"
+                          [attr.aria-label]="'COMMON.EDIT' | translate"
+                        >
+                          <span class="material-symbols-outlined">edit</span>
+                        </button>
+                      }
+                      @if (canRemoveProblems()) {
+                        <button
+                          type="button"
+                          class="action-link delete-link"
+                          (click)="openDeleteProblem(p)"
+                          [title]="'COMMON.DELETE' | translate"
+                          [attr.aria-label]="'COMMON.DELETE' | translate"
+                        >
+                          <span class="material-symbols-outlined">delete</span>
+                        </button>
+                      }
                     </div>
                   </td>
                 }
@@ -262,8 +302,8 @@
           <div class="update-card" [class.foreign-row]="isForeignRow(u)">
             <button type="button" class="update-header" (click)="toggleUpdate(u)">
               <span class="update-version">v{{ u.versionNumber }}</span>
-              <span class="update-reason">{{ u.updateReason }}</span>
-              <span class="update-meta">
+              {{ ' ' }}<span class="update-reason">{{ u.updateReason }}</span> {{ ' '
+              }}<span class="update-meta">
                 {{ u.recordedByName }} — {{ u.recordedAt | serverTime | date: 'short' }}
                 @if (u.hospitalName) {
                   <span class="update-hospital">· {{ u.hospitalName }}</span>
@@ -535,12 +575,20 @@
                     </td>
                   } @else {
                     <td>
-                      <span class="lab-value">{{ r.value || '—' }}</span>
+                      <!-- Round 19 (D1095/D1106 merge): Angular drops whitespace-only text
+                           between elements, so the spaces between value, unit and the
+                           correction badge are real text, not markup indentation
+                           ("9,2 g/dL Corrigé", never "9,2g/dLCorrigé"). -->
+                      <span class="lab-value">{{ r.value | labValue }}</span>
                       @if (r.unit) {
-                        <span class="lab-unit">{{ r.unit }}</span>
+                        <span class="lab-unit">{{ ' ' + r.unit }}</span>
+                      }
+                      <!-- QA D1016 (round 18): the chart's own Labs table marks a correction -->
+                      @if (r.corrected) {
+                        {{ ' ' }}<app-lab-correction-badge [corrected]="r.corrected" />
                       }
                     </td>
-                    <td>{{ r.referenceRange || '—' }}</td>
+                    <td>{{ r.referenceRange | labRange }}</td>
                   }
                   <td>
                     <span [class]="labStatusClass(r)">{{ labStatusKey(r) | translate }}</span>
@@ -569,7 +617,8 @@
       <div class="loading-state"><div class="spinner"></div></div>
     } @else if (timeline(); as tl) {
       <p class="timeline-meta">
-        {{ 'CHART.TIMELINE_REASON' | translate }}: {{ tl.accessReason }} — {{ tl.totalEntries }}
+        {{ 'CHART.TIMELINE_REASON' | translate }}{{ 'COMMON.COLON' | translate }}
+        {{ tl.accessReason }} — {{ tl.totalEntries }}
         {{ 'CHART.ENTRIES' | translate }}
       </p>
       <ul class="timeline-list">
@@ -579,10 +628,19 @@
               timelineIcon(e.category)
             }}</span>
             <div>
-              <div class="timeline-summary">{{ e.summary }}</div>
+              <div class="timeline-summary">
+                {{ e.summary }}
+                <!-- QA D1423: a deactivated allergy stays in the history, marked as such. -->
+                @if (e.category === 'ALLERGY' && e.metadata?.active === false) {
+                  <span class="provenance-badge" data-testid="timeline-allergy-inactive">{{
+                    'COMMON.INACTIVE' | translate
+                  }}</span>
+                }
+              </div>
               <div class="timeline-date">
-                {{ e.category | enumLabel: 'timelineCategory' }} ·
-                {{ e.occurredAt | serverTime | date: 'medium' }}
+                @let kind = timelineKind(e);
+                {{ kind.value | enumLabel: kind.domain }} ·
+                {{ e.occurredAt | serverTime | dateTime }}
               </div>
               <!--
                 E8 #50 — hospital, clinician and origin on the row itself, never
@@ -596,6 +654,13 @@
                     {{ hospital }}
                   </span>
                 }
+                @if (entryRecordedAt(e); as recordedAt) {
+                  <!-- QA D1113: a transcribed dose was recorded here, not given here -->
+                  <span class="provenance-hospital" data-testid="timeline-transcribed">
+                    <span class="material-symbols-outlined" aria-hidden="true">edit_note</span>
+                    {{ 'CHART.TIMELINE_TRANSCRIBED_AT' | translate: { hospital: recordedAt } }}
+                  </span>
+                }
                 @if (entryClinician(e); as clinician) {
                   <span class="provenance-clinician">
                     <span class="material-symbols-outlined" aria-hidden="true">person</span>
@@ -603,7 +668,8 @@
                   </span>
                 }
                 @if (isForeignEntry(e)) {
-                  <span class="provenance-badge">{{
+                  {{ ' '
+                  }}<span class="provenance-badge">{{
                     'CHART.TIMELINE_FROM_OTHER_HOSPITAL' | translate
                   }}</span>
                 }
@@ -619,6 +685,17 @@
         <p class="labs-hint" role="note">{{ 'CHART.RECORDS_WITHHELD' | translate }}</p>
       }
       <!-- E9 #64 — what D3 withheld from this read, never a silent gap. -->
+      <!-- QA D1380: every entry is reachable, counted by the server. -->
+      <app-range-pager
+        testId="timeline-pager"
+        [label]="'CHART.ENTRIES' | translate"
+        [page]="tl.page ?? 0"
+        [size]="tl.pageSize ?? tl.entries.length"
+        [total]="tl.totalEntries"
+        [shown]="tl.entries.length"
+        [busy]="timelineLoading()"
+        (pageChange)="loadTimelinePage($event)"
+      />
       <app-restricted-rows
         [rows]="tl.restrictedRows ?? []"
         (openWithReason)="openRestricted.emit()"
@@ -645,22 +722,32 @@
   >
     <div
       class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="chart-dialog-1-title"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown)="$event.stopPropagation()"
+      appDialogFocus
+      (dialogDismiss)="closeAllergyModal()"
     >
       <div class="modal-header">
-        <h2>
+        <h2 id="chart-dialog-1-title">
           {{ (editingAllergyId() ? 'CHART.EDIT_ALLERGY' : 'CHART.ADD_ALLERGY') | translate }}
         </h2>
-        <button type="button" class="modal-close" (click)="closeAllergyModal()">
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          type="button"
+          class="modal-close"
+          (click)="closeAllergyModal()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
       <div class="modal-body">
         <div class="field">
           <label for="allergy-name">{{ 'CHART.ALLERGEN' | translate }} *</label>
-          <input id="allergy-name" type="text" [(ngModel)]="allergyForm.allergenDisplay" />
+          <input required id="allergy-name" type="text" [(ngModel)]="allergyForm.allergenDisplay" />
         </div>
         <div class="form-row">
           <div class="field">
@@ -709,6 +796,8 @@
           {{ 'COMMON.CANCEL' | translate }}
         </button>
         <button
+          appSubmitGuard
+          submitGuardRequired
           type="button"
           class="btn-primary"
           (click)="submitAllergy()"
@@ -731,13 +820,23 @@
   >
     <div
       class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="chart-dialog-2-title"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown)="$event.stopPropagation()"
+      appDialogFocus
+      (dialogDismiss)="closeDeactivateAllergy()"
     >
       <div class="modal-header">
-        <h2>{{ 'CHART.DEACTIVATE_ALLERGY' | translate }}</h2>
-        <button type="button" class="modal-close" (click)="closeDeactivateAllergy()">
+        <h2 id="chart-dialog-2-title">{{ 'CHART.DEACTIVATE_ALLERGY' | translate }}</h2>
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          type="button"
+          class="modal-close"
+          (click)="closeDeactivateAllergy()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
@@ -747,14 +846,25 @@
         </p>
         <div class="field">
           <label for="deactivate-reason">{{ 'CHART.REASON' | translate }} *</label>
-          <textarea id="deactivate-reason" rows="3" [(ngModel)]="deactivateReason"></textarea>
+          <textarea
+            required
+            id="deactivate-reason"
+            rows="3"
+            [(ngModel)]="deactivateReason"
+          ></textarea>
         </div>
       </div>
       <div class="modal-actions">
         <button type="button" class="btn-secondary" (click)="closeDeactivateAllergy()">
           {{ 'COMMON.CANCEL' | translate }}
         </button>
-        <button type="button" class="btn-danger" (click)="submitDeactivateAllergy()">
+        <button
+          appSubmitGuard
+          submitGuardRequired
+          type="button"
+          class="btn-danger"
+          (click)="submitDeactivateAllergy()"
+        >
           {{ 'CHART.DEACTIVATE' | translate }}
         </button>
       </div>
@@ -772,22 +882,32 @@
   >
     <div
       class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="chart-dialog-3-title"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown)="$event.stopPropagation()"
+      appDialogFocus
+      (dialogDismiss)="closeProblemModal()"
     >
       <div class="modal-header">
-        <h2>
+        <h2 id="chart-dialog-3-title">
           {{ (editingProblemId() ? 'CHART.EDIT_PROBLEM' : 'CHART.ADD_PROBLEM') | translate }}
         </h2>
-        <button type="button" class="modal-close" (click)="closeProblemModal()">
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          type="button"
+          class="modal-close"
+          (click)="closeProblemModal()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
       <div class="modal-body">
         <div class="field">
           <label for="problem-name">{{ 'CHART.PROBLEM' | translate }} *</label>
-          <input id="problem-name" type="text" [(ngModel)]="problemForm.problemDisplay" />
+          <input required id="problem-name" type="text" [(ngModel)]="problemForm.problemDisplay" />
         </div>
         <div class="form-row">
           <div class="field">
@@ -836,6 +956,8 @@
           {{ 'COMMON.CANCEL' | translate }}
         </button>
         <button
+          appSubmitGuard
+          submitGuardRequired
           type="button"
           class="btn-primary"
           (click)="submitProblem()"
@@ -858,13 +980,23 @@
   >
     <div
       class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="chart-dialog-4-title"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown)="$event.stopPropagation()"
+      appDialogFocus
+      (dialogDismiss)="closeDeleteProblem()"
     >
       <div class="modal-header">
-        <h2>{{ 'CHART.DELETE_PROBLEM' | translate }}</h2>
-        <button type="button" class="modal-close" (click)="closeDeleteProblem()">
+        <h2 id="chart-dialog-4-title">{{ 'CHART.DELETE_PROBLEM' | translate }}</h2>
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          type="button"
+          class="modal-close"
+          (click)="closeDeleteProblem()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
@@ -875,6 +1007,7 @@
         <div class="field">
           <label for="problem-delete-reason">{{ 'CHART.REASON' | translate }} *</label>
           <textarea
+            required
             id="problem-delete-reason"
             rows="3"
             [(ngModel)]="problemDeleteReason"
@@ -885,7 +1018,13 @@
         <button type="button" class="btn-secondary" (click)="closeDeleteProblem()">
           {{ 'COMMON.CANCEL' | translate }}
         </button>
-        <button type="button" class="btn-danger" (click)="submitDeleteProblem()">
+        <button
+          appSubmitGuard
+          submitGuardRequired
+          type="button"
+          class="btn-danger"
+          (click)="submitDeleteProblem()"
+        >
           {{ 'COMMON.DELETE' | translate }}
         </button>
       </div>
@@ -903,20 +1042,30 @@
   >
     <div
       class="modal modal-lg"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="chart-dialog-5-title"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown)="$event.stopPropagation()"
+      appDialogFocus
+      (dialogDismiss)="closeUpdateModal()"
     >
       <div class="modal-header">
-        <h2>{{ 'CHART.NEW_UPDATE' | translate }}</h2>
-        <button type="button" class="modal-close" (click)="closeUpdateModal()">
+        <h2 id="chart-dialog-5-title">{{ 'CHART.NEW_UPDATE' | translate }}</h2>
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          type="button"
+          class="modal-close"
+          (click)="closeUpdateModal()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
       <div class="modal-body">
         <div class="field">
           <label for="update-reason">{{ 'CHART.UPDATE_REASON' | translate }} *</label>
-          <input id="update-reason" type="text" [(ngModel)]="updateForm.updateReason" />
+          <input required id="update-reason" type="text" [(ngModel)]="updateForm.updateReason" />
         </div>
         <div class="field">
           <label for="update-summary">{{ 'CHART.SUMMARY' | translate }}</label>
@@ -948,11 +1097,13 @@
               <input
                 type="text"
                 [placeholder]="'CHART.SECTION_DISPLAY' | translate"
+                [attr.aria-label]="'CHART.SECTION_DISPLAY' | translate"
                 [(ngModel)]="s.display"
               />
               <input
                 type="text"
                 [placeholder]="'CHART.SECTION_NARRATIVE' | translate"
+                [attr.aria-label]="'CHART.SECTION_NARRATIVE' | translate"
                 [(ngModel)]="s.narrative"
               />
               <button
@@ -972,6 +1123,8 @@
           {{ 'COMMON.CANCEL' | translate }}
         </button>
         <button
+          appSubmitGuard
+          submitGuardRequired
           type="button"
           class="btn-primary"
           (click)="submitUpdate()"
@@ -994,13 +1147,23 @@
   >
     <div
       class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="chart-dialog-6-title"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown)="$event.stopPropagation()"
+      appDialogFocus
+      (dialogDismiss)="closeTimelineReason()"
     >
       <div class="modal-header">
-        <h2>{{ 'CHART.TIMELINE_ACCESS' | translate }}</h2>
-        <button type="button" class="modal-close" (click)="closeTimelineReason()">
+        <h2 id="chart-dialog-6-title">{{ 'CHART.TIMELINE_ACCESS' | translate }}</h2>
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          type="button"
+          class="modal-close"
+          (click)="closeTimelineReason()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
@@ -1008,14 +1171,20 @@
         <p>{{ 'CHART.TIMELINE_ACCESS_HINT' | translate }}</p>
         <div class="field">
           <label for="timeline-reason">{{ 'CHART.REASON' | translate }} *</label>
-          <textarea id="timeline-reason" rows="3" [(ngModel)]="timelineReason"></textarea>
+          <textarea required id="timeline-reason" rows="3" [(ngModel)]="timelineReason"></textarea>
         </div>
       </div>
       <div class="modal-actions">
         <button type="button" class="btn-secondary" (click)="closeTimelineReason()">
           {{ 'COMMON.CANCEL' | translate }}
         </button>
-        <button type="button" class="btn-primary" (click)="submitTimelineReason()">
+        <button
+          appSubmitGuard
+          submitGuardRequired
+          type="button"
+          class="btn-primary"
+          (click)="submitTimelineReason()"
+        >
           {{ 'CHART.LOAD_TIMELINE' | translate }}
         </button>
       </div>

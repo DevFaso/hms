@@ -2,15 +2,22 @@ package com.example.hms.service.pharmacy;
 
 import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.model.Hospital;
 import com.example.hms.model.Prescription;
 import com.example.hms.model.Staff;
+import com.example.hms.model.medication.MedicationCatalogItem;
+import com.example.hms.repository.MedicationCatalogItemRepository;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDateTime;
+import java.util.Optional;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * The controlled-substance safeguards, exercised directly (P2 #15).
@@ -25,7 +32,31 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class ControlledSubstanceGateTest {
 
-    private final ControlledSubstanceGuard guard = new ControlledSubstanceGuard();
+    private static final UUID HOSPITAL = UUID.randomUUID();
+    private static final UUID MORPHINE_ITEM = UUID.randomUUID();
+
+    private final MedicationCatalogItemRepository catalog = mock(MedicationCatalogItemRepository.class);
+    private final ControlledSubstanceGuard guard =
+        new ControlledSubstanceGuard(new PrescriptionControlledResolver(catalog));
+
+    /**
+     * QA D922 (round-18 merge): morphine picked from a catalogue item marked
+     * controlled, with the prescriber's tick left unset.
+     */
+    private Prescription catalogueControlledWithoutTick(PrescriptionStatus status) {
+        MedicationCatalogItem morphine = new MedicationCatalogItem();
+        morphine.setControlled(true);
+        when(catalog.findByIdAndHospital_Id(MORPHINE_ITEM, HOSPITAL)).thenReturn(Optional.of(morphine));
+        Hospital hospital = new Hospital();
+        hospital.setId(HOSPITAL);
+        Prescription rx = new Prescription();
+        rx.setId(UUID.randomUUID());
+        rx.setHospital(hospital);
+        rx.setMedicationCatalogItemId(MORPHINE_ITEM);
+        rx.setControlledSubstance(false);
+        rx.setStatus(status);
+        return rx;
+    }
 
     private static Prescription controlled(PrescriptionStatus status) {
         Prescription rx = new Prescription();
@@ -45,7 +76,7 @@ class ControlledSubstanceGateTest {
 
         assertThatThrownBy(() -> guard.requireDispensable(rx))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("CONTROLLED_SUBSTANCE");
+            .extracting("messageKey").isEqualTo("prescription.safeguard.CONTROLLED_SUBSTANCE.dispense");
     }
 
     @Test
@@ -54,6 +85,41 @@ class ControlledSubstanceGateTest {
         rx.setTwoFactorVerifiedAt(LocalDateTime.now());
 
         assertThatCode(() -> guard.requireDispensable(rx)).doesNotThrowAnyException();
+    }
+
+    /**
+     * The user's rule (QA D922, 2026-10-28): "a drug the catalogue marks as
+     * controlled is always treated as controlled, whatever the prescriber
+     * ticked". Before the round-18 merge the dispense gate read the tick
+     * alone, so a catalogue-controlled order signed without the prescriber's
+     * proof was handed over as an ordinary drug.
+     */
+    @Test
+    void dispenseRefusesACatalogueControlledOrderWithoutTwoFactorWhateverTheTick() {
+        Prescription rx = catalogueControlledWithoutTick(PrescriptionStatus.SIGNED);
+
+        assertThatThrownBy(() -> guard.requireDispensable(rx))
+            .isInstanceOf(BusinessException.class)
+            .extracting("messageKey").isEqualTo("prescription.safeguard.CONTROLLED_SUBSTANCE.dispense");
+    }
+
+    @Test
+    void dispenseAllowsACatalogueControlledOrderOnceThePrescriberVerified() {
+        Prescription rx = catalogueControlledWithoutTick(PrescriptionStatus.SIGNED);
+        rx.setTwoFactorVerifiedAt(LocalDateTime.now());
+
+        assertThatCode(() -> guard.requireDispensable(rx)).doesNotThrowAnyException();
+    }
+
+    @Test
+    void aCatalogueControlledOrderCannotReachAnActionableStatusWithoutTwoFactor() {
+        Prescription rx = catalogueControlledWithoutTick(PrescriptionStatus.DRAFT);
+
+        assertThatThrownBy(() -> guard.requireSafeguardsFor(rx, PrescriptionStatus.TRANSMITTED))
+            .isInstanceOf(BusinessException.class)
+            .extracting("messageKey").isEqualTo("prescription.safeguard.CONTROLLED_SUBSTANCE.status");
+        assertThatCode(() -> guard.requireSafeguardsFor(rx, PrescriptionStatus.DRAFT))
+            .doesNotThrowAnyException();
     }
 
     @Test
@@ -65,7 +131,7 @@ class ControlledSubstanceGateTest {
 
         assertThatThrownBy(() -> guard.requireDispensable(rx))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("COSIGN_REQUIRED");
+            .extracting("messageKey").isEqualTo("prescription.safeguard.COSIGN_REQUIRED.dispense");
     }
 
     @Test
@@ -114,7 +180,7 @@ class ControlledSubstanceGateTest {
 
         assertThatThrownBy(() -> guard.requireSafeguardsFor(rx, PrescriptionStatus.SIGNED))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("CONTROLLED_SUBSTANCE");
+            .extracting("messageKey").isEqualTo("prescription.safeguard.CONTROLLED_SUBSTANCE.status");
     }
 
     @Test
@@ -125,7 +191,7 @@ class ControlledSubstanceGateTest {
 
         assertThatThrownBy(() -> guard.requireSafeguardsFor(rx, PrescriptionStatus.TRANSMITTED))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("CONTROLLED_SUBSTANCE");
+            .extracting("messageKey").isEqualTo("prescription.safeguard.CONTROLLED_SUBSTANCE.status");
     }
 
     @Test
@@ -134,7 +200,8 @@ class ControlledSubstanceGateTest {
 
         assertThatThrownBy(() -> guard.requireSafeguardsFor(rx, PrescriptionStatus.SIGNED))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("SIGNED");
+            .extracting("args").asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.ARRAY)
+            .containsExactly(PrescriptionStatus.SIGNED.localizedLabel());
     }
 
     @Test
@@ -146,7 +213,7 @@ class ControlledSubstanceGateTest {
 
         assertThatThrownBy(() -> guard.requireSafeguardsFor(rx, PrescriptionStatus.SIGNED))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("COSIGN_REQUIRED");
+            .extracting("messageKey").isEqualTo("prescription.safeguard.COSIGN_REQUIRED.status");
     }
 
     @Test
@@ -162,5 +229,64 @@ class ControlledSubstanceGateTest {
 
         assertThatCode(() -> guard.requireSafeguardsFor(rx, PrescriptionStatus.SIGNED))
             .doesNotThrowAnyException();
+    }
+
+    // ── QA D1097 (round 19): withdrawing is never gated by the step-up ─────
+
+    /**
+     * The QA call: an unsigned morphine order stuck in PENDING_SIGNATURE
+     * because Annulée asked for the signature's two-factor proof. A withdrawal
+     * gives nobody leave to act on the order, so neither safeguard applies.
+     */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = PrescriptionStatus.class, names = {"CANCELLED", "DISCONTINUED"})
+    void aControlledOrCosignOrderMayBeWithdrawnWithoutItsSafeguards(PrescriptionStatus withdrawal) {
+        Prescription rx = controlled(PrescriptionStatus.PENDING_SIGNATURE);
+        rx.setRequiresCosign(true);
+        assertThatCode(() -> guard.requireSafeguardsFor(rx, withdrawal)).doesNotThrowAnyException();
+        Prescription catalogue = catalogueControlledWithoutTick(PrescriptionStatus.DRAFT);
+        assertThatCode(() -> guard.requireSafeguardsFor(catalogue, withdrawal)).doesNotThrowAnyException();
+    }
+
+    /** Every status but the unsigned and the withdrawn ones still needs the proof (the signature's gate is kept). */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(PrescriptionStatus.class)
+    void onlyTheActionableStatusesNeedTheProof(PrescriptionStatus target) {
+        Prescription rx = controlled(PrescriptionStatus.DRAFT);
+        boolean actionable = target != PrescriptionStatus.DRAFT && target != PrescriptionStatus.PENDING_SIGNATURE
+            && target != PrescriptionStatus.CANCELLED && target != PrescriptionStatus.DISCONTINUED;
+        assertThat(ControlledSubstanceGuard.isActionable(target)).isEqualTo(actionable);
+        if (actionable) {
+            assertThatThrownBy(() -> guard.requireSafeguardsFor(rx, target))
+                .isInstanceOf(BusinessException.class)
+                .extracting("messageKey").isEqualTo("prescription.safeguard.CONTROLLED_SUBSTANCE.status");
+        } else {
+            assertThatCode(() -> guard.requireSafeguardsFor(rx, target)).doesNotThrowAnyException();
+        }
+    }
+
+    // ── QA D1096 (round 19): the paediatric dose review at the counter ─────
+
+    @Test
+    void dispenseRefusesAnOrderWhoseDoseReviewIsNotRecorded() {
+        Prescription rx = new Prescription();
+        rx.setId(UUID.randomUUID());
+        rx.setStatus(PrescriptionStatus.SIGNED);
+        rx.setPediatricDoseReviewRequired(true);
+
+        assertThatThrownBy(() -> guard.requireDispensable(rx))
+            .isInstanceOf(BusinessException.class)
+            .extracting("messageKey").isEqualTo("prescription.safeguard.PEDIATRIC_DOSE_REVIEW.dispense");
+    }
+
+    @Test
+    void dispenseAllowsAnOrderOnceItsDoseReviewIsRecorded() {
+        Prescription rx = new Prescription();
+        rx.setId(UUID.randomUUID());
+        rx.setStatus(PrescriptionStatus.SIGNED);
+        rx.setPediatricDoseReviewRequired(true);
+        rx.setPediatricDoseReviewedAt(LocalDateTime.now());
+
+        assertThatCode(() -> guard.requireDispensable(rx)).doesNotThrowAnyException();
     }
 }

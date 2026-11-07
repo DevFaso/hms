@@ -1,4 +1,14 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import { InlineDiscardAskComponent } from '../shared/a11y/inline-discard-ask.component';
+import { InlineSubFormDirective } from '../shared/a11y/inline-sub-form.directive';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  OnInit,
+  inject,
+  signal,
+} from '@angular/core';
+import { isOrderCancellable } from '../shared/order-lifecycle';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -26,7 +36,13 @@ import {
   withServerDateTimes,
 } from '../shared/date-utils';
 import { refusalReason } from '../shared/refusal-reason';
+import { AuthorshipService } from '../shared/authorship.service';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { blankFields, refuseFields } from '../shared/forms/invalid-fields';
+import { DateTimePipe } from '../shared/pipes/date-time.pipe';
+import { missingRequiredMessage } from '../shared/required-fields';
 type Worklist = 'all' | 'pending-consent' | ProcedureOrderStatus;
 
 /**
@@ -35,27 +51,42 @@ type Worklist = 'all' | 'pending-consent' | ProcedureOrderStatus;
  * (never GET-by-id) because HOSPITAL_ADMIN may list but not read single
  * orders on the backend.
  */
+/** The required fields of the order form (QA D1306). */
+const PROC_REQUIRED_IDS = ['proc-patient', 'proc-name', 'proc-indication'];
+/** Every field the order form may refuse. */
+const PROC_ORDER_IDS = [...PROC_REQUIRED_IDS, 'proc-scheduled'];
+/** The date of the schedule action. */
+const SCHEDULE_IDS = ['proc-schedule'];
+const PAST_DATE_KEY = 'PROCEDURES.PAST_DATE';
+
 @Component({
   selector: 'app-procedure-orders',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    DateTimePipe,
+    InlineDiscardAskComponent,
+    InlineSubFormDirective,
+    SubmitGuardDirective,
     ServerTimePipe,
     CommonModule,
     FormsModule,
     TranslateModule,
     PatientPickerComponent,
     EnumLabelPipe,
+    ModalDialogDirective,
   ],
   templateUrl: './procedure-orders.html',
   styleUrl: './procedure-orders.scss',
 })
 export class ProcedureOrdersComponent implements OnInit {
   private readonly orderService = inject(ProcedureOrderService);
+  private readonly authorship = inject(AuthorshipService);
   private readonly auth = inject(AuthService);
   private readonly roleContext = inject(RoleContextService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   private hospitalId: string | null = null;
 
@@ -67,6 +98,18 @@ export class ProcedureOrdersComponent implements OnInit {
   ]);
   /** Cancel = DOCTOR/SUPER_ADMIN only (no NURSE). */
   readonly canCancel = this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR', 'ROLE_SUPER_ADMIN']);
+
+  /**
+   * QA D1081: the ordering clinician cancels; a physician also ends a nurse's
+   * or a midwife's order (ProcedureOrderServiceImpl.requireCancelAuthor).
+   */
+  canCancelOrder(o: ProcedureOrderResponse): boolean {
+    return (
+      this.canCancel &&
+      isOrderCancellable(o.status) &&
+      (this.authorship.isAuthor(o) || o.authorIsPhysician === false)
+    );
+  }
 
   worklist = signal<Worklist>('all');
   readonly worklists: Worklist[] = [
@@ -216,14 +259,35 @@ export class ProcedureOrdersComponent implements OnInit {
 
   submitOrder(): void {
     const form = this.orderForm;
-    if (!form.patientId || !form.procedureName.trim() || !form.indication.trim()) {
-      this.toast.error(this.translate.instant('PROCEDURES.REQUIRED_FIELDS'));
+    // QA D1306 (round 28): every refusal marks its field, not only a toast.
+    const root = this.host.nativeElement;
+    const blank = blankFields(
+      {
+        'proc-patient': form.patientId,
+        'proc-name': form.procedureName,
+        'proc-indication': form.indication,
+      },
+      PROC_REQUIRED_IDS,
+    );
+    if (blank.length > 0) {
+      // QA D1358: name the blank fields, not a fixed list.
+      const message =
+        missingRequiredMessage(this.translate, [
+          { labelKey: 'PROCEDURES.PATIENT', value: form.patientId },
+          { labelKey: 'PROCEDURES.PROCEDURE', value: form.procedureName },
+          { labelKey: 'PROCEDURES.INDICATION', value: form.indication },
+        ]) ?? this.translate.instant('COMMON.SUBMIT_BLOCKED_REQUIRED');
+      refuseFields(root, blank, PROC_ORDER_IDS, this.translate.instant('COMMON.FIELD_REQUIRED'));
+      this.toast.error(message);
       return;
     }
     if (ProcedureOrdersComponent.isPastLocal(form.scheduledDatetime)) {
-      this.toast.error(this.translate.instant('PROCEDURES.PAST_DATE'));
+      const message = this.translate.instant(PAST_DATE_KEY);
+      refuseFields(root, ['proc-scheduled'], PROC_ORDER_IDS, message);
+      this.toast.error(message);
       return;
     }
+    refuseFields(root, [], PROC_ORDER_IDS, '');
     form.hospitalId = this.hospitalId ?? '';
     this.orderSaving.set(true);
     // #948 review: the datetime-local is the user's wall clock; the server keeps
@@ -279,9 +343,13 @@ export class ProcedureOrdersComponent implements OnInit {
     if (!order || !this.scheduleDatetime) return;
     // QA D857: 01/01/2020 was accepted and offered "Débuter la procédure".
     if (ProcedureOrdersComponent.isPastLocal(this.scheduleDatetime)) {
-      this.toast.error(this.translate.instant('PROCEDURES.PAST_DATE'));
+      // QA D1306 (round 28): the date is marked, not only a toast.
+      const message = this.translate.instant(PAST_DATE_KEY);
+      refuseFields(this.host.nativeElement, SCHEDULE_IDS, SCHEDULE_IDS, message);
+      this.toast.error(message);
       return;
     }
+    refuseFields(this.host.nativeElement, [], SCHEDULE_IDS, '');
     // Backend auto-promotes ORDERED→SCHEDULED; send the status explicitly so
     // rescheduling from POSTPONED also lands back on SCHEDULED.
     this.applyUpdate(

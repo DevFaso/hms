@@ -89,6 +89,7 @@ public class PermissionServiceImpl implements PermissionService {
         }
 
         permission.setName(request.getName());
+        permission.setCode(request.getCode());
         Permission updated = permissionRepository.save(permission);
         return permissionMapper.toResponseDTO(updated);
     }

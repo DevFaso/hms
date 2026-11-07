@@ -87,6 +87,15 @@ public class PharmacyPayment extends BaseEntity {
     @Column(name = "reference_number", length = 120)
     private String referenceNumber;
 
+    /**
+     * QA D1032: the readable receipt number ({@code CODE-PH-YYYY-000001}),
+     * allocated once when the payment is recorded and never recomputed, so a
+     * reprint shows the number first printed. Rows recorded before V246 were
+     * numbered by the migration in the order they were taken.
+     */
+    @Column(name = "receipt_number", length = 40)
+    private String receiptNumber;
+
     @NotNull
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "received_by", nullable = false,

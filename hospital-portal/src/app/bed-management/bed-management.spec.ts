@@ -7,6 +7,7 @@ import { BedService, WardResponse, BedResponse } from '../services/bed.service';
 import { ToastService } from '../core/toast.service';
 import { DepartmentLookupService } from '../services/department-lookup.service';
 import { RoleContextService } from '../core/role-context.service';
+import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 
 function ward(id: string, code: string, totalBeds = 0): WardResponse {
   return {
@@ -164,9 +165,19 @@ describe('BedManagementComponent', () => {
     expect(bedServiceSpy.updateBedStatus).not.toHaveBeenCalled();
   });
 
-  it('deleteWard failure surfaces the delete-failed toast', () => {
+  it('QA CX-010: deleting a ward or a bed asks first; a no sends nothing', async () => {
+    const ask = spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(false);
+    await component.deleteWard(ward('w1', 'MAT01', 3));
+    await component.deleteBed(bed('b1', 'B01'));
+    expect(ask).toHaveBeenCalledTimes(2);
+    expect(bedServiceSpy.deleteWard).not.toHaveBeenCalled();
+    expect(bedServiceSpy.deleteBed).not.toHaveBeenCalled();
+  });
+
+  it('deleteWard failure surfaces the delete-failed toast', async () => {
+    spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
     bedServiceSpy.deleteWard.and.returnValue(throwError(() => new Error('has beds')));
-    component.deleteWard(ward('w1', 'MAT01', 3));
+    await component.deleteWard(ward('w1', 'MAT01', 3));
     expect(toastSpy.error).toHaveBeenCalled();
   });
 });

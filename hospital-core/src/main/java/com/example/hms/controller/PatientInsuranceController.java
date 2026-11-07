@@ -54,7 +54,8 @@ public class PatientInsuranceController {
     @Parameter(name = "X-Role-Code", in = ParameterIn.HEADER,
         description = "Optional STAFF role pin: RECEPTIONIST | NURSE | DOCTOR")
     public ResponseEntity<PatientInsuranceResponseDTO> upsertAndLink(
-        @Valid @RequestBody LinkPatientInsuranceRequestDTO request,
+        @org.springframework.validation.annotation.Validated({jakarta.validation.groups.Default.class,
+            com.example.hms.validation.OnCreate.class}) @RequestBody LinkPatientInsuranceRequestDTO request,
         Locale locale,
         com.example.hms.security.ActingContext ctx
     ) {

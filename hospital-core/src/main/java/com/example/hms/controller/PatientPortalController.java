@@ -35,6 +35,7 @@ import com.example.hms.payload.dto.portal.PatientPaymentRequestDTO;
 import com.example.hms.enums.PatientDocumentType;
 import com.example.hms.utility.MessageUtil;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.model.Notification;
 import com.example.hms.payload.dto.portal.NotificationPreferenceDTO;
 import com.example.hms.payload.dto.portal.NotificationPreferenceUpdateDTO;
@@ -107,6 +108,8 @@ public class PatientPortalController {
     private final NotificationService notificationService;
     private final PharmacyPaymentService pharmacyPaymentService;
     private final PharmacyClaimService pharmacyClaimService;
+    /** QA D966: the printed copy of a prescription the pharmacy printed for the patient. */
+    private final com.example.hms.service.pharmacy.PrescriptionCopyPdfService prescriptionCopyPdfService;
 
     // ── Profile ──────────────────────────────────────────────────────────
 
@@ -148,9 +151,24 @@ public class PatientPortalController {
     @PreAuthorize("hasAuthority('ROLE_PATIENT')")
     public ResponseEntity<ApiResponseWrapper<List<PatientLabResultResponseDTO>>> getMyLabResults(
             Authentication auth,
-            @RequestParam(defaultValue = "20") int limit) {
-        List<PatientLabResultResponseDTO> results = portalService.getMyLabResults(auth, limit);
+            @RequestParam(defaultValue = "20") int limit,
+            @RequestParam(required = false) Integer offset) {
+        // QA D1213 (round 23): offset skips CURRENT results (superseded rows
+        // are removed first); without it the read is unchanged for the
+        // dashboard and the mobile apps. A plain list, no total: the portal
+        // asks for limit + 1 to know whether there is more.
+        List<PatientLabResultResponseDTO> results = offset == null
+            ? portalService.getMyLabResults(auth, limit)
+            : portalService.getMyLabResults(auth, offset, limit);
         return ResponseEntity.ok(ApiResponseWrapper.success(results));
+    }
+
+    /** QA D1399: the total `/my-lab-results` pages read; the list above has no room for one. */
+    @Operation(summary = "How many lab results of mine the list holds (QA D1399)")
+    @GetMapping("/lab-results/count")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<Long>> countMyLabResults(Authentication auth) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(portalService.countMyLabResults(auth)));
     }
 
     // ── Medications ──────────────────────────────────────────────────────
@@ -165,6 +183,20 @@ public class PatientPortalController {
         return ResponseEntity.ok(ApiResponseWrapper.success(meds));
     }
 
+    /**
+     * QA D1399 (D1347 class): "Médicaments passés" read the list above with its
+     * default limit, so 20 of 249 past medicines showed with nothing to say so.
+     * This pages every medication, active first, with the total; the list stays
+     * as it is for the dashboard and the mobile apps.
+     */
+    @Operation(summary = "Every medication of mine, one page at a time with the total (QA D1399)")
+    @GetMapping("/medications/page")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<Page<PatientMedicationResponseDTO>>> getMyMedicationsPage(
+            Authentication auth, @PageableDefault(size = 20) Pageable pageable) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(portalService.getMyMedicationsPage(auth, pageable)));
+    }
+
     // ── Prescriptions ────────────────────────────────────────────────────
 
     @Operation(summary = "View my prescriptions")
@@ -177,6 +209,21 @@ public class PatientPortalController {
         return ResponseEntity.ok(ApiResponseWrapper.success(prescriptions));
     }
 
+    /**
+     * QA D966: the copy of a prescription the pharmacy printed for me, to take
+     * to an outside pharmacy. My own prescriptions only, and only once printed.
+     */
+    @Operation(summary = "Download the printed copy of my prescription")
+    @GetMapping(value = "/prescriptions/{prescriptionId}/printed-copy",
+            produces = org.springframework.http.MediaType.APPLICATION_PDF_VALUE)
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<byte[]> getMyPrintedPrescription(Authentication auth,
+                                                           @PathVariable UUID prescriptionId) {
+        UUID patientId = portalService.resolvePatientId(auth);
+        return com.example.hms.controller.pharmacy.StockOutRoutingController.printedCopyResponse(
+                prescriptionCopyPdfService.copyForPatient(prescriptionId, patientId));
+    }
+
     // ── Vital Signs ──────────────────────────────────────────────────────
 
     @Operation(summary = "View my vital signs")
@@ -187,6 +234,22 @@ public class PatientPortalController {
             @RequestParam(defaultValue = "10") int limit) {
         List<PatientVitalSignResponseDTO> vitals = portalService.getMyVitals(auth, limit);
         return ResponseEntity.ok(ApiResponseWrapper.success(vitals));
+    }
+
+    /**
+     * QA D1379 (D1347 class): {@code /my-vitals} read {@code /vitals?limit=10}
+     * and showed those 10 of 45 records with no way to the rest. This read
+     * pages the whole history newest first and answers the total; the list
+     * read above stays as it is for the dashboard and the mobile apps.
+     */
+    @Operation(summary = "My vital-sign history, one page at a time with the total (QA D1379)")
+    @GetMapping("/vitals/history")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<Page<PatientVitalSignResponseDTO>>> getMyVitalsHistory(
+            Authentication auth,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(portalService.getMyVitalsPage(auth, page, size)));
     }
 
     // ── Encounters (visit history) ───────────────────────────────────────
@@ -224,6 +287,41 @@ public class PatientPortalController {
         Locale locale = LocaleContextHolder.getLocale();
         Page<BillingInvoiceResponseDTO> invoices = portalService.getMyInvoices(auth, pageable, locale);
         return ResponseEntity.ok(ApiResponseWrapper.success(invoices));
+    }
+
+    @Operation(summary = "One of my invoices with its lines and payments (QA D982)")
+    @GetMapping("/billing/invoices/{invoiceId}")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<com.example.hms.payload.dto.portal.PortalInvoiceDetailDTO>> getMyInvoiceDetail(
+            Authentication auth, @PathVariable UUID invoiceId) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(portalService.getMyInvoiceDetail(auth, invoiceId)));
+    }
+
+    @Operation(summary = "Download my invoice as PDF (QA D982)")
+    @GetMapping("/billing/invoices/{invoiceId}/pdf")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<byte[]> downloadMyInvoicePdf(Authentication auth, @PathVariable UUID invoiceId) {
+        var pdf = portalService.getMyInvoicePdf(auth, invoiceId, LocaleContextHolder.getLocale());
+        return pdfAttachment(pdf.content(), "invoice-" + pdf.suggestedFilename() + ".pdf");
+    }
+
+    @Operation(summary = "Download the receipt of one of my payments (QA D982)")
+    @GetMapping("/billing/invoices/{invoiceId}/payments/{paymentId}/receipt")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<byte[]> downloadMyReceiptPdf(Authentication auth, @PathVariable UUID invoiceId,
+                                                       @PathVariable UUID paymentId) {
+        var pdf = portalService.getMyReceiptPdf(auth, invoiceId, paymentId, LocaleContextHolder.getLocale());
+        return pdfAttachment(pdf.content(), pdf.suggestedFilename() + ".pdf");
+    }
+
+    private static ResponseEntity<byte[]> pdfAttachment(byte[] content, String filename) {
+        return ResponseEntity.ok()
+            .contentType(MediaType.APPLICATION_PDF)
+            .cacheControl(org.springframework.http.CacheControl.noCache())
+            .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
+                org.springframework.http.ContentDisposition.attachment().filename(filename).build().toString())
+            .contentLength(content.length)
+            .body(content);
     }
 
     @Operation(summary = "Pay an invoice",
@@ -344,6 +442,33 @@ public class PatientPortalController {
             Authentication auth, @PathVariable UUID hospitalId, @PathVariable UUID departmentId) {
         return ResponseEntity.ok(ApiResponseWrapper.success(
                 portalService.getProvidersForDepartment(auth, hospitalId, departmentId)));
+    }
+
+    @Operation(summary = "List the published, free slots of a day",
+            description = "QA D1093: the slots a patient may book on a date at a hospital they are registered at; "
+                    + "a self-booking takes exactly one of them")
+    @GetMapping("/booking/hospitals/{hospitalId}/departments/{departmentId}/slots")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    @HospitalScopeExempt(reason = "A patient choosing where to book: the hospital is the booking target, and a patient's own scope holds no hospital")
+    public ResponseEntity<ApiResponseWrapper<List<Map<String, Object>>>> getOpenSlots(
+            Authentication auth, @PathVariable UUID hospitalId, @PathVariable UUID departmentId,
+            @RequestParam(required = false) UUID staffId,
+            @RequestParam @org.springframework.format.annotation.DateTimeFormat(
+                    iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate date) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+                portalService.getOpenSlots(auth, hospitalId, departmentId, staffId, date)));
+    }
+
+    @Operation(summary = "List the slots my appointment can move to",
+            description = "QA D1093: the published, free slots of the same clinician on a date")
+    @GetMapping("/appointments/{appointmentId}/reschedule-slots")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<List<Map<String, Object>>>> getRescheduleSlots(
+            Authentication auth, @PathVariable UUID appointmentId,
+            @RequestParam @org.springframework.format.annotation.DateTimeFormat(
+                    iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate date) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+                portalService.getRescheduleSlots(auth, appointmentId, date)));
     }
 
     // ── Cancel own appointment ───────────────────────────────────────────
@@ -595,13 +720,36 @@ public class PatientPortalController {
         return ResponseEntity.ok(ApiResponseWrapper.success(data));
     }
 
+    /** QA D1399 (D1347 class): the proxy tab showed active + 50 of 340, with nothing to say so. */
+    @Operation(summary = "Every medication of the grantor, one page at a time with the total (QA D1399)")
+    @GetMapping("/proxy-access/{patientId}/medications/page")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponseWrapper<Page<PatientMedicationResponseDTO>>> getProxyMedicationsPage(
+            Authentication auth, @PathVariable UUID patientId, @PageableDefault(size = 20) Pageable pageable) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+            portalService.getProxyMedicationsPage(auth, patientId, pageable)));
+    }
+
+    /** QA D1399: the total the Labs tab's pages read; its list has no room for one. */
+    @Operation(summary = "How many lab results of the grantor the list holds (QA D1399)")
+    @GetMapping("/proxy-access/{patientId}/lab-results/count")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponseWrapper<Long>> countProxyLabResults(
+            Authentication auth, @PathVariable UUID patientId) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(portalService.countProxyLabResults(auth, patientId)));
+    }
+
     @Operation(summary = "View grantor's lab results as proxy")
     @GetMapping("/proxy-access/{patientId}/lab-results")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponseWrapper<List<PatientLabResultResponseDTO>>> getProxyLabResults(
             Authentication auth, @PathVariable UUID patientId,
-            @RequestParam(defaultValue = "50") int limit) {
-        List<PatientLabResultResponseDTO> data = portalService.getProxyLabResults(auth, patientId, limit);
+            @RequestParam(defaultValue = "50") int limit,
+            @RequestParam(required = false) Integer offset) {
+        // QA D1213: the same offset contract as the patient's own list.
+        List<PatientLabResultResponseDTO> data = offset == null
+            ? portalService.getProxyLabResults(auth, patientId, limit)
+            : portalService.getProxyLabResults(auth, patientId, offset, limit);
         return ResponseEntity.ok(ApiResponseWrapper.success(data));
     }
 
@@ -635,7 +783,7 @@ public class PatientPortalController {
     public ResponseEntity<ApiResponseWrapper<PatientDocumentResponseDTO>> uploadDocument(
             Authentication auth,
             @RequestPart("file") MultipartFile file,
-            @RequestPart("documentType") String documentTypeStr,
+            @RequestPart(value = "documentType", required = false) String documentTypeStr,
             @RequestParam(required = false) String collectionDate,
             @RequestParam(required = false) String notes) throws IOException {
         PatientDocumentRequestDTO request = PatientDocumentRequestDTO.builder()
@@ -652,14 +800,16 @@ public class PatientPortalController {
      * never a 500 and never the Java enum's class name.
      */
     private static PatientDocumentType parseDocumentType(String raw) {
-        if (raw != null) {
-            for (PatientDocumentType candidate : PatientDocumentType.values()) {
-                if (candidate.name().equalsIgnoreCase(raw.trim())) {
-                    return candidate;
-                }
+        // QA D1470: a missing type was a bare 400, with no field the reader could be told about.
+        if (raw == null || raw.isBlank()) {
+            throw new FieldBusinessException("documentType", "portal.document.typeRequired");
+        }
+        for (PatientDocumentType candidate : PatientDocumentType.values()) {
+            if (candidate.name().equalsIgnoreCase(raw.trim())) {
+                return candidate;
             }
         }
-        throw new BusinessException(MessageUtil.resolve("portal.document.invalidType"));
+        throw new FieldBusinessException("documentType", "portal.document.invalidType");
     }
 
     private static java.time.LocalDate parseCollectionDate(String raw) {

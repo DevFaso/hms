@@ -20,6 +20,7 @@ import com.example.hms.model.Staff;
 import com.example.hms.model.scheduling.PatientRecall;
 import com.example.hms.payload.dto.mortality.DeathClosureSummaryDTO;
 import com.example.hms.payload.dto.mortality.DeathRecordAmendmentDTO;
+import com.example.hms.payload.dto.mortality.DeathRecordEnteredInErrorDTO;
 import com.example.hms.payload.dto.mortality.DeathRecordRequestDTO;
 import com.example.hms.payload.dto.mortality.DeathRecordResponseDTO;
 import com.example.hms.payload.dto.mortality.MortalityRegisterDTO;
@@ -96,6 +97,22 @@ public class MortalityServiceImpl implements MortalityService {
 
     private static final String CLOSURE_REASON = "Patient deceased";
 
+    /** QA D1488: the entered-in-error reason's column size. */
+    private static final int MAX_ERROR_REASON_LENGTH = 500;
+
+    private com.example.hms.service.AdmissionStayEncounterService stayEncounters;
+    private com.example.hms.service.AuditEventLogService auditEventLogService;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setAuditEventLogService(com.example.hms.service.AuditEventLogService auditEventLogService) {
+        this.auditEventLogService = auditEventLogService;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setStayEncounters(com.example.hms.service.AdmissionStayEncounterService stayEncounters) {
+        this.stayEncounters = stayEncounters;
+    }
+
     private final Clock clock;
     private final DeathRecordRepository deathRecordRepository;
     private final PatientRepository patientRepository;
@@ -109,6 +126,10 @@ public class MortalityServiceImpl implements MortalityService {
     private final MortalityMapper mapper;
     private final RoleValidator roleValidator;
     private final com.example.hms.service.BedAssignmentService bedAssignmentService;
+    private final com.example.hms.repository.DeathDisputeRepository disputeRepository;
+    private final com.example.hms.service.InBasketService inBasketService;
+    /** QA D972: a visit a death closes is handed to billing like a checkout (null in hand-built tests). */
+    private final org.springframework.context.ApplicationEventPublisher eventPublisher;
 
     @Override
     public RecordDeathResponseDTO recordDeath(DeathRecordRequestDTO request) {
@@ -116,14 +137,22 @@ public class MortalityServiceImpl implements MortalityService {
         Patient patient = patientChartAccess.require(request.getPatientId(), hospitalId);
 
         if (deathRecordRepository.existsByPatient_Id(patient.getId())) {
-            throw new BusinessException(
-                "A death is already recorded for this patient. Amend that record rather than "
-                    + "filing a second one.");
+            throw new com.example.hms.exception.FieldBusinessException("patientId", "mortality.alreadyRecorded");
         }
         if (request.getDiedAt().isAfter(LocalDateTime.now(clock))) {
-            throw new BusinessException("The time of death cannot be in the future.");
+            throw new com.example.hms.exception.FieldBusinessException("diedAt", "mortality.timeInFuture");
         }
         validateMortalityFlags(request);
+        // QA D1490: a wrong date, and a classification this patient cannot have. With the classification
+        // left off, the death still saves.
+        com.example.hms.service.support.DeathClassificationRules.requireDiedAfterBirth(patient, request.getDiedAt());
+        if (Boolean.TRUE.equals(request.getMaternalDeath())) {
+            com.example.hms.service.support.DeathClassificationRules.requireMaternalPossible(patient);
+        }
+        if (Boolean.TRUE.equals(request.getPerinatalDeath())) {
+            com.example.hms.service.support.DeathClassificationRules.requirePerinatalPossible(
+                patient, request.getPerinatalType(), request.getDiedAt());
+        }
 
         DeathRecord deathRecord = DeathRecord.builder()
             .patient(patient)
@@ -169,9 +198,21 @@ public class MortalityServiceImpl implements MortalityService {
     @Override
     public DeathRecordResponseDTO amendDeathRecord(UUID recordId, DeathRecordAmendmentDTO request) {
         if (!StringUtils.hasText(request.getAmendmentReason())) {
-            throw new BusinessException("An amendment reason is required.");
+            throw new com.example.hms.exception.FieldBusinessException("amendmentReason", "mortality.amendmentReasonRequired");
         }
         DeathRecord deathRecord = loadScoped(recordId);
+        if (deathRecord.isEnteredInError()) {
+            throw new BusinessException("mortality.enteredInError.closed");
+        }
+        // QA D1490: an amendment reaches the same two classifications. Only what this amendment sets is judged:
+        // an autopsy's new cause is never refused over an older row's flags.
+        if (Boolean.TRUE.equals(request.getMaternalDeath())) {
+            com.example.hms.service.support.DeathClassificationRules.requireMaternalPossible(deathRecord.getPatient());
+        }
+        if (Boolean.TRUE.equals(request.getPerinatalDeath())) {
+            com.example.hms.service.support.DeathClassificationRules.requirePerinatalPossible(
+                deathRecord.getPatient(), request.getPerinatalType(), deathRecord.getDiedAt());
+        }
 
         if (request.getImmediateCause() != null) {
             deathRecord.setImmediateCause(request.getImmediateCause());
@@ -207,12 +248,10 @@ public class MortalityServiceImpl implements MortalityService {
         // maternal without saying when would break the reporting query.
         if (Boolean.TRUE.equals(deathRecord.getMaternalDeath())
             && deathRecord.getMaternalDeathTiming() == null) {
-            throw new BusinessException(
-                "A maternal death must state when it occurred relative to the pregnancy.");
+            throw new com.example.hms.exception.FieldBusinessException("maternalDeathTiming", "mortality.maternalTimingRequired");
         }
         if (Boolean.TRUE.equals(deathRecord.getPerinatalDeath()) && deathRecord.getPerinatalType() == null) {
-            throw new BusinessException(
-                "A perinatal death must state whether it was a stillbirth or a neonatal death.");
+            throw new com.example.hms.exception.FieldBusinessException("perinatalType", "mortality.perinatalTypeRequired");
         }
 
         deathRecord.setAmendedAt(LocalDateTime.now(clock));
@@ -222,11 +261,84 @@ public class MortalityServiceImpl implements MortalityService {
     }
 
     @Override
+    public DeathRecordResponseDTO markEnteredInError(UUID recordId, DeathRecordEnteredInErrorDTO request) {
+        String reason = request == null || request.getReason() == null ? "" : request.getReason().trim();
+        if (reason.isEmpty()) {
+            throw new com.example.hms.exception.FieldBusinessException("reason", "mortality.enteredInError.reasonRequired");
+        }
+        if (reason.length() > MAX_ERROR_REASON_LENGTH) {
+            throw new com.example.hms.exception.FieldBusinessException("reason", "mortality.enteredInError.reasonTooLong",
+                MAX_ERROR_REASON_LENGTH);
+        }
+        // Disputes and outcomes take turns on the record: a dispute committed meanwhile is ended below.
+        deathRecordRepository.lockById(recordId);
+        DeathRecord deathRecord = loadScoped(recordId);
+        if (deathRecord.isEnteredInError()) {
+            throw new BusinessException("mortality.enteredInError.closed");
+        }
+        UUID actorId = roleValidator.getCurrentUserId();
+        // The controller's role check reads the union of the caller's assignments: an administrator of
+        // hospital A who is a nurse at B, acting at B, must not reach B's records through it.
+        if (!roleValidator.isSuperAdminFromAuth()
+                && !roleValidator.isHospitalAdmin(actorId, deathRecord.getHospital().getId())) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                "Only a hospital administrator of this hospital can mark a death record entered in error.");
+        }
+        String actorName = currentUsername();
+        deathRecord.setEnteredInErrorAt(LocalDateTime.now(clock));
+        deathRecord.setEnteredInErrorById(actorId);
+        deathRecord.setEnteredInErrorByName(actorName);
+        deathRecord.setEnteredInErrorReason(reason);
+        DeathRecord saved = deathRecordRepository.save(deathRecord);
+
+        Patient patient = deathRecord.getPatient();
+        patient.setDeceasedAt(null);
+        patientRepository.save(patient);
+
+        DeathDisputeServiceImpl.closeAll(disputeRepository.lockOpenForRecord(recordId), inBasketService, actorId, actorName,
+            reason, deathRecord.getEnteredInErrorAt());
+
+        auditEnteredInError(saved, patient.getId(), actorId, actorName, reason);
+        return mapper.toDto(saved);
+    }
+
+    /** Ids only: the audit service writes in its own transaction, with no persistence context of this one. */
+    private void auditEnteredInError(DeathRecord record, UUID patientId, UUID actorId, String actorName, String reason) {
+        if (auditEventLogService == null) {
+            return;
+        }
+        try {
+            auditEventLogService.logEvent(com.example.hms.payload.dto.AuditEventRequestDTO.builder()
+                .eventType(com.example.hms.enums.AuditEventType.PATIENT_UPDATE)
+                .status(com.example.hms.enums.AuditStatus.SUCCESS)
+                .entityType("DEATH_RECORD")
+                .resourceId(record.getId().toString())
+                .patientId(patientId)
+                .hospitalId(record.getHospital() != null ? record.getHospital().getId() : null)
+                .userId(actorId)
+                .userName(actorName)
+                .eventDescription("Death record " + record.getId() + " marked entered in error; the patient is no "
+                    + "longer recorded as deceased. Stays, visits and appointments the death closed were not "
+                    + "reopened. Reason: " + reason)
+                .build());
+        } catch (RuntimeException ex) {
+            log.warn("Failed to audit death record {} entered in error: {}", record.getId(), ex.getMessage());
+        }
+    }
+
+    private static String currentUsername() {
+        var authentication = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        return authentication != null ? authentication.getName() : null;
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public DeathRecordResponseDTO getForPatient(UUID patientId) {
         UUID hospitalId = requireHospital();
         patientChartAccess.require(patientId, hospitalId);
+        // A patient registered at two hospitals: the record stays with the one that wrote it.
         return deathRecordRepository.findByPatient_Id(patientId)
+            .filter(death -> death.getHospital() != null && hospitalId.equals(death.getHospital().getId()))
             .map(mapper::toDto)
             .orElseThrow(() -> new ResourceNotFoundException(MSG_DEATH_NOT_FOUND, patientId));
     }
@@ -236,10 +348,10 @@ public class MortalityServiceImpl implements MortalityService {
     public MortalityRegisterDTO getRegister(LocalDate from, LocalDate to) {
         UUID hospitalId = requireHospital();
         if (from == null || to == null) {
-            throw new BusinessException("A period is required to read the mortality register.");
+            throw new com.example.hms.exception.FieldBusinessException("from", "mortality.periodRequired");
         }
         if (to.isBefore(from)) {
-            throw new BusinessException("The end of the period cannot precede its start.");
+            throw new BusinessException("mortality.periodReversed");
         }
         // Half-open on the upper bound so a death at 23:59 on the last day is
         // inside the period rather than silently dropped.
@@ -260,7 +372,12 @@ public class MortalityServiceImpl implements MortalityService {
                 && d.getPerinatalType() == com.example.hms.enums.PerinatalDeathType.STILLBIRTH)
             .count();
 
+        // A disputed death stays listed and counted until its outcome, flagged, with the count shown.
+        java.util.Set<UUID> disputed = all.isEmpty() ? Set.of() : new java.util.HashSet<>(
+            disputeRepository.findOpenRecordIds(all.stream().map(DeathRecord::getId).toList()));
+
         return MortalityRegisterDTO.builder()
+            .disputedDeaths(disputed.size())
             .from(from)
             .to(to)
             .totalDeaths(all.size())
@@ -268,7 +385,13 @@ public class MortalityServiceImpl implements MortalityService {
             .lateMaternalDeaths(lateMaternal)
             .perinatalDeaths(perinatal)
             .stillbirths(stillbirths)
-            .deaths(all.stream().map(mapper::toDto).toList())
+            .deaths(all.stream().map(death -> {
+                DeathRecordResponseDTO dto = mapper.toDto(death);
+                dto.setDisputed(disputed.contains(death.getId()));
+                return dto;
+            }).toList())
+            .enteredInError(deathRecordRepository.findEnteredInError(hospitalId, start, end).stream()
+                .map(mapper::toDto).toList())
             .build();
     }
 
@@ -307,6 +430,10 @@ public class MortalityServiceImpl implements MortalityService {
             // reserved destination bed handed back.
             bedAssignmentService.releaseBed(admission);
             admissionRepository.save(admission);
+            // QA D1435: and no nurse keeps a task or a handoff for the patient.
+            if (stayEncounters != null) {
+                stayEncounters.closeNursingWorkOfEndedStay(admission);
+            }
             if (deathRecord.getAdmissionId() == null) {
                 deathRecord.setAdmissionId(admission.getId());
             }
@@ -323,7 +450,16 @@ public class MortalityServiceImpl implements MortalityService {
                 continue;
             }
             encounter.setStatus(EncounterStatus.COMPLETED);
+            if (encounter.getCheckoutTimestamp() == null) {
+                encounter.setCheckoutTimestamp(LocalDateTime.now(clock));
+            }
             encounterRepository.save(encounter);
+            // QA D972 (round 18): the visit is billed like any completed one;
+            // the family settles it as in any hospital.
+            if (eventPublisher != null) {
+                eventPublisher.publishEvent(
+                    com.example.hms.event.EncounterCheckedOutEvent.of(encounter, encounter.getCheckoutTimestamp()));
+            }
             if (deathRecord.getEncounterId() == null) {
                 deathRecord.setEncounterId(encounter.getId());
             }
@@ -376,14 +512,10 @@ public class MortalityServiceImpl implements MortalityService {
 
     private void validateMortalityFlags(DeathRecordRequestDTO request) {
         if (Boolean.TRUE.equals(request.getMaternalDeath()) && request.getMaternalDeathTiming() == null) {
-            throw new BusinessException(
-                "A maternal death must state when it occurred relative to the pregnancy — the WHO "
-                    + "definition depends on it, and a late maternal death is reported separately.");
+            throw new com.example.hms.exception.FieldBusinessException("maternalDeathTiming", "mortality.maternalTimingRequiredWho");
         }
         if (Boolean.TRUE.equals(request.getPerinatalDeath()) && request.getPerinatalType() == null) {
-            throw new BusinessException(
-                "A perinatal death must state whether it was a stillbirth or a neonatal death: a "
-                    + "stillborn infant was never born alive, so the two are never summed.");
+            throw new com.example.hms.exception.FieldBusinessException("perinatalType", "mortality.perinatalTypeRequiredWhy");
         }
     }
 
@@ -411,8 +543,7 @@ public class MortalityServiceImpl implements MortalityService {
     private UUID requireHospital() {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId == null) {
-            throw new BusinessException(
-                "An active hospital is required: a death is certified at a facility.");
+            throw new BusinessException("mortality.hospitalRequired");
         }
         return hospitalId;
     }

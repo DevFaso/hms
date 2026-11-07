@@ -22,6 +22,11 @@ public class ObgynReferralResponseDTO {
     private ReferralPatientSummaryDTO patient;
     private ReferralHospitalSummaryDTO hospital;
     private ReferralClinicianSummaryDTO midwife;
+    /**
+     * QA D1081 (D995 class): the user the server's author check compares the caller with, so a
+     * list offers the author-only actions (cancel, edit, sign) on this row only to its author.
+     */
+    private java.util.UUID authorUserId;
     private ReferralClinicianSummaryDTO obgyn;
     private Integer gestationalAgeWeeks;
     private ObgynReferralCareContext careContext;

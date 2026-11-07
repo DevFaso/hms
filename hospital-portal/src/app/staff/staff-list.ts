@@ -1,3 +1,4 @@
+import { allRows } from '../shared/all-pages';
 import {
   Component,
   computed,
@@ -22,6 +23,8 @@ import { AuthService } from '../auth/auth.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { localDateString } from '../shared/date-utils';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 
 /** A user whose only role is ROLE_PATIENT (a patient portal account). */
 function isPatientOnlyUser(u: Pick<UserSummary, 'roleName'>): boolean {
@@ -36,7 +39,13 @@ function canonicalJobTitle(title: string | null | undefined): string {
 @Component({
   selector: 'app-staff-list',
   standalone: true,
-  imports: [FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [
+    SubmitGuardDirective,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+    ModalDialogDirective,
+  ],
   templateUrl: './staff-list.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './staff-list.scss',
@@ -209,9 +218,10 @@ export class StaffListComponent implements OnInit {
     // QA D790: the account picker of the create form reads the administrators'
     // directory; the staff page's readers (reception, lab managers) never open it.
     if (this.canManageStaff) {
-      this.userService.list(0, 500).subscribe({
+      // QA D1347: every user (all pages), not the first 500.
+      allRows((page, size) => this.userService.list(page, size)).subscribe({
         // QA D122: a patient account is never offered as a new staff member.
-        next: (page) => this.users.set((page.content ?? []).filter((u) => !isPatientOnlyUser(u))),
+        next: (list) => this.users.set(list.filter((u) => !isPatientOnlyUser(u))),
       });
     }
   }

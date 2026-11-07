@@ -25,6 +25,12 @@ public final class CrossReactivityAdvisory {
     private CrossReactivityAdvisory() {
     }
 
+    /** QA D935/D970: the label in the reader's language, English when no bundle knows it. */
+    public static String sourceLabel() {
+        String localized = MessageUtil.resolveOrNull(null, "cds.source.allergy");
+        return localized != null ? localized : SOURCE_LABEL;
+    }
+
     /**
      * The advisory card for this medication and these allergies, or empty when
      * no active allergy may cross-react with it (or one matches it directly,
@@ -36,7 +42,7 @@ public final class CrossReactivityAdvisory {
                 MessageUtil.resolveOrRaw("cds.allergy.crossReactivity.summary", medicationName, allergen),
                 MessageUtil.resolveOrRaw("cds.allergy.crossReactivity.detail", medicationName, allergen),
                 CdsCard.Indicator.WARNING,
-                new Source(SOURCE_LABEL, null, null),
+                new Source(sourceLabel(), null, null),
                 null, null, null, UUID.randomUUID().toString()));
     }
 }

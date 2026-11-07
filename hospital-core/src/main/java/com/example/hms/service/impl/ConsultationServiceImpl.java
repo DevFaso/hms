@@ -63,6 +63,9 @@ import com.example.hms.service.recordaccess.BreakGlassGate;
 @RequiredArgsConstructor
 @Transactional
 public class ConsultationServiceImpl implements ConsultationService {
+    /** Request properties a refusal names (QA D1352 class, round 30). */
+    private static final String FIELD_CONSULTANT_ID = "consultantId";
+
     private static final String CONSULTATION_CONSULTANT_NOT_FOUND_KEY = "consultation.consultant.notFound";
 
 
@@ -115,6 +118,7 @@ public class ConsultationServiceImpl implements ConsultationService {
         Patient patient = patientRepository.findByIdUnscoped(request.getPatientId())
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));
 
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
         Hospital hospital = hospitalRepository.findClinicalById(request.getHospitalId())
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
 
@@ -136,6 +140,10 @@ public class ConsultationServiceImpl implements ConsultationService {
             consultant = resolveStaffAt(request.getPreferredConsultantId(), hospital.getId())
                 .orElseThrow(() -> new BusinessException("consultation.consultant.notAtHospital"));
             requireConsultantAtHospital(consultant, hospital.getId());
+            // QA D955 class: a consult asks a colleague, from its creation on.
+            if (com.example.hms.security.CallerIdentity.sameUser(requestingProvider, consultant)) {
+                throw new BusinessException("consultation.consultant.notRequester");
+            }
         }
 
         LocalDateTime slaDueBy = calculateSlaDueBy(request.getUrgency());
@@ -493,7 +501,7 @@ public class ConsultationServiceImpl implements ConsultationService {
                     : NotificationLocalizer.key("patient.fallback.yours");
                 notificationService.createNotification("consultation.completed.notification",
                     new Object[]{patientName, consultation.getSpecialtyRequested(), consultantName},
-                    requesterUsername, null);
+                    requesterUsername, "CONSULTATION_UPDATE");
             }
         } catch (Exception e) {
             log.warn("Failed to send completion notification for consultation {}: {}", consultationId, e.getMessage());
@@ -514,10 +522,12 @@ public class ConsultationServiceImpl implements ConsultationService {
             throw new BusinessException("consultation.cancel.alreadyCancelled");
         }
         requireRequesterOrSuperAdmin(consultation);
+        // QA D1098: the request DTO's @NotBlank holds at the edge; any other caller states why too.
+        String reason = com.example.hms.service.support.CancelledOrders.requireCancelReason(cancellationReason, "cancellationReason");
 
         consultation.setStatus(ConsultationStatus.CANCELLED);
         consultation.setCancelledAt(LocalDateTime.now(clock));
-        consultation.setCancellationReason(cancellationReason);
+        consultation.setCancellationReason(reason);
 
         Consultation saved = consultationRepository.save(consultation);
         log.info("Consultation {} cancelled: {}", consultationId, cancellationReason);
@@ -529,6 +539,7 @@ public class ConsultationServiceImpl implements ConsultationService {
     public ConsultationResponseDTO scheduleConsultation(UUID consultationId, LocalDateTime scheduledAt, String scheduleNote) {
         Consultation consultation = getConsultationInScope(consultationId);
 
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(consultation.getPatient());
         if (consultation.getStatus() == ConsultationStatus.COMPLETED ||
             consultation.getStatus() == ConsultationStatus.CANCELLED ||
             consultation.getStatus() == ConsultationStatus.DECLINED) {
@@ -552,6 +563,7 @@ public class ConsultationServiceImpl implements ConsultationService {
     public ConsultationResponseDTO startConsultation(UUID consultationId) {
         Consultation consultation = getConsultationInScope(consultationId);
 
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(consultation.getPatient());
         if (consultation.getStatus() != ConsultationStatus.SCHEDULED &&
             consultation.getStatus() != ConsultationStatus.ACKNOWLEDGED &&
             consultation.getStatus() != ConsultationStatus.ASSIGNED) {
@@ -628,7 +640,7 @@ public class ConsultationServiceImpl implements ConsultationService {
                 : NotificationLocalizer.key("patient.fallback.indefinite");
             notificationService.createNotification("consultation.assigned.notification",
                 new Object[]{patientName, consultation.getSpecialtyRequested(), consultation.getUrgency()},
-                consultantUsername, null);
+                consultantUsername, "CONSULTATION_UPDATE");
         } catch (Exception e) {
             log.warn("Failed to send assignment notification for consultation {}: {}", consultationId, e.getMessage());
         }
@@ -820,19 +832,23 @@ public class ConsultationServiceImpl implements ConsultationService {
      */
     private void requireConsultantAtHospital(Staff consultant, Consultation consultation) {
         requireConsultantAtHospital(consultant, consultation.getHospital() != null ? consultation.getHospital().getId() : null);
+        // QA D955 class: a consult asks a colleague; the requester is never its consultant.
+        if (com.example.hms.security.CallerIdentity.sameUser(consultation.getRequestingProvider(), consultant)) {
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_CONSULTANT_ID, "consultation.consultant.notRequester");
+        }
     }
 
     private void requireConsultantAtHospital(Staff consultant, UUID hospitalId) {
         UUID userId = consultant.getUser() != null ? consultant.getUser().getId() : null;
         if (hospitalId == null || userId == null
                 || assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(userId, hospitalId).isEmpty()) {
-            throw new BusinessException("consultation.consultant.notAtHospital");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_CONSULTANT_ID, "consultation.consultant.notAtHospital");
         }
         // QA D715: an assignment of ANY role used to pass, so a consult could be
         // addressed to a nurse, who never sees it in a consultant worklist. The
         // consultant answers a medical question: a doctor at that hospital.
         if (!isPhysicianAt(userId, hospitalId)) {
-            throw new BusinessException("consultation.consultant.notPhysician");
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_CONSULTANT_ID, "consultation.consultant.notPhysician");
         }
     }
 
@@ -1080,6 +1096,8 @@ public class ConsultationServiceImpl implements ConsultationService {
 
         return ConsultationResponseDTO.builder()
             .id(consultationId)
+            .authorUserId(consultation.getRequestingProvider() != null && consultation.getRequestingProvider().getUser() != null
+                ? consultation.getRequestingProvider().getUser().getId() : null)
             .patientId(patient != null ? patient.getId() : null)
             .patientName(patient != null ? patient.getFullName() : null)
             .patientMrn(patientMrn)

@@ -32,6 +32,11 @@ public class TransfusionRequestResponseDTO {
     private TransfusionUrgency urgency;
     private TransfusionRequestStatus status;
     private String requestedByName;
+    /**
+     * QA D1081 (D995 class): the user the server's author check compares the caller with, so a
+     * list offers the author-only actions (cancel, edit, sign) on this row only to its author.
+     */
+    private java.util.UUID authorUserId;
     private LocalDateTime requestedAt;
     private LocalDateTime requiredBy;
     private String cancelReason;
@@ -46,5 +51,7 @@ public class TransfusionRequestResponseDTO {
 
     private List<BloodUnitResponseDTO> units;
     private List<CrossmatchResponseDTO> crossmatches;
+    /** Every emergency release on this request, newest first, one per bag; empty on a list row. */
+    private List<EmergencyBloodReleaseResponseDTO> emergencyReleases;
     private LocalDateTime createdAt;
 }

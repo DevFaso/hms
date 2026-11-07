@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  ElementRef,
   OnChanges,
   OnDestroy,
   SimpleChanges,
@@ -10,6 +11,7 @@ import {
   output,
   signal,
 } from '@angular/core';
+import { refuseFields } from '../../shared/forms/invalid-fields';
 
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -23,7 +25,10 @@ import {
 import { ToastService } from '../../core/toast.service';
 import { AuthService } from '../../auth/auth.service';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
 
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+import { ConfirmService } from '../../shared/confirm-dialog/confirm.service';
 const SERVER_TIME = new ServerTimePipe();
 
 type LoadState = 'idle' | 'loading' | 'ready' | 'error';
@@ -39,7 +44,7 @@ type LoadState = 'idle' | 'loading' | 'ready' | 'error';
 @Component({
   selector: 'app-break-glass-banner',
   standalone: true,
-  imports: [FormsModule, TranslateModule],
+  imports: [SubmitGuardDirective, ModalDialogDirective, FormsModule, TranslateModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './break-glass-banner.component.html',
   styleUrl: './break-glass-banner.component.scss',
@@ -55,6 +60,8 @@ export class BreakGlassBannerComponent implements OnChanges, OnDestroy {
   private readonly toast = inject(ToastService);
   private readonly auth = inject(AuthService);
   private readonly translate = inject(TranslateService);
+  private readonly confirm = inject(ConfirmService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   protected readonly state = signal<LoadState>('idle');
   protected readonly mySession = signal<BreakGlassSession | null>(null);
@@ -183,7 +190,10 @@ export class BreakGlassBannerComponent implements OnChanges, OnDestroy {
       return;
     }
     if (reason.length < 10) {
-      this.toast.error(this.translate.instant('BREAK_GLASS.REASON_TOO_SHORT'));
+      // QA D1281 class: the short justification is marked where it is typed.
+      const message = this.translate.instant('BREAK_GLASS.REASON_TOO_SHORT');
+      refuseFields(this.host.nativeElement, ['bgReason'], ['bgReason'], message);
+      this.toast.error(message);
       return;
     }
 
@@ -215,11 +225,17 @@ export class BreakGlassBannerComponent implements OnChanges, OnDestroy {
     });
   }
 
-  protected revoke(): void {
+  protected async revoke(): Promise<void> {
     const session = this.mySession();
     if (!session || !session.live) {
       return;
     }
+    // QA CX-010: one click ended the emergency access mid-care.
+    const confirmed = await this.confirm.ask({
+      titleKey: 'BREAK_GLASS.REVOKE_CONFIRM',
+      confirmKey: 'COMMON.CONFIRM',
+    });
+    if (!confirmed) return;
     this.cancelInFlight();
     this.inFlight = this.service.revoke(session.id, {}).subscribe({
       next: (updated) => {

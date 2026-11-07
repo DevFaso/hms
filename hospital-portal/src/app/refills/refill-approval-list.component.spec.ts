@@ -10,6 +10,7 @@ import {
   RefillStatus,
 } from '../services/refill-approval.service';
 import { ToastService } from '../core/toast.service';
+import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 
 describe('RefillApprovalListComponent', () => {
   let fixture: ComponentFixture<RefillApprovalListComponent>;
@@ -46,7 +47,7 @@ describe('RefillApprovalListComponent', () => {
   /** Reaches past `protected` — the spec exercises the same surface the template does. */
   interface TemplateApi {
     approve(r: RefillRequest): void;
-    reject(r: RefillRequest): void;
+    reject(r: RefillRequest): Promise<void>;
     pause(r: RefillRequest): void;
     isOpen(s: RefillStatus): boolean;
     canPause(s: RefillStatus): boolean;
@@ -87,7 +88,28 @@ describe('RefillApprovalListComponent', () => {
 
   it('loads the pending queue on init', () => {
     fixture.detectChanges();
-    expect(service.list).toHaveBeenCalledWith('REQUESTED', 0, 50);
+    expect(service.list).toHaveBeenCalledWith('REQUESTED', 0, 200); // QA D1347
+  });
+
+  // QA D1276 (round 27): three "Paracétamol" cards could not be told apart.
+  it('QA D1276: each card names the patient and the MRN', () => {
+    service.list.and.returnValue(
+      page([
+        refill({ id: 'r1', patientName: 'Awa Kaboré', patientMrn: 'CHW9395' }),
+        refill({ id: 'r2', patientName: 'Ali Ouédraogo', patientMrn: null }),
+        refill({ id: 'r3' }),
+      ]),
+    );
+    fixture.detectChanges();
+    const patientOf = (id: string) =>
+      (fixture.nativeElement as HTMLElement)
+        .querySelector(`[data-testid="refill-card-${id}"] [data-testid="refill-patient"]`)
+        ?.textContent?.replace(/\s+/g, ' ')
+        .trim();
+    expect(patientOf('r1')).toContain('Awa Kaboré (CHW9395)');
+    expect(patientOf('r2')).toContain('Ali Ouédraogo');
+    expect(patientOf('r2')).not.toContain('(');
+    expect(patientOf('r3')).toContain('REFILLS.UNKNOWN_PATIENT');
   });
 
   it('renders the empty state when the queue is clear', () => {
@@ -104,13 +126,13 @@ describe('RefillApprovalListComponent', () => {
   it('sends no status param for the ALL filter', () => {
     fixture.detectChanges();
     api().setFilter('ALL');
-    expect(service.list).toHaveBeenCalledWith(undefined, 0, 50);
+    expect(service.list).toHaveBeenCalledWith(undefined, 0, 200); // QA D1347
   });
 
   it('offers a PAUSED filter so held requests stay findable', () => {
     fixture.detectChanges();
     api().setFilter('PAUSED');
-    expect(service.list).toHaveBeenCalledWith('PAUSED', 0, 50);
+    expect(service.list).toHaveBeenCalledWith('PAUSED', 0, 200); // QA D1347
   });
 
   // ── The decision actions ────────────────────────────────────
@@ -137,6 +159,16 @@ describe('RefillApprovalListComponent', () => {
 
     expect(service.reject).not.toHaveBeenCalled();
     expect(toast.error).toHaveBeenCalled();
+  });
+
+  it('QA D1305: a refusal without notes marks the card notes box, not only a toast', () => {
+    service.list.and.returnValue(page([refill()]));
+    fixture.detectChanges();
+    api().reject(refill());
+    fixture.detectChanges();
+    const box = (fixture.nativeElement as HTMLElement).querySelector('#refill-notes-r1')!;
+    expect(box.getAttribute('aria-invalid')).toBe('true');
+    expect(document.activeElement).toBe(box);
   });
 
   it('refuses to pause without a reason — the patient is shown that note', () => {
@@ -215,5 +247,14 @@ describe('RefillApprovalListComponent', () => {
 
   it('gives a paused request its own badge, distinct from pending', () => {
     expect(api().statusBadgeClass('PAUSED')).not.toBe(api().statusBadgeClass('REQUESTED'));
+  });
+
+  it('QA CX-010: refusing a refill asks first even with its reason written; a no sends nothing', async () => {
+    fixture.detectChanges();
+    const ask = spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(false);
+    api().decisionNotes['r1'] = 'Not without a visit';
+    await api().reject(refill());
+    expect(ask).toHaveBeenCalledTimes(1);
+    expect(service.reject).not.toHaveBeenCalled();
   });
 });

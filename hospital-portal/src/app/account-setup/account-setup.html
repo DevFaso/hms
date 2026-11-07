@@ -129,7 +129,12 @@
           </div>
         }
 
-        <button type="submit" class="btn btn-primary" [disabled]="!canSubmit">
+        <button
+          type="submit"
+          class="btn btn-primary"
+          [disabled]="loading"
+          [appSubmitGuard]="!canSubmit"
+        >
           @if (loading) {
             <span class="spinner"></span>
           }

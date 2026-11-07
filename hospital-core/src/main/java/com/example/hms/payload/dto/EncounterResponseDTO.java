@@ -32,6 +32,8 @@ public class EncounterResponseDTO {
     private String patientPhoneNumber;
 
     private UUID staffId;
+    /** QA D1085: the assigned clinician's user id, for the per-visit "Démarrer" rule. */
+    private UUID staffUserId;
     private String staffName;
     private String staffEmail;
     private String staffPhoneNumber;
@@ -69,6 +71,13 @@ public class EncounterResponseDTO {
 
     /** Chief complaint captured at check-in or triage (MVP 1). */
     private String chiefComplaint;
+
+    /**
+     * RCPT-CLIN: what the desk itself typed. Never serialized: ReceptionistResponseShaping
+     * puts it in place of {@link #chiefComplaint} for a receptionist.
+     */
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    private String deskChiefComplaint;
 
     /** ESI acuity score 1-5 (MVP 2). */
     private Integer esiScore;

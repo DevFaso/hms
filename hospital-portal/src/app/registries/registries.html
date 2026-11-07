@@ -118,7 +118,8 @@
               <td>
                 <div class="patient-cell">
                   <span class="patient-name">{{ row.patientName }}</span>
-                  <span class="patient-meta">
+                  {{ ' '
+                  }}<span class="patient-meta">
                     @if (row.mrn) {
                       {{ row.mrn }}
                     }
@@ -150,7 +151,8 @@
                   {{ 'REGISTRIES.STATUS.' + row.status | translate }}
                 </span>
                 @if (row.closureReason) {
-                  <span class="closure-reason" [title]="row.closureReason">
+                  {{ ' '
+                  }}<span class="closure-reason" [title]="row.closureReason">
                     {{ row.closureReason }}
                   </span>
                 }
@@ -190,6 +192,7 @@
   @if (showEnrollForm()) {
     <div class="modal-backdrop" (click)="closeEnrollForm()" aria-hidden="true"></div>
     <div
+      appModalDialog
       #enrollDialog
       class="modal"
       role="dialog"
@@ -214,6 +217,7 @@
            idiom that makes a stale selection impossible, and the
            super-admin-aware hospital scope. -->
       <app-patient-picker
+        required
         inputId="registry-patient-picker"
         [hospitalId]="pickerHospitalId()"
         [selected]="selectedPatient()"
@@ -234,6 +238,7 @@
       <label class="field">
         <span>{{ 'REGISTRIES.CADENCE' | translate }} *</span>
         <input
+          required
           type="number"
           name="regCadence"
           min="1"
@@ -268,6 +273,8 @@
           {{ 'COMMON.CANCEL' | translate }}
         </button>
         <button
+          appSubmitGuard
+          submitGuardRequired
           type="button"
           class="btn-primary"
           [disabled]="saving()"
@@ -284,6 +291,7 @@
   @if (statusTarget(); as target) {
     <div class="modal-backdrop" (click)="closeStatusModal()" aria-hidden="true"></div>
     <div
+      appModalDialog
       #statusDialog
       class="modal"
       role="dialog"
@@ -316,6 +324,7 @@
         <label class="field">
           <span>{{ 'REGISTRIES.CLOSURE_REASON' | translate }} *</span>
           <textarea
+            required
             name="regStatusReason"
             rows="2"
             maxlength="500"
@@ -334,6 +343,8 @@
           {{ 'COMMON.CANCEL' | translate }}
         </button>
         <button
+          appSubmitGuard
+          submitGuardRequired
           type="button"
           class="btn-primary"
           [disabled]="saving()"

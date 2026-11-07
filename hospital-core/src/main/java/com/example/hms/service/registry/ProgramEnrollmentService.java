@@ -25,6 +25,7 @@ import com.example.hms.repository.scheduling.PatientRecallRepository;
 import com.example.hms.security.SecurityUtils;
 import com.example.hms.service.AuditEventLogService;
 import com.example.hms.utility.RoleValidator;
+import com.example.hms.utility.DisplayDates;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -87,12 +88,11 @@ public class ProgramEnrollmentService {
         UUID hospitalId = requireHospital();
         Patient patient = requirePatientInTenant(patientId, hospitalId);
 
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
         enrollmentRepository.findByPatientIdAndHospitalIdAndProgramAndStatus(
                 patientId, hospitalId, request.getProgram(), ProgramEnrollmentStatus.ACTIVE)
             .ifPresent(existing -> {
-                throw new BusinessException(
-                    "The patient is already enrolled in this programme. Close the existing "
-                        + "enrolment first if this is a new episode.");
+                throw new com.example.hms.exception.FieldBusinessException("program", "program.enrollment.alreadyActive");
             });
 
         LocalDate enrolledOn = request.getEnrolledOn() != null
@@ -130,7 +130,7 @@ public class ProgramEnrollmentService {
         ProgramEnrollmentStatus previous = enrollment.getStatus();
         ProgramEnrollmentStatus target = request.getStatus();
         if (previous == target) {
-            throw new BusinessException("The enrolment is already in that state.");
+            throw new com.example.hms.exception.FieldBusinessException("status", "program.enrollment.sameStatus");
         }
 
         String reason = trimToNull(request.getReason());
@@ -139,14 +139,12 @@ public class ProgramEnrollmentService {
             // refused rather than ignored: text supplied here would vanish
             // silently, and the caller deserves to know it has nowhere to go.
             if (reason != null) {
-                throw new BusinessException(
-                    "A move back to ACTIVE takes no reason - use the enrolment notes.");
+                throw new com.example.hms.exception.FieldBusinessException("reason", "program.enrollment.reopenNoReason");
             }
             enrollmentRepository.findByPatientIdAndHospitalIdAndProgramAndStatus(
                     patientId, hospitalId, enrollment.getProgram(), ProgramEnrollmentStatus.ACTIVE)
                 .ifPresent(other -> {
-                    throw new BusinessException(
-                        "The patient already has an active enrolment in this programme.");
+                    throw new BusinessException("program.enrollment.otherActive");
                 });
             enrollment.setStatus(ProgramEnrollmentStatus.ACTIVE);
             enrollment.setClosedOn(null);
@@ -158,9 +156,7 @@ public class ProgramEnrollmentService {
             restoreCancelledTracingRecall(enrollment);
         } else {
             if (reason == null) {
-                throw new BusinessException(
-                    "Closing an enrolment needs a reason - it is the outcome the "
-                        + "programme reports, not bookkeeping.");
+                throw new com.example.hms.exception.FieldBusinessException("reason", "program.enrollment.closeReasonRequired");
             }
             enrollment.setStatus(target);
             enrollment.setClosedOn(LocalDate.now(clock));
@@ -187,14 +183,15 @@ public class ProgramEnrollmentService {
         ProgramEnrollment enrollment = requireEnrollmentInTenant(enrollmentId, patientId, hospitalId);
 
         if (enrollment.getStatus() != ProgramEnrollmentStatus.ACTIVE) {
-            throw new BusinessException(
-                "Only an active enrolment records programme visits. Re-open it first.");
+            throw new BusinessException("program.enrollment.visitNotActive");
         }
 
         LocalDate visitDate = request != null && request.getVisitDate() != null
             ? request.getVisitDate() : LocalDate.now(clock);
+        // QA D1488: a visit made before the death can still be entered, with its real date.
+        com.example.hms.service.support.DeceasedPatientGuard.refuseCareAfterDeathDay(enrollment.getPatient(), visitDate, "visitDate");
         if (visitDate.isBefore(enrollment.getEnrolledOn())) {
-            throw new BusinessException("A programme visit cannot predate the enrolment.");
+            throw new com.example.hms.exception.FieldBusinessException("visitDate", "program.enrollment.visitBeforeEnrolment");
         }
         // lastVisitOn/nextExpectedVisit summarize the LATEST visit. A
         // backfilled earlier visit would move nextExpectedVisit backwards
@@ -203,9 +200,8 @@ public class ProgramEnrollmentService {
         // absorb it (deliberately: the summary pair is all item 36 needs).
         if (enrollment.getLastVisitOn() != null
             && visitDate.isBefore(enrollment.getLastVisitOn())) {
-            throw new BusinessException(
-                "A visit before the last recorded one (" + enrollment.getLastVisitOn()
-                    + ") cannot be recorded - the registry tracks the latest visit.");
+            throw new com.example.hms.exception.FieldBusinessException("visitDate", "program.enrollment.visitBeforeLast",
+                DisplayDates.date(enrollment.getLastVisitOn()));
         }
 
         enrollment.setLastVisitOn(visitDate);
@@ -259,7 +255,7 @@ public class ProgramEnrollmentService {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId == null) {
             // A registry without a hospital is every hospital's registry.
-            throw new BusinessException("An active hospital context is required.");
+            throw new BusinessException("program.enrollment.hospitalRequired");
         }
         return hospitalId;
     }

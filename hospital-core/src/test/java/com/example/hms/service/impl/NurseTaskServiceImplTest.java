@@ -165,6 +165,14 @@ class NurseTaskServiceImplTest {
     private com.example.hms.repository.UserRoleHospitalAssignmentRepository assignmentRepository;
     @Mock
     private com.example.hms.repository.PatientAllergyRepository patientAllergyRepository;
+    @Mock
+    private com.example.hms.service.emar.ControlledAdministrationWitness administrationWitness;
+    /** QA D1314: reads the ward at once; here it answers from the per-patient stubs these tests set (see setUp). */
+    @Mock
+    private com.example.hms.service.emar.MarWardReader marWardReader;
+    /** QA D1286: real, over the real bundles, so the inbox renders a keyed item for its reader. */
+    private final com.example.hms.service.i18n.NotificationLocalizer notificationLocalizer =
+        new com.example.hms.service.i18n.NotificationLocalizer(com.example.hms.i18n.TestMessageSources.bundles());
 
     @BeforeEach
     void setUp() {
@@ -176,7 +184,7 @@ class NurseTaskServiceImplTest {
             nurseHandoffRepository, labOrderRepository, imagingOrderRepository, procedureOrderRepository,
             fiveRightsService, objectMapper, news2EscalationService,
             new com.example.hms.service.support.DischargedPatientGuard(admissionRepository, encounterRepository),
-            assignmentRepository, patientAllergyRepository));
+            assignmentRepository, patientAllergyRepository, administrationWitness, notificationLocalizer, marWardReader));
 
         // QA D220 narrowed the vitals rounds to admitted patients; the tests
         // below that are about windows, names and counts treat every listed
@@ -184,8 +192,10 @@ class NurseTaskServiceImplTest {
         lenient().doReturn(EVERY_PATIENT).when(service).activelyAdmittedPatientIds(any());
         lenient().doReturn(EVERY_PATIENT_IN_A_STAY).when(service).activeStaysByPatient(any());
 
+        wardReadsAnswerFromPerPatientStubs();
+
         // Default stubs so synthetic/fallback paths activate in existing tests
-        lenient().when(vitalSignRepository.findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(any(), any()))
+        lenient().when(vitalSignRepository.findLatestObservationSet(any(), any()))
             .thenReturn(Optional.empty());
         lenient().when(prescriptionRepository.findByPatient_IdAndHospital_Id(any(), any()))
             .thenReturn(List.of());
@@ -206,6 +216,71 @@ class NurseTaskServiceImplTest {
             .thenReturn(Page.empty());
         lenient().when(encounterRepository.findFirstByPatient_IdAndHospital_IdAndStatusOrderByEncounterDateDesc(
             any(), any(), any())).thenReturn(Optional.empty());
+    }
+
+    /**
+     * QA D1314: the ward's lists read everything at once, through
+     * {@code MarWardReader} and {@code getPatientNamesForNurse}. These tests are
+     * about what a row says, so they keep stating their data per patient and per
+     * order; each batch read answers from those stubs. The batch queries
+     * themselves run on PostgreSQL in {@code WardLoadPostgresIT}.
+     */
+    private void wardReadsAnswerFromPerPatientStubs() {
+        lenient().when(nurseDashboardService.getPatientNamesForNurse(any(), any())).thenAnswer(inv ->
+            nurseDashboardService.getPatientsForNurse(inv.getArgument(0), inv.getArgument(1), null));
+        lenient().when(marWardReader.ordersByPatient(any(), any())).thenAnswer(inv -> {
+            java.util.Map<UUID, List<Prescription>> byPatient = new java.util.HashMap<>();
+            UUID hospital = inv.getArgument(0);
+            if (hospital == null) {
+                return byPatient;
+            }
+            for (UUID patient : inv.<java.util.Collection<UUID>>getArgument(1)) {
+                List<Prescription> rows = prescriptionRepository.findByPatient_IdAndHospital_Id(patient, hospital);
+                if (!rows.isEmpty()) {
+                    byPatient.put(patient, rows);
+                }
+            }
+            return byPatient;
+        });
+        lenient().when(marWardReader.closedStaysByPatient(any(), any())).thenAnswer(inv -> {
+            java.util.Map<UUID, List<Admission>> byPatient = new java.util.HashMap<>();
+            for (UUID patient : inv.<java.util.Collection<UUID>>getArgument(1)) {
+                byPatient.put(patient, admissionRepository.findByPatient_IdAndHospital_Id(patient, inv.getArgument(0)).stream()
+                    .filter(a -> a.getActualDischargeDateTime() != null).toList());
+            }
+            return byPatient;
+        });
+        lenient().when(marWardReader.doseRowsByPrescription(any())).thenAnswer(inv -> {
+            java.util.Map<UUID, List<MedicationAdministrationRecord>> byOrder = new java.util.HashMap<>();
+            for (UUID order : inv.<java.util.Collection<UUID>>getArgument(0)) {
+                byOrder.put(order, marRepository.findByPrescription_IdOrderByScheduledTimeDesc(order));
+            }
+            return byOrder;
+        });
+        lenient().when(marWardReader.allergiesByPatient(any())).thenAnswer(inv -> {
+            java.util.Map<UUID, List<com.example.hms.model.PatientAllergy>> byPatient = new java.util.HashMap<>();
+            for (UUID patient : inv.<java.util.Collection<UUID>>getArgument(0)) {
+                byPatient.put(patient, patientAllergyRepository.findByPatient_Id(patient));
+            }
+            return byPatient;
+        });
+        lenient().when(marWardReader.latestObservationSets(any(), any())).thenAnswer(inv -> {
+            java.util.Map<UUID, PatientVitalSign> byPatient = new java.util.HashMap<>();
+            for (UUID patient : inv.<java.util.Collection<UUID>>getArgument(1)) {
+                vitalSignRepository.findLatestObservationSet(patient, inv.getArgument(0))
+                    .ifPresent(vitals -> byPatient.put(patient, vitals));
+            }
+            return byPatient;
+        });
+        lenient().when(marWardReader.controlledOrders(any())).thenAnswer(inv -> {
+            java.util.Set<UUID> controlled = new java.util.HashSet<>();
+            for (Prescription order : inv.<java.util.Collection<Prescription>>getArgument(0)) {
+                if (pharmacistVerificationService.isControlledSubstance(order)) {
+                    controlled.add(order.getId());
+                }
+            }
+            return controlled;
+        });
     }
 
     @Test
@@ -337,6 +412,15 @@ class NurseTaskServiceImplTest {
             .isEqualTo("LAB");
     }
 
+    /** QA D1384 (round 32): an unknown handoff status filter is refused on "status" (fieldErrors), translated. */
+    @Test
+    void d1384_anUnknownHandoffStatusIsRefusedOnTheParameter() {
+        UUID hospitalId = UUID.randomUUID();
+        assertThatThrownBy(() -> service.getHandoffSummaries(null, null, hospitalId, 10, "BOGUS"))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getField()).isEqualTo("status"));
+    }
+
     @Test
     void getHandoffSummariesReadsPendingRowsAndClampsLimit() {
         UUID hospitalId = UUID.randomUUID();
@@ -352,6 +436,9 @@ class NurseTaskServiceImplTest {
             .recommendation("Continue q4h vitals.")
             .createdByName("Nina Nurse")
             .build();
+        // QA D1075: the report time is the creation time, which completion never moves.
+        first.setCreatedAt(java.time.LocalDateTime.of(2026, 10, 30, 13, 33, 43));
+        first.setUpdatedAt(java.time.LocalDateTime.of(2026, 10, 30, 13, 34, 2));
         NurseHandoff second = NurseHandoff.builder()
             .patient(patientEntity)
             .direction("Transfer to Radiology")
@@ -370,6 +457,7 @@ class NurseTaskServiceImplTest {
         assertThat(dto.getNote()).isEqualTo("Post-op day 1, afebrile.");
         assertThat(dto.getRecommendation()).isEqualTo("Continue q4h vitals.");
         assertThat(dto.getCreatedByName()).isEqualTo("Nina Nurse");
+        assertThat(dto.getCreatedAt()).isEqualTo(java.time.LocalDateTime.of(2026, 10, 30, 13, 33, 43));
         assertThat(dto.getStatus()).isEqualTo("PENDING");
     }
 
@@ -542,7 +630,7 @@ class NurseTaskServiceImplTest {
             .temperatureCelsius(38.9).heartRateBpm(112).respiratoryRateBpm(26)
             .systolicBpMmHg(95).diastolicBpMmHg(60).spo2Percent(91)
             .build();
-        when(vitalSignRepository.findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(patientId, hospitalId))
+        when(vitalSignRepository.findLatestObservationSet(patientId, hospitalId))
             .thenReturn(Optional.of(last));
 
         try (MockedStatic<LocalDateTime> mockedNow = mockStatic(LocalDateTime.class)) {
@@ -625,7 +713,9 @@ class NurseTaskServiceImplTest {
         UUID actor = UUID.randomUUID();
         assertThatThrownBy(() -> service.createHandoff(actor, hospitalId, request))
             .isInstanceOf(BusinessException.class)
-            .hasFieldOrPropertyWithValue("messageKey", "nurse.handoff.recipient.required");
+            .hasFieldOrPropertyWithValue("messageKey", "nurse.handoff.recipient.required")
+            // QA D1282: the refusal names the field, so the handoff form marks the recipient picker.
+            .hasFieldOrPropertyWithValue("field", "recipientUserId");
         verify(nurseHandoffRepository, never()).save(any());
     }
 
@@ -637,7 +727,10 @@ class NurseTaskServiceImplTest {
         NurseHandoffCreateRequestDTO request = validHandoff(patientId, actor);
         assertThatThrownBy(() -> service.createHandoff(actor, hospitalId, request))
             .isInstanceOf(BusinessException.class)
-            .hasFieldOrPropertyWithValue("messageKey", "nurse.handoff.recipient.notSelf");
+            .hasFieldOrPropertyWithValue("messageKey", "nurse.handoff.recipient.notSelf")
+            // QA D1352 (round 30): on the recipient picker.
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "recipientUserId");
         verify(nurseHandoffRepository, never()).save(any());
     }
 
@@ -848,6 +941,8 @@ class NurseTaskServiceImplTest {
 
         NurseMedicationAdministrationRequestDTO request = new NurseMedicationAdministrationRequestDTO();
         request.setStatus(" held ");
+        // QA D1159: a held dose says why.
+        request.setNote("Patient au bloc");
 
         NurseMedicationTaskResponseDTO normalized = service.recordMedicationAdministration(
             taskId,
@@ -933,7 +1028,7 @@ class NurseTaskServiceImplTest {
 
         // Last vitals recorded 1 hour ago — within the 4h overdue threshold
         PatientVitalSign vs = PatientVitalSign.builder().recordedAt(fixedNow.minusHours(1)).build();
-        when(vitalSignRepository.findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(patientId, hospitalId))
+        when(vitalSignRepository.findLatestObservationSet(patientId, hospitalId))
             .thenReturn(Optional.of(vs));
 
         try (MockedStatic<LocalDateTime> mockedNow = mockStatic(LocalDateTime.class)) {
@@ -962,7 +1057,7 @@ class NurseTaskServiceImplTest {
 
         // Last vitals recorded 6 hours ago — beyond the 4h overdue threshold
         PatientVitalSign vs = PatientVitalSign.builder().recordedAt(fixedNow.minusHours(6)).build();
-        when(vitalSignRepository.findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(patientId, hospitalId))
+        when(vitalSignRepository.findLatestObservationSet(patientId, hospitalId))
             .thenReturn(Optional.of(vs));
 
         try (MockedStatic<LocalDateTime> mockedNow = mockStatic(LocalDateTime.class)) {
@@ -1115,6 +1210,8 @@ class NurseTaskServiceImplTest {
         lenient().when(mockHospital.getId()).thenReturn(hospitalId);
 
         Prescription rx = mock(Prescription.class);
+        // QA D1491 (changed: no frequency used to close the course): a single dose is what closes it.
+        lenient().when(rx.getFrequency()).thenReturn("STAT");
         when(rx.getId()).thenReturn(rxId);
         lenient().when(rx.getPatient()).thenReturn(mockPatient);
         lenient().when(rx.getHospital()).thenReturn(mockHospital);
@@ -1242,6 +1339,73 @@ class NurseTaskServiceImplTest {
         assertThat(result.getStatus()).isEqualTo("GIVEN");
         verify(marRepository).save(any(MedicationAdministrationRecord.class));
         verify(staffRepository).findByUserIdAndHospitalId(nurseId, hospitalId);
+    }
+
+    @Test
+    void D922_aControlledDoseIsRecordedWithItsWitnessAndRefusedWithoutOne() {
+        UUID rxId = UUID.randomUUID();
+        UUID nurseId = UUID.randomUUID();
+        UUID witnessId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Patient mockPatient = mock(Patient.class);
+        lenient().when(mockPatient.getId()).thenReturn(UUID.randomUUID());
+        Hospital mockHospital = mock(Hospital.class);
+        lenient().when(mockHospital.getId()).thenReturn(hospitalId);
+        Prescription rx = mock(Prescription.class);
+        lenient().when(rx.getId()).thenReturn(rxId);
+        lenient().when(rx.getPatient()).thenReturn(mockPatient);
+        lenient().when(rx.getHospital()).thenReturn(mockHospital);
+        lenient().when(rx.getMedicationName()).thenReturn("Morphine");
+        lenient().when(rx.isControlledSubstance()).thenReturn(true);
+        // A controlled order is verified by a pharmacist before it is given (the gate above the witness).
+        lenient().when(rx.getPharmacistVerifiedAt()).thenReturn(LocalDateTime.now().minusHours(1));
+        lenient().when(rx.getCreatedAt()).thenReturn(LocalDateTime.now().minusHours(1));
+        when(prescriptionRepository.findByIdForUpdate(rxId)).thenReturn(Optional.of(rx));
+        NurseMedicationAdministrationRequestDTO request = new NurseMedicationAdministrationRequestDTO();
+        request.setStatus("GIVEN");
+        request.setOverrideReason("Scanner down; checked by hand.");
+
+        // Without a witness: refused before anything is written.
+        when(administrationWitness.resolve(rx, MedicationAdministrationStatus.GIVEN, null, nurseId))
+            .thenThrow(new BusinessException("nurse.mar.witness.required", "Morphine"));
+        assertThatThrownBy(() -> service.recordMedicationAdministration(rxId, nurseId, hospitalId, request))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "nurse.mar.witness.required");
+        verify(marRepository, never()).save(any(MedicationAdministrationRecord.class));
+
+        // With a colleague as witness: recorded with the dose.
+        User colleague = new User();
+        colleague.setId(witnessId);
+        colleague.setFirstName("Awa");
+        colleague.setLastName("Kaboré");
+        request.setWitnessUserId(witnessId);
+        when(administrationWitness.resolve(rx, MedicationAdministrationStatus.GIVEN, witnessId, nurseId))
+            .thenReturn(colleague);
+        when(marRepository.save(any(MedicationAdministrationRecord.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        NurseMedicationTaskResponseDTO result = service.recordMedicationAdministration(rxId, nurseId, hospitalId, request);
+
+        org.mockito.ArgumentCaptor<MedicationAdministrationRecord> saved =
+            org.mockito.ArgumentCaptor.forClass(MedicationAdministrationRecord.class);
+        verify(marRepository).save(saved.capture());
+        assertThat(saved.getValue().getWitnessUser()).isSameAs(colleague);
+        assertThat(result.getWitnessName()).isEqualTo("Awa Kaboré");
+        // QA D1080: the administer response says what the GET says - morphine is controlled.
+        assertThat(result.isControlledSubstance()).isTrue();
+    }
+
+    /** QA D1080: the synthetic-task fallback keeps the row's controlled flag too. */
+    @Test
+    void d1080_theFallbackResponseKeepsTheControlledFlag() {
+        UUID taskId = UUID.randomUUID();
+        UUID nurseId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        doReturn(List.of(NurseMedicationTaskResponseDTO.builder().id(taskId).patientId(UUID.randomUUID())
+            .medication("Morphine").status("DUE").controlledSubstance(true).build()))
+            .when(service).getMedicationTasks(nurseId, hospitalId, null);
+
+        assertThat(service.recordMedicationAdministration(taskId, nurseId, hospitalId, null).isControlledSubstance())
+            .isTrue();
     }
 
     @Test
@@ -1538,7 +1702,7 @@ class NurseTaskServiceImplTest {
             .thenReturn(List.of(patient(patientId, "Summary Pat", "Summary", "Pat")));
 
         // Patient has no vitals → should count as vitalsDue=1
-        when(vitalSignRepository.findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(patientId, hospitalId))
+        when(vitalSignRepository.findLatestObservationSet(patientId, hospitalId))
             .thenReturn(Optional.empty());
 
         // One active prescription that's DUE
@@ -1583,7 +1747,7 @@ class NurseTaskServiceImplTest {
 
         // Vitals recorded recently — not overdue
         PatientVitalSign vs = PatientVitalSign.builder().recordedAt(fixedNow.minusHours(1)).build();
-        when(vitalSignRepository.findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(patientId, hospitalId))
+        when(vitalSignRepository.findLatestObservationSet(patientId, hospitalId))
             .thenReturn(Optional.of(vs));
 
         Patient mockPatient = mock(Patient.class);
@@ -1607,10 +1771,52 @@ class NurseTaskServiceImplTest {
 
             NurseDashboardSummaryDTO summary = service.getDashboardSummary(nurseId, hospitalId);
 
+            // QA D1402: the tile is the list's row count. Round 33: a set an hour old has its
+            // next round an hour away, past the 30-minute look-ahead, so it is no row (it was one
+            // while the look-ahead was also the 2-hour interval: nearly every patient was due).
             assertThat(summary.getVitalsDue()).isZero();
             assertThat(summary.getMedicationsOverdue()).isEqualTo(1);
             assertThat(summary.getMedicationsDue()).isZero();
             assertThat(summary.getAnnouncements()).isZero();
+        }
+    }
+
+    /**
+     * QA round 30: an as-needed order is given on demand, not waiting: the
+     * dashboard counts it neither due nor overdue (a PRN never given read
+     * OVERDUE an hour after it was signed, and counted).
+     */
+    @Test
+    void prn_anAsNeededOrderIsNotCountedDueOrOverdue() {
+        UUID nurseId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID patientId = UUID.randomUUID();
+        LocalDateTime fixedNow = LocalDateTime.of(2025, 10, 30, 10, 0);
+        when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null))
+            .thenReturn(List.of(patient(patientId, "Prn Pat", "Prn", "Pat")));
+        when(vitalSignRepository.findLatestObservationSet(patientId, hospitalId)).thenReturn(Optional.empty());
+        Patient mockPatient = mock(Patient.class);
+        lenient().when(mockPatient.getId()).thenReturn(patientId);
+        Hospital mockHospital = mock(Hospital.class);
+        lenient().when(mockHospital.getId()).thenReturn(hospitalId);
+        Prescription prn = mock(Prescription.class);
+        lenient().when(prn.getId()).thenReturn(UUID.randomUUID());
+        lenient().when(prn.getPatient()).thenReturn(mockPatient);
+        lenient().when(prn.getHospital()).thenReturn(mockHospital);
+        when(prn.getStatus()).thenReturn(PrescriptionStatus.SIGNED);
+        lenient().when(prn.getCreatedAt()).thenReturn(fixedNow.minusHours(8));
+        lenient().when(prn.getFrequency()).thenReturn("si besoin");
+        // QA D1378: as-needed is the prescriber's tick.
+        when(prn.isAsNeeded()).thenReturn(true);
+        lenient().when(prn.getPrnMinIntervalHours()).thenReturn(6);
+        when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId)).thenReturn(List.of(prn));
+        when(announcementRepository.countByHospital_Id(hospitalId)).thenReturn(0L);
+
+        try (MockedStatic<LocalDateTime> mockedNow = mockStatic(LocalDateTime.class)) {
+            mockedNow.when(LocalDateTime::now).thenReturn(fixedNow);
+            NurseDashboardSummaryDTO summary = service.getDashboardSummary(nurseId, hospitalId);
+            assertThat(summary.getMedicationsDue()).isZero();
+            assertThat(summary.getMedicationsOverdue()).isZero();
         }
     }
 
@@ -1718,7 +1924,7 @@ class NurseTaskServiceImplTest {
 
         // Exactly 4h ago → dueTime = now-4h+2h = now-2h → overdue=true
         PatientVitalSign vs = PatientVitalSign.builder().recordedAt(fixedNow.minusHours(4)).build();
-        when(vitalSignRepository.findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(patientId, hospitalId))
+        when(vitalSignRepository.findLatestObservationSet(patientId, hospitalId))
             .thenReturn(Optional.of(vs));
 
         try (MockedStatic<LocalDateTime> mockedNow = mockStatic(LocalDateTime.class)) {
@@ -1766,7 +1972,7 @@ class NurseTaskServiceImplTest {
         adm.setStatus(AdmissionStatus.ACTIVE);
 
         when(admissionRepository.findActiveAdmissionsByHospital(hospitalId)).thenReturn(List.of(adm));
-        when(vitalSignRepository.findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(patientId, hospitalId))
+        when(vitalSignRepository.findLatestObservationSet(patientId, hospitalId))
             .thenReturn(Optional.empty());
         when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
             .thenReturn(List.of());
@@ -1807,10 +2013,12 @@ class NurseTaskServiceImplTest {
             .status(PrescriptionStatus.SIGNED)
             .build();
         activePending.setId(UUID.randomUUID());
-        activePending.setCreatedAt(LocalDateTime.now().minusHours(6));
+        // QA D1402: written during this stay. The card counts what the eMAR lists;
+        // an order older than the admission is not one of its doses (QA D702).
+        activePending.setCreatedAt(LocalDateTime.now().minusHours(4));
 
         when(admissionRepository.findActiveAdmissionsByHospital(hospitalId)).thenReturn(List.of(adm));
-        when(vitalSignRepository.findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(patientId, hospitalId))
+        when(vitalSignRepository.findLatestObservationSet(patientId, hospitalId))
             .thenReturn(Optional.of(PatientVitalSign.builder().recordedAt(LocalDateTime.now()).build()));
         when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
             .thenReturn(List.of(activePending));
@@ -1971,6 +2179,29 @@ class NurseTaskServiceImplTest {
             .hasMessageContaining("Hospital context");
     }
 
+    /** QA D1077: the nurse station refuses a head circumference for an adult, before any row is saved. */
+    @Test
+    void captureVitalsRefusesAHeadCircumferenceForAnAdult_D1077() {
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Patient pat = Patient.builder().build();
+        pat.setId(patientId);
+        pat.setDateOfBirth(java.time.LocalDate.now().minusYears(46));
+        Hospital hosp = Hospital.builder().build();
+        hosp.setId(hospitalId);
+        registerPatientAtHospital(pat, hosp);
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(pat));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hosp));
+        NurseVitalCaptureRequestDTO req = NurseVitalCaptureRequestDTO.builder()
+            .heartRateBpm(72).headCircumferenceCm(57.0).build();
+
+        UUID nurseId = UUID.randomUUID();
+        assertThatThrownBy(() -> service.captureVitals(patientId, nurseId, hospitalId, req))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("vitals.headCircumference.notApplicable");
+        verify(vitalSignRepository, never()).save(any());
+    }
+
     @Test
     void captureVitalsSavesNormalVitals() {
         UUID patientId = UUID.randomUUID();
@@ -1992,6 +2223,7 @@ class NurseTaskServiceImplTest {
             .temperatureCelsius(36.8)
             .systolicBpMmHg(120)
             .diastolicBpMmHg(80)
+            .painScale(4)
             .build();
 
         service.captureVitals(patientId, nurseId, hospitalId, req);
@@ -2000,6 +2232,10 @@ class NurseTaskServiceImplTest {
         verify(vitalSignRepository).save(captor.capture());
         PatientVitalSign saved = captor.getValue();
         assertThat(saved.getHeartRateBpm()).isEqualTo(72);
+        // QA D1045: the ward pain reassessment is charted. QA D1169: as a number, rendered
+        // in the reader's language when read (it was stored as the nurse's sentence).
+        assertThat(saved.getPainScore()).isEqualTo(4);
+        assertThat(saved.getNotes()).isNull();
         assertThat(saved.isClinicallySignificant()).isFalse();
     }
 
@@ -2357,14 +2593,77 @@ class NurseTaskServiceImplTest {
             .recipientUsername("nurse1")
             .build();
 
-        when(notificationRepository.findByRecipientUsername(eq("nurse1"), any(Pageable.class)))
-            .thenReturn(new PageImpl<>(List.of(n)));
+        when(notificationRepository.findByRecipientUsernameAndReadOrderByCreatedAtDesc("nurse1", false))
+            .thenReturn(List.of(n));
+        when(notificationRepository.findByRecipientUsernameAndRead(eq("nurse1"), eq(true), any(Pageable.class)))
+            .thenReturn(Page.empty());
 
         List<NurseInboxItemDTO> result = service.getNurseInboxItems("nurse1", 10);
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).getMessage()).isEqualTo("New order");
         assertThat(result.get(0).isRead()).isFalse();
+    }
+
+    /**
+     * QA D1295 (round 28, patient safety): the inbox read 20 rows with no
+     * order and cut today's NEWS2 16 escalation. Every unread item comes back,
+     * however many, newest first; the limit bounds only the read history,
+     * which follows, asked newest first from the database.
+     */
+    @Test
+    void getNurseInboxItemsReturnsEveryUnreadItemNewestFirstThenTheReadHistory_D1295() {
+        LocalDateTime now = LocalDateTime.now();
+        List<Notification> unread = new java.util.ArrayList<>();
+        for (int i = 0; i < 41; i++) {
+            unread.add(Notification.builder().id(UUID.randomUUID()).message("unread " + i).read(false)
+                .createdAt(now.minusMinutes(i)).recipientUsername("nurse.a").build());
+        }
+        Notification readOne = Notification.builder().id(UUID.randomUUID()).message("seen").read(true)
+            .createdAt(now.plusMinutes(1)).recipientUsername("nurse.a").build();
+        when(notificationRepository.findByRecipientUsernameAndReadOrderByCreatedAtDesc("nurse.a", false))
+            .thenReturn(unread);
+        org.mockito.ArgumentCaptor<Pageable> asked = org.mockito.ArgumentCaptor.forClass(Pageable.class);
+        when(notificationRepository.findByRecipientUsernameAndRead(eq("nurse.a"), eq(true), asked.capture()))
+            .thenReturn(new PageImpl<>(List.of(readOne)));
+
+        List<NurseInboxItemDTO> result = service.getNurseInboxItems("nurse.a", 20);
+
+        assertThat(result).hasSize(42);
+        assertThat(result.get(0).getMessage()).isEqualTo("unread 0");
+        assertThat(result.subList(0, 41)).noneMatch(NurseInboxItemDTO::isRead);
+        assertThat(result.get(41).getMessage()).isEqualTo("seen");
+        assertThat(asked.getValue().getPageSize()).isEqualTo(20);
+        assertThat(asked.getValue().getSort()).isEqualTo(NurseTaskServiceImpl.INBOX_NEWEST_FIRST);
+        assertThat(asked.getValue().getSort().getOrderFor("createdAt").isDescending()).isTrue();
+    }
+
+    /**
+     * QA D1286 (round 27): the NEWS2 escalation is stored with its French copy
+     * and its key; ES and EN nurses read it in French. Each reader now gets it
+     * rendered from the key in their language; a keyless row keeps its text.
+     */
+    @org.junit.jupiter.params.ParameterizedTest(name = "{0}")
+    @org.junit.jupiter.params.provider.CsvSource(delimiter = '|', value = {
+        "es|Puntuación NEWS2 7 (ALTA) para Drissa Konaté",
+        "en|NEWS2 score 7",
+        "fr|Score NEWS2 7 (ÉLEVÉ) pour Drissa Konaté",
+    })
+    void getNurseInboxItemsRendersAKeyedItemInTheNursesLanguage(String language, String expected) {
+        Notification news2 = Notification.builder()
+            .id(UUID.randomUUID()).message("Score NEWS2 7 (ÉLEVÉ) pour Drissa Konaté : …")
+            .messageKey("news2.escalation.high").messageArgs(List.of(7, "Drissa Konaté", 15))
+            .createdAt(LocalDateTime.now()).recipientUsername("nurse.b").build();
+        when(notificationRepository.findByRecipientUsernameAndReadOrderByCreatedAtDesc("nurse.b", false))
+            .thenReturn(List.of(news2));
+        when(notificationRepository.findByRecipientUsernameAndRead(eq("nurse.b"), eq(true), any(Pageable.class)))
+            .thenReturn(Page.empty());
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.forLanguageTag(language));
+        try {
+            assertThat(service.getNurseInboxItems("nurse.b", 10).get(0).getMessage()).startsWith(expected);
+        } finally {
+            org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+        }
     }
 
     /* ════════════════════════════════════════════════════════════════════
@@ -2429,9 +2728,18 @@ class NurseTaskServiceImplTest {
         req.setDataPart("Vital signs stable");
         req.setActionPart("Repositioned patient");
         req.setResponsePart("Patient comfortable after repositioning");
+        req.setTitle("Réévaluation douleur post-morphine");
 
         NurseCareNoteResponseDTO result = service.createCareNote(patientId, nurseId, hospitalId, req);
 
+        // QA D1044: the title the nurse typed is stored with the note and returned.
+        ArgumentCaptor<NursingNote> savedNote = ArgumentCaptor.forClass(NursingNote.class);
+        verify(nursingNoteRepository).save(savedNote.capture());
+        assertThat(savedNote.getValue().getTitle()).isEqualTo("Réévaluation douleur post-morphine");
+        // QA D1107: the dialog has no draft state; the saved note is final, signed by its author.
+        assertThat(savedNote.getValue().getSignedAt()).isEqualTo(savedNote.getValue().getDocumentedAt()).isNotNull();
+        assertThat(savedNote.getValue().getSignedByName()).isEqualTo("Jane RN");
+        assertThat(result.getTitle()).isEqualTo("Réévaluation douleur post-morphine");
         assertThat(result.getTemplate()).isEqualTo("DAR");
         assertThat(result.getAuthorName()).isEqualTo("Jane RN");
         assertThat(result.getPatientName()).isEqualTo("Note Patient");
@@ -2658,6 +2966,7 @@ class NurseTaskServiceImplTest {
         Hospital hospital = mock(Hospital.class);
         lenient().when(hospital.getId()).thenReturn(hospitalId);
         Prescription rx = new Prescription();
+        rx.setStatus(PrescriptionStatus.SIGNED);
         rx.setMedicationName("Amoxicillin");
         rx.setMedicationCode("AMOX-500");
         rx.setDosage("500 mg");
@@ -3079,6 +3388,7 @@ class NurseTaskServiceImplTest {
         patient.setLastName("Kabore");
         Prescription rx = new Prescription();
         rx.setId(UUID.randomUUID());
+        rx.setStatus(PrescriptionStatus.SIGNED);
         rx.setHospital(hospital);
         rx.setPatient(patient);
         rx.setMedicationName("Morphine");
@@ -3105,6 +3415,8 @@ class NurseTaskServiceImplTest {
         NurseMedicationAdministrationRequestDTO request =
             new NurseMedicationAdministrationRequestDTO();
         request.setStatus(status);
+        // QA D1159: a held or refused dose says why.
+        request.setNote("Patient nauséeux");
         return request;
     }
 
@@ -3162,6 +3474,22 @@ class NurseTaskServiceImplTest {
         assertThatCode(() -> service.recordMedicationAdministration(
             rx.getId(), UUID.randomUUID(), hospitalId, statusRequest("HELD")))
             .doesNotThrowAnyException();
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"HELD", "REFUSED"})
+    void aWithheldDoseWithoutAReasonIsRefusedBeforeAnythingIsWritten_D1159(String status) {
+        // QA D1159 (round 21): the eMAR sent {"status":"HELD"} alone and the record kept no reason.
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = highRiskRx(hospitalId, false);
+        org.mockito.Mockito.lenient().when(prescriptionRepository.findByIdForUpdate(rx.getId())).thenReturn(Optional.of(rx));
+        NurseMedicationAdministrationRequestDTO request = statusRequest(status);
+        request.setNote("  ");
+
+        assertThatThrownBy(() -> service.recordMedicationAdministration(rx.getId(), UUID.randomUUID(), hospitalId, request))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .extracting("messageKey").isEqualTo("nurse.mar.reasonRequired");
+        verify(marRepository, never()).save(any());
     }
 
     @Test
@@ -3262,7 +3590,7 @@ class NurseTaskServiceImplTest {
             nurseHandoffRepository, labOrderRepository, imagingOrderRepository, procedureOrderRepository,
             fiveRightsService, failingMapper, news2EscalationService,
             new com.example.hms.service.support.DischargedPatientGuard(admissionRepository, encounterRepository),
-            assignmentRepository, patientAllergyRepository);
+            assignmentRepository, patientAllergyRepository, administrationWitness, notificationLocalizer, marWardReader);
 
         UUID rxId = UUID.randomUUID();
         UUID nurseId = UUID.randomUUID();
@@ -3364,6 +3692,114 @@ class NurseTaskServiceImplTest {
         verify(marRepository, never()).save(any(MedicationAdministrationRecord.class));
     }
 
+    /* ── QA D1210 (round 23): the minimum interval since the last GIVEN, on every write path ── */
+
+    private MedicationAdministrationRecord givenAt(Prescription rx, LocalDateTime slot, LocalDateTime administeredAt) {
+        MedicationAdministrationRecord r = closedDose(rx, slot, MedicationAdministrationStatus.GIVEN);
+        r.setAdministeredAt(administeredAt);
+        return r;
+    }
+
+    @Test
+    void D1210_theQaMorphineQ4hDoseAMinuteAfterTheLateOneIsRefused() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "q4h");
+        rx.setMedicationName("Morphine 2 mg IV");
+        // First slot six hours ago, given late a minute ago: the second slot is already overdue.
+        rx.setCreatedAt(LocalDateTime.now().minusHours(6));
+        when(prescriptionRepository.findByIdForUpdate(rx.getId())).thenReturn(Optional.of(rx));
+        when(marRepository.findByPrescription_IdOrderByScheduledTimeDesc(rx.getId()))
+            .thenReturn(List.of(givenAt(rx, rx.getCreatedAt(), LocalDateTime.now().minusMinutes(1))));
+        UUID rxId = rx.getId();
+        UUID nurseId = UUID.randomUUID();
+        NurseMedicationAdministrationRequestDTO given = givenRequest();
+
+        assertThatThrownBy(() -> service.recordMedicationAdministration(rxId, nurseId, hospitalId, given))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "nurse.mar.doseTooSoon")
+            .hasFieldOrPropertyWithValue("field", "earlyDoseReason");
+        verify(marRepository, never()).save(any(MedicationAdministrationRecord.class));
+    }
+
+    @Test
+    void D1210_anEarlyDoseWithAReasonIsRecordedWithTheReasonOnTheRow() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "TID");
+        rx.setCreatedAt(LocalDateTime.now().minusHours(10));
+        when(prescriptionRepository.findByIdForUpdate(rx.getId())).thenReturn(Optional.of(rx));
+        when(marRepository.findByPrescription_IdOrderByScheduledTimeDesc(rx.getId()))
+            .thenReturn(List.of(givenAt(rx, rx.getCreatedAt(), LocalDateTime.now().minusMinutes(2))));
+        ArgumentCaptor<MedicationAdministrationRecord> saved = ArgumentCaptor.forClass(MedicationAdministrationRecord.class);
+        when(marRepository.save(saved.capture())).thenAnswer(i -> i.getArgument(0));
+        NurseMedicationAdministrationRequestDTO given = givenRequest();
+        given.setEarlyDoseReason("Leaving for theatre; surgeon asked for the dose now");
+
+        service.recordMedicationAdministration(rx.getId(), UUID.randomUUID(), hospitalId, given);
+
+        assertThat(saved.getValue().getStatus()).isEqualTo(MedicationAdministrationStatus.GIVEN);
+        assertThat(saved.getValue().getReason()).isEqualTo("Leaving for theatre; surgeon asked for the dose now");
+    }
+
+    @Test
+    void D1210_aDoseOnTimeSinceTheLastOneNeedsNoReason() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "q4h");
+        rx.setCreatedAt(LocalDateTime.now().minusHours(8));
+        when(prescriptionRepository.findByIdForUpdate(rx.getId())).thenReturn(Optional.of(rx));
+        when(marRepository.findByPrescription_IdOrderByScheduledTimeDesc(rx.getId()))
+            .thenReturn(List.of(givenAt(rx, rx.getCreatedAt(), LocalDateTime.now().minusHours(4))));
+        marSaveEchoes();
+
+        NurseMedicationTaskResponseDTO out =
+            service.recordMedicationAdministration(rx.getId(), UUID.randomUUID(), hospitalId, givenRequest());
+
+        assertThat(out.getStatus()).isEqualTo("GIVEN");
+    }
+
+    @Test
+    void D1210_theVerifiedRowPathIsHeldToTheSameInterval() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "q4h");
+        rx.setCreatedAt(LocalDateTime.now().minusHours(6));
+        MedicationAdministrationRecord first = givenAt(rx, rx.getCreatedAt(), LocalDateTime.now().minusMinutes(1));
+        MedicationAdministrationRecord verified =
+            closedDose(rx, rx.getCreatedAt().plusHours(4), MedicationAdministrationStatus.PENDING);
+        verified.setFiveRightsStatus(FiveRightsStatus.VERIFIED);
+        when(prescriptionRepository.findByIdForUpdate(rx.getId())).thenReturn(Optional.of(rx));
+        when(marRepository.findByPrescription_IdOrderByScheduledTimeDesc(rx.getId()))
+            .thenReturn(List.of(verified, first));
+        UUID rxId = rx.getId();
+        UUID nurseId = UUID.randomUUID();
+        NurseMedicationAdministrationRequestDTO given = statusRequest("GIVEN");
+
+        assertThatThrownBy(() -> service.recordMedicationAdministration(rxId, nurseId, hospitalId, given))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "nurse.mar.doseTooSoon");
+        assertThat(verified.getStatus()).isEqualTo(MedicationAdministrationStatus.PENDING);
+    }
+
+    @Test
+    void D1210_theMarRowIdPathIsHeldToTheSameInterval() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "q4h");
+        rx.setCreatedAt(LocalDateTime.now().minusHours(6));
+        MedicationAdministrationRecord first = givenAt(rx, rx.getCreatedAt(), LocalDateTime.now().minusMinutes(1));
+        MedicationAdministrationRecord pending =
+            closedDose(rx, rx.getCreatedAt().plusHours(4), MedicationAdministrationStatus.PENDING);
+        when(marRepository.findById(pending.getId())).thenReturn(Optional.of(pending));
+        when(prescriptionRepository.findByIdForUpdate(rx.getId())).thenReturn(Optional.of(rx));
+        when(marRepository.findByPrescription_IdOrderByScheduledTimeDesc(rx.getId()))
+            .thenReturn(List.of(pending, first));
+        UUID marId = pending.getId();
+        UUID nurseId = UUID.randomUUID();
+        NurseMedicationAdministrationRequestDTO given = givenRequest();
+
+        assertThatThrownBy(() -> service.recordMedicationAdministration(marId, nurseId, hospitalId, given))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "nurse.mar.doseTooSoon");
+        verify(marRepository, never()).save(any(MedicationAdministrationRecord.class));
+    }
+
     @Test
     void D136_aDischargedPatientsInpatientOrderIsNoLongerDue() {
         UUID nurseId = UUID.randomUUID();
@@ -3440,14 +3876,15 @@ class NurseTaskServiceImplTest {
         List<NurseMedicationTaskResponseDTO> tasks = service.getMedicationTasks(nurseId, hospitalId, null);
 
         assertThat(tasks).hasSize(1);
-        assertThat(tasks.get(0).getStatus()).isEqualTo("DUE");
+        // QA D949: eight hours away is not yet due (it was reported DUE and refused on Give).
+        assertThat(tasks.get(0).getStatus()).isEqualTo("UPCOMING");
         assertThat(tasks.get(0).getDueTime()).isEqualTo(firstSlot.plusHours(12));
     }
 
     @Test
     void D77_theSameDoseCannotBeRecordedTwice() {
         UUID hospitalId = UUID.randomUUID();
-        Prescription rx = scheduledRx(hospitalId, "once");
+        Prescription rx = scheduledRx(hospitalId, "once only");
         when(prescriptionRepository.findByIdForUpdate(rx.getId())).thenReturn(Optional.of(rx));
         when(marRepository.findByPrescription_IdOrderByScheduledTimeDesc(rx.getId()))
             .thenReturn(List.of(closedDose(rx, rx.getCreatedAt(), MedicationAdministrationStatus.GIVEN)));
@@ -3989,5 +4426,951 @@ class NurseTaskServiceImplTest {
             .isInstanceOf(BusinessException.class)
             .hasFieldOrPropertyWithValue("messageKey", "nurse.mar.patientDischarged");
         verify(marRepository, never()).save(any(MedicationAdministrationRecord.class));
+    }
+
+    // ── QA round 16 (D928, D929, D949, D950, D922) ──────────────────────
+
+    private List<NurseMedicationTaskResponseDTO> marFor(UUID nurseId, UUID hospitalId, Prescription rx,
+                                                        String filter,
+                                                        MedicationAdministrationRecord... closed) {
+        UUID patientId = rx.getPatient().getId();
+        when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null))
+            .thenReturn(List.of(patient(patientId, "Awa Kabore", "Awa", "Kabore")));
+        when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
+            .thenReturn(List.of(rx));
+        lenient().when(marRepository.findByPrescription_IdOrderByScheduledTimeDesc(rx.getId()))
+            .thenReturn(List.of(closed));
+        return service.getMedicationTasks(nurseId, hospitalId, filter);
+    }
+
+    /**
+     * QA D928 replay (u16.js): "Une fois par jour", held. The course used to
+     * become COMPLETED with no due time, so days 2-5 vanished. The next dose
+     * is tomorrow, and the held dose is said to be held (D929).
+     */
+    @Test
+    void d928_aFrenchWordFrequencyKeepsTheCourseAfterAHeldDose() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "Une fois par jour");
+        rx.setStatus(PrescriptionStatus.SIGNED);
+        LocalDateTime firstSlot = rx.getCreatedAt();
+
+        List<NurseMedicationTaskResponseDTO> tasks = marFor(UUID.randomUUID(), hospitalId, rx, null,
+            closedDose(rx, firstSlot, MedicationAdministrationStatus.HELD));
+
+        assertThat(tasks).hasSize(1);
+        assertThat(tasks.get(0).getStatus()).isEqualTo("UPCOMING");
+        assertThat(tasks.get(0).getDueTime()).isEqualTo(firstSlot.plusHours(24));
+        assertThat(tasks.get(0).getLastOutcome()).isEqualTo("HELD");
+    }
+
+    /** QA D929: a one-off dose that was refused ends the course, and the row says it was refused. */
+    @Test
+    void d929_aFinishedCourseCarriesTheLastOutcome() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "une seule fois");
+        rx.setStatus(PrescriptionStatus.SIGNED);
+
+        List<NurseMedicationTaskResponseDTO> tasks = marFor(UUID.randomUUID(), hospitalId, rx, null,
+            closedDose(rx, rx.getCreatedAt(), MedicationAdministrationStatus.REFUSED));
+
+        assertThat(tasks.get(0).getStatus()).isEqualTo("COMPLETED");
+        assertThat(tasks.get(0).getLastOutcome()).isEqualTo("REFUSED");
+    }
+
+    /**
+     * QA D949: tomorrow's dose is not "to give" and is not counted as due;
+     * the eMAR's "still to give" list (PENDING) leaves it out.
+     */
+    @Test
+    void d949_aSlotBeyondTheEarlyWindowIsUpcomingAndNotPending() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "q24h");
+        rx.setStatus(PrescriptionStatus.SIGNED);
+
+        List<NurseMedicationTaskResponseDTO> pending = marFor(UUID.randomUUID(), hospitalId, rx, "PENDING",
+            closedDose(rx, rx.getCreatedAt(), MedicationAdministrationStatus.GIVEN));
+
+        assertThat(pending).isEmpty();
+    }
+
+    /** QA D950/D922: the route as a form code, and the controlled flag, on the MAR row. */
+    @Test
+    void d950_theRowCarriesTheRouteCodeAndTheControlledFlag() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "q4h");
+        rx.setStatus(PrescriptionStatus.SIGNED);
+        rx.setRoute("INTRAVENOUS");
+        rx.setControlledSubstance(true);
+
+        List<NurseMedicationTaskResponseDTO> tasks = marFor(UUID.randomUUID(), hospitalId, rx, null);
+
+        assertThat(tasks.get(0).getRouteCode()).isEqualTo("IV");
+        assertThat(tasks.get(0).isControlledSubstance()).isTrue();
+    }
+
+
+    /* ── QA D1225 (round 24): the reason the administer call required is read back on the MAR row ── */
+
+    @Test
+    void D1225_theListCarriesTheEarlyDoseReasonAndTheHistory() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "q4h");
+        rx.setStatus(PrescriptionStatus.SIGNED);
+        rx.setCreatedAt(LocalDateTime.now().minusHours(9));
+        MedicationAdministrationRecord held = closedDose(rx, rx.getCreatedAt(), MedicationAdministrationStatus.HELD);
+        held.setReason("Patient au bloc");
+        MedicationAdministrationRecord early = givenAt(rx, rx.getCreatedAt().plusHours(4), LocalDateTime.now().minusMinutes(1));
+        early.setReason("Douleur intense, avis du médecin");
+        early.setOverrideReason("Bracelet illisible");
+
+        List<NurseMedicationTaskResponseDTO> tasks = marFor(UUID.randomUUID(), hospitalId, rx, null, early, held);
+
+        NurseMedicationTaskResponseDTO row = tasks.get(0);
+        assertThat(row.getLastOutcome()).isEqualTo("GIVEN");
+        assertThat(row.isLastGivenEarly()).isTrue();
+        assertThat(row.getLastReason()).isEqualTo("Douleur intense, avis du médecin");
+        assertThat(row.getDoseHistory()).extracting(com.example.hms.payload.dto.nurse.MarDoseHistoryDTO::getStatus)
+            .containsExactly("GIVEN", "HELD");
+        assertThat(row.getDoseHistory().get(0).getOverrideReason()).isEqualTo("Bracelet illisible");
+        assertThat(row.getDoseHistory().get(1).getReason()).isEqualTo("Patient au bloc");
+        assertThat(row.getDoseHistory().get(1).isGivenEarly()).as("a held dose is not 'given early'").isFalse();
+    }
+
+    @Test
+    void D1225_aDoseGivenOnTimeIsNotEarlyAndCarriesNoReason() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "q24h");
+        rx.setStatus(PrescriptionStatus.SIGNED);
+
+        List<NurseMedicationTaskResponseDTO> tasks = marFor(UUID.randomUUID(), hospitalId, rx, null,
+            closedDose(rx, rx.getCreatedAt(), MedicationAdministrationStatus.GIVEN));
+
+        assertThat(tasks.get(0).isLastGivenEarly()).isFalse();
+        assertThat(tasks.get(0).getLastReason()).isNull();
+        assertThat(tasks.get(0).getDoseHistory()).hasSize(1);
+    }
+
+    @Test
+    void D1225_theAdministerAnswerCarriesTheReasonItJustRecorded() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "TID");
+        rx.setCreatedAt(LocalDateTime.now().minusHours(10));
+        when(prescriptionRepository.findByIdForUpdate(rx.getId())).thenReturn(Optional.of(rx));
+        MedicationAdministrationRecord previous = givenAt(rx, rx.getCreatedAt(), LocalDateTime.now().minusMinutes(2));
+        java.util.List<MedicationAdministrationRecord> rows = new java.util.ArrayList<>(List.of(previous));
+        when(marRepository.findByPrescription_IdOrderByScheduledTimeDesc(rx.getId())).thenAnswer(i -> List.copyOf(rows));
+        when(marRepository.save(any(MedicationAdministrationRecord.class))).thenAnswer(i -> {
+            MedicationAdministrationRecord saved = i.getArgument(0);
+            rows.add(0, saved);
+            return saved;
+        });
+        NurseMedicationAdministrationRequestDTO given = givenRequest();
+        given.setEarlyDoseReason("Départ au bloc");
+
+        NurseMedicationTaskResponseDTO answer =
+            service.recordMedicationAdministration(rx.getId(), UUID.randomUUID(), hospitalId, given);
+
+        assertThat(answer.getLastOutcome()).isEqualTo("GIVEN");
+        assertThat(answer.isLastGivenEarly()).isTrue();
+        assertThat(answer.getLastReason()).isEqualTo("Départ au bloc");
+        assertThat(answer.getDoseHistory()).hasSize(2);
+    }
+
+    /* ════════════════════════════════════════════════════════════════════
+       QA round 25: D1236 (the next dose counts from when the last one was
+       really given) and D1237 (a frequency in words never ends the course)
+       ════════════════════════════════════════════════════════════════════ */
+
+    /**
+     * QA D1236 replay (nsgive.js): morphine q6h, slots missed for two days, a
+     * dose given a minute ago for a backlog slot. The row used to read
+     * OVERDUE with the next backlog slot; the next dose is now due at the
+     * minimum gap after the real dose and is not offered before it.
+     */
+    @Test
+    void d1236_aLateDoseMovesTheNextDoseAndTheBacklogIsNotOfferedAgain() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "q6h");
+        rx.setStatus(PrescriptionStatus.SIGNED);
+        rx.setSignedAt(null);
+        rx.setCreatedAt(LocalDateTime.now().minusDays(2));
+        LocalDateTime given = LocalDateTime.now().minusMinutes(1);
+        UUID nurseId = UUID.randomUUID();
+
+        List<NurseMedicationTaskResponseDTO> tasks = marFor(nurseId, hospitalId, rx, null,
+            givenAt(rx, rx.getCreatedAt(), given));
+
+        assertThat(tasks).hasSize(1);
+        assertThat(tasks.get(0).getStatus()).isEqualTo("UPCOMING");
+        assertThat(tasks.get(0).getDueTime()).isEqualTo(given.plusHours(5));
+        assertThat(service.getMedicationTasks(nurseId, hospitalId, "OVERDUE")).isEmpty();
+    }
+
+    /** QA D1236: a dose given on time keeps the schedule exactly as before. */
+    @Test
+    void d1236_anOnTimeDoseKeepsTheSchedule() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "q6h");
+        rx.setStatus(PrescriptionStatus.SIGNED);
+        rx.setSignedAt(null);
+        LocalDateTime slot = rx.getCreatedAt();
+
+        List<NurseMedicationTaskResponseDTO> tasks = marFor(UUID.randomUUID(), hospitalId, rx, null,
+            givenAt(rx, slot, slot));
+
+        assertThat(tasks.get(0).getDueTime()).isEqualTo(slot.plusHours(6));
+        assertThat(tasks.get(0).getStatus()).isEqualTo("UPCOMING");
+    }
+
+    /**
+     * QA D1237 replay (freqmar.js): the frequencies the prescriber wrote in
+     * words. The course used to be COMPLETED after its first dose.
+     */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {
+        "toutes les six heures", "Toutes les 6 heures", "cada seis horas", "every six hours", "6h/6h"})
+    void d1237_aFrequencyInWordsKeepsTheCourseAfterTheFirstDose(String frequency) {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, frequency);
+        rx.setStatus(PrescriptionStatus.SIGNED);
+        rx.setSignedAt(null);
+        LocalDateTime slot = rx.getCreatedAt();
+
+        List<NurseMedicationTaskResponseDTO> tasks = marFor(UUID.randomUUID(), hospitalId, rx, null,
+            givenAt(rx, slot, slot));
+
+        assertThat(tasks.get(0).getStatus()).isEqualTo("UPCOMING");
+        assertThat(tasks.get(0).getDueTime()).isEqualTo(slot.plusHours(6));
+        assertThat(tasks.get(0).isFrequencyUnread()).isFalse();
+    }
+
+    /** QA D1237: "toutes les heures" is hourly; four hours after the first dose the course is overdue, not over. */
+    @Test
+    void d1237_hourlyInWordsIsHourly() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "toutes les heures");
+        rx.setStatus(PrescriptionStatus.SIGNED);
+        rx.setSignedAt(null);
+        LocalDateTime slot = rx.getCreatedAt();
+
+        List<NurseMedicationTaskResponseDTO> tasks = marFor(UUID.randomUUID(), hospitalId, rx, null,
+            givenAt(rx, slot, slot));
+
+        assertThat(tasks.get(0).getStatus()).isEqualTo("OVERDUE");
+        assertThat(tasks.get(0).getDueTime()).isEqualTo(slot.plusHours(1));
+    }
+
+    /**
+     * QA D1237: a frequency the reader cannot place keeps the course open and
+     * flagged; it is never read as a single dose.
+     */
+    @Test
+    void d1237_anUnreadFrequencyKeepsTheCourseOpenAndFlagged() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "selon protocole");
+        rx.setStatus(PrescriptionStatus.SIGNED);
+        LocalDateTime slot = rx.getCreatedAt();
+
+        List<NurseMedicationTaskResponseDTO> tasks = marFor(UUID.randomUUID(), hospitalId, rx, null,
+            givenAt(rx, slot, slot));
+
+        assertThat(tasks.get(0).getStatus()).isEqualTo("DUE");
+        assertThat(tasks.get(0).isFrequencyUnread()).isTrue();
+    }
+
+    /**
+     * QA D1508: an order asked about shows its flag from the start, as its prescription row does, before any
+     * dose. QA D1491: an older order with no frequency is the same. The first dose keeps the order's own slot.
+     */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"selon protocole", "3 fois chaque jour", "20/j", "", "  "})
+    void d1508_anUnreadOrderIsFlaggedBeforeItsFirstDose(String frequency) {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, frequency);
+        rx.setStatus(PrescriptionStatus.SIGNED);
+
+        List<NurseMedicationTaskResponseDTO> tasks = marFor(UUID.randomUUID(), hospitalId, rx, null);
+
+        assertThat(tasks.get(0).isFrequencyUnread()).as(frequency).isTrue();
+        assertThat(tasks.get(0).getDueTime()).as("its slot is the order's").isEqualTo(rx.getCreatedAt());
+        // The flag changes no status: the same row as any schedule before its first dose.
+        Prescription schedule = scheduledRx(hospitalId, "toutes les 6 heures");
+        schedule.setStatus(PrescriptionStatus.SIGNED);
+        schedule.setCreatedAt(rx.getCreatedAt());
+        assertThat(tasks.get(0).getStatus()).as(frequency)
+            .isEqualTo(marFor(UUID.randomUUID(), hospitalId, schedule, null).get(0).getStatus());
+    }
+
+    /** QA D1508: and only those. */
+    @Test
+    void d1508_aScheduleIsNotFlaggedBeforeItsFirstDose() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "toutes les 6 heures");
+        rx.setStatus(PrescriptionStatus.SIGNED);
+        assertThat(marFor(UUID.randomUUID(), hospitalId, rx, null).get(0).isFrequencyUnread()).isFalse();
+    }
+
+    /** QA D1237: the next dose of an unread order is accepted only with a reason, which is kept on the row. */
+    @Test
+    void d1237_anUnreadFrequencyAsksWhyEachLaterDoseIsGiven() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "selon protocole");
+        when(prescriptionRepository.findByIdForUpdate(rx.getId())).thenReturn(Optional.of(rx));
+        when(marRepository.findByPrescription_IdOrderByScheduledTimeDesc(rx.getId()))
+            .thenReturn(List.of(givenAt(rx, rx.getCreatedAt(), rx.getCreatedAt())));
+        UUID rxId = rx.getId();
+        UUID nurseId = UUID.randomUUID();
+        NurseMedicationAdministrationRequestDTO given = givenRequest();
+
+        assertThatThrownBy(() -> service.recordMedicationAdministration(rxId, nurseId, hospitalId, given))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", MarDoseInterval.FREQUENCY_UNREAD_KEY)
+            .hasFieldOrPropertyWithValue("field", "earlyDoseReason");
+        verify(marRepository, never()).save(any(MedicationAdministrationRecord.class));
+
+        ArgumentCaptor<MedicationAdministrationRecord> saved = ArgumentCaptor.forClass(MedicationAdministrationRecord.class);
+        when(marRepository.save(saved.capture())).thenAnswer(i -> i.getArgument(0));
+        given.setEarlyDoseReason("Prescriber confirmed: after each meal");
+        service.recordMedicationAdministration(rxId, nurseId, hospitalId, given);
+        assertThat(saved.getValue().getReason()).isEqualTo("Prescriber confirmed: after each meal");
+    }
+
+    /**
+     * QA round 30 (user decision 2026-11-02): a PRN order is no longer ended
+     * after its first dose. A minute after a dose it is still offered (DUE),
+     * flagged early, with the prescriber's interval on the row; it never
+     * reads OVERDUE.
+     */
+    @Test
+    void prn_staysOfferedAfterADoseFlaggedEarlyWithTheInterval() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "si besoin");
+        rx.setAsNeeded(true);
+        rx.setStatus(PrescriptionStatus.SIGNED);
+        rx.setPrnMinIntervalHours(6);
+        LocalDateTime given = LocalDateTime.now().minusMinutes(1);
+        UUID nurseId = UUID.randomUUID();
+
+        List<NurseMedicationTaskResponseDTO> tasks = marFor(nurseId, hospitalId, rx, null,
+            givenAt(rx, given, given));
+
+        assertThat(tasks).hasSize(1);
+        assertThat(tasks.get(0).getStatus()).isEqualTo("DUE");
+        assertThat(tasks.get(0).isAsNeeded()).isTrue();
+        assertThat(tasks.get(0).isEarlyDose()).isTrue();
+        assertThat(tasks.get(0).getPrnMinIntervalHours()).isEqualTo(6);
+        assertThat(tasks.get(0).getPrnLabel()).isNotBlank();
+        assertThat(service.getMedicationTasks(nurseId, hospitalId, "OVERDUE")).isEmpty();
+    }
+
+    /**
+     * QA D1375 replay (prn31.log give1): the answer to an early PRN dose said
+     * asNeeded=false, no interval, no label, earlyDose=false, while the next
+     * GET of the MAR said otherwise. Guard: every field of the answer equals
+     * the list row read right after, except the fields of the dose itself.
+     * A new field on the row that an administer answer does not carry fails here.
+     */
+    @Test
+    void d1375_theAdministerAnswerOfAPrnOrderSaysWhatTheListSays() throws Exception {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "au besoin");
+        rx.setAsNeeded(true);
+        rx.setStatus(PrescriptionStatus.SIGNED);
+        rx.setPrnMinIntervalHours(6);
+        LocalDateTime earlier = LocalDateTime.now().minusHours(1);
+        List<MedicationAdministrationRecord> rows = new java.util.ArrayList<>(List.of(givenAt(rx, earlier, earlier)));
+        when(prescriptionRepository.findByIdForUpdate(rx.getId())).thenReturn(Optional.of(rx));
+        lenient().when(marRepository.findByPrescription_IdOrderByScheduledTimeDesc(rx.getId()))
+            .thenAnswer(i -> List.copyOf(rows));
+        when(marRepository.save(any(MedicationAdministrationRecord.class))).thenAnswer(i -> {
+            MedicationAdministrationRecord saved = i.getArgument(0);
+            saved.setId(UUID.randomUUID());
+            rows.add(0, saved);
+            return saved;
+        });
+        UUID nurseId = UUID.randomUUID();
+        NurseMedicationAdministrationRequestDTO dose = givenRequest();
+        dose.setEarlyDoseReason("Douleur 8/10, médecin prévenu");
+
+        NurseMedicationTaskResponseDTO answer = service.recordMedicationAdministration(rx.getId(), nurseId,
+            hospitalId, dose);
+
+        assertThat(answer.getStatus()).isEqualTo("GIVEN");
+        assertThat(answer.isAsNeeded()).isTrue();
+        assertThat(answer.getPrnMinIntervalHours()).isEqualTo(6);
+        assertThat(answer.getPrnLabel()).isNotBlank();
+        assertThat(answer.isEarlyDose()).isTrue();
+
+        UUID patientId = rx.getPatient().getId();
+        when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null))
+            .thenReturn(List.of(patient(patientId, rx.getPatient().getFullName(), "Awa", "Kabore")));
+        when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId)).thenReturn(List.of(rx));
+        NurseMedicationTaskResponseDTO row = service.getMedicationTasks(nurseId, hospitalId, null).get(0);
+
+        // The dose itself: its own row id, the outcome recorded, its slot, its witness.
+        java.util.Set<String> ofTheDose = java.util.Set.of("id", "status", "dueTime", "witnessName");
+        List<String> differ = new java.util.ArrayList<>();
+        int compared = 0;
+        for (java.lang.reflect.Field field : NurseMedicationTaskResponseDTO.class.getDeclaredFields()) {
+            if (java.lang.reflect.Modifier.isStatic(field.getModifiers()) || ofTheDose.contains(field.getName())) {
+                continue;
+            }
+            field.setAccessible(true);
+            compared++;
+            if (!java.util.Objects.equals(field.get(answer), field.get(row))) {
+                differ.add(field.getName() + ": answer=" + field.get(answer) + " list=" + field.get(row));
+            }
+        }
+        assertThat(compared).isGreaterThanOrEqualTo(20);
+        assertThat(differ).isEmpty();
+    }
+
+    /**
+     * QA D1375 guard (source scan): a MAR row is built in ONE shape. Every
+     * NurseMedicationTaskResponseDTO built in main code goes through
+     * withOrderReading (the list) or answerAfterDose (every administer
+     * answer), or is a whole-row copy (toBuilder), and only
+     * NurseTaskServiceImpl builds one.
+     */
+    @Test
+    void d1375_everyMarRowIsBuiltThroughTheOrderReading() throws Exception {
+        java.nio.file.Path main = java.nio.file.Path.of("src", "main", "java");
+        List<String> builders;
+        try (var files = java.nio.file.Files.walk(main)) {
+            builders = files.filter(f -> f.toString().endsWith(".java"))
+                .filter(f -> {
+                    try {
+                        return java.nio.file.Files.readString(f).contains("NurseMedicationTaskResponseDTO.builder()");
+                    } catch (java.io.IOException e) {
+                        throw new java.io.UncheckedIOException(e);
+                    }
+                })
+                .map(f -> f.getFileName().toString())
+                .toList();
+        }
+        assertThat(builders).containsExactly("NurseTaskServiceImpl.java");
+        String source = java.nio.file.Files.readString(
+            main.resolve("com/example/hms/service/impl/NurseTaskServiceImpl.java"));
+        List<String> unwrapped = new java.util.ArrayList<>();
+        int found = 0;
+        for (int at = source.indexOf("NurseMedicationTaskResponseDTO.builder()"); at >= 0;
+             at = source.indexOf("NurseMedicationTaskResponseDTO.builder()", at + 1)) {
+            found++;
+            String before = source.substring(Math.max(0, at - 60), at);
+            if (!before.contains("withOrderReading(") && !before.contains("answerAfterDose(")) {
+                unwrapped.add(before.trim());
+            }
+        }
+        assertThat(found).isGreaterThanOrEqualTo(4);
+        assertThat(unwrapped).isEmpty();
+    }
+
+    /** QA round 30: a second PRN dose inside the interval is accepted only with a reason, kept on the row. */
+    @Test
+    void prn_aSecondDoseInsideTheIntervalAsksWhy() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "PRN");
+        rx.setAsNeeded(true);
+        rx.setPrnMinIntervalHours(4);
+        LocalDateTime given = LocalDateTime.now().minusHours(1);
+        when(prescriptionRepository.findByIdForUpdate(rx.getId())).thenReturn(Optional.of(rx));
+        when(marRepository.findByPrescription_IdOrderByScheduledTimeDesc(rx.getId()))
+            .thenReturn(List.of(givenAt(rx, given, given)));
+        UUID rxId = rx.getId();
+        UUID nurseId = UUID.randomUUID();
+        NurseMedicationAdministrationRequestDTO dose = givenRequest();
+
+        assertThatThrownBy(() -> service.recordMedicationAdministration(rxId, nurseId, hospitalId, dose))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", MarDoseInterval.TOO_SOON_KEY)
+            .hasFieldOrPropertyWithValue("field", "earlyDoseReason");
+        verify(marRepository, never()).save(any(MedicationAdministrationRecord.class));
+
+        ArgumentCaptor<MedicationAdministrationRecord> saved = ArgumentCaptor.forClass(MedicationAdministrationRecord.class);
+        when(marRepository.save(saved.capture())).thenAnswer(i -> i.getArgument(0));
+        dose.setEarlyDoseReason("Douleur 8/10, médecin prévenu");
+        service.recordMedicationAdministration(rxId, nurseId, hospitalId, dose);
+        assertThat(saved.getValue().getReason()).isEqualTo("Douleur 8/10, médecin prévenu");
+        // The dose fills a slot of now (the TIME right reads it), never the end of the interval.
+        assertThat(saved.getValue().getScheduledTime()).isAfter(given.plusMinutes(30));
+        assertThat(saved.getValue().getScheduledTime()).isBefore(given.plusHours(2));
+    }
+
+    /**
+     * QA D1255 (round 26): the MAR list was cut at 20 rows for the whole
+     * hospital, before any sort, so a controlled morphine order with a dose
+     * already given vanished. Every active order of the scope is listed,
+     * soonest due first, a finished course last.
+     */
+    @Test
+    void d1255_everyActiveOrderIsListedSoonestFirst() {
+        UUID nurseId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        List<PatientResponseDTO> patients = new java.util.ArrayList<>();
+        LocalDateTime base = LocalDateTime.now().minusHours(30);
+        for (int i = 0; i < 25; i++) {
+            Prescription rx = scheduledRx(hospitalId, "q12h");
+            rx.setStatus(PrescriptionStatus.SIGNED);
+            rx.setMedicationName("Order " + i);
+            // Later patients' orders start earlier, so the read order is not the due order.
+            rx.setCreatedAt(base.plusMinutes(60L * (25 - i)));
+            UUID patientId = rx.getPatient().getId();
+            patients.add(patient(patientId, "Patient " + i, "P", String.valueOf(i)));
+            when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
+                .thenReturn(List.of(rx));
+        }
+        when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null)).thenReturn(patients);
+
+        List<NurseMedicationTaskResponseDTO> tasks = service.getMedicationTasks(nurseId, hospitalId, null);
+
+        assertThat(tasks).hasSize(25);
+        assertThat(tasks).extracting(NurseMedicationTaskResponseDTO::getDueTime)
+            .isSortedAccordingTo(java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder()));
+        assertThat(tasks.get(0).getMedication()).isEqualTo("Order 24");
+    }
+
+    /**
+     * QA D1254 (round 26, regression of D1236): hourly morphine given on time
+     * five minutes ago. The next dose is inside its slot window but before the
+     * 30-minute gap: DUE (so Give is offered and the server's reason refusal
+     * opens the early-dose dialog), flagged earlyDose. Round 25 made it
+     * UPCOMING and the early-dose path unreachable.
+     */
+    @Test
+    void d1254_aDoseInsideItsSlotWindowButBeforeTheGapIsDueAndFlaggedEarly() {
+        UUID nurseId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "toutes les heures");
+        rx.setStatus(PrescriptionStatus.SIGNED);
+        LocalDateTime slot = LocalDateTime.now().minusMinutes(5);
+        rx.setSignedAt(slot);
+        UUID patientId = rx.getPatient().getId();
+        MedicationAdministrationRecord given = closedDose(rx, slot, MedicationAdministrationStatus.GIVEN);
+        given.setAdministeredAt(slot);
+        when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null))
+            .thenReturn(List.of(patient(patientId, "Rihanata Sankara", "Rihanata", "Sankara")));
+        when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId)).thenReturn(List.of(rx));
+        when(marRepository.findByPrescription_IdOrderByScheduledTimeDesc(rx.getId())).thenReturn(List.of(given));
+
+        List<NurseMedicationTaskResponseDTO> pending = service.getMedicationTasks(nurseId, hospitalId, "PENDING");
+
+        assertThat(pending).hasSize(1);
+        assertThat(pending.get(0).getStatus()).isEqualTo("DUE");
+        assertThat(pending.get(0).isEarlyDose()).isTrue();
+    }
+
+    /** QA D1254: once the gap has passed, the same order is DUE and not early. */
+    @Test
+    void d1254_afterTheGapTheDoseIsNoLongerEarly() {
+        UUID nurseId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "toutes les heures");
+        rx.setStatus(PrescriptionStatus.SIGNED);
+        LocalDateTime slot = LocalDateTime.now().minusMinutes(40);
+        rx.setSignedAt(slot);
+        UUID patientId = rx.getPatient().getId();
+        MedicationAdministrationRecord given = closedDose(rx, slot, MedicationAdministrationStatus.GIVEN);
+        given.setAdministeredAt(slot);
+        when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null))
+            .thenReturn(List.of(patient(patientId, "Rihanata Sankara", "Rihanata", "Sankara")));
+        when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId)).thenReturn(List.of(rx));
+        when(marRepository.findByPrescription_IdOrderByScheduledTimeDesc(rx.getId())).thenReturn(List.of(given));
+
+        NurseMedicationTaskResponseDTO row = service.getMedicationTasks(nurseId, hospitalId, null).get(0);
+
+        assertThat(row.getStatus()).isEqualTo("DUE");
+        assertThat(row.isEarlyDose()).isFalse();
+    }
+
+    /**
+     * QA D1262 (round 26): a REFUSED outcome recorded late on a missed backlog
+     * slot. The row moves to the schedule's first slot after the refusal; it
+     * is not OVERDUE on the next missed slot.
+     */
+    @Test
+    void d1262_aLateRefusalOnABacklogSlotIsNotOverdue() {
+        UUID nurseId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "trois fois par jour");
+        rx.setStatus(PrescriptionStatus.SIGNED);
+        LocalDateTime missed = LocalDateTime.now().minusHours(20);
+        rx.setSignedAt(missed);
+        UUID patientId = rx.getPatient().getId();
+        MedicationAdministrationRecord refused = closedDose(rx, missed, MedicationAdministrationStatus.REFUSED);
+        refused.setAdministeredAt(LocalDateTime.now().minusMinutes(1));
+        when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null))
+            .thenReturn(List.of(patient(patientId, "Aminatou Diallo", "Aminatou", "Diallo")));
+        when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId)).thenReturn(List.of(rx));
+        when(marRepository.findByPrescription_IdOrderByScheduledTimeDesc(rx.getId())).thenReturn(List.of(refused));
+
+        NurseMedicationTaskResponseDTO row = service.getMedicationTasks(nurseId, hospitalId, null).get(0);
+
+        assertThat(row.getStatus()).isEqualTo("UPCOMING");
+        assertThat(row.getDueTime()).isEqualTo(missed.plusHours(24));
+    }
+
+    /** QA D1255 class: an uncapped pending-handoff list reads every pending handoff, unpaged, and keeps them all. */
+    @Test
+    void d1255_anUncappedHandoffListReadsAndKeepsEveryPendingHandoff() {
+        UUID hospitalId = UUID.randomUUID();
+        Patient p = mock(Patient.class);
+        lenient().when(p.getId()).thenReturn(UUID.randomUUID());
+        List<NurseHandoff> many = new java.util.ArrayList<>();
+        for (int i = 0; i < 30; i++) {
+            many.add(NurseHandoff.builder().patient(p).direction("SHIFT_CHANGE").build());
+        }
+        when(nurseHandoffRepository.findByHospital_IdAndStatusOrderByCreatedAtDesc(
+            hospitalId, "PENDING", Pageable.unpaged())).thenReturn(many);
+
+        assertThat(service.getHandoffSummaries(null, null, hospitalId,
+            com.example.hms.service.NurseTaskService.NO_LIMIT, null)).hasSize(30);
+    }
+    /* ── QA round 33: D1392 (an order's own status), D1402 (tile == list) ── */
+
+    private static org.assertj.core.api.ThrowingConsumer<Throwable> refusedAs(String key) {
+        return ex -> assertThat(ex).isInstanceOf(com.example.hms.exception.ConflictException.class).hasMessage(key);
+    }
+
+    private MarVerificationRequestDTO scans() {
+        MarVerificationRequestDTO req = new MarVerificationRequestDTO();
+        req.setPatientScanValue("p");
+        req.setMedicationScanValue("m");
+        req.setDoseScanValue("d");
+        req.setRouteScanValue("IV");
+        return req;
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = PrescriptionStatus.class, names = {"CANCELLED", "DISCONTINUED"})
+    void d1392_aWithdrawnOrderTakesNoDoseAndNoBedsideCheck(PrescriptionStatus withdrawn) {
+        UUID hospitalId = UUID.randomUUID();
+        UUID nurseId = UUID.randomUUID();
+        Prescription rx = highRiskRx(hospitalId, true);
+        rx.setStatus(withdrawn);
+        when(prescriptionRepository.findByIdForUpdate(rx.getId())).thenReturn(Optional.of(rx));
+        lenient().when(prescriptionRepository.findByIdAndHospitalIdForUpdate(rx.getId(), hospitalId))
+            .thenReturn(Optional.of(rx));
+        NurseMedicationAdministrationRequestDTO given = givenRequest();
+        MarVerificationRequestDTO scans = scans();
+
+        assertThatThrownBy(() -> service.recordMedicationAdministration(rx.getId(), nurseId, hospitalId, given))
+            .satisfies(refusedAs("nurse.mar.orderWithdrawn"));
+        assertThatThrownBy(() -> service.verifyMedicationAdministration(rx.getId(), nurseId, hospitalId, scans))
+            .satisfies(refusedAs("nurse.mar.orderWithdrawn"));
+        verify(marRepository, never()).save(any(MedicationAdministrationRecord.class));
+    }
+
+    /** The panel opened before the cancel: its PENDING row already exists, so the MAR-row path is the one taken. */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = PrescriptionStatus.class, names = {"CANCELLED", "DISCONTINUED"})
+    void d1392_aPanelOpenedBeforeTheWithdrawalIsRefusedOnItsPendingRow(PrescriptionStatus withdrawn) {
+        UUID hospitalId = UUID.randomUUID();
+        UUID nurseId = UUID.randomUUID();
+        Prescription rx = highRiskRx(hospitalId, true);
+        rx.setStatus(withdrawn);
+        MedicationAdministrationRecord pending = closedDose(rx, LocalDateTime.now(), MedicationAdministrationStatus.PENDING);
+        when(marRepository.findById(pending.getId())).thenReturn(Optional.of(pending));
+        NurseMedicationAdministrationRequestDTO given = givenRequest();
+        MarVerificationRequestDTO scans = scans();
+
+        assertThatThrownBy(() -> service.recordMedicationAdministration(pending.getId(), nurseId, hospitalId, given))
+            .satisfies(refusedAs("nurse.mar.orderWithdrawn"));
+        assertThatThrownBy(() -> service.verifyMedicationAdministration(pending.getId(), nurseId, hospitalId, scans))
+            .satisfies(refusedAs("nurse.mar.orderWithdrawn"));
+        verify(marRepository, never()).save(any(MedicationAdministrationRecord.class));
+        assertThat(pending.getStatus()).as("no dose recorded").isEqualTo(MedicationAdministrationStatus.PENDING);
+    }
+
+    /** The order's lock is taken before its status is read, or a cancel committed meanwhile is missed. */
+    @Test
+    void d1392_theOrderIsLockedBeforeItsStatusIsRead() {
+        UUID hospitalId = UUID.randomUUID();
+        UUID rxId = UUID.randomUUID();
+        Prescription rx = mock(Prescription.class);
+        when(rx.getId()).thenReturn(rxId);
+        when(rx.getStatus()).thenReturn(PrescriptionStatus.CANCELLED);
+        MedicationAdministrationRecord pending = MedicationAdministrationRecord.builder()
+            .prescription(rx).status(MedicationAdministrationStatus.PENDING).build();
+        pending.setId(UUID.randomUUID());
+        when(marRepository.findById(pending.getId())).thenReturn(Optional.of(pending));
+        NurseMedicationAdministrationRequestDTO given = givenRequest();
+
+        assertThatThrownBy(() -> service.recordMedicationAdministration(pending.getId(), UUID.randomUUID(), hospitalId, given))
+            .satisfies(refusedAs("nurse.mar.orderWithdrawn"));
+
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(prescriptionRepository, rx);
+        order.verify(prescriptionRepository).findByIdAndHospitalIdForUpdate(rxId, hospitalId);
+        order.verify(rx).getStatus();
+    }
+
+    /** What must not break: the refusal a discharged stay's order has always had keeps its wording. */
+    @Test
+    void d1392_aDischargedStaysOrderKeepsTheDischargeRefusal() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = highRiskRx(hospitalId, true);
+        rx.setStatus(PrescriptionStatus.DISCONTINUED);
+        rx.setCreatedAt(LocalDateTime.now().minusHours(3));
+        Admission stay = new Admission();
+        stay.setId(UUID.randomUUID());
+        stay.setAdmissionDateTime(LocalDateTime.now().minusHours(5));
+        stay.setActualDischargeDateTime(LocalDateTime.now().minusHours(1));
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(rx.getId(), hospitalId)).thenReturn(Optional.of(rx));
+        when(admissionRepository.findByPatient_IdAndHospital_Id(rx.getPatient().getId(), hospitalId))
+            .thenReturn(List.of(stay));
+        NurseMedicationAdministrationRequestDTO given = givenRequest();
+
+        assertThatThrownBy(() -> service.recordMedicationAdministration(rx.getId(), UUID.randomUUID(), hospitalId, given))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "nurse.mar.patientDischarged");
+    }
+
+    /** QA D1393: a live order on a cancelled stay (a prepared fill holds it) is refused too; no discharge exists to say so. */
+    @Test
+    void d1393_aLiveOrderOfACancelledStayIsRefused() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = highRiskRx(hospitalId, true);
+        rx.setStatus(PrescriptionStatus.SIGNED);
+        Encounter cancelledStay = new Encounter();
+        cancelledStay.setAdmissionId(UUID.randomUUID());
+        cancelledStay.setStatus(com.example.hms.enums.EncounterStatus.CANCELLED);
+        rx.setEncounter(cancelledStay);
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(rx.getId(), hospitalId)).thenReturn(Optional.of(rx));
+        NurseMedicationAdministrationRequestDTO given = givenRequest();
+
+        assertThatThrownBy(() -> service.recordMedicationAdministration(rx.getId(), UUID.randomUUID(), hospitalId, given))
+            .satisfies(refusedAs("nurse.mar.stayEnded"));
+    }
+
+    /** What must not break: the supply statuses say where the medicine is; the panel opened before the hand-over still records. */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = PrescriptionStatus.class,
+        names = {"DISPENSED", "PARTIALLY_FILLED", "PENDING_STOCK", "PENDING_CLARIFICATION", "SIGNED", "TRANSMITTED"})
+    void d1392_anOrderThePrescriberStillStandsBehindTakesItsDose(PrescriptionStatus supply) {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = highRiskRx(hospitalId, true);
+        rx.setControlledSubstance(false);
+        rx.setMedicationName("Paracetamol");
+        rx.setStatus(supply);
+        when(prescriptionRepository.findByIdForUpdate(rx.getId())).thenReturn(Optional.of(rx));
+        marSaveEchoes();
+
+        assertThatCode(() -> service.recordMedicationAdministration(rx.getId(), UUID.randomUUID(), null, givenRequest()))
+            .doesNotThrowAnyException();
+    }
+
+    private PatientVitalSign highNews2Set(LocalDateTime at) {
+        // The D207 set: T 38.9, HR 112, RR 26, BP 95/60, SpO2 91 -> NEWS2 HIGH.
+        return PatientVitalSign.builder().recordedAt(at)
+            .temperatureCelsius(38.9).heartRateBpm(112).respiratoryRateBpm(26)
+            .systolicBpMmHg(95).diastolicBpMmHg(60).spo2Percent(91).build();
+    }
+
+    /**
+     * QA D1402: tile 30, list 34. A patient on a shortened NEWS2 interval whose
+     * last set is under four hours old is due in the list and was absent from
+     * the tile. Every shape of due round, one count.
+     */
+    @Test
+    void d1402_theVitalsTileIsTheRowCountOfItsList() {
+        UUID nurseId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID neverMeasured = UUID.randomUUID();
+        UUID shortened = UUID.randomUUID();
+        UUID longAgo = UUID.randomUUID();
+        UUID justMeasured = UUID.randomUUID();
+        LocalDateTime fixedNow = LocalDateTime.of(2026, 11, 6, 17, 43);
+        when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null)).thenReturn(List.of(
+            patient(neverMeasured, "A A", "A", "A"), patient(shortened, "B B", "B", "B"),
+            patient(longAgo, "C C", "C", "C"), patient(justMeasured, "D D", "D", "D")));
+        when(vitalSignRepository.findLatestObservationSet(neverMeasured, hospitalId)).thenReturn(Optional.empty());
+        when(vitalSignRepository.findLatestObservationSet(shortened, hospitalId))
+            .thenReturn(Optional.of(highNews2Set(fixedNow.minusMinutes(20))));
+        when(vitalSignRepository.findLatestObservationSet(longAgo, hospitalId))
+            .thenReturn(Optional.of(PatientVitalSign.builder().recordedAt(fixedNow.minusHours(5)).build()));
+        when(vitalSignRepository.findLatestObservationSet(justMeasured, hospitalId))
+            .thenReturn(Optional.of(PatientVitalSign.builder().recordedAt(fixedNow).build()));
+
+        try (MockedStatic<LocalDateTime> mockedNow = mockStatic(LocalDateTime.class)) {
+            mockedNow.when(LocalDateTime::now).thenReturn(fixedNow);
+            List<NurseVitalTaskResponseDTO> list = service.getDueVitals(nurseId, hospitalId, null);
+            NurseDashboardSummaryDTO summary = service.getDashboardSummary(nurseId, hospitalId);
+
+            assertThat(list).extracting(NurseVitalTaskResponseDTO::getPatientId)
+                .containsExactlyInAnyOrder(neverMeasured, shortened, longAgo);
+            assertThat(summary.getVitalsDue()).isEqualTo(list.size());
+        }
+    }
+
+    /**
+     * User decision (round 33): routine rounds fall due every 2 hours, and the look-ahead is
+     * 30 minutes. Both used one constant, so a patient measured 10 minutes ago was already "due".
+     */
+    @Test
+    void routineVitals_areDueInTheLastThirtyMinutesOfTheirTwoHours_inTheListAndTheTile() {
+        UUID nurseId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID justMeasured = UUID.randomUUID();
+        UUID dueInAnHour = UUID.randomUUID();
+        UUID dueIn31Minutes = UUID.randomUUID();
+        UUID dueIn29Minutes = UUID.randomUUID();
+        UUID overdue = UUID.randomUUID();
+        LocalDateTime fixedNow = LocalDateTime.of(2026, 11, 6, 17, 43);
+        when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null)).thenReturn(List.of(
+            patient(justMeasured, "A A", "A", "A"), patient(dueInAnHour, "B B", "B", "B"),
+            patient(dueIn31Minutes, "C C", "C", "C"), patient(dueIn29Minutes, "D D", "D", "D"),
+            patient(overdue, "E E", "E", "E")));
+        stubLastSet(justMeasured, hospitalId, fixedNow.minusMinutes(10));
+        stubLastSet(dueInAnHour, hospitalId, fixedNow.minusHours(1));
+        stubLastSet(dueIn31Minutes, hospitalId, fixedNow.minusMinutes(89));
+        stubLastSet(dueIn29Minutes, hospitalId, fixedNow.minusMinutes(91));
+        stubLastSet(overdue, hospitalId, fixedNow.minusMinutes(121));
+
+        try (MockedStatic<LocalDateTime> mockedNow = mockStatic(LocalDateTime.class)) {
+            mockedNow.when(LocalDateTime::now).thenReturn(fixedNow);
+            List<NurseVitalTaskResponseDTO> list = service.getDueVitals(nurseId, hospitalId, null);
+            NurseDashboardSummaryDTO summary = service.getDashboardSummary(nurseId, hospitalId);
+
+            assertThat(list).extracting(NurseVitalTaskResponseDTO::getPatientId)
+                .containsExactly(overdue, dueIn29Minutes);
+            assertThat(list.get(0).isOverdue()).isTrue();
+            assertThat(list.get(1).isOverdue()).isFalse();
+            assertThat(list.get(1).getDueTime()).isEqualTo(fixedNow.plusMinutes(29));
+            assertThat(summary.getVitalsDue()).isEqualTo(list.size());
+        }
+    }
+
+    /** The reader's look-ahead shows more rounds; it never moves when a round falls due. */
+    @Test
+    void routineVitals_aWiderLookAheadNeverStretchesTheTwoHourInterval() {
+        UUID nurseId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID fiveHoursAgo = UUID.randomUUID();
+        UUID oneHourAgo = UUID.randomUUID();
+        LocalDateTime fixedNow = LocalDateTime.of(2026, 11, 6, 17, 43);
+        when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null)).thenReturn(List.of(
+            patient(fiveHoursAgo, "A A", "A", "A"), patient(oneHourAgo, "B B", "B", "B")));
+        stubLastSet(fiveHoursAgo, hospitalId, fixedNow.minusHours(5));
+        stubLastSet(oneHourAgo, hospitalId, fixedNow.minusHours(1));
+
+        try (MockedStatic<LocalDateTime> mockedNow = mockStatic(LocalDateTime.class)) {
+            mockedNow.when(LocalDateTime::now).thenReturn(fixedNow);
+            List<NurseVitalTaskResponseDTO> list = service.getDueVitals(nurseId, hospitalId, Duration.ofHours(8));
+
+            assertThat(list).extracting(NurseVitalTaskResponseDTO::getPatientId)
+                .containsExactly(fiveHoursAgo, oneHourAgo);
+            assertThat(list.get(0).isOverdue()).isTrue();
+            assertThat(list.get(0).getDueTime()).isEqualTo(fixedNow.minusHours(3));
+            assertThat(list.get(1).getDueTime()).isEqualTo(fixedNow.plusHours(1));
+        }
+    }
+
+    private void stubLastSet(UUID patientId, UUID hospitalId, LocalDateTime recordedAt) {
+        when(vitalSignRepository.findLatestObservationSet(patientId, hospitalId))
+            .thenReturn(Optional.of(PatientVitalSign.builder().recordedAt(recordedAt).build()));
+    }
+
+    /**
+     * QA D1402: "Médicaments à administrer" read 9 against 21 rows, and the two
+     * labels read the same. Each medication tile is a named filter of the rows
+     * the eMAR lists, as-needed orders counted apart.
+     */
+    @Test
+    void d1402_theMedicationTilesAreFiltersOfTheEmarRows() {
+        UUID nurseId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        LocalDateTime now = LocalDateTime.now();
+        Prescription due = scheduledRx(hospitalId, "q12h");
+        due.setStatus(PrescriptionStatus.SIGNED);
+        due.setCreatedAt(now.minusMinutes(10));
+        UUID patientId = due.getPatient().getId();
+        Prescription overdue = scheduledRx(hospitalId, "q12h");
+        overdue.setPatient(due.getPatient());
+        overdue.setStatus(PrescriptionStatus.SIGNED);
+        overdue.setCreatedAt(now.minusHours(3));
+        Prescription upcoming = scheduledRx(hospitalId, "q12h");
+        upcoming.setPatient(due.getPatient());
+        upcoming.setStatus(PrescriptionStatus.SIGNED);
+        upcoming.setCreatedAt(now.minusHours(13));
+        lenient().when(marRepository.findByPrescription_IdOrderByScheduledTimeDesc(upcoming.getId()))
+            .thenReturn(List.of(closedDose(upcoming, upcoming.getCreatedAt().plusHours(12), MedicationAdministrationStatus.GIVEN)));
+        Prescription asNeeded = scheduledRx(hospitalId, "si besoin");
+        asNeeded.setPatient(due.getPatient());
+        asNeeded.setStatus(PrescriptionStatus.SIGNED);
+        asNeeded.setAsNeeded(true);
+        asNeeded.setPrnMinIntervalHours(6);
+        Prescription withdrawn = scheduledRx(hospitalId, "q12h");
+        withdrawn.setPatient(due.getPatient());
+        withdrawn.setStatus(PrescriptionStatus.CANCELLED);
+        when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null))
+            .thenReturn(List.of(patient(patientId, "Awa Kabore", "Awa", "Kabore")));
+        when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
+            .thenReturn(List.of(due, overdue, upcoming, asNeeded, withdrawn));
+
+        List<NurseMedicationTaskResponseDTO> rows = service.getMedicationTasks(nurseId, hospitalId, null);
+        NurseDashboardSummaryDTO summary = service.getDashboardSummary(nurseId, hospitalId);
+
+        assertThat(rows).as("the withdrawn order is on no list").hasSize(4);
+        assertThat(summary.getMedicationsDue()).isEqualTo(
+            rows.stream().filter(r -> "DUE".equals(r.getStatus()) && !r.isAsNeeded()).count());
+        assertThat(summary.getMedicationsOverdue()).isEqualTo(
+            rows.stream().filter(r -> "OVERDUE".equals(r.getStatus())).count());
+        assertThat(summary.getMedicationsAsNeeded()).isEqualTo(1L)
+            .isEqualTo(rows.stream().filter(NurseMedicationTaskResponseDTO::isAsNeeded).count());
+    }
+
+    /** QA D1402: the workboard card reads the eMAR's rule: another visit's take-home order is no ward dose. */
+    @Test
+    void d1402_theWorkboardCardCountsTheRowsTheEmarLists() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription ofTheStay = scheduledRx(hospitalId, "q12h");
+        ofTheStay.setStatus(PrescriptionStatus.SIGNED);
+        ofTheStay.setCreatedAt(LocalDateTime.now().minusMinutes(10));
+        UUID patientId = ofTheStay.getPatient().getId();
+        Encounter consultation = new Encounter();
+        consultation.setEncounterType(com.example.hms.enums.EncounterType.CONSULTATION);
+        consultation.setStatus(com.example.hms.enums.EncounterStatus.COMPLETED);
+        Prescription ofAVisit = scheduledRx(hospitalId, "q12h");
+        ofAVisit.setPatient(ofTheStay.getPatient());
+        ofAVisit.setStatus(PrescriptionStatus.SIGNED);
+        ofAVisit.setCreatedAt(LocalDateTime.now().minusMinutes(10));
+        ofAVisit.setEncounter(consultation);
+        Admission adm = new Admission();
+        adm.setId(UUID.randomUUID());
+        adm.setPatient(ofTheStay.getPatient());
+        adm.setStatus(AdmissionStatus.ACTIVE);
+        adm.setAdmissionDateTime(LocalDateTime.now().minusHours(5));
+        when(admissionRepository.findActiveAdmissionsByHospital(hospitalId)).thenReturn(List.of(adm));
+        when(vitalSignRepository.findLatestObservationSet(patientId, hospitalId))
+            .thenReturn(Optional.of(highNews2Set(LocalDateTime.now().minusMinutes(20))));
+        when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
+            .thenReturn(List.of(ofTheStay, ofAVisit));
+
+        List<NurseWorkboardPatientDTO> cards = service.getWorkboard(UUID.randomUUID(), hospitalId);
+
+        assertThat(cards).singleElement().satisfies(card -> {
+            assertThat(card.getMedsDue()).isEqualTo(1L);
+            assertThat(card.isVitalsDue()).as("overdue on its NEWS2 interval, as in the list").isTrue();
+        });
+    }
+
+    /** QA D1428 class: a recorded dose keeps its scans, its override and its nurse. */
+    @Test
+    void qaD1428_aRecordedDoseIsNotVerifiedAgain() {
+        UUID marId = UUID.randomUUID();
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        MedicationAdministrationRecord mar = seededMar(patientId, hospitalId, LocalDateTime.now());
+        mar.setStatus(com.example.hms.enums.MedicationAdministrationStatus.GIVEN);
+        mar.setPatientScanValue("as scanned");
+        when(marRepository.findById(marId)).thenReturn(Optional.of(mar));
+        MarVerificationRequestDTO req = new MarVerificationRequestDTO();
+        req.setPatientScanValue("rewritten");
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> service.verifyMedicationAdministration(marId, null, hospitalId, req))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .extracting("messageKey").isEqualTo("nurse.mar.alreadyRecorded");
+        assertThat(mar.getPatientScanValue()).isEqualTo("as scanned");
     }
 }

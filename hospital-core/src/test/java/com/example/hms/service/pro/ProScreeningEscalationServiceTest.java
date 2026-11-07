@@ -129,7 +129,7 @@ class ProScreeningEscalationServiceTest {
 
         service.notifyOnRecord(response);
 
-        verify(notificationService).created(contains("Item de sécurité EPDS"), eq("midwife.kone"),
+        verify(notificationService).created(contains("Réponse positive à l'item de sécurité EPDS"), eq("midwife.kone"),
             eq(ProScreeningEscalationService.CRITICAL_TYPE));
         verify(notificationService).created(anyString(), eq("dr.ouedraogo"),
             eq(ProScreeningEscalationService.CRITICAL_TYPE));
@@ -215,7 +215,7 @@ class ProScreeningEscalationServiceTest {
 
         service.notifyOnRecord(response);
 
-        verify(smsService).send(eq("+22670000000"), contains("Item de sécurité EPDS"));
+        verify(smsService).send(eq("+22670000000"), contains("Réponse positive à l'item de sécurité EPDS"));
     }
 
     @Test

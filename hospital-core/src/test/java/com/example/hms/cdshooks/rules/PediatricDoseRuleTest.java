@@ -64,7 +64,8 @@ class PediatricDoseRuleTest {
 
         assertThat(cards).hasSize(1);
         assertThat(cards.get(0).indicator()).isEqualTo(CdsCard.Indicator.CRITICAL);
-        assertThat(cards.get(0).summary()).contains("60.00 mg/kg");
+        // QA D1133 (changed assertion): "60 mg/kg", no padded zeros (was "60.00 mg/kg").
+        assertThat(cards.get(0).summary()).contains("60 mg/kg").doesNotContain("60.00");
     }
 
     @Test
@@ -82,7 +83,8 @@ class PediatricDoseRuleTest {
 
         assertThat(cards).hasSize(1);
         assertThat(cards.get(0).indicator()).isEqualTo(CdsCard.Indicator.WARNING);
-        assertThat(cards.get(0).detail()).contains("18.00 kg");
+        // QA D1133 (changed assertion): "18 kg", no padded zeros (was "18.00 kg").
+        assertThat(cards.get(0).detail()).contains("18 kg").doesNotContain("18.00");
     }
 
     @Test

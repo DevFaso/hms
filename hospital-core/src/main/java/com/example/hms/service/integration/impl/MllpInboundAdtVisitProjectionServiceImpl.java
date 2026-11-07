@@ -243,6 +243,8 @@ public class MllpInboundAdtVisitProjectionServiceImpl
 
         if (firstTransition) {
             bedAssignmentService.releaseBed(row);
+            // QA D1435: an ADT discharge ends the stay's nursing work like any other.
+            stayEncounters.ifAvailable(service -> service.closeNursingWorkOfEndedStay(row));
             emitAdmissionLifecycleAudit(
                 AuditEventType.ADMISSION_DISCHARGED, row, ctx,
                 String.format(

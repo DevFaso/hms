@@ -27,4 +27,6 @@ public class PatientFlowItemDTO {
     private String urgency;      // LOW, ROUTINE, URGENT, EMERGENT
     private String state;        // encounter/flow state label
     private String flowSource;   // "ENCOUNTER" or "ADMISSION"
+    /** QA D994: the visit's type (EMERGENCY, OUTPATIENT, …), so the board can say "Urgences". */
+    private String encounterType;
 }

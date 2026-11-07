@@ -55,13 +55,13 @@ public interface PatientHospitalRegistrationRepository extends JpaRepository<Pat
     @Query("""
            SELECT new com.example.hms.payload.dto.RegistrationDeskRow(
                r.id, r.mrn,
-               p.id, u.username, p.firstName, p.lastName,
+               p.id, u.username, p.firstName, p.middleName, p.lastName,
                p.email, p.phoneNumberPrimary, p.gender,
                h.id, h.name, h.code, h.address,
                r.registrationDate, r.active,
                r.stayStatus, r.stayStatusUpdatedAt,
                r.currentRoom, r.currentBed, r.attendingPhysicianName,
-               r.readyForDischargeNote, r.readyByStaffId
+               r.readyForDischargeNote, r.readyByStaffId, r.deactivationReason
            )
            FROM PatientHospitalRegistration r
            LEFT JOIN r.patient p
@@ -99,6 +99,9 @@ public interface PatientHospitalRegistrationRepository extends JpaRepository<Pat
     );
     boolean existsByPatientIdAndHospitalId(UUID patientId, UUID hospitalId);
 
+    /** QA D1476: the patient holds a registration here and the desk deactivated it. */
+    boolean existsByPatientIdAndHospitalIdAndActiveFalse(UUID patientId, UUID hospitalId);
+
     // 🔍 Add Spring Data fallback method
     Optional<PatientHospitalRegistration> findByPatientIdAndHospitalIdAndActiveTrue(UUID patientId, UUID hospitalId);
 
@@ -119,11 +122,13 @@ public interface PatientHospitalRegistrationRepository extends JpaRepository<Pat
         WHERE r.hospital.id = :hospitalId
           AND r.active = true
           AND (
-                LOWER(r.mrn) = LOWER(:identifier)
-             OR LOWER(COALESCE(p.email, '')) = LOWER(:identifier)
-             OR LOWER(COALESCE(p.user.username, '')) = LOWER(:identifier)
-             OR LOWER(COALESCE(r.patientFullName, '')) = LOWER(:identifier)
-             OR LOWER(CONCAT(COALESCE(p.firstName, ''), ' ', COALESCE(p.lastName, ''))) = LOWER(:identifier)
+                LOWER(r.mrn) = LOWER(CAST(:identifier AS string))
+             OR LOWER(COALESCE(p.email, '')) = LOWER(CAST(:identifier AS string))
+             OR LOWER(COALESCE(p.user.username, '')) = LOWER(CAST(:identifier AS string))
+             OR LOWER(COALESCE(r.patientFullName, '')) = LOWER(CAST(:identifier AS string))
+             OR LOWER(CONCAT(COALESCE(p.firstName, ''), ' ', COALESCE(p.lastName, ''))) = LOWER(CAST(:identifier AS string))
+             OR (p.middleName IS NOT NULL AND LOWER(CONCAT(COALESCE(p.firstName, ''), ' ', p.middleName, ' ',
+                 COALESCE(p.lastName, ''))) = LOWER(CAST(:identifier AS string)))
           )
     """)
     List<PatientHospitalRegistration> findActiveByHospitalIdAndIdentifier(@Param("hospitalId") UUID hospitalId,
@@ -133,15 +138,37 @@ public interface PatientHospitalRegistrationRepository extends JpaRepository<Pat
                 SELECT r FROM PatientHospitalRegistration r
                 JOIN FETCH r.patient p
                 LEFT JOIN FETCH p.user u
+                LEFT JOIN FETCH u.patientProfile
+                LEFT JOIN FETCH u.staffProfile
                 WHERE r.hospital.id = :hospitalId
                     AND r.active = true
         """)
         List<PatientHospitalRegistration> findActiveForHospitalWithPatient(@Param("hospitalId") UUID hospitalId);
 
+    /**
+     * QA D1314: who a nurse's lists are for, and nothing else. They built each
+     * row from {@link #findActiveForHospitalWithPatient}, which loads the
+     * patient and the account (and more statements per account), then enriched
+     * it with the vitals and the allergies: for every registered patient, on
+     * every read.
+     */
+    @Query("""
+        SELECT new com.example.hms.payload.dto.nurse.NursePatientNameRow(
+            p.id, p.firstName, p.middleName, p.lastName, r.patientFullName, r.registrationDate, r.readyByStaffId)
+        FROM PatientHospitalRegistration r
+        JOIN r.patient p
+        WHERE r.hospital.id = :hospitalId
+          AND r.active = true
+        """)
+    List<com.example.hms.payload.dto.nurse.NursePatientNameRow> findActiveNamesForHospital(@Param("hospitalId") UUID hospitalId);
+
     @Query("""
         SELECT new com.example.hms.payload.dto.PatientMultiHospitalSummaryDTO(
             p.id,
-            CONCAT(TRIM(COALESCE(p.firstName, '')), ' ', TRIM(COALESCE(p.lastName, ''))),
+            CONCAT(TRIM(COALESCE(p.firstName, '')),
+                   CASE WHEN p.middleName IS NULL OR TRIM(p.middleName) = '' THEN ''
+                        ELSE CONCAT(' ', TRIM(p.middleName)) END,
+                   ' ', TRIM(COALESCE(p.lastName, ''))),
             h.id,
             h.name
         )

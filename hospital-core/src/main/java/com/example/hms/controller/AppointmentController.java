@@ -140,6 +140,26 @@ public class AppointmentController {
         return auth.getName();
     }
 
+    /** QA D1474: the desk is told at once that a time cannot be booked, before it writes a reason. */
+    @GetMapping("/booking-time-check")
+    @PreAuthorize(APPOINTMENT_MANAGE_ROLES)
+    @Operation(summary = "Why a booking at this time would be refused",
+        description = "The past, schedule and overlap rules of a booking; `refusal` is absent when it can be booked.")
+    public ResponseEntity<java.util.Map<String, String>> bookingTimeCheck(
+        @RequestParam java.util.UUID staffId,
+        @RequestParam @org.springframework.format.annotation.DateTimeFormat(
+            iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate date,
+        @RequestParam @org.springframework.format.annotation.DateTimeFormat(
+            iso = org.springframework.format.annotation.DateTimeFormat.ISO.TIME) java.time.LocalTime time,
+        @RequestParam(required = false) java.util.UUID movedAppointmentId,
+        @RequestHeader(name = "Accept-Language", required = false) String lang,
+        Authentication authentication
+    ) {
+        String refusal = appointmentService.bookingTimeRefusal(staffId, date, time, movedAppointmentId,
+            parseLocale(lang), getUsername(authentication));
+        return ResponseEntity.ok(refusal == null ? java.util.Map.of() : java.util.Map.of("refusal", refusal));
+    }
+
     // ---- CREATE ----
     @PostMapping
     @PreAuthorize(APPOINTMENT_BOOK_ROLES)
@@ -174,12 +194,16 @@ public class AppointmentController {
     public ResponseEntity<AppointmentResponseDTO> updateAppointmentStatus(
         @PathVariable UUID id,
         @RequestParam(name = "action") String action,
+        // QA D1126 / D1132: the reason of a cancel or a no-show (required for those two).
+        @jakarta.validation.Valid @RequestBody(required = false)
+        com.example.hms.payload.dto.AppointmentStatusChangeRequestDTO body,
     @RequestHeader(name = "Accept-Language", required = false) String lang,
         Authentication authentication
     ) {
     Locale locale = parseLocale(lang);
         return ResponseEntity.ok(
-            appointmentService.confirmOrCancelAppointment(id, action, locale, getUsername(authentication))
+            appointmentService.confirmOrCancelAppointment(id, action, body != null ? body.getReason() : null,
+                locale, getUsername(authentication))
         );
     }
 
@@ -198,6 +222,7 @@ public class AppointmentController {
     }
 
     // ---- SEARCH ----
+    @com.example.hms.security.ReadsOnly("a filtered search of appointments, under POST for its body")
     @PostMapping("/search")
     @PreAuthorize(APPOINTMENT_READ_ROLES)
     public ResponseEntity<Page<AppointmentResponseDTO>> searchAppointments(
@@ -466,13 +491,14 @@ public class AppointmentController {
         Authentication authentication,
         @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage
     ) {
-        if (from == null || to == null || from.isAfter(to)) {
-            return ResponseEntity.badRequest().build();
+        // QA round 29 sweep: a refusal names its field (it was an empty 400).
+        if (from.isAfter(to)) {
+            throw new com.example.hms.exception.FieldBusinessException("to", "query.dateRange.reversed");
         }
         // The cap is INCLUSIVE: ChronoUnit.DAYS.between excludes the end date,
         // so the 42-day month grid yields 41; reject anything longer.
         if (java.time.temporal.ChronoUnit.DAYS.between(from, to) > CALENDAR_MAX_RANGE_DAYS - 1) {
-            return ResponseEntity.badRequest().build();
+            throw new com.example.hms.exception.FieldBusinessException("to", "query.dateRange.tooLong", CALENDAR_MAX_RANGE_DAYS);
         }
         Locale locale = (acceptLanguage == null || acceptLanguage.isBlank())
             ? Locale.ENGLISH : Locale.forLanguageTag(acceptLanguage);

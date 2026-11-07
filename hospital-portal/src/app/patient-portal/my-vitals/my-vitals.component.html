@@ -11,7 +11,15 @@
       <div class="portal-spinner"></div>
       <p>{{ 'PORTAL.VITALS.LOADING' | translate }}</p>
     </div>
-  } @else if (vitals().length === 0) {
+  } @else if (loadFailed()) {
+    <div class="portal-empty" role="alert" data-testid="vitals-load-failed">
+      <span class="material-symbols-outlined">error</span>
+      <p>{{ loadFailedReason() ?? ('PATIENTS.VITALS_LOAD_FAILED' | translate) }}</p>
+      <button type="button" class="btn-secondary" (click)="loadPage(page())">
+        {{ 'COMMON.RETRY' | translate }}
+      </button>
+    </div>
+  } @else if (vitals().length === 0 && total() === 0) {
     <div class="portal-empty">
       <span class="material-symbols-outlined">monitor_heart</span>
       <h3>{{ 'PORTAL.VITALS.EMPTY_TITLE' | translate }}</h3>
@@ -56,7 +64,7 @@
             @if (isExpanded(group.id)) {
               <div class="vitals-grid">
                 @for (v of group.vitals; track v.id) {
-                  <div class="vital-card">
+                  <div class="vital-card" [class.out-of-range]="!!rangeFlag(v)">
                     <div class="vc-icon">
                       <span class="material-symbols-outlined">{{ getVitalIcon(v.type) }}</span>
                     </div>
@@ -66,10 +74,24 @@
                       <span class="vc-value"
                         >{{ displayValue(v.value) }} <small>{{ unitLabel(v.unit) }}</small></span
                       >
+                      @if (rangeFlag(v); as flag) {
+                        <!-- QA D980: an out-of-range reading says so, in words and not by colour alone. -->
+                        <span
+                          class="vc-flag"
+                          [attr.data-flag]="flag"
+                          [attr.data-testid]="'flag-' + v.id"
+                          >{{
+                            (flag === 'HIGH'
+                              ? 'PORTAL.VITALS.ABOVE_NORMAL'
+                              : 'PORTAL.VITALS.BELOW_NORMAL'
+                            ) | translate
+                          }}</span
+                        >
+                      }
                       @if (getNormalRange(v.type)) {
                         <span class="vc-range"
-                          >{{ 'PORTAL.VITALS.NORMAL_PREFIX' | translate }}:
-                          {{ getNormalRange(v.type) }}</span
+                          >{{ 'PORTAL.VITALS.NORMAL_PREFIX' | translate
+                          }}{{ 'COMMON.COLON' | translate }} {{ getNormalRange(v.type) }}</span
                         >
                       }
                     </div>
@@ -80,6 +102,16 @@
           </article>
         }
       </div>
+      <!-- QA D1379: every record is reachable, counted by the server. -->
+      <app-range-pager
+        testId="vitals-pager"
+        [label]="'PORTAL.VITALS.TITLE' | translate"
+        [page]="page()"
+        [size]="pageSize()"
+        [total]="total()"
+        [shown]="recordsOnPage()"
+        (pageChange)="loadPage($event)"
+      />
     </section>
   }
 </div>

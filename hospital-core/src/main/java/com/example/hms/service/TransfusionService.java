@@ -4,6 +4,8 @@ import com.example.hms.payload.dto.transfusion.BloodUnitRequestDTO;
 import com.example.hms.payload.dto.transfusion.BloodUnitResponseDTO;
 import com.example.hms.payload.dto.transfusion.CrossmatchRequestDTO;
 import com.example.hms.payload.dto.transfusion.CrossmatchResponseDTO;
+import com.example.hms.payload.dto.transfusion.EmergencyReleaseOptionsDTO;
+import com.example.hms.payload.dto.transfusion.EmergencyReleaseRequestDTO;
 import com.example.hms.payload.dto.transfusion.PatientBloodGroupRequestDTO;
 import com.example.hms.payload.dto.transfusion.PatientBloodGroupResponseDTO;
 import com.example.hms.payload.dto.transfusion.TransfusionAdministrationRequestDTO;
@@ -90,9 +92,21 @@ public interface TransfusionService {
     /** Release a crossmatched unit from the lab to the ward. */
     BloodUnitResponseDTO issueUnit(UUID requestId, UUID unitId);
 
+    /**
+     * Issue a red-cell bag on a documented emergency decision: O positive where the rules ask for a
+     * decision, or despite an incompatible crossmatch. The crossmatch result is left as it was.
+     */
+    BloodUnitResponseDTO emergencyRelease(UUID requestId, EmergencyReleaseRequestDTO release);
+
+    /** What the emergency rules say for this request, for the form that asks. */
+    EmergencyReleaseOptionsDTO emergencyReleaseOptions(UUID requestId);
+
     // ── Bedside ─────────────────────────────────────────────────────────
 
     TransfusionAdministrationResponseDTO startAdministration(TransfusionAdministrationRequestDTO request);
+
+    /** Colleagues who can be the second check at the bedside (QA CX-008). */
+    List<com.example.hms.payload.dto.pharmacy.StockWitnessCandidateDTO> listVerifierCandidates();
 
     TransfusionAdministrationResponseDTO completeAdministration(UUID administrationId, Integer volumeMl);
 

@@ -96,6 +96,16 @@ public class PatientAllergy extends BaseEntity {
     @Column(name = "active", nullable = false)
     private boolean active = true;
 
+    /** QA D1242 (round 25): why, when and by whom the entry was deactivated (kept, never overwritten). */
+    @Column(name = "deactivation_reason", length = 500)
+    private String deactivationReason;
+
+    @Column(name = "deactivated_at")
+    private java.time.LocalDateTime deactivatedAt;
+
+    @Column(name = "deactivated_by_user_id")
+    private java.util.UUID deactivatedByUserId;
+
     @PrePersist
     @PreUpdate
     private void normalize() {

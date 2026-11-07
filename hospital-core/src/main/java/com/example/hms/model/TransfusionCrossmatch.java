@@ -87,6 +87,15 @@ public class TransfusionCrossmatch extends BaseEntity {
     @Column(name = "expires_at")
     private LocalDateTime expiresAt;
 
+    /**
+     * QA CX-012: this result was written while the bag was out for this request. Kept on the row because the bag's
+     * own status moves on (an issued bag found incompatible goes back to RETURNED, as a never-issued one does):
+     * an incompatible result so written stands, and no later compatible result replaces it.
+     */
+    @Column(name = "unit_issued", nullable = false)
+    @Builder.Default
+    private boolean unitIssued = false;
+
     /** Compatible, and the reservation has not lapsed. */
     public boolean isUsableAt(LocalDateTime now) {
         return Boolean.TRUE.equals(compatible)

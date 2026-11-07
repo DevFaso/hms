@@ -525,4 +525,78 @@ class AdmissionStayEncounterServiceTest {
         verify(encounterRepository, never()).save(any());
         assertThat(stay.getDepartment()).isSameAs(admitting);
     }
+
+    // ═══════════════ QA D1435 (round 34): the nursing work of a cancelled stay ═══════════════
+
+    private com.example.hms.model.NursingTask taskWrittenAt(LocalDateTime at) {
+        com.example.hms.model.NursingTask task = new com.example.hms.model.NursingTask();
+        task.setStatus("PENDING");
+        task.setCreatedAt(at);
+        return task;
+    }
+
+    private com.example.hms.model.NurseHandoff handoffWrittenAt(LocalDateTime at) {
+        com.example.hms.model.NurseHandoff handoff = new com.example.hms.model.NurseHandoff();
+        handoff.setStatus("PENDING");
+        handoff.setCreatedAt(at);
+        return handoff;
+    }
+
+    @Test
+    void qaD1435_aCancelledStayClosesItsOwnWorkWithTheReasonAndLeavesTheEarlierWork() {
+        LocalDateTime opened = LocalDateTime.of(2026, 11, 1, 8, 0);
+        admission.setAdmissionDateTime(opened);
+        admission.cancel("Erreur de patient", UUID.randomUUID(), opened.plusHours(5));
+        com.example.hms.model.NursingTask ofTheStay = taskWrittenAt(opened.plusHours(1));
+        com.example.hms.model.NursingTask before = taskWrittenAt(opened.minusDays(2));
+        com.example.hms.model.NurseHandoff handoffOfTheStay = handoffWrittenAt(opened.plusHours(2));
+        com.example.hms.model.NurseHandoff handoffBefore = handoffWrittenAt(opened.minusDays(2));
+        when(nursingTaskRepository.findByPatient_IdAndHospital_IdAndStatus(
+            admission.getPatient().getId(), hospital.getId(), "PENDING")).thenReturn(List.of(ofTheStay, before));
+        when(nurseHandoffRepository.findByPatient_IdAndHospital_IdAndStatus(
+            admission.getPatient().getId(), hospital.getId(), "PENDING")).thenReturn(List.of(handoffOfTheStay, handoffBefore));
+        when(messageSource.getMessage(eq("nurse.work.closedByStayCancel"), any(), any(), any()))
+            .thenReturn("Clôturée : séjour annulé (Erreur de patient)");
+
+        service.recordCancellation(admission, UUID.randomUUID());
+
+        assertThat(ofTheStay.getStatus()).isEqualTo("COMPLETED");
+        assertThat(ofTheStay.getCompletionNote()).isEqualTo("Erreur de patient");
+        assertThat(ofTheStay.getCompletedByName()).contains("Erreur de patient");
+        assertThat(before.getStatus()).isEqualTo("PENDING");
+        assertThat(handoffOfTheStay.getStatus()).isEqualTo("COMPLETED");
+        assertThat(handoffOfTheStay.getCompletedByName()).contains("Erreur de patient");
+        assertThat(handoffBefore.getStatus()).isEqualTo("PENDING");
+        verify(nursingTaskRepository).saveAll(List.of(ofTheStay));
+        verify(nurseHandoffRepository).saveAll(List.of(handoffOfTheStay));
+    }
+
+    @Test
+    void qaD1435_aLongReasonStillFitsTheCloserColumn() {
+        LocalDateTime opened = LocalDateTime.of(2026, 11, 1, 8, 0);
+        admission.setAdmissionDateTime(opened);
+        admission.cancel("x".repeat(1000), UUID.randomUUID(), opened.plusHours(5));
+        com.example.hms.model.NurseHandoff handoff = handoffWrittenAt(opened.plusHours(2));
+        when(nurseHandoffRepository.findByPatient_IdAndHospital_IdAndStatus(
+            admission.getPatient().getId(), hospital.getId(), "PENDING")).thenReturn(List.of(handoff));
+        when(messageSource.getMessage(eq("nurse.work.closedByStayCancel"), any(), any(), any()))
+            .thenReturn("Clôturée : séjour annulé (" + "x".repeat(1000) + ")");
+
+        service.recordCancellation(admission, UUID.randomUUID());
+
+        assertThat(handoff.getCompletedByName()).hasSizeLessThanOrEqualTo(200);
+    }
+
+    @Test
+    void qaD1435_anEndedStayClosesTheWorkAsADischargeDoes() {
+        com.example.hms.model.NursingTask open = taskWrittenAt(LocalDateTime.of(2026, 1, 1, 8, 0));
+        when(nursingTaskRepository.findByPatient_IdAndHospital_IdAndStatus(
+            admission.getPatient().getId(), hospital.getId(), "PENDING")).thenReturn(List.of(open));
+        when(messageSource.getMessage(eq("nurse.handoff.closedByDischarge"), any(), any(), any()))
+            .thenReturn("Clôturée à la sortie");
+
+        service.closeNursingWorkOfEndedStay(admission);
+
+        assertThat(open.getStatus()).isEqualTo("COMPLETED");
+    }
 }

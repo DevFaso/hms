@@ -343,7 +343,7 @@ public class PrescriptionQueueClaimService {
     private UUID requireCaller() {
         UUID callerId = roleValidator.getCurrentUserId();
         if (callerId == null) {
-            throw new BusinessException("Unable to determine current user");
+            throw new BusinessException("pharmacy.currentUserUnknown");
         }
         return callerId;
     }

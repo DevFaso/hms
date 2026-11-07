@@ -1,4 +1,4 @@
-import { CommonModule, DatePipe } from '@angular/common';
+import { CommonModule } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
   Component,
@@ -23,7 +23,10 @@ import { isStepUpAction, isStepUpRefusal, stepUpRefusalKey } from '../services/s
 import { localDateString } from '../shared/date-utils';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { OrgTextPipe } from '../shared/pipes/org-text.pipe';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 type ActionKind = 'suspend' | 'restore' | 'archive' | 'schedule-purge' | 'cancel-purge';
 
 interface ActionDialog {
@@ -40,12 +43,14 @@ interface ActionDialog {
   selector: 'app-hospital-detail',
   standalone: true,
   imports: [
+    DateTimePipe,
+    SubmitGuardDirective,
+    ModalDialogDirective,
     ServerTimePipe,
     CommonModule,
     FormsModule,
     RouterLink,
     TranslateModule,
-    DatePipe,
     OrgTextPipe,
   ],
   templateUrl: './hospital-detail.html',

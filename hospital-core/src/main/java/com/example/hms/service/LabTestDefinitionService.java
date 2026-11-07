@@ -21,5 +21,12 @@ public interface LabTestDefinitionService {
     Page<LabTestDefinitionResponseDTO> search(String keyword, String unit, String category, Boolean active, LabTestDefinitionApprovalStatus approvalStatus, Pageable pageable);
     LabTestDefinitionResponseDTO processApprovalAction(UUID id, LabTestDefinitionApprovalRequestDTO dto);
     LabTestDefinitionResponseDTO updateReferenceRanges(UUID id, List<LabTestReferenceRangeDTO> ranges);
+
+    /**
+     * QA D1120: a new DRAFT version of an ACTIVE definition, linked to it. It
+     * goes through the same approval and, on ACTIVATE, retires the version it
+     * replaces.
+     */
+    LabTestDefinitionResponseDTO createNewVersion(UUID id);
     byte[] exportPdf();
 }

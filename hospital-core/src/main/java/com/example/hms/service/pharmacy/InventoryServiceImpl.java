@@ -90,7 +90,7 @@ public class InventoryServiceImpl implements InventoryService {
         inventoryItemRepository.findByPharmacyIdAndMedicationCatalogItemId(
                 pharmacy.getId(), medication.getId())
             .ifPresent(existing -> {
-                throw new BusinessException("stock.inventory.duplicate");
+                throw new com.example.hms.exception.FieldBusinessException("medicationCatalogItemId", "stock.inventory.duplicate");
             });
         // QA D208: the same drug under another catalogue row (same molecule,
         // strength and form) is the same stock item; a second one splits the
@@ -101,13 +101,13 @@ public class InventoryServiceImpl implements InventoryService {
                     org.springframework.data.domain.Pageable.unpaged()).stream()
                 .anyMatch(existing -> key.equals(sameDrugKey(existing.getMedicationCatalogItem())));
             if (twin) {
-                throw new BusinessException("stock.inventory.duplicate");
+                throw new com.example.hms.exception.FieldBusinessException("medicationCatalogItemId", "stock.inventory.duplicate");
             }
         }
         // QA D208: stock enters through a goods receipt (lot + ledger), never
         // as an opening number typed on the item.
         if (dto.getQuantityOnHand() != null && dto.getQuantityOnHand().signum() != 0) {
-            throw new BusinessException("stock.inventory.openingQuantity");
+            throw new com.example.hms.exception.FieldBusinessException("quantityOnHand", "stock.inventory.openingQuantity");
         }
 
         InventoryItem entity = inventoryItemMapper.toEntity(dto, pharmacy, medication);
@@ -180,7 +180,7 @@ public class InventoryServiceImpl implements InventoryService {
         // adjustment screen), which writes the ledger and needs a reason.
         if (dto.getQuantityOnHand() != null && (item.getQuantityOnHand() == null
                 || dto.getQuantityOnHand().compareTo(item.getQuantityOnHand()) != 0)) {
-            throw new BusinessException("stock.inventory.quantityViaTransaction");
+            throw new com.example.hms.exception.FieldBusinessException("quantityOnHand", "stock.inventory.quantityViaTransaction");
         }
         inventoryItemMapper.updateEntity(item, dto);
         InventoryItem saved = inventoryItemRepository.save(item);
@@ -205,7 +205,7 @@ public class InventoryServiceImpl implements InventoryService {
         // reorder decision and report counted it.
         if (dto.getExpiryDate() != null && !dto.getExpiryDate().isAfter(LocalDate.now(ZoneId.systemDefault()))) {
             // QA D710: a lot expiring today is already expired.
-            throw new BusinessException(
+            throw new com.example.hms.exception.FieldBusinessException("expiryDate", 
                 com.example.hms.utility.MessageUtil.resolve("stockLot.expired"));
         }
 
@@ -213,26 +213,25 @@ public class InventoryServiceImpl implements InventoryService {
         // the database CHECK and came back as a generic constraint error.
         if (dto.getInitialQuantity() == null || dto.getInitialQuantity().signum() <= 0
             || (dto.getRemainingQuantity() != null && dto.getRemainingQuantity().signum() < 0)) {
-            throw new BusinessException(
-                com.example.hms.utility.MessageUtil.resolve("stockLot.quantity.positive"));
+            throw new com.example.hms.exception.FieldBusinessException("initialQuantity", "stockLot.quantity.positive");
         }
         // QA D733: 1e9 units were accepted; no single delivery is that size.
         if (dto.getInitialQuantity().compareTo(MAX_RECEIPT_QUANTITY) > 0) {
-            throw new BusinessException(
+            throw new com.example.hms.exception.FieldBusinessException("initialQuantity", 
                 com.example.hms.utility.MessageUtil.resolve("stockLot.quantity.tooLarge",
-                    MAX_RECEIPT_QUANTITY.toPlainString()));
+                    com.example.hms.utility.DisplayNumbers.quantity(MAX_RECEIPT_QUANTITY)));
         }
         // QA D334: a delivery cannot have been received in the future. #948
         // review: the portal defaults it to the reader's today, which east of
         // UTC is already tomorrow on the server's calendar, so that day passes.
         if (!PickedDayNotInFutureValidator.isAllowed(dto.getReceivedDate(), clock)) {
-            throw new BusinessException(
+            throw new com.example.hms.exception.FieldBusinessException("receivedDate", 
                 com.example.hms.utility.MessageUtil.resolve("stockLot.receivedDate.future"));
         }
         // QA D405: a lot cannot be received holding more than was received.
         if (dto.getRemainingQuantity() != null && dto.getInitialQuantity() != null
             && dto.getRemainingQuantity().compareTo(dto.getInitialQuantity()) > 0) {
-            throw new BusinessException(
+            throw new com.example.hms.exception.FieldBusinessException("remainingQuantity", 
                 com.example.hms.utility.MessageUtil.resolve("stockLot.quantity.aboveReceived"));
         }
     }
@@ -244,7 +243,7 @@ public class InventoryServiceImpl implements InventoryService {
         if (dto.getLotNumber() != null && dto.getExpiryDate() != null
             && stockLotRepository.existsOtherExpiryForLot(item.getId(), dto.getLotNumber().trim(),
                 dto.getExpiryDate())) {
-            throw new BusinessException(
+            throw new com.example.hms.exception.FieldBusinessException("lotNumber", 
                 com.example.hms.utility.MessageUtil.resolve("stockLot.lotNumber.expiryMismatch"));
         }
     }
@@ -263,7 +262,7 @@ public class InventoryServiceImpl implements InventoryService {
         // QA D778: the DTO constraint is the first gate; this one holds for
         // any caller that skips bean validation.
         if (dto.getUnitCost() != null && dto.getUnitCost().signum() < 0) {
-            throw new BusinessException("stockTransaction.unitCost.min");
+            throw new com.example.hms.exception.FieldBusinessException("unitCost", "stockTransaction.unitCost.min");
         }
         requireConsistentLotExpiry(item, dto);
 
@@ -272,7 +271,7 @@ public class InventoryServiceImpl implements InventoryService {
         // colleague's name.
         User receivedByUser = resolveCurrentUser();
         if (dto.getReceivedBy() != null && !dto.getReceivedBy().equals(receivedByUser.getId())) {
-            throw new BusinessException(
+            throw new com.example.hms.exception.FieldBusinessException("receivedBy", 
                 com.example.hms.utility.MessageUtil.resolve("stockTransaction.performer.notSelf"));
         }
 
@@ -371,7 +370,7 @@ public class InventoryServiceImpl implements InventoryService {
         // write-off and a new receipt, which the ledger records.
         if ((dto.getLotNumber() != null && !dto.getLotNumber().equals(lot.getLotNumber()))
             || (dto.getExpiryDate() != null && !dto.getExpiryDate().equals(lot.getExpiryDate()))) {
-            throw new BusinessException(
+            throw new com.example.hms.exception.FieldBusinessException("lotNumber", 
                 com.example.hms.utility.MessageUtil.resolve("stockLot.identity.immutable"));
         }
         // QA D405 (D82, D341 did not hold): the lot edit set any count, above
@@ -383,7 +382,7 @@ public class InventoryServiceImpl implements InventoryService {
         // back still saves its other fields.
         if (dto.getRemainingQuantity() != null
                 && (remainingBefore == null || dto.getRemainingQuantity().compareTo(remainingBefore) != 0)) {
-            throw new BusinessException(
+            throw new com.example.hms.exception.FieldBusinessException("remainingQuantity", 
                 com.example.hms.utility.MessageUtil.resolve("stockLot.quantity.useAdjustment"));
         }
         stockLotMapper.updateEntity(lot, dto);
@@ -436,7 +435,10 @@ public class InventoryServiceImpl implements InventoryService {
             boolean hasPharmacy = item.getPharmacy() != null;
             String onHand = String.valueOf(item.getQuantityOnHand());
             String threshold = String.valueOf(item.getReorderThreshold());
-            Object[] alertArgs = {hasMedication ? item.getMedicationCatalogItem().getNameFr() : unknown,
+            // QA D1235 class: the alert reader sees the drug in their own language.
+            String drugName = hasMedication
+                ? com.example.hms.utility.DrugDisplayNames.forReader(item.getMedicationCatalogItem(), locale) : null;
+            Object[] alertArgs = {drugName != null ? drugName : unknown,
                 hasPharmacy ? item.getPharmacy().getName() : unknown, onHand, threshold};
             Object[] auditArgs = {hasMedication ? item.getMedicationCatalogItem().getNameFr() : unknownForAudit,
                 hasPharmacy ? item.getPharmacy().getName() : unknownForAudit, onHand, threshold};

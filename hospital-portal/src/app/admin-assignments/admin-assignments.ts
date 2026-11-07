@@ -30,7 +30,12 @@ import { ToastService } from '../core/toast.service';
 import { deliveryWarningKeys, hasActivationSent } from '../shared/delivery-warnings';
 import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { refusalReason } from '../shared/refusal-reason';
+import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 type ModalKind = 'create' | 'multi' | 'edit' | 'detail' | 'regen' | 'import' | null;
 
 /**
@@ -43,7 +48,16 @@ type ModalKind = 'create' | 'multi' | 'edit' | 'detail' | 'regen' | 'import' | n
 @Component({
   selector: 'app-admin-assignments',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule, RoleLabelPipe],
+  imports: [
+    DateTimePipe,
+    SubmitGuardDirective,
+    ModalDialogDirective,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    RoleLabelPipe,
+  ],
   templateUrl: './admin-assignments.html',
   styleUrl: './admin-assignments.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -56,6 +70,8 @@ export class AdminAssignmentsComponent implements OnInit {
   private readonly auth = inject(AuthService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  /** QA D1229: the in-app confirmation, never the browser's. */
+  private readonly confirmService = inject(ConfirmService);
   private readonly route = inject(ActivatedRoute);
 
   /* List state */
@@ -425,7 +441,9 @@ export class AdminAssignmentsComponent implements OnInit {
           this.toast.info(this.translate.instant('DELIVERY.NOTHING_TO_SEND'));
         }
       },
-      error: () => this.toast.error(this.translate.instant('ASSIGN_ADMIN.ACTION_ERROR')),
+      // QA r22: the server refuses (409) to re-send the activation of an
+      // account already activated; its localized reason is shown.
+      error: (err: HttpErrorResponse) => this.toastRefusal(err, 'ASSIGN_ADMIN.ACTION_ERROR'),
     });
   }
 
@@ -439,7 +457,13 @@ export class AdminAssignmentsComponent implements OnInit {
     return !!me && row.userId === me;
   }
 
-  deactivate(row: AssignmentResponse): void {
+  async deactivate(row: AssignmentResponse): Promise<void> {
+    // QA CX-010: one click took the role away.
+    const confirmed = await this.confirmService.ask({
+      titleKey: 'ASSIGN_ADMIN.DEACTIVATE_CONFIRM',
+      confirmKey: 'ASSIGN_ADMIN.DEACTIVATE',
+    });
+    if (!confirmed) return;
     this.service.deactivate(row.id).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('ASSIGN_ADMIN.DEACTIVATED'));
@@ -451,18 +475,19 @@ export class AdminAssignmentsComponent implements OnInit {
     });
   }
 
-  /** A 409's own message when it has one, else the given fallback. */
+  /** The server's own refusal (e.g. the 409 on an activated account) when it has one, else the fallback. */
   private toastRefusal(err: HttpErrorResponse, fallbackKey: string): void {
-    const serverMessage: unknown = err.status === 409 ? err.error?.message : null;
-    this.toast.error(
-      typeof serverMessage === 'string' && serverMessage.trim()
-        ? serverMessage
-        : this.translate.instant(fallbackKey),
-    );
+    this.toast.error(refusalReason(err) ?? this.translate.instant(fallbackKey));
   }
 
-  delete(row: AssignmentResponse): void {
-    if (!confirm(this.translate.instant('ASSIGN_ADMIN.DELETE_CONFIRM'))) return;
+  async delete(row: AssignmentResponse): Promise<void> {
+    if (
+      !(await this.confirmService.ask({
+        titleKey: 'ASSIGN_ADMIN.DELETE_CONFIRM',
+        confirmKey: 'COMMON.DELETE',
+      }))
+    )
+      return;
     this.service.delete(row.id).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('ASSIGN_ADMIN.DELETED'));

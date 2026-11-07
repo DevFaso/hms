@@ -96,9 +96,9 @@ class ServiceWriteTenantLoadCoverageTest {
 
     /** Class.method#call → why the method needs no tenant check of its own. Frozen: it only shrinks. */
     private static final Map<String, String> RECORDED = Map.ofEntries(
-        entry("AdmissionOrderSetServiceImpl.deactivate#findById", ACTOR + "; the order set itself is loaded scoped"),
         entry("AppointmentServiceImpl.resolvePatient#findByIdUnscoped", PATIENT),
         entry("AppointmentServiceImpl.resolveStaff#findById", ACTOR),
+        entry("AppointmentServiceImpl.bookingTimeRefusal#findById", ACTOR + "; hasHospitalAccess answers another hospital's as unknown"),
         entry("AuditEventLogServiceImpl.resolveAssignment#findById", "the caller's own assignment, checked against the caller"),
         entry("BillingInvoiceServiceImpl.creditCheckInCopays#findById", CALLER_CHECKS + " (invoice writes load through loadInScope)"),
         entry("BillingInvoiceServiceImpl.recomputeAndPersistTotals#findById", CALLER_CHECKS + " (invoice item writes check writableInvoice first)"),
@@ -130,6 +130,9 @@ class ServiceWriteTenantLoadCoverageTest {
         entry("ObstetricAlertEscalationWorker.escalateOne#findByIdUnscoped", SYSTEM + " (QA D659: the patient the escalation row was raised for, to name her in the reminder; the reminder goes only to that row's hospital staff)"),
         entry("ObstetricAlertEscalationWorker.escalateOne#findById", SYSTEM + " (the escalation row carries its own hospital; no user scope exists in a sweep)"),
         entry("PatientChartAccess.requireOwnRecord#findByIdUnscoped", OWN_ROW + " (the patient's own chart)"),
+        entry("PatientPortalServiceImpl.verifyProxyAccess#findByIdUnscoped", "QA D1212 (round 23): the grantor's"
+            + " record, read only after the caller's active, unexpired, in-scope proxy grant FROM that grantor is verified;"
+            + " the grant is patient-owned, not a hospital's, so the proxy's tenancy is not the bound"),
         entry("PatientEducationServiceImpl.incrementResourceViewCount#findById", SHARED),
         entry("PatientEducationServiceImpl.submitQuestion#findById", UNSWEPT),
         entry("PatientEducationServiceImpl.trackProgress#findById", UNSWEPT),
@@ -137,6 +140,8 @@ class ServiceWriteTenantLoadCoverageTest {
         entry("PatientPortalServiceImpl.requestMedicationRefill#findById", OWN_ROW + " (the patient's own prescription)"),
         entry("PatientServiceImpl.fetchPatient#findByIdUnscoped", PATIENT),
         entry("PatientVitalSignServiceImpl.resolveAssignment#findById", ACTOR),
+        entry("PrescriptionCopyPdfService.copyForPatient#findById", OWN_ROW
+            + " (QA D966: a read; 404 unless the prescription is the calling patient's own)"),
         entry("PatientVitalSignServiceImpl.resolveRegistration#findById", UNSWEPT),
         entry("PermissionServiceImpl.createPermission#findById", ACTOR),
         entry("PharmacySaleServiceImpl.buildLine#findById", SHARED),

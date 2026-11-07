@@ -1,6 +1,7 @@
 package com.example.hms.mapper;
 
 import com.example.hms.enums.PrescriptionStatus;
+import com.example.hms.service.pharmacy.CatalogControlledIndex;
 import com.example.hms.model.Encounter;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
@@ -42,6 +43,18 @@ public class PrescriptionMapper {
     }
 
     /**
+     * QA D934: whether an unsigned order's prescriber holds a signature of her
+     * own (doctor, physician, surgeon) at the order's hospital. Optional for
+     * the same reason as the catalog repository.
+     */
+    private com.example.hms.utility.RoleValidator roleValidator;
+
+    @Autowired(required = false)
+    public void setRoleValidator(com.example.hms.utility.RoleValidator roleValidator) {
+        this.roleValidator = roleValidator;
+    }
+
+    /**
      * Statuses the pharmacy writes (gap G7). While the row is in one of these
      * the status IS the latest pharmacy event; DRAFT, SIGNED, CANCELLED and
      * the like are the prescriber's, and report no pharmacy event.
@@ -64,7 +77,49 @@ public class PrescriptionMapper {
        ============================ */
     public PrescriptionResponseDTO toResponseDTO(Prescription p) {
         if (p == null) return null;
+        Hospital hospital = safeInit(p.getHospital(), ENTITY, p.getId(), "hospital");
+        Encounter enc = safeInit(p.getEncounter(), ENTITY, p.getId(), "encounter");
+        // D654/D678: tick OR the catalog item at the order's hospital (the rule
+        // PrescriptionControlledResolver applies for verification, chart and history).
+        return toResponseDTO(p, ticked(p)
+            || catalogControlled(resolveHospitalId(hospital, enc),
+                p.getMedicationCatalogItemId(), p.getMedicationCode()), new java.util.HashMap<>());
+    }
 
+    /**
+     * QA D1314: {@link #toResponseDTO(Prescription)} for one page of orders.
+     * The catalogue is read once for the page, not once per row: a page of 200
+     * cost about 100 statements in catalogue reads alone. An unsigned order's
+     * prescriber is looked up once per prescriber, not once per order.
+     */
+    public java.util.List<PrescriptionResponseDTO> toResponseDTOs(java.util.List<Prescription> rows) {
+        java.util.List<CatalogControlledIndex.Order> keys = new java.util.ArrayList<>();
+        for (Prescription p : rows) {
+            java.util.UUID hospitalId = hospitalIdOf(p);
+            if (hospitalId != null) {
+                keys.add(new CatalogControlledIndex.Order(hospitalId, p.getMedicationCatalogItemId(), p.getMedicationCode()));
+            }
+        }
+        CatalogControlledIndex index = catalogRepository == null
+            ? CatalogControlledIndex.EMPTY : CatalogControlledIndex.read(catalogRepository, keys);
+        java.util.Map<String, Boolean> drafters = new java.util.HashMap<>();
+        return rows.stream()
+            .map(p -> toResponseDTO(p, ticked(p)
+                || index.controlled(hospitalIdOf(p), p.getMedicationCatalogItemId(), p.getMedicationCode()), drafters))
+            .toList();
+    }
+
+    private static boolean ticked(Prescription p) {
+        return p.isControlledSubstance();
+    }
+
+    private java.util.UUID hospitalIdOf(Prescription p) {
+        return resolveHospitalId(safeInit(p.getHospital(), ENTITY, p.getId(), "hospital"),
+            safeInit(p.getEncounter(), ENTITY, p.getId(), "encounter"));
+    }
+
+    private PrescriptionResponseDTO toResponseDTO(Prescription p, boolean controlled,
+                                                  java.util.Map<String, Boolean> drafters) {
         // Defensive: if a parent row was hard-deleted while a Prescription
         // still references it (dangling FK), `safeInit` returns null instead
         // of letting the lazy proxy throw EntityNotFoundException — which
@@ -74,11 +129,6 @@ public class PrescriptionMapper {
         Staff     staff    = safeInit(p.getStaff(),     ENTITY, p.getId(), "staff");
         Encounter enc      = safeInit(p.getEncounter(), ENTITY, p.getId(), "encounter");
         Hospital  hospital = safeInit(p.getHospital(),  ENTITY, p.getId(), "hospital");
-        // D654/D678: tick OR the catalog item at the order's hospital (the rule
-        // PrescriptionControlledResolver applies for verification, chart and history).
-        boolean controlled = p.isControlledSubstance()
-            || catalogControlled(resolveHospitalId(hospital, enc),
-                p.getMedicationCatalogItemId(), p.getMedicationCode());
 
         return PrescriptionResponseDTO.builder()
             .id(p.getId())
@@ -97,9 +147,14 @@ public class PrescriptionMapper {
 
             .medicationName(p.getMedicationName())
             .medicationDisplayName(p.getMedicationDisplayName())
+            .medicationCatalogItemId(p.getMedicationCatalogItemId())
 
             .dosage(p.getDosage())
             .frequency(p.getFrequency())
+            .prnMinIntervalHours(p.getPrnMinIntervalHours())
+            .asNeeded(p.isAsNeeded())
+            .frequencyUnread(com.example.hms.service.impl.MarDoseSchedule.read(p).kind()
+                == com.example.hms.service.impl.MarDoseSchedule.Kind.UNREAD)
             .duration(p.getDuration())
             .route(p.getRoute())
             .instructions(p.getInstructions())
@@ -115,6 +170,7 @@ public class PrescriptionMapper {
             .status(p.getStatus() != null ? p.getStatus().name() : null)
             .controlledSubstance(controlled)
             .requiresCosign(p.isRequiresCosign())
+            .awaitingPhysicianSignature(awaitsPhysicianSignature(p, staff, resolveHospitalId(hospital, enc), drafters))
             .takeHome(p.isTakeHome())
             .twoFactorVerifiedAt(p.getTwoFactorVerifiedAt())
             .cosignedAt(p.getCosignedAt())
@@ -150,6 +206,15 @@ public class PrescriptionMapper {
             .clarificationResponse(p.getClarificationResponse())
             .clarificationResolvedAt(p.getClarificationResolvedAt())
             .withdrawalReason(p.getWithdrawalReason())
+            // QA D1101: the override reason the prescriber gave, for the
+            // pharmacist, the co-signer and the chart.
+            .overrideReason(p.getOverrideReason())
+            .allergyOverride(p.getOverrideReason() == null ? null : p.isAllergiesReviewed())
+            // QA D1096: the paediatric dose review, required and recorded.
+            .pediatricDoseReviewRequired(p.isPediatricDoseReviewRequired())
+            .pediatricDoseReviewedAt(p.getPediatricDoseReviewedAt())
+            .pediatricDoseReviewedByName(displayName(p.getPediatricDoseReviewedBy()))
+            .pediatricDoseReviewReason(p.getPediatricDoseReviewReason())
 
             .createdAt(p.getCreatedAt())
             .updatedAt(p.getUpdatedAt())
@@ -196,6 +261,10 @@ public class PrescriptionMapper {
 
         e.setDosage(dto.getDosage());
         e.setFrequency(dto.getFrequency());
+        // QA round 30: the as-needed interval (PrnMinInterval.applyTo checks it).
+        e.setPrnMinIntervalHours(dto.getPrnMinIntervalHours());
+        // QA D1378 / D1360: as-needed is the prescriber's tick, absent = not as-needed.
+        e.setAsNeeded(Boolean.TRUE.equals(dto.getAsNeeded()));
         e.setRoute(normalizeRoute(dto.getRoute()));
         e.setDuration(dto.getDuration());
         e.setNotes(dto.getNotes());
@@ -232,23 +301,53 @@ public class PrescriptionMapper {
             target.setHospital(staff.getHospital());
         }
 
+        // QA D1147: an edit that names another drug must not keep the old
+        // drug's code either: a code left behind keys the catalogue, the CDS
+        // rules and the pharmacy on a drug the order no longer is.
+        boolean drugChanged = !sameDrugName(target.getMedicationName(), dto.getMedicationName());
         target.setMedicationName(dto.getMedicationName());
         if (dto.getMedicationCode() != null) {
             target.setMedicationCode(dto.getMedicationCode());
+        } else if (drugChanged) {
+            target.setMedicationCode(null);
         }
         // D654: an edit names its catalog pick again, or falls back to the code.
         target.setMedicationCatalogItemId(dto.getMedicationCatalogItemId());
-        if (!notBlank(target.getMedicationDisplayName())) {
-            target.setMedicationDisplayName(dto.getMedicationName());
-        }
+        // QA D1147: the display name is a copy of the drug's name, rewritten on
+        // every edit. It was written only while blank, so the list, the
+        // pharmacist's view and the record PDF kept naming the first drug of an
+        // order edited to Morphine.
+        target.setMedicationDisplayName(dto.getMedicationName());
 
         target.setDosage(dto.getDosage());
         target.setFrequency(dto.getFrequency());
+        updateAsNeededPart(target, dto);
         if (dto.getRoute() != null) {
             target.setRoute(normalizeRoute(dto.getRoute()));
         }
         target.setDuration(dto.getDuration());
         target.setNotes(dto.getNotes());
+        updateQuantityStatusAndFlags(target, dto);
+    }
+
+    /**
+     * QA round 30: null keeps the stored interval. QA D1378 / D1360: null keeps
+     * the stored tick; unticking drops the stored interval (an interval sent
+     * with the untick is refused).
+     */
+    private static void updateAsNeededPart(Prescription target, PrescriptionRequestDTO dto) {
+        if (dto.getPrnMinIntervalHours() != null) {
+            target.setPrnMinIntervalHours(dto.getPrnMinIntervalHours());
+        }
+        if (dto.getAsNeeded() != null) {
+            target.setAsNeeded(dto.getAsNeeded());
+            if (Boolean.FALSE.equals(dto.getAsNeeded()) && dto.getPrnMinIntervalHours() == null) {
+                target.setPrnMinIntervalHours(null);
+            }
+        }
+    }
+
+    private static void updateQuantityStatusAndFlags(Prescription target, PrescriptionRequestDTO dto) {
         // QA D706: null leaves the prescribed quantity unchanged.
         if (dto.getQuantity() != null) {
             target.setQuantity(dto.getQuantity());
@@ -285,6 +384,14 @@ public class PrescriptionMapper {
         return s != null && !s.isBlank();
     }
 
+    /** The same drug name, ignoring case and surrounding blanks. */
+    private static boolean sameDrugName(String a, String b) {
+        if (a == null || b == null) {
+            return a == null && b == null;
+        }
+        return a.trim().equalsIgnoreCase(b.trim());
+    }
+
     private String resolveStaffFullName(Staff staff) {
         if (staff != null && notBlank(staff.getName())) {
             return staff.getName();
@@ -300,7 +407,8 @@ public class PrescriptionMapper {
 
     private String resolvePatientFullName(Patient patient) {
         if (patient == null) return "";
-        return buildFullName(patient.getFirstName(), patient.getLastName());
+        String fullName = patient.getFullName();
+        return fullName != null ? fullName : "";
     }
 
     /**
@@ -337,6 +445,26 @@ public class PrescriptionMapper {
         return catalogRepository.findByHospitalIdAndCode(hospitalId, medicationCode.trim())
             .map(MedicationCatalogItem::isControlled)
             .orElse(false);
+    }
+
+    /**
+     * QA D934: an unsigned order drafted by a nurse or a midwife of the
+     * order's hospital ({@code RoleValidator.draftsForPhysicianSignature}),
+     * the same rule {@code PrescriptionServiceImpl} applies when a doctor
+     * signs it.
+     */
+    private boolean awaitsPhysicianSignature(Prescription p, Staff staff, java.util.UUID hospitalId,
+                                             java.util.Map<String, Boolean> drafters) {
+        if (roleValidator == null || hospitalId == null || p.getSignatureValue() != null
+                || (p.getStatus() != PrescriptionStatus.DRAFT && p.getStatus() != PrescriptionStatus.PENDING_SIGNATURE)) {
+            return false;
+        }
+        java.util.UUID userId = staff != null && staff.getUser() != null ? staff.getUser().getId() : null;
+        if (userId == null) {
+            return false;
+        }
+        return drafters.computeIfAbsent(userId + "@" + hospitalId,
+            key -> roleValidator.draftsForPhysicianSignature(userId, hospitalId));
     }
 
     private java.util.UUID resolveHospitalId(Hospital hospital, Encounter enc) {

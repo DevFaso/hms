@@ -1,5 +1,5 @@
 import { TranslateService } from '@ngx-translate/core';
-import { hasValue, missingRequiredMessage } from './required-fields';
+import { hasValue, joinReasons, missingRequiredMessage } from './required-fields';
 
 describe('missingRequiredMessage (QA D890)', () => {
   const translate = {
@@ -26,5 +26,15 @@ describe('missingRequiredMessage (QA D890)', () => {
     expect(hasValue(0)).toBeTrue();
     expect(hasValue(false)).toBeTrue();
     expect(hasValue(undefined)).toBeFalse();
+  });
+});
+
+describe('joinReasons (QA D1256 class, round 27)', () => {
+  it('says every reason at once, each as a sentence; one reason as given; none as null', () => {
+    expect(joinReasons(['Choisissez le témoin', false, null, 'Vérifiez les cinq bons.'])).toBe(
+      'Choisissez le témoin. Vérifiez les cinq bons.',
+    );
+    expect(joinReasons(['Saisissez la quantité', false])).toBe('Saisissez la quantité');
+    expect(joinReasons([false, undefined, ''])).toBeNull();
   });
 });

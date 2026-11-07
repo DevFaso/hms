@@ -37,10 +37,10 @@
     <div class="snapshot-meta">
       <span class="badge badge-info">v{{ snap.version }}</span>
       @if (snap.label) {
-        <span class="badge badge-muted">{{ snap.label }}</span>
+        {{ ' ' }}<span class="badge badge-muted">{{ snap.label }}</span>
       }
       <span class="meta-text">
-        {{ snap.createdBy || '—' }} · {{ snap.createdAt | serverTime | date: 'medium' }}
+        {{ snap.createdBy || '—' }} · {{ snap.createdAt | serverTime | dateTime }}
       </span>
     </div>
     <div class="table-wrap">
@@ -115,6 +115,7 @@
                   class="icon-btn"
                   (click)="viewSnapshot(snap)"
                   [title]="'COMMON.VIEW' | translate"
+                  [attr.aria-label]="'COMMON.VIEW' | translate"
                 >
                   <span class="material-symbols-outlined">visibility</span>
                 </button>
@@ -192,9 +193,11 @@
         aria-modal="true"
         tabindex="-1"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="$event.stopPropagation()"
+        (keydown.escape)="closeView(); $event.stopPropagation()"
+        appModalDialog
+        aria-labelledby="matrix-tab-dialog-2-title"
       >
-        <h2>
+        <h2 id="matrix-tab-dialog-2-title">
           {{ 'ADMIN_GOV.ENV_' + snap.environment | translate }} · v{{ snap.version }}
           @if (snap.label) {
             — {{ snap.label }}
@@ -246,13 +249,19 @@
         aria-modal="true"
         tabindex="-1"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="$event.stopPropagation()"
+        (keydown.escape)="closeCreate(); $event.stopPropagation()"
+        appModalDialog
+        aria-labelledby="matrix-tab-dialog-1-title"
       >
-        <h2>{{ 'ADMIN_GOV.NEW_SNAPSHOT' | translate }}</h2>
+        <h2 id="matrix-tab-dialog-1-title">{{ 'ADMIN_GOV.NEW_SNAPSHOT' | translate }}</h2>
         <div class="form-row">
           <label class="form-field">
             <span>{{ 'ADMIN_GOV.ENVIRONMENT' | translate }} *</span>
-            <select [ngModel]="createEnvironment()" (ngModelChange)="createEnvironment.set($event)">
+            <select
+              required
+              [ngModel]="createEnvironment()"
+              (ngModelChange)="createEnvironment.set($event)"
+            >
               @for (env of environments; track env) {
                 <option [value]="env">{{ 'ADMIN_GOV.ENV_' + env | translate }}</option>
               }
@@ -304,6 +313,7 @@
                 class="icon-btn danger"
                 (click)="removeRow($index)"
                 [title]="'COMMON.DELETE' | translate"
+                [attr.aria-label]="'COMMON.DELETE' | translate"
               >
                 <span class="material-symbols-outlined">delete</span>
               </button>
@@ -317,7 +327,14 @@
           <button type="button" class="btn-secondary" (click)="closeCreate()">
             {{ 'COMMON.CANCEL' | translate }}
           </button>
-          <button type="button" class="btn-primary" [disabled]="saving()" (click)="submitCreate()">
+          <button
+            appSubmitGuard
+            submitGuardRequired
+            type="button"
+            class="btn-primary"
+            [disabled]="saving()"
+            (click)="submitCreate()"
+          >
             {{ 'ADMIN_GOV.PUBLISH_SNAPSHOT' | translate }}
           </button>
         </div>

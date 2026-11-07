@@ -134,6 +134,8 @@
     [attr.aria-label]="'COMMON.CANCEL' | translate"
   ></div>
   <div
+    appModalDialog
+    (escaped)="showCreate.set(false)"
     class="modal-panel"
     role="dialog"
     aria-modal="true"
@@ -154,6 +156,7 @@
       <div class="form-group">
         <label class="form-label" for="rep-name">{{ 'COMMON.NAME' | translate }} *</label>
         <input
+          required
           id="rep-name"
           class="form-input"
           type="text"
@@ -197,6 +200,7 @@
           {{ 'REPORTS.RECIPIENTS' | translate }} *
         </label>
         <textarea
+          required
           id="rep-recipients"
           class="form-textarea"
           rows="2"
@@ -223,7 +227,14 @@
       <button class="btn-secondary" type="button" (click)="showCreate.set(false)">
         {{ 'COMMON.CANCEL' | translate }}
       </button>
-      <button class="btn-primary" type="button" [disabled]="saving()" (click)="submitCreate()">
+      <button
+        appSubmitGuard
+        submitGuardRequired
+        class="btn-primary"
+        type="button"
+        [disabled]="saving()"
+        (click)="submitCreate()"
+      >
         @if (saving()) {
           <span class="material-symbols-outlined spin">progress_activity</span>
         }

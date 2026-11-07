@@ -74,7 +74,8 @@ describe('LabResultsInboxComponent', () => {
     expect(dashboardService.getResultReviewQueue).toHaveBeenCalledTimes(1);
     const text = fixture.nativeElement.textContent as string;
     expect(text).toContain('Hémoglobine');
-    expect(text).toContain('9.2 g/dL');
+    // D1106 (round 19): a value typed with its unit also takes the reader's separator.
+    expect(text).toMatch(/9[.,]2 g\/dL/);
     expect(text).toContain('Awa Traoré');
   });
 

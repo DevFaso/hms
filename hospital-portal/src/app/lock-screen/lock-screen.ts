@@ -10,10 +10,11 @@ import { IdleService } from '../core/idle.service';
 import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
 import { refreshWithSupersededRetry } from '../interceptors/error.interceptor';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 @Component({
   selector: 'app-lock-screen',
   standalone: true,
-  imports: [FormsModule, TranslateModule, RoleLabelPipe],
+  imports: [SubmitGuardDirective, FormsModule, TranslateModule, RoleLabelPipe],
   templateUrl: './lock-screen.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './lock-screen.scss',

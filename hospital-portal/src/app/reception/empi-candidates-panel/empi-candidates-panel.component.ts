@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  ElementRef,
   EventEmitter,
   Output,
   computed,
@@ -16,6 +17,9 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EmpiCandidateMatch, EmpiCandidateQuery, EmpiService } from '../../services/empi.service';
 import { ToastService } from '../../core/toast.service';
 import { RoleContextService } from '../../core/role-context.service';
+import { MeasurePipe } from '../../shared/pipes/measure.pipe';
+import { refuseFields } from '../../shared/forms/invalid-fields';
+import { refusalReason } from '../../shared/refusal-reason';
 
 interface CandidateFormState {
   firstName: string;
@@ -49,10 +53,13 @@ const SEX_OPTIONS: string[] = ['F', 'M', 'X'];
  * up to the parent component; the {@code (newPatient)} output
  * signals the parent to start a fresh-create flow.
  */
+/** The search fields, one of which is needed (QA D1306). */
+const EMPI_FIELD_IDS = ['empi-first', 'empi-last', 'empi-dob', 'empi-sex', 'empi-national-id'];
+
 @Component({
   selector: 'app-empi-candidates-panel',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [MeasurePipe, CommonModule, FormsModule, TranslateModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="empi-panel" data-testid="empi-candidates-panel">
@@ -170,7 +177,7 @@ const SEX_OPTIONS: string[] = ['F', 'M', 'X'];
                       [class.empi-panel__score--medium]="match.score >= 0.7 && match.score < 0.85"
                       [class.empi-panel__score--low]="match.score < 0.7"
                     >
-                      {{ (match.score * 100 | number: '1.0-1') + '%' }}
+                      {{ match.score * 100 | measure: '%' }}
                     </span>
                   </td>
                   <td>
@@ -236,9 +243,9 @@ const SEX_OPTIONS: string[] = ['F', 'M', 'X'];
         @if (isAdmin && mergeSelection().length === 2) {
           <div class="empi-panel__merge-bar" data-testid="empi-merge-bar">
             <p>
-              {{ 'EMPI.MERGE_PRIMARY_LABEL' | translate }}:
+              {{ 'EMPI.MERGE_PRIMARY_LABEL' | translate }}{{ 'COMMON.COLON' | translate }}
               <strong>{{ mergeSelection()[0].displayName }}</strong>
-              · {{ 'EMPI.MERGE_SECONDARY_LABEL' | translate }}:
+              · {{ 'EMPI.MERGE_SECONDARY_LABEL' | translate }}{{ 'COMMON.COLON' | translate }}
               {{ mergeSelection()[1].displayName }}
             </p>
             <div class="actions">
@@ -399,6 +406,7 @@ export class EmpiCandidatesPanelComponent {
   private readonly empi = inject(EmpiService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly router = inject(Router);
   private readonly roleContext = inject(RoleContextService);
 
@@ -412,9 +420,13 @@ export class EmpiCandidatesPanelComponent {
     event.preventDefault();
     const query = this.toQuery();
     if (!hasAnyField(query)) {
-      this.toast.error(this.translate.instant('EMPI.VALIDATION.AT_LEAST_ONE_FIELD'));
+      // QA D1306 (round 28): one of the fields is needed, so all are marked.
+      const message = this.translate.instant('EMPI.VALIDATION.AT_LEAST_ONE_FIELD');
+      refuseFields(this.host.nativeElement, EMPI_FIELD_IDS, EMPI_FIELD_IDS, message);
+      this.toast.error(message);
       return;
     }
+    refuseFields(this.host.nativeElement, [], EMPI_FIELD_IDS, '');
     this.searching.set(true);
     this.error.set(false);
     this.disabled.set(false);
@@ -512,8 +524,8 @@ export class EmpiCandidatesPanelComponent {
           matches.filter((match) => match.patientId !== secondary.patientId),
         );
       },
-      error: () => {
-        this.toast.error(this.translate.instant('EMPI.TOAST.MERGE_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('EMPI.TOAST.MERGE_FAILED'));
         this.merging.set(false);
         this.mergeArmed.set(false);
       },

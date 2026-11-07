@@ -1,6 +1,5 @@
 package com.example.hms.service;
 
-import com.example.hms.utility.ElapsedTime;
 import com.example.hms.enums.EncounterStatus;
 import com.example.hms.enums.LabOrderStatus;
 import com.example.hms.enums.RefillStatus;
@@ -163,23 +162,23 @@ public class ClinicalDashboardServiceImpl implements ClinicalDashboardService {
                     for (Encounter enc : active) {
                         Patient p = enc.getPatient();
                         if (p == null) continue;
-                        String name = p.getFirstName() + " " + p.getLastName();
+                        String name = p.getFullName();
                         int age = p.getDateOfBirth() != null
                                 ? Period.between(p.getDateOfBirth(), LocalDate.now()).getYears()
                                 : 0;
-                        long waitMinutes = enc.getEncounterDate() != null
-                                ? ElapsedTime.minutesBetween(enc.getEncounterDate(), LocalDateTime.now())
-                                : 0;
+                        // QA D1039: from the arrival, never from the visit day's midnight.
+                        long waitMinutes = com.example.hms.utility.EncounterWait.minutes(enc, LocalDateTime.now(java.time.ZoneId.systemDefault()));
                         result.add(RoomedPatientDTO.builder()
                                 .id(p.getId())
                                 .encounterId(enc.getId())
                                 .patientName(name)
                                 .age(age)
                                 .sex(p.getGender())
-                                .mrn(p.getId().toString())
+                                // QA D1040: the hospital's MRN, never the patient's UUID.
+                                .mrn(enc.getHospital() != null ? p.getMrnForHospital(enc.getHospital().getId()) : null)
                                 .chiefComplaint(enc.getNotes())
                                 .waitTimeMinutes((int) Math.min(waitMinutes, Integer.MAX_VALUE))
-                                .arrivalTime(enc.getEncounterDate())
+                                .arrivalTime(com.example.hms.utility.EncounterWait.since(enc))
                                 .flags(Collections.emptyList())
                                 .prepStatus(RoomedPatientDTO.PrepStatusDTO.builder()
                                         .labsDrawn(false)
@@ -214,8 +213,10 @@ public class ClinicalDashboardServiceImpl implements ClinicalDashboardService {
                         Patient p = e.getPatient();
                         PatientResponse dto = new PatientResponse();
                         dto.setId(p.getId());
-                        dto.setMrn(p.getId().toString());
+                        // QA D1040: the hospital's MRN, never the patient's UUID.
+                        dto.setMrn(e.getHospital() != null ? p.getMrnForHospital(e.getHospital().getId()) : null);
                         dto.setFirstName(p.getFirstName());
+                        dto.setMiddleName(p.getMiddleName());
                         dto.setLastName(p.getLastName());
                         dto.setDateOfBirth(p.getDateOfBirth());
                         dto.setGender(p.getGender());

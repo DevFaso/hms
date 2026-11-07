@@ -124,6 +124,24 @@ public class PatientController {
         + "'ROLE_BILLING_SPECIALIST','ROLE_ACCOUNTANT')";
 
     /**
+     * QA D1224 (round 24), as in real hospitals: the clinicians of the
+     * patient's hospital who chart - doctor, nurse, midwife, and the pharmacist
+     * for allergies - record, revise and deactivate an allergy (deactivation
+     * with a reason, audited; never a hard delete).
+     */
+    private static final String ALLERGY_WRITE_ROLES =
+        "hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_PHARMACIST')";
+
+    /**
+     * QA D1224 (round 24): a diagnosis entered in error is removed (set
+     * INACTIVE with a reason, audited in its history) by a clinician of the
+     * patient's hospital - doctor, nurse or midwife. Recording or recoding a
+     * diagnosis stays the doctor's.
+     */
+    private static final String DIAGNOSIS_REMOVE_ROLES =
+        "hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')";
+
+    /**
      * E9 #69 — allergies are readable by every clinical role. A radiologist
      * planning contrast, an anaesthetist planning induction and a
      * physiotherapist planning a session each need the allergy list; before
@@ -183,6 +201,12 @@ public class PatientController {
             // first patients of the hospital were offered whatever was typed and
             // the wrong patient was admitted. Same matching as /patients/search
             // (name or MRN), and, like the unfiltered list, inactive records too.
+            // QA D1019: a typed phone number ("65112233", "65 11 22 33",
+            // "+226 65 11 22 33") is searched as a number, folded like the
+            // duplicate check; it used to be matched against names only, so
+            // the appointment and walk-in pickers never found a patient by phone.
+            // QA D1274: the service reads the typed term (a phone number, a
+            // birth date, an e-mail or the start of one, else a name or MRN).
             PatientSearchCriteria criteria = PatientSearchCriteria.builder()
                 .name(search.trim())
                 .hospitalId(resolvedHospitalId)
@@ -306,6 +330,11 @@ public class PatientController {
         @RequestHeader(name = "Accept-Language", required = false) String lang,
         Authentication auth
     ) {
+        // RCPT-CLIN: clinical text the desk cannot read is not the desk's to overwrite.
+        if (com.example.hms.controller.support.ReceptionistResponseShaping.isReceptionistOnly()
+            && (dto.getCareTeamNotes() != null || dto.getChronicConditions() != null || dto.getBloodType() != null)) {
+            throw new org.springframework.security.access.AccessDeniedException("Clinical fields are not the desk's to write");
+        }
         Locale locale = parseLocale(lang);
         UUID resolvedHospitalId = authUtils.resolveHospitalScope(auth, null, false);
         return ResponseEntity.ok(patientService.patchPatient(id, dto, resolvedHospitalId, locale));
@@ -367,6 +396,9 @@ public class PatientController {
     ) {
         Locale locale = parseLocale(lang);
         UUID resolvedHospitalId = authUtils.resolveHospitalScope(auth, hospitalId, false);
+        // QA D1019 / D1274: a number, a birth date or an e-mail typed into the
+        // name box is searched as such by the service (each only when its own
+        // filter is not given); dob accepts yyyy-mm-dd, dd/mm/yyyy, dd-mm-yyyy.
         PatientSearchCriteria criteria = PatientSearchCriteria.builder()
             .mrn(mrn)
             .name(name)
@@ -433,11 +465,19 @@ public class PatientController {
         @RequestParam(required = false) String email,
         @RequestParam(required = false) String phone,
         @RequestParam(required = false) UUID hospitalId,
+        // QA D1061 / D1064: the form's name and date of birth, to tell a shared
+        // contact from the same person and to find that person by identity.
+        @RequestParam(required = false) String firstName,
+        @RequestParam(required = false) String lastName,
+        @RequestParam(required = false)
+        @org.springframework.format.annotation.DateTimeFormat(
+            iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate dateOfBirth,
         Authentication auth
     ) {
         authUtils.requireAuth(auth);
         UUID resolvedHospitalId = authUtils.resolveHospitalScope(auth, hospitalId, false);
-        return ResponseEntity.ok(patientService.findRegistrationMatches(email, phone, resolvedHospitalId));
+        return ResponseEntity.ok(patientService.findRegistrationMatches(email, phone, firstName, lastName,
+            dateOfBirth, resolvedHospitalId));
     }
 
     @WriteAudited(skip = true, reason = "a read under POST; the service records the access itself")
@@ -446,6 +486,7 @@ public class PatientController {
         description = "Provides a comprehensive patient record snapshot with sensitive data gating and audit logging.",
         security = @SecurityRequirement(name = "bearerAuth")
     )
+    @com.example.hms.security.ReadsOnly("a chart read under POST for its access reason; only the access audit is written")
     @PostMapping("/{id}/doctor-record")
     @PreAuthorize("hasAuthority('ROLE_DOCTOR')")
     public ResponseEntity<DoctorPatientRecordDTO> getDoctorRecord(
@@ -472,6 +513,7 @@ public class PatientController {
         description = "Provides a longitudinal patient timeline with sensitive data gating and audit logging.",
         security = @SecurityRequirement(name = "bearerAuth")
     )
+    @com.example.hms.security.ReadsOnly("a timeline read under POST for its access reason; only the access audit is written")
     @PostMapping("/{id}/doctor-timeline")
     @PreAuthorize("hasAuthority('ROLE_DOCTOR')")
     public ResponseEntity<PatientTimelineResponseDTO> getDoctorTimeline(
@@ -564,7 +606,7 @@ public class PatientController {
         security = @SecurityRequirement(name = "bearerAuth")
     )
     @PostMapping("/{id}/allergies")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_PHARMACIST')")
+    @PreAuthorize(ALLERGY_WRITE_ROLES)
     public ResponseEntity<PatientAllergyResponseDTO> createPatientAllergy(
         @PathVariable UUID id,
         @Valid @RequestBody PatientAllergyRequestDTO request,
@@ -590,7 +632,7 @@ public class PatientController {
         security = @SecurityRequirement(name = "bearerAuth")
     )
     @PutMapping("/{id}/allergies/{allergyId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_PHARMACIST')")
+    @PreAuthorize(ALLERGY_WRITE_ROLES)
     public ResponseEntity<PatientAllergyResponseDTO> updatePatientAllergy(
         @PathVariable UUID id,
         @PathVariable UUID allergyId,
@@ -617,7 +659,7 @@ public class PatientController {
         security = @SecurityRequirement(name = "bearerAuth")
     )
     @DeleteMapping("/{id}/allergies/{allergyId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_PHARMACIST')")
+    @PreAuthorize(ALLERGY_WRITE_ROLES)
     public ResponseEntity<MessageResponse> deactivatePatientAllergy(
         @PathVariable UUID id,
         @PathVariable UUID allergyId,
@@ -630,10 +672,10 @@ public class PatientController {
             .orElseThrow(() -> new BusinessException(MSG_DOCTOR_CONTEXT_REQUIRED));
         UUID resolvedHospitalId = authUtils.resolveHospitalScope(auth, hospitalId, false);
         if (resolvedHospitalId == null) {
-            throw new BusinessException("Hospital context is required to deactivate allergies.");
+            throw new BusinessException("patient.r7.allergyDeactivateHospitalRequired");
         }
         patientService.deactivatePatientAllergy(id, resolvedHospitalId, allergyId, requesterUserId, request.getReason());
-        return ResponseEntity.ok(new MessageResponse("Allergy entry deactivated."));
+        return ResponseEntity.ok(new MessageResponse(com.example.hms.utility.MessageUtil.resolve("patient.r25.allergyDeactivated")));
     }
 
     // ----------------------------------------------------------
@@ -725,7 +767,7 @@ public class PatientController {
         security = @SecurityRequirement(name = "bearerAuth")
     )
     @DeleteMapping("/{id}/diagnoses/{diagnosisId}")
-    @PreAuthorize("hasAuthority('ROLE_DOCTOR')")
+    @PreAuthorize(DIAGNOSIS_REMOVE_ROLES)
     public ResponseEntity<MessageResponse> deletePatientDiagnosis(
         @PathVariable UUID id,
         @PathVariable UUID diagnosisId,
@@ -738,10 +780,10 @@ public class PatientController {
             .orElseThrow(() -> new BusinessException(MSG_DOCTOR_CONTEXT_REQUIRED));
         UUID resolvedHospitalId = authUtils.resolveHospitalScope(auth, hospitalId, false);
         if (resolvedHospitalId == null) {
-            throw new BusinessException("Hospital context is required to remove diagnoses.");
+            throw new BusinessException("patient.r7.diagnosisRemoveHospitalRequired");
         }
         patientService.deletePatientDiagnosis(id, resolvedHospitalId, diagnosisId, requesterUserId, request.getReason());
-        return ResponseEntity.ok(new MessageResponse("Diagnosis removed successfully."));
+        return ResponseEntity.ok(new MessageResponse(com.example.hms.utility.MessageUtil.resolve("patient.r25.diagnosisRemoved")));
     }
 
     @Operation(

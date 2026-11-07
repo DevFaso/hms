@@ -72,7 +72,7 @@ public class AdmissionMapper {
         // Patient info
         if (patient != null) {
             dto.setPatientId(patient.getId());
-            dto.setPatientName(buildFullName(patient.getFirstName(), patient.getLastName()));
+            dto.setPatientName(patient.getFullName());
             // resolvePatientMrn touches patient.getHospitalRegistrations() so
             // we must only invoke it once safeInit has confirmed the patient
             // row still exists; otherwise the lazy registration collection
@@ -114,6 +114,9 @@ public class AdmissionMapper {
         dto.setAdmissionDateTime(admission.getAdmissionDateTime());
         dto.setExpectedDischargeDateTime(admission.getExpectedDischargeDateTime());
         dto.setActualDischargeDateTime(admission.getActualDischargeDateTime());
+        // QA D1381: the stay's cancellation reason and time.
+        dto.setCancellationReason(admission.getCancellationReason());
+        dto.setCancelledAt(admission.getCancelledAt());
 
         dto.setChiefComplaint(admission.getChiefComplaint());
         dto.setPrimaryDiagnosisCode(admission.getPrimaryDiagnosisCode());
@@ -291,12 +294,5 @@ public class AdmissionMapper {
                 .filter(StringUtils::hasText)
                 .findFirst()
                 .orElse(null);
-        }
-
-        private static String buildFullName(String first, String last) {
-            String f = first == null ? "" : first.trim();
-            String l = last == null ? "" : last.trim();
-            String full = (f + " " + l).trim();
-            return full.isEmpty() ? null : full;
         }
 }

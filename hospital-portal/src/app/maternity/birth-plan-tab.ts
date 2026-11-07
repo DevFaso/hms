@@ -1,3 +1,5 @@
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { personName } from '../shared/pipes/person-name.pipe';
 import { ChangeDetectionStrategy, Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -15,12 +17,27 @@ import { ToastService } from '../core/toast.service';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { refusalReason } from '../shared/refusal-reason';
+import { ReasonDialogComponent } from '../shared/reason-dialog/reason-dialog.component';
+import { DateTimePipe } from '../shared/pipes/date-time.pipe';
+import { missingRequiredMessage } from '../shared/required-fields';
 type BirthPlanFilter = 'all' | 'pending-review' | 'reviewed';
 
 @Component({
   selector: 'app-birth-plan-tab',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule, PatientPickerComponent],
+  imports: [
+    DateTimePipe,
+    ReasonDialogComponent,
+    SubmitGuardDirective,
+    ModalDialogDirective,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    PatientPickerComponent,
+  ],
   templateUrl: './birth-plan-tab.html',
   styleUrl: './maternity.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -221,7 +238,7 @@ export class BirthPlanTabComponent implements OnInit {
     this.planPatient.set(p);
     this.planForm.patientId = p?.id ?? '';
     if (p && !this.planForm.introduction.patientName) {
-      this.planForm.introduction.patientName = `${p.firstName ?? ''} ${p.lastName ?? ''}`.trim();
+      this.planForm.introduction.patientName = personName(p);
     }
   }
 
@@ -241,7 +258,16 @@ export class BirthPlanTabComponent implements OnInit {
       !form.introduction.expectedDueDate ||
       !form.flexibilityAcknowledgment
     ) {
-      this.toast.error(this.translate.instant('BIRTH_PLAN.REQUIRED_FIELDS'));
+      // QA D1358: name the blank fields, not a fixed list.
+      this.toast.error(
+        missingRequiredMessage(this.translate, [
+          { labelKey: 'MATERNITY.PATIENT', value: form.patientId },
+          { labelKey: 'BIRTH_PLAN.PATIENT_NAME', value: form.introduction.patientName?.trim() },
+          { labelKey: 'MATERNITY.EDD', value: form.introduction.expectedDueDate },
+          // An unticked box is a blank field.
+          { labelKey: 'BIRTH_PLAN.FLEXIBILITY', value: form.flexibilityAcknowledgment || null },
+        ]) ?? this.translate.instant('COMMON.SUBMIT_BLOCKED_REQUIRED'),
+      );
       return;
     }
     form.hospitalId = this.hospitalId ?? undefined;
@@ -263,8 +289,8 @@ export class BirthPlanTabComponent implements OnInit {
         this.closePlanModal();
         this.load();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('BIRTH_PLAN.SAVE_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('BIRTH_PLAN.SAVE_ERROR'));
         this.planSaving.set(false);
       },
     });
@@ -308,8 +334,8 @@ export class BirthPlanTabComponent implements OnInit {
           this.closeReview();
           this.load();
         },
-        error: () => {
-          this.toast.error(this.translate.instant('BIRTH_PLAN.REVIEW_ERROR'));
+        error: (err: unknown) => {
+          this.toast.error(refusalReason(err) ?? this.translate.instant('BIRTH_PLAN.REVIEW_ERROR'));
           this.reviewBusy.set(false);
         },
       });
@@ -325,21 +351,45 @@ export class BirthPlanTabComponent implements OnInit {
     this.deleteTarget.set(null);
   }
 
-  submitDelete(): void {
+  /** QA D1241: a provider reviewed or signed the plan: it is withdrawn, never deleted. */
+  isReviewed(plan: BirthPlanResponse): boolean {
+    return !!plan.providerReviewed || !!plan.providerSignatureDate;
+  }
+
+  /**
+   * QA D1241: the plan is removed with the reason given. The answer (204)
+   * does not say whether it was deleted or withdrawn, so the plan is read
+   * back: a withdrawn plan is still there with its withdrawal date, a deleted
+   * one is gone (404). The toast says which.
+   */
+  submitDelete(reason: string): void {
     const plan = this.deleteTarget();
     if (!plan) return;
     this.deleteBusy.set(true);
-    this.birthPlanService.delete(plan.id).subscribe({
+    this.birthPlanService.delete(plan.id, reason).subscribe({
       next: () => {
-        this.toast.success(this.translate.instant('BIRTH_PLAN.DELETED'));
-        this.deleteBusy.set(false);
-        this.closeDelete();
-        this.load();
+        this.birthPlanService.getById(plan.id).subscribe({
+          next: (kept) =>
+            this.afterRemove(kept?.withdrawnAt ? 'BIRTH_PLAN.WITHDRAWN' : 'BIRTH_PLAN.REMOVED'),
+          error: (err: unknown) =>
+            this.afterRemove(
+              (err as { status?: number } | null)?.status === 404
+                ? 'BIRTH_PLAN.DELETED'
+                : 'BIRTH_PLAN.REMOVED',
+            ),
+        });
       },
-      error: () => {
-        this.toast.error(this.translate.instant('BIRTH_PLAN.DELETE_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('BIRTH_PLAN.DELETE_ERROR'));
         this.deleteBusy.set(false);
       },
     });
+  }
+
+  private afterRemove(key: string): void {
+    this.toast.success(this.translate.instant(key));
+    this.deleteBusy.set(false);
+    this.closeDelete();
+    this.load();
   }
 }

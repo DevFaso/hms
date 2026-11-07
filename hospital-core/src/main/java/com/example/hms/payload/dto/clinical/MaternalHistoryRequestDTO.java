@@ -20,6 +20,9 @@ import java.util.UUID;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+// QA D1318 class (round 29): the content rule is checked with the ids, in one answer.
+@com.example.hms.validation.AnyAnswer(metadata = {"patientId", "hospitalId", "recordedByStaffId", "recordedDate",
+    "updateReason"}, reportedOn = "clinicalNotes", message = "{maternalHistory.contentRequired}")
 public class MaternalHistoryRequestDTO {
 
     @NotNull(message = "{maternalHistory.patientId.required}")
@@ -126,6 +129,12 @@ public class MaternalHistoryRequestDTO {
 
         @PositiveOrZero
         private Integer livingChildren;
+
+        /**
+         * QA D1465: a previous multiple birth, stated on the form. A twin birth counts once in parity,
+         * so only this lets living children stand above it. It is a check of this request, not stored.
+         */
+        private Boolean multipleBirth;
 
         @PositiveOrZero
         private Integer previousCesareanSections;

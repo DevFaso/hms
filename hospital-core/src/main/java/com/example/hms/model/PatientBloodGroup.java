@@ -111,6 +111,11 @@ public class PatientBloodGroup extends BaseEntity {
     @Column(name = "notes", length = 1000)
     private String notes;
 
+    /** Why this result disagrees with the one before it (QA CX-011). */
+    @Size(max = 500)
+    @Column(name = "correction_reason", length = 500)
+    private String correctionReason;
+
     /**
      * True when the screen is still usable for a crossmatch.
      *

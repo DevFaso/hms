@@ -142,4 +142,13 @@ describe('MyCareTeamComponent', () => {
     ]);
     expect(host().querySelector('[data-testid="care-team-empty"]')).toBeNull();
   });
+
+  it("QA D1212: a refused read shows the server's reason", () => {
+    portal.getMyCareTeam.and.returnValue(
+      throwError(() => ({ status: 403, error: { message: 'Accès au portail suspendu.' } })),
+    );
+    fixture = TestBed.createComponent(MyCareTeamComponent);
+    fixture.detectChanges();
+    expect(texts('[data-testid="care-team-error"] p')).toEqual(['Accès au portail suspendu.']);
+  });
 });

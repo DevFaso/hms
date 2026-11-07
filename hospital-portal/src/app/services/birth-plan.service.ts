@@ -79,6 +79,9 @@ export interface BirthPlanResponse {
   providerSignature?: string | null;
   providerSignatureDate?: string | null;
   providerComments?: string | null;
+  /** QA D1241: a plan withdrawn with a reason (kept for the record, hidden from lists). */
+  withdrawnAt?: string | null;
+  withdrawalReason?: string | null;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -160,7 +163,12 @@ export class BirthPlanService {
     });
   }
 
-  delete(id: string): Observable<void> {
-    return this.http.delete<void>(`${this.baseUrl}/${id}`);
+  /**
+   * QA D1241: a reason is required. The author's own unreviewed draft is
+   * deleted; a reviewed plan, or a draft someone else wrote, is withdrawn
+   * (kept, marked, audited).
+   */
+  delete(id: string, reason: string): Observable<void> {
+    return this.http.delete<void>(`${this.baseUrl}/${id}`, { params: { reason } });
   }
 }

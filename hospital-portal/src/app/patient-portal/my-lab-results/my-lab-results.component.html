@@ -11,6 +11,15 @@
       <div class="portal-spinner"></div>
       <p>{{ 'PORTAL.LAB_RESULTS.LOADING' | translate }}</p>
     </div>
+  } @else if (firstReadFailed()) {
+    <!-- QA D1213 / D1212: a failed read says so, with the server's reason, never "no results" -->
+    <div class="portal-empty" data-testid="lab-load-failed" role="alert">
+      <span class="material-symbols-outlined">error</span>
+      <p>{{ failureReason() ?? ('PORTAL_PAGING.LAB_LOAD_FAILED' | translate) }}</p>
+      <button type="button" class="btn-primary" (click)="retry()">
+        {{ 'COMMON.RETRY' | translate }}
+      </button>
+    </div>
   } @else if (results().length === 0) {
     <div class="portal-empty">
       <span class="material-symbols-outlined">biotech</span>
@@ -30,6 +39,7 @@
             tabindex="0"
             (keydown.enter)="toggleExpand(lab.id)"
             [class.expanded]="expandedId() === lab.id"
+            [attr.data-lab-id]="lab.id"
           >
             <div
               class="pli-icon"
@@ -39,22 +49,37 @@
               <span class="material-symbols-outlined">{{ labIcon(lab) }}</span>
             </div>
             <div class="pli-body">
-              <span class="pli-title">{{ lab.testName }}</span>
+              <span class="pli-title"
+                >{{ lab.testName }}
+                <!-- QA D1016: a corrected result is never shown as a second, new one -->
+                <app-lab-correction-badge [corrected]="lab.corrected" audience="patient"
+              /></span>
               @if (lab.isPending) {
-                <span class="pli-sub">{{ 'PORTAL.LAB_RESULTS.PENDING_RESULT' | translate }}</span>
+                {{ ' '
+                }}<span class="pli-sub">{{ 'PORTAL.LAB_RESULTS.PENDING_RESULT' | translate }}</span>
               } @else {
-                <span class="pli-sub">
-                  {{ 'PORTAL.LAB_RESULTS.RESULT' | translate }}:
-                  <strong>{{ displayResult(lab.result) }}</strong>
+                {{ ' '
+                }}<span class="pli-sub">
+                  {{ 'PORTAL.LAB_RESULTS.RESULT_PREFIX' | translate }}
+                  <!-- QA D1095: the value is never shown without its unit -->
+                  <strong
+                    >{{ displayResult(lab.result) }}{{ lab.unit ? ' ' + lab.unit : '' }}</strong
+                  >
                   @if (lab.referenceRange) {
                     &nbsp;({{ 'PORTAL.LAB_RESULTS.NORMAL_PREFIX' | translate }}
                     {{ displayResult(lab.referenceRange) }})
                   }
                 </span>
               }
-              <span class="pli-meta"
+              {{ ' '
+              }}<span class="pli-meta"
                 >{{ lab.collectedDate | serverTime | date: 'mediumDate' }} ·
-                {{ lab.status | enumLabel: 'status' }}</span
+                <!-- QA D1394: never "Inconnu", which reads as if nothing were wrong -->
+                {{
+                  lab.isUngraded
+                    ? ('PORTAL.LAB_RESULTS.NOT_GRADED_STATUS' | translate)
+                    : (lab.status | enumLabel: 'status')
+                }}</span
               >
             </div>
             @if (lab.isAbnormal) {
@@ -62,6 +87,11 @@
             } @else if (lab.isPending) {
               <span class="pending-badge">{{
                 'PORTAL.LAB_RESULTS.PENDING_BADGE' | translate
+              }}</span>
+            } @else if (lab.isUngraded) {
+              {{ ' '
+              }}<span class="pending-badge" [attr.data-testid]="'lab-not-graded-' + lab.id">{{
+                'PORTAL.LAB_RESULTS.NOT_GRADED_STATUS' | translate
               }}</span>
             }
           </div>
@@ -75,11 +105,14 @@
                 </div>
                 <div class="detail-item">
                   <span class="dl">{{ 'PORTAL.LAB_RESULTS.RESULT' | translate }}</span>
-                  <span class="dv" [class.text-danger]="lab.isAbnormal">{{
-                    lab.isPending
-                      ? ('PORTAL.LAB_RESULTS.PENDING_RESULT' | translate)
-                      : displayResult(lab.result)
-                  }}</span>
+                  <span class="dv" [class.text-danger]="lab.isAbnormal"
+                    >{{
+                      lab.isPending
+                        ? ('PORTAL.LAB_RESULTS.PENDING_RESULT' | translate)
+                        : displayResult(lab.result) + (lab.unit ? ' ' + lab.unit : '')
+                    }}
+                    <app-lab-correction-badge [corrected]="lab.corrected" audience="patient"
+                  /></span>
                 </div>
                 @if (lab.referenceRange) {
                   <div class="detail-item">
@@ -89,12 +122,15 @@
                 }
                 <div class="detail-item">
                   <span class="dl">{{ 'PORTAL.LAB_RESULTS.COLLECTION_DATE' | translate }}</span>
-                  <span class="dv">{{ lab.collectedDate | serverTime | date: 'medium' }}</span>
+                  <span class="dv">{{ lab.collectedDate | serverTime | dateTime }}</span>
                 </div>
                 <div class="detail-item">
                   <span class="dl">{{ 'PORTAL.LAB_RESULTS.STATUS' | translate }}</span>
-                  <span class="dv portal-status-chip" [attr.data-status]="lab.status">{{
-                    lab.status | enumLabel: 'status'
+                  {{ ' '
+                  }}<span class="dv portal-status-chip" [attr.data-status]="lab.status">{{
+                    lab.isUngraded
+                      ? ('PORTAL.LAB_RESULTS.NOT_GRADED_STATUS' | translate)
+                      : (lab.status | enumLabel: 'status')
                   }}</span>
                 </div>
                 <div class="detail-item">
@@ -108,6 +144,30 @@
           }
         }
       </div>
+      @if (labTotal(); as total) {
+        <p class="pli-meta" data-testid="lab-count">
+          {{ 'PORTAL_PAGING.SHOWN_OF' | translate: { shown: results().length, total: total } }}
+        </p>
+      }
+      <!-- QA D1213: the older results are one click away, never silently cut -->
+      @if (pager.loadMoreFailed()) {
+        <p class="portal-inline-error" data-testid="lab-load-more-failed" role="alert">
+          {{ failureReason() ?? ('PORTAL_PAGING.LAB_LOAD_MORE_FAILED' | translate) }}
+        </p>
+      }
+      @if (pager.hasMore()) {
+        <div class="portal-load-more">
+          <button
+            type="button"
+            class="btn-secondary"
+            data-testid="lab-load-more"
+            [attr.aria-busy]="pager.loading()"
+            (click)="loadMore()"
+          >
+            {{ 'PORTAL_PAGING.LAB_LOAD_MORE' | translate }}
+          </button>
+        </div>
+      }
     </section>
   }
 </div>

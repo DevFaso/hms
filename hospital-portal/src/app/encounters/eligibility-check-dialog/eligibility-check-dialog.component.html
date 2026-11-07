@@ -1,5 +1,5 @@
 @if (open) {
-  <div class="elig-dialog">
+  <div class="elig-dialog__overlay">
     <button
       type="button"
       class="elig-dialog__backdrop"
@@ -10,9 +10,10 @@
 
     <dialog
       class="elig-dialog__panel"
-      aria-modal="true"
+      appModalDialog
       aria-labelledby="elig-dialog-title"
       [open]="true"
+      (escaped)="close()"
     >
       <header class="elig-dialog__header">
         <h3 id="elig-dialog-title">{{ 'ENCOUNTERS.ELIGIBILITY.TITLE' | translate }}</h3>
@@ -48,9 +49,11 @@
         </div>
 
         <label class="elig-dialog__field">
-          <span>{{ 'ENCOUNTERS.ELIGIBILITY.MEMBER_ID' | translate }}</span>
+          <span>{{ 'ENCOUNTERS.ELIGIBILITY.MEMBER_ID' | translate }} *</span>
           <input
+            id="elig-member-id"
             type="text"
+            required
             [ngModel]="memberId()"
             (ngModelChange)="memberId.set($event)"
             name="memberId"
@@ -60,9 +63,11 @@
 
         @if (checkType() === 'PRIOR_AUTH') {
           <label class="elig-dialog__field">
-            <span>{{ 'ENCOUNTERS.ELIGIBILITY.SERVICE_CODE' | translate }}</span>
+            <span>{{ 'ENCOUNTERS.ELIGIBILITY.SERVICE_CODE' | translate }} *</span>
             <input
+              id="elig-service-code"
               type="text"
+              required
               [ngModel]="serviceCode()"
               (ngModelChange)="serviceCode.set($event)"
               name="serviceCode"
@@ -72,7 +77,14 @@
         }
 
         <div class="elig-dialog__actions">
-          <button type="button" class="btn btn--primary" (click)="run()" [disabled]="running()">
+          <button
+            type="button"
+            class="btn btn--primary"
+            appSubmitGuard
+            submitGuardRequired
+            (click)="run()"
+            [disabled]="running()"
+          >
             {{
               (running() ? 'ENCOUNTERS.ELIGIBILITY.RUNNING' : 'ENCOUNTERS.ELIGIBILITY.RUN')
                 | translate
@@ -139,7 +151,7 @@
               }
               <div>
                 <dt>{{ 'ENCOUNTERS.ELIGIBILITY.CHECKED_AT' | translate }}</dt>
-                <dd>{{ r.completedAt ?? r.requestedAt }}</dd>
+                <dd>{{ r.completedAt ?? r.requestedAt | serverTime | date: 'short' }}</dd>
               </div>
             </dl>
           </article>

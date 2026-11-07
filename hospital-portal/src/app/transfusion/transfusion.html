@@ -5,6 +5,15 @@
       <p class="page-subtitle">{{ 'TRANSFUSION.SUBTITLE' | translate }}</p>
     </div>
     <div class="page-actions">
+      @if (tab() === 'requests' && canLab) {
+        <button
+          class="btn-secondary"
+          data-testid="record-group-any-patient"
+          (click)="openGroupModalForAnyPatient()"
+        >
+          {{ 'TRANSFUSION.RECORD_GROUP' | translate }}
+        </button>
+      }
       @if (tab() === 'requests' && canRequest) {
         <button class="btn-primary" (click)="openNewRequest()">
           <span class="material-symbols-outlined">add</span>
@@ -127,14 +136,16 @@
                       class="action-link"
                       (click)="openRequest(r)"
                       [title]="'COMMON.VIEW' | translate"
+                      [attr.aria-label]="'COMMON.VIEW' | translate"
                     >
                       <span class="material-symbols-outlined">visibility</span>
                     </button>
-                    @if (canRequest && r.status !== 'COMPLETED' && r.status !== 'CANCELLED') {
+                    @if (canCancelRequest(r)) {
                       <button
                         class="action-link delete"
                         (click)="cancelRequest(r)"
                         [title]="'COMMON.CANCEL' | translate"
+                        [attr.aria-label]="'COMMON.CANCEL' | translate"
                       >
                         <span class="material-symbols-outlined">cancel</span>
                       </button>
@@ -201,6 +212,7 @@
                       class="action-link delete"
                       (click)="discardUnit(u)"
                       [title]="'TRANSFUSION.DISCARD' | translate"
+                      [attr.aria-label]="'TRANSFUSION.DISCARD' | translate"
                     >
                       <span class="material-symbols-outlined">delete</span>
                     </button>
@@ -217,10 +229,22 @@
   <!-- ══ Request detail ══ -->
   @if (selectedRequest(); as req) {
     <div class="detail-overlay" tabindex="-1" (keydown.escape)="closeRequest()">
-      <div class="detail-panel">
+      <div
+        appModalDialog
+        aria-labelledby="transfusion-panel-1-title"
+        (escaped)="closeRequest()"
+        class="detail-panel"
+      >
         <div class="detail-header">
-          <h2>{{ req.patientName }} — {{ req.productType | enumLabel: 'bloodProductType' }}</h2>
-          <button class="btn-close" (click)="closeRequest()" [title]="'COMMON.CLOSE' | translate">
+          <h2 id="transfusion-panel-1-title">
+            {{ req.patientName }} — {{ req.productType | enumLabel: 'bloodProductType' }}
+          </h2>
+          <button
+            class="btn-close"
+            (click)="closeRequest()"
+            [title]="'COMMON.CLOSE' | translate"
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
@@ -229,6 +253,18 @@
             <div class="emergency-banner">
               <span class="material-symbols-outlined">emergency</span>
               {{ 'TRANSFUSION.EMERGENCY_UNTYPED' | translate }}
+            </div>
+          }
+          @for (a of runningIncompatible(); track a.id) {
+            <div class="emergency-banner" role="alert" data-testid="running-incompatible-banner">
+              <span class="material-symbols-outlined">warning</span>
+              {{ 'TRANSFUSION.RUNNING_INCOMPATIBLE' | translate: { unit: a.unitNumber } }}
+            </div>
+          }
+          @if (req.emergencyReleases?.length) {
+            <div class="warn-banner" role="status" data-testid="type-specific-reminder">
+              <span class="material-symbols-outlined">swap_horiz</span>
+              {{ 'TRANSFUSION.SWITCH_TO_TYPE_SPECIFIC' | translate }}
             </div>
           }
           @if (req.bloodGroupId && !req.screenCurrent) {
@@ -272,13 +308,242 @@
             <p>{{ req.indication }}</p>
           </div>
 
+          @if (req.emergencyReleases?.length) {
+            <div class="section-head">
+              <h3>{{ 'TRANSFUSION.EMERGENCY_RELEASES' | translate }}</h3>
+            </div>
+            <div class="table-wrapper" data-testid="emergency-releases">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th scope="col">{{ 'TRANSFUSION.UNIT_NUMBER' | translate }}</th>
+                    <th scope="col">{{ 'TRANSFUSION.RELEASE_TYPE' | translate }}</th>
+                    <th scope="col">{{ 'TRANSFUSION.RELEASE_REASON' | translate }}</th>
+                    <th scope="col">{{ 'TRANSFUSION.RELEASE_AUTHORISER' | translate }}</th>
+                    <th scope="col">{{ 'TRANSFUSION.RELEASE_ISSUED_BY' | translate }}</th>
+                    <th scope="col">{{ 'TRANSFUSION.RELEASE_ISSUED_AT' | translate }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (r of req.emergencyReleases; track r.id) {
+                    <tr>
+                      <td>{{ r.unitNumber }}</td>
+                      <td>
+                        {{ 'TRANSFUSION.RELEASE_TYPE_' + r.releaseType | translate }}
+                        @if (r.antibodyWarning) {
+                          <div class="warn-inline">
+                            {{ 'TRANSFUSION.RELEASE_ANTIBODY_FLAG' | translate }}
+                          </div>
+                        }
+                        @if (r.negativeUnobtainableStated) {
+                          <div class="warn-inline" data-testid="release-negative-statement">
+                            {{
+                              'TRANSFUSION.RELEASE_NEGATIVE_STATEMENT'
+                                | translate: { units: r.negativeUnitsShown }
+                            }}
+                          </div>
+                        }
+                      </td>
+                      <td>{{ r.reason || '—' }}</td>
+                      <td>{{ r.authoriserName || '—' }}</td>
+                      <td>{{ r.issuedByName || '—' }}</td>
+                      <td>{{ r.issuedAt | serverTime | date: 'short' }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+
+          <!-- QA CX-008: above the workup, because this is where an emergency starts. -->
+          @if (administrationsState() === 'failed') {
+            <div class="warn-banner" data-testid="administrations-failed">
+              <span class="material-symbols-outlined">error</span>
+              {{ 'TRANSFUSION.ADMIN_LOAD_ERROR' | translate }}
+              <button class="btn-secondary" (click)="loadAdministrations()">
+                {{ 'COMMON.RETRY' | translate }}
+              </button>
+            </div>
+          }
+          @if (administrations().length > 0) {
+            <div class="section-head">
+              <h3 id="tx-administrations-heading" tabindex="-1">
+                {{ 'TRANSFUSION.ADMINISTRATIONS' | translate }}
+              </h3>
+            </div>
+            @for (a of administrations(); track a.id) {
+              <div
+                class="administration-card"
+                [class.in-progress]="isInProgress(a)"
+                [attr.data-testid]="'administration-' + a.id"
+              >
+                <div class="administration-head">
+                  <span class="mono">{{ a.unitNumber }}</span>
+                  {{ ' '
+                  }}<span
+                    class="status-badge"
+                    [class.status-progress]="isInProgress(a)"
+                    [class.status-completed]="a.status === 'COMPLETED'"
+                    [class.status-cancelled]="a.status === 'STOPPED'"
+                    >{{ 'TRANSFUSION.ADMIN_STATUS_' + a.status | translate }}</span
+                  >
+                </div>
+                <div class="administration-facts">
+                  <span
+                    >{{ 'TRANSFUSION.ADMIN_STARTED' | translate }}{{ 'COMMON.COLON' | translate }}
+                    {{ a.startedAt | serverTime | date: 'short' }}</span
+                  >
+                  @if (a.administeredByName) {
+                    <span
+                      >{{ 'TRANSFUSION.ADMIN_GIVEN_BY' | translate
+                      }}{{ 'COMMON.COLON' | translate }} {{ a.administeredByName }}</span
+                    >
+                  }
+                  @if (a.verifiedByName) {
+                    <span
+                      >{{ 'TRANSFUSION.VERIFIER' | translate }}{{ 'COMMON.COLON' | translate }}
+                      {{ a.verifiedByName }}</span
+                    >
+                  }
+                  @if (a.completedAt) {
+                    <span
+                      >{{ 'TRANSFUSION.ADMIN_ENDED' | translate }}{{ 'COMMON.COLON' | translate }}
+                      {{ a.completedAt | serverTime | date: 'short' }}</span
+                    >
+                  }
+                  @if (a.volumeTransfusedMl !== null) {
+                    <span
+                      >{{ 'TRANSFUSION.ADMIN_VOLUME_GIVEN' | translate
+                      }}{{ 'COMMON.COLON' | translate }} {{ a.volumeTransfusedMl }} mL</span
+                    >
+                  }
+                  <!-- A reaction's own stop reason is written by the server for the
+                       record; the reaction below says what happened, in the reader's
+                       language. A nurse's own reason is shown as she wrote it. -->
+                  @if (a.stopReason && a.reactions.length === 0) {
+                    <span>{{ 'COMMON.REASON_VALUE' | translate: { reason: a.stopReason } }}</span>
+                  }
+                </div>
+                @if (a.crossmatch; as xm) {
+                  @if (!xm.compatible) {
+                    <div
+                      class="administration-reaction"
+                      [attr.data-testid]="'xm-incompatible-' + a.id"
+                    >
+                      <span class="material-symbols-outlined">warning</span>
+                      <span>
+                        {{
+                          (isInProgress(a)
+                            ? 'TRANSFUSION.RUNNING_INCOMPATIBLE_SHORT'
+                            : 'TRANSFUSION.INCOMPATIBLE'
+                          ) | translate
+                        }}
+                        @if (xm.incompatibilityReason) {
+                          —
+                          {{
+                            'COMMON.REASON_VALUE' | translate: { reason: xm.incompatibilityReason }
+                          }}
+                        }
+                      </span>
+                    </div>
+                  }
+                }
+                @if (canRecordLateResult(a)) {
+                  <div class="administration-actions">
+                    <button
+                      class="btn-secondary"
+                      data-testid="late-incompatible-result"
+                      (click)="openLateResult(a)"
+                    >
+                      {{ 'TRANSFUSION.LATE_INCOMPATIBLE_RESULT' | translate }}
+                    </button>
+                  </div>
+                }
+                @for (rx of a.reactions; track rx.id) {
+                  <div class="administration-reaction" [attr.data-testid]="'reaction-' + rx.id">
+                    <span class="material-symbols-outlined">warning</span>
+                    <span>
+                      {{ 'TRANSFUSION.REACTION_' + rx.reactionType | translate }} —
+                      {{ 'TRANSFUSION.SEVERITY_' + rx.severity | translate }} —
+                      {{ rx.onsetAt | serverTime | date: 'short' }}
+                    </span>
+                  </div>
+                }
+                @if (canBedside) {
+                  <div class="administration-actions">
+                    @if (isInProgress(a)) {
+                      <button
+                        class="btn-danger"
+                        data-testid="suspected-reaction"
+                        (click)="openReaction(a.id)"
+                      >
+                        <span class="material-symbols-outlined">emergency</span>
+                        {{ 'TRANSFUSION.SUSPECTED_REACTION' | translate }}
+                      </button>
+                      <button
+                        class="btn-secondary"
+                        data-testid="complete-administration"
+                        (click)="openComplete(a)"
+                      >
+                        {{ 'TRANSFUSION.ADMIN_COMPLETE' | translate }}
+                      </button>
+                      <button
+                        class="btn-secondary"
+                        data-testid="stop-administration"
+                        (click)="openStop(a)"
+                      >
+                        {{ 'TRANSFUSION.ADMIN_STOP' | translate }}
+                      </button>
+                    } @else {
+                      <!-- Some reactions come after the bag has run out. -->
+                      <button
+                        class="btn-secondary"
+                        data-testid="later-reaction"
+                        (click)="openReaction(a.id)"
+                      >
+                        {{ 'TRANSFUSION.REPORT_REACTION' | translate }}
+                      </button>
+                    }
+                  </div>
+                }
+              </div>
+            }
+          }
+
           <!-- Workup -->
           <div class="section-head">
             <h3>{{ 'TRANSFUSION.WORKUP' | translate }}</h3>
             @if (canLab && req.status !== 'COMPLETED' && req.status !== 'CANCELLED') {
-              <button class="btn-secondary" (click)="openCrossmatch()">
-                {{ 'TRANSFUSION.RECORD_CROSSMATCH' | translate }}
-              </button>
+              <div class="action-group">
+                @if (canReleaseInEmergency(req)) {
+                  <button
+                    class="btn-danger"
+                    data-testid="emergency-release"
+                    (click)="openEmergencyRelease(req)"
+                  >
+                    {{ 'TRANSFUSION.EMERGENCY_RELEASE' | translate }}
+                  </button>
+                }
+                @if (canReleaseIncompatible(req)) {
+                  <button
+                    class="btn-danger"
+                    data-testid="incompatible-release"
+                    (click)="openIncompatibleRelease(req)"
+                  >
+                    {{ 'TRANSFUSION.INCOMPATIBLE_RELEASE' | translate }}
+                  </button>
+                }
+                <button
+                  class="btn-secondary"
+                  data-testid="record-group-for-request"
+                  (click)="openGroupModalForRequest(req)"
+                >
+                  {{ 'TRANSFUSION.RECORD_GROUP' | translate }}
+                </button>
+                <button class="btn-secondary" (click)="openCrossmatch()">
+                  {{ 'TRANSFUSION.RECORD_CROSSMATCH' | translate }}
+                </button>
+              </div>
             }
           </div>
 
@@ -341,8 +606,12 @@
                               {{ 'TRANSFUSION.ISSUE' | translate }}
                             </button>
                           }
-                          @if (canBedside && u.status === 'ISSUED') {
-                            <button class="action-link" (click)="openHang(u)">
+                          @if (canHang(u)) {
+                            <button
+                              class="action-link"
+                              data-testid="hang-unit"
+                              (click)="openHang(u)"
+                            >
                               {{ 'TRANSFUSION.HANG' | translate }}
                             </button>
                           }
@@ -364,93 +633,119 @@
     <div
       class="modal-backdrop"
       tabindex="-1"
-      (click)="closeNewRequest()"
+      appBackdropClose
+      (backdropClose)="closeNewRequest()"
       (keydown.escape)="closeNewRequest()"
-    ></div>
-    <div class="modal modal-wide">
-      <div class="modal-header">
-        <h2>{{ 'TRANSFUSION.NEW_REQUEST' | translate }}</h2>
-        <button class="modal-close" (click)="closeNewRequest()">&times;</button>
-      </div>
-      <div class="modal-body">
-        <app-patient-picker
-          inputId="tx-patientSearch"
-          [selected]="selectedPatient()"
-          (selectedChange)="onPatientPicked($event)"
-        />
+    >
+      <div
+        class="modal modal-wide"
+        appModalDialog
+        aria-labelledby="transfusion-dialog-1-title"
+        (escaped)="closeNewRequest()"
+      >
+        <div class="modal-header">
+          <h2 id="transfusion-dialog-1-title">{{ 'TRANSFUSION.NEW_REQUEST' | translate }}</h2>
+          <button class="modal-close" (click)="closeNewRequest()">&times;</button>
+        </div>
+        <div class="modal-body">
+          <!-- QA D1304 (D1272 class): the required picker shows a visible, starred label. -->
+          <label for="tx-patientSearch">{{ 'PATIENTS.PATIENT_NAME' | translate }} *</label>
+          <app-patient-picker
+            inputId="tx-patientSearch"
+            required
+            [selected]="selectedPatient()"
+            (selectedChange)="onPatientPicked($event)"
+          />
 
-        @if (selectedPatient()) {
-          <div class="group-summary">
-            @if (patientGroup(); as g) {
-              <span class="group-badge"
-                >{{ g.aboGroup }}{{ g.rhFactor === 'POSITIVE' ? '+' : '−' }}</span
-              >
-              <span>{{ 'TRANSFUSION.SCREEN' | translate }}: {{ g.antibodyScreen }}</span>
-              @if (!g.screenCurrent) {
-                <span class="warn-inline">{{ 'TRANSFUSION.SCREEN_LAPSED' | translate }}</span>
+          @if (selectedPatient()) {
+            <div class="group-summary">
+              @if (patientGroup(); as g) {
+                <span class="group-badge"
+                  >{{ g.aboGroup }}{{ g.rhFactor === 'POSITIVE' ? '+' : '−' }}</span
+                >
+                <span
+                  >{{ 'TRANSFUSION.SCREEN' | translate }}{{ 'COMMON.COLON' | translate }}
+                  {{ g.antibodyScreen }}</span
+                >
+                @if (!g.screenCurrent) {
+                  <span class="warn-inline">{{ 'TRANSFUSION.SCREEN_LAPSED' | translate }}</span>
+                }
+                @if (g.correctionReason) {
+                  {{ ' '
+                  }}<span>{{
+                    'COMMON.REASON_VALUE' | translate: { reason: g.correctionReason }
+                  }}</span>
+                }
+              } @else {
+                <span class="warn-inline">{{ 'TRANSFUSION.NO_GROUP_ON_FILE' | translate }}</span>
               }
-            } @else {
-              <span class="warn-inline">{{ 'TRANSFUSION.NO_GROUP_ON_FILE' | translate }}</span>
-            }
-            @if (canLab) {
-              <button class="btn-secondary" (click)="openGroupModal()">
-                {{ 'TRANSFUSION.RECORD_GROUP' | translate }}
-              </button>
-            }
-          </div>
-        }
+              @if (canLab) {
+                <button class="btn-secondary" (click)="openGroupModal()">
+                  {{ 'TRANSFUSION.RECORD_GROUP' | translate }}
+                </button>
+              }
+            </div>
+          }
 
-        <div class="field-row">
+          <div class="field-row">
+            <div class="field">
+              <label for="tx-product">{{ 'TRANSFUSION.PRODUCT' | translate }}</label>
+              <select id="tx-product" [(ngModel)]="requestForm.productType">
+                @for (p of productTypes; track p) {
+                  <option [value]="p">{{ p | enumLabel: 'bloodProductType' }}</option>
+                }
+              </select>
+            </div>
+            <div class="field">
+              <label for="tx-units">{{ 'TRANSFUSION.UNITS' | translate }}</label>
+              <input
+                id="tx-units"
+                type="number"
+                min="1"
+                [max]="maxUnitsPerRequest"
+                [(ngModel)]="requestForm.unitsRequested"
+              />
+            </div>
+            <div class="field">
+              <label for="tx-urgency">{{ 'TRANSFUSION.URGENCY' | translate }}</label>
+              <select id="tx-urgency" [(ngModel)]="requestForm.urgency">
+                @for (u of urgencies; track u) {
+                  <option [value]="u">{{ 'TRANSFUSION.URGENCY_' + u | translate }}</option>
+                }
+              </select>
+            </div>
+          </div>
+          @if (requestForm.urgency === 'EMERGENCY') {
+            <small class="field-hint">{{ 'TRANSFUSION.EMERGENCY_HINT' | translate }}</small>
+          }
           <div class="field">
-            <label for="tx-product">{{ 'TRANSFUSION.PRODUCT' | translate }}</label>
-            <select id="tx-product" [(ngModel)]="requestForm.productType">
-              @for (p of productTypes; track p) {
-                <option [value]="p">{{ p | enumLabel: 'bloodProductType' }}</option>
-              }
-            </select>
+            <label for="tx-indication">{{ 'TRANSFUSION.INDICATION' | translate }} *</label>
+            <textarea
+              required
+              id="tx-indication"
+              rows="2"
+              [(ngModel)]="requestForm.indication"
+            ></textarea>
           </div>
           <div class="field">
-            <label for="tx-units">{{ 'TRANSFUSION.UNITS' | translate }}</label>
-            <input
-              id="tx-units"
-              type="number"
-              min="1"
-              [max]="maxUnitsPerRequest"
-              [(ngModel)]="requestForm.unitsRequested"
-            />
-          </div>
-          <div class="field">
-            <label for="tx-urgency">{{ 'TRANSFUSION.URGENCY' | translate }}</label>
-            <select id="tx-urgency" [(ngModel)]="requestForm.urgency">
-              @for (u of urgencies; track u) {
-                <option [value]="u">{{ 'TRANSFUSION.URGENCY_' + u | translate }}</option>
-              }
-            </select>
+            <label for="tx-notes">{{ 'COMMON.NOTES' | translate }}</label>
+            <textarea id="tx-notes" rows="2" [(ngModel)]="requestForm.notes"></textarea>
           </div>
         </div>
-        @if (requestForm.urgency === 'EMERGENCY') {
-          <small class="field-hint">{{ 'TRANSFUSION.EMERGENCY_HINT' | translate }}</small>
-        }
-        <div class="field">
-          <label for="tx-indication">{{ 'TRANSFUSION.INDICATION' | translate }} *</label>
-          <textarea id="tx-indication" rows="2" [(ngModel)]="requestForm.indication"></textarea>
+        <div class="modal-actions">
+          <button class="btn-secondary" (click)="closeNewRequest()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+          <button
+            class="btn-primary"
+            (click)="submitRequest()"
+            [disabled]="requestSubmitting()"
+            [appSubmitGuard]="!requestForm.patientId || !requestForm.indication"
+            [submitGuardFields]="['tx-patientSearch', 'tx-indication']"
+          >
+            {{ 'COMMON.SAVE' | translate }}
+          </button>
         </div>
-        <div class="field">
-          <label for="tx-notes">{{ 'COMMON.NOTES' | translate }}</label>
-          <textarea id="tx-notes" rows="2" [(ngModel)]="requestForm.notes"></textarea>
-        </div>
-      </div>
-      <div class="modal-actions">
-        <button class="btn-secondary" (click)="closeNewRequest()">
-          {{ 'COMMON.CANCEL' | translate }}
-        </button>
-        <button
-          class="btn-primary"
-          (click)="submitRequest()"
-          [disabled]="requestSubmitting() || !requestForm.patientId || !requestForm.indication"
-        >
-          {{ 'COMMON.SAVE' | translate }}
-        </button>
       </div>
     </div>
   }
@@ -460,60 +755,83 @@
     <div
       class="modal-backdrop"
       tabindex="-1"
-      (click)="closeGroupModal()"
+      appBackdropClose
+      (backdropClose)="closeGroupModal()"
       (keydown.escape)="closeGroupModal()"
-    ></div>
-    <div class="modal">
-      <div class="modal-header">
-        <h2>{{ 'TRANSFUSION.RECORD_GROUP' | translate }}</h2>
-        <button class="modal-close" (click)="closeGroupModal()">&times;</button>
-      </div>
-      <div class="modal-body">
-        <div class="field-row">
-          <div class="field">
-            <label for="grp-abo">{{ 'TRANSFUSION.ABO' | translate }}</label>
-            <select id="grp-abo" [(ngModel)]="groupForm.aboGroup">
-              @for (a of aboGroups; track a) {
-                <option [value]="a">{{ a }}</option>
-              }
-            </select>
+    >
+      <div
+        class="modal"
+        appModalDialog
+        aria-labelledby="transfusion-dialog-2-title"
+        (escaped)="closeGroupModal()"
+      >
+        <div class="modal-header">
+          <h2 id="transfusion-dialog-2-title">{{ 'TRANSFUSION.RECORD_GROUP' | translate }}</h2>
+          <button class="modal-close" (click)="closeGroupModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+          @if (groupNeedsPatient()) {
+            <label for="grp-patient">{{ 'PATIENTS.PATIENT_NAME' | translate }} *</label>
+            <app-patient-picker
+              inputId="grp-patient"
+              required
+              [selected]="groupPickerPatient()"
+              (selectedChange)="onGroupPatientPicked($event)"
+            />
+          }
+          <div class="field-row">
+            <div class="field">
+              <label for="grp-abo">{{ 'TRANSFUSION.ABO' | translate }}</label>
+              <select id="grp-abo" [(ngModel)]="groupForm.aboGroup">
+                @for (a of aboGroups; track a) {
+                  <option [value]="a">{{ a }}</option>
+                }
+              </select>
+            </div>
+            <div class="field">
+              <label for="grp-rh">{{ 'TRANSFUSION.RH' | translate }}</label>
+              <select id="grp-rh" [(ngModel)]="groupForm.rhFactor">
+                @for (r of rhFactors; track r) {
+                  <option [value]="r">{{ 'TRANSFUSION.RH_' + r | translate }}</option>
+                }
+              </select>
+            </div>
+            <div class="field">
+              <label for="grp-screen">{{ 'TRANSFUSION.SCREEN' | translate }}</label>
+              <select id="grp-screen" [(ngModel)]="groupForm.antibodyScreen">
+                @for (s of screenResults; track s) {
+                  <option [value]="s">{{ 'TRANSFUSION.SCREEN_' + s | translate }}</option>
+                }
+              </select>
+            </div>
           </div>
+          @if (groupForm.antibodyScreen === 'POSITIVE') {
+            <div class="field">
+              <label for="grp-detail">{{ 'TRANSFUSION.ANTIBODY_DETAIL' | translate }}</label>
+              <input id="grp-detail" type="text" [(ngModel)]="groupForm.antibodyDetail" />
+            </div>
+          }
           <div class="field">
-            <label for="grp-rh">{{ 'TRANSFUSION.RH' | translate }}</label>
-            <select id="grp-rh" [(ngModel)]="groupForm.rhFactor">
-              @for (r of rhFactors; track r) {
-                <option [value]="r">{{ 'TRANSFUSION.RH_' + r | translate }}</option>
-              }
-            </select>
-          </div>
-          <div class="field">
-            <label for="grp-screen">{{ 'TRANSFUSION.SCREEN' | translate }}</label>
-            <select id="grp-screen" [(ngModel)]="groupForm.antibodyScreen">
-              @for (s of screenResults; track s) {
-                <option [value]="s">{{ 'TRANSFUSION.SCREEN_' + s | translate }}</option>
-              }
-            </select>
+            <label for="grp-correction">{{ 'TRANSFUSION.CORRECTION_REASON' | translate }}</label>
+            <input id="grp-correction" type="text" [(ngModel)]="groupForm.correctionReason" />
+            <small class="field-hint">{{ 'TRANSFUSION.CORRECTION_HINT' | translate }}</small>
           </div>
         </div>
-        @if (groupForm.antibodyScreen === 'POSITIVE') {
-          <div class="field">
-            <label for="grp-detail">{{ 'TRANSFUSION.ANTIBODY_DETAIL' | translate }}</label>
-            <input id="grp-detail" type="text" [(ngModel)]="groupForm.antibodyDetail" />
-          </div>
-        }
-        <div class="field">
-          <label for="grp-correction">{{ 'TRANSFUSION.CORRECTION_REASON' | translate }}</label>
-          <input id="grp-correction" type="text" [(ngModel)]="groupForm.correctionReason" />
-          <small class="field-hint">{{ 'TRANSFUSION.CORRECTION_HINT' | translate }}</small>
+        <div class="modal-actions">
+          <button class="btn-secondary" (click)="closeGroupModal()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+          <button
+            class="btn-primary"
+            data-testid="submit-group"
+            (click)="submitGroup()"
+            [disabled]="groupSubmitting()"
+            [appSubmitGuard]="!groupForm.patientId"
+            [submitGuardFields]="['grp-patient']"
+          >
+            {{ 'COMMON.SAVE' | translate }}
+          </button>
         </div>
-      </div>
-      <div class="modal-actions">
-        <button class="btn-secondary" (click)="closeGroupModal()">
-          {{ 'COMMON.CANCEL' | translate }}
-        </button>
-        <button class="btn-primary" (click)="submitGroup()" [disabled]="groupSubmitting()">
-          {{ 'COMMON.SAVE' | translate }}
-        </button>
       </div>
     </div>
   }
@@ -523,86 +841,95 @@
     <div
       class="modal-backdrop"
       tabindex="-1"
-      (click)="closeUnitModal()"
+      appBackdropClose
+      (backdropClose)="closeUnitModal()"
       (keydown.escape)="closeUnitModal()"
-    ></div>
-    <div class="modal">
-      <div class="modal-header">
-        <h2>{{ 'TRANSFUSION.RECEIVE_UNIT' | translate }}</h2>
-        <button class="modal-close" (click)="closeUnitModal()">&times;</button>
-      </div>
-      <div class="modal-body">
-        <div class="field">
-          <label for="u-number">{{ 'TRANSFUSION.UNIT_NUMBER' | translate }} *</label>
-          <input id="u-number" type="text" [(ngModel)]="unitForm.unitNumber" />
+    >
+      <div
+        class="modal"
+        appModalDialog
+        aria-labelledby="transfusion-dialog-3-title"
+        (escaped)="closeUnitModal()"
+      >
+        <div class="modal-header">
+          <h2 id="transfusion-dialog-3-title">{{ 'TRANSFUSION.RECEIVE_UNIT' | translate }}</h2>
+          <button class="modal-close" (click)="closeUnitModal()">&times;</button>
         </div>
-        <div class="field-row">
+        <div class="modal-body">
           <div class="field">
-            <label for="u-product">{{ 'TRANSFUSION.PRODUCT' | translate }}</label>
-            <select id="u-product" [(ngModel)]="unitForm.productType">
-              @for (p of productTypes; track p) {
-                <option [value]="p">{{ p | enumLabel: 'bloodProductType' }}</option>
-              }
-            </select>
+            <label for="u-number">{{ 'TRANSFUSION.UNIT_NUMBER' | translate }} *</label>
+            <input required id="u-number" type="text" [(ngModel)]="unitForm.unitNumber" />
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="u-product">{{ 'TRANSFUSION.PRODUCT' | translate }}</label>
+              <select id="u-product" [(ngModel)]="unitForm.productType">
+                @for (p of productTypes; track p) {
+                  <option [value]="p">{{ p | enumLabel: 'bloodProductType' }}</option>
+                }
+              </select>
+            </div>
+            <div class="field">
+              <label for="u-abo">{{ 'TRANSFUSION.ABO' | translate }}</label>
+              <select id="u-abo" [(ngModel)]="unitForm.aboGroup">
+                @for (a of aboGroups; track a) {
+                  <option [value]="a">{{ a }}</option>
+                }
+              </select>
+            </div>
+            <div class="field">
+              <label for="u-rh">{{ 'TRANSFUSION.RH' | translate }}</label>
+              <select id="u-rh" [(ngModel)]="unitForm.rhFactor">
+                @for (r of rhFactors; track r) {
+                  <option [value]="r">{{ 'TRANSFUSION.RH_' + r | translate }}</option>
+                }
+              </select>
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="u-volume">{{ 'TRANSFUSION.VOLUME' | translate }}</label>
+              <input
+                id="u-volume"
+                type="number"
+                min="1"
+                [max]="maxUnitVolumeMl"
+                [(ngModel)]="unitForm.volumeMl"
+              />
+            </div>
+            <div class="field">
+              <label for="u-collected">{{ 'TRANSFUSION.COLLECTED_ON' | translate }}</label>
+              <input
+                id="u-collected"
+                type="date"
+                [max]="maxCollectedOn"
+                [(ngModel)]="unitForm.collectedOn"
+              />
+            </div>
+            <div class="field">
+              <label for="u-expires">{{ 'TRANSFUSION.EXPIRES' | translate }} *</label>
+              <input required id="u-expires" type="date" [(ngModel)]="unitForm.expiresOn" />
+            </div>
           </div>
           <div class="field">
-            <label for="u-abo">{{ 'TRANSFUSION.ABO' | translate }}</label>
-            <select id="u-abo" [(ngModel)]="unitForm.aboGroup">
-              @for (a of aboGroups; track a) {
-                <option [value]="a">{{ a }}</option>
-              }
-            </select>
-          </div>
-          <div class="field">
-            <label for="u-rh">{{ 'TRANSFUSION.RH' | translate }}</label>
-            <select id="u-rh" [(ngModel)]="unitForm.rhFactor">
-              @for (r of rhFactors; track r) {
-                <option [value]="r">{{ 'TRANSFUSION.RH_' + r | translate }}</option>
-              }
-            </select>
+            <label for="u-source">{{ 'TRANSFUSION.SOURCE' | translate }}</label>
+            <input id="u-source" type="text" [(ngModel)]="unitForm.source" />
           </div>
         </div>
-        <div class="field-row">
-          <div class="field">
-            <label for="u-volume">{{ 'TRANSFUSION.VOLUME' | translate }}</label>
-            <input
-              id="u-volume"
-              type="number"
-              min="1"
-              [max]="maxUnitVolumeMl"
-              [(ngModel)]="unitForm.volumeMl"
-            />
-          </div>
-          <div class="field">
-            <label for="u-collected">{{ 'TRANSFUSION.COLLECTED_ON' | translate }}</label>
-            <input
-              id="u-collected"
-              type="date"
-              [max]="maxCollectedOn"
-              [(ngModel)]="unitForm.collectedOn"
-            />
-          </div>
-          <div class="field">
-            <label for="u-expires">{{ 'TRANSFUSION.EXPIRES' | translate }} *</label>
-            <input id="u-expires" type="date" [(ngModel)]="unitForm.expiresOn" />
-          </div>
+        <div class="modal-actions">
+          <button class="btn-secondary" (click)="closeUnitModal()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+          <button
+            class="btn-primary"
+            (click)="submitUnit()"
+            [disabled]="unitSubmitting()"
+            [appSubmitGuard]="!unitForm.unitNumber || !unitForm.expiresOn"
+            [submitGuardFields]="['u-number', 'u-expires']"
+          >
+            {{ 'COMMON.SAVE' | translate }}
+          </button>
         </div>
-        <div class="field">
-          <label for="u-source">{{ 'TRANSFUSION.SOURCE' | translate }}</label>
-          <input id="u-source" type="text" [(ngModel)]="unitForm.source" />
-        </div>
-      </div>
-      <div class="modal-actions">
-        <button class="btn-secondary" (click)="closeUnitModal()">
-          {{ 'COMMON.CANCEL' | translate }}
-        </button>
-        <button
-          class="btn-primary"
-          (click)="submitUnit()"
-          [disabled]="unitSubmitting() || !unitForm.unitNumber || !unitForm.expiresOn"
-        >
-          {{ 'COMMON.SAVE' | translate }}
-        </button>
       </div>
     </div>
   }
@@ -612,55 +939,306 @@
     <div
       class="modal-backdrop"
       tabindex="-1"
-      (click)="closeCrossmatch()"
+      appBackdropClose
+      (backdropClose)="closeCrossmatch()"
       (keydown.escape)="closeCrossmatch()"
-    ></div>
-    <div class="modal">
-      <div class="modal-header">
-        <h2>{{ 'TRANSFUSION.RECORD_CROSSMATCH' | translate }}</h2>
-        <button class="modal-close" (click)="closeCrossmatch()">&times;</button>
-      </div>
-      <div class="modal-body">
-        <p class="modal-hint">{{ 'TRANSFUSION.CROSSMATCH_HINT' | translate }}</p>
-        <div class="field">
-          <label for="xm-unit">{{ 'TRANSFUSION.UNIT_NUMBER' | translate }} *</label>
-          <select id="xm-unit" [(ngModel)]="crossmatchForm.bloodUnitId">
-            <option value="">{{ 'COMMON.SELECT' | translate }}</option>
-            @for (u of assignableUnits(); track u.id) {
-              <option [value]="u.id">
-                {{ u.unitNumber }} — {{ u.aboGroup }}{{ u.rhFactor === 'POSITIVE' ? '+' : '−' }} ({{
-                  u.productType | enumLabel: 'bloodProductType'
-                }})
-              </option>
-            }
-          </select>
+    >
+      <div
+        class="modal"
+        appModalDialog
+        aria-labelledby="transfusion-dialog-4-title"
+        (escaped)="closeCrossmatch()"
+      >
+        <div class="modal-header">
+          <h2 id="transfusion-dialog-4-title">{{ 'TRANSFUSION.RECORD_CROSSMATCH' | translate }}</h2>
+          <button class="modal-close" (click)="closeCrossmatch()">&times;</button>
         </div>
-        <label class="checkbox-field">
-          <input type="checkbox" [(ngModel)]="crossmatchForm.compatible" />
-          {{ 'TRANSFUSION.COMPATIBLE' | translate }}
-        </label>
-        <div class="field">
-          <label for="xm-method">{{ 'TRANSFUSION.METHOD' | translate }}</label>
-          <input id="xm-method" type="text" [(ngModel)]="crossmatchForm.method" />
-        </div>
-        @if (!crossmatchForm.compatible) {
+        <div class="modal-body">
+          @if (lateResultUnit(); as unitNumber) {
+            <p class="modal-hint warn" data-testid="late-result-hint">
+              {{ 'TRANSFUSION.LATE_INCOMPATIBLE_HINT' | translate: { unit: unitNumber } }}
+            </p>
+          } @else {
+            <p class="modal-hint">{{ 'TRANSFUSION.CROSSMATCH_HINT' | translate }}</p>
+            <div class="field">
+              <label for="xm-unit">{{ 'TRANSFUSION.UNIT_NUMBER' | translate }} *</label>
+              <select required id="xm-unit" [(ngModel)]="crossmatchForm.bloodUnitId">
+                <option value="">{{ 'COMMON.SELECT' | translate }}</option>
+                @for (u of assignableUnits(); track u.id) {
+                  <option [value]="u.id">
+                    {{ u.unitNumber }} — {{ u.aboGroup
+                    }}{{ u.rhFactor === 'POSITIVE' ? '+' : '−' }} ({{
+                      u.productType | enumLabel: 'bloodProductType'
+                    }})
+                  </option>
+                }
+              </select>
+            </div>
+            <label class="checkbox-field">
+              <input type="checkbox" [(ngModel)]="crossmatchForm.compatible" />
+              {{ 'TRANSFUSION.COMPATIBLE' | translate }}
+            </label>
+          }
           <div class="field">
-            <label for="xm-reason">{{ 'TRANSFUSION.INCOMPAT_REASON' | translate }}</label>
-            <input id="xm-reason" type="text" [(ngModel)]="crossmatchForm.incompatibilityReason" />
+            <label for="xm-method">{{ 'TRANSFUSION.METHOD' | translate }}</label>
+            <input id="xm-method" type="text" [(ngModel)]="crossmatchForm.method" />
           </div>
-        }
+          @if (!crossmatchForm.compatible) {
+            <div class="field">
+              <label for="xm-reason">{{ 'TRANSFUSION.INCOMPAT_REASON' | translate }} *</label>
+              <input
+                required
+                id="xm-reason"
+                type="text"
+                [(ngModel)]="crossmatchForm.incompatibilityReason"
+              />
+            </div>
+          }
+        </div>
+        <div class="modal-actions">
+          <button class="btn-secondary" (click)="closeCrossmatch()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+          <button
+            class="btn-primary"
+            (click)="submitCrossmatch()"
+            [disabled]="crossmatchSubmitting()"
+            [appSubmitGuard]="
+              !crossmatchForm.bloodUnitId ||
+              (!crossmatchForm.compatible && !crossmatchForm.incompatibilityReason.trim())
+            "
+            [submitGuardFields]="crossmatchForm.compatible ? ['xm-unit'] : ['xm-unit', 'xm-reason']"
+          >
+            {{ 'COMMON.SAVE' | translate }}
+          </button>
+        </div>
       </div>
-      <div class="modal-actions">
-        <button class="btn-secondary" (click)="closeCrossmatch()">
-          {{ 'COMMON.CANCEL' | translate }}
-        </button>
-        <button
-          class="btn-primary"
-          (click)="submitCrossmatch()"
-          [disabled]="crossmatchSubmitting() || !crossmatchForm.bloodUnitId"
-        >
-          {{ 'COMMON.SAVE' | translate }}
-        </button>
+    </div>
+  }
+
+  <!-- ══ Emergency release modal ══ -->
+  @if (showEmergencyModal()) {
+    <div
+      class="modal-backdrop"
+      tabindex="-1"
+      appBackdropClose
+      (backdropClose)="closeEmergencyRelease()"
+      (keydown.escape)="closeEmergencyRelease()"
+    >
+      <div
+        class="modal"
+        appModalDialog
+        aria-labelledby="transfusion-dialog-7-title"
+        (escaped)="closeEmergencyRelease()"
+      >
+        <div class="modal-header">
+          <h2 id="transfusion-dialog-7-title">{{ 'TRANSFUSION.EMERGENCY_RELEASE' | translate }}</h2>
+          <button class="modal-close" (click)="closeEmergencyRelease()">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-hint warn">{{ 'TRANSFUSION.EMERGENCY_RELEASE_HINT' | translate }}</p>
+          @if (emergencyOptions(); as options) {
+            @if (options.antibodyWarning) {
+              <div class="emergency-banner" role="alert" data-testid="antibody-warning">
+                <span class="material-symbols-outlined">warning</span>
+                <span>
+                  {{ 'TRANSFUSION.ANTIBODY_REVIEW_WARNING' | translate }}
+                  @if (options.antibodyDetail) {
+                    ({{ options.antibodyDetail }})
+                  }
+                </span>
+              </div>
+            }
+            @if (options.negativeStock.length) {
+              <p class="modal-hint warn" data-testid="o-negative-first">
+                {{ 'TRANSFUSION.O_NEGATIVE_FIRST' | translate: { units: negativeStockNumbers() } }}
+              </p>
+            }
+          }
+          <div class="field">
+            <label for="em-unit">{{ 'TRANSFUSION.UNIT_NUMBER' | translate }} *</label>
+            <select
+              required
+              id="em-unit"
+              [(ngModel)]="emergencyUnitId"
+              (ngModelChange)="onEmergencyUnitPicked()"
+            >
+              <option value="">{{ 'COMMON.SELECT' | translate }}</option>
+              @for (u of emergencyOptions()?.units ?? []; track u.id) {
+                <option [value]="u.id">
+                  {{ u.unitNumber }} — {{ u.aboGroup }}{{ u.rhFactor === 'POSITIVE' ? '+' : '−' }}
+                </option>
+              }
+            </select>
+          </div>
+          @if (emergencyDecisionRequired()) {
+            <p class="modal-hint warn" data-testid="decision-required">
+              {{ 'TRANSFUSION.O_POSITIVE_DECISION_HINT' | translate }}
+            </p>
+            <div class="field">
+              <label for="em-decider">{{ 'TRANSFUSION.DECIDER' | translate }} *</label>
+              <select required id="em-decider" [(ngModel)]="emergencyAuthoriserId">
+                <option value="">{{ 'COMMON.SELECT' | translate }}</option>
+                @for (c of emergencyOptions()?.deciders ?? []; track c.userId) {
+                  <option [value]="c.userId">{{ c.displayName }}</option>
+                }
+              </select>
+            </div>
+            <div class="field">
+              <label for="em-reason">{{ 'TRANSFUSION.RELEASE_REASON' | translate }} *</label>
+              <textarea
+                required
+                id="em-reason"
+                rows="2"
+                maxlength="500"
+                [(ngModel)]="emergencyReason"
+              ></textarea>
+            </div>
+          }
+          @if (emergencyStatementRequired()) {
+            <label class="checkbox-field">
+              <input
+                type="checkbox"
+                required
+                id="em-statement"
+                data-testid="negative-statement"
+                [(ngModel)]="emergencyNegativeStated"
+              />
+              {{ 'TRANSFUSION.NEGATIVE_UNOBTAINABLE_STATEMENT' | translate }} *
+            </label>
+          }
+        </div>
+        <div class="modal-actions">
+          <button class="btn-secondary" (click)="closeEmergencyRelease()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+          <button
+            class="btn-danger"
+            data-testid="submit-emergency-release"
+            (click)="submitEmergencyRelease()"
+            [disabled]="emergencySubmitting()"
+            [appSubmitGuard]="
+              !emergencyUnitId ||
+              (emergencyDecisionRequired() &&
+                (!emergencyAuthoriserId || !emergencyReason.trim())) ||
+              (emergencyStatementRequired() && !emergencyNegativeStated)
+            "
+            [submitGuardFields]="['em-unit', 'em-decider', 'em-reason', 'em-statement']"
+          >
+            {{ 'TRANSFUSION.ISSUE' | translate }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ══ Emergency release, serologically incompatible ══ -->
+  @if (showIncompatibleModal()) {
+    <div
+      class="modal-backdrop"
+      tabindex="-1"
+      appBackdropClose
+      (backdropClose)="closeIncompatibleRelease()"
+      (keydown.escape)="closeIncompatibleRelease()"
+    >
+      <div
+        class="modal"
+        appModalDialog
+        aria-labelledby="transfusion-dialog-8-title"
+        (escaped)="closeIncompatibleRelease()"
+      >
+        <div class="modal-header">
+          <h2 id="transfusion-dialog-8-title">
+            {{ 'TRANSFUSION.INCOMPATIBLE_RELEASE' | translate }}
+          </h2>
+          <button class="modal-close" (click)="closeIncompatibleRelease()">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-hint warn">{{ 'TRANSFUSION.INCOMPATIBLE_RELEASE_HINT' | translate }}</p>
+          @if (emergencyOptions()?.antibodyWarning) {
+            <div class="emergency-banner" role="alert">
+              <span class="material-symbols-outlined">warning</span>
+              <span>
+                {{ 'TRANSFUSION.ANTIBODY_REVIEW_WARNING' | translate }}
+                @if (emergencyOptions()?.antibodyDetail) {
+                  ({{ emergencyOptions()?.antibodyDetail }})
+                }
+              </span>
+            </div>
+          }
+          <div class="field">
+            <label for="si-unit">{{ 'TRANSFUSION.UNIT_NUMBER' | translate }} *</label>
+            <select
+              required
+              id="si-unit"
+              [(ngModel)]="emergencyUnitId"
+              (ngModelChange)="onEmergencyUnitPicked()"
+            >
+              <option value="">{{ 'COMMON.SELECT' | translate }}</option>
+              @for (u of emergencyOptions()?.incompatibleUnits ?? []; track u.id) {
+                <option [value]="u.id" [disabled]="!u.releasable">
+                  {{ u.unitNumber }} — {{ u.aboGroup }}{{ u.rhFactor === 'POSITIVE' ? '+' : '−' }}
+                  @if (!u.releasable) {
+                    — {{ 'TRANSFUSION.INCOMPATIBLE_RELEASE_REFUSED' | translate }}
+                  }
+                </option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label for="si-authoriser">{{ 'TRANSFUSION.AUTHORISER' | translate }} *</label>
+            <select required id="si-authoriser" [(ngModel)]="emergencyAuthoriserId">
+              <option value="">{{ 'COMMON.SELECT' | translate }}</option>
+              @for (c of emergencyOptions()?.authorisers ?? []; track c.userId) {
+                <option [value]="c.userId">{{ c.displayName }}</option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label for="si-reason">{{ 'TRANSFUSION.RELEASE_REASON' | translate }} *</label>
+            <textarea
+              required
+              id="si-reason"
+              rows="2"
+              maxlength="500"
+              [(ngModel)]="emergencyReason"
+            ></textarea>
+          </div>
+          @if (emergencyStatementRequired()) {
+            <p class="modal-hint warn" data-testid="si-o-negative-first">
+              {{ 'TRANSFUSION.O_NEGATIVE_FIRST' | translate: { units: negativeStockNumbers() } }}
+            </p>
+            <label class="checkbox-field">
+              <input
+                type="checkbox"
+                required
+                id="si-statement"
+                [(ngModel)]="emergencyNegativeStated"
+              />
+              {{ 'TRANSFUSION.NEGATIVE_UNOBTAINABLE_STATEMENT' | translate }} *
+            </label>
+          }
+        </div>
+        <div class="modal-actions">
+          <button class="btn-secondary" (click)="closeIncompatibleRelease()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+          <button
+            class="btn-danger"
+            data-testid="submit-incompatible-release"
+            (click)="submitIncompatibleRelease()"
+            [disabled]="incompatibleSubmitting()"
+            [appSubmitGuard]="
+              !emergencyUnitId ||
+              !emergencyAuthoriserId ||
+              !emergencyReason.trim() ||
+              (emergencyStatementRequired() && !emergencyNegativeStated)
+            "
+            [submitGuardFields]="['si-unit', 'si-authoriser', 'si-reason', 'si-statement']"
+          >
+            {{ 'TRANSFUSION.INCOMPATIBLE_RELEASE' | translate }}
+          </button>
+        </div>
       </div>
     </div>
   }
@@ -670,37 +1248,62 @@
     <div
       class="modal-backdrop"
       tabindex="-1"
-      (click)="closeHang()"
+      appBackdropClose
+      (backdropClose)="closeHang()"
       (keydown.escape)="closeHang()"
-    ></div>
-    <div class="modal">
-      <div class="modal-header">
-        <h2>{{ 'TRANSFUSION.HANG' | translate }}</h2>
-        <button class="modal-close" (click)="closeHang()">&times;</button>
-      </div>
-      <div class="modal-body">
-        <p class="modal-hint">{{ 'TRANSFUSION.HANG_HINT' | translate }}</p>
-        <div class="field">
-          <label for="hang-verifier">{{ 'TRANSFUSION.VERIFIER' | translate }} *</label>
-          <input id="hang-verifier" type="text" [(ngModel)]="hangForm.verifiedByStaffId" />
-          <small class="field-hint">{{ 'TRANSFUSION.VERIFIER_HINT' | translate }}</small>
+    >
+      <div
+        class="modal"
+        appModalDialog
+        aria-labelledby="transfusion-dialog-5-title"
+        (escaped)="closeHang()"
+      >
+        <div class="modal-header">
+          <h2 id="transfusion-dialog-5-title">{{ 'TRANSFUSION.HANG' | translate }}</h2>
+          <button class="modal-close" (click)="closeHang()">&times;</button>
         </div>
-        <div class="field">
-          <label for="hang-method">{{ 'TRANSFUSION.VERIFICATION_METHOD' | translate }}</label>
-          <input id="hang-method" type="text" [(ngModel)]="hangForm.verificationMethod" />
+        <div class="modal-body">
+          <p class="modal-hint">{{ 'TRANSFUSION.HANG_HINT' | translate }}</p>
+          <div class="field">
+            <label for="hang-verifier">{{ 'TRANSFUSION.VERIFIER' | translate }} *</label>
+            <select
+              required
+              id="hang-verifier"
+              data-testid="hang-verifier"
+              [(ngModel)]="hangForm.verifiedByUserId"
+            >
+              <option value="">{{ 'COMMON.SELECT' | translate }}</option>
+              @for (c of verifierCandidates(); track c.userId) {
+                <option [value]="c.userId">{{ c.displayName }}</option>
+              }
+            </select>
+            <small class="field-hint">
+              @if (verifierCandidatesFailed()) {
+                {{ 'TRANSFUSION.VERIFIER_LOAD_ERROR' | translate }}
+              } @else {
+                {{ 'TRANSFUSION.VERIFIER_HINT' | translate }}
+              }
+            </small>
+          </div>
+          <div class="field">
+            <label for="hang-method">{{ 'TRANSFUSION.VERIFICATION_METHOD' | translate }}</label>
+            <input id="hang-method" type="text" [(ngModel)]="hangForm.verificationMethod" />
+          </div>
         </div>
-      </div>
-      <div class="modal-actions">
-        <button class="btn-secondary" (click)="closeHang()">
-          {{ 'COMMON.CANCEL' | translate }}
-        </button>
-        <button
-          class="btn-primary"
-          (click)="submitHang()"
-          [disabled]="hangSubmitting() || !hangForm.verifiedByStaffId"
-        >
-          {{ 'COMMON.SAVE' | translate }}
-        </button>
+        <div class="modal-actions">
+          <button class="btn-secondary" (click)="closeHang()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+          <button
+            class="btn-primary"
+            (click)="submitHang()"
+            [disabled]="hangSubmitting()"
+            [appSubmitGuard]="!hangForm.verifiedByUserId"
+            [submitGuardFields]="['hang-verifier']"
+          >
+            {{ 'COMMON.SAVE' | translate }}
+          </button>
+        </div>
       </div>
     </div>
   }
@@ -710,68 +1313,138 @@
     <div
       class="modal-backdrop"
       tabindex="-1"
-      (click)="closeReaction()"
+      appBackdropClose
+      (backdropClose)="closeReaction()"
       (keydown.escape)="closeReaction()"
-    ></div>
-    <div class="modal">
-      <div class="modal-header">
-        <h2>{{ 'TRANSFUSION.REPORT_REACTION' | translate }}</h2>
-        <button class="modal-close" (click)="closeReaction()">&times;</button>
-      </div>
-      <div class="modal-body">
-        <p class="modal-hint warn">{{ 'TRANSFUSION.REACTION_HINT' | translate }}</p>
-        <div class="field-row">
-          <div class="field">
-            <label for="rx-type">{{ 'TRANSFUSION.REACTION_TYPE' | translate }}</label>
-            <select id="rx-type" [(ngModel)]="reactionForm.reactionType">
-              @for (t of reactionTypes; track t) {
-                <option [value]="t">{{ 'TRANSFUSION.REACTION_' + t | translate }}</option>
-              }
-            </select>
+    >
+      <div
+        class="modal"
+        appModalDialog
+        aria-labelledby="transfusion-dialog-6-title"
+        (escaped)="closeReaction()"
+      >
+        <div class="modal-header">
+          <h2 id="transfusion-dialog-6-title">{{ 'TRANSFUSION.REPORT_REACTION' | translate }}</h2>
+          <button class="modal-close" (click)="closeReaction()">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-hint warn">{{ 'TRANSFUSION.REACTION_HINT' | translate }}</p>
+          <div class="field-row">
+            <div class="field">
+              <label for="rx-type">{{ 'TRANSFUSION.REACTION_TYPE' | translate }}</label>
+              <select id="rx-type" [(ngModel)]="reactionForm.reactionType">
+                @for (t of reactionTypes; track t) {
+                  <option [value]="t">{{ 'TRANSFUSION.REACTION_' + t | translate }}</option>
+                }
+              </select>
+            </div>
+            <div class="field">
+              <label for="rx-severity">{{ 'TRANSFUSION.SEVERITY' | translate }}</label>
+              <select id="rx-severity" [(ngModel)]="reactionForm.severity">
+                @for (s of reactionSeverities; track s) {
+                  <option [value]="s">{{ 'TRANSFUSION.SEVERITY_' + s | translate }}</option>
+                }
+              </select>
+            </div>
           </div>
           <div class="field">
-            <label for="rx-severity">{{ 'TRANSFUSION.SEVERITY' | translate }}</label>
-            <select id="rx-severity" [(ngModel)]="reactionForm.severity">
-              @for (s of reactionSeverities; track s) {
-                <option [value]="s">{{ 'TRANSFUSION.SEVERITY_' + s | translate }}</option>
-              }
-            </select>
+            <label for="rx-onset">{{ 'TRANSFUSION.ONSET' | translate }} *</label>
+            <input
+              required
+              id="rx-onset"
+              type="datetime-local"
+              [max]="maxOnsetAt"
+              [(ngModel)]="reactionForm.onsetAt"
+            />
           </div>
+          <div class="field">
+            <label for="rx-signs">{{ 'TRANSFUSION.SIGNS' | translate }} *</label>
+            <textarea
+              required
+              id="rx-signs"
+              rows="3"
+              [(ngModel)]="reactionForm.signsSymptoms"
+            ></textarea>
+          </div>
+          <div class="field">
+            <label for="rx-actions">{{ 'TRANSFUSION.ACTIONS_TAKEN' | translate }}</label>
+            <textarea id="rx-actions" rows="2" [(ngModel)]="reactionForm.actionsTaken"></textarea>
+          </div>
+          <label class="checkbox-field">
+            <input type="checkbox" [(ngModel)]="reactionForm.unitReturnedToLab" />
+            {{ 'TRANSFUSION.UNIT_RETURNED' | translate }}
+          </label>
         </div>
-        <div class="field">
-          <label for="rx-onset">{{ 'TRANSFUSION.ONSET' | translate }} *</label>
-          <input
-            id="rx-onset"
-            type="datetime-local"
-            [max]="maxOnsetAt"
-            [(ngModel)]="reactionForm.onsetAt"
-          />
+        <div class="modal-actions">
+          <button class="btn-secondary" (click)="closeReaction()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+          <button
+            class="btn-danger"
+            (click)="submitReaction()"
+            [disabled]="reactionSubmitting()"
+            [appSubmitGuard]="!reactionForm.signsSymptoms || !reactionForm.onsetAt"
+            [submitGuardFields]="['rx-signs', 'rx-onset']"
+          >
+            {{ 'TRANSFUSION.REPORT_REACTION' | translate }}
+          </button>
         </div>
-        <div class="field">
-          <label for="rx-signs">{{ 'TRANSFUSION.SIGNS' | translate }} *</label>
-          <textarea id="rx-signs" rows="3" [(ngModel)]="reactionForm.signsSymptoms"></textarea>
-        </div>
-        <div class="field">
-          <label for="rx-actions">{{ 'TRANSFUSION.ACTIONS_TAKEN' | translate }}</label>
-          <textarea id="rx-actions" rows="2" [(ngModel)]="reactionForm.actionsTaken"></textarea>
-        </div>
-        <label class="checkbox-field">
-          <input type="checkbox" [(ngModel)]="reactionForm.unitReturnedToLab" />
-          {{ 'TRANSFUSION.UNIT_RETURNED' | translate }}
-        </label>
-      </div>
-      <div class="modal-actions">
-        <button class="btn-secondary" (click)="closeReaction()">
-          {{ 'COMMON.CANCEL' | translate }}
-        </button>
-        <button
-          class="btn-danger"
-          (click)="submitReaction()"
-          [disabled]="reactionSubmitting() || !reactionForm.signsSymptoms || !reactionForm.onsetAt"
-        >
-          {{ 'TRANSFUSION.REPORT_REACTION' | translate }}
-        </button>
       </div>
     </div>
   }
 </div>
+
+<!-- QA D1201 (round 22): the reason is asked in the shared dialog, never a browser prompt. -->
+@if (cancellingRequest(); as r) {
+  <app-reason-dialog
+    titleKey="TRANSFUSION.CANCEL_PROMPT"
+    confirmKey="TRANSFUSION.CANCEL_REQUEST_CONFIRM"
+    [busy]="cancelRequestBusy()"
+    (confirmed)="confirmCancelRequest(r, $event)"
+    (cancelled)="cancellingRequest.set(null)"
+  />
+}
+@if (discardingUnit(); as u) {
+  <app-reason-dialog
+    titleKey="TRANSFUSION.DISCARD_PROMPT"
+    confirmKey="TRANSFUSION.DISCARD"
+    [busy]="discardBusy()"
+    (confirmed)="confirmDiscardUnit(u, $event)"
+    (cancelled)="discardingUnit.set(null)"
+  />
+}
+<!-- QA CX-008: both of these end the transfusion, so each asks first. -->
+@if (completingAdministration(); as a) {
+  <app-confirm-dialog
+    titleKey="TRANSFUSION.ADMIN_COMPLETE_TITLE"
+    messageKey="TRANSFUSION.ADMIN_COMPLETE_MESSAGE"
+    confirmKey="TRANSFUSION.ADMIN_COMPLETE"
+    [params]="{ unit: a.unitNumber }"
+    [busy]="completeBusy()"
+    (confirmed)="confirmComplete(a)"
+    (cancelled)="completingAdministration.set(null)"
+  >
+    <div class="field">
+      <label for="tx-complete-volume">{{ 'TRANSFUSION.ADMIN_VOLUME_GIVEN' | translate }}</label>
+      <input
+        appFocusOnRender
+        id="tx-complete-volume"
+        data-testid="complete-volume"
+        type="number"
+        min="0"
+        [max]="maxUnitVolumeMl"
+        [(ngModel)]="completeVolumeMl"
+      />
+    </div>
+  </app-confirm-dialog>
+}
+@if (stoppingAdministration(); as a) {
+  <app-reason-dialog
+    titleKey="TRANSFUSION.ADMIN_STOP_TITLE"
+    messageKey="TRANSFUSION.ADMIN_STOP_MESSAGE"
+    confirmKey="TRANSFUSION.ADMIN_STOP"
+    [busy]="stopBusy()"
+    (confirmed)="confirmStop(a, $event)"
+    (cancelled)="stoppingAdministration.set(null)"
+  />
+}

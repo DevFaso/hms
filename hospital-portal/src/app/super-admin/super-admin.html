@@ -8,8 +8,7 @@
       <div class="header-meta">
         <span class="material-symbols-outlined">schedule</span>
         <span
-          >{{ 'SUPER_ADMIN.AS_OF' | translate }}
-          {{ generatedAt() | serverTime | date: 'medium' }}</span
+          >{{ 'SUPER_ADMIN.AS_OF' | translate }} {{ generatedAt() | serverTime | dateTime }}</span
         >
       </div>
     }
@@ -40,7 +39,8 @@
             <span class="stat-value">{{ stat.value }}</span>
             <span class="stat-label">{{ stat.labelKey | translate }}</span>
             @if (stat.sublabelKey) {
-              <span class="stat-sub">
+              {{ ' '
+              }}<span class="stat-sub">
                 <em>{{ stat.subvalue }}</em>
                 {{ stat.sublabelKey | translate }}
               </span>
@@ -119,7 +119,7 @@
           @for (row of selectedActivityRows(); track row.id; let i = $index) {
             <div class="activity-row" [attr.data-test]="'activity-row-' + i">
               <div class="activity-id">
-                <code>{{ row.id || '—' }}</code>
+                <code>{{ row.code || '—' }}</code>
               </div>
               <div class="activity-summary">{{ row.summary || '—' }}</div>
               <div class="activity-timestamp">

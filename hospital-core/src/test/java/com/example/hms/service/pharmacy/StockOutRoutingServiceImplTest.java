@@ -225,6 +225,19 @@ class StockOutRoutingServiceImplTest {
     }
 
     @Test
+    @DisplayName("QA D1282: routeToPartner with no target pharmacy names the field")
+    void routeToPartnerWithoutATargetNamesTheField() {
+        RoutingDecisionRequestDTO request = RoutingDecisionRequestDTO.builder()
+                .prescriptionId(prescriptionId).reason("no stock").build();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.routeToPartner(prescriptionId, request))
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                .hasFieldOrPropertyWithValue("field", "targetPharmacyId");
+    }
+
+    @Test
     @DisplayName("routeToPartner should update prescription and persist a routing decision")
     void routeToPartnerShouldUpdatePrescriptionAndPersistDecision() {
         RoutingDecisionRequestDTO request = RoutingDecisionRequestDTO.builder()
@@ -295,7 +308,8 @@ class StockOutRoutingServiceImplTest {
 
         assertThatThrownBy(() -> service.confirmPartnerDispense(decisionId))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("ACCEPTED status");
+                // QA D1090 class: worded for people, the raw status code is gone from the message.
+                .extracting("messageKey").isEqualTo("stock.routing.dispenseNotAccepted");
     }
 
     @Nested
@@ -734,7 +748,8 @@ class StockOutRoutingServiceImplTest {
 
         assertThatThrownBy(() -> service.routeToPartner(prescriptionId, request))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("PARTNER_PHARMACY");
+                // QA D1371 class (changed assertion): the message names the choices, not raw codes.
+                .hasMessageContaining("partner pharmacy");
     }
 
     @Test
@@ -1237,7 +1252,11 @@ class StockOutRoutingServiceImplTest {
 
             assertThatThrownBy(() -> service.partnerNoShow(decision.getId(), "never came"))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("ACCEPTED");
+                    // QA D1090 class: the status is passed as its label, never the raw code.
+                    .satisfies(e -> {
+                        assertThat(((BusinessException) e).getMessageKey()).isEqualTo("stock.routing.noShowNotAccepted");
+                        assertThat(((BusinessException) e).getArgs()).doesNotContain("PENDING");
+                    });
             verify(prescriptionRepository, never()).save(any());
         }
 

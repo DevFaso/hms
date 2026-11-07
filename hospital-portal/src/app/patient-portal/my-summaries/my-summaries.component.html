@@ -73,13 +73,19 @@
                   <h4>{{ 'PORTAL.SUMMARIES.DISPOSITION' | translate }}</h4>
                   @if (s.disposition) {
                     <p>
-                      <strong>{{ 'PORTAL.SUMMARIES.DISPOSITION_LABEL' | translate }}:</strong>
+                      <strong
+                        >{{ 'PORTAL.SUMMARIES.DISPOSITION_LABEL' | translate
+                        }}{{ 'COMMON.COLON' | translate }}</strong
+                      >
                       {{ s.disposition | enumLabel: 'dischargeDisposition' }}
                     </p>
                   }
                   @if (s.dischargeCondition) {
                     <p>
-                      <strong>{{ 'PORTAL.SUMMARIES.DISCHARGE_CONDITION' | translate }}:</strong>
+                      <strong
+                        >{{ 'PORTAL.SUMMARIES.DISCHARGE_CONDITION' | translate
+                        }}{{ 'COMMON.COLON' | translate }}</strong
+                      >
                       {{ s.dischargeCondition }}
                     </p>
                   }

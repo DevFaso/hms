@@ -1,4 +1,9 @@
 import { installDecimalCommaSupport } from './shared/decimal-comma';
+import { installFocusRescue } from './shared/a11y/focus-rescue';
+import {
+  installServerFieldMarks,
+  serverFieldErrorsInterceptor,
+} from './shared/forms/server-field-errors';
 import { ApplicationConfig, LOCALE_ID, provideAppInitializer, inject } from '@angular/core';
 import { DOCUMENT, registerLocaleData } from '@angular/common';
 import localeFr from '@angular/common/locales/fr';
@@ -17,6 +22,7 @@ import { hospitalCacheInterceptor } from './interceptors/hospital-cache.intercep
 import { errorInterceptor } from './interceptors/error.interceptor';
 import { offlineDispenseInterceptor } from './interceptors/offline-dispense.interceptor';
 import { languageInterceptor } from './interceptors/language.interceptor';
+import { patientChartChangeInterceptor } from './interceptors/patient-chart-change.interceptor';
 import { currentLocale } from './shared/i18n/app-locale';
 
 /**
@@ -58,10 +64,16 @@ export const appConfig: ApplicationConfig = {
     provideHttpClient(
       withXhr(),
       withInterceptors([
+        // QA D1341 / D1320 / D1321: a write refused with `fieldErrors` marks
+        // the named fields in the form it was sent from (outermost, so it sees
+        // the refusal the page sees, after CSRF replays and the error path).
+        serverFieldErrorsInterceptor,
         apiPrefixInterceptor,
         languageInterceptor,
         csrfInterceptor,
         hospitalCacheInterceptor,
+        // QA D957: a write on a patient's chart refreshes every summary of it.
+        patientChartChangeInterceptor,
         // Roadmap row 4 / T-68 — must run BEFORE errorInterceptor so a queued
         // (synthetic 202) response is not treated as a real error and routed
         // through the auth-refresh / toast path. Order is the chain order.
@@ -87,5 +99,11 @@ export const appConfig: ApplicationConfig = {
     provideAppInitializer(() => inject(OidcAuthService).initialize()),
     // QA D505: comma decimals in every numeric input, whatever the browser locale.
     provideAppInitializer(() => installDecimalCommaSupport(inject(DOCUMENT))),
+    // QA D1202 / D1198 / D1199 / D1197: focus never falls to the page body when
+    // the control that held it goes away (shared/a11y/focus-rescue.ts).
+    provideAppInitializer(() => installFocusRescue(inject(DOCUMENT))),
+    // QA D1341: remember where the reader acts, so a refused write's fields
+    // are marked in that form (shared/forms/server-field-errors.ts).
+    provideAppInitializer(() => installServerFieldMarks(inject(DOCUMENT))),
   ],
 };

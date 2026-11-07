@@ -51,6 +51,8 @@ public class StaffController {
     @PostMapping
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN')")
     public ResponseEntity<StaffResponseDTO> create(
+        // QA D1349 (round 30): the three required values are named at the edge.
+        @org.springframework.validation.annotation.Validated(com.example.hms.validation.OnCreate.class)
         @RequestBody StaffRequestDTO request,
         @RequestHeader(name = "Accept-Language", required = false) String lang
     ) {
@@ -87,7 +89,7 @@ public class StaffController {
     @GetMapping("/search/by-email")
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN')")
     public ResponseEntity<List<StaffResponseDTO>> getByUserEmail(
-        @RequestParam @Email String email,
+        @RequestParam @Email(message = "{validation.email.invalid}") String email,
         @RequestHeader(name = "Accept-Language", required = false) String lang) {
         Locale locale = parseLocale(lang);
         return ResponseEntity.ok(staffService.getStaffByUserEmail(email, locale));

@@ -33,8 +33,12 @@ public class RescheduleAppointmentRequestDTO {
     @Schema(description = "Requested new start time", example = "10:00", requiredMode = Schema.RequiredMode.REQUIRED)
     private LocalTime newStartTime;
 
-    @NotNull
-    @Schema(description = "Requested new end time", example = "10:30", requiredMode = Schema.RequiredMode.REQUIRED)
+    /**
+     * QA D1060: IGNORED. The slot rules set the length at the new time; kept
+     * only so an older app that still sends it is not refused.
+     */
+    @Schema(description = "Ignored: the clinic's slot rules set the visit length (QA D1060)", example = "10:30",
+            deprecated = true)
     private LocalTime newEndTime;
 
     @Size(max = 500)

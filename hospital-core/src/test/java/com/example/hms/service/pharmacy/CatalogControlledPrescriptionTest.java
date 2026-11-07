@@ -17,6 +17,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -25,8 +26,10 @@ import static org.mockito.Mockito.when;
  * QA D678: catalog-controlled morphine written without the prescriber's tick
  * was treated as an ordinary drug everywhere but the prescription response.
  * The shared resolver makes it controlled for pharmacist verification (and
- * the chart, history and PDF, pinned in their own tests); signing is still
- * not blocked (user decision D654).
+ * the chart, history and PDF, pinned in their own tests). Since the round-18
+ * merge the two-factor safeguard keys on the same answer (QA D922 supersedes
+ * D654): signing re-authenticates the prescriber, and an order without that
+ * proof reaches no actionable status and is not dispensed.
  */
 class CatalogControlledPrescriptionTest {
 
@@ -86,11 +89,25 @@ class CatalogControlledPrescriptionTest {
         assertThat(resolver.isControlled(rx)).isTrue();
     }
 
+    /**
+     * Declared assertion change (round-18 merge, QA D922): this test pinned
+     * D654 ("the two-factor block stays on the prescriber's tick until a
+     * two-factor step exists"). Round 18 built that step, and the user's rule
+     * makes the catalogue decide: the safeguard now refuses catalogue-controlled
+     * morphine without the prescriber's proof, and passes it with the proof.
+     */
     @Test
-    void signingIsStillNotBlockedByTheCatalogFlag() {
-        // D654: the two-factor block stays on the prescriber's tick until a two-factor step exists.
+    void theTwoFactorSafeguardAsksTheCatalogToo() {
+        ControlledSubstanceGuard guard = new ControlledSubstanceGuard(resolver);
         Prescription rx = morphineWithoutTick(HOSPITAL);
-        assertThatCode(() -> new ControlledSubstanceGuard().requireSafeguardsFor(rx, PrescriptionStatus.SIGNED))
-            .doesNotThrowAnyException();
+        assertThatThrownBy(() -> guard.requireSafeguardsFor(rx, PrescriptionStatus.SIGNED))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .extracting("messageKey").isEqualTo("prescription.safeguard.CONTROLLED_SUBSTANCE.status");
+        assertThatThrownBy(() -> guard.requireDispensable(rx))
+            .extracting("messageKey").isEqualTo("prescription.safeguard.CONTROLLED_SUBSTANCE.dispense");
+
+        rx.setTwoFactorVerifiedAt(java.time.LocalDateTime.now());
+        assertThatCode(() -> guard.requireSafeguardsFor(rx, PrescriptionStatus.SIGNED)).doesNotThrowAnyException();
+        assertThatCode(() -> guard.requireDispensable(rx)).doesNotThrowAnyException();
     }
 }

@@ -31,6 +31,10 @@ public final class PrescribedQuantityEstimate {
 
     /** Units owed per fill, or null when the regimen cannot be read safely. */
     public static BigDecimal perFill(Prescription prescription) {
+        // QA D1378: an order ticked as needed (PRN) has no fixed daily count, whatever its frequency says.
+        if (com.example.hms.service.impl.PrnMinInterval.isAsNeeded(prescription)) {
+            return null;
+        }
         Integer interval = MarDoseSchedule.intervalHours(prescription.getFrequency());
         if (interval == null || 24 % interval != 0) {
             return null;

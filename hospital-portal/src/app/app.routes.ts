@@ -3,6 +3,7 @@ import { AuthGuard } from './auth/auth.guard';
 import { AccountSetupGuard } from './auth/account-setup.guard';
 import { LoginRedirectGuard } from './auth/login-redirect.guard';
 import { RoleGuard } from './auth/role.guard';
+import { empiEnabledGuard } from './reception/empi-status.service';
 import { SuperAdminRedirectGuard } from './auth/super-admin-redirect.guard';
 import { superAdminPathRewriteGuard } from './auth/super-admin-path-rewrite.guard';
 import { FacilityTypeGuard, ProviderHomeRedirectGuard } from './auth/facility-type.guard';
@@ -616,6 +617,26 @@ export const routes: Routes = [
           import('./transfusion/transfusion').then((m) => m.TransfusionComponent),
       },
       {
+        // Roles mirror MortalityController's READER set; recording is gated in-component.
+        // The screen and its API existed with no route, so nobody could open it (QA round 35).
+        path: 'mortality',
+        canActivate: [RoleGuard],
+        data: {
+          requiresHospitalScope: true,
+          roles: [
+            'ROLE_DOCTOR',
+            'ROLE_SURGEON',
+            'ROLE_MIDWIFE',
+            'ROLE_NURSE',
+            'ROLE_QUALITY_MANAGER',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () => import('./mortality/mortality').then((m) => m.MortalityComponent),
+      },
+      {
         // Roles mirror MicroCultureController.READ_ROLES exactly (P3 #19) —
         // resulting/finalize buttons are gated in-component to the narrower
         // ENTRY/FINALIZE role sets.
@@ -1140,6 +1161,8 @@ export const routes: Routes = [
             'ROLE_MIDWIFE',
             'ROLE_LAB_TECHNICIAN',
             'ROLE_LAB_MANAGER',
+            'ROLE_LAB_DIRECTOR',
+            'ROLE_HOSPITAL_ADMIN',
             'ROLE_SUPER_ADMIN',
           ],
         },
@@ -1261,7 +1284,8 @@ export const routes: Routes = [
       // lesson on PR #341.
       {
         path: 'reception/empi-candidates',
-        canActivate: [RoleGuard],
+        // QA D987: not offered while the matcher is switched off (it answers 404).
+        canActivate: [RoleGuard, empiEnabledGuard],
         data: {
           roles: [
             'ROLE_RECEPTIONIST',
@@ -1370,6 +1394,21 @@ export const routes: Routes = [
         },
         loadComponent: () =>
           import('./pharmacy/stock-adjustment').then((m) => m.StockAdjustmentComponent),
+      },
+      {
+        // QA D967: the controlled-drug register; roles mirror ControlledRegisterController.
+        path: 'pharmacy/controlled-register',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_PHARMACIST',
+            'ROLE_STORE_MANAGER',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () =>
+          import('./pharmacy/controlled-register').then((m) => m.ControlledRegisterComponent),
       },
       {
         path: 'pharmacy/dispensing',

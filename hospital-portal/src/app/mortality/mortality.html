@@ -47,7 +47,12 @@
           <span class="muted">{{ 'MORTALITY.CLOSURE_NOTHING' | translate }}</span>
         }
       </div>
-      <button class="btn-close" (click)="dismissClosure()" [title]="'COMMON.CLOSE' | translate">
+      <button
+        class="btn-close"
+        (click)="dismissClosure()"
+        [title]="'COMMON.CLOSE' | translate"
+        [attr.aria-label]="'COMMON.CLOSE' | translate"
+      >
         <span class="material-symbols-outlined">close</span>
       </button>
     </div>
@@ -58,7 +63,13 @@
       <label for="mort-from">{{ 'MORTALITY.FROM' | translate }}</label>
       <input id="mort-from" type="date" [(ngModel)]="from" (change)="loadRegister()" />
       <label for="mort-to">{{ 'MORTALITY.TO' | translate }}</label>
-      <input id="mort-to" type="date" [(ngModel)]="to" (change)="loadRegister()" />
+      <input
+        id="mort-to"
+        type="date"
+        [attr.min]="from || null"
+        [(ngModel)]="to"
+        (change)="loadRegister()"
+      />
     </div>
   </div>
 
@@ -96,11 +107,18 @@
           <span class="card-value">{{ reg.perinatalDeaths }}</span>
           <span class="card-label">{{ 'MORTALITY.PERINATAL_DEATHS' | translate }}</span>
           <small class="card-note"
-            >{{ 'MORTALITY.STILLBIRTHS' | translate }}: {{ reg.stillbirths }}</small
+            >{{ 'MORTALITY.STILLBIRTHS' | translate }}{{ 'COMMON.COLON' | translate }}
+            {{ reg.stillbirths }}</small
           >
         </div>
       </div>
     </div>
+
+    @if (reg.disputedDeaths) {
+      <p class="disputed-count" data-testid="register-disputed-count">
+        {{ reg.disputedDeaths }} {{ 'MORTALITY.DISPUTED_COUNT' | translate }}
+      </p>
+    }
 
     @if (reg.deaths.length === 0) {
       <div class="empty-state">
@@ -145,6 +163,11 @@
                   @if (d.amended) {
                     <span class="flag amended">{{ 'MORTALITY.AMENDED' | translate }}</span>
                   }
+                  @if (d.disputed) {
+                    <span class="flag disputed" data-testid="register-disputed">{{
+                      'MORTALITY.DISPUTED' | translate
+                    }}</span>
+                  }
                 </td>
                 <td>
                   <div class="action-group">
@@ -152,6 +175,7 @@
                       class="action-link"
                       (click)="openDetail(d)"
                       [title]="'COMMON.VIEW' | translate"
+                      [attr.aria-label]="'COMMON.VIEW' | translate"
                     >
                       <span class="material-symbols-outlined">visibility</span>
                     </button>
@@ -160,8 +184,19 @@
                         class="action-link"
                         (click)="openAmend(d)"
                         [title]="'MORTALITY.AMEND' | translate"
+                        [attr.aria-label]="'MORTALITY.AMEND' | translate"
                       >
                         <span class="material-symbols-outlined">edit_note</span>
+                      </button>
+                    }
+                    @if (canCorrect) {
+                      <button
+                        class="action-link"
+                        (click)="openEnteredInError(d)"
+                        [title]="'MORTALITY.MARK_ENTERED_IN_ERROR' | translate"
+                        [attr.aria-label]="'MORTALITY.MARK_ENTERED_IN_ERROR' | translate"
+                      >
+                        <span class="material-symbols-outlined">report_off</span>
                       </button>
                     }
                   </div>
@@ -174,13 +209,106 @@
     }
   }
 
+  <!-- The urgent dispute: the two outcomes, by an administrator, and never by a timeout. -->
+  @if (canCorrect && disputes().length) {
+    <h2 class="error-list-title">{{ 'MORTALITY.DISPUTES_TITLE' | translate }}</h2>
+    <div class="data-table">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">{{ 'PATIENTS.PATIENT_NAME' | translate }}</th>
+            <th scope="col">{{ 'MORTALITY.DISPUTED_ON' | translate }}</th>
+            <th scope="col">{{ 'MORTALITY.DISPUTED_BY' | translate }}</th>
+            <th scope="col">{{ 'MORTALITY.DISPUTE_REASON' | translate }}</th>
+            <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (x of disputes(); track x.id) {
+            <tr class="data-row">
+              <td>
+                <div class="cell-primary">{{ x.patientName }}</div>
+                <div class="cell-secondary">{{ x.patientMrn || '—' }}</div>
+              </td>
+              <td>{{ x.disputedAt | serverTime | date: 'short' }}</td>
+              <td>{{ x.disputedByName || '—' }}</td>
+              <td>{{ 'COMMON.REASON_VALUE' | translate: { reason: x.reason } }}</td>
+              <td>
+                <div class="action-group">
+                  <button
+                    class="btn-secondary btn-sm"
+                    data-testid="dispute-uphold"
+                    (click)="openUphold(x)"
+                  >
+                    {{ 'MORTALITY.UPHOLD' | translate }}
+                  </button>
+                  @if (x.deathRecordId) {
+                    <button
+                      class="btn-secondary btn-sm"
+                      data-testid="dispute-entered-in-error"
+                      (click)="openEnteredInErrorFor(x)"
+                    >
+                      {{ 'MORTALITY.MARK_ENTERED_IN_ERROR' | translate }}
+                    </button>
+                  }
+                </div>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+
+  <!-- QA D1488: kept, with who, when and why, and in none of the counts above. -->
+  @if (!loading() && register()?.enteredInError?.length) {
+    <h2 class="error-list-title">{{ 'MORTALITY.ENTERED_IN_ERROR_LIST' | translate }}</h2>
+    <div class="data-table">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">{{ 'PATIENTS.PATIENT_NAME' | translate }}</th>
+            <th scope="col">{{ 'MORTALITY.DIED_AT' | translate }}</th>
+            <th scope="col">{{ 'MORTALITY.ENTERED_IN_ERROR_ON' | translate }}</th>
+            <th scope="col">{{ 'MORTALITY.ENTERED_IN_ERROR_BY' | translate }}</th>
+            <th scope="col">{{ 'MORTALITY.ENTERED_IN_ERROR_REASON' | translate }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (e of register()?.enteredInError; track e.id) {
+            <tr class="data-row">
+              <td>
+                <div class="cell-primary">{{ e.patientName }}</div>
+                <div class="cell-secondary">{{ e.patientMrn || '—' }}</div>
+              </td>
+              <td>{{ e.diedAt | serverTime | date: 'short' }}</td>
+              <td>{{ e.enteredInErrorAt | serverTime | date: 'short' }}</td>
+              <td>{{ e.enteredInErrorByName || '—' }}</td>
+              <td>{{ 'COMMON.REASON_VALUE' | translate: { reason: e.enteredInErrorReason } }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+
   <!-- ══ Detail ══ -->
   @if (selected(); as rec) {
     <div class="detail-overlay" tabindex="-1" (keydown.escape)="closeDetail()">
-      <div class="detail-panel">
+      <div
+        appModalDialog
+        aria-labelledby="mortality-panel-1-title"
+        (escaped)="closeDetail()"
+        class="detail-panel"
+      >
         <div class="detail-header">
-          <h2>{{ rec.patientName }}</h2>
-          <button class="btn-close" (click)="closeDetail()" [title]="'COMMON.CLOSE' | translate">
+          <h2 id="mortality-panel-1-title">{{ rec.patientName }}</h2>
+          <button
+            class="btn-close"
+            (click)="closeDetail()"
+            [title]="'COMMON.CLOSE' | translate"
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
@@ -188,17 +316,18 @@
           @if (rec.amended) {
             <div class="amended-banner">
               <span class="material-symbols-outlined">history_edu</span>
-              <span>
+              {{ ' '
+              }}<span>
                 {{ 'MORTALITY.AMENDED_ON' | translate }}
                 {{ rec.amendedAt | serverTime | date: 'short' }} —
-                {{ rec.amendmentReason }}
+                {{ 'COMMON.REASON_VALUE' | translate: { reason: rec.amendmentReason } }}
               </span>
             </div>
           }
           <div class="detail-grid">
             <div class="detail-field">
               <span class="field-label">{{ 'MORTALITY.DIED_AT' | translate }}</span>
-              <span class="field-value">{{ rec.diedAt | serverTime | date: 'medium' }}</span>
+              <span class="field-value">{{ rec.diedAt | serverTime | dateTime }}</span>
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'MORTALITY.PLACE' | translate }}</span>
@@ -257,127 +386,245 @@
     <div
       class="modal-backdrop"
       tabindex="-1"
-      (click)="closeRecord()"
+      appBackdropClose
+      (backdropClose)="closeRecord()"
       (keydown.escape)="closeRecord()"
-    ></div>
-    <div class="modal modal-wide">
-      <div class="modal-header">
-        <h2>{{ 'MORTALITY.RECORD_DEATH' | translate }}</h2>
-        <button class="modal-close" (click)="closeRecord()">&times;</button>
+    >
+      <div
+        class="modal modal-wide"
+        appModalDialog
+        aria-labelledby="mortality-dialog-2-title"
+        (escaped)="closeRecord()"
+      >
+        <div class="modal-header">
+          <h2 id="mortality-dialog-2-title">{{ 'MORTALITY.RECORD_DEATH' | translate }}</h2>
+          <button class="modal-close" (click)="closeRecord()">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-hint warn">{{ 'MORTALITY.RECORD_HINT' | translate }}</p>
+
+          <!-- QA D1304 (D1272 class): the required picker shows a visible, starred label. -->
+          <label for="mort-patientSearch">{{ 'PATIENTS.PATIENT_NAME' | translate }} *</label>
+          <app-patient-picker
+            inputId="mort-patientSearch"
+            required
+            [selected]="selectedPatient()"
+            (selectedChange)="onPatientPicked($event)"
+          />
+
+          <div class="field-row">
+            <div class="field">
+              <label for="d-when">{{ 'MORTALITY.DIED_AT' | translate }} *</label>
+              <input required id="d-when" type="datetime-local" [(ngModel)]="form.diedAt" />
+            </div>
+            <div class="field">
+              <label for="d-place">{{ 'MORTALITY.PLACE' | translate }}</label>
+              <select id="d-place" [(ngModel)]="form.placeOfDeath">
+                @for (p of placesOfDeath; track p) {
+                  <option [value]="p">{{ 'MORTALITY.PLACE_' + p | translate }}</option>
+                }
+              </select>
+            </div>
+            <div class="field">
+              <label for="d-manner">{{ 'MORTALITY.MANNER' | translate }}</label>
+              <select id="d-manner" [(ngModel)]="form.mannerOfDeath">
+                @for (m of mannersOfDeath; track m) {
+                  <option [value]="m">{{ 'MORTALITY.MANNER_' + m | translate }}</option>
+                }
+              </select>
+            </div>
+          </div>
+
+          <div class="field-row">
+            <div class="field grow">
+              <label for="d-immediate">{{ 'MORTALITY.IMMEDIATE_CAUSE' | translate }} *</label>
+              <input required id="d-immediate" type="text" [(ngModel)]="form.immediateCause" />
+            </div>
+            <div class="field">
+              <label for="d-immediate-code">{{ 'MORTALITY.ICD_CODE' | translate }}</label>
+              <input id="d-immediate-code" type="text" [(ngModel)]="form.immediateCauseCode" />
+            </div>
+          </div>
+
+          <div class="field-row">
+            <div class="field grow">
+              <label for="d-underlying">{{ 'MORTALITY.UNDERLYING_CAUSE' | translate }}</label>
+              <input id="d-underlying" type="text" [(ngModel)]="form.underlyingCause" />
+            </div>
+            <div class="field">
+              <label for="d-underlying-code">{{ 'MORTALITY.ICD_CODE' | translate }}</label>
+              <input id="d-underlying-code" type="text" [(ngModel)]="form.underlyingCauseCode" />
+            </div>
+          </div>
+          <small class="field-hint">{{ 'MORTALITY.UNDERLYING_HINT' | translate }}</small>
+
+          <div class="field">
+            <label for="d-contributing">{{ 'MORTALITY.CONTRIBUTING' | translate }}</label>
+            <textarea id="d-contributing" rows="2" [(ngModel)]="form.contributingCauses"></textarea>
+          </div>
+
+          @if (!maternalHidden()) {
+            <label class="checkbox-field">
+              <input type="checkbox" [(ngModel)]="form.maternalDeath" />
+              {{ 'MORTALITY.IS_MATERNAL' | translate }}
+            </label>
+            @if (form.maternalDeath) {
+              <div class="field">
+                <label for="d-maternal-timing"
+                  >{{ 'MORTALITY.MATERNAL_TIMING' | translate }} *</label
+                >
+                <select required id="d-maternal-timing" [(ngModel)]="form.maternalDeathTiming">
+                  @for (t of maternalTimings; track t) {
+                    <option [value]="t">{{ 'MORTALITY.TIMING_' + t | translate }}</option>
+                  }
+                </select>
+                <small class="field-hint">{{ 'MORTALITY.MATERNAL_TIMING_HINT' | translate }}</small>
+              </div>
+            }
+          }
+
+          <label class="checkbox-field">
+            <input type="checkbox" [(ngModel)]="form.perinatalDeath" />
+            {{ 'MORTALITY.IS_PERINATAL' | translate }}
+          </label>
+          @if (form.perinatalDeath) {
+            <div class="field">
+              <label for="d-perinatal-type">{{ 'MORTALITY.PERINATAL_TYPE' | translate }} *</label>
+              <select required id="d-perinatal-type" [(ngModel)]="form.perinatalType">
+                @for (t of perinatalTypes; track t) {
+                  <option [value]="t">{{ 'MORTALITY.PERINATAL_' + t | translate }}</option>
+                }
+              </select>
+              <small class="field-hint">{{ 'MORTALITY.PERINATAL_TYPE_HINT' | translate }}</small>
+            </div>
+          }
+
+          <label class="checkbox-field">
+            <input type="checkbox" [(ngModel)]="form.autopsyRequested" />
+            {{ 'MORTALITY.AUTOPSY' | translate }}
+          </label>
+
+          <div class="field">
+            <label for="d-notes">{{ 'COMMON.NOTES' | translate }}</label>
+            <textarea id="d-notes" rows="2" [(ngModel)]="form.notes"></textarea>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn-secondary" (click)="closeRecord()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+          <button
+            submitGuardRequired
+            class="btn-danger"
+            (click)="submitRecord()"
+            [disabled]="recording()"
+            [appSubmitGuard]="!form.patientId || !form.diedAt || !form.immediateCause"
+            [submitGuardFields]="['mort-patientSearch', 'd-when', 'd-immediate']"
+          >
+            {{ 'MORTALITY.RECORD_DEATH' | translate }}
+          </button>
+        </div>
       </div>
-      <div class="modal-body">
-        <p class="modal-hint warn">{{ 'MORTALITY.RECORD_HINT' | translate }}</p>
+    </div>
+  }
 
-        <app-patient-picker
-          inputId="mort-patientSearch"
-          [selected]="selectedPatient()"
-          (selectedChange)="onPatientPicked($event)"
-        />
-
-        <div class="field-row">
+  <!-- ══ Entered in error (QA D1488) ══ -->
+  @if (errorRecord(); as rec) {
+    <div
+      class="modal-backdrop"
+      tabindex="-1"
+      appBackdropClose
+      (backdropClose)="closeEnteredInError()"
+      (keydown.escape)="closeEnteredInError()"
+    >
+      <div
+        class="modal"
+        appModalDialog
+        aria-labelledby="mortality-dialog-3-title"
+        (escaped)="closeEnteredInError()"
+      >
+        <div class="modal-header">
+          <h2 id="mortality-dialog-3-title">
+            {{ 'MORTALITY.MARK_ENTERED_IN_ERROR' | translate }}
+          </h2>
+          <button class="modal-close" (click)="closeEnteredInError()">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-hint warn">{{ 'MORTALITY.ENTERED_IN_ERROR_HINT' | translate }}</p>
+          <p>
+            <strong>{{ rec.patientName }}</strong> {{ rec.patientMrn || '' }} —
+            {{ rec.diedAt | serverTime | dateTime }}
+          </p>
           <div class="field">
-            <label for="d-when">{{ 'MORTALITY.DIED_AT' | translate }} *</label>
-            <input id="d-when" type="datetime-local" [(ngModel)]="form.diedAt" />
-          </div>
-          <div class="field">
-            <label for="d-place">{{ 'MORTALITY.PLACE' | translate }}</label>
-            <select id="d-place" [(ngModel)]="form.placeOfDeath">
-              @for (p of placesOfDeath; track p) {
-                <option [value]="p">{{ 'MORTALITY.PLACE_' + p | translate }}</option>
-              }
-            </select>
-          </div>
-          <div class="field">
-            <label for="d-manner">{{ 'MORTALITY.MANNER' | translate }}</label>
-            <select id="d-manner" [(ngModel)]="form.mannerOfDeath">
-              @for (m of mannersOfDeath; track m) {
-                <option [value]="m">{{ 'MORTALITY.MANNER_' + m | translate }}</option>
-              }
-            </select>
+            <label for="e-reason">{{ 'MORTALITY.ENTERED_IN_ERROR_REASON' | translate }} *</label>
+            <input required id="e-reason" type="text" maxlength="500" [(ngModel)]="errorReason" />
           </div>
         </div>
-
-        <div class="field-row">
-          <div class="field grow">
-            <label for="d-immediate">{{ 'MORTALITY.IMMEDIATE_CAUSE' | translate }} *</label>
-            <input id="d-immediate" type="text" [(ngModel)]="form.immediateCause" />
-          </div>
-          <div class="field">
-            <label for="d-immediate-code">{{ 'MORTALITY.ICD_CODE' | translate }}</label>
-            <input id="d-immediate-code" type="text" [(ngModel)]="form.immediateCauseCode" />
-          </div>
-        </div>
-
-        <div class="field-row">
-          <div class="field grow">
-            <label for="d-underlying">{{ 'MORTALITY.UNDERLYING_CAUSE' | translate }}</label>
-            <input id="d-underlying" type="text" [(ngModel)]="form.underlyingCause" />
-          </div>
-          <div class="field">
-            <label for="d-underlying-code">{{ 'MORTALITY.ICD_CODE' | translate }}</label>
-            <input id="d-underlying-code" type="text" [(ngModel)]="form.underlyingCauseCode" />
-          </div>
-        </div>
-        <small class="field-hint">{{ 'MORTALITY.UNDERLYING_HINT' | translate }}</small>
-
-        <div class="field">
-          <label for="d-contributing">{{ 'MORTALITY.CONTRIBUTING' | translate }}</label>
-          <textarea id="d-contributing" rows="2" [(ngModel)]="form.contributingCauses"></textarea>
-        </div>
-
-        <label class="checkbox-field">
-          <input type="checkbox" [(ngModel)]="form.maternalDeath" />
-          {{ 'MORTALITY.IS_MATERNAL' | translate }}
-        </label>
-        @if (form.maternalDeath) {
-          <div class="field">
-            <label for="d-maternal-timing">{{ 'MORTALITY.MATERNAL_TIMING' | translate }} *</label>
-            <select id="d-maternal-timing" [(ngModel)]="form.maternalDeathTiming">
-              @for (t of maternalTimings; track t) {
-                <option [value]="t">{{ 'MORTALITY.TIMING_' + t | translate }}</option>
-              }
-            </select>
-            <small class="field-hint">{{ 'MORTALITY.MATERNAL_TIMING_HINT' | translate }}</small>
-          </div>
-        }
-
-        <label class="checkbox-field">
-          <input type="checkbox" [(ngModel)]="form.perinatalDeath" />
-          {{ 'MORTALITY.IS_PERINATAL' | translate }}
-        </label>
-        @if (form.perinatalDeath) {
-          <div class="field">
-            <label for="d-perinatal-type">{{ 'MORTALITY.PERINATAL_TYPE' | translate }} *</label>
-            <select id="d-perinatal-type" [(ngModel)]="form.perinatalType">
-              @for (t of perinatalTypes; track t) {
-                <option [value]="t">{{ 'MORTALITY.PERINATAL_' + t | translate }}</option>
-              }
-            </select>
-            <small class="field-hint">{{ 'MORTALITY.PERINATAL_TYPE_HINT' | translate }}</small>
-          </div>
-        }
-
-        <label class="checkbox-field">
-          <input type="checkbox" [(ngModel)]="form.autopsyRequested" />
-          {{ 'MORTALITY.AUTOPSY' | translate }}
-        </label>
-
-        <div class="field">
-          <label for="d-notes">{{ 'COMMON.NOTES' | translate }}</label>
-          <textarea id="d-notes" rows="2" [(ngModel)]="form.notes"></textarea>
+        <div class="modal-actions">
+          <button class="btn-secondary" (click)="closeEnteredInError()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+          <button
+            submitGuardRequired
+            class="btn-danger"
+            data-testid="mort-entered-in-error-submit"
+            (click)="submitEnteredInError()"
+            [disabled]="errorSubmitting()"
+            [appSubmitGuard]="!errorReason.trim()"
+            [submitGuardFields]="['e-reason']"
+          >
+            {{ 'MORTALITY.MARK_ENTERED_IN_ERROR' | translate }}
+          </button>
         </div>
       </div>
-      <div class="modal-actions">
-        <button class="btn-secondary" (click)="closeRecord()">
-          {{ 'COMMON.CANCEL' | translate }}
-        </button>
-        <button
-          class="btn-danger"
-          (click)="submitRecord()"
-          [disabled]="recording() || !form.patientId || !form.diedAt || !form.immediateCause"
-        >
-          {{ 'MORTALITY.RECORD_DEATH' | translate }}
-        </button>
+    </div>
+  }
+
+  <!-- ══ Uphold ══ -->
+  @if (upholdTarget(); as target) {
+    <div
+      class="modal-backdrop"
+      tabindex="-1"
+      appBackdropClose
+      (backdropClose)="closeUphold()"
+      (keydown.escape)="closeUphold()"
+    >
+      <div
+        class="modal"
+        appModalDialog
+        aria-labelledby="mortality-dialog-4-title"
+        (escaped)="closeUphold()"
+      >
+        <div class="modal-header">
+          <h2 id="mortality-dialog-4-title">{{ 'MORTALITY.UPHOLD' | translate }}</h2>
+          <button class="modal-close" (click)="closeUphold()">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-hint warn">{{ 'MORTALITY.UPHOLD_HINT' | translate }}</p>
+          <p>
+            <strong>{{ target.patientName }}</strong>
+          </p>
+          <div class="field">
+            <label for="u-reason">{{ 'MORTALITY.UPHOLD_REASON' | translate }} *</label>
+            <input required id="u-reason" type="text" maxlength="1000" [(ngModel)]="upholdReason" />
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn-secondary" (click)="closeUphold()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+          <button
+            submitGuardRequired
+            class="btn-danger"
+            data-testid="mort-uphold-submit"
+            (click)="submitUphold()"
+            [disabled]="upholding()"
+            [appSubmitGuard]="!upholdReason.trim()"
+            [submitGuardFields]="['u-reason']"
+          >
+            {{ 'MORTALITY.UPHOLD' | translate }}
+          </button>
+        </div>
       </div>
     </div>
   }
@@ -387,44 +634,53 @@
     <div
       class="modal-backdrop"
       tabindex="-1"
-      (click)="closeAmend()"
+      appBackdropClose
+      (backdropClose)="closeAmend()"
       (keydown.escape)="closeAmend()"
-    ></div>
-    <div class="modal">
-      <div class="modal-header">
-        <h2>{{ 'MORTALITY.AMEND' | translate }}</h2>
-        <button class="modal-close" (click)="closeAmend()">&times;</button>
-      </div>
-      <div class="modal-body">
-        <p class="modal-hint">{{ 'MORTALITY.AMEND_HINT' | translate }}</p>
-        <div class="field">
-          <label for="a-reason">{{ 'MORTALITY.AMENDMENT_REASON' | translate }} *</label>
-          <input id="a-reason" type="text" [(ngModel)]="amendForm.amendmentReason" />
+    >
+      <div
+        class="modal"
+        appModalDialog
+        aria-labelledby="mortality-dialog-1-title"
+        (escaped)="closeAmend()"
+      >
+        <div class="modal-header">
+          <h2 id="mortality-dialog-1-title">{{ 'MORTALITY.AMEND' | translate }}</h2>
+          <button class="modal-close" (click)="closeAmend()">&times;</button>
         </div>
-        <div class="field">
-          <label for="a-immediate">{{ 'MORTALITY.IMMEDIATE_CAUSE' | translate }}</label>
-          <input id="a-immediate" type="text" [(ngModel)]="amendForm.immediateCause" />
+        <div class="modal-body">
+          <p class="modal-hint">{{ 'MORTALITY.AMEND_HINT' | translate }}</p>
+          <div class="field">
+            <label for="a-reason">{{ 'MORTALITY.AMENDMENT_REASON' | translate }} *</label>
+            <input required id="a-reason" type="text" [(ngModel)]="amendForm.amendmentReason" />
+          </div>
+          <div class="field">
+            <label for="a-immediate">{{ 'MORTALITY.IMMEDIATE_CAUSE' | translate }}</label>
+            <input id="a-immediate" type="text" [(ngModel)]="amendForm.immediateCause" />
+          </div>
+          <div class="field">
+            <label for="a-underlying">{{ 'MORTALITY.UNDERLYING_CAUSE' | translate }}</label>
+            <input id="a-underlying" type="text" [(ngModel)]="amendForm.underlyingCause" />
+          </div>
+          <div class="field">
+            <label for="a-notes">{{ 'COMMON.NOTES' | translate }}</label>
+            <textarea id="a-notes" rows="2" [(ngModel)]="amendForm.notes"></textarea>
+          </div>
         </div>
-        <div class="field">
-          <label for="a-underlying">{{ 'MORTALITY.UNDERLYING_CAUSE' | translate }}</label>
-          <input id="a-underlying" type="text" [(ngModel)]="amendForm.underlyingCause" />
+        <div class="modal-actions">
+          <button class="btn-secondary" (click)="closeAmend()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+          <button
+            class="btn-primary"
+            (click)="submitAmend()"
+            [disabled]="amending()"
+            [appSubmitGuard]="!amendForm.amendmentReason"
+            [submitGuardFields]="['a-reason']"
+          >
+            {{ 'COMMON.SAVE' | translate }}
+          </button>
         </div>
-        <div class="field">
-          <label for="a-notes">{{ 'COMMON.NOTES' | translate }}</label>
-          <textarea id="a-notes" rows="2" [(ngModel)]="amendForm.notes"></textarea>
-        </div>
-      </div>
-      <div class="modal-actions">
-        <button class="btn-secondary" (click)="closeAmend()">
-          {{ 'COMMON.CANCEL' | translate }}
-        </button>
-        <button
-          class="btn-primary"
-          (click)="submitAmend()"
-          [disabled]="amending() || !amendForm.amendmentReason"
-        >
-          {{ 'COMMON.SAVE' | translate }}
-        </button>
       </div>
     </div>
   }

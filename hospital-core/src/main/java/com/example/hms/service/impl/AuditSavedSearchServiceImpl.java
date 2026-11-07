@@ -1,6 +1,7 @@
 package com.example.hms.service.impl;
 
 import com.example.hms.exception.BusinessRuleException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.exception.UnauthorizedException;
 import com.example.hms.model.platform.AuditSavedSearch;
@@ -25,6 +26,8 @@ import java.util.UUID;
 @Transactional
 public class AuditSavedSearchServiceImpl implements AuditSavedSearchService {
 
+    private static final String DUPLICATE_NAME_KEY = "auditSavedSearch.name.duplicate";
+
     private final AuditSavedSearchRepository repository;
 
     @Override
@@ -44,9 +47,8 @@ public class AuditSavedSearchServiceImpl implements AuditSavedSearchService {
         Optional<AuditSavedSearch> existing = repository
             .findByOwnerUsernameAndName(owner, request.getName().trim());
         if (existing.isPresent()) {
-            throw new BusinessRuleException(
-                "A saved search with that name already exists for this operator: "
-                    + request.getName());
+            // QA CX-005: on its field, so the form marks it, and in the reader's language.
+            throw new FieldBusinessException("name", DUPLICATE_NAME_KEY, request.getName().trim());
         }
 
         AuditSavedSearch entity = AuditSavedSearch.builder()
@@ -79,9 +81,7 @@ public class AuditSavedSearchServiceImpl implements AuditSavedSearchService {
         if (!newName.equals(entity.getName())) {
             repository.findByOwnerUsernameAndName(owner, newName).ifPresent(other -> {
                 if (!other.getId().equals(id)) {
-                    throw new BusinessRuleException(
-                        "A saved search with that name already exists for this operator: "
-                            + newName);
+                    throw new FieldBusinessException("name", DUPLICATE_NAME_KEY, newName);
                 }
             });
             entity.setName(newName);
@@ -120,10 +120,10 @@ public class AuditSavedSearchServiceImpl implements AuditSavedSearchService {
             throw new BusinessRuleException("Saved-search payload is required.");
         }
         if (request.getName() == null || request.getName().trim().isEmpty()) {
-            throw new BusinessRuleException("Saved-search name is required.");
+            throw new com.example.hms.exception.FieldBusinessException("name", "auditSavedSearch.nameRequired");
         }
         if (request.getFilterJson() == null || request.getFilterJson().isBlank()) {
-            throw new BusinessRuleException("Saved-search filterJson is required.");
+            throw new com.example.hms.exception.FieldBusinessException("filterJson", "auditSavedSearch.filterRequired");
         }
     }
 

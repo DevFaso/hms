@@ -17,7 +17,7 @@ public abstract class BaseUserDTO {
     private String username;
 
     @NotBlank(message = "{user.email.required}")
-    @Email
+    @Email(message = "{validation.email.invalid}")
     private String email;
 
     @NotBlank(message = "{user.firstName.required}")
@@ -27,6 +27,7 @@ public abstract class BaseUserDTO {
     private String lastName;
 
     @NotBlank(message = "{user.phoneNumber.required}")
+    @com.example.hms.validation.PhoneNumber
     private String phoneNumber;
 
     private LocalDate dateOfBirth;

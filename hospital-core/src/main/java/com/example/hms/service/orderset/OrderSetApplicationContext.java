@@ -24,5 +24,16 @@ public record OrderSetApplicationContext(
     UUID orderingStaffId,
     UUID orderingAssignmentId,
     String primaryDiagnosisCode,
-    Boolean forceOverride
-) {}
+    Boolean forceOverride,
+    /* Round 18 (QA D935): the reason handed to each medication's override. */
+    String overrideReason
+) {
+    /** The context before round 18: no override reason. */
+    public OrderSetApplicationContext(UUID orderSetId, String orderSetName, String orderSetDescription,
+                                      UUID admissionId, UUID patientId, UUID hospitalId, UUID encounterId,
+                                      UUID orderingStaffId, UUID orderingAssignmentId,
+                                      String primaryDiagnosisCode, Boolean forceOverride) {
+        this(orderSetId, orderSetName, orderSetDescription, admissionId, patientId, hospitalId, encounterId,
+            orderingStaffId, orderingAssignmentId, primaryDiagnosisCode, forceOverride, null);
+    }
+}

@@ -426,6 +426,7 @@
 "document_type_prescription" = "Ordonnance";
 "document_type_insurance_document" = "Document d’assurance";
 "document_type_invoice" = "Facture";
+"document_type_medical_certificate" = "Certificat médical";
 "document_type_immunization_record" = "Carnet de vaccination";
 "document_type_other" = "Autre";
 "preparing_file" = "Préparation…";

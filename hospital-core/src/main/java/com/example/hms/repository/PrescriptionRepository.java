@@ -22,6 +22,14 @@ import java.util.UUID;
 public interface PrescriptionRepository extends JpaRepository<Prescription, UUID> {
 
     /**
+     * QA D1295 class: every order of one visit, in the order written. The
+     * discharge reconciliation and the ward-order list read them all; they
+     * read an unordered first 100 (or 200) before.
+     */
+    Pageable EVERY_ORDER_OF_THE_VISIT =
+        Pageable.unpaged(org.springframework.data.domain.Sort.by("createdAt", "id"));
+
+    /**
      * SUPER_ADMIN cross-tenant fallback list. Overrides {@link JpaRepository#findAll(Pageable)}
      * so the same {@link EntityGraph} as the hospital-scoped queries is applied — without it
      * the mapper triggers lazy proxy initialisation per row, and any dangling FK
@@ -30,30 +38,115 @@ public interface PrescriptionRepository extends JpaRepository<Prescription, UUID
      * {@code GlobalExceptionHandler.handleEntityNotFound}.
      */
     @Override
-    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital", "hospital"})
+    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "encounter", "encounter.hospital", "hospital"})
     Page<Prescription> findAll(Pageable pageable);
 
-    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital"})
+    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "encounter", "encounter.hospital"})
     Page<Prescription> findByPatient_Id(UUID patientId, Pageable pageable);
 
-    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital"})
+    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "encounter", "encounter.hospital"})
     Page<Prescription> findByStaff_Id(UUID staffId, Pageable pageable);
 
-    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital"})
+    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "encounter", "encounter.hospital"})
     Page<Prescription> findByEncounter_Id(UUID encounterId, Pageable pageable);
 
-    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital"})
+    /**
+     * QA D1314: the orders that can be on this hospital's MAR, for the whole
+     * ward in one statement: active, and either the patient has a stay here or
+     * the order was written on an open emergency visit (QA D514, D702).
+     * {@code NurseTaskServiceImpl.onWardMar} still decides each row.
+     */
+    @Query("""
+        SELECT p FROM Prescription p
+        LEFT JOIN FETCH p.encounter e
+        WHERE p.hospital.id = :hospitalId
+          AND p.status IN :orderStatuses
+          AND (p.patient.id IN (SELECT a.patient.id FROM Admission a
+                                WHERE a.hospital.id = :hospitalId AND a.status IN ('ACTIVE', 'ON_LEAVE'))
+               OR (e.encounterType = :emergency AND e.status NOT IN :closedVisit))
+        """)
+    List<Prescription> findWardMarOrders(@Param("hospitalId") UUID hospitalId,
+                                         @Param("orderStatuses") Collection<PrescriptionStatus> orderStatuses,
+                                         @Param("emergency") com.example.hms.enums.EncounterType emergency,
+                                         @Param("closedVisit") Collection<com.example.hms.enums.EncounterStatus> closedVisit);
+
+    /**
+     * QA D1314: the search box of the prescription list. The page read every
+     * row of the tab into the browser to filter it there: 26,706 statements,
+     * 46 s and 3.2 GB allocated on 15,000 rows, for each search. What the box
+     * matches: the drug, the patient's name, the prescriber's name (the staff
+     * row's, which the list shows first, and the account's), accents ignored. {@code :namePattern} comes from {@code PatientMatchKeys.nameContainsPattern}.
+     */
+    String SEARCH_JOINS = " LEFT JOIN rx.patient p LEFT JOIN rx.staff s LEFT JOIN s.user u ";
+    /**
+     * What every comparison of the search box ends with. ESCAPE is spelled out:
+     * Hibernate does not leave LIKE on PostgreSQL's default escape, and without
+     * it the pattern's escaped {@code %} matched nothing ("Glucose 5%").
+     */
+    String SEARCH_LIKE = " LIKE :namePattern ESCAPE '\\'";
+    /** The folded fields the search box reads, on the aliases of {@link #SEARCH_JOINS}. */
+    String SEARCH_MATCH = "(" + PatientRepository.FOLD_OPEN + "rx.medicationName" + PatientRepository.FOLD_CLOSE + SEARCH_LIKE
+        + " OR " + PatientRepository.FOLD_OPEN + "CONCAT(p.firstName, ' ', COALESCE(CONCAT(p.middleName, ' '), ''), p.lastName)"
+        + PatientRepository.FOLD_CLOSE + SEARCH_LIKE
+        + " OR " + PatientRepository.FOLD_OPEN + "CONCAT(p.firstName, ' ', p.lastName)" + PatientRepository.FOLD_CLOSE + SEARCH_LIKE
+        + " OR " + PatientRepository.FOLD_OPEN + "CONCAT(p.lastName, ' ', p.firstName)" + PatientRepository.FOLD_CLOSE + SEARCH_LIKE
+        + " OR " + PatientRepository.FOLD_OPEN + "s.name" + PatientRepository.FOLD_CLOSE + SEARCH_LIKE
+        + " OR " + PatientRepository.FOLD_OPEN + "CONCAT(COALESCE(u.firstName, ''), ' ', COALESCE(u.lastName, ''))"
+        + PatientRepository.FOLD_CLOSE + SEARCH_LIKE + ")";
+
+    /** The search box at one hospital, every status. */
+    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "encounter", "encounter.hospital"})
+    @Query(value = "SELECT rx FROM Prescription rx" + SEARCH_JOINS
+        + "WHERE rx.hospital.id = :hospitalId AND " + SEARCH_MATCH,
+        countQuery = "SELECT COUNT(rx) FROM Prescription rx" + SEARCH_JOINS
+        + "WHERE rx.hospital.id = :hospitalId AND " + SEARCH_MATCH)
+    Page<Prescription> searchAtHospital(@Param("hospitalId") UUID hospitalId,
+                                        @Param("namePattern") String namePattern, Pageable pageable);
+
+    /** The search box at one hospital, one tab's statuses. */
+    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "encounter", "encounter.hospital"})
+    @Query(value = "SELECT rx FROM Prescription rx" + SEARCH_JOINS
+        + "WHERE rx.hospital.id = :hospitalId AND rx.status IN :statuses AND " + SEARCH_MATCH,
+        countQuery = "SELECT COUNT(rx) FROM Prescription rx" + SEARCH_JOINS
+        + "WHERE rx.hospital.id = :hospitalId AND rx.status IN :statuses AND " + SEARCH_MATCH)
+    Page<Prescription> searchAtHospitalInStatuses(@Param("hospitalId") UUID hospitalId,
+                                                  @Param("statuses") Collection<PrescriptionStatus> statuses,
+                                                  @Param("namePattern") String namePattern, Pageable pageable);
+
+    /** The search box in a super-admin's global view, every status. */
+    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "encounter", "encounter.hospital", "hospital"})
+    @Query(value = "SELECT rx FROM Prescription rx" + SEARCH_JOINS + "WHERE " + SEARCH_MATCH,
+        countQuery = "SELECT COUNT(rx) FROM Prescription rx" + SEARCH_JOINS + "WHERE " + SEARCH_MATCH)
+    Page<Prescription> searchEveryHospital(@Param("namePattern") String namePattern, Pageable pageable);
+
+    /** The search box in a super-admin's global view, one tab's statuses. */
+    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "encounter", "encounter.hospital", "hospital"})
+    @Query(value = "SELECT rx FROM Prescription rx" + SEARCH_JOINS
+        + "WHERE rx.status IN :statuses AND " + SEARCH_MATCH,
+        countQuery = "SELECT COUNT(rx) FROM Prescription rx" + SEARCH_JOINS
+        + "WHERE rx.status IN :statuses AND " + SEARCH_MATCH)
+    Page<Prescription> searchEveryHospitalInStatuses(@Param("statuses") Collection<PrescriptionStatus> statuses,
+                                                     @Param("namePattern") String namePattern, Pageable pageable);
+
+    /** QA D972 hand-off: a visit's prescription ids, withdrawn ones left out (checkout event). */
+    @org.springframework.data.jpa.repository.Query(
+        "select p.id from Prescription p where p.encounter.id = :encounterId and p.status not in :excluded")
+    List<UUID> findIdsByEncounterIdAndStatusNotIn(
+        @org.springframework.data.repository.query.Param("encounterId") UUID encounterId,
+        @org.springframework.data.repository.query.Param("excluded") java.util.Collection<com.example.hms.enums.PrescriptionStatus> excluded);
+
+    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "encounter", "encounter.hospital"})
     List<Prescription> findByPatient_IdAndHospital_Id(UUID patientId, UUID hospitalId);
 
     // Hospital-scoped queries for tenant isolation
-    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital"})
+    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "encounter", "encounter.hospital"})
     Page<Prescription> findByHospital_Id(UUID hospitalId, Pageable pageable);
 
-    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital"})
+    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "encounter", "encounter.hospital"})
     Page<Prescription> findByPatient_IdAndHospital_Id(UUID patientId, UUID hospitalId, Pageable pageable);
 
     /** E9 #59c — the paged prescription list across the readable hospitals ({@code RecordAccessPolicy.readableHospitalIds}). */
-    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital", "hospital"})
+    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "encounter", "encounter.hospital", "hospital"})
     Page<Prescription> findByPatient_IdAndHospital_IdIn(UUID patientId, Collection<UUID> hospitalIds, Pageable pageable);
 
     /**
@@ -62,7 +155,7 @@ public interface PrescriptionRepository extends JpaRepository<Prescription, UUID
      * {@code unsent} is that hospital's work in progress, and its by-id read
      * answers 404 here. Rows of the acting hospital are kept whatever their status.
      */
-    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital", "hospital"})
+    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "encounter", "encounter.hospital", "hospital"})
     @Query(value = "SELECT p FROM Prescription p WHERE p.patient.id = :patientId AND p.hospital.id IN :hospitalIds"
         + " AND (p.hospital.id = :actingHospitalId OR p.status NOT IN :unsent)",
         countQuery = "SELECT COUNT(p) FROM Prescription p WHERE p.patient.id = :patientId AND p.hospital.id IN :hospitalIds"
@@ -74,7 +167,7 @@ public interface PrescriptionRepository extends JpaRepository<Prescription, UUID
                                                Pageable pageable);
 
     /** {@link #findSentAcrossHospitals} restricted to a set of statuses (Gap G12). */
-    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital", "hospital"})
+    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "encounter", "encounter.hospital", "hospital"})
     @Query(value = "SELECT p FROM Prescription p WHERE p.patient.id = :patientId AND p.hospital.id IN :hospitalIds"
         + " AND (p.hospital.id = :actingHospitalId OR p.status NOT IN :unsent) AND p.status IN :statuses",
         countQuery = "SELECT COUNT(p) FROM Prescription p WHERE p.patient.id = :patientId AND p.hospital.id IN :hospitalIds"
@@ -86,10 +179,10 @@ public interface PrescriptionRepository extends JpaRepository<Prescription, UUID
                                                           @Param("statuses") Collection<PrescriptionStatus> statuses,
                                                           Pageable pageable);
 
-    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital"})
+    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "encounter", "encounter.hospital"})
     Page<Prescription> findByStaff_IdAndHospital_Id(UUID staffId, UUID hospitalId, Pageable pageable);
 
-    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital"})
+    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "encounter", "encounter.hospital"})
     Page<Prescription> findByEncounter_IdAndHospital_Id(UUID encounterId, UUID hospitalId, Pageable pageable);
 
     /* ── Gap G12: the same finders, restricted to a set of statuses ──────
@@ -106,31 +199,31 @@ public interface PrescriptionRepository extends JpaRepository<Prescription, UUID
      * reason: the mapper reads {@code prescription.getHospital()} on every
      * row, so leaving it out is 200 lazy loads on a full page.
      */
-    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital", "hospital"})
+    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "encounter", "encounter.hospital", "hospital"})
     Page<Prescription> findByStatusIn(Collection<PrescriptionStatus> statuses, Pageable pageable);
 
-    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital"})
+    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "encounter", "encounter.hospital"})
     Page<Prescription> findByPatient_IdAndStatusIn(
         UUID patientId, Collection<PrescriptionStatus> statuses, Pageable pageable);
 
-    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital", "hospital"})
+    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "encounter", "encounter.hospital", "hospital"})
     Page<Prescription> findByPatient_IdAndHospital_IdInAndStatusIn(
         UUID patientId, Collection<UUID> hospitalIds,
         Collection<PrescriptionStatus> statuses, Pageable pageable);
 
-    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital"})
+    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "encounter", "encounter.hospital"})
     Page<Prescription> findByStaff_IdAndStatusIn(
         UUID staffId, Collection<PrescriptionStatus> statuses, Pageable pageable);
 
-    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital"})
+    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "encounter", "encounter.hospital"})
     Page<Prescription> findByStaff_IdAndHospital_IdAndStatusIn(
         UUID staffId, UUID hospitalId, Collection<PrescriptionStatus> statuses, Pageable pageable);
 
-    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital"})
+    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "encounter", "encounter.hospital"})
     Page<Prescription> findByEncounter_IdAndStatusIn(
         UUID encounterId, Collection<PrescriptionStatus> statuses, Pageable pageable);
 
-    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital"})
+    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "encounter", "encounter.hospital"})
     Page<Prescription> findByEncounter_IdAndHospital_IdAndStatusIn(
         UUID encounterId, UUID hospitalId, Collection<PrescriptionStatus> statuses, Pageable pageable);
 
@@ -138,7 +231,7 @@ public interface PrescriptionRepository extends JpaRepository<Prescription, UUID
     long countByStaff_IdAndStatus(UUID staffId, PrescriptionStatus status);
 
     /** Pharmacist work queue: dispensable prescriptions at a hospital, ordered by creation date. */
-    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital"})
+    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "encounter", "encounter.hospital"})
     Page<Prescription> findByHospital_IdAndStatusIn(UUID hospitalId, List<PrescriptionStatus> statuses, Pageable pageable);
 
     /**
@@ -149,7 +242,7 @@ public interface PrescriptionRepository extends JpaRepository<Prescription, UUID
      * {@code InpatientOrderEnd.endedWithItsStay}; the MINE and UNCLAIMED
      * queries carry it too.
      */
-    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital"})
+    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "encounter", "encounter.hospital"})
     @Query(value = "select p from Prescription p where p.hospital.id = :hospitalId and p.status in :statuses "
             + "and (p.takeHome = true or not exists (select se.id from Encounter se where se = p.encounter "
             + "and se.admissionId is not null and se.status in (com.example.hms.enums.EncounterStatus.COMPLETED, com.example.hms.enums.EncounterStatus.CANCELLED, com.example.hms.enums.EncounterStatus.LEFT_WITHOUT_BEING_SEEN))) ",
@@ -166,7 +259,7 @@ public interface PrescriptionRepository extends JpaRepository<Prescription, UUID
      * {@code activeAfter} (now minus the TTL, from the service clock), so a
      * test can drive time. Its own count query, with the same predicate.
      */
-    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital"})
+    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "encounter", "encounter.hospital"})
     @Query(value = "select p from Prescription p where p.hospital.id = :hospitalId and p.status in :statuses "
             + "and (p.takeHome = true or not exists (select se.id from Encounter se where se = p.encounter "
             + "and se.admissionId is not null and se.status in (com.example.hms.enums.EncounterStatus.COMPLETED, com.example.hms.enums.EncounterStatus.CANCELLED, com.example.hms.enums.EncounterStatus.LEFT_WITHOUT_BEING_SEEN))) "
@@ -189,7 +282,7 @@ public interface PrescriptionRepository extends JpaRepository<Prescription, UUID
      * is not work someone could pick up). Its own count query, with the same
      * predicate.
      */
-    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital"})
+    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "encounter", "encounter.hospital"})
     @Query(value = "select p from Prescription p where p.hospital.id = :hospitalId and p.status in :statuses "
             + "and (p.takeHome = true or not exists (select se.id from Encounter se where se = p.encounter "
             + "and se.admissionId is not null and se.status in (com.example.hms.enums.EncounterStatus.COMPLETED, com.example.hms.enums.EncounterStatus.CANCELLED, com.example.hms.enums.EncounterStatus.LEFT_WITHOUT_BEING_SEEN))) "
@@ -253,6 +346,6 @@ public interface PrescriptionRepository extends JpaRepository<Prescription, UUID
      * load per row. {@code patient} is not fetched: this caller never touches
      * the association, and the row carries a dozen encrypted columns.
      */
-    @EntityGraph(attributePaths = {"staff", "staff.user", "hospital", "encounter", "encounter.department"})
+    @EntityGraph(attributePaths = {"staff", "staff.user", "staff.user.staffProfile", "staff.user.patientProfile", "hospital", "encounter", "encounter.department"})
     List<Prescription> findByPatient_IdAndHospital_IdIn(UUID patientId, Collection<UUID> hospitalIds);
 }

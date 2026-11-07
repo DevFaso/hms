@@ -24,6 +24,9 @@ public class LabSpecimenMapper {
             .currentLocation(specimen.getCurrentLocation())
             .status(specimen.getStatus() != null ? specimen.getStatus().name() : null)
             .notes(specimen.getNotes())
+            .rejectionReason(specimen.getRejectionReason())
+            .rejectedAt(specimen.getRejectedAt())
+            .rejectedById(specimen.getRejectedById())
             .createdAt(specimen.getCreatedAt())
             .updatedAt(specimen.getUpdatedAt())
             .build();

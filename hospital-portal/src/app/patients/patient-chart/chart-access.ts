@@ -231,11 +231,22 @@ export const ENCOUNTER_VIEW_ROLES: string[] = [
  * /imaging, which are order-entry workbenches owned by the teams that work
  * those queues.
  */
+/**
+ * RCPT-CLIN (user decision 2026-11-06): the active roles hold the receptionist and
+ * nothing that reads clinical content. Mirrors ReceptionistResponseShaping on the
+ * server: a second clinical or administrative role lifts it.
+ */
+export function isFrontDeskOnly(hasAnyActiveRole: (roles: string[]) => boolean): boolean {
+  return (
+    hasAnyActiveRole(['ROLE_RECEPTIONIST']) &&
+    !hasAnyActiveRole([...CHART_REVIEW_VIEW_ROLES, 'ROLE_HOSPITAL_ADMIN', 'ROLE_ADMIN'])
+  );
+}
+
 export const CHART_REVIEW_VIEW_ROLES: string[] = [
   ...DOCTOR_ROLES,
   'ROLE_NURSE',
   'ROLE_MIDWIFE',
-  'ROLE_RECEPTIONIST',
   'ROLE_PHARMACIST',
   'ROLE_LAB_SCIENTIST',
   'ROLE_LAB_TECHNICIAN',

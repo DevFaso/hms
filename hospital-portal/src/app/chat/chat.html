@@ -39,6 +39,7 @@
             class="btn-new-chat"
             (click)="openNewConversation()"
             [title]="'CHAT.NEW_CONVERSATION' | translate"
+            [attr.aria-label]="'CHAT.NEW_CONVERSATION' | translate"
           >
             <span class="material-symbols-outlined">edit_square</span>
           </button>
@@ -93,13 +94,21 @@
       <div class="msg-area">
         <!-- New Conversation Panel -->
         @if (showNewConversation()) {
-          <div class="new-conv-panel">
+          <!-- QA D1230: the panel takes the keyboard (its search field),
+               closes on Escape and gives the keyboard back to its opener. -->
+          <div
+            class="new-conv-panel"
+            role="region"
+            aria-labelledby="newConvTitle"
+            (keydown.escape)="closeNewConversation()"
+          >
             <div class="new-conv-header">
-              <h3>{{ 'CHAT.NEW_CONVERSATION' | translate }}</h3>
+              <h3 id="newConvTitle">{{ 'CHAT.NEW_CONVERSATION' | translate }}</h3>
               <button
                 class="btn-icon"
                 (click)="closeNewConversation()"
                 [title]="'COMMON.CLOSE' | translate"
+                [attr.aria-label]="'COMMON.CLOSE' | translate"
               >
                 <span class="material-symbols-outlined">close</span>
               </button>
@@ -107,6 +116,7 @@
             <div class="new-conv-search">
               <span class="material-symbols-outlined search-icon">person_search</span>
               <input
+                appFocusOnRender
                 [attr.aria-label]="'CHAT.SEARCH_USERS' | translate"
                 type="text"
                 [placeholder]="'CHAT.SEARCH_USERS' | translate"
@@ -168,6 +178,7 @@
                 class="btn-icon"
                 (click)="refreshMessages()"
                 [title]="'CHAT.REFRESH_MESSAGES' | translate"
+                [attr.aria-label]="'CHAT.REFRESH_MESSAGES' | translate"
               >
                 <span class="material-symbols-outlined">refresh</span>
               </button>
@@ -245,7 +256,7 @@
                     }}
                   </span>
                   @if (att.kind === 'AUDIO' && att.durationSeconds) {
-                    <span class="pending-meta">{{ att.durationSeconds }}s</span>
+                    {{ ' ' }}<span class="pending-meta">{{ att.durationSeconds }}s</span>
                   }
                   <button
                     type="button"
@@ -286,6 +297,7 @@
               [disabled]="uploadingPhoto() || sendingMessage() || recordingAudio()"
               (click)="photoInput.click()"
               [title]="'CHAT.ATTACH_PHOTO' | translate"
+              [attr.aria-label]="'CHAT.ATTACH_PHOTO' | translate"
             >
               <span class="material-symbols-outlined">{{
                 uploadingPhoto() ? 'progress_activity' : 'image'
@@ -297,6 +309,7 @@
               [disabled]="uploadingAudio() || sendingMessage()"
               (click)="toggleVoiceMemo()"
               [title]="'CHAT.RECORD_VOICE_MEMO' | translate"
+              [attr.aria-label]="'CHAT.RECORD_VOICE_MEMO' | translate"
             >
               <span class="material-symbols-outlined">{{
                 recordingAudio() ? 'stop_circle' : uploadingAudio() ? 'progress_activity' : 'mic'
@@ -309,11 +322,13 @@
               (keydown.enter)="sendMessage()"
             />
             <button
+              [attr.aria-label]="'CHAT.SEND' | translate"
               class="send-btn"
-              [disabled]="
-                sendingMessage() ||
-                recordingAudio() ||
-                (!messageText.trim() && pendingAttachments().length === 0)
+              [disabled]="sendingMessage() || recordingAudio()"
+              [appSubmitGuard]="
+                !messageText.trim() &&
+                pendingAttachments().length === 0 &&
+                ('SUBMIT_GUARD.MESSAGE' | translate)
               "
               (click)="sendMessage()"
             >

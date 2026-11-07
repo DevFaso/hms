@@ -522,8 +522,10 @@ class StaffSchedulingServiceImplTest {
         StaffShiftRequestDTO backwards = new StaffShiftRequestDTO(staffId, hospitalId, null, TODAY.plusDays(1),
             LocalTime.of(16, 0), LocalTime.of(8, 0), StaffShiftType.MORNING, null);
 
+        // QA round 29 (assertion changed): named on endTime.
         assertThatThrownBy(() -> service.scheduleShift(backwards, Locale.ENGLISH))
-            .isInstanceOf(BusinessRuleException.class)
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getField()).isEqualTo("endTime"))
             .hasMessageContaining("schedule.shift.timeRange.invalid");
         verify(shiftRepository, never()).save(any(StaffShift.class));
     }

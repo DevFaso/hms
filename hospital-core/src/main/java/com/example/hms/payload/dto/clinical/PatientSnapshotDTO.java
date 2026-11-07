@@ -60,11 +60,15 @@ public class PatientSnapshotDTO {
     public static class LabItem {
         private String test;
         private String value;
+        /** QA D1095: the unit the value is in (the test definition's when none was typed). */
+        private String unit;
         /** NORMAL / ABNORMAL / CRITICAL, or REVIEW for an unflagged, unacknowledged row. */
         private String flag;
         /** LOW / HIGH when the abnormal result's side of the range is known. */
         private com.example.hms.enums.AbnormalDirection abnormalDirection;
         private String date;
+        /** QA D1016: the result corrects a released value. */
+        private boolean corrected;
     }
 
     @Data @Builder @NoArgsConstructor @AllArgsConstructor

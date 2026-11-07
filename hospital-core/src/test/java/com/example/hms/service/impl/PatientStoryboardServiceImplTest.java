@@ -199,15 +199,15 @@ class PatientStoryboardServiceImplTest {
     }
 
     @Test
-    void capsAllergyAndProblemListsToProtectMobileBandwidth() {
+    void everyAllergyAndProblemReachesTheBanner_aCutListReadsAsComplete() {
         java.util.List<PatientAllergy> many = new java.util.ArrayList<>();
-        for (int i = 0; i < PatientStoryboardServiceImpl.MAX_ALLERGIES + 4; i++) {
+        for (int i = 0; i < 40; i++) {
             many.add(allergy("Allergen " + i, AllergySeverity.MILD, true));
         }
         when(allergyRepo.findVisibleAt(eq(PATIENT_ID), any())).thenReturn(many);
 
         java.util.List<PatientProblem> manyProblems = new java.util.ArrayList<>();
-        for (int i = 0; i < PatientStoryboardServiceImpl.MAX_PROBLEMS + 4; i++) {
+        for (int i = 0; i < 40; i++) {
             manyProblems.add(problem("Problem " + i, ProblemStatus.ACTIVE, false));
         }
         when(problemRepo.findByPatient_IdAndHospital_IdIn(PATIENT_ID, Set.of(HOSPITAL_ID))).thenReturn(manyProblems);
@@ -218,8 +218,8 @@ class PatientStoryboardServiceImplTest {
 
         PatientStoryboardDTO dto = service.getStoryboard(PATIENT_ID, HOSPITAL_ID);
 
-        assertThat(dto.getAllergies()).hasSize(PatientStoryboardServiceImpl.MAX_ALLERGIES);
-        assertThat(dto.getProblems()).hasSize(PatientStoryboardServiceImpl.MAX_PROBLEMS);
+        assertThat(dto.getAllergies()).hasSize(40);
+        assertThat(dto.getProblems()).hasSize(40);
     }
 
     @Test

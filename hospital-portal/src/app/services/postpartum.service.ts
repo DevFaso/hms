@@ -4,6 +4,8 @@ import { Observable } from 'rxjs';
 
 import { ProScreeningSummary } from './pro-screening.service';
 
+export type GlucoseUnit = 'MG_DL' | 'MMOL_L';
+
 export type PostpartumSchedulePhase =
   'IMMEDIATE_RECOVERY' | 'SHIFT_BASELINE' | 'ENHANCED_MONITORING' | 'DISCHARGE_PLANNING';
 export type PostpartumFundusTone =
@@ -173,6 +175,9 @@ export interface NewbornAssessmentRequest {
   diastolicBpMmHg?: number;
   oxygenSaturationPercent?: number;
   glucoseMgDl?: number;
+  /** QA D1424: a glucose as entered, always with its unit. */
+  glucoseValue?: number;
+  glucoseUnit?: GlucoseUnit;
   examGeneralAppearance?: string;
   examNotes?: string;
   followUpNotes?: string;

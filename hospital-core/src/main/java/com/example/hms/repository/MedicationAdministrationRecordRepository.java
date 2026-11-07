@@ -17,8 +17,40 @@ public interface MedicationAdministrationRecordRepository extends JpaRepository<
     List<MedicationAdministrationRecord> findByPatient_IdAndHospital_IdAndStatus(
         UUID patientId, UUID hospitalId, MedicationAdministrationStatus status);
 
-    /** Every MAR row of one prescription, latest scheduled dose first (D77 dose schedule). */
-    List<MedicationAdministrationRecord> findByPrescription_IdOrderByScheduledTimeDesc(UUID prescriptionId);
+    /**
+     * Every MAR row of one prescription, latest scheduled dose first (D77 dose
+     * schedule). QA D1409: two doses of an as-needed order given in the same
+     * minute share their slot, and nothing broke the tie, so the "last dose"
+     * could be the earlier one. The dose recorded last comes first, then a
+     * total order; a PENDING row, recorded by nobody yet, follows its slot's
+     * recorded rows.
+     */
+    @Query("""
+        SELECT m FROM MedicationAdministrationRecord m
+        WHERE m.prescription.id = :prescriptionId
+        ORDER BY m.scheduledTime DESC, m.administeredAt DESC NULLS LAST, m.createdAt DESC, m.id DESC
+    """)
+    List<MedicationAdministrationRecord> findByPrescription_IdOrderByScheduledTimeDesc(
+        @Param("prescriptionId") UUID prescriptionId);
+
+    /**
+     * QA D1314: {@link #findByPrescription_IdOrderByScheduledTimeDesc} for a
+     * whole ward, in that order, with what a row's dose history names (the
+     * nurse, the witness) in the same statement.
+     */
+    @Query("""
+        SELECT m FROM MedicationAdministrationRecord m
+        LEFT JOIN FETCH m.administeredByStaff s
+        LEFT JOIN FETCH s.user su
+        LEFT JOIN FETCH su.patientProfile
+        LEFT JOIN FETCH m.witnessUser wu
+        LEFT JOIN FETCH wu.patientProfile
+        LEFT JOIN FETCH wu.staffProfile
+        WHERE m.prescription.id IN :prescriptionIds
+        ORDER BY m.scheduledTime DESC, m.administeredAt DESC NULLS LAST, m.createdAt DESC, m.id DESC
+    """)
+    List<MedicationAdministrationRecord> findByPrescriptionIdsNewestSlotFirst(
+        @Param("prescriptionIds") java.util.Collection<UUID> prescriptionIds);
 
     @Query("""
         SELECT m FROM MedicationAdministrationRecord m

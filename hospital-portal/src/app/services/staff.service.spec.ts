@@ -15,3 +15,11 @@ describe('staff provider predicates', () => {
     expect(isClinicalProvider({ roleCode: 'ROLE_MIDWIFE' })).toBeTrue();
   });
 });
+
+describe('isClinicalProvider (QA D1164)', () => {
+  it('offers the midwife as a visit provider, as the walk-in and check-in paths accept her', () => {
+    expect(isClinicalProvider({ roleCode: 'ROLE_MIDWIFE' })).toBeTrue();
+    expect(isClinicalProvider({ roleCode: 'ROLE_DOCTOR' })).toBeTrue();
+    expect(isClinicalProvider({ roleCode: 'ROLE_RECEPTIONIST' })).toBeFalse();
+  });
+});

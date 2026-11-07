@@ -24,9 +24,11 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -100,6 +102,124 @@ class OrderSetItemDispatcherTest {
         assertThat(sent.getMedicationName()).isEqualTo("Ceftriaxone");
         assertThat(sent.getDosage()).isEqualTo("2 g IV");
         assertThat(sent.getNotes()).contains("Sepsis bundle");
+    }
+
+    /**
+     * QA D1396 (round 33): the item's quantity, unit and catalogue pick reach
+     * the order, so a controlled drug can be applied; the editor's dose range is
+     * the order's dose. Numbers come out of JSON as Integer, Double or String.
+     */
+    @Test
+    void d1396_theQuantityUnitPickAndDoseRangeReachTheOrder() {
+        PrescriptionResponseDTO resp = new PrescriptionResponseDTO();
+        resp.setId(UUID.randomUUID());
+        resp.setCdsAdvisories(List.of());
+        when(prescriptionService.createPrescription(any(), any(Locale.class))).thenReturn(resp);
+        UUID pick = UUID.randomUUID();
+        ArgumentCaptor<PrescriptionRequestDTO> captor = ArgumentCaptor.forClass(PrescriptionRequestDTO.class);
+
+        dispatcher.dispatch(Map.of("orderType", "MEDICATION", "medicationName", "Morphine", "doseRangeMin", 2,
+            "doseRangeMax", 2.0, "doseUnit", "mg", "route", "IV", "frequency", "Q4H", "quantity", 6,
+            "quantityUnit", "ampoules", "medicationCatalogItemId", pick.toString()), ctx(), Locale.FRENCH);
+        verify(prescriptionService).createPrescription(captor.capture(), eq(Locale.FRENCH));
+        PrescriptionRequestDTO sent = captor.getValue();
+        assertThat(sent.getQuantity()).isEqualByComparingTo("6");
+        assertThat(sent.getQuantityUnit()).isEqualTo("ampoules");
+        assertThat(sent.getMedicationCatalogItemId()).isEqualTo(pick);
+        assertThat(sent.getDosage()).isEqualTo("2 mg IV");
+        assertThat(sent.getRoute()).as("the route reaches the order itself").isEqualTo("IV");
+
+        org.mockito.Mockito.clearInvocations(prescriptionService);
+        dispatcher.dispatch(Map.of("orderType", "MEDICATION", "medicationName", "Morphine", "doseRangeMin", 2,
+            "doseRangeMax", 4, "doseUnit", "mg", "quantity", "6.5", "medicationCatalogItemId", "not-a-uuid"),
+            ctx(), Locale.FRENCH);
+        verify(prescriptionService).createPrescription(captor.capture(), eq(Locale.FRENCH));
+        assertThat(captor.getValue().getDosage()).isEqualTo("2-4 mg");
+        assertThat(captor.getValue().getQuantity()).isEqualByComparingTo("6.5");
+        assertThat(captor.getValue().getMedicationCatalogItemId()).isNull();
+        assertThat(captor.getValue().getRoute()).as("no route written").isNull();
+
+        org.mockito.Mockito.clearInvocations(prescriptionService);
+        dispatcher.dispatch(Map.of("orderType", "MEDICATION", "medicationName", "X", "route", "BOGUS",
+            "notes", "Surveiller la FR"), ctx(), Locale.FRENCH);
+        verify(prescriptionService).createPrescription(captor.capture(), eq(Locale.FRENCH));
+        assertThat(captor.getValue().getRoute()).as("a route the reading does not know is not stored").isNull();
+        assertThat(captor.getValue().getNotes()).contains("Sepsis bundle").contains("Surveiller la FR");
+    }
+
+    /**
+     * QA round 30 / QA D1378 / D1382 (round 32): an item ticked as needed
+     * carries its author's tick and minimum interval to the order (a number,
+     * digits or a long); an item not ticked sends neither, whatever its
+     * frequency says - the order rule (PrnMinInterval, in createPrescription)
+     * and the apply's item check (OrderSetItemPrnRules) refuse what is wrong,
+     * the dispatcher never skips a medication item for it any more.
+     */
+    @Test
+    void prn_theItemsTickAndIntervalReachTheOrder() {
+        PrescriptionResponseDTO resp = new PrescriptionResponseDTO();
+        resp.setId(UUID.randomUUID());
+        resp.setCdsAdvisories(List.of());
+        when(prescriptionService.createPrescription(any(), any(Locale.class))).thenReturn(resp);
+
+        for (Object hours : new Object[] {6, "6", 6L}) {
+            DispatchResult applied = dispatcher.dispatch(Map.of(
+                "orderType", "MEDICATION", "medicationName", "Paracetamol", "frequency", "SOS",
+                "asNeeded", true, "prnMinIntervalHours", hours), ctx(), Locale.ENGLISH);
+            assertThat(applied.type()).as(String.valueOf(hours)).isEqualTo(DispatchResult.Type.MEDICATION);
+        }
+        ArgumentCaptor<PrescriptionRequestDTO> captor = ArgumentCaptor.forClass(PrescriptionRequestDTO.class);
+        verify(prescriptionService, times(3)).createPrescription(captor.capture(), eq(Locale.ENGLISH));
+        assertThat(captor.getAllValues()).allSatisfy(r -> {
+            assertThat(r.getAsNeeded()).isTrue();
+            assertThat(r.getPrnMinIntervalHours()).isEqualTo(6);
+        });
+
+        dispatcher.dispatch(Map.of("orderType", "MEDICATION", "medicationName", "Amoxicillin", "frequency", "TID",
+            "prnMinIntervalHours", 6), ctx(), Locale.ENGLISH);
+        verify(prescriptionService, times(4)).createPrescription(captor.capture(), eq(Locale.ENGLISH));
+        assertThat(captor.getValue().getAsNeeded()).isFalse();
+        assertThat(captor.getValue().getPrnMinIntervalHours()).isNull();
+    }
+
+    /** QA D1491: a set saved with an item that names no frequency still applies: nobody can answer for it then. */
+    @Test
+    void anItemSavedWithNoFrequencyStillAppliesAndItsOrderIsFlagged() {
+        when(prescriptionService.createPrescription(any(), any())).thenReturn(new PrescriptionResponseDTO());
+        ArgumentCaptor<PrescriptionRequestDTO> captor = ArgumentCaptor.forClass(PrescriptionRequestDTO.class);
+        dispatcher.dispatch(Map.of("orderType", "MEDICATION", "medicationName", "Amoxicillin"), ctx(), Locale.ENGLISH);
+        dispatcher.dispatch(Map.of("orderType", "MEDICATION", "medicationName", "Amoxicillin", "frequency", "  "),
+            ctx(), Locale.ENGLISH);
+        verify(prescriptionService, times(2)).createPrescription(captor.capture(), eq(Locale.ENGLISH));
+        assertThat(captor.getAllValues()).allSatisfy(r -> assertThat(r.getFrequencyConfirmed()).isTrue());
+    }
+
+    /** QA D1491: at save, an item states its frequency; at apply, the same item passes, by name otherwise. */
+    @Test
+    void anItemWithNoFrequencyIsRefusedByNameAtSaveNotAtApply() {
+        List<Map<String, Object>> items = List.of(Map.of("orderType", "MEDICATION", "medicationName", "Amoxicillin"));
+        assertThatThrownBy(() -> OrderSetItemPrnRules.requireValid(items))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "orderItems[0].frequency");
+        List<Map<String, Object>> confirmed = List.of(Map.of(
+            "orderType", "MEDICATION", "medicationName", "Amoxicillin", "frequency", " ", "frequencyConfirmed", true));
+        assertThatThrownBy(() -> OrderSetItemPrnRules.requireValid(confirmed)).as("confirming does not answer it")
+            .hasFieldOrPropertyWithValue("field", "orderItems[0].frequency");
+        OrderSetItemPrnRules.requireValidToApply(items);
+    }
+
+    /** QA D1419: the author's answer about a wording the MAR cannot schedule reaches the order the item creates. */
+    @Test
+    void anItemsConfirmedWordingReachesTheOrder() {
+        when(prescriptionService.createPrescription(any(), any())).thenReturn(new PrescriptionResponseDTO());
+        ArgumentCaptor<PrescriptionRequestDTO> captor = ArgumentCaptor.forClass(PrescriptionRequestDTO.class);
+        dispatcher.dispatch(Map.of("orderType", "MEDICATION", "medicationName", "Fansidar", "frequency", "SP + AQ",
+            "frequencyConfirmed", true), ctx(), Locale.ENGLISH);
+        dispatcher.dispatch(Map.of("orderType", "MEDICATION", "medicationName", "Fansidar", "frequency", "BID"),
+            ctx(), Locale.ENGLISH);
+        verify(prescriptionService, times(2)).createPrescription(captor.capture(), eq(Locale.ENGLISH));
+        assertThat(captor.getAllValues().get(0).getFrequencyConfirmed()).isTrue();
+        assertThat(captor.getAllValues().get(1).getFrequencyConfirmed()).isFalse();
     }
 
     @Test
@@ -285,5 +405,68 @@ class OrderSetItemDispatcherTest {
         );
         assertThat(result.type()).isEqualTo(DispatchResult.Type.SKIPPED);
         assertThat(result.skipReason()).contains("MAGIC");
+    }
+
+    // ═══════════════ QA D1436 (round 34): a dose keeps its unit ═══════════════
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.MethodSource("dosesAndUnits")
+    void qaD1436_theDoseReachesTheOrderWithItsUnit(Map<String, Object> dose, String expected) {
+        PrescriptionResponseDTO resp = new PrescriptionResponseDTO();
+        resp.setId(UUID.randomUUID());
+        when(prescriptionService.createPrescription(any(), any(Locale.class))).thenReturn(resp);
+        Map<String, Object> item = new java.util.HashMap<>(dose);
+        item.put("orderType", "MEDICATION");
+        item.put("medicationName", "Morphine");
+        item.put("route", "IV");
+
+        dispatcher.dispatch(item, ctx(), Locale.ENGLISH);
+
+        ArgumentCaptor<PrescriptionRequestDTO> captor = ArgumentCaptor.forClass(PrescriptionRequestDTO.class);
+        verify(prescriptionService).createPrescription(captor.capture(), eq(Locale.ENGLISH));
+        assertThat(captor.getValue().getDosage()).isEqualTo(expected);
+    }
+
+    static java.util.stream.Stream<org.junit.jupiter.params.provider.Arguments> dosesAndUnits() {
+        return java.util.stream.Stream.of(
+            org.junit.jupiter.params.provider.Arguments.of(Map.of("dose", "2", "doseUnit", "mg"), "2 mg IV"),
+            org.junit.jupiter.params.provider.Arguments.of(Map.of("dose", 2, "doseUnit", "mg"), "2 mg IV"),
+            org.junit.jupiter.params.provider.Arguments.of(Map.of("dose", "2-4", "doseUnit", "mg"), "2-4 mg IV"),
+            org.junit.jupiter.params.provider.Arguments.of(Map.of("dose", "2 mg", "doseUnit", "mg"), "2 mg IV"),
+            org.junit.jupiter.params.provider.Arguments.of(Map.of("dose", ".5", "doseUnit", "mg"), ".5 mg IV"),
+            org.junit.jupiter.params.provider.Arguments.of(Map.of("dose", "1/2", "doseUnit", "cp"), "1/2 cp IV"),
+            org.junit.jupiter.params.provider.Arguments.of(Map.of("dose", "2 g"), "2 g IV"),
+            org.junit.jupiter.params.provider.Arguments.of(Map.of("doseRangeMin", 2, "doseRangeMax", 4, "doseUnit", "mg"), "2-4 mg IV"),
+            org.junit.jupiter.params.provider.Arguments.of(Map.of(), "IV"));
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.MethodSource("dosesWithoutAUnit")
+    void qaD1436_aNumberWithNoUnitIsRefusedByNameAtSaveAndAtApply(Map<String, Object> dose) {
+        Map<String, Object> item = new java.util.HashMap<>(dose);
+        item.put("orderType", "MEDICATION");
+        item.put("medicationName", "Morphine");
+        item.put("frequency", "Q6H");
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> OrderSetItemPrnRules.requireValid(List.of(item)))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .extracting("field").isEqualTo("orderItems[0].doseUnit");
+    }
+
+    static java.util.stream.Stream<Map<String, Object>> dosesWithoutAUnit() {
+        return java.util.stream.Stream.of(Map.of("dose", "2"), Map.of("dose", 2), Map.of("dose", "2,5"),
+            Map.of("doseRangeMin", 2, "doseRangeMax", 4));
+    }
+
+    @Test
+    void qaD1436_aDoseThatSaysItsOwnUnitOrNoDoseAtAllPasses() {
+        for (Map<String, Object> dose : List.<Map<String, Object>>of(Map.of("dose", "1 comprimé"), Map.of("dose", "2", "doseUnit", "mg"), Map.of())) {
+            Map<String, Object> item = new java.util.HashMap<>(dose);
+            item.put("orderType", "MEDICATION");
+            item.put("medicationName", "Morphine");
+            item.put("frequency", "Q6H");
+            org.assertj.core.api.Assertions.assertThatCode(() -> OrderSetItemPrnRules.requireValid(List.of(item)))
+                .doesNotThrowAnyException();
+        }
     }
 }

@@ -62,6 +62,9 @@ public class MedicationCatalogItemRequestDTO {
 
     private boolean controlled;
 
+    // Round 18 (QA D935): the paediatric limits are written only through the
+    // pharmacy's audited PUT /medication-catalog/{id}/pediatric-dosing.
+
     @Builder.Default
     private boolean active = true;
 

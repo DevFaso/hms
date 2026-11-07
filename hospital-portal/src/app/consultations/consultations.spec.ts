@@ -280,6 +280,23 @@ describe('ConsultationsComponent', () => {
     expect(component.showModal()).toBeTrue();
   });
 
+  it('QA D1306: an empty form marks each blank field, not only a toast', () => {
+    const fixture = TestBed.createComponent(ConsultationsComponent);
+    const cmp = fixture.componentInstance;
+    cmp.ngOnInit();
+    cmp.openCreate();
+    cmp.form.hospitalId = 'h1';
+    fixture.detectChanges();
+
+    cmp.submitForm();
+
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('#con-specialty')?.getAttribute('aria-invalid')).toBe('true');
+    expect(host.querySelector('#con-reason')?.getAttribute('aria-invalid')).toBe('true');
+    expect(host.querySelector('#con-hospitalId')?.getAttribute('aria-invalid')).not.toBe('true');
+    expect(toastSpy.error).toHaveBeenCalled();
+  });
+
   it("QA D890: the server's field reason is shown under the field's label, not a generic toast", () => {
     const translate = TestBed.inject(TranslateService);
     translate.setTranslation('fr', {

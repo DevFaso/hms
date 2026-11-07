@@ -2205,6 +2205,78 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
 
 ## Standing platform debt — owed, not parity
 
+- **QA round 19 residuals (fix/r19-scheduling-frontdesk-billing).**
+  (1) D1093: the two native patient apps (`patient-android-app`, `patient-ios-app`) book and reschedule
+  through the same endpoints with a free time; the server now refuses any time that is not a published,
+  free slot (`portal.booking.notAPublishedSlot`), so the apps must offer the slots of
+  `GET /me/patient/booking/hospitals/{h}/departments/{d}/slots?date=` and
+  `GET /me/patient/appointments/{id}/reschedule-slots?date=` instead of a time picker (CI is the only
+  Swift compiler; own PR). (2) A hospital with no session templates offers no online booking at all now
+  (the desk books as before); the clinics must generate slots before patients can self-book.
+- **QA round 18 residuals (fix/r18-billing-pharmacy), noted, not fixed there.**
+  (1) *(Fixed by fix/r19-scheduling-frontdesk-billing, QA D1069 round 19: the reason is mandatory on the
+  dispense cancel, kept on the dispense and the voided payment, asked for in the dispensing panel.)* D1069 sibling: cancelling a completed dispense (`POST /pharmacy/dispense/{id}/cancel`) voids its payment
+  (refund due) and puts the stock back with no reason asked; the ledger and the payment store the English
+  literals "Dispense cancelled ..." (read through the register's reason labels). Needs a reason field in the
+  dispensing cancel panel and on `DispenseCancelRequestDTO`, stored on the payment void and the ledger row.
+  (2) D1084 sibling: at the round-18 merge (#976) `PdfInvoiceService` was confirmed to print dates only
+  (`PaymentTransaction.paymentDate` is a `LocalDate`), so no billing time reaches `PdfLabels`. Still owed:
+  `PdfLabels.fmt(LocalDateTime)` serves the clinical PDFs (`PatientRecordPdfService` "generated at"
+  `LocalDateTime.now(ZoneOffset.UTC)` and chart rows, `WristbandPdfService` specimen collection time) in the
+  server's zone; give them the hospital's zone, then delete the `PdfLabels` pin in `ServerComposedTimeGuardTest`.
+  (3) D972: an ultrasound order has no encounter link, so it cannot reach the visit invoice; it needs a charge
+  at completion (as `DeliveryChargeService` does for a birth) or an encounter column.
+  (4) D972 decision recorded: an in-house specialist consultation and an immunization are not separate visit
+  lines (`BillableOrderRegistryGuardTest.NOT_BILLABLE`); a hospital that charges for them records the service
+  on the visit. Revisit if the user wants them billed by default.
+
+- **QA round 16 residuals (PR #972 review round 8), noted, not fixed there.**
+  (1) The slot inventory and the overlap rule disagree on RESCHEDULED: the
+  status action releases the inventory slot, while `holdsSlot()` keeps the
+  row's time held, so the picker can offer a time the booking then refuses
+  (pre-existing; decide which one is the truth). (2) The desk reschedule
+  modal sends SCHEDULED, which NO_SHOW cannot reach (its only exit is
+  RESCHEDULED), so a missed visit can be moved only through the API
+  (`PUT /appointments/{id}` with status RESCHEDULED). (3) A demographics PATCH
+  or PUT that renames the patient leaves the linked login account's
+  `User.firstName/lastName` unchanged. (4) The portal profile's phone
+  uniqueness (D113, `existsByPhoneNumberPrimaryAndIdNot`) compares the stored
+  string exactly, so a legacy national-format holder is not seen; the rule
+  itself is in question now that the desk records shared family numbers.
+  (5) Fixed in #972 round 10 (a short number lists every holder). (6) The phone match is a
+  sequential scan; a stored digits column with an index needs a migration.
+  (7) Fixed on qa/r16-combined with (13) below.
+  (8) The D919 "scoped onlyDeleted is an empty page" rule lives in both
+  `UserController` and `UserServiceImpl`; keep it in the service only.
+  (9) Blob downloads revoke the object URL right after `click()` (billing,
+  governance, the check-in receipt); a shared download helper that defers the
+  revoke would cover every caller.
+  (10) Round 13: a phone the facility rule cannot normalise is stored as
+  typed (as on develop); refusing it at the desk is a product decision.
+  (11) A missed visit moved back into a slot-holding status does not re-link
+  the recall the no-show reopened. (12) `PatientMatchKeys.samePhone` (full
+  match) and `PhoneNumbers.isSameSubscriber` (last 8 digits) define "same
+  subscriber" differently; one definition should serve both.
+  Remaining after round 18 (#972, bounded by the coordinator):
+  (13) ✅ FIXED on qa/r16-combined (2026-10-28): the audit's PATIENT
+  resource name (phone, email, full name, MRN) resolves by the request's
+  patient id, else only among patients actively registered at the event's
+  hospital, and only when exactly one matches; no hospital or two holders
+  leaves it unresolved. Same class fixed in the patient's own booking by
+  email (first match → the caller's own record) and the identifier lookup's
+  email branch (first holder → every holder, then the hospital filter);
+  guarded codebase-wide by `PatientFirstMatchGuardTest`. (14) Recall auto-linking (no recallId) takes any
+  open recall of the same department or clinician from 30 days before its
+  due date, so an unrelated visit there can close it on completion; decide
+  the targeting rule with the clinic. (15) PATCH identity fields (name, DOB,
+  sex) are open to every role the endpoint admits and change the shared row
+  for every hospital; gender is free text up to 10 characters (as the PUT).
+  (16) `appDialogFocus` closes the whole dialog on an Escape meant for a
+  suggestion list inside it (walk-in, recall). (17) The duplicate check's two
+  Page searches each run an unused COUNT; a Slice/List variant would drop
+  them. (18) The check-in copay receipt hard-codes the French "recu-" file
+  prefix.
+
 - **QA D899 residual (round 15): the stock check counts expired lots.**
   Stock routing now resolves a free-text order to the shelf by the dispense
   DRUG rule (`fix/qa-r15-clinical-pharmacy`), but its on-hand figure is still
@@ -2375,6 +2447,121 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   (4) the head SHA is read live instead of from the event payload, so a
   push during a run can be labelled with the newer head; (5) a PR with only
   generated files still calls the model; (6) tests for those cases.
+
+- **QA D972 — clinic-to-billing hand-off at checkout (round 16, branch B
+  prepared the producer; the consumer is owed).** A checked-out visit creates
+  no charge: only the copay invoice exists, and only maternity delivery posts
+  lines automatically. `EncounterServiceImpl.checkOut` now publishes
+  `com.example.hms.event.EncounterCheckedOutEvent` (ids and scalars only:
+  encounter, code, patient, hospital, department, provider staff, encounter
+  type, checkout time, the visit's non-withdrawn prescription ids, its lab
+  order ids and procedure order ids). Owed: a billing listener
+  (`@TransactionalEventListener(phase = AFTER_COMMIT)` + `REQUIRES_NEW`, the
+  `DeliveryChargeService` idiom) that turns it into draft charges on the
+  visit's invoice from the hospital's price list, idempotent per encounter
+  (a unique key on the encounter id so a replayed event never bills twice),
+  and a test that a failed charge never rolls the checkout back.
+- **Round 16 branch B follow-ups that live in other branches' files.**
+  (1) The nursing-notes panel (`encounters/nursing-notes-panel`, D927) is in
+  the encounter detail only; the patient chart (`patients/patient-detail`)
+  should embed `<app-nursing-notes-panel [patientId]>` too. (2) The ward
+  vitals dialog in `nurse-station.html` has no pain field (D989 note), and
+  the chart's vitals list shows the localised `notes` text, not a structured
+  pain score (a `pain_score` column like `postpartum_observations` would let
+  every screen format it). (3) The treatment-plans page still offers Edit on
+  a colleague's plan; the server now refuses it (D930 class), so the button
+  should be hidden for non-authors. (4) Author checks still missing on
+  documents owned by other branches, found in the D930 audit: an unsigned
+  prescription draft can be rewritten or deleted by any prescriber
+  (`PrescriptionServiceImpl.update/deletePrescription`), a lab order can be
+  hard-deleted by anyone at the ordering hospital
+  (`LabOrderServiceImpl.deleteLabOrder`), an imaging report draft can be
+  edited, signed or voided by any clinician (`ImagingReportServiceImpl`), an
+  imaging order can be cancelled through `updateOrderStatus` by anyone in
+  scope, and an ultrasound order update has no author check. Admissions,
+  problems, allergies and family/social history are left team-owned on
+  purpose (the ward team acts on them). Procedure orders: DECIDED by the user
+  2026-10-28 ("as it works in real hospitals"), applied on
+  fix/r17-review-976: an order belongs to the clinician who placed it.
+  Cancelling it (POST /cancel, or CANCELLED through the update) is the
+  ordering clinician's, a physician's of that hospital for a nurse's or
+  midwife's order, or a super-admin's in global view (translated 403
+  `procedureOrder.cancelForbidden` otherwise); the care team still records
+  execution (schedule, pre-op steps, start, complete, postpone, consent,
+  site marking); a cancelled order stays locked with its first stamp. The
+  order has no clinical-content edit and no signature step today, so there
+  is nothing else to gate; the portal's cancel button is role-level only
+  (the response carries the ordering staff id, not a user id, so an exact
+  author gate needs a server-computed flag). (5) D1003: the CVX code
+  stays a required typed field because the DHIS2 ADX export counts doses by
+  it; the PEV vaccine list offers names only. A vetted PEV-vaccine to CVX
+  table (supplied by the user, never invented) would let the form fill the
+  code. (6) D930: a draft discharge summary is editable by the visit's
+  treating doctor, but finalize still requires the discharging provider
+  (QA D503), who is the visit's clinician of record and may be the nurse
+  who opened it; the Résumés tab shows the buttons to the discharging
+  provider only. Checkout should name the treating doctor as discharging
+  provider. (7) D961: the certificate's examination date is the visit's
+  date on the server clock (UTC); right for UTC+0 hospitals, a day early
+  for a past-day visit at a UTC+1 hospital until hospitals carry a zone.
+  (8) Review round 7 of #971, deferred (not logic or security breaks):
+  the certificate button is offered to every doctor on a seen visit while
+  the server lets only the treating clinician sign (the refusal is readable
+  in the dialog; an exact gate needs a server-computed flag on the
+  encounter); a sick-leave start date has no upper bound (the maximum
+  offset after the visit is a clinical policy for the user to set); the
+  checkout diagnosis prefill takes problems reviewed on or after the visit
+  day with no upper bound (problems carry no encounter link; the prefill is
+  editable); efficiency: `DischargeSummaryServiceImpl.toDto` runs the
+  author rule per list row (role lookups and an exists query per draft),
+  `publishCheckedOut` runs three id queries with no listener yet, and
+  `BpaRuleEngine.buildContext` loads the due date for every non-male
+  patient even when no BP reading is hypertensive; "who is a physician"
+  is computed in `EncounterServiceImpl.isPhysicianAt`,
+  `DischargeSummaryServiceImpl.isPhysician` and the token-based
+  `callerIsDoctor`, which should share one helper.
+  (9) Review round 9 of #971, deferred: `issuing_hospital_id` (V240) has
+  no foreign key or index, so a removed hospital would leave a dangling id
+  and a 500 on the document read; V240 may already have run on dev from an
+  integration branch, so the FK needs its own migration (next free number)
+  rather than an edit; the certificate endpoint admits ROLE_DOCTOR only,
+  while checkout ownership counts physicians and surgeons as doctors
+  (DECIDED by the user 2026-10-28, applied on fix/r17-review-976: any
+  licensed physician at the visit's hospital signs - doctor, physician,
+  surgeon, anaesthesiologist, radiologist, `RoleValidator.
+  LICENSED_PHYSICIAN_ROLE_CODES`; never a nurse, midwife, receptionist or
+  admin; the endpoint, the service and the portal button share the list);
+  the maternity screens show a gestational age up to 44 weeks while the
+  pregnancy-hypertension card stops at the due date + 14 days (42 weeks);
+  the nursing-notes panel on a closed visit reads the 50 newest notes and
+  keeps the visit's days, so a visit followed by more than 50 later notes
+  shows none of its own until `GET /nurse/notes` takes a date range.
+  qSOFA scores the worst reading in its window for mentation, as it
+  already did for RR and sBP (a rule-wide design, not changed here).
+  (10) Review round 10 of #971, deferred: the EMERGENCY "dated today"
+  test and the certificate's examination day compare the server's date
+  (UTC) with a form date sent as local midnight, so at a UTC+1 hospital a
+  visit for today reads as yesterday (Burkina Faso is UTC+0; the fix is a
+  zone per hospital, as in (7)); a discharge-summary draft keeps its
+  provider when the visit's clinician of record is reassigned and the visit
+  is completed again (before #971 checkout re-homed it every time; who owns
+  a draft after a reassignment is a rule to decide, not re-homing that
+  would undo a covering doctor's ownership).
+  (11) Review round 11 of #971: a treatment plan's author still cannot hand
+  it to a colleague (the D503 rule on develop already refused naming
+  someone else as author; #971 only stopped a colleague from taking a plan
+  over), so the plan form's author picker can only fail: hide it, or decide
+  a hand-over rule.
+  (12) Review round 12 of #971, deferred: checkout still writes the visit's
+  closing fields (diagnoses, follow-up, summaries) into an existing draft
+  held by another doctor, as it did before #971 (it no longer changes the
+  draft's owner); whether checkout should leave another doctor's draft
+  alone, or append, is a workflow decision, and refusing it would break
+  checkout. A transcribed vaccine dose (D1003) records no staff member,
+  since `administered_by` was its only actor column; a `recorded_by`
+  column (new migration) would keep who entered it, beyond the write-audit
+  row. The certificate dialog's default start date is the browser's day of
+  the arrival, the server checks its own (the zone item in (10)).
 
 ### Execution plan (2026-09-26)
 
@@ -2607,6 +2794,28 @@ user, data steps, and the residuals each PR recorded (the bullets dated
 2026-10-04 and 2026-10-07 at the end of the items).
 
 ### The items
+
+- **Chronology rows of another hospital for the visit categories (QA round 16 (D959)).**
+  The doctor's chronology now lists diagnoses, lab orders still waiting,
+  imaging orders, signed notes with their plan and referrals
+  (`VisitTimelineRows`), but only the acting hospital's own rows. Reading
+  another hospital's rows in these categories needs the same treatment-
+  relationship and sensitive-category accounting the shared categories have
+  (E8 #49/#51, decision D3, RECORD_SHARE per source): a problem carries its
+  own sensitivity category, a note and a lab order ride on their encounter,
+  a referral and an imaging order have neither. Until then they are not read
+  across hospitals at all.
+
+- **Invoice adjustments after this round (QA round 16 (D974)).** Discounts,
+  waivers and credit notes (V242, `POST /billing-invoices/{id}/adjustments`)
+  lower an issued invoice with a mandatory reason, an audit row and the line
+  on the PDF; a credit note reverses a line. Still owed: a refund when a credit
+  note would leave the invoice below what was already paid (today the payment
+  is reversed first), a report of adjustments per period for the
+  accountant, and a status of its own for an invoice settled by a waiver
+  (today it ends PAID with amountPaid 0: nothing is owed and revenue sums
+  amountPaid, but the paid tab and paid counts include it; a WAIVED status
+  needs a product decision and a migration of the status column users).
 
 - **~~Device-only history notes are filed under a different identity per login path
   (#709 iOS, #710 Android).~~ Closed by #791** (2026-10-03): both apps resolve
@@ -5359,11 +5568,17 @@ user, data steps, and the residuals each PR recorded (the bullets dated
 - **Note signing at outpatient checkout (QA D513, round 8, `fix/qa-r8-clinical-inpatient`).** The checkout no longer lets the visit note be rewritten (400 refusal `encounter.note.closedLocked`, corrections go through an attributed addendum) and the edit response now carries the flushed `updatedAt`. Requiring the note to be signed before checkout, or signing it as part of checkout, changes the outpatient flow for every clinician and is a product decision (who signs a nurse-documented visit, what happens to a visit closed by the discharge path); an unsigned closed note is still shown as unsigned. Owed: decide and build the checkout-time signature step.
 - **Patient returns tied to a dispense in the stock form (QA D604/D653/D654, round 9, `fix/qa-r9-pharmacy-billing`).** A RETURN that names its dispense (`referenceId`) is capped at what that fill delivered minus earlier returns, under the dispense row lock, and a cancel puts back only the part not yet returned. A RETURN with no reference on a lot with fills still out is now booked against the most recent fill that can take all of it (so that fill's cancel puts nothing back twice), and a return larger than every open fill is refused (`stockTransaction.return.referenceRequired`). Remaining: the attribution picks the newest fill, not necessarily the one the patient brought back (a dispense picker in the return form would let the pharmacist name it), and a lot's transferred-out stock coming back while a fill is still out is booked against that fill. Controlled stock is now witnessed on dispense, prepare-ready, dispense cancel and lot receipt; a `cancel-ready` of a prepared controlled fill (and the system voids on a prescription edit) still returns stock unwitnessed. The prescription response now shows the catalog's controlled flag (D654, decided); enforcing it in the signing gate waits on the prescriber two-factor step (next bullet).
 
-- **Prescriber two-factor step for controlled substances (D654, #926).** The prescription response now shows the catalog's controlled flag (morphine reports controlled = true), but the two-factor signing and dispense block (`ControlledSubstanceGuard`) still keys on the prescriber's own tick, because no prescriber two-factor step exists yet. Owed: build that step, then enforce the catalog flag in the guard. Stock witness rules already read the catalog.
+- **Prescriber two-factor step for controlled substances (D654, #926; round 17: decision D654 SUPERSEDED by the user on 2026-10-28, QA D922: a catalogue-controlled drug is always controlled. `fix/r17-lab-pharmacy-billing` applied it to every safeguard that exists, guarded by `ControlledFlagGuardTest`; this two-factor clause is the one remaining exception, because enforcing a step nobody can perform would make every morphine order unsignable - flagged to the user for a decision.)** The prescription response now shows the catalog's controlled flag (morphine reports controlled = true), but the two-factor signing and dispense block (`ControlledSubstanceGuard`) still keys on the prescriber's own tick, because no prescriber two-factor step exists yet. Owed: build that step, then enforce the catalog flag in the guard. Stock witness rules already read the catalog. **Round 18 (`fix/r18-clinical-reference`): the step is built.** `signPrescription` re-authenticates the prescriber (TOTP/backup code when enrolled, else the HMS password; one call, one signature; audited `PRESCRIPTION_SIGN_REAUTHENTICATION`) for every controlled order, tick OR catalogue (`PrescriptionControlledResolver`), and writes `twoFactorVerifiedAt`; `ControlledSigningReauthenticationGuardTest` keeps every SIGNED write behind it. ~~Still owed: the dispense side (`requireDispensable`) keys on the tick.~~ **Done at the round-18 merge (#976):** `ControlledSubstanceGuard` keys both the status clause and `requireDispensable` on `PrescriptionControlledResolver`, so a catalogue-controlled order without the prescriber's proof (signed before round 18) is refused at the dispense, preparation and hand-over; `ControlledFlagGuardTest#everyTwoFactorSafeguardAsksTheCatalogue` fails on a proof check keyed on the tick. No trainee co-sign: the product has no intern/resident role (only `EmploymentType.INTERN`, not a role).
+- **Round 18 clinical reference defaults (`fix/r18-clinical-reference`).** (1) An ACTIVE lab test definition's reference ranges are locked (D617/D705) and `test_code` is globally unique, so a live test's ranges cannot be revised except by retiring it and creating a new version under a new code: a range-revision workflow (new version of the same test) is owed. (2) Neonatal glucose has only a critical low (< 0.40 g/L / 2.2 mmol/L): no neonatal normal interval was supplied, so a non-critical neonatal low reads "normal" until the lab director adds one. (3) Adult critical limits for Hb, WBC and platelets were not supplied; the seed keeps the existing configured values, marked unverified. (4) Children's glucose (1 month-17 years) and potassium: no paediatric interval supplied; they fall back to the adult range as before. (5) An order whose typed name matches several uncontrolled catalogue items stays unlinked and is checked against ONE of them (the lowest absolute daily cap, else the lowest mg/kg ceiling): the other items' limits are not applied; picking the exact item in the form avoids it, and a per-limit "strictest of each" check is owed. (6) The dev defaults are loaded by `C:/dev/hms-qa/scripts/r18/seed/` (dry run by default) and stay "default, pending local approval" until the lab director / pharmacy lead approves them.
+- **Witness at administration of a controlled substance (QA D922, round 16, `fix/r16-orders-meds-lab`).** Round 16 made the catalogue's controlled flag reach the order whatever the client sends (name resolution in `PrescriptionServiceImpl.applyCatalogPick`), so a controlled order now needs a pharmacist's verification before the MAR lets it be given, the MAR and eMAR rows say "Stupéfiant", and the patient cannot request its renewal. Still owed from the QA expectation: a second nurse or doctor witnessing the GIVEN record of a controlled dose (a `witness` on `MedicationAdministrationRecord`, a picker on the eMAR and the nurse-station Give, refused without one), which needs a column (next free migration) and is a new safeguard rather than a fix of an offered workflow. The prescriber two-factor step (previous bullet) is unchanged.
+- **Prescription read/write cost after round 16 (#975 review, efficiency, deferred with the user's rule).** (1) `PrescriptionServiceImpl.catalogItemsNamed` loads the hospital's active catalogue and accent-folds it in memory on every create/update that carries neither a catalogue id nor a code (the prescribing form now sends the id, so this is the API/order-set path); the accent-insensitive prefix rule needs an `unaccent`-backed bounded query before it can be pushed to the database. (2) `PrescriptionMapper.awaitsPhysicianSignature` asks RoleValidator up to three times per unsigned DRAFT/PENDING_SIGNATURE row (`isDoctor` short-circuits for doctors, so one query in the common case); a per-mapping memo keyed on (userId, hospitalId) or a batched role read would answer it once per list. Both are correct today; owed when a list page measures slow.
+- **National (LNME) catalogue entries in prescription resolution (#975 review round 6, scope widening, deferred).** The D922 resolution (`PrescriptionServiceImpl.applyCatalogPick` / `catalogItemsNamed`, `findByHospitalIdAndCode`, `PrescriptionControlledResolver`) reads only the hospital's own catalogue rows, while the catalogue list also serves national entries (`hospital_id IS NULL`, V95). A controlled drug that exists only as a national entry stays unflagged when typed or coded. Owed: resolve hospital rows first, then national ones, under the same ambiguity rule, with a test that a national-only controlled drug is flagged.
 
 - **Report picker in the sign modal (QA D627 / D123, round 9, `fix/qa-r9-i18n-admin-portal`).** The modal now offers only the types the server can sign (`SIGNABLE_TYPES` = `SignableReportLocator.SIGNABLE`, mirrored by `SignableTypesMirrorTest`), the server refuses an unsignable type with a translated 400, and a non-UUID id is refused before the call. Choosing the record by name instead of pasting its UUID needs a per-type search (discharge summaries, lab results, imaging reports, consultations, notes, prescriptions, procedures) in the acting hospital — a new picker feature, not a fix. Signing from each record's own page already passes the id.
-- **Two priority pickers echo the wire value (QA D620 sibling, round 9).** `lab.html` and `ultrasound-tab.html` render `<option>{{ p }}</option>` for ROUTINE/URGENT/STAT; no lab-order or ultrasound priority domain is keyed yet, so they are pinned in `i18n-raw-enums-baseline.json` (the gate now sees an option that echoes its value). Key the two domains and pipe them.
+- **Two priority pickers echo the wire value (QA D620 sibling, round 9).** `lab.html` and `ultrasound-tab.html` render `<option>{{ p }}</option>` for ROUTINE/URGENT/STAT; no lab-order or ultrasound priority domain is keyed yet, so they are pinned in `i18n-raw-enums-baseline.json` (the gate now sees an option that echoes its value). Key the two domains and pipe them. **Round 20 (`fix/r20-portal-forms`, QA D1117): the ultrasound picker, list and view now read through `imagingOrderPriority` (the same ROUTINE/URGENT/STAT set) and its two pins are gone; the lab picker is still owed.**
 - **QA D660 follow-up (#929): only SIGNED** prescriptions are locked to withdraw-with-reason on edit (`PrescriptionServiceImpl.withdrawSignedPrescription`). Other post-signature states (TRANSMITTED, TRANSMISSION_FAILED, PENDING_STOCK, PARTNER_*, PENDING_CLARIFICATION) still go through the general edit path and can rewrite the signed drug/dose under the original signature digest; PENDING_CLARIFICATION needs its G5 "doctor edits first" path kept, so widening the lock needs a design decision. The withdrawal reason is stored (V223, encrypted) and returned on the response DTO but not yet shown on the prescription detail/list.
+- **Imaging order status moves by any doctor in scope (#976 review, QA D930 class, predates #976).** `ImagingOrderServiceImpl.updateOrderStatus` now restricts the move into CANCELLED and the move back out of it to the ordering provider, a radiologist of the hospital or a super-admin in global view, and stamps the cancellation on the transition only. Every other transition is still open to any caller the controller admits: a doctor can move a colleague's order to COMPLETED or RESULTS_AVAILABLE (and rewrite its schedule, location and workflow notes) without being its author or of the imaging department. This predates #976 and was left out of it on purpose. Owed: decide who may record each imaging workflow state (likely the imaging department for SCHEDULED/IN_PROGRESS/COMPLETED/RESULTS_AVAILABLE, the author for the rest), enforce it at the same choke point, and extend `ClinicalDocumentAuthorGuardTest`.
+- **Silent disabled controls, what round 20 left (QA D1124, `fix/r20-portal-forms`).** (1) ~~Four files pinned in `scripts/lib/silent-disabled-submit.test.mjs`~~ — done at the round-20 merge into qa/r16-combined: admissions (bed assign, admit, discharge), appointment-detail (complete / no-show before the start time), bed-board (precaution, transfer) and the nursing intake (submit; the reconciled row now says "Ajouté" in words) use `[appSubmitGuard]`; PINS is empty. (2) Some admin screens (DHIS2 forms, hospital purge, organisation actions, ROI, provider verification, webhooks, LOINC check) answer a refused click with the general sentence "Complete the required fields (marked *)" because their inputs carry no id or no `required`; naming the field there needs ids on those inputs. (3) Other paged pharmacy reads (claims, payments, sales, stock lots/transactions, routing decisions, MTM) still have no declared order; `DispenseListOrderGuardTest` covers dispenses only.
 
 ## Open clinical questions — kept open on purpose, not forgotten
 
@@ -5705,6 +5920,49 @@ ships*, not for building — and check the shipped surface before trusting a
   ROLE_SUPER_ADMIN for those. A complete fix is backend-side: return the held
   roles in the session bootstrap, and a required-role hint in 403 bodies.
 - **QA D601 follow-up (r9-lab-integrity):** lab test definitions and orders with results can no longer be hard-deleted, but dev already holds rows orphaned before the fix (definition 570c6b4d gone, its orders and released results left behind). They need a one-off data repair (restore the definition row as RETIRED from a backup, or re-point the orders) that the user must run; it is data, not code, so it is not in the PR. A DB-level FK `lab_orders.lab_test_definition_id` (the entity declares `fk_laborder_testdef`, the dev schema evidently lacks it) should be added in a migration once the orphans are repaired, since the migration would fail on them today.
+- **Round 18 branch 2 (fix/r18-clinical-record, #983) residuals (efficiency, not logic).**
+  `ProcedureOrderServiceImpl#authorIsPhysician` asks `RoleValidator.draftsForPhysicianSignature`
+  for every row of a procedure list (up to two role queries per row): resolve it once per distinct
+  (author, hospital) in the list methods. `MaternalHistoryServiceImpl#toDto` looks up the delivery
+  (D1067 `deliveredAt`) once per row on the paged hospital lists: batch it per page.
+  `PediatricDoseRule` card decimals: done at the round-18 merge (#976): `CdsCardText.decimal`, the
+  `CdsCardLocaleFormatGuardTest` allowance deleted, `PediatricDoseRuleRound18Test` asserts FR/ES commas.
+
+## Standing debt — round 20 (fix/r20-portal-overlays-display, PR #998)
+- [ ] `POST /assignments/public/activate-by-phone`: an unknown number answers slightly faster than a wrong code (no assignment query); bounded by the per-IP rate limit and the per-number lockout. Equalise if it matters.
+- [ ] The per-number wrong-code lockout is in memory, per instance; move it to a shared store for a multi-instance deploy.
+- [x] D1140 / D1138 siblings in fix/r20-portal-forms files (`waitlist-panel.component.html`, `birth-plan-tab.html`): fixed by #996, pins removed from `iso-date-display.test.mjs` and `glued-colon-baseline.json` at the round-20 merge.
+
+## Standing debt — round 21 (fix/r21-core-clinical-rules)
+- [ ] D1157 class: `PUT /refills/{id}/reject` takes optional `providerNotes`; require a reason once the portal refill screen asks for one (`CancelVoidReasonGuardTest` KNOWN GAP).
+- [ ] D1157 class: `PUT /roi-requests/{id}/cancel` takes an optional note (deny requires it); require it with the ROI worklist dialog (KNOWN GAP).
+- [ ] D1151 / D1148 class: edits of a recorded imaging report, micro culture, maternal history and high-risk plan are not checked for emptying the record (`EmptyClinicalWriteGuardTest` KNOWN_GAPS); the creates are.
+- [ ] D1148: the check-in desk's consent (`ReceptionServiceImpl`, source CHECK_IN) is recorded best effort and may still carry no signer; the desk dialog should require the name (portal) before the server can refuse it without losing the consent silently.
+- [ ] D1161 / D660: the author can still edit the content (drug, dose) of a sent, partly filled or partner-held order (G13/G15 design: the edit voids the prepared fill and ends the queue claim). Whether a post-signature content edit should be refused like SIGNED (withdraw and re-prescribe) is a product decision; only the withdrawal is under the signed rule now.
+- [ ] D1149: sulfonamide class membership is by drug-name stem, co-trimoxazole (the interaction base's trimethoprim/sulfamethoxazole) and catalogue ATC J01EB-J01EE. A brand name with no ATC code on its catalogue item, and non-antibacterial sulfonamides (furosemide, thiazides, sulfonylureas), are not matched: no class data for them exists in the repo.
+- [ ] D1163: unit families (solid dose / container / measured) are a vocabulary table in `DispenseUnitForms`; a unit it does not know is never refused. A coded dose-form on the catalogue item and the prescription would replace it.
+
+## Standing debt — round 21 (fix/r21-portal-shell-a11y-typography)
+- [ ] D1179 class: 17 e-mail fields send the address to the server unchecked (allowlisted in `hospital-portal/scripts/lib/email-field-check.test.mjs`): departments, hospitals, login (bootstrap, resend activation), organizations, patients (coverage guarantor, demographics edit, registration), pharmacy registry, platform (2), profile, provider (profile, staff register, provider form), users, verify-email. Each calls `isEmailAddress` and `refuseFields` on its field, then its entry is deleted.
+- [ ] D1166 sibling in `profile/profile.html` (security score "NN%"): `| measure: '%' : 0`, then delete its pin in `scripts/lib/lab-locale-format.test.mjs` (owned by fix/r21-portal-clinical-forms in round 21).
+- [ ] D1145 class beyond billing: 32 `error: () => this.x.set([])` handlers portal-wide show a failed read as an empty list (billing's main list and totals fixed in round 21). A guard plus an error state per list.
+
+### Round-21 merge residuals (qa/r16-combined)
+- [ ] Billing invoice line editor: move the hand-written Escape/focus handlers (billing.ts `startEditLine` / `onLineEditEscape`) onto `appInlineSubForm` + `appFocusOnRender`, then delete the `billing.html::subform::lines-table` pin and the billing entry in `inline-editor-focus.test.mjs` (QA D1155 / D1175 class).
+
+## Standing debt — round 22 (fix/r22-reception-portal-backend)
+- [ ] D1184 (ops, user only): make the dev volume mount path match `APP_UPLOAD_DIR` exactly (they differ by whitespace; details with the coordinator). Check prod sets no `APP_UPLOAD_DIR` other than its volume path and no patient-photo dir outside it.
+- [ ] D1184 sibling: `hms.tenant-archive.output-dir` defaults to `java.io.tmpdir` (container disk): a purge archive written there does not survive a deploy. Decide where archives live before the first real purge.
+- [ ] D1184 sibling: generated-export blob downloads (PDF/CSV: record, invoices, claims, registers) still show a generic toast on a 4xx; extend `blobRefusalReason` and `stored-file-download-refusal.test.mjs` to them. A chat attachment whose file is gone stays a silent broken link.
+- [ ] D1196: appointments written before the fix keep "Patient rescheduled: …" / "Patient cancelled: …" in their notes (no migration in this branch); a backfill moving the text into `status_reason` needs a migration number.
+- [ ] D1187 class: 144 files still carry English refusals under the per-file ratchet (`exception-prose-baseline.properties`, 467 sentences); grow `ZERO_PROSE_SCOPES` area by area (next: PatientController 32, ImagingReportServiceImpl 23).
+- [ ] D1186 class: `ProgramEnrollmentService.updateStatus` lets one closed outcome be re-classified to another (LTFU → DECEASED), overwriting `closureReason` (audited as PROGRAM_STATUS_CHANGED). Kept as a deliberate reclassification; a history table would keep both reasons.
+- [ ] Resend sibling: `POST /assignments/{id}/regenerate-code` on a verified assignment resets `confirmationVerifiedAt` and re-sends (explicit admin re-issue, kept); confirm with the user whether it should refuse a verified row too.
+- [ ] D1184 sibling: the FHIR bulk-export directory (`app.fhir.operations.bulk-export.storage-dir`, relative default) is on the container disk; temporary by design, but a job's files vanish at a deploy mid-download. Decide whether it joins `UploadStoragePersistenceCheck`.
+- [ ] D1196 sibling (mobile): the Android app sends the English literal "Patient cancelled" as the cancel reason (`AppointmentsScreen.kt`), which now lands in `statusReason`; send the patient's text or nothing.
+- [ ] D1185 edge: `offerWaitlistSlot` counts the offer window in elapsed minutes (`ElapsedTime`) while `hold()` adds wall-clock minutes; across a DST change in a non-UTC zone `holdIsThisOffer` would not recognise the offer's own hold. Deployments are UTC today.
+- [ ] Test assertions `hasMessageContaining("<message.key>")` (61 sites) depend on test order (MessageUtil's static source): move them to `extracting("messageKey")` and lower `MessageKeyAssertionGuardTest.BASELINE` (round-22 merge).
+
 - **Blackbox liveness/readiness probes (PR #1007 follow-up):** two of the five
   blackbox jobs target `/api/actuator/health/liveness` and `/readiness`.
   `management.endpoint.health.probes.enabled` is never set — only
@@ -5718,6 +5976,62 @@ ships*, not for building — and check the shipped surface before trusting a
   rather than repointing the targets again. Flagged in PR #1007 round 10; not
   fixed there because the fix would have been a guess against a measurement that
   contradicted it.
+
+## Standing debt — round 23 (fix/r23-portal-patient-desk-billing)
+- [x] (done by #1011 at the r23 merge) D1213 contract (backend, fix/r23-backend): `GET /api/me/patient/lab-results` and `/proxy-access/{patientId}/lab-results` must accept `offset` (skip that many CURRENT rows, superseded rows already removed) next to `limit` (at most `limit` rows, newest first). The portal sends `limit = 21` to show 20 and stops when a page adds no new id, so a server that ignores `offset` does not duplicate rows, but it shows nothing past the first page. MAX_LIMIT 100 also covers the look-ahead row.
+- [ ] D1212 sibling class: 17 patient-portal read handlers show a failed read as an EMPTY list (`error: () => this.loading.set(false)`: appointments, billing list, education, medical history, medications ×3, pharmacy invoices ×2, records ×5, summaries, visits, vitals). A patient reads "nothing yet", not "could not load". Give each an error state with `refusalReason`, then widen `portal-failure-reason.test.mjs` to silent handlers.
+- [ ] D1213 edge: the my-records "Résultats récents" preview reads `limit=50`, so its "+ N de plus" count stops at 46. It links to the paged page; show "plus de 46" or read `hasMore`.
+- [x] (done by #1011 at the r23 merge) D1214 (backend half, fix/r23-backend): `/health-summary` and `/proxy-access/{id}/records` must fill `activeDiagnoses` from ACTIVE `clinical.patient_problems`. The portal merges it with `chronicConditions` and accepts strings or `{display|name, code}`. `/my-medical-history` is a separate endpoint and is also empty.
+- [ ] D1215 siblings outside the front desk: the 14 range-end inputs now bound in the picker (discharge, medication history, mortality, on-call, controlled register, platform release, bulk scheduling, slot generate/search, cost panel, audit logs, audit search ×2, integration messages) do not check a typed reversed range on submit. Only the controlled register already did. Add `endsBeforeStart` to the write forms (platform release, bulk scheduling, slot generate).
+
+### Round-23 merge residuals (qa/r16-combined)
+- [ ] 6 hand-written patient pickers (found by #1010's D1216 sweep) should move onto `<app-patient-picker>`, so search, dedupe and focus behave the same everywhere.
+- [ ] The appointment cancel reason is typed inline in the edit form (#1009); move it to the shared reason dialog used by the other terminal actions.
+- [x] (fix/r23-portal-siblings residuals, done in fix/r24-clinical-text-and-attribution) An allergy acknowledgement given at SIGNATURE is audited as "Allergy override recorded on edit": emit a distinct "recorded at signature" description (`PrescriptionServiceImpl`, the sign path) plus its alternative in `audit-description-patterns.ts` and AUDIT.DESC keys in EN/FR/ES.
+- [ ] D1209 guard gap: `scripts/lib/nested-dialog-scan.mjs` ignores a dialog opened inside a `.subscribe` callback (a reason dialog opened on a server refusal while its parent stays open, e.g. the nurse-station early-dose dialog over the Give prompt). Widen the scan and add a click-through DOM spec for that pair.
+- [ ] D1211: a server `validation.phone.invalid` 400 is shown through the generic refusal message, not mapped onto the phone field it names.
+
+## Standing debt — round 24 (fix/r24-portal-proxy-and-ui)
+- [ ] D1212 class (SwallowedNestedTransactionGuardTest allowlist, 66 entries): best-effort reads that join the caller's transaction — `PatientSnapshotServiceImpl` (9 card reads), `DoctorWorklistServiceImpl` (4), `ResultReviewServiceImpl` (7), `ClinicalDashboardServiceImpl` (3), `DischargeSummaryServiceImpl:784`, `EncounterServiceImpl:3043`, `LabResultServiceImpl:1328`, `InventoryServiceImpl:456`, `MicroCultureServiceImpl:367`, `PatientDocumentServiceImpl:301`, `SuperAdminLabOrderServiceImpl:280`, the lifecycle sweeps — should read through `IsolatedReads.attempt(...)`; each fails only on a database error today, which already aborts the PostgreSQL transaction.
+- [ ] D1212 class, writes: `UserGovernanceService` bulk import (`createUserWithRolesAndHospital` per row: one failing row rolls the whole import back with a 500 — needs one transaction per row) and force reset (`requestReset` / `invalidateAllForUser` per user); the "best effort" consent capture at check-in (`ReceptionServiceImpl:1186`) and pre-check-in (`PatientPortalServiceImpl` `treatmentConsentService.record`): a failing `record()` still rolls the check-in back (needs a savepoint or an after-commit capture, since the consent references rows of the same transaction).
+- [ ] D1225 class, reasons stored and never read (StoredReasonExposureGuardTest allowlist): `InvoiceAdjustment.reason`/`reversalReason`, `PaymentTransaction.reversalReason`, `Organization.suspensionReason`/`archiveReason`/`purgeReason`, `PatientProblemHistory.reason`, `PatientRecordSharingOptOut.reason`, `PostpartumCarePlan.escalationReason`, `PrescriptionTransmission.statusReason`, `StaffLeaveRequest.reason`, `StaffShift.cancellationReason`, `AppointmentSlot.blockedReason`.
+- [ ] D1225 class, portal half (on the wire, shown on no screen): `ImagingReport.lockReason` (ImagingReportResponseDTO), `PatientProblem.statusChangeReason` (PatientProblemResponseDTO — the D1224 branch owns the diagnosis screens), `AppointmentWaitlist.closeReason` (WaitlistEntryResponseDTO), `MedicationReconciliationEntry.reasonForChange` (MedicationReconciliationDTO), `PatientRecall.closeReason` (RecallResponseDTO).
+
+### fix/r24-clinical-text-and-attribution residuals
+- [ ] D1235 follow-up: the medication catalogue has no Spanish name, so a Spanish reader reads the catalogue's French display name (consistent with the lot and the prescription, never the English INN). A `name_es` column (migration + catalogue form + `DrugDisplayNames`) would name it in Spanish; Spanish INNs must come from a verified source, never invented.
+- [ ] D1232 class, rest of the tree: `ExceptionProseRatchetTest`'s baseline still allows ~380 English sentences in ~135 non-clinical files (admin, platform, integration, PRO instruments, EMPI, support impersonation, the patient controller). The clinical record's services are at zero and pinned; convert the rest area by area, lowering the baseline.
+- [ ] D1234 class, outside sentences: e-mails print the time as 24-hour `HH:mm` for every locale (the date is localized), and the delivery-charge invoice note stores the birth date as ISO `yyyy-MM-dd`. Neither is ambiguous; move both onto `DisplayDates` when those texts are next touched.
+
+## Standing debt — round 25 (fix/r25-clinical-records-api)
+- [ ] D1241 class, DELETEs of a patient's record still taken without a reason (CancelVoidReasonGuardTest `DELETE_HANDLERS`, KNOWN GAP): admission cancel (`DELETE /admissions/{id}`), appointment hard delete (`DELETE /appointments/{id}`), discharge summary, encounter / maternal history / prescription (SUPER_ADMIN), lab order and lab result hard deletes, social / family history and immunization soft deletes (a repeat is now refused), outside pharmacy fill, patient insurance, primary-care link, deregistration, billing invoice delete. Each needs a reason field in its UI first, or the endpoint retired in favour of the reasoned path.
+- [ ] D1241 portal half: the birth-plan delete now requires `?reason=`; the portal's delete button must ask for it (owner: fix/r25-portal-forms or the next portal branch).
+- [ ] D1225 class: `PatientAllergy.deactivationReason`, `PatientGuarantor.deactivationReason` and `BirthPlan.withdrawalReason` are on the wire (response DTOs); no screen shows them yet.
+- [x] D1245 class, labels: a default-message constraint now reads "{label} : {message}", with `field.label.<name>` when the bundle has one and the raw property name otherwise; most request fields have no label yet. (Round 26, D1268: every default-message field labelled in EN/FR/ES, `FieldLabelCoverageTest`; parsed scalars remain, see round 26.)
+
+## Standing debt — round 25 (fix/r25-mar-cds-pharmacy-billing)
+- [ ] D1237 portal half: the eMAR and nurse-station MAR rows carry `frequencyUnread: true` for an order whose frequency cannot be read as a schedule (course kept open, each later dose asks for a reason on `earlyDoseReason`). The portal should show that flag on the row (fix/r25-portal-forms owns hospital-portal).
+- [ ] D1237 prevention: the prescriber is not told at signature that a frequency will not schedule on the MAR (`MarDoseSchedule.read(...) == UNREAD`, e.g. "après les repas", "toutes les 30 minutes"). A non-blocking card at sign time would let the prescriber restate it before the nurse meets it.
+- [ ] Pre-existing, not changed: an as-needed (PRN, "si besoin") order ends on the MAR after its first recorded outcome, as a one-off does. A PRN order should stay available with its own minimum interval; needs a decision on the PRN interval source (the order's "q4h PRN" part, else a catalogue value - never an invented one).
+
+## Standing debt — round 26 (fix/r26-portal-forms)
+- [x] D1272 class, listed-but-undeclared fields (`required-form-submit.test.mjs` `LISTED_UNDECLARED_ALLOWED`, 28 pins): fields a guard refuses blank without `required` or a star — bed-board precaution / transfer / override fields, admission bed, checkout diagnoses and instructions, encounter addendum, lab rejection reason, lab read-back value, lock-screen password, profile e-mail / password / verification fields, patient-form OTP, the pre-check-in, dispensing and check-in attestation boxes, and 8 nurse-station / eMAR fields (owner fix/r26-mar-schedule: handoff Patient / Sens, task patient / category, MAR reason, care note, intake notes, eMAR hold reason). Each needs `required` + a star and a test of the action that shows it. (Round 27, fix/r27-portal-markers-focus, D1280 / D1281: all declared and starred; 9 pins left, each required only in part by design — one of several parts, one action, a secondary code step.)
+- [x] D1271: the eMAR queue meta (`nurse-station/emar/emar.component.html:52`) is glued to the text before it; pinned in `badge-spacing.test.mjs` for the MAR branch. (Round 27: spaced, pin deleted.)
+
+## Standing debt — round 27 (fix/r27-portal-markers-focus)
+- [ ] D1288 class beyond lifecycle notes: label / value span pairs (`field-label` + `field-value`, `detail-label` + value) are glued in text content across many detail panes; `gluedLifecycleNotes` reads only reasons and close times. Widen the rule to every label/value pair and space them.
+- [ ] `patients/patient-form.ts` `PHONE_TOO_SHORT` refusal marks no field (pinned in `required-refusal-baseline.json` when round 27 widened the rule to TOO_SHORT keys; owner fix/r27-portal-search-forms, D1289).
+
+## Standing debt — round 26 (fix/r26-backend-validation)
+- [ ] **D1264 (acetaminophen / acetaminofén / Efferalgan on the Paracétamol item).** Not fixed by decision: the tree's terminology data (ATC N02BE01, the RxNorm bindings in V60/V93, the cited brand table in `DrugClassAllergy`) carries no "acetaminophen" name; the only occurrence is a test comment. The user's rule is "never add reference data by hand": a cited source (WHO INN list or RxNorm export) must be supplied before the synonym and the brand go into `OrderedDrugIdentity` / `DrugClassAllergy`. The refusal is in the safe direction.
+- [ ] **StaffController create/update bind `StaffRequestDTO` without `@Valid`** (`RequiredRequestIdGuardTest` allowlist): the DTO puts `@NotBlank`/`@Size` on enum fields, which bean validation cannot apply (UnexpectedTypeException, a 500). Fix the DTO constraints first, then add `@Valid` and delete the allowlist lines.
+- [ ] **Field labels for parsed scalars** (UUID / enum / date / number fields whose constraints all carry their own message, ~375 names): an unreadable value still reads "La valeur saisie pour « xxxId » n'est pas valide." Extend `FieldLabelCoverageTest` to parsed types once those labels exist.
+- [ ] **In-Basket items stored before D1269** keep their staff-locale text (no backfill: the escalation's arguments are not recoverable from the stored title).
+
+## Standing debt — round 27 (fix/r27-backend)
+
+- [ ] `AuthController#resendActivationByPhone` finds only the account that logs in with the number, and the notifier sends no SMS to an account without a login phone, so "resend the code" delivers nothing to a patient registered on a family phone (D1275 sibling). Needs the user's decision on sending the code to the contact number.
+- [ ] `PharmacySaleResponseDTO` names the patient by id only (`PatientQueueDisplayNameGuardTest` allowlist): add the patient name before any screen lists sales.
+
 - **`severity: page` alerts without a runbook (PR #1013 round 3):** the convention
   in `docs/runbooks/grafana-observability.md` ("Adding a new runbook entry") makes
   `annotations.runbook_url` plus a matching section mandatory for every alert.
@@ -5771,3 +6085,243 @@ ships*, not for building — and check the shipped surface before trusting a
   is warn-once-per-subject with suppression, which the same class already does for a
   missing principal (`isKnownMissingPrincipal` + "suppressing future warnings"):
   apply that shape to these four, then they can be WARN safely.
+
+## Standing debt — round 28 (fix/r28-backend)
+- [ ] D1300 KNOWN GAPS (`RequiredRequestIdGuardTest#everyServiceRequiredFieldIsAlsoABeanConstraint`): 15 fields the service refuses absent but the body cannot constrain yet, because the same DTO serves a path where the field is optional or the controller fills it after binding: `AppointmentRequestDTO` patientId / staffId / hospitalId / appointmentDate, `BirthPlanRequestDTO` patientId / hospitalId, `DepartmentRequestDTO.hospitalId`, `HospitalRequestDTO` state / zipCode, `ImagingReportUpsertRequestDTO.imagingOrderId`, `InvoiceAdjustmentRequestDTO.invoiceItemId`, `LinkPatientInsuranceRequestDTO` payerCode / policyNumber, `CheckInRequestDTO.appointmentId`. Split the DTOs (or add a group per path) so an empty body names them with the rest.
+- [ ] D1301 (409 conflicts): `patient.r16.emailTaken`, `lab.definition.duplicateCode`, `provider.licence.duplicate`, `provider.business.duplicate` answer 409 with no `fieldErrors`; a `ConflictException` that names its field would let the forms mark them without changing the status.
+- [ ] D1301 / D1299 (auth controller): `AuthController#changeOwnUsername` and `#completeAccountSetup` wrap service refusals in their own `MessageResponse`, so `users.username.taken` and every `badSetup(...)` reason carry no field.
+- [ ] D1310: the invoice search strips `_` and `%` from the term (QA D203) instead of escaping them, so an e-mail with an underscore is found only by the part before it.
+
+## Standing debt — round 29 (fix/r29-backend)
+- [ ] Round 29 sweep: `FileUploadController` (multipart, outside the JSON sweep) answers refusals as `badRequest().body(new MessageResponse(...))` with no field (11 sites, some English); `AuthController#completeAccountSetup` / `badSetup` likewise. The sweep reads JSON bodies only.
+- [x] (round 30, fix/r30-service-field-errors: ~250 converted, guard `RequiredRequestIdGuardTest#everyRefusalOfAGivenRequestValueNamesItsField`; 8 `PrescriptionServiceImpl` sites remain, see round 30) Round 29 sweep: about 30 value refusals of a typed field are still plain `BusinessException` (`billing.invoice.cancelReasonTooLong`, `lab.order.invalidIcd10` on additional codes, `dispense.handOver.notesTooLong`, `pharmacy.fefo.reasonTooLong`, `nurse.handoff.recipient.invalid`, `nurse.mar.witness.invalid`, ...): each reached only on a found record, so the behavioural sweep cannot see them; the R29 guard covers the "required" shape only.
+- [ ] D1157 class: `PUT /roi-requests/{id}/cancel` note still optional (listed in the sweep's `NO_REQUIRED_FIELD` as KNOWN GAP).
+- [ ] D1301: `POST /security-policies` duplicate answers the generic integrity sentence with no field; `provider.licence.duplicate` / `provider.business.duplicate` 409s carry no `field:` prefix.
+- [ ] Map-bodied endpoints (`/pharmacy/claims/*`, `/assignments/public/*`, `/auth/resend-verification`, `/reception/encounters/{id}/status`) name their keys by hand; a typed DTO would let bean validation and the sweep read them.
+
+## Standing debt — round 30 (fix/r30-portal-forms)
+
+- [ ] D1347 sibling (hospital-core, no branch owned it): `GET /slots/search` answers a bare list capped at 200 (`SlotInventoryServiceImpl.MAX_SEARCH_RESULTS`) with no total; slot-admin and the waitlist offer picker cannot reach the rest. Needs a paged endpoint with a total. Pinned in `scripts/list-caps-baseline.json`.
+- [ ] D1347 siblings in prescription files (fix/r30-prn-interval owned them this round): `PrescriptionService.list` keeps the first page (the attention list), and the prescription pharmacy history reads 20 dispenses / 20 routing decisions. Pinned.
+- [ ] D1347 follow-up: the lists that now read every page (encounters, lab orders/results, notifications, webhook deliveries) should move to server-side paging and search with a total as they grow; until then they load whole.
+- [ ] D1347 follow-up: endpoints read page by page whose server query has no total order (pharmacy lists, notifications, refills) rely on the id de-duplication; a server ORDER BY with an id tie-break would make every page read exact (UnsortedPageGuardTest covers `PageRequest.of`, not controller `Pageable`s).
+- [ ] D1352 portal half: nurse-station.html `#ho-recipient` needs `data-server-field="recipientUserId"` (MAR branch owned the template this round).
+- [ ] Dead i18n keys after D1357/D1358 (no reader left): DIRECTIVES.REQUIRED_FIELDS, PATIENTS.EDIT_REQUIRED_MISSING and the 25 fixed `…REQUIRED_FIELDS` sentences listed in the PR; remove in an i18n cleanup PR.
+
+## Standing debt — round 30 (fix/r30-service-field-errors)
+- [ ] D1354 class: 8 plain `BusinessException` refusals of a request value in `PrescriptionServiceImpl` (`prescription.status.notAssertable`, `controlled.flagLocked`, `cosign.flagLocked`, `signed.onlyWithdrawal`, `encounter.stayClosed`, `encounter.closed`, `catalog.nameMismatch`, `withdrawn.final`) - the file belonged to fix/r30-prn-interval this round; listed in `RequiredRequestIdGuardTest.REFUSAL_OF_THE_RECORD` as KNOWN GAP D1354.
+- [ ] D1355 class: `TreatmentConsentServiceImpl#record` refuses the capture method, then the signer, one per press; `EmptyClinicalWriteGuardTest` reads the signer check as `ClinicalContent.requirePresent`, so teach it a `RequiredFields` chain first (`ONE_AT_A_TIME_KNOWN`).
+- [ ] D1354 guard limit: a refusal two or more calls away from the request value (`StockTransactionServiceImpl#putOnWithinReceived`, fixed by hand this round) is not read by the scan; the behavioural sweep reaches only refusals of an empty body.
+- [x] Unfiled observation in the round-30 report: `GET /slots/search` seems capped at about 200 rows (same class as D1346 / D1347), not checked by this branch. Closed by round 32 D1390 (fix/r32-list-caps): the search is cut after its booked-over filter, and `GET /slots/search/page` pages it with a total for the slot admin list and the waitlist offer picker.
+
+## Standing debt — round 31 (fix/r31-prn-mar)
+- [ ] D1371 class: 15 endpoints whose filled-body value refusal still comes one request after the edge's (`WriteEndpointRequiredFieldSweepIT.VALUE_REFUSED_AFTER_THE_EDGE`): `POST /admin/adt-intake-configs` (admittingProviderId), `POST /auth/me/change-email` (currentPassword), `POST /billing-invoices` (invoiceDate vs dueDate), `POST|PUT /drug-interactions` (drug2Code vs drug1Code), `POST /lab-qc-events` (qcLevel), `POST /me/patient/appointments` (startTime), `POST /mortality/deaths` (diedAt), `POST /on-call` and `POST /session-templates` and `POST /staff/scheduling/shifts/bulk` (endTime vs start), `POST /reports` (recipients), `POST /super-admin/platform/release-windows` (endsAt), `POST /transfusions/administrations/{id}/reaction` (onsetAt), `POST /webhook-endpoints` (events). Each moves to a constraint on its request (a class-level one for a cross-field rule).
+- [ ] D1366 guard limit: a refusal of a record picked by id two calls away (controller -> service -> choke point) is not read by `everyRefusalOfAGivenRequestValueNamesItsField`; the bed choke points have a per-file guard only.
+- [ ] Phase 7 of the sweep cannot reach an endpoint that looks up a sampled id first (the discharge decision answered 404 before its reason check): those are covered by unit tests only.
+
+## Standing debt — round 31 (fix/r31-refusals)
+- [ ] D1369 class: `DischargeSummaryRequestDTO` medication / pending-test / follow-up rows are not cascaded with `@Valid` - the discharge form adds blank rows (`discharge.ts addMedication / addPendingTest / addFollowUp`) and saves them today, so cascading would refuse a working save. Make the form drop or mark blank rows, then cascade and delete the three `UNCASCADED_ALLOWED` entries in `RequiredRequestIdGuardTest` (KNOWN GAP D1369).
+- [ ] D1373 sibling outside the request bodies: an inbound HL7 ADT stores PID-8 as sent (`M`, `F`, `O`, `U`, `A`, `N`; `MllpInboundAdtServiceImpl#applyDemographics`). Every reader accepts `M`/`F`, so nothing is misread today; mapping table 0001 onto `PatientGender` belongs in an HL7 PR (it changes what an ADT update writes).
+- [ ] D1371 merge note: when fix/r31-prn-mar makes `NurseHandoffCreateRequestDTO.direction` an enum or edge-checks it, delete its `CHECKED_IN_CODE` entry in `FreeTextStatusRequestFieldGuardTest` (the stale-entry assertion fails until then).
+
+## Standing debt — round 32 (fix/r32-list-caps)
+- [ ] D1379 class, found by the new `default-limit` list-caps rule and pinned in `scripts/list-caps-baseline.json` as open siblings (a capped bare list with no total): `/announcements` (50), chat conversations (20) and a chat thread (50 newest, no older-message control), the chat recipient picker (200), the labor tab's episodes (10), the encounter nursing-notes panel (20 / 50), the postpartum observations, newborn assessments and screening history (20 each), and the proxy viewer's medication history after the active courses (50). Each needs a paged endpoint with a total or an every-page read.
+- [ ] Native apps: `patient-android-app` sends `size=20` to `GET /me/patient/vitals`, which reads only `limit` (default 10), so the app shows 10 readings; the apps should read `GET /me/patient/vitals/history` (page + total) like the web portal.
+- [ ] `NursingNoteServiceImpl#getRecentNotes` reads `findTop50…` and then the caller's limit: a recent-notes read, but the nursing-notes panel shows no total (same class as the pins above).
+- [ ] `POST /patients/{id}/doctor-record` caps each section at `maxItems` (≤ 200) with no total; no portal screen reads it today (API only).
+
+## Standing debt — round 33 (fix/r33-mar-stay)
+- [ ] D1402 observation, not changed: `GET /nurse/vitals/due` reads its routine interval from the same value as its lookahead (`observationInterval(news, window)`, both 2 h), so every admitted patient measured before this instant is listed, and the tile, now the list's row count, reads about the number of admitted patients. Tightening it means deciding a routine round interval (the old tile's 4 h is the only value in the code), which changes the overdue flags nurses act on; it needs a clinical decision, not a count fix.
+- [ ] D1393 sibling, not changed: pending nursing tasks and handoffs are closed by a discharge (D234, D294) but not by a cancelled admission, because the closing rule reads every pending row of the patient at the hospital and a cancel must not close a task of another visit. The nurse can still complete them; a filter on the stay's dates would close them.
+- [ ] D1393 sibling, not changed: lab, imaging and procedure orders still open on a cancelled stay stay as they are; a discharge does not end them either, and the laboratory may hold a specimen. Their encounter is now CANCELLED, so they read as orders of a closed visit.
+- [ ] D1393 limit: the visit that led to the admission (D712 closes it at the admission) is not reopened by the cancel.
+
+## Standing debt — round 33 (fix/r33-prn-ordersets)
+
+- **Validation before authorization, the class.** Spring validates a `@Valid` body before a method's `@PreAuthorize`, so any role refused by the annotation alone reads a 400 about the body instead of a 403, on every controller. `POST /prescriptions` and `PUT /prescriptions/*` now answer at the edge (`SecurityConfig`, `PrescriptionWriteAuthorizationIT`). The others leak nothing but the rule's wording and the role still cannot write, so they wait for a choke-point decision: a matcher per write, or an interceptor reading `@PreAuthorize` before argument resolution.
+- **A dose written as a range reads as its low end.** `CdsRuleEngine.parseDoseMg` reads the first number, so "2-4 mg" (typed, or an order-set item's `doseRangeMin`/`doseRangeMax` since D1396) is judged at 2 mg by the paediatric limits. Reading the high end changes every typed range's verdict, so it is its own decision.
+- **MAR on the forms the reader leaves open.** The wording rule accepts forms `MarDoseSchedule.read` leaves UNREAD (`TPI-SP`, `1 fois par mois`, `le matin`, `à la naissance`): the MAR keeps showing them `frequencyUnread`, as it always did (brief: the MAR reads old orders as it does now). Reading them on the MAR as a one-off or a long cadence is a change of the MAR's behaviour and was not made here.
+- **Dropped by the rule, reported to the user:** `SP 3 cp`, `AS 3 cp` and `selon le poids` were in the QA fixed-schedule scripts but state a dose or a basis, no schedule; `selon prescription médicale` likewise. Refused as unreadable by decision, not by accident. A limit or a range (`max 4/j`, `1 à 3 fois par jour`) is refused too (coordinator decision).
+
+## Standing debt — round 33 (fix/r33-lab-patient-meds)
+- [ ] D1394 native apps: both patient apps read only `status` (`UNKNOWN` shows "Statut indisponible": not a claim of normal, and a value no bound settled now always answers UNKNOWN). They do not read `gradeUnknown` / `unitMismatch`, so a unit-mismatch row an analyser flagged N still reads Normal there, as before this round. Needs a store build: the portal is fixed, CI is the only Swift compiler.
+- [ ] D1398 native apps: the medication rows now carry `asNeeded` and `prnMinIntervalHours`; neither app draws them yet.
+- [ ] D1394 sibling, not a comparator: a reflex rule with `{"severityFlag": ...}` reads only the stored analyser flag (`LabResultServiceImpl#evaluateReflexCondition`), so a hand-entered critical never fires a CRITICAL rule, plain number or not. Not changed: it would create child orders that do not exist today, and needs a decision.
+- [ ] D1394 note: `G/L` and `g/L` compare equal at step 1 of `LabResultMapper#gradingOf` (a range in the result's unit, case aside), as they always did. A test configured in one and a result typed in the other is graded, though a conversion would refuse them. Not changed: no catalogue test mixes them, and the brief keeps unit matching case-insensitive.
+
+## Standing debt — round 33 (fix/r33-reception-billing)
+- [ ] Flow board: the "Sans rendez-vous" column is filled only by a walk-in whose encounter is SCHEDULED; a walk-in on the queue sits in its status column. Not changed: moving walk-ins between columns changes the board's drag rules (D1400 sibling).
+- [ ] `ReceptionServiceImpl#getQueue` applies `departmentId` / `providerId` to booked visits only, not to walk-ins. The portal sends neither today (API only).
+- [ ] `WriteAuditInterceptor.READ_ONLY_POST_TAILS` is a second, name-based list beside `@ReadsOnly`: `/eligibility/check` and `/maternal-history/{id}/calculate-risk` write and are not write-audited; `/cds-services/{id}`, `/prenatal/schedule`, `/signatures/verify` and the rule simulation read and are recorded as DATA_CREATE. The interceptor should read `@ReadsOnly` (D1404 sibling, other branch's file).
+- [ ] `/api/auth/` stays wholly open in read-only mode, as decided for D1404, and that prefix holds real writes: register, bootstrap-signup, change-password, change-username, change-email, complete-setup, MFA enrolment, recovery contacts, password reset. A login must work in downtime; these need not.
+- [ ] The entity's `@Past` refuses a birth date of today, so a newborn cannot be registered on its birthday (kept: the rule is existing behaviour; D1403 only localised it).
+- [ ] `ReceptionistResponseShaping` reads the caller's authorities: an account that is a doctor at hospital A and a receptionist at hospital B, on a token that holds both, keeps the doctor's view while acting at B (RCPT-CLIN; a token minted after the role picker holds one role).
+- [ ] `ReceptionServiceImpl#getInsuranceIssues` goes through `getQueue` (insurance and balance per row) and reads the insurance again per flagged row: several hundred queries per cockpit load at 166 flagged rows. Efficiency only: `getQueue` could carry the issue type.
+- [x] (Closed by fix/r33-followup: coordinator decision, the role is off `POST /encounters/{id}/checkout`, and the guard refuses it.) RCPT-CLIN: a receptionist has no working check-out in the portal. The tracker's dialog opens on `GET /encounters/{id}`, which refuses the role (button now hidden, it did nothing), and the flow board's "completed" drop sends an empty body, which `AfterVisitSummaryContent.require` refuses. `POST /encounters/{id}/checkout` still admits the role by API, and `storeDischargeData` then overwrites the clinician's diagnoses and instructions with what the caller typed, values the desk can no longer read. Either take the role off that endpoint, or have a non-clinician's check-out keep the clinician's stored content.
+- [ ] `DigitalSignatureServiceImpl#verifySignature` saves the verification attempt inside `@Transactional(readOnly = true)`, so the counter may never be written. Found while declaring it `@ReadsOnly`; not changed here.
+
+## Standing debt — round 33 (fix/r33-platform-admin)
+- [x] (Closed by fix/r33-followup: every row is answered; the pins are gone.) CX-003 class, found by the new `server-stream-limit` list-caps rule and pinned in `scripts/list-caps-baseline.json` as open siblings (a fixed server cut with no total, in files of other rounds): the patient storyboard banner (`loadAllergies` 8, `loadProblems` 8, `loadCodeStatus` 5), the patient snapshot (`buildActiveMedications` 10, `buildPendingOrders` 10, `buildCareTeam` 10), the pharmacy return form's fill picker (`listReturnableDispenses` 50, QA D932). Each should answer its total ("and N more") or list everything; the allergies first, since a cut allergy list is a clinical risk.
+- [ ] CX-005 note: `platform.hospitalLink.exists` and `platform.departmentLink.exists` stay fieldless 409s: both ids come from the URL, so no request field exists to mark (`PlatformAnalyticsHonestNumbersGuardTest#NOT_A_TYPED_VALUE`). `provider.licence.duplicate`, `provider.business.duplicate` and `users.username.taken` remain as listed in `RequiredRequestIdGuardTest#NOT_A_TYPED_VALUE` (D1301).
+- [ ] CX-010 limit of the guard: `guard:destructive-confirm` treats a button inside an opened dialog as confirmed, so a row action inside a list dialog would pass, and it follows `this.x()` within one class only: a destructive call behind a shared store or a child component's own service call is judged in that component, not its parent.
+- [ ] `patient-education.ts#submitDelete` has no template binding: the delete it serves is unreachable from the screen (found by the CX-010 enumeration; dead code or a lost button, not a one-click delete).
+
+## Standing debt — round 33 (fix/r33-bloodbank-micro)
+- [ ] CX-011, clinical confirmation wanted: an issue is now refused once the screen behind the crossmatch has lapsed, or when a newer screen is positive and the crossmatch predates it. Both use rules the repo already holds (`screenIsCurrent`, the crossmatch expiry), and emergency O negative release still goes out, but a haematologist has not signed off this rule.
+- [ ] Clinical confirmation wanted: emergency release is now refused for an O negative plasma or platelet unit to a typed patient the `AboGroup` table excludes, and the portal offers emergency release for red cells only. To an untyped patient the API path still issues those products, as it did before; a haematologist should say whether that is meant.
+- [ ] An incompatible result on an issued bag, like `cancelRequest`, marks it RETURNED while it may still be on the ward, so it becomes assignable stock the lab does not hold until it comes back. A received-back step is a new workflow, not a fix.
+- [ ] `TransfusionServiceImpl.recordReaction` still writes the English `Transfusion reaction: <type>` into `stop_reason` and `discard_reason`. The portal shows the reaction itself, in the reader's language, instead of that text; the Units tab does not display it. Stored text, not rewritten here.
+- [ ] CX-009: `MicroCultureCorrection` is a report-level history. A correction that edits an isolate records the state before it, but the chart's read-only micro tab (`patients/micro/micro-tab.component`) does not show the history yet; the workbench does.
+
+## Standing debt — round 33 (fix/r33-followup)
+- [x] Dose text read LOW (`1/2 cp` as a whole tablet, `1 000 mg` as 1 mg): fixed in `DoseRange.highEnd` on the round 33 merge, coordinator decision: read them. `DoseRangeTest#aSpacedThousandIsOneNumber`, `#aFractionOfATabletIsThatFraction`.
+- [ ] The flow board's drop of a seen visit on "completed" stays refused for everyone, with "enter a discharge diagnosis or instructions" (`AfterVisitSummaryContent.require`): the board sends no body. It overwrites nothing, so it is no RCPT-CLIN hole, but the desk cannot act on that sentence and the column still offers the drop. Either remove the drop for a seen visit, or say "the clinician checks the patient out".
+- [ ] The patient tracker's check-out button shows for ROLE_HOSPITAL_ADMIN and ROLE_ADMIN (`!frontDeskOnly`), who reach the page but not `POST /encounters/{id}/checkout`: found on the check-out hunt, pre-existing, not changed here.
+- [ ] D1347 siblings found by the new `server-query-top` list-caps rule, pinned: the newest 50 nursing notes of a patient (`NursingNoteServiceImpl`), permission-matrix audit events (`PermissionMatrixServiceImpl`, twice) and report runs (`ReportController`), each with no total.
+- [ ] The snapshot's `recentVitals` (5) and `recentLabResults` (10) read a fixed page with `PageRequest.of(0, n)`, which no list-caps rule sees. Both are titled recent and the chart holds the full list, so they are previews, but neither links to it from the drawer. A rule for `PageRequest.of(0, <literal>)` in a service would show how many more there are.
+- [ ] The return form lists every fill of a lot in one `<select>`. Reachable and in one query, but a lot with thousands of fills needs a date or patient filter; none exists yet.
+- [ ] A CDS hook evaluation (`POST /cds-services/{id}`) leaves no audit row now that it is a declared read. Its old `DATA_CREATE` named no patient, so it was never an access trail; a real one would need the patient id from the hook context.
+- [ ] A crossmatch result on a bag already finished or stopped is still refused (`transfusion.unit.noLongerUsable`, and `transfusion.request.closed` once the request completes). An emergency bag can run out before its crossmatch comes back: an incompatible result then has nowhere to go and nobody is told. Out of the round-34 brief (issued or being transfused); needs the blood bank lead's view of what that result should do.
+- [ ] A request raised by a caller with no staff record has no `requestedBy`: an incompatible result then tells only the running nurse, and nobody when the bag is not hanging (logged by id). Hospital-level escalation is a decision for the blood bank lead.
+
+## Standing debt — round 34 (fix/r34-prenatal-risk)
+
+- [ ] The prenatal planner decides "this pregnancy" by date, because neither record names a pregnancy: a history score counts when it was made on or after the LMP the caller sends (`risk_assessed_at`, V267; rows from before V267 take their `updated_at`), a care plan when it was created on or after it. So an LMP sent later than the true one hides a recorded HIGH, an old plan that clinicians keep using in a new pregnancy does not count until a new one is opened, and a HIGH scored in an earlier pregnancy does not carry over to the next, although the chart banner still shows it on an unedited version. A pregnancy id on both records would settle it (`PrenatalSchedulingServiceImpl#historySaysHighRisk`, `#activePlanSaysHighRisk`).
+- [ ] The planner reads only the requested hospital's records, so a HIGH recorded at another hospital does not reach the cadence here, even with the treatment relationship that lets a clinician read it (`RecordAccessPolicy.readableHospitalIds`).
+- [ ] `MaternalHistoryServiceImpl#updateMaternalHistory` writes a new version with no score, so the chart shows no risk category after any edit while the planner, which looks through to the newest scored version, still counts the HIGH. The chart should say the same. A score pressed on an older version from the list rows also does not replace a newer version's score in the planner, which goes by version number.
+- [ ] `MaternalHistoryServiceImpl#calculateRiskScore` computes the score but never writes the numeric `calculatedRiskScore` (it stores the category and its date), and `getMaternalHistoryById`, `getMaternalHistoryByPatientIdAndVersion` and `getMaternalHistoryByDateRange` read by id or patient with no hospital check, unlike its writes. Not changed here: they feed nothing in the planner.
+
+## Standing debt — round 34 (fix/r34-emergency-release)
+
+- **Local choices, not AABB requirements.** The documented O positive decision for every female or unknown-sex patient at any age, and a doctor or laboratory director who is not the issuer authorising a serologically incompatible release, are local implementation choices informed by the user-supplied guidance (2026-11-06, citing AABB Bulletin 19-02 and Canadian Blood Services). They are not requirements prescribed by AABB. Named clinician sign-off before prod remains open.
+- **Known female typed Rh positive:** the brief applies the O-negative-first path to every female; the guidance speaks of unknown or negative RhD. Implemented as the brief says, the stricter reading. One condition in `EmergencyReleasePolicy.oPositiveStep` if the clinician relaxes it.
+- **O negative on a positive screen:** the warning shows, the documented decision is mandatory for O positive only, as the rule is written under "O positive emergency release". An O negative release stays no extra step. To confirm with the clinician.
+- **Special requirements** (irradiated, CMV-negative, chronic transfusion, transplant): the repo records none, so none can trigger the review. A coded field is a new feature for the clinician to specify.
+- **Antibody identity** is free text (`antibody_detail`): not parsed. A positive screen, current or earlier, stands for known anti-D; the text is shown in the warning.
+- **A later correction to a result on a hung bag has no path:** an incompatible result on a hung or knowingly released bag cannot be replaced, a clerical error included. A correction with history is a feature to specify.
+- **O negative first is never an absolute block (user rule):** the system's stock can be wrong (an incompatible result marks an issued bag RETURNED while it may still be on the ward). While it shows O negative of this product (AVAILABLE or RETURNED, in date, not found incompatible for this patient, never hung), the O positive form lists those bags and requires a statement that O negative cannot be obtained in time, recorded on the release row and in the audit with the units shown. To confirm with the clinician: this statement is local, not in the guidance. A compatible O negative bag CROSSMATCHED on this same request does not count as stock: to confirm too.
+- **O positive decider list:** doctor, physician, surgeon, midwife and laboratory roles, and may be the issuer. The guidance names a person and no role. To confirm with the clinician.
+- **A positive screen stands in for known anti-D:** identity is free text and not parsed. To confirm with the clinician.
+- **A result found on another request:** a bag found incompatible for a patient stays refused for that patient's other requests until a compatible crossmatch on the new request, or that result recorded there and the serologically incompatible release. Rows are not time-ordered across requests. Kept the stricter reading; "latest result wins" would be a clinical decision.
+- **A group corrected after an O positive decision** is honoured at the bedside, as the rule says; O negative first is not re-checked there.
+- **`Patient.bloodType`** (desk free text) is not read by these rules: only the lab's type and screen. A chart-only "O-" on an adult male takes no extra step.
+- **Low, deferred (independent review, round 3):** `moveOpenRequestsOnto` saves from a second list query, so a request created and acted on within milliseconds between its two queries could be written without its lock. Iterating the locked rows changes the seam the CX-011 tests stand on; the window is milliseconds on a brand-new request. **Low:** `listAssignableUnits` still lists a RETURNED bag ever hung (legacy rows only; issue refuses it).
+
+## Standing debt — round 34 (fix/r34-frequency-dose)
+
+- Adult paracetamol: `2 000 mg` 3 fois par jour (6 g/day) raises no card, because no adult daily maximum exists in the catalogue rule or in `reference-values-general-2026-10-30.md` / `reference-values-user-2026-10-29.md` (their 4 g is the paediatric table's cap). Needs the user's value; nothing was changed. D1264 is unrelated.
+- A dose in words with no number ("demi comprimé", "un demi cp") is still unknown to the limit check (null, so no card): it reads below nothing rather than below what was written, so D1420 does not cover it.
+- Jackson's float-to-int coercion is on globally: D1433 closed the one `Integer` of `PrescriptionRequestDTO`. Other request DTOs' `Integer` fields still truncate a JSON fraction; switching `ACCEPT_FLOAT_AS_INT` off globally needs its own PR and its own sweep.
+- Asked though regular (safe, a nuisance, second review of round 34): `q8hrs`, `q 12 hours`, `1 tab b.i.d.`, `q2wks`, `tous les 6 heures`, `toutes 8h`, `20h et 8h`, `3x1 cp`, `500-0-500`, `4cp/j`, `1+1+1`, `7j/7`, `alternate days`, `les lundis`, `mondays`. Read them only with a fixture line each.
+- Dose readings left (low): `2.400.000 UI` and `1.000.000 UI` read as 2.4 and 1 instead of unknown; `10,000 mg` reads 10 (the rule covers one digit before the separator); `500 à 1 g` and `1,000 à 2 g` over-read (false alarm only).
+- The condition list stays a list: a symptom not listed and with no opener ("q6h zzz") reads as its cadence, by the coordinator's rule that an unknown word is never a condition. With `pour`, `para`, `for`, `selon` before it, it is asked.
+
+## Standing debt — round 34 (fix/r34-stay-orders)
+
+Siblings of D1428 (a closed record edited) left open, each on `ClosedRecordWriteGuardTest` or named here. None is the reported stay.
+
+- [ ] `ImmunizationServiceImpl#updateImmunization`: an entered-in-error dose can be edited back. `fix/r34-maternity-records` owns the file this round; the guard's allowlist names it.
+- [ ] `PostpartumCareServiceImpl#recordObservation`: a closed care plan named by id still takes an observation. Same owner.
+- [ ] `HighRiskPregnancyCarePlanServiceImpl#updatePlan` and its BP, medication, note and milestone writes on an inactive plan. The `active` flag on the same body is how a plan closes and reopens, so it needs a product rule first.
+- [ ] `LabResultServiceImpl#signLabResult`: a second signature overwrites the first signer. It is also the clinician's acknowledgment, so a refusal needs the acknowledgment path checked. An amend before release withdraws the signature and nobody is told; the signer should be.
+- [ ] `ObservationFhirWriteService#updateLabResult`: appends notes to a released result. Off by default (`FHIR_WRITE_ENABLED=false`).
+- [ ] `ConsultationServiceImpl#reassign` from DECLINED and `ObgynReferralServiceImpl#addMessage` on COMPLETED: possibly intended (re-routing, a thread message); kept as they are until a coordinator decides.
+- [ ] `DischargeSummaryServiceImpl#enrichSparseExistingSummaries` no longer writes a finalized summary, so one finalized before D744 keeps its gaps on the patient's page.
+- [ ] A partly filled order's content stays editable (G13/G15): the drug can be renamed over the part already handed over. The rule has its own test; changing it is a pharmacy decision.
+- [ ] D1432 data: the two QA orders cancelled after dispensing (14cd0c42, 52794b1a) stay CANCELLED on dev. No migration repairs them.
+- [ ] D1435: a nursing task or handoff names no stay, so "of this stay" is read from the creation time. A real `admission_id` on both would end the inference.
+- [ ] D1436: an order set saved before this round with a bare number and no unit previews normally and refuses its apply until an admin edits it. The editor leaves the unit optional; the server is the only check.
+- [ ] D1435: a stay cancelled long after it opened closes outpatient work on the patient written in that window. `admitPatient` opens stays ACTIVE and same-day, so it needs a backdated or ADT-created stay; an `admission_id` on the rows ends it.
+- [ ] `TreatmentPlanServiceImpl#update`: an ARCHIVED plan stays editable, because that form is the only way back from a mistaken archive. A real restore action would let it close.
+
+## Standing debt — round 34 (fix/r34-reception-billing)
+- [ ] D1429: the two booking writes that choose a minute without the desk keep today's behaviour and ask no overbooking reason: the check-out follow-up on a day with no published slot (first free half-hour from 08:00) and a referral's appointment (the referring clinician's time). No form can ask there, and a refusal would drop the follow-up. Decide whether either should stamp a system reason.
+- [ ] D1429: a desk booking on a published free slot still does not mark the slot BOOKED (as today): the slot's own row stays OPEN and the overlap rule protects the time. Only `/slots/{id}/book` and the patient paths take the row.
+- [ ] Announcements: a platform-wide one (no hospital) is readable by id from any hospital, but `GET /announcements` at a hospital lists only that hospital's, so nobody pinned to a hospital sees it in the list. Not changed: nothing leaks, and showing them is a product decision.
+- [ ] D1445: the server's `FlowBoardDTO.walkIn` still lists a walk-in whose encounter is SCHEDULED; the portal draws those cards with the arrived ones. The field stays for API callers.
+- [ ] D1300 known gap added by D1430: `PatientHospitalRegistrationRequestDTO.patientId` and `.hospitalName` are in `RequiredRequestIdGuardTest.CONDITIONALLY_REQUIRED`: the DTO now has a constraint, so bean validation runs before `validateRequest` names them. Create-only fields, and the same body edits: moving them needs an `OnCreate` group on that controller.
+
+## Standing debt — round 34 (fix/r34-adult-paracetamol)
+
+The "adult paracetamol" line under fix/r34-frequency-dose is answered: the user supplied the values on 2026-11-07, and `AdultParacetamolRule` carries them. Sources:
+- US FDA guidance on acetaminophen, under "Acetaminophen Is in Many Products": 4,000 mg in 24 hours is the adult maximum, counting paracetamol/acetaminophen from all medicines combined.
+- EFFERALGANSTIX 1000 mg, RCP sections 4.2 and 4.3 (Base de données publique des médicaments, France): 3 g/day usual dose from 50 kg; up to 4 g/day only on medical advice, without additional hepatotoxicity risk factors; 1 g per administration; at least 4 hours apart. Under 50 kg, chronic malnutrition or dehydration: 60 mg/kg/day or 3,000 mg/day, whichever is lower (45 kg gives 2,700 mg/day). Mild to moderate hepatocellular insufficiency, Gilbert syndrome or chronic alcoholism: 2,000 mg/day; chronic alcoholism at least 8 hours between doses. Severe hepatocellular insufficiency: contraindicated. When several apply, the lowest ceiling.
+
+For the clinician list (proposed alert logic, pending sign-off):
+- [ ] The severe-hepatocellular contraindication is `critical`: the order saves only with a recorded, audited reason (the existing override), not a hard stop. Every other card is an alert (`warning`, or `info` from 3 g to 4 g), and the order saves. Should the daily or single-dose card become a soft stop too? One constant, `AdultParacetamolRule.ALERT`.
+- [ ] The ICD-10 mapping needs clinical validation, and a code may not establish current severity. The problem codes behind each group (`ParacetamolRisk`): malnutrition E40-E46 (ICD-10 does not say chronic, so any coded malnutrition counts); dehydration E86 without E86.1; Gilbert E80.4; chronic alcoholism F10.2; hepatocellular insufficiency K72, K70.4, K71.1, with its degree from the row's severity (SEVERE, LIFE_THREATENING contraindicate; none recorded takes 2,000 mg/day and says so).
+- [ ] "Other liver risk factors" have no number: no rule, no card beyond the groups named in the text.
+- [ ] Combination products (paracetamol + codeine, tramadol): not counted. The catalogue's strength ("500/30") has no label per ingredient, so their paracetamol content cannot be read. Needs a structured content field to count them.
+- [ ] Brands: `DrugClassAllergy.BRAND_GENERICS` holds no paracetamol brand, so a free-text Efferalgan or Doliprane counts only when the catalogue item names it. Adding them changes the allergy resolution, so it was not done here; D1264 stays debt.
+- [ ] Not detected, named in the text for the prescriber to judge: a condition typed only as free text (no code), coded in ICD-11 (no mapping supplied), recorded only in the social history (alcohol use is not a diagnosis), or at another hospital (problems and orders are read at the order's hospital, as every CDS rule does).
+- [ ] CDS hooks send no frequency to the engine (`MedicationDraftExtractor` reads the dose only), so there the daily total counts one dose of the draft plus the other active orders. The paediatric rule has the same limit. The prescribing form, its edit and order sets send it. A hook also sends no edited-order id, so re-checking a saved order through a hook counts that order too. The portal's prescribing does not use these hooks.
+- [ ] What counts as an active order, since nothing on an order says it is over: not stopped; not past the duration it states (English, French, Spanish); not ended with its stay; a one-off only for 24 hours; an order with no readable duration only for 7 days (the duplicate-order check's window), or while it is filed on an open stay. Past the window it is not counted and is named on the card as "may still be in use, not counted". The total counts prescribed orders, not actual use: a duration does not show the patient is still taking it, the window can undercount ongoing outpatient use, and an open stay does not prove a dose was given. Confirm or change the window.
+- [ ] A bare number (`2`, `2000`) is read as neither mg nor tablets: no dose card. The form does not require a unit, so `2000` 3 fois par jour raises nothing here. Should the form require a unit?
+- [ ] A combination is recognised by a separator or by naming a partner ingredient (`ParacetamolIdentity`: codeine, tramadol, caffeine, ibuprofen and the like). A brand of a combination is known only if the catalogue's generic name says so.
+- [ ] A patient with no date of birth gets an information card saying no limit was judged, and the paediatric rule stays silent for them.
+- [ ] `MedicationCourseStatus` reads durations only in English, so a course written "5 jours" never ends in the patient's medication list or the staff snapshot. `ParacetamolFactsReader` reads French and Spanish itself for now.
+- [ ] `PharmacyRefillReminderScheduler.parseDurationDays` returns null for any text containing "an", such as "pendant 5 jours", so that course gets no refill reminder.
+- [ ] A bare dosage number with no unit (`2000`) raises no paracetamol card, because the form does not require a unit.
+- [ ] Orders and problems are read at the acting hospital only, so the paracetamol total is not "all active orders": the cards say "at this hospital; check other facilities". A patient's orders at another facility are not counted.
+- [ ] Pre-existing: `PrescriptionServiceImpl.recordCdsOverride` does not store a CDS override reason when an allergy override already holds `overrideReason`, so a critical card's reason given beside an allergy override at creation is audited but not stored. The signature appends instead, so a contraindication's own reason is kept.
+- [ ] The contraindication asks for a reason at the signature even when the order was created with one: nothing on the order says which card a stored reason answered. A column would allow asking once; clinician to confirm the double ask is acceptable.
+- [ ] A child with a coded severe hepatocellular insufficiency gets the contraindication card beside the paediatric rule's cards. No adult limit applies to a child, and no paediatric limit changes. For clinician sign-off: RCP 4.3 is not age-limited, but the RCP cited is an adult product's.
+- [ ] A typed combination that the catalogue resolves to a paracetamol-alone item (`Paracétamol + codéine` with one item naming it) is judged as paracetamol alone, because the link wins over reading the name.
+
+## Standing debt — round 34 (fix/r34-maternity-records)
+
+- [x] D1424 newborn values, supplied by the user: Royal Children's Hospital, "Acceptable ranges for physiological variables", Term row (last updated July 2023); NICE NG195 table 2; Canadian Paediatric Society statement (posted Nov 20, 2019, updated Mar 28, 2025). They live in `NewbornAlertRules`. Warnings and escalation only; the newborn form refuses a negative number, SpO2 above 100 %, a glucose value with no unit and a reversed pressure pair.
+- [ ] D1424, for a clinician: the NICE NG195 table 2 numbers are only partly verified and wait for a check against the original. No preterm ranges are sourced: a preterm baby gets the term notice, which says it is a term range. SpO2 in the first minutes after birth needs a separate pathway and the source gives no window: the alert still fires and its wording says it does not apply to normal transition.
+- [ ] D1447 legacy rows: a stored scheduled time that is free text shows blank in the `type="time"` input on edit and is re-sent unchanged; the list still shows it. Typing a real time replaces it. The past-date check compares with the server's day, as the imaging order's does, with no grace for a browser west of the server.
+- [ ] D1427 siblings kept as records, not translated: billing line descriptions (`BedDaysChargeSource`, `ConsultationChargeSource`, `TransfusionChargeSource`, `EncounterCheckoutChargeListener`) and the labour notes that join a system sentence with typed text (`maternity.labor.unbookedPregnancyNote`, `labor.episode.recentDeliveryOverrideNote`) stay in the staff language for a reader in EN or ES. Each is a written record; `StoredAlertReaderLanguageGuardTest` lists them.
+- [ ] D1425 legacy rows: a vaccination saved before this rule with an impossible value stays as it is until someone edits that value. No data correction was run.
+
+## Standing debt — round 35 (fix/r35-clinical-lab)
+
+- [ ] D1462, for the user: Dafalgan, Panadol and Paralgan are not in `DrugClassAllergy.BRAND_GENERICS`: nothing in the repository or the user's sources names them. Needed: a cited source for each (an RCP, or the catalogue item of the hospital). Until then the card says "could not be checked as paracetamol", and a catalogue item naming the brand already matches. Tylenol is in on the strength of the order-set form's own example (`order-set.service.ts`, `SYNONYMS_PLACEHOLDER`): remove it if that is not source enough.
+- [ ] D1264: the Efferalgan half closes with D1462 (it now agrees with the Paracétamol item). Acetaminophen / acetaminofén on the Paracétamol item is still refused as a name mismatch, in the safe direction, waiting for the cited source.
+- [ ] D1465, for the user: gravidity has no ceiling: no source in the repository gives one, so G99 P1 still saves. Needed: a sourced number, or a decision that none is wanted.
+- [ ] D1465, for a clinician: living children above parity is refused unless the form states a previous multiple birth, because a twin birth counts once in P. The statement is a check of the request and is not stored; a stored field would need a migration and a product decision.
+- [ ] D1477: a visit ended with a consultation or cancelled stays open to nursing writes (real late documentation, nurse visits, a booking mistake). Care notes are not gated at all, by design. A patient who left unseen and has an appointment but no check-in yet is refused until the check-in opens the visit.
+- [ ] D1465, for a clinician: only a due date on or before the LMP is refused. How far it may stand from the LMP needs a sourced number; the ultrasound date is not compared at all.
+- [ ] D1465: the labour admission's carried term, preterm and caesarean counts are not compared with a typed parity, so a woman in labour is never refused over old counts; the next edit of that record asks for them to be corrected.
+- [ ] D1462, for the user: the "not on file" card informs on every free-text order no catalogue item or cited brand names, an INN such as amlodipine included, and such orders are named beside a paracetamol total. Narrowing it needs a list of INNs the repository does not hold.
+- [ ] D1451 guard: `@HostListener` and `host: {}` bindings are not scanned; a hand hunt found none returning false.
+- [ ] For the user: `MortalityComponent` has no route and no nav link in the portal, and never had one (`c4dd0f3c4`): the death register and its record dialog cannot be opened by anyone, though the API works. Found during D1451. Its boxes are fixed and proved in Karma; the route and who sees the link were left for a decision.
+
+## Standing debt — round 35 (fix/r35-desk-billing-portal)
+
+- D1466 sibling, apps: `refundDue` is on the web billing page, the patient's web billing page and the PDF; `patient-android-app` and `patient-ios-app` show the balance (0) and not the refund. They do not misbehave; the patient is not told there. App release needed.
+- D1466: a real refund flow does not exist; the excess is stated as owed. Reversing the whole payment is the only ledger action today.
+- D1476 sibling, decision needed: `AdmissionServiceImpl` opens a stay on a deactivated registration (an emergency admission must not be refused at the desk, so it needs a product decision like the walk-in's EMERGENCY exemption). `ConsultationServiceImpl:113` and `GeneralReferralServiceImpl:94` use the same registration check and were not judged to open a desk visit; re-check them with that decision.
+
+- [ ] Round 35 frequency grammar, for a clinician: `SMC <n>` is asked once, not read as a single dose (coordinator accepted, PR 1065), since SMC is understood to be a 3-day course. If a clinician says each cycle row is one dose, it is one line in `FrequencyCadence.GRAMMAR`, the mirror and the fixture.
+- [ ] Round 35 frequency grammar: meals (`avant les repas`), minutes (`toutes les 30 min`), `once`, `une fois`, and any duration after a schedule (`3 fois par jour pendant 5 jours`) are asked once. If the extra tick costs prescribers too much, each is a line to add, with its fixture and a clinician's reading.
+- [ ] Round 35 frequency grammar, for a clinician (independent review): `bolus` reads as a single dose and ends the course after it, though it states a route. Bare `continu` / `en continu` reads as an infusion, with no next dose and no overdue. Each is one line to remove.
+- [ ] Round 35 frequency grammar: clock lists read by their count, as built in round 34: `8 h et 12 h` and `8h, 14h, 20h` read every 12 h and every 8 h, so a dose at the second time asks a reason, and a limit on the interval judges that interval, not the real gap. Bare `4/4` still reads every 4 h and `12/12` could be a date: confirm with a clinician.
+
+## Standing debt — round 36 (fix/r36-clinical-registration)
+
+- **NOT clinically approved:** `DeathClassificationRules.PERINATAL_PERIOD_COMPLETED_DAYS` (WHO, seven completed days) awaits the obstetric/neonatal lead and the responsible coding authority. QA passing is not approval.
+- D1490: `LATE_NEONATAL` keeps the enum's 7-28 days, or the type could not be used, yet it still counts in `perinatalDeaths`, which the WHO period does not include. It has no lower bound either. For the same sign-off.
+- D1490: a stillbirth with no chart of its own has no way into the mortality register: the delivery record holds it (`LaborOutcome.STILLBIRTH`), and the register counts only `death_records`.
+- D1488: inbound ADT (`MllpInboundAdtVisitProjectionServiceImpl`) can still create a stay or visit on a deceased patient: classified as a fact another system reports. Needs a product decision.
+- D1488: the cascade cancels appointments after the day of death, at the recording hospital, so a later same-day visit and another hospital's visits stay live. Their new-care writes are refused, but they stay on the desk's list.
+- D1488: the chart still offers actions the server now refuses for a deceased patient; the refusal is clean and localized.
+- D1489: `appointment-detail.html:59` still offers check-in on a deactivated registration or a deceased patient (branch 3's file); the refusal is clean.
+- D1489 class: the consent `try/catch` inside the check-in and pre-check-in transactions stays: both now refuse first, but any other failure of `TreatmentConsentService.record` would still mark the transaction rollback-only and answer 500.
+- Dispute: an in-basket item filed by the sweep, with no tenant context, keeps the patient's name and loses its patient link (`InBasketServiceImpl.fileItem`). Reminder and recall sweeps still skip a deceased patient under dispute (`AppointmentRepository`, `PatientRecallRepository`). Entered in error's audit does not name the disputes it ended; their rows do.
+- D1495: the refusal is on `hospitalId`, as booking's is, and that field is not on the reschedule form: it reads as a banner.
+
+## Standing debt — round 36 (fix/r36-memory)
+
+- **D1314, `UserProfileFetchGuardTest.NOT_YET`:** the repositories whose fetch of a User still costs one SELECT per row: lab results (`LabResultRepositoryEntityGraphTest` pins the exact graph, so change both), appointments, invoices, break-glass, treatment plans, treatments, staff lists, assignments, shifts and the like. Same one-line fix as the graphs of `PrescriptionRepository`, one file at a time; the guard's count falls with each.
+- **D1314, the root cause stays:** `User.patientProfile` and `User.staffProfile` are forced EAGER by `@NotFound`. Making them truly lazy (a `@OneToMany` read as first-or-null, or bytecode enhancement) would end the class at once, but 13 main-code readers run outside a guaranteed session and a `LazyInitializationException` at login is the wrong trade for this wave.
+- **D1314, `GET /patients?assignedTo=me` (`getPatientsForNurse`, the full read):** still one vitals read and one sharing read per registered patient, as measured in `WardLoadPostgresIT#nursePatients`. The ward's lists no longer use it. Batch it, or make the endpoint serve only the bed list.
+- **D1314, an unsigned order's prescriber:** `awaitingPhysicianSignature` is two role queries per distinct prescriber on a page: bounded by the page, not by the table.
+- **D1314, `HospitalAdminDashboardServiceImpl.buildStaffingMetrics`:** `staffAvailabilityRepository.findAll()` then a filter in memory, on every hospital's rows. Not measured.
+- **D1314, `allRows` readers:** `PrescriptionService.list` still reads every page where a caller needs the whole of one visit, and for a status this build has no name for (the attention tab only). Both are bounded by what they read; neither is a search any more.
+
+## Round 36 Lows left for later
+
+From docs/qa/dev-qa-run-2026-11-07-round36.md (steps and likely code there). They do not block: D1493, D1496, D1497, D1498, D1499, D1500, D1501, D1502, D1503, D1504, D1506, D1509, D1510, D1511, D1513.

@@ -5,6 +5,8 @@ import { MAX_PATIENT_DOCUMENT_BYTES, MyDocumentsComponent } from './my-documents
 import { PatientPortalService } from '../../services/patient-portal.service';
 import { ToastService } from '../../core/toast.service';
 import { currentLocale } from '../../shared/i18n/app-locale';
+import { isSubmitBlocked } from '../../shared/forms/submit-guard.testing';
+import { ConfirmService } from '../../shared/confirm-dialog/confirm.service';
 
 const mockDoc = {
   id: 'doc-1',
@@ -103,26 +105,26 @@ describe('MyDocumentsComponent', () => {
     expect(component.uploading()).toBeFalse();
   });
 
-  it('should delete document and remove from list', () => {
-    spyOn(window, 'confirm').and.returnValue(true);
+  it('should delete document and remove from list', async () => {
+    spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
     component.documents.set([mockDoc]);
-    component.deleteDocument('doc-1');
+    await component.deleteDocument('doc-1');
     expect(portalService.deleteDocument).toHaveBeenCalledWith('doc-1');
     expect(component.documents()).toEqual([]);
     expect(toastService.success).toHaveBeenCalled();
   });
 
-  it('should not delete if confirm is cancelled', () => {
-    spyOn(window, 'confirm').and.returnValue(false);
-    component.deleteDocument('doc-1');
+  it('should not delete if confirm is cancelled', async () => {
+    spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(false);
+    await component.deleteDocument('doc-1');
     expect(portalService.deleteDocument).not.toHaveBeenCalled();
   });
 
-  it('should show error toast when delete fails', () => {
-    spyOn(window, 'confirm').and.returnValue(true);
+  it('should show error toast when delete fails', async () => {
+    spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
     portalService.deleteDocument.and.returnValue(throwError(() => new Error('fail')));
     component.documents.set([mockDoc]);
-    component.deleteDocument('doc-1');
+    await component.deleteDocument('doc-1');
     expect(toastService.error).toHaveBeenCalled();
     expect(component.deleting()).toBeNull();
   });
@@ -131,7 +133,7 @@ describe('MyDocumentsComponent', () => {
     portalService.listDocuments.calls.reset();
     component.filterType.set('LAB_RESULT');
     component.onFilterChange();
-    expect(portalService.listDocuments).toHaveBeenCalledWith('LAB_RESULT', 0, 50);
+    expect(portalService.listDocuments).toHaveBeenCalledWith('LAB_RESULT', 0, 200); // QA D1347: every page
   });
 
   it('fileSizeKb should format correctly', () => {
@@ -212,7 +214,7 @@ describe('MyDocumentsComponent - file size', () => {
     );
     expect(fixture.componentInstance.selectedFile()).toBeNull();
     expect(input.value).toBe('');
-    expect(uploadButton().disabled).toBeTrue();
+    expect(isSubmitBlocked(uploadButton())).toBeTrue();
     fixture.componentInstance.uploadDocument();
     expect(portalService.uploadDocument).not.toHaveBeenCalled();
   });
@@ -223,7 +225,7 @@ describe('MyDocumentsComponent - file size', () => {
 
     expect(host().querySelector('[data-testid="file-too-large"]')).toBeNull();
     expect(fixture.componentInstance.selectedFile()?.size).toBe(MAX_PATIENT_DOCUMENT_BYTES);
-    expect(uploadButton().disabled).toBeFalse();
+    expect(isSubmitBlocked(uploadButton())).toBeFalse();
   });
 
   it('toasts the upload failure translated, not as a raw key', () => {

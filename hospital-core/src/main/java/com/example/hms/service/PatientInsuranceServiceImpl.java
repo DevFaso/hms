@@ -5,6 +5,7 @@ import com.example.hms.security.ActingContext;
 import com.example.hms.security.tenant.ActingScope;
 import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.PatientInsuranceMapper;
 import com.example.hms.model.Patient;
@@ -65,7 +66,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
     @Transactional
     public PatientInsuranceResponseDTO addInsuranceToPatient(PatientInsuranceRequestDTO dto, Locale locale) {
         if (dto.getPatientId() == null) {
-            throw new BusinessException(
+            throw new FieldBusinessException("patientId",
                 messageSource.getMessage(PATIENT_REQUIRED_KEY,
                     null, PATIENT_REQUIRED_MSG, locale));
         }
@@ -124,7 +125,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
             : existing.getPatient();
 
         if (targetPatient == null) {
-            throw new BusinessException(
+            throw new FieldBusinessException("patientId",
                 messageSource.getMessage(PATIENT_REQUIRED_KEY,
                     null, PATIENT_REQUIRED_MSG, locale));
         }
@@ -260,7 +261,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         PatientInsurance insurance = getInsuranceOrThrow(insuranceId);
 
         if (req.getPatientId() == null) {
-            throw new BusinessException(messageSource.getMessage(
+            throw new FieldBusinessException("patientId", messageSource.getMessage(
                 PATIENT_REQUIRED_KEY, null, PATIENT_REQUIRED_MSG, locale));
         }
         Patient patient = getPatientOrThrow(req.getPatientId());
@@ -316,6 +317,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         }
 
         PatientInsurance insurance = findOrCreateInsurance(patientId, payerCode, policyNumber, patient);
+        applyProviderName(insurance, req.getProviderName(), payerCode);
 
         if (!actAsPatient) {
             insurance.setAssignment(resolveStaffAssignment(actorUserId, hospitalIdForStaff, locale));
@@ -366,7 +368,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
 
     private void rejectHospitalLinkForPatient(LinkPatientInsuranceRequestDTO req, Locale locale) {
         if (req.getHospitalId() != null) {
-            throw new BusinessException(
+            throw new com.example.hms.exception.FieldBusinessException("hospitalId", 
                 messageSource.getMessage("patient.cannot.link.hospital", null,
                     "Patients cannot link insurance to a hospital", locale));
         }
@@ -401,18 +403,15 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
     }
 
     private void validateNaturalKeyParts(LinkPatientInsuranceRequestDTO req, Locale locale) {
-        if (req == null || req.getPatientId() == null) {
-            throw new BusinessException(messageSource.getMessage(
-                PATIENT_REQUIRED_KEY, null, PATIENT_REQUIRED_MSG, locale));
-        }
-        if (req.getPayerCode() == null || req.getPayerCode().isBlank()) {
-            throw new BusinessException(messageSource.getMessage(
-                "patientinsurance.payer.required", null, "Payer code is required", locale));
-        }
-        if (req.getPolicyNumber() == null || req.getPolicyNumber().isBlank()) {
-            throw new BusinessException(messageSource.getMessage(
-                "patientinsurance.policy.required", null, "Policy number is required", locale));
-        }
+        // QA D1355 class (round 30): the patient, the payer and the policy named in one refusal.
+        com.example.hms.exception.RequiredFields.check()
+            .requireValue(req == null ? null : req.getPatientId(), "patientId", messageSource.getMessage(
+                PATIENT_REQUIRED_KEY, null, PATIENT_REQUIRED_MSG, locale))
+            .requireValue(req == null ? null : req.getPayerCode(), "payerCode", messageSource.getMessage(
+                "patientinsurance.payer.required", null, "Payer code is required", locale))
+            .requireValue(req == null ? null : req.getPolicyNumber(), "policyNumber", messageSource.getMessage(
+                "patientinsurance.policy.required", null, "Policy number is required", locale))
+            .orThrow();
     }
 
     private PatientInsurance findOrCreateInsurance(UUID patientId, String payerCode, String policyNumber, Patient patient) {
@@ -429,6 +428,22 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
             insurance.setPatient(patient);
         }
         return insurance;
+    }
+
+    /**
+     * QA D925: {@code provider_name} is required, and a policy created through
+     * the natural-key link had none, so every new link answered 500 (or 400
+     * "providerName: must not be blank" when it was also made primary). A
+     * typed name wins; otherwise a new policy keeps the payer code as its name
+     * and an existing one keeps the name it has.
+     */
+    private static void applyProviderName(PatientInsurance insurance, String typed, String payerCode) {
+        String name = typed == null ? null : typed.trim();
+        if (name != null && !name.isEmpty()) {
+            insurance.setProviderName(name);
+        } else if (insurance.getProviderName() == null || insurance.getProviderName().isBlank()) {
+            insurance.setProviderName(payerCode);
+        }
     }
 
     private void applyPrimaryFlag(LinkPatientInsuranceRequestDTO req, boolean actAsPatient,

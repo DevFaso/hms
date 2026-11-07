@@ -35,9 +35,9 @@ import java.time.LocalDateTime;
  * <p><b>Cause of death is amendable.</b> An autopsy or a coroner routinely
  * revises it weeks later, so the record carries {@link #amendmentReason} and
  * {@link #amendedAt} instead of being frozen. What is NOT amendable is the fact
- * of death: there is no un-death path here, because reversing a death is a
- * data-correction exercise and not a workflow anyone should be able to trigger
- * from a form.
+ * of death. The one way back is QA D1488's: a hospital administrator marks a
+ * record made on the wrong patient as {@link #enteredInErrorAt entered in error}.
+ * The row is kept with who, when and why, and stops counting as a death.
  */
 @Entity
 @Table(
@@ -75,6 +75,11 @@ public class DeathRecord extends BaseEntity {
 
     @Column(name = "died_at", nullable = false)
     private LocalDateTime diedAt;
+
+    /** The state of this record a dispute read; moved by every amendment. */
+    @jakarta.persistence.Version
+    @Column(name = "version", nullable = false)
+    private Long version;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "place_of_death", nullable = false, length = 30)
@@ -155,6 +160,25 @@ public class DeathRecord extends BaseEntity {
     @JoinColumn(name = "recorded_by_staff_id",
         foreignKey = @ForeignKey(name = "fk_death_recorder"))
     private Staff recordedBy;
+
+    /** QA D1488: when this row was marked entered in error. It is then no death, and leaves every count. */
+    @Column(name = "entered_in_error_at")
+    private LocalDateTime enteredInErrorAt;
+
+    @Column(name = "entered_in_error_by_id")
+    private java.util.UUID enteredInErrorById;
+
+    @Size(max = 255)
+    @Column(name = "entered_in_error_by_name", length = 255)
+    private String enteredInErrorByName;
+
+    @Size(max = 500)
+    @Column(name = "entered_in_error_reason", length = 500)
+    private String enteredInErrorReason;
+
+    public boolean isEnteredInError() {
+        return enteredInErrorAt != null;
+    }
 
     /**
      * A maternal death by the WHO definition — during pregnancy or within 42

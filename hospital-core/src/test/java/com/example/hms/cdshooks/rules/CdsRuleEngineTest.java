@@ -114,7 +114,7 @@ class CdsRuleEngineTest {
         p.setDateOfBirth(LocalDate.now().minusYears(5));
         PatientVitalSign vs = new PatientVitalSign();
         vs.setWeightKg(20.0);
-        when(vitalSignRepository.findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(p.getId(), hospitalId))
+        when(vitalSignRepository.findFirstByPatient_IdAndHospital_IdAndWeightKgIsNotNullOrderByRecordedAtDesc(p.getId(), hospitalId))
             .thenReturn(Optional.of(vs));
         when(prescriptionRepository.findByPatient_IdAndHospital_Id(p.getId(), hospitalId))
             .thenReturn(List.of());

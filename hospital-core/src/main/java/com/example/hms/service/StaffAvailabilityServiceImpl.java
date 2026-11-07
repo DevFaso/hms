@@ -13,6 +13,7 @@ import com.example.hms.repository.DepartmentRepository;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.StaffAvailabilityRepository;
 import com.example.hms.repository.StaffRepository;
+import com.example.hms.utility.DisplayDates;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.MessageSource;
@@ -36,6 +37,21 @@ public class StaffAvailabilityServiceImpl implements StaffAvailabilityService {
     private final StaffAvailabilityMapper mapper;
     private final MessageSource messageSource;
     private final DepartmentRepository departmentRepository;
+
+    /** A working day has its hours, the end after the start; a day off has none (Sonar S3776, round 30). */
+    private static void requireWorkingHours(StaffAvailabilityRequestDTO dto) {
+        // Sonar S5411 (round 31): never null (the record defaults it), compared without unboxing.
+        if (Boolean.TRUE.equals(dto.dayOff())) {
+            return;
+        }
+        if (dto.availableFrom() == null || dto.availableTo() == null) {
+            throw new com.example.hms.exception.FieldBusinessException(
+                dto.availableFrom() == null ? "availableFrom" : "availableTo", "availability.time.required");
+        }
+        if (!dto.availableTo().isAfter(dto.availableFrom())) {
+            throw new com.example.hms.exception.FieldBusinessException("availableTo", "availability.time.range.invalid");
+        }
+    }
 
     @Override
     @Transactional
@@ -71,17 +87,10 @@ public class StaffAvailabilityServiceImpl implements StaffAvailabilityService {
 
         if (availabilityRepository.existsByStaff_IdAndDate(dto.staffId(), dto.date())) {
             throw new BusinessRuleException(
-                getLocalizedMessage("availability.exists", new Object[]{dto.date()}, locale));
+                getLocalizedMessage("availability.exists", new Object[]{DisplayDates.date(dto.date(), locale)}, locale));
         }
 
-        if (!dto.dayOff()) {
-            if (dto.availableFrom() == null || dto.availableTo() == null) {
-                throw new BusinessRuleException(getLocalizedMessage("availability.time.required", null, locale));
-            }
-            if (!dto.availableTo().isAfter(dto.availableFrom())) {
-                throw new BusinessRuleException(getLocalizedMessage("availability.time.range.invalid", null, locale));
-            }
-        }
+        requireWorkingHours(dto);
 
         if (dto.date().isBefore(LocalDate.now())) {
             throw new BusinessRuleException(getLocalizedMessage("availability.date.past", null, locale));

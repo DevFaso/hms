@@ -135,7 +135,7 @@ class PatientPhotoServiceImplTest {
 
         assertThatThrownBy(() -> service.upload(patientId, hospitalId, pdf))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Only image files");
+            .hasMessageContaining("patient.photo.imageOnly");
     }
 
     @Test
@@ -145,7 +145,7 @@ class PatientPhotoServiceImplTest {
 
         assertThatThrownBy(() -> service.upload(patientId, hospitalId, svg))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Unsupported image type");
+            .hasMessageContaining("patient.photo.typeUnsupported");
     }
 
     @Test
@@ -155,7 +155,7 @@ class PatientPhotoServiceImplTest {
 
         assertThatThrownBy(() -> service.upload(patientId, foreignScope, file))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("not registered");
+            .hasMessageContaining("patient.photo.notRegistered");
     }
 
     @Test
@@ -192,7 +192,7 @@ class PatientPhotoServiceImplTest {
 
         assertThatThrownBy(() -> service.upload(patientId, null, file))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("active hospital");
+            .hasMessageContaining("patient.photo.hospitalRequired");
     }
 
     @Test
@@ -201,7 +201,7 @@ class PatientPhotoServiceImplTest {
 
         assertThatThrownBy(() -> service.upload(patientId, hospitalId, empty))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("photo file is required");
+            .hasMessageContaining("patient.photo.required");
     }
 
     @Test
@@ -210,7 +210,7 @@ class PatientPhotoServiceImplTest {
 
         assertThatThrownBy(() -> service.upload(patientId, hospitalId, big))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("5 MB");
+            .hasMessageContaining("patient.photo.tooLarge");
     }
 
     @Test
@@ -220,14 +220,14 @@ class PatientPhotoServiceImplTest {
 
         assertThatThrownBy(() -> service.upload(patientId, hospitalId, nameless))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Unsupported image type");
+            .hasMessageContaining("patient.photo.typeUnsupported");
     }
 
     @Test
     void deleteRequiresAHospitalScope() {
         assertThatThrownBy(() -> service.delete(patientId, null))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("active hospital");
+            .hasMessageContaining("patient.photo.hospitalRequiredRemove");
     }
 
     @Test

@@ -1,3 +1,5 @@
+import { textMatches } from '../shared/person-search';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import {
   Component,
   inject,
@@ -9,7 +11,7 @@ import {
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
-import { Subject, debounceTime, distinctUntilChanged, takeUntil } from 'rxjs';
+import { Subject, catchError, debounceTime, of, switchMap, takeUntil, tap } from 'rxjs';
 import { AppointmentService, AppointmentResponse } from '../services/appointment.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { PermissionService } from '../core/permission.service';
@@ -26,7 +28,15 @@ type SortDir = 'asc' | 'desc';
 @Component({
   selector: 'app-appointment-list',
   standalone: true,
-  imports: [ClockTimePipe, CommonModule, RouterLink, FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [
+    ClockTimePipe,
+    ServerTimePipe,
+    CommonModule,
+    RouterLink,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+  ],
   templateUrl: './appointment-list.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './appointment-list.scss',
@@ -42,6 +52,14 @@ export class AppointmentListComponent implements OnInit, OnDestroy {
   private readonly searchInput$ = new Subject<string>();
 
   appointments = signal<AppointmentResponse[]>([]);
+  /**
+   * QA D1322 (round 29; the D1310 / D1274 class): what the SERVER finds for
+   * the typed term — its `?search=` goes through the patient-search router
+   * (MRN, phone, e-mail, birth date as well as names). The page filtered
+   * only the four names it holds, so "CHW1112", "70291801" or "14/08/1979"
+   * found nothing. `null`: no term, or the answer is not back yet.
+   */
+  private readonly serverMatches = signal<AppointmentResponse[] | null>(null);
   filtered = signal<AppointmentResponse[]>([]);
   loading = signal(true);
   canCreate = this.permissions.hasPermission('Create Appointments');
@@ -80,9 +98,23 @@ export class AppointmentListComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.searchInput$
-      .pipe(debounceTime(300), distinctUntilChanged(), takeUntil(this.destroy$))
-      .subscribe(() => {
-        this.currentPage.set(0);
+      .pipe(
+        debounceTime(300),
+        tap(() => {
+          this.currentPage.set(0);
+          this.serverMatches.set(null);
+          this.applyFilter();
+        }),
+        switchMap((value) => {
+          const term = value.trim();
+          if (!term) return of(null);
+          // A failed search keeps the names the page holds; it never empties the list.
+          return this.appointmentService.list({ search: term }).pipe(catchError(() => of(null)));
+        }),
+        takeUntil(this.destroy$),
+      )
+      .subscribe((rows) => {
+        this.serverMatches.set(rows);
         this.applyFilter();
       });
 
@@ -135,7 +167,16 @@ export class AppointmentListComponent implements OnInit, OnDestroy {
   }
 
   applyFilter(): void {
-    let result = this.appointments();
+    const term = this.searchTerm.toLowerCase().trim();
+    const server = term ? this.serverMatches() : null;
+    const serverIds = new Set((server ?? []).map((a) => a.id));
+    // The server may know a match the page has not loaded: both are read.
+    let result = server
+      ? [
+          ...this.appointments(),
+          ...server.filter((a) => !this.appointments().some((b) => b.id === a.id)),
+        ]
+      : this.appointments();
 
     if (this.statusFilter) {
       result = result.filter((a) => a.status === this.statusFilter);
@@ -149,14 +190,14 @@ export class AppointmentListComponent implements OnInit, OnDestroy {
     if (this.hospitalFilter) {
       result = result.filter((a) => a.hospitalId === this.hospitalFilter);
     }
-    const term = this.searchTerm.toLowerCase().trim();
     if (term) {
       result = result.filter(
         (a) =>
-          a.patientName.toLowerCase().includes(term) ||
-          a.staffName.toLowerCase().includes(term) ||
-          a.reason.toLowerCase().includes(term) ||
-          (a.hospitalName?.toLowerCase().includes(term) ?? false),
+          serverIds.has(a.id) ||
+          textMatches(a.patientName, term) ||
+          textMatches(a.staffName, term) ||
+          textMatches(a.reason, term) ||
+          textMatches(a.hospitalName, term),
       );
     }
 
@@ -213,6 +254,7 @@ export class AppointmentListComponent implements OnInit, OnDestroy {
     this.dateTo = '';
     this.hospitalFilter = '';
     this.searchTerm = '';
+    this.searchInput$.next('');
     this.currentPage.set(0);
     this.applyFilter();
   }

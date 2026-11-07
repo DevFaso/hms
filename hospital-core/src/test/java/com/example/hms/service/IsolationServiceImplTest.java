@@ -63,6 +63,7 @@ class IsolationServiceImplTest {
     @Mock private StaffRepository staffRepository;
     @Mock private PatientChartAccess patientChartAccess;
     @Mock private RoleValidator roleValidator;
+    @Mock private com.example.hms.service.support.DischargedPatientGuard dischargedPatientGuard;
     @Spy private IsolationMapper mapper = new IsolationMapper();
 
     @InjectMocks private IsolationServiceImpl service;
@@ -85,11 +86,28 @@ class IsolationServiceImplTest {
         patient.setFirstName("Aminata");
         patient.setLastName("Diallo");
 
+        // QA D1232 (round 24): the refusals are keys now; read them in English.
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.ENGLISH);
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(patientChartAccess.require(any(), any())).thenReturn(patient);
         when(precautionRepository.save(any())).thenAnswer(i -> i.getArgument(0));
         when(precautionRepository.findActiveOfType(any(), any())).thenReturn(Optional.empty());
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void tearDown() {
+        com.example.hms.utility.MessageUtil.setMessageSource(null);
+        org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+        org.springframework.security.core.context.SecurityContextHolder.clearContext();
+    }
+
+    private void signedInAs(UUID userId) {
+        com.example.hms.model.User user = new com.example.hms.model.User();
+        user.setId(userId);
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(user, null, List.of()));
     }
 
     private IsolationPrecautionRequestDTO.IsolationPrecautionRequestDTOBuilder base() {
@@ -135,7 +153,12 @@ class IsolationServiceImplTest {
 
         assertThatThrownBy(() -> service.startPrecaution(request))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("already on CONTACT");
+            // QA D1232 (round 24): the type is named in words, in the reader's
+            // language, not by its code ("already on CONTACT").
+            .hasMessageContaining("already on contact precautions")
+            // QA D1352 (round 30): on the Type field, so the form marks it.
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "precautionType");
         verify(precautionRepository, never()).save(any());
     }
 
@@ -235,6 +258,47 @@ class IsolationServiceImplTest {
         verify(precautionRepository, never()).delete(any());
     }
 
+    /**
+     * QA D1226 (round 24): the bed board lifts a precaution without naming
+     * anyone, and the lift recorded nobody (discontinuedByName null). The
+     * nurse who lifts it is the session, as at the start.
+     */
+    @Test
+    void liftingAPrecautionRecordsTheNurseWhoLiftedIt() {
+        IsolationPrecaution precaution = persisted(IsolationPrecautionType.CONTACT);
+        UUID nurseUserId = UUID.randomUUID();
+        signedInAs(nurseUserId);
+        Staff nurse = new Staff();
+        nurse.setId(UUID.randomUUID());
+        nurse.setHospital(hospital);
+        when(staffRepository.findByUserIdAndHospitalId(nurseUserId, hospitalId)).thenReturn(Optional.of(nurse));
+
+        service.discontinuePrecaution(precaution.getId(),
+            DiscontinuePrecautionRequestDTO.builder().discontinuationReason("Stool culture negative").build());
+
+        assertThat(precaution.getDiscontinuedBy()).isSameAs(nurse);
+    }
+
+    @Test
+    void aColleagueCannotBeNamedAsHavingLiftedIt() {
+        IsolationPrecaution precaution = persisted(IsolationPrecautionType.CONTACT);
+        signedInAs(UUID.randomUUID());
+        com.example.hms.model.User colleagueUser = new com.example.hms.model.User();
+        colleagueUser.setId(UUID.randomUUID());
+        Staff colleague = new Staff();
+        colleague.setId(UUID.randomUUID());
+        colleague.setHospital(hospital);
+        colleague.setUser(colleagueUser);
+        when(staffRepository.findById(colleague.getId())).thenReturn(Optional.of(colleague));
+        UUID id = precaution.getId();
+        DiscontinuePrecautionRequestDTO request = DiscontinuePrecautionRequestDTO.builder()
+            .discontinuationReason("Not mine to lift").discontinuedByStaffId(colleague.getId()).build();
+
+        assertThatThrownBy(() -> service.discontinuePrecaution(id, request))
+            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        assertThat(precaution.getDiscontinuedBy()).isNull();
+    }
+
     @Test
     void liftingAPrecautionNeedsAReason() {
         UUID precautionId = persisted(IsolationPrecautionType.CONTACT).getId();
@@ -321,5 +385,16 @@ class IsolationServiceImplTest {
 
         assertThatThrownBy(() -> service.startPrecaution(request))
             .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    /** QA D1477: no new precaution on a patient who has gone; lifting one stays open. */
+    @org.junit.jupiter.api.Test
+    void aPrecautionIsNotStartedOnAPatientWhoHasLeft() {
+        org.mockito.Mockito.doThrow(new com.example.hms.exception.BusinessException("isolation.precaution.patientDischarged"))
+            .when(dischargedPatientGuard).requireNotDischargedWithoutVisit(patientId, hospitalId, "isolation.precaution.patientDischarged");
+        IsolationPrecautionRequestDTO request = base().build();
+        assertThatThrownBy(() -> service.startPrecaution(request))
+            .hasFieldOrPropertyWithValue("messageKey", "isolation.precaution.patientDischarged");
+        org.mockito.Mockito.verify(precautionRepository, org.mockito.Mockito.never()).save(org.mockito.ArgumentMatchers.any());
     }
 }

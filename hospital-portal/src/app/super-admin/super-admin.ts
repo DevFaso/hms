@@ -22,6 +22,7 @@ import {
 import { ActionPanel, PlatformService, PlatformSummary } from '../services/platform.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { formatLabNumber } from '../lab/shared/lab-value.pipe';
 
 interface ControlTowerStat {
   key: string;
@@ -60,16 +61,28 @@ interface ActivityTab {
 }
 
 interface ActivityRow {
+  /** The record's id: the row's identity for tracking, never shown (QA D992). */
   id: string;
+  /** The human code the record carries (encounter, order or invoice number, MRN…), or ''. */
+  code: string;
   summary: string;
   timestamp: string | null;
 }
 
 import { EnumLabelService } from '../core/enum-label.service';
+import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 @Component({
   selector: 'app-super-admin',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, RouterLink, TranslateModule, DatePipe, EnumLabelPipe],
+  imports: [
+    DateTimePipe,
+    ServerTimePipe,
+    CommonModule,
+    RouterLink,
+    TranslateModule,
+    DatePipe,
+    EnumLabelPipe,
+  ],
   templateUrl: './super-admin.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './super-admin.scss',
@@ -547,13 +560,62 @@ export class SuperAdminComponent implements OnInit {
     referrals: ['patientName', 'receivingHospitalName', 'referralType', 'status'],
   };
 
+  /**
+   * QA CX-006: the coded fields of {@link ACTIVITY_FIELDS}, per tab, with their
+   * label domain: the summaries showed ROUTINE, URGENT, REQUESTED, CANCELLED in
+   * every language. `null` looks the code up in every domain (a lab result's
+   * status has no domain of its own). `scripts/lib/activity-summary-enums.test.mjs`
+   * fails on a coded field left out of this table.
+   */
+  private static readonly ACTIVITY_ENUM_DOMAINS: Record<
+    ActivityKey,
+    Readonly<Record<string, string | null>>
+  > = {
+    consultations: { urgency: 'consultationUrgency', status: 'consultationStatus' },
+    admissions: { admissionType: 'admissionType', status: 'admissionStatus' },
+    prescriptions: { status: 'prescriptionStatus' },
+    labOrders: { status: 'labOrderStatus' },
+    labResults: { status: null },
+    labTestDefinitions: {},
+    treatmentPlans: { status: 'treatmentPlanStatus' },
+    referrals: { referralType: 'referralType', status: 'referralStatus' },
+  };
+
+  /** Human codes a recent-activity record may carry, most specific first. */
+  private static readonly ACTIVITY_CODE_FIELDS = [
+    'labOrderCode',
+    'encounterNumber',
+    'orderNumber',
+    'accessionNumber',
+    'invoiceNumber',
+    'referralNumber',
+    'prescriptionNumber',
+    'admissionNumber',
+    'mrn',
+    'patientMrn',
+    'labTestCode',
+  ];
+
   private toActivityRow(item: SuperAdminRecentItem, tab: ActivityKey): ActivityRow {
-    const idValue = typeof item['id'] === 'string' ? (item['id'] as string) : '';
-    const id = idValue ? idValue.slice(0, 8) : '';
+    // QA D992 class: the column showed the first 8 characters of the UUID.
+    // It now shows the human code the record carries, or nothing.
+    const id = typeof item['id'] === 'string' ? (item['id'] as string) : '';
+    const code =
+      SuperAdminComponent.ACTIVITY_CODE_FIELDS.map((field) => item[field]).find(
+        (v): v is string => typeof v === 'string' && v.trim().length > 0,
+      ) ?? '';
     const ordered = SuperAdminComponent.ACTIVITY_FIELDS[tab] ?? [];
+    // QA D1002 class: a lab value in the summary reads in the reader's number format.
+    const domains = SuperAdminComponent.ACTIVITY_ENUM_DOMAINS[tab] ?? {};
     const stringFields = ordered
-      .map((field) => item[field])
-      .map((v) => (v == null ? '' : String(v)))
+      .map((field) => {
+        const value =
+          field === 'resultValue' ? formatLabNumber(item[field] as string) : item[field];
+        if (value == null) return '';
+        return field in domains
+          ? this.enumLabels.transform(String(value), domains[field] ?? undefined)
+          : String(value);
+      })
       .filter((s) => s.length > 0);
     // Activity-row timestamp extractor.
     //
@@ -588,6 +650,7 @@ export class SuperAdminComponent implements OnInit {
       null;
     return {
       id,
+      code,
       summary: stringFields.join(' · '),
       timestamp,
     };

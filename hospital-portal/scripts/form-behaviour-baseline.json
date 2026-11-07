@@ -1,0 +1,1214 @@
+{
+  "$comment": [
+    "Submits no spec drives empty, and guarded forms that never mark a server 400 fieldErrors, as they stand today.",
+    "Each key is \"file::rule::anchor\"; \"why\" is the QA defect id or the reason.",
+    "A site not listed fails the build: drive the submit with expectEmptySubmitRefusal (src/app/testing/form-refusal-behaviour.ts)",
+    "and map fieldErrors with refusedFieldReasons + refuseFields, then delete its pin."
+  ],
+  "pinned": {
+    "src/app/account-setup/account-setup.html::empty-submit-untested::type=submit": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/account-setup/account-setup.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/admin-assignments/admin-assignments.html::empty-submit-untested::(click)=modal": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/admin-assignments/admin-assignments.html::empty-submit-untested::(click)=submitImport": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/admin-assignments/admin-assignments.html::empty-submit-untested::(click)=submitMulti": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/admin-assignments/admin-assignments.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/admin-governance/matrix-tab.html::empty-submit-untested::(click)=submitCreate": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/admin-governance/matrix-tab.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/admin-governance/policies-tab.html::empty-submit-untested::(click)=submitPolicy": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/admin-governance/policies-tab.html::empty-submit-untested::(click)=submitRule": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/admin-governance/policies-tab.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/admin-governance/security-tab.html::empty-submit-untested::(click)=runSimulation": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/admin-governance/security-tab.html::empty-submit-untested::(click)=submitBaseline": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/admin-governance/security-tab.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/admin-governance/users-tab.html::empty-submit-untested::(click)=submitImport": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/admin-governance/users-tab.html::empty-submit-untested::(click)=submitReset": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/admin-governance/users-tab.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/admin/adt-intake-config/adt-intake-config.component.ts::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/admin/integrations/dhis2-admin-page/dhis2-admin-page.component.ts::empty-submit-untested::data-testid=dhis2-config-save": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/admin/integrations/dhis2-admin-page/dhis2-admin-page.component.ts::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/admin/integrations/dhis2-export-panel/dhis2-export-panel.component.ts::empty-submit-untested::data-testid=dhis2-export-trigger": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/admin/integrations/dhis2-export-panel/dhis2-export-panel.component.ts::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/admin/integrations/dhis2-mapping-editor/dhis2-mapping-editor.component.ts::empty-submit-untested::data-testid=dhis2-mapping-add-submit": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/admin/integrations/dhis2-mapping-editor/dhis2-mapping-editor.component.ts::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/admin/order-sets/order-set-edit.component.html::empty-submit-untested::data-testid=order-set-edit-save": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/admin/order-sets/order-set-edit.component.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/admissions/admissions.html::empty-submit-untested::(click)=executeDischarge": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/admissions/admissions.html::empty-submit-untested::(click)=submitBedAssign": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/admissions/admissions.html::empty-submit-untested::(click)=submitForm": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/admissions/admissions.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/announcements/announcement-list.html::empty-submit-untested::type=submit": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/announcements/announcement-list.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/appointments/appointment-detail.html::empty-submit-untested::(click)=markAsCompleted": {
+      "count": 1,
+      "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
+    },
+    "src/app/appointments/appointment-detail.html::empty-submit-untested::data-testid=mark-no-show": {
+      "count": 1,
+      "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
+    },
+    "src/app/appointments/appointment-detail.html::empty-submit-untested::type=submit": {
+      "count": 1,
+      "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
+    },
+    "src/app/appointments/appointment-detail.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): front-office form, mapped by the fix/r29-portal-front-office shared fieldErrors mapper"
+    },
+    "src/app/appointments/appointment-form.html::empty-submit-untested::type=submit": {
+      "count": 1,
+      "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
+    },
+    "src/app/bed-board/bed-board.html::empty-submit-untested::(click)=submitPrecaution": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/bed-board/bed-board.html::empty-submit-untested::(click)=submitTransfer": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/bed-board/bed-board.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/bed-management/bed-management.html::empty-submit-untested::(click)=submitBed": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/bed-management/bed-management.html::empty-submit-untested::(click)=submitWard": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/bed-management/bed-management.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/billing/billing.html::empty-submit-untested::(click)=submitForm": {
+      "count": 1,
+      "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
+    },
+    "src/app/billing/billing.html::empty-submit-untested::data-testid=adjustment-submit": {
+      "count": 1,
+      "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
+    },
+    "src/app/billing/billing.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): front-office form, mapped by the fix/r29-portal-front-office shared fieldErrors mapper"
+    },
+    "src/app/break-glass-review/break-glass-review.html::empty-submit-untested::(click)=reload": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/break-glass-review/break-glass-review.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/chat/chat.html::empty-submit-untested::(click)=sendMessage": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/chat/chat.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/checkout/checkout-dialog/checkout-dialog.component.html::empty-submit-untested::type=submit": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/checkout/checkout-dialog/checkout-dialog.component.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/consultations/consultations.html::empty-submit-untested::(click)=executeCancel": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/consultations/consultations.html::empty-submit-untested::(click)=submitAssign": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/consultations/consultations.html::empty-submit-untested::(click)=submitComplete": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/consultations/consultations.html::empty-submit-untested::(click)=submitDecline": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/consultations/consultations.html::empty-submit-untested::(click)=submitForm": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/consultations/consultations.html::empty-submit-untested::(click)=submitSchedule": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/consultations/consultations.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/departments/department-list.html::empty-submit-untested::type=submit": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/departments/department-list.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/digital-signatures/digital-signatures.html::empty-submit-untested::(click)=doSign": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/digital-signatures/digital-signatures.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/discharge/discharge.html::empty-submit-untested::(click)=submitDecision": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/discharge/discharge.html::empty-submit-untested::(click)=submitFinalize": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/discharge/discharge.html::empty-submit-untested::(click)=submitRequest": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/discharge/discharge.html::empty-submit-untested::(click)=submitSummary": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/discharge/discharge.html::empty-submit-untested::data-testid=discharge-cancel-confirm": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/discharge/discharge.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/encounters/eligibility-check-dialog/eligibility-check-dialog.component.html::empty-submit-untested::(click)=run": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/encounters/eligibility-check-dialog/eligibility-check-dialog.component.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/encounters/encounter-note-form/encounter-note-form.component.html::empty-submit-untested::type=submit": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/encounters/encounters.html::empty-submit-untested::(click)=submitForm": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/encounters/encounters.html::empty-submit-untested::data-testid=addendum-save": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/encounters/encounters.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/encounters/medical-certificate-dialog/medical-certificate-dialog.component.html::empty-submit-untested::type=submit": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/encounters/medical-certificate-dialog/medical-certificate-dialog.component.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/feature-flags/feature-flags.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "marked by the shared serverFieldErrorsInterceptor through data-server-field, the mapper form-behaviour.spec.ts drives on this screen (QA CX-004/CX-005); the component adds no map of its own"
+    },
+    "src/app/hospitals/hospital-detail.html::empty-submit-untested::(click)=submitDialog": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/hospitals/hospital-detail.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/hospitals/hospital-list.html::empty-submit-untested::type=submit": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/hospitals/hospital-list.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/imaging/imaging.html::empty-submit-untested::(click)=submitReport": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/imaging/imaging.html::empty-submit-untested::(click)=submitStatusUpdate": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/imaging/imaging.html::empty-submit-untested::data-testid=imaging-order-submit": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/lab/lab-approval-queue/lab-approval-queue.html::empty-submit-untested::(click)=saveStudy": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/lab/lab-approval-queue/lab-approval-queue.html::empty-submit-untested::(click)=submitApprovalAction": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/lab/lab-approval-queue/lab-approval-queue.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/lab/lab-instruments/lab-instruments.html::empty-submit-untested::type=submit": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/lab/lab-instruments/lab-instruments.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/lab/lab-inventory/lab-inventory.html::empty-submit-untested::type=submit": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/lab/lab-inventory/lab-inventory.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/lab/lab-results/lab-results.html::empty-submit-untested::(click)=submitForm": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/lab/lab-results/lab-results.html::empty-submit-untested::data-testid=read-back-submit": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/lab/lab-results/lab-results.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/lab/lab.html::empty-submit-untested::(click)=collectSpecimen": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/lab/lab.html::empty-submit-untested::(click)=submitForm": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/lab/lab.html::empty-submit-untested::data-testid=lab-reject-confirm": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/lab/lab.html::empty-submit-untested::data-testid=lab-void-confirm": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/lab/lab.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/lock-screen/lock-screen.html::empty-submit-untested::type=submit": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/lock-screen/lock-screen.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/login/login.html::empty-submit-untested::type=submit": {
+      "count": 4,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/login/login.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/maternity/birth-plan-tab.html::empty-submit-untested::(click)=submitPlan": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/maternity/birth-plan-tab.html::empty-submit-untested::(click)=submitReview": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/maternity/birth-plan-tab.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/maternity/maternity.html::empty-submit-untested::(click)=sendMessage": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/maternity/maternity.html::empty-submit-untested::(click)=submitHistory": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/maternity/maternity.html::empty-submit-untested::(click)=submitReferral": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/maternity/maternity.html::empty-submit-untested::(click)=submitReferralAction": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/maternity/maternity.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/maternity/prenatal-tab.html::empty-submit-untested::(click)=generate": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/maternity/prenatal-tab.html::empty-submit-untested::(click)=submitReschedule": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/maternity/prenatal-tab.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/maternity/ultrasound-tab.html::empty-submit-untested::(click)=submitOrder": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/maternity/ultrasound-tab.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/medication-history/medication-history.html::empty-submit-untested::(click)=submitFill": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/medication-history/medication-history.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/mfa/mfa-challenge.html::empty-submit-untested::type=submit": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/mfa/mfa-enroll.html::empty-submit-untested::type=submit": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/micro/microbiology.html::empty-submit-untested::data-testid=susc-save": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/micro/microbiology.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/mortality/mortality.html::empty-submit-untested::(click)=submitAmend": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/mortality/mortality.html::empty-submit-untested::(click)=submitRecord": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/mortality/mortality.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/notifications/notification-settings.ts::empty-submit-untested::(click)=save": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/notifications/notification-settings.ts::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/nurse-station/emar/emar.component.html::empty-submit-untested::data-testid=emar-administer-given": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/nurse-station/emar/emar.component.html::empty-submit-untested::data-testid=emar-administer-held": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/nurse-station/emar/emar.component.html::empty-submit-untested::data-testid=emar-administer-refused": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/nurse-station/emar/emar.component.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/nurse-station/nurse-station.html::empty-submit-untested::(click)=confirmHoldRefuse": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/nurse-station/nurse-station.html::empty-submit-untested::(click)=submitCreateHandoff": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/nurse-station/nurse-station.html::empty-submit-untested::(click)=submitCreateTask": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/nurse-station/nurse-station.html::empty-submit-untested::data-testid=care-note-save": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/nurse-station/nurse-station.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/nurse-station/nursing-intake-form/nursing-intake-form.component.html::empty-submit-untested::type=submit": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/nurse-station/nursing-intake-form/nursing-intake-form.component.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/nurse-station/triage-form/triage-form.component.html::empty-submit-untested::type=submit": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/nurse-station/triage-form/triage-form.component.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/on-call/on-call.html::empty-submit-untested::data-testid=oncall-save": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/on-call/on-call.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/onboarding/role-welcome/role-welcome.html::empty-submit-untested::(click)=submitCode": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/onboarding/role-welcome/role-welcome.html::empty-submit-untested::data-testid=activate-by-phone-submit": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/onboarding/role-welcome/role-welcome.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/organizations/organization-detail.html::empty-submit-untested::(click)=confirm": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/organizations/organization-detail.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/organizations/organization-list.html::empty-submit-untested::type=submit": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/organizations/organization-list.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/panel/panel.html::empty-submit-untested::(click)=submitEnd": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/panel/panel.html::empty-submit-untested::data-testid=submit-assign": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/panel/panel.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/patient-education/patient-education.html::empty-submit-untested::(click)=submitAssign": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/patient-education/patient-education.html::empty-submit-untested::(click)=submitResource": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/patient-education/patient-education.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/patient-portal/my-appointments/pre-checkin-form/pre-checkin-form.component.html::empty-submit-untested::(click)=submit": {
+      "count": 1,
+      "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
+    },
+    "src/app/patient-portal/my-appointments/pre-checkin-form/pre-checkin-form.component.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): front-office form, mapped by the fix/r29-portal-front-office shared fieldErrors mapper"
+    },
+    "src/app/patient-portal/my-documents/my-documents.component.html::empty-submit-untested::(click)=uploadDocument": {
+      "count": 1,
+      "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
+    },
+    "src/app/patient-portal/my-documents/my-documents.component.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): front-office form, mapped by the fix/r29-portal-front-office shared fieldErrors mapper"
+    },
+    "src/app/patient-portal/my-education/my-education.component.html::empty-submit-untested::data-testid=edu-submit-question": {
+      "count": 1,
+      "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
+    },
+    "src/app/patient-portal/my-education/my-education.component.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): front-office form, mapped by the fix/r29-portal-front-office shared fieldErrors mapper"
+    },
+    "src/app/patient-portal/my-family-access/my-family-access.component.html::empty-submit-untested::(click)=grantAccess": {
+      "count": 1,
+      "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
+    },
+    "src/app/patient-portal/my-family-access/my-family-access.component.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): front-office form, mapped by the fix/r29-portal-front-office shared fieldErrors mapper"
+    },
+    "src/app/patient-portal/my-screenings/my-screenings.component.html::empty-submit-untested::(click)=submit": {
+      "count": 1,
+      "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
+    },
+    "src/app/patient-portal/my-screenings/my-screenings.component.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): front-office form, mapped by the fix/r29-portal-front-office shared fieldErrors mapper"
+    },
+    "src/app/patients/break-glass-banner/break-glass-banner.component.html::empty-submit-untested::(click)=openModal": {
+      "count": 1,
+      "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
+    },
+    "src/app/patients/break-glass-banner/break-glass-banner.component.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): front-office form, mapped by the fix/r29-portal-front-office shared fieldErrors mapper"
+    },
+    "src/app/patients/coverage-tab/coverage-tab.component.html::empty-submit-untested::(click)=submitEdit": {
+      "count": 1,
+      "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
+    },
+    "src/app/patients/coverage-tab/coverage-tab.component.html::empty-submit-untested::(click)=submitLink": {
+      "count": 1,
+      "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
+    },
+    "src/app/patients/coverage-tab/coverage-tab.component.html::empty-submit-untested::data-testid=consent-revoke-confirm": {
+      "count": 1,
+      "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
+    },
+    "src/app/patients/coverage-tab/coverage-tab.component.html::empty-submit-untested::data-testid=consent-save": {
+      "count": 1,
+      "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
+    },
+    "src/app/patients/coverage-tab/coverage-tab.component.html::empty-submit-untested::data-testid=guarantor-save": {
+      "count": 1,
+      "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
+    },
+    "src/app/patients/coverage-tab/coverage-tab.component.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): front-office form, mapped by the fix/r29-portal-front-office shared fieldErrors mapper"
+    },
+    "src/app/patients/fluid-balance/fluid-balance-tab.component.html::empty-submit-untested::data-testid=io-save": {
+      "count": 1,
+      "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
+    },
+    "src/app/patients/fluid-balance/fluid-balance-tab.component.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): front-office form, mapped by the fix/r29-portal-front-office shared fieldErrors mapper"
+    },
+    "src/app/patients/medical-history-tab/medical-history-tab.component.html::empty-submit-untested::(click)=submitFamily": {
+      "count": 1,
+      "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
+    },
+    "src/app/patients/medical-history-tab/medical-history-tab.component.html::empty-submit-untested::(click)=submitImmunization": {
+      "count": 1,
+      "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
+    },
+    "src/app/patients/medical-history-tab/medical-history-tab.component.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): front-office form, mapped by the fix/r29-portal-front-office shared fieldErrors mapper"
+    },
+    "src/app/patients/patient-chart/patient-chart.component.html::empty-submit-untested::(click)=submitAllergy": {
+      "count": 1,
+      "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
+    },
+    "src/app/patients/patient-chart/patient-chart.component.html::empty-submit-untested::(click)=submitDeactivateAllergy": {
+      "count": 1,
+      "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
+    },
+    "src/app/patients/patient-chart/patient-chart.component.html::empty-submit-untested::(click)=submitDeleteProblem": {
+      "count": 1,
+      "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
+    },
+    "src/app/patients/patient-chart/patient-chart.component.html::empty-submit-untested::(click)=submitProblem": {
+      "count": 1,
+      "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
+    },
+    "src/app/patients/patient-chart/patient-chart.component.html::empty-submit-untested::(click)=submitTimelineReason": {
+      "count": 1,
+      "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
+    },
+    "src/app/patients/patient-chart/patient-chart.component.html::empty-submit-untested::(click)=submitUpdate": {
+      "count": 1,
+      "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
+    },
+    "src/app/patients/patient-chart/patient-chart.component.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): front-office form, mapped by the fix/r29-portal-front-office shared fieldErrors mapper"
+    },
+    "src/app/patients/patient-demographics-edit/patient-demographics-edit.component.html::empty-submit-untested::type=submit": {
+      "count": 1,
+      "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
+    },
+    "src/app/patients/patient-form.html::empty-submit-untested::(click)=confirmPhoneVerification": {
+      "count": 1,
+      "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
+    },
+    "src/app/patients/patient-form.html::empty-submit-untested::(click)=sendPhoneVerification": {
+      "count": 1,
+      "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
+    },
+    "src/app/patients/patient-form.html::empty-submit-untested::type=submit": {
+      "count": 1,
+      "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
+    },
+    "src/app/pharmacy/controlled-register.html::empty-submit-untested::data-testid=register-export-csv": {
+      "count": 1,
+      "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
+    },
+    "src/app/pharmacy/controlled-register.html::empty-submit-untested::data-testid=register-export-pdf": {
+      "count": 1,
+      "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
+    },
+    "src/app/pharmacy/controlled-register.html::empty-submit-untested::data-testid=register-load": {
+      "count": 1,
+      "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
+    },
+    "src/app/pharmacy/controlled-register.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): front-office form, mapped by the fix/r29-portal-front-office shared fieldErrors mapper"
+    },
+    "src/app/pharmacy/dispensing.html::empty-submit-untested::data-testid=dispense-submit": {
+      "count": 1,
+      "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
+    },
+    "src/app/pharmacy/dispensing.html::empty-submit-untested::data-testid=mark-ready": {
+      "count": 1,
+      "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
+    },
+    "src/app/pharmacy/dispensing.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): front-office form, mapped by the fix/r29-portal-front-office shared fieldErrors mapper"
+    },
+    "src/app/pharmacy/drug-interactions.html::empty-submit-untested::data-testid=ddi-save": {
+      "count": 1,
+      "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
+    },
+    "src/app/pharmacy/drug-interactions.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): front-office form, mapped by the fix/r29-portal-front-office shared fieldErrors mapper"
+    },
+    "src/app/pharmacy/goods-receipt.html::empty-submit-untested::type=submit": {
+      "count": 1,
+      "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
+    },
+    "src/app/pharmacy/goods-receipt.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): front-office form, mapped by the fix/r29-portal-front-office shared fieldErrors mapper"
+    },
+    "src/app/pharmacy/inventory-dashboard.html::empty-submit-untested::type=submit": {
+      "count": 1,
+      "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
+    },
+    "src/app/pharmacy/inventory-dashboard.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): front-office form, mapped by the fix/r29-portal-front-office shared fieldErrors mapper"
+    },
+    "src/app/pharmacy/medication-catalog.html::empty-submit-untested::type=submit": {
+      "count": 2,
+      "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
+    },
+    "src/app/pharmacy/medication-catalog.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): front-office form, mapped by the fix/r29-portal-front-office shared fieldErrors mapper"
+    },
+    "src/app/pharmacy/mtm-review.html::empty-submit-untested::type=submit": {
+      "count": 1,
+      "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
+    },
+    "src/app/pharmacy/mtm-review.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): front-office form, mapped by the fix/r29-portal-front-office shared fieldErrors mapper"
+    },
+    "src/app/pharmacy/pharmacy-registry.html::empty-submit-untested::type=submit": {
+      "count": 1,
+      "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
+    },
+    "src/app/pharmacy/pharmacy-registry.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): front-office form, mapped by the fix/r29-portal-front-office shared fieldErrors mapper"
+    },
+    "src/app/pharmacy/stock-adjustment.html::empty-submit-untested::type=submit": {
+      "count": 1,
+      "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
+    },
+    "src/app/pharmacy/stock-adjustment.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): front-office form, mapped by the fix/r29-portal-front-office shared fieldErrors mapper"
+    },
+    "src/app/pharmacy/stock-routing.html::empty-submit-untested::(click)=confirmPartnerDispense": {
+      "count": 1,
+      "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
+    },
+    "src/app/pharmacy/stock-routing.html::empty-submit-untested::(click)=openPartnerForm": {
+      "count": 1,
+      "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
+    },
+    "src/app/pharmacy/stock-routing.html::empty-submit-untested::(click)=respondToPartner": {
+      "count": 2,
+      "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
+    },
+    "src/app/pharmacy/stock-routing.html::empty-submit-untested::(click)=submitBackOrder": {
+      "count": 1,
+      "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
+    },
+    "src/app/pharmacy/stock-routing.html::empty-submit-untested::(click)=submitRouteToPartner": {
+      "count": 1,
+      "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
+    },
+    "src/app/pharmacy/stock-routing.html::empty-submit-untested::data-testid=open-back-order": {
+      "count": 1,
+      "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
+    },
+    "src/app/pharmacy/stock-routing.html::empty-submit-untested::data-testid=print-for-patient": {
+      "count": 1,
+      "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
+    },
+    "src/app/pharmacy/stock-routing.html::empty-submit-untested::data-testid=routing-recheck": {
+      "count": 1,
+      "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
+    },
+    "src/app/pharmacy/stock-routing.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): front-office form, mapped by the fix/r29-portal-front-office shared fieldErrors mapper"
+    },
+    "src/app/platform/platform.html::empty-submit-untested::(click)=provisionCatalogItem": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/platform/platform.html::empty-submit-untested::type=submit": {
+      "count": 3,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/platform/platform.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/prescriptions/prescriptions.html::empty-submit-untested::(click)=submitForm": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/prescriptions/prescriptions.html::empty-submit-untested::data-testid=rx-dispatch-submit": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/prescriptions/prescriptions.html::empty-submit-untested::data-testid=rx-sign-submit": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/prescriptions/prescriptions.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/procedure-orders/procedure-orders.html::empty-submit-untested::(click)=submitCancel": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/procedure-orders/procedure-orders.html::empty-submit-untested::(click)=submitConsent": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/procedure-orders/procedure-orders.html::empty-submit-untested::(click)=submitOrder": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/procedure-orders/procedure-orders.html::empty-submit-untested::(click)=submitSchedule": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/procedure-orders/procedure-orders.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/profile/profile.html::empty-submit-untested::(click)=submitVerificationCode": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/profile/profile.html::empty-submit-untested::type=submit": {
+      "count": 5,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/profile/profile.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/provider/provider-profile/provider-profile.html::empty-submit-untested::(click)=save": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/provider/provider-profile/provider-profile.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/provider/provider-staff-register/provider-staff-register.html::empty-submit-untested::(click)=submit": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/provider/provider-staff-register/provider-staff-register.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/reception/checkin-dialog/checkin-dialog.component.html::empty-submit-untested::type=submit": {
+      "count": 1,
+      "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
+    },
+    "src/app/reception/close-unseen-dialog/close-unseen-dialog.component.html::empty-submit-untested::(click)=submit": {
+      "count": 1,
+      "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
+    },
+    "src/app/reception/close-unseen-dialog/close-unseen-dialog.component.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): front-office form, mapped by the fix/r29-portal-front-office shared fieldErrors mapper"
+    },
+    "src/app/reception/empi-candidates-panel/empi-candidates-panel.component.ts::empty-submit-untested::data-testid=empi-search": {
+      "count": 1,
+      "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
+    },
+    "src/app/reception/waitlist-panel/waitlist-panel.component.html::empty-submit-untested::(click)=submitOffer": {
+      "count": 1,
+      "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
+    },
+    "src/app/reception/waitlist-panel/waitlist-panel.component.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): front-office form, mapped by the fix/r29-portal-front-office shared fieldErrors mapper"
+    },
+    "src/app/reception/walkin-dialog/walkin-dialog.component.html::empty-submit-untested::(click)=submit": {
+      "count": 1,
+      "why": "D1256 class (round 29): front-office form, driven by the fix/r29-portal-front-office behavioural guard"
+    },
+    "src/app/reception/walkin-dialog/walkin-dialog.component.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): front-office form, mapped by the fix/r29-portal-front-office shared fieldErrors mapper"
+    },
+    "src/app/referrals/referrals.html::empty-submit-untested::(click)=executeAcknowledge": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/referrals/referrals.html::empty-submit-untested::(click)=executeComplete": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/referrals/referrals.html::empty-submit-untested::(click)=executeReject": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/referrals/referrals.html::empty-submit-untested::(click)=executeSchedule": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/referrals/referrals.html::empty-submit-untested::(click)=submitForm": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/referrals/referrals.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/registrations/registrations.html::empty-submit-untested::(click)=submitForm": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/registrations/registrations.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/registries/registries.html::empty-submit-untested::data-testid=submit-enroll": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/registries/registries.html::empty-submit-untested::data-testid=submit-status": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/registries/registries.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/reports/reports.html::empty-submit-untested::(click)=submitCreate": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/reports/reports.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/reset-password/reset-password.html::empty-submit-untested::type=submit": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/reset-password/reset-password.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/roi/roi.html::empty-submit-untested::data-testid=submit-decision": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/roi/roi.html::empty-submit-untested::data-testid=submit-intake": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/roi/roi.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/roles/role-list.html::empty-submit-untested::(click)=savePermissions": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/roles/role-list.html::empty-submit-untested::type=submit": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/roles/role-list.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/scheduling/scheduling.html::empty-submit-untested::(click)=submitBulk": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/scheduling/scheduling.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/shared/prescription-clarification/prescription-clarification.component.html::empty-submit-untested::(click)=submit": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/shared/prescription-clarification/prescription-clarification.component.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/shared/reason-dialog/reason-dialog.component.ts::empty-submit-untested::data-testid=reason-dialog-confirm": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/shared/reason-dialog/reason-dialog.component.ts::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/slot-admin/slot-admin.html::empty-submit-untested::data-testid=tpl-save": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/slot-admin/slot-admin.html::empty-submit-untested::data-testid=vt-save": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/slot-admin/slot-admin.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/staff/staff-list.html::empty-submit-untested::type=submit": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/staff/staff-list.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/super-admin/cost-panel/cost-panel.component.ts::empty-submit-untested::data-testid=cost-reload": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/super-admin/emergency/emergency.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "marked by the shared serverFieldErrorsInterceptor through data-server-field, the mapper form-behaviour.spec.ts drives on this screen (QA CX-004/CX-005); the component adds no map of its own"
+    },
+    "src/app/super-admin/integration-messages/integration-messages.html::empty-submit-untested::type=submit": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/super-admin/providers/provider-detail/provider-detail.html::empty-submit-untested::(click)=submitDecision": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/super-admin/providers/provider-detail/provider-detail.html::empty-submit-untested::(click)=submitLifecycle": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/super-admin/providers/provider-detail/provider-detail.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/super-admin/providers/provider-form/provider-form.html::empty-submit-untested::(click)=submit": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/super-admin/providers/provider-form/provider-form.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/super-admin/subscriptions/subscriptions.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "marked by the shared serverFieldErrorsInterceptor through data-server-field, the mapper form-behaviour.spec.ts drives on this screen (QA CX-004/CX-005); the component adds no map of its own"
+    },
+    "src/app/transfusion/transfusion.html::empty-submit-untested::(click)=submitCrossmatch": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/transfusion/transfusion.html::empty-submit-untested::(click)=submitHang": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/transfusion/transfusion.html::empty-submit-untested::(click)=submitReaction": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/transfusion/transfusion.html::empty-submit-untested::(click)=submitRequest": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/transfusion/transfusion.html::empty-submit-untested::(click)=submitUnit": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/transfusion/transfusion.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/users/user-list.html::empty-submit-untested::type=submit": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/users/user-list.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/verify-email/verify-email.html::empty-submit-untested::type=submit": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/verify-email/verify-email.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    },
+    "src/app/webhooks/webhooks.html::empty-submit-untested::data-testid=submit-endpoint": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/webhooks/webhooks.html::empty-submit-untested::data-testid=submit-issue": {
+      "count": 1,
+      "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
+    },
+    "src/app/webhooks/webhooks.html::server-field-errors-unmapped::component": {
+      "count": 1,
+      "why": "D1341 class (round 29): fieldErrors not yet mapped onto the controls; standing debt"
+    }
+  }
+}

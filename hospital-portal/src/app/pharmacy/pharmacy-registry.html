@@ -64,7 +64,8 @@
             @if (p.fulfillmentMode) {
               <span class="meta-chip">{{ p.fulfillmentMode | enumLabel: 'fulfillmentMode' }}</span>
             }
-            <span class="status-badge" [class.active]="p.active">
+            {{ ' '
+            }}<span class="status-badge" [class.active]="p.active">
               {{ p.active ? ('COMMON.ACTIVE' | translate) : ('COMMON.INACTIVE' | translate) }}
             </span>
             @if (canManage()) {
@@ -72,6 +73,7 @@
                 <button
                   class="action-link"
                   [title]="'COMMON.EDIT' | translate"
+                  [attr.aria-label]="'COMMON.EDIT' | translate"
                   (click)="openEdit(p)"
                 >
                   <span class="material-symbols-outlined">edit</span>
@@ -79,6 +81,7 @@
                 <button
                   class="action-link danger"
                   [title]="'COMMON.DELETE' | translate"
+                  [attr.aria-label]="'COMMON.DELETE' | translate"
                   (click)="confirmDelete(p)"
                 >
                   <span class="material-symbols-outlined">delete</span>
@@ -92,11 +95,17 @@
 
     @if (totalPages > 1) {
       <div class="pagination">
-        <button class="btn-secondary btn-sm" [disabled]="currentPage === 0" (click)="prevPage()">
+        <button
+          [attr.aria-label]="'COMMON.PREVIOUS' | translate"
+          class="btn-secondary btn-sm"
+          [disabled]="currentPage === 0"
+          (click)="prevPage()"
+        >
           <span class="material-symbols-outlined">chevron_left</span>
         </button>
         <span class="page-info">{{ currentPage + 1 }} / {{ totalPages }}</span>
         <button
+          [attr.aria-label]="'COMMON.NEXT' | translate"
           class="btn-secondary btn-sm"
           [disabled]="currentPage >= totalPages - 1"
           (click)="nextPage()"
@@ -136,16 +145,23 @@
         (click)="$event.stopPropagation()"
         (keydown)="$event.stopPropagation()"
         tabindex="-1"
+        appModalDialog
+        aria-labelledby="pharmacy-registry-dialog-title-1"
+        (escaped)="closeModal()"
       >
         <div class="modal-header">
-          <h2>
+          <h2 id="pharmacy-registry-dialog-title-1">
             {{
               editing()
                 ? ('PHARMACY.EDIT_PHARMACY' | translate)
                 : ('PHARMACY.NEW_PHARMACY' | translate)
             }}
           </h2>
-          <button class="modal-close" (click)="closeModal()">
+          <button
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+            class="modal-close"
+            (click)="closeModal()"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
@@ -251,6 +267,7 @@
                 <input
                   id="pPhone"
                   type="tel"
+                  appPhoneField
                   [(ngModel)]="form.phoneNumber"
                   name="phoneNumber"
                   placeholder="+22625000001"
@@ -302,7 +319,13 @@
             <button type="button" class="btn-secondary" (click)="closeModal()">
               {{ 'COMMON.CANCEL' | translate }}
             </button>
-            <button type="submit" class="btn-primary" [disabled]="saving()">
+            <button
+              appSubmitGuard
+              submitGuardRequired
+              type="submit"
+              class="btn-primary"
+              [disabled]="saving()"
+            >
               {{
                 saving()
                   ? editing()
@@ -334,10 +357,17 @@
         (click)="$event.stopPropagation()"
         (keydown)="$event.stopPropagation()"
         tabindex="-1"
+        appModalDialog
+        aria-labelledby="pharmacy-registry-dialog-title-2"
+        (escaped)="cancelDelete()"
       >
         <div class="modal-header">
-          <h2>{{ 'COMMON.DELETE' | translate }}</h2>
-          <button class="modal-close" (click)="cancelDelete()">
+          <h2 id="pharmacy-registry-dialog-title-2">{{ 'COMMON.DELETE' | translate }}</h2>
+          <button
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+            class="modal-close"
+            (click)="cancelDelete()"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
@@ -345,7 +375,7 @@
           <p class="delete-warning">
             {{ 'PHARMACY.DELETE_PHARMACY_CONFIRM' | translate }}
             <strong>{{ deletingItem()?.name }}</strong
-            >?
+            >{{ 'COMMON.QUESTION_MARK' | translate }}
           </p>
         </div>
         <div class="modal-actions">

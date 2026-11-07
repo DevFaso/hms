@@ -31,6 +31,12 @@ public final class CallerIdentity {
         return PrincipalUserIds.of(auth).orElse(null);
     }
 
+    /** True when the two staff records belong to the same user (QA D955 class: requester vs approver). */
+    public static boolean sameUser(Staff a, Staff b) {
+        return a != null && b != null && a.getUser() != null && b.getUser() != null
+            && a.getUser().getId() != null && a.getUser().getId().equals(b.getUser().getId());
+    }
+
     /** True when {@code staff} is the caller's own staff record. */
     public static boolean isCaller(Staff staff) {
         UUID caller = currentUserId();
@@ -57,6 +63,30 @@ public final class CallerIdentity {
     public static void requireCallerUnlessSuperAdmin(Staff staff) {
         if (!isGlobalSuperAdmin()) {
             requireCaller(staff);
+        }
+    }
+
+    /**
+     * QA D1112 (round 19): an authorship check says what the rule is. A doctor
+     * finalizing a colleague's discharge summary read "Vous ne pouvez agir
+     * qu'en votre propre nom" ({@code identity.notCaller}), which is the
+     * refusal for naming someone else in a request, not for touching a record
+     * someone else wrote. Refuse (403) with {@code messageKey}, the object's
+     * own rule ("Seul le médecin qui a rédigé ce résumé peut le finaliser."),
+     * unless {@code author} is the caller's staff record.
+     * {@code AuthorshipRefusalKeyGuardTest} keeps {@code requireCaller} for
+     * the acting-on-behalf checks only.
+     */
+    public static void requireAuthor(Staff author, String messageKey) {
+        if (!isCaller(author)) {
+            throw new ClientSafeAccessDeniedException(MessageUtil.resolveOrRaw(messageKey));
+        }
+    }
+
+    /** {@link #requireAuthor}, except for a verified super-admin in global view. */
+    public static void requireAuthorUnlessSuperAdmin(Staff author, String messageKey) {
+        if (!isGlobalSuperAdmin()) {
+            requireAuthor(author, messageKey);
         }
     }
 

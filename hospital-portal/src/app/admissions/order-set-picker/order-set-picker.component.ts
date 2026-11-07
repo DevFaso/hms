@@ -1,6 +1,8 @@
+import { allRows } from '../../shared/all-pages';
 import {
   ChangeDetectionStrategy,
   Component,
+  computed,
   EventEmitter,
   OnChanges,
   OnDestroy,
@@ -12,25 +14,36 @@ import {
 } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
-import { TranslateModule } from '@ngx-translate/core';
-import {
-  Subject,
-  Subscription,
-  debounceTime,
-  distinctUntilChanged,
-  switchMap,
-  takeUntil,
-} from 'rxjs';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { Subject, Subscription, debounceTime, switchMap, takeUntil } from 'rxjs';
 
 import {
+  appliedOrderCount,
+  appliedResultKey,
   AppliedOrderSetSummary,
   OrderSetService,
   OrderSetSummary,
 } from '../../services/order-set.service';
 import { CdsCardListComponent } from '../../shared/cds-card/cds-card.component';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
+import { refusalReason } from '../../shared/refusal-reason';
 
 type State = 'idle' | 'searching' | 'ready' | 'applying' | 'applied' | 'error';
+
+/**
+ * QA D1438: the words a stored item may name its route in, as the prescription
+ * form's codes (MedicationRoutes on the server knows the same words). Older and
+ * API-written items say ORAL where the editor writes PO.
+ */
+const ROUTE_CODES: Readonly<Record<string, string>> = {
+  ORAL: 'PO',
+  INTRAVENOUS: 'IV',
+  INTRAMUSCULAR: 'IM',
+  SUBCUTANEOUS: 'SC',
+  RECTAL: 'PR',
+  INHALATION: 'INH',
+  TOP: 'TOPICAL',
+};
 
 /**
  * Modal-style picker for applying a CPOE order set to an admission.
@@ -72,7 +85,7 @@ type State = 'idle' | 'searching' | 'ready' | 'applying' | 'applied' | 'error';
         (ngModelChange)="onSearch($event)"
       />
 
-      @if (state() === 'ready' && results().length > 0) {
+      @if (showList() && results().length > 0) {
         <ul class="order-set-picker__list" data-testid="order-set-picker-list">
           @for (os of results(); track trackById($index, os)) {
             <li
@@ -88,7 +101,9 @@ type State = 'idle' | 'searching' | 'ready' | 'applying' | 'applied' | 'error';
                 {{ os.name }} <small>v{{ os.version }}</small>
               </div>
               <div class="order-set-picker__item-meta">
-                {{ os.orderCount }} {{ 'ORDER_SETS.ITEMS' | translate }} ·
+                {{ os.orderCount }}
+                {{ (os.orderCount === 1 ? 'ORDER_SETS.ITEM_ONE' : 'ORDER_SETS.ITEMS') | translate }}
+                ·
                 {{ os.admissionType | enumLabel: 'admissionType' }}
               </div>
             </li>
@@ -96,7 +111,7 @@ type State = 'idle' | 'searching' | 'ready' | 'applying' | 'applied' | 'error';
         </ul>
       }
 
-      @if (state() === 'ready' && results().length === 0) {
+      @if (showList() && results().length === 0) {
         <p class="order-set-picker__empty" data-testid="order-set-picker-empty">
           {{ 'ORDER_SETS.NO_RESULTS' | translate }}
         </p>
@@ -108,9 +123,9 @@ type State = 'idle' | 'searching' | 'ready' | 'applying' | 'applied' | 'error';
         </p>
       }
 
-      @if (state() === 'error') {
-        <p class="order-set-picker__error" data-testid="order-set-picker-error">
-          {{ 'ORDER_SETS.ERROR' | translate }}
+      @if (state() === 'error' || applyFailed()) {
+        <p class="order-set-picker__error" role="alert" data-testid="order-set-picker-error">
+          {{ applyRefusal() || ('ORDER_SETS.ERROR' | translate) }}
         </p>
       }
 
@@ -122,21 +137,28 @@ type State = 'idle' | 'searching' | 'ready' | 'applying' | 'applied' | 'error';
           }
           <ul>
             @for (item of sel.orderItems; track item; let i = $index) {
-              <li>
+              <li data-testid="order-set-picker-preview-item">
                 <strong>{{ orderItemType(item) }}</strong
-                >: {{ orderItemLabel(item) }}
+                >{{ 'COMMON.COLON' | translate }} {{ orderItemLabel(item) }}
+                @if (orderItemDetail(item); as detail) {
+                  <small class="order-set-picker__item-detail">{{ detail }}</small>
+                }
               </li>
             }
           </ul>
-          <button
-            type="button"
-            class="btn-primary"
-            data-testid="order-set-picker-apply"
-            [disabled]="state() === 'applying'"
-            (click)="apply(sel)"
-          >
-            {{ 'ORDER_SETS.APPLY' | translate }}
-          </button>
+          <!-- QA D1345 class (round 30): once applied, the preview offers no Apply
+               (a second press created every order again); the result shows below. -->
+          @if (appliedSummary() === null) {
+            <button
+              type="button"
+              class="btn-primary"
+              data-testid="order-set-picker-apply"
+              [disabled]="applying()"
+              (click)="apply(sel)"
+            >
+              {{ 'ORDER_SETS.APPLY' | translate }}
+            </button>
+          }
         </section>
       }
 
@@ -144,15 +166,8 @@ type State = 'idle' | 'searching' | 'ready' | 'applying' | 'applied' | 'error';
         <section class="order-set-picker__applied" data-testid="order-set-picker-applied">
           <p>
             {{
-              'ORDER_SETS.APPLIED_RESULT'
-                | translate
-                  : {
-                      count:
-                        summary.prescriptionIds.length +
-                        summary.labOrderIds.length +
-                        summary.imagingOrderIds.length,
-                      skipped: summary.skippedItemCount,
-                    }
+              resultKey(summary)
+                | translate: { count: createdCount(summary), skipped: summary.skippedItemCount }
             }}
           </p>
           <app-cds-card-list [cards]="summary.cdsAdvisories" />
@@ -197,6 +212,10 @@ type State = 'idle' | 'searching' | 'ready' | 'applying' | 'applied' | 'error';
       .order-set-picker__error {
         color: var(--danger, #b00020);
       }
+      .order-set-picker__item-detail {
+        display: block;
+        color: var(--text-secondary, #64748b);
+      }
       .order-set-picker__preview {
         margin-top: 1rem;
         padding-top: 1rem;
@@ -215,12 +234,23 @@ export class OrderSetPickerComponent implements OnChanges, OnDestroy {
   @Output() readonly applied = new EventEmitter<AppliedOrderSetSummary>();
 
   protected readonly state = signal<State>('idle');
+  /** A request to apply the order set is in flight (the only reason "Apply" is disabled). */
+  protected readonly applying = computed(() => this.state() === 'applying');
   protected readonly results = signal<OrderSetSummary[]>([]);
   protected readonly selected = signal<OrderSetSummary | null>(null);
   protected readonly searchTerm = signal<string>('');
   protected readonly appliedSummary = signal<AppliedOrderSetSummary | null>(null);
+  /** QA D1396: the server's own reason an apply was refused, shown instead of the generic line. */
+  protected readonly applyRefusal = signal<string | null>(null);
+  /** An apply failed: said on the page, and the list stays to pick another set. */
+  protected readonly applyFailed = signal(false);
+  /** The list while nothing is being read, and while a set is being applied. */
+  protected readonly showList = computed(
+    () => this.state() === 'ready' || this.state() === 'applying',
+  );
 
   private readonly orderSetService = inject(OrderSetService);
+  private readonly translate = inject(TranslateService);
   private readonly searchSubject = new Subject<string>();
   private readonly destroyed$ = new Subject<void>();
   private applySub?: Subscription;
@@ -229,7 +259,6 @@ export class OrderSetPickerComponent implements OnChanges, OnDestroy {
     this.searchSubject
       .pipe(
         debounceTime(250),
-        distinctUntilChanged(),
         takeUntil(this.destroyed$),
         // Guard: when the host component renders before its hospitalId
         // input binding has propagated, an immediate request would hit
@@ -242,18 +271,20 @@ export class OrderSetPickerComponent implements OnChanges, OnDestroy {
             this.state.set('idle');
             return [];
           }
-          this.state.set('searching');
-          return this.orderSetService.list(hid, term);
+          // QA D1345 class: a search landing mid-apply never re-enables "Apply".
+          if (this.state() !== 'applying') this.state.set('searching');
+          // QA D1347: every order set the search matches (all pages), not the first 20.
+          return allRows((page, size) => this.orderSetService.list(hid, term, page, size));
         }),
       )
       .subscribe({
-        next: (page) => {
-          this.results.set(page.content ?? []);
-          this.state.set('ready');
+        next: (rows) => {
+          this.results.set(rows);
+          if (this.state() !== 'applying') this.state.set('ready');
         },
         error: () => {
           this.results.set([]);
-          this.state.set('error');
+          if (this.state() !== 'applying') this.state.set('error');
         },
       });
     this.searchSubject.next('');
@@ -280,10 +311,18 @@ export class OrderSetPickerComponent implements OnChanges, OnDestroy {
   protected select(os: OrderSetSummary): void {
     this.selected.set(os);
     this.appliedSummary.set(null);
+    this.applyRefusal.set(null);
+    this.applyFailed.set(false);
   }
 
   protected apply(os: OrderSetSummary): void {
+    // QA D1345 class (round 30): an applied set is never applied again from
+    // the same preview (a second press created every order a second time);
+    // picking a set again starts a new preview.
+    if (this.appliedSummary() !== null || this.applying()) return;
     this.applySub?.unsubscribe();
+    this.applyRefusal.set(null);
+    this.applyFailed.set(false);
     this.state.set('applying');
     this.applySub = this.orderSetService
       .apply(os.id, this.admissionId(), {
@@ -296,7 +335,11 @@ export class OrderSetPickerComponent implements OnChanges, OnDestroy {
           this.state.set('applied');
           this.applied.emit(summary);
         },
-        error: () => this.state.set('error'),
+        error: (err: unknown) => {
+          this.applyRefusal.set(refusalReason(err));
+          this.applyFailed.set(true);
+          this.state.set('ready');
+        },
       });
   }
 
@@ -304,8 +347,88 @@ export class OrderSetPickerComponent implements OnChanges, OnDestroy {
     return os.id;
   }
 
+  /** QA D1405: the item's type in the reader's language, never the wire code. */
   protected orderItemType(item: Record<string, unknown>): string {
-    return String(item['orderType'] ?? '?');
+    return this.labelFor('ORDER_SETS.ITEM_TYPE', String(item['orderType'] ?? '?'));
+  }
+
+  protected createdCount(summary: AppliedOrderSetSummary): number {
+    return appliedOrderCount(summary);
+  }
+
+  protected resultKey(summary: AppliedOrderSetSummary): string {
+    return appliedResultKey(appliedOrderCount(summary));
+  }
+
+  /**
+   * QA D1405: what tells two items of one drug apart: dose, route, frequency,
+   * the as-needed interval, the quantity. Empty for an item with none of them.
+   */
+  protected orderItemDetail(item: Record<string, unknown>): string {
+    const interval = item['prnMinIntervalHours'];
+    const parts = [
+      this.doseText(item),
+      this.routeText(item['route']),
+      this.codedText('ORDER_SETS.FREQUENCY', item['frequency']),
+      this.asNeededText(item),
+      interval
+        ? this.translate.instant('PRESCRIPTIONS.PRN_MIN_INTERVAL_VALUE', { hours: interval })
+        : '',
+      item['quantity']
+        ? this.translate.instant('ORDER_SETS.QUANTITY_VALUE', {
+            value: item['quantity'],
+            unit: item['quantityUnit'] ?? '',
+          })
+        : '',
+    ];
+    return parts
+      .map((p) => String(p).trim())
+      .filter((p) => p !== '')
+      .join(' · ');
+  }
+
+  /** QA D1439: "as needed" is said once; a frequency that already says it is enough. */
+  private asNeededText(item: Record<string, unknown>): string {
+    if (item['asNeeded'] !== true) return '';
+    const frequency = item['frequency'];
+    const says = typeof frequency === 'string' && frequency.trim().toUpperCase() === 'PRN';
+    return says ? '' : this.translate.instant('ORDER_SETS.FREQUENCY.PRN');
+  }
+
+  /** QA D1438: the route in the reader's language, whichever word the item stored it in. */
+  private routeText(route: unknown): string {
+    if (typeof route !== 'string') return '';
+    const upper = route.trim().toUpperCase();
+    const code = ROUTE_CODES[upper] ?? upper;
+    const label = this.labelFor('ORDER_SETS.ROUTE', code);
+    return label === code ? route.trim() : label;
+  }
+
+  private doseText(item: Record<string, unknown>): string {
+    const dose = item['dose'];
+    if ((typeof dose === 'string' && dose.trim()) || typeof dose === 'number') {
+      // QA D1436: a bare number and its unit read together, as on the order.
+      const written = String(dose).trim();
+      const unit = item['doseUnit'];
+      return unit && /^[\d.,/\s\u2013-]+$/.test(written) ? `${written} ${unit as string}` : written;
+    }
+    const min = item['doseRangeMin'];
+    const max = item['doseRangeMax'];
+    const range = min != null && max != null && min !== max ? `${min}-${max}` : (min ?? max ?? '');
+    if (range === '') return '';
+    const unit = item['doseUnit'];
+    return unit ? `${range as string | number} ${unit as string}` : String(range);
+  }
+
+  private codedText(prefix: string, code: unknown): string {
+    return typeof code === 'string' && code.trim() ? this.labelFor(prefix, code) : '';
+  }
+
+  /** The translation of a coded value, or the value as written when it is not a known code. */
+  private labelFor(prefix: string, code: string): string {
+    const key = `${prefix}.${code}`;
+    const label: string = this.translate.instant(key);
+    return label === key ? code : label;
   }
 
   protected orderItemLabel(item: Record<string, unknown>): string {

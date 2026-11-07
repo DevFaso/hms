@@ -177,15 +177,15 @@ public class SuperAdminPlatformRegistryServiceImpl implements SuperAdminPlatform
     @Override
     public PlatformReleaseWindowResponseDTO scheduleReleaseWindow(PlatformReleaseWindowRequestDTO request) {
         if (!request.getEndsAt().isAfter(request.getStartsAt())) {
-            throw new BusinessException("platform.releaseWindow.endBeforeStart");
+            throw new com.example.hms.exception.FieldBusinessException("endsAt", "platform.releaseWindow.endBeforeStart");
         }
         // D7b: the unique (name, environment) constraint used to fire at
         // flush, after the audit row had already committed in its own
         // transaction — a refused schedule left an audit entry behind.
         if (platformReleaseWindowRepository.existsByNameAndEnvironment(request.getName(), request.getEnvironment())) {
-            // No arguments: ConflictException's handler splits a message on its
-            // first ':' (a "field:" prefix), and a window name may contain one.
-            throw new ConflictException(MessageUtil.resolve("platform.releaseWindow.duplicate"));
+            // QA CX-005: "name:" marks the field. No message arguments: the handler
+            // reads the prefix up to the first ':', and a window name may hold one.
+            throw new ConflictException("name:" + MessageUtil.resolve("platform.releaseWindow.duplicate"));
         }
 
         PlatformReleaseWindow releaseWindow = PlatformReleaseWindow.builder()

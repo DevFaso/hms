@@ -101,6 +101,10 @@ class AppointmentSpecificationTest {
         lenient().when(criteriaBuilder.like(any(Expression.class), anyString())).thenAnswer(inv -> mock(Predicate.class));
         lenient().when(criteriaBuilder.or(any(Predicate[].class))).thenAnswer(inv -> mock(Predicate.class));
         lenient().when(criteriaBuilder.or(any(Predicate.class), any(Predicate.class))).thenAnswer(inv -> mock(Predicate.class));
+        // QA D1322 (round 29): the search adds an MRN subquery (registration at the appointment's hospital).
+        lenient().when(query.subquery(Integer.class)).thenAnswer(inv -> mock(jakarta.persistence.criteria.Subquery.class,
+            Answers.RETURNS_DEEP_STUBS));
+        lenient().when(criteriaBuilder.exists(any())).thenAnswer(inv -> mock(Predicate.class));
 
     Join<Object, Object> patientJoin = mock(Join.class, Answers.RETURNS_DEEP_STUBS);
     Join<Object, Object> staffJoin = mock(Join.class, Answers.RETURNS_DEEP_STUBS);

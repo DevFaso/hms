@@ -64,6 +64,15 @@ for (const { file, text, lineOffset } of templatesIn(SRC)) {
   }
 }
 
+/** The `reasons` map of the current baseline (pin id → why it is free text), if any. */
+function existingReasons() {
+  try {
+    return JSON.parse(readFileSync(BASELINE_PATH, 'utf8')).reasons ?? {};
+  } catch {
+    return {};
+  }
+}
+
 if (WRITE_BASELINE) {
   const doc = {
     $comment: [
@@ -76,6 +85,8 @@ if (WRITE_BASELINE) {
       'build green.',
     ],
     pinned: [...seen.keys()].sort(),
+    // A written reason per pin, kept for every site that is still pinned.
+    reasons: Object.fromEntries(Object.entries(existingReasons()).filter(([id]) => seen.has(id))),
   };
   writeFileSync(BASELINE_PATH, `${JSON.stringify(doc, null, 2)}\n`, 'utf8');
   console.log(`[i18n-raw-enums] baseline rewritten with ${seen.size} site(s) — READ THE DIFF.`);

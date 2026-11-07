@@ -3,7 +3,13 @@ import { TestBed } from '@angular/core/testing';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 
-import { LaborTabComponent } from './labor-tab';
+import { LaborTabComponent, PARTOGRAPH_LIMITS } from './labor-tab';
+import { VITAL_SIGN_LIMITS } from '../shared/vital-sign-limits';
+import {
+  expectEmptySubmitRefusal,
+  expectFieldsMarked,
+  fieldErrorsResponse,
+} from '../testing/form-refusal-behaviour';
 import {
   LaborService,
   LaborEpisodeResponse,
@@ -559,4 +565,271 @@ describe('LaborTabComponent', () => {
       expect(text).not.toContain('(ml)');
     });
   }
+  /* ── Round 18 (QA D1068): what the midwife typed is read back ── */
+
+  it('QA D1068: the delivery summary shows the placenta, the uterotonic and the notes', () => {
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', fr);
+    translate.use('fr');
+    const delivered = { ...episode('e1', 'DELIVERED'), deliveryRecorded: true };
+    laborSpy.episodes.and.returnValue(of([delivered]));
+    laborSpy.delivery.and.returnValue(
+      of({
+        id: 'd1',
+        episodeId: 'e1',
+        patientId: 'p1',
+        deliveredByStaffName: null,
+        birthDateTime: '2026-10-30T17:12:00',
+        deliveryMode: 'SPONTANEOUS_VAGINAL',
+        liveBirth: true,
+        numberOfInfants: 1,
+        infantSex: null,
+        birthWeightGrams: null,
+        gestationalAgeWeeksAtBirth: null,
+        apgarOneMinute: null,
+        apgarFiveMinute: null,
+        placentaDeliveredAt: '2026-10-30T17:20:00',
+        placentaComplete: true,
+        uterotonicGiven: true,
+        estimatedBloodLossMl: null,
+        perinealTear: null,
+        notes: 'Déchirure suturée, mère stable',
+        alerts: [],
+      }),
+    );
+    const fixture = TestBed.createComponent(LaborTabComponent);
+    fixture.componentInstance.onPatientChange({ id: 'p1' } as PatientResponse);
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    const stage = (
+      el.querySelector('[data-testid="delivery-third-stage"]')?.textContent ?? ''
+    ).replace(/\s+/g, ' ');
+    expect(stage).toContain('Placenta complet : Oui');
+    expect(stage).toContain('Utérotonique administré (GATPA) : Oui');
+    expect(el.querySelector('[data-testid="delivery-notes"]')?.textContent).toContain(
+      'Déchirure suturée, mère stable',
+    );
+  });
+
+  it('QA D1068: the partograph lists the drugs and notes of each observation, and the risk notes', () => {
+    useFrench();
+    laborSpy.episodes.and.returnValue(
+      of([{ ...episode('e1', 'ACTIVE'), riskNotes: 'Antécédent de césarienne' }]),
+    );
+    laborSpy.entries.and.returnValue(
+      of([{ ...entry('pe1'), drugsGiven: 'Ocytocine 5 UI', notes: 'Poche des eaux rompue' }]),
+    );
+    const fixture = TestBed.createComponent(LaborTabComponent);
+    fixture.componentInstance.onPatientChange({ id: 'p1' } as PatientResponse);
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    const cell = el.querySelector('[data-testid="partograph-entry-notes"]')?.textContent ?? '';
+    expect(cell).toContain('Ocytocine 5 UI');
+    expect(cell).toContain('Poche des eaux rompue');
+    expect(el.querySelector('[data-testid="labor-risk-notes"]')?.textContent).toContain(
+      'Antécédent de césarienne',
+    );
+  });
+});
+
+describe('LaborTabComponent recent-delivery override (rendered, QA D1339 / D1340)', () => {
+  let laborSpy: jasmine.SpyObj<LaborService>;
+  let attached: HTMLElement | null = null;
+
+  /** A zone-less UTC wall time `days` ago, as the API sends it. */
+  function serverWallDaysAgo(days: number): string {
+    return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().slice(0, 19);
+  }
+
+  function delivered(id: string, daysAgo: number): LaborEpisodeResponse {
+    return {
+      ...episode(id, 'DELIVERED'),
+      admittedAt: serverWallDaysAgo(daysAgo),
+      deliveryRecorded: true,
+    };
+  }
+
+  beforeEach(async () => {
+    laborSpy = jasmine.createSpyObj('LaborService', [
+      'startEpisode',
+      'episodes',
+      'addEntry',
+      'entries',
+      'recordDelivery',
+      'delivery',
+    ]);
+    laborSpy.entries.and.returnValue(of([]));
+    laborSpy.delivery.and.returnValue(throwError(() => ({ status: 404 })));
+    const patientSpy = jasmine.createSpyObj('PatientService', ['search', 'lookup']);
+    patientSpy.search.and.returnValue(of([]));
+    patientSpy.lookup.and.returnValue(of([]));
+    await TestBed.configureTestingModule({
+      imports: [LaborTabComponent, TranslateModule.forRoot()],
+      providers: [
+        { provide: LaborService, useValue: laborSpy },
+        {
+          provide: ToastService,
+          useValue: jasmine.createSpyObj('ToastService', ['success', 'error', 'info']),
+        },
+        { provide: PatientService, useValue: patientSpy },
+      ],
+    }).compileComponents();
+  });
+
+  afterEach(() => {
+    attached?.remove();
+    attached = null;
+  });
+
+  function render(episodes: LaborEpisodeResponse[]) {
+    laborSpy.episodes.and.returnValue(of(episodes));
+    const fixture = TestBed.createComponent(LaborTabComponent);
+    attached = fixture.nativeElement as HTMLElement;
+    document.body.appendChild(attached);
+    fixture.componentInstance.onPatientChange({ id: 'p1' } as PatientResponse);
+    fixture.detectChanges();
+    return fixture;
+  }
+
+  function openStart(episodes: LaborEpisodeResponse[]) {
+    const fixture = render(episodes);
+    fixture.componentInstance.openStartForm();
+    fixture.componentInstance.startForm.laborOnsetAt = nowLocalDatetime();
+    fixture.detectChanges();
+    return fixture;
+  }
+
+  it('after a birth in the last 20 weeks the override is starred, required and marked when blank', async () => {
+    const fixture = openStart([delivered('e0', 1)]);
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const marked = expectEmptySubmitRefusal(fixture, {
+      button: '[data-testid="labor-start-submit"]',
+      sent: laborSpy.startEpisode,
+    });
+    expect(marked).toContain('labor-override');
+  });
+
+  it('with no recent birth the override is optional (negative control)', async () => {
+    const fixture = openStart([delivered('e0', 200)]);
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const override = (fixture.nativeElement as HTMLElement).querySelector('#labor-override');
+    expect(override?.hasAttribute('required')).toBeFalse();
+    expect(fixture.componentInstance.startOverrideRequired()).toBeFalse();
+  });
+
+  it('the server naming the override under fieldErrors marks it with its reason', async () => {
+    laborSpy.startEpisode.and.returnValue(
+      throwError(() =>
+        fieldErrorsResponse({ recentDeliveryOverrideReason: 'Motif requis après une naissance' }),
+      ),
+    );
+    const fixture = openStart([]);
+    await fixture.whenStable();
+    fixture.componentInstance.submitStart();
+    fixture.detectChanges();
+    expect(laborSpy.startEpisode).toHaveBeenCalled();
+    expectFieldsMarked(fixture, { 'labor-override': 'Motif requis après une naissance' });
+  });
+
+  it('the delivery form asks for the override when another birth is recent', async () => {
+    const fixture = render([episode('e1', 'ACTIVE'), delivered('e0', 30)]);
+    fixture.componentInstance.openDeliveryForm();
+    fixture.componentInstance.deliveryForm.deliveryMode = 'SPONTANEOUS_VAGINAL';
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const marked = expectEmptySubmitRefusal(fixture, {
+      button: '[data-testid="labor-delivery-submit"]',
+      sent: laborSpy.recordDelivery,
+    });
+    expect(marked).toContain('dl-override');
+  });
+
+  it('QA D1446: the server refusing the time marks the time field, as on the delivery form', async () => {
+    laborSpy.addEntry.and.returnValue(
+      throwError(() =>
+        fieldErrorsResponse({ observationTime: 'Cette heure ne peut pas être dans le futur.' }),
+      ),
+    );
+    const fixture = render([episode('e1', 'ACTIVE')]);
+    fixture.componentInstance.entryFormOpen.set(true);
+    fixture.componentInstance.entryForm = { fetalHeartRateBpm: 140 };
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.componentInstance.submitEntry();
+    fixture.detectChanges();
+    expectFieldsMarked(fixture, { 'pe-time': 'Cette heure ne peut pas être dans le futur.' });
+  });
+
+  it('QA D1424: 70/120 is refused on the diastolic and never sent; 120/70 and a pressure alone are', async () => {
+    laborSpy.addEntry.and.returnValue(of({ alerts: [] }) as never);
+    const fixture = render([episode('e1', 'ACTIVE')]);
+    const cmp = fixture.componentInstance;
+    cmp.entryFormOpen.set(true);
+    cmp.entryForm = { systolicBpMmHg: 70, diastolicBpMmHg: 120 };
+    fixture.detectChanges();
+    await fixture.whenStable();
+    cmp.submitEntry();
+    fixture.detectChanges();
+    expect(laborSpy.addEntry).not.toHaveBeenCalled();
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('#pe-dia')?.getAttribute('aria-invalid')).toBe('true');
+
+    cmp.entryForm = { systolicBpMmHg: 120, diastolicBpMmHg: 70 };
+    cmp.submitEntry();
+    expect(laborSpy.addEntry).toHaveBeenCalledTimes(1);
+
+    cmp.entryFormOpen.set(true);
+    cmp.entryForm = { systolicBpMmHg: 170 };
+    cmp.submitEntry();
+    expect(laborSpy.addEntry).toHaveBeenCalledTimes(2);
+  });
+
+  it('QA D1424: the partograph vitals carry the bounds of every other vitals form', () => {
+    for (const [field, limit] of [
+      ['pulseBpm', VITAL_SIGN_LIMITS.heartRateBpm],
+      ['systolicBpMmHg', VITAL_SIGN_LIMITS.systolicBpMmHg],
+      ['diastolicBpMmHg', VITAL_SIGN_LIMITS.diastolicBpMmHg],
+    ] as const) {
+      const row = PARTOGRAPH_LIMITS.find((l) => l.field === field);
+      expect(row?.min).withContext(field).toBe(limit.min);
+      expect(row?.max).withContext(field).toBe(limit.max);
+    }
+  });
+
+  it('QA D1340: the delivery card shows the birth time without seconds', () => {
+    laborSpy.delivery.and.returnValue(
+      of({
+        id: 'd1',
+        episodeId: 'e0',
+        patientId: 'p1',
+        deliveredByStaffName: null,
+        birthDateTime: '2026-11-02T15:00:00',
+        deliveryMode: 'SPONTANEOUS_VAGINAL',
+        liveBirth: true,
+        numberOfInfants: 1,
+        infantSex: null,
+        birthWeightGrams: null,
+        gestationalAgeWeeksAtBirth: null,
+        apgarOneMinute: null,
+        apgarFiveMinute: null,
+        placentaDeliveredAt: null,
+        placentaComplete: null,
+        uterotonicGiven: null,
+        estimatedBloodLossMl: null,
+        perinealTear: null,
+        notes: null,
+        alerts: [],
+      }),
+    );
+    const fixture = render([delivered('e0', 200)]);
+    const text = ((fixture.nativeElement as HTMLElement).textContent ?? '').replace(/\s+/g, ' ');
+    // The time reads in the runner's locale ("15:00" in FR, "3:00 PM" in CI's EN).
+    expect(text).toMatch(/2026, \d{1,2}:\d{2}/);
+    expect(text).not.toMatch(/\d{1,2}:\d{2}:\d{2}/);
+  });
 });

@@ -97,6 +97,13 @@ public class ObstetricAlertCurrency {
             return false;
         }
         NewbornAssessment source = found.get();
+        // Review of D1424: on the mother's chart a later reading of twin B said twin A had
+        // recovered, and A's reminders stopped. Twins cannot be told apart here, so only a
+        // person closes such an alert; another delivery's baby is another baby.
+        com.example.hms.model.labor.DeliveryRecord delivery = source.getDeliveryRecord();
+        if (delivery != null && delivery.getNumberOfInfants() > 1) {
+            return false;
+        }
         String type = row.getAlertType();
         List<Object> measuredBefore = newbornValues(type, source);
         return newbornAssessmentRepository
@@ -104,6 +111,8 @@ public class ObstetricAlertCurrency {
                 source.getPatient().getId(), source.getAssessmentTime())
             .stream()
             .filter(later -> !Objects.equals(later.getId(), source.getId()))
+            .filter(later -> delivery == null || (later.getDeliveryRecord() != null
+                && Objects.equals(later.getDeliveryRecord().getId(), delivery.getId())))
             .filter(later -> remeasured(measuredBefore, newbornValues(type, later)))
             .findFirst()
             .map(later -> later.getAlerts().stream().noneMatch(a -> a.getSeverity() == NewbornAlertSeverity.URGENT

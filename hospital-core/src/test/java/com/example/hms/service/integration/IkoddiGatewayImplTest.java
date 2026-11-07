@@ -131,6 +131,36 @@ class IkoddiGatewayImplTest {
     }
 
     @Test
+    @DisplayName("QA D1034: a refused SMS still fails with the status, and its body is logged without numbers")
+    void aRefusedSmsKeepsItsStatus() {
+        server.expect(requestTo("https://ikoddi.test/api/v1/groups/org-1/sms"))
+            .andRespond(org.springframework.test.web.client.response.MockRestResponseCreators
+                .withBadRequest()
+                .body("{\"message\":\"Sender HMS is not approved\",\"sentTo\":[\"22670000101\"]}")
+                .contentType(MediaType.APPLICATION_JSON));
+
+        List<String> recipients = List.of("+22670000101");
+        assertThatThrownBy(() -> gateway.sendSms(recipients, "code 123456", null))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("400")
+            .hasMessageNotContaining("22670000101");
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("QA D1034: the logged gateway body masks numbers and addresses and is capped")
+    void theLoggedBodyCarriesNoPhi() {
+        String logged = IkoddiGatewayImpl.safeGatewayBody(
+            "{\"error\":\"Sender not approved\",\"to\":\"+226 70 00 01 01\",\"mail\":\"awa.kabore@example.test\"}");
+        assertThat(logged).contains("Sender not approved").contains("[number]").contains("[email]")
+            .doesNotContain("70 00 01 01").doesNotContain("awa.kabore");
+        assertThat(IkoddiGatewayImpl.safeGatewayBody("x".repeat(1000))).hasSizeLessThanOrEqualTo(301);
+        assertThat(IkoddiGatewayImpl.safeGatewayBody(null)).isEqualTo("<empty>");
+        // A short code of a few digits is kept: it is the reason, not a number.
+        assertThat(IkoddiGatewayImpl.safeGatewayBody("{\"code\":4012}")).contains("4012");
+    }
+
+    @Test
     @DisplayName("credentials present but the switch left off still counts as unavailable")
     void enabledFlagIsRequired() {
         RestClient.Builder builder = RestClient.builder().baseUrl("https://ikoddi.test/api/v1");

@@ -26,7 +26,9 @@ public final class VitalsSummaryText {
         }
         List<String> parts = new ArrayList<>();
         if (v.getTemperatureCelsius() != null) {
-            parts.add(MessageUtil.resolve("vitals.summary.temperature", v.getTemperatureCelsius()));
+            // D1002 class: "38,9" in French and Spanish, one decimal at most, no grouping.
+            parts.add(MessageUtil.resolve("vitals.summary.temperature",
+                DisplayNumbers.measure(v.getTemperatureCelsius(), 1, DisplayNumbers.requestLocale())));
         }
         if (v.getHeartRateBpm() != null) {
             parts.add(MessageUtil.resolve("vitals.summary.heartRate", v.getHeartRateBpm()));

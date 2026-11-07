@@ -14,7 +14,19 @@
     unlabeled; it remains a `complementary` landmark by default, which
     is the correct ARIA role for a non-primary side region.
   -->
-  <aside class="sidebar">
+  <!--
+    QA D1153 / D1125: on a phone the open drawer is a modal over the page
+    (appDrawerDialog: role and aria-modal, focus in, Tab kept inside, Escape
+    from anywhere - the Menu button included - and focus back to Menu). On a
+    wide screen it stays a landmark.
+  -->
+  <aside
+    class="sidebar"
+    tabindex="-1"
+    [appDrawerDialog]="phoneDrawerOpen()"
+    [attr.aria-label]="phoneDrawerOpen() ? ('SHELL.MENU' | translate) : null"
+    (drawerClose)="closeSidebarFromKeyboard()"
+  >
     <div class="sidebar-header">
       <div class="logo-area">
         <app-brand-mark [size]="30" tone="onDark" />
@@ -175,16 +187,12 @@
 
   @if (!sidebarCollapsed()) {
     <!-- Phones only (shell.scss): the drawer's backdrop closes it on a tap. -->
-    <div
-      class="sidebar-backdrop"
-      aria-hidden="true"
-      (click)="closeSidebar()"
-      (keydown.escape)="closeSidebar()"
-    ></div>
+    <div class="sidebar-backdrop" aria-hidden="true" (click)="closeSidebar()"></div>
   }
 
   <!-- Main Content -->
-  <div class="main-area">
+  <!-- QA D1153: the page behind the open phone drawer is out of reach (Tab, clicks, readers). -->
+  <div class="main-area" [attr.inert]="phoneDrawerOpen() ? '' : null">
     <!-- Header -->
     <header class="topbar" role="banner">
       <div class="topbar-left">
@@ -256,7 +264,7 @@
         >
           <span class="material-symbols-outlined" aria-hidden="true">chat</span>
           @if (chatUnread() > 0) {
-            <span class="badge">{{ chatUnread() > 99 ? '99+' : chatUnread() }}</span>
+            {{ ' ' }}<span class="badge">{{ chatUnread() > 99 ? '99+' : chatUnread() }}</span>
           }
         </a>
 
@@ -274,18 +282,20 @@
         <!-- Notifications -->
         <button
           class="icon-btn"
+          data-testid="shell-bell"
           (click)="toggleNotifications()"
           [attr.aria-label]="translate.instant('NAV.NOTIFICATIONS_ARIA', { count: unreadCount() })"
         >
           <span class="material-symbols-outlined" aria-hidden="true">notifications</span>
           @if (unreadCount() > 0) {
-            <span class="badge">{{ unreadCount() > 99 ? '99+' : unreadCount() }}</span>
+            {{ ' ' }}<span class="badge">{{ unreadCount() > 99 ? '99+' : unreadCount() }}</span>
           }
         </button>
 
         <!-- Profile -->
         <button
           class="profile-btn"
+          data-testid="shell-profile-btn"
           (click)="toggleProfileMenu()"
           [attr.aria-label]="userName() ? null : ('SHELL.MY_PROFILE' | translate)"
         >
@@ -312,15 +322,17 @@
 
     <!-- Notification Panel -->
     @if (notifPanelOpen()) {
+      <div class="overlay-backdrop" aria-hidden="true" (click)="closeOverlays()"></div>
+      <!-- QA D1125: focus in, Escape, focus back to the bell (appModalDialog). -->
       <div
-        class="overlay-backdrop"
-        aria-hidden="true"
-        (click)="closeOverlays()"
-        (keydown.escape)="closeOverlays()"
-      ></div>
-      <div class="notif-panel">
+        class="notif-panel"
+        appModalDialog
+        aria-labelledby="shell-notif-panel-title"
+        data-testid="shell-notif-panel"
+        (escaped)="closeOverlays()"
+      >
         <div class="panel-header">
-          <h3>{{ 'SHELL.NOTIFICATIONS' | translate }}</h3>
+          <h3 id="shell-notif-panel-title">{{ 'SHELL.NOTIFICATIONS' | translate }}</h3>
           <div class="panel-header-actions">
             @if (unreadCount() > 0) {
               <button
@@ -382,13 +394,15 @@
 
     <!-- Profile Menu -->
     @if (profileMenuOpen()) {
+      <div class="overlay-backdrop" aria-hidden="true" (click)="closeOverlays()"></div>
+      <!-- QA D1125: focus in, Escape, focus back to the avatar (appModalDialog). -->
       <div
-        class="overlay-backdrop"
-        aria-hidden="true"
-        (click)="closeOverlays()"
-        (keydown.escape)="closeOverlays()"
-      ></div>
-      <div class="profile-menu">
+        class="profile-menu"
+        appModalDialog
+        [attr.aria-label]="'SHELL.MY_PROFILE' | translate"
+        data-testid="shell-profile-menu"
+        (escaped)="closeOverlays()"
+      >
         <div class="profile-menu-header">
           <div class="avatar-lg">
             @if (userAvatarUrl()) {

@@ -8,6 +8,7 @@ import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.example.hms.controller.support.ControllerAuthUtils;
@@ -85,6 +86,19 @@ class NurseTaskControllerTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).hasSize(1);
+    }
+
+    /** The list's default is the tile's, one constant: the two read one rule (QA D1402). */
+    @ParameterizedTest(name = "getDueVitals window={0}")
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"", " ", "invalid"})
+    void getDueVitalsNoReadableWindowIsTheSharedLookAhead(String window) {
+        when(nurseTaskService.getDueVitals(null, HOSPITAL_ID, Duration.ofMinutes(30))).thenReturn(List.of());
+
+        controller.getDueVitals(window, null, null, auth);
+        controller.getDueVitals(null, null, null, auth);
+
+        org.mockito.Mockito.verify(nurseTaskService, org.mockito.Mockito.times(2))
+            .getDueVitals(null, HOSPITAL_ID, Duration.ofMinutes(30));
     }
 
     @ParameterizedTest(name = "getDueVitals window={0}, assignee={1}")
@@ -311,9 +325,10 @@ class NurseTaskControllerTest {
        GET /nurse/orders
        ═══════════════════════════════════════════════════════════════════ */
 
+    /** QA D1255 (changed assertion: default 6 → every order): the order queue is never cut silently. */
     @Test
     void getOrdersDefault() {
-        when(nurseTaskService.getOrderTasks(null, HOSPITAL_ID, null, 6)).thenReturn(List.of());
+        when(nurseTaskService.getOrderTasks(null, HOSPITAL_ID, null, NurseTaskService.NO_LIMIT)).thenReturn(List.of());
 
         ResponseEntity<List<NurseOrderTaskResponseDTO>> response =
             controller.getOrders(null, null, null, null, auth);
@@ -324,7 +339,7 @@ class NurseTaskControllerTest {
     @Test
     void getOrdersWithLimitClamp() {
         // limit=50 → clamped to 20
-        when(nurseTaskService.getOrderTasks(null, HOSPITAL_ID, "stat", 20)).thenReturn(List.of());
+        when(nurseTaskService.getOrderTasks(null, HOSPITAL_ID, "STAT", 20)).thenReturn(List.of());
 
         ResponseEntity<List<NurseOrderTaskResponseDTO>> response =
             controller.getOrders(null, "stat", 50, null, auth);
@@ -347,14 +362,24 @@ class NurseTaskControllerTest {
        GET /nurse/handoffs
        ═══════════════════════════════════════════════════════════════════ */
 
+    /** QA D1255 (changed assertion: default 6 → every pending handoff): a worklist is never cut silently. */
     @Test
     void getHandoffsDefault() {
-        when(nurseTaskService.getHandoffSummaries(null, NURSE_ID, HOSPITAL_ID, 6, null)).thenReturn(List.of());
+        when(nurseTaskService.getHandoffSummaries(null, NURSE_ID, HOSPITAL_ID, NurseTaskService.NO_LIMIT, null))
+            .thenReturn(List.of());
 
         ResponseEntity<List<NurseHandoffSummaryDTO>> response =
             controller.getHandoffs(null, null, null, null, auth);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    }
+
+    /** QA D1255: the completed handoffs are a history and keep their default length. */
+    @Test
+    void getCompletedHandoffsKeepTheirDefaultLength() {
+        controller.getHandoffs(null, null, null, "COMPLETED", auth);
+
+        verify(nurseTaskService).getHandoffSummaries(null, NURSE_ID, HOSPITAL_ID, 6, "COMPLETED");
     }
 
     /** QA D785: every list variant computes completableByMe for the caller, not for the filter. */
@@ -363,11 +388,12 @@ class NurseTaskControllerTest {
     @org.junit.jupiter.params.provider.ValueSource(strings = {"all", "me", "  "})
     void getHandoffsPassesTheCallerAsViewerOnEveryVariant(String assignee) {
         UUID filter = "me".equals(assignee) ? NURSE_ID : null;
-        when(nurseTaskService.getHandoffSummaries(filter, NURSE_ID, HOSPITAL_ID, 6, null)).thenReturn(List.of());
+        when(nurseTaskService.getHandoffSummaries(filter, NURSE_ID, HOSPITAL_ID, NurseTaskService.NO_LIMIT, null))
+            .thenReturn(List.of());
 
         controller.getHandoffs(assignee, null, null, null, auth);
 
-        verify(nurseTaskService).getHandoffSummaries(filter, NURSE_ID, HOSPITAL_ID, 6, null);
+        verify(nurseTaskService).getHandoffSummaries(filter, NURSE_ID, HOSPITAL_ID, NurseTaskService.NO_LIMIT, null);
     }
 
     @Test
@@ -562,5 +588,51 @@ class NurseTaskControllerTest {
         assertThatThrownBy(() -> controller.getDueVitals(null, "nurse123", null, auth))
             .isInstanceOf(BusinessException.class)
             .extracting("messageKey").isEqualTo("nurse.assignee.invalid");
+        // QA D1384 (round 32): the refusal names the parameter, so fieldErrors.assignee is set.
+        assertThatThrownBy(() -> controller.getDueVitals(null, "tous", null, auth))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getField()).isEqualTo("assignee"));
+    }
+    /** QA D1408: an unknown filter is refused on its name; it read as "nothing to do". */
+    @Test
+    void d1408_anUnknownStatusIsRefusedOnItsField() {
+        for (org.assertj.core.api.ThrowableAssert.ThrowingCallable call
+                : List.<org.assertj.core.api.ThrowableAssert.ThrowingCallable>of(
+                    () -> controller.getMedicationTasks("all", "BOGUS", null, auth),
+                    () -> controller.getOrders("all", "BOGUS", null, null, auth),
+                    () -> controller.getHandoffs("all", null, null, "BOGUS", auth),
+                    () -> controller.getNursingTaskBoard("BOGUS", null, null, auth))) {
+            assertThatThrownBy(call).isInstanceOfSatisfying(
+                com.example.hms.exception.InvalidQueryParameterException.class,
+                ex -> assertThat(ex.getParameter()).isEqualTo("status"));
+        }
+        verifyNoInteractions(nurseTaskService);
+    }
+
+    /** QA D1408: the task board has no assignee filter; a value it could not honour was silently ignored. */
+    @Test
+    void d1408_theTaskBoardRefusesAnUnknownAssignee() {
+        assertThatThrownBy(() -> controller.getNursingTaskBoard(null, "BOGUS", null, auth))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getField()).isEqualTo("assignee"));
+        verifyNoInteractions(nurseTaskService);
+    }
+
+    /** What must not break: every value a screen sends, in any case. */
+    @Test
+    void d1408_theValuesInUseStillFilter() {
+        for (String status : List.of("PENDING", "pending", " Due ", "OVERDUE", "UPCOMING", "COMPLETED")) {
+            assertThat(controller.getMedicationTasks("all", status, null, auth).getStatusCode()).isEqualTo(HttpStatus.OK);
+        }
+        for (String priority : List.of("ROUTINE", "URGENT", "STAT", "stat")) {
+            assertThat(controller.getOrders("all", priority, null, null, auth).getStatusCode()).isEqualTo(HttpStatus.OK);
+        }
+        for (String status : List.of("PENDING", "COMPLETED", "completed")) {
+            assertThat(controller.getHandoffs("all", null, null, status, auth).getStatusCode()).isEqualTo(HttpStatus.OK);
+        }
+        for (String status : List.of("ALL", "PENDING", "IN_PROGRESS", "COMPLETED", "CANCELLED")) {
+            assertThat(controller.getNursingTaskBoard(status, null, null, auth).getStatusCode()).isEqualTo(HttpStatus.OK);
+        }
+        assertThat(controller.getNursingTaskBoard(null, "all", null, auth).getStatusCode()).isEqualTo(HttpStatus.OK);
     }
 }

@@ -43,6 +43,9 @@ public class PatientAccountRegistrationService {
      */
     @Transactional
     public UserResponseDTO registerPatient(AdminSignupRequest request, Locale locale) {
+        // QA D1414: the account carries the names too, and the record's are judged at its create.
+        com.example.hms.utility.PatientIdentityRules.requireNameWithLetters("firstName", request.getFirstName(), null);
+        com.example.hms.utility.PatientIdentityRules.requireNameWithLetters("lastName", request.getLastName(), null);
         UUID patientHospitalId = actingScopeResolver.current() instanceof ActingScope.Pinned pinned
             ? pinned.hospitalId()
             : request.getHospitalId();

@@ -20,4 +20,11 @@ export interface CdsCard {
   indicator: CdsIndicator;
   source: CdsSource;
   uuid?: string | null;
+  /**
+   * Round 18 (QA D935): true on a card no override passes (a dose above the
+   * absolute daily maximum); absent on every other card.
+   */
+  hardStop?: boolean | null;
+  /** True on a critical card that the signature also asks a reason for; absent on every other card. */
+  reasonAtSignature?: boolean | null;
 }

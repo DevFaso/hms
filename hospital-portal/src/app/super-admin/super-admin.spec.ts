@@ -14,6 +14,8 @@ import {
   SuperAdminSummary,
 } from '../services/dashboard.service';
 import { PlatformService, PlatformSummary } from '../services/platform.service';
+import fr from '../../assets/i18n/fr.json';
+import es from '../../assets/i18n/es.json';
 
 /**
  * Empty {@link SuperAdminRecentActivityBundle} for tests — F5 from
@@ -285,9 +287,36 @@ describe('SuperAdminComponent', () => {
 
     const rows = c.selectedActivityRows();
     expect(rows.length).toBe(1);
-    expect(rows[0].id).toBe('aaaa1111');
+    // QA D992 class: the full id identifies the row; the screen never shows a slice of it
+    // (was: rows[0].id === 'aaaa1111'). With no human code on the record the column is empty.
+    expect(rows[0].id).toBe('aaaa1111-2222-3333-4444-555555555555');
+    expect(rows[0].code).toBe('');
     expect(rows[0].summary).toContain('Amoxicillin');
     expect(rows[0].timestamp).toBe('2026-05-02T10:00:00Z');
+  });
+
+  it('shows the human code a record carries, never a slice of its id (QA D992)', () => {
+    dashboard.getSummary.and.returnValue(of(fakeSummary()));
+    platform.getSummary.and.returnValue(of(fakePlatformSummary()));
+    dashboard.getRecentActivity.and.returnValue(
+      of(
+        bundleWith({
+          labOrders: [
+            {
+              id: 'bbbb2222-2222-3333-4444-555555555555',
+              labOrderCode: 'LAB-000042',
+              patientFullName: 'Ada',
+              createdAt: '2026-05-02T10:00:00Z',
+            },
+          ] as SuperAdminRecentItem[],
+        }),
+      ),
+    );
+
+    const c = setup();
+    c.selectActivityTab('labOrders');
+
+    expect(c.selectedActivityRows()[0].code).toBe('LAB-000042');
   });
 
   it('reflects empty activity collections gracefully', () => {
@@ -427,5 +456,46 @@ describe('SuperAdminComponent', () => {
     expect(panel!.getAttribute('aria-labelledby')).toBe(
       `activity-tab-${fix.componentInstance.selectedActivityTab()}`,
     );
+  });
+
+  it('QA CX-006: a coded field of a recent-activity summary reads as a label, free text as typed', () => {
+    dashboard.getSummary.and.returnValue(of(fakeSummary()));
+    platform.getSummary.and.returnValue(of(fakePlatformSummary()));
+    dashboard.getRecentActivity.and.returnValue(
+      of(
+        bundleWith({
+          consultations: [
+            {
+              id: 'c1',
+              patientName: 'Ada',
+              specialtyRequested: 'ROUTINE_SPECIALTY',
+              urgency: 'ROUTINE',
+              status: 'CANCELLED',
+              createdAt: '2026-05-02T10:00:00Z',
+            },
+          ] as SuperAdminRecentItem[],
+        }),
+      ),
+    );
+    const c = setup();
+    c.selectActivityTab('consultations');
+    const summary = c.selectedActivityRows()[0].summary;
+
+    expect(summary).toBe('Ada · ROUTINE_SPECIALTY · Routine · Cancelled');
+  });
+
+  it('QA CX-006: the codes the summaries show are translated in French and Spanish', () => {
+    for (const locale of [fr, es]) {
+      const labels = locale.PORTAL.ENUM as unknown as Record<string, Record<string, string>>;
+      for (const [domain, code] of [
+        ['CONSULTATION_URGENCY', 'ROUTINE'],
+        ['CONSULTATION_URGENCY', 'URGENT'],
+        ['CONSULTATION_STATUS', 'REQUESTED'],
+        ['CONSULTATION_STATUS', 'CANCELLED'],
+      ]) {
+        expect(labels[domain][code]).withContext(`${domain}.${code}`).toBeTruthy();
+        expect(labels[domain][code]).not.toBe(code);
+      }
+    }
   });
 });

@@ -112,6 +112,14 @@
     background: #fbe9e7;
     color: #c62828;
   }
+  &.deceased {
+    background: #37474f;
+    color: #fff;
+  }
+  &.disputed {
+    background: #fff3e0;
+    color: #b45309;
+  }
 }
 
 .tabs {

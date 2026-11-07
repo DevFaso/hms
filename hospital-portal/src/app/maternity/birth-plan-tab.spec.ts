@@ -1,3 +1,4 @@
+import { expectKeyboardModal } from '../testing/modal-dialog-keyboard';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
@@ -56,6 +57,8 @@ describe('BirthPlanTabComponent', () => {
     service = jasmine.createSpyObj<BirthPlanService>('BirthPlanService', [
       'search',
       'pendingReview',
+      'delete',
+      'getById',
     ]);
     service.pendingReview.and.returnValue(of(page([])));
     toast = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error']);
@@ -151,5 +154,47 @@ describe('BirthPlanTabComponent', () => {
     fixture.detectChanges();
     expect(toast.error).toHaveBeenCalledWith('Chargement impossible');
     expect(fixture.componentInstance.loading()).toBeFalse();
+  });
+
+  describe('keyboard modals (QA D1004)', () => {
+    afterEach(() => (fixture.nativeElement as HTMLElement).remove());
+
+    it('"Nouveau plan de naissance": focus moves in, Escape closes, focus returns', () => {
+      create(['ROLE_MIDWIFE']);
+      document.body.appendChild(fixture.nativeElement);
+      const opener = host().querySelector<HTMLElement>('.filter-bar .btn-primary')!;
+      expectKeyboardModal(fixture, opener);
+    });
+  });
+  describe('QA D1241: removing a plan asks why and says what happened', () => {
+    const component = () => fixture.componentInstance;
+
+    it('asks a reason in the shared dialog and sends it as ?reason=', () => {
+      create(['ROLE_MIDWIFE']);
+      service.delete.and.returnValue(of(undefined));
+      service.getById.and.returnValue(throwError(() => ({ status: 404 })));
+      component().confirmDelete(plan());
+      fixture.detectChanges();
+      expect(host().querySelector('[data-testid="reason-dialog"]')).not.toBeNull();
+      expect(service.delete).not.toHaveBeenCalled();
+
+      component().submitDelete('Saisi pour la mauvaise patiente');
+      expect(service.delete).toHaveBeenCalledWith('bp-1', 'Saisi pour la mauvaise patiente');
+      expect(toast.success).toHaveBeenCalledWith('BIRTH_PLAN.DELETED');
+    });
+
+    it('a reviewed plan is announced as withdrawn, kept for the record', () => {
+      const reviewed = plan({ providerReviewed: true });
+      create(['ROLE_MIDWIFE'], [reviewed]);
+      expect(component().isReviewed(reviewed)).toBeTrue();
+      service.delete.and.returnValue(of(undefined));
+      service.getById.and.returnValue(
+        of({ ...reviewed, withdrawnAt: '2026-11-02T08:00:00', withdrawalReason: 'Doublon' }),
+      );
+      component().confirmDelete(reviewed);
+      fixture.detectChanges();
+      component().submitDelete('Doublon');
+      expect(toast.success).toHaveBeenCalledWith('BIRTH_PLAN.WITHDRAWN');
+    });
   });
 });

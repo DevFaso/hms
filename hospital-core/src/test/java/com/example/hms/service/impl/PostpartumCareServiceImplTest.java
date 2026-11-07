@@ -385,6 +385,100 @@ class PostpartumCareServiceImplTest {
         assertTrue(plan.getShiftFrequencyMinutes() < PostpartumCarePlan.DEFAULT_SHIFT_FREQUENCY_MINUTES);
     }
 
+    /* ── QA D1181 (round 22): a note that checks nothing leaves the clock ── */
+
+    @Test
+    void aMoodOnlyObservationLeavesTheOverdueFifteenMinuteCheckOverdue_D1181() {
+        PostpartumCarePlan plan = PostpartumCarePlan.builder().patient(patient).hospital(hospital).build();
+        plan.setId(UUID.randomUUID());
+        plan.setDeliveryOccurredAt(LocalDateTime.now().minusMinutes(90));
+        plan.setImmediateObservationTarget(8);
+        plan.setImmediateObservationsCompleted(4);
+        plan.markActivePhase(PostpartumSchedulePhase.IMMEDIATE_RECOVERY);
+        LocalDateTime overdueSince = LocalDateTime.now().minusMinutes(20).truncatedTo(ChronoUnit.SECONDS);
+        plan.setNextDueAt(overdueSince);
+        plan.setOverdueSince(overdueSince);
+        when(carePlanRepository.findFirstByPatient_IdAndHospital_IdAndActiveTrueOrderByCreatedAtDesc(patientId, hospitalId))
+            .thenReturn(Optional.of(plan));
+
+        PostpartumObservationRequestDTO request = PostpartumObservationRequestDTO.builder()
+            .hospitalId(hospitalId)
+            .observationTime(LocalDateTime.now().minusMinutes(1))
+            .moodStatus(PostpartumMoodStatus.CALM)
+            .psychosocialNotes("Calme, entourée")
+            .build();
+
+        PostpartumObservationResponseDTO response = service.recordObservation(patientId, request, recorderId);
+
+        assertEquals(4, plan.getImmediateObservationsCompleted(), "a mood is not one of the checks");
+        assertEquals(overdueSince, plan.getNextDueAt(), "a mood does not move the next check");
+        assertEquals(overdueSince, plan.getOverdueSince(), "the missed check stays overdue");
+        assertFalse(plan.isImmediateWindowCompleted());
+        assertEquals(PostpartumSchedulePhase.IMMEDIATE_RECOVERY, plan.getActivePhase());
+        assertTrue(response.getSchedule().isOverdue());
+        verify(observationRepository).save(any(PostpartumObservation.class));
+    }
+
+    @Test
+    void anEducationNoteAfterTheWindowClosesNeverClosesItOrMovesTheShiftCheck_D1181() {
+        PostpartumCarePlan plan = PostpartumCarePlan.builder().patient(patient).hospital(hospital).build();
+        plan.setId(UUID.randomUUID());
+        // Past the two-hour window with 1/8 checks: a note used to close the window.
+        plan.setDeliveryOccurredAt(LocalDateTime.now().minusHours(4));
+        plan.setImmediateObservationTarget(8);
+        plan.setImmediateObservationsCompleted(1);
+        plan.markActivePhase(PostpartumSchedulePhase.IMMEDIATE_RECOVERY);
+        LocalDateTime due = LocalDateTime.now().minusMinutes(100).truncatedTo(ChronoUnit.SECONDS);
+        plan.setNextDueAt(due);
+        when(carePlanRepository.findFirstByPatient_IdAndHospital_IdAndActiveTrueOrderByCreatedAtDesc(patientId, hospitalId))
+            .thenReturn(Optional.of(plan));
+
+        service.recordObservation(patientId, PostpartumObservationRequestDTO.builder()
+            .hospitalId(hospitalId)
+            .observationTime(LocalDateTime.now().minusMinutes(1))
+            .educationTopics(Set.of(PostpartumEducationTopic.WARNING_SIGNS_FEVER))
+            .educationNotes("Signes d'alerte expliqués")
+            .build(), recorderId);
+
+        assertFalse(plan.isImmediateWindowCompleted(), "a note does not close the immediate-recovery window");
+        assertEquals(PostpartumSchedulePhase.IMMEDIATE_RECOVERY, plan.getActivePhase());
+        assertEquals(due, plan.getNextDueAt());
+        assertEquals(due, plan.getOverdueSince());
+    }
+
+    @Test
+    void inTheShiftPhaseANoteLeavesTheNextCheckAndAnEscalatingNoteOnlyBringsItForward_D1181() {
+        PostpartumCarePlan plan = PostpartumCarePlan.builder().patient(patient).hospital(hospital).build();
+        plan.setId(UUID.randomUUID());
+        plan.setDeliveryOccurredAt(LocalDateTime.now().minusHours(10));
+        plan.setImmediateWindowCompleted(true);
+        plan.markActivePhase(PostpartumSchedulePhase.SHIFT_BASELINE);
+        plan.setShiftFrequencyMinutes(PostpartumCarePlan.DEFAULT_SHIFT_FREQUENCY_MINUTES);
+        LocalDateTime due = LocalDateTime.now().minusMinutes(30).truncatedTo(ChronoUnit.SECONDS);
+        plan.setNextDueAt(due);
+        when(carePlanRepository.findFirstByPatient_IdAndHospital_IdAndActiveTrueOrderByCreatedAtDesc(patientId, hospitalId))
+            .thenReturn(Optional.of(plan));
+
+        service.recordObservation(patientId, PostpartumObservationRequestDTO.builder()
+            .hospitalId(hospitalId)
+            .observationTime(LocalDateTime.now().minusMinutes(2))
+            .sleepStatus(com.example.hms.enums.PostpartumSleepQuality.INTERRUPTED)
+            .painScore(3)
+            .build(), recorderId);
+        assertEquals(due, plan.getNextDueAt(), "sleep and pain are recorded, the check stays due");
+        assertEquals(PostpartumSchedulePhase.SHIFT_BASELINE, plan.getActivePhase());
+
+        // Chills alone raise the infection alert: monitoring is escalated, the overdue check is not pushed back.
+        service.recordObservation(patientId, PostpartumObservationRequestDTO.builder()
+            .hospitalId(hospitalId)
+            .observationTime(LocalDateTime.now().minusMinutes(1))
+            .chillsOrRigors(Boolean.TRUE)
+            .build(), recorderId);
+        assertEquals(PostpartumSchedulePhase.ENHANCED_MONITORING, plan.getActivePhase());
+        assertEquals(due, plan.getNextDueAt(), "an escalation brings the check forward, never back");
+        assertEquals(due, plan.getOverdueSince());
+    }
+
     /* ── QA D268 (round 5) ────────────────────────────────────────────── */
 
     @Test

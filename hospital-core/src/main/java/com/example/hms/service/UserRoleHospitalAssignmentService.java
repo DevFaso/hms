@@ -183,6 +183,12 @@ public interface UserRoleHospitalAssignmentService {
     UserRoleAssignmentPublicViewDTO verifyAssignmentByCode(String assignmentCode, String confirmationCode);
 
     /**
+     * QA D1123: activation by the registered phone number and the one-time
+     * code from the SMS ("I have a code"), for a holder with no e-mail link.
+     */
+    UserRoleAssignmentPublicViewDTO verifyAssignmentByPhone(String phone, String confirmationCode);
+
+    /**
      * Bulk import assignments using a CSV payload.
      */
     UserRoleAssignmentBulkImportResponseDTO bulkImportAssignments(UserRoleAssignmentBulkImportRequestDTO requestDTO);

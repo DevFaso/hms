@@ -563,22 +563,24 @@ class DepartmentServiceImplTest {
 
     @Test
     void createDepartment_noHospitalIdOrName_throwsIllegalArgument() {
+        // QA D1299 (round 28; assertion changed): the refusal names its field (FieldBusinessException, still 400).
         DepartmentRequestDTO dto = new DepartmentRequestDTO();
         dto.setName("Test");
         when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Hospital required");
 
         assertThatThrownBy(() -> departmentService.createDepartment(dto, locale))
-            .isInstanceOf(IllegalArgumentException.class);
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
     }
 
     @Test
     void createDepartment_noName_throwsIllegalArgument() {
+        // QA D1299 (round 28; assertion changed): the refusal names its field (FieldBusinessException, still 400).
         DepartmentRequestDTO dto = new DepartmentRequestDTO();
         dto.setHospitalId(hospitalId);
         when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Name required");
 
         assertThatThrownBy(() -> departmentService.createDepartment(dto, locale))
-            .isInstanceOf(IllegalArgumentException.class);
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
     }
 
     @Test

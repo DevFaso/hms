@@ -502,6 +502,43 @@ describe('UserListComponent — no archived hospital in the create picker (QA D8
  * and read "user not found". The list now offers no edit or delete on it.
  */
 describe('UserListComponent — no edit or delete on an account the caller may not manage (QA D914)', () => {
+  function render(superAdmin = false): { root: HTMLElement; users: jasmine.SpyObj<UserService> } {
+    const page = { content: [], number: 0, totalPages: 1, totalElements: 0 };
+    const users = jasmine.createSpyObj<UserService>('UserService', ['list', 'search']);
+    users.list.and.returnValue(of(page) as never);
+    users.search.and.returnValue(of(page) as never);
+    TestBed.configureTestingModule({
+      imports: [UserListComponent, TranslateModule.forRoot()],
+      providers: [
+        { provide: AuthService, useValue: { getUserProfile: () => null, getUserId: () => null } },
+        provideRouter([]),
+        { provide: UserService, useValue: users },
+        { provide: RoleService, useValue: { list: () => of([]) } },
+        {
+          provide: HospitalService,
+          useValue: { list: () => of({ content: [] }), getMyHospitalAsResponse: () => of(null) },
+        },
+        {
+          provide: ToastService,
+          useValue: jasmine.createSpyObj('ToastService', ['success', 'error', 'warning', 'info']),
+        },
+        { provide: RoleContextService, useValue: { isSuperAdmin: () => superAdmin } },
+        { provide: ImpersonationService, useValue: { active: () => null } },
+      ],
+    });
+    const fixture = TestBed.createComponent(UserListComponent);
+    fixture.detectChanges();
+    return { root: fixture.nativeElement as HTMLElement, users };
+  }
+
+  it('QA D919: a hospital admin is not offered the "Deleted" filter, nor asks for deleted rows', () => {
+    const { root, users } = render(false);
+    expect(root.querySelector('.deleted-pill')).toBeNull();
+    expect(users.list.calls.mostRecent().args[2]).toBeFalse();
+    TestBed.resetTestingModule();
+    expect(render(true).root.querySelector('.deleted-pill')).not.toBeNull();
+  });
+
   function rowButtons(): { edit: number; del: number } {
     const page = {
       content: [

@@ -90,10 +90,49 @@ class MalformedRequestFieldLabelTest {
         assertThat(body).containsEntry("field", "startDate");
     }
 
-    @Test
-    void aFieldWithoutALabelKeepsItsPath() {
+    /** QA D1268 (round 26): the fields the round named by their raw property in FR and ES sentences. */
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', value = {
+        "fullName|nom complet|nombre completo", "encounterType|type de consultation|tipo de consulta",
+        "dueDate|date d’échéance|fecha de vencimiento", "medicationName|nom du médicament|nombre del medicamento",
+        "patientId|patient|paciente", "authorStaffId|auteur|autor", "problemStatement|énoncé du problème|enunciado del problema",
+        "priority|priorité|prioridad", "modality|modalité|modalidad", "studyType|type d’examen|tipo de estudio"})
+    void theRoundTwentySixFieldsAreNamedByTheirLabel(String property, String french, String spanish) {
         LocaleContextHolder.setLocale(Locale.FRENCH);
-        assertThat((String) body(badField("zzUnlabelled")).get("message")).contains("« zzUnlabelled »");
+        assertThat((String) body(badField(property)).get("message")).contains("« " + french + " »")
+            .doesNotContain(property);
+        LocaleContextHolder.setLocale(Locale.forLanguageTag("es"));
+        assertThat((String) body(badField(property)).get("message")).contains("«" + spanish + "»");
+    }
+
+    /**
+     * QA D1312 (round 28; assertion changed): a field with no label used to
+     * keep its raw path in the sentence ("« copayMethod »"). It now gets the
+     * sentence without a name; the body's {@code field} and {@code fieldErrors}
+     * still name it, so the form marks it.
+     */
+    @Test
+    void aFieldWithoutALabelIsNeverNamedByItsRawPath() {
+        LocaleContextHolder.setLocale(Locale.FRENCH);
+        Map<String, Object> body = body(badField("zzUnlabelled"));
+        assertThat((String) body.get("message")).isEqualTo("Une valeur saisie n’est pas valide.")
+            .doesNotContain("zzUnlabelled");
+        assertThat(body).containsEntry("field", "zzUnlabelled");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> fieldErrors = (Map<String, Object>) body.get("fieldErrors");
+        assertThat(fieldErrors).containsOnlyKeys("zzUnlabelled");
+    }
+
+    /** QA D1312 (round 28): the check-in's malformed copay method is named by its label in every language. */
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', value = {
+        "fr|La valeur saisie pour « mode de paiement » n'est pas valide.",
+        "es|El valor introducido para «forma de pago» no es válido.",
+        "en|The value entered for \"payment method\" is not valid."
+    })
+    void copayMethodIsNamedByItsLabel(String lang, String expected) {
+        LocaleContextHolder.setLocale(Locale.forLanguageTag(lang));
+        assertThat((String) body(badField("copayMethod")).get("message")).isEqualTo(expected);
     }
 
     /** Guard: every property of the scheduling request bodies has a label in every bundle. */
@@ -116,6 +155,15 @@ class MalformedRequestFieldLabelTest {
             }
         }
         assertThat(missing).isEmpty();
+    }
+
+    /** QA D1313 (round 29): the three fields the round found unnamed in English. */
+    @ParameterizedTest
+    @CsvSource({"relationship", "date", "amount"})
+    void aLabelThatSpellsItsKeyIsStillUsed(String property) {
+        LocaleContextHolder.setLocale(Locale.ENGLISH);
+        assertThat((String) body(badField(property)).get("message"))
+            .isEqualTo("The value entered for \"" + property + "\" is not valid.");
     }
 
     @Test

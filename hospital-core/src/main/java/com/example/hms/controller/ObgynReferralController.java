@@ -127,7 +127,9 @@ public class ObgynReferralController {
     }
 
     @PostMapping("/{id}/cancel")
-    @PreAuthorize("hasAnyAuthority('ROLE_MIDWIFE','ROLE_SUPER_ADMIN')")
+    // QA D1026: the author withdraws it, a midwife or a doctor (create admits
+    // both); the service refuses anyone who did not write it.
+    @PreAuthorize("hasAnyAuthority('ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Cancel referral")
     public ResponseEntity<ObgynReferralResponseDTO> cancelReferral(
         @PathVariable UUID id,

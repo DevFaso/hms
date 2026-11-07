@@ -37,6 +37,17 @@ public class RegistrationMatchDTO {
     private int hospitalCount;
     /** True when the patient already has an active registration at the caller's hospital. */
     private boolean alreadyRegisteredHere;
-    /** Which identifier produced the match: PHONE or EMAIL. */
+    /**
+     * Which identifier produced the match: PHONE, EMAIL, or IDENTITY (QA D1064:
+     * the same first and last name and date of birth at another hospital of
+     * the organisation, with neither the phone nor the e-mail in common).
+     */
     private String matchedOn;
+    /**
+     * QA D1061: whether the match names the same PERSON as the form (same first
+     * and last name and date of birth): false when only a contact is shared (a
+     * child under a parent's number), null when the form sent no name and date
+     * of birth to compare.
+     */
+    private Boolean sameIdentity;
 }

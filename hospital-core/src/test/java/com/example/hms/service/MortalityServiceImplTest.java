@@ -71,6 +71,14 @@ import static org.mockito.Mockito.when;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class MortalityServiceImplTest {
 
+    // QA D1232 (round 24): the refusals are message keys now; the assertions
+    // read them in English through the real bundles (set up in setUp).
+    @org.junit.jupiter.api.AfterEach
+    void resetRefusalLocale() {
+        com.example.hms.utility.MessageUtil.setMessageSource(null);
+        org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+    }
+
     @Mock private DeathRecordRepository deathRecordRepository;
     @Mock private PatientRepository patientRepository;
     @Mock private AdmissionRepository admissionRepository;
@@ -82,6 +90,9 @@ class MortalityServiceImplTest {
     @Mock private PatientChartAccess patientChartAccess;
     @Mock private RoleValidator roleValidator;
     @Mock private com.example.hms.service.BedAssignmentService bedAssignmentService;
+    @Mock private com.example.hms.repository.DeathDisputeRepository disputeRepository;
+    @Mock private com.example.hms.service.InBasketService inBasketService;
+    @Mock private org.springframework.context.ApplicationEventPublisher eventPublisher;
     @Spy private Clock clock = Clock.systemDefaultZone();
     @Spy private MortalityMapper mapper = new MortalityMapper();
 
@@ -96,6 +107,8 @@ class MortalityServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.ENGLISH);
         hospitalId = UUID.randomUUID();
         patientId = UUID.randomUUID();
         callerUserId = UUID.randomUUID();
@@ -134,6 +147,222 @@ class MortalityServiceImplTest {
     }
 
     // ── Recording ───────────────────────────────────────────────────────
+
+    // ── QA D1490: the classification, never the death ────────────────
+
+    @Test
+    void aDeathOutsideThePerinatalPeriodSavesWithoutTheClassification() {
+        patient.setDateOfBirth(java.time.LocalDate.of(1940, 1, 1));
+
+        service.recordDeath(base().build());
+
+        assertThat(patient.isDeceased()).isTrue();
+        verify(deathRecordRepository).save(any());
+    }
+
+    @Test
+    void theSameDeathIsRefusedOnlyWithTheClassification() {
+        patient.setDateOfBirth(java.time.LocalDate.of(1940, 1, 1));
+        DeathRecordRequestDTO classified = base().perinatalDeath(true)
+            .perinatalType(com.example.hms.enums.PerinatalDeathType.STILLBIRTH).build();
+
+        assertThatThrownBy(() -> service.recordDeath(classified))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                e -> assertThat(e.getField()).isEqualTo("perinatalType"));
+        assertThat(patient.isDeceased()).isFalse();
+
+        service.recordDeath(base().build());
+        assertThat(patient.isDeceased()).isTrue();
+    }
+
+    @Test
+    void aMalePatientSavesWithoutTheMaternalClassificationAndIsRefusedWithIt() {
+        patient.setGender("M");
+        DeathRecordRequestDTO classified = base().maternalDeath(true)
+            .maternalDeathTiming(com.example.hms.enums.MaternalDeathTiming.DURING_PREGNANCY).build();
+
+        assertThatThrownBy(() -> service.recordDeath(classified))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                e -> assertThat(e.getField()).isEqualTo("maternalDeath"));
+
+        service.recordDeath(base().build());
+        assertThat(patient.isDeceased()).isTrue();
+    }
+
+    @Test
+    void aDeathBeforeTheBirthIsRefusedOnTheDate() {
+        patient.setDateOfBirth(java.time.LocalDate.now().minusDays(1));
+        DeathRecordRequestDTO before = base().diedAt(LocalDateTime.now().minusDays(5)).build();
+
+        assertThatThrownBy(() -> service.recordDeath(before))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                e -> assertThat(e.getField()).isEqualTo("diedAt"));
+    }
+
+    @Test
+    void anAmendmentCannotClassifyWhatTheRecordCannotBe() {
+        patient.setGender("male");
+        DeathRecord existing = DeathRecord.builder().patient(patient).hospital(hospital)
+            .diedAt(LocalDateTime.now().minusDays(1)).immediateCause("x").build();
+        existing.setId(UUID.randomUUID());
+        when(deathRecordRepository.findById(existing.getId())).thenReturn(Optional.of(existing));
+        UUID id = existing.getId();
+        DeathRecordAmendmentDTO amendment = DeathRecordAmendmentDTO.builder().amendmentReason("Autopsy")
+            .maternalDeath(true).maternalDeathTiming(com.example.hms.enums.MaternalDeathTiming.DURING_PREGNANCY).build();
+
+        assertThatThrownBy(() -> service.amendDeathRecord(id, amendment))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
+    }
+
+    // ── QA D1488: entered in error ────────────────────────────────
+
+    @Test
+    void anotherHospitalDoesNotReadThisRecordThroughTheChart() {
+        Hospital other = new Hospital();
+        other.setId(UUID.randomUUID());
+        DeathRecord elsewhere = DeathRecord.builder().patient(patient).hospital(other)
+            .diedAt(LocalDateTime.now().minusDays(1)).immediateCause("Private").build();
+        when(deathRecordRepository.findByPatient_Id(patientId)).thenReturn(Optional.of(elsewhere));
+
+        assertThatThrownBy(() -> service.getForPatient(patientId))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+    }
+
+    @Test
+    void enteredInErrorEndsEveryOpenDisputeOfTheRecord() {
+        DeathRecord existing = recordedDeath();
+        com.example.hms.model.DeathDispute open = com.example.hms.model.DeathDispute.builder()
+            .deathRecordId(existing.getId()).patientId(patientId).hospitalId(UUID.randomUUID()).build();
+        open.setId(UUID.randomUUID());
+        when(disputeRepository.lockOpenForRecord(existing.getId())).thenReturn(List.of(open));
+
+        service.markEnteredInError(existing.getId(),
+            com.example.hms.payload.dto.mortality.DeathRecordEnteredInErrorDTO.builder().reason("Wrong patient").build());
+
+        assertThat(open.getStatus()).isEqualTo(com.example.hms.enums.DeathDisputeStatus.ENTERED_IN_ERROR);
+        assertThat(open.getResolutionReason()).isEqualTo("Wrong patient");
+        assertThat(open.getResolvedById()).isEqualTo(callerUserId);
+        verify(inBasketService).removeOpenItemsForReference(any(), org.mockito.ArgumentMatchers.eq("DEATH_DISPUTE"));
+    }
+
+    @Test
+    void aDisputedDeathStaysListedAndCountedAndIsFlagged() {
+        DeathRecord existing = recordedDeath();
+        when(deathRecordRepository.findRegister(any(), any(), any())).thenReturn(List.of(existing));
+        when(disputeRepository.findOpenRecordIds(any())).thenReturn(List.of(existing.getId()));
+
+        var register = service.getRegister(java.time.LocalDate.now().minusDays(3), java.time.LocalDate.now());
+
+        assertThat(register.getTotalDeaths()).isEqualTo(1);
+        assertThat(register.getDisputedDeaths()).isEqualTo(1);
+        assertThat(register.getDeaths().get(0).isDisputed()).isTrue();
+    }
+
+    @Test
+    void anAdministratorOfAnotherHospitalWhoIsANurseHereIsRefused() {
+        DeathRecord existing = recordedDeath();
+        UUID id = existing.getId();
+        when(roleValidator.isHospitalAdmin(callerUserId, hospitalId)).thenReturn(false);
+        var body = com.example.hms.payload.dto.mortality.DeathRecordEnteredInErrorDTO.builder().reason("Wrong").build();
+
+        assertThatThrownBy(() -> service.markEnteredInError(id, body))
+            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        assertThat(patient.isDeceased()).isTrue();
+        assertThat(existing.isEnteredInError()).isFalse();
+    }
+
+    @Test
+    void aSuperAdminMayMarkItWithNoRoleAtTheHospital() {
+        DeathRecord existing = recordedDeath();
+        when(roleValidator.isHospitalAdmin(callerUserId, hospitalId)).thenReturn(false);
+        when(roleValidator.isSuperAdminFromAuth()).thenReturn(true);
+
+        service.markEnteredInError(existing.getId(),
+            com.example.hms.payload.dto.mortality.DeathRecordEnteredInErrorDTO.builder().reason("Wrong").build());
+
+        assertThat(patient.isDeceased()).isFalse();
+    }
+
+    private DeathRecord recordedDeath() {
+        when(roleValidator.isHospitalAdmin(callerUserId, hospitalId)).thenReturn(true);
+        patient.setDeceasedAt(LocalDateTime.now().minusDays(1));
+        DeathRecord existing = DeathRecord.builder().patient(patient).hospital(hospital)
+            .diedAt(patient.getDeceasedAt()).immediateCause("x").build();
+        existing.setId(UUID.randomUUID());
+        when(deathRecordRepository.findById(existing.getId())).thenReturn(Optional.of(existing));
+        return existing;
+    }
+
+    @Test
+    void enteredInErrorKeepsTheRowMarkedAndReopensCare() {
+        DeathRecord existing = recordedDeath();
+        when(roleValidator.getCurrentUserId()).thenReturn(callerUserId);
+
+        var result = service.markEnteredInError(existing.getId(),
+            com.example.hms.payload.dto.mortality.DeathRecordEnteredInErrorDTO.builder().reason(" Wrong patient ").build());
+
+        assertThat(patient.isDeceased()).isFalse();
+        verify(patientRepository).save(patient);
+        assertThat(existing.isEnteredInError()).isTrue();
+        assertThat(existing.getEnteredInErrorById()).isEqualTo(callerUserId);
+        assertThat(existing.getEnteredInErrorReason()).isEqualTo("Wrong patient");
+        assertThat(result.isEnteredInError()).isTrue();
+        assertThat(result.getEnteredInErrorReason()).isEqualTo("Wrong patient");
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
+    }
+
+    @Test
+    void enteredInErrorIsAudited() {
+        DeathRecord existing = recordedDeath();
+        var audit = org.mockito.Mockito.mock(com.example.hms.service.AuditEventLogService.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "auditEventLogService", audit);
+
+        service.markEnteredInError(existing.getId(),
+            com.example.hms.payload.dto.mortality.DeathRecordEnteredInErrorDTO.builder().reason("Wrong patient").build());
+
+        var captor = org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+        verify(audit).logEvent(captor.capture());
+        assertThat(captor.getValue().getEntityType()).isEqualTo("DEATH_RECORD");
+        assertThat(captor.getValue().getPatientId()).isEqualTo(patientId);
+        assertThat(captor.getValue().getHospitalId()).isEqualTo(hospitalId);
+        assertThat(captor.getValue().getEventDescription()).contains("entered in error").contains("Wrong patient");
+    }
+
+    @Test
+    void enteredInErrorNeedsAReason() {
+        DeathRecord existing = recordedDeath();
+        UUID id = existing.getId();
+        var blank = com.example.hms.payload.dto.mortality.DeathRecordEnteredInErrorDTO.builder().reason("  ").build();
+
+        assertThatThrownBy(() -> service.markEnteredInError(id, blank))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                e -> assertThat(e.getField()).isEqualTo("reason"));
+        assertThat(patient.isDeceased()).isTrue();
+    }
+
+    @Test
+    void enteredInErrorAtAnotherHospitalAnswersAsMissing() {
+        DeathRecord existing = recordedDeath();
+        UUID id = existing.getId();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
+        var body = com.example.hms.payload.dto.mortality.DeathRecordEnteredInErrorDTO.builder().reason("Wrong").build();
+
+        assertThatThrownBy(() -> service.markEnteredInError(id, body))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        assertThat(patient.isDeceased()).isTrue();
+    }
+
+    @Test
+    void aRowEnteredInErrorIsNotMarkedTwiceNorAmended() {
+        DeathRecord existing = recordedDeath();
+        UUID id = existing.getId();
+        var body = com.example.hms.payload.dto.mortality.DeathRecordEnteredInErrorDTO.builder().reason("Wrong").build();
+        service.markEnteredInError(id, body);
+
+        assertThatThrownBy(() -> service.markEnteredInError(id, body)).isInstanceOf(BusinessException.class);
+        DeathRecordAmendmentDTO amendment = DeathRecordAmendmentDTO.builder().amendmentReason("Autopsy").build();
+        assertThatThrownBy(() -> service.amendDeathRecord(id, amendment)).isInstanceOf(BusinessException.class);
+    }
 
     @Test
     void recordingADeathMarksThePatientDeceased() {
@@ -213,6 +442,9 @@ class MortalityServiceImplTest {
 
         assertThat(open.getStatus()).isEqualTo(EncounterStatus.COMPLETED);
         assertThat(result.getClosure().getEncountersClosed()).isEqualTo(1);
+        // QA D972 (round 18): the closed visit is stamped and handed to billing like a checkout.
+        assertThat(open.getCheckoutTimestamp()).isNotNull();
+        verify(eventPublisher).publishEvent(org.mockito.ArgumentMatchers.any(com.example.hms.event.EncounterCheckedOutEvent.class));
     }
 
     @Test
@@ -525,5 +757,23 @@ class MortalityServiceImplTest {
             .certifiedByStaffId(certifier.getId()).build());
 
         assertThat(result.getDeathRecord().getCertifiedAt()).isNotNull();
+    }
+
+    /** QA D1435: a death ends the stay's nursing work, as a discharge does. */
+    @Test
+    void qaD1435_aDeathClosesTheStaysNursingWork() {
+        com.example.hms.service.AdmissionStayEncounterService stayEncounters =
+            org.mockito.Mockito.mock(com.example.hms.service.AdmissionStayEncounterService.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "stayEncounters", stayEncounters);
+        Admission open = new Admission();
+        open.setId(UUID.randomUUID());
+        open.setHospital(hospital);
+        open.setStatus(AdmissionStatus.ACTIVE);
+        when(admissionRepository.findByPatientIdOrderByAdmissionDateTimeDesc(patientId))
+            .thenReturn(List.of(open));
+
+        service.recordDeath(base().build());
+
+        verify(stayEncounters).closeNursingWorkOfEndedStay(open);
     }
 }

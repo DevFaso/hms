@@ -83,6 +83,11 @@ public class PharmacistVerificationService {
         return controlledResolver != null ? controlledResolver.isControlled(p) : p.isControlledSubstance();
     }
 
+    /** QA D922: the same controlled answer, for the MAR row's "controlled substance" flag. */
+    public boolean isControlledSubstance(Prescription prescription) {
+        return prescription != null && controlled(prescription);
+    }
+
     /**
      * Whether this prescription may not be administered until a pharmacist
      * has verified it.
@@ -93,8 +98,12 @@ public class PharmacistVerificationService {
      * the gate once it is in.
      */
     public boolean requiresVerification(Prescription prescription) {
-        return prescription != null
-            && (controlled(prescription) || prescription.isRequiresCosign());
+        return prescription != null && requiresVerification(prescription, controlled(prescription));
+    }
+
+    /** The same rule for a caller that already resolved {@code controlled} (the MAR row shows it too). */
+    public boolean requiresVerification(Prescription prescription, boolean controlled) {
+        return prescription != null && (controlled || prescription.isRequiresCosign());
     }
 
     /** Whether a pharmacist has verified the CURRENT version of this prescription. */

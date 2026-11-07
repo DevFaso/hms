@@ -32,4 +32,9 @@ public class TransfusionAdministrationResponseDTO {
     private String stopReason;
     private String notes;
     private List<TransfusionReactionResponseDTO> reactions;
+    /**
+     * The crossmatch result on file for this bag, null when none: an emergency bag goes out with
+     * none, and the result can come back while it is running. Nothing here stops the bag.
+     */
+    private CrossmatchResponseDTO crossmatch;
 }

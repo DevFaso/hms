@@ -29,7 +29,7 @@ public interface FeatureFlagOverrideRepository extends JpaRepository<FeatureFlag
     @Query("""
         select o
           from FeatureFlagOverride o
-         where lower(o.flagKey) = lower(:flagKey)
+         where lower(o.flagKey) = lower(CAST(:flagKey AS string))
            and o.organizationId is null
         """)
     Optional<FeatureFlagOverride> findGlobalByFlagKey(@Param("flagKey") String flagKey);
@@ -42,7 +42,7 @@ public interface FeatureFlagOverrideRepository extends JpaRepository<FeatureFlag
     @Query("""
         select o
           from FeatureFlagOverride o
-         where lower(o.flagKey) = lower(:flagKey)
+         where lower(o.flagKey) = lower(CAST(:flagKey AS string))
            and ((:organizationId is null and o.organizationId is null)
                 or o.organizationId = :organizationId)
         """)

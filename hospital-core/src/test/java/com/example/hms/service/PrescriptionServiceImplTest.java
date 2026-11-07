@@ -98,7 +98,8 @@ class PrescriptionServiceImplTest {
     // would let the service pass while the rule refuses.
     @org.mockito.Spy
     private com.example.hms.service.pharmacy.ControlledSubstanceGuard controlledSubstanceGuard =
-        new com.example.hms.service.pharmacy.ControlledSubstanceGuard();
+        new com.example.hms.service.pharmacy.ControlledSubstanceGuard(
+            new com.example.hms.service.pharmacy.PrescriptionControlledResolver(mock(com.example.hms.repository.MedicationCatalogItemRepository.class)));
 
     // Also real, same reasoning. updatePrescription calls invalidateOnChange,
     // which is a pure mutation of the passed Prescription — mocking it would
@@ -137,6 +138,9 @@ class PrescriptionServiceImplTest {
     /** G13: the work-queue claim; exit-path releases are verified where they matter. */
     @Mock private com.example.hms.service.pharmacy.PrescriptionQueueClaimService queueClaimService;
 
+    /** QA D1432: the fills on record decide whether an order can still be cancelled. */
+    @Mock private com.example.hms.repository.pharmacy.DispenseRepository dispenseRepository;
+
     /** D83: allergy overrides are audited. */
     @Mock private AuditEventLogService auditEventLogService;
     /** D414: the open stay a consultant's order belongs to. */
@@ -144,6 +148,9 @@ class PrescriptionServiceImplTest {
     /** D654: a catalog pick carries its code into the order. */
     @Mock private com.example.hms.repository.MedicationCatalogItemRepository catalogRepo;
     @Mock private AdmissionStayEncounterService stayEncounters;
+    /** Round 18: controlled orders (tick or catalogue) re-authenticate the prescriber at signing. */
+    @Mock private com.example.hms.service.pharmacy.PrescriptionControlledResolver controlledResolver;
+    @Mock private PrescriberReauthenticationService prescriberReauthentication;
 
     @InjectMocks
     private PrescriptionServiceImpl prescriptionService;
@@ -199,17 +206,55 @@ class PrescriptionServiceImplTest {
 
         lenient().when(patientAllergyRepository.findByPatient_Id(any()))
             .thenReturn(List.of());
-        lenient().when(cdsRuleEngine.evaluateProposedPrescription(any(), any(), any(), any(), any()))
+        lenient().when(cdsRuleEngine.evaluateProposedPrescription(any(), any(), any(com.example.hms.cdshooks.rules.CdsRuleEngine.ProposedOrder.class)))
             .thenReturn(List.of());
+        // QA D922: an order without id or code is resolved by name in the catalogue.
+        lenient().when(catalogRepo.findByHospital_IdAndActiveTrue(any(), any()))
+            .thenReturn(org.springframework.data.domain.Page.empty());
 
         assignment = new UserRoleHospitalAssignment();
         assignment.setId(UUID.randomUUID());
         assignment.setHospital(encounter.getHospital());
 
         lenient().when(prescriptionMapper.toEntity(any(), any(), any(), any()))
-            .thenReturn(new Prescription());
+            .thenReturn(mappedOrder());
+        // QA D1314: the list maps a page at once; these tests state each row's answer.
+        lenient().when(prescriptionMapper.toResponseDTOs(any())).thenAnswer(inv ->
+            inv.<List<Prescription>>getArgument(0).stream().map(prescriptionMapper::toResponseDTO).toList());
         // The named prescriber holds a prescribing role unless a test says otherwise.
         lenient().when(roleValidator.canCreatePrescription(user.getId(), hospitalId)).thenReturn(true);
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({"true,false", "true,true", "false,false", "false,true"})
+    @org.junit.jupiter.api.DisplayName("QA D1314: the search box asks the query of its scope and tab, with the typed text folded")
+    void d1314SearchPicksTheQueryOfItsScopeAndTab(boolean atHospital, boolean inTab) {
+        Pageable page = PageRequest.of(0, 50);
+        List<com.example.hms.enums.PrescriptionStatus> statuses = inTab ? List.of(com.example.hms.enums.PrescriptionStatus.SIGNED) : List.of();
+        Page<Prescription> rows = new PageImpl<>(List.of());
+        when(roleValidator.requireActiveHospitalId()).thenReturn(atHospital ? hospitalId : null);
+        String folded = "%kiemde%";
+        if (atHospital && inTab) {
+            when(prescriptionRepository.searchAtHospitalInStatuses(hospitalId, statuses, folded, page)).thenReturn(rows);
+        } else if (atHospital) {
+            when(prescriptionRepository.searchAtHospital(hospitalId, folded, page)).thenReturn(rows);
+        } else if (inTab) {
+            when(prescriptionRepository.searchEveryHospitalInStatuses(statuses, folded, page)).thenReturn(rows);
+        } else {
+            when(prescriptionRepository.searchEveryHospital(folded, page)).thenReturn(rows);
+        }
+
+        assertThat(prescriptionService.search("  KIEMDÉ ", statuses, page, Locale.ENGLISH).getContent()).isEmpty();
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("QA D1314: a search with nothing to search for is the plain list")
+    void d1314BlankSearchIsTheList() {
+        Pageable page = PageRequest.of(0, 50);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findByHospital_Id(hospitalId, page)).thenReturn(new PageImpl<>(List.of()));
+
+        assertThat(prescriptionService.search("   ", null, page, Locale.ENGLISH).getContent()).isEmpty();
     }
 
     @Test
@@ -256,7 +301,7 @@ class PrescriptionServiceImplTest {
         encounterAssignment.setHospital(encounter.getHospital());
         encounter.setAssignment(encounterAssignment);
         UUID currentUser = staff.getUser().getId();
-        Prescription mappedEntity = new Prescription();
+        Prescription mappedEntity = mappedOrder();
         mappedEntity.setControlledSubstance(true);
 
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
@@ -280,7 +325,7 @@ class PrescriptionServiceImplTest {
         encounter.setAssignment(encounterAssignment);
 
         UUID currentUser = staff.getUser().getId();
-        Prescription mappedEntity = new Prescription();
+        Prescription mappedEntity = mappedOrder();
         PrescriptionResponseDTO responseDTO = PrescriptionResponseDTO.builder()
             .id(UUID.randomUUID())
             .build();
@@ -309,6 +354,8 @@ class PrescriptionServiceImplTest {
     @Test
     void createPrescriptionFromACatalogPickTakesTheItemCode() {
         PrescriptionRequestDTO request = buildRequest();
+        // QA D922: a catalogue-controlled drug states its quantity, as the form always sends it.
+        request.setQuantity(java.math.BigDecimal.TEN);
         request.setMedicationCode(null);
         UUID catalogId = UUID.randomUUID();
         request.setMedicationCatalogItemId(catalogId);
@@ -316,12 +363,18 @@ class PrescriptionServiceImplTest {
             new com.example.hms.model.medication.MedicationCatalogItem();
         item.setCode("N02AA01");
         item.setControlled(true);
+        // QA D1223: the picked item is the drug the order names (a real item has
+        // its NOT NULL names; a typed name naming another drug is refused).
+        item.setNameFr("Morphine");
+        item.setGenericName("morphine");
+        request.setMedicationName("Morphine 10 mg");
         UserRoleHospitalAssignment encounterAssignment = new UserRoleHospitalAssignment();
         encounterAssignment.setId(UUID.randomUUID());
         encounterAssignment.setHospital(encounter.getHospital());
         encounter.setAssignment(encounterAssignment);
         UUID currentUser = staff.getUser().getId();
-        Prescription mappedEntity = new Prescription();
+        Prescription mappedEntity = mappedOrder();
+        mappedEntity.setQuantity(java.math.BigDecimal.TEN); // the mapper copies the request's quantity
 
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
@@ -391,7 +444,7 @@ class PrescriptionServiceImplTest {
         UserRoleHospitalAssignment resolvedAssignment = new UserRoleHospitalAssignment();
         resolvedAssignment.setId(UUID.randomUUID());
 
-        Prescription mappedEntity = new Prescription();
+        Prescription mappedEntity = mappedOrder();
         PrescriptionResponseDTO responseDTO = PrescriptionResponseDTO.builder().id(UUID.randomUUID()).build();
 
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
@@ -433,7 +486,7 @@ class PrescriptionServiceImplTest {
         encounterAssignment.setId(UUID.randomUUID());
         encounter.setAssignment(encounterAssignment);
 
-        Prescription mappedEntity = new Prescription();
+        Prescription mappedEntity = mappedOrder();
         PrescriptionResponseDTO responseDTO = PrescriptionResponseDTO.builder().id(UUID.randomUUID()).build();
 
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
@@ -472,7 +525,7 @@ class PrescriptionServiceImplTest {
         staffDepartment.setHospital(encounter.getHospital());
         staff.setDepartment(staffDepartment);
 
-        Prescription mappedEntity = new Prescription();
+        Prescription mappedEntity = mappedOrder();
         PrescriptionResponseDTO responseDTO = PrescriptionResponseDTO.builder().id(UUID.randomUUID()).build();
 
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
@@ -563,7 +616,7 @@ class PrescriptionServiceImplTest {
         actingAssignment.setHospital(acting);
         actingStaff.setAssignment(actingAssignment);
 
-        Prescription mappedEntity = new Prescription();
+        Prescription mappedEntity = mappedOrder();
         PrescriptionResponseDTO responseDTO = PrescriptionResponseDTO.builder().id(UUID.randomUUID()).build();
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(actingId);
@@ -605,7 +658,7 @@ class PrescriptionServiceImplTest {
         encounterAssignment.setId(UUID.randomUUID());
         encounter.setAssignment(encounterAssignment);
 
-        Prescription mappedEntity = new Prescription();
+        Prescription mappedEntity = mappedOrder();
         PrescriptionResponseDTO responseDTO = PrescriptionResponseDTO.builder().id(UUID.randomUUID()).build();
 
         when(patientRepository.findByUsernameOrEmail(patientIdentifier)).thenReturn(Optional.of(patient));
@@ -683,6 +736,118 @@ class PrescriptionServiceImplTest {
         verify(prescriptionRepository).save(existing);
     }
 
+    /**
+     * QA round 30 (user decision 2026-11-02): an as-needed order names its
+     * minimum interval on every path that writes it - here the service, which
+     * order sets reach without the request constraints. Nothing is saved.
+     */
+    @Test
+    void prn_createOfAnAsNeededOrderWithoutItsIntervalIsRefusedOnTheField() {
+        PrescriptionRequestDTO request = buildRequest();
+        UserRoleHospitalAssignment encounterAssignment = new UserRoleHospitalAssignment();
+        encounterAssignment.setId(UUID.randomUUID());
+        encounterAssignment.setHospital(encounter.getHospital());
+        encounter.setAssignment(encounterAssignment);
+        UUID currentUser = staff.getUser().getId();
+        Prescription mappedEntity = mappedOrder();
+        mappedEntity.setFrequency("si besoin");
+
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(authService.getCurrentUserId()).thenReturn(currentUser);
+        when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
+        when(prescriptionMapper.toEntity(request, patient, staff, encounter)).thenReturn(mappedEntity);
+
+        // QA D1378 (round 32): not ticked, the as-needed wording is refused on the tick (safety net).
+        assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "asNeeded");
+        mappedEntity.setFrequency("SOS");
+        assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "asNeeded");
+        // Ticked, the interval is required.
+        mappedEntity.setAsNeeded(true);
+        assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "prnMinIntervalHours");
+        verify(prescriptionRepository, never()).save(any());
+
+        mappedEntity.setPrnMinIntervalHours(6);
+        when(prescriptionRepository.save(mappedEntity)).thenReturn(mappedEntity);
+        when(prescriptionMapper.toResponseDTO(mappedEntity))
+            .thenReturn(PrescriptionResponseDTO.builder().id(UUID.randomUUID()).build());
+        prescriptionService.createPrescription(request, Locale.ENGLISH);
+        verify(prescriptionRepository).save(mappedEntity);
+        assertThat(mappedEntity.getPrnMinIntervalHours()).isEqualTo(6);
+    }
+
+    /**
+     * QA D1359: an edit names a known route or echoes the order's own; a new
+     * unknown route is refused on the field and nothing is saved.
+     */
+    @Test
+    void d1359_anEditToAnUnknownRouteIsRefusedButTheOrdersOwnRouteIsEchoed() {
+        UUID prescriptionId = UUID.randomUUID();
+        PrescriptionRequestDTO request = buildRequest();
+        request.setRoute("BOGUS");
+        Prescription existing = new Prescription();
+        existing.setId(prescriptionId);
+        existing.setRoute("PO");
+        UserRoleHospitalAssignment staffAssignment = new UserRoleHospitalAssignment();
+        staffAssignment.setId(UUID.randomUUID());
+        staffAssignment.setHospital(encounter.getHospital());
+        staff.setAssignment(staffAssignment);
+        UUID currentUser = staff.getUser().getId();
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(existing));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(authService.getCurrentUserId()).thenReturn(currentUser);
+        when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
+
+        assertThatThrownBy(() -> prescriptionService.updatePrescription(prescriptionId, request, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "route");
+        verify(prescriptionRepository, never()).save(any());
+
+        existing.setRoute("BOGUS");
+        when(prescriptionRepository.save(existing)).thenReturn(existing);
+        when(prescriptionMapper.toResponseDTO(existing))
+            .thenReturn(PrescriptionResponseDTO.builder().id(prescriptionId).build());
+        prescriptionService.updatePrescription(prescriptionId, request, Locale.ENGLISH);
+        verify(prescriptionRepository).save(existing);
+    }
+
+    /** QA round 30: an edit of an as-needed order's content keeps or names its interval; nothing saved without it. */
+    @Test
+    void prn_anEditOfAnAsNeededOrderWithoutAnIntervalIsRefused() {
+        UUID prescriptionId = UUID.randomUUID();
+        PrescriptionRequestDTO request = buildRequest();
+        Prescription existing = new Prescription();
+        existing.setId(prescriptionId);
+        existing.setFrequency("PRN");
+        existing.setAsNeeded(true);
+        UserRoleHospitalAssignment staffAssignment = new UserRoleHospitalAssignment();
+        staffAssignment.setId(UUID.randomUUID());
+        staffAssignment.setHospital(encounter.getHospital());
+        staff.setAssignment(staffAssignment);
+        UUID currentUser = staff.getUser().getId();
+
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(existing));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(authService.getCurrentUserId()).thenReturn(currentUser);
+        when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
+
+        assertThatThrownBy(() -> prescriptionService.updatePrescription(prescriptionId, request, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "prnMinIntervalHours");
+        verify(prescriptionRepository, never()).save(any());
+    }
+
     @Test
     void d739_anEditKeepingTheOrdersOwnCompletedEncounterIsAccepted() {
         UUID prescriptionId = UUID.randomUUID();
@@ -753,6 +918,13 @@ class PrescriptionServiceImplTest {
 
         assertThat(result.getContent()).containsExactly(dto);
         verify(prescriptionRepository).findByHospital_Id(hospitalId, pageable);
+    }
+
+    /** What the mapper makes of a request: QA D1491, a new order states its frequency. */
+    private static Prescription mappedOrder() {
+        Prescription order = new Prescription();
+        order.setFrequency(TEST_FREQUENCY);
+        return order;
     }
 
     private PrescriptionRequestDTO buildRequest() {
@@ -913,7 +1085,7 @@ class PrescriptionServiceImplTest {
         encounter.setAssignment(encounterAssignment);
 
         UUID currentUser = staff.getUser().getId();
-        Prescription mappedEntity = new Prescription();
+        Prescription mappedEntity = mappedOrder();
         PrescriptionResponseDTO responseDTO = PrescriptionResponseDTO.builder().id(UUID.randomUUID()).build();
 
         when(patientRepository.findByUsernameOrEmail(mrn)).thenReturn(Optional.empty());
@@ -947,7 +1119,7 @@ class PrescriptionServiceImplTest {
         encounter.setAssignment(encounterAssignment);
 
         UUID currentUser = staff.getUser().getId();
-        Prescription mappedEntity = new Prescription();
+        Prescription mappedEntity = mappedOrder();
         PrescriptionResponseDTO responseDTO = PrescriptionResponseDTO.builder().id(UUID.randomUUID()).build();
 
         when(patientRepository.findByUsernameOrEmail(patientUuid.toString())).thenReturn(Optional.empty());
@@ -1155,7 +1327,7 @@ class PrescriptionServiceImplTest {
         encounter.setAssignment(encounterAssignment);
 
         UUID currentUser = staff.getUser().getId();
-        Prescription mappedEntity = new Prescription();
+        Prescription mappedEntity = mappedOrder();
         PrescriptionResponseDTO responseDTO = PrescriptionResponseDTO.builder().id(UUID.randomUUID()).build();
 
         PatientAllergy allergy = new PatientAllergy();
@@ -1188,6 +1360,211 @@ class PrescriptionServiceImplTest {
         // the free-text reason never lands in the unencrypted audit row
         assertThat(String.valueOf(audit.getValue().getDetails())).doesNotContain("Benefit");
         assertThat(audit.getValue().getEventDescription()).doesNotContain("Benefit");
+    }
+
+    // ═══════════════ QA D1183 / D1149 round 23: INN class + safety net ═══════════════
+
+    /** QA D1183: an active catalogue item (this hospital's or the national list) named {@code generic}. */
+    private void stubCatalogueKnows(String generic) {
+        com.example.hms.model.medication.MedicationCatalogItem item =
+            new com.example.hms.model.medication.MedicationCatalogItem();
+        item.setId(UUID.randomUUID());
+        item.setNameFr(generic);
+        item.setGenericName(generic);
+        lenient().when(catalogRepo.findActivePage(any(), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(item)));
+    }
+
+    private PrescriptionRequestDTO d1183Request(String medication, boolean force, String reason) {
+        return PrescriptionRequestDTO.builder()
+            .patientId(patientId).staffId(staffId).encounterId(encounterId)
+            .medicationName(medication).dosage(TEST_DOSAGE).frequency(TEST_FREQUENCY)
+            .forceOverride(force).overrideReason(reason)
+            .build();
+    }
+
+    private void d1183StubCreate(String allergen) {
+        UserRoleHospitalAssignment encounterAssignment = new UserRoleHospitalAssignment();
+        encounterAssignment.setId(UUID.randomUUID());
+        encounterAssignment.setHospital(encounter.getHospital());
+        encounter.setAssignment(encounterAssignment);
+        UUID currentUser = staff.getUser().getId();
+        PatientAllergy allergy = new PatientAllergy();
+        allergy.setActive(true);
+        allergy.setAllergenDisplay(allergen);
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(authService.getCurrentUserId()).thenReturn(currentUser);
+        when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
+        when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(List.of(allergy));
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest(name = "create {1} typed free-text, allergy {0}: blocked")
+    @org.junit.jupiter.params.provider.CsvSource({
+        "Sulfamides, Septrin", "Sulfamides, Septrin forte", "Sulfamides, Fansidar", "Sulfamides, Eusaprim",
+        "Sulfamides, Bactrim", "Pénicilline, Totapen", "Pénicilline, Orbénine", "Pénicilline, Ospen",
+        "Pénicilline, Augmentin",
+    })
+    void d1183_everyQaBrandTypedFreeTextIsBlockedAtCreation(String allergen, String medication) {
+        d1183StubCreate(allergen);
+        PrescriptionRequestDTO request = d1183Request(medication, false, null);
+        assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.FRENCH))
+            .isInstanceOf(com.example.hms.cdshooks.CdsCriticalBlockException.class);
+        verify(prescriptionRepository, never()).save(any());
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest(name = "create {1} picked from the catalogue, allergy {0}: blocked")
+    @org.junit.jupiter.params.provider.CsvSource({
+        "Sulfamides, Septrin, Sulfaméthoxazole + Triméthoprime",
+        "Sulfamides, Septrin forte, Sulfaméthoxazole + Triméthoprime",
+        "Sulfamides, Fansidar, Sulfadoxine + Pyriméthamine",
+        "Sulfamides, Eusaprim, Sulfaméthoxazole + Triméthoprime",
+        "Sulfamides, Bactrim, Sulfaméthoxazole + Triméthoprime",
+        "Pénicilline, Totapen, Ampicilline",
+        "Pénicilline, Orbénine, Cloxacilline",
+        "Pénicilline, Ospen, Phénoxyméthylpénicilline",
+        "Pénicilline, Augmentin, Amoxicilline + acide clavulanique",
+    })
+    void d1183_everyQaBrandPickedFromTheCatalogueIsBlockedAtCreation(String allergen, String brand, String generic) {
+        d1183StubCreate(allergen);
+        com.example.hms.model.medication.MedicationCatalogItem item =
+            new com.example.hms.model.medication.MedicationCatalogItem();
+        item.setId(UUID.randomUUID());
+        item.setNameFr(brand);
+        item.setGenericName(generic);
+        PrescriptionRequestDTO request = d1183Request(brand, false, null);
+        request.setMedicationCatalogItemId(item.getId());
+        lenient().when(catalogRepo.findByIdAndHospital_Id(item.getId(), hospitalId))
+            .thenReturn(Optional.of(item));
+        lenient().when(catalogRepo.findActivePage(any(), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(item)));
+        lenient().when(catalogRepo.findByHospital_IdAndActiveTrue(any(), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(item)));
+        assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.FRENCH))
+            .isInstanceOf(com.example.hms.cdshooks.CdsCriticalBlockException.class);
+        verify(prescriptionRepository, never()).save(any());
+    }
+
+    @Test
+    void d1183_anUnknownFreeTextNameWithAClassAllergyNeedsAnAcknowledgement() {
+        d1183StubCreate("Pénicilline");
+        PrescriptionRequestDTO request = d1183Request("Zorbalix 500 mg", false, null);
+        assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.FRENCH))
+            .isInstanceOfSatisfying(com.example.hms.cdshooks.CdsCriticalBlockException.class, ex ->
+                assertThat(ex.getCards()).singleElement().satisfies(card -> {
+                    assertThat(card.indicator())
+                        .isEqualTo(com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard.Indicator.CRITICAL);
+                    assertThat(card.summary()).contains("Zorbalix").contains("Pénicilline");
+                }));
+        verify(prescriptionRepository, never()).save(any());
+    }
+
+    @Test
+    void d1183_theSafetyNetAcknowledgementIsRecordedAndAudited() {
+        PrescriptionRequestDTO request =
+            d1183Request("Zorbalix 500 mg", true, "Checked with the pharmacist: not a penicillin");
+        d1183StubCreate("Pénicilline");
+        Prescription mappedEntity = mappedOrder();
+        when(prescriptionMapper.toEntity(request, patient, staff, encounter)).thenReturn(mappedEntity);
+        when(prescriptionRepository.save(mappedEntity)).thenReturn(mappedEntity);
+        when(prescriptionMapper.toResponseDTO(mappedEntity)).thenReturn(PrescriptionResponseDTO.builder().build());
+
+        prescriptionService.createPrescription(request, Locale.FRENCH);
+
+        assertThat(mappedEntity.isAllergiesReviewed()).isTrue();
+        assertThat(mappedEntity.getOverrideReason()).isEqualTo("Checked with the pharmacist: not a penicillin");
+        verify(auditEventLogService).logEvent(org.mockito.ArgumentMatchers.argThat(e ->
+            e.getEventType() == com.example.hms.enums.AuditEventType.PRESCRIPTION_ALLERGY_OVERRIDDEN));
+    }
+
+    @Test
+    void d1183_anUnknownNameWithoutAClassAllergyIsNotBlocked() {
+        PrescriptionRequestDTO request = d1183Request("Zorbalix 500 mg", false, null);
+        d1183StubCreate("Aspirine");
+        Prescription mappedEntity = mappedOrder();
+        when(prescriptionMapper.toEntity(request, patient, staff, encounter)).thenReturn(mappedEntity);
+        when(prescriptionRepository.save(mappedEntity)).thenReturn(mappedEntity);
+        when(prescriptionMapper.toResponseDTO(mappedEntity)).thenReturn(PrescriptionResponseDTO.builder().build());
+
+        prescriptionService.createPrescription(request, Locale.FRENCH);
+
+        assertThat(mappedEntity.isAllergiesReviewed()).isFalse();
+    }
+
+    @Test
+    void d1488_aDraftIsNotSignedForAPatientWhoHasDied() {
+        UUID prescriberUserId = UUID.randomUUID();
+        Prescription rx = signablePrescription(prescriberUserId);
+        rx.getPatient().setDeceasedAt(java.time.LocalDateTime.now().minusHours(1));
+        when(prescriptionRepository.findById(rx.getId())).thenReturn(java.util.Optional.of(rx));
+        UUID rxId = rx.getId();
+
+        assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, null, Locale.FRENCH))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.DRAFT);
+    }
+
+    @Test
+    void d1183_aTotapenDraftSavedBeforeTheRuleIsNotSignedWithoutAnAcknowledgement() {
+        UUID prescriberUserId = UUID.randomUUID();
+        Prescription rx = signablePrescription(prescriberUserId);
+        rx.setMedicationName("Totapen 1 g");
+        PatientAllergy allergy = new PatientAllergy();
+        allergy.setActive(true);
+        allergy.setAllergenDisplay("Pénicilline");
+        stubSignable(rx, prescriberUserId);
+        when(patientAllergyRepository.findByPatient_Id(rx.getPatient().getId())).thenReturn(List.of(allergy));
+        UUID rxId = rx.getId();
+
+        assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, null, Locale.FRENCH))
+            .isInstanceOf(com.example.hms.cdshooks.CdsCriticalBlockException.class);
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.DRAFT);
+        assertThat(rx.getSignatureValue()).isNull();
+    }
+
+    @Test
+    void d1183_theSignerMayAcknowledgeTheAllergyAtTheSignatureAndItIsRecorded() {
+        UUID prescriberUserId = UUID.randomUUID();
+        Prescription rx = signablePrescription(prescriberUserId);
+        rx.setMedicationName("Septrin forte");
+        PatientAllergy allergy = new PatientAllergy();
+        allergy.setActive(true);
+        allergy.setAllergenDisplay("Sulfamides");
+        stubSignable(rx, prescriberUserId);
+        when(patientAllergyRepository.findByPatient_Id(rx.getPatient().getId())).thenReturn(List.of(allergy));
+        when(prescriptionRepository.save(any(Prescription.class))).thenAnswer(i -> i.getArgument(0));
+        when(prescriptionMapper.toResponseDTO(any(Prescription.class))).thenReturn(new PrescriptionResponseDTO());
+
+        prescriptionService.signPrescription(rx.getId(),
+            com.example.hms.payload.dto.SignPrescriptionRequestDTO.builder()
+                .allergyOverrideReason("Tolerated co-trimoxazole in 2025, documented").build(),
+            Locale.FRENCH);
+
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.SIGNED);
+        assertThat(rx.isAllergiesReviewed()).isTrue();
+        assertThat(rx.getOverrideReason()).isEqualTo("Tolerated co-trimoxazole in 2025, documented");
+        // r23 residual: an acknowledgement given at the signature says so in
+        // the audit log (it read "recorded on edit", an edit nobody made).
+        verify(auditEventLogService).logEvent(org.mockito.ArgumentMatchers.argThat(e ->
+            e.getEventType() == com.example.hms.enums.AuditEventType.PRESCRIPTION_ALLERGY_OVERRIDDEN
+                && "Allergy override recorded at signature".equals(e.getEventDescription())));
+    }
+
+    @Test
+    void d1183_anOrderAcknowledgedAtCreationIsSignedWithoutAskingAgain() {
+        UUID prescriberUserId = UUID.randomUUID();
+        Prescription rx = signablePrescription(prescriberUserId);
+        rx.setMedicationName("Totapen 1 g");
+        rx.setAllergiesReviewed(true);
+        rx.setOverrideReason("reviewed");
+        stubSignable(rx, prescriberUserId);
+        when(prescriptionRepository.save(any(Prescription.class))).thenAnswer(i -> i.getArgument(0));
+        when(prescriptionMapper.toResponseDTO(any(Prescription.class))).thenReturn(new PrescriptionResponseDTO());
+
+        prescriptionService.signPrescription(rx.getId(), null, Locale.FRENCH);
+
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.SIGNED);
     }
 
     @Test
@@ -1260,7 +1637,7 @@ class PrescriptionServiceImplTest {
         encounter.setAssignment(encounterAssignment);
 
         UUID currentUser = staff.getUser().getId();
-        Prescription mappedEntity = new Prescription();
+        Prescription mappedEntity = mappedOrder();
         PrescriptionResponseDTO responseDTO = PrescriptionResponseDTO.builder().id(UUID.randomUUID()).build();
 
         PatientAllergy allergy = new PatientAllergy();
@@ -1294,7 +1671,7 @@ class PrescriptionServiceImplTest {
         encounter.setAssignment(encounterAssignment);
 
         UUID currentUser = staff.getUser().getId();
-        Prescription mappedEntity = new Prescription();
+        Prescription mappedEntity = mappedOrder();
         PrescriptionResponseDTO responseDTO = PrescriptionResponseDTO.builder().id(UUID.randomUUID()).build();
 
         PatientAllergy allergy = new PatientAllergy();
@@ -1328,7 +1705,7 @@ class PrescriptionServiceImplTest {
         encounter.setAssignment(encounterAssignment);
 
         UUID currentUser = staff.getUser().getId();
-        Prescription mappedEntity = new Prescription();
+        Prescription mappedEntity = mappedOrder();
         PrescriptionResponseDTO responseDTO = PrescriptionResponseDTO.builder().id(UUID.randomUUID()).build();
 
         PatientAllergy allergy = new PatientAllergy();
@@ -1360,13 +1737,16 @@ class PrescriptionServiceImplTest {
         encounter.setAssignment(encounterAssignment);
 
         UUID currentUser = staff.getUser().getId();
-        Prescription mappedEntity = new Prescription();
+        Prescription mappedEntity = mappedOrder();
         PrescriptionResponseDTO responseDTO = PrescriptionResponseDTO.builder().id(UUID.randomUUID()).build();
 
         PatientAllergy allergy = new PatientAllergy();
         allergy.setActive(true);
         allergy.setAllergenDisplay("Penicillin"); // does not match Ibuprofen
         allergy.setSeverity(com.example.hms.enums.AllergySeverity.SEVERE);
+        // QA D1183 (round 23): the drug is known to the catalogue, so the check
+        // judges it (a free-text name nobody recorded reaches the safety net).
+        stubCatalogueKnows("Ibuprofen");
 
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
@@ -1396,7 +1776,7 @@ class PrescriptionServiceImplTest {
         encounterAssignment.setHospital(encounter.getHospital());
         encounter.setAssignment(encounterAssignment);
         UUID currentUser = staff.getUser().getId();
-        Prescription mappedEntity = new Prescription();
+        Prescription mappedEntity = mappedOrder();
         PrescriptionResponseDTO responseDTO = PrescriptionResponseDTO.builder().id(UUID.randomUUID()).build();
         PatientAllergy allergy = new PatientAllergy();
         allergy.setActive(true);
@@ -1468,11 +1848,162 @@ class PrescriptionServiceImplTest {
         when(prescriptionMapper.toResponseDTO(any(Prescription.class))).thenReturn(new PrescriptionResponseDTO());
         when(patientAllergyRepository.findByPatient_Id(rx.getPatient().getId())).thenReturn(List.of(allergy));
 
-        PrescriptionResponseDTO signed = prescriptionService.signPrescription(rx.getId(), Locale.ENGLISH);
+        PrescriptionResponseDTO signed = prescriptionService.signPrescription(rx.getId(), null, Locale.ENGLISH);
 
         assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.SIGNED);
         assertThat(signed.getCdsAdvisories()).singleElement()
             .satisfies(card -> assertThat(card.indicator()).isEqualTo(com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard.Indicator.WARNING));
+    }
+
+    /** Round 18: a controlled order (catalogue flag, no tick) is signed only after re-authentication. */
+    @Test
+    void signingAControlledOrderReAuthenticatesThePrescriberAndRecordsTheProof() {
+        UUID prescriberUserId = UUID.randomUUID();
+        Prescription rx = signablePrescription(prescriberUserId);
+        rx.setMedicationName("Morphine 10 mg");
+        when(prescriptionRepository.findById(rx.getId())).thenReturn(java.util.Optional.of(rx));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(rx.getHospital().getId());
+        when(roleValidator.getCurrentUserId()).thenReturn(prescriberUserId);
+        when(prescriptionRepository.save(any(Prescription.class))).thenAnswer(i -> i.getArgument(0));
+        when(prescriptionMapper.toResponseDTO(any(Prescription.class))).thenReturn(new PrescriptionResponseDTO());
+        when(controlledResolver.isControlled(rx)).thenReturn(true);
+        java.time.LocalDateTime at = java.time.LocalDateTime.of(2026, 10, 30, 9, 0);
+        when(prescriberReauthentication.requireForControlledSigning(prescriberUserId, rx.getId(), "s3cret", null))
+            .thenReturn(new PrescriberReauthenticationService.Verified("PASSWORD", at));
+
+        prescriptionService.signPrescription(rx.getId(),
+            com.example.hms.payload.dto.SignPrescriptionRequestDTO.builder().password("s3cret").build(), Locale.ENGLISH);
+
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.SIGNED);
+        assertThat(rx.getTwoFactorVerifiedAt()).isEqualTo(at);
+        assertThat(rx.getTwoFactorMethod()).isEqualTo("PASSWORD");
+    }
+
+    /** Round 18: a ticked controlled order, unsignable before (nothing wrote the proof), now signs after re-authentication. */
+    @Test
+    void aTickedControlledOrderIsSignableOnceThePrescriberReAuthenticates() {
+        UUID prescriberUserId = UUID.randomUUID();
+        Prescription rx = signablePrescription(prescriberUserId);
+        rx.setControlledSubstance(true);
+        when(prescriptionRepository.findById(rx.getId())).thenReturn(java.util.Optional.of(rx));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(rx.getHospital().getId());
+        when(roleValidator.getCurrentUserId()).thenReturn(prescriberUserId);
+        when(prescriptionRepository.save(any(Prescription.class))).thenAnswer(i -> i.getArgument(0));
+        when(prescriptionMapper.toResponseDTO(any(Prescription.class))).thenReturn(new PrescriptionResponseDTO());
+        when(controlledResolver.isControlled(rx)).thenReturn(true);
+        when(prescriberReauthentication.requireForControlledSigning(any(), any(), any(), any()))
+            .thenReturn(new PrescriberReauthenticationService.Verified("TOTP", java.time.LocalDateTime.now()));
+
+        prescriptionService.signPrescription(rx.getId(),
+            com.example.hms.payload.dto.SignPrescriptionRequestDTO.builder().mfaCode("123456").build(), Locale.ENGLISH);
+
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.SIGNED);
+        assertThat(rx.getTwoFactorMethod()).isEqualTo("TOTP");
+    }
+
+    /** Round 18: a refused re-authentication leaves the order unsigned. */
+    @Test
+    void aRefusedReAuthenticationLeavesTheOrderUnsigned() {
+        UUID prescriberUserId = UUID.randomUUID();
+        Prescription rx = signablePrescription(prescriberUserId);
+        when(prescriptionRepository.findById(rx.getId())).thenReturn(java.util.Optional.of(rx));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(rx.getHospital().getId());
+        when(roleValidator.getCurrentUserId()).thenReturn(prescriberUserId);
+        when(controlledResolver.isControlled(rx)).thenReturn(true);
+        when(prescriberReauthentication.requireForControlledSigning(any(), any(), any(), any()))
+            .thenThrow(new com.example.hms.exception.MfaStepUpRefusedException(
+                com.example.hms.exception.MfaStepUpRefusedException.Reason.INVALID));
+
+        assertThatThrownBy(() -> prescriptionService.signPrescription(rx.getId(), null, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.MfaStepUpRefusedException.class);
+        assertThat(rx.getSignatureValue()).isNull();
+        assertThat(rx.getTwoFactorVerifiedAt()).isNull();
+        verify(prescriptionRepository, never()).save(any());
+    }
+
+    /** Review of round 18: a missing co-signature is refused before the prescriber's code is spent. */
+    @Test
+    void aMissingCosignatureIsRefusedBeforeTheReAuthentication() {
+        UUID prescriberUserId = UUID.randomUUID();
+        Prescription rx = signablePrescription(prescriberUserId);
+        rx.setRequiresCosign(true);
+        when(prescriptionRepository.findById(rx.getId())).thenReturn(java.util.Optional.of(rx));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(rx.getHospital().getId());
+        when(roleValidator.getCurrentUserId()).thenReturn(prescriberUserId);
+        when(controlledResolver.isControlled(rx)).thenReturn(true);
+
+        assertThatThrownBy(() -> prescriptionService.signPrescription(rx.getId(),
+            com.example.hms.payload.dto.SignPrescriptionRequestDTO.builder().mfaCode("123456").build(), Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class);
+        verify(prescriberReauthentication, never()).requireForControlledSigning(any(), any(), any(), any());
+    }
+
+    /** Review round 2: a hard stop on a draft saved before the cap existed is refused at the signature, before any code is spent. */
+    @Test
+    void aHardStopIsRefusedAtTheSignatureBeforeTheReAuthentication() {
+        UUID prescriberUserId = UUID.randomUUID();
+        Prescription rx = signablePrescription(prescriberUserId);
+        when(prescriptionRepository.findById(rx.getId())).thenReturn(java.util.Optional.of(rx));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(rx.getHospital().getId());
+        when(roleValidator.getCurrentUserId()).thenReturn(prescriberUserId);
+        com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard hardStop =
+            new com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard(
+                "Paracetamol: 6000 mg per day is above the absolute daily maximum of 4000 mg", null,
+                com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard.Indicator.CRITICAL,
+                new com.example.hms.cdshooks.dto.CdsHookDtos.Source("HMS Pediatric Dose Check", null, null),
+                null, null, null, "uuid", Boolean.TRUE);
+        when(cdsRuleEngine.evaluateProposedPrescription(any(), any(), any(com.example.hms.cdshooks.rules.CdsRuleEngine.ProposedOrder.class)))
+            .thenReturn(List.of(hardStop));
+
+        assertThatThrownBy(() -> prescriptionService.signPrescription(rx.getId(), null, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.cdshooks.CdsCriticalBlockException.class);
+        assertThat(rx.getSignatureValue()).isNull();
+        verify(prescriberReauthentication, never()).requireForControlledSigning(any(), any(), any(), any());
+    }
+
+    /** Review round 3: an unlinked order is re-checked against the strictest item its name names (the daily cap decides). */
+    @Test
+    void anUnlinkedOrderIsReCheckedAgainstTheItemWithTheLowestDailyCap() {
+        UUID prescriberUserId = UUID.randomUUID();
+        Prescription rx = signablePrescription(prescriberUserId);
+        rx.setMedicationName("Paracétamol");
+        com.example.hms.model.medication.MedicationCatalogItem uncapped =
+            com.example.hms.model.medication.MedicationCatalogItem.builder()
+                .nameFr("Paracétamol").genericName("Paracetamol").strength("250").strengthUnit("mg")
+                .pediatricMaxDoseMgPerKg(new java.math.BigDecimal("10")).build();
+        com.example.hms.model.medication.MedicationCatalogItem capped =
+            com.example.hms.model.medication.MedicationCatalogItem.builder()
+                .nameFr("Paracétamol").genericName("Paracetamol").strength("500").strengthUnit("mg")
+                .pediatricMaxDailyMg(new java.math.BigDecimal("4000")).build();
+        when(prescriptionRepository.findById(rx.getId())).thenReturn(java.util.Optional.of(rx));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(rx.getHospital().getId());
+        when(roleValidator.getCurrentUserId()).thenReturn(prescriberUserId);
+        when(prescriptionRepository.save(any(Prescription.class))).thenAnswer(i -> i.getArgument(0));
+        when(prescriptionMapper.toResponseDTO(any(Prescription.class))).thenReturn(new PrescriptionResponseDTO());
+        when(catalogRepo.findByHospital_IdAndActiveTrue(eq(rx.getHospital().getId()), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(uncapped, capped)));
+
+        prescriptionService.signPrescription(rx.getId(), null, Locale.ENGLISH);
+
+        verify(cdsRuleEngine).evaluateProposedPrescription(any(), any(), org.mockito.ArgumentMatchers.argThat(
+            o -> o.catalogItem() == capped && rx.getId().equals(o.excludedPrescriptionId())));
+    }
+
+    /** Round 18: an ordinary drug signs without any re-authentication. */
+    @Test
+    void anOrdinaryOrderSignsWithoutReAuthentication() {
+        UUID prescriberUserId = UUID.randomUUID();
+        Prescription rx = signablePrescription(prescriberUserId);
+        when(prescriptionRepository.findById(rx.getId())).thenReturn(java.util.Optional.of(rx));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(rx.getHospital().getId());
+        when(roleValidator.getCurrentUserId()).thenReturn(prescriberUserId);
+        when(prescriptionRepository.save(any(Prescription.class))).thenAnswer(i -> i.getArgument(0));
+        when(prescriptionMapper.toResponseDTO(any(Prescription.class))).thenReturn(new PrescriptionResponseDTO());
+
+        prescriptionService.signPrescription(rx.getId(), null, Locale.ENGLISH);
+
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.SIGNED);
+        verify(prescriberReauthentication, never()).requireForControlledSigning(any(), any(), any(), any());
     }
 
     @Test
@@ -1484,6 +2015,8 @@ class PrescriptionServiceImplTest {
         PatientAllergy allergy = new PatientAllergy();
         allergy.setActive(true);
         allergy.setAllergenDisplay("Pénicilline");
+        // QA D1183 (round 23): the catalogue knows the drug, so the check judges it.
+        stubCatalogueKnows("Paracétamol");
         when(prescriptionRepository.findById(rx.getId())).thenReturn(java.util.Optional.of(rx));
         when(roleValidator.requireActiveHospitalId()).thenReturn(rx.getHospital().getId());
         when(roleValidator.getCurrentUserId()).thenReturn(prescriberUserId);
@@ -1491,7 +2024,7 @@ class PrescriptionServiceImplTest {
         when(prescriptionMapper.toResponseDTO(any(Prescription.class))).thenReturn(new PrescriptionResponseDTO());
         when(patientAllergyRepository.findByPatient_Id(rx.getPatient().getId())).thenReturn(List.of(allergy));
 
-        PrescriptionResponseDTO signed = prescriptionService.signPrescription(rx.getId(), Locale.ENGLISH);
+        PrescriptionResponseDTO signed = prescriptionService.signPrescription(rx.getId(), null, Locale.ENGLISH);
 
         assertThat(signed.getCdsAdvisories()).isNullOrEmpty();
     }
@@ -1505,7 +2038,7 @@ class PrescriptionServiceImplTest {
         encounter.setAssignment(encounterAssignment);
 
         UUID currentUser = staff.getUser().getId();
-        Prescription mappedEntity = new Prescription();
+        Prescription mappedEntity = mappedOrder();
         PrescriptionResponseDTO responseDTO = PrescriptionResponseDTO.builder().id(UUID.randomUUID()).build();
 
         PatientAllergy allergy = new PatientAllergy();
@@ -1545,7 +2078,7 @@ class PrescriptionServiceImplTest {
         encounter.setAssignment(encounterAssignment);
 
         UUID currentUser = staff.getUser().getId();
-        Prescription mappedEntity = new Prescription();
+        Prescription mappedEntity = mappedOrder();
         PrescriptionResponseDTO responseDTO = PrescriptionResponseDTO.builder().id(UUID.randomUUID()).build();
 
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
@@ -1580,7 +2113,7 @@ class PrescriptionServiceImplTest {
         encounter.setAssignment(encounterAssignment);
 
         UUID currentUser = staff.getUser().getId();
-        Prescription mappedEntity = new Prescription();
+        Prescription mappedEntity = mappedOrder();
         PrescriptionResponseDTO responseDTO = PrescriptionResponseDTO.builder().id(UUID.randomUUID()).build();
 
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
@@ -1610,7 +2143,7 @@ class PrescriptionServiceImplTest {
         staff.setAssignment(staffAssignment);
 
         UUID currentUser = staff.getUser().getId();
-        Prescription mappedEntity = new Prescription();
+        Prescription mappedEntity = mappedOrder();
         PrescriptionResponseDTO responseDTO = PrescriptionResponseDTO.builder().id(UUID.randomUUID()).build();
 
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
@@ -2423,7 +2956,7 @@ class PrescriptionServiceImplTest {
         encounter.setAssignment(encAssignment);
 
         when(roleValidator.canCreatePrescription(any(), eq(hospitalId))).thenReturn(true);
-        when(prescriptionMapper.toEntity(any(), any(), any(), any())).thenReturn(new Prescription());
+        when(prescriptionMapper.toEntity(any(), any(), any(), any())).thenReturn(mappedOrder());
         when(prescriptionRepository.save(any())).thenReturn(new Prescription());
         when(prescriptionMapper.toResponseDTO(any())).thenReturn(PrescriptionResponseDTO.builder().build());
 
@@ -2469,7 +3002,7 @@ class PrescriptionServiceImplTest {
         // auto-create encounter
         when(encounterRepository.save(any())).thenReturn(encounter);
         when(roleValidator.canCreatePrescription(any(), eq(hospitalId))).thenReturn(true);
-        when(prescriptionMapper.toEntity(any(), any(), any(), any())).thenReturn(new Prescription());
+        when(prescriptionMapper.toEntity(any(), any(), any(), any())).thenReturn(mappedOrder());
         when(prescriptionRepository.save(any())).thenReturn(new Prescription());
         when(prescriptionMapper.toResponseDTO(any())).thenReturn(PrescriptionResponseDTO.builder().build());
 
@@ -2528,7 +3061,7 @@ class PrescriptionServiceImplTest {
         when(patientAllergyRepository.findByPatient_Id(patientId))
             .thenReturn(List.of(allergy));
 
-        when(prescriptionMapper.toEntity(any(), any(), any(), any())).thenReturn(new Prescription());
+        when(prescriptionMapper.toEntity(any(), any(), any(), any())).thenReturn(mappedOrder());
         when(prescriptionRepository.save(any())).thenReturn(new Prescription());
         when(prescriptionMapper.toResponseDTO(any())).thenReturn(PrescriptionResponseDTO.builder().build());
 
@@ -2715,7 +3248,7 @@ class PrescriptionServiceImplTest {
         when(authService.getCurrentUserId()).thenReturn(staff.getUser().getId());
         when(roleValidator.canCreatePrescription(any(), eq(hospitalId))).thenReturn(true);
 
-        when(prescriptionMapper.toEntity(any(), any(), any(), any())).thenReturn(new Prescription());
+        when(prescriptionMapper.toEntity(any(), any(), any(), any())).thenReturn(mappedOrder());
         when(prescriptionRepository.save(any())).thenReturn(new Prescription());
         when(prescriptionMapper.toResponseDTO(any())).thenReturn(PrescriptionResponseDTO.builder().build());
 
@@ -3054,7 +3587,7 @@ class PrescriptionServiceImplTest {
         encounterAssignment.setHospital(encounter.getHospital());
         encounter.setAssignment(encounterAssignment);
 
-        Prescription mappedEntity = new Prescription();
+        Prescription mappedEntity = mappedOrder();
         PrescriptionResponseDTO responseDTO = PrescriptionResponseDTO.builder()
             .id(UUID.randomUUID()).build();
 
@@ -3083,7 +3616,7 @@ class PrescriptionServiceImplTest {
         encounter.setAssignment(encAssignment);
 
         UUID currentUser = staff.getUser().getId();
-        Prescription mappedEntity = new Prescription();
+        Prescription mappedEntity = mappedOrder();
         PrescriptionResponseDTO responseDTO = PrescriptionResponseDTO.builder()
             .id(UUID.randomUUID()).build();
 
@@ -3103,7 +3636,8 @@ class PrescriptionServiceImplTest {
         when(prescriptionRepository.save(mappedEntity)).thenReturn(mappedEntity);
         when(prescriptionMapper.toResponseDTO(mappedEntity)).thenReturn(responseDTO);
         when(cdsRuleEngine.evaluateProposedPrescription(
-                eq(patient), eq(hospitalId), eq(TEST_MEDICATION), any(), eq(TEST_DOSAGE)))
+                eq(patient), eq(hospitalId), org.mockito.ArgumentMatchers.argThat(
+                    o -> TEST_MEDICATION.equals(o.medicationName()) && TEST_DOSAGE.equals(o.dosage()))))
             .thenReturn(List.of(warning));
 
         PrescriptionResponseDTO result = prescriptionService.createPrescription(request, Locale.ENGLISH);
@@ -3133,12 +3667,14 @@ class PrescriptionServiceImplTest {
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(authService.getCurrentUserId()).thenReturn(currentUser);
         when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
-        when(cdsRuleEngine.evaluateProposedPrescription(any(), any(), any(), any(), any()))
+        when(cdsRuleEngine.evaluateProposedPrescription(any(), any(), any(com.example.hms.cdshooks.rules.CdsRuleEngine.ProposedOrder.class)))
             .thenReturn(List.of(critical));
 
         assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
             .isInstanceOf(com.example.hms.cdshooks.CdsCriticalBlockException.class)
-            .hasMessageContaining("CDS ALERT")
+            // QA D1102: the box on the form, never the API field.
+            .hasMessageContaining("Override critical advisory after clinical review")
+            .hasMessageNotContaining("forceOverride")
             .hasMessageContaining("warfarin")
             .extracting("cards", as(InstanceOfAssertFactories.LIST))
             .hasSize(1);
@@ -3150,13 +3686,15 @@ class PrescriptionServiceImplTest {
     void createPrescriptionWithCriticalCdsAdvisoryAndForceOverridePersists() {
         PrescriptionRequestDTO request = buildRequest();
         request.setForceOverride(true);
+        // Round 18 (QA D935): an override of a critical alert states its reason.
+        request.setOverrideReason("Benefit outweighs risk, INR monitored");
         UserRoleHospitalAssignment encAssignment = new UserRoleHospitalAssignment();
         encAssignment.setId(UUID.randomUUID());
         encAssignment.setHospital(encounter.getHospital());
         encounter.setAssignment(encAssignment);
 
         UUID currentUser = staff.getUser().getId();
-        Prescription mappedEntity = new Prescription();
+        Prescription mappedEntity = mappedOrder();
         PrescriptionResponseDTO responseDTO = PrescriptionResponseDTO.builder()
             .id(UUID.randomUUID()).build();
 
@@ -3175,13 +3713,75 @@ class PrescriptionServiceImplTest {
         when(prescriptionMapper.toEntity(request, patient, staff, encounter)).thenReturn(mappedEntity);
         when(prescriptionRepository.save(mappedEntity)).thenReturn(mappedEntity);
         when(prescriptionMapper.toResponseDTO(mappedEntity)).thenReturn(responseDTO);
-        when(cdsRuleEngine.evaluateProposedPrescription(any(), any(), any(), any(), any()))
+        when(cdsRuleEngine.evaluateProposedPrescription(any(), any(), any(com.example.hms.cdshooks.rules.CdsRuleEngine.ProposedOrder.class)))
             .thenReturn(List.of(critical));
 
         PrescriptionResponseDTO result = prescriptionService.createPrescription(request, Locale.ENGLISH);
 
         assertThat(result.getCdsAdvisories()).containsExactly(critical);
         verify(prescriptionRepository).save(mappedEntity);
+        // Round 18 (QA D935): the reason is kept on the order.
+        assertThat(mappedEntity.getOverrideReason()).isEqualTo("Benefit outweighs risk, INR monitored");
+    }
+
+    /** Round 18 (QA D935): forceOverride alone no longer passes a critical alert. */
+    @Test
+    void criticalCdsOverrideWithoutReasonIsRefused() {
+        PrescriptionRequestDTO request = buildRequest();
+        request.setForceOverride(true);
+        request.setOverrideReason("   ");
+        UserRoleHospitalAssignment encAssignment = new UserRoleHospitalAssignment();
+        encAssignment.setId(UUID.randomUUID());
+        encAssignment.setHospital(encounter.getHospital());
+        encounter.setAssignment(encAssignment);
+        UUID currentUser = staff.getUser().getId();
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(authService.getCurrentUserId()).thenReturn(currentUser);
+        when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
+        com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard softStop =
+            new com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard(
+                "Paracetamol: 52.63 mg/kg per dose is above 15 mg/kg", null,
+                com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard.Indicator.CRITICAL,
+                new com.example.hms.cdshooks.dto.CdsHookDtos.Source("HMS Pediatric Dose Check", null, null),
+                null, null, null, "uuid");
+        when(cdsRuleEngine.evaluateProposedPrescription(any(), any(), any(com.example.hms.cdshooks.rules.CdsRuleEngine.ProposedOrder.class)))
+            .thenReturn(List.of(softStop));
+
+        assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.cdshooks.CdsCriticalBlockException.class);
+        verify(prescriptionRepository, never()).save(any());
+    }
+
+    /** Round 18 (QA D935): a hard stop is refused even with an override and a reason. */
+    @Test
+    void cdsHardStopIsRefusedWhateverTheOverride() {
+        PrescriptionRequestDTO request = buildRequest();
+        request.setForceOverride(true);
+        request.setOverrideReason("Prescriber insists");
+        UserRoleHospitalAssignment encAssignment = new UserRoleHospitalAssignment();
+        encAssignment.setId(UUID.randomUUID());
+        encAssignment.setHospital(encounter.getHospital());
+        encounter.setAssignment(encAssignment);
+        UUID currentUser = staff.getUser().getId();
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(authService.getCurrentUserId()).thenReturn(currentUser);
+        when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
+        com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard hardStop =
+            new com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard(
+                "Paracetamol: 6000 mg per day is above the absolute daily maximum of 4000 mg", null,
+                com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard.Indicator.CRITICAL,
+                new com.example.hms.cdshooks.dto.CdsHookDtos.Source("HMS Pediatric Dose Check", null, null),
+                null, null, null, "uuid", Boolean.TRUE);
+        when(cdsRuleEngine.evaluateProposedPrescription(any(), any(), any(com.example.hms.cdshooks.rules.CdsRuleEngine.ProposedOrder.class)))
+            .thenReturn(List.of(hardStop));
+
+        assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.cdshooks.CdsCriticalBlockException.class);
+        verify(prescriptionRepository, never()).save(any());
     }
 
     // ── The signing ceremony (P2 #16) ─────────────────────────────────────
@@ -3542,6 +4142,7 @@ class PrescriptionServiceImplTest {
             .dosage(TEST_DOSAGE)
             .frequency(TEST_FREQUENCY)
             .status(com.example.hms.enums.PrescriptionStatus.CANCELLED)
+            .withdrawalReason("Contre-indiqué, remplacé par une autre molécule")
             .controlledSubstance(false)
             .build();
 
@@ -3557,6 +4158,37 @@ class PrescriptionServiceImplTest {
         assertThat(existing.getClarificationResolvedAt()).isNotNull();
         assertThat(existing.getClarificationResolvedByUserId()).isEqualTo(doctorUserId);
         assertThat(existing.getClarificationReason()).isEqualTo("Dose au-dessus du plafond rénal");
+    }
+
+    @Test
+    void updatePrescriptionRefusesAWithdrawalWithoutReasonWhileAwaitingClarification_D1098() {
+        // QA D1098 class: the order was signed before the pharmacist asked;
+        // withdrawing it states why, exactly as a SIGNED withdrawal does.
+        UUID rxId = UUID.randomUUID();
+        Prescription existing = new Prescription();
+        existing.setId(rxId);
+        existing.setStatus(com.example.hms.enums.PrescriptionStatus.PENDING_CLARIFICATION);
+
+        PrescriptionRequestDTO request = PrescriptionRequestDTO.builder()
+            .patientId(patientId)
+            .medicationName(TEST_MEDICATION)
+            .dosage(TEST_DOSAGE)
+            .frequency(TEST_FREQUENCY)
+            .status(com.example.hms.enums.PrescriptionStatus.CANCELLED)
+            .withdrawalReason("   ")
+            .build();
+
+        when(prescriptionRepository.findByIdForUpdate(rxId)).thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> prescriptionService.updatePrescription(rxId, request, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .satisfies(e -> assertThat(((com.example.hms.exception.FieldBusinessException) e).getField())
+                .as("QA D1368: the request's own key").isEqualTo("withdrawalReason"))
+            .extracting(e -> ((BusinessException) e).getMessageKey())
+            .isEqualTo("prescription.signed.withdrawalReason.required");
+        assertThat(existing.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.PENDING_CLARIFICATION);
+        assertThat(existing.getClarificationResolvedAt()).isNull();
+        verify(prescriptionRepository, never()).save(any());
     }
 
     @Test
@@ -3579,7 +4211,8 @@ class PrescriptionServiceImplTest {
 
         assertThatThrownBy(() -> prescriptionService.updatePrescription(rxId, request, Locale.ENGLISH))
             .isInstanceOf(com.example.hms.exception.ConflictException.class)
-            .hasMessageContaining("resolve-clarification");
+            // QA D934 class: a sentence for the prescriber, no longer an API path.
+            .hasMessageContaining("awaiting the prescriber's clarification");
         verify(prescriptionRepository, never()).save(any());
     }
 
@@ -3643,7 +4276,7 @@ class PrescriptionServiceImplTest {
         when(prescriptionMapper.toResponseDTO(any(Prescription.class)))
             .thenReturn(new PrescriptionResponseDTO());
 
-        prescriptionService.signPrescription(rx.getId(), java.util.Locale.ENGLISH);
+        prescriptionService.signPrescription(rx.getId(), null, java.util.Locale.ENGLISH);
 
         assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.SIGNED);
         assertThat(rx.getSignedAt()).isNotNull();
@@ -3665,7 +4298,7 @@ class PrescriptionServiceImplTest {
         when(roleValidator.getCurrentUserId()).thenReturn(UUID.randomUUID());
 
         UUID rxId = rx.getId();
-        assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, java.util.Locale.ENGLISH))
+        assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, null, java.util.Locale.ENGLISH))
             .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class)
             .hasMessage("Only the prescribing clinician can sign this prescription.");
         assertThat(rx.getSignatureValue()).isNull();
@@ -3681,7 +4314,7 @@ class PrescriptionServiceImplTest {
         when(roleValidator.requireActiveHospitalId()).thenReturn(rx.getHospital().getId());
 
         UUID rxId = rx.getId();
-        assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, java.util.Locale.ENGLISH))
+        assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, null, java.util.Locale.ENGLISH))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("already been signed");
     }
@@ -3699,9 +4332,9 @@ class PrescriptionServiceImplTest {
         when(roleValidator.getCurrentUserId()).thenReturn(prescriberUserId);
 
         UUID rxId = rx.getId();
-        assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, java.util.Locale.ENGLISH))
+        assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, null, java.util.Locale.ENGLISH))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("CONTROLLED_SUBSTANCE");
+            .extracting("messageKey").isEqualTo("prescription.safeguard.CONTROLLED_SUBSTANCE.status");
         assertThat(rx.getSignatureValue()).isNull();
     }
 
@@ -3715,9 +4348,11 @@ class PrescriptionServiceImplTest {
         when(roleValidator.requireActiveHospitalId()).thenReturn(rx.getHospital().getId());
 
         UUID rxId = rx.getId();
-        assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, java.util.Locale.ENGLISH))
+        assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, null, java.util.Locale.ENGLISH))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("DRAFT or PENDING_SIGNATURE");
+            // QA D934 class: the status in words, not the enum constant.
+            .hasMessageContaining("draft or awaiting signature")
+            .hasMessageNotContaining("PENDING_SIGNATURE");
     }
 
     @Test
@@ -3729,7 +4364,7 @@ class PrescriptionServiceImplTest {
         when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
 
         UUID rxId = rx.getId();
-        assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, java.util.Locale.ENGLISH))
+        assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, null, java.util.Locale.ENGLISH))
             .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -4195,8 +4830,7 @@ class PrescriptionServiceImplTest {
         leadAssignment.setId(UUID.randomUUID());
         stay.setAssignment(leadAssignment);
         when(encounterRepository
-            .findFirstByPatient_IdAndHospital_IdAndAdmissionIdIsNotNullAndStatusNotInOrderByEncounterDateDesc(
-                eq(patientId), eq(hospitalId), any())).thenReturn(Optional.of(stay));
+            .findOpenStayEncounters(eq(patientId), eq(hospitalId), any(), any())).thenReturn(List.of(stay));
 
         prescriptionService.createPrescription(requestWithoutEncounter(), Locale.ENGLISH);
 
@@ -4263,8 +4897,7 @@ class PrescriptionServiceImplTest {
         Encounter stay = strangersStay(admission);
         when(admissionRepository.findById(admission.getId())).thenReturn(Optional.of(admission));
         when(encounterRepository
-            .findFirstByPatient_IdAndHospital_IdAndAdmissionIdIsNotNullAndStatusNotInOrderByEncounterDateDesc(
-                eq(patientId), eq(hospitalId), any())).thenReturn(Optional.of(stay));
+            .findOpenStayEncounters(eq(patientId), eq(hospitalId), any(), any())).thenReturn(List.of(stay));
         PrescriptionRequestDTO request = requestWithoutEncounter();
 
         prescriptionService.createPrescription(request, Locale.ENGLISH);
@@ -4281,8 +4914,7 @@ class PrescriptionServiceImplTest {
         moveAdmissionToAnotherHospital(admission);
         when(admissionRepository.findById(admission.getId())).thenReturn(Optional.of(admission));
         when(encounterRepository
-            .findFirstByPatient_IdAndHospital_IdAndAdmissionIdIsNotNullAndStatusNotInOrderByEncounterDateDesc(
-                eq(patientId), eq(hospitalId), any())).thenReturn(Optional.of(stay));
+            .findOpenStayEncounters(eq(patientId), eq(hospitalId), any(), any())).thenReturn(List.of(stay));
         PrescriptionRequestDTO request = requestWithoutEncounter();
 
         assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
@@ -4666,7 +5298,9 @@ class PrescriptionServiceImplTest {
         request.setWithdrawalReason("   ");
 
         assertThatThrownBy(() -> prescriptionService.updatePrescription(id, request, Locale.FRENCH))
-            .isInstanceOf(BusinessException.class)
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .satisfies(e -> assertThat(((com.example.hms.exception.FieldBusinessException) e).getField())
+                .as("QA D1368: the request's own key").isEqualTo("withdrawalReason"))
             .extracting("messageKey").isEqualTo("prescription.signed.withdrawalReason.required");
         verify(prescriptionRepository, never()).save(any());
     }
@@ -4787,4 +5421,1278 @@ class PrescriptionServiceImplTest {
         assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.DISCONTINUED);
     }
 
+
+    // ═══════════════ QA D1161 (round 21): signed orders, every withdrawal path ═══════════════
+
+    /** A colleague's withdrawal of a signed order is allowed with its reason, and audited as a colleague's. */
+    @Test
+    void qaD1161_aColleaguesWithdrawalOfASignedOrderIsAuditedAsSuch() {
+        UUID id = UUID.randomUUID();
+        Prescription rx = signedRow(id);
+        UUID callerId = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(id, hospitalId)).thenReturn(Optional.of(rx));
+        when(authService.getCurrentUserId()).thenReturn(callerId);
+        when(roleValidator.isDoctor(callerId, hospitalId)).thenReturn(true);
+        when(prescriptionRepository.save(rx)).thenReturn(rx);
+        when(prescriptionMapper.toResponseDTO(rx)).thenReturn(PrescriptionResponseDTO.builder().id(id).build());
+        PrescriptionRequestDTO request = buildRequest();
+        request.setStatus(com.example.hms.enums.PrescriptionStatus.DISCONTINUED);
+        request.setWithdrawalReason("Respiratory depression, stopped by the covering doctor");
+
+        prescriptionService.updatePrescription(id, request, Locale.FRENCH);
+
+        org.mockito.ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> audit =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(audit.capture());
+        assertThat(audit.getValue().getEventType()).isEqualTo(com.example.hms.enums.AuditEventType.PRESCRIPTION_DISCONTINUED);
+        assertThat(audit.getValue().getUserId()).isEqualTo(callerId);
+        assertThat(String.valueOf(audit.getValue().getDetails())).contains("\"byPrescriber\":false").contains("\"from\":\"SIGNED\"")
+            .doesNotContain("Respiratory");
+        assertThat(audit.getValue().getEventDescription()).contains("another prescriber");
+    }
+
+    /** The prescriber's own withdrawal is audited too, as the prescriber's. */
+    @Test
+    void qaD1161_thePrescribersWithdrawalIsAuditedAsThePrescribers() {
+        UUID id = UUID.randomUUID();
+        Prescription rx = signedRow(id);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(id, hospitalId)).thenReturn(Optional.of(rx));
+        when(authService.getCurrentUserId()).thenReturn(staff.getUser().getId());
+        when(prescriptionRepository.save(rx)).thenReturn(rx);
+        when(prescriptionMapper.toResponseDTO(rx)).thenReturn(PrescriptionResponseDTO.builder().id(id).build());
+        PrescriptionRequestDTO request = buildRequest();
+        request.setStatus(com.example.hms.enums.PrescriptionStatus.CANCELLED);
+        request.setWithdrawalReason("Wrong patient");
+
+        prescriptionService.updatePrescription(id, request, Locale.FRENCH);
+
+        org.mockito.ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> audit =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(audit.capture());
+        assertThat(String.valueOf(audit.getValue().getDetails())).contains("\"byPrescriber\":true");
+    }
+
+    /**
+     * Withdrawing an order a signature led to is held to the signed rule: a
+     * colleague prescriber of the hospital may, with a reason, audited; a
+     * withdrawal with no reason is refused for every such status.
+     */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = com.example.hms.enums.PrescriptionStatus.class,
+        names = {"TRANSMITTED", "TRANSMISSION_FAILED", "PARTIALLY_FILLED", "PENDING_STOCK", "SENT_TO_PARTNER",
+            "PARTNER_ACCEPTED", "PARTNER_REJECTED", "PRINTED_FOR_PATIENT", "DISPENSED", "PARTNER_DISPENSED",
+            "PENDING_CLARIFICATION"})
+    void qaD1161_aSignedOrderInAnyLaterStatusIsWithdrawnUnderTheSignedRule(
+            com.example.hms.enums.PrescriptionStatus status) {
+        UUID id = UUID.randomUUID();
+        Prescription rx = signedRow(id);
+        rx.setStatus(status);
+        UUID callerId = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(id, hospitalId)).thenReturn(Optional.of(rx));
+        PrescriptionRequestDTO blank = buildRequest();
+        blank.setStatus(com.example.hms.enums.PrescriptionStatus.DISCONTINUED);
+        blank.setWithdrawalReason(" ");
+
+        assertThatThrownBy(() -> prescriptionService.updatePrescription(id, blank, Locale.FRENCH))
+            .isInstanceOf(BusinessException.class)
+            .extracting("messageKey").isEqualTo("prescription.signed.withdrawalReason.required");
+        assertThat(rx.getStatus()).isEqualTo(status);
+
+        when(authService.getCurrentUserId()).thenReturn(callerId);
+        lenient().when(roleValidator.getCurrentUserId()).thenReturn(callerId);
+        when(roleValidator.isDoctor(callerId, hospitalId)).thenReturn(true);
+        when(prescriptionRepository.save(rx)).thenReturn(rx);
+        when(prescriptionMapper.toResponseDTO(rx)).thenReturn(PrescriptionResponseDTO.builder().id(id).build());
+        PrescriptionRequestDTO reasoned = buildRequest();
+        reasoned.setStatus(com.example.hms.enums.PrescriptionStatus.DISCONTINUED);
+        reasoned.setWithdrawalReason("Stopped by the covering doctor");
+
+        prescriptionService.updatePrescription(id, reasoned, Locale.FRENCH);
+
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.DISCONTINUED);
+        verify(auditEventLogService).logEvent(any());
+    }
+
+    /** Every status is classified: a new one must be placed as signed or not on purpose. */
+    @Test
+    void qaD1161_everyStatusIsClassifiedAsSignedOrNot() {
+        java.util.Set<com.example.hms.enums.PrescriptionStatus> notSigned = java.util.EnumSet.of(
+            com.example.hms.enums.PrescriptionStatus.DRAFT, com.example.hms.enums.PrescriptionStatus.PENDING_SIGNATURE,
+            com.example.hms.enums.PrescriptionStatus.CANCELLED, com.example.hms.enums.PrescriptionStatus.DISCONTINUED);
+        for (com.example.hms.enums.PrescriptionStatus status : com.example.hms.enums.PrescriptionStatus.values()) {
+            assertThat(PrescriptionServiceImpl.isSignedOrder(status)).as(status.name()).isEqualTo(!notSigned.contains(status));
+        }
+    }
+
+    /** A colleague withdraws an order awaiting clarification under the signed-order rule. */
+    @Test
+    void qaD1161_aColleagueMayWithdrawAnOrderAwaitingClarificationWithAReason() {
+        UUID id = UUID.randomUUID();
+        Prescription rx = signedRow(id);
+        rx.setStatus(com.example.hms.enums.PrescriptionStatus.PENDING_CLARIFICATION);
+        UUID callerId = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(id, hospitalId)).thenReturn(Optional.of(rx));
+        when(authService.getCurrentUserId()).thenReturn(callerId);
+        lenient().when(roleValidator.getCurrentUserId()).thenReturn(callerId);
+        when(roleValidator.isDoctor(callerId, hospitalId)).thenReturn(true);
+        when(prescriptionRepository.save(rx)).thenReturn(rx);
+        when(prescriptionMapper.toResponseDTO(rx)).thenReturn(PrescriptionResponseDTO.builder().id(id).build());
+        PrescriptionRequestDTO request = buildRequest();
+        request.setStatus(com.example.hms.enums.PrescriptionStatus.CANCELLED);
+        request.setWithdrawalReason("Contraindicated");
+
+        prescriptionService.updatePrescription(id, request, Locale.FRENCH);
+
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.CANCELLED);
+        assertThat(rx.getClarificationResolvedAt()).isNotNull();
+    }
+
+    // ── QA round 16 (D922/D935, D934, D970) ─────────────────────────────
+
+    private com.example.hms.model.medication.MedicationCatalogItem catalogItem(String name, boolean controlled) {
+        com.example.hms.model.medication.MedicationCatalogItem item =
+            new com.example.hms.model.medication.MedicationCatalogItem();
+        item.setId(UUID.randomUUID());
+        item.setNameFr(name);
+        item.setGenericName(name.toLowerCase(Locale.ROOT));
+        item.setControlled(controlled);
+        return item;
+    }
+
+    private void stubCreateContext(PrescriptionRequestDTO request, Prescription mappedEntity) {
+        UserRoleHospitalAssignment encounterAssignment = new UserRoleHospitalAssignment();
+        encounterAssignment.setId(UUID.randomUUID());
+        encounterAssignment.setHospital(encounter.getHospital());
+        encounter.setAssignment(encounterAssignment);
+        UUID currentUser = staff.getUser().getId();
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(authService.getCurrentUserId()).thenReturn(currentUser);
+        when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
+        lenient().when(prescriptionMapper.toEntity(request, patient, staff, encounter)).thenReturn(mappedEntity);
+        lenient().when(prescriptionRepository.save(mappedEntity)).thenReturn(mappedEntity);
+        lenient().when(prescriptionMapper.toResponseDTO(mappedEntity)).thenReturn(PrescriptionResponseDTO.builder().build());
+    }
+
+    /**
+     * QA D922 replay (u18.js / d20.js): the form posts "Morphine" with no
+     * catalogue id and no code. The hospital's one Morphine item is written on
+     * the order, so its controlled flag reaches verification, the MAR and the
+     * patient's refill, and the CDS rules evaluate that item (D935).
+     */
+    @Test
+    void d922_aTypedNameIsResolvedToTheHospitalsOneCatalogItem() {
+        PrescriptionRequestDTO request = buildRequest();
+        // QA D922: a catalogue-controlled drug states its quantity, as the form always sends it.
+        request.setQuantity(java.math.BigDecimal.TEN);
+        request.setMedicationName("Morphine 10 mg");
+        request.setMedicationCode(null);
+        com.example.hms.model.medication.MedicationCatalogItem morphine = catalogItem("Morphine", true);
+        com.example.hms.model.medication.MedicationCatalogItem other = catalogItem("Paracétamol", false);
+        Prescription mappedEntity = mappedOrder();
+        mappedEntity.setQuantity(java.math.BigDecimal.TEN); // the mapper copies the request's quantity
+        stubCreateContext(request, mappedEntity);
+        when(catalogRepo.findByHospital_IdAndActiveTrue(eq(hospitalId), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(other, morphine)));
+
+        prescriptionService.createPrescription(request, Locale.ENGLISH);
+
+        assertThat(request.getMedicationCatalogItemId()).isEqualTo(morphine.getId());
+        verify(cdsRuleEngine).evaluateProposedPrescription(eq(patient), eq(hospitalId),
+            org.mockito.ArgumentMatchers.argThat(o -> "Morphine 10 mg".equals(o.medicationName())
+                && o.catalogItem() == morphine && o.excludedPrescriptionId() == null));
+    }
+
+    @Test
+    void d922_anAmbiguousNameIsRefusedWhenOneMatchIsControlled() {
+        PrescriptionRequestDTO request = buildRequest();
+        request.setMedicationName("Morphine");
+        request.setMedicationCode(null);
+        Prescription mappedEntity = mappedOrder();
+        stubCreateContext(request, mappedEntity);
+        when(catalogRepo.findByHospital_IdAndActiveTrue(eq(hospitalId), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(
+                List.of(catalogItem("Morphine", true), catalogItem("Morphine", false))));
+
+        assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("controlled");
+        verify(prescriptionRepository, never()).save(any());
+    }
+
+    @Test
+    void d935_anAmbiguousUncontrolledNameIsEvaluatedAgainstTheStrictestCeiling() {
+        PrescriptionRequestDTO request = buildRequest();
+        request.setMedicationName("Paracétamol");
+        request.setMedicationCode(null);
+        com.example.hms.model.medication.MedicationCatalogItem tablets = catalogItem("Paracétamol", false);
+        tablets.setPediatricMaxDoseMgPerKg(new java.math.BigDecimal("20"));
+        com.example.hms.model.medication.MedicationCatalogItem syrup = catalogItem("Paracétamol", false);
+        syrup.setPediatricMaxDoseMgPerKg(new java.math.BigDecimal("15"));
+        Prescription mappedEntity = mappedOrder();
+        stubCreateContext(request, mappedEntity);
+        when(catalogRepo.findByHospital_IdAndActiveTrue(eq(hospitalId), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(tablets, syrup)));
+
+        prescriptionService.createPrescription(request, Locale.ENGLISH);
+
+        // Not tied to one strength: the dispense may still pick either.
+        assertThat(request.getMedicationCatalogItemId()).isNull();
+        verify(cdsRuleEngine).evaluateProposedPrescription(any(), any(), org.mockito.ArgumentMatchers.argThat(
+            o -> o.catalogItem() == syrup && o.excludedPrescriptionId() == null));
+    }
+
+    /** Review of #975: a code names this hospital's item; the order is linked to it. */
+    @Test
+    void d922_aMedicationCodeResolvesToTheHospitalsItem() {
+        PrescriptionRequestDTO request = buildRequest();
+        // QA D922: a catalogue-controlled drug states its quantity, as the form always sends it.
+        request.setQuantity(java.math.BigDecimal.TEN);
+        request.setMedicationCode("N02AA01");
+        // QA D1223: the code's item is the drug the order names.
+        request.setMedicationName("Morphine 10 mg");
+        com.example.hms.model.medication.MedicationCatalogItem morphine = catalogItem("Morphine", true);
+        Prescription mappedEntity = mappedOrder();
+        mappedEntity.setQuantity(java.math.BigDecimal.TEN); // the mapper copies the request's quantity
+        stubCreateContext(request, mappedEntity);
+        when(catalogRepo.findByHospitalIdAndCode(hospitalId, "N02AA01")).thenReturn(Optional.of(morphine));
+
+        prescriptionService.createPrescription(request, Locale.ENGLISH);
+
+        assertThat(request.getMedicationCatalogItemId()).isEqualTo(morphine.getId());
+        verify(cdsRuleEngine).evaluateProposedPrescription(any(), any(), org.mockito.ArgumentMatchers.argThat(
+            o -> o.catalogItem() == morphine && o.excludedPrescriptionId() == null));
+    }
+
+    /**
+     * Review of #975: an edit echoing the same drug name without the catalogue
+     * id (a client that never sent one) keeps the item the order was written
+     * from, so the controlled flag and the paediatric ceiling survive the edit.
+     */
+    @Test
+    void d922_anEditWithoutTheCatalogIdKeepsTheOrdersItem() {
+        UUID prescriptionId = UUID.randomUUID();
+        UUID linkedItemId = UUID.randomUUID();
+        PrescriptionRequestDTO request = buildRequest();
+        Prescription existing = new Prescription();
+        existing.setId(prescriptionId);
+        existing.setMedicationName(TEST_MEDICATION);
+        existing.setMedicationCatalogItemId(linkedItemId);
+        UserRoleHospitalAssignment staffAssignment = new UserRoleHospitalAssignment();
+        staffAssignment.setId(UUID.randomUUID());
+        staffAssignment.setHospital(encounter.getHospital());
+        staff.setAssignment(staffAssignment);
+        UUID currentUser = staff.getUser().getId();
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(existing));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(authService.getCurrentUserId()).thenReturn(currentUser);
+        when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
+        when(prescriptionRepository.save(existing)).thenReturn(existing);
+        when(prescriptionMapper.toResponseDTO(existing)).thenReturn(PrescriptionResponseDTO.builder().build());
+        com.example.hms.model.medication.MedicationCatalogItem linked = catalogItem(TEST_MEDICATION, true);
+        linked.setId(linkedItemId);
+        when(catalogRepo.findByIdAndHospital_Id(linkedItemId, hospitalId)).thenReturn(Optional.of(linked));
+
+        prescriptionService.updatePrescription(prescriptionId, request, Locale.ENGLISH);
+
+        assertThat(request.getMedicationCatalogItemId()).isEqualTo(linkedItemId);
+        // The kept link is the answer: no name resolution runs over the catalogue.
+        verify(catalogRepo, never()).findByHospital_IdAndActiveTrue(any(), any());
+        verify(cdsRuleEngine).evaluateProposedPrescription(any(), any(), org.mockito.ArgumentMatchers.argThat(
+            o -> o.catalogItem() == linked && prescriptionId.equals(o.excludedPrescriptionId())));
+    }
+
+    /**
+     * Review of #975: a legacy order never linked, whose name matches two
+     * controlled items, stays editable: an edit keeping the name leaves it as
+     * it was instead of refusing every edit as ambiguous.
+     */
+    @Test
+    void d922_anEditOfAnUnlinkedLegacyOrderKeepingItsNameIsNotRefusedAsAmbiguous() {
+        UUID prescriptionId = UUID.randomUUID();
+        PrescriptionRequestDTO request = buildRequest();
+        request.setMedicationName("Morphine");
+        Prescription existing = new Prescription();
+        existing.setId(prescriptionId);
+        existing.setMedicationName("Morphine");
+        UserRoleHospitalAssignment staffAssignment = new UserRoleHospitalAssignment();
+        staffAssignment.setId(UUID.randomUUID());
+        staffAssignment.setHospital(encounter.getHospital());
+        staff.setAssignment(staffAssignment);
+        UUID currentUser = staff.getUser().getId();
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(existing));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(authService.getCurrentUserId()).thenReturn(currentUser);
+        when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
+        when(prescriptionRepository.save(existing)).thenReturn(existing);
+        when(prescriptionMapper.toResponseDTO(existing)).thenReturn(PrescriptionResponseDTO.builder().build());
+        when(catalogRepo.findByHospital_IdAndActiveTrue(eq(hospitalId), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(
+                List.of(catalogItem("Morphine", true), catalogItem("Morphine", true))));
+
+        prescriptionService.updatePrescription(prescriptionId, request, Locale.ENGLISH);
+
+        assertThat(request.getMedicationCatalogItemId()).isNull();
+        verify(prescriptionRepository).save(existing);
+    }
+
+    /**
+     * Review of #975: a same-drug edit whose code resolves to nothing and whose
+     * name matches several items keeps the order's link (it used to be nulled).
+     */
+    @Test
+    void d922_aSameDrugEditWithAnUnknownCodeAndAnAmbiguousNameKeepsItsLink() {
+        UUID prescriptionId = UUID.randomUUID();
+        UUID linkedItemId = UUID.randomUUID();
+        PrescriptionRequestDTO request = buildRequest();
+        request.setMedicationName("Morphine");
+        request.setMedicationCode("7052");
+        Prescription existing = new Prescription();
+        existing.setId(prescriptionId);
+        existing.setMedicationName("Morphine");
+        existing.setMedicationCatalogItemId(linkedItemId);
+        UserRoleHospitalAssignment staffAssignment = new UserRoleHospitalAssignment();
+        staffAssignment.setId(UUID.randomUUID());
+        staffAssignment.setHospital(encounter.getHospital());
+        staff.setAssignment(staffAssignment);
+        UUID currentUser = staff.getUser().getId();
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(existing));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(authService.getCurrentUserId()).thenReturn(currentUser);
+        when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
+        when(prescriptionRepository.save(existing)).thenReturn(existing);
+        when(prescriptionMapper.toResponseDTO(existing)).thenReturn(PrescriptionResponseDTO.builder().build());
+        when(catalogRepo.findByHospitalIdAndCode(hospitalId, "7052")).thenReturn(Optional.empty());
+        when(catalogRepo.findByHospital_IdAndActiveTrue(eq(hospitalId), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(
+                List.of(catalogItem("Morphine", true), catalogItem("Morphine", true))));
+
+        prescriptionService.updatePrescription(prescriptionId, request, Locale.ENGLISH);
+
+        assertThat(request.getMedicationCatalogItemId()).isEqualTo(linkedItemId);
+    }
+
+    /** Review of #975: a code no catalogue item carries does not let the name escape the flag. */
+    @Test
+    void d922_anUnknownCodeFallsThroughToTheName() {
+        PrescriptionRequestDTO request = buildRequest();
+        // QA D922: a catalogue-controlled drug states its quantity, as the form always sends it.
+        request.setQuantity(java.math.BigDecimal.TEN);
+        request.setMedicationName("Morphine");
+        request.setMedicationCode("7052");
+        com.example.hms.model.medication.MedicationCatalogItem morphine = catalogItem("Morphine", true);
+        Prescription mappedEntity = mappedOrder();
+        mappedEntity.setQuantity(java.math.BigDecimal.TEN); // the mapper copies the request's quantity
+        stubCreateContext(request, mappedEntity);
+        when(catalogRepo.findByHospitalIdAndCode(hospitalId, "7052")).thenReturn(Optional.empty());
+        when(catalogRepo.findByHospital_IdAndActiveTrue(eq(hospitalId), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(morphine)));
+
+        prescriptionService.createPrescription(request, Locale.ENGLISH);
+
+        assertThat(request.getMedicationCatalogItemId()).isEqualTo(morphine.getId());
+    }
+
+    @Test
+    void d922_anEditNamingAnotherDrugDropsTheOldItem() {
+        UUID prescriptionId = UUID.randomUUID();
+        PrescriptionRequestDTO request = buildRequest();
+        request.setMedicationName("Amoxicilline");
+        Prescription existing = new Prescription();
+        existing.setId(prescriptionId);
+        existing.setMedicationName("Morphine");
+        existing.setMedicationCatalogItemId(UUID.randomUUID());
+        UserRoleHospitalAssignment staffAssignment = new UserRoleHospitalAssignment();
+        staffAssignment.setId(UUID.randomUUID());
+        staffAssignment.setHospital(encounter.getHospital());
+        staff.setAssignment(staffAssignment);
+        UUID currentUser = staff.getUser().getId();
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(existing));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(authService.getCurrentUserId()).thenReturn(currentUser);
+        when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
+        when(prescriptionRepository.save(existing)).thenReturn(existing);
+        when(prescriptionMapper.toResponseDTO(existing)).thenReturn(PrescriptionResponseDTO.builder().build());
+
+        prescriptionService.updatePrescription(prescriptionId, request, Locale.ENGLISH);
+
+        assertThat(request.getMedicationCatalogItemId()).isNull();
+    }
+
+    /** QA D970: the order being edited is not a duplicate of itself. */
+    @Test
+    void d970_anEditIsEvaluatedWithoutItself() {
+        UUID prescriptionId = UUID.randomUUID();
+        PrescriptionRequestDTO request = buildRequest();
+        Prescription existing = new Prescription();
+        existing.setId(prescriptionId);
+        UserRoleHospitalAssignment staffAssignment = new UserRoleHospitalAssignment();
+        staffAssignment.setId(UUID.randomUUID());
+        staffAssignment.setHospital(encounter.getHospital());
+        staff.setAssignment(staffAssignment);
+        UUID currentUser = staff.getUser().getId();
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(existing));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(authService.getCurrentUserId()).thenReturn(currentUser);
+        when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
+        when(prescriptionRepository.save(existing)).thenReturn(existing);
+        when(prescriptionMapper.toResponseDTO(existing)).thenReturn(PrescriptionResponseDTO.builder().build());
+
+        prescriptionService.updatePrescription(prescriptionId, request, Locale.ENGLISH);
+
+        verify(cdsRuleEngine).evaluateProposedPrescription(any(), any(), org.mockito.ArgumentMatchers.argThat(
+            o -> prescriptionId.equals(o.excludedPrescriptionId())));
+    }
+
+    /**
+     * QA D934 replay (u21.js): a midwife drafts SP; a doctor of the hospital
+     * signs it. The midwife stays the prescriber of record, the doctor is the signer.
+     */
+    @Test
+    void d934_aDoctorOfTheHospitalSignsAMidwifesDraft() {
+        UUID midwifeUserId = UUID.randomUUID();
+        Prescription rx = signablePrescription(midwifeUserId);
+        UUID rxHospitalId = rx.getHospital().getId();
+        UUID doctorUserId = UUID.randomUUID();
+        com.example.hms.model.Staff doctor = com.example.hms.model.Staff.builder().build();
+        doctor.setId(UUID.randomUUID());
+        when(prescriptionRepository.findById(rx.getId())).thenReturn(Optional.of(rx));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(rxHospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(doctorUserId);
+        when(roleValidator.draftsForPhysicianSignature(midwifeUserId, rxHospitalId)).thenReturn(true);
+        when(roleValidator.isSigningPhysician(doctorUserId, rxHospitalId)).thenReturn(true);
+        when(staffRepository.findByUserIdAndHospitalId(doctorUserId, rxHospitalId)).thenReturn(Optional.of(doctor));
+        when(prescriptionRepository.save(rx)).thenReturn(rx);
+        when(prescriptionMapper.toResponseDTO(rx)).thenReturn(PrescriptionResponseDTO.builder().build());
+
+        prescriptionService.signPrescription(rx.getId(), null, Locale.ENGLISH);
+
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.SIGNED);
+        assertThat(rx.getSignedBy()).isSameAs(doctor);
+        assertThat(rx.getStaff().getUser().getId()).isEqualTo(midwifeUserId);
+    }
+
+    /**
+     * Review of #975: once a doctor may sign a midwife's draft, the doctor
+     * who co-signed it must not sign it too - one judgment would carry both
+     * signatures to the pharmacy.
+     */
+    @Test
+    void d934_theCoSignerOfANursesDraftCannotAlsoSignIt() {
+        UUID midwifeUserId = UUID.randomUUID();
+        Prescription rx = signablePrescription(midwifeUserId);
+        UUID rxHospitalId = rx.getHospital().getId();
+        UUID doctorUserId = UUID.randomUUID();
+        com.example.hms.model.Staff doctor = com.example.hms.model.Staff.builder().build();
+        doctor.setId(UUID.randomUUID());
+        rx.setRequiresCosign(true);
+        rx.setCosignedBy(doctor);
+        rx.setCosignedAt(java.time.LocalDateTime.now());
+        when(prescriptionRepository.findById(rx.getId())).thenReturn(Optional.of(rx));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(rxHospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(doctorUserId);
+        when(roleValidator.draftsForPhysicianSignature(midwifeUserId, rxHospitalId)).thenReturn(true);
+        when(roleValidator.isSigningPhysician(doctorUserId, rxHospitalId)).thenReturn(true);
+        when(staffRepository.findByUserIdAndHospitalId(doctorUserId, rxHospitalId)).thenReturn(Optional.of(doctor));
+
+        UUID rxId = rx.getId();
+        assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, null, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .extracting("messageKey").isEqualTo("prescription.sign.ownCosign");
+        assertThat(rx.getSignatureValue()).isNull();
+        verify(prescriptionRepository, never()).save(any());
+    }
+
+    @Test
+    void d934_aDoctorStillCannotSignAnotherDoctorsDraft() {
+        UUID otherDoctorUserId = UUID.randomUUID();
+        Prescription rx = signablePrescription(otherDoctorUserId);
+        UUID rxHospitalId = rx.getHospital().getId();
+        UUID doctorUserId = UUID.randomUUID();
+        when(prescriptionRepository.findById(rx.getId())).thenReturn(Optional.of(rx));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(rxHospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(doctorUserId);
+        // The other doctor holds a signature of her own: her draft is not a nurse's.
+        when(roleValidator.draftsForPhysicianSignature(otherDoctorUserId, rxHospitalId)).thenReturn(false);
+        lenient().when(roleValidator.isSigningPhysician(doctorUserId, rxHospitalId)).thenReturn(true);
+
+        UUID rxId = rx.getId();
+        assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, null, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThat(rx.getSignatureValue()).isNull();
+    }
+
+    /**
+     * Review of #975: the rule is "a nurse's or a midwife's draft", not "anyone
+     * who is not a physician here": a prescriber outside those roles (a doctor
+     * credentialed elsewhere, a dentist) keeps "only the prescriber signs".
+     */
+    @Test
+    void d934_aDraftOfAnotherKindOfPrescriberIsNotSignedByALocalDoctor() {
+        UUID otherPrescriberUserId = UUID.randomUUID();
+        Prescription rx = signablePrescription(otherPrescriberUserId);
+        UUID rxHospitalId = rx.getHospital().getId();
+        UUID doctorUserId = UUID.randomUUID();
+        when(prescriptionRepository.findById(rx.getId())).thenReturn(Optional.of(rx));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(rxHospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(doctorUserId);
+        when(roleValidator.draftsForPhysicianSignature(otherPrescriberUserId, rxHospitalId)).thenReturn(false);
+        lenient().when(roleValidator.isSigningPhysician(doctorUserId, rxHospitalId)).thenReturn(true);
+
+        UUID rxId = rx.getId();
+        assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, null, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThat(rx.getSignatureValue()).isNull();
+        verify(staffRepository, never()).findByUserIdAndHospitalId(any(), any());
+    }
+
+    // ═══════════════ QA D930 class (round 16 siblings): draft author ═══════════════
+
+    @Test
+    void d930_anotherDoctorCannotRewriteAColleaguesDraft() {
+        UUID authorUserId = UUID.randomUUID();
+        Prescription rx = signablePrescription(authorUserId);
+        UUID rxHospitalId = rx.getHospital().getId();
+        UUID colleagueUserId = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(rxHospitalId);
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(rx.getId(), rxHospitalId))
+            .thenReturn(Optional.of(rx));
+        when(roleValidator.getCurrentUserId()).thenReturn(colleagueUserId);
+        when(roleValidator.draftsForPhysicianSignature(authorUserId, rxHospitalId)).thenReturn(false);
+
+        UUID rxId = rx.getId();
+        PrescriptionRequestDTO edit = new PrescriptionRequestDTO();
+        edit.setMedicationName("Ciprofloxacin");
+        assertThatThrownBy(() -> prescriptionService.updatePrescription(rxId, edit, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThat(rx.getMedicationName()).isEqualTo("Amoxicillin");
+        verify(prescriptionRepository, never()).save(any());
+    }
+
+    // ═══════════════ Round 19 rx slice: D1096, D1097, D1102 ═══════════════
+
+    private static com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard reviewCard() {
+        return new com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard(
+            "Paracétamol: child under 3 months - no automatic mg/kg check; a pharmacist or physician must review the dose",
+            null, com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard.Indicator.WARNING,
+            new com.example.hms.cdshooks.dto.CdsHookDtos.Source("HMS Pediatric Dose Check", null, null),
+            null, null, null, "uuid", null, Boolean.TRUE);
+    }
+
+    private void stubSignable(Prescription rx, UUID callerUserId) {
+        when(prescriptionRepository.findById(rx.getId())).thenReturn(java.util.Optional.of(rx));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(rx.getHospital().getId());
+        when(roleValidator.getCurrentUserId()).thenReturn(callerUserId);
+    }
+
+    /** QA D1097: the QA call - the author sets Annulée on an unsigned morphine order; no step-up, no CDS re-run. */
+    @Test
+    void d1097_theAuthorCancelsAnUnsignedControlledOrderWithoutStepUp() {
+        UUID authorUserId = UUID.randomUUID();
+        Prescription rx = signablePrescription(authorUserId);
+        rx.setStatus(com.example.hms.enums.PrescriptionStatus.PENDING_SIGNATURE);
+        rx.setControlledSubstance(true);
+        rx.setMedicationName("Morphine 10 mg");
+        UUID rxHospitalId = rx.getHospital().getId();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(rxHospitalId);
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(rx.getId(), rxHospitalId)).thenReturn(Optional.of(rx));
+        when(roleValidator.getCurrentUserId()).thenReturn(authorUserId);
+        when(authService.getCurrentUserId()).thenReturn(authorUserId);
+        when(prescriptionRepository.save(rx)).thenReturn(rx);
+        when(prescriptionMapper.toResponseDTO(rx)).thenReturn(PrescriptionResponseDTO.builder().id(rx.getId()).build());
+        PrescriptionRequestDTO request = PrescriptionRequestDTO.builder()
+            .medicationName("Morphine 10 mg").dosage(TEST_DOSAGE).frequency(TEST_FREQUENCY)
+            .controlledSubstance(true)
+            .status(com.example.hms.enums.PrescriptionStatus.CANCELLED).build();
+
+        prescriptionService.updatePrescription(rx.getId(), request, Locale.FRENCH);
+
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.CANCELLED);
+        assertThat(rx.getTwoFactorVerifiedAt()).isNull();
+        verify(prescriberReauthentication, never()).requireForControlledSigning(any(), any(), any(), any());
+        verify(cdsRuleEngine, never()).evaluateProposedPrescription(any(), any(), any());
+        verify(prescriptionMapper, never()).updateEntity(any(), any(), any(), any(), any());
+    }
+
+    /** QA D1097: Discontinued from a draft too, with the optional reason kept. */
+    @Test
+    void d1097_theAuthorDiscontinuesAnUnsignedCosignOrderAndTheReasonIsKept() {
+        UUID authorUserId = UUID.randomUUID();
+        Prescription rx = signablePrescription(authorUserId);
+        rx.setRequiresCosign(true);
+        UUID rxHospitalId = rx.getHospital().getId();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(rxHospitalId);
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(rx.getId(), rxHospitalId)).thenReturn(Optional.of(rx));
+        when(roleValidator.getCurrentUserId()).thenReturn(authorUserId);
+        when(authService.getCurrentUserId()).thenReturn(authorUserId);
+        when(prescriptionRepository.save(rx)).thenReturn(rx);
+        when(prescriptionMapper.toResponseDTO(rx)).thenReturn(PrescriptionResponseDTO.builder().id(rx.getId()).build());
+        PrescriptionRequestDTO request = PrescriptionRequestDTO.builder()
+            .status(com.example.hms.enums.PrescriptionStatus.DISCONTINUED).withdrawalReason("  Wrong patient  ").build();
+
+        prescriptionService.updatePrescription(rx.getId(), request, Locale.ENGLISH);
+
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.DISCONTINUED);
+        assertThat(rx.getWithdrawalReason()).isEqualTo("Wrong patient");
+    }
+
+    /** QA D1097: the author rule is kept - a colleague does not cancel someone else's unsigned order. */
+    @Test
+    void d1097_aColleagueStillCannotCancelAnUnsignedOrder() {
+        UUID authorUserId = UUID.randomUUID();
+        Prescription rx = signablePrescription(authorUserId);
+        rx.setControlledSubstance(true);
+        UUID rxHospitalId = rx.getHospital().getId();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(rxHospitalId);
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(rx.getId(), rxHospitalId)).thenReturn(Optional.of(rx));
+        when(roleValidator.getCurrentUserId()).thenReturn(UUID.randomUUID());
+        when(roleValidator.draftsForPhysicianSignature(authorUserId, rxHospitalId)).thenReturn(false);
+        PrescriptionRequestDTO request = PrescriptionRequestDTO.builder()
+            .status(com.example.hms.enums.PrescriptionStatus.CANCELLED).build();
+
+        UUID rxId = rx.getId();
+        assertThatThrownBy(() -> prescriptionService.updatePrescription(rxId, request, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.DRAFT);
+        verify(prescriptionRepository, never()).save(any());
+    }
+
+    /** QA D1096: a review card on creation marks the order as needing a recorded review. */
+    @Test
+    void d1096_aReviewCardAtCreationMarksTheOrder() {
+        PrescriptionRequestDTO request = buildRequest();
+        UserRoleHospitalAssignment encAssignment = new UserRoleHospitalAssignment();
+        encAssignment.setId(UUID.randomUUID());
+        encAssignment.setHospital(encounter.getHospital());
+        encounter.setAssignment(encAssignment);
+        UUID currentUser = staff.getUser().getId();
+        Prescription mappedEntity = mappedOrder();
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(authService.getCurrentUserId()).thenReturn(currentUser);
+        when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
+        when(prescriptionMapper.toEntity(request, patient, staff, encounter)).thenReturn(mappedEntity);
+        when(prescriptionRepository.save(mappedEntity)).thenReturn(mappedEntity);
+        when(prescriptionMapper.toResponseDTO(mappedEntity)).thenReturn(new PrescriptionResponseDTO());
+        when(cdsRuleEngine.evaluateProposedPrescription(any(), any(), any(com.example.hms.cdshooks.rules.CdsRuleEngine.ProposedOrder.class)))
+            .thenReturn(List.of(reviewCard()));
+
+        prescriptionService.createPrescription(request, Locale.ENGLISH);
+
+        assertThat(mappedEntity.isPediatricDoseReviewRequired()).isTrue();
+        assertThat(mappedEntity.getPediatricDoseReviewedAt()).isNull();
+    }
+
+    /** QA D1096: the QA call - the 7-week-old's order is not signed while no review is recorded; no code is spent. */
+    @Test
+    void d1096_anOrderAwaitingItsDoseReviewIsNotSigned() {
+        UUID prescriberUserId = UUID.randomUUID();
+        Prescription rx = signablePrescription(prescriberUserId);
+        rx.setPediatricDoseReviewRequired(true);
+        stubSignable(rx, prescriberUserId);
+
+        UUID rxId = rx.getId();
+        com.example.hms.payload.dto.SignPrescriptionRequestDTO signRequest =
+            com.example.hms.payload.dto.SignPrescriptionRequestDTO.builder().mfaCode("123456").build();
+        assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, signRequest, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .extracting("messageKey").isEqualTo("prescription.pediatricReview.requiredToSign");
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.DRAFT);
+        assertThat(rx.getSignatureValue()).isNull();
+        verify(prescriberReauthentication, never()).requireForControlledSigning(any(), any(), any(), any());
+        verify(prescriptionRepository, never()).save(any());
+    }
+
+    /** QA D1096: a draft saved before the rule (flag unset) is held by the cards the signature re-runs. */
+    @Test
+    void d1096_theSignatureReRunsTheCheckAndHoldsADraftSavedBeforeTheRule() {
+        UUID prescriberUserId = UUID.randomUUID();
+        Prescription rx = signablePrescription(prescriberUserId);
+        stubSignable(rx, prescriberUserId);
+        when(cdsRuleEngine.evaluateProposedPrescription(any(), any(), any(com.example.hms.cdshooks.rules.CdsRuleEngine.ProposedOrder.class)))
+            .thenReturn(List.of(reviewCard()));
+
+        UUID rxId = rx.getId();
+        assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, null, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .extracting("messageKey").isEqualTo("prescription.pediatricReview.requiredToSign");
+        assertThat(rx.getSignatureValue()).isNull();
+    }
+
+    /** QA D1096: once a pharmacist recorded the review, the prescriber signs. */
+    @Test
+    void d1096_aReviewedOrderIsSigned() {
+        UUID prescriberUserId = UUID.randomUUID();
+        Prescription rx = signablePrescription(prescriberUserId);
+        rx.setPediatricDoseReviewRequired(true);
+        com.example.hms.model.User pharmacist = new com.example.hms.model.User();
+        pharmacist.setId(UUID.randomUUID());
+        rx.setPediatricDoseReviewedBy(pharmacist);
+        rx.setPediatricDoseReviewedAt(java.time.LocalDateTime.now());
+        rx.setPediatricDoseReviewReason("Neonatal dose checked against the BNFc");
+        stubSignable(rx, prescriberUserId);
+        when(prescriptionRepository.save(any(Prescription.class))).thenAnswer(i -> i.getArgument(0));
+        when(prescriptionMapper.toResponseDTO(any(Prescription.class))).thenReturn(new PrescriptionResponseDTO());
+
+        prescriptionService.signPrescription(rx.getId(), null, Locale.ENGLISH);
+
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.SIGNED);
+    }
+
+    /** QA D1096: the physician who reviewed the dose does not also sign it (two judgments). */
+    @Test
+    void d1096_theReviewerDoesNotAlsoSign() {
+        UUID signerUserId = UUID.randomUUID();
+        Prescription rx = signablePrescription(signerUserId);
+        rx.setPediatricDoseReviewRequired(true);
+        rx.setPediatricDoseReviewedBy(rx.getStaff().getUser());
+        rx.setPediatricDoseReviewedAt(java.time.LocalDateTime.now());
+        stubSignable(rx, signerUserId);
+
+        UUID rxId = rx.getId();
+        assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, null, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .extracting("messageKey").isEqualTo("prescription.pediatricReview.reviewerCannotSign");
+        assertThat(rx.getSignatureValue()).isNull();
+    }
+
+    /** QA D1096: SIGNED is not a status a PUT may assert, so the edit form is no way round the review. */
+    @Test
+    void d1096_aPutCannotAssertSignedOnAnOrderAwaitingItsReview() {
+        UUID authorUserId = UUID.randomUUID();
+        Prescription rx = signablePrescription(authorUserId);
+        rx.setPediatricDoseReviewRequired(true);
+        UUID rxHospitalId = rx.getHospital().getId();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(rxHospitalId);
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(rx.getId(), rxHospitalId)).thenReturn(Optional.of(rx));
+        when(roleValidator.getCurrentUserId()).thenReturn(authorUserId);
+        PrescriptionRequestDTO request = PrescriptionRequestDTO.builder()
+            .status(com.example.hms.enums.PrescriptionStatus.SIGNED).build();
+
+        UUID rxId = rx.getId();
+        assertThatThrownBy(() -> prescriptionService.updatePrescription(rxId, request, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .extracting("messageKey").isEqualTo("prescription.status.notAssertable");
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.DRAFT);
+    }
+
+    private Prescription reviewableRow(UUID prescriberUserId) {
+        Prescription rx = signablePrescription(prescriberUserId);
+        rx.setPediatricDoseReviewRequired(true);
+        UUID rxHospitalId = rx.getHospital().getId();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(rxHospitalId);
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(rx.getId(), rxHospitalId)).thenReturn(Optional.of(rx));
+        return rx;
+    }
+
+    /** QA D1096: a pharmacist records the review - who, when, why - and it is audited (reason as a digest only). */
+    @Test
+    void d1096_aPharmacistRecordsTheReviewWithItsReason() {
+        Prescription rx = reviewableRow(UUID.randomUUID());
+        com.example.hms.model.User pharmacist = new com.example.hms.model.User();
+        pharmacist.setId(UUID.randomUUID());
+        com.example.hms.repository.UserRepository users = mock(com.example.hms.repository.UserRepository.class);
+        prescriptionService.setDoseReviewUsers(users);
+        when(users.findById(pharmacist.getId())).thenReturn(Optional.of(pharmacist));
+        when(roleValidator.getCurrentUserId()).thenReturn(pharmacist.getId());
+        when(roleValidator.hasAnyAuthority("PHARMACIST", "PHARMACY_VERIFIER", "SUPER_ADMIN")).thenReturn(true);
+        when(prescriptionRepository.save(rx)).thenReturn(rx);
+        when(prescriptionMapper.toResponseDTO(rx)).thenReturn(new PrescriptionResponseDTO());
+
+        prescriptionService.recordPediatricDoseReview(rx.getId(), "  Dose checked: 15 mg/kg q6h  ", Locale.FRENCH);
+
+        assertThat(rx.getPediatricDoseReviewedBy()).isSameAs(pharmacist);
+        assertThat(rx.getPediatricDoseReviewedAt()).isEqualTo(java.time.LocalDateTime.now(clock));
+        assertThat(rx.getPediatricDoseReviewReason()).isEqualTo("Dose checked: 15 mg/kg q6h");
+        org.mockito.ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> audit =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(audit.capture());
+        assertThat(audit.getValue().getEventType())
+            .isEqualTo(com.example.hms.enums.AuditEventType.PRESCRIPTION_PEDIATRIC_DOSE_REVIEWED);
+        assertThat(String.valueOf(audit.getValue().getDetails())).contains("reasonSha256").doesNotContain("15 mg/kg");
+    }
+
+    /** QA D1096: a physician of the hospital may review too; the reason is mandatory. */
+    @Test
+    void d1096_aReviewWithoutAReasonIsRefused() {
+        // QA round 29 (test reshaped): the mandatory reason is read first, named on "reason",
+        // before the order is looked up or locked.
+        UUID rxId = UUID.randomUUID();
+        assertThatThrownBy(() -> prescriptionService.recordPediatricDoseReview(rxId, "   ", Locale.ENGLISH))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getField()).isEqualTo("reason"))
+            .extracting("messageKey").isEqualTo("prescription.pediatricReview.reasonRequired");
+        verify(prescriptionRepository, never()).findByIdAndHospitalIdForUpdate(any(), any());
+    }
+
+    /** QA D1096: the prescriber does not review their own order. */
+    @Test
+    void d1096_thePrescriberCannotReviewTheirOwnOrder() {
+        UUID prescriberUserId = UUID.randomUUID();
+        Prescription rx = reviewableRow(prescriberUserId);
+        when(roleValidator.getCurrentUserId()).thenReturn(prescriberUserId);
+        when(roleValidator.isSigningPhysician(prescriberUserId, rx.getHospital().getId())).thenReturn(true);
+
+        UUID rxId = rx.getId();
+        assertThatThrownBy(() -> prescriptionService.recordPediatricDoseReview(rxId, "ok", Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .extracting("messageKey").isEqualTo("prescription.pediatricReview.ownOrder");
+    }
+
+    /** QA D1096: a nurse (neither pharmacist nor physician) gets a translated 403. */
+    @Test
+    void d1096_someoneWhoIsNeitherPharmacistNorPhysicianCannotReview() {
+        Prescription rx = reviewableRow(UUID.randomUUID());
+        UUID nurse = UUID.randomUUID();
+        when(roleValidator.getCurrentUserId()).thenReturn(nurse);
+
+        UUID rxId = rx.getId();
+        assertThatThrownBy(() -> prescriptionService.recordPediatricDoseReview(rxId, "ok", Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThat(rx.getPediatricDoseReviewedAt()).isNull();
+    }
+
+    /** QA D1096: a withdrawn order takes no review; an order that does not need one is refused too. */
+    @Test
+    void d1096_aWithdrawnOrNotRequiredOrderTakesNoReview() {
+        Prescription rx = reviewableRow(UUID.randomUUID());
+        UUID pharmacist = UUID.randomUUID();
+        when(roleValidator.getCurrentUserId()).thenReturn(pharmacist);
+        when(roleValidator.hasAnyAuthority("PHARMACIST", "PHARMACY_VERIFIER", "SUPER_ADMIN")).thenReturn(true);
+        UUID rxId = rx.getId();
+
+        rx.setStatus(com.example.hms.enums.PrescriptionStatus.CANCELLED);
+        assertThatThrownBy(() -> prescriptionService.recordPediatricDoseReview(rxId, "ok", Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .extracting("messageKey").isEqualTo("prescription.pediatricReview.wrongStatus");
+
+        rx.setStatus(com.example.hms.enums.PrescriptionStatus.DRAFT);
+        rx.setPediatricDoseReviewRequired(false);
+        assertThatThrownBy(() -> prescriptionService.recordPediatricDoseReview(rxId, "ok", Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .extracting("messageKey").isEqualTo("prescription.pediatricReview.notRequired");
+    }
+
+    /** QA D1102: the soft-stop refusal names the box on the form and the reason, in the reader's language. */
+    @Test
+    void d1102_theSoftStopRefusalIsClinicalTextInTheReadersLanguage() {
+        PrescriptionRequestDTO request = buildRequest();
+        UserRoleHospitalAssignment encAssignment = new UserRoleHospitalAssignment();
+        encAssignment.setId(UUID.randomUUID());
+        encAssignment.setHospital(encounter.getHospital());
+        encounter.setAssignment(encAssignment);
+        UUID currentUser = staff.getUser().getId();
+        com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard softStop =
+            new com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard(
+                "Dose pédiatrique au-dessus du plafond : 26,32 mg/kg > 15 mg/kg max pour Paracétamol", null,
+                com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard.Indicator.CRITICAL,
+                new com.example.hms.cdshooks.dto.CdsHookDtos.Source("HMS Pediatric Dose Check", null, null),
+                null, null, null, "uuid");
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(authService.getCurrentUserId()).thenReturn(currentUser);
+        when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
+        when(cdsRuleEngine.evaluateProposedPrescription(any(), any(), any(com.example.hms.cdshooks.rules.CdsRuleEngine.ProposedOrder.class)))
+            .thenReturn(List.of(softStop));
+
+        for (Map.Entry<Locale, String> expected : Map.of(
+                Locale.FRENCH, "« Outrepasser l’alerte critique après revue clinique »",
+                Locale.forLanguageTag("es"), "«Anular alerta crítica tras revisión clínica»",
+                Locale.ENGLISH, "“Override critical advisory after clinical review”").entrySet()) {
+            LocaleContextHolder.setLocale(expected.getKey());
+            assertThatThrownBy(() -> prescriptionService.createPrescription(request, expected.getKey()))
+                .isInstanceOf(com.example.hms.cdshooks.CdsCriticalBlockException.class)
+                .hasMessageContaining(expected.getValue())
+                .hasMessageContaining("26,32 mg/kg")
+                .hasMessageNotContaining("forceOverride")
+                .hasMessageNotContaining("CDS ALERT");
+        }
+        verify(prescriptionRepository, never()).save(any());
+    }
+
+    // ═══════════════ QA D1223 (round 24): one input never hides the other ═══════════════
+
+    private static com.example.hms.model.medication.MedicationCatalogItem d1223Item(String nameFr, String generic,
+                                                                                    String atc) {
+        com.example.hms.model.medication.MedicationCatalogItem item =
+            new com.example.hms.model.medication.MedicationCatalogItem();
+        item.setId(UUID.randomUUID());
+        item.setNameFr(nameFr);
+        item.setGenericName(generic);
+        item.setAtcCode(atc);
+        return item;
+    }
+
+    private final com.example.hms.model.medication.MedicationCatalogItem d1223Paracetamol =
+        d1223Item("Paracétamol", "Paracétamol", "N02BE01");
+    private final com.example.hms.model.medication.MedicationCatalogItem d1223Amoxicillin =
+        d1223Item("Amoxicilline", "Amoxicilline", "J01CA04");
+    private final com.example.hms.model.medication.MedicationCatalogItem d1223Cotrimoxazole =
+        d1223Item("Cotrimoxazole", "Sulfaméthoxazole + Triméthoprime", "J01EE01");
+
+    /**
+     * {@link #d1183StubCreate} with the patient's allergies stubbed leniently:
+     * a mismatched order is refused before the allergy list is read.
+     */
+    private void d1223StubCreate(String allergen) {
+        UserRoleHospitalAssignment encounterAssignment = new UserRoleHospitalAssignment();
+        encounterAssignment.setId(UUID.randomUUID());
+        encounterAssignment.setHospital(encounter.getHospital());
+        encounter.setAssignment(encounterAssignment);
+        UUID currentUser = staff.getUser().getId();
+        PatientAllergy allergy = new PatientAllergy();
+        allergy.setActive(true);
+        allergy.setAllergenDisplay(allergen);
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(authService.getCurrentUserId()).thenReturn(currentUser);
+        when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
+        lenient().when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(List.of(allergy));
+    }
+
+    /** The hospital's catalogue: paracetamol and one member of each allergy class. */
+    private void d1223StubCatalogue() {
+        List<com.example.hms.model.medication.MedicationCatalogItem> all =
+            List.of(d1223Paracetamol, d1223Amoxicillin, d1223Cotrimoxazole);
+        for (com.example.hms.model.medication.MedicationCatalogItem item : all) {
+            lenient().when(catalogRepo.findByIdAndHospital_Id(eq(item.getId()), any())).thenReturn(Optional.of(item));
+        }
+        lenient().when(catalogRepo.findActivePage(any(), any())).thenReturn(new PageImpl<>(all));
+        lenient().when(catalogRepo.findByHospital_IdAndActiveTrue(any(), any())).thenReturn(new PageImpl<>(all));
+    }
+
+    /** How the drug reaches the order (QA D1223 report: free text, catalogue, mismatched id, stale id). */
+    enum D1223Input { FREE_TEXT, CATALOGUE, MISMATCHED_ID, STALE_ID }
+
+    /** The typed name and the catalogue id an order carries for the class of an allergen. */
+    private record D1223Drug(String typedName, UUID catalogItemId) { }
+
+    private D1223Drug d1223Drug(String allergen, D1223Input input) {
+        boolean penicillin = allergen.startsWith("P");
+        // Names the system does not recognise, as QA typed them (round 24).
+        String unknown = penicillin ? "Bristopen 500 mg" : "Kotrimazol-Faso 480";
+        com.example.hms.model.medication.MedicationCatalogItem member =
+            penicillin ? d1223Amoxicillin : d1223Cotrimoxazole;
+        return switch (input) {
+            case FREE_TEXT -> new D1223Drug(unknown, null);
+            case CATALOGUE -> new D1223Drug(member.getNameFr() + " 500 mg", member.getId());
+            case MISMATCHED_ID, STALE_ID -> new D1223Drug(unknown, d1223Paracetamol.getId());
+        };
+    }
+
+    private static void d1223AssertRefusedOrBlocked(D1223Input input,
+                                                    org.assertj.core.api.ThrowableAssert.ThrowingCallable call) {
+        if (input == D1223Input.MISMATCHED_ID || input == D1223Input.STALE_ID) {
+            assertThatThrownBy(call)
+                .isInstanceOfSatisfying(BusinessException.class, ex ->
+                    assertThat(ex.getMessageKey()).isEqualTo("prescription.catalog.nameMismatch"));
+        } else {
+            assertThatThrownBy(call).isInstanceOf(com.example.hms.cdshooks.CdsCriticalBlockException.class);
+        }
+    }
+
+    @ParameterizedTest(name = "create, allergy {0}, {1}: never saved in silence")
+    @org.junit.jupiter.params.provider.MethodSource("d1223CreateMatrix")
+    void d1223_createMatrix(String allergen, D1223Input input) {
+        d1223StubCreate(allergen);
+        d1223StubCatalogue();
+        D1223Drug drug = d1223Drug(allergen, input);
+        PrescriptionRequestDTO request = d1183Request(drug.typedName(), false, null);
+        request.setMedicationCatalogItemId(drug.catalogItemId());
+
+        d1223AssertRefusedOrBlocked(input, () -> prescriptionService.createPrescription(request, Locale.FRENCH));
+        verify(prescriptionRepository, never()).save(any());
+    }
+
+    static java.util.stream.Stream<org.junit.jupiter.params.provider.Arguments> d1223CreateMatrix() {
+        return java.util.stream.Stream.of("Pénicilline", "Sulfamides").flatMap(allergen ->
+            java.util.stream.Stream.of(D1223Input.FREE_TEXT, D1223Input.CATALOGUE, D1223Input.MISMATCHED_ID)
+                .map(input -> org.junit.jupiter.params.provider.Arguments.of(allergen, input)));
+    }
+
+    @ParameterizedTest(name = "edit, allergy {0}, {1}: never saved in silence")
+    @org.junit.jupiter.params.provider.MethodSource("d1223EditMatrix")
+    void d1223_editMatrix(String allergen, D1223Input input) {
+        d1223StubCreate(allergen);
+        d1223StubCatalogue();
+        // The order the QA script edited: a plain paracetamol order the server linked.
+        UUID prescriptionId = UUID.randomUUID();
+        Prescription existing = new Prescription();
+        existing.setId(prescriptionId);
+        existing.setMedicationName("Paracétamol 500 mg");
+        existing.setMedicationCatalogItemId(d1223Paracetamol.getId());
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(existing));
+        D1223Drug drug = d1223Drug(allergen, input);
+        PrescriptionRequestDTO request = d1183Request(drug.typedName(), false, null);
+        // STALE_ID: the edit sends the order's own body back, the old id included.
+        request.setMedicationCatalogItemId(input == D1223Input.FREE_TEXT ? null : drug.catalogItemId());
+
+        d1223AssertRefusedOrBlocked(input,
+            () -> prescriptionService.updatePrescription(prescriptionId, request, Locale.FRENCH));
+        verify(prescriptionRepository, never()).save(any());
+        assertThat(existing.getMedicationName()).isEqualTo("Paracétamol 500 mg");
+    }
+
+    static java.util.stream.Stream<org.junit.jupiter.params.provider.Arguments> d1223EditMatrix() {
+        return java.util.stream.Stream.of("Pénicilline", "Sulfamides").flatMap(allergen ->
+            java.util.stream.Stream.of(D1223Input.values())
+                .map(input -> org.junit.jupiter.params.provider.Arguments.of(allergen, input)));
+    }
+
+    @ParameterizedTest(name = "sign, allergy {0}, {1}: never signed in silence")
+    @org.junit.jupiter.params.provider.MethodSource("d1223EditMatrix")
+    void d1223_signMatrix(String allergen, D1223Input input) {
+        d1223StubCatalogue();
+        UUID prescriberUserId = UUID.randomUUID();
+        Prescription rx = signablePrescription(prescriberUserId);
+        D1223Drug drug = d1223Drug(allergen, input);
+        // A row saved before round 24: STALE_ID and MISMATCHED_ID both carry paracetamol's link.
+        rx.setMedicationName(drug.typedName());
+        rx.setMedicationCatalogItemId(drug.catalogItemId());
+        PatientAllergy allergy = new PatientAllergy();
+        allergy.setActive(true);
+        allergy.setAllergenDisplay(allergen);
+        stubSignable(rx, prescriberUserId);
+        lenient().when(patientAllergyRepository.findByPatient_Id(rx.getPatient().getId())).thenReturn(List.of(allergy));
+        UUID rxId = rx.getId();
+
+        d1223AssertRefusedOrBlocked(input, () -> prescriptionService.signPrescription(rxId, null, Locale.FRENCH));
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.DRAFT);
+        assertThat(rx.getSignatureValue()).isNull();
+    }
+
+    @Test
+    void d1223_anAcknowledgementDoesNotMakeAMismatchedOrderAcceptable() {
+        d1223StubCreate("Pénicilline");
+        d1223StubCatalogue();
+        PrescriptionRequestDTO request = d1183Request("Bristopen 500 mg", true, "Acknowledged");
+        request.setMedicationCatalogItemId(d1223Paracetamol.getId());
+
+        assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("Bristopen 500 mg")
+            .hasMessageContaining("does not name the catalogue item");
+        verify(prescriptionRepository, never()).save(any());
+    }
+
+    @Test
+    void d1223_aCodeForAnotherDrugIsRefusedLikeAnId() {
+        d1223StubCreate("Sulfamides");
+        d1223StubCatalogue();
+        d1223Paracetamol.setCode("PARA500");
+        when(catalogRepo.findByHospitalIdAndCode(any(), eq("PARA500"))).thenReturn(Optional.of(d1223Paracetamol));
+        PrescriptionRequestDTO request = d1183Request("Kotrimazol-Faso 480", false, null);
+        request.setMedicationCode("PARA500");
+
+        assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
+            .isInstanceOfSatisfying(BusinessException.class, ex ->
+                assertThat(ex.getMessageKey()).isEqualTo("prescription.catalog.nameMismatch"));
+        verify(prescriptionRepository, never()).save(any());
+    }
+
+    @Test
+    void d1223_theAgreeingPickIsStillCreatedForAnAllergicPatient() {
+        // Control: paracetamol picked from the catalogue, typed as the form types it, for a
+        // penicillin-allergic patient - the drug is known and is not a penicillin.
+        d1223StubCreate("Pénicilline");
+        d1223StubCatalogue();
+        PrescriptionRequestDTO request = d1183Request("Paracétamol 500 mg Comprimé", false, null);
+        request.setMedicationCatalogItemId(d1223Paracetamol.getId());
+        Prescription mappedEntity = mappedOrder();
+        when(prescriptionMapper.toEntity(request, patient, staff, encounter)).thenReturn(mappedEntity);
+        when(prescriptionRepository.save(mappedEntity)).thenReturn(mappedEntity);
+        when(prescriptionMapper.toResponseDTO(mappedEntity)).thenReturn(PrescriptionResponseDTO.builder().build());
+
+        prescriptionService.createPrescription(request, Locale.FRENCH);
+
+        verify(prescriptionRepository).save(mappedEntity);
+        assertThat(mappedEntity.isAllergiesReviewed()).isFalse();
+    }
+
+    /**
+     * QA D1393: the lookup answers no open stay once the admission was cancelled,
+     * so the order gets a finished outpatient anchor, and a stay it does answer
+     * is filed on with the prescriber's own first.
+     */
+    @Test
+    void d1393_anOrderWithNoOpenStayGetsAnOutpatientAnchor() {
+        stubPrescriberWithoutEncounter();
+        when(encounterRepository.save(any(Encounter.class))).thenAnswer(i -> i.getArgument(0));
+
+        prescriptionService.createPrescription(requestWithoutEncounter(), Locale.ENGLISH);
+
+        verify(encounterRepository).findOpenStayEncounters(patientId, hospitalId,
+            com.example.hms.enums.EncounterStatus.CLOSED,
+            java.util.EnumSet.of(com.example.hms.enums.AdmissionStatus.DISCHARGED,
+                com.example.hms.enums.AdmissionStatus.CANCELLED));
+        org.mockito.ArgumentCaptor<Encounter> anchor = org.mockito.ArgumentCaptor.forClass(Encounter.class);
+        verify(encounterRepository).save(anchor.capture());
+        assertThat(anchor.getValue().getAdmissionId()).isNull();
+        assertThat(anchor.getValue().getEncounterType()).isEqualTo(com.example.hms.enums.EncounterType.CONSULTATION);
+        assertThat(anchor.getValue().getStatus()).isEqualTo(com.example.hms.enums.EncounterStatus.COMPLETED);
+    }
+
+    @Test
+    void d136_ofTheOpenStaysThePrescribersOwnComesFirst() {
+        stubPrescriberWithoutEncounter();
+        com.example.hms.model.Admission admission = new com.example.hms.model.Admission();
+        admission.setId(UUID.randomUUID());
+        Encounter someoneElses = strangersStay(admission);
+        Encounter mine = strangersStay(admission);
+        mine.setStaff(staff);
+        admission.setAttendingPhysician(staff);
+        lenient().when(admissionRepository.findById(admission.getId())).thenReturn(Optional.of(admission));
+        when(encounterRepository.findOpenStayEncounters(eq(patientId), eq(hospitalId), any(), any()))
+            .thenReturn(List.of(someoneElses, mine));
+
+        prescriptionService.createPrescription(requestWithoutEncounter(), Locale.ENGLISH);
+
+        verify(prescriptionMapper).toEntity(any(), any(), any(), eq(mine));
+    }
+
+    // ═══════════════ QA D1432 (round 34): what a PUT may do to a dispensed order ═══════════════
+
+    private Prescription dispensedRow(UUID id, com.example.hms.enums.PrescriptionStatus status) {
+        Prescription rx = signedRow(id);
+        rx.setStatus(status);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(id, hospitalId)).thenReturn(Optional.of(rx));
+        return rx;
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = com.example.hms.enums.PrescriptionStatus.class,
+        names = {"DISPENSED", "PARTNER_DISPENSED", "PARTIALLY_FILLED"})
+    void qaD1432_anOrderDispensedFromIsNeverCancelled(com.example.hms.enums.PrescriptionStatus status) {
+        UUID id = UUID.randomUUID();
+        Prescription rx = dispensedRow(id, status);
+        PrescriptionRequestDTO cancel = buildRequest();
+        cancel.setStatus(com.example.hms.enums.PrescriptionStatus.CANCELLED);
+        cancel.setWithdrawalReason("Changed my mind");
+
+        assertThatThrownBy(() -> prescriptionService.updatePrescription(id, cancel, Locale.FRENCH))
+            .isInstanceOf(BusinessException.class)
+            .extracting("messageKey").isEqualTo("prescription.dispensed.noCancel");
+        assertThat(rx.getStatus()).isEqualTo(status);
+        assertThat(rx.getWithdrawalReason()).isNull();
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = com.example.hms.enums.PrescriptionStatus.class,
+        names = {"DISPENSED", "PARTNER_DISPENSED"})
+    void qaD1432_aWhollyDispensedOrderIsNotRewritten(com.example.hms.enums.PrescriptionStatus status) {
+        UUID id = UUID.randomUUID();
+        Prescription rx = dispensedRow(id, status);
+        PrescriptionRequestDTO edit = buildRequest();
+        edit.setDosage("9000 mg");
+
+        assertThatThrownBy(() -> prescriptionService.updatePrescription(id, edit, Locale.FRENCH))
+            .isInstanceOf(BusinessException.class)
+            .extracting("messageKey").isEqualTo("prescription.dispensed.readOnly");
+        assertThat(rx.getDosage()).isEqualTo(TEST_DOSAGE);
+
+        PrescriptionRequestDTO stopAndRewrite = buildRequest();
+        stopAndRewrite.setDosage("9000 mg");
+        stopAndRewrite.setStatus(com.example.hms.enums.PrescriptionStatus.DISCONTINUED);
+        stopAndRewrite.setWithdrawalReason("Stopped");
+        assertThatThrownBy(() -> prescriptionService.updatePrescription(id, stopAndRewrite, Locale.FRENCH))
+            .isInstanceOf(BusinessException.class)
+            .extracting("messageKey").isEqualTo("prescription.dispensed.readOnly");
+        assertThat(rx.getDosage()).isEqualTo(TEST_DOSAGE);
+    }
+
+    @Test
+    void qaD1432_aPartFillStopsItsBalanceWithAReason() {
+        UUID id = UUID.randomUUID();
+        Prescription rx = dispensedRow(id, com.example.hms.enums.PrescriptionStatus.PARTIALLY_FILLED);
+        UUID callerId = UUID.randomUUID();
+        when(authService.getCurrentUserId()).thenReturn(callerId);
+        lenient().when(roleValidator.getCurrentUserId()).thenReturn(callerId);
+        when(roleValidator.isDoctor(callerId, hospitalId)).thenReturn(true);
+        when(prescriptionRepository.save(rx)).thenReturn(rx);
+        when(prescriptionMapper.toResponseDTO(rx)).thenReturn(PrescriptionResponseDTO.builder().id(id).build());
+        PrescriptionRequestDTO stop = buildRequest();
+        stop.setStatus(com.example.hms.enums.PrescriptionStatus.DISCONTINUED);
+        stop.setWithdrawalReason("Rest no longer needed");
+
+        prescriptionService.updatePrescription(id, stop, Locale.FRENCH);
+
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.DISCONTINUED);
+        assertThat(rx.getWithdrawalReason()).isEqualTo("Rest no longer needed");
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = com.example.hms.enums.PrescriptionStatus.class,
+        names = {"DISPENSED", "PARTNER_DISPENSED", "PARTIALLY_FILLED"})
+    void qaD1432_anOrderDispensedFromIsNotDeleted(com.example.hms.enums.PrescriptionStatus status) {
+        UUID id = UUID.randomUUID();
+        Prescription rx = signedRow(id);
+        rx.setStatus(status);
+        when(prescriptionRepository.findById(id)).thenReturn(Optional.of(rx));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+
+        assertThatThrownBy(() -> prescriptionService.deletePrescription(id, Locale.FRENCH))
+            .isInstanceOf(BusinessException.class)
+            .extracting("messageKey").isEqualTo("prescription.dispensed.readOnly");
+        verify(prescriptionRepository, never()).deleteById(any());
+    }
+
+    /** QA D1432 review: a part fill moves on (back-order, partner, clarification, refill); the fill stands. */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = com.example.hms.enums.PrescriptionStatus.class,
+        names = {"SIGNED", "TRANSMITTED", "PENDING_STOCK", "SENT_TO_PARTNER", "PARTNER_ACCEPTED", "PARTNER_REJECTED",
+            "PRINTED_FOR_PATIENT", "PENDING_CLARIFICATION"})
+    void qaD1432_aFillOnRecordKeepsAnOrderFromBeingCancelled(com.example.hms.enums.PrescriptionStatus status) {
+        UUID id = UUID.randomUUID();
+        Prescription rx = dispensedRow(id, status);
+        when(dispenseRepository.sumQuantityDispensedForPrescription(id,
+            com.example.hms.repository.pharmacy.DispenseRepository.NOT_A_FILL)).thenReturn(java.math.BigDecimal.TEN);
+        PrescriptionRequestDTO cancel = buildRequest();
+        cancel.setStatus(com.example.hms.enums.PrescriptionStatus.CANCELLED);
+        cancel.setWithdrawalReason("Changed my mind");
+
+        assertThatThrownBy(() -> prescriptionService.updatePrescription(id, cancel, Locale.FRENCH))
+            .isInstanceOf(BusinessException.class)
+            .extracting("messageKey").isEqualTo("prescription.dispensed.noCancel");
+        assertThat(rx.getStatus()).isEqualTo(status);
+    }
+
+    @Test
+    void qaD1432_anOrderWithNoFillIsStillCancelled() {
+        UUID id = UUID.randomUUID();
+        Prescription rx = dispensedRow(id, com.example.hms.enums.PrescriptionStatus.SIGNED);
+        UUID callerId = UUID.randomUUID();
+        when(dispenseRepository.sumQuantityDispensedForPrescription(id,
+            com.example.hms.repository.pharmacy.DispenseRepository.NOT_A_FILL)).thenReturn(java.math.BigDecimal.ZERO);
+        when(authService.getCurrentUserId()).thenReturn(callerId);
+        lenient().when(roleValidator.getCurrentUserId()).thenReturn(callerId);
+        when(roleValidator.isDoctor(callerId, hospitalId)).thenReturn(true);
+        when(prescriptionRepository.save(rx)).thenReturn(rx);
+        when(prescriptionMapper.toResponseDTO(rx)).thenReturn(PrescriptionResponseDTO.builder().id(id).build());
+        PrescriptionRequestDTO cancel = buildRequest();
+        cancel.setStatus(com.example.hms.enums.PrescriptionStatus.CANCELLED);
+        cancel.setWithdrawalReason("Wrong patient");
+
+        prescriptionService.updatePrescription(id, cancel, Locale.FRENCH);
+
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.CANCELLED);
+    }
 }

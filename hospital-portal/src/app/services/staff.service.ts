@@ -1,6 +1,8 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { map, Observable } from 'rxjs';
+import { Observable } from 'rxjs';
+
+import { allRows, PageSlice } from '../shared/all-pages';
 
 export interface StaffResponse {
   id: string;
@@ -97,12 +99,15 @@ export class StaffService {
 
   list(hospitalId?: string): Observable<StaffResponse[]> {
     if (hospitalId) {
-      // Use the hospital-scoped active endpoint which filters correctly
-      return this.http
-        .get<{ content: StaffResponse[] }>(`/staff/hospital/${hospitalId}/active`, {
-          params: new HttpParams().set('size', '200'),
-        })
-        .pipe(map((page) => page.content ?? []));
+      // Use the hospital-scoped active endpoint which filters correctly.
+      // QA D1347: every active staff member (all pages), not the first 200 —
+      // the pickers built on this list could not offer the 201st.
+      return allRows((page, size) =>
+        this.http.get<PageSlice<StaffResponse>>(`/staff/hospital/${hospitalId}/active`, {
+          // A total order, so no row repeats or falls between two pages.
+          params: new HttpParams().set('page', page).set('size', size).set('sort', 'id'),
+        }),
+      );
     }
     return this.http.get<StaffResponse[]>('/staff');
   }

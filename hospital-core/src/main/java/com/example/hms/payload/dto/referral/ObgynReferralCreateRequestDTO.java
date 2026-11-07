@@ -26,6 +26,10 @@ public class ObgynReferralCreateRequestDTO {
     @NotNull
     private UUID hospitalId;
 
+    // QA D1481: the ceiling of every other gestational age of a request.
+    @jakarta.validation.constraints.Min(value = 0, message = "{ultrasoundOrder.gestationalAge.range}")
+    @jakarta.validation.constraints.Max(value = com.example.hms.utility.GestationalDating.MAX_RECORDED_WEEKS,
+        message = "{ultrasoundOrder.gestationalAge.range}")
     private Integer gestationalAgeWeeks;
 
     @NotNull

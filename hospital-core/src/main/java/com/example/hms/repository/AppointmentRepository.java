@@ -30,17 +30,27 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID>,
     int claimReminder(@Param("id") UUID id, @Param("now") LocalDateTime now);
 
     // Custom queries for flexible appointment lookup
-    @Query("SELECT a FROM Appointment a WHERE LOWER(a.patient.email) = LOWER(:email)")
+    @Query("SELECT a FROM Appointment a WHERE LOWER(a.patient.email) = LOWER(CAST(:email AS string))")
     List<Appointment> findByPatientEmail(@Param("email") String email);
 
-    @Query("SELECT a FROM Appointment a WHERE LOWER(a.patient.email) = LOWER(:email) AND a.hospital.id = :hospitalId")
+    @Query("SELECT a FROM Appointment a WHERE LOWER(a.patient.email) = LOWER(CAST(:email AS string)) AND a.hospital.id = :hospitalId")
     List<Appointment> findByPatientEmailAndHospitalId(@Param("email") String email, @Param("hospitalId") UUID hospitalId);
 
-    @Query("SELECT a FROM Appointment a WHERE a.patient.phoneNumberPrimary = :phone")
-    List<Appointment> findByPatientPhoneNumber(@Param("phone") String phone);
+    /**
+     * QA D942: the patient's primary number reduced to its digits, so a number
+     * stored in E.164 ("+22670001002") is found whatever form is typed. The
+     * caller binds {@code :phonePattern} from PatientMatchKeys.
+     */
+    String PATIENT_PHONE_DIGITS = com.example.hms.utility.PatientMatchKeys.DIGITS_SQL_OPEN
+        + "a.patient.phoneNumberPrimary" + com.example.hms.utility.PatientMatchKeys.DIGITS_SQL_CLOSE;
 
-    @Query("SELECT a FROM Appointment a WHERE a.patient.phoneNumberPrimary = :phone AND a.hospital.id = :hospitalId")
-    List<Appointment> findByPatientPhoneNumberAndHospitalId(@Param("phone") String phone, @Param("hospitalId") UUID hospitalId);
+    @Query("SELECT a FROM Appointment a WHERE " + PATIENT_PHONE_DIGITS + " LIKE :phonePattern")
+    List<Appointment> findByPatientPhoneNumber(@Param("phonePattern") String phonePattern);
+
+    @Query("SELECT a FROM Appointment a WHERE " + PATIENT_PHONE_DIGITS + " LIKE :phonePattern"
+        + " AND a.hospital.id = :hospitalId")
+    List<Appointment> findByPatientPhoneNumberAndHospitalId(@Param("phonePattern") String phonePattern,
+                                                            @Param("hospitalId") UUID hospitalId);
 
     @Query("SELECT a FROM Appointment a JOIN a.patient.hospitalRegistrations r WHERE r.mrn = :mrn")
     List<Appointment> findByPatientMrn(@Param("mrn") String mrn);
@@ -54,10 +64,10 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID>,
     @Query("SELECT a FROM Appointment a WHERE a.staff.licenseNumber = :number AND a.hospital.id = :hospitalId")
     List<Appointment> findByStaffNumberAndHospitalId(@Param("number") String number, @Param("hospitalId") UUID hospitalId);
 
-    @Query("SELECT a FROM Appointment a WHERE LOWER(a.staff.user.email) = LOWER(:email)")
+    @Query("SELECT a FROM Appointment a WHERE LOWER(a.staff.user.email) = LOWER(CAST(:email AS string))")
     List<Appointment> findByStaffEmail(@Param("email") String email);
 
-    @Query("SELECT a FROM Appointment a WHERE LOWER(a.staff.user.email) = LOWER(:email) AND a.hospital.id = :hospitalId")
+    @Query("SELECT a FROM Appointment a WHERE LOWER(a.staff.user.email) = LOWER(CAST(:email AS string)) AND a.hospital.id = :hospitalId")
     List<Appointment> findByStaffEmailAndHospitalId(@Param("email") String email, @Param("hospitalId") UUID hospitalId);
 
     @Query("SELECT a FROM Appointment a WHERE a.staff.id = :id")
@@ -158,4 +168,30 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID>,
     /** E8 #48 — appointments of this patient here inside the lookback/lookahead window. */
     List<Appointment> findByPatient_IdAndHospital_IdAndAppointmentDateBetween(
         UUID patientId, UUID hospitalId, LocalDate from, LocalDate to);
+
+    /** QA D936: serialises two check-ins of one appointment (row lock until the transaction ends). */
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @org.springframework.data.jpa.repository.Query("SELECT a FROM Appointment a WHERE a.id = :id")
+    java.util.Optional<Appointment> lockById(@org.springframework.data.repository.query.Param("id") java.util.UUID id);
+
+    /** QA CX-002: appointments per department, by the database. */
+    @org.springframework.data.jpa.repository.Query("SELECT a.department.id AS ownerId, COUNT(a) AS total FROM Appointment a "
+        + "WHERE a.department IS NOT NULL GROUP BY a.department.id")
+    java.util.List<PlatformCountRows.IdCount> countPerDepartment();
+
+    /** QA CX-002: appointments per hospital, by the database. */
+    @org.springframework.data.jpa.repository.Query("SELECT a.hospital.id AS ownerId, COUNT(a) AS total FROM Appointment a "
+        + "WHERE a.hospital IS NOT NULL GROUP BY a.hospital.id")
+    java.util.List<PlatformCountRows.IdCount> countPerHospital();
+
+    /** QA CX-002: appointments per status, by the database. */
+    @org.springframework.data.jpa.repository.Query("SELECT CAST(a.status AS string) AS label, COUNT(a) AS total FROM Appointment a GROUP BY a.status")
+    java.util.List<PlatformCountRows.StatusCount> countPerStatus();
+
+    /** QA CX-002: appointments per day of a window, both ends included. */
+    @org.springframework.data.jpa.repository.Query("SELECT a.appointmentDate AS day, COUNT(a) AS total FROM Appointment a "
+        + "WHERE a.appointmentDate BETWEEN :from AND :to GROUP BY a.appointmentDate")
+    java.util.List<PlatformCountRows.DayCount> countPerDay(
+        @org.springframework.data.repository.query.Param("from") java.time.LocalDate from,
+        @org.springframework.data.repository.query.Param("to") java.time.LocalDate to);
 }

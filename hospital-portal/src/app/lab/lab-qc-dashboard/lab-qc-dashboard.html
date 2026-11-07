@@ -53,7 +53,7 @@
         <span class="material-symbols-outlined">verified</span>
       </div>
       <div>
-        <div class="value">{{ overallPassRate() | number: '1.1-1' }}%</div>
+        <div class="value">{{ overallPassRate() | measure: '%' }}</div>
         <div class="label">{{ 'LAB_QC.VALIDATION_PASS_RATE' | translate }}</div>
       </div>
     </div>
@@ -105,10 +105,9 @@
                 [class.fail]="row.failedEvents > 0"
               >
                 {{
-                  row.totalEvents > 0
-                    ? ((row.failedEvents / row.totalEvents) * 100 | number: '1.1-1')
-                    : '0.0'
-                }}%
+                  (row.totalEvents > 0 ? (row.failedEvents / row.totalEvents) * 100 : 0)
+                    | measure: '%'
+                }}
               </span>
             </td>
             <td>
@@ -382,7 +381,7 @@
                 [class.pass]="row.passRate >= 90"
                 [class.fail]="row.passRate < 90"
               >
-                {{ row.passRate | number: '1.1-1' }}%
+                {{ row.passRate | measure: '%' }}
               </span>
             </td>
             <td>

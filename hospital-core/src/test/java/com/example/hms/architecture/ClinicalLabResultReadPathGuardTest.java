@@ -57,6 +57,7 @@ class ClinicalLabResultReadPathGuardTest {
         Map.entry("com/example/hms/service/DoctorWorklistServiceImpl.java", "a count, no values"),
         Map.entry("com/example/hms/service/InstrumentOutboxServiceImpl.java", "instrument transmit"),
         Map.entry("com/example/hms/service/LabOrderServiceImpl.java", "existence check for a performer change"),
+        Map.entry("com/example/hms/service/LabSpecimenServiceImpl.java", "existence check barring a specimen rejection (#975), no values"),
         Map.entry("com/example/hms/service/SuperAdminDashboardServiceImpl.java", "a count, no values"),
         Map.entry("com/example/hms/service/integration/impl/MllpInboundLabServiceImpl.java", "HL7 ingest"),
         Map.entry("com/example/hms/service/signature/SignableReportLocator.java", "owning hospital of a signature"),

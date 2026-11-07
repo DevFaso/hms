@@ -174,6 +174,26 @@ describe('OnCallComponent', () => {
     expect(onCallService.create).not.toHaveBeenCalled();
   });
 
+  it('QA D1306: a reversed shift marks the end field, not only a toast', () => {
+    setup(['ROLE_HOSPITAL_ADMIN'], []);
+    component.openCreate();
+    fixture.detectChanges();
+    component.form = {
+      staffId: 's-1',
+      departmentId: '',
+      startLocal: '2026-08-22T20:00',
+      endLocal: '2026-08-22T08:00',
+      notes: '',
+    };
+
+    component.submit();
+
+    const el: HTMLElement = fixture.nativeElement;
+    expect(el.querySelector('#oncall-end')?.getAttribute('aria-invalid')).toBe('true');
+    expect(el.querySelector('#oncall-start')?.hasAttribute('aria-invalid')).toBeFalse();
+    expect(onCallService.create).not.toHaveBeenCalled();
+  });
+
   it('sends ISO timestamps and omits departmentId for a hospital-wide entry', () => {
     setup(['ROLE_HOSPITAL_ADMIN'], []);
     onCallService.create.and.returnValue(of(entry({})));

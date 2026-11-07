@@ -216,8 +216,8 @@ public class InstrumentOutboxServiceImpl implements InstrumentOutboxService {
     public InstrumentOutboxResponseDTO retry(UUID id) {
         InstrumentOutbox message = loadScoped(id);
         if (message.getStatus() != InstrumentOutboxStatus.ERROR) {
-            throw new BusinessException(
-                "Only a message in ERROR can be retried; this one is " + message.getStatus() + ".");
+            // QA D1187 class (round 22): a key, in the reader's language.
+            throw new BusinessException("instrumentOutbox.retry.notInError");
         }
         // Reset the attempt counter rather than just flipping the status: the
         // sweep's findDispatchable requires attempts < maxAttempts, and a row
@@ -266,7 +266,7 @@ public class InstrumentOutboxServiceImpl implements InstrumentOutboxService {
         try {
             return InstrumentOutboxStatus.valueOf(status.trim().toUpperCase());
         } catch (IllegalArgumentException ex) {
-            throw new BusinessException("Unknown outbox status: " + status);
+            throw new BusinessException("instrumentOutbox.status.unknown", status);
         }
     }
 

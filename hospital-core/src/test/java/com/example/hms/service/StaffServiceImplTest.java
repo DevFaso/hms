@@ -323,38 +323,41 @@ class StaffServiceImplTest {
 
     @Test
     void createStaff_throwsWhenEmailBlank() {
+        // QA D1299 (round 28; assertion changed): the refusal names its field (FieldBusinessException, still 400).
         StaffRequestDTO dto = new StaffRequestDTO();
         dto.setUserEmail("");
         dto.setHospitalName("H");
         dto.setJobTitle("Doctor");
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Required");
+        // QA round 29 (stub removed): the required fields go through RequiredFields, not the service's messageSource.
 
         assertThatThrownBy(() -> staffService.createStaff(dto, locale))
-                .isInstanceOf(BusinessRuleException.class);
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
     }
 
     @Test
     void createStaff_throwsWhenHospitalNameBlank() {
+        // QA D1299 (round 28; assertion changed): the refusal names its field (FieldBusinessException, still 400).
         StaffRequestDTO dto = new StaffRequestDTO();
         dto.setUserEmail("user@test.com");
         dto.setHospitalName("");
         dto.setJobTitle("Doctor");
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Required");
+        // QA round 29 (stub removed): the required fields go through RequiredFields, not the service's messageSource.
 
         assertThatThrownBy(() -> staffService.createStaff(dto, locale))
-                .isInstanceOf(BusinessRuleException.class);
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
     }
 
     @Test
     void createStaff_throwsWhenJobTitleBlank() {
+        // QA D1299 (round 28; assertion changed): the refusal names its field (FieldBusinessException, still 400).
         StaffRequestDTO dto = new StaffRequestDTO();
         dto.setUserEmail("user@test.com");
         dto.setHospitalName("Hospital");
         dto.setJobTitle("");
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Required");
+        // QA round 29 (stub removed): the required fields go through RequiredFields, not the service's messageSource.
 
         assertThatThrownBy(() -> staffService.createStaff(dto, locale))
-                .isInstanceOf(BusinessRuleException.class);
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
     }
 
     @Test
@@ -621,10 +624,11 @@ class StaffServiceImplTest {
         when(assignmentRepository.findFirstByUserIdAndHospitalIdAndRoleId(any(), any(), any()))
             .thenReturn(Optional.of(assignment));
         when(staffRepository.existsByLicenseNumber("LIC-EXISTING")).thenReturn(true);
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Duplicate");
+        // QA round 29 (stub removed, assertion changed): a field refusal on licenseNumber.
 
         assertThatThrownBy(() -> staffService.createStaff(dto, locale))
-                .isInstanceOf(BusinessRuleException.class);
+                .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                    ex -> assertThat(ex.getField()).isEqualTo("licenseNumber"));
     }
 
     @Test
@@ -650,10 +654,11 @@ class StaffServiceImplTest {
         when(roleRepository.findByCode("ROLE_DOCTOR")).thenReturn(Optional.of(role));
         when(assignmentRepository.findFirstByUserIdAndHospitalIdAndRoleId(any(), any(), any()))
             .thenReturn(Optional.of(assignment));
-        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Required");
+        // QA round 29 (stub removed, assertion changed): a field refusal on licenseNumber.
 
         assertThatThrownBy(() -> staffService.createStaff(dto, locale))
-                .isInstanceOf(BusinessRuleException.class);
+                .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                    ex -> assertThat(ex.getField()).isEqualTo("licenseNumber"));
     }
 
     @Test
@@ -685,6 +690,7 @@ class StaffServiceImplTest {
 
     @Test
     void createStaff_nurseRole_validatesEmploymentType() {
+        // QA D1299 (round 28; assertion changed): the refusal names its field (FieldBusinessException, still 400).
         StaffRequestDTO dto = StaffRequestDTO.builder()
             .userEmail("doctor@test.com")
             .hospitalName("Test Hospital")
@@ -710,11 +716,12 @@ class StaffServiceImplTest {
         when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Required");
 
         assertThatThrownBy(() -> staffService.createStaff(dto, locale))
-                .isInstanceOf(BusinessRuleException.class);
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
     }
 
     @Test
     void createStaff_doctorRole_validatesSpecialization() {
+        // QA D1299 (round 28; assertion changed): the refusal names its field (FieldBusinessException, still 400).
         StaffRequestDTO dto = StaffRequestDTO.builder()
             .userEmail("doctor@test.com")
             .hospitalName("Test Hospital")
@@ -740,11 +747,12 @@ class StaffServiceImplTest {
         when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Required");
 
         assertThatThrownBy(() -> staffService.createStaff(dto, locale))
-                .isInstanceOf(BusinessRuleException.class);
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
     }
 
     @Test
     void createStaff_radiologistRole_validatesFields() {
+        // QA D1299 (round 28; assertion changed): the refusal names its field (FieldBusinessException, still 400).
         StaffRequestDTO dto = StaffRequestDTO.builder()
             .userEmail("doctor@test.com")
             .hospitalName("Test Hospital")
@@ -770,7 +778,7 @@ class StaffServiceImplTest {
         when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Required");
 
         assertThatThrownBy(() -> staffService.createStaff(dto, locale))
-                .isInstanceOf(BusinessRuleException.class);
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
     }
 
     @Test
@@ -971,6 +979,7 @@ class StaffServiceImplTest {
 
     @Test
     void radiologist_noSpecialization_throws() {
+        // QA D1299 (round 28; assertion changed): the refusal names its field (FieldBusinessException, still 400).
         StaffRequestDTO dto = StaffRequestDTO.builder()
             .userEmail("doctor@test.com")
             .hospitalName("Test Hospital")
@@ -997,7 +1006,7 @@ class StaffServiceImplTest {
         when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Required");
 
         assertThatThrownBy(() -> staffService.createStaff(dto, locale))
-                .isInstanceOf(BusinessRuleException.class);
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
     }
 
     // ── MVP 3: Lab Staff Management Tests ──────────────────────

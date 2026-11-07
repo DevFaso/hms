@@ -90,7 +90,7 @@ public class Hospital extends BaseEntity {
     @Size(max = 50)  @Column(length = 50)  private String poBox;
     @Size(max = 30)  @Column(length = 30)  private String phoneNumber;
 
-    @Email
+    @Email(message = "{validation.email.invalid}")
     @Size(max = 255)
     @Column(length = 255)
     private String email;

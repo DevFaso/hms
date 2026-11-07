@@ -218,14 +218,17 @@ public class DispenseController {
     @PostMapping("/{id}/cancel")
     @PreAuthorize("hasAnyRole('PHARMACIST', 'PHARMACY_VERIFIER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
     @Operation(summary = "Cancel dispense",
-            description = "Cancel a dispense and reverse stock changes")
+            description = "Cancel a dispense and reverse stock changes. QA D1069: a reason is required.")
     @ApiResponse(responseCode = "200", description = "Dispense cancelled and stock reversed")
     @ApiResponse(responseCode = "400", description = "Cannot cancel this dispense")
     @ApiResponse(responseCode = "404", description = "Dispense record not found")
     public ResponseEntity<ApiResponseWrapper<DispenseResponseDTO>> cancelDispense(
             @PathVariable UUID id,
-            @RequestBody(required = false) com.example.hms.payload.dto.pharmacy.DispenseCancelRequestDTO request) {
+            @jakarta.validation.Valid @RequestBody(required = false)
+            com.example.hms.payload.dto.pharmacy.DispenseCancelRequestDTO request) {
+        // QA D1069: an empty body is a cancel with no reason, which the service refuses in the reader's language.
         return ResponseEntity.ok(ApiResponseWrapper.success(
-                dispenseService.cancelDispense(id, request != null ? request.getWitnessedBy() : null)));
+                dispenseService.cancelDispense(id, request != null ? request.getWitnessedBy() : null,
+                        request != null ? request.getReason() : null)));
     }
 }

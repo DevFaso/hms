@@ -239,6 +239,23 @@ class PatientLabResultServiceImplTest {
         assertThat(row.getPerformedBy()).isNull();
     }
 
+    /** QA D1394: an analyser's N is no grade the patient may read as fine when the ranges could not grade it. */
+    @Test void portalView_aValueNoBoundSettled_isMarkedAndNeverNormal() {
+        LabResult lr = unreleasedGlucoseWithEverything();
+        lr.setReleased(true);
+        lr.setResultValue(">1");
+        lr.setAbnormalFlag(com.example.hms.enums.AbnormalFlag.NORMAL);
+        LabResultResponseDTO mapped = new LabResultResponseDTO();
+        mapped.setSeverityFlag("UNSPECIFIED");
+        mapped.setGradeUnknown(true);
+        when(labResultMapper.toResponseDTO(lr)).thenReturn(mapped);
+        givenTheOnlyRowIs(lr);
+
+        PatientLabResultResponseDTO row = service.getLabResultsForPatientPortal(patientId, hospitalId, 10).get(0);
+        assertThat(row.isGradeUnknown()).isTrue();
+        assertThat(row.getStatus()).isEqualTo("UNKNOWN");
+    }
+
     /** B3 — the same row, once released, reaches the patient whole. */
     @Test void portalView_releasedRow_carriesTheValue() {
         LabResult lr = unreleasedGlucoseWithEverything();
@@ -351,6 +368,79 @@ class PatientLabResultServiceImplTest {
                 + "never a hundred-row page on every call, and never a fixed +1 that a second "
                 + "pair on the page would defeat")
             .containsExactly(2, 100);
+    }
+
+    /* ── QA D1213 (round 23): filter before limit, and paging for the portal ── */
+
+    /**
+     * The QA's A2: 21 released results, two of them corrected away (each
+     * superseded by a later row), so 19 are current. Newest first, each on its
+     * own order; the corrected rows sit inside the first twenty.
+     */
+    private List<LabResult> a2Results() {
+        List<LabResult> rows = new java.util.ArrayList<>();
+        LocalDateTime t = LocalDateTime.of(2026, 11, 1, 18, 0);
+        for (int i = 0; i < 21; i++) {
+            LabResult r = buildLabResult(String.valueOf(i), "mmol/L", true, false);
+            r.setResultDate(t.minusHours(i));
+            LabOrder order = new LabOrder();
+            order.setId(UUID.randomUUID());
+            order.setLabTestDefinition(new LabTestDefinition());
+            r.setLabOrder(order);
+            r.setTestCode("T" + i);
+            rows.add(r);
+        }
+        rows.get(3).setSupersededByResultId(rows.get(2).getId());
+        rows.get(10).setSupersededByResultId(rows.get(9).getId());
+        lenient().when(labResultMapper.toResponseDTO(any(LabResult.class))).thenAnswer(inv -> {
+            LabResult r = inv.getArgument(0);
+            LabResultResponseDTO dto = new LabResultResponseDTO();
+            dto.setId(r.getId().toString());
+            return dto;
+        });
+        when(patientChartAccess.requireOwnRecord(patientId)).thenReturn(patient);
+        List<LabResult> all = List.copyOf(rows);
+        when(labResultRepository.findAllPatientResults(eq(patientId), any(Pageable.class))).thenAnswer(inv -> {
+            Pageable requested = inv.getArgument(1);
+            return all.subList(0, Math.min(requested.getPageSize(), all.size()));
+        });
+        return all;
+    }
+
+    @Test void d1213_theListFiltersBeforeItLimits() {
+        a2Results();
+
+        List<PatientLabResultResponseDTO> shown = service.getLabResultsForPatientPortal(patientId, null, 20);
+
+        assertThat(shown).as("all 19 current results within a limit of 20, not 17").hasSize(19);
+    }
+
+    @Test void d1213_pagesReachEveryCurrentResultOnceInOrder() {
+        List<LabResult> all = a2Results();
+
+        // The portal's contract: offset/limit, asking limit + 1 to see "more".
+        List<PatientLabResultResponseDTO> first = service.getLabResultsForPatientPortal(patientId, 0, 11);
+        List<PatientLabResultResponseDTO> second = service.getLabResultsForPatientPortal(patientId, 10, 11);
+
+        assertThat(first).as("10 shown + 1 that says there is more").hasSize(11);
+        assertThat(second).as("the last 9, nothing more").hasSize(9);
+        List<UUID> served = new java.util.ArrayList<>();
+        first.subList(0, 10).forEach(r -> served.add(r.getId()));
+        second.forEach(r -> served.add(r.getId()));
+        List<UUID> expected = all.stream().filter(r -> r.getSupersededByResultId() == null)
+            .map(LabResult::getId).toList();
+        assertThat(served).as("every current result, once, newest first").containsExactlyElementsOf(expected);
+        assertThat(service.getLabResultsForPatientPortal(patientId, 50, 10)).isEmpty();
+    }
+
+    /** QA D1362 (round 31): the portal's total counts the current results, every one, not a window. */
+    @Test void d1362_theTotalCountsEveryCurrentResult() {
+        a2Results();
+
+        assertThat(service.countLabResultsForPatientPortal(patientId))
+            .as("21 rows, two corrected away: 19 current, the rows the paged list reaches")
+            .isEqualTo(19);
+        verify(patientChartAccess).requireOwnRecord(patientId);
     }
 
     /** The staff record is the record: both rows stay, each labelled. */

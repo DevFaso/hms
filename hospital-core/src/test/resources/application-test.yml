@@ -118,3 +118,11 @@ app:
       hec:
         url: ""
         token: ""
+
+# QA D1121 (round 20): a CDS or BPA rule that throws fails the test that
+# reached it, instead of the engine logging and dropping the card (the
+# production default keeps the chart loading and logs at ERROR).
+hms:
+  cds:
+    rules:
+      fail-fast: true
