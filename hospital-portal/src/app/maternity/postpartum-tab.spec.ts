@@ -3,6 +3,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, Subject, throwError } from 'rxjs';
 
 import { PostpartumTabComponent } from './postpartum-tab';
+import { expectFieldsMarked, fieldErrorsResponse } from '../testing/form-refusal-behaviour';
 import {
   NewbornAssessmentResponse,
   PostpartumObservationResponse,
@@ -197,6 +198,125 @@ describe('PostpartumTabComponent — screening', () => {
     cmp.assessmentForm.apgarOneMinute = 8;
     cmp.submitAssessment();
     expect(postpartumSpy.createNewbornAssessment).toHaveBeenCalled();
+  });
+
+  it('QA D1424: the newborn form refuses only what cannot exist; a high value saves, and asks to remeasure', () => {
+    const fixture = TestBed.createComponent(PostpartumTabComponent);
+    const cmp = fixture.componentInstance;
+    cmp.onPatientPicked({ id: 'p1' } as PatientResponse);
+    cmp.openAssessment();
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    for (const [field, value, id] of [
+      ['heartRateBpm', -1, '#nb-hr'],
+      ['respirationsPerMin', -1, '#nb-resp'],
+      ['oxygenSaturationPercent', 150, '#nb-spo2'],
+      ['oxygenSaturationPercent', -1, '#nb-spo2'],
+    ] as const) {
+      cmp.assessmentForm = { apgarOneMinute: 8, [field]: value };
+      cmp.submitAssessment();
+      expect(postpartumSpy.createNewbornAssessment).withContext(field).not.toHaveBeenCalled();
+      expect(host.querySelector(id)?.getAttribute('aria-invalid')).withContext(id).toBe('true');
+    }
+    postpartumSpy.createNewbornAssessment.and.returnValue(of({ alerts: [] }) as never);
+    cmp.assessmentForm = { heartRateBpm: 1000, respirationsPerMin: 200, temperatureCelsius: 44.1 };
+    expect(cmp.newbornValueToCheck('heartRateBpm')).toBeTrue();
+    expect(cmp.newbornValueToCheck('respiratoryRateBpm')).toBeTrue();
+    expect(cmp.newbornValueToCheck('temperatureCelsius')).toBeTrue();
+    fixture.componentRef.changeDetectorRef.markForCheck();
+    fixture.detectChanges();
+    expect(host.querySelector('[data-testid="nb-hr-check"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="nb-resp-check"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="nb-temp-check"]')).not.toBeNull();
+    cmp.submitAssessment();
+    expect(postpartumSpy.createNewbornAssessment).toHaveBeenCalledTimes(1);
+    cmp.openAssessment();
+    cmp.assessmentForm = { heartRateBpm: 300, respirationsPerMin: 80, temperatureCelsius: 44 };
+    expect(cmp.newbornValueToCheck('heartRateBpm')).toBeFalse();
+    expect(cmp.newbornValueToCheck('respiratoryRateBpm')).toBeFalse();
+    expect(cmp.newbornValueToCheck('temperatureCelsius')).toBeFalse();
+  });
+
+  it('QA D1424: a glucose with no unit is refused on the unit field; with its unit it is sent as entered', () => {
+    const fixture = TestBed.createComponent(PostpartumTabComponent);
+    const cmp = fixture.componentInstance;
+    cmp.onPatientPicked({ id: 'p1' } as PatientResponse);
+    cmp.openAssessment();
+    fixture.detectChanges();
+    cmp.assessmentForm = { glucoseValue: 5.6 };
+    cmp.submitAssessment();
+    expect(postpartumSpy.createNewbornAssessment).not.toHaveBeenCalled();
+    expect(
+      (fixture.nativeElement as HTMLElement)
+        .querySelector('#nb-glucose-unit')
+        ?.getAttribute('aria-invalid'),
+    ).toBe('true');
+    postpartumSpy.createNewbornAssessment.and.returnValue(of({ alerts: [] }) as never);
+    cmp.assessmentForm = { glucoseValue: 5.6, glucoseUnit: 'MMOL_L' };
+    cmp.submitAssessment();
+    const body = postpartumSpy.createNewbornAssessment.calls.mostRecent().args[1];
+    expect(body.glucoseValue).toBe(5.6);
+    expect(body.glucoseUnit).toBe('MMOL_L');
+    expect(cmp.newbornValueToCheck('glucose')).toBeFalse();
+    cmp.assessmentForm = { glucoseValue: 50, glucoseUnit: 'MMOL_L' };
+    expect(cmp.newbornValueToCheck('glucose')).toBeTrue();
+    cmp.assessmentForm = { glucoseValue: 50, glucoseUnit: 'MG_DL' };
+    expect(cmp.newbornValueToCheck('glucose')).toBeFalse();
+  });
+
+  it('QA D1424: the chart reads a request to remeasure and a range notice as sentences', () => {
+    const cmp = TestBed.createComponent(PostpartumTabComponent).componentInstance;
+    const read = cmp.newbornAlertsToRead({
+      alerts: [
+        { code: 'newborn-check-heart-rate', severity: 'CAUTION', message: 'a' },
+        { code: 'newborn-reference-heart-rate', severity: 'INFO', message: 'b' },
+        { code: 'newborn-heart-rate', severity: 'URGENT', message: 'c' },
+      ],
+    } as never);
+    expect(read.map((alert) => alert.message)).toEqual(['a', 'b']);
+  });
+
+  it('QA D1424: a post-partum 70/120 is refused on the diastolic', () => {
+    const fixture = TestBed.createComponent(PostpartumTabComponent);
+    const cmp = fixture.componentInstance;
+    cmp.onPatientPicked({ id: 'p1' } as PatientResponse);
+    cmp.openObservation();
+    fixture.detectChanges();
+    cmp.observationForm.systolicBpMmHg = 70;
+    cmp.observationForm.diastolicBpMmHg = 120;
+    cmp.submitObservation();
+    expect(postpartumSpy.createObservation).not.toHaveBeenCalled();
+    expect(
+      (fixture.nativeElement as HTMLElement)
+        .querySelector('#obs-dia')
+        ?.getAttribute('aria-invalid'),
+    ).toBe('true');
+  });
+
+  it('QA D1446: the server refusing the time marks the time field on both forms', () => {
+    const refusal = (field: string) =>
+      throwError(() =>
+        fieldErrorsResponse({ [field]: 'Cette heure ne peut pas être dans le futur.' }),
+      );
+    postpartumSpy.createObservation.and.returnValue(refusal('observationTime') as never);
+    postpartumSpy.createNewbornAssessment.and.returnValue(refusal('assessmentTime') as never);
+    const fixture = TestBed.createComponent(PostpartumTabComponent);
+    const cmp = fixture.componentInstance;
+    cmp.onPatientPicked({ id: 'p1' } as PatientResponse);
+    cmp.openObservation();
+    fixture.detectChanges();
+    cmp.observationForm.temperatureCelsius = 37;
+    cmp.submitObservation();
+    fixture.detectChanges();
+    expectFieldsMarked(fixture, { 'obs-time': 'Cette heure ne peut pas être dans le futur.' });
+    cmp.closeObservation();
+
+    cmp.openAssessment();
+    fixture.detectChanges();
+    cmp.assessmentForm.apgarOneMinute = 8;
+    cmp.submitAssessment();
+    fixture.detectChanges();
+    expectFieldsMarked(fixture, { 'nb-time': 'Cette heure ne peut pas être dans le futur.' });
   });
 
   it('picking a patient loads the screening history for the plan instrument', () => {

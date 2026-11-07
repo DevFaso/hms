@@ -556,8 +556,9 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
     }
 
     /**
-     * Alert text in the staff locale (QA D226), like the labor alerts: the alert is
-     * stored and read by staff, so it is never composed in English in code.
+     * Alert text in the staff locale (QA D226), like the labor alerts: never
+     * composed in English in code. QA D1427: this is the stored copy; a reader of
+     * the alert gets the sentence in her own language from the mapper.
      */
     private String alertText(String code) {
         return messageSource.getMessage(ALERT_MSG_PREFIX + code, null, NotificationLocales.STAFF);

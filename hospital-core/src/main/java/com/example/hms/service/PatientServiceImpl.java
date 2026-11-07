@@ -2521,6 +2521,8 @@ public class PatientServiceImpl implements PatientService {
                 putIfNotNull(metadata, "severity", allergy.getSeverity());
                 putIfNotNull(metadata, "reaction", allergy.getReaction());
                 putIfNotNull(metadata, "verificationStatus", allergy.getVerificationStatus());
+                // QA D1423: the timeline is history, so a deactivated allergy stays, marked.
+                metadata.put("active", allergy.isActive());
                 LocalDateTime occurredAt = toDateTime(Optional.ofNullable(allergy.getLastOccurrenceDate())
                     .orElse(Optional.ofNullable(allergy.getRecordedDate()).orElse(allergy.getOnsetDate())));
                 return PatientTimelineEntryDTO.builder()
@@ -2662,8 +2664,10 @@ public class PatientServiceImpl implements PatientService {
         Set<String> sensitiveSections
     ) {
         List<PatientAllergy> allergies = allergiesVisibleAt(patientId, hospitalId);
+        // QA D1448: the active allergies first, whatever the severity of a deactivated row.
         Comparator<PatientAllergy> comparator = Comparator
-            .comparing((PatientAllergy allergy) -> severityOrder(allergy.getSeverity()))
+            .comparing((PatientAllergy allergy) -> !allergy.isActive())
+            .thenComparing(allergy -> severityOrder(allergy.getSeverity()))
             .thenComparing(PatientAllergy::getOnsetDate, Comparator.nullsLast(Comparator.reverseOrder()))
             .thenComparing(PatientAllergy::getUpdatedAt, Comparator.nullsLast(Comparator.reverseOrder()));
         boolean sectionSensitive = allergies.stream().anyMatch(this::isSensitiveAllergy);

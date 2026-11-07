@@ -317,7 +317,9 @@ class WriteEndpointRequiredFieldSweepIT extends BaseIT {
         // only for a non-cash method (the sample method is not CASH)
         Map.entry("POST /me/patient/billing/invoices/{invoiceId}/pay", Set.of("transactionReference")),
         // only for an active DNR / POLST (the sample type and status are the first constants)
-        Map.entry("POST /advance-directives/patient/{patientId}", Set.of("physicianName", "effectiveDate"))
+        Map.entry("POST /advance-directives/patient/{patientId}", Set.of("physicianName", "effectiveDate")),
+        // only when the chosen time is not a published free slot (QA D1429, round 34)
+        Map.entry("POST /appointments", Set.of("overbookReason"))
     );
 
     private final AtomicInteger sequence = new AtomicInteger();

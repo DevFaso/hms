@@ -997,3 +997,15 @@ Rounds 27, 28 and 29 each found 20–30 new siblings of the required-field class
 | `architecture/AdultParacetamolGuardTest` (new) | A path building a CDS rule context outside `CdsRuleEngine`, which would reach the rules without the paracetamol facts; the adult rule turning into a stop or a review by a side effect; a second reading of the adult age | none |
 | `cdshooks/rules/AdultParacetamolRuleTest`, `ParacetamolFactsReaderTest` (new) | Every boundary of the single dose, daily ceiling, interval and each lower group; which orders and which problem rows count | none |
 | `controller/PrescriptionEditAndWithdrawalIT#adultParacetamol*` (new) | The alerts over the real create endpoint with real rows, and the reader from a CDS hook with no session (LAZY encounter, QA D1121) | none |
+
+
+## Guards added or widened by round 34 (fix/r34-maternity-records)
+
+| Guard | Catches | Baseline |
+|---|---|---|
+| `architecture/AllergyActiveReadersGuardTest` (new) | A class that reads the allergy rows and is not listed with what a deactivated row does there (active only, or history with a mark); a listed reader that lost its filter; the snapshot's problem, diagnosis and medication filters, the storyboard's directive filter | 12 readers, each with its reason |
+| `validation/BloodPressurePairGuardTest` (new) | A request payload with a systolic and a diastolic without `isBloodPressureOrdered` (`VitalSignLimits.bloodPressureOrdered`, `@ReportedOn`) or without both pressures bounded inside `VitalSignLimits` (the newborn form refuses only a negative pressure; `NewbornAlertRules` warns instead); the scan reads every class under `payload` | none (read-only `*Response*` payloads placed by name) |
+| `i18n/StoredAlertReaderLanguageGuardTest` (new) | A mapper handing a stored alert sentence to the reader; a class writing `NotificationLocales.STAFF` text that is not listed with who reads it; a labour alert code of the bundle that cannot be rendered again from its row in EN, FR and ES | 17 classes, each with its reason |
+| `scripts/lib/maternity-date-server-marks.test.mjs` (new) | A date or time input of the maternity screens that the server's `fieldErrors` key cannot reach (no `data-server-field`, no field map) | none |
+| `service/maternity/NewbornAlertRulesTest` (new) | Every sourced newborn number at and either side of its boundary, in both glucose units: a threshold moved, a rule dropped, an older stricter urgent alert lost. Each rule was moved by one step and the test failed | none |
+| `validation/ClinicalTimestampFutureValidationTest#d1449_*` | A date-only field refused with the wording about a time of day | none |

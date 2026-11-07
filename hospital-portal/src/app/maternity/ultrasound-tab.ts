@@ -48,6 +48,8 @@ export type UltrasoundReportForm = Omit<UltrasoundReportRequest, 'findingCategor
 
 /** The fields the report form may refuse. */
 const REPORT_FIELD_IDS = ['rep-date', 'rep-category', 'rep-summary'];
+/** QA D1447: the order form's fields checked before sending. */
+const ORDER_CHECKED_IDS = ['us-date', 'us-scan-count'];
 
 /** The measured or written findings of a report: at least one is required (QA D1150). */
 const FINDING_FIELDS: readonly (keyof UltrasoundReportRequest)[] = [
@@ -293,13 +295,52 @@ export class UltrasoundTabComponent implements OnInit {
   }
 
   openCreateOrder(): void {
+    this.editedOrder = null;
     this.orderForm = this.emptyOrderForm();
     this.editingOrderId.set(null);
     this.orderPatient.set(null);
     this.showOrderModal.set(true);
   }
 
+  /** QA D1447: the stored order an edit echoes; a value it does not change is not judged. */
+  private editedOrder: UltrasoundOrderResponse | null = null;
+
+  /**
+   * QA D1447: an appointment is not booked in the past. An order whose date has
+   * passed keeps it when edited on its other fields, so the date stays selectable.
+   */
+  orderDateMin(): string {
+    const today = localDateString();
+    const stored = this.editedOrder?.scheduledDate;
+    return stored && stored < today ? stored : today;
+  }
+
+  /** QA D1447: the field to refuse before sending, as the server would. */
+  private orderProblem(): { id: string; messageKey: string } | null {
+    const { scheduledDate, scanCountForPregnancy } = this.orderForm;
+    const stored = this.editedOrder;
+    if (
+      scheduledDate &&
+      scheduledDate !== stored?.scheduledDate &&
+      scheduledDate < localDateString()
+    ) {
+      return { id: 'us-date', messageKey: 'ULTRASOUND.SCHEDULED_DATE_PAST' };
+    }
+    const count = scanCountForPregnancy as number | string | null | undefined;
+    if (
+      count !== null &&
+      count !== undefined &&
+      count !== '' &&
+      Number(count) < 1 &&
+      Number(count) !== stored?.scanCountForPregnancy
+    ) {
+      return { id: 'us-scan-count', messageKey: 'ULTRASOUND.SCAN_COUNT_INVALID' };
+    }
+    return null;
+  }
+
   openEditOrder(order: UltrasoundOrderResponse): void {
+    this.editedOrder = order;
     this.orderForm = {
       patientId: order.patientId,
       hospitalId: order.hospitalId,
@@ -352,6 +393,14 @@ export class UltrasoundTabComponent implements OnInit {
       }
       return;
     }
+    const problem = this.orderProblem();
+    if (problem) {
+      const message = this.translate.instant(problem.messageKey);
+      refuseFields(this.host.nativeElement, [problem.id], ORDER_CHECKED_IDS, message);
+      this.toast.error(message);
+      return;
+    }
+    refuseFields(this.host.nativeElement, [], ORDER_CHECKED_IDS, '');
     this.orderForm.hospitalId = this.hospitalId;
     this.orderSaving.set(true);
     const editingId = this.editingOrderId();

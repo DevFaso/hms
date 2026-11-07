@@ -245,10 +245,6 @@
       "count": 1,
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only (key re-pinned by D1358: the toast now names the blank fields; the fallback key is what the scan reads)"
     },
-    "src/app/patients/medical-history-tab/medical-history-tab.component.ts::unmarked-refusal::submitImmunization::COMMON.SUBMIT_BLOCKED_REQUIRED": {
-      "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only (key re-pinned by D1358: the toast now names the blank fields; the fallback key is what the scan reads)"
-    },
     "src/app/patients/patient-chart/patient-chart.component.ts::unmarked-refusal::submitAllergy::CHART.ALLERGEN_REQUIRED": {
       "count": 1,
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"

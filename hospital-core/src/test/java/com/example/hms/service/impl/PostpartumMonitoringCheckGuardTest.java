@@ -49,6 +49,7 @@ class PostpartumMonitoringCheckGuardTest {
 
     /** References, times of record and sign-off: not findings at all. */
     private static final Set<String> METADATA = Set.of(
+        "bloodPressureOrdered",
         "class", "carePlanId", "hospitalId", "registrationId", "recordedByStaffId", "supersedesObservationId",
         "observationTime", "deliveryOccurredAt", "lateEntry", "originalEntryTime", "signoffName",
         "signoffCredentials", "signedAt");

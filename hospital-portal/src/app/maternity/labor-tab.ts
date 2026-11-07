@@ -30,6 +30,7 @@ import { ToastService } from '../core/toast.service';
 import { labelledRefusalReason, refusedFieldReasons } from '../shared/refusal-reason';
 import { FieldLimit, firstOutOfRange, labelKeysOf, rangeMessage } from '../shared/field-limits';
 import { MeasurePipe } from '../shared/pipes/measure.pipe';
+import { bloodPressureReversed } from '../shared/vital-sign-limits';
 import { PartographChartComponent } from './partograph-chart.component';
 
 /**
@@ -55,9 +56,10 @@ export const PARTOGRAPH_LIMITS: readonly FieldLimit[] = [
   { field: 'contractionsPerTenMinutes', labelKey: 'LABOR.CONTRACTIONS_TEN', min: 0, max: 10 },
   { field: 'contractionDurationSeconds', labelKey: 'LABOR.CONTRACTION_SECONDS', min: 0, max: 600 },
   { field: 'oxytocinDropsPerMinute', labelKey: 'LABOR.OXYTOCIN_DROPS', min: 0, max: 120 },
-  { field: 'pulseBpm', labelKey: 'LABOR.PULSE', min: 0, max: 300 },
-  { field: 'systolicBpMmHg', labelKey: 'LABOR.SYSTOLIC', min: 0, max: 350 },
-  { field: 'diastolicBpMmHg', labelKey: 'LABOR.DIASTOLIC', min: 0, max: 250 },
+  // QA D1424: VitalSignLimits, as on every other vitals form.
+  { field: 'pulseBpm', labelKey: 'LABOR.PULSE', min: 20, max: 300 },
+  { field: 'systolicBpMmHg', labelKey: 'LABOR.SYSTOLIC', min: 40, max: 300 },
+  { field: 'diastolicBpMmHg', labelKey: 'LABOR.DIASTOLIC', min: 20, max: 200 },
   { field: 'temperatureCelsius', labelKey: 'LABOR.TEMPERATURE', min: 25, max: 44 },
   { field: 'urineOutputMl', labelKey: 'LABOR.URINE_ML', min: 0 },
 ];
@@ -116,6 +118,11 @@ const PARTOGRAPH_FIELD_IDS: Readonly<Record<string, string>> = {
   temperatureCelsius: 'pe-temp',
   urineOutputMl: 'pe-urine',
 };
+/** QA D1446: the template id of each field the server may name under a partograph refusal. */
+const PARTOGRAPH_SERVER_FIELD_IDS: Readonly<Record<string, string>> = {
+  ...PARTOGRAPH_FIELD_IDS,
+  observationTime: 'pe-time',
+};
 const DELIVERY_MODE_ID = 'dl-mode';
 const DELIVERY_BIRTH_TIME_ID = 'dl-time';
 const DELIVERY_PLACENTA_TIME_ID = 'dl-placenta-time';
@@ -144,7 +151,7 @@ const DELIVERY_SERVER_FIELD_IDS: Readonly<Record<string, string>> = {
   birthDateTime: DELIVERY_BIRTH_TIME_ID,
   placentaDeliveredAt: DELIVERY_PLACENTA_TIME_ID,
 };
-const PARTOGRAPH_IDS = Object.values(PARTOGRAPH_FIELD_IDS);
+const PARTOGRAPH_IDS = Object.values(PARTOGRAPH_SERVER_FIELD_IDS);
 const DELIVERY_IDS = [
   DELIVERY_BIRTH_TIME_ID,
   DELIVERY_MODE_ID,
@@ -394,6 +401,18 @@ export class LaborTabComponent {
       this.toast.error(message);
       return;
     }
+    if (bloodPressureReversed(form.systolicBpMmHg, form.diastolicBpMmHg)) {
+      // QA D1424: 70/120 is a swapped entry; it never reaches the hypertension alert.
+      const message = this.translate.instant('VITAL_LIMITS.BP_ORDER');
+      refuseFields(
+        this.host.nativeElement,
+        [PARTOGRAPH_FIELD_IDS['diastolicBpMmHg']],
+        PARTOGRAPH_IDS,
+        message,
+      );
+      this.toast.error(message);
+      return;
+    }
     refuseFields(this.host.nativeElement, [], PARTOGRAPH_IDS, '');
     this.saving.set(true);
     this.laborService
@@ -414,6 +433,8 @@ export class LaborTabComponent {
           this.loadEpisodes(patient.id);
         },
         error: (err: unknown) => {
+          // QA D1446: the fields the refusal names are marked, as on the delivery form.
+          this.markServerRefusals(err, PARTOGRAPH_SERVER_FIELD_IDS, PARTOGRAPH_IDS);
           this.toast.error(
             labelledRefusalReason(err, this.translate, PARTOGRAPH_LABELS) ??
               this.translate.instant('LABOR.ENTRY_SAVE_ERROR'),

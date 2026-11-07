@@ -42,6 +42,7 @@ import java.util.Set;
 import com.example.hms.security.context.HospitalContextHolder;
 import org.springframework.context.MessageSource;
 import com.example.hms.service.i18n.NotificationLocales;
+import com.example.hms.service.maternity.NewbornAlertRules;
 
 @Service
 @RequiredArgsConstructor
@@ -54,16 +55,6 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
     private static final String HOSPITAL_NOT_FOUND = "hospital.notFound";
 
     private static final int LOW_APGAR_THRESHOLD = 7;
-    private static final double LOW_TEMP_THRESHOLD = 36.5;
-    private static final double HIGH_TEMP_THRESHOLD = 37.5;
-    private static final double CRITICAL_LOW_TEMP = 36.0;
-    private static final double CRITICAL_HIGH_TEMP = 38.0;
-    private static final int HEART_RATE_LOW = 100;
-    private static final int HEART_RATE_HIGH = 180;
-    private static final int RESP_RATE_LOW = 30;
-    private static final int RESP_RATE_HIGH = 70;
-    private static final int OXYGEN_CRITICAL = 90;
-    private static final int GLUCOSE_CRITICAL = 45;
     private static final int DEFAULT_RECENT_LIMIT = 10;
     private static final int MAX_RECENT_LIMIT = 50;
     private static final int DEFAULT_PAGE_SIZE = 20;
@@ -96,10 +87,19 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
             request.getApgarOneMinute(), request.getApgarFiveMinute(), request.getApgarTenMinute(),
             request.getApgarNotes(), request.getTemperatureCelsius(), request.getHeartRateBpm(),
             request.getRespirationsPerMin(), request.getSystolicBpMmHg(), request.getDiastolicBpMmHg(),
-            request.getOxygenSaturationPercent(), request.getGlucoseMgDl(), request.getExamGeneralAppearance(),
+            request.getOxygenSaturationPercent(), request.getGlucoseMgDl(), request.getGlucoseValue(),
+            request.getExamGeneralAppearance(),
             request.getExamHeadNeck(), request.getExamChestLungs(), request.getExamCardiac(),
             request.getExamAbdomen(), request.getExamGenitourinary(), request.getExamSkin(),
             request.getExamNeurological(), request.getExamMusculoskeletal(), request.getExamNotes());
+    }
+
+    /** The whole mg/dL the column stores: the value as entered in its unit, else the mg/dL field. */
+    private static Integer glucoseMgDlOf(NewbornAssessmentRequestDTO request) {
+        if (request.getGlucoseValue() == null || request.getGlucoseUnit() == null) {
+            return request.getGlucoseMgDl();
+        }
+        return request.getGlucoseUnit().toMgDl(request.getGlucoseValue());
     }
 
     @Override
@@ -140,7 +140,7 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
         assessment.setDeliveryRecord(deliveryRecord);
         requireNotBeforeBirth(assessment.getAssessmentTime(), deliveryRecord,
             recordedOnNewbornChart ? patient : null);
-        evaluateAssessment(assessment);
+        evaluateAssessment(assessment, request, recordedOnNewbornChart);
 
         NewbornAssessment saved = assessmentRepository.save(assessment);
         publishAlerts(saved, documentedBy);
@@ -245,7 +245,7 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
             .systolicBpMmHg(request.getSystolicBpMmHg())
             .diastolicBpMmHg(request.getDiastolicBpMmHg())
             .oxygenSaturationPercent(request.getOxygenSaturationPercent())
-            .glucoseMgDl(request.getGlucoseMgDl())
+            .glucoseMgDl(glucoseMgDlOf(request))
             .examGeneralAppearance(request.getExamGeneralAppearance())
             .examHeadNeck(request.getExamHeadNeck())
             .examChestLungs(request.getExamChestLungs())
@@ -273,19 +273,74 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
         return assessment;
     }
 
-    private void evaluateAssessment(NewbornAssessment assessment) {
+    private void evaluateAssessment(NewbornAssessment assessment, NewbornAssessmentRequestDTO request, boolean ownChart) {
         List<NewbornAssessmentAlert> alerts = new ArrayList<>();
-        boolean urgentDetected = false;
-
-        urgentDetected |= evaluateApgar(assessment, alerts);
-        urgentDetected |= evaluateTemperature(assessment, alerts);
-        urgentDetected |= evaluateCardiorespiratory(assessment, alerts);
-        urgentDetected |= evaluateOxygenation(assessment, alerts);
-        urgentDetected |= evaluateGlucose(assessment, alerts);
-
+        boolean urgentDetected = evaluateApgar(assessment, alerts);
+        for (NewbornAlertRules.Finding finding : NewbornAlertRules.evaluate(readingOf(assessment, request, ownChart))) {
+            alerts.add(buildAlert(finding.type(), finding.severity(), finding.code(), alertText(finding.code()),
+                finding.code()));
+            if (finding.followUp() != null) {
+                assessment.addFollowUpAction(finding.followUp());
+            }
+            if (finding.startsSupport()) {
+                markSupportStarted(assessment, finding.type());
+            }
+            urgentDetected |= finding.severity() == NewbornAlertSeverity.URGENT;
+        }
         alerts.forEach(assessment::addAlert);
         if (urgentDetected) {
             assessment.markEscalationRecommended();
+        }
+    }
+
+    private NewbornAlertRules.Reading readingOf(NewbornAssessment assessment, NewbornAssessmentRequestDTO request, boolean ownChart) {
+        com.example.hms.enums.GlucoseUnit unit = request.getGlucoseUnit();
+        com.example.hms.model.labor.DeliveryRecord delivery = assessment.getDeliveryRecord();
+        Integer weeks = delivery == null ? null : delivery.getGestationalAgeWeeksAtBirth();
+        return new NewbornAlertRules.Reading(assessment.getTemperatureCelsius(), assessment.getHeartRateBpm(),
+            assessment.getRespirationsPerMin(), assessment.getOxygenSaturationPercent(), assessment.getGlucoseMgDl(),
+            unit == com.example.hms.enums.GlucoseUnit.MMOL_L ? request.getGlucoseValue() : null,
+            assessment.getSystolicBpMmHg(), assessment.getDiastolicBpMmHg(),
+            NewbornAlertRules.hoursSinceBirth(delivery == null ? null : delivery.getBirthDateTime(),
+                ownChart && assessment.getPatient() != null ? assessment.getPatient().getDateOfBirth() : null,
+                assessment.getAssessmentTime()),
+            weeks != null && weeks < NewbornAlertRules.PRETERM_BELOW_WEEKS,
+            previousHeartRateOfConcern(assessment, ownChart),
+            unit == com.example.hms.enums.GlucoseUnit.MG_DL ? request.getGlucoseValue() : null);
+    }
+
+    /**
+     * Whether the last heart rate recorded for this same baby was also of concern. On the
+     * mother's chart that is known only for a singleton's delivery: a twin's reading, or a
+     * previous baby's, says nothing about this one, so the alert then only asks for a recheck.
+     */
+    private boolean previousHeartRateOfConcern(NewbornAssessment assessment, boolean ownChart) {
+        if (!NewbornAlertRules.heartRateOfConcern(assessment.getHeartRateBpm()) || assessment.getPatient() == null) {
+            return false;
+        }
+        com.example.hms.model.labor.DeliveryRecord delivery = assessment.getDeliveryRecord();
+        if (!ownChart && (delivery == null || delivery.getNumberOfInfants() != 1)) {
+            return false;
+        }
+        if (assessment.getHospital() == null || assessment.getAssessmentTime() == null) {
+            return false;
+        }
+        return assessmentRepository
+            .findFirstByPatient_IdAndHospital_IdAndHeartRateBpmIsNotNullAndAssessmentTimeLessThanEqualOrderByAssessmentTimeDesc(
+                assessment.getPatient().getId(), assessment.getHospital().getId(), assessment.getAssessmentTime())
+            .filter(previous -> ownChart || (previous.getDeliveryRecord() != null
+                && Objects.equals(previous.getDeliveryRecord().getId(), delivery.getId())))
+            .filter(previous -> NewbornAlertRules.heartRateOfConcern(previous.getHeartRateBpm()))
+            .isPresent();
+    }
+
+    /** The record says support started in the bands where it always has. */
+    private static void markSupportStarted(NewbornAssessment assessment, NewbornAlertType type) {
+        switch (type) {
+            case THERMOREGULATION -> assessment.setThermoregulationSupportInitiated(true);
+            case RESPIRATORY -> assessment.setRespiratorySupportInitiated(true);
+            case GLUCOSE -> assessment.setGlucoseProtocolInitiated(true);
+            default -> { /* no support flag for the other types */ }
         }
     }
 
@@ -313,87 +368,6 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
                 "Apgar 10 minute"));
         }
         return urgent;
-    }
-
-    private boolean evaluateTemperature(NewbornAssessment assessment, List<NewbornAssessmentAlert> alerts) {
-        Double temperature = assessment.getTemperatureCelsius();
-        if (temperature == null) {
-            return false;
-        }
-        if (temperature < CRITICAL_LOW_TEMP || temperature > CRITICAL_HIGH_TEMP) {
-            alerts.add(buildAlert(NewbornAlertType.THERMOREGULATION, NewbornAlertSeverity.URGENT,
-                "newborn-temperature-critical", alertText("newborn-temperature-critical"),
-                "Temperature"));
-            assessment.addFollowUpAction(NewbornFollowUpAction.THERMAL_SUPPORT);
-            if (!assessment.isThermoregulationSupportInitiated()) {
-                assessment.setThermoregulationSupportInitiated(true);
-            }
-            return true;
-        }
-        if (temperature < LOW_TEMP_THRESHOLD || temperature > HIGH_TEMP_THRESHOLD) {
-            alerts.add(buildAlert(NewbornAlertType.THERMOREGULATION, NewbornAlertSeverity.CAUTION,
-                "newborn-temperature", alertText("newborn-temperature"),
-                "Temperature"));
-        }
-        return false;
-    }
-
-    private boolean evaluateCardiorespiratory(NewbornAssessment assessment, List<NewbornAssessmentAlert> alerts) {
-        boolean urgent = false;
-        Integer heartRate = assessment.getHeartRateBpm();
-        Integer respirations = assessment.getRespirationsPerMin();
-
-        if (heartRate != null && (heartRate < HEART_RATE_LOW || heartRate > HEART_RATE_HIGH)) {
-            alerts.add(buildAlert(NewbornAlertType.CARDIOVASCULAR, NewbornAlertSeverity.URGENT,
-                "newborn-heart-rate", alertText("newborn-heart-rate"),
-                "Heart Rate"));
-            assessment.addFollowUpAction(NewbornFollowUpAction.NICU_CONSULT);
-            urgent = true;
-        }
-        if (respirations != null && (respirations < RESP_RATE_LOW || respirations > RESP_RATE_HIGH)) {
-            alerts.add(buildAlert(NewbornAlertType.RESPIRATORY, NewbornAlertSeverity.URGENT,
-                "newborn-respiratory", alertText("newborn-respiratory"),
-                "Respiratory Rate"));
-            assessment.addFollowUpAction(NewbornFollowUpAction.RESPIRATORY_SUPPORT);
-            if (!assessment.isRespiratorySupportInitiated()) {
-                assessment.setRespiratorySupportInitiated(true);
-            }
-            urgent = true;
-        }
-        return urgent;
-    }
-
-    private boolean evaluateOxygenation(NewbornAssessment assessment, List<NewbornAssessmentAlert> alerts) {
-        Integer oxygen = assessment.getOxygenSaturationPercent();
-        if (oxygen == null) {
-            return false;
-        }
-        if (oxygen < OXYGEN_CRITICAL) {
-            alerts.add(buildAlert(NewbornAlertType.OXYGENATION, NewbornAlertSeverity.URGENT,
-                "newborn-oxygenation", alertText("newborn-oxygenation"),
-                "SpO2"));
-            assessment.addFollowUpAction(NewbornFollowUpAction.OXYGEN_THERAPY);
-            return true;
-        }
-        return false;
-    }
-
-    private boolean evaluateGlucose(NewbornAssessment assessment, List<NewbornAssessmentAlert> alerts) {
-        Integer glucose = assessment.getGlucoseMgDl();
-        if (glucose == null) {
-            return false;
-        }
-        if (glucose < GLUCOSE_CRITICAL) {
-            alerts.add(buildAlert(NewbornAlertType.GLUCOSE, NewbornAlertSeverity.URGENT,
-                "newborn-glucose", alertText("newborn-glucose"),
-                "Glucose"));
-            assessment.addFollowUpAction(NewbornFollowUpAction.GLUCOSE_MONITORING);
-            if (!assessment.isGlucoseProtocolInitiated()) {
-                assessment.setGlucoseProtocolInitiated(true);
-            }
-            return true;
-        }
-        return false;
     }
 
     /**

@@ -17,6 +17,8 @@ import {
   PostpartumService,
   NewbornAssessmentRequest,
   NewbornAssessmentResponse,
+  NewbornAlert,
+  GlucoseUnit,
   NewbornFollowUpAction,
   PostpartumBladderStatus,
   PostpartumFundusTone,
@@ -40,7 +42,9 @@ import {
 import { AuthService } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
-import { labelledRefusalReason } from '../shared/refusal-reason';
+import { labelledRefusalReason, refusedFieldReasons } from '../shared/refusal-reason';
+import { VITAL_SIGN_LIMITS, bloodPressureReversed } from '../shared/vital-sign-limits';
+import { glucoseMmolToMgDl } from '../shared/glucose-units';
 import { refuseFields } from '../shared/forms/invalid-fields';
 import { hasClinicalContent } from '../shared/forms/clinical-content';
 import { FieldLimit, firstOutOfRange, labelKeysOf, rangeMessage } from '../shared/field-limits';
@@ -67,7 +71,13 @@ export const NEWBORN_LIMITS: readonly FieldLimit[] = [
   { field: 'apgarOneMinute', labelKey: 'POSTPARTUM.APGAR_ONE', min: 0, max: 10 },
   { field: 'apgarFiveMinute', labelKey: 'POSTPARTUM.APGAR_FIVE', min: 0, max: 10 },
   { field: 'apgarTenMinute', labelKey: 'POSTPARTUM.APGAR_TEN', min: 0, max: 10 },
-  { field: 'temperatureCelsius', labelKey: 'POSTPARTUM.TEMPERATURE', min: 25, max: 44 },
+  { field: 'temperatureCelsius', labelKey: 'POSTPARTUM.TEMPERATURE', min: 0 },
+  // QA D1424: warnings and escalation, never a limit that prevents saving an observation.
+  // Only what cannot exist is refused; a high value saves, flagged (NewbornAlertRules).
+  { field: 'heartRateBpm', labelKey: 'POSTPARTUM.PULSE', min: 0 },
+  { field: 'respirationsPerMin', labelKey: 'POSTPARTUM.RESP', min: 0 },
+  { field: 'oxygenSaturationPercent', labelKey: 'NURSE.SPO2', min: 0, max: 100 },
+  { field: 'glucoseValue', labelKey: 'POSTPARTUM.GLUCOSE_VALUE', min: 0 },
 ];
 
 /**
@@ -97,9 +107,23 @@ const NEWBORN_FIELD_IDS: Readonly<Record<string, string>> = {
   apgarFiveMinute: 'nb-apgar5',
   apgarTenMinute: 'nb-apgar10',
   temperatureCelsius: 'nb-temp',
+  heartRateBpm: 'nb-hr',
+  respirationsPerMin: 'nb-resp',
+  oxygenSaturationPercent: 'nb-spo2',
+  glucoseValue: 'nb-glucose',
+  glucoseUnit: 'nb-glucose-unit',
 };
-const OBSERVATION_IDS = Object.values(OBSERVATION_FIELD_IDS);
-const NEWBORN_IDS = Object.values(NEWBORN_FIELD_IDS);
+/** QA D1446: the template id of each field the server may name under a refusal. */
+const OBSERVATION_SERVER_FIELD_IDS: Readonly<Record<string, string>> = {
+  ...OBSERVATION_FIELD_IDS,
+  observationTime: 'obs-time',
+};
+const NEWBORN_SERVER_FIELD_IDS: Readonly<Record<string, string>> = {
+  ...NEWBORN_FIELD_IDS,
+  assessmentTime: 'nb-time',
+};
+const OBSERVATION_IDS = Object.values(OBSERVATION_SERVER_FIELD_IDS);
+const NEWBORN_IDS = Object.values(NEWBORN_SERVER_FIELD_IDS);
 /** The id prefix the screening modal gives its instrument form's radios. */
 const SCREENING_ID_PREFIX = 'pp-pro';
 
@@ -141,7 +165,7 @@ export const NEWBORN_FINDINGS = [
   'heartRateBpm',
   'respirationsPerMin',
   'oxygenSaturationPercent',
-  'glucoseMgDl',
+  'glucoseValue',
   'examGeneralAppearance',
   'examNotes',
 ] as const;
@@ -157,6 +181,9 @@ const OBSERVATION_LABELS: Record<string, string> = {
 
 /** The instrument the postpartum module screens with when the plan does not say. */
 const DEFAULT_SCREENING_INSTRUMENT = 'EPDS';
+
+/** QA D1424: the unit is chosen every time; 5.6 means nothing without it. */
+export const GLUCOSE_UNITS: readonly GlucoseUnit[] = ['MG_DL', 'MMOL_L'];
 
 @Component({
   selector: 'app-postpartum-tab',
@@ -558,6 +585,23 @@ export class PostpartumTabComponent {
       this.toast.error(message);
       return;
     }
+    if (
+      bloodPressureReversed(
+        this.observationForm.systolicBpMmHg,
+        this.observationForm.diastolicBpMmHg,
+      )
+    ) {
+      // QA D1424: 70/120 is a swapped entry, refused where it was typed.
+      const message = this.translate.instant('VITAL_LIMITS.BP_ORDER');
+      refuseFields(
+        this.host.nativeElement,
+        [OBSERVATION_FIELD_IDS['diastolicBpMmHg']],
+        OBSERVATION_IDS,
+        message,
+      );
+      this.toast.error(message);
+      return;
+    }
     this.observationSaving.set(true);
     this.postpartumService
       .createObservation(patient.id, withServerDateTimes(this.observationForm, ['observationTime']))
@@ -574,6 +618,8 @@ export class PostpartumTabComponent {
           }
         },
         error: (err: unknown) => {
+          // QA D1446: the fields the refusal names are marked, as on the delivery form.
+          this.markServerRefusals(err, OBSERVATION_SERVER_FIELD_IDS, OBSERVATION_IDS);
           this.toast.error(
             labelledRefusalReason(err, this.translate, OBSERVATION_LABELS) ??
               this.translate.instant('POSTPARTUM.OBSERVATION_SAVE_ERROR'),
@@ -624,6 +670,17 @@ export class PostpartumTabComponent {
       return;
     }
     refuseFields(this.host.nativeElement, [], NEWBORN_IDS, '');
+    if (this.glucoseHasNoUnit()) {
+      const message = this.translate.instant('POSTPARTUM.GLUCOSE_UNIT_REQUIRED');
+      refuseFields(
+        this.host.nativeElement,
+        [NEWBORN_FIELD_IDS['glucoseUnit']],
+        NEWBORN_IDS,
+        message,
+      );
+      this.toast.error(message);
+      return;
+    }
     const outOfRange = firstOutOfRange(this.assessmentForm, NEWBORN_LIMITS);
     if (outOfRange) {
       const message = rangeMessage(outOfRange, this.translate);
@@ -655,6 +712,8 @@ export class PostpartumTabComponent {
           }
         },
         error: (err: unknown) => {
+          // QA D1446: the fields the refusal names are marked, as on the delivery form.
+          this.markServerRefusals(err, NEWBORN_SERVER_FIELD_IDS, NEWBORN_IDS);
           this.toast.error(
             labelledRefusalReason(err, this.translate, NEWBORN_LABELS) ??
               this.translate.instant('POSTPARTUM.ASSESSMENT_SAVE_ERROR'),
@@ -662,6 +721,67 @@ export class PostpartumTabComponent {
           this.assessmentSaving.set(false);
         },
       });
+  }
+
+  readonly glucoseUnits = GLUCOSE_UNITS;
+  /** Symbols, the same in every language. */
+  readonly glucoseUnitLabels: Readonly<Record<GlucoseUnit, string>> = {
+    MG_DL: 'mg/dL',
+    MMOL_L: 'mmol/L',
+  };
+
+  private glucoseHasNoUnit(): boolean {
+    const { glucoseValue, glucoseUnit } = this.assessmentForm;
+    return glucoseValue !== undefined && glucoseValue !== null && !glucoseUnit;
+  }
+
+  /**
+   * QA D1424: a value above what the other vitals forms accept saves on this form; the
+   * reader is asked to check it. The numbers only choose when to ask.
+   */
+  newbornValueToCheck(
+    field: 'temperatureCelsius' | 'heartRateBpm' | 'respiratoryRateBpm' | 'glucose',
+  ): boolean {
+    const form = this.assessmentForm;
+    if (field === 'temperatureCelsius') {
+      return Number(form.temperatureCelsius) > VITAL_SIGN_LIMITS.temperatureCelsius.max;
+    }
+    if (field === 'heartRateBpm') {
+      return Number(form.heartRateBpm) > VITAL_SIGN_LIMITS.heartRateBpm.max;
+    }
+    if (field === 'respiratoryRateBpm') {
+      return Number(form.respirationsPerMin) > VITAL_SIGN_LIMITS.respiratoryRateBpm.max;
+    }
+    const value = Number(form.glucoseValue);
+    const mgDl = form.glucoseUnit === 'MMOL_L' ? glucoseMmolToMgDl(value) : value;
+    return mgDl > VITAL_SIGN_LIMITS.bloodGlucoseMgDl.max;
+  }
+
+  /** QA D1424: a request to remeasure stands out on the chart; a range notice does not. */
+  isNewbornValueCheck(alert: NewbornAlert): boolean {
+    return !!alert.code?.startsWith('newborn-check-');
+  }
+
+  /** QA D1424: a request to remeasure, or an acceptable-range notice, reads as its sentence on the chart. */
+  newbornAlertsToRead(a: NewbornAssessmentResponse): NewbornAlert[] {
+    return (a.alerts ?? []).filter(
+      (alert) => this.isNewbornValueCheck(alert) || alert.severity === 'INFO',
+    );
+  }
+
+  /** Marks each field a refusal names under `fieldErrors` with the server's reason. */
+  private markServerRefusals(
+    err: unknown,
+    idByField: Readonly<Record<string, string>>,
+    all: readonly string[],
+  ): void {
+    const refused = refusedFieldReasons(err, idByField);
+    if (refused.length === 0) return;
+    refuseFields(
+      this.host.nativeElement,
+      refused.map(([id, message]) => ({ id, message })),
+      all,
+    );
   }
 
   apgarSummary(a: NewbornAssessmentResponse): string {

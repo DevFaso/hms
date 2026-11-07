@@ -410,6 +410,7 @@
             <label for="us-scan-count">{{ 'ULTRASOUND.SCAN_COUNT' | translate }}</label>
             <input
               id="us-scan-count"
+              data-server-field="scanCountForPregnancy"
               type="number"
               min="1"
               [(ngModel)]="orderForm.scanCountForPregnancy"
@@ -419,11 +420,22 @@
         <div class="form-row">
           <div class="field">
             <label for="us-date">{{ 'ULTRASOUND.SCHEDULED' | translate }}</label>
-            <input id="us-date" type="date" [(ngModel)]="orderForm.scheduledDate" />
+            <input
+              id="us-date"
+              data-server-field="scheduledDate"
+              type="date"
+              [min]="orderDateMin()"
+              [(ngModel)]="orderForm.scheduledDate"
+            />
           </div>
           <div class="field">
             <label for="us-time">{{ 'ULTRASOUND.SCHEDULED_TIME' | translate }}</label>
-            <input id="us-time" type="text" [(ngModel)]="orderForm.scheduledTime" />
+            <input
+              id="us-time"
+              data-server-field="scheduledTime"
+              type="time"
+              [(ngModel)]="orderForm.scheduledTime"
+            />
           </div>
         </div>
         <div class="field">
@@ -525,7 +537,13 @@
         <div class="form-row">
           <div class="field">
             <label for="rep-date">{{ 'ULTRASOUND.SCAN_DATE' | translate }} *</label>
-            <input required id="rep-date" type="date" [(ngModel)]="reportForm.scanDate" />
+            <input
+              required
+              id="rep-date"
+              data-server-field="scanDate"
+              type="date"
+              [(ngModel)]="reportForm.scanDate"
+            />
           </div>
           <div class="field">
             <label for="rep-category">{{ 'ULTRASOUND.FINDING' | translate }} *</label>

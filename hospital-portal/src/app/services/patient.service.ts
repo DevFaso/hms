@@ -272,6 +272,8 @@ export interface ChartUpdateRequest {
  * wire and was discarded here.
  */
 export interface TimelineEntryMetadata {
+  /** QA D1423: on an ALLERGY entry, false when the allergy was deactivated. */
+  active?: boolean;
   /** Hospital the row belongs to — present on local rows too, not just foreign ones. */
   sourceHospitalName?: string;
   sourceHospitalId?: string;
