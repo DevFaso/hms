@@ -1318,6 +1318,11 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     params: [],
   },
   {
+    key: 'AUDIT.DESC.CDS_CRITICAL_OVERRIDDEN_AT_SIGNATURE',
+    re: /^Critical decision-support alert overridden at signature$/,
+    params: [],
+  },
+  {
     key: 'AUDIT.DESC.STATUS_WAS',
     re: /^(.+) \(was ([A-Z_]+)\)$/,
     params: ['what', 'previous'],

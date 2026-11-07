@@ -1689,6 +1689,7 @@
       "ENCOUNTER_STATUS_UPDATED": "Estado de la consulta cambiado de {{from}} a {{to}}",
       "APPOINTMENT_OVERBOOKED": "Cita añadida fuera de los horarios publicados",
       "REGISTRATION_DEACTIVATED": "Registro del paciente desactivado",
+      "CDS_CRITICAL_OVERRIDDEN_AT_SIGNATURE": "Alerta crítica de ayuda a la decisión anulada en la firma",
       "ENCOUNTER_CANCELLED_WITH_ADMISSION": "Encuentro cerrado: la hospitalización {{admission}} fue cancelada (estaba {{previous}})",
       "ENCOUNTER_DISCHARGE_COMPLETED": "Consulta cerrada en el alta del ingreso {{admission}} (estaba {{previous}})",
       "ENCOUNTER_ADMISSION_COMPLETED": "Consulta cerrada al ingreso {{admission}} (estaba {{previous}})",
