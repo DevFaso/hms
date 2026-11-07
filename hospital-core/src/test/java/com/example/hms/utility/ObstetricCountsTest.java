@@ -60,7 +60,7 @@ class ObstetricCountsTest {
         org.assertj.core.api.Assertions.assertThatThrownBy(call)
             .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class, ex -> {
                 org.assertj.core.api.Assertions.assertThat(ex.getField()).isEqualTo(field);
-                org.assertj.core.api.Assertions.assertThat(ex.getMessage()).isEqualTo(key);
+                org.assertj.core.api.Assertions.assertThat(ex.getMessageKey()).isEqualTo(key);
             });
     }
 }

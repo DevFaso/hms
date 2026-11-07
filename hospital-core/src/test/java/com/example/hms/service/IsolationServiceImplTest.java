@@ -394,7 +394,7 @@ class IsolationServiceImplTest {
             .when(dischargedPatientGuard).requireNotDischargedWithoutVisit(patientId, hospitalId, "isolation.precaution.patientDischarged");
         IsolationPrecautionRequestDTO request = base().build();
         assertThatThrownBy(() -> service.startPrecaution(request))
-            .hasMessage("isolation.precaution.patientDischarged");
+            .hasFieldOrPropertyWithValue("messageKey", "isolation.precaution.patientDischarged");
         org.mockito.Mockito.verify(precautionRepository, org.mockito.Mockito.never()).save(org.mockito.ArgumentMatchers.any());
     }
 }

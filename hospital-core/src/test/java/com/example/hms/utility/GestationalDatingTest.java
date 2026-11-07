@@ -47,7 +47,7 @@ class GestationalDatingTest {
             org.assertj.core.api.Assertions.assertThatCode(check).doesNotThrowAnyException();
         } else {
             org.assertj.core.api.Assertions.assertThatThrownBy(check)
-                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class).hasMessage(refusal);
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class).hasFieldOrPropertyWithValue("messageKey", refusal);
         }
     }
 

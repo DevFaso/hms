@@ -59,7 +59,7 @@ class DischargedPatientGuardTest {
 
     private void assertRefused() {
         assertThatThrownBy(() -> guard.requireNotDischargedWithoutVisit(patient, hospital, KEY))
-            .isInstanceOf(BusinessException.class).hasMessage(KEY);
+            .isInstanceOf(BusinessException.class).hasFieldOrPropertyWithValue("messageKey", KEY);
     }
 
     private void assertAllowed() {
