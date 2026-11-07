@@ -98,6 +98,11 @@ public class DeliveryRecord extends BaseEntity {
     @Column(name = "birth_date_time", nullable = false)
     private LocalDateTime birthDateTime;
 
+    /** False when the time was left blank and {@link #birthDateTime} holds the moment of documenting (V280). */
+    @Column(name = "birth_time_stated", nullable = false)
+    @Builder.Default
+    private boolean birthTimeStated = false;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "delivery_mode", nullable = false, length = 30)
     private DeliveryMode deliveryMode;

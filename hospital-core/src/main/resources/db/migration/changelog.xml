@@ -3400,4 +3400,11 @@
                  stripComments="false"/>
     </changeSet>
 
+    <changeSet id="V280-death-record-birth-facts" author="hms-team" runOnChange="false">
+        <sqlFile path="V280__death_record_birth_facts.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

@@ -529,6 +529,7 @@ public class LaborServiceImpl implements LaborService {
             .deliveredByStaff(deliveredBy)
             .documentedBy(documentedBy)
             .birthDateTime(birthAt)
+            .birthTimeStated(request.getBirthDateTime() != null)
             .deliveryMode(request.getDeliveryMode())
             .liveBirth(request.getLiveBirth() == null || request.getLiveBirth())
             .numberOfInfants(request.getNumberOfInfants() != null ? request.getNumberOfInfants() : 1)

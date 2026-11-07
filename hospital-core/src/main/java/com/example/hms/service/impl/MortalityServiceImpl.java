@@ -5,6 +5,10 @@ import com.example.hms.enums.AppointmentStatus;
 import com.example.hms.enums.EncounterStatus;
 import com.example.hms.enums.MannerOfDeath;
 import com.example.hms.enums.MaternalDeathTiming;
+import com.example.hms.enums.PerinatalAgeBasis;
+import com.example.hms.enums.PerinatalBirthStatus;
+import com.example.hms.enums.PerinatalDeathType;
+import com.example.hms.enums.PerinatalReportingEligibility;
 import com.example.hms.enums.PlaceOfDeath;
 import com.example.hms.enums.RecallStatus;
 import com.example.hms.exception.BusinessException;
@@ -17,6 +21,8 @@ import com.example.hms.model.Encounter;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
 import com.example.hms.model.Staff;
+import com.example.hms.model.labor.DeliveryRecord;
+import com.example.hms.model.neonatal.NewbornAssessment;
 import com.example.hms.model.scheduling.PatientRecall;
 import com.example.hms.payload.dto.mortality.DeathClosureSummaryDTO;
 import com.example.hms.payload.dto.mortality.DeathRecordAmendmentDTO;
@@ -34,6 +40,7 @@ import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.scheduling.PatientRecallRepository;
 import com.example.hms.service.MortalityService;
+import com.example.hms.service.support.DeathClassificationRules;
 import com.example.hms.service.support.PatientChartAccess;
 import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
@@ -128,6 +135,8 @@ public class MortalityServiceImpl implements MortalityService {
     private final com.example.hms.service.BedAssignmentService bedAssignmentService;
     private final com.example.hms.repository.DeathDisputeRepository disputeRepository;
     private final com.example.hms.service.InBasketService inBasketService;
+    /** CR-08: the way from a newborn's chart to the delivery that holds its birth time. */
+    private final com.example.hms.repository.NewbornAssessmentRepository newbornAssessmentRepository;
     /** QA D972: a visit a death closes is handed to billing like a checkout (null in hand-built tests). */
     private final org.springframework.context.ApplicationEventPublisher eventPublisher;
 
@@ -149,10 +158,10 @@ public class MortalityServiceImpl implements MortalityService {
         if (Boolean.TRUE.equals(request.getMaternalDeath())) {
             com.example.hms.service.support.DeathClassificationRules.requireMaternalPossible(patient);
         }
-        if (Boolean.TRUE.equals(request.getPerinatalDeath())) {
-            com.example.hms.service.support.DeathClassificationRules.requirePerinatalPossible(
-                patient, request.getPerinatalType(), request.getDiedAt());
-        }
+        BirthFacts birth = judgeBirthFacts(patient, hospitalId,
+            Boolean.TRUE.equals(request.getPerinatalDeath()) ? request.getPerinatalType() : null,
+            request.getDiedAt(),
+            new BirthFacts(request.getBornAt(), request.getBirthStatus(), request.getGestationalAgeWeeks()));
 
         DeathRecord deathRecord = DeathRecord.builder()
             .patient(patient)
@@ -169,6 +178,10 @@ public class MortalityServiceImpl implements MortalityService {
             .maternalDeathTiming(request.getMaternalDeathTiming())
             .perinatalDeath(Boolean.TRUE.equals(request.getPerinatalDeath()))
             .perinatalType(request.getPerinatalType())
+            .bornAt(birth.bornAt())
+            .birthStatus(birth.status())
+            .gestationalAgeWeeks(birth.gestationWeeks())
+            .perinatalAgeBasis(birth.ageBasis())
             .autopsyRequested(Boolean.TRUE.equals(request.getAutopsyRequested()))
             .certifiedBy(resolveCertifier(request.getCertifiedByStaffId(), hospitalId))
             .certifiedAt(request.getCertifiedByStaffId() != null ? LocalDateTime.now(clock) : null)
@@ -209,10 +222,7 @@ public class MortalityServiceImpl implements MortalityService {
         if (Boolean.TRUE.equals(request.getMaternalDeath())) {
             com.example.hms.service.support.DeathClassificationRules.requireMaternalPossible(deathRecord.getPatient());
         }
-        if (Boolean.TRUE.equals(request.getPerinatalDeath())) {
-            com.example.hms.service.support.DeathClassificationRules.requirePerinatalPossible(
-                deathRecord.getPatient(), request.getPerinatalType(), deathRecord.getDiedAt());
-        }
+        amendBirthFacts(deathRecord, request);
 
         if (request.getImmediateCause() != null) {
             deathRecord.setImmediateCause(request.getImmediateCause());
@@ -365,11 +375,13 @@ public class MortalityServiceImpl implements MortalityService {
             .filter(d -> Boolean.TRUE.equals(d.getMaternalDeath())
                 && d.getMaternalDeathTiming() == MaternalDeathTiming.LATE_MATERNAL)
             .count();
-        int perinatal = (int) all.stream()
-            .filter(d -> Boolean.TRUE.equals(d.getPerinatalDeath())).count();
-        int stillbirths = (int) all.stream()
-            .filter(d -> Boolean.TRUE.equals(d.getPerinatalDeath())
-                && d.getPerinatalType() == com.example.hms.enums.PerinatalDeathType.STILLBIRTH)
+        // CR-07: read off the record's own definition. A late neonatal death is reported, but not in this figure.
+        int perinatal = (int) all.stream().filter(DeathRecord::isInWhoPerinatalNumerator).count();
+        int eligibilityUnknown = (int) all.stream()
+            .filter(d -> d.getPerinatalEligibility() == PerinatalReportingEligibility.UNKNOWN).count();
+        int belowGestation = (int) all.stream()
+            .filter(d -> ofPerinatalType(d) != null && ofPerinatalType(d).inWhoPerinatalPeriod()
+                && d.isBelowWhoPerinatalGestation())
             .count();
 
         // A disputed death stays listed and counted until its outcome, flagged, with the count shown.
@@ -384,7 +396,11 @@ public class MortalityServiceImpl implements MortalityService {
             .maternalDeaths(maternal)
             .lateMaternalDeaths(lateMaternal)
             .perinatalDeaths(perinatal)
-            .stillbirths(stillbirths)
+            .perinatalEligibilityUnknown(eligibilityUnknown)
+            .perinatalBelowGestation(belowGestation)
+            .stillbirths(countOfType(all, PerinatalDeathType.STILLBIRTH))
+            .earlyNeonatalDeaths(countOfType(all, PerinatalDeathType.EARLY_NEONATAL))
+            .lateNeonatalDeaths(countOfType(all, PerinatalDeathType.LATE_NEONATAL))
             .deaths(all.stream().map(death -> {
                 DeathRecordResponseDTO dto = mapper.toDto(death);
                 dto.setDisputed(disputed.contains(death.getId()));
@@ -506,6 +522,127 @@ public class MortalityServiceImpl implements MortalityService {
 
     private String appendReason(String existing) {
         return StringUtils.hasText(existing) ? existing + " — " + CLOSURE_REASON : CLOSURE_REASON;
+    }
+
+    // ── Perinatal classification ────────────────────────────────────────
+
+    /** The facts offered for, or found for, a perinatal classification. */
+    private record BirthFacts(LocalDateTime bornAt, PerinatalBirthStatus status, Integer gestationWeeks,
+                              PerinatalAgeBasis ageBasis) {
+
+        BirthFacts(LocalDateTime bornAt, PerinatalBirthStatus status, Integer gestationWeeks) {
+            this(bornAt, status == null ? PerinatalBirthStatus.UNKNOWN : status, gestationWeeks, PerinatalAgeBasis.UNKNOWN);
+        }
+
+        /** What was stated stands. A delivery on file only answers what was left unknown. */
+        BirthFacts answeredBy(DeliveryRecord delivery) {
+            if (delivery == null) {
+                return this;
+            }
+            PerinatalBirthStatus onFile = delivery.isLiveBirth()
+                ? PerinatalBirthStatus.LIVE_BIRTH : PerinatalBirthStatus.STILLBIRTH;
+            return new BirthFacts(
+                bornAt != null || !delivery.isBirthTimeStated() ? bornAt : delivery.getBirthDateTime(),
+                status != PerinatalBirthStatus.UNKNOWN ? status : onFile,
+                gestationWeeks != null ? gestationWeeks : deliveryGestation(delivery),
+                ageBasis);
+        }
+
+        BirthFacts withAgeBasis(PerinatalAgeBasis basis) {
+            return new BirthFacts(bornAt, status, gestationWeeks, basis);
+        }
+
+        private static Integer deliveryGestation(DeliveryRecord delivery) {
+            Integer weeks = delivery.getGestationalAgeWeeksAtBirth();
+            return weeks != null && DeathClassificationRules.isPlausibleGestation(weeks) ? weeks : null;
+        }
+    }
+
+    /**
+     * With no type selected nothing here refuses, by the user's ruling: the death saves, and a fact that cannot be
+     * true is simply not kept. With a type, a fact is refused on its own field and the type is judged. The answer is
+     * kept on the record, so the register reads it without one more query per row.
+     */
+    private BirthFacts judgeBirthFacts(Patient patient, UUID hospitalId, PerinatalDeathType type,
+                                       LocalDateTime diedAt, BirthFacts stated) {
+        if (type == null) {
+            return new BirthFacts(
+                stated.bornAt() != null && DeathClassificationRules.birthTimeFits(patient, stated.bornAt(), diedAt)
+                    ? stated.bornAt() : null,
+                stated.status(),
+                stated.gestationWeeks() != null && DeathClassificationRules.isPlausibleGestation(stated.gestationWeeks())
+                    ? stated.gestationWeeks() : null);
+        }
+        DeathClassificationRules.requireBirthFactsPossible(patient, stated.bornAt(), stated.gestationWeeks(), diedAt);
+        BirthFacts known = stated.answeredBy(singleBirthOnFile(patient, hospitalId, diedAt));
+        return known.withAgeBasis(DeathClassificationRules.requirePerinatalPossible(
+            patient, type, diedAt, known.bornAt(), known.status()));
+    }
+
+    /**
+     * The birth on record for this chart: the delivery its newborn assessments link to, as the growth chart reads it.
+     * A delivery of several infants holds one time and one outcome, so it does not speak for this one. The date of
+     * birth must fit, which also keeps a mother's own delivery from being read as her birth. A delivery documented
+     * with its time left blank holds the moment of documenting, so its time is not used as the birth's.
+     */
+    private DeliveryRecord singleBirthOnFile(Patient patient, UUID hospitalId, LocalDateTime diedAt) {
+        if (patient.getDateOfBirth() == null) {
+            return null;
+        }
+        return newbornAssessmentRepository
+            .findFirstByPatient_IdAndDeliveryRecordIsNotNullOrderByAssessmentTimeAsc(patient.getId())
+            .filter(assessment -> inScope(assessment.getHospital(), hospitalId))
+            .map(NewbornAssessment::getDeliveryRecord)
+            .filter(delivery -> delivery.getNumberOfInfants() == 1)
+            .filter(delivery -> delivery.getBirthDateTime() != null
+                && DeathClassificationRules.birthTimeFits(patient, delivery.getBirthDateTime(), diedAt))
+            .orElse(null);
+    }
+
+    /**
+     * An amendment reaches the same classification, and only what it sets is judged: an autopsy's new cause is never
+     * refused over an older row's flags, and a gestation alone says nothing about the type.
+     */
+    private void amendBirthFacts(DeathRecord deathRecord, DeathRecordAmendmentDTO request) {
+        boolean typeOrTimingSet = request.getPerinatalDeath() != null
+            || request.getBornAt() != null || request.getBirthStatus() != null;
+        if (!typeOrTimingSet && request.getGestationalAgeWeeks() == null) {
+            return;
+        }
+        Patient patient = deathRecord.getPatient();
+        LocalDateTime diedAt = deathRecord.getDiedAt();
+        BirthFacts stated = new BirthFacts(
+            request.getBornAt() != null ? request.getBornAt() : deathRecord.getBornAt(),
+            request.getBirthStatus() != null ? request.getBirthStatus() : deathRecord.getBirthStatus(),
+            request.getGestationalAgeWeeks() != null ? request.getGestationalAgeWeeks() : deathRecord.getGestationalAgeWeeks());
+        BirthFacts judged;
+        if (typeOrTimingSet) {
+            judged = judgeBirthFacts(patient, deathRecord.getHospital().getId(), amendedPerinatalType(deathRecord, request),
+                diedAt, stated);
+        } else {
+            DeathClassificationRules.requireBirthFactsPossible(patient, null, stated.gestationWeeks(), diedAt);
+            judged = stated.withAgeBasis(deathRecord.getPerinatalAgeBasis());
+        }
+        deathRecord.setBornAt(judged.bornAt());
+        deathRecord.setBirthStatus(judged.status());
+        deathRecord.setGestationalAgeWeeks(judged.gestationWeeks());
+        deathRecord.setPerinatalAgeBasis(judged.ageBasis());
+    }
+
+    private static PerinatalDeathType amendedPerinatalType(DeathRecord deathRecord, DeathRecordAmendmentDTO request) {
+        if (request.getPerinatalDeath() != null) {
+            return Boolean.TRUE.equals(request.getPerinatalDeath()) ? request.getPerinatalType() : null;
+        }
+        return ofPerinatalType(deathRecord);
+    }
+
+    /** The type this death is classified as; null when the flag is off, whatever the column holds. */
+    private static PerinatalDeathType ofPerinatalType(DeathRecord deathRecord) {
+        return Boolean.TRUE.equals(deathRecord.getPerinatalDeath()) ? deathRecord.getPerinatalType() : null;
+    }
+
+    private static int countOfType(List<DeathRecord> deaths, PerinatalDeathType type) {
+        return (int) deaths.stream().filter(d -> ofPerinatalType(d) == type).count();
     }
 
     // ── Guards and helpers ──────────────────────────────────────────────
