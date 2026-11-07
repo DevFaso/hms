@@ -1,11 +1,15 @@
 package com.example.hms.controller;
 
+import com.example.hms.payload.dto.mortality.DeathDisputeOutcomeDTO;
+import com.example.hms.payload.dto.mortality.DeathDisputeRequestDTO;
+import com.example.hms.payload.dto.mortality.DeathDisputeResponseDTO;
 import com.example.hms.payload.dto.mortality.DeathRecordAmendmentDTO;
 import com.example.hms.payload.dto.mortality.DeathRecordEnteredInErrorDTO;
 import com.example.hms.payload.dto.mortality.DeathRecordRequestDTO;
 import com.example.hms.payload.dto.mortality.DeathRecordResponseDTO;
 import com.example.hms.payload.dto.mortality.MortalityRegisterDTO;
 import com.example.hms.payload.dto.mortality.RecordDeathResponseDTO;
+import com.example.hms.service.DeathDisputeService;
 import com.example.hms.service.MortalityService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -25,6 +29,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -66,6 +71,7 @@ public class MortalityController {
             + "'NURSE','QUALITY_MANAGER')";
 
     private final MortalityService mortalityService;
+    private final DeathDisputeService disputeService;
 
     @PostMapping("/deaths")
     @PreAuthorize(RECORDER)
@@ -104,6 +110,37 @@ public class MortalityController {
         @Valid @RequestBody DeathRecordEnteredInErrorDTO request
     ) {
         return ResponseEntity.ok(mortalityService.markEnteredInError(recordId, request));
+    }
+
+    @PostMapping("/patients/{patientId}/disputes")
+    @PreAuthorize("hasRole('DOCTOR')")
+    @Operation(summary = "Dispute a recorded death, urgently",
+               description = "A doctor with an active assignment at this hospital, who has assessed the patient as "
+                   + "alive and verified who they are. Lifts the death's block on care here, at once, pending review. "
+                   + "The death record is kept as it is. A repeat answers with the open dispute.")
+    public ResponseEntity<DeathDisputeResponseDTO> disputeDeath(
+        @PathVariable UUID patientId,
+        @Valid @RequestBody DeathDisputeRequestDTO request
+    ) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(disputeService.dispute(patientId, request));
+    }
+
+    @GetMapping("/disputes")
+    @PreAuthorize(CORRECTOR)
+    @Operation(summary = "The open disputes this hospital has to review")
+    public ResponseEntity<List<DeathDisputeResponseDTO>> openDisputes() {
+        return ResponseEntity.ok(disputeService.openForReview());
+    }
+
+    @PostMapping("/disputes/{disputeId}/uphold")
+    @PreAuthorize(CORRECTOR)
+    @Operation(summary = "Death upheld: the block on care is back at the disputing hospital",
+               description = "The other outcome is marking the death record entered in error. A reason is required.")
+    public ResponseEntity<DeathDisputeResponseDTO> upholdDeath(
+        @PathVariable UUID disputeId,
+        @Valid @RequestBody DeathDisputeOutcomeDTO outcome
+    ) {
+        return ResponseEntity.ok(disputeService.uphold(disputeId, outcome));
     }
 
     @GetMapping("/deaths/patient/{patientId}")

@@ -317,7 +317,9 @@
                   [class.inactive]="!patient.active || patient.deceased"
                 >
                   <span class="status-dot"></span>
-                  @if (patient.deceased) {
+                  @if (patient.deceased && patient.deathDisputed) {
+                    {{ 'MORTALITY.DISPUTED' | translate }}
+                  } @else if (patient.deceased) {
                     {{ 'PATIENTS.DECEASED' | translate }}
                   } @else {
                     {{

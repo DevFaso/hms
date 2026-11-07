@@ -453,7 +453,7 @@ public class ReceptionServiceImpl implements ReceptionService {
                         && detectInsuranceIssue(pid, hospitalId))
                 .hasOutstandingBalance(detectOutstandingBalance(pid, hospitalId))
                 // QA D1489: the row does not offer a check-in that can only be refused.
-                .patientDeceased(p.isDeceased())
+                .patientDeceased(com.example.hms.service.support.DeceasedPatientGuard.careBlocked(p))
                 .registrationInactive(ReceptionQueueFilters.expectedAtTheDesk(row.status())
                         && registrationRepo.existsByPatientIdAndHospitalIdAndActiveFalse(pid, hospitalId))
                 .build();

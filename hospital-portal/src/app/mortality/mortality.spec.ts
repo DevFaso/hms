@@ -6,6 +6,7 @@ import { of, throwError } from 'rxjs';
 
 import { MortalityComponent } from './mortality';
 import {
+  DeathDispute,
   DeathRecordResponse,
   MortalityRegister,
   MortalityService,
@@ -61,7 +62,11 @@ describe('MortalityComponent, QA D1488 / D1490', () => {
       'amendDeathRecord',
       'getForPatient',
       'markEnteredInError',
+      'openDisputes',
+      'upholdDeath',
     ]);
+    spy.openDisputes.and.returnValue(of([]));
+    spy.upholdDeath.and.returnValue(of({} as DeathDispute));
     spy.getRegister.and.returnValue(of(mockRegister()));
     spy.markEnteredInError.and.returnValue(of(mockDeath()));
     confirmSpy = jasmine.createSpyObj('ConfirmService', ['ask']);
@@ -123,6 +128,30 @@ describe('MortalityComponent, QA D1488 / D1490', () => {
     fixture.nativeElement.remove();
   });
 
+  it('upholding needs a reason: empty is marked and nothing is sent', () => {
+    const fixture = TestBed.createComponent(MortalityComponent);
+    document.body.appendChild(fixture.nativeElement);
+    fixture.detectChanges();
+    fixture.componentInstance.openUphold({ id: 'x1', patientName: 'Awa' } as DeathDispute);
+    fixture.detectChanges();
+    const marked = expectEmptySubmitRefusal(fixture, {
+      button: '[data-testid="mort-uphold-submit"]',
+      sent: spy.upholdDeath,
+    });
+    expect(marked).toContain('u-reason');
+    fixture.nativeElement.remove();
+  });
+
+  it('upholds with the reason after the confirmation, and reloads the disputes', async () => {
+    fixtureComponent.openUphold({ id: 'x1' } as DeathDispute);
+    fixtureComponent.upholdReason = ' Family confirmed ';
+    spy.openDisputes.calls.reset();
+    await fixtureComponent.submitUphold();
+    expect(confirmSpy.ask).toHaveBeenCalled();
+    expect(spy.upholdDeath).toHaveBeenCalledWith('x1', 'Family confirmed');
+    expect(spy.openDisputes).toHaveBeenCalled();
+  });
+
   it('sends nothing when the confirmation is declined', async () => {
     confirmSpy.ask.and.resolveTo(false);
     fixtureComponent.openEnteredInError(mockDeath());
@@ -143,7 +172,9 @@ describe('MortalityComponent', () => {
       'recordDeath',
       'amendDeathRecord',
       'getForPatient',
+      'openDisputes',
     ]);
+    mortalitySpy.openDisputes.and.returnValue(of([]));
     mortalitySpy.getRegister.and.returnValue(of(mockRegister()));
 
     toastSpy = jasmine.createSpyObj('ToastService', ['success', 'error']);

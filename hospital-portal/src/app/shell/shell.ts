@@ -725,6 +725,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         route: '/in-basket',
         permission: 'View Patient Records',
         roles: [
+          'ROLE_HOSPITAL_ADMIN',
           'ROLE_DOCTOR',
           'ROLE_NURSE',
           'ROLE_MIDWIFE',

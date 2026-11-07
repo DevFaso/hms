@@ -38,3 +38,51 @@ UPDATE clinical.transfusion_crossmatches c
                     WHERE a.blood_unit_id = c.blood_unit_id AND a.request_id = c.request_id)
         OR EXISTS (SELECT 1 FROM clinical.emergency_blood_releases e
                     WHERE e.blood_unit_id = c.blood_unit_id AND e.request_id = c.request_id));
+
+-- The urgent dispute of a recorded death (user-approved, round 36). A doctor who assessed the patient as alive lifts
+-- the block on care at one hospital, pending review. The death record is left as it was: its version says which
+-- state of it was disputed. At most one open dispute per death and hospital.
+
+ALTER TABLE clinical.death_records
+    ADD COLUMN IF NOT EXISTS version BIGINT NOT NULL DEFAULT 0;
+
+CREATE TABLE IF NOT EXISTS clinical.death_disputes (
+    id                    UUID          NOT NULL DEFAULT gen_random_uuid(),
+    death_record_id       UUID          NOT NULL,
+    death_record_version  BIGINT        NOT NULL,
+    patient_id            UUID          NOT NULL,
+    hospital_id           UUID          NOT NULL,
+    disputed_by_id        UUID          NOT NULL,
+    disputed_by_name      VARCHAR(255),
+    disputed_at           TIMESTAMP     NOT NULL,
+    reason                VARCHAR(1000) NOT NULL,
+    assessed_alive        BOOLEAN       NOT NULL,
+    identity_verified     BOOLEAN       NOT NULL,
+    status                VARCHAR(20)   NOT NULL DEFAULT 'OPEN',
+    resolved_at           TIMESTAMP,
+    resolved_by_id        UUID,
+    resolved_by_name      VARCHAR(255),
+    resolution_reason     VARCHAR(1000),
+    review_filed_at       TIMESTAMP,
+    last_escalated_at     TIMESTAMP,
+    escalation_count      INTEGER       NOT NULL DEFAULT 0,
+    created_at            TIMESTAMP     NOT NULL DEFAULT now(),
+    updated_at            TIMESTAMP     NOT NULL DEFAULT now(),
+
+    CONSTRAINT pk_death_disputes        PRIMARY KEY (id),
+    CONSTRAINT fk_death_dispute_record  FOREIGN KEY (death_record_id) REFERENCES clinical.death_records(id),
+    CONSTRAINT fk_death_dispute_patient FOREIGN KEY (patient_id)      REFERENCES clinical.patients(id),
+    CONSTRAINT fk_death_dispute_hospital FOREIGN KEY (hospital_id)    REFERENCES hospital.hospitals(id),
+    CONSTRAINT ck_death_dispute_status  CHECK (status IN ('OPEN', 'UPHELD', 'ENTERED_IN_ERROR')),
+    CONSTRAINT ck_death_dispute_stated  CHECK (assessed_alive AND identity_verified)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_death_dispute_open
+    ON clinical.death_disputes (death_record_id, hospital_id)
+    WHERE status = 'OPEN';
+
+CREATE INDEX IF NOT EXISTS idx_death_dispute_record ON clinical.death_disputes (death_record_id);
+
+CREATE INDEX IF NOT EXISTS idx_death_dispute_care
+    ON clinical.death_disputes (patient_id, hospital_id)
+    WHERE status = 'OPEN';

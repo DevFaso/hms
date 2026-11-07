@@ -66,6 +66,8 @@ class InBasketRecipientGuardTest {
         "ObstetricAlertEscalationWorker.java", union(
             codes(setConstant(ObstetricAlertEscalationWorker.class, "FIRST_NOTICE_ROLES")),
             codes(setConstant(ObstetricAlertEscalationWorker.class, "REMINDER_ROLES"))),
+        // The urgent dispute of a death: the administrators of both hospitals, who decide it.
+        "DeathDisputeServiceImpl.java", codes(setConstant(com.example.hms.service.impl.DeathDisputeServiceImpl.class, "ADMIN_ROLE_CODES")),
         // The store itself: every sender above reaches it through createItem.
         "InBasketServiceImpl.java", Set.of());
 

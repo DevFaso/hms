@@ -22,6 +22,16 @@ public interface DeathRecordRepository extends JpaRepository<DeathRecord, UUID> 
     @Query("SELECT COUNT(d) > 0 FROM DeathRecord d WHERE d.patient.id = :patientId AND d.enteredInErrorAt IS NULL")
     boolean existsByPatient_Id(@Param("patientId") UUID patientId);
 
+    /** Locked, and to be the first read of this record in the transaction: disputes and outcomes take turns on it. */
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT d FROM DeathRecord d WHERE d.patient.id = :patientId AND d.enteredInErrorAt IS NULL")
+    Optional<DeathRecord> lockLiveByPatientId(@Param("patientId") UUID patientId);
+
+    /** Locked, ahead of the record's first read: see {@link #lockLiveByPatientId}. */
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT d.id FROM DeathRecord d WHERE d.id = :id")
+    Optional<UUID> lockById(@Param("id") UUID id);
+
     /** QA D1488: the rows marked entered in error in a period, listed apart from the register's counts. */
     @Query("SELECT d FROM DeathRecord d WHERE d.hospital.id = :hospitalId AND d.enteredInErrorAt IS NOT NULL "
         + "AND d.diedAt >= :from AND d.diedAt < :to ORDER BY d.enteredInErrorAt DESC")

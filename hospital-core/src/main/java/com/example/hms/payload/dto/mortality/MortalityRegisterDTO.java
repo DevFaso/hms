@@ -26,6 +26,8 @@ public class MortalityRegisterDTO {
     private int lateMaternalDeaths;
     private int perinatalDeaths;
     private int stillbirths;
+    /** Deaths above under an open dispute: still counted until the outcome. For the coding authority's sign-off. */
+    private int disputedDeaths;
     private List<DeathRecordResponseDTO> deaths;
     /** QA D1488: rows marked entered in error: kept and shown, in none of the counts above. */
     private List<DeathRecordResponseDTO> enteredInError;

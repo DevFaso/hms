@@ -115,6 +115,10 @@ public class PatientResponseDTO {
     /** QA D1488: set when a death is on record. {@code active} is the administrative flag, not this. */
     private boolean deceased;
     private LocalDateTime deceasedAt;
+    /** A doctor has disputed the death at the acting hospital: care is permitted here pending review. */
+    private boolean deathDisputed;
+    /** The one rule ({@code DeceasedPatientGuard.careBlocked}), for the screens. */
+    private boolean careBlockedByDeath;
     /** E8 #54 — every read of this chart needs a live break-the-glass session. */
     private boolean chartRestricted;
     private String chartRestrictionReason;

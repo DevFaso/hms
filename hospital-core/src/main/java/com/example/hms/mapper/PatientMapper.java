@@ -201,6 +201,8 @@ public class PatientMapper {
             .active(patient.isActive())
             .deceased(patient.isDeceased())
             .deceasedAt(patient.getDeceasedAt())
+            .deathDisputed(com.example.hms.service.support.DeceasedPatientGuard.deathDisputedHere(patient))
+            .careBlockedByDeath(com.example.hms.service.support.DeceasedPatientGuard.careBlocked(patient))
             .chartRestricted(patient.isChartRestricted())
             .chartRestrictionReason(patient.getChartRestrictionReason())
             .chartRestrictedAt(patient.getChartRestrictedAt())

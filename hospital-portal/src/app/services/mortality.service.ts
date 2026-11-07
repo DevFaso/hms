@@ -45,6 +45,8 @@ export interface DeathRecordResponse {
   recordedByName: string | null;
   createdAt: string;
   /** QA D1488: marked entered in error, with who, when and why. Such a row counts as no death. */
+  /** Under an open dispute: still counted, until the outcome. */
+  disputed?: boolean;
   enteredInError?: boolean;
   enteredInErrorAt?: string | null;
   enteredInErrorByName?: string | null;
@@ -113,6 +115,22 @@ export interface MortalityRegister {
   deaths: DeathRecordResponse[];
   /** QA D1488: kept and shown, in none of the counts above. */
   enteredInError?: DeathRecordResponse[];
+  disputedDeaths?: number;
+}
+
+export interface DeathDispute {
+  id: string;
+  patientId: string;
+  patientName: string | null;
+  patientMrn: string | null;
+  hospitalId: string;
+  status: 'OPEN' | 'UPHELD' | 'ENTERED_IN_ERROR';
+  reason: string;
+  disputedByName: string | null;
+  disputedAt: string;
+  /** Set only at the hospital that recorded the death, which alone can mark the record entered in error. */
+  deathRecordId: string | null;
+  statusMessage: string | null;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -133,6 +151,21 @@ export class MortalityService {
       `${this.baseUrl}/deaths/${recordId}/entered-in-error`,
       { reason },
     );
+  }
+
+  disputeDeath(
+    patientId: string,
+    body: { reason: string; assessedAlive: boolean; identityVerified: boolean },
+  ): Observable<DeathDispute> {
+    return this.http.post<DeathDispute>(`${this.baseUrl}/patients/${patientId}/disputes`, body);
+  }
+
+  openDisputes(): Observable<DeathDispute[]> {
+    return this.http.get<DeathDispute[]>(`${this.baseUrl}/disputes`);
+  }
+
+  upholdDeath(disputeId: string, reason: string): Observable<DeathDispute> {
+    return this.http.post<DeathDispute>(`${this.baseUrl}/disputes/${disputeId}/uphold`, { reason });
   }
 
   getForPatient(patientId: string): Observable<DeathRecordResponse> {

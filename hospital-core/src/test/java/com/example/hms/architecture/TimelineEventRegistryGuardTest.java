@@ -90,6 +90,7 @@ class TimelineEventRegistryGuardTest {
         Map.entry("AppointmentWaitlist", "scheduling, not care"),
         Map.entry("PatientRecall", "a scheduling reminder, not care"),
         Map.entry("BillingInvoice", "billing, not clinical"),
+        Map.entry("DeathDispute", "a review of the death row already on the chronology; audited, and on the mortality register"),
         Map.entry("PharmacyClaim", "billing, not clinical"),
         Map.entry("PharmacyPayment", "billing, not clinical"),
         Map.entry("PharmacySale", "a sale; the prescription row is the clinical event"),

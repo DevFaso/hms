@@ -126,6 +126,8 @@ public class MortalityServiceImpl implements MortalityService {
     private final MortalityMapper mapper;
     private final RoleValidator roleValidator;
     private final com.example.hms.service.BedAssignmentService bedAssignmentService;
+    private final com.example.hms.repository.DeathDisputeRepository disputeRepository;
+    private final com.example.hms.service.InBasketService inBasketService;
     /** QA D972: a visit a death closes is handed to billing like a checkout (null in hand-built tests). */
     private final org.springframework.context.ApplicationEventPublisher eventPublisher;
 
@@ -268,6 +270,8 @@ public class MortalityServiceImpl implements MortalityService {
             throw new com.example.hms.exception.FieldBusinessException("reason", "mortality.enteredInError.reasonTooLong",
                 MAX_ERROR_REASON_LENGTH);
         }
+        // Disputes and outcomes take turns on the record: a dispute committed meanwhile is ended below.
+        deathRecordRepository.lockById(recordId);
         DeathRecord deathRecord = loadScoped(recordId);
         if (deathRecord.isEnteredInError()) {
             throw new BusinessException("mortality.enteredInError.closed");
@@ -290,6 +294,9 @@ public class MortalityServiceImpl implements MortalityService {
         Patient patient = deathRecord.getPatient();
         patient.setDeceasedAt(null);
         patientRepository.save(patient);
+
+        DeathDisputeServiceImpl.closeAll(disputeRepository.lockOpenForRecord(recordId), inBasketService, actorId, actorName,
+            reason, deathRecord.getEnteredInErrorAt());
 
         auditEnteredInError(saved, patient.getId(), actorId, actorName, reason);
         return mapper.toDto(saved);
@@ -363,7 +370,12 @@ public class MortalityServiceImpl implements MortalityService {
                 && d.getPerinatalType() == com.example.hms.enums.PerinatalDeathType.STILLBIRTH)
             .count();
 
+        // A disputed death stays listed and counted until its outcome, flagged, with the count shown.
+        java.util.Set<UUID> disputed = all.isEmpty() ? Set.of() : new java.util.HashSet<>(
+            disputeRepository.findOpenRecordIds(all.stream().map(DeathRecord::getId).toList()));
+
         return MortalityRegisterDTO.builder()
+            .disputedDeaths(disputed.size())
             .from(from)
             .to(to)
             .totalDeaths(all.size())
@@ -371,7 +383,11 @@ public class MortalityServiceImpl implements MortalityService {
             .lateMaternalDeaths(lateMaternal)
             .perinatalDeaths(perinatal)
             .stillbirths(stillbirths)
-            .deaths(all.stream().map(mapper::toDto).toList())
+            .deaths(all.stream().map(death -> {
+                DeathRecordResponseDTO dto = mapper.toDto(death);
+                dto.setDisputed(disputed.contains(death.getId()));
+                return dto;
+            }).toList())
             .enteredInError(deathRecordRepository.findEnteredInError(hospitalId, start, end).stream()
                 .map(mapper::toDto).toList())
             .build();

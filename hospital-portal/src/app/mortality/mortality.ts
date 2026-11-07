@@ -5,6 +5,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 import {
   DeathClosureSummary,
+  DeathDispute,
   DeathRecordResponse,
   MannerOfDeath,
   MaternalDeathTiming,
@@ -120,12 +121,69 @@ export class MortalityComponent implements OnInit {
   errorSubmitting = signal(false);
   errorReason = '';
 
+  /* ── Disputes to review ── */
+  disputes = signal<DeathDispute[]>([]);
+  upholdTarget = signal<DeathDispute | null>(null);
+  upholdReason = '';
+  upholding = signal(false);
+
   ngOnInit(): void {
     const today = new Date();
     const start = new Date(today.getFullYear(), today.getMonth(), 1);
     this.from = this.toIsoDate(start);
     this.to = this.toIsoDate(today);
     this.loadRegister();
+    this.loadDisputes();
+  }
+
+  loadDisputes(): void {
+    if (!this.canCorrect) return;
+    this.mortality.openDisputes().subscribe({
+      next: (list) => this.disputes.set(list),
+      error: () => this.toast.error(this.translate.instant('MORTALITY.LOAD_ERROR')),
+    });
+  }
+
+  openUphold(dispute: DeathDispute): void {
+    this.upholdReason = '';
+    this.upholdTarget.set(dispute);
+  }
+
+  closeUphold(): void {
+    this.upholdTarget.set(null);
+  }
+
+  async submitUphold(): Promise<void> {
+    const dispute = this.upholdTarget();
+    const reason = this.upholdReason.trim();
+    if (!dispute || !reason) return;
+    if (
+      !(await this.confirmService.ask({
+        titleKey: 'MORTALITY.UPHOLD_CONFIRM',
+        confirmKey: 'MORTALITY.UPHOLD',
+      }))
+    )
+      return;
+    this.upholding.set(true);
+    this.mortality.upholdDeath(dispute.id, reason).subscribe({
+      next: () => {
+        this.toast.success(this.translate.instant('MORTALITY.UPHOLD_DONE'));
+        this.upholding.set(false);
+        this.upholdTarget.set(null);
+        this.loadDisputes();
+        this.loadRegister();
+      },
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('MORTALITY.UPHOLD_FAILED'));
+        this.upholding.set(false);
+      },
+    });
+  }
+
+  /** Entered in error from a dispute: the row it needs is on the register, when this hospital recorded the death. */
+  openEnteredInErrorFor(dispute: DeathDispute): void {
+    const record = this.register()?.deaths.find((d) => d.id === dispute.deathRecordId);
+    if (record) this.openEnteredInError(record);
   }
 
   loadRegister(): void {
@@ -294,6 +352,7 @@ export class MortalityComponent implements OnInit {
         this.errorRecord.set(null);
         this.selected.set(null);
         this.loadRegister();
+        this.loadDisputes();
       },
       error: (err: unknown) => {
         this.toast.error(

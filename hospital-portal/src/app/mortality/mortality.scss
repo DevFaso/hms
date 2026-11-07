@@ -107,6 +107,17 @@
   font-size: 1rem;
 }
 
+.disputed-count {
+  margin: 0 0 12px;
+  font-weight: 600;
+  color: #b45309;
+}
+
+.flag.disputed {
+  background: #fff3e0;
+  color: #b45309;
+}
+
 /* ── Flags ── */
 
 .flag {

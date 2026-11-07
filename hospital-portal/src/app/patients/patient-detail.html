@@ -72,11 +72,25 @@
             >
           }
           {{ ' ' }}
-          @if (p.deceased) {
+          @if (p.deceased && p.deathDisputed) {
+            <span class="status-badge disputed" data-testid="patient-death-disputed">{{
+              'MORTALITY.DISPUTE_STATUS' | translate
+            }}</span>
+          } @else if (p.deceased) {
             <!-- QA D1488: a recorded death is shown, never "Active". -->
             <span class="status-badge deceased" data-testid="patient-deceased">{{
               'PATIENTS.DECEASED_ON' | translate: { date: p.deceasedAt | serverTime | dateTime }
             }}</span>
+            @if (canDisputeDeath()) {
+              <button
+                type="button"
+                class="btn-secondary btn-sm"
+                data-testid="patient-dispute-death"
+                (click)="showDeathDispute.set(true)"
+              >
+                {{ 'MORTALITY.DISPUTE' | translate }}
+              </button>
+            }
           } @else {
             <span class="status-badge" [class.active]="p.active" [class.inactive]="!p.active">{{
               p.active ? ('COMMON.ACTIVE' | translate) : ('COMMON.INACTIVE' | translate)
@@ -133,6 +147,14 @@
         </button>
       }
     </div>
+
+    @if (showDeathDispute()) {
+      <app-death-dispute-dialog
+        [patientId]="p.id"
+        (dismissed)="showDeathDispute.set(false)"
+        (disputed)="onDeathDisputed()"
+      />
+    }
 
     <!-- Storyboard — allergies / problems / active encounter / code status. Identity is the header above. -->
     @if (!isFrontDeskOnly()) {

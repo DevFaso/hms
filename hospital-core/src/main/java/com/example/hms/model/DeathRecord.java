@@ -76,6 +76,11 @@ public class DeathRecord extends BaseEntity {
     @Column(name = "died_at", nullable = false)
     private LocalDateTime diedAt;
 
+    /** The state of this record a dispute read; moved by every amendment. */
+    @jakarta.persistence.Version
+    @Column(name = "version", nullable = false)
+    private Long version;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "place_of_death", nullable = false, length = 30)
     @Builder.Default

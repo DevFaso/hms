@@ -14,6 +14,7 @@ import {
 import { saveBlob } from '../shared/download-file';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { DeathDisputeDialogComponent } from '../mortality/death-dispute-dialog.component';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
 import { PatientService, PatientResponse } from '../services/patient.service';
@@ -90,6 +91,7 @@ type TabKey =
     ServerTimePipe,
     CommonModule,
     FormsModule,
+    DeathDisputeDialogComponent,
     RouterLink,
     TranslateModule,
     PatientChartComponent,
@@ -215,6 +217,18 @@ export class PatientDetailComponent implements OnInit {
    * the list with no word on why.
    */
   readonly unavailable = signal(false);
+
+  /** The urgent dispute of a recorded death: a doctor here; the server asks the role at this hospital. */
+  showDeathDispute = signal(false);
+
+  canDisputeDeath(): boolean {
+    return this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR']);
+  }
+
+  onDeathDisputed(): void {
+    this.showDeathDispute.set(false);
+    this.loadPatient(this.patientId);
+  }
 
   loadPatient(id: string): void {
     this.loading.set(true);

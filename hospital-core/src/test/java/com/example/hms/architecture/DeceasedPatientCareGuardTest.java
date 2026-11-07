@@ -200,7 +200,7 @@ class DeceasedPatientCareGuardTest {
         Map.entry("PharmacyClaim", BILLING), Map.entry("PharmacyPayment", BILLING),
         Map.entry("DischargeApproval", "discharge and stay close-out"),
         Map.entry("DischargeSummary", "discharge and stay close-out"),
-        Map.entry("Mortality", "the death record"),
+        Map.entry("Mortality", "the death record, and its dispute, which is what lifts the block"),
         Map.entry("ImagingResult", RESULTS), Map.entry("LabResult", RESULTS), Map.entry("MicroCulture", RESULTS),
         Map.entry("BreakGlass", RECORDS), Map.entry("CdsAcknowledgement", RECORDS), Map.entry("DigitalSignature", RECORDS),
         Map.entry("Empi", RECORDS), Map.entry("FileUpload", RECORDS), Map.entry("MedicationHistory", RECORDS),
@@ -278,6 +278,29 @@ class DeceasedPatientCareGuardTest {
         }
         assertThat(missing).as("gives new care to a patient who has died (QA D1488)" + SourceScan.MANDATE).isEmpty();
         assertThat(staysOpen()).as("both refused and open").doesNotContainAnyElementsOf(refused().keySet());
+    }
+
+    /**
+     * The dispute's one rule: no service reads the death itself to decide about care. An exemption written at one
+     * entry point would admit a patient whose medication or blood stays blocked downstream.
+     */
+    @Test
+    @DisplayName("nothing but the guard reads the death to decide about care, and every refusal asks careBlocked")
+    void oneEligibilityRule() throws IOException {
+        Set<String> allowed = Set.of("DeceasedPatientGuard", "MortalityServiceImpl");
+        List<String> readers = new ArrayList<>();
+        for (Map.Entry<String, Path> service : servicesByName().entrySet()) {
+            String source = SourceScan.stripComments(Files.readString(service.getValue(), StandardCharsets.UTF_8));
+            if (!allowed.contains(service.getKey()) && (source.contains(".isDeceased()") || source.contains(".getDeceasedAt()"))) {
+                readers.add(service.getKey());
+            }
+        }
+        assertThat(readers).as("decide through DeceasedPatientGuard.careBlocked, not an exemption of its own").isEmpty();
+        String guard = SourceScan.stripComments(Files.readString(
+            SERVICES.resolve("support/DeceasedPatientGuard.java"), StandardCharsets.UTF_8));
+        for (String refusal : List.of("refuseNewCare", "refuseCareAfterDeath", "refuseCareAfterDeathDay")) {
+            assertThat(bodyOf(guard, refusal)).as(refusal).contains("careBlocked(patient)");
+        }
     }
 
     /** What the user's rule names must keep its place: these never move to STAYS_OPEN by accident. */

@@ -392,6 +392,8 @@ class CancelVoidReasonGuardTest {
             "@RequestParam cancellationReason -> service/impl/ProcedureOrderServiceImplTest#cancelProcedureOrder_refusesABlankReason_D1098");
         CLINICAL_HANDLERS.put("POST /transfers/{orderId}/cancel",
             "TransferCancellationRequestDTO.cancellationReason -> service/TransferServiceImplTest#cancellingNeedsAReasonBecauseTheBedWasHeldOutOfCirculation");
+        CLINICAL_HANDLERS.put("POST /mortality/disputes/{disputeId}/uphold",
+            "DeathDisputeOutcomeDTO.reason -> service/DeathDisputeServiceImplTest#upholdRefusals");
         CLINICAL_HANDLERS.put("POST /transfusions/requests/{requestId}/cancel",
             "@RequestParam reason -> service/TransfusionServiceImplTest#cancellingRequiresAReason");
         CLINICAL_HANDLERS.put("POST /patients/{patientId}/treatment-consents/{consentId}/revoke",
