@@ -1,376 +1,467 @@
-<div class="page-container">
-  <div class="page-header">
+<div class="page-container patients-dashboard">
+  <div class="page-header dashboard-header">
     <div>
+      <p class="dashboard-eyebrow">{{ 'PATIENTS.WORKSPACE' | translate }}</p>
       <h1 class="page-title">{{ 'PATIENTS.TITLE' | translate }}</h1>
-      <p class="page-subtitle">
-        @if (!loading()) {
-          {{ filtered().length }} / {{ patients().length }}
-          {{ 'PATIENTS.PATIENT_COUNT' | translate }}
-        } @else {
-          {{ 'PATIENTS.SUBTITLE' | translate }}
-        }
-      </p>
+      <p class="page-subtitle">{{ 'PATIENTS.DIRECTORY_SUBTITLE' | translate }}</p>
     </div>
-    @if (canCreate) {
-      <a routerLink="/patients/new" class="btn-primary">
-        <span class="material-symbols-outlined">person_add</span>
-        {{ 'PATIENTS.REGISTER' | translate }}
-      </a>
-    }
+    <div class="page-actions">
+      <button type="button" class="refresh-button" (click)="loadPatients()" [disabled]="loading()">
+        <span class="material-symbols-outlined" aria-hidden="true">refresh</span
+        >{{ 'PATIENTS.REFRESH' | translate }}
+      </button>
+      @if (canCreate) {
+        <a routerLink="/patients/new" class="btn-primary">
+          <span class="material-symbols-outlined">person_add</span>
+          {{ 'PATIENTS.REGISTER' | translate }}
+        </a>
+      }
+    </div>
   </div>
-
-  <!-- Search + Filter toolbar -->
-  <div class="filter-toolbar">
-    <div class="search-bar toolbar-search">
-      <span class="material-symbols-outlined search-icon">search</span>
-      <input
-        [attr.aria-label]="'PATIENTS.SEARCH' | translate"
-        type="text"
-        [placeholder]="'PATIENTS.SEARCH' | translate"
-        [value]="searchTerm"
-        (input)="onSearchChange($any($event.target).value)"
-      />
-      @if (searchTerm) {
+  <section class="overview-panel" [attr.aria-label]="'PATIENTS.REGISTRATION_OVERVIEW' | translate">
+    <div class="overview-heading">
+      <h2>{{ 'PATIENTS.REGISTRATION_OVERVIEW' | translate }}</h2>
+      <p>{{ 'PATIENTS.REGISTRATION_HELP' | translate }}</p>
+    </div>
+    <div class="summary-cards">
+      @for (metric of directoryMetrics; track metric.id) {
         <button
-          class="search-clear"
-          [title]="'COMMON.CLEAR_SEARCH' | translate"
-          (click)="onSearchChange('')"
+          type="button"
+          class="summary-card"
+          [class.total-card]="metric.id === 'all'"
+          [class.metric-selected]="metricSelected(metric.id)"
+          [attr.aria-pressed]="metricSelected(metric.id)"
+          [attr.data-metric]="metric.id"
+          (click)="selectMetric(metric.id)"
+          [disabled]="loading() || loadError()"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span
+            class="material-symbols-outlined card-icon"
+            [ngClass]="metric.tone"
+            aria-hidden="true"
+            >{{ metric.icon }}</span
+          >
+          <strong class="card-value">{{ loading() || loadError() ? '—' : metric.count }}</strong
+          ><span class="card-label">{{ metric.label | translate }}</span>
         </button>
       }
     </div>
-
-    <button
-      class="filter-toggle-btn"
-      [class.has-filters]="activeFilterCount > 0"
-      (click)="showFilters.set(!showFilters())"
-      [title]="'PATIENTS.TOGGLE_FILTERS' | translate"
-    >
-      <span class="material-symbols-outlined">tune</span>
-      {{ 'COMMON.FILTERS' | translate }}
-      @if (activeFilterCount > 0) {
-        <span class="filter-badge">{{ activeFilterCount }}</span>
-      }
-    </button>
-  </div>
-
-  <!-- Expanded filter row -->
-  @if (showFilters()) {
-    <div class="filter-row">
-      <div class="filter-group">
-        <label class="filter-label" for="genderFilter">{{ 'PATIENTS.GENDER' | translate }}</label>
-        <select
-          id="genderFilter"
-          class="filter-select"
-          [title]="'PATIENTS.FILTER_GENDER' | translate"
-          [(ngModel)]="genderFilter"
-          (ngModelChange)="onFilterChange()"
-        >
-          <option value="">{{ 'COMMON.ALL' | translate }}</option>
-          @for (g of genderOptions; track g) {
-            <option [value]="g">{{ g | enumLabel: 'gender' }}</option>
-          }
-        </select>
+  </section>
+  <section class="directory-panel" [attr.aria-label]="'PATIENTS.DIRECTORY' | translate">
+    <div class="directory-heading">
+      <div>
+        <h2>{{ 'PATIENTS.DIRECTORY' | translate }}</h2>
+        <p role="status">
+          {{ 'PATIENTS.MATCHING_RECORDS' | translate: { count: filtered().length } }}
+        </p>
       </div>
-
-      <div class="filter-group">
-        <label class="filter-label" for="statusFilter">{{ 'COMMON.STATUS' | translate }}</label>
-        <select
-          id="statusFilter"
-          class="filter-select"
-          [title]="'PATIENTS.FILTER_STATUS' | translate"
-          [(ngModel)]="statusFilter"
-          (ngModelChange)="onFilterChange()"
-        >
-          <option value="">{{ 'COMMON.ALL' | translate }}</option>
-          <option value="active">{{ 'COMMON.ACTIVE' | translate }}</option>
-          <option value="inactive">{{ 'COMMON.INACTIVE' | translate }}</option>
-        </select>
-      </div>
-
-      <div class="filter-group">
-        <label class="filter-label" for="bloodTypeFilter">{{
-          'PATIENTS.BLOOD_TYPE' | translate
-        }}</label>
-        <select
-          id="bloodTypeFilter"
-          class="filter-select"
-          [title]="'PATIENTS.FILTER_BLOOD_TYPE' | translate"
-          [(ngModel)]="bloodTypeFilter"
-          (ngModelChange)="onFilterChange()"
-        >
-          <option value="">{{ 'COMMON.ALL' | translate }}</option>
-          @for (bt of bloodTypes; track bt) {
-            <option [value]="bt">{{ bt }}</option>
-          }
-        </select>
-      </div>
-
       @if (hospitals().length > 0) {
-        <div class="filter-group">
-          <label class="filter-label" for="hospitalFilter">{{
-            'ENCOUNTERS.HOSPITAL' | translate
-          }}</label>
-          <select
-            id="hospitalFilter"
-            class="filter-select"
-            [title]="'HOSPITAL_SCOPE.FILTER_BY_HOSPITAL' | translate"
+        <label class="hospital-control" for="directoryHospital"
+          >{{ 'ENCOUNTERS.HOSPITAL' | translate
+          }}<select
+            id="directoryHospital"
             [(ngModel)]="hospitalFilter"
             (ngModelChange)="onFilterChange()"
           >
-            <option value="">{{ 'COMMON.ALL_HOSPITALS' | translate }}</option>
+            <option value="">{{ 'PATIENTS.LOADED_HOSPITALS' | translate }}</option>
             @for (h of hospitals(); track h.id) {
               <option [value]="h.id">{{ h.name }}</option>
             }
+          </select></label
+        >
+      }
+    </div>
+    <!-- Search + Filter toolbar -->
+    <div class="filter-toolbar">
+      <div class="search-bar toolbar-search">
+        <span class="material-symbols-outlined search-icon">search</span>
+        <input
+          [attr.aria-label]="'PATIENTS.SEARCH' | translate"
+          type="text"
+          [placeholder]="'PATIENTS.SEARCH' | translate"
+          [value]="searchTerm"
+          (input)="onSearchChange($any($event.target).value)"
+        />
+        @if (searchTerm) {
+          <button
+            class="search-clear"
+            [title]="'COMMON.CLEAR_SEARCH' | translate"
+            (click)="onSearchChange('')"
+          >
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        }
+      </div>
+
+      <button
+        class="filter-toggle-btn"
+        [class.has-filters]="activeFilterCount > 0"
+        [attr.aria-expanded]="showFilters()"
+        aria-controls="patient-filters"
+        (click)="showFilters.set(!showFilters())"
+        [title]="'PATIENTS.TOGGLE_FILTERS' | translate"
+      >
+        <span class="material-symbols-outlined">tune</span>
+        {{ 'COMMON.FILTERS' | translate }}
+        @if (activeFilterCount > 0) {
+          <span class="filter-badge">{{ activeFilterCount }}</span>
+        }
+      </button>
+    </div>
+
+    <!-- Expanded filter row -->
+    @if (showFilters()) {
+      <div class="filter-row" id="patient-filters">
+        <div class="filter-group">
+          <label class="filter-label" for="genderFilter">{{ 'PATIENTS.GENDER' | translate }}</label>
+          <select
+            id="genderFilter"
+            class="filter-select"
+            [title]="'PATIENTS.FILTER_GENDER' | translate"
+            [(ngModel)]="genderFilter"
+            (ngModelChange)="onFilterChange()"
+          >
+            <option value="">{{ 'COMMON.ALL' | translate }}</option>
+            @for (g of genderOptions; track g) {
+              <option [value]="g">{{ g | enumLabel: 'gender' }}</option>
+            }
           </select>
         </div>
-      }
 
-      @if (activeFilterCount > 0) {
-        <button class="clear-filters-btn" (click)="clearFilters()">
-          <span class="material-symbols-outlined">filter_alt_off</span>
-          {{ 'COMMON.CLEAR_ALL' | translate }}
-        </button>
-      }
-    </div>
-  }
-
-  <!-- Active filter chips -->
-  @if (activeFilterCount > 0) {
-    <div class="active-chips">
-      @if (genderFilter) {
-        <span class="filter-chip">
-          {{ 'PATIENTS.GENDER' | translate }}: {{ genderFilter | enumLabel: 'gender' }}
-          <button class="chip-remove" (click)="removeFilter('gender')">
-            <span class="material-symbols-outlined">close</span>
-          </button>
-        </span>
-      }
-      @if (statusFilter) {
-        <span class="filter-chip">
-          {{ 'COMMON.STATUS' | translate }}:
-          {{ (statusFilter === 'active' ? 'COMMON.ACTIVE' : 'COMMON.INACTIVE') | translate }}
-          <button class="chip-remove" (click)="removeFilter('status')">
-            <span class="material-symbols-outlined">close</span>
-          </button>
-        </span>
-      }
-      @if (bloodTypeFilter) {
-        <span class="filter-chip">
-          {{ 'PATIENTS.BLOOD' | translate }}: {{ bloodTypeFilter }}
-          <button class="chip-remove" (click)="removeFilter('bloodType')">
-            <span class="material-symbols-outlined">close</span>
-          </button>
-        </span>
-      }
-      @if (hospitalFilter) {
-        <span class="filter-chip">
-          {{ 'ENCOUNTERS.HOSPITAL' | translate }}: {{ hospitalName(hospitalFilter) }}
-          <button class="chip-remove" (click)="removeFilter('hospital')">
-            <span class="material-symbols-outlined">close</span>
-          </button>
-        </span>
-      }
-    </div>
-  }
-
-  <!-- Loading -->
-  @if (loading()) {
-    <div class="loading-state">
-      <div class="spinner"></div>
-      <p>{{ 'PATIENTS.LOADING' | translate }}</p>
-    </div>
-  }
-
-  <!-- Table -->
-  @if (!loading() && pagedFiltered.length > 0) {
-    <div class="table-wrapper">
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th
-              class="sortable-th"
-              (click)="sort('name')"
-              (keydown.enter)="sort('name')"
-              tabindex="0"
-              scope="col"
-              [attr.aria-sort]="
-                sortField() === 'name' ? (sortDir() === 'asc' ? 'ascending' : 'descending') : 'none'
-              "
-            >
-              {{ 'PATIENTS.PATIENT_NAME' | translate }}
-              <span class="material-symbols-outlined sort-icon">{{ sortIcon('name') }}</span>
-            </th>
-            <th
-              class="sortable-th"
-              (click)="sort('mrn')"
-              (keydown.enter)="sort('mrn')"
-              tabindex="0"
-              scope="col"
-              [attr.aria-sort]="
-                sortField() === 'mrn' ? (sortDir() === 'asc' ? 'ascending' : 'descending') : 'none'
-              "
-            >
-              {{ 'PATIENTS.MRN' | translate }}
-              <span class="material-symbols-outlined sort-icon">{{ sortIcon('mrn') }}</span>
-            </th>
-            <th scope="col">{{ 'PATIENTS.EMAIL' | translate }}</th>
-            <th scope="col">{{ 'PATIENTS.PHONE' | translate }}</th>
-            <th
-              class="sortable-th"
-              (click)="sort('gender')"
-              (keydown.enter)="sort('gender')"
-              tabindex="0"
-              scope="col"
-              [attr.aria-sort]="
-                sortField() === 'gender'
-                  ? sortDir() === 'asc'
-                    ? 'ascending'
-                    : 'descending'
-                  : 'none'
-              "
-            >
-              {{ 'PATIENTS.GENDER' | translate }}
-              <span class="material-symbols-outlined sort-icon">{{ sortIcon('gender') }}</span>
-            </th>
-            <th scope="col">{{ 'PATIENTS.BLOOD_TYPE' | translate }}</th>
-            <th
-              class="sortable-th"
-              (click)="sort('status')"
-              (keydown.enter)="sort('status')"
-              tabindex="0"
-              scope="col"
-              [attr.aria-sort]="
-                sortField() === 'status'
-                  ? sortDir() === 'asc'
-                    ? 'ascending'
-                    : 'descending'
-                  : 'none'
-              "
-            >
-              {{ 'COMMON.STATUS' | translate }}
-              <span class="material-symbols-outlined sort-icon">{{ sortIcon('status') }}</span>
-            </th>
-            <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (patient of pagedFiltered; track patient.id) {
-            <tr>
-              <td class="name-cell">
-                <div class="avatar-sm">
-                  {{ patient.firstName.charAt(0) }}{{ patient.lastName.charAt(0) }}
-                </div>
-                <div class="name-stack">
-                  <span class="name-primary">{{ patient.firstName }} {{ patient.lastName }}</span>
-                  @if (patient.hospitalName) {
-                    <span class="name-sub">{{ patient.hospitalName }}</span>
-                  }
-                </div>
-              </td>
-              <td>
-                <code class="mrn-code">{{ patient.mrn ?? '—' }}</code>
-              </td>
-              <td>{{ patient.email }}</td>
-              <td>{{ patient.phoneNumberPrimary ?? '—' }}</td>
-              <td>{{ patient.gender ? (patient.gender | enumLabel: 'gender') : '—' }}</td>
-              <td>
-                @if (patient.bloodType) {
-                  <span class="blood-badge">{{ patient.bloodType }}</span>
-                } @else {
-                  —
-                }
-              </td>
-              <td>
-                <span
-                  class="status-badge with-dot"
-                  [class.active]="patient.active"
-                  [class.inactive]="!patient.active"
-                >
-                  <span class="status-dot"></span>
-                  {{
-                    patient.active ? ('COMMON.ACTIVE' | translate) : ('COMMON.INACTIVE' | translate)
-                  }}
-                </span>
-              </td>
-              <td>
-                <a
-                  [routerLink]="['/patients', patient.id]"
-                  class="action-link"
-                  [title]="'PATIENTS.VIEW' | translate"
-                >
-                  <span class="material-symbols-outlined">arrow_forward</span>
-                </a>
-              </td>
-            </tr>
-          }
-        </tbody>
-      </table>
-    </div>
-
-    <!-- Pagination -->
-    @if (totalPages > 1) {
-      <div class="pagination-row">
-        <span class="pagination-info">
-          {{
-            'COMMON.SHOWING_RANGE'
-              | translate
-                : {
-                    from: currentPage() * pageSize + 1,
-                    to:
-                      (currentPage() + 1) * pageSize < filtered().length
-                        ? (currentPage() + 1) * pageSize
-                        : filtered().length,
-                    total: filtered().length,
-                  }
-          }}
-        </span>
-        <div class="pagination-controls">
-          <button
-            class="page-btn"
-            [disabled]="currentPage() === 0"
-            (click)="goToPage(currentPage() - 1)"
-            [title]="'PATIENTS.PAGER_PREV' | translate"
-            [attr.aria-label]="'PATIENTS.PAGER_PREV' | translate"
+        <div class="filter-group">
+          <label class="filter-label" for="statusFilter">{{ 'COMMON.STATUS' | translate }}</label>
+          <select
+            id="statusFilter"
+            class="filter-select"
+            [title]="'PATIENTS.FILTER_STATUS' | translate"
+            [(ngModel)]="statusFilter"
+            (ngModelChange)="onFilterChange()"
           >
-            <span class="material-symbols-outlined">chevron_left</span>
+            <option value="">{{ 'COMMON.ALL' | translate }}</option>
+            <option value="active">{{ 'COMMON.ACTIVE' | translate }}</option>
+            <option value="inactive">{{ 'COMMON.INACTIVE' | translate }}</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <label class="filter-label" for="bloodTypeFilter">{{
+            'PATIENTS.BLOOD_TYPE' | translate
+          }}</label>
+          <select
+            id="bloodTypeFilter"
+            class="filter-select"
+            [title]="'PATIENTS.FILTER_BLOOD_TYPE' | translate"
+            [(ngModel)]="bloodTypeFilter"
+            (ngModelChange)="onFilterChange()"
+          >
+            <option value="">{{ 'COMMON.ALL' | translate }}</option>
+            @for (bt of bloodTypes; track bt) {
+              <option [value]="bt">{{ bt }}</option>
+            }
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <label class="filter-label" for="contactFilter">{{
+            'PATIENTS.CONTACT_DETAILS' | translate
+          }}</label
+          ><select
+            id="contactFilter"
+            class="filter-select"
+            [(ngModel)]="contactFilter"
+            (ngModelChange)="onFilterChange()"
+          >
+            <option value="">{{ 'COMMON.ALL' | translate }}</option>
+            <option value="missing">{{ 'PATIENTS.NO_CONTACT' | translate }}</option>
+            <option value="recorded">{{ 'PATIENTS.CONTACT_RECORDED' | translate }}</option>
+          </select>
+        </div>
+        @if (activeFilterCount > 0) {
+          <button class="clear-filters-btn" (click)="clearFilters()">
+            <span class="material-symbols-outlined">filter_alt_off</span>
+            {{ 'COMMON.CLEAR_ALL' | translate }}
           </button>
-          @if (totalPages <= 7) {
-            @for (p of [].constructor(totalPages); track $index) {
-              <button
-                class="page-btn page-num"
-                [class.active]="$index === currentPage()"
-                (click)="goToPage($index)"
-                [attr.aria-label]="'PATIENTS.PAGER_PAGE' | translate: { page: $index + 1 }"
-                [attr.aria-current]="$index === currentPage() ? 'page' : null"
-              >
-                {{ $index + 1 }}
-              </button>
-            }
-          } @else {
-            <!-- First page -->
+        }
+      </div>
+    }
+
+    <!-- Active filter chips -->
+    @if (activeFilterCount > 0) {
+      <div class="active-chips">
+        @if (genderFilter) {
+          <span class="filter-chip">
+            {{ 'PATIENTS.GENDER' | translate }}: {{ genderFilter | enumLabel: 'gender' }}
             <button
-              class="page-btn page-num"
-              [class.active]="currentPage() === 0"
-              (click)="goToPage(0)"
-              [attr.aria-label]="'PATIENTS.PAGER_PAGE' | translate: { page: 1 }"
-              [attr.aria-current]="currentPage() === 0 ? 'page' : null"
+              class="chip-remove"
+              [attr.aria-label]="'COMMON.REMOVE' | translate"
+              (click)="removeFilter('gender')"
             >
-              1
+              <span class="material-symbols-outlined">close</span>
             </button>
-            <!-- Leading ellipsis -->
-            @if (currentPage() > 3) {
-              <span class="page-ellipsis">…</span>
+          </span>
+        }
+        @if (statusFilter) {
+          <span class="filter-chip">
+            {{ 'COMMON.STATUS' | translate }}:
+            {{ (statusFilter === 'active' ? 'COMMON.ACTIVE' : 'COMMON.INACTIVE') | translate }}
+            <button
+              class="chip-remove"
+              [attr.aria-label]="'COMMON.REMOVE' | translate"
+              (click)="removeFilter('status')"
+            >
+              <span class="material-symbols-outlined">close</span>
+            </button>
+          </span>
+        }
+        @if (bloodTypeFilter) {
+          <span class="filter-chip">
+            {{ 'PATIENTS.BLOOD' | translate }}: {{ bloodTypeFilter }}
+            <button
+              class="chip-remove"
+              [attr.aria-label]="'COMMON.REMOVE' | translate"
+              (click)="removeFilter('bloodType')"
+            >
+              <span class="material-symbols-outlined">close</span>
+            </button>
+          </span>
+        }
+        @if (hospitalFilter) {
+          <span class="filter-chip">
+            {{ 'ENCOUNTERS.HOSPITAL' | translate }}: {{ hospitalName(hospitalFilter) }}
+            <button
+              class="chip-remove"
+              [attr.aria-label]="'COMMON.REMOVE' | translate"
+              (click)="removeFilter('hospital')"
+            >
+              <span class="material-symbols-outlined">close</span>
+            </button>
+          </span>
+        }
+      </div>
+    }
+
+    @if (contactFilter) {
+      <div class="active-chips">
+        <span class="filter-chip"
+          >{{
+            (contactFilter === 'missing' ? 'PATIENTS.NO_CONTACT' : 'PATIENTS.CONTACT_RECORDED')
+              | translate
+          }}<button
+            class="chip-remove"
+            [attr.aria-label]="'COMMON.REMOVE' | translate"
+            (click)="removeFilter('contact')"
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
+          </button></span
+        >
+      </div>
+    }
+    @if (!loading() && loadError()) {
+      <div class="load-error" role="alert">
+        <span class="material-symbols-outlined" aria-hidden="true">cloud_off</span>
+        <p>{{ 'PATIENTS.LOAD_FAILED' | translate }}</p>
+        <button type="button" class="refresh-button" (click)="loadPatients()">
+          {{ 'PATIENTS.RETRY' | translate }}
+        </button>
+      </div>
+    }
+    <!-- Loading -->
+    @if (loading()) {
+      <div class="loading-state">
+        <div class="spinner"></div>
+        <p>{{ 'PATIENTS.LOADING' | translate }}</p>
+      </div>
+    }
+
+    <!-- Table -->
+    @if (!loading() && pagedFiltered.length > 0) {
+      <div class="table-wrapper">
+        <table class="data-table">
+          <caption class="sr-only">
+            {{
+              'PATIENTS.DIRECTORY' | translate
+            }}
+          </caption>
+          <thead>
+            <tr>
+              <th
+                class="sortable-th"
+                scope="col"
+                [attr.aria-sort]="
+                  sortField() === 'name'
+                    ? sortDir() === 'asc'
+                      ? 'ascending'
+                      : 'descending'
+                    : 'none'
+                "
+              >
+                <button type="button" class="sort-button" (click)="sort('name')">
+                  {{ 'PATIENTS.PATIENT_NAME' | translate }}
+                  <span class="material-symbols-outlined sort-icon">{{ sortIcon('name') }}</span>
+                </button>
+              </th>
+              <th
+                class="sortable-th"
+                scope="col"
+                [attr.aria-sort]="
+                  sortField() === 'mrn'
+                    ? sortDir() === 'asc'
+                      ? 'ascending'
+                      : 'descending'
+                    : 'none'
+                "
+              >
+                <button type="button" class="sort-button" (click)="sort('mrn')">
+                  {{ 'PATIENTS.MRN' | translate }}
+                  <span class="material-symbols-outlined sort-icon">{{ sortIcon('mrn') }}</span>
+                </button>
+              </th>
+              <th scope="col">{{ 'PATIENTS.CONTACT_DETAILS' | translate }}</th>
+              <th
+                class="sortable-th"
+                scope="col"
+                [attr.aria-sort]="
+                  sortField() === 'gender'
+                    ? sortDir() === 'asc'
+                      ? 'ascending'
+                      : 'descending'
+                    : 'none'
+                "
+              >
+                <button type="button" class="sort-button" (click)="sort('gender')">
+                  {{ 'PATIENTS.GENDER' | translate }}
+                  <span class="material-symbols-outlined sort-icon">{{ sortIcon('gender') }}</span>
+                </button>
+              </th>
+              <th scope="col">{{ 'PATIENTS.BLOOD_TYPE' | translate }}</th>
+              <th
+                class="sortable-th"
+                scope="col"
+                [attr.aria-sort]="
+                  sortField() === 'status'
+                    ? sortDir() === 'asc'
+                      ? 'ascending'
+                      : 'descending'
+                    : 'none'
+                "
+              >
+                <button type="button" class="sort-button" (click)="sort('status')">
+                  {{ 'COMMON.STATUS' | translate }}
+                  <span class="material-symbols-outlined sort-icon">{{ sortIcon('status') }}</span>
+                </button>
+              </th>
+              <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (patient of pagedFiltered; track patient.id) {
+              <tr>
+                <td class="name-cell">
+                  <div class="avatar-sm">
+                    {{ patient.firstName.charAt(0) }}{{ patient.lastName.charAt(0) }}
+                  </div>
+                  <div class="name-stack">
+                    <span class="name-primary">{{ patient.firstName }} {{ patient.lastName }}</span>
+                    @if (patient.hospitalName) {
+                      <span class="name-sub">{{ patient.hospitalName }}</span>
+                    }
+                  </div>
+                </td>
+                <td>
+                  <code class="mrn-code">{{ patient.mrn ?? '—' }}</code>
+                </td>
+                <td class="contact-cell">
+                  @if (patient.phoneNumberPrimary || patient.phoneNumberSecondary) {
+                    <span class="contact-primary">{{
+                      patient.phoneNumberPrimary || patient.phoneNumberSecondary
+                    }}</span>
+                  }
+                  @if (patient.email) {
+                    <span class="contact-secondary">{{ patient.email }}</span>
+                  }
+                  @if (!hasContact(patient)) {
+                    <span class="contact-missing">{{ 'PATIENTS.NO_CONTACT' | translate }}</span>
+                  }
+                </td>
+                <td>{{ patient.gender ? (patient.gender | enumLabel: 'gender') : '—' }}</td>
+                <td>
+                  @if (patient.bloodType) {
+                    <span class="blood-badge">{{ patient.bloodType }}</span>
+                  } @else {
+                    —
+                  }
+                </td>
+                <td>
+                  <span
+                    class="status-badge with-dot"
+                    [class.active]="patient.active"
+                    [class.inactive]="!patient.active"
+                  >
+                    <span class="status-dot"></span>
+                    {{
+                      patient.active
+                        ? ('COMMON.ACTIVE' | translate)
+                        : ('COMMON.INACTIVE' | translate)
+                    }}
+                  </span>
+                </td>
+                <td>
+                  <a
+                    [routerLink]="['/patients', patient.id]"
+                    class="action-link"
+                    [title]="'PATIENTS.VIEW' | translate"
+                    [attr.aria-label]="
+                      'PATIENTS.OPEN_PATIENT'
+                        | translate: { name: patient.firstName + ' ' + patient.lastName }
+                    "
+                  >
+                    <span>{{ 'PATIENTS.OPEN_RECORD' | translate }}</span
+                    ><span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span>
+                  </a>
+                </td>
+              </tr>
             }
-            <!-- Middle pages window -->
-            @for (p of [].constructor(totalPages); track $index) {
-              @if (
-                $index > 0 &&
-                $index < totalPages - 1 &&
-                $index >= currentPage() - 2 &&
-                $index <= currentPage() + 2
-              ) {
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Pagination -->
+      @if (filtered().length > 0) {
+        <div class="pagination-row">
+          <span class="pagination-info">
+            {{
+              'COMMON.SHOWING_RANGE'
+                | translate
+                  : {
+                      from: currentPage() * pageSize + 1,
+                      to:
+                        (currentPage() + 1) * pageSize < filtered().length
+                          ? (currentPage() + 1) * pageSize
+                          : filtered().length,
+                      total: filtered().length,
+                    }
+            }}
+          </span>
+          <label class="page-size"
+            >{{ 'PATIENTS.ROWS_PER_PAGE' | translate
+            }}<select [ngModel]="pageSize" (ngModelChange)="changePageSize(+$event)">
+              <option [ngValue]="10">10</option>
+              <option [ngValue]="20">20</option>
+              <option [ngValue]="50">50</option>
+            </select></label
+          >
+          <div class="pagination-controls">
+            <button
+              class="page-btn"
+              [disabled]="currentPage() === 0"
+              (click)="goToPage(currentPage() - 1)"
+              [title]="'PATIENTS.PAGER_PREV' | translate"
+              [attr.aria-label]="'PATIENTS.PAGER_PREV' | translate"
+            >
+              <span class="material-symbols-outlined">chevron_left</span>
+            </button>
+            @if (totalPages <= 7) {
+              @for (p of [].constructor(totalPages); track $index) {
                 <button
                   class="page-btn page-num"
                   [class.active]="$index === currentPage()"
@@ -381,51 +472,85 @@
                   {{ $index + 1 }}
                 </button>
               }
+            } @else {
+              <!-- First page -->
+              <button
+                class="page-btn page-num"
+                [class.active]="currentPage() === 0"
+                (click)="goToPage(0)"
+                [attr.aria-label]="'PATIENTS.PAGER_PAGE' | translate: { page: 1 }"
+                [attr.aria-current]="currentPage() === 0 ? 'page' : null"
+              >
+                1
+              </button>
+              <!-- Leading ellipsis -->
+              @if (currentPage() > 3) {
+                <span class="page-ellipsis">…</span>
+              }
+              <!-- Middle pages window -->
+              @for (p of [].constructor(totalPages); track $index) {
+                @if (
+                  $index > 0 &&
+                  $index < totalPages - 1 &&
+                  $index >= currentPage() - 2 &&
+                  $index <= currentPage() + 2
+                ) {
+                  <button
+                    class="page-btn page-num"
+                    [class.active]="$index === currentPage()"
+                    (click)="goToPage($index)"
+                    [attr.aria-label]="'PATIENTS.PAGER_PAGE' | translate: { page: $index + 1 }"
+                    [attr.aria-current]="$index === currentPage() ? 'page' : null"
+                  >
+                    {{ $index + 1 }}
+                  </button>
+                }
+              }
+              <!-- Trailing ellipsis -->
+              @if (currentPage() < totalPages - 4) {
+                <span class="page-ellipsis">…</span>
+              }
+              <!-- Last page -->
+              <button
+                class="page-btn page-num"
+                [class.active]="currentPage() === totalPages - 1"
+                (click)="goToPage(totalPages - 1)"
+                [attr.aria-label]="'PATIENTS.PAGER_PAGE' | translate: { page: totalPages }"
+                [attr.aria-current]="currentPage() === totalPages - 1 ? 'page' : null"
+              >
+                {{ totalPages }}
+              </button>
             }
-            <!-- Trailing ellipsis -->
-            @if (currentPage() < totalPages - 4) {
-              <span class="page-ellipsis">…</span>
-            }
-            <!-- Last page -->
             <button
-              class="page-btn page-num"
-              [class.active]="currentPage() === totalPages - 1"
-              (click)="goToPage(totalPages - 1)"
-              [attr.aria-label]="'PATIENTS.PAGER_PAGE' | translate: { page: totalPages }"
-              [attr.aria-current]="currentPage() === totalPages - 1 ? 'page' : null"
+              class="page-btn"
+              [disabled]="currentPage() >= totalPages - 1"
+              (click)="goToPage(currentPage() + 1)"
+              [title]="'PATIENTS.PAGER_NEXT' | translate"
+              [attr.aria-label]="'PATIENTS.PAGER_NEXT' | translate"
             >
-              {{ totalPages }}
+              <span class="material-symbols-outlined">chevron_right</span>
             </button>
-          }
-          <button
-            class="page-btn"
-            [disabled]="currentPage() >= totalPages - 1"
-            (click)="goToPage(currentPage() + 1)"
-            [title]="'PATIENTS.PAGER_NEXT' | translate"
-            [attr.aria-label]="'PATIENTS.PAGER_NEXT' | translate"
-          >
-            <span class="material-symbols-outlined">chevron_right</span>
-          </button>
+          </div>
         </div>
+      }
+    }
+
+    <!-- Empty -->
+    @if (!loading() && !loadError() && filtered().length === 0) {
+      <div class="empty-state">
+        <span class="material-symbols-outlined empty-icon">people</span>
+        <h3>{{ 'PATIENTS.NO_PATIENTS' | translate }}</h3>
+        <p>
+          @if (searchTerm || activeFilterCount > 0) {
+            {{ 'COMMON.TRY_ADJUSTING' | translate }}
+            <button class="link-btn" (click)="clearFilters()">
+              {{ 'COMMON.CLEAR_ALL_FILTERS' | translate }}
+            </button>
+          } @else {
+            {{ 'PATIENTS.REGISTER_FIRST' | translate }}
+          }
+        </p>
       </div>
     }
-  }
-
-  <!-- Empty -->
-  @if (!loading() && filtered().length === 0) {
-    <div class="empty-state">
-      <span class="material-symbols-outlined empty-icon">people</span>
-      <h3>{{ 'PATIENTS.NO_PATIENTS' | translate }}</h3>
-      <p>
-        @if (searchTerm || activeFilterCount > 0) {
-          {{ 'COMMON.TRY_ADJUSTING' | translate }}
-          <button class="link-btn" (click)="clearFilters()">
-            {{ 'COMMON.CLEAR_ALL_FILTERS' | translate }}
-          </button>
-        } @else {
-          {{ 'PATIENTS.REGISTER_FIRST' | translate }}
-        }
-      </p>
-    </div>
-  }
+  </section>
 </div>
