@@ -367,7 +367,14 @@
                   }
                   <!-- QA D1424: what asks to remeasure, or names the acceptable range, is read, not hovered. -->
                   @for (alert of newbornAlertsToRead(a); track $index) {
-                    <p class="saved-note" data-testid="newborn-alert-sentence">{{ alert.message }}</p>
+                    <p
+                      class="saved-note"
+                      [class.risk-badge]="isNewbornValueCheck(alert)"
+                      [class.risk-high]="isNewbornValueCheck(alert)"
+                      data-testid="newborn-alert-sentence"
+                    >
+                      {{ alert.message }}
+                    </p>
                   }
                 </td>
                 <!-- QA D1068: appearance, exam and follow-up notes, as typed. -->
@@ -712,23 +719,22 @@
             <label for="nb-temp">{{ 'POSTPARTUM.TEMPERATURE' | translate }}</label>
             <input
               id="nb-temp"
+              min="0"
               type="number"
               step="0.1"
-              min="25"
-              max="44"
               [(ngModel)]="assessmentForm.temperatureCelsius"
             />
+            @if (newbornValueToCheck('temperatureCelsius')) {
+              <p class="risk-badge risk-high" role="alert" data-testid="nb-temp-check">
+                {{ 'POSTPARTUM.CHECK_VALUE' | translate }}
+              </p>
+            }
           </div>
           <div class="field">
             <label for="nb-hr">{{ 'POSTPARTUM.PULSE' | translate }}</label>
-            <input
-              id="nb-hr"
-              type="number"
-              min="0"
-              [(ngModel)]="assessmentForm.heartRateBpm"
-            />
+            <input id="nb-hr" type="number" min="0" [(ngModel)]="assessmentForm.heartRateBpm" />
             @if (newbornValueToCheck('heartRateBpm')) {
-              <p class="field-hint" role="status" data-testid="nb-hr-check">
+              <p class="risk-badge risk-high" role="alert" data-testid="nb-hr-check">
                 {{ 'POSTPARTUM.CHECK_VALUE' | translate }}
               </p>
             }
@@ -742,7 +748,7 @@
               [(ngModel)]="assessmentForm.respirationsPerMin"
             />
             @if (newbornValueToCheck('respiratoryRateBpm')) {
-              <p class="field-hint" role="status" data-testid="nb-resp-check">
+              <p class="risk-badge risk-high" role="alert" data-testid="nb-resp-check">
                 {{ 'POSTPARTUM.CHECK_VALUE' | translate }}
               </p>
             }
@@ -767,7 +773,7 @@
               [(ngModel)]="assessmentForm.glucoseValue"
             />
             @if (newbornValueToCheck('glucose')) {
-              <p class="field-hint" role="status" data-testid="nb-check-glucose">
+              <p class="risk-badge risk-high" role="alert" data-testid="nb-check-glucose">
                 {{ 'POSTPARTUM.CHECK_VALUE' | translate }}
               </p>
             }
@@ -777,7 +783,9 @@
             <select id="nb-glucose-unit" [(ngModel)]="assessmentForm.glucoseUnit">
               <option [ngValue]="undefined">—</option>
               @for (unit of glucoseUnits; track unit) {
-                <option [ngValue]="unit">{{ 'POSTPARTUM.GLUCOSE_UNIT_' + unit | translate }}</option>
+                <option [ngValue]="unit">
+                  {{ glucoseUnitLabels[unit] }}
+                </option>
               }
             </select>
           </div>

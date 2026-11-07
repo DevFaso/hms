@@ -2,7 +2,6 @@ package com.example.hms.payload.dto.clinical.newborn;
 
 import com.example.hms.payload.dto.VitalSignLimits;
 import jakarta.validation.constraints.DecimalMin;
-import jakarta.validation.constraints.DecimalMax;
 import com.example.hms.enums.NewbornEducationTopic;
 import com.example.hms.enums.NewbornFollowUpAction;
 import jakarta.validation.constraints.Max;
@@ -60,8 +59,7 @@ public class NewbornAssessmentRequestDTO {
 
     private String apgarNotes;
 
-    @DecimalMin(value = VitalSignLimits.TEMPERATURE_MIN_C, message = "{vitals.temperature.range}")
-    @DecimalMax(value = VitalSignLimits.TEMPERATURE_MAX_C, message = "{vitals.temperature.range}")
+    @DecimalMin(value = "0", message = "{newborn.vitals.negative}")
     private Double temperatureCelsius;
     // QA D1424: warnings and escalation, never a limit that prevents saving an observation
     // (NewbornAlertRules holds the sources). Only what cannot exist by definition is refused:

@@ -158,6 +158,9 @@ class BloodPressurePairGuardTest {
             .glucoseMgDl(900).oxygenSaturationPercent(100).systolicBpMmHg(400).diastolicBpMmHg(300).build())).isEmpty();
         assertThat(rejected(NewbornAssessmentRequestDTO.builder().glucoseValue(0.0).glucoseUnit(com.example.hms.enums.GlucoseUnit.MG_DL).build())).isEmpty();
         assertThat(rejected(NewbornAssessmentRequestDTO.builder().glucoseValue(-0.1).build())).contains("glucoseValue");
+        assertThat(rejected(NewbornAssessmentRequestDTO.builder().temperatureCelsius(24.9).build())).isEmpty();
+        assertThat(rejected(NewbornAssessmentRequestDTO.builder().temperatureCelsius(44.1).build())).isEmpty();
+        assertThat(rejected(NewbornAssessmentRequestDTO.builder().temperatureCelsius(-0.1).build())).contains("temperatureCelsius");
         assertThat(rejected(NewbornAssessmentRequestDTO.builder().heartRateBpm(0).respirationsPerMin(0)
             .oxygenSaturationPercent(40).glucoseMgDl(18).build())).isEmpty();
         assertThat(rejected(NewbornAssessmentRequestDTO.builder().heartRateBpm(250).respirationsPerMin(85)

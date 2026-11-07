@@ -160,6 +160,45 @@ class NewbornAlertRulesTest {
         assertGlucose(codes(glucose(GlucoseUnit.MMOL_L.toMgDl(mmol), mmol, hours)), code, severity);
     }
 
+    @ParameterizedTest(name = "{0} mg/dL as entered at {1} h: {2} {3}")
+    @CsvSource({
+        "46.6,1,newborn-glucose-first-72h,URGENT",
+        "47.0,1,none,NONE",
+        "58.6,72,newborn-glucose-after-72h,CAUTION",
+        "59.0,72,none,NONE",
+        "44.6,72,newborn-glucose,URGENT"
+    })
+    @DisplayName("a decimal in mg/dL is judged as entered, not after rounding")
+    void glucoseDecimalInMgDl(double entered, long hours, String code, String severity) {
+        assertGlucose(codes(new NewbornAlertRules.Reading(null, null, null, null, GlucoseUnit.MG_DL.toMgDl(entered), null,
+            null, null, hours, false, false, entered)), code, severity);
+    }
+
+    @Test
+    @DisplayName("2.49 mmol/L is below the older critical line, though it rounds to 45 mg/dL")
+    void theOlderCriticalLineHoldsInMmol() {
+        assertThat(codes(glucose(GlucoseUnit.MMOL_L.toMgDl(2.49), 2.49, 100L))).containsEntry("newborn-glucose", NewbornAlertSeverity.URGENT);
+    }
+
+    @ParameterizedTest(name = "T {0} says support started: {1}")
+    @CsvSource({"35.9,true", "38.0,false", "38.1,true"})
+    @DisplayName("38.0 is urgent, and the record does not claim support started")
+    void temperatureSupportFlag(double value, boolean started) {
+        assertThat(NewbornAlertRules.evaluate(new NewbornAlertRules.Reading(value, null, null, null, null, null, null, null, 1L, false, false)))
+            .filteredOn(f -> "newborn-temperature-critical".equals(f.code()))
+            .singleElement()
+            .satisfies(f -> assertThat(f.startsSupport()).isEqualTo(started));
+    }
+
+    @Test
+    @DisplayName("a temperature above what other forms accept asks to remeasure, and stays urgent")
+    void aHighTemperatureAsksToRemeasure() {
+        assertThat(codes(new NewbornAlertRules.Reading(44.1, null, null, null, null, null, null, null, 1L, false, false)))
+            .containsKeys("newborn-check-temperature", "newborn-temperature-critical");
+        assertThat(codes(new NewbornAlertRules.Reading(44.0, null, null, null, null, null, null, null, 1L, false, false)))
+            .doesNotContainKey("newborn-check-temperature");
+    }
+
     @ParameterizedTest(name = "{0} mg/dL, age unknown: {1}")
     @CsvSource({
         "44,newborn-glucose", "45,newborn-glucose-unknown-age", "46,newborn-glucose-unknown-age", "47,none", "58,none"
@@ -257,7 +296,7 @@ class NewbornAlertRulesTest {
             "newborn-glucose-first-72h", "newborn-glucose-unknown-age", "newborn-glucose-after-72h",
             "newborn-reference-heart-rate", "newborn-reference-heart-rate-preterm", "newborn-reference-respiratory",
             "newborn-reference-respiratory-preterm", "newborn-check-heart-rate", "newborn-check-respiratory",
-            "newborn-check-glucose", "newborn-check-pressure");
+            "newborn-check-glucose", "newborn-check-pressure", "newborn-check-temperature");
         for (java.util.Locale locale : List.of(java.util.Locale.ENGLISH, java.util.Locale.FRENCH, java.util.Locale.forLanguageTag("es"))) {
             for (String code : codes) {
                 assertThat(messages.getMessage("newborn.alert.msg." + code, null, locale)).as(code).isNotBlank();

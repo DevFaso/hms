@@ -506,8 +506,10 @@ class NewbornAssessmentServiceImplTest {
     private void previousReading(com.example.hms.model.labor.DeliveryRecord delivery, int heartRate) {
         NewbornAssessment previous = NewbornAssessment.builder().heartRateBpm(heartRate).build();
         previous.setDeliveryRecord(delivery);
-        lenient().when(assessmentRepository.findWithinRange(eq(patientId), eq(hospitalId), isNull(), any(), any()))
-            .thenReturn(java.util.List.of(previous));
+        lenient().when(assessmentRepository
+            .findFirstByPatient_IdAndHospital_IdAndHeartRateBpmIsNotNullAndAssessmentTimeLessThanEqualOrderByAssessmentTimeDesc(
+                eq(patientId), eq(hospitalId), any()))
+            .thenReturn(Optional.of(previous));
     }
 
     private com.example.hms.model.labor.DeliveryRecord onTheMothersChart(int infants) {

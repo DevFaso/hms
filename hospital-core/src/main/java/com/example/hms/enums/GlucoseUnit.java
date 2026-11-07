@@ -15,6 +15,10 @@ public enum GlucoseUnit {
     }
 
     public int toMgDl(double value) {
-        return (int) Math.min(Integer.MAX_VALUE, Math.round(value * mgDlPerUnit));
+        return (int) Math.min(Integer.MAX_VALUE, Math.round(toExactMgDl(value)));
+    }
+
+    public double toExactMgDl(double value) {
+        return value * mgDlPerUnit;
     }
 }

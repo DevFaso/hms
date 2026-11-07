@@ -157,6 +157,47 @@ class ObstetricAlertCurrencyTest {
     }
 
     @Test
+    @org.junit.jupiter.api.DisplayName("Review of D1424: a twin's later reading never closes the other twin's alert")
+    void aTwinsLaterReadingKeepsTheAlert() {
+        Patient mother = new Patient();
+        mother.setId(UUID.randomUUID());
+        com.example.hms.model.labor.DeliveryRecord twins = new com.example.hms.model.labor.DeliveryRecord();
+        twins.setId(UUID.randomUUID());
+        twins.setNumberOfInfants(2);
+        NewbornAssessment source = assessment(mother, T0, NewbornAlertSeverity.URGENT);
+        source.setDeliveryRecord(twins);
+        when(newbornRepository.findById(source.getId())).thenReturn(Optional.of(source));
+        assertThat(currency.noLongerUrgent(row(ObstetricAlertEscalationService.SOURCE_NEWBORN, source.getId(), "RESPIRATORY"))).isFalse();
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("Review of D1424: a singleton's own later reading closes the alert; another delivery's baby does not")
+    void aSingletonIsJudgedOnItsOwnDelivery() {
+        Patient mother = new Patient();
+        mother.setId(UUID.randomUUID());
+        com.example.hms.model.labor.DeliveryRecord delivery = new com.example.hms.model.labor.DeliveryRecord();
+        delivery.setId(UUID.randomUUID());
+        delivery.setNumberOfInfants(1);
+        NewbornAssessment source = assessment(mother, T0, NewbornAlertSeverity.URGENT);
+        source.setDeliveryRecord(delivery);
+        when(newbornRepository.findById(source.getId())).thenReturn(Optional.of(source));
+        ObstetricAlertEscalation r = row(ObstetricAlertEscalationService.SOURCE_NEWBORN, source.getId(), "RESPIRATORY");
+        NewbornAssessment same = assessment(mother, T0.plusHours(1), null);
+        same.setDeliveryRecord(delivery);
+        when(newbornRepository.findByPatient_IdAndAssessmentTimeAfterOrderByAssessmentTimeDesc(mother.getId(), T0))
+            .thenReturn(List.of(same));
+        assertThat(currency.noLongerUrgent(r)).isTrue();
+
+        com.example.hms.model.labor.DeliveryRecord another = new com.example.hms.model.labor.DeliveryRecord();
+        another.setId(UUID.randomUUID());
+        NewbornAssessment otherBaby = assessment(mother, T0.plusHours(1), null);
+        otherBaby.setDeliveryRecord(another);
+        when(newbornRepository.findByPatient_IdAndAssessmentTimeAfterOrderByAssessmentTimeDesc(mother.getId(), T0))
+            .thenReturn(List.of(otherBaby));
+        assertThat(currency.noLongerUrgent(r)).isFalse();
+    }
+
+    @Test
     void newbornLaterAssessmentDecides() {
         Patient baby = new Patient();
         baby.setId(UUID.randomUUID());

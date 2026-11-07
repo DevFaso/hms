@@ -140,9 +140,7 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
         assessment.setDeliveryRecord(deliveryRecord);
         requireNotBeforeBirth(assessment.getAssessmentTime(), deliveryRecord,
             recordedOnNewbornChart ? patient : null);
-        evaluateAssessment(assessment,
-            request.getGlucoseUnit() == com.example.hms.enums.GlucoseUnit.MMOL_L ? request.getGlucoseValue() : null,
-            recordedOnNewbornChart);
+        evaluateAssessment(assessment, request, recordedOnNewbornChart);
 
         NewbornAssessment saved = assessmentRepository.save(assessment);
         publishAlerts(saved, documentedBy);
@@ -275,10 +273,10 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
         return assessment;
     }
 
-    private void evaluateAssessment(NewbornAssessment assessment, Double enteredMmol, boolean ownChart) {
+    private void evaluateAssessment(NewbornAssessment assessment, NewbornAssessmentRequestDTO request, boolean ownChart) {
         List<NewbornAssessmentAlert> alerts = new ArrayList<>();
         boolean urgentDetected = evaluateApgar(assessment, alerts);
-        for (NewbornAlertRules.Finding finding : NewbornAlertRules.evaluate(readingOf(assessment, enteredMmol, ownChart))) {
+        for (NewbornAlertRules.Finding finding : NewbornAlertRules.evaluate(readingOf(assessment, request, ownChart))) {
             alerts.add(buildAlert(finding.type(), finding.severity(), finding.code(), alertText(finding.code()),
                 finding.code()));
             if (finding.followUp() != null) {
@@ -295,21 +293,24 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
         }
     }
 
-    private NewbornAlertRules.Reading readingOf(NewbornAssessment assessment, Double enteredMmol, boolean ownChart) {
+    private NewbornAlertRules.Reading readingOf(NewbornAssessment assessment, NewbornAssessmentRequestDTO request, boolean ownChart) {
+        com.example.hms.enums.GlucoseUnit unit = request.getGlucoseUnit();
         com.example.hms.model.labor.DeliveryRecord delivery = assessment.getDeliveryRecord();
         Integer weeks = delivery == null ? null : delivery.getGestationalAgeWeeksAtBirth();
         return new NewbornAlertRules.Reading(assessment.getTemperatureCelsius(), assessment.getHeartRateBpm(),
             assessment.getRespirationsPerMin(), assessment.getOxygenSaturationPercent(), assessment.getGlucoseMgDl(),
-            enteredMmol, assessment.getSystolicBpMmHg(), assessment.getDiastolicBpMmHg(),
+            unit == com.example.hms.enums.GlucoseUnit.MMOL_L ? request.getGlucoseValue() : null,
+            assessment.getSystolicBpMmHg(), assessment.getDiastolicBpMmHg(),
             NewbornAlertRules.hoursSinceBirth(delivery == null ? null : delivery.getBirthDateTime(),
                 ownChart && assessment.getPatient() != null ? assessment.getPatient().getDateOfBirth() : null,
                 assessment.getAssessmentTime()),
             weeks != null && weeks < NewbornAlertRules.PRETERM_BELOW_WEEKS,
-            previousHeartRateOfConcern(assessment, ownChart));
+            previousHeartRateOfConcern(assessment, ownChart),
+            unit == com.example.hms.enums.GlucoseUnit.MG_DL ? request.getGlucoseValue() : null);
     }
 
     /**
-     * Whether the previous assessment of this same baby also had a heart rate of concern. On the
+     * Whether the last heart rate recorded for this same baby was also of concern. On the
      * mother's chart that is known only for a singleton's delivery: a twin's reading, or a
      * previous baby's, says nothing about this one, so the alert then only asks for a recheck.
      */
@@ -321,12 +322,16 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
         if (!ownChart && (delivery == null || delivery.getNumberOfInfants() != 1)) {
             return false;
         }
-        return assessmentRepository.findWithinRange(assessment.getPatient().getId(),
-                assessment.getHospital() == null ? null : assessment.getHospital().getId(), null,
-                assessment.getAssessmentTime(), org.springframework.data.domain.PageRequest.of(0, 1)).stream()
+        if (assessment.getHospital() == null || assessment.getAssessmentTime() == null) {
+            return false;
+        }
+        return assessmentRepository
+            .findFirstByPatient_IdAndHospital_IdAndHeartRateBpmIsNotNullAndAssessmentTimeLessThanEqualOrderByAssessmentTimeDesc(
+                assessment.getPatient().getId(), assessment.getHospital().getId(), assessment.getAssessmentTime())
             .filter(previous -> ownChart || (previous.getDeliveryRecord() != null
                 && Objects.equals(previous.getDeliveryRecord().getId(), delivery.getId())))
-            .anyMatch(previous -> NewbornAlertRules.heartRateOfConcern(previous.getHeartRateBpm()));
+            .filter(previous -> NewbornAlertRules.heartRateOfConcern(previous.getHeartRateBpm()))
+            .isPresent();
     }
 
     /** The record says support started in the bands where it always has. */

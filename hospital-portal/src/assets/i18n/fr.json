@@ -10743,8 +10743,6 @@
   "POSTPARTUM": {
     "GLUCOSE_VALUE": "Glycémie",
     "GLUCOSE_UNIT": "Unité de glycémie",
-    "GLUCOSE_UNIT_MG_DL": "mg/dL",
-    "GLUCOSE_UNIT_MMOL_L": "mmol/L",
     "GLUCOSE_UNIT_REQUIRED": "Choisissez l'unité de cette glycémie (mg/dL ou mmol/L).",
     "CHECK_VALUE": "Vérifiez cette valeur et mesurez à nouveau : elle dépasse ce que les autres formulaires de constantes acceptent. Elle peut quand même être enregistrée.",
     "MOTHER_TAB": "Mère",

@@ -219,17 +219,22 @@ describe('PostpartumTabComponent — screening', () => {
       expect(host.querySelector(id)?.getAttribute('aria-invalid')).withContext(id).toBe('true');
     }
     postpartumSpy.createNewbornAssessment.and.returnValue(of({ alerts: [] }) as never);
-    cmp.assessmentForm = { heartRateBpm: 1000, respirationsPerMin: 200 };
+    cmp.assessmentForm = { heartRateBpm: 1000, respirationsPerMin: 200, temperatureCelsius: 44.1 };
+    expect(cmp.newbornValueToCheck('heartRateBpm')).toBeTrue();
+    expect(cmp.newbornValueToCheck('respiratoryRateBpm')).toBeTrue();
+    expect(cmp.newbornValueToCheck('temperatureCelsius')).toBeTrue();
+    fixture.componentRef.changeDetectorRef.markForCheck();
     fixture.detectChanges();
     expect(host.querySelector('[data-testid="nb-hr-check"]')).not.toBeNull();
     expect(host.querySelector('[data-testid="nb-resp-check"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="nb-temp-check"]')).not.toBeNull();
     cmp.submitAssessment();
     expect(postpartumSpy.createNewbornAssessment).toHaveBeenCalledTimes(1);
     cmp.openAssessment();
-    cmp.assessmentForm = { heartRateBpm: 300, respirationsPerMin: 80 };
-    fixture.detectChanges();
-    expect(host.querySelector('[data-testid="nb-hr-check"]')).toBeNull();
-    expect(host.querySelector('[data-testid="nb-resp-check"]')).toBeNull();
+    cmp.assessmentForm = { heartRateBpm: 300, respirationsPerMin: 80, temperatureCelsius: 44 };
+    expect(cmp.newbornValueToCheck('heartRateBpm')).toBeFalse();
+    expect(cmp.newbornValueToCheck('respiratoryRateBpm')).toBeFalse();
+    expect(cmp.newbornValueToCheck('temperatureCelsius')).toBeFalse();
   });
 
   it('QA D1424: a glucose with no unit is refused on the unit field; with its unit it is sent as entered', () => {

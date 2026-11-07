@@ -71,7 +71,7 @@ export const NEWBORN_LIMITS: readonly FieldLimit[] = [
   { field: 'apgarOneMinute', labelKey: 'POSTPARTUM.APGAR_ONE', min: 0, max: 10 },
   { field: 'apgarFiveMinute', labelKey: 'POSTPARTUM.APGAR_FIVE', min: 0, max: 10 },
   { field: 'apgarTenMinute', labelKey: 'POSTPARTUM.APGAR_TEN', min: 0, max: 10 },
-  { field: 'temperatureCelsius', labelKey: 'POSTPARTUM.TEMPERATURE', min: 25, max: 44 },
+  { field: 'temperatureCelsius', labelKey: 'POSTPARTUM.TEMPERATURE', min: 0 },
   // QA D1424: warnings and escalation, never a limit that prevents saving an observation.
   // Only what cannot exist is refused; a high value saves, flagged (NewbornAlertRules).
   { field: 'heartRateBpm', labelKey: 'POSTPARTUM.PULSE', min: 0 },
@@ -672,7 +672,12 @@ export class PostpartumTabComponent {
     refuseFields(this.host.nativeElement, [], NEWBORN_IDS, '');
     if (this.glucoseHasNoUnit()) {
       const message = this.translate.instant('POSTPARTUM.GLUCOSE_UNIT_REQUIRED');
-      refuseFields(this.host.nativeElement, [NEWBORN_FIELD_IDS['glucoseUnit']], NEWBORN_IDS, message);
+      refuseFields(
+        this.host.nativeElement,
+        [NEWBORN_FIELD_IDS['glucoseUnit']],
+        NEWBORN_IDS,
+        message,
+      );
       this.toast.error(message);
       return;
     }
@@ -719,6 +724,11 @@ export class PostpartumTabComponent {
   }
 
   readonly glucoseUnits = GLUCOSE_UNITS;
+  /** Symbols, the same in every language. */
+  readonly glucoseUnitLabels: Readonly<Record<GlucoseUnit, string>> = {
+    MG_DL: 'mg/dL',
+    MMOL_L: 'mmol/L',
+  };
 
   private glucoseHasNoUnit(): boolean {
     const { glucoseValue, glucoseUnit } = this.assessmentForm;
@@ -729,8 +739,13 @@ export class PostpartumTabComponent {
    * QA D1424: a value above what the other vitals forms accept saves on this form; the
    * reader is asked to check it. The numbers only choose when to ask.
    */
-  newbornValueToCheck(field: 'heartRateBpm' | 'respiratoryRateBpm' | 'glucose'): boolean {
+  newbornValueToCheck(
+    field: 'temperatureCelsius' | 'heartRateBpm' | 'respiratoryRateBpm' | 'glucose',
+  ): boolean {
     const form = this.assessmentForm;
+    if (field === 'temperatureCelsius') {
+      return Number(form.temperatureCelsius) > VITAL_SIGN_LIMITS.temperatureCelsius.max;
+    }
     if (field === 'heartRateBpm') {
       return Number(form.heartRateBpm) > VITAL_SIGN_LIMITS.heartRateBpm.max;
     }
@@ -742,10 +757,15 @@ export class PostpartumTabComponent {
     return mgDl > VITAL_SIGN_LIMITS.bloodGlucoseMgDl.max;
   }
 
+  /** QA D1424: a request to remeasure stands out on the chart; a range notice does not. */
+  isNewbornValueCheck(alert: NewbornAlert): boolean {
+    return !!alert.code?.startsWith('newborn-check-');
+  }
+
   /** QA D1424: a request to remeasure, or an acceptable-range notice, reads as its sentence on the chart. */
   newbornAlertsToRead(a: NewbornAssessmentResponse): NewbornAlert[] {
     return (a.alerts ?? []).filter(
-      (alert) => alert.code?.startsWith('newborn-check-') || alert.severity === 'INFO',
+      (alert) => this.isNewbornValueCheck(alert) || alert.severity === 'INFO',
     );
   }
 

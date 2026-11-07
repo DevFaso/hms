@@ -10743,8 +10743,6 @@
   "POSTPARTUM": {
     "GLUCOSE_VALUE": "Blood glucose",
     "GLUCOSE_UNIT": "Glucose unit",
-    "GLUCOSE_UNIT_MG_DL": "mg/dL",
-    "GLUCOSE_UNIT_MMOL_L": "mmol/L",
     "GLUCOSE_UNIT_REQUIRED": "Choose the unit of this glucose value (mg/dL or mmol/L).",
     "CHECK_VALUE": "Check this value and remeasure: it is above what the other vitals forms accept. It can still be saved.",
     "MOTHER_TAB": "Mother",

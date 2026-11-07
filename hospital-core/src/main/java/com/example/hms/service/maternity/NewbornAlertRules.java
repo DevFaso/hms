@@ -1,5 +1,6 @@
 package com.example.hms.service.maternity;
 
+import com.example.hms.enums.GlucoseUnit;
 import com.example.hms.enums.NewbornAlertSeverity;
 import com.example.hms.enums.NewbornAlertType;
 import com.example.hms.enums.NewbornFollowUpAction;
@@ -68,11 +69,22 @@ public final class NewbornAlertRules {
     /** The gestational age below which a birth is preterm (the labour module's own). */
     public static final int PRETERM_BELOW_WEEKS = 37;
 
-    /** What the rules read. {@code enteredMmol} is null when the glucose was given in mg/dL. */
+    /**
+     * What the rules read. {@code enteredMmol} and {@code enteredMgDl} hold a glucose as it was
+     * entered, before it was rounded to the column's whole mg/dL: it is judged as entered.
+     */
     public record Reading(Double temperatureCelsius, Integer heartRateBpm, Integer respirationsPerMin,
                           Integer spo2Percent, Integer glucoseMgDl, Double enteredMmol,
                           Integer systolicBpMmHg, Integer diastolicBpMmHg,
-                          Long hoursSinceBirth, boolean preterm, boolean previousHeartRateOfConcern) {
+                          Long hoursSinceBirth, boolean preterm, boolean previousHeartRateOfConcern,
+                          Double enteredMgDl) {
+        public Reading(Double temperatureCelsius, Integer heartRateBpm, Integer respirationsPerMin,
+                       Integer spo2Percent, Integer glucoseMgDl, Double enteredMmol,
+                       Integer systolicBpMmHg, Integer diastolicBpMmHg,
+                       Long hoursSinceBirth, boolean preterm, boolean previousHeartRateOfConcern) {
+            this(temperatureCelsius, heartRateBpm, respirationsPerMin, spo2Percent, glucoseMgDl, enteredMmol,
+                systolicBpMmHg, diastolicBpMmHg, hoursSinceBirth, preterm, previousHeartRateOfConcern, null);
+        }
     }
 
     /** One warning, and what it adds to the record. */
@@ -120,8 +132,11 @@ public final class NewbornAlertRules {
             return;
         }
         if (temperature < CONCERN_TEMPERATURE_LOW || temperature >= CONCERN_TEMPERATURE_HIGH) {
+            // 38.0 itself is new to the urgent band: it alerts, and the record does not
+            // claim that support started, which it has only ever said above 38.
             findings.add(new Finding(NewbornAlertType.THERMOREGULATION, NewbornAlertSeverity.URGENT,
-                "newborn-temperature-critical", NewbornFollowUpAction.THERMAL_SUPPORT, true));
+                "newborn-temperature-critical", NewbornFollowUpAction.THERMAL_SUPPORT,
+                temperature < CONCERN_TEMPERATURE_LOW || temperature > CONCERN_TEMPERATURE_HIGH));
         } else if (temperature < CAUTION_TEMPERATURE_LOW || temperature > CAUTION_TEMPERATURE_HIGH) {
             findings.add(Finding.of(NewbornAlertType.THERMOREGULATION, NewbornAlertSeverity.CAUTION, "newborn-temperature"));
         }
@@ -175,7 +190,7 @@ public final class NewbornAlertRules {
         if (mgDl == null) {
             return;
         }
-        if (mgDl < GLUCOSE_CRITICAL_MG_DL) {
+        if (exactMgDl(reading) < GLUCOSE_CRITICAL_MG_DL) {
             findings.add(new Finding(NewbornAlertType.GLUCOSE, NewbornAlertSeverity.URGENT, "newborn-glucose",
                 NewbornFollowUpAction.GLUCOSE_MONITORING, true));
             return;
@@ -195,7 +210,15 @@ public final class NewbornAlertRules {
 
     /** In the unit the value was entered in: 2.59 mmol/L rounds to 47 mg/dL and is still below 2.6. */
     private static boolean below(Reading reading, double mmol, int mgDl) {
-        return reading.enteredMmol() != null ? reading.enteredMmol() < mmol : reading.glucoseMgDl() < mgDl;
+        return reading.enteredMmol() != null ? reading.enteredMmol() < mmol : exactMgDl(reading) < mgDl;
+    }
+
+    /** The glucose before rounding: 46.6 mg/dL and 2.49 mmol/L are below what they round to. */
+    private static double exactMgDl(Reading reading) {
+        if (reading.enteredMmol() != null) {
+            return GlucoseUnit.MMOL_L.toExactMgDl(reading.enteredMmol());
+        }
+        return reading.enteredMgDl() != null ? reading.enteredMgDl() : reading.glucoseMgDl();
     }
 
     /**
@@ -203,6 +226,10 @@ public final class NewbornAlertRules {
      * numbers only choose when to ask; none of them refuses anything on this form.
      */
     private static void checkTheValue(Reading reading, List<Finding> findings) {
+        if (reading.temperatureCelsius() != null
+            && reading.temperatureCelsius() > Double.parseDouble(VitalSignLimits.TEMPERATURE_MAX_C)) {
+            findings.add(Finding.of(NewbornAlertType.THERMOREGULATION, NewbornAlertSeverity.CAUTION, "newborn-check-temperature"));
+        }
         check(reading.heartRateBpm(), VitalSignLimits.HEART_RATE_MAX, NewbornAlertType.CARDIOVASCULAR, "newborn-check-heart-rate", findings);
         check(reading.respirationsPerMin(), VitalSignLimits.RESPIRATORY_RATE_MAX, NewbornAlertType.RESPIRATORY, "newborn-check-respiratory", findings);
         check(reading.glucoseMgDl(), VitalSignLimits.GLUCOSE_MAX, NewbornAlertType.GLUCOSE, "newborn-check-glucose", findings);
