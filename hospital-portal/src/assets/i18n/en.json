@@ -1109,6 +1109,7 @@
     "NURSING_NOTE": "Nursing note"
   },
   "ORDER_SETS": {
+    "QUANTITY_VALUE": "Quantity: {{value}} {{unit}}",
     "FIELD_CATALOG_ITEM": "Exact catalogue item",
     "QUANTITY_HINT": "Required for a controlled drug.",
     "APPLIED_RESULT_ONE": "Applied. Created 1 order ({{skipped}} skipped).",
@@ -1232,6 +1233,7 @@
     "NOTES_REQUIRED_FOR": "(required to deny or hold)"
   },
   "ADMISSIONS": {
+    "ROOM_BED_HELD_HINT": "The room follows the bed this stay holds. To move the patient, assign another bed or request a transfer.",
     "ACUITY": "Acuity",
     "ACUITY_CRITICAL": "Critical",
     "ACUITY_LEVEL": "Acuity Level",

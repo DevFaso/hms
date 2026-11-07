@@ -965,3 +965,13 @@ Rounds 27, 28 and 29 each found 20–30 new siblings of the required-field class
 | `scripts/lib/as-needed-frequency.test.mjs` (widened) | Both forms answer the question on `frequencyConfirmed`, marked by the server, and neither sets the tick from it. | none |
 | `service/impl/FrequencyWordingTest#reviewOfRound34_*`, `#secondReviewOfRound34_*` (new) | A sentence with more in it read at its first cadence: a second phase, a stated gap, two intervals, a ceiling, a repeated single dose, a reason beside a cadence. | none |
 | `cdshooks/rules/DoseRangeTest#d1420_*` (new table) | A mixed number or a thousands separator read below what was written, and any valid single dose whose reading changes. | none |
+
+
+## Guards added or widened by round 34 (fix/r34-stay-orders)
+
+| Guard | Catches | Scope / allowlist |
+|---|---|---|
+| `architecture/ClosedRecordWriteGuardTest#everyEditMethodRefusesAClosedRecordOrSaysWhyNot` (new) | D1428: a public `update*`, `edit*` or `amend*` of any service that does not refuse a record already in its terminal state. A new edit method is classified on purpose. | Every service; the allowlist says why each entry has no check (no terminal state, a designed reopen, or an open D1428 sibling named in tasklist.md) |
+| `architecture/ClosedRecordWriteGuardTest#theNamedWritesKeepTheirCheck` (new) | D1428 / D1432 / D1435: the writes not named as edits, each pinned to its check: the stay's order sets and bed release, a closed visit's PUT and delete, a finalized summary at checkout and on the portal read, a dispensed order, a recorded dose, every way a stay ends closing its nursing work. | 23 pins |
+| `architecture/CancelledOrderLockGuardTest` (widened) | The plan's cancelled lock now lives in `requirePlanOpen`, read as a lock. | Same |
+| `scripts/lib/glued-colon.test.mjs` (new rule) | D1438: a colon glued to a closing tag. The scan reads a tag as a break, so `<strong>…</strong>: x` passed it; `admin-assignments.html` had the same. | Every template; 0 |

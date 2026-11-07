@@ -379,4 +379,67 @@ class OrderSetItemDispatcherTest {
         assertThat(result.type()).isEqualTo(DispatchResult.Type.SKIPPED);
         assertThat(result.skipReason()).contains("MAGIC");
     }
+
+    // ═══════════════ QA D1436 (round 34): a dose keeps its unit ═══════════════
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.MethodSource("dosesAndUnits")
+    void qaD1436_theDoseReachesTheOrderWithItsUnit(Map<String, Object> dose, String expected) {
+        PrescriptionResponseDTO resp = new PrescriptionResponseDTO();
+        resp.setId(UUID.randomUUID());
+        when(prescriptionService.createPrescription(any(), any(Locale.class))).thenReturn(resp);
+        Map<String, Object> item = new java.util.HashMap<>(dose);
+        item.put("orderType", "MEDICATION");
+        item.put("medicationName", "Morphine");
+        item.put("route", "IV");
+
+        dispatcher.dispatch(item, ctx(), Locale.ENGLISH);
+
+        ArgumentCaptor<PrescriptionRequestDTO> captor = ArgumentCaptor.forClass(PrescriptionRequestDTO.class);
+        verify(prescriptionService).createPrescription(captor.capture(), eq(Locale.ENGLISH));
+        assertThat(captor.getValue().getDosage()).isEqualTo(expected);
+    }
+
+    static java.util.stream.Stream<org.junit.jupiter.params.provider.Arguments> dosesAndUnits() {
+        return java.util.stream.Stream.of(
+            org.junit.jupiter.params.provider.Arguments.of(Map.of("dose", "2", "doseUnit", "mg"), "2 mg IV"),
+            org.junit.jupiter.params.provider.Arguments.of(Map.of("dose", 2, "doseUnit", "mg"), "2 mg IV"),
+            org.junit.jupiter.params.provider.Arguments.of(Map.of("dose", "2-4", "doseUnit", "mg"), "2-4 mg IV"),
+            org.junit.jupiter.params.provider.Arguments.of(Map.of("dose", "2 mg", "doseUnit", "mg"), "2 mg IV"),
+            org.junit.jupiter.params.provider.Arguments.of(Map.of("dose", ".5", "doseUnit", "mg"), ".5 mg IV"),
+            org.junit.jupiter.params.provider.Arguments.of(Map.of("dose", "1/2", "doseUnit", "cp"), "1/2 cp IV"),
+            org.junit.jupiter.params.provider.Arguments.of(Map.of("dose", "2 g"), "2 g IV"),
+            org.junit.jupiter.params.provider.Arguments.of(Map.of("doseRangeMin", 2, "doseRangeMax", 4, "doseUnit", "mg"), "2-4 mg IV"),
+            org.junit.jupiter.params.provider.Arguments.of(Map.of(), "IV"));
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.MethodSource("dosesWithoutAUnit")
+    void qaD1436_aNumberWithNoUnitIsRefusedByNameAtSaveAndAtApply(Map<String, Object> dose) {
+        Map<String, Object> item = new java.util.HashMap<>(dose);
+        item.put("orderType", "MEDICATION");
+        item.put("medicationName", "Morphine");
+        item.put("frequency", "Q6H");
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> OrderSetItemPrnRules.requireValid(List.of(item)))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .extracting("field").isEqualTo("orderItems[0].doseUnit");
+    }
+
+    static java.util.stream.Stream<Map<String, Object>> dosesWithoutAUnit() {
+        return java.util.stream.Stream.of(Map.of("dose", "2"), Map.of("dose", 2), Map.of("dose", "2,5"),
+            Map.of("doseRangeMin", 2, "doseRangeMax", 4));
+    }
+
+    @Test
+    void qaD1436_aDoseThatSaysItsOwnUnitOrNoDoseAtAllPasses() {
+        for (Map<String, Object> dose : List.<Map<String, Object>>of(Map.of("dose", "1 comprimé"), Map.of("dose", "2", "doseUnit", "mg"), Map.of())) {
+            Map<String, Object> item = new java.util.HashMap<>(dose);
+            item.put("orderType", "MEDICATION");
+            item.put("medicationName", "Morphine");
+            item.put("frequency", "Q6H");
+            org.assertj.core.api.Assertions.assertThatCode(() -> OrderSetItemPrnRules.requireValid(List.of(item)))
+                .doesNotThrowAnyException();
+        }
+    }
 }

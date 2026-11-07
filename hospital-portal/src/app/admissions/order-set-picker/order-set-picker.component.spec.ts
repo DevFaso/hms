@@ -250,6 +250,7 @@ describe('OrderSetPickerComponent', () => {
           ITEM_TYPE: { MEDICATION: 'Médicament' },
           ROUTE: { PO: 'Orale' },
           FREQUENCY: { Q6H: 'Toutes les 6 h', PRN: 'Si besoin (PRN)' },
+          QUANTITY_VALUE: 'Quantité : {{value}} {{unit}}',
           ITEM_ONE: 'élément',
           ITEMS: 'éléments',
         },
@@ -295,7 +296,7 @@ describe('OrderSetPickerComponent', () => {
         expect(items[0]).not.toContain('MEDICATION');
         expect(items[0]).toContain('500 mg · Orale · Toutes les 6 h');
         expect(items[1]).toContain(
-          '1 g · si fièvre · Si besoin (PRN) · Au moins 6 h entre deux doses · 6 cp',
+          '1 g · si fièvre · Si besoin (PRN) · Au moins 6 h entre deux doses · Quantité : 6 cp',
         );
         expect(items[0]).not.toEqual(items[1]);
         expect(text('order-set-picker-list')).toContain('1 élément');
@@ -345,5 +346,63 @@ describe('OrderSetPickerComponent', () => {
     btn.click();
 
     expect(closed).toBeTrue();
+  });
+
+  describe('QA D1438 / D1439 / D1436: what the preview says of an item', () => {
+    const detail = (item: Record<string, unknown>): string =>
+      (
+        fixture.componentInstance as unknown as { orderItemDetail(i: unknown): string }
+      ).orderItemDetail(item);
+
+    beforeEach(() => {
+      const translate = TestBed.inject(TranslateService);
+      translate.setTranslation(
+        'fr',
+        {
+          COMMON: { COLON: '\u00a0:' },
+          ORDER_SETS: {
+            ITEM_TYPE: { MEDICATION: 'Médicament' },
+            ROUTE: { PO: 'Voie orale (PO)', IV: 'Intraveineuse (IV)' },
+            FREQUENCY: { PRN: 'Si besoin (PRN)', Q4H: 'Toutes les 4 heures (Q4H)' },
+            QUANTITY_VALUE: 'Quantité : {{value}} {{unit}}',
+          },
+          PRESCRIPTIONS: { PRN_MIN_INTERVAL_VALUE: 'Au moins {{hours}} h entre deux doses' },
+        },
+        true,
+      );
+      translate.use('fr');
+    });
+
+    it('a route stored as a word reads as the code it is', () => {
+      expect(detail({ route: 'ORAL' })).toBe('Voie orale (PO)');
+      expect(detail({ route: 'oral' })).toBe('Voie orale (PO)');
+      expect(detail({ route: 'INTRAVENOUS' })).toBe('Intraveineuse (IV)');
+      expect(detail({ route: 'PO' })).toBe('Voie orale (PO)');
+      expect(detail({ route: 'à la seringue' })).toBe('à la seringue');
+    });
+
+    it('says as-needed once, whichever field says it', () => {
+      expect(detail({ frequency: 'PRN', asNeeded: true, prnMinIntervalHours: 6 })).toBe(
+        'Si besoin (PRN) · Au moins 6 h entre deux doses',
+      );
+      expect(detail({ asNeeded: true })).toBe('Si besoin (PRN)');
+      expect(detail({ frequency: 'si fièvre', asNeeded: true })).toBe(
+        'si fièvre · Si besoin (PRN)',
+      );
+      expect(detail({ frequency: 'Q4H', asNeeded: true })).toBe(
+        'Toutes les 4 heures (Q4H) · Si besoin (PRN)',
+      );
+    });
+
+    it('labels the quantity, with or without a unit', () => {
+      expect(detail({ quantity: 6 })).toBe('Quantité : 6');
+      expect(detail({ quantity: 6, quantityUnit: 'cp' })).toBe('Quantité : 6 cp');
+    });
+
+    it('reads a bare dose with its unit, and leaves a dose that says its own', () => {
+      expect(detail({ dose: '2', doseUnit: 'mg' })).toBe('2 mg');
+      expect(detail({ dose: 2, doseUnit: 'mg' })).toBe('2 mg');
+      expect(detail({ dose: '1 comprimé', doseUnit: 'mg' })).toBe('1 comprimé');
+    });
   });
 });

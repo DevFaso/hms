@@ -3139,22 +3139,17 @@ class EncounterServiceImplTest {
         @Test
         void d513_updateRefusesANestedNoteOnACheckedOutVisit() {
             // #922 review: PUT /encounters/{id} with a nested note bypassed the
-            // lock that POST /encounters/{id}/notes enforces.
+            // lock that POST /encounters/{id}/notes enforces. QA D1428: a closed visit
+            // is no longer merged, so the note is read from the stored row.
             Encounter existing = encounter();
             existing.setStatus(EncounterStatus.COMPLETED);
-            Encounter merged = encounter();
-            merged.setStatus(EncounterStatus.COMPLETED);
             com.example.hms.model.encounter.EncounterNote mine = new com.example.hms.model.encounter.EncounterNote();
             mine.setId(UUID.randomUUID());
             mine.setAssessment("original");
-            merged.setEncounterNote(mine);
+            existing.setEncounterNote(mine);
             when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(existing));
-            when(encounterMapper.mergeEncounter(any(com.example.hms.payload.dto.EncounterRequestDTO.class),
-                    any(Encounter.class), any(Patient.class), any(Staff.class), any(Hospital.class),
-                    org.mockito.ArgumentMatchers.<Appointment>isNull(), any(UserRoleHospitalAssignment.class)))
-                .thenReturn(merged);
             com.example.hms.payload.dto.EncounterRequestDTO request =
-                request(note(null, "rewritten after checkout"), merged.getEncounterDate());
+                request(note(null, "rewritten after checkout"), existing.getEncounterDate());
             request.setStatus(EncounterStatus.COMPLETED);
 
             assertThatThrownBy(() -> service.updateEncounter(encounterId, request, locale, true, null))
@@ -3897,5 +3892,81 @@ class EncounterServiceImplTest {
             EncounterClosureRules.requireDirectTransition(EncounterStatus.ARRIVED, EncounterStatus.TRIAGE, false);
             EncounterClosureRules.requireDeskTransition(EncounterStatus.IN_PROGRESS, EncounterStatus.ARRIVED);
         }).doesNotThrowAnyException();
+    }
+
+    // ═══════════════ QA D1428 class (round 34): a closed visit's record is protected ═══════════════
+
+    private Encounter closedVisit(EncounterStatus status) {
+        Hospital h = new Hospital();
+        h.setId(UUID.randomUUID());
+        Encounter e = new Encounter();
+        e.setId(UUID.randomUUID());
+        e.setStatus(status);
+        e.setHospital(h);
+        e.setNotes("as written");
+        when(encounterRepository.findById(e.getId())).thenReturn(Optional.of(e));
+        return e;
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = EncounterStatus.class,
+        names = {"COMPLETED", "CANCELLED", "LEFT_WITHOUT_BEING_SEEN"})
+    void qaD1428_aPutThatKeepsTheStatusDoesNotRewriteAClosedVisit(EncounterStatus closed) {
+        Encounter visit = closedVisit(closed);
+        com.example.hms.payload.dto.EncounterRequestDTO body = new com.example.hms.payload.dto.EncounterRequestDTO();
+        body.setStatus(closed);
+        body.setNotes("rewritten");
+        Locale fr = Locale.FRENCH;
+
+        assertThatThrownBy(() -> service.updateEncounter(visit.getId(), body, fr, true, null))
+            .isInstanceOf(BusinessException.class)
+            .extracting("messageKey").isEqualTo("encounter.closed.readOnly");
+        assertThat(visit.getNotes()).isEqualTo("as written");
+        verify(encounterRepository, never()).save(any());
+        verify(encounterMapper, never()).mergeEncounter(any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void qaD1428_aPutStillRefusesReopeningAClosedVisitByItsOwnReason() {
+        Encounter visit = closedVisit(EncounterStatus.COMPLETED);
+        com.example.hms.payload.dto.EncounterRequestDTO body = new com.example.hms.payload.dto.EncounterRequestDTO();
+        body.setStatus(EncounterStatus.IN_PROGRESS);
+        Locale fr = Locale.FRENCH;
+
+        assertThatThrownBy(() -> service.updateEncounter(visit.getId(), body, fr, true, null))
+            .isInstanceOf(BusinessException.class)
+            .extracting("messageKey").isEqualTo("encounter.status.closed");
+    }
+
+    @Test
+    void qaD1428_aClosedVisitIsNotDeleted() {
+        Encounter visit = closedVisit(EncounterStatus.COMPLETED);
+        when(encounterRepository.existsById(visit.getId())).thenReturn(true);
+        Locale fr = Locale.FRENCH;
+
+        assertThatThrownBy(() -> service.deleteEncounter(visit.getId(), fr))
+            .isInstanceOf(BusinessException.class)
+            .extracting("messageKey").isEqualTo("encounter.closed.readOnly");
+        verify(encounterRepository, never()).deleteById(any());
+    }
+
+    @Test
+    void qaD1428_theCheckoutAfterAFinalizedSummaryLeavesItAsSigned() {
+        UUID encounterId = UUID.randomUUID();
+        Encounter encounter = checkoutRecallEncounter(encounterId);
+        DischargeSummary summary = new DischargeSummary();
+        summary.setIsFinalized(true);
+        summary.setDischargeDiagnosis("as signed");
+        summary.setFollowUpInstructions("as signed");
+        when(dischargeSummaryRepository.findByEncounter_Id(encounter.getId())).thenReturn(Optional.of(summary));
+        lenient().when(patientLocaleResolver.resolve(any(), any())).thenReturn(Locale.FRENCH);
+        lenient().when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("ok");
+
+        service.checkOut(encounterId, CheckOutRequestDTO.builder().followUpInstructions("Repos").build(),
+            "doctor1", true, null);
+
+        assertThat(summary.getDischargeDiagnosis()).isEqualTo("as signed");
+        assertThat(summary.getFollowUpInstructions()).isEqualTo("as signed");
+        verify(dischargeSummaryRepository, never()).save(summary);
     }
 }

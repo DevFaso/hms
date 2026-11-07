@@ -522,4 +522,21 @@ class BedAssignmentServiceTest {
         assertThat(order.getStatus()).isEqualTo(com.example.hms.enums.TransferOrderStatus.CANCELLED);
         assertThat(destination.getStatus()).isEqualTo(BedStatus.OCCUPIED);
     }
+
+    /** QA D1428: a closed stay's bed is history and may hold another patient by now. */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = com.example.hms.enums.AdmissionStatus.class,
+        names = {"DISCHARGED", "CANCELLED", "TRANSFERRED", "DECEASED"})
+    void qaD1428_aClosedStayDoesNotFreeTheBedItOnceHeld(com.example.hms.enums.AdmissionStatus closed) {
+        Bed bed = bed("B07", BedStatus.OCCUPIED);
+        admission.setBed(bed);
+        admission.setRoomBed("MAT01/B07");
+        admission.setStatus(closed);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.unassignBed(admission))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class);
+
+        assertThat(bed.getStatus()).isEqualTo(BedStatus.OCCUPIED);
+        assertThat(admission.getRoomBed()).isEqualTo("MAT01/B07");
+    }
 }

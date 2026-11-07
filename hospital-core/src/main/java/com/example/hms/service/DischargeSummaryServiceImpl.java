@@ -729,6 +729,8 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
             Encounter enc = summary.getEncounter();
             // QA D151: a prescription anchor is never shown, so never enriched.
             if (enc == null || isPrescriptionAnchor(enc)) continue;
+            // QA D1428 class: a finalized summary is signed; a read never adds to it.
+            if (Boolean.TRUE.equals(summary.getIsFinalized())) continue;
             boolean changed = false;
 
             // Enrich hospitalCourse from encounter notes if missing.

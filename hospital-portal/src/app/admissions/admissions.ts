@@ -32,7 +32,11 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { OrderSetPickerComponent } from './order-set-picker/order-set-picker.component';
 import { AuthService } from '../auth/auth.service';
 import { ActionKey, actionRoles } from '../core/action-permissions';
-import { AppliedOrderSetSummary } from '../services/order-set.service';
+import {
+  appliedOrderCount,
+  appliedResultKey,
+  AppliedOrderSetSummary,
+} from '../services/order-set.service';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { fromServerDateTime, toLocalInputValue, toServerDateTime } from '../shared/date-utils';
@@ -58,6 +62,14 @@ interface OrderSetPickerCtx {
 
 /** QA D603: the stay statuses that may still be cancelled (mirrors AdmissionServiceImpl). */
 const CANCELLABLE_STATUSES = new Set<string>(['PENDING', 'ACTIVE', 'ON_LEAVE']);
+
+/** QA D1428: a stay still open (AdmissionStatus.OPEN on the server). */
+const OPEN_STATUSES: ReadonlySet<string> = new Set([
+  'PENDING',
+  'ACTIVE',
+  'ON_LEAVE',
+  'AWAITING_DISCHARGE',
+]);
 
 @Component({
   selector: 'app-admissions',
@@ -493,10 +505,10 @@ export class AdmissionsComponent implements OnInit {
   onOrderSetApplied(summary: AppliedOrderSetSummary): void {
     // Compute the real created/skipped counts from the backend summary
     // so the toast shows accurate numbers instead of empty placeholders.
-    const count =
-      summary.prescriptionIds.length + summary.labOrderIds.length + summary.imagingOrderIds.length;
+    const count = appliedOrderCount(summary);
+    // QA D1439: the panel's own sentence, singular for one.
     this.toast.success(
-      this.translate.instant('ORDER_SETS.APPLIED_RESULT', {
+      this.translate.instant(appliedResultKey(count), {
         count,
         skipped: summary.skippedItemCount,
       }),
@@ -504,6 +516,8 @@ export class AdmissionsComponent implements OnInit {
   }
 
   openEdit(a: AdmissionResponse): void {
+    // QA D1428: the room of a stay that holds a bed is that bed; it moves by assignment or transfer.
+    this.editingHoldsBed.set(!!a.bedId);
     this.form = {
       patientId: a.patientId ?? '',
       hospitalId: a.hospitalId ?? '',
@@ -565,6 +579,14 @@ export class AdmissionsComponent implements OnInit {
       },
     });
   }
+
+  /** QA D1428: a closed stay's record is protected: the row offers no edit, as the server refuses it. */
+  isEditable(a: AdmissionResponse): boolean {
+    return OPEN_STATUSES.has(a.status);
+  }
+
+  /** QA D1428: the stay being edited holds a structured bed. */
+  readonly editingHoldsBed = signal(false);
 
   /**
    * QA D603: only a stay still in progress can be cancelled. A discharged,

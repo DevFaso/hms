@@ -4,6 +4,7 @@ import com.example.hms.enums.SensitivityCategory;
 import com.example.hms.enums.AcuityLevel;
 import com.example.hms.enums.AdmissionStatus;
 import com.example.hms.enums.AdmissionType;
+import com.example.hms.exception.ConflictException;
 import com.example.hms.enums.DischargeDisposition;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -319,6 +320,22 @@ public class Admission {
      */
     public void activate() {
         this.status = AdmissionStatus.ACTIVE;
+    }
+
+
+    /**
+     * QA D1428 (round 34): a closed stay's record is protected. Every write to
+     * an admission goes through here; only the acts that close a stay and the
+     * record of what happened afterwards (a note addendum, the discharge
+     * summary, the invoice) live elsewhere and do not write this row.
+     *
+     * @throws ConflictException when the stay is discharged, cancelled, transferred or the patient died
+     */
+    public void requireOpen() {
+        if (status != null && !AdmissionStatus.OPEN.contains(status)) {
+            throw new ConflictException(status == AdmissionStatus.CANCELLED
+                ? "admission.cancelled.readOnly" : "admission.closed.readOnly");
+        }
     }
 
     /**

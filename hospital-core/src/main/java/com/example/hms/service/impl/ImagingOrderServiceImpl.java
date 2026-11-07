@@ -152,6 +152,10 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         // QA D1066 class: a cancelled order is not edited back to life either.
         com.example.hms.service.support.CancelledOrders.requireNotCancelled(order.getStatus(),
             IMAGING_ORDER_CANCELLED_LOCKED);
+        // QA D1428 class: a study done is what was done; a correction is a new order.
+        if (RESULTED_STATES.contains(order.getStatus())) {
+            throw new com.example.hms.exception.BusinessException("imaging.order.resulted.locked");
+        }
 
         if (request.getPatientId() != null && (order.getPatient() == null || !request.getPatientId().equals(order.getPatient().getId()))) {
             Patient patient = patientRepository.findById(request.getPatientId())
@@ -216,6 +220,10 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         // cancelled nor sent back to ORDERED - and every cancel states why.
         com.example.hms.service.support.CancelledOrders.requireResultStaysClosed(order.getStatus(),
             request.getStatus(), RESULTED_STATES);
+        // QA D1428 class: nor does a same-status write rewrite its schedule and notes.
+        if (RESULTED_STATES.contains(order.getStatus()) && request.getStatus() == order.getStatus()) {
+            throw new com.example.hms.exception.FieldBusinessException("status", "imaging.order.resulted.locked");
+        }
         if (cancelling) {
             requireCancelAuthor(order);
         }

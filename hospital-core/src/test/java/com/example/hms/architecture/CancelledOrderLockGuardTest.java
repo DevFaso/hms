@@ -59,7 +59,7 @@ class CancelledOrderLockGuardTest {
     private static final Pattern LOCK = Pattern.compile(
         // A refusal of the cancelled state, not merely a mention of CANCELLED:
         // the D1066 code named it (wasCancelled / reopening) and still reopened.
-        "requireNotCancelled\\(|isTerminal\\(|validateStatusTransition\\("
+        "requireNotCancelled\\(|requirePlanOpen\\(|isTerminal\\(|validateStatusTransition\\("
             + "|==\\s*\\w+Status\\.CANCELLED[^{;]*\\{\\s*throw"
             + "|getStatus\\(\\)\\s*!=\\s*\\w+Status\\.(?!CANCELLED\\b)\\w+"
             + "|\\b\\w*[sS]tatus\\s*!=\\s*\\w+Status\\.(?!CANCELLED\\b)\\w+");

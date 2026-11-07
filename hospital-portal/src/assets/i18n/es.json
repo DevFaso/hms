@@ -1109,6 +1109,7 @@
     "NURSING_NOTE": "Nota de enfermería"
   },
   "ORDER_SETS": {
+    "QUANTITY_VALUE": "Cantidad: {{value}} {{unit}}",
     "FIELD_CATALOG_ITEM": "Artículo exacto del catálogo",
     "QUANTITY_HINT": "Obligatorio para un estupefaciente.",
     "APPLIED_RESULT_ONE": "Aplicado. 1 orden creada ({{skipped}} omitida(s)).",
@@ -1232,6 +1233,7 @@
     "NOTES_REQUIRED_FOR": "(obligatorias para denegar o poner en espera)"
   },
   "ADMISSIONS": {
+    "ROOM_BED_HELD_HINT": "La habitación sigue a la cama de esta estancia. Para trasladar al paciente, asigne otra cama o solicite un traslado.",
     "ACUITY": "Gravedad",
     "ACUITY_CRITICAL": "Crítica",
     "ACUITY_LEVEL": "Nivel de gravedad",

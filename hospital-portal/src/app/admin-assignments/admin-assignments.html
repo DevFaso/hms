@@ -440,7 +440,7 @@
               @for (f of multiResult()!.failures; track $index) {
                 <li>
                   <strong>{{ f.scopeLabel || f.hospitalId }}</strong
-                  >: {{ f.message }}
+                  >{{ 'COMMON.COLON' | translate }} {{ f.message }}
                 </li>
               }
             </ul>

@@ -61,6 +61,9 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     // Sonar S1192 (Pattern 5 of docs/SonarQubeInstructions.md): the
     // i18n key for "prescription not found" appears 5x in this file.
     private static final String PRESCRIPTION_NOT_FOUND = "prescription.notfound";
+    /** QA D1432: the statuses in which medicine has left the counter under this order. */
+    private static final java.util.Set<PrescriptionStatus> DISPENSED_FROM = java.util.EnumSet.of(
+        PrescriptionStatus.DISPENSED, PrescriptionStatus.PARTNER_DISPENSED, PrescriptionStatus.PARTIALLY_FILLED);
     /** QA D1368 (round 31): the request property a missing withdrawal reason is named by. */
     private static final String FIELD_WITHDRAWAL_REASON = "withdrawalReason";
     /**
@@ -81,6 +84,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private static final String AUDIT_ENTITY_PRESCRIPTION = "Prescription";
 
     private final PrescriptionRepository prescriptionRepository;
+    /** QA D1432: whether medicine has left the counter under an order. */
+    private final com.example.hms.repository.pharmacy.DispenseRepository dispenseRepository;
     private final PatientRepository patientRepository;
     private final com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
     private final PatientAllergyRepository patientAllergyRepository;
@@ -1429,6 +1434,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // security finding 3); a super-admin in global view has none.
         UUID actingHospitalId = roleValidator.requireActiveHospitalId();
         Prescription existing = lockForUpdateInActingHospital(id, actingHospitalId);
+        requireDispensedOrderKept(existing, request);
         // QA D660: a signed order is no longer rewritten by edit.
         if (existing.getStatus() == PrescriptionStatus.SIGNED) {
             return withdrawSignedPrescription(existing, request);
@@ -1680,6 +1686,51 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     }
 
     /**
+     * QA D1432 (round 34): what a PUT may do to an order the pharmacy has
+     * dispensed from, in the portal's own rule (D678). The medicine has left the
+     * counter: nothing reverses the dispense, so an order set to CANCELLED said
+     * it was withdrawn while the patient had it and the dispense stayed billable.
+     *
+     * <ul>
+     *   <li>CANCELLED ("never given") is refused, whole fill or part, whatever
+     *       status the row holds now: a part fill moves on to PENDING_STOCK, a
+     *       partner or a clarification, and a refill release returns to SIGNED,
+     *       so the fills decide ({@link #hasBeenDispensedFrom}). What a
+     *       pharmacy does with a part fill is stop the balance: DISCONTINUED,
+     *       under the signed-order rule (a reason, audited). The fill and its
+     *       charge stand, and the rest is no longer dispensable. The same stop
+     *       ends a fully dispensed order's further use (D1161).</li>
+     *   <li>A wholly dispensed order takes no other write: its drug and dose
+     *       are what was handed over. A part fill's balance stays editable
+     *       (G13/G15: the edit voids a prepared fill).</li>
+     * </ul>
+     */
+    private void requireDispensedOrderKept(Prescription existing, PrescriptionRequestDTO request) {
+        if (request.getStatus() == PrescriptionStatus.CANCELLED && hasBeenDispensedFrom(existing)) {
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_STATUS, "prescription.dispensed.noCancel");
+        }
+        PrescriptionStatus current = existing.getStatus();
+        if (current != PrescriptionStatus.DISPENSED && current != PrescriptionStatus.PARTNER_DISPENSED) {
+            return;
+        }
+        boolean plainStop = request.getStatus() == PrescriptionStatus.DISCONTINUED && !changesSignedContent(existing, request);
+        if (!plainStop) {
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_STATUS, request.getStatus() == null
+                || request.getStatus().isWithdrawn() ? "prescription.dispensed.readOnly" : "prescription.status.notAssertable");
+        }
+    }
+
+    /** QA D1432: medicine has left the counter under this order, by its status or by a fill on record. */
+    private boolean hasBeenDispensedFrom(Prescription prescription) {
+        if (prescription.getStatus() != null && DISPENSED_FROM.contains(prescription.getStatus())) {
+            return true;
+        }
+        java.math.BigDecimal filled = dispenseRepository.sumQuantityDispensedForPrescription(
+            prescription.getId(), com.example.hms.repository.pharmacy.DispenseRepository.NOT_A_FILL);
+        return filled != null && filled.signum() > 0;
+    }
+
+    /**
      * QA D1161: a request that only withdraws an order a signature led to.
      * An edit of a sent or partly filled order's content keeps its own rules
      * (G13/G15: the author's edit voids a prepared fill and ends a queue claim).
@@ -1831,6 +1882,10 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                 && prescription.getHospital() != null
                 && !prescription.getHospital().getId().equals(hospitalId)) {
             throw new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND);
+        }
+        // QA D1432: the order a dispense was made from outlives any delete.
+        if (hasBeenDispensedFrom(prescription)) {
+            throw new BusinessException("prescription.dispensed.readOnly");
         }
 
         prescriptionRepository.deleteById(id);

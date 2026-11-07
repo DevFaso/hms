@@ -561,6 +561,7 @@ class TreatmentPlanServiceImplTest {
 
     @Test
     void updateFollowUp_success() {
+        when(treatmentPlanRepository.findById(planId)).thenReturn(Optional.of(plan));
         UUID followUpId = UUID.randomUUID();
         TreatmentPlanFollowUp followUp = TreatmentPlanFollowUp.builder()
                 .treatmentPlan(plan)
@@ -938,6 +939,7 @@ class TreatmentPlanServiceImplTest {
 
     @Test
     void updateFollowUp_withAssignedStaff_success() {
+        when(treatmentPlanRepository.findById(planId)).thenReturn(Optional.of(plan));
         UUID followUpId = UUID.randomUUID();
         UUID staffMemberId = UUID.randomUUID();
         Staff assignedStaff = new Staff();
@@ -1053,5 +1055,19 @@ class TreatmentPlanServiceImplTest {
 
         Page<TreatmentPlanResponseDTO> result = service.listAll(null, pageable);
         assertThat(result.getContent()).hasSize(1);
+    }
+
+    /** QA D1428 class: a cancelled or archived plan takes no follow-up, new or edited. */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = com.example.hms.enums.TreatmentPlanStatus.class,
+        names = {"CANCELLED", "ARCHIVED"})
+    void qaD1428_aClosedPlanTakesNoFollowUp(com.example.hms.enums.TreatmentPlanStatus closed) {
+        plan.setStatus(closed);
+        when(treatmentPlanRepository.findById(planId)).thenReturn(Optional.of(plan));
+        TreatmentPlanFollowUpRequestDTO request = new TreatmentPlanFollowUpRequestDTO();
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.addFollowUp(planId, request))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class);
+        verify(treatmentPlanFollowUpRepository, org.mockito.Mockito.never()).save(any());
     }
 }

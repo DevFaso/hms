@@ -963,4 +963,142 @@ class AdmissionServiceImplTest {
             .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
         verify(admissionRepository, never()).save(any());
     }
+
+    // ═══════════════ QA D1428 (round 34): a closed stay's record is protected ═══════════════
+
+    private Admission stayInScope(AdmissionStatus status) {
+        Admission admission = new Admission();
+        admission.setId(admissionId);
+        admission.setStatus(status);
+        admission.setPatient(patient);
+        admission.setHospital(hospital);
+        when(admissionRepository.findById(admissionId)).thenReturn(Optional.of(admission));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        return admission;
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = AdmissionStatus.class,
+        names = {"DISCHARGED", "CANCELLED", "TRANSFERRED", "DECEASED"})
+    void qaD1428_noFieldOfAClosedStayIsEdited(AdmissionStatus closed) {
+        Admission admission = stayInScope(closed);
+        admission.setAdmissionNotes("as written");
+        AdmissionUpdateRequestDTO request = new AdmissionUpdateRequestDTO();
+        request.setAdmissionNotes("rewritten");
+        request.setRoomBed("MA-09");
+
+        assertThatThrownBy(() -> service.updateAdmission(admissionId, request))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class)
+            .hasMessage(closed == AdmissionStatus.CANCELLED ? "admission.cancelled.readOnly" : "admission.closed.readOnly");
+        assertThat(admission.getAdmissionNotes()).isEqualTo("as written");
+        assertThat(admission.getRoomBed()).isNull();
+        verify(admissionRepository, never()).save(any());
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = AdmissionStatus.class,
+        names = {"PENDING", "ACTIVE", "ON_LEAVE", "AWAITING_DISCHARGE"})
+    void qaD1428_everyOpenStayIsStillEdited(AdmissionStatus open) {
+        Admission admission = stayInScope(open);
+        AdmissionUpdateRequestDTO request = new AdmissionUpdateRequestDTO();
+        request.setAdmissionNotes("rewritten");
+        when(admissionRepository.save(admission)).thenReturn(admission);
+
+        service.updateAdmission(admissionId, request);
+
+        assertThat(admission.getAdmissionNotes()).isEqualTo("rewritten");
+    }
+
+    @Test
+    void qaD1428_aDischargedStayStillTakesLateCodingAndNothingElse() {
+        Admission admission = stayInScope(AdmissionStatus.DISCHARGED);
+        AdmissionUpdateRequestDTO coding = new AdmissionUpdateRequestDTO();
+        coding.setSecondaryDiagnosesToAdd(java.util.List.of(java.util.Map.of("code", "E11", "description", "Diabete")));
+        when(admissionRepository.save(admission)).thenReturn(admission);
+
+        service.updateAdmission(admissionId, coding);
+
+        assertThat(admission.getSecondaryDiagnoses()).hasSize(1);
+
+        AdmissionUpdateRequestDTO more = new AdmissionUpdateRequestDTO();
+        more.setSecondaryDiagnosesToAdd(java.util.List.of(java.util.Map.of("code", "I10", "description", "HTA")));
+        more.setAdmissionNotes("and a rewrite");
+        assertThatThrownBy(() -> service.updateAdmission(admissionId, more))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class);
+    }
+
+    @Test
+    void qaD1428_aCancelledStayTakesNoCoding() {
+        stayInScope(AdmissionStatus.CANCELLED);
+        AdmissionUpdateRequestDTO coding = new AdmissionUpdateRequestDTO();
+        coding.setSecondaryDiagnosesToAdd(java.util.List.of(java.util.Map.of("code", "E11", "description", "Diabete")));
+
+        assertThatThrownBy(() -> service.updateAdmission(admissionId, coding))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class)
+            .hasMessage("admission.cancelled.readOnly");
+    }
+
+    @Test
+    void qaD1428_aClosedStayTakesNoOrderSet() {
+        stayInScope(AdmissionStatus.DISCHARGED);
+        com.example.hms.payload.dto.AdmissionOrderExecutionRequestDTO request =
+            new com.example.hms.payload.dto.AdmissionOrderExecutionRequestDTO();
+
+        assertThatThrownBy(() -> service.applyOrderSets(admissionId, request))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class);
+        verify(admissionRepository, never()).save(any());
+    }
+
+    private com.example.hms.model.Bed heldBed(Admission admission) {
+        com.example.hms.model.Ward ward = new com.example.hms.model.Ward();
+        ward.setCode("MA");
+        com.example.hms.model.Bed bed = new com.example.hms.model.Bed();
+        bed.setWard(ward);
+        bed.setBedNumber("01");
+        admission.setBed(bed);
+        admission.setRoomBed(com.example.hms.service.BedAssignmentService.bedLabel(bed));
+        return bed;
+    }
+
+    @Test
+    void qaD1428_aRoomThatDisagreesWithTheHeldBedIsRefusedOnTheField() {
+        Admission admission = stayInScope(AdmissionStatus.ACTIVE);
+        heldBed(admission);
+        String label = admission.getRoomBed();
+        AdmissionUpdateRequestDTO request = new AdmissionUpdateRequestDTO();
+        request.setRoomBed("MA-09");
+
+        assertThatThrownBy(() -> service.updateAdmission(admissionId, request))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .extracting("field").isEqualTo("roomBed");
+        assertThat(admission.getRoomBed()).isEqualTo(label);
+    }
+
+    @Test
+    void qaD1428_theFormEchoingTheHeldBedIsNoChange() {
+        Admission admission = stayInScope(AdmissionStatus.ACTIVE);
+        heldBed(admission);
+        String label = admission.getRoomBed();
+        AdmissionUpdateRequestDTO request = new AdmissionUpdateRequestDTO();
+        request.setRoomBed(" " + label.toLowerCase(java.util.Locale.ROOT) + " ");
+        request.setAdmissionNotes("noted");
+        when(admissionRepository.save(admission)).thenReturn(admission);
+
+        service.updateAdmission(admissionId, request);
+
+        assertThat(admission.getRoomBed()).isEqualTo(label);
+        assertThat(admission.getAdmissionNotes()).isEqualTo("noted");
+    }
+
+    @Test
+    void qaD1428_aStayWithNoStructuredBedKeepsItsFreeTextRoom() {
+        Admission admission = stayInScope(AdmissionStatus.ACTIVE);
+        AdmissionUpdateRequestDTO request = new AdmissionUpdateRequestDTO();
+        request.setRoomBed("Salle 3");
+        when(admissionRepository.save(admission)).thenReturn(admission);
+
+        service.updateAdmission(admissionId, request);
+
+        assertThat(admission.getRoomBed()).isEqualTo("Salle 3");
+    }
 }

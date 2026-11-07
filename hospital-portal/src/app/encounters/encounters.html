@@ -179,7 +179,7 @@
                   >
                     <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
                   </button>
-                  @if (canEditEncounter()) {
+                  @if (canEditEncounter() && !isClosedVisit(enc)) {
                     <button
                       [attr.aria-label]="'ENCOUNTERS.EDIT' | translate"
                       class="btn-icon"
@@ -189,7 +189,7 @@
                       <span class="material-symbols-outlined" aria-hidden="true">edit</span>
                     </button>
                   }
-                  @if (canDeleteEncounter()) {
+                  @if (canDeleteEncounter() && !isClosedVisit(enc)) {
                     <button
                       [attr.aria-label]="'ENCOUNTERS.DELETE' | translate"
                       class="btn-icon danger"

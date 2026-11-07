@@ -62,6 +62,9 @@ public class LabOrderServiceImpl implements LabOrderService {
     // i18n key for "lab order not found" appears 7x in this file.
     // One constant, one source of truth.
     private static final String LAB_ORDER_NOT_FOUND = "laborder.notfound";
+    /** QA D1428 class: the statuses in which an order's content is closed to an edit. */
+    private static final java.util.Set<LabOrderStatus> CLOSED_TO_EDIT = java.util.EnumSet.of(
+        LabOrderStatus.VERIFIED, LabOrderStatus.COMPLETED, LabOrderStatus.CANCELLED);
 
     /** The key an unknown staff id gets; every ordering-staff refusal reuses it. */
     private static final String STAFF_NOT_FOUND = "staff.notfound";
@@ -128,6 +131,11 @@ public class LabOrderServiceImpl implements LabOrderService {
         // QA D820: an order voided as entered in error is kept as it was voided.
         if (existing.getStatus() == LabOrderStatus.ENTERED_IN_ERROR) {
             throw new BusinessException("lab.order.enteredInError");
+        }
+        // QA D1428 class: a resulted or cancelled order is the record of what
+        // was asked and done; a correction is a new order or a superseding result.
+        if (CLOSED_TO_EDIT.contains(existing.getStatus())) {
+            throw new BusinessException("lab.order.closed.readOnly");
         }
 
         Hospital previousPerformer = existing.getPerformingHospital();

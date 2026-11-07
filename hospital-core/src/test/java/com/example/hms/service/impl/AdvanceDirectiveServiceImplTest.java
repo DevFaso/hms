@@ -280,4 +280,22 @@ class AdvanceDirectiveServiceImplTest {
         assertThatThrownBy(() -> service.revoke(id, "reason"))
             .isInstanceOf(ResourceNotFoundException.class);
     }
+
+    /** QA D1428 class: a body with no status rewrote a revoked directive's content. */
+    @Test
+    void qaD1428_aRevokedDirectiveIsNotRewrittenByABodyWithNoStatus() {
+        UUID id = UUID.randomUUID();
+        AdvanceDirective revoked = new AdvanceDirective();
+        revoked.setId(id);
+        revoked.setHospital(hospital);
+        revoked.setStatus(AdvanceDirectiveStatus.REVOKED);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(directiveRepository.findById(id)).thenReturn(Optional.of(revoked));
+        AdvanceDirectiveRequestDTO edit = new AdvanceDirectiveRequestDTO();
+
+        assertThatThrownBy(() -> service.update(id, edit))
+            .isInstanceOf(BusinessException.class)
+            .extracting("messageKey").isEqualTo("advanceDirective.revoked.locked");
+        verify(directiveRepository, never()).save(any());
+    }
 }

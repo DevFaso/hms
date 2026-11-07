@@ -574,4 +574,22 @@ class ImagingReportServiceImplTest {
 
         verify(imagingReportRepository).save(report);
     }
+
+    /** QA D1428 class: a voided read stays voided: no revision, and no status moves it back. */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = ImagingReportStatus.class, names = {"CANCELLED", "ERROR"})
+    void qaD1428_aVoidedReportIsNotRevised(ImagingReportStatus voided) {
+        ImagingReport report = persistedReport();
+        report.setReportStatus(voided);
+        ImagingReportUpsertRequestDTO revise = ImagingReportUpsertRequestDTO.builder().findings("revised").build();
+        ImagingReportStatusUpdateRequestDTO again = ImagingReportStatusUpdateRequestDTO.builder()
+            .status(ImagingReportStatus.ERROR).statusReason("again").build();
+
+        assertThatThrownBy(() -> imagingReportService.updateReport(reportId, revise))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("imaging.report.voided.locked");
+        assertThatThrownBy(() -> imagingReportService.updateReportStatus(reportId, again))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("imaging.report.voided.locked");
+    }
 }

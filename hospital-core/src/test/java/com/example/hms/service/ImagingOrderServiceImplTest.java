@@ -1344,4 +1344,22 @@ class ImagingOrderServiceImplTest {
             .isInstanceOf(com.example.hms.exception.BusinessException.class);
         assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.CANCELLED);
     }
+
+    /** QA D1428 class: a study done is what was done. */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = ImagingOrderStatus.class, names = {"COMPLETED", "RESULTS_AVAILABLE"})
+    void qaD1428_aResultedOrderIsNotEdited(ImagingOrderStatus resulted) {
+        ImagingOrder order = new ImagingOrder();
+        order.setId(orderId);
+        order.setStatus(resulted);
+        order.setStudyType("Chest PA");
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        ImagingOrderRequestDTO edit = ImagingOrderRequestDTO.builder().studyType("CT Head").build();
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> imagingOrderService.updateOrder(orderId, edit, null))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .hasMessage("imaging.order.resulted.locked");
+        assertThat(order.getStudyType()).isEqualTo("Chest PA");
+        verify(imagingOrderRepository, never()).save(any());
+    }
 }

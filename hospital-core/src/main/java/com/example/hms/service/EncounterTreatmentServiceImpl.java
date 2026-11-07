@@ -41,6 +41,11 @@ public class EncounterTreatmentServiceImpl implements EncounterTreatmentService 
         // QA r5 tenancy sweep: the encounter is the caller's hospital's, and so is the treatment.
         com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(encounter.getHospital(), ENCOUNTER_NOT_FOUND_KEY, dto.getEncounterId());
         com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(treatment.getHospital(), "treatment.notfound", dto.getTreatmentId());
+        // QA D1428 class: a visit closed unseen had no treatment. A COMPLETED one
+        // takes a late entry: the treatment was given and is being documented.
+        if (com.example.hms.enums.EncounterStatus.ENDED_UNSEEN.contains(encounter.getStatus())) {
+            throw new com.example.hms.exception.FieldBusinessException("encounterId", "encounter.treatment.endedUnseen", encounter.getStatus().localizedLabel());
+        }
         // QA D503 class: the clinician who gave the treatment is the caller.
         Staff staff = com.example.hms.security.CallerIdentity.resolveActor(staffRepository, dto.getStaffId(),
                 com.example.hms.security.CallerIdentity.hospitalIdOf(encounter.getHospital()));

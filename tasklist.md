@@ -6215,3 +6215,21 @@ ships*, not for building — and check the shipped surface before trusting a
 - Asked though regular (safe, a nuisance, second review of round 34): `q8hrs`, `q 12 hours`, `1 tab b.i.d.`, `q2wks`, `tous les 6 heures`, `toutes 8h`, `20h et 8h`, `3x1 cp`, `500-0-500`, `4cp/j`, `1+1+1`, `7j/7`, `alternate days`, `les lundis`, `mondays`. Read them only with a fixture line each.
 - Dose readings left (low): `2.400.000 UI` and `1.000.000 UI` read as 2.4 and 1 instead of unknown; `10,000 mg` reads 10 (the rule covers one digit before the separator); `500 à 1 g` and `1,000 à 2 g` over-read (false alarm only).
 - The condition list stays a list: a symptom not listed and with no opener ("q6h zzz") reads as its cadence, by the coordinator's rule that an unknown word is never a condition. With `pour`, `para`, `for`, `selon` before it, it is asked.
+
+## Standing debt — round 34 (fix/r34-stay-orders)
+
+Siblings of D1428 (a closed record edited) left open, each on `ClosedRecordWriteGuardTest` or named here. None is the reported stay.
+
+- [ ] `ImmunizationServiceImpl#updateImmunization`: an entered-in-error dose can be edited back. `fix/r34-maternity-records` owns the file this round; the guard's allowlist names it.
+- [ ] `PostpartumCareServiceImpl#recordObservation`: a closed care plan named by id still takes an observation. Same owner.
+- [ ] `HighRiskPregnancyCarePlanServiceImpl#updatePlan` and its BP, medication, note and milestone writes on an inactive plan. The `active` flag on the same body is how a plan closes and reopens, so it needs a product rule first.
+- [ ] `LabResultServiceImpl#signLabResult`: a second signature overwrites the first signer. It is also the clinician's acknowledgment, so a refusal needs the acknowledgment path checked. An amend before release withdraws the signature and nobody is told; the signer should be.
+- [ ] `ObservationFhirWriteService#updateLabResult`: appends notes to a released result. Off by default (`FHIR_WRITE_ENABLED=false`).
+- [ ] `ConsultationServiceImpl#reassign` from DECLINED and `ObgynReferralServiceImpl#addMessage` on COMPLETED: possibly intended (re-routing, a thread message); kept as they are until a coordinator decides.
+- [ ] `DischargeSummaryServiceImpl#enrichSparseExistingSummaries` no longer writes a finalized summary, so one finalized before D744 keeps its gaps on the patient's page.
+- [ ] A partly filled order's content stays editable (G13/G15): the drug can be renamed over the part already handed over. The rule has its own test; changing it is a pharmacy decision.
+- [ ] D1432 data: the two QA orders cancelled after dispensing (14cd0c42, 52794b1a) stay CANCELLED on dev. No migration repairs them.
+- [ ] D1435: a nursing task or handoff names no stay, so "of this stay" is read from the creation time. A real `admission_id` on both would end the inference.
+- [ ] D1436: an order set saved before this round with a bare number and no unit previews normally and refuses its apply until an admin edits it. The editor leaves the unit optional; the server is the only check.
+- [ ] D1435: a stay cancelled long after it opened closes outpatient work on the patient written in that window. `admitPatient` opens stays ACTIVE and same-day, so it needs a backdated or ADT-created stay; an `admission_id` on the rows ends it.
+- [ ] `TreatmentPlanServiceImpl#update`: an ARCHIVED plan stays editable, because that form is the only way back from a mistaken archive. A real restore action would let it close.

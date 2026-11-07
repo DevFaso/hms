@@ -2017,4 +2017,37 @@ class LabResultServiceImplLifecycleTest {
                 .isEqualTo("lab.order.cancelledNoResult"));
         verify(labResultRepository, never()).save(any(LabResult.class));
     }
+
+    /** QA D1428 class: a signature covers the value it was given to: the amend withdraws it. */
+    @Test
+    void qaD1428_anAmendOfASignedResultWithdrawsTheSignature() {
+        org.mockito.Mockito.lenient().when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        stubEntryPath();
+        LabResult existing = resultOn(order, false);
+        existing.setSignedAt(java.time.LocalDateTime.now());
+        existing.setSignedByDisplay("Dr A");
+        existing.setAcknowledged(true);
+        when(labResultRepository.findById(existing.getId())).thenReturn(Optional.of(existing));
+        LabResultRequestDTO request = entryRequest();
+        request.setResultValue("9.9");
+
+        service.updateLabResult(existing.getId(), request, Locale.ENGLISH);
+
+        assertThat(existing.getSignedAt()).isNull();
+        assertThat(existing.getSignedByDisplay()).isNull();
+        assertThat(existing.isAcknowledged()).isFalse();
+    }
+
+    @Test
+    void qaD1428_aSignedResultIsNotDeleted() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        LabResult existing = resultOn(order, false);
+        existing.setSignedAt(java.time.LocalDateTime.now());
+        when(labResultRepository.findById(existing.getId())).thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> service.deleteLabResult(existing.getId(), Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "labresult.signed.noDelete");
+        verify(labResultRepository, never()).deleteById(any());
+    }
 }

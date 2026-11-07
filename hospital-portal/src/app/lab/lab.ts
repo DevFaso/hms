@@ -306,7 +306,9 @@ export class LabComponent implements OnInit {
    * sent here, which belongs to the ordering hospital.
    */
   isEditable(o: LabOrderResponse): boolean {
-    return !this.isIncomingExternal(o) && o.status !== 'ENTERED_IN_ERROR';
+    // QA D1428 class: the server refuses an edit of a resulted or cancelled order.
+    const closed = ['ENTERED_IN_ERROR', 'VERIFIED', 'COMPLETED', 'CANCELLED'].includes(o.status);
+    return !this.isIncomingExternal(o) && !closed;
   }
 
   /** As {@link isEditable}, and never on an order that carries results (QA D601/D616). */

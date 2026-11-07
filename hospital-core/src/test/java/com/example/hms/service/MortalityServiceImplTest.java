@@ -540,4 +540,22 @@ class MortalityServiceImplTest {
 
         assertThat(result.getDeathRecord().getCertifiedAt()).isNotNull();
     }
+
+    /** QA D1435: a death ends the stay's nursing work, as a discharge does. */
+    @Test
+    void qaD1435_aDeathClosesTheStaysNursingWork() {
+        com.example.hms.service.AdmissionStayEncounterService stayEncounters =
+            org.mockito.Mockito.mock(com.example.hms.service.AdmissionStayEncounterService.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "stayEncounters", stayEncounters);
+        Admission open = new Admission();
+        open.setId(UUID.randomUUID());
+        open.setHospital(hospital);
+        open.setStatus(AdmissionStatus.ACTIVE);
+        when(admissionRepository.findByPatientIdOrderByAdmissionDateTimeDesc(patientId))
+            .thenReturn(List.of(open));
+
+        service.recordDeath(base().build());
+
+        verify(stayEncounters).closeNursingWorkOfEndedStay(open);
+    }
 }
