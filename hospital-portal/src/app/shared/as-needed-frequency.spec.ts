@@ -64,7 +64,7 @@ describe('as-needed-frequency (QA D1391 / D1395: the mirror of the server rule)'
 
   it('QA D1419: an unknown word is never a condition', () => {
     expect(unTickedFrequencyVerdict('prendre 1 comprimé 3 fois par jour')).toBe('FIXED');
-        expect(unTickedFrequencyVerdict('1 cp par jour pour HTA')).toBe('UNREADABLE');
+    expect(unTickedFrequencyVerdict('1 cp par jour pour HTA')).toBe('UNREADABLE');
 
     expect(unTickedFrequencyVerdict('pour HTA')).toBe('UNREADABLE');
     expect(unTickedFrequencyVerdict('toutes les 6 h pour douleur')).toBe('CONDITIONAL');

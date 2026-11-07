@@ -959,4 +959,5 @@ Rounds 27, 28 and 29 each found 20–30 new siblings of the required-field class
 | `service/impl/FrequencyWordingTest#d1395_theFiledConditionsAreRefusedOnTheTick`, `#aConfirmationDoesNotPassACondition` (new) | D1395, the re-test gate: a condition is refused on `asNeeded`, and confirming never passes it. | none |
 | `architecture/MarAsNeededFlagGuardTest` (rule 2 names `FrequencyWording` as the rule's reader) | As before; the rule asks the one reader what a text says. | `FLAG_READERS` unchanged |
 | `scripts/lib/as-needed-frequency.test.mjs` (widened) | Both forms answer the question on `frequencyConfirmed`, marked by the server, and neither sets the tick from it. | none |
+| `service/impl/FrequencyWordingTest#reviewOfRound34_*`, `#secondReviewOfRound34_*` (new) | A sentence with more in it read at its first cadence: a second phase, a stated gap, two intervals, a ceiling, a repeated single dose, a reason beside a cadence. | none |
 | `cdshooks/rules/DoseRangeTest#d1420_*` (new table) | A mixed number or a thousands separator read below what was written, and any valid single dose whose reading changes. | none |
