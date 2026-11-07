@@ -567,6 +567,25 @@ class MaternalHistoryServiceImplTest {
         verify(maternalHistoryRepository, never()).delete(any());
     }
 
+    /** The score sets the cadence the prenatal planner gives the owning hospital, so it is written only from there. */
+    @Test
+    void calculateRiskScore_isRefusedAtAnotherHospital() {
+        UUID historyId = UUID.randomUUID();
+        UUID elsewhere = UUID.randomUUID();
+        maternalHistory.setHospital(hospital);
+        when(maternalHistoryRepository.findById(historyId)).thenReturn(Optional.of(maternalHistory));
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .principalUserId(userId)
+            .activeHospitalId(elsewhere)
+            .permittedHospitalIds(Set.of(elsewhere))
+            .superAdmin(false)
+            .build());
+
+        assertThatThrownBy(() -> maternalHistoryService.calculateRiskScore(historyId, username))
+            .isInstanceOf(ResourceNotFoundException.class);
+        verify(maternalHistoryRepository, never()).save(any());
+    }
+
     @Test
     void calculateRiskScore_shouldCalculateLowRisk() {
         UUID historyId = UUID.randomUUID();

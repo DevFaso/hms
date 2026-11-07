@@ -404,6 +404,10 @@ public class MaternalHistoryServiceImpl implements MaternalHistoryService {
         MaternalHistory maternalHistory = maternalHistoryRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(MATERNAL_HISTORY_NOT_FOUND_WITH_ID, id));
         
+        // A write loads under the tenant guard, as the rest of this service: the score stored here sets
+        // the visit cadence the prenatal planner gives the hospital that owns this history.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(maternalHistory.getHospital(), MATERNAL_HISTORY_NOT_FOUND_WITH_ID, id);
+
         // Simple risk calculation based on history flags
         int riskScore = 0;
         String riskCategory = "LOW";
