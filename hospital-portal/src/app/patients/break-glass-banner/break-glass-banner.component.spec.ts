@@ -91,6 +91,19 @@ describe('BreakGlassBannerComponent', () => {
     }
   });
 
+  it('keeps an idle declaration accessible in compact mode and highlights a live session', () => {
+    init(['ROLE_DOCTOR']);
+    fixture.componentRef.setInput('compactWhenIdle', true);
+    bgSpy.findMyLiveSession.and.returnValue(of(null));
+    setInputs('p1');
+    expect(fixture.nativeElement.querySelector('.bg-compact .bg-banner__btn')).toBeTruthy();
+
+    bgSpy.findMyLiveSession.and.returnValue(of(liveSession));
+    setInputs('p2');
+    expect(fixture.nativeElement.querySelector('.bg-active')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('.bg-compact')).toBeNull();
+  });
+
   it('shows the prompt button when clinician has no active session', () => {
     init(['ROLE_DOCTOR']);
     bgSpy.findMyLiveSession.and.returnValue(of(null));

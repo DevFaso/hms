@@ -49,8 +49,11 @@ import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { serverDateOrInstant } from '../shared/date-utils';
 import { ClockTimePipe } from '../shared/pipes/clock-time.pipe';
 
+type SectionKey = 'overview' | 'clinical' | 'documents' | 'care' | 'administration';
+
 type TabKey =
   | 'overview'
+  | 'administration'
   | 'medical'
   | 'chart'
   | 'chart-review'
@@ -111,6 +114,102 @@ export class PatientDetailComponent implements OnInit {
   patient = signal<PatientResponse | null>(null);
   loading = signal(true);
   activeTab = signal<TabKey>('overview');
+
+  readonly sections: { key: SectionKey; label: string; icon: string }[] = [
+    { key: 'overview', label: 'PATIENTS.SUMMARY', icon: 'space_dashboard' },
+    { key: 'clinical', label: 'PATIENTS.CLINICAL_RECORD', icon: 'clinical_notes' },
+    { key: 'documents', label: 'PATIENT_DOCUMENTS.TAB', icon: 'folder_open' },
+    { key: 'care', label: 'PATIENTS.CARE_PATHWAY', icon: 'event_note' },
+    { key: 'administration', label: 'PATIENTS.ADMINISTRATION', icon: 'admin_panel_settings' },
+  ];
+
+  readonly navigationTabs = computed(() => {
+    const tabs: { key: TabKey; section: SectionKey; label: string; visible: boolean }[] = [
+      { key: 'overview', section: 'overview', label: 'PATIENTS.SUMMARY', visible: true },
+      { key: 'medical', section: 'clinical', label: 'PATIENTS.MEDICAL', visible: true },
+      { key: 'chart', section: 'clinical', label: 'CHART.TAB', visible: this.canViewChart() },
+      {
+        key: 'med-history',
+        section: 'clinical',
+        label: 'MED_HISTORY.TAB',
+        visible: this.canViewMedHistory(),
+      },
+      {
+        key: 'vitals',
+        section: 'clinical',
+        label: 'PATIENTS.VITALS',
+        visible: this.canViewVitals(),
+      },
+      { key: 'growth', section: 'clinical', label: 'GROWTH.TAB', visible: this.showGrowthTab() },
+      {
+        key: 'fluid-balance',
+        section: 'clinical',
+        label: 'FLUID_BALANCE.TAB',
+        visible: this.canViewFluidBalance(),
+      },
+      { key: 'micro', section: 'clinical', label: 'MICRO.TAB', visible: this.canViewMicro() },
+      {
+        key: 'chart-review',
+        section: 'clinical',
+        label: 'CHART_REVIEW.TAB_LABEL',
+        visible: this.canViewChartReview(),
+      },
+      {
+        key: 'directives',
+        section: 'clinical',
+        label: 'DIRECTIVES.TAB_LABEL',
+        visible: this.canViewDirectives(),
+      },
+      {
+        key: 'documents',
+        section: 'documents',
+        label: 'PATIENT_DOCUMENTS.TAB',
+        visible: this.canViewDocuments(),
+      },
+      {
+        key: 'encounters',
+        section: 'care',
+        label: 'PATIENTS.ENCOUNTERS_TAB',
+        visible: this.canViewEncounters(),
+      },
+      {
+        key: 'appointments',
+        section: 'care',
+        label: 'PATIENTS.APPOINTMENTS_TAB',
+        visible: this.canViewAppointments(),
+      },
+      {
+        key: 'administration',
+        section: 'administration',
+        label: 'PATIENTS.HOSPITAL_INFO',
+        visible: true,
+      },
+      {
+        key: 'coverage',
+        section: 'administration',
+        label: 'COVERAGE.TAB',
+        visible: this.canViewCoverage(),
+      },
+    ];
+    return tabs.filter((tab) => tab.visible);
+  });
+
+  readonly activeSection = computed<SectionKey>(() => {
+    return this.navigationTabs().find((tab) => tab.key === this.activeTab())?.section ?? 'overview';
+  });
+
+  sectionVisible(section: SectionKey): boolean {
+    return this.navigationTabs().some((tab) => tab.section === section);
+  }
+
+  readonly sectionTabs = computed(() => {
+    return this.navigationTabs().filter((tab) => tab.section === this.activeSection());
+  });
+
+  setSection(section: SectionKey): void {
+    const first = this.navigationTabs().find((tab) => tab.section === section);
+    if (first) this.setTab(first.key);
+  }
 
   /* Sub-tab data */
   vitals = signal<VitalSignResponse[]>([]);
@@ -545,7 +644,8 @@ export class PatientDetailComponent implements OnInit {
       this.loadVitals();
     if (tab === 'encounters' && this.canViewEncounters() && this.encounters().length === 0)
       this.loadEncounters();
-    if (tab === 'appointments' && this.appointments().length === 0) this.loadAppointments();
+    if (tab === 'appointments' && this.canViewAppointments() && this.appointments().length === 0)
+      this.loadAppointments();
   }
 
   private loadVitals(): void {
