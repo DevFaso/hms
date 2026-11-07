@@ -81,7 +81,7 @@
     }
   },
   "BEDS": {
-    "NO_MATCHES": "Aucun r?sultat ne correspond ? ces filtres",
+    "NO_MATCHES": "Aucun résultat ne correspond à ces filtres",
     "CLEAR_FILTERS": "Effacer les filtres",
     "WORKSPACE": "Gestion des capacités",
     "CAPACITY_OVERVIEW": "Vue d’ensemble des capacités",
@@ -9594,7 +9594,7 @@
     "PAST_DATE": "La date et l'heure prévues ne peuvent pas être dans le passé."
   },
   "REGISTRATIONS": {
-    "NO_MATCHES": "Aucun r?sultat ne correspond ? ces filtres",
+    "NO_MATCHES": "Aucun résultat ne correspond à ces filtres",
     "CLEAR_FILTERS": "Effacer les filtres",
     "WORKSPACE": "Inscription hospitalière",
     "OVERVIEW": "Vue des inscriptions et séjours",
