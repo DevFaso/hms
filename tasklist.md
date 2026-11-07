@@ -6240,3 +6240,20 @@ Siblings of D1428 (a closed record edited) left open, each on `ClosedRecordWrite
 - [ ] Announcements: a platform-wide one (no hospital) is readable by id from any hospital, but `GET /announcements` at a hospital lists only that hospital's, so nobody pinned to a hospital sees it in the list. Not changed: nothing leaks, and showing them is a product decision.
 - [ ] D1445: the server's `FlowBoardDTO.walkIn` still lists a walk-in whose encounter is SCHEDULED; the portal draws those cards with the arrived ones. The field stays for API callers.
 - [ ] D1300 known gap added by D1430: `PatientHospitalRegistrationRequestDTO.patientId` and `.hospitalName` are in `RequiredRequestIdGuardTest.CONDITIONALLY_REQUIRED`: the DTO now has a constraint, so bean validation runs before `validateRequest` names them. Create-only fields, and the same body edits: moving them needs an `OnCreate` group on that controller.
+
+## Standing debt — round 34 (fix/r34-adult-paracetamol)
+
+The "adult paracetamol" line under fix/r34-frequency-dose is answered: the user supplied the values on 2026-11-07, and `AdultParacetamolRule` carries them. Sources:
+- US FDA guidance on acetaminophen, under "Acetaminophen Is in Many Products": 4,000 mg in 24 hours is the adult maximum, counting paracetamol/acetaminophen from all medicines combined.
+- EFFERALGANSTIX 1000 mg, RCP sections 4.2 and 4.3 (Base de données publique des médicaments, France): 3 g/day usual dose from 50 kg; up to 4 g/day only on medical advice, without additional hepatotoxicity risk factors; 1 g per administration; at least 4 hours apart. Under 50 kg, chronic malnutrition or dehydration: 60 mg/kg/day or 3,000 mg/day, whichever is lower (45 kg gives 2,700 mg/day). Mild to moderate hepatocellular insufficiency, Gilbert syndrome or chronic alcoholism: 2,000 mg/day; chronic alcoholism at least 8 hours between doses. Severe hepatocellular insufficiency: contraindicated. When several apply, the lowest ceiling.
+
+For the clinician list (proposed alert logic, pending sign-off):
+- [ ] Every card is an alert (`warning`, or `info` from 3 g to 4 g): the order saves. Should the daily, single-dose or contraindication card become a soft stop (reason required, audited)? One constant, `AdultParacetamolRule.ALERT`.
+- [ ] The problem codes behind each group (`ParacetamolRisk`): malnutrition E40-E46 (ICD-10 does not say chronic, so any coded malnutrition counts); dehydration E86 without E86.1; Gilbert E80.4; chronic alcoholism F10.2; hepatocellular insufficiency K72, K70.4, K71.1, with its degree from the row's severity (SEVERE, LIFE_THREATENING contraindicate; none recorded takes 2,000 mg/day and says so).
+- [ ] "Other liver risk factors" have no number: no rule, no card beyond the groups named in the text.
+- [ ] Combination products (paracetamol + codeine, tramadol): not counted. The catalogue's strength ("500/30") has no label per ingredient, so their paracetamol content cannot be read. Needs a structured content field to count them.
+- [ ] Brands: `DrugClassAllergy.BRAND_GENERICS` holds no paracetamol brand, so a free-text Efferalgan or Doliprane counts only when the catalogue item names it. Adding them changes the allergy resolution, so it was not done here; D1264 stays debt.
+- [ ] Not detected, named in the text for the prescriber to judge: a condition typed only as free text (no code), coded in ICD-11 (no mapping supplied), recorded only in the social history (alcohol use is not a diagnosis), or at another hospital (problems and orders are read at the order's hospital, as every CDS rule does).
+- [ ] CDS hooks send no frequency to the engine (`MedicationDraftExtractor` reads the dose only), so there the daily total counts one dose of the draft plus the other active orders. The paediatric rule has the same limit. The prescribing form, its edit and order sets send it.
+- [ ] An active order with no duration counts until it is stopped, cancelled or its stay ends (`MedicationCourseStatus`'s rule); a course whose duration is in months is not read as ended either.
+- [ ] A patient with no date of birth gets no card from either rule.

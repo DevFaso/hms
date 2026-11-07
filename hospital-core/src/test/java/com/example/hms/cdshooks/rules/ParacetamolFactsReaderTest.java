@@ -1,0 +1,309 @@
+package com.example.hms.cdshooks.rules;
+
+import com.example.hms.enums.PrescriptionStatus;
+import com.example.hms.enums.ProblemSeverity;
+import com.example.hms.enums.ProblemStatus;
+import com.example.hms.model.Admission;
+import com.example.hms.model.Patient;
+import com.example.hms.model.PatientProblem;
+import com.example.hms.model.Prescription;
+import com.example.hms.model.medication.MedicationCatalogItem;
+import com.example.hms.repository.AdmissionRepository;
+import com.example.hms.repository.MedicationCatalogItemRepository;
+import com.example.hms.repository.PatientProblemRepository;
+import com.example.hms.repository.PrescriptionRepository;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
+
+/** Which orders and problems count: "paracetamol from all active orders", coded problems only. */
+class ParacetamolFactsReaderTest {
+
+    private final PrescriptionRepository prescriptions = mock(PrescriptionRepository.class);
+    private final MedicationCatalogItemRepository catalogue = mock(MedicationCatalogItemRepository.class);
+    private final PatientProblemRepository problems = mock(PatientProblemRepository.class);
+    private final AdmissionRepository admissions = mock(AdmissionRepository.class);
+    private final ParacetamolFactsReader reader =
+        new ParacetamolFactsReader(prescriptions, catalogue, problems, admissions);
+
+    private final UUID hospitalId = UUID.randomUUID();
+    private final List<Prescription> orders = new ArrayList<>();
+    private final List<PatientProblem> rows = new ArrayList<>();
+    private final List<MedicationCatalogItem> items = new ArrayList<>();
+    private Patient adult;
+    private MedicationCatalogItem doliprane;
+
+    @BeforeEach
+    void setUp() {
+        adult = Patient.builder().dateOfBirth(LocalDate.now().minusYears(40)).build();
+        adult.setId(UUID.randomUUID());
+        doliprane = item("Paracétamol", "Doliprane", "1000");
+        items.add(doliprane);
+        items.add(item("Paracétamol + codéine", "Codoliprane", "500/30"));
+        items.add(item("Amoxicilline", "Clamoxyl", "500"));
+        when(prescriptions.findByPatient_IdAndHospital_Id(adult.getId(), hospitalId)).thenReturn(orders);
+        when(problems.findByPatient_IdAndHospital_Id(adult.getId(), hospitalId)).thenReturn(rows);
+        when(catalogue.findActivePage(eq(hospitalId), any(Pageable.class))).thenAnswer(i -> new PageImpl<>(items));
+        when(admissions.findByPatientIdOrderByAdmissionDateTimeDesc(adult.getId())).thenReturn(List.<Admission>of());
+    }
+
+    private static MedicationCatalogItem item(String generic, String brand, String strength) {
+        MedicationCatalogItem item = MedicationCatalogItem.builder().code(brand.toUpperCase())
+            .genericName(generic).brandName(brand).nameFr(generic).strength(strength).strengthUnit("mg").build();
+        item.setId(UUID.randomUUID());
+        return item;
+    }
+
+    private Prescription order(String name, PrescriptionStatus status) {
+        Prescription rx = Prescription.builder().medicationName(name).dosage("1 g").status(status).build();
+        rx.setId(UUID.randomUUID());
+        rx.setCreatedAt(LocalDateTime.now().minusDays(2));
+        orders.add(rx);
+        return rx;
+    }
+
+    private ParacetamolFacts read() {
+        return reader.read(adult, hospitalId, "Paracétamol 500 mg", null, null);
+    }
+
+    @Test
+    void aChildAndAnotherDrugReadNothing() {
+        Patient child = Patient.builder().dateOfBirth(LocalDate.now().minusYears(17)).build();
+        child.setId(UUID.randomUUID());
+        assertThat(reader.read(child, hospitalId, "Paracétamol", null, null)).isEqualTo(ParacetamolFacts.NONE);
+        assertThat(reader.read(adult, hospitalId, "Amoxicilline", items.get(2), null)).isEqualTo(ParacetamolFacts.NONE);
+        verifyNoInteractions(prescriptions, catalogue, problems, admissions);
+    }
+
+    @ParameterizedTest(name = "typed {0}: applies = {1}")
+    @CsvSource({
+        "Paracétamol 500 mg, true",
+        "Acetaminophen 500 mg, true",
+        "Doliprane 1000 mg, true",
+        "Codoliprane, false",
+        "Totapen, false",
+        "Paracétamol + codéine, false",
+    })
+    void aFreeTextNameIsJudgedThroughTheCatalogue(String typed, boolean applies) {
+        assertThat(reader.read(adult, hospitalId, typed, null, null).applies()).isEqualTo(applies);
+    }
+
+    @Test
+    void aBrandPickedFromTheCatalogueApplies() {
+        assertThat(reader.read(adult, hospitalId, "Doliprane", doliprane, null).applies()).isTrue();
+        assertThat(reader.read(adult, hospitalId, "Codoliprane", items.get(1), null).applies()).isFalse();
+    }
+
+    @ParameterizedTest(name = "{0}: counted = {1}")
+    @CsvSource({
+        "DRAFT, true",
+        "PENDING_SIGNATURE, true",
+        "SIGNED, true",
+        "DISPENSED, true",
+        "PARTIALLY_FILLED, true",
+        "CANCELLED, false",
+        "DISCONTINUED, false",
+        "PARTNER_REJECTED, false",
+    })
+    void onlyActiveStatusesCount(PrescriptionStatus status, boolean counted) {
+        order("Paracétamol", status);
+        assertThat(read().otherOrders()).hasSize(counted ? 1 : 0);
+    }
+
+    @Test
+    void theOrderBeingEditedIsNotAnotherOrder() {
+        Prescription edited = order("Paracétamol", PrescriptionStatus.DRAFT);
+        assertThat(reader.read(adult, hospitalId, "Paracétamol", null, edited.getId()).otherOrders()).isEmpty();
+    }
+
+    @ParameterizedTest(name = "{0} written {1} days ago: counted = {2}")
+    @CsvSource({
+        "5 days, 5, true",
+        "5 days, 6, false",
+        "5 jours, 5, true",
+        "5 jours, 6, false",
+        "1 semaine, 7, true",
+        "1 semaine, 8, false",
+        "3 mois, 400, true",
+        "'', 400, true",
+    })
+    void aPastCourseIsNotActive(String duration, int daysAgo, boolean counted) {
+        Prescription rx = order("Paracétamol", PrescriptionStatus.DISPENSED);
+        rx.setDuration(duration);
+        rx.setCreatedAt(LocalDateTime.now().minusDays(daysAgo));
+        assertThat(read().otherOrders()).hasSize(counted ? 1 : 0);
+    }
+
+    @Test
+    void anOrderWrittenDuringAFinishedStayIsNotActive() {
+        Prescription rx = order("Paracétamol", PrescriptionStatus.SIGNED);
+        rx.setHospital(hospitalOf());
+        Admission stay = new Admission();
+        stay.setHospital(rx.getHospital());
+        stay.setAdmissionDateTime(LocalDateTime.now().minusDays(5));
+        stay.setActualDischargeDateTime(LocalDateTime.now().minusDays(1));
+        when(admissions.findByPatientIdOrderByAdmissionDateTimeDesc(adult.getId())).thenReturn(List.of(stay));
+        assertThat(read().otherOrders()).isEmpty();
+        rx.setTakeHome(true);
+        assertThat(read().otherOrders()).hasSize(1);
+    }
+
+    private com.example.hms.model.Hospital hospitalOf() {
+        com.example.hms.model.Hospital hospital = com.example.hms.model.Hospital.builder().build();
+        hospital.setId(hospitalId);
+        return hospital;
+    }
+
+    @Test
+    void identityOfTheOtherOrders() {
+        order("Doliprane 1000 mg", PrescriptionStatus.SIGNED);
+        order("Acétaminophène", PrescriptionStatus.SIGNED);
+        order("Paracetamol + codéine 500/30", PrescriptionStatus.SIGNED);
+        order("Codoliprane", PrescriptionStatus.SIGNED);
+        order("Amoxicilline 1 g", PrescriptionStatus.SIGNED);
+        Prescription linked = order("Efferalgan", PrescriptionStatus.SIGNED);
+        linked.setMedicationCatalogItemId(doliprane.getId());
+        Prescription coded = order("Dafalgan", PrescriptionStatus.SIGNED);
+        coded.setMedicationCode(doliprane.getCode());
+
+        assertThat(read().otherOrders()).extracting(o -> o.order().getMedicationName())
+            .containsExactly("Doliprane 1000 mg", "Acétaminophène", "Efferalgan", "Dafalgan");
+        assertThat(read().otherOrders().get(0).item()).isSameAs(doliprane);
+        assertThat(read().otherOrders().get(1).item()).isNull();
+        assertThat(read().otherOrders().get(2).item()).isSameAs(doliprane);
+    }
+
+    @Test
+    void itemsOfDifferentStrengthsGiveNoStrength() {
+        items.add(item("Paracétamol", "Doliprane", "500"));
+        order("Doliprane", PrescriptionStatus.SIGNED);
+        assertThat(read().otherOrders().get(0).item()).isNull();
+        items.remove(items.size() - 1);
+        items.add(item("Paracétamol", "Doliprane", "1000"));
+        assertThat(read().otherOrders().get(0).item()).isNotNull();
+    }
+
+    private PatientProblem problem(String code, ProblemStatus status, boolean removed) {
+        PatientProblem row = PatientProblem.builder().problemCode(code).problemDisplay("x").status(status)
+            .enteredInError(removed).build();
+        rows.add(row);
+        return row;
+    }
+
+    @Test
+    void onlyActiveRowsCount() {
+        problem("E80.4", ProblemStatus.RESOLVED, false);
+        problem("F10.2", ProblemStatus.INACTIVE, false);
+        problem("K72.9", ProblemStatus.ACTIVE, true);
+        assertThat(read().risks()).isEmpty();
+        problem("E80.4", ProblemStatus.RECURRENCE, false);
+        assertThat(read().risks()).containsExactly(ParacetamolRisk.TWO_GRAM_GROUP);
+    }
+
+    @ParameterizedTest(name = "{0} {1}")
+    @CsvSource(nullValues = "null", value = {
+        "E43, null, MALNUTRITION_OR_DEHYDRATION",
+        "E40, null, MALNUTRITION_OR_DEHYDRATION",
+        "E46, null, MALNUTRITION_OR_DEHYDRATION",
+        "E44.1, null, MALNUTRITION_OR_DEHYDRATION",
+        "E86, null, MALNUTRITION_OR_DEHYDRATION",
+        "E86.0, null, MALNUTRITION_OR_DEHYDRATION",
+        "E80.4, null, TWO_GRAM_GROUP",
+        "e80.4, null, TWO_GRAM_GROUP",
+        "F10.2, null, TWO_GRAM_GROUP CHRONIC_ALCOHOLISM",
+        "F10.20, null, TWO_GRAM_GROUP CHRONIC_ALCOHOLISM",
+        "K72.9, MILD, TWO_GRAM_GROUP",
+        "K72.1, MODERATE, TWO_GRAM_GROUP",
+        "K72.9, null, TWO_GRAM_GROUP HEPATIC_DEGREE_UNRECORDED",
+        "K72.9, UNKNOWN, TWO_GRAM_GROUP HEPATIC_DEGREE_UNRECORDED",
+        "K72.9, SEVERE, SEVERE_HEPATIC",
+        "K70.4, LIFE_THREATENING, SEVERE_HEPATIC",
+        "K71.1, SEVERE, SEVERE_HEPATIC",
+    })
+    void theCodedGroups(String code, ProblemSeverity severity, String expected) {
+        problem(code, ProblemStatus.ACTIVE, false).setSeverity(severity);
+        assertThat(read().risks()).extracting(Enum::name).containsExactlyInAnyOrder(expected.split(" "));
+    }
+
+    @ParameterizedTest(name = "{0} is no group")
+    @CsvSource({"E47", "E39", "E86.1", "E80.5", "F10.1", "F10.3", "K74.6", "K70.3", "K71.2", "K76.0", "I10"})
+    void otherCodesAreNoGroup(String code) {
+        problem(code, ProblemStatus.ACTIVE, false);
+        assertThat(read().risks()).isEmpty();
+    }
+
+    @Test
+    void freeTextAndIcd11AreNotRead() {
+        PatientProblem display = PatientProblem.builder().problemDisplay("Alcoolisme chronique, cirrhose grave")
+            .status(ProblemStatus.ACTIVE).build();
+        rows.add(display);
+        problem("E80.4", ProblemStatus.ACTIVE, false).setIcdVersion("ICD-11");
+        assertThat(read().risks()).isEmpty();
+    }
+
+    @Test
+    void theSecondaryCodesOfARowCount() {
+        PatientProblem row = problem("I10", ProblemStatus.ACTIVE, false);
+        row.setDiagnosisCodes(new ArrayList<>(List.of("E80.4")));
+        assertThat(read().risks()).isEqualTo(Set.of(ParacetamolRisk.TWO_GRAM_GROUP));
+    }
+
+    @ParameterizedTest(name = "{0}: alone = {1}")
+    @CsvSource(delimiter = '|', value = {
+        "Paracetamol | true",
+        "Paracétamol 500 mg comprimé | true",
+        "PARACETAMOL | true",
+        "Paracetamolo | true",
+        "Paracétamol sirop 120 mg/5 ml | true",
+        "Paracétamol 10 mg/ml | true",
+        "Paracétamol (Doliprane) | true",
+        "Paracetamol, 500 mg | true",
+        "Acetaminophen | true",
+        "Acétaminophène | true",
+        "Acetaminofén 500 mg | true",
+        "Paracétamol + codéine | false",
+        "Paracétamol/codéine | false",
+        "Paracétamol-codéine | false",
+        "Paracétamol et codéine | false",
+        "Paracetamol 500/30 mg | false",
+        "Tramadol/paracétamol | false",
+        "Codéine paracétamol | false",
+        "Paracetamolx | false",
+        "Doliprane | false",
+    })
+    void nameTable(String name, boolean alone) {
+        assertThat(ParacetamolIdentity.nameIsParacetamolAlone(name)).isEqualTo(alone);
+    }
+
+    @Test
+    void identityReadsBothInputsAndNeverACombination() {
+        MedicationCatalogItem byAtc = MedicationCatalogItem.builder().genericName("Efferalgan").atcCode("N02BE01").build();
+        MedicationCatalogItem combo = MedicationCatalogItem.builder().genericName("Tramadol + paracétamol").build();
+        assertThat(ParacetamolIdentity.names("Bristopen", doliprane)).isTrue();
+        assertThat(ParacetamolIdentity.names("Paracétamol", items.get(2))).isTrue();
+        assertThat(ParacetamolIdentity.names("Efferalgan", byAtc)).isTrue();
+        assertThat(ParacetamolIdentity.names("Paracétamol", combo)).isFalse();
+        assertThat(ParacetamolIdentity.names(null, null)).isFalse();
+        // What the prescriber wrote beside the drug is read even when the item is paracetamol alone.
+        assertThat(ParacetamolIdentity.names("Paracétamol + codéine", doliprane)).isFalse();
+        assertThat(ParacetamolIdentity.names("Paracétamol-codéine", doliprane)).isFalse();
+        assertThat(ParacetamolIdentity.names("Paracétamol 500 mg - comprimé", null)).isTrue();
+    }
+}

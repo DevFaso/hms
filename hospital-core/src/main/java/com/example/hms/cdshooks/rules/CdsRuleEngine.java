@@ -73,6 +73,7 @@ public class CdsRuleEngine {
     private final PrescriptionRepository prescriptionRepository;
     private final MedicationCatalogItemRepository catalogRepository;
     private final PatientVitalSignRepository vitalSignRepository;
+    private final ParacetamolFactsReader paracetamolFacts;
 
     /**
      * QA D1121 (round 20): a rule that throws is a defect, not a quiet log
@@ -96,10 +97,27 @@ public class CdsRuleEngine {
         MedicationCatalogItemRepository catalogRepository,
         PatientVitalSignRepository vitalSignRepository
     ) {
+        this(rules, prescriptionRepository, catalogRepository, vitalSignRepository, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public CdsRuleEngine(
+        List<CdsRule> rules,
+        PrescriptionRepository prescriptionRepository,
+        MedicationCatalogItemRepository catalogRepository,
+        PatientVitalSignRepository vitalSignRepository,
+        ParacetamolFactsReader paracetamolFacts
+    ) {
         this.rules = List.copyOf(rules);
         this.prescriptionRepository = prescriptionRepository;
         this.catalogRepository = catalogRepository;
         this.vitalSignRepository = vitalSignRepository;
+        this.paracetamolFacts = paracetamolFacts;
+    }
+
+    /** Whether a status ends an order for the active-medication checks. */
+    static boolean isTerminal(PrescriptionStatus status) {
+        return TERMINAL_STATUSES.contains(status);
     }
 
     /** Build a context for the given proposed order; never null. */
@@ -194,7 +212,9 @@ public class CdsRuleEngine {
             proposedFrequency,
             parseDoseUnits(proposedDosage),
             weighedAt,
-            order.prnDosesPerDay()
+            order.prnDosesPerDay(),
+            paracetamolFacts == null ? ParacetamolFacts.NONE
+                : paracetamolFacts.read(patient, hospitalId, proposedMedicationName, catalogItem, excludedPrescriptionId)
         );
     }
 

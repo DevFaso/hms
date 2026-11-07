@@ -96,7 +96,7 @@ public class PharmacyRefillReminderScheduler {
      * sequence is found. Weeks are converted (×7); months/years are ignored
      * (too imprecise for a day-level reminder).
      */
-    static Integer parseDurationDays(String duration) {
+    public static Integer parseDurationDays(String duration) {
         if (duration == null || duration.isBlank()) {
             return null;
         }
