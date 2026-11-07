@@ -1173,6 +1173,8 @@ public class TransfusionServiceImpl implements TransfusionService {
                     && AboGroup.isEmergencyOPositive(bag.getAboGroup(), bag.getRhFactor(), bag.getProductType())))
             .forEach(bag -> bags.put(bag.getId(), bag));
         unitRepository.findAssignable(request.getHospital().getId(), today).stream()
+            .filter(bag -> bag.getProductType() == request.getProductType()
+                && bag.getAboGroup() == AboGroup.emergencyReleaseGroup())
             .filter(bag -> administrationRepository.findByBloodUnit_Id(bag.getId()).isEmpty())
             .forEach(bag -> bags.put(bag.getId(), bag));
         List<UUID> incompatible = request.getPatient() == null ? List.of()
