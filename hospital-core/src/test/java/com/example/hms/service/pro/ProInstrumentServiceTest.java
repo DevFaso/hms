@@ -450,6 +450,7 @@ class ProInstrumentServiceTest {
             noVersion.setVersion("  ");
             assertThatThrownBy(() -> service.importDefinition(noVersion))
                 .isInstanceOf(BusinessException.class)
+                .extracting("messageKey").isEqualTo("pro.instrument.versionLocked");
             verify(instrumentRepository, org.mockito.Mockito.never()).saveAndFlush(any());
             // Stored rows are untouched by a refused import.
             assertThat(existing.getItems().get(1).getOptions()).hasSize(2);
