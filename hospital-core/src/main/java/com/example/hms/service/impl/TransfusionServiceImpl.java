@@ -537,6 +537,11 @@ public class TransfusionServiceImpl implements TransfusionService {
                 productLabel(unit.getProductType()), productLabel(transfusionRequest.getProductType()));
         }
         requireNotHeldElsewhere(unit, requestId, hung);
+        // QA CX-012: nor is a result that stands got round by a new request of the same patient.
+        if (claimsCompatible && crossmatchRepository.existsStandingIncompatibleForPatient(
+                unit.getId(), transfusionRequest.getPatient().getId(), requestId)) {
+            throw new FieldBusinessException(FIELD_COMPATIBLE, "transfusion.crossmatch.incompatibleStands", unit.getUnitNumber());
+        }
         requireInFuture(request.getExpiresAt());
 
         // QA CX-011: the patient's current screen. A request raised before a
@@ -608,6 +613,12 @@ public class TransfusionServiceImpl implements TransfusionService {
             .build();
         boolean alreadyIncompatible = crossmatch.getId() != null && !Boolean.TRUE.equals(crossmatch.getCompatible());
 
+        // QA CX-012: a result written on a bag out for this request carries that fact, because the bag's status moves
+        // on just below. Enough for every path: an issued bag leaves ISSUED only by a result here or by a cancelled
+        // request, and a closed request takes no compatible result. A release leaves the row alone, as ever.
+        if (hung != null || (unit.getStatus() == BloodUnitStatus.ISSUED && issuedTo(unit, requestId))) {
+            crossmatch.setUnitIssued(true);
+        }
         crossmatch.setCompatible(request.getCompatible());
         crossmatch.setMethod(request.getMethod());
         crossmatch.setIncompatibilityReason(request.getIncompatibilityReason());
@@ -648,16 +659,21 @@ public class TransfusionServiceImpl implements TransfusionService {
         return mapper.toDto(saved);
     }
 
+    private static boolean issuedTo(BloodUnit unit, UUID requestId) {
+        return unit.getRequest() != null && requestId.equals(unit.getRequest().getId());
+    }
+
     /**
-     * The result is settled for this bag: an incompatible result stands once the bag was hung for
-     * this request, or released knowing it. Before that the laboratory may still repeat the test.
+     * The result is settled for this bag: an incompatible result stands once the bag was issued to
+     * this request (QA CX-012), whatever its status says since, hung for it, or released knowing it.
+     * Before that the laboratory may still repeat the test.
      */
     private boolean incompatibleResultIsFixed(UUID requestId, BloodUnit unit, TransfusionAdministration hung,
                                               TransfusionCrossmatch onFile) {
         if (onFile == null || Boolean.TRUE.equals(onFile.getCompatible())) {
             return false;
         }
-        return hung != null || releaseRepository.existsByRequest_IdAndBloodUnit_IdAndReleaseType(
+        return hung != null || onFile.isUnitIssued() || releaseRepository.existsByRequest_IdAndBloodUnit_IdAndReleaseType(
             requestId, unit.getId(), EmergencyReleaseType.SEROLOGICALLY_INCOMPATIBLE);
     }
 

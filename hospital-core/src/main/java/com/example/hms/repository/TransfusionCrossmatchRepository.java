@@ -16,6 +16,14 @@ public interface TransfusionCrossmatchRepository extends JpaRepository<Transfusi
 
     List<TransfusionCrossmatch> findByRequest_IdOrderByPerformedAtDesc(UUID requestId);
 
+    /** QA CX-012: an incompatible result that stands for this bag and patient, on another of their requests. */
+    @Query("SELECT COUNT(c) > 0 FROM TransfusionCrossmatch c WHERE c.bloodUnit.id = :unitId "
+        + "AND c.request.patient.id = :patientId AND c.request.id <> :requestId "
+        + "AND c.compatible = FALSE AND c.unitIssued = TRUE")
+    boolean existsStandingIncompatibleForPatient(@Param("unitId") UUID unitId,
+                                                 @Param("patientId") UUID patientId,
+                                                 @Param("requestId") UUID requestId);
+
     /** The bags found incompatible for this patient, on any of their requests. */
     @Query("SELECT c.bloodUnit.id FROM TransfusionCrossmatch c WHERE c.request.patient.id = :patientId AND c.compatible = FALSE")
     List<UUID> findIncompatibleUnitIdsForPatient(@Param("patientId") UUID patientId);

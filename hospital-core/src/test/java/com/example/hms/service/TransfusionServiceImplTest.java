@@ -2172,6 +2172,92 @@ class TransfusionServiceImplTest {
         assertThat(filedItems(1).get(0).getRecipientUserId()).isEqualTo(nurse);
     }
 
+    // ---- QA CX-012: a result on a bag issued to this request stands.
+
+    private final java.util.Map<String, TransfusionCrossmatch> keptRows = new java.util.HashMap<>();
+
+    /** The one row per (request, unit), kept as the database keeps it. */
+    private void keepCrossmatchRows() {
+        when(crossmatchRepository.findByRequest_IdAndBloodUnit_Id(any(), any())).thenAnswer(call ->
+            Optional.ofNullable(keptRows.get(call.getArgument(0) + "/" + call.getArgument(1))));
+        when(crossmatchRepository.save(any(TransfusionCrossmatch.class))).thenAnswer(call -> {
+            TransfusionCrossmatch row = call.getArgument(0);
+            keptRows.put(row.getRequest().getId() + "/" + row.getBloodUnit().getId(), row);
+            return row;
+        });
+    }
+
+    private void assertTheResultStands(TransfusionRequest req, BloodUnit bag) {
+        UUID requestId = req.getId();
+        CrossmatchRequestDTO later = compatibleCrossmatch(bag);
+        assertThatThrownBy(() -> service.recordCrossmatch(requestId, later))
+            .isInstanceOfSatisfying(FieldBusinessException.class, e -> assertThat(e.getField()).isEqualTo("compatible"));
+        TransfusionCrossmatch row = keptRows.get(requestId + "/" + bag.getId());
+        assertThat(row.getCompatible()).isFalse();
+        assertThat(row.getIncompatibilityReason()).isEqualTo("Anti-K");
+    }
+
+    @Test
+    void cx012_anIncompatibleResultOnAnIssuedBagIsNotOverwritten() {
+        keepCrossmatchRows();
+        TransfusionRequest req = request(group(AboGroup.AB, RhFactor.POSITIVE, AntibodyScreenResult.NEGATIVE),
+            TransfusionUrgency.ROUTINE);
+        BloodUnit bag = unit(AboGroup.O, RhFactor.NEGATIVE, BloodProductType.PACKED_RED_CELLS, BloodUnitStatus.AVAILABLE);
+        service.recordCrossmatch(req.getId(), compatibleCrossmatch(bag));
+        service.issueUnit(req.getId(), bag.getId());
+        assertThat(bag.getStatus()).isEqualTo(BloodUnitStatus.ISSUED);
+
+        service.recordCrossmatch(req.getId(), incompatible(bag));
+
+        assertThat(bag.getStatus()).as("the fact outlives the bag's status").isEqualTo(BloodUnitStatus.RETURNED);
+        assertTheResultStands(req, bag);
+    }
+
+    @Test
+    void cx012_aBagReleasedWithNoCrossmatchThenFoundIncompatibleStandsToo() {
+        keepCrossmatchRows();
+        TransfusionRequest req = request(group(AboGroup.AB, RhFactor.POSITIVE, AntibodyScreenResult.NEGATIVE),
+            TransfusionUrgency.EMERGENCY);
+        BloodUnit bag = unit(AboGroup.O, RhFactor.NEGATIVE, BloodProductType.PACKED_RED_CELLS, BloodUnitStatus.ISSUED);
+        bag.setRequest(req);
+
+        service.recordCrossmatch(req.getId(), incompatible(bag));
+
+        assertTheResultStands(req, bag);
+    }
+
+    @Test
+    void cx012_aBagNeverIssuedKeepsTheLabsCorrection() {
+        keepCrossmatchRows();
+        TransfusionRequest req = request(group(AboGroup.AB, RhFactor.POSITIVE, AntibodyScreenResult.NEGATIVE),
+            TransfusionUrgency.ROUTINE);
+        BloodUnit bag = unit(AboGroup.O, RhFactor.NEGATIVE, BloodProductType.PACKED_RED_CELLS, BloodUnitStatus.AVAILABLE);
+        service.recordCrossmatch(req.getId(), compatibleCrossmatch(bag));
+        service.recordCrossmatch(req.getId(), incompatible(bag));
+        assertThat(bag.getStatus()).isEqualTo(BloodUnitStatus.RETURNED);
+
+        service.recordCrossmatch(req.getId(), compatibleCrossmatch(bag));
+
+        TransfusionCrossmatch row = keptRows.get(req.getId() + "/" + bag.getId());
+        assertThat(row.getCompatible()).isTrue();
+        assertThat(row.getIncompatibilityReason()).isNull();
+        assertThat(bag.getStatus()).isEqualTo(BloodUnitStatus.CROSSMATCHED);
+    }
+
+    @Test
+    void cx012_aNewRequestOfTheSamePatientDoesNotGetRoundIt() {
+        TransfusionRequest req = request(group(AboGroup.AB, RhFactor.POSITIVE, AntibodyScreenResult.NEGATIVE),
+            TransfusionUrgency.ROUTINE);
+        BloodUnit bag = unit(AboGroup.O, RhFactor.NEGATIVE, BloodProductType.PACKED_RED_CELLS, BloodUnitStatus.RETURNED);
+        when(crossmatchRepository.existsStandingIncompatibleForPatient(bag.getId(), patientId, req.getId())).thenReturn(true);
+        UUID requestId = req.getId();
+        CrossmatchRequestDTO later = compatibleCrossmatch(bag);
+
+        assertThatThrownBy(() -> service.recordCrossmatch(requestId, later))
+            .isInstanceOfSatisfying(FieldBusinessException.class, e -> assertThat(e.getField()).isEqualTo("compatible"));
+        verify(crossmatchRepository, never()).save(any());
+    }
+
     @Test
     void aBagThatRanOutOfDateWhileRunningStillTakesTheResult() {
         TransfusionAdministration running = running();
