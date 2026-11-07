@@ -2,6 +2,7 @@ package com.example.hms.cdshooks.rules;
 
 import java.util.Locale;
 import java.util.Map;
+import java.util.regex.MatchResult;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -10,6 +11,12 @@ import java.util.regex.Pattern;
  * "1 to 2 tablets") can be given at its high end, so a limit judges the high end.
  * Every reader of a number per dose goes through {@link #highEnd}; read at its first
  * number, "2-4 mg" passed a limit of 3 mg.
+ *
+ * <p>QA D1420 (round 34): a dose read below what was written passes every limit. A mixed
+ * number is read exactly ("2 1/2 cp" is 2.5, "1 cp 1/2" is 1.5, "1 cp et demi" is 1.5), and
+ * a digit from 1 to 9, a comma or a point and exactly three digits reads as thousands
+ * ("1,000 mg" and "1.000 mg" are 1000 mg): at least ambiguous for a child, and the larger
+ * reading is the safe one for a limit. "0,125 mg", "1,5 mg" and "1,250 g" stay decimals.
  *
  * <p>Only a leading range is rewritten, and only two numbers of one measure. Everything
  * else comes back as written: "1-0-1" (a morning-noon-evening posology), "500 mg - 2 fois
@@ -44,6 +51,36 @@ public final class DoseRange {
     /** A leading part of a tablet: "1/2 cp". "500/125 mg" is a combination and does not match. */
     private static final Pattern LEADING_FRACTION =
         Pattern.compile("^\\s*+([1-3])\\s*+/\\s*+([2-4])(?![\\d.,/])");
+    /**
+     * QA D1420: "1,000", "1.000" and "1,500" for a limit. Never "0,125", "1,5", "1.25", "1,000,000", "12,500";
+     * never a last digit other than 0 ("3,125 mg" is a real dose of carvedilol, "1,875 mg" too); and never before
+     * a g ("1,250 g" is a valid dose of 1.25 g; 1250 g is nobody's reading).
+     */
+    private static final Pattern SEPARATED_THOUSANDS = Pattern.compile(
+        "(?<![\\d.,])([1-9])[.,](\\d{2}+0)(?![\\d.,])(?!\\s*+(?:g|gr|gramme|grammes|gram|grams|gramo|gramos)(?!\\p{L}))",
+        Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+    /** A part followed by an hour is a time, not a dose: "1 cp 1/2 h avant le repas". */
+    private static final String NOT_A_DOSE_AFTER = "\\s*+(?:h|hr|hrs|heures?+|horas?+|hours?+)(?!\\p{L})";
+    /** QA D1420: a whole number and a part: "2 1/2", "1 1/2 cp", also at the high end of a range. */
+    private static final Pattern MIXED =
+        Pattern.compile("(?<![\\d.,/])(\\d{1,3}+)(?:\\s++|\\s*+(?:-|\\+|et\\b|y\\b|and\\b)\\s*+)([1-3])\\s*+/\\s*+([2-4])(?![\\d.,/])(?!"
+            + NOT_A_DOSE_AFTER + ")", Pattern.CASE_INSENSITIVE);
+    /** QA D1420: a whole number and a part sign: "2 \u00bd", "2\u00bd cp". */
+    private static final Pattern MIXED_SIGN =
+        Pattern.compile("(?<![\\d.,/])(\\d{1,3}+)\\s*+(?:(?:-|\\+|et\\b|y\\b|and\\b)\\s*+)?+([\\u00bd\\u00bc\\u00be])",
+            Pattern.CASE_INSENSITIVE);
+    /** QA D1420: the part after the unit: "1 cp 1/2", "1 cp \u00bd", "1 cp + 1/2", "1 tablet and 1/2", at the high end too. */
+    private static final Pattern UNIT_THEN_PART = Pattern.compile(
+        "(?<![\\d.,/])(\\d{1,3}+)\\s*+(\\p{L}++)\\s*+(?:(?:et\\b|y\\b|and\\b|\\+)\\s*+)?+(?:([1-3])\\s*+/\\s*+([2-4])(?![\\d.,/])(?!"
+            + NOT_A_DOSE_AFTER + ")|([\\u00bd\\u00bc\\u00be]))",
+        Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+    /** QA D1420: a part in words: "1 cp et demi", "1 et demi cp", "1 tablet and one half", "1 and a half tablets", "1 cp et quart". */
+    private static final Pattern PART_IN_WORDS = Pattern.compile(
+        "(?<![\\d.,/])(\\d{1,3}+)\\s*+(?:(\\p{L}{2,20}+)\\s++)?(?:et|y|and|\\+)\\s*+(demie?+|medi[oa]|a\\s++half|one\\s++half|trois\\s++quarts|quart)(?!\\p{L})",
+        Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+    private static final double ONE_QUARTER = 0.25d;
+    private static final double THREE_QUARTERS = 0.75d;
+    private static final double ONE_HALF = 0.5d;
     private static final Map<String, String> FRACTION_SIGNS = Map.of(
         "½", "0.5", "¼", "0.25", "¾", "0.75");
     private static final Pattern LEADING_FRACTION_SIGN = Pattern.compile("^\\s*+([\\u00bd\\u00bc\\u00be])");
@@ -86,7 +123,16 @@ public final class DoseRange {
     }
 
     private static String withPlainNumbers(String dosage) {
-        String closed = SPACED_THOUSANDS.matcher(dosage).replaceAll(r -> r.group().replace(" ", ""));
+        String spaced = SPACED_THOUSANDS.matcher(dosage).replaceAll(r -> r.group().replace(" ", ""));
+        String closed = SEPARATED_THOUSANDS.matcher(spaced).replaceAll("$1$2");
+        String mixed = withMixedNumber(closed);
+        if (mixed != null) {
+            return mixed;
+        }
+        return withLeadingFraction(closed);
+    }
+
+    private static String withLeadingFraction(String closed) {
         Matcher sign = LEADING_FRACTION_SIGN.matcher(closed);
         if (sign.find()) {
             return FRACTION_SIGNS.get(sign.group(1)) + closed.substring(sign.end());
@@ -100,6 +146,56 @@ public final class DoseRange {
             }
         }
         return closed;
+    }
+
+    /** QA D1420: "2 1/2 cp", "2\u00bd cp", "1 cp 1/2", "1 cp et demi" as a decimal, or {@code null} when it is none of them. */
+    private static String withMixedNumber(String dose) {
+        String numbers = MIXED.matcher(dose).replaceAll(m -> Integer.parseInt(m.group(2)) < Integer.parseInt(m.group(3))
+            ? decimal(m.group(1), Double.parseDouble(m.group(2)) / Integer.parseInt(m.group(3)))
+            : Matcher.quoteReplacement(m.group()));
+        numbers = MIXED_SIGN.matcher(numbers).replaceAll(m ->
+            decimal(m.group(1), Double.parseDouble(FRACTION_SIGNS.get(m.group(2)))));
+        numbers = UNIT_THEN_PART.matcher(numbers).replaceAll(DoseRange::partOfUnit);
+        numbers = PART_IN_WORDS.matcher(numbers).replaceAll(DoseRange::partInWords);
+        if (!numbers.equals(dose)) {
+            // The low end of a range can still be a plain part: "1/2 - 1 1/2 cp".
+            return withLeadingFraction(numbers);
+        }
+        return null;
+    }
+
+    private static String partOfUnit(MatchResult m) {
+        if (!CdsRuleEngine.COUNT_UNITS.contains(m.group(2).toLowerCase(Locale.ROOT))) {
+            return Matcher.quoteReplacement(m.group());
+        }
+        double part;
+        if (m.group(5) != null) {
+            part = Double.parseDouble(FRACTION_SIGNS.get(m.group(5)));
+        } else if (Integer.parseInt(m.group(3)) < Integer.parseInt(m.group(4))) {
+            part = Double.parseDouble(m.group(3)) / Integer.parseInt(m.group(4));
+        } else {
+            return Matcher.quoteReplacement(m.group());
+        }
+        return decimal(m.group(1), part) + " " + m.group(2);
+    }
+
+    private static String partInWords(MatchResult m) {
+        String unit = m.group(2);
+        if (unit != null && !CdsRuleEngine.COUNT_UNITS.contains(unit.toLowerCase(Locale.ROOT))) {
+            return Matcher.quoteReplacement(m.group());
+        }
+        String word = m.group(3).toLowerCase(Locale.ROOT);
+        double part = ONE_HALF;
+        if (word.startsWith("trois")) {
+            part = THREE_QUARTERS;
+        } else if (word.startsWith("quart")) {
+            part = ONE_QUARTER;
+        }
+        return decimal(m.group(1), part) + (unit == null ? "" : " " + unit);
+    }
+
+    private static String decimal(String whole, double fraction) {
+        return String.valueOf(Integer.parseInt(whole) + fraction);
     }
 
     /** Two mass units, two counts of a unit, or one unit twice; "per" the same thing in both. */

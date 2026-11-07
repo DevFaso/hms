@@ -98,7 +98,10 @@
   @if (loading() && filtered().length === 0) {
     <div class="loading-state">
       <div class="spinner"></div>
-      <p>{{ 'PRESCRIPTIONS.LOADING' | translate }}</p>
+      <!-- QA D1441: a search reads the whole tab, which takes a while on a large one. -->
+      <p data-testid="rx-list-loading">
+        {{ (searchTerm.trim() ? 'PRESCRIPTIONS.SEARCHING' : 'PRESCRIPTIONS.LOADING') | translate }}
+      </p>
     </div>
   }
   @if (!loading() && filtered().length === 0) {
@@ -1043,6 +1046,21 @@
                 />
                 {{ 'ORDER_SETS.FREQUENCY.PRN' | translate }}
               </label>
+              <!-- QA D1419: a wording the MAR cannot schedule is a question, not a refusal:
+                 the box appears on the server's refusal, which the shared interceptor marks. -->
+              @if (frequencyConfirmAsked() && !form.asNeeded) {
+                <label for="rx-frequencyConfirmed" class="checkbox-label">
+                  <input
+                    id="rx-frequencyConfirmed"
+                    data-server-field="frequencyConfirmed"
+                    data-testid="rx-frequency-confirmed"
+                    type="checkbox"
+                    [ngModel]="form.frequencyConfirmed"
+                    (ngModelChange)="form.frequencyConfirmed = $event"
+                  />
+                  {{ 'PRESCRIPTIONS.FREQUENCY_CONFIRM' | translate }}
+                </label>
+              }
             </div>
           </div>
           @if (prnIntervalShown()) {

@@ -24,7 +24,14 @@ public final class MarPrnLabel {
      * when {@code due} is not as-needed.
      */
     public static String of(Prescription rx, MarNextDose.Due due, LocalDateTime now) {
-        if (rx == null || due == null || !due.asNeeded()) {
+        if (rx == null || due == null) {
+            return null;
+        }
+        // QA D1419: a continuous infusion says what it is, next to the Give button.
+        if (due.continuous()) {
+            return MessageUtil.resolve("nurse.mar.continuousLabel");
+        }
+        if (!due.asNeeded()) {
             return null;
         }
         Integer hours = rx.getPrnMinIntervalHours();

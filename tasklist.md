@@ -6206,3 +6206,12 @@ ships*, not for building — and check the shipped surface before trusting a
 - **A group corrected after an O positive decision** is honoured at the bedside, as the rule says; O negative first is not re-checked there.
 - **`Patient.bloodType`** (desk free text) is not read by these rules: only the lab's type and screen. A chart-only "O-" on an adult male takes no extra step.
 - **Low, deferred (independent review, round 3):** `moveOpenRequestsOnto` saves from a second list query, so a request created and acted on within milliseconds between its two queries could be written without its lock. Iterating the locked rows changes the seam the CX-011 tests stand on; the window is milliseconds on a brand-new request. **Low:** `listAssignableUnits` still lists a RETURNED bag ever hung (legacy rows only; issue refuses it).
+
+## Standing debt — round 34 (fix/r34-frequency-dose)
+
+- Adult paracetamol: `2 000 mg` 3 fois par jour (6 g/day) raises no card, because no adult daily maximum exists in the catalogue rule or in `reference-values-general-2026-10-30.md` / `reference-values-user-2026-10-29.md` (their 4 g is the paediatric table's cap). Needs the user's value; nothing was changed. D1264 is unrelated.
+- A dose in words with no number ("demi comprimé", "un demi cp") is still unknown to the limit check (null, so no card): it reads below nothing rather than below what was written, so D1420 does not cover it.
+- Jackson's float-to-int coercion is on globally: D1433 closed the one `Integer` of `PrescriptionRequestDTO`. Other request DTOs' `Integer` fields still truncate a JSON fraction; switching `ACCEPT_FLOAT_AS_INT` off globally needs its own PR and its own sweep.
+- Asked though regular (safe, a nuisance, second review of round 34): `q8hrs`, `q 12 hours`, `1 tab b.i.d.`, `q2wks`, `tous les 6 heures`, `toutes 8h`, `20h et 8h`, `3x1 cp`, `500-0-500`, `4cp/j`, `1+1+1`, `7j/7`, `alternate days`, `les lundis`, `mondays`. Read them only with a fixture line each.
+- Dose readings left (low): `2.400.000 UI` and `1.000.000 UI` read as 2.4 and 1 instead of unknown; `10,000 mg` reads 10 (the rule covers one digit before the separator); `500 à 1 g` and `1,000 à 2 g` over-read (false alarm only).
+- The condition list stays a list: a symptom not listed and with no opener ("q6h zzz") reads as its cadence, by the coordinator's rule that an unknown word is never a condition. With `pour`, `para`, `for`, `selon` before it, it is asked.

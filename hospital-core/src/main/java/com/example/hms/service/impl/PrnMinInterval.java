@@ -21,10 +21,10 @@ import com.example.hms.model.Prescription;
  * through {@link #refusalOf}):
  * <ul>
  *   <li>ticked as needed: the interval is required, 1 to {@link #MAX_HOURS} hours;</li>
- *   <li>not ticked: no interval; and the frequency must read as a fixed
- *       schedule ({@link FrequencyWording}, QA D1391 / D1395), or it is refused
- *       on {@link #AS_NEEDED_FIELD}: tick "as needed" and give the interval, or
- *       write a fixed schedule (the wording rule).</li>
+ *   <li>not ticked: no interval; and the frequency goes through the wording
+ *       rule ({@link FrequencyWording}): a schedule is accepted, a condition is
+ *       refused on {@link #AS_NEEDED_FIELD}, anything else is asked about once on
+ *       {@link #CONFIRMED_FIELD} (QA D1419 / D1426 / D1434, round 34).</li>
  * </ul>
  * No per-drug default interval is ever written. Pure functions.
  */
@@ -51,7 +51,10 @@ public final class PrnMinInterval {
     /** QA D1378: a conditional frequency on an order not ticked as needed. */
     public static final String CONFIRM_KEY = "prescription.asNeeded.confirm";
 
-    /** QA D1395: a frequency that is not a schedule anyone can read, on an order not ticked as needed. */
+    /** QA D1419: the request field of the prescriber's "this wording cannot be scheduled, I confirm it". */
+    public static final String CONFIRMED_FIELD = "frequencyConfirmed";
+
+    /** QA D1419: a frequency the MAR cannot schedule, on an order not ticked and not yet confirmed. */
     public static final String UNREADABLE_KEY = "prescription.asNeeded.unreadable";
 
     /** The hours a daily total is counted over. */
@@ -77,6 +80,15 @@ public final class PrnMinInterval {
      * @param frequency the frequency text (the wording rule reads it)
      */
     public static Refusal refusalOf(boolean asNeeded, Integer hours, String frequency) {
+        return refusalOf(asNeeded, hours, frequency, false);
+    }
+
+    /**
+     * {@link #refusalOf(boolean, Integer, String)} with the prescriber's answer.
+     *
+     * @param confirmed the prescriber confirmed a wording the MAR cannot schedule
+     */
+    public static Refusal refusalOf(boolean asNeeded, Integer hours, String frequency, boolean confirmed) {
         if (asNeeded) {
             if (hours == null) {
                 return new Refusal(FIELD, REQUIRED_KEY);
@@ -85,37 +97,55 @@ public final class PrnMinInterval {
         }
         // The wording first: "si besoin" with an interval but no tick is
         // answered by ticking, not by deleting the interval.
-        Refusal confirm = safetyNet(frequency);
+        Refusal confirm = safetyNet(frequency, confirmed);
         if (confirm != null) {
             return confirm;
         }
         return hours != null ? new Refusal(FIELD, NOT_AS_NEEDED_KEY) : null;
     }
 
-    /**
-     * QA D1391 / D1395: the wording rule alone, for an order NOT ticked as
-     * needed: anything but a fixed schedule is refused on {@link #AS_NEEDED_FIELD}
-     * ({@link FrequencyWording}). The only place the frequency text bears on
-     * as-needed.
-     */
+    /** {@link #safetyNet(String, boolean)} for a wording not confirmed. */
     public static Refusal safetyNet(String frequency) {
+        return safetyNet(frequency, false);
+    }
+
+    /**
+     * QA D1419 / D1426: the wording rule alone, for an order NOT ticked as
+     * needed ({@link FrequencyWording}). A schedule passes; a condition is
+     * refused on {@link #AS_NEEDED_FIELD}, confirmed or not; anything else asks
+     * on {@link #CONFIRMED_FIELD}, once. The only place the frequency text bears
+     * on as-needed.
+     */
+    public static Refusal safetyNet(String frequency, boolean confirmed) {
         return switch (FrequencyWording.classify(frequency)) {
             case FIXED -> null;
             case CONDITIONAL -> new Refusal(AS_NEEDED_FIELD, CONFIRM_KEY);
-            case UNREADABLE -> new Refusal(AS_NEEDED_FIELD, UNREADABLE_KEY);
+            case UNREADABLE -> confirmed ? null : new Refusal(CONFIRMED_FIELD, UNREADABLE_KEY);
         };
+    }
+
+    /** {@link #applyTo(Prescription, boolean)} for a wording not confirmed. */
+    public static void applyTo(Prescription rx) {
+        applyTo(rx, false);
     }
 
     /**
      * The order as written, on every path that writes a NEW order's content
      * (the prescribing form, order sets): an as-needed order must carry its
-     * interval; any other order carries none and must state a fixed schedule.
+     * interval; any other order carries none and its wording is judged.
+     *
+     * @param confirmed the prescriber confirmed a wording the MAR cannot schedule
      */
-    public static void applyTo(Prescription rx) {
+    public static void applyTo(Prescription rx, boolean confirmed) {
         if (rx == null) {
             return;
         }
-        throwIf(refusalOf(isAsNeeded(rx), rx.getPrnMinIntervalHours(), rx.getFrequency()));
+        throwIf(refusalOf(isAsNeeded(rx), rx.getPrnMinIntervalHours(), rx.getFrequency(), confirmed));
+    }
+
+    /** {@link #applyToEdit(Prescription, String, boolean, boolean)} for a wording not confirmed. */
+    public static void applyToEdit(Prescription rx, String frequencyBefore, boolean tickedBefore) {
+        applyToEdit(rx, frequencyBefore, tickedBefore, false);
     }
 
     /**
@@ -130,8 +160,9 @@ public final class PrnMinInterval {
      *
      * @param frequencyBefore the frequency stored before the edit
      * @param tickedBefore    the tick stored before the edit
+     * @param confirmed       the prescriber confirmed a wording the MAR cannot schedule
      */
-    public static void applyToEdit(Prescription rx, String frequencyBefore, boolean tickedBefore) {
+    public static void applyToEdit(Prescription rx, String frequencyBefore, boolean tickedBefore, boolean confirmed) {
         if (rx == null) {
             return;
         }
@@ -139,7 +170,7 @@ public final class PrnMinInterval {
             throwIf(rx.getPrnMinIntervalHours() != null ? new Refusal(FIELD, NOT_AS_NEEDED_KEY) : null);
             return;
         }
-        applyTo(rx);
+        applyTo(rx, confirmed);
     }
 
     /**

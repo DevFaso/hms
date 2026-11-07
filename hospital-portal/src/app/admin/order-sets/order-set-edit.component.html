@@ -193,8 +193,26 @@
                     @for (f of frequencyPresets; track f.value) {
                       <option [value]="f.value">{{ choiceLabel(f) }}</option>
                     }
+                    @if (frequencyOffTheList(item)) {
+                      <option [value]="item.frequency">{{ item.frequency }}</option>
+                    }
                   </select>
                 </label>
+                <!-- QA D1419: a wording the MAR cannot schedule is a question: the box appears on
+                   the server's refusal, marked by the shared interceptor; the answer stays on the item. -->
+                @if (frequencyConfirmShown(item)) {
+                  <label class="checkbox-label">
+                    <input
+                      type="checkbox"
+                      [(ngModel)]="item.frequencyConfirmed"
+                      [name]="'frequencyConfirmed-' + i"
+                      [id]="'order-set-item-frequency-confirmed-' + i"
+                      [attr.data-testid]="'order-set-item-frequency-confirmed-' + i"
+                      [attr.data-server-field]="'orderItems[' + i + '].frequencyConfirmed'"
+                    />
+                    <span>{{ 'PRESCRIPTIONS.FREQUENCY_CONFIRM' | translate }}</span>
+                  </label>
+                }
                 <!-- QA D1396: the quantity to hand over reaches the order the item creates; the
                    server requires it for a drug the catalogue marks controlled, on this field. -->
                 <label>

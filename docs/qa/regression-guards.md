@@ -950,3 +950,18 @@ Rounds 27, 28 and 29 each found 20–30 new siblings of the required-field class
 | `service/PrenatalRecordedRiskCadenceTest` (new: every role x box x recorded state), `repository/PrenatalRecordedRiskPostgresIT` (new), `architecture/ReceptionistClinicalReadGuardTest#aRiskFlagTheRoleCanSendDecidesNothingAlone` (new rule) | The prenatal cadence planned from a box the desk does not count, with the recorded risk unread. A high-risk flag the desk can send must name the class where the record decides instead; only that class reads it, and the recorded value must reach the cadence | `THE_RECORD_DECIDES_INSTEAD`; a stale entry fails |
 
 | `architecture/EmergencyBloodReleaseGuardTest` (new), `service/TransfusionEmergencyReleaseTest`, `service/TransfusionEmergencyReleasePostgresIT`, `service/support/EmergencyReleasePolicyTest` (new) | A bag reaches ISSUED in one line reached by the two issue paths, each checking the bag and writing its release row; a verdict is set in one place behind the rule that fixes it, and a release never writes the crossmatch; the O positive rules live in one class; the action keeps its exact name and "least incompatible" appears in no language. |
+
+
+## Guards added or widened by round 34 (fix/r34-frequency-dose)
+
+| Guard | Catches | Baseline |
+|---|---|---|
+| `service/impl/FrequencyWordingTest#aWordingAcceptedAsAScheduleIsNeverUnreadOnTheMar`, `#aWordingConfirmedIsUnreadOnTheMar` (new) | D1419 + D1426, one class: the rule that accepts a wording and the MAR that schedules it disagree. The shared fixture drives `MarNextDose` itself: every accepted wording is never `frequencyUnread` after dose 1, every wording asked about always is. | none |
+| `service/impl/FrequencyWordingTest#everyScheduleReadsAsTheFixtureSays`, `as-needed-frequency.spec.ts` (widened) | The server and the portal mirror read each accepted wording to the same kind, minutes and course moments (`readings`), not only the same verdict. | none |
+| `service/impl/FrequencyWordingTest#theFixtureGivesEveryFiledWordingOneOutcome` (new) | A wording of D1419 or D1426 with no outcome or two (`filed`). | none |
+| `service/impl/FrequencyWordingTest#theWordListsMatchThePortalMirror` (widened) | The word lists of `FrequencyCadence` too. | none |
+| `service/impl/FrequencyWordingTest#d1395_theFiledConditionsAreRefusedOnTheTick`, `#aConfirmationDoesNotPassACondition` (new) | D1395, the re-test gate: a condition is refused on `asNeeded`, and confirming never passes it. | none |
+| `architecture/MarAsNeededFlagGuardTest` (rule 2 names `FrequencyWording` as the rule's reader) | As before; the rule asks the one reader what a text says. | `FLAG_READERS` unchanged |
+| `scripts/lib/as-needed-frequency.test.mjs` (widened) | Both forms answer the question on `frequencyConfirmed`, marked by the server, and neither sets the tick from it. | none |
+| `service/impl/FrequencyWordingTest#reviewOfRound34_*`, `#secondReviewOfRound34_*` (new) | A sentence with more in it read at its first cadence: a second phase, a stated gap, two intervals, a ceiling, a repeated single dose, a reason beside a cadence. | none |
+| `cdshooks/rules/DoseRangeTest#d1420_*` (new table) | A mixed number or a thousands separator read below what was written, and any valid single dose whose reading changes. | none |

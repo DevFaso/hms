@@ -72,6 +72,7 @@ public class PrescriptionRequestDTO {
     @jakarta.validation.constraints.Min(value = 1, message = "{prescription.prnMinInterval.range}")
     @jakarta.validation.constraints.Max(value = com.example.hms.service.impl.PrnMinInterval.MAX_HOURS,
         message = "{prescription.prnMinInterval.range}")
+    @tools.jackson.databind.annotation.JsonDeserialize(using = com.example.hms.validation.WholeHoursDeserializer.class)
     private Integer prnMinIntervalHours;
 
     /**
@@ -82,6 +83,17 @@ public class PrescriptionRequestDTO {
      * the stored value.
      */
     private Boolean asNeeded;
+
+    /**
+     * QA D1419 / D1426 / D1434 (round 34): the prescriber's answer to "this
+     * wording cannot be scheduled; nurses will be asked a reason at each dose
+     * after the first". The first submit of such a frequency is refused on this
+     * field; the same order with {@code true} is created, and its row reads
+     * {@code frequencyUnread} on the MAR. It answers that question only: a
+     * condition stays refused on {@link #asNeeded}, and an edit that leaves the
+     * frequency as it was is never asked. Not stored.
+     */
+    private Boolean frequencyConfirmed;
 
     /**
      * Administration route (PO, IV, IM, SC, ...). The MAR five-rights route

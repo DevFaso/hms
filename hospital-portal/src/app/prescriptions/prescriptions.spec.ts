@@ -1216,6 +1216,107 @@ describe('PrescriptionsComponent — signing', () => {
       expect(component.frequencyHintKey()).withContext('ticked: nothing to say').toBeNull();
     });
 
+    describe('QA D1419 / D1440: a wording the MAR cannot schedule is a question', () => {
+      const asked = {
+        status: 400,
+        error: {
+          message: 'Cette formulation ne peut pas être planifiée',
+          fieldErrors: { frequencyConfirmed: 'Cette formulation ne peut pas être planifiée' },
+        },
+      };
+
+      function submit(frequency: string): void {
+        component.openCreate();
+        component.form = {
+          ...component.form,
+          medicationName: 'Fansidar',
+          quantity: 3,
+          frequency,
+        } as never;
+        component.submitForm();
+        fixture.detectChanges();
+      }
+
+      it('the first refusal shows the box, in one place, and the answer creates the order', () => {
+        prescriptionService.create.and.returnValue(throwError(() => asked));
+        const toast = TestBed.inject(ToastService) as jasmine.SpyObj<ToastService>;
+        toast.error.calls.reset();
+        submit('SP + AQ');
+
+        const el = fixture.nativeElement as HTMLElement;
+        const box = el.querySelector<HTMLInputElement>('[data-testid="rx-frequency-confirmed"]');
+        expect(box).withContext('the box appears on the refusal').not.toBeNull();
+        expect(box?.getAttribute('data-server-field')).toBe('frequencyConfirmed');
+        expect(
+          prescriptionService.create.calls.mostRecent().args[0].frequencyConfirmed,
+        ).toBeFalse();
+        // One clear message, at the field: no hint, no banner, no toast over Create.
+        expect(el.querySelector('[data-testid="rx-frequency-hint"]')).toBeNull();
+        expect(el.querySelector('[data-testid="rx-form-error"]')).toBeNull();
+        expect(toast.error).not.toHaveBeenCalled();
+
+        prescriptionService.create.and.returnValue(of(rx('rx-sp', 'DRAFT')));
+        component.form.frequencyConfirmed = true;
+        component.submitForm();
+        const sent = prescriptionService.create.calls.mostRecent().args[0];
+        expect(sent.frequencyConfirmed).toBeTrue();
+        expect(sent.asNeeded).withContext('never nudged into as-needed').toBeFalse();
+      });
+
+      it('a new wording drops the question and its answer', () => {
+        prescriptionService.create.and.returnValue(throwError(() => asked));
+        submit('SP + AQ');
+        component.form.frequencyConfirmed = true;
+        component.onFrequencyChange('q6h');
+        fixture.detectChanges();
+        expect(component.frequencyConfirmAsked()).toBeFalse();
+        expect(component.form.frequencyConfirmed).toBeFalse();
+      });
+
+      it('a condition is refused on the tick, with no box and one message', () => {
+        prescriptionService.create.and.returnValue(
+          throwError(() => ({
+            status: 400,
+            error: { message: 'si besoin', fieldErrors: { asNeeded: 'si besoin' } },
+          })),
+        );
+        const toast = TestBed.inject(ToastService) as jasmine.SpyObj<ToastService>;
+        toast.error.calls.reset();
+        submit('pour douleur');
+        const el = fixture.nativeElement as HTMLElement;
+        expect(el.querySelector('[data-testid="rx-frequency-confirmed"]')).toBeNull();
+        expect(el.querySelector('[data-testid="rx-frequency-hint"]')).toBeNull();
+        expect(el.querySelector('[data-testid="rx-form-error"]')).toBeNull();
+        expect(toast.error).not.toHaveBeenCalled();
+      });
+
+      it('a refusal naming the question and another field still shows the box', () => {
+        prescriptionService.create.and.returnValue(
+          throwError(() => ({
+            status: 400,
+            error: {
+              message: 'both',
+              fieldErrors: { frequencyConfirmed: 'asked', dosage: 'dose' },
+            },
+          })),
+        );
+        submit('SP + AQ');
+        expect(component.frequencyConfirmAsked()).toBeTrue();
+        expect(component['formError']()).toBe('both');
+      });
+
+      it('a refusal that names another field keeps its banner', () => {
+        prescriptionService.create.and.returnValue(
+          throwError(() => ({
+            status: 400,
+            error: { message: 'dose', fieldErrors: { dosage: 'dose' } },
+          })),
+        );
+        submit('q6h');
+        expect(component['formError']()).toBe('dose');
+      });
+    });
+
     it('QA D1391: unticking an order is told about its frequency, which the server now judges', () => {
       component.openEdit({ ...rx('rx-old', 'DRAFT'), frequency: 'si douleur', asNeeded: true });
       component.onAsNeededChange(false);
@@ -2402,6 +2503,49 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
     expect(rowsRead[0][0].statuses).toEqual([]);
     const counted = prescriptionServiceSpy.page.calls.allArgs().filter(([, , size]) => size === 1);
     expect(counted.length).withContext('one count per tab').toBe(6);
+  });
+
+  it('QA D1441: a search hides the unfiltered rows and says it is searching until the answer is known', async () => {
+    const rows = Array.from({ length: 60 }, (_, i) =>
+      makeRx({ id: 'rx-' + i, status: 'SIGNED', createdAt: '2026-09-20T08:00:00' }),
+    );
+    await setup({ list: rows });
+    fixture.detectChanges();
+    expect(component.filtered().length).toBe(50);
+
+    const whole$ = new Subject<PrescriptionResponse[]>();
+    prescriptionServiceSpy.list.and.returnValue(whole$);
+    component.searchTerm = 'zzzzzz';
+    component.onSearchInput();
+    fixture.detectChanges();
+
+    expect(component.filtered()).withContext('no stale rows').toEqual([]);
+    expect(el('[data-testid="rx-list-pager"]')).withContext('no stale total').toBeNull();
+    expect(el('[data-testid="rx-list-loading"]')?.textContent).toContain('PRESCRIPTIONS.SEARCHING');
+
+    whole$.next(rows);
+    whole$.complete();
+    fixture.detectChanges();
+    expect(component.filtered()).toEqual([]);
+    expect(component.listTotal()).toBe(0);
+    expect(el('[data-testid="rx-list-loading"]')).toBeNull();
+  });
+
+  it('QA D1441: a search whose read fails leaves the list as it was', async () => {
+    const rows = Array.from({ length: 60 }, (_, i) =>
+      makeRx({ id: 'rx-' + i, status: 'SIGNED', createdAt: '2026-09-20T08:00:00' }),
+    );
+    await setup({ list: rows });
+    fixture.detectChanges();
+    const total = component.listTotal();
+
+    prescriptionServiceSpy.list.and.returnValue(throwError(() => new Error('down')));
+    component.searchTerm = 'zzzzzz';
+    component.onSearchInput();
+    fixture.detectChanges();
+
+    expect(component.filtered().length).toBe(50);
+    expect(component.listTotal()).toBe(total);
   });
 
   it('QA D1412: the pager shows the server total and every row is reachable', async () => {

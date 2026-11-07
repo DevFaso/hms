@@ -3,6 +3,7 @@ package com.example.hms.service.impl;
 import com.example.hms.model.Prescription;
 
 import java.text.Normalizer;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -36,9 +37,18 @@ import java.util.regex.Pattern;
  * {@link #read(String)} never does; a frequency it reads as "as needed" on an
  * order not ticked is {@link Kind#UNREAD} (open, every later dose asks why).
  * The text feeds one more thing: the rule on an order not ticked
- * ({@link FrequencyWording}, QA D1391 / D1395), which accepts only a fixed
- * schedule (MarAsNeededFlagGuardTest). That rule never changes how an order
- * already written is read here.
+ * ({@link FrequencyWording}, QA D1391 / D1395).
+ *
+ * <p>QA D1419 / D1426 (round 34, coordinator decision 2026-11-06): this reader
+ * and that rule give one answer. What is read here ({@link FrequencyCadence}
+ * for every way of writing a cadence the patterns below do not take) is a
+ * schedule for the prescriber AND for the MAR, so a wording accepted as a
+ * schedule never shows {@code frequencyUnread}; what is not read asks the
+ * prescriber once, then stays open on the MAR. A ceiling, a range or a choice
+ * ("max 4/j", "1 a 3 fois par jour", "matin ou soir") is not a schedule, here
+ * either, though {@link #dosesPerDay} still counts its highest number for a
+ * daily limit. Two more {@link Kind}s say what the MAR does with a continuous
+ * infusion and with a course of fixed moments.
  */
 public final class MarDoseSchedule {
 
@@ -54,21 +64,52 @@ public final class MarDoseSchedule {
          */
         AS_NEEDED,
         /** Written, but not readable as a schedule: never read as a single dose (D1237). */
-        UNREAD
+        UNREAD,
+        /**
+         * QA D1419: a continuous infusion ("perfusion continue", "IVSE", "125 ml/h"): it is started, then
+         * runs. There is no next slot; the row stays open for a new bag, with no reason and no overdue.
+         */
+        CONTINUOUS,
+        /**
+         * QA D1419: a course at fixed moments after its first dose ("H0 H8 H24 H36 H48 H60", "J1 J3 J5"),
+         * {@link Reading#courseOffsets()}: each dose its own gap, and it ends after the last.
+         */
+        COURSE
     }
 
-    /** A frequency read: its kind and, for a repeat, the minutes between doses. */
-    public record Reading(Kind kind, Integer intervalMinutes) {
-        static final Reading ONE_OFF = new Reading(Kind.ONE_OFF, null);
-        static final Reading AS_NEEDED = new Reading(Kind.AS_NEEDED, null);
-        static final Reading UNREAD = new Reading(Kind.UNREAD, null);
+    /**
+     * A frequency read: its kind, for a repeat the minutes between doses, for a
+     * course the minutes of each dose after the first (the first is 0).
+     */
+    public record Reading(Kind kind, Integer intervalMinutes, List<Integer> courseOffsets) {
+        static final Reading ONE_OFF = new Reading(Kind.ONE_OFF, null, List.of());
+        static final Reading AS_NEEDED = new Reading(Kind.AS_NEEDED, null, List.of());
+        static final Reading UNREAD = new Reading(Kind.UNREAD, null, List.of());
+        static final Reading CONTINUOUS = new Reading(Kind.CONTINUOUS, null, List.of());
 
         static Reading every(int minutes) {
-            return new Reading(Kind.REPEATING, minutes);
+            return new Reading(Kind.REPEATING, minutes, List.of());
+        }
+
+        static Reading course(List<Integer> offsets) {
+            return new Reading(Kind.COURSE, null, List.copyOf(offsets));
         }
 
         public boolean repeating() {
             return kind == Kind.REPEATING;
+        }
+
+        /**
+         * The gap before the next dose once {@code closedDoses} doses have an
+         * outcome, or {@code null} when none follows: a repeat's interval, a
+         * course's next step (QA D1419).
+         */
+        public Integer gapAfter(int closedDoses) {
+            if (kind == Kind.COURSE) {
+                int next = Math.max(closedDoses, 1);
+                return next < courseOffsets.size() ? courseOffsets.get(next) - courseOffsets.get(next - 1) : null;
+            }
+            return intervalMinutes;
         }
     }
 
@@ -79,7 +120,7 @@ public final class MarDoseSchedule {
     private static final int MAX_INTERVAL_HOURS = 72;
 
     /** The hour units in English, French and Spanish (accents removed before matching). */
-    private static final String HOUR_UNIT = "(?:H|HR|HRS|HOUR|HOURS|HEURE|HEURES|HORA|HORAS)";
+    private static final String HOUR_UNIT = "(?:H|HR|HRS|HS|HOUR|HOURS|HEURE|HEURES|HORA|HORAS)";
     private static final String EVERY = "(?:EVERY|TOUTES LES|CHAQUE|CADA)";
 
     private static final Pattern Q_HOURS = Pattern.compile("\\bQ\\s*(\\d{1,2})\\s*H\\b");
@@ -110,7 +151,7 @@ public final class MarDoseSchedule {
     // Sonar S5843 (regex complexity): the one alternation is split in two
     // patterns tried in turn at the same place; the slash form and the worded
     // forms share no first character, so the union reads what the one pattern read.
-    private static final Pattern PER_DAY_SLASH = Pattern.compile("/\\s*+(?:JOURS?+|J|DIAS?+|DAYS?+|D)\\b");
+    private static final Pattern PER_DAY_SLASH = Pattern.compile("/\\s*+(?:JOURS?+|JRS?+|J|DIAS?+|DAYS?+|D)\\b");
     private static final Pattern PER_DAY_WORDS =
         Pattern.compile("(?:PAR JOUR|PAR 24 ?H|AL DIA|POR DIA|DAILY|A DAY|PER DAY)\\b");
     /**
@@ -126,7 +167,7 @@ public final class MarDoseSchedule {
      * Only the slash forms: "2 daily" can be two tablets a day.
      */
     private static final Pattern BARE_PER_DAY =
-        Pattern.compile("\\b(\\d{1,2}+)\\s*+/\\s*+(?:JOURS?+|J|DIAS?+|DAYS?+|D)\\b");
+        Pattern.compile("\\b(\\d{1,2}+)\\s*+/\\s*+(?:JOURS?+|JRS?+|J|DIAS?+|DAYS?+|D)\\b");
 
     /**
      * QA D928: a count written as a word ("une fois par jour", "dos veces al
@@ -159,6 +200,11 @@ public final class MarDoseSchedule {
     /** Any run of characters that is not a letter or a digit (one class, no backtracking). */
     private static final Pattern NOT_ALPHANUMERIC = Pattern.compile("[^A-Z0-9]+");
 
+    private static final Pattern STAT_WORD = Pattern.compile("\\bSTAT\\b");
+
+    /** Any kind of space, read as one: "toutes  les", and the comma of "toutes, les" once it is a space. */
+    private static final Pattern SPACES = Pattern.compile("[\\s\\p{Z}\\uFEFF]++");
+
     /** Frequencies (accents and spaces removed, counts as digits) that mean a single dose, in EN, FR and ES. */
     private static final Set<String> ONE_OFF_WORDS = Set.of(
         "ONCE", "ONCEONLY", "ONETIME", "SINGLEDOSE", "IMMEDIATELY", "NOW", "1X", "1FOIS",
@@ -188,21 +234,33 @@ public final class MarDoseSchedule {
      * an "as needed" wording on an order not ticked is {@link Kind#UNREAD}.
      */
     public static Reading read(String frequency) {
-        if (frequency == null || frequency.isBlank()) {
+        if (frequency == null || SPACES.matcher(frequency).replaceAll("").isEmpty()) {
             return Reading.ONE_OFF;
         }
         String upper = normalize(frequency);
-        if (upper.contains("STAT")) {
+        // The digits of a decimal or a fraction are part of a dose, never a count or a list.
+        String written = FrequencyCadence.withoutDoseParts(accentlessUpper(frequency));
+        // Before STAT: "1 g stat puis 500 mg toutes les 8 h" is more than one dose.
+        if (FrequencyCadence.statesNoFixedSchedule(written)) {
+            return Reading.UNREAD;
+        }
+        // A word: atorvastatine and nystatine are not one dose.
+        if (STAT_WORD.matcher(upper).find()) {
             return Reading.ONE_OFF;
         }
         if (isAsNeeded(frequency)) {
             return Reading.UNREAD;
         }
-        Integer minutes = intervalMinutesOf(frequency);
+        Integer minutes = intervalMinutesOf(written);
         if (minutes != null) {
             return Reading.every(minutes);
         }
-        return ONE_OFF_WORDS.contains(upper.replace(" ", "")) ? Reading.ONE_OFF : Reading.UNREAD;
+        if (ONE_OFF_WORDS.contains(upper.replace(" ", ""))) {
+            return Reading.ONE_OFF;
+        }
+        // QA D1419 / D1426: a cadence written any other way, wherever it stands in the sentence.
+        Reading cadence = FrequencyCadence.read(normalize(written));
+        return cadence != null ? cadence : Reading.UNREAD;
     }
 
     /**
@@ -215,12 +273,27 @@ public final class MarDoseSchedule {
         if (frequency == null || frequency.isBlank() || isAsNeeded(frequency)) {
             return null;
         }
-        Integer perDay = timesPerDay(normalize(frequency));
+        Integer perDay = timesPerDay(normalize(FrequencyCadence.withoutDoseParts(accentlessUpper(frequency))));
         if (perDay != null) {
             return perDay > 0 ? (double) perDay : null;
         }
         Reading reading = read(frequency);
+        if (reading.kind() == Kind.COURSE) {
+            return (double) mostDosesInADay(reading.courseOffsets());
+        }
         return reading.repeating() ? (double) MINUTES_PER_DAY / reading.intervalMinutes() : null;
+    }
+
+    /** QA D1419: the most doses of a course inside any 24 hours ("H0 H8 H24" is 2), what a daily limit judges. */
+    private static int mostDosesInADay(List<Integer> offsets) {
+        int most = 0;
+        List<Integer> window = new ArrayList<>();
+        for (int offset : offsets) {
+            window.removeIf(earlier -> offset - earlier >= MINUTES_PER_DAY);
+            window.add(offset);
+            most = Math.max(most, window.size());
+        }
+        return most;
     }
 
     /**
@@ -311,11 +384,6 @@ public final class MarDoseSchedule {
             || PER_DAY_WORDS.matcher(f).region(from, f.length()).lookingAt();
     }
 
-    /** QA D1391: a per-day slash anywhere: "3 cp/j", which no count before it makes a repeat here. */
-    static boolean hasPerDaySlash(String text) {
-        return PER_DAY_SLASH.matcher(normalize(text)).find();
-    }
-
     /** The count of a "3 fois par jour" (or "1-0-1") frequency, or {@code null}. */
     private static Integer timesPerDay(String f) {
         String compact = f.replace(" ", "");
@@ -357,7 +425,8 @@ public final class MarDoseSchedule {
     static String normalize(String frequency) {
         String plain = accentlessUpper(frequency.trim())
             .replace('_', ' ').replace('.', ' ').replace(',', ' ');
-        return wordsAsDigits(wordsAsDigits(plain, COUNT_WORD, false), HOUR_WORD, true);
+        String spaced = SPACES.matcher(plain).replaceAll(" ").trim();
+        return wordsAsDigits(wordsAsDigits(spaced, COUNT_WORD, false), HOUR_WORD, true);
     }
 
     /**

@@ -53,6 +53,8 @@ class MarAsNeededFlagGuardTest {
     private static final Path MAIN = Path.of("src/main/java/com/example/hms");
     private static final String SCHEDULE = "service/impl/MarDoseSchedule.java";
     private static final String HELPER = "service/impl/PrnMinInterval.java";
+    /** QA D1419: the wording rule asks the one reader what a text says, which is what it is for. */
+    private static final String WORDING = "service/impl/FrequencyWording.java";
 
     /** Rule 1: who may read the entity's flag directly, and why. */
     private static final Map<String, String> FLAG_READERS = Map.of(
@@ -95,7 +97,7 @@ class MarAsNeededFlagGuardTest {
         if (!rel.equals(SCHEDULE)) {
             Matcher read = READ_CALL.matcher(src);
             while (read.find()) {
-                if (read.group(1).toLowerCase(java.util.Locale.ROOT).contains("frequency")) {
+                if (!rel.equals(WORDING) && read.group(1).toLowerCase(java.util.Locale.ROOT).contains("frequency")) {
                     found.put(rel + " #2", "MarDoseSchedule.read(" + read.group(1) + "): pass the order, whose"
                         + " tick decides as-needed, not its frequency text");
                 }
@@ -141,7 +143,7 @@ class MarAsNeededFlagGuardTest {
     void anEditIsJudgedOnWhatItWrote() throws IOException {
         String service = SourceScan.stripComments(Files.readString(
             MAIN.resolve("service/PrescriptionServiceImpl.java"), StandardCharsets.UTF_8));
-        assertThat(service).contains("PrnMinInterval.applyToEdit(existing, frequencyBefore, tickedBefore)");
+        assertThat(service).contains("PrnMinInterval.applyToEdit(existing, frequencyBefore, tickedBefore,");
         assertThat(Pattern.compile("PrnMinInterval\\.applyTo\\(").matcher(service).results().count())
             .as("applyTo is the create path only").isEqualTo(1);
         for (String reader : java.util.List.of("service/impl/MarNextDose.java", "service/impl/MarDoseInterval.java")) {

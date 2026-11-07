@@ -232,9 +232,14 @@ export interface PrescriptionRequest {
   prnMinIntervalHours?: number | null;
   /**
    * QA D1378 (round 32): the prescriber's explicit "as needed (PRN)" tick. A
-   * conditional frequency sent without it is refused (fieldErrors.asNeeded).
+   * condition in the frequency sent without it is refused (fieldErrors.asNeeded).
    */
   asNeeded?: boolean;
+  /**
+   * QA D1419: the prescriber's answer to "this wording cannot be scheduled"
+   * (fieldErrors.frequencyConfirmed): the order is created and the MAR flags it.
+   */
+  frequencyConfirmed?: boolean;
   /** D109: the route the MAR five-rights check compares the bedside entry with. */
   route?: string;
   duration?: string;

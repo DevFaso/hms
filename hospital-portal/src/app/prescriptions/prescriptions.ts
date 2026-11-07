@@ -42,6 +42,7 @@ import { encounterOptionLabel } from '../shared/encounter-option-label';
 import { allPages, allRows } from '../shared/all-pages';
 import { RangePagerComponent } from '../shared/range-pager/range-pager.component';
 import { unTickedFrequencyVerdict } from '../shared/as-needed-frequency';
+import { serverFieldErrors } from '../shared/forms/server-field-errors';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { expandRoleEquivalents, roleSatisfies } from '../core/role-equivalence';
@@ -164,6 +165,12 @@ export const PRESCRIPTION_TABS: readonly { id: PrescriptionTab; labelKey: string
 /** The prescribed quantity, refused when blank or not positive (QA D1306). */
 const RX_QUANTITY_IDS = ['rx-quantity'];
 /** QA round 30: the as-needed order's minimum interval (server key prnMinIntervalHours). */
+/** QA D1440: the server keys of the wording and as-needed refusals, each marked at its own field. */
+const RX_WORDING_FIELDS: ReadonlySet<string> = new Set([
+  'asNeeded',
+  'frequencyConfirmed',
+  'prnMinIntervalHours',
+]);
 const RX_PRN_INTERVAL_IDS = ['rx-prnMinIntervalHours'];
 
 @Component({
@@ -659,6 +666,7 @@ export class PrescriptionsComponent implements OnInit {
   }
 
   openCreate(): void {
+    this.resetWordingAnswer();
     this.frequencyBeforeEdit = undefined;
     this.form = this.emptyForm();
     this.createdWithAdvisories.set(false);
@@ -678,6 +686,7 @@ export class PrescriptionsComponent implements OnInit {
   }
 
   openEdit(p: PrescriptionResponse): void {
+    this.resetWordingAnswer();
     // QA D660: a withdrawn order is read-only, every field; the server
     // refuses any edit of it, so no form is opened on one.
     if (isWithdrawnStatus(p.status)) return;
@@ -755,6 +764,7 @@ export class PrescriptionsComponent implements OnInit {
   }
 
   closeModal(): void {
+    this.resetWordingAnswer();
     this.showModal.set(false);
     this.createdWithAdvisories.set(false);
     this.formError.set('');
@@ -796,6 +806,9 @@ export class PrescriptionsComponent implements OnInit {
     if (!checked) {
       this.form.prnMinIntervalHours = null;
     }
+    // QA D1419: the tick answers the question too.
+    this.form.frequencyConfirmed = false;
+    this.resetWordingAnswer();
     // QA D1406: the tick answers the refusal; its banner does not outlive the answer.
     this.formError.set('');
   }
@@ -804,6 +817,38 @@ export class PrescriptionsComponent implements OnInit {
   onFrequencyChange(value: string): void {
     this.form.frequency = value;
     this.formError.set('');
+    // QA D1419: a new wording is a new question; the old answer does not carry over.
+    this.form.frequencyConfirmed = false;
+    this.frequencyConfirmAsked.set(false);
+    this.wordingRefused.set(false);
+  }
+
+  /** QA D1419: the server asked about this wording: the prescriber may confirm it, here. */
+  readonly frequencyConfirmAsked = signal(false);
+
+  /** QA D1440: the server's own sentence stands at the marked field, so the hint gives way to it. */
+  private readonly wordingRefused = signal(false);
+
+  private resetWordingAnswer(): void {
+    this.frequencyConfirmAsked.set(false);
+    this.wordingRefused.set(false);
+  }
+
+  /**
+   * QA D1419 / D1440: a refusal of the wording or of the as-needed part. The
+   * shared interceptor marks its field with the server's sentence (the checkbox
+   * appears first, this tick); a banner, a toast and the hint would only say the
+   * same sentence three more times, the toast over the Create button.
+   *
+   * @return whether the field says it all
+   */
+  private answerWordingRefusal(err: unknown): boolean {
+    const fields = [...serverFieldErrors(err).keys()];
+    // Asked whatever else the refusal names: the box must be there for the interceptor to mark.
+    this.frequencyConfirmAsked.set(fields.includes('frequencyConfirmed'));
+    if (fields.length === 0 || !fields.every((f) => RX_WORDING_FIELDS.has(f))) return false;
+    this.wordingRefused.set(true);
+    return true;
   }
 
   /**
@@ -814,6 +859,7 @@ export class PrescriptionsComponent implements OnInit {
    */
   frequencyHintKey(): string | null {
     if (this.form.asNeeded || this.frequencyBeforeEdit === this.form.frequency) return null;
+    if (this.wordingRefused()) return null;
     const verdict = unTickedFrequencyVerdict(this.form.frequency);
     if (verdict === 'FIXED') return null;
     return verdict === 'CONDITIONAL'
@@ -859,6 +905,8 @@ export class PrescriptionsComponent implements OnInit {
       ...this.form,
       asNeeded: !!this.form.asNeeded,
       prnMinIntervalHours: this.prnIntervalShown() ? this.form.prnMinIntervalHours : null,
+      frequencyConfirmed:
+        !this.form.asNeeded && this.frequencyConfirmAsked() && !!this.form.frequencyConfirmed,
     };
     const op = this.editing()
       ? this.prescriptionService.update(this.editingId()!, body)
@@ -890,6 +938,10 @@ export class PrescriptionsComponent implements OnInit {
       },
       error: (err) => {
         const cards = this.extractCdsCards(err);
+        if (cards.length === 0 && this.answerWordingRefusal(err)) {
+          this.saving.set(false);
+          return;
+        }
         if (cards.length > 0) {
           // Stay in the modal — backend has signalled a critical
           // block. Render the structured cards verbatim and expose
@@ -1429,6 +1481,8 @@ export class PrescriptionsComponent implements OnInit {
   readonly listTotal = signal(0);
   /** True while `prescriptions` holds the WHOLE tab, read for the search box. */
   private wholeTabRead = false;
+  /** QA D1441: the rows a search hid while it reads, shown again if the read fails. */
+  private rowsBeforeSearch: { rows: PrescriptionResponse[]; total: number } | null = null;
   /** That read is in flight: the keystrokes meanwhile are applied when it lands. */
   private wholeTabLoading = false;
   /** The list holds a status this build does not know: "Needs attention" is read whole, and narrowed here. */
@@ -1536,6 +1590,7 @@ export class PrescriptionsComponent implements OnInit {
           }
           this.loading.set(false);
           this.wholeTabRead = false;
+          this.rowsBeforeSearch = null;
           // Only now: a move that fails leaves the pager on the rows still shown.
           this.listPage.set(page);
           this.prescriptions.set(rows);
@@ -1549,11 +1604,18 @@ export class PrescriptionsComponent implements OnInit {
   private refuseLoad(): void {
     this.loading.set(false);
     this.wholeTabLoading = false;
+    // QA D1441: a read that fails leaves the list as it was: the rows the search hid come back.
+    if (this.rowsBeforeSearch) {
+      this.filtered.set(this.rowsBeforeSearch.rows);
+      this.listTotal.set(this.rowsBeforeSearch.total);
+      this.rowsBeforeSearch = null;
+    }
     this.toast.error(this.translate.instant('PRESCRIPTIONS.TOAST.LOAD_FAILED'));
   }
 
   setTab(tab: PrescriptionTab): void {
     this.activeTab.set(tab);
+    this.rowsBeforeSearch = null;
     this.listPage.set(0);
     this.wholeTabRead = false;
     this.wholeTabLoading = false;
@@ -1640,9 +1702,16 @@ export class PrescriptionsComponent implements OnInit {
       return;
     }
     if (!this.wholeTabRead) {
+      // QA D1441: until the answer is known the page's unfiltered rows say nothing
+      // about this search: they go, and the list says it is searching.
+      if (this.filtered().length > 0) {
+        this.rowsBeforeSearch = { rows: this.filtered(), total: this.listTotal() };
+      }
+      this.filtered.set([]);
       if (!this.wholeTabLoading) this.loadRows();
       return;
     }
+    this.rowsBeforeSearch = null;
     const matches = term
       ? inTab.filter(
           (p) =>

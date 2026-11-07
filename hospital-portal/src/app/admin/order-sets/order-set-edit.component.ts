@@ -123,6 +123,7 @@ import { refusalReason } from '../../shared/refusal-reason';
 import { joinReasons } from '../../shared/required-fields';
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 import { PRN_MAX_INTERVAL_HOURS } from '../../shared/as-needed-frequency';
+import { serverFieldErrors } from '../../shared/forms/server-field-errors';
 
 @Component({
   selector: 'app-order-set-edit',
@@ -259,9 +260,43 @@ export class OrderSetEditComponent implements OnInit {
    */
   protected onFrequencyChange(it: EditableItem, value: string): void {
     it.frequency = value;
+    // QA D1419: a value chosen from the list is a schedule: it never asks, and the old answer goes.
+    delete it.frequencyConfirmed;
+    this.itemsAskedToConfirm.update((asked) => asked.filter((item) => item !== it));
     if (value === PRN_PRESET) {
       it.asNeeded = true;
     }
+  }
+
+  /**
+   * QA D1419: an item whose wording the MAR cannot schedule (a text stored or
+   * sent by another path; this list only offers schedules) shows the wording and
+   * its confirm box: on the server's refusal, or when already confirmed.
+   */
+  protected readonly itemsAskedToConfirm = signal<EditableItem[]>([]);
+
+  protected frequencyConfirmShown(it: EditableItem): boolean {
+    return (
+      this.isMedicationLike(it.orderType) &&
+      it.asNeeded !== true &&
+      (it.frequencyConfirmed === true || this.itemsAskedToConfirm().includes(it))
+    );
+  }
+
+  /** A stored wording that is not one of the list's: shown as it is, so the author knows what is asked about. */
+  protected frequencyOffTheList(it: OrderSetItem): boolean {
+    return !!it.frequency && !this.frequencyPresets.some((f) => f.value === it.frequency);
+  }
+
+  /** `orderItems[2].frequencyConfirmed` names the item the server asks about (its field is marked once it shows). */
+  private askToConfirm(err: unknown): void {
+    const asked: EditableItem[] = [];
+    for (const key of serverFieldErrors(err).keys()) {
+      const m = /^orderItems\[(\d+)\]\.frequencyConfirmed$/.exec(key);
+      const item = m ? this.items()[Number(m[1])] : undefined;
+      if (item) asked.push(item);
+    }
+    if (asked.length > 0) this.itemsAskedToConfirm.update((all) => [...all, ...asked]);
   }
 
   protected itemMissingPrnInterval(index: number): boolean {
@@ -351,6 +386,7 @@ export class OrderSetEditComponent implements OnInit {
       },
       error: (err: unknown) => {
         this.saving.set(false);
+        this.askToConfirm(err);
         this.toast.error(refusalReason(err) ?? this.translate.instant('ORDER_SETS.SAVE_FAILED'));
         // A set reopened untouched has no list yet, and the refusal may ask for a choice from it.
         this.items().forEach((_, i) => this.loadCatalogChoices(i));
@@ -462,6 +498,10 @@ export class OrderSetEditComponent implements OnInit {
     }
     if (!out.medicationCatalogItemId) {
       delete out.medicationCatalogItemId;
+    }
+    // QA D1419: the answer belongs to an item whose wording was asked about.
+    if (!out.frequencyConfirmed || out.asNeeded === true) {
+      delete out.frequencyConfirmed;
     }
     // QA round 30 / QA D1378: the tick and the interval belong to an as-needed item only.
     if (this.prnIntervalShown(out)) {

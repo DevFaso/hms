@@ -47,6 +47,8 @@ export interface OrderSetItem {
   prnMinIntervalHours?: number | null;
   /** QA D1378 (round 32): the author's explicit "as needed (PRN)" tick on a medication item. */
   asNeeded?: boolean;
+  /** QA D1419: the author confirmed a wording the MAR cannot schedule (`orderItems[i].frequencyConfirmed`). */
+  frequencyConfirmed?: boolean;
   /**
    * QA D1396: the quantity to hand over per fill and what it counts. Required at
    * save for a drug the hospital's catalogue marks controlled (the server names

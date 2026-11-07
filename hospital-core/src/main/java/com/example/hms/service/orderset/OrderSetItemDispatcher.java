@@ -139,6 +139,8 @@ public class OrderSetItemDispatcher {
         if (asNeeded) {
             req.setPrnMinIntervalHours(OrderSetItemPrnRules.intervalHours(item));
         }
+        // QA D1419: the author's answer about a wording the MAR cannot schedule reaches the order.
+        req.setFrequencyConfirmed(OrderSetItemPrnRules.frequencyConfirmed(item));
         req.setDuration(string(item.get("duration")));
         // QA D1396 class: what the editor writes reaches the order: the route
         // (it reached only the dose text, so the MAR's route right saw none),

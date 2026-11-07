@@ -20,6 +20,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /** QA D1210 (round 23): the minimum interval between two GIVEN doses of a scheduled order. */
 class MarDoseIntervalTest {
 
+    /** A wording the reader cannot place (QA D1426: not "apres les repas", which it now reads). */
+    private static final String UNREAD_WORDING = "selon protocole";
+
     private static final Duration WINDOW = NurseTaskServiceImpl.EARLY_ADMINISTRATION_WINDOW;
     private static final LocalDateTime NOW = LocalDateTime.of(2026, 11, 1, 19, 4);
 
@@ -140,18 +143,50 @@ class MarDoseIntervalTest {
     @Test
     void d1237_anUnreadFrequencyAsksForAReasonAfterTheFirstDose() {
         Optional<LocalDateTime> last = Optional.of(NOW.minusHours(8));
-        Prescription unread = rx("après les repas");
+        Prescription unread = rx(UNREAD_WORDING);
         assertThatThrownBy(() -> MarDoseInterval.requireIntervalOrReason(unread,
                 MedicationAdministrationStatus.GIVEN, last, NOW, WINDOW, null))
             .isInstanceOf(FieldBusinessException.class)
             .hasFieldOrPropertyWithValue("messageKey", MarDoseInterval.FREQUENCY_UNREAD_KEY)
             .hasFieldOrPropertyWithValue("field", MarDoseInterval.REASON_FIELD);
-        assertThat(MarDoseInterval.requireIntervalOrReason(rx("après les repas"),
+        assertThat(MarDoseInterval.requireIntervalOrReason(rx(UNREAD_WORDING),
             MedicationAdministrationStatus.GIVEN, last, NOW, WINDOW, " checked with the prescriber "))
             .isEqualTo("checked with the prescriber");
         // The first dose of an unread order needs no reason.
-        assertThat(MarDoseInterval.requireIntervalOrReason(rx("après les repas"),
+        assertThat(MarDoseInterval.requireIntervalOrReason(rx(UNREAD_WORDING),
             MedicationAdministrationStatus.GIVEN, Optional.empty(), NOW, WINDOW, null)).isNull();
+    }
+
+    /** QA D1426 (changed from "apres les repas", now read): a wording read as a schedule keeps its own gap, with no unread reason. */
+    @Test
+    void d1426_aMealWordingKeepsAGap() {
+        Optional<LocalDateTime> soon = Optional.of(NOW.minusHours(1));
+        assertThatThrownBy(() -> MarDoseInterval.requireIntervalOrReason(rx("après les repas"),
+                MedicationAdministrationStatus.GIVEN, soon, NOW, WINDOW, null))
+            .hasFieldOrPropertyWithValue("messageKey", MarDoseInterval.TOO_SOON_KEY);
+        assertThat(MarDoseInterval.requireIntervalOrReason(rx("après les repas"),
+            MedicationAdministrationStatus.GIVEN, Optional.of(NOW.minusHours(8)), NOW, WINDOW, null)).isNull();
+    }
+
+    /** QA D1419: a course keeps the gap of its own step: H0 H8 H24: 8 h after the first, 16 h after the second. */
+    @Test
+    void d1419_aCourseKeepsTheGapOfItsStep() {
+        Prescription course = rx("H0 H8 H24");
+        Optional<LocalDateTime> tenHoursAgo = Optional.of(NOW.minusHours(10));
+        assertThat(MarDoseInterval.requireIntervalOrReason(course, MedicationAdministrationStatus.GIVEN,
+            tenHoursAgo, NOW, WINDOW, null, 1)).as("second dose, gap 8 h").isNull();
+        assertThatThrownBy(() -> MarDoseInterval.requireIntervalOrReason(course, MedicationAdministrationStatus.GIVEN,
+                tenHoursAgo, NOW, WINDOW, null, 2))
+            .as("third dose, gap 16 h")
+            .hasFieldOrPropertyWithValue("messageKey", MarDoseInterval.TOO_SOON_KEY);
+    }
+
+    /** QA D1419: an infusion's new bag and a single-dose form never ask a reason. */
+    @Test
+    void d1419_anInfusionAsksNoReason() {
+        Optional<LocalDateTime> minuteAgo = Optional.of(NOW.minusMinutes(1));
+        assertThat(MarDoseInterval.requireIntervalOrReason(rx("perfusion continue"),
+            MedicationAdministrationStatus.GIVEN, minuteAgo, NOW, WINDOW, null)).isNull();
     }
 
     /**
