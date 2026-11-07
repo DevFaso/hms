@@ -1308,6 +1308,16 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     params: ['unit', 'request'],
   },
   {
+    key: 'AUDIT.DESC.APPOINTMENT_OVERBOOKED',
+    re: /^Appointment overbooked outside the published slots$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.REGISTRATION_DEACTIVATED',
+    re: /^Patient registration deactivated$/,
+    params: [],
+  },
+  {
     key: 'AUDIT.DESC.STATUS_WAS',
     re: /^(.+) \(was ([A-Z_]+)\)$/,
     params: ['what', 'previous'],

@@ -1687,6 +1687,8 @@
       "ROI_STATUS": "Release-of-information request {{verb}}",
       "ENCOUNTER_STATUS_DENIED": "Encounter status change refused: the encounter is not assigned to the caller",
       "ENCOUNTER_STATUS_UPDATED": "Encounter status changed from {{from}} to {{to}}",
+      "APPOINTMENT_OVERBOOKED": "Appointment overbooked outside the published slots",
+      "REGISTRATION_DEACTIVATED": "Patient registration deactivated",
       "ENCOUNTER_CANCELLED_WITH_ADMISSION": "Encounter closed: admission {{admission}} was cancelled (was {{previous}})",
       "ENCOUNTER_DISCHARGE_COMPLETED": "Encounter closed at the discharge of admission {{admission}} (was {{previous}})",
       "ENCOUNTER_ADMISSION_COMPLETED": "Encounter closed when admission {{admission}} began (was {{previous}})",

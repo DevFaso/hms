@@ -1687,6 +1687,8 @@
       "ROI_STATUS": "Demande de communication du dossier {{verb}}",
       "ENCOUNTER_STATUS_DENIED": "Changement de statut de consultation refusé : la consultation n’est pas attribuée à l’auteur",
       "ENCOUNTER_STATUS_UPDATED": "Statut de la consultation changé de {{from}} à {{to}}",
+      "APPOINTMENT_OVERBOOKED": "Rendez-vous ajouté hors des créneaux publiés",
+      "REGISTRATION_DEACTIVATED": "Enregistrement du patient désactivé",
       "ENCOUNTER_CANCELLED_WITH_ADMISSION": "Consultation clôturée : l’hospitalisation {{admission}} a été annulée (était {{previous}})",
       "ENCOUNTER_DISCHARGE_COMPLETED": "Consultation clôturée à la sortie de l’hospitalisation {{admission}} (était {{previous}})",
       "ENCOUNTER_ADMISSION_COMPLETED": "Consultation clôturée à l’hospitalisation {{admission}} (était {{previous}})",

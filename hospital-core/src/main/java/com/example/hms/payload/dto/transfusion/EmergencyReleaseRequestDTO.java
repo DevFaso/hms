@@ -23,7 +23,8 @@ public class EmergencyReleaseRequestDTO {
     @NotNull
     private EmergencyReleaseType releaseType;
 
-    /** Required; checked by the service, which names the field in the caller's language. */
+    /** Required, named at once with the other fields; the service also bounds its length. */
+    @jakarta.validation.constraints.NotBlank
     private String reason;
 
     /** The person making the decision, picked from the options the server offers. */

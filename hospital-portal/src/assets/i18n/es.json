@@ -1687,6 +1687,8 @@
       "ROI_STATUS": "Solicitud de acceso a la historia {{verb}}",
       "ENCOUNTER_STATUS_DENIED": "Cambio de estado de la consulta rechazado: la consulta no está asignada al autor",
       "ENCOUNTER_STATUS_UPDATED": "Estado de la consulta cambiado de {{from}} a {{to}}",
+      "APPOINTMENT_OVERBOOKED": "Cita añadida fuera de los horarios publicados",
+      "REGISTRATION_DEACTIVATED": "Registro del paciente desactivado",
       "ENCOUNTER_CANCELLED_WITH_ADMISSION": "Encuentro cerrado: la hospitalización {{admission}} fue cancelada (estaba {{previous}})",
       "ENCOUNTER_DISCHARGE_COMPLETED": "Consulta cerrada en el alta del ingreso {{admission}} (estaba {{previous}})",
       "ENCOUNTER_ADMISSION_COMPLETED": "Consulta cerrada al ingreso {{admission}} (estaba {{previous}})",
