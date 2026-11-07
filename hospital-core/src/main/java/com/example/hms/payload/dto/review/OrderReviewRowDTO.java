@@ -43,7 +43,7 @@ public class OrderReviewRowDTO {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class PriorDose {
-        private LocalDateTime administeredAt;
+        private LocalDateTime givenAt;
         private String note;
     }
 

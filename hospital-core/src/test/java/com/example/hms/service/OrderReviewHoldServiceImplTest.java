@@ -829,7 +829,7 @@ class OrderReviewHoldServiceImplTest {
         verify(audit).logEvent(event.capture());
         assertThat(event.getValue().getEventDescription()).startsWith("Dose charted as given before the hold").doesNotContain("Given at handover");
         assertThat(service.forPatient(patient).get(0).getDosesGivenBeforeHold())
-            .extracting(com.example.hms.payload.dto.review.OrderReviewRowDTO.PriorDose::getAdministeredAt).containsExactly(held.minusHours(1));
+            .extracting(com.example.hms.payload.dto.review.OrderReviewRowDTO.PriorDose::getGivenAt).containsExactly(held.minusHours(1));
     }
 
     @Test

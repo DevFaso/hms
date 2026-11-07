@@ -404,8 +404,11 @@ public class OrderReviewHoldServiceImpl implements OrderReviewHoldService, org.s
             addIfActive(clinicians, running.getRequest().getRequestedBy());
         }
         String unit = running.getBloodUnit() != null ? running.getBloodUnit().getUnitNumber() : null;
-        afterCommit(new OrderReviewAfterCommit.Notice(hospital, running.getPatient() != null ? running.getPatient().getId() : null,
-            running.getPatient() != null ? running.getPatient().getFullName() : null, flagId, REFERENCE_TYPE,
+        // Read here, in the event's transaction: the notice carries ids and text only.
+        com.example.hms.model.Patient chart = running.getPatient();
+        UUID patientId = chart != null ? chart.getId() : null;
+        String patientName = chart != null ? chart.getFullName() : null;
+        afterCommit(new OrderReviewAfterCommit.Notice(hospital, patientId, patientName, flagId, REFERENCE_TYPE,
             RUNNING_TITLE_KEY, RUNNING_BODY_KEY, new Object[] {unit}, clinicians));
     }
 
@@ -712,7 +715,7 @@ public class OrderReviewHoldServiceImpl implements OrderReviewHoldService, org.s
             .filter(dose -> dose.getStatus() == com.example.hms.enums.MedicationAdministrationStatus.GIVEN
                 && dose.getAdministeredAt() != null && dose.getAdministeredAt().isBefore(hold.getCreatedAt())
                 && dose.getUpdatedAt() != null && !dose.getUpdatedAt().isBefore(hold.getCreatedAt()))
-            .map(dose -> OrderReviewRowDTO.PriorDose.builder().administeredAt(dose.getAdministeredAt()).note(dose.getNotes()).build())
+            .map(dose -> OrderReviewRowDTO.PriorDose.builder().givenAt(dose.getAdministeredAt()).note(dose.getNotes()).build())
             .toList();
     }
 

@@ -191,7 +191,7 @@ describe('OrderReviewPanelComponent', () => {
 
   it('shows a dose charted as given before the hold, so the prescriber sees it', () => {
     spy.forPatient.and.returnValue(
-      of([row({ dosesGivenBeforeHold: [{ administeredAt: '2026-11-07T08:00:00', note: 'Late' }] })]),
+      of([row({ dosesGivenBeforeHold: [{ givenAt: '2026-11-07T08:00:00', note: 'Late' }] })]),
     );
     fixture.componentInstance.load();
     fixture.detectChanges();

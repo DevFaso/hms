@@ -20,14 +20,14 @@
                 <div class="cell-secondary">
                   {{ 'ORDER_REVIEW.TYPE_' + row.orderType | translate }}
                 </div>
-                @for (dose of row.dosesGivenBeforeHold ?? []; track dose.administeredAt) {
+                @for (dose of row.dosesGivenBeforeHold ?? []; track dose.givenAt) {
                   <div
                     class="cell-secondary order-review-prior"
                     data-testid="order-review-prior-dose"
                   >
                     {{
                       'ORDER_REVIEW.GIVEN_BEFORE_ROW'
-                        | translate: { at: (dose.administeredAt | serverTime | date: 'short') }
+                        | translate: { at: (dose.givenAt | serverTime | date: 'short') }
                     }}
                     @if (dose.note) {
                       <div>{{ dose.note }}</div>
