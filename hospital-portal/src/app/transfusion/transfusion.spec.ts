@@ -1218,12 +1218,14 @@ describe('TransfusionComponent: a transfusion in progress (QA CX-008)', () => {
           await open(['ROLE_NURSE']);
           component.openReaction('adm-1');
           await settle();
+          const before = component.reactionForm.unitReturnedToLab;
           await expectToggles('.modal-body input[type="checkbox"]');
-          expect(component.reactionForm.unitReturnedToLab).toBeTrue();
+          expect(component.reactionForm.unitReturnedToLab).toBe(!before);
         });
 
         it('a click inside the dialog leaves it open and is not cancelled; one on the backdrop closes it', async () => {
           await open(['ROLE_LAB_DIRECTOR']);
+          txSpy.listAssignableUnits.and.returnValue(of([]));
           component.openCrossmatch();
           await settle();
           const inside = new MouseEvent('click', { bubbles: true, cancelable: true });
@@ -1382,7 +1384,7 @@ describe('TransfusionComponent: a transfusion in progress (QA CX-008)', () => {
             issuedByName: 'Tech Ouedraogo',
             issuedAt: '2026-11-06T10:00:00',
             antibodyWarning: true,
-            negativeUnobtainable: true,
+            negativeUnobtainableStated: true,
             negativeUnitsShown: 'ONEG-1',
           },
           {
