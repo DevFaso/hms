@@ -170,7 +170,7 @@ service is `hms-backend-core`, dev is `hms-backend-dev`):
 
 | Service | Memory limit | `JAVA_TOOL_OPTIONS` | Sleep when idle |
 | --- | --- | --- | --- |
-| `hms-backend-core` (prod) | 2 GB | `-XX:MaxRAMPercentage=70` | off |
+| `hms-backend-core` (prod) | 6 GB (raised 2026-11-07, heap read back at 4006M) | `-XX:MaxRAMPercentage=70`, to be removed after the sync that ships this entrypoint | off |
 | `hms-backend-dev` | 4 GB (raised after QA D1314's first report; the 2 GB here was stale) | `-XX:MaxRAMPercentage=70`, to be removed | off |
 | `hms-keycloak-prod` | 2 GB (1.5 GB failed to boot) | none | on, requested; confirm it actually sleeps (DB traffic can keep it awake) |
 | `hms-keycloak-dev` | 2 GB | none | off (hms-backend-dev needs it at boot and for JWKS refresh) |
