@@ -189,10 +189,12 @@ const FREQUENCY_CHOICES = [
 /** QA D1440: the server keys of the wording and as-needed refusals, each marked at its own field. */
 const RX_WORDING_FIELDS: ReadonlySet<string> = new Set([
   'asNeeded',
+  'frequency',
   'frequencyConfirmed',
   'prnMinIntervalHours',
 ]);
 const RX_PRN_INTERVAL_IDS = ['rx-prnMinIntervalHours'];
+const RX_FREQUENCY_IDS = ['rx-frequency'];
 
 @Component({
   selector: 'app-prescriptions',
@@ -689,6 +691,7 @@ export class PrescriptionsComponent implements OnInit {
   openCreate(): void {
     this.resetWordingAnswer();
     this.frequencyBeforeEdit = undefined;
+    this.frequencyStored = '';
     this.form = this.emptyForm();
     this.createdWithAdvisories.set(false);
     this.resetCatalogPick();
@@ -715,6 +718,7 @@ export class PrescriptionsComponent implements OnInit {
     this.createdWithAdvisories.set(false);
     // A ticked order: unticking it writes its frequency as a fixed schedule, so the hint speaks.
     this.frequencyBeforeEdit = p.asNeeded ? undefined : (p.frequency ?? '');
+    this.frequencyStored = p.frequency ?? '';
     this.form = {
       patientId: p.patientId ?? '',
       staffId: p.staffId ?? '',
@@ -894,6 +898,15 @@ export class PrescriptionsComponent implements OnInit {
   /** The frequency the order being edited already carries (no hint about it). */
   private frequencyBeforeEdit: string | null | undefined = undefined;
 
+  /** QA D1491: what the order carries; an older order written with none stays editable as it is. */
+  private frequencyStored = '';
+
+  /** QA D1491: a new order states its frequency, and an edit does not empty one (the server refuses both). */
+  private frequencyMissing(): boolean {
+    if (this.editingSigned() || this.form.frequency?.trim()) return false;
+    return !this.editing() || !!this.frequencyStored.trim();
+  }
+
   /** QA round 30: a whole number of hours from 1 to the maximum. */
   private prnIntervalValid(): boolean {
     const hours = Number(this.form.prnMinIntervalHours);
@@ -904,6 +917,13 @@ export class PrescriptionsComponent implements OnInit {
     // QA D1345: a created order is never posted again from the same dialog.
     if (this.createdWithAdvisories()) return;
     this.formError.set('');
+    if (this.frequencyMissing()) {
+      const message = this.translate.instant('PRESCRIPTIONS.FREQUENCY_REQUIRED');
+      refuseFields(this.host.nativeElement, RX_FREQUENCY_IDS, RX_FREQUENCY_IDS, message);
+      this.formError.set(message);
+      return;
+    }
+    refuseFields(this.host.nativeElement, [], RX_FREQUENCY_IDS, '');
     // QA D706: a new prescription states the quantity to hand over; the
     // pharmacy caps the dispense at it (the server refuses it too).
     const qty = this.form.quantity;

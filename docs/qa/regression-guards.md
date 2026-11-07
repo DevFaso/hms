@@ -1046,3 +1046,12 @@ Rounds 27, 28 and 29 each found 20–30 new siblings of the required-field class
 | `service/impl/FrequencyWordingTest#d1472_everyChoiceOfThePrescriptionFormIsASchedule` (new) and `scripts/lib/as-needed-frequency.test.mjs` (widened) | A choice of the form's list that asks, or reads differently in another language, or has no label in one. | none |
 | `cdshooks/rules/PediatricDoseRuleRound18Test#d1455_*`, `AdultParacetamolRuleTest#d1455_*` (new) | An unread frequency judged as one dose a day, or a limit card that does not say the total is unknown. | none |
 | `service/impl/MarNextDoseTest#d1457_aStoredWordingNotReadStaysOpenAndFlagged` (new) | A stored order the grammar does not read ended, or given a cadence. | none |
+
+## Guards added or widened by round 36 (fix/r36-frequency-strict)
+
+| Guard | What it catches | Allowlist |
+|---|---|---|
+| `service/impl/FrequencyWordingTest#everyNumberSlotOfTheGrammarHasItsBound` (new), and its twin in `as-needed-frequency.spec.ts` | D1486, D1487, D1512, one class: a number in a slot of the grammar that takes a value no prescriber means as a schedule. Generated: every line of `FrequencyCadence.GRAMMAR` holding a number, with every number `slotBounds` says its kind of form reads and every one it says is asked. A new line or a new kind of form with no bound fails. | none |
+| `filed.D1486`, `filed.D1487`, `filed.D1512`, `filed.R36-slots` in the shared fixture (new, run by every list test of `FrequencyWordingTest` and the spec) | The slots outside the table: clock times joined by "à" or "vers", impossible hours, a lone "1h30", course moments, posology intakes, N/24, zero doses and rates, a number word of another language than its form. Each is asked on both sides and flagged on the MAR. | none |
+| `service/impl/FrequencyWordingTest#d1491_aBlankFrequencyIsRefusedAndNeverEndsACourse`, `PrnMinIntervalTest#d1491_*`, `OrderSetItemDispatcherTest#anItem*NoFrequency*`, `PrescriptionEditAndWithdrawalIT#d1491_*` (new) | D1491: no frequency accepted on a new order, or read as a single dose on an older one. Each path that writes an order is named: create, constraint, edit, emptying edit, untick, withdrawal, order-set save, order-set apply. | none |
+| `service/impl/NurseTaskServiceImplTest#d1508_*` (new) | D1508: an unread order with no `frequencyUnread` on the MAR until its first dose. | none |

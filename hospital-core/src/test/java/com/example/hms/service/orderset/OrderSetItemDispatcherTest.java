@@ -24,6 +24,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -179,6 +180,32 @@ class OrderSetItemDispatcherTest {
         verify(prescriptionService, times(4)).createPrescription(captor.capture(), eq(Locale.ENGLISH));
         assertThat(captor.getValue().getAsNeeded()).isFalse();
         assertThat(captor.getValue().getPrnMinIntervalHours()).isNull();
+    }
+
+    /** QA D1491: a set saved with an item that names no frequency still applies: nobody can answer for it then. */
+    @Test
+    void anItemSavedWithNoFrequencyStillAppliesAndItsOrderIsFlagged() {
+        when(prescriptionService.createPrescription(any(), any())).thenReturn(new PrescriptionResponseDTO());
+        ArgumentCaptor<PrescriptionRequestDTO> captor = ArgumentCaptor.forClass(PrescriptionRequestDTO.class);
+        dispatcher.dispatch(Map.of("orderType", "MEDICATION", "medicationName", "Amoxicillin"), ctx(), Locale.ENGLISH);
+        dispatcher.dispatch(Map.of("orderType", "MEDICATION", "medicationName", "Amoxicillin", "frequency", "  "),
+            ctx(), Locale.ENGLISH);
+        verify(prescriptionService, times(2)).createPrescription(captor.capture(), eq(Locale.ENGLISH));
+        assertThat(captor.getAllValues()).allSatisfy(r -> assertThat(r.getFrequencyConfirmed()).isTrue());
+    }
+
+    /** QA D1491: at save, an item states its frequency; at apply, the same item passes, by name otherwise. */
+    @Test
+    void anItemWithNoFrequencyIsRefusedByNameAtSaveNotAtApply() {
+        List<Map<String, Object>> items = List.of(Map.of("orderType", "MEDICATION", "medicationName", "Amoxicillin"));
+        assertThatThrownBy(() -> OrderSetItemPrnRules.requireValid(items))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "orderItems[0].frequency");
+        List<Map<String, Object>> confirmed = List.of(Map.of(
+            "orderType", "MEDICATION", "medicationName", "Amoxicillin", "frequency", " ", "frequencyConfirmed", true));
+        assertThatThrownBy(() -> OrderSetItemPrnRules.requireValid(confirmed)).as("confirming does not answer it")
+            .hasFieldOrPropertyWithValue("field", "orderItems[0].frequency");
+        OrderSetItemPrnRules.requireValidToApply(items);
     }
 
     /** QA D1419: the author's answer about a wording the MAR cannot schedule reaches the order the item creates. */

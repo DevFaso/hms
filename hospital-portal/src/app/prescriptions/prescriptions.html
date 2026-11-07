@@ -1017,9 +1017,10 @@
               />
             </div>
             <div class="field">
-              <label for="rx-frequency">{{ 'PRESCRIPTIONS.FREQUENCY' | translate }}</label>
+              <label for="rx-frequency">{{ 'PRESCRIPTIONS.FREQUENCY' | translate }} *</label>
               <input
                 id="rx-frequency"
+                data-server-field="frequency"
                 type="text"
                 [ngModel]="form.frequency"
                 (ngModelChange)="onFrequencyChange($event)"

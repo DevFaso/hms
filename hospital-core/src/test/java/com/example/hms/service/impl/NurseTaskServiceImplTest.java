@@ -1140,6 +1140,8 @@ class NurseTaskServiceImplTest {
         lenient().when(mockHospital.getId()).thenReturn(hospitalId);
 
         Prescription rx = mock(Prescription.class);
+        // QA D1491 (changed: no frequency used to close the course): a single dose is what closes it.
+        lenient().when(rx.getFrequency()).thenReturn("STAT");
         when(rx.getId()).thenReturn(rxId);
         lenient().when(rx.getPatient()).thenReturn(mockPatient);
         lenient().when(rx.getHospital()).thenReturn(mockHospital);
@@ -4605,6 +4607,32 @@ class NurseTaskServiceImplTest {
 
         assertThat(tasks.get(0).getStatus()).isEqualTo("DUE");
         assertThat(tasks.get(0).isFrequencyUnread()).isTrue();
+    }
+
+    /**
+     * QA D1508: an order asked about shows its flag from the start, as its prescription row does, before any
+     * dose. QA D1491: an older order with no frequency is the same. The first dose keeps the order's own slot.
+     */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"selon protocole", "3 fois chaque jour", "20/j", "", "  "})
+    void d1508_anUnreadOrderIsFlaggedBeforeItsFirstDose(String frequency) {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, frequency);
+        rx.setStatus(PrescriptionStatus.SIGNED);
+
+        List<NurseMedicationTaskResponseDTO> tasks = marFor(UUID.randomUUID(), hospitalId, rx, null);
+
+        assertThat(tasks.get(0).isFrequencyUnread()).as(frequency).isTrue();
+        assertThat(tasks.get(0).getDueTime()).as("its slot is the order's").isEqualTo(rx.getCreatedAt());
+    }
+
+    /** QA D1508: and only those. */
+    @Test
+    void d1508_aScheduleIsNotFlaggedBeforeItsFirstDose() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "toutes les 6 heures");
+        rx.setStatus(PrescriptionStatus.SIGNED);
+        assertThat(marFor(UUID.randomUUID(), hospitalId, rx, null).get(0).isFrequencyUnread()).isFalse();
     }
 
     /** QA D1237: the next dose of an unread order is accepted only with a reason, which is kept on the row. */

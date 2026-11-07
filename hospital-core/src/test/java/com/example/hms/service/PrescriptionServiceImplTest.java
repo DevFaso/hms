@@ -217,7 +217,7 @@ class PrescriptionServiceImplTest {
         assignment.setHospital(encounter.getHospital());
 
         lenient().when(prescriptionMapper.toEntity(any(), any(), any(), any()))
-            .thenReturn(new Prescription());
+            .thenReturn(mappedOrder());
         // The named prescriber holds a prescribing role unless a test says otherwise.
         lenient().when(roleValidator.canCreatePrescription(user.getId(), hospitalId)).thenReturn(true);
     }
@@ -266,7 +266,7 @@ class PrescriptionServiceImplTest {
         encounterAssignment.setHospital(encounter.getHospital());
         encounter.setAssignment(encounterAssignment);
         UUID currentUser = staff.getUser().getId();
-        Prescription mappedEntity = new Prescription();
+        Prescription mappedEntity = mappedOrder();
         mappedEntity.setControlledSubstance(true);
 
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
@@ -290,7 +290,7 @@ class PrescriptionServiceImplTest {
         encounter.setAssignment(encounterAssignment);
 
         UUID currentUser = staff.getUser().getId();
-        Prescription mappedEntity = new Prescription();
+        Prescription mappedEntity = mappedOrder();
         PrescriptionResponseDTO responseDTO = PrescriptionResponseDTO.builder()
             .id(UUID.randomUUID())
             .build();
@@ -338,7 +338,7 @@ class PrescriptionServiceImplTest {
         encounterAssignment.setHospital(encounter.getHospital());
         encounter.setAssignment(encounterAssignment);
         UUID currentUser = staff.getUser().getId();
-        Prescription mappedEntity = new Prescription();
+        Prescription mappedEntity = mappedOrder();
         mappedEntity.setQuantity(java.math.BigDecimal.TEN); // the mapper copies the request's quantity
 
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
@@ -409,7 +409,7 @@ class PrescriptionServiceImplTest {
         UserRoleHospitalAssignment resolvedAssignment = new UserRoleHospitalAssignment();
         resolvedAssignment.setId(UUID.randomUUID());
 
-        Prescription mappedEntity = new Prescription();
+        Prescription mappedEntity = mappedOrder();
         PrescriptionResponseDTO responseDTO = PrescriptionResponseDTO.builder().id(UUID.randomUUID()).build();
 
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
@@ -451,7 +451,7 @@ class PrescriptionServiceImplTest {
         encounterAssignment.setId(UUID.randomUUID());
         encounter.setAssignment(encounterAssignment);
 
-        Prescription mappedEntity = new Prescription();
+        Prescription mappedEntity = mappedOrder();
         PrescriptionResponseDTO responseDTO = PrescriptionResponseDTO.builder().id(UUID.randomUUID()).build();
 
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
@@ -490,7 +490,7 @@ class PrescriptionServiceImplTest {
         staffDepartment.setHospital(encounter.getHospital());
         staff.setDepartment(staffDepartment);
 
-        Prescription mappedEntity = new Prescription();
+        Prescription mappedEntity = mappedOrder();
         PrescriptionResponseDTO responseDTO = PrescriptionResponseDTO.builder().id(UUID.randomUUID()).build();
 
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
@@ -581,7 +581,7 @@ class PrescriptionServiceImplTest {
         actingAssignment.setHospital(acting);
         actingStaff.setAssignment(actingAssignment);
 
-        Prescription mappedEntity = new Prescription();
+        Prescription mappedEntity = mappedOrder();
         PrescriptionResponseDTO responseDTO = PrescriptionResponseDTO.builder().id(UUID.randomUUID()).build();
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(actingId);
@@ -623,7 +623,7 @@ class PrescriptionServiceImplTest {
         encounterAssignment.setId(UUID.randomUUID());
         encounter.setAssignment(encounterAssignment);
 
-        Prescription mappedEntity = new Prescription();
+        Prescription mappedEntity = mappedOrder();
         PrescriptionResponseDTO responseDTO = PrescriptionResponseDTO.builder().id(UUID.randomUUID()).build();
 
         when(patientRepository.findByUsernameOrEmail(patientIdentifier)).thenReturn(Optional.of(patient));
@@ -714,7 +714,7 @@ class PrescriptionServiceImplTest {
         encounterAssignment.setHospital(encounter.getHospital());
         encounter.setAssignment(encounterAssignment);
         UUID currentUser = staff.getUser().getId();
-        Prescription mappedEntity = new Prescription();
+        Prescription mappedEntity = mappedOrder();
         mappedEntity.setFrequency("si besoin");
 
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
@@ -885,6 +885,13 @@ class PrescriptionServiceImplTest {
         verify(prescriptionRepository).findByHospital_Id(hospitalId, pageable);
     }
 
+    /** What the mapper makes of a request: QA D1491, a new order states its frequency. */
+    private static Prescription mappedOrder() {
+        Prescription order = new Prescription();
+        order.setFrequency(TEST_FREQUENCY);
+        return order;
+    }
+
     private PrescriptionRequestDTO buildRequest() {
         return PrescriptionRequestDTO.builder()
             .patientId(patientId)
@@ -1043,7 +1050,7 @@ class PrescriptionServiceImplTest {
         encounter.setAssignment(encounterAssignment);
 
         UUID currentUser = staff.getUser().getId();
-        Prescription mappedEntity = new Prescription();
+        Prescription mappedEntity = mappedOrder();
         PrescriptionResponseDTO responseDTO = PrescriptionResponseDTO.builder().id(UUID.randomUUID()).build();
 
         when(patientRepository.findByUsernameOrEmail(mrn)).thenReturn(Optional.empty());
@@ -1077,7 +1084,7 @@ class PrescriptionServiceImplTest {
         encounter.setAssignment(encounterAssignment);
 
         UUID currentUser = staff.getUser().getId();
-        Prescription mappedEntity = new Prescription();
+        Prescription mappedEntity = mappedOrder();
         PrescriptionResponseDTO responseDTO = PrescriptionResponseDTO.builder().id(UUID.randomUUID()).build();
 
         when(patientRepository.findByUsernameOrEmail(patientUuid.toString())).thenReturn(Optional.empty());
@@ -1285,7 +1292,7 @@ class PrescriptionServiceImplTest {
         encounter.setAssignment(encounterAssignment);
 
         UUID currentUser = staff.getUser().getId();
-        Prescription mappedEntity = new Prescription();
+        Prescription mappedEntity = mappedOrder();
         PrescriptionResponseDTO responseDTO = PrescriptionResponseDTO.builder().id(UUID.randomUUID()).build();
 
         PatientAllergy allergy = new PatientAllergy();
@@ -1423,7 +1430,7 @@ class PrescriptionServiceImplTest {
         PrescriptionRequestDTO request =
             d1183Request("Zorbalix 500 mg", true, "Checked with the pharmacist: not a penicillin");
         d1183StubCreate("Pénicilline");
-        Prescription mappedEntity = new Prescription();
+        Prescription mappedEntity = mappedOrder();
         when(prescriptionMapper.toEntity(request, patient, staff, encounter)).thenReturn(mappedEntity);
         when(prescriptionRepository.save(mappedEntity)).thenReturn(mappedEntity);
         when(prescriptionMapper.toResponseDTO(mappedEntity)).thenReturn(PrescriptionResponseDTO.builder().build());
@@ -1440,7 +1447,7 @@ class PrescriptionServiceImplTest {
     void d1183_anUnknownNameWithoutAClassAllergyIsNotBlocked() {
         PrescriptionRequestDTO request = d1183Request("Zorbalix 500 mg", false, null);
         d1183StubCreate("Aspirine");
-        Prescription mappedEntity = new Prescription();
+        Prescription mappedEntity = mappedOrder();
         when(prescriptionMapper.toEntity(request, patient, staff, encounter)).thenReturn(mappedEntity);
         when(prescriptionRepository.save(mappedEntity)).thenReturn(mappedEntity);
         when(prescriptionMapper.toResponseDTO(mappedEntity)).thenReturn(PrescriptionResponseDTO.builder().build());
@@ -1582,7 +1589,7 @@ class PrescriptionServiceImplTest {
         encounter.setAssignment(encounterAssignment);
 
         UUID currentUser = staff.getUser().getId();
-        Prescription mappedEntity = new Prescription();
+        Prescription mappedEntity = mappedOrder();
         PrescriptionResponseDTO responseDTO = PrescriptionResponseDTO.builder().id(UUID.randomUUID()).build();
 
         PatientAllergy allergy = new PatientAllergy();
@@ -1616,7 +1623,7 @@ class PrescriptionServiceImplTest {
         encounter.setAssignment(encounterAssignment);
 
         UUID currentUser = staff.getUser().getId();
-        Prescription mappedEntity = new Prescription();
+        Prescription mappedEntity = mappedOrder();
         PrescriptionResponseDTO responseDTO = PrescriptionResponseDTO.builder().id(UUID.randomUUID()).build();
 
         PatientAllergy allergy = new PatientAllergy();
@@ -1650,7 +1657,7 @@ class PrescriptionServiceImplTest {
         encounter.setAssignment(encounterAssignment);
 
         UUID currentUser = staff.getUser().getId();
-        Prescription mappedEntity = new Prescription();
+        Prescription mappedEntity = mappedOrder();
         PrescriptionResponseDTO responseDTO = PrescriptionResponseDTO.builder().id(UUID.randomUUID()).build();
 
         PatientAllergy allergy = new PatientAllergy();
@@ -1682,7 +1689,7 @@ class PrescriptionServiceImplTest {
         encounter.setAssignment(encounterAssignment);
 
         UUID currentUser = staff.getUser().getId();
-        Prescription mappedEntity = new Prescription();
+        Prescription mappedEntity = mappedOrder();
         PrescriptionResponseDTO responseDTO = PrescriptionResponseDTO.builder().id(UUID.randomUUID()).build();
 
         PatientAllergy allergy = new PatientAllergy();
@@ -1721,7 +1728,7 @@ class PrescriptionServiceImplTest {
         encounterAssignment.setHospital(encounter.getHospital());
         encounter.setAssignment(encounterAssignment);
         UUID currentUser = staff.getUser().getId();
-        Prescription mappedEntity = new Prescription();
+        Prescription mappedEntity = mappedOrder();
         PrescriptionResponseDTO responseDTO = PrescriptionResponseDTO.builder().id(UUID.randomUUID()).build();
         PatientAllergy allergy = new PatientAllergy();
         allergy.setActive(true);
@@ -1983,7 +1990,7 @@ class PrescriptionServiceImplTest {
         encounter.setAssignment(encounterAssignment);
 
         UUID currentUser = staff.getUser().getId();
-        Prescription mappedEntity = new Prescription();
+        Prescription mappedEntity = mappedOrder();
         PrescriptionResponseDTO responseDTO = PrescriptionResponseDTO.builder().id(UUID.randomUUID()).build();
 
         PatientAllergy allergy = new PatientAllergy();
@@ -2023,7 +2030,7 @@ class PrescriptionServiceImplTest {
         encounter.setAssignment(encounterAssignment);
 
         UUID currentUser = staff.getUser().getId();
-        Prescription mappedEntity = new Prescription();
+        Prescription mappedEntity = mappedOrder();
         PrescriptionResponseDTO responseDTO = PrescriptionResponseDTO.builder().id(UUID.randomUUID()).build();
 
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
@@ -2058,7 +2065,7 @@ class PrescriptionServiceImplTest {
         encounter.setAssignment(encounterAssignment);
 
         UUID currentUser = staff.getUser().getId();
-        Prescription mappedEntity = new Prescription();
+        Prescription mappedEntity = mappedOrder();
         PrescriptionResponseDTO responseDTO = PrescriptionResponseDTO.builder().id(UUID.randomUUID()).build();
 
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
@@ -2088,7 +2095,7 @@ class PrescriptionServiceImplTest {
         staff.setAssignment(staffAssignment);
 
         UUID currentUser = staff.getUser().getId();
-        Prescription mappedEntity = new Prescription();
+        Prescription mappedEntity = mappedOrder();
         PrescriptionResponseDTO responseDTO = PrescriptionResponseDTO.builder().id(UUID.randomUUID()).build();
 
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
@@ -2901,7 +2908,7 @@ class PrescriptionServiceImplTest {
         encounter.setAssignment(encAssignment);
 
         when(roleValidator.canCreatePrescription(any(), eq(hospitalId))).thenReturn(true);
-        when(prescriptionMapper.toEntity(any(), any(), any(), any())).thenReturn(new Prescription());
+        when(prescriptionMapper.toEntity(any(), any(), any(), any())).thenReturn(mappedOrder());
         when(prescriptionRepository.save(any())).thenReturn(new Prescription());
         when(prescriptionMapper.toResponseDTO(any())).thenReturn(PrescriptionResponseDTO.builder().build());
 
@@ -2947,7 +2954,7 @@ class PrescriptionServiceImplTest {
         // auto-create encounter
         when(encounterRepository.save(any())).thenReturn(encounter);
         when(roleValidator.canCreatePrescription(any(), eq(hospitalId))).thenReturn(true);
-        when(prescriptionMapper.toEntity(any(), any(), any(), any())).thenReturn(new Prescription());
+        when(prescriptionMapper.toEntity(any(), any(), any(), any())).thenReturn(mappedOrder());
         when(prescriptionRepository.save(any())).thenReturn(new Prescription());
         when(prescriptionMapper.toResponseDTO(any())).thenReturn(PrescriptionResponseDTO.builder().build());
 
@@ -3006,7 +3013,7 @@ class PrescriptionServiceImplTest {
         when(patientAllergyRepository.findByPatient_Id(patientId))
             .thenReturn(List.of(allergy));
 
-        when(prescriptionMapper.toEntity(any(), any(), any(), any())).thenReturn(new Prescription());
+        when(prescriptionMapper.toEntity(any(), any(), any(), any())).thenReturn(mappedOrder());
         when(prescriptionRepository.save(any())).thenReturn(new Prescription());
         when(prescriptionMapper.toResponseDTO(any())).thenReturn(PrescriptionResponseDTO.builder().build());
 
@@ -3193,7 +3200,7 @@ class PrescriptionServiceImplTest {
         when(authService.getCurrentUserId()).thenReturn(staff.getUser().getId());
         when(roleValidator.canCreatePrescription(any(), eq(hospitalId))).thenReturn(true);
 
-        when(prescriptionMapper.toEntity(any(), any(), any(), any())).thenReturn(new Prescription());
+        when(prescriptionMapper.toEntity(any(), any(), any(), any())).thenReturn(mappedOrder());
         when(prescriptionRepository.save(any())).thenReturn(new Prescription());
         when(prescriptionMapper.toResponseDTO(any())).thenReturn(PrescriptionResponseDTO.builder().build());
 
@@ -3532,7 +3539,7 @@ class PrescriptionServiceImplTest {
         encounterAssignment.setHospital(encounter.getHospital());
         encounter.setAssignment(encounterAssignment);
 
-        Prescription mappedEntity = new Prescription();
+        Prescription mappedEntity = mappedOrder();
         PrescriptionResponseDTO responseDTO = PrescriptionResponseDTO.builder()
             .id(UUID.randomUUID()).build();
 
@@ -3561,7 +3568,7 @@ class PrescriptionServiceImplTest {
         encounter.setAssignment(encAssignment);
 
         UUID currentUser = staff.getUser().getId();
-        Prescription mappedEntity = new Prescription();
+        Prescription mappedEntity = mappedOrder();
         PrescriptionResponseDTO responseDTO = PrescriptionResponseDTO.builder()
             .id(UUID.randomUUID()).build();
 
@@ -3639,7 +3646,7 @@ class PrescriptionServiceImplTest {
         encounter.setAssignment(encAssignment);
 
         UUID currentUser = staff.getUser().getId();
-        Prescription mappedEntity = new Prescription();
+        Prescription mappedEntity = mappedOrder();
         PrescriptionResponseDTO responseDTO = PrescriptionResponseDTO.builder()
             .id(UUID.randomUUID()).build();
 
@@ -5539,7 +5546,7 @@ class PrescriptionServiceImplTest {
         request.setMedicationCode(null);
         com.example.hms.model.medication.MedicationCatalogItem morphine = catalogItem("Morphine", true);
         com.example.hms.model.medication.MedicationCatalogItem other = catalogItem("Paracétamol", false);
-        Prescription mappedEntity = new Prescription();
+        Prescription mappedEntity = mappedOrder();
         mappedEntity.setQuantity(java.math.BigDecimal.TEN); // the mapper copies the request's quantity
         stubCreateContext(request, mappedEntity);
         when(catalogRepo.findByHospital_IdAndActiveTrue(eq(hospitalId), any()))
@@ -5558,7 +5565,7 @@ class PrescriptionServiceImplTest {
         PrescriptionRequestDTO request = buildRequest();
         request.setMedicationName("Morphine");
         request.setMedicationCode(null);
-        Prescription mappedEntity = new Prescription();
+        Prescription mappedEntity = mappedOrder();
         stubCreateContext(request, mappedEntity);
         when(catalogRepo.findByHospital_IdAndActiveTrue(eq(hospitalId), any()))
             .thenReturn(new org.springframework.data.domain.PageImpl<>(
@@ -5579,7 +5586,7 @@ class PrescriptionServiceImplTest {
         tablets.setPediatricMaxDoseMgPerKg(new java.math.BigDecimal("20"));
         com.example.hms.model.medication.MedicationCatalogItem syrup = catalogItem("Paracétamol", false);
         syrup.setPediatricMaxDoseMgPerKg(new java.math.BigDecimal("15"));
-        Prescription mappedEntity = new Prescription();
+        Prescription mappedEntity = mappedOrder();
         stubCreateContext(request, mappedEntity);
         when(catalogRepo.findByHospital_IdAndActiveTrue(eq(hospitalId), any()))
             .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(tablets, syrup)));
@@ -5602,7 +5609,7 @@ class PrescriptionServiceImplTest {
         // QA D1223: the code's item is the drug the order names.
         request.setMedicationName("Morphine 10 mg");
         com.example.hms.model.medication.MedicationCatalogItem morphine = catalogItem("Morphine", true);
-        Prescription mappedEntity = new Prescription();
+        Prescription mappedEntity = mappedOrder();
         mappedEntity.setQuantity(java.math.BigDecimal.TEN); // the mapper copies the request's quantity
         stubCreateContext(request, mappedEntity);
         when(catalogRepo.findByHospitalIdAndCode(hospitalId, "N02AA01")).thenReturn(Optional.of(morphine));
@@ -5737,7 +5744,7 @@ class PrescriptionServiceImplTest {
         request.setMedicationName("Morphine");
         request.setMedicationCode("7052");
         com.example.hms.model.medication.MedicationCatalogItem morphine = catalogItem("Morphine", true);
-        Prescription mappedEntity = new Prescription();
+        Prescription mappedEntity = mappedOrder();
         mappedEntity.setQuantity(java.math.BigDecimal.TEN); // the mapper copies the request's quantity
         stubCreateContext(request, mappedEntity);
         when(catalogRepo.findByHospitalIdAndCode(hospitalId, "7052")).thenReturn(Optional.empty());
@@ -6026,7 +6033,7 @@ class PrescriptionServiceImplTest {
         encAssignment.setHospital(encounter.getHospital());
         encounter.setAssignment(encAssignment);
         UUID currentUser = staff.getUser().getId();
-        Prescription mappedEntity = new Prescription();
+        Prescription mappedEntity = mappedOrder();
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
@@ -6461,7 +6468,7 @@ class PrescriptionServiceImplTest {
         d1223StubCatalogue();
         PrescriptionRequestDTO request = d1183Request("Paracétamol 500 mg Comprimé", false, null);
         request.setMedicationCatalogItemId(d1223Paracetamol.getId());
-        Prescription mappedEntity = new Prescription();
+        Prescription mappedEntity = mappedOrder();
         when(prescriptionMapper.toEntity(request, patient, staff, encounter)).thenReturn(mappedEntity);
         when(prescriptionRepository.save(mappedEntity)).thenReturn(mappedEntity);
         when(prescriptionMapper.toResponseDTO(mappedEntity)).thenReturn(PrescriptionResponseDTO.builder().build());

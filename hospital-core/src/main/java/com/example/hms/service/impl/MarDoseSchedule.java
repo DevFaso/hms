@@ -62,14 +62,14 @@ public final class MarDoseSchedule {
     public enum Kind {
         /** A fixed repeat: {@link Reading#intervalMinutes()} is set. */
         REPEATING,
-        /** A single dose (STAT, once, "dose unique", or no frequency written). */
+        /** A single dose (STAT, once, "dose unique"). */
         ONE_OFF,
         /**
          * An order the prescriber ticked as needed (PRN): no fixed repeat; given on demand within the
          * order's minimum interval. Only {@link #read(Prescription)} gives it (QA D1378).
          */
         AS_NEEDED,
-        /** Written, but not readable as a schedule: never read as a single dose (D1237). */
+        /** Not readable as a schedule, or not written at all (QA D1491): never read as a single dose (D1237). */
         UNREAD,
         /**
          * QA D1419: a continuous infusion ("perfusion continue", "IVSE", "125 ml/h"): it is started, then
@@ -225,15 +225,17 @@ public final class MarDoseSchedule {
     }
 
     /**
-     * QA D1237: what the frequency text says. A blank frequency is a one-off
-     * order (nothing to repeat was written); a written one that is not read is
-     * {@link Kind#UNREAD}, never a single dose. QA D1378: never
+     * QA D1237: what the frequency text says. One that is not read is
+     * {@link Kind#UNREAD}, never a single dose. QA D1491: so is one never written:
+     * a forgotten frequency closed the course after one dose, and create now refuses
+     * it ({@link PrnMinInterval}); an older order keeps its row open, and each later
+     * dose says why. QA D1378: never
      * {@link Kind#AS_NEEDED} (only the prescriber's tick is, {@link #read(Prescription)});
      * an "as needed" wording on an order not ticked is {@link Kind#UNREAD}.
      */
     public static Reading read(String frequency) {
-        if (frequency == null || SPACES.matcher(frequency).replaceAll("").isEmpty()) {
-            return Reading.ONE_OFF;
+        if (nothingWritten(frequency)) {
+            return Reading.UNREAD;
         }
         // QA D1452: all of the text is one form of the grammar, or it is not read.
         Reading cadence = FrequencyCadence.read(frequency);
@@ -272,6 +274,9 @@ public final class MarDoseSchedule {
      * {@code null} for anything else. Beside {@link #dosesPerDay}, for a limit on the interval.
      */
     public static Integer shortestMinutesBetweenDoses(String frequency) {
+        if (nothingWritten(frequency)) {
+            return null;
+        }
         Reading reading = read(frequency);
         if (reading.repeating()) {
             return reading.intervalMinutes();
@@ -331,6 +336,9 @@ public final class MarDoseSchedule {
      * least, or nothing; a card says the total could not be calculated in both cases (QA D1455).
      */
     public static boolean writtenWithNoCount(String frequency) {
+        if (nothingWritten(frequency)) {
+            return false;
+        }
         Kind kind = read(frequency).kind();
         return kind == Kind.UNREAD || kind == Kind.CONTINUOUS;
     }
@@ -485,6 +493,11 @@ public final class MarDoseSchedule {
             }
         }
         return false;
+    }
+
+    /** QA D1491: nothing but spaces, of any kind, or nothing at all. */
+    static boolean nothingWritten(String frequency) {
+        return frequency == null || SPACES.matcher(frequency).replaceAll("").isEmpty();
     }
 
     /** Upper case with the accents removed. */

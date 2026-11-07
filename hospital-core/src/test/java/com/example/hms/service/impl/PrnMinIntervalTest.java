@@ -50,10 +50,11 @@ class PrnMinIntervalTest {
 
     /**
      * QA D1378 (round 32): an order the prescriber ticked as needed needs its
-     * interval, whatever its frequency says ("q4h", "SOS", nothing at all).
+     * interval, whatever its frequency says ("q4h", "SOS"). QA D1491 (changed: "" passed with its interval):
+     * nothing written is refused too, {@link #d1491_noFrequencyIsRefusedOnEveryPathThatWritesOne}.
      */
     @ParameterizedTest
-    @ValueSource(strings = {"PRN", "si besoin", "SOS", "q4h", "toutes les 6 heures", ""})
+    @ValueSource(strings = {"PRN", "si besoin", "SOS", "q4h", "toutes les 6 heures"})
     void aTickedOrderWithoutItsIntervalIsRefusedOnTheField(String frequency) {
         Prescription rx = new Prescription();
         rx.setFrequency(frequency);
@@ -116,7 +117,10 @@ class PrnMinIntervalTest {
             .doesNotContain(PrnMinInterval.FIELD, PrnMinInterval.AS_NEEDED_FIELD);
         Prescription rx = new Prescription();
         rx.setFrequency(frequency);
-        PrnMinInterval.applyTo(rx);
+        // QA D1491 (changed: a blank passed): the fixture's blanks are refused on their own field.
+        if (!MarDoseSchedule.nothingWritten(frequency)) {
+            PrnMinInterval.applyTo(rx);
+        }
         assertThat(rx.getPrnMinIntervalHours()).isNull();
     }
 
@@ -220,6 +224,55 @@ class PrnMinIntervalTest {
             .isEqualTo(new PrnMinInterval.Refusal(PrnMinInterval.CONFIRMED_FIELD, PrnMinInterval.UNREADABLE_KEY));
         assertThat(PrnMinInterval.safetyNet("q6h")).isNull();
         assertThat(PrnMinInterval.safetyNet(null)).isNull();
+    }
+
+    /** QA D1491: every path that writes an order, and what each does with no frequency. */
+    @ParameterizedTest
+    @org.junit.jupiter.params.provider.NullSource
+    @ValueSource(strings = {"", "   ", "\u00a0"})
+    void d1491_noFrequencyIsRefusedOnEveryPathThatWritesOne(String blank) {
+        Prescription rx = new Prescription();
+        rx.setMedicationName("Paracetamol");
+        rx.setFrequency(blank);
+        // Create, past the request constraint.
+        assertThatThrownBy(() -> PrnMinInterval.applyTo(rx))
+            .isInstanceOf(FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", PrnMinInterval.FREQUENCY_FIELD)
+            .hasFieldOrPropertyWithValue("messageKey", PrnMinInterval.FREQUENCY_REQUIRED_KEY);
+        // An order-set item saved with none, at apply: its order is created, and flagged on the MAR.
+        PrnMinInterval.applyTo(rx, true);
+        // An edit that leaves an older order's frequency as it was.
+        PrnMinInterval.applyToEdit(rx, blank, false);
+        // An edit that empties one; confirming does not answer it.
+        for (boolean confirmed : new boolean[] {false, true}) {
+            assertThatThrownBy(() -> PrnMinInterval.applyToEdit(rx, "q6h", false, confirmed))
+                .hasFieldOrPropertyWithValue("field", PrnMinInterval.FREQUENCY_FIELD);
+        }
+        // Unticking an older ticked order writes it as a fixed schedule: it needs one now.
+        assertThatThrownBy(() -> PrnMinInterval.applyToEdit(rx, blank, true))
+            .hasFieldOrPropertyWithValue("field", PrnMinInterval.FREQUENCY_FIELD);
+        // A withdrawal, whatever the body said.
+        rx.setStatus(com.example.hms.enums.PrescriptionStatus.CANCELLED);
+        PrnMinInterval.applyToEdit(rx, "q6h", false);
+        rx.setStatus(null);
+        // An older ticked order stays editable as it was; a new one states it.
+        rx.setAsNeeded(true);
+        rx.setPrnMinIntervalHours(4);
+        PrnMinInterval.applyToEdit(rx, blank, true);
+        assertThatThrownBy(() -> PrnMinInterval.applyTo(rx))
+            .hasFieldOrPropertyWithValue("field", PrnMinInterval.FREQUENCY_FIELD);
+
+        // The request constraint: on its field, whatever else the request says.
+        for (Boolean asNeeded : new Boolean[] {null, false}) {
+            for (Boolean confirmed : new Boolean[] {null, false, true}) {
+                PrescriptionRequestDTO request = new PrescriptionRequestDTO();
+                request.setMedicationName("Paracetamol");
+                request.setFrequency(blank);
+                request.setAsNeeded(asNeeded);
+                request.setFrequencyConfirmed(confirmed);
+                assertThat(paths(request, Default.class, OnCreate.class)).contains(PrnMinInterval.FREQUENCY_FIELD);
+            }
+        }
     }
 
     /** QA D1419 / D1434: a wording the MAR cannot schedule is a question at create, controlled drug included. */

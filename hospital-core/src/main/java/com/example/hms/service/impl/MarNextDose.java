@@ -66,6 +66,9 @@ import java.util.Optional;
  * its first dose as any order; once started it has no next slot: the row stays
  * open so a new bag can be recorded, with no reason asked and never overdue.
  *
+ * <p>QA D1491 (round 36): an older order with no frequency written is
+ * {@link MarDoseSchedule.Kind#UNREAD} too: it stays open and flagged, it no longer ends after one dose.
+ *
  * <p>Pure: the caller passes the clock reading and the order's rows.
  */
 public final class MarNextDose {
@@ -185,6 +188,15 @@ public final class MarNextDose {
         boolean backlog = scheduled.plus(earlyWindow).isBefore(lastGiven.get());
         LocalDateTime notBefore = backlog ? earliest : scheduled.minus(earlyWindow);
         return Due.scheduled(slot, notBefore, earliest, scheduled, false);
+    }
+
+    /**
+     * QA D1508: what a MAR row flags, from the start, as the prescription's own row says, not only once a dose
+     * is recorded. {@link Due#frequencyUnread()} stays what the slot and the status read: before its first dose
+     * an unread order keeps the order's own slot, as any other.
+     */
+    public static boolean flaggedUnread(Prescription rx, Due due) {
+        return due.frequencyUnread() || MarDoseSchedule.read(rx).kind() == MarDoseSchedule.Kind.UNREAD;
     }
 
     /**

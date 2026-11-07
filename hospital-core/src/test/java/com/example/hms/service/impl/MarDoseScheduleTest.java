@@ -205,6 +205,8 @@ class MarDoseScheduleTest {
      * tried and stayed unread. Every count one to twelve, written bare before
      * every per-day slash in FR, ES and EN, with and without spaces, reads as
      * that many doses a day; and "N x/j", "N x/día", "N x/day" too.
+     * QA D1487 (changed, coordinator ruling: all twelve were read): bare, only one to four read; from five
+     * on it is asked, "5/j" may be 5 mg. What the sentence states is still the floor a limit judges.
      */
     @Test
     void d1308_everyBareCountBeforeAPerDaySlashIsRead() {
@@ -217,8 +219,10 @@ class MarDoseScheduleTest {
             for (String template : templates) {
                 String text = String.format(template, n);
                 MarDoseSchedule.Reading reading = MarDoseSchedule.read(text);
-                if (!reading.repeating() || reading.intervalMinutes() != 24 * 60 / n
-                    || !java.util.Objects.equals(MarDoseSchedule.dosesPerDay(text), (double) n)) {
+                boolean bare = !template.contains("x");
+                boolean read = bare && n > 4 ? reading.kind() == MarDoseSchedule.Kind.UNREAD
+                    : reading.repeating() && reading.intervalMinutes() == 24 * 60 / n;
+                if (!read || !java.util.Objects.equals(MarDoseSchedule.dosesPerDay(text), (double) n)) {
                     wrong.add(text + " -> " + reading);
                 }
             }
@@ -393,8 +397,9 @@ class MarDoseScheduleTest {
     @ParameterizedTest
     @NullAndEmptySource
     @ValueSource(strings = {"   "})
-    void d1237_noFrequencyWrittenIsAOneOffOrder(String frequency) {
-        assertThat(MarDoseSchedule.read(frequency).kind()).isEqualTo(MarDoseSchedule.Kind.ONE_OFF);
+    void d1491_noFrequencyWrittenIsUnreadNotAOneOffOrder(String frequency) {
+        // QA D1491 (changed: this was ONE_OFF, and a forgotten frequency closed the course after one dose).
+        assertThat(MarDoseSchedule.read(frequency).kind()).isEqualTo(MarDoseSchedule.Kind.UNREAD);
     }
 
     /** QA D1426: what the grammar holds is read, and what the fixture does not hold reads too. */

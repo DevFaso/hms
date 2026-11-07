@@ -25,6 +25,10 @@ import com.example.hms.model.Prescription;
  *       rule ({@link FrequencyWording}): a schedule is accepted, a condition is
  *       refused on {@link #AS_NEEDED_FIELD}, anything else is asked about once on
  *       {@link #CONFIRMED_FIELD} (QA D1419 / D1426 / D1434, round 34).</li>
+ *   <li>QA D1491 (round 36, coordinator ruling): a NEW order states a frequency, ticked or not, refused on
+ *       {@link #FREQUENCY_FIELD}; confirming does not answer it. An order already stored without one stays
+ *       editable ({@link #applyToEdit}) and its row stays open on the MAR (MarDoseSchedule); an order set
+ *       saved with such an item still applies ({@code OrderSetItemPrnRules.requireValidToApply}).</li>
  * </ul>
  * No per-drug default interval is ever written. Pure functions.
  */
@@ -57,6 +61,10 @@ public final class PrnMinInterval {
     /** QA D1419: a frequency the MAR cannot schedule, on an order not ticked and not yet confirmed. */
     public static final String UNREADABLE_KEY = "prescription.asNeeded.unreadable";
 
+    /** QA D1491: the request field of the frequency, and its refusal when nothing is written. */
+    public static final String FREQUENCY_FIELD = "frequency";
+    public static final String FREQUENCY_REQUIRED_KEY = "prescription.frequency.required";
+
     /** The hours a daily total is counted over. */
     private static final double HOURS_PER_DAY = 24d;
 
@@ -84,7 +92,8 @@ public final class PrnMinInterval {
     }
 
     /**
-     * {@link #refusalOf(boolean, Integer, String)} with the prescriber's answer.
+     * {@link #refusalOf(boolean, Integer, String)} with the prescriber's answer. The interval first, then
+     * QA D1491's missing frequency, which no answer passes, then the wording.
      *
      * @param confirmed the prescriber confirmed a wording the MAR cannot schedule
      */
@@ -93,7 +102,14 @@ public final class PrnMinInterval {
             if (hours == null) {
                 return new Refusal(FIELD, REQUIRED_KEY);
             }
-            return hours < 1 || hours > MAX_HOURS ? new Refusal(FIELD, RANGE_KEY) : null;
+            if (hours < 1 || hours > MAX_HOURS) {
+                return new Refusal(FIELD, RANGE_KEY);
+            }
+            return missingFrequency(frequency);
+        }
+        Refusal missing = missingFrequency(frequency);
+        if (missing != null) {
+            return missing;
         }
         // The wording first: "si besoin" with an interval but no tick is
         // answered by ticking, not by deleting the interval.
@@ -102,6 +118,11 @@ public final class PrnMinInterval {
             return confirm;
         }
         return hours != null ? new Refusal(FIELD, NOT_AS_NEEDED_KEY) : null;
+    }
+
+    /** QA D1491: a new order with no frequency, or {@code null}. */
+    public static Refusal missingFrequency(String frequency) {
+        return MarDoseSchedule.nothingWritten(frequency) ? new Refusal(FREQUENCY_FIELD, FREQUENCY_REQUIRED_KEY) : null;
     }
 
     /** {@link #safetyNet(String, boolean)} for a wording not confirmed. */
@@ -134,13 +155,21 @@ public final class PrnMinInterval {
      * (the prescribing form, order sets): an as-needed order must carry its
      * interval; any other order carries none and its wording is judged.
      *
+     * <p>QA D1491: the request constraint refuses a missing frequency whatever the request says. Here, past
+     * it, only an order-set item stored without one comes with an answer ({@code frequencyConfirmed}): nobody
+     * can answer for it at apply, so its order is created and stays open and flagged on the MAR.
+     *
      * @param confirmed the prescriber confirmed a wording the MAR cannot schedule
      */
     public static void applyTo(Prescription rx, boolean confirmed) {
         if (rx == null) {
             return;
         }
-        throwIf(refusalOf(isAsNeeded(rx), rx.getPrnMinIntervalHours(), rx.getFrequency(), confirmed));
+        Refusal refusal = refusalOf(isAsNeeded(rx), rx.getPrnMinIntervalHours(), rx.getFrequency(), confirmed);
+        boolean answeredAtApply = confirmed && refusal != null && FREQUENCY_FIELD.equals(refusal.field());
+        if (!answeredAtApply) {
+            throwIf(refusal);
+        }
     }
 
     /** {@link #applyToEdit(Prescription, String, boolean, boolean)} for a wording not confirmed. */
@@ -170,7 +199,15 @@ public final class PrnMinInterval {
             throwIf(rx.getPrnMinIntervalHours() != null ? new Refusal(FIELD, NOT_AS_NEEDED_KEY) : null);
             return;
         }
-        applyTo(rx, confirmed);
+        // QA D1491: an edit that empties the frequency is not answered by confirming. A ticked order written
+        // with none keeps being editable, and a withdrawal (a clarification's) is asked for no frequency.
+        Refusal refusal = refusalOf(isAsNeeded(rx), rx.getPrnMinIntervalHours(), rx.getFrequency(), confirmed);
+        boolean noFrequency = refusal != null && FREQUENCY_FIELD.equals(refusal.field());
+        boolean leftAsItWas = isAsNeeded(rx) && sameText(frequencyBefore, rx.getFrequency());
+        boolean withdrawn = rx.getStatus() != null && rx.getStatus().isWithdrawn();
+        if (!noFrequency || (!leftAsItWas && !withdrawn)) {
+            throwIf(refusal);
+        }
     }
 
     /**

@@ -277,12 +277,22 @@ class ParacetamolFactsReaderTest {
     }
 
     @ParameterizedTest(name = "one-off {0}, written {1} h ago: counted = {2}")
-    @CsvSource({"STAT, 23, true", "STAT, 25, false", "'', 23, true", "'', 25, false"})
+    // QA D1491 (changed: no frequency counted as a one-off): see the test below.
+    @CsvSource({"STAT, 23, true", "STAT, 25, false"})
     void aOneOffCountsForItsDay(String frequency, int hoursAgo, boolean counted) {
         Prescription rx = order("Paracétamol", PrescriptionStatus.DISPENSED);
         rx.setFrequency(frequency);
         rx.setCreatedAt(LocalDateTime.now().minusHours(hoursAgo));
         assertThat(read().otherOrders()).hasSize(counted ? 1 : 0);
+    }
+
+    /** QA D1491: an older order with no frequency is no single dose: the MAR keeps it open, so it counts on. */
+    @Test
+    void anOrderWithNoFrequencyCountsPastItsFirstDay() {
+        Prescription rx = order("Paracétamol", PrescriptionStatus.DISPENSED);
+        rx.setFrequency("");
+        rx.setCreatedAt(LocalDateTime.now().minusHours(25));
+        assertThat(read().otherOrders()).hasSize(1);
     }
 
     @Test
