@@ -3,7 +3,7 @@ import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { of, throwError } from 'rxjs';
+import { of, throwError, Subject } from 'rxjs';
 
 import { ActivityKey, SuperAdminComponent } from './super-admin';
 import {
@@ -197,6 +197,59 @@ describe('SuperAdminComponent', () => {
     expect(c.errored()).toBeFalse();
     expect(c.stats().length).toBe(8);
     expect(c.platformActions()).toBeNull();
+    expect(c.platformUnavailable()).toBeTrue();
+  });
+
+  it('keeps refreshed totals, platform status and activity when old responses arrive late', () => {
+    const oldSummary = new Subject<SuperAdminSummary>();
+    const oldPlatform = new Subject<PlatformSummary>();
+    const oldActivity = new Subject<SuperAdminRecentActivityBundle>();
+    dashboard.getSummary.and.returnValue(oldSummary);
+    platform.getSummary.and.returnValue(oldPlatform);
+    dashboard.getRecentActivity.and.returnValue(oldActivity);
+    const c = setup();
+    dashboard.getSummary.and.returnValue(of(fakeSummary({ totalPatients: 99 })));
+    platform.getSummary.and.returnValue(of(fakePlatformSummary()));
+    dashboard.getRecentActivity.and.returnValue(of(bundleWith({ consultations: [{ id: 'new' }] })));
+    c.loadAll();
+    oldSummary.next(fakeSummary({ totalPatients: 1 }));
+    oldPlatform.next({
+      ...fakePlatformSummary(),
+      actions: {
+        totalIntegrations: 0,
+        pendingIntegrations: 0,
+        disabledLinks: 0,
+        activeReleaseWindows: 0,
+      },
+    });
+    oldActivity.next(bundleWith({ consultations: [{ id: 'old' }] }));
+    expect(c.stats().find((stat) => stat.key === 'patients')?.value).toBe(99);
+    expect(c.platformActions()?.totalIntegrations).toBe(12);
+    expect(c.selectedActivityRows()[0].id).toBe('new');
+    expect(c.activityLoading()).toBeFalse();
+  });
+
+  it('reports an unavailable network summary while retaining successful platform status', () => {
+    dashboard.getSummary.and.returnValue(throwError(() => new Error('offline')));
+    platform.getSummary.and.returnValue(of(fakePlatformSummary()));
+    const c = setup();
+    expect(c.summaryUnavailable()).toBeTrue();
+    expect(c.platformUnavailable()).toBeFalse();
+    expect(c.errored()).toBeFalse();
+    expect(c.stats()).toEqual([]);
+    expect(c.platformActions()?.pendingIntegrations).toBe(2);
+  });
+
+  it('filters only the loaded recent audit sample', () => {
+    dashboard.getSummary.and.returnValue(
+      of(fakeSummary({ recentAuditEvents: [auditEvent('ok'), auditEvent('failed', 'FAILURE')] })),
+    );
+    platform.getSummary.and.returnValue(of(fakePlatformSummary()));
+    const c = setup();
+    c.auditFailuresOnly.set(true);
+    expect(c.visibleAudit().map((event) => event.id)).toEqual(['failed']);
+    expect(c.recentAudit().length).toBe(2);
+    expect(dashboard.getSummary.calls.count()).toBe(1);
   });
 
   it('exposes the quick-link grid covering core super-admin destinations', () => {
@@ -427,5 +480,13 @@ describe('SuperAdminComponent', () => {
     expect(panel!.getAttribute('aria-labelledby')).toBe(
       `activity-tab-${fix.componentInstance.selectedActivityTab()}`,
     );
+    tabs[0].focus();
+    tabs[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    fix.detectChanges();
+    expect(document.activeElement).toBe(tabs[1]);
+    expect(tabs[1].getAttribute('aria-selected')).toBe('true');
+    tabs[1].dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }));
+    fix.detectChanges();
+    expect(document.activeElement).toBe(tabs[tabs.length - 1]);
   });
 });

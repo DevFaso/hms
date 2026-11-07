@@ -1,119 +1,215 @@
-<div class="roi-page">
+<div class="roi-page operations-dashboard">
   <header class="page-header">
-    <h1>{{ 'ROI.TITLE' | translate }}</h1>
+    <div>
+      <p class="dashboard-eyebrow">{{ 'ROI.WORKSPACE' | translate }}</p>
+      <h1>{{ 'ROI.TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'ROI.SUBTITLE' | translate }}</p>
+    </div>
     <div class="header-actions">
+      <button type="button" class="btn-secondary" [disabled]="loading()" (click)="load()">
+        <span class="material-symbols-outlined" aria-hidden="true">refresh</span
+        >{{ 'COMMON.REFRESH' | translate }}
+      </button>
       <button
         type="button"
         class="btn-primary"
         data-testid="open-intake"
         (click)="openIntake($event)"
       >
-        <span class="material-symbols-outlined">post_add</span>
-        {{ 'ROI.LOG_REQUEST' | translate }}
+        <span class="material-symbols-outlined" aria-hidden="true">post_add</span
+        >{{ 'ROI.LOG_REQUEST' | translate }}
       </button>
     </div>
   </header>
-
-  <!-- Status filters as plain pressed buttons: a full ARIA tab widget
-       needs tabpanels + roving tabindex, and these are filters anyway. -->
-  <div class="tabs">
-    @for (s of statuses; track s) {
-      <button
-        type="button"
-        class="tab"
-        [class.active]="activeStatus() === s"
-        [attr.aria-pressed]="activeStatus() === s"
-        (click)="setStatus(s)"
+  <section class="dashboard-overview" aria-labelledby="queue-heading">
+    <div class="panel-heading">
+      <div>
+        <h2 id="queue-heading">{{ 'ROI.QUEUE_OVERVIEW' | translate }}</h2>
+        <p>{{ 'ROI.COUNTS_HELP' | translate }}</p>
+      </div>
+      <span class="queue-status">{{ statusKey(activeStatus()) | translate }}</span>
+    </div>
+    <div class="summary-cards">
+      <div class="summary-card total-card">
+        <span class="material-symbols-outlined metric-icon" aria-hidden="true">folder_open</span
+        ><strong>{{ loading() || loadFailed() ? '—' : total() }}</strong
+        ><span>{{ 'ROI.STATUS_TOTAL' | translate }}</span>
+      </div>
+      <div class="summary-card">
+        <span class="material-symbols-outlined metric-icon" aria-hidden="true">person</span
+        ><strong>{{ loading() || loadFailed() ? '—' : patientRequestsLoaded() }}</strong
+        ><span>{{ 'ROI.PATIENT_LOADED' | translate }}</span>
+      </div>
+      <div class="summary-card">
+        <span class="material-symbols-outlined metric-icon" aria-hidden="true">groups</span
+        ><strong>{{ loading() || loadFailed() ? '—' : thirdPartyRequestsLoaded() }}</strong
+        ><span>{{ 'ROI.THIRD_PARTY_LOADED' | translate }}</span>
+      </div>
+    </div>
+  </section>
+  <section class="card request-directory">
+    <div class="directory-heading">
+      <div>
+        <h2>{{ 'ROI.REQUEST_DIRECTORY' | translate }}</h2>
+        <p>{{ 'ROI.QUEUE_HELP' | translate }}</p>
+      </div>
+      <span class="material-symbols-outlined directory-icon" aria-hidden="true">folder_shared</span>
+    </div>
+    <div class="tabs" [attr.aria-label]="'ROI.STATUS_FILTER' | translate">
+      @for (s of statuses; track s) {
+        <button
+          type="button"
+          class="tab"
+          [class.active]="activeStatus() === s"
+          [attr.aria-pressed]="activeStatus() === s"
+          (click)="setStatus(s)"
+        >
+          {{ statusKey(s) | translate }}
+        </button>
+      }
+    </div>
+    <div class="queue-toolbar">
+      <label class="queue-search"
+        ><span class="material-symbols-outlined" aria-hidden="true">search</span
+        ><input
+          type="search"
+          [attr.aria-label]="'ROI.SEARCH' | translate"
+          [placeholder]="'ROI.SEARCH' | translate"
+          [ngModel]="searchTerm()"
+          (ngModelChange)="searchTerm.set($event)"
+      /></label>
+      <label class="requester-filter"
+        ><span class="sr-only">{{ 'ROI.REQUESTER_TYPE' | translate }}</span
+        ><select [ngModel]="requesterFilter()" (ngModelChange)="requesterFilter.set($event)">
+          <option value="">{{ 'ROI.ALL_REQUESTERS' | translate }}</option>
+          @for (type of requesterTypes; track type) {
+            <option [value]="type">{{ requesterKey(type) | translate }}</option>
+          }
+        </select></label
       >
-        {{ statusKey(s) | translate }}
-      </button>
-    }
-  </div>
-
-  <section class="card">
+      @if (searchTerm() || requesterFilter()) {
+        <button type="button" class="btn-secondary" (click)="clearFilters()">
+          {{ 'ROI.CLEAR_FILTERS' | translate }}
+        </button>
+      }
+    </div>
     @if (loadFailed()) {
-      <p class="hint error-hint">{{ 'ROI.LOAD_FAILED' | translate }}</p>
+      <div class="queue-empty error-hint" role="alert">
+        <span class="material-symbols-outlined" aria-hidden="true">cloud_off</span>
+        <h3>{{ 'ROI.LOAD_FAILED' | translate }}</h3>
+        <button type="button" class="btn-secondary" (click)="load()">
+          {{ 'COMMON.RETRY' | translate }}
+        </button>
+      </div>
     } @else if (loading()) {
-      <p class="hint">{{ 'COMMON.LOADING' | translate }}</p>
-    } @else if (rows().length === 0) {
-      <p class="hint">{{ 'ROI.EMPTY' | translate }}</p>
+      <p class="queue-empty" role="status">{{ 'COMMON.LOADING' | translate }}</p>
     } @else {
       @if (truncated()) {
-        <p class="hint">
+        <p class="limit-notice">
           {{ 'ROI.SHOWING_FIRST' | translate: { shown: rows().length, total: total() } }}
         </p>
       }
-      <div class="table-scroll">
-        <table>
-          <thead>
-            <tr>
-              <th>{{ 'ROI.PATIENT' | translate }}</th>
-              <th>{{ 'ROI.REQUESTER' | translate }}</th>
-              <th>{{ 'ROI.SCOPE' | translate }}</th>
-              <th>{{ 'ROI.REQUESTED_ON' | translate }}</th>
-              @if (activeStatus() !== 'PENDING') {
-                <th>{{ 'ROI.DECIDED' | translate }}</th>
-              }
-              <th>
-                <span class="sr-only">{{ 'COMMON.ACTIONS' | translate }}</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (row of rows(); track row.id) {
+      @if (visibleRows().length === 0) {
+        <div class="queue-empty">
+          <span class="material-symbols-outlined" aria-hidden="true">inbox</span>
+          <h3>{{ (rows().length ? 'ROI.NO_MATCHES' : 'ROI.EMPTY') | translate }}</h3>
+          <p>{{ (rows().length ? 'ROI.FILTER_HELP' : 'ROI.EMPTY_HELP') | translate }}</p>
+          @if (rows().length) {
+            <button type="button" class="btn-secondary" (click)="clearFilters()">
+              {{ 'ROI.CLEAR_FILTERS' | translate }}
+            </button>
+          }
+        </div>
+      } @else {
+        <div
+          class="table-scroll"
+          tabindex="0"
+          role="region"
+          [attr.aria-label]="'ROI.TITLE' | translate"
+        >
+          <table>
+            <thead>
               <tr>
-                <td>
-                  <a [routerLink]="['/patients', row.patientId]">{{ row.patientName }}</a>
-                </td>
-                <td>
-                  {{ requesterKey(row.requesterType) | translate }}
-                  @if (row.requesterName) {
-                    — {{ row.requesterName }}
-                  }
-                </td>
-                <td class="scope-cell">{{ row.scopeDescription }}</td>
-                <td>{{ row.requestedOn | serverTime | date: 'mediumDate' }}</td>
+                <th>{{ 'ROI.PATIENT' | translate }}</th>
+                <th>{{ 'ROI.REQUESTER' | translate }}</th>
+                <th>{{ 'ROI.REQUEST_DETAILS' | translate }}</th>
+                <th>{{ 'ROI.REQUESTED_ON' | translate }}</th>
                 @if (activeStatus() !== 'PENDING') {
+                  <th>{{ 'ROI.DECIDED' | translate }}</th>
+                }
+                <th>
+                  <span class="sr-only">{{ 'COMMON.ACTIONS' | translate }}</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of visibleRows(); track row.id) {
+                <tr>
                   <td>
-                    {{ row.decidedAt | serverTime | date: 'mediumDate' }}
-                    @if (row.decidedByName) {
-                      · {{ row.decidedByName }}
+                    <a class="patient-link" [routerLink]="['/patients', row.patientId]"
+                      ><span class="material-symbols-outlined" aria-hidden="true">person</span
+                      >{{ row.patientName || row.patientId }}</a
+                    >
+                  </td>
+                  <td>
+                    {{ requesterKey(row.requesterType) | translate }}
+                    @if (row.requesterName) {
+                      — {{ row.requesterName }}
                     }
                   </td>
-                }
-                <td class="actions-cell">
-                  @if (row.status === 'PENDING') {
-                    @if (canDecide()) {
+                  <td class="scope-cell">
+                    <strong>{{ row.purpose }}</strong
+                    ><span>{{ row.scopeDescription }}</span>
+                  </td>
+                  <td>{{ row.requestedOn | serverTime | date: 'mediumDate' }}</td>
+                  @if (activeStatus() !== 'PENDING') {
+                    <td>
+                      {{ row.decidedAt | serverTime | date: 'mediumDate' }}
+                      @if (row.decidedByName) {
+                        · {{ row.decidedByName }}
+                      }
+                    </td>
+                  }
+                  <td class="actions-cell">
+                    @if (row.status === 'PENDING') {
+                      @if (canDecide()) {
+                        <button
+                          type="button"
+                          class="btn-link"
+                          data-testid="fulfil-btn"
+                          (click)="openDecision(row, 'fulfil', $event)"
+                        >
+                          {{ 'ROI.FULFIL' | translate }}
+                        </button>
+                        <button
+                          type="button"
+                          class="btn-link danger"
+                          (click)="openDecision(row, 'deny', $event)"
+                        >
+                          {{ 'ROI.DENY' | translate }}
+                        </button>
+                      }
                       <button
                         type="button"
                         class="btn-link"
-                        data-testid="fulfil-btn"
-                        (click)="openDecision(row, 'fulfil', $event)"
+                        (click)="openDecision(row, 'cancel', $event)"
                       >
-                        {{ 'ROI.FULFIL' | translate }}
-                      </button>
-                      <button
-                        type="button"
-                        class="btn-link danger"
-                        (click)="openDecision(row, 'deny', $event)"
-                      >
-                        {{ 'ROI.DENY' | translate }}
+                        {{ 'ROI.CANCEL' | translate }}
                       </button>
                     }
-                    <button
-                      type="button"
-                      class="btn-link"
-                      (click)="openDecision(row, 'cancel', $event)"
-                    >
-                      {{ 'ROI.CANCEL' | translate }}
-                    </button>
-                  }
-                </td>
-              </tr>
-            }
-          </tbody>
-        </table>
-      </div>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+      <footer class="queue-footer">
+        <span>{{
+          'ROI.RESULTS' | translate: { shown: visibleRows().length, loaded: rows().length }
+        }}</span
+        ><span>{{ 'ROI.LOADED_SEARCH' | translate }}</span>
+      </footer>
     }
   </section>
 </div>

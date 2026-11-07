@@ -87,6 +87,11 @@ export class SuperAdminComponent implements OnInit {
 
   readonly loading = signal(true);
   readonly errored = signal(false);
+  readonly summaryUnavailable = signal(false);
+  readonly platformUnavailable = signal(false);
+  readonly activityLoading = signal(false);
+  readonly auditFailuresOnly = signal(false);
+  private loadRequest = 0;
 
   private readonly summary = signal<SuperAdminSummary | null>(null);
   private readonly platformSummary = signal<PlatformSummary | null>(null);
@@ -327,6 +332,9 @@ export class SuperAdminComponent implements OnInit {
   readonly recentAudit = computed<RecentAuditEvent[]>(
     () => this.summary()?.recentAuditEvents ?? [],
   );
+  readonly visibleAudit = computed(() =>
+    this.recentAudit().filter((event) => !this.auditFailuresOnly() || event.status === 'FAILURE'),
+  );
 
   readonly generatedAt = computed<string | null>(() => this.summary()?.generatedAt ?? null);
 
@@ -429,6 +437,7 @@ export class SuperAdminComponent implements OnInit {
   }
 
   loadAll(): void {
+    const request = ++this.loadRequest;
     // Single-roundtrip load (F5 from
     // docs/super-admin-cross-tenant-design.md). Replaces the prior
     // streaming-load of 8 individual recent-* subscriptions with one
@@ -452,6 +461,9 @@ export class SuperAdminComponent implements OnInit {
     //     platform fail.
     this.loading.set(true);
     this.errored.set(false);
+    this.summaryUnavailable.set(false);
+    this.platformUnavailable.set(false);
+    this.activityLoading.set(true);
     const summaryFailed = signal(false);
     const platformFailed = signal(false);
 
@@ -467,10 +479,12 @@ export class SuperAdminComponent implements OnInit {
         takeUntilDestroyed(this.destroyRef),
       )
       .subscribe((res) => {
+        if (request !== this.loadRequest) return;
         if (res === null) {
           summaryFailed.set(true);
         }
         this.summary.set(res);
+        this.summaryUnavailable.set(res === null);
         this.errored.set(summaryFailed() && platformFailed());
         // Header is the gating element for "is the page useful yet?";
         // flip loading off as soon as it arrives so the user sees the
@@ -485,10 +499,12 @@ export class SuperAdminComponent implements OnInit {
         takeUntilDestroyed(this.destroyRef),
       )
       .subscribe((res) => {
+        if (request !== this.loadRequest) return;
         if (res === null) {
           platformFailed.set(true);
         }
         this.platformSummary.set(res);
+        this.platformUnavailable.set(res === null);
         this.errored.set(summaryFailed() && platformFailed());
       });
 
@@ -499,6 +515,8 @@ export class SuperAdminComponent implements OnInit {
       .getRecentActivity(10)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((bundle) => {
+        if (request !== this.loadRequest) return;
+        this.activityLoading.set(false);
         this.recent.set({
           consultations: bundle.consultations ?? [],
           labOrders: bundle.labOrders ?? [],
@@ -517,6 +535,22 @@ export class SuperAdminComponent implements OnInit {
 
   selectActivityTab(key: ActivityKey): void {
     this.selectedActivityTab.set(key);
+  }
+
+  onActivityKeydown(event: KeyboardEvent): void {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+    const current = this.activityTabs.findIndex((tab) => tab.key === this.selectedActivityTab());
+    const last = this.activityTabs.length - 1;
+    const next =
+      event.key === 'Home'
+        ? 0
+        : event.key === 'End'
+          ? last
+          : (current + (event.key === 'ArrowRight' ? 1 : last)) % this.activityTabs.length;
+    event.preventDefault();
+    this.selectActivityTab(this.activityTabs[next].key);
+    const list = (event.currentTarget as HTMLElement).parentElement;
+    list?.querySelector<HTMLElement>(`#activity-tab-${this.activityTabs[next].key}`)?.focus();
   }
 
   countForTab(tab: ActivityTab): number {
