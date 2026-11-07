@@ -2140,6 +2140,30 @@ class PatientServiceImplTest {
     }
 
     @Test
+    void d1448_theActiveAllergiesComeBeforeEveryDeactivatedOne() {
+        UUID requester = UUID.randomUUID();
+        PatientAllergy severeRemoved = new PatientAllergy();
+        severeRemoved.setHospital(hospital);
+        severeRemoved.setAllergenDisplay("Sesame");
+        severeRemoved.setSeverity(com.example.hms.enums.AllergySeverity.SEVERE);
+        severeRemoved.setActive(false);
+        PatientAllergy mildActive = new PatientAllergy();
+        mildActive.setHospital(hospital);
+        mildActive.setAllergenDisplay("Latex");
+        mildActive.setSeverity(com.example.hms.enums.AllergySeverity.MILD);
+        mildActive.setActive(true);
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
+        when(patientAllergyRepository.findVisibleAt(eq(patientId), any())).thenReturn(List.of(severeRemoved, mildActive));
+        when(patientAllergyMapper.toResponseDto(any())).thenAnswer(inv -> PatientAllergyResponseDTO.builder()
+            .allergenDisplay(inv.<PatientAllergy>getArgument(0).getAllergenDisplay()).hospitalId(hospitalId).build());
+
+        assertThat(patientService.getPatientAllergies(patientId, hospitalId, requester))
+            .extracting(PatientAllergyResponseDTO::getAllergenDisplay)
+            .containsExactly("Latex", "Sesame");
+    }
+
+    @Test
     void getPatientAllergiesSurfacesOtherHospitalsRowsAndRecordsTheReach() {
         // E9 #56 — every active allergy travels; a row recorded elsewhere is
         // returned with its hospital and accounted as one RECORD_SHARE.

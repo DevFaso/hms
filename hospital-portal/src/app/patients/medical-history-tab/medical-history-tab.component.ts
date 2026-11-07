@@ -37,6 +37,9 @@ import { KeyLabelPipe } from '../../shared/pipes/key-label.pipe';
 import { DashPipe } from '../../shared/pipes/dash.pipe';
 import { missingRequiredMessage } from '../../shared/required-fields';
 
+/** QA D1425: the vaccination form's fields checked before sending. */
+const IMMUNIZATION_CHECKED_IDS = ['im-date', 'im-dose', 'im-total', 'im-next-due'];
+
 /** QA D1148: what a social-history version records; one of them is required. */
 const SOCIAL_CONTENT_FIELDS = [
   'tobaccoUse',
@@ -448,6 +451,7 @@ export class MedicalHistoryTabComponent implements OnInit {
   }
 
   openCreateImmunization(): void {
+    this.editedImmunization = null;
     this.immunizationForm = {
       ...this.emptyImmunizationForm(),
       patientId: this.patientId,
@@ -459,7 +463,61 @@ export class MedicalHistoryTabComponent implements OnInit {
     this.showImmunizationModal.set(true);
   }
 
+  /** QA D1425: the row an edit echoes; a value it does not change is not judged. */
+  private editedImmunization: ImmunizationResponse | null = null;
+
+  /**
+   * QA D1425: a dose records a day that happened. A row stored with a later date
+   * keeps it when edited on its other fields, so that date stays selectable.
+   */
+  immunizationDateMax(): string {
+    const today = this.todayIso();
+    const stored = this.editedImmunization?.administrationDate;
+    return stored && stored > today ? stored : today;
+  }
+
+  /** QA D1425: the field to refuse before sending, as the server would (the birth date is the server's). */
+  private immunizationProblem(): { id: string; messageKey: string } | null {
+    const form = this.immunizationForm;
+    const stored = this.editedImmunization;
+    const date = form.administrationDate;
+    if (
+      date !== stored?.administrationDate &&
+      date > this.todayIso() &&
+      form.status !== 'DEFERRED'
+    ) {
+      return { id: 'im-date', messageKey: 'MED_HISTORY.IMM_DATE_FUTURE' };
+    }
+    const dose = this.filledNumber(form.doseNumber);
+    const series = this.filledNumber(form.totalDosesInSeries);
+    const doseChanged = !stored || dose !== this.filledNumber(stored.doseNumber);
+    const seriesChanged = !stored || series !== this.filledNumber(stored.totalDosesInSeries);
+    if (dose !== null && dose < 1 && doseChanged) {
+      return { id: 'im-dose', messageKey: 'MED_HISTORY.IMM_DOSE_BELOW_ONE' };
+    }
+    if (series !== null && series < 1 && seriesChanged) {
+      return { id: 'im-total', messageKey: 'MED_HISTORY.IMM_SERIES_BELOW_ONE' };
+    }
+    if (dose !== null && series !== null && dose > series && (doseChanged || seriesChanged)) {
+      return { id: 'im-dose', messageKey: 'MED_HISTORY.IMM_DOSE_ABOVE_SERIES' };
+    }
+    const next = form.nextDoseDueDate;
+    if (
+      next &&
+      next < date &&
+      (date !== stored?.administrationDate || next !== stored?.nextDoseDueDate)
+    ) {
+      return { id: 'im-next-due', messageKey: 'MED_HISTORY.IMM_NEXT_BEFORE_DOSE' };
+    }
+    return null;
+  }
+
+  private filledNumber(value: number | string | null | undefined): number | null {
+    return value === null || value === undefined || value === '' ? null : Number(value);
+  }
+
   openEditImmunization(immunization: ImmunizationResponse): void {
+    this.editedImmunization = immunization;
     // PUT is a full replace — round-trip the complete record.
     this.immunizationForm = {
       ...immunization,
@@ -540,6 +598,14 @@ export class MedicalHistoryTabComponent implements OnInit {
       );
       return;
     }
+    const problem = this.immunizationProblem();
+    if (problem) {
+      const message = this.translate.instant(problem.messageKey);
+      refuseFields(this.host.nativeElement, [problem.id], IMMUNIZATION_CHECKED_IDS, message);
+      this.toast.error(message);
+      return;
+    }
+    refuseFields(this.host.nativeElement, [], IMMUNIZATION_CHECKED_IDS, '');
     // QA D1003: only a dose given here is credited to the clinician recording
     // it, and only when it is recorded: an edit keeps the dose's vaccinator.
     if (form.sourceOfRecord && form.sourceOfRecord !== 'GIVEN_HERE') {

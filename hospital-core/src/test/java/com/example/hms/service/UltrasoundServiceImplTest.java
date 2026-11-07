@@ -983,4 +983,41 @@ class UltrasoundServiceImplTest {
 
         assertThat(order.getStatus()).isEqualTo(UltrasoundOrderStatus.CANCELLED);
     }
+
+    private static UltrasoundOrderRequestDTO schedule(java.time.LocalDate date, String time, Integer count) {
+        return UltrasoundOrderRequestDTO.builder().scheduledDate(date).scheduledTime(time).scanCountForPregnancy(count).build();
+    }
+
+    private static void refusedOn(String field, UltrasoundOrderRequestDTO request, com.example.hms.model.UltrasoundOrder current) {
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> UltrasoundServiceImpl.requirePlausibleSchedule(request, current))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> org.assertj.core.api.Assertions.assertThat(ex.getField()).isEqualTo(field));
+    }
+
+    @Test
+    void d1447_aPastDateTextAsTimeAndABadCountAreRefusedOnTheirFields() {
+        java.time.LocalDate today = java.time.LocalDate.now(java.time.ZoneId.systemDefault());
+        refusedOn("scheduledDate", schedule(today.minusDays(30), null, null), null);
+        refusedOn("scheduledTime", schedule(today, "99:99 demain", null), null);
+        refusedOn("scanCountForPregnancy", schedule(today, null, -1), null);
+        refusedOn("scanCountForPregnancy", schedule(today, null, 0), null);
+        org.assertj.core.api.Assertions.assertThatCode(() -> UltrasoundServiceImpl.requirePlausibleSchedule(
+            schedule(today, "14:30", 2), null)).doesNotThrowAnyException();
+        org.assertj.core.api.Assertions.assertThatCode(() -> UltrasoundServiceImpl.requirePlausibleSchedule(
+            schedule(null, "", null), null)).doesNotThrowAnyException();
+    }
+
+    @Test
+    void d1447_anEditDoesNotJudgeWhatItOnlyEchoes() {
+        java.time.LocalDate past = java.time.LocalDate.now(java.time.ZoneId.systemDefault()).minusDays(30);
+        com.example.hms.model.UltrasoundOrder stored = new com.example.hms.model.UltrasoundOrder();
+        stored.setScheduledDate(past);
+        stored.setScheduledTime("99:99 demain");
+        stored.setScanCountForPregnancy(-1);
+        org.assertj.core.api.Assertions.assertThatCode(() -> UltrasoundServiceImpl.requirePlausibleSchedule(
+            schedule(past, "99:99 demain", -1), stored)).doesNotThrowAnyException();
+        refusedOn("scheduledDate", schedule(past.minusDays(1), "99:99 demain", -1), stored);
+        refusedOn("scheduledTime", schedule(past, "tomorrow", -1), stored);
+        refusedOn("scanCountForPregnancy", schedule(past, "99:99 demain", -2), stored);
+    }
 }

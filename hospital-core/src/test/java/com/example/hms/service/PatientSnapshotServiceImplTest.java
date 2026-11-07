@@ -178,6 +178,7 @@ class PatientSnapshotServiceImplTest {
         givenPatient(patientId, patient);
 
         PatientAllergy allergy = mock(PatientAllergy.class);
+        when(allergy.isActive()).thenReturn(true);
         when(allergy.getAllergenDisplay()).thenReturn("Penicillin");
 
         when(patientAllergyRepository.findVisibleAt(eq(patientId), any())).thenReturn(List.of(allergy));
@@ -201,6 +202,7 @@ class PatientSnapshotServiceImplTest {
         Patient patient = stubPatient(patientId);
         givenPatient(patientId, patient);
         PatientAllergy allergy = mock(PatientAllergy.class);
+        when(allergy.isActive()).thenReturn(true);
         when(allergy.getAllergenDisplay()).thenReturn("Peanuts");
         when(patientAllergyRepository.hasActiveSharingOptOut(patientId)).thenReturn(true);
         when(patientAllergyRepository.findVisibleAt(patientId, HOSPITAL_ID)).thenReturn(List.of(allergy));
@@ -232,6 +234,7 @@ class PatientSnapshotServiceImplTest {
             com.example.hms.security.context.HospitalContext.builder().principalUserId(doctorB).build());
         try {
             PatientAllergy allergy = mock(PatientAllergy.class);
+            when(allergy.isActive()).thenReturn(true);
             when(allergy.getAllergenDisplay()).thenReturn("Penicillin");
             when(patientAllergyRepository.hasActiveSharingOptOut(patientId)).thenReturn(true);
             when(recordAccessPolicy.decide(doctorB, patientId, HOSPITAL_ID)).thenReturn(
@@ -268,6 +271,7 @@ class PatientSnapshotServiceImplTest {
         Patient patient = stubPatient(patientId);
         givenPatient(patientId, patient);
         PatientAllergy allergy = mock(PatientAllergy.class);
+        when(allergy.isActive()).thenReturn(true);
         when(allergy.getAllergenDisplay()).thenReturn("Penicillin");
         when(patientAllergyRepository.findVisibleAt(eq(patientId), any())).thenReturn(List.of(allergy));
         when(patientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(eq(patientId), eq(READABLE), any()))
@@ -1484,5 +1488,27 @@ class PatientSnapshotServiceImplTest {
         } finally {
             HospitalContextHolder.clear();
         }
+    }
+
+    @Test
+    void d1423_aDeactivatedAllergyIsNotOnTheSnapshotAndTheSummaryTextDoesNotStandInForIt() {
+        UUID patientId = UUID.randomUUID();
+        Patient patient = stubPatient(patientId);
+        lenient().when(patient.getAllergies()).thenReturn("Sesame");
+        givenPatient(patientId, patient);
+
+        PatientAllergy active = new PatientAllergy();
+        active.setAllergenDisplay("Penicillin");
+        active.setActive(true);
+        PatientAllergy removed = new PatientAllergy();
+        removed.setAllergenDisplay("Sesame");
+        removed.setActive(false);
+        when(patientAllergyRepository.findVisibleAt(eq(patientId), any())).thenReturn(List.of(removed, active));
+
+        assertEquals(List.of("Penicillin"), service.getSnapshot(patientId, HOSPITAL_ID).getAllergies());
+
+        when(patientAllergyRepository.findVisibleAt(eq(patientId), any())).thenReturn(List.of(removed));
+        assertTrue(service.getSnapshot(patientId, HOSPITAL_ID).getAllergies().isEmpty(),
+            "every allergy deactivated: nothing is listed, and the old summary text does not come back");
     }
 }

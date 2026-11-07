@@ -199,6 +199,75 @@ describe('PostpartumTabComponent — screening', () => {
     expect(postpartumSpy.createNewbornAssessment).toHaveBeenCalled();
   });
 
+  it('QA D1424: the newborn form refuses impossible vitals on their field, with the vitals bounds', () => {
+    const fixture = TestBed.createComponent(PostpartumTabComponent);
+    const cmp = fixture.componentInstance;
+    cmp.onPatientPicked({ id: 'p1' } as PatientResponse);
+    cmp.openAssessment();
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    for (const [field, value, id] of [
+      ['heartRateBpm', 1000, '#nb-hr'],
+      ['heartRateBpm', -1, '#nb-hr'],
+      ['respirationsPerMin', 500, '#nb-resp'],
+      ['oxygenSaturationPercent', 150, '#nb-spo2'],
+      ['glucoseMgDl', -5, '#nb-glucose'],
+    ] as const) {
+      cmp.assessmentForm = { apgarOneMinute: 8, [field]: value };
+      cmp.submitAssessment();
+      expect(postpartumSpy.createNewbornAssessment).withContext(field).not.toHaveBeenCalled();
+      expect(host.querySelector(id)?.getAttribute('aria-invalid')).withContext(id).toBe('true');
+    }
+    postpartumSpy.createNewbornAssessment.and.returnValue(of({ alerts: [] }) as never);
+    // A heart rate of 70 is an emergency, not a typing slip: it saves, and it alerts.
+    cmp.assessmentForm = { heartRateBpm: 70, glucoseMgDl: 30 };
+    cmp.submitAssessment();
+    expect(postpartumSpy.createNewbornAssessment).toHaveBeenCalled();
+  });
+
+  it('QA D1424: a post-partum 70/120 is refused on the diastolic', () => {
+    const fixture = TestBed.createComponent(PostpartumTabComponent);
+    const cmp = fixture.componentInstance;
+    cmp.onPatientPicked({ id: 'p1' } as PatientResponse);
+    cmp.openObservation();
+    fixture.detectChanges();
+    cmp.observationForm.systolicBpMmHg = 70;
+    cmp.observationForm.diastolicBpMmHg = 120;
+    cmp.submitObservation();
+    expect(postpartumSpy.createObservation).not.toHaveBeenCalled();
+    expect(
+      (fixture.nativeElement as HTMLElement)
+        .querySelector('#obs-dia')
+        ?.getAttribute('aria-invalid'),
+    ).toBe('true');
+  });
+
+  it('QA D1446: the server refusing the time marks the time field on both forms', () => {
+    const refusal = (field: string) =>
+      throwError(() =>
+        fieldErrorsResponse({ [field]: 'Cette heure ne peut pas être dans le futur.' }),
+      );
+    postpartumSpy.createObservation.and.returnValue(refusal('observationTime') as never);
+    postpartumSpy.createNewbornAssessment.and.returnValue(refusal('assessmentTime') as never);
+    const fixture = TestBed.createComponent(PostpartumTabComponent);
+    const cmp = fixture.componentInstance;
+    cmp.onPatientPicked({ id: 'p1' } as PatientResponse);
+    cmp.openObservation();
+    fixture.detectChanges();
+    cmp.observationForm.temperatureCelsius = 37;
+    cmp.submitObservation();
+    fixture.detectChanges();
+    expectFieldsMarked(fixture, { 'obs-time': 'Cette heure ne peut pas être dans le futur.' });
+    cmp.closeObservation();
+
+    cmp.openAssessment();
+    fixture.detectChanges();
+    cmp.assessmentForm.apgarOneMinute = 8;
+    cmp.submitAssessment();
+    fixture.detectChanges();
+    expectFieldsMarked(fixture, { 'nb-time': 'Cette heure ne peut pas être dans le futur.' });
+  });
+
   it('picking a patient loads the screening history for the plan instrument', () => {
     screeningSpy.history.and.returnValue(of([response('r1')]));
     component.onPatientPicked({ id: 'p1' } as PatientResponse);

@@ -82,10 +82,10 @@ public class LaborServiceImpl implements LaborService {
 
     /* ── Clinical thresholds ─────────────────────────────────────────── */
 
-    static final int FHR_BRADYCARDIA_BPM = 110;
+    static final int FHR_BRADYCARDIA_BPM = com.example.hms.service.maternity.LaborAlertArgs.FHR_BRADYCARDIA_BPM;
     private static final String FETAL_HEART_RATE_FIELD = "fetalHeartRateBpm";
-    static final int FHR_TACHYCARDIA_BPM = 160;
-    static final int ACTIVE_PHASE_DILATION_CM = 4;
+    static final int FHR_TACHYCARDIA_BPM = com.example.hms.service.maternity.LaborAlertArgs.FHR_TACHYCARDIA_BPM;
+    static final int ACTIVE_PHASE_DILATION_CM = com.example.hms.service.maternity.LaborAlertArgs.ACTIVE_PHASE_DILATION_CM;
     static final double ACTION_LINE_LAG_HOURS = 4.0;
     static final double MATERNAL_FEVER_C = 38.0;
     static final int MATERNAL_TACHYCARDIA_BPM = 120;
@@ -667,9 +667,7 @@ public class LaborServiceImpl implements LaborService {
             || entry.getObservationTime().isBefore(anchor)) {
             return;
         }
-        double hours = ElapsedTime.minutesBetween(anchor, entry.getObservationTime()) / 60.0;
-        double expected = Math.min(10.0, ACTIVE_PHASE_DILATION_CM + hours);
-        double lagHours = expected - dilation;
+        double lagHours = com.example.hms.service.maternity.LaborAlertArgs.lagHours(anchor, entry.getObservationTime(), dilation);
         if (lagHours >= ACTION_LINE_LAG_HOURS) {
             entry.addAlert(LaborAlertType.LABOR_PROGRESS, LaborAlertSeverity.URGENT,
                 "labor-action-line",
@@ -703,13 +701,13 @@ public class LaborServiceImpl implements LaborService {
         if (severe) {
             entry.addAlert(LaborAlertType.MATERNAL_VITALS, LaborAlertSeverity.URGENT,
                 "labor-severe-hypertension",
-                alertText("labor-severe-hypertension", sys, dia),
-                "bloodPressure", new Object[]{sys, dia});
+                alertText("labor-severe-hypertension", com.example.hms.service.maternity.LaborAlertArgs.bloodPressure(sys, dia)),
+                "bloodPressure", com.example.hms.service.maternity.LaborAlertArgs.bloodPressure(sys, dia));
         } else if (mild) {
             entry.addAlert(LaborAlertType.MATERNAL_VITALS, LaborAlertSeverity.CAUTION,
                 "labor-hypertension",
-                alertText("labor-hypertension", sys, dia),
-                "bloodPressure", new Object[]{sys, dia});
+                alertText("labor-hypertension", com.example.hms.service.maternity.LaborAlertArgs.bloodPressure(sys, dia)),
+                "bloodPressure", com.example.hms.service.maternity.LaborAlertArgs.bloodPressure(sys, dia));
         }
     }
 
@@ -926,8 +924,9 @@ public class LaborServiceImpl implements LaborService {
 
     /**
      * QA D172 (D61/D121): alert text is rendered from the message bundle in the
-     * staff locale (it is stored, shown on the chart and sent as a notification),
-     * not composed in English in code.
+     * staff locale, not composed in English in code. It is what the notices and
+     * the in-basket title store. QA D1427: a reader of the alert never reads this
+     * copy; LaborMapper renders the sentence in the reader's language.
      */
     private String alertText(String code, Object... args) {
         return messageSource.getMessage("labor.alert.msg." + code, args, NotificationLocales.STAFF);

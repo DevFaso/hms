@@ -80,6 +80,7 @@ public class ImmunizationServiceImpl implements ImmunizationService {
             com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(encounter.getHospital(), ENCOUNTER_NOT_FOUND_KEY, requestDTO.getEncounterId());
         }
 
+        ImmunizationPlausibility.require(requestDTO, patient.getDateOfBirth(), null);
         PatientImmunization immunization = immunizationMapper.toEntity(requestDTO, patient, hospital, administeredBy, encounter);
         refuseDuplicateDose(immunization, null);
         PatientImmunization savedImmunization = immunizationRepository.save(immunization);
@@ -252,6 +253,9 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         PatientImmunization existingImmunization = immunizationRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(IMMUNIZATION_NOT_FOUND_KEY, id));
         com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(existingImmunization.getHospital(), IMMUNIZATION_NOT_FOUND_KEY, id);
+        ImmunizationPlausibility.require(requestDTO,
+            existingImmunization.getPatient() == null ? null : existingImmunization.getPatient().getDateOfBirth(),
+            existingImmunization);
 
         // Review of #971: an edit that does not send a source keeps the stored
         // one (and its vaccinator); only an explicit change to a transcribed

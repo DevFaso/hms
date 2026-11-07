@@ -947,3 +947,13 @@ Rounds 27, 28 and 29 each found 20–30 new siblings of the required-field class
 | `architecture/ReceptionistClinicalReadGuardTest` (vocabulary widened: bloodgroup, abogroup, rhfactor, antibody, triage, isolation, highrisk), `controller/support/ReceptionistResponseShapingTest` (a test per field, receptionist against doctor and nurse) | RCPT-CLIN, user decision 2026-11-06: triage's chief complaint, the blood type and the high-risk flag out of what a receptionist reads, on the same endpoints | `THE_DESK_NEEDS_IT`, `THE_DESK_WRITES_IT` with a reason; stale entries fail |
 | `architecture/ReadOnlyAuthWritesGuardTest` (new) | Every write under `/auth` from Spring's mapping registry is classified open, refused, or open only when it blocks the sign-in, and goes through the real `ReadOnlyModeFilter`. A new one fails until classified | `CLASSIFIED`, each class stated; the filter's `OPEN_AUTH_WRITES` must equal it exactly |
 | `service/TransfusionRunningBagPostgresIT` (new), `service/TransfusionServiceImplTest` | An incompatible crossmatch on a bag out of the lab reaches the requester and the running nurse, after the commit; a running bag stays ISSUED and shows the result | none |
+
+## Guards added or widened by round 34 (fix/r34-maternity-records)
+
+| Guard | Catches | Baseline |
+|---|---|---|
+| `architecture/AllergyActiveReadersGuardTest` (new) | A class that reads the allergy rows and is not listed with what a deactivated row does there (active only, or history with a mark); a listed reader that lost its filter; the snapshot's problem, diagnosis and medication filters, the storyboard's directive filter | 12 readers, each with its reason |
+| `validation/BloodPressurePairGuardTest` (new) | A request payload with a systolic and a diastolic without `isBloodPressureOrdered` (`VitalSignLimits.bloodPressureOrdered`, `@ReportedOn`) or without both pressures bounded inside `VitalSignLimits`; the scan reads every class under `payload` | none (read-only `*Response*` payloads placed by name) |
+| `i18n/StoredAlertReaderLanguageGuardTest` (new) | A mapper handing a stored alert sentence to the reader; a class writing `NotificationLocales.STAFF` text that is not listed with who reads it; a labour alert code of the bundle that cannot be rendered again from its row in EN, FR and ES | 17 classes, each with its reason |
+| `scripts/lib/maternity-date-server-marks.test.mjs` (new) | A date or time input of the maternity screens that the server's `fieldErrors` key cannot reach (no `data-server-field`, no field map) | none |
+| `validation/ClinicalTimestampFutureValidationTest#d1449_*` | A date-only field refused with the wording about a time of day | none |

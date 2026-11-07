@@ -715,14 +715,26 @@
           </div>
           <div class="field">
             <label for="nb-hr">{{ 'POSTPARTUM.PULSE' | translate }}</label>
-            <input id="nb-hr" type="number" [(ngModel)]="assessmentForm.heartRateBpm" />
+            <input
+              id="nb-hr"
+              type="number"
+              min="20"
+              max="300"
+              [(ngModel)]="assessmentForm.heartRateBpm"
+            />
           </div>
           <div class="field">
             <label for="nb-resp">{{ 'POSTPARTUM.RESP' | translate }}</label>
-            <input id="nb-resp" type="number" [(ngModel)]="assessmentForm.respirationsPerMin" />
+            <input
+              id="nb-resp"
+              type="number"
+              min="4"
+              max="80"
+              [(ngModel)]="assessmentForm.respirationsPerMin"
+            />
           </div>
           <div class="field">
-            <label for="nb-spo2">SpO2 %</label>
+            <label for="nb-spo2">{{ 'POSTPARTUM.SPO2' | translate }}</label>
             <input
               id="nb-spo2"
               type="number"
@@ -733,7 +745,13 @@
           </div>
           <div class="field">
             <label for="nb-glucose">{{ 'POSTPARTUM.GLUCOSE' | translate }}</label>
-            <input id="nb-glucose" type="number" min="0" [(ngModel)]="assessmentForm.glucoseMgDl" />
+            <input
+              id="nb-glucose"
+              type="number"
+              min="20"
+              max="800"
+              [(ngModel)]="assessmentForm.glucoseMgDl"
+            />
           </div>
         </div>
         <div class="field">
@@ -845,7 +863,12 @@
           <div class="form-row">
             <div class="field">
               <label for="pro-time">{{ 'PRO.ADMINISTERED_AT' | translate }}</label>
-              <input id="pro-time" type="datetime-local" [(ngModel)]="screeningAdministeredAt" />
+              <input
+                id="pro-time"
+                data-server-field="administeredAt"
+                type="datetime-local"
+                [(ngModel)]="screeningAdministeredAt"
+              />
             </div>
             @if (instrument.availableLanguages.length > 1) {
               <div class="field">

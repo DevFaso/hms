@@ -40,7 +40,8 @@ import {
 import { AuthService } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
-import { labelledRefusalReason } from '../shared/refusal-reason';
+import { labelledRefusalReason, refusedFieldReasons } from '../shared/refusal-reason';
+import { bloodPressureReversed } from '../shared/vital-sign-limits';
 import { refuseFields } from '../shared/forms/invalid-fields';
 import { hasClinicalContent } from '../shared/forms/clinical-content';
 import { FieldLimit, firstOutOfRange, labelKeysOf, rangeMessage } from '../shared/field-limits';
@@ -68,6 +69,11 @@ export const NEWBORN_LIMITS: readonly FieldLimit[] = [
   { field: 'apgarFiveMinute', labelKey: 'POSTPARTUM.APGAR_FIVE', min: 0, max: 10 },
   { field: 'apgarTenMinute', labelKey: 'POSTPARTUM.APGAR_TEN', min: 0, max: 10 },
   { field: 'temperatureCelsius', labelKey: 'POSTPARTUM.TEMPERATURE', min: 25, max: 44 },
+  // QA D1424: VitalSignLimits, as on every other vitals form (1000 bpm reached the chart).
+  { field: 'heartRateBpm', labelKey: 'POSTPARTUM.PULSE', min: 20, max: 300 },
+  { field: 'respirationsPerMin', labelKey: 'POSTPARTUM.RESP', min: 4, max: 80 },
+  { field: 'oxygenSaturationPercent', labelKey: 'POSTPARTUM.SPO2', min: 0, max: 100 },
+  { field: 'glucoseMgDl', labelKey: 'POSTPARTUM.GLUCOSE', min: 20, max: 800 },
 ];
 
 /**
@@ -97,9 +103,22 @@ const NEWBORN_FIELD_IDS: Readonly<Record<string, string>> = {
   apgarFiveMinute: 'nb-apgar5',
   apgarTenMinute: 'nb-apgar10',
   temperatureCelsius: 'nb-temp',
+  heartRateBpm: 'nb-hr',
+  respirationsPerMin: 'nb-resp',
+  oxygenSaturationPercent: 'nb-spo2',
+  glucoseMgDl: 'nb-glucose',
 };
-const OBSERVATION_IDS = Object.values(OBSERVATION_FIELD_IDS);
-const NEWBORN_IDS = Object.values(NEWBORN_FIELD_IDS);
+/** QA D1446: the template id of each field the server may name under a refusal. */
+const OBSERVATION_SERVER_FIELD_IDS: Readonly<Record<string, string>> = {
+  ...OBSERVATION_FIELD_IDS,
+  observationTime: 'obs-time',
+};
+const NEWBORN_SERVER_FIELD_IDS: Readonly<Record<string, string>> = {
+  ...NEWBORN_FIELD_IDS,
+  assessmentTime: 'nb-time',
+};
+const OBSERVATION_IDS = Object.values(OBSERVATION_SERVER_FIELD_IDS);
+const NEWBORN_IDS = Object.values(NEWBORN_SERVER_FIELD_IDS);
 /** The id prefix the screening modal gives its instrument form's radios. */
 const SCREENING_ID_PREFIX = 'pp-pro';
 
@@ -558,6 +577,23 @@ export class PostpartumTabComponent {
       this.toast.error(message);
       return;
     }
+    if (
+      bloodPressureReversed(
+        this.observationForm.systolicBpMmHg,
+        this.observationForm.diastolicBpMmHg,
+      )
+    ) {
+      // QA D1424: 70/120 is a swapped entry, refused where it was typed.
+      const message = this.translate.instant('VITAL_LIMITS.BP_ORDER');
+      refuseFields(
+        this.host.nativeElement,
+        [OBSERVATION_FIELD_IDS['diastolicBpMmHg']],
+        OBSERVATION_IDS,
+        message,
+      );
+      this.toast.error(message);
+      return;
+    }
     this.observationSaving.set(true);
     this.postpartumService
       .createObservation(patient.id, withServerDateTimes(this.observationForm, ['observationTime']))
@@ -574,6 +610,8 @@ export class PostpartumTabComponent {
           }
         },
         error: (err: unknown) => {
+          // QA D1446: the fields the refusal names are marked, as on the delivery form.
+          this.markServerRefusals(err, OBSERVATION_SERVER_FIELD_IDS, OBSERVATION_IDS);
           this.toast.error(
             labelledRefusalReason(err, this.translate, OBSERVATION_LABELS) ??
               this.translate.instant('POSTPARTUM.OBSERVATION_SAVE_ERROR'),
@@ -655,6 +693,8 @@ export class PostpartumTabComponent {
           }
         },
         error: (err: unknown) => {
+          // QA D1446: the fields the refusal names are marked, as on the delivery form.
+          this.markServerRefusals(err, NEWBORN_SERVER_FIELD_IDS, NEWBORN_IDS);
           this.toast.error(
             labelledRefusalReason(err, this.translate, NEWBORN_LABELS) ??
               this.translate.instant('POSTPARTUM.ASSESSMENT_SAVE_ERROR'),
@@ -662,6 +702,21 @@ export class PostpartumTabComponent {
           this.assessmentSaving.set(false);
         },
       });
+  }
+
+  /** Marks each field a refusal names under `fieldErrors` with the server's reason. */
+  private markServerRefusals(
+    err: unknown,
+    idByField: Readonly<Record<string, string>>,
+    all: readonly string[],
+  ): void {
+    const refused = refusedFieldReasons(err, idByField);
+    if (refused.length === 0) return;
+    refuseFields(
+      this.host.nativeElement,
+      refused.map(([id, message]) => ({ id, message })),
+      all,
+    );
   }
 
   apgarSummary(a: NewbornAssessmentResponse): string {

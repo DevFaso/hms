@@ -773,6 +773,7 @@
               id="im-date"
               data-server-field="administrationDate"
               type="date"
+              [max]="immunizationDateMax()"
               [ngModel]="immunizationForm.administrationDate"
               (ngModelChange)="onImmunizationDateChange($event)"
             />
@@ -808,12 +809,19 @@
         <div class="form-row">
           <div class="field">
             <label for="im-dose">{{ 'MED_HISTORY.DOSE_NUMBER' | translate }}</label>
-            <input id="im-dose" type="number" min="1" [(ngModel)]="immunizationForm.doseNumber" />
+            <input
+              id="im-dose"
+              data-server-field="doseNumber"
+              type="number"
+              min="1"
+              [(ngModel)]="immunizationForm.doseNumber"
+            />
           </div>
           <div class="field">
             <label for="im-total">{{ 'MED_HISTORY.TOTAL_DOSES' | translate }}</label>
             <input
               id="im-total"
+              data-server-field="totalDosesInSeries"
               type="number"
               min="1"
               [(ngModel)]="immunizationForm.totalDosesInSeries"
@@ -842,7 +850,12 @@
         </div>
         <div class="field">
           <label for="im-next-due">{{ 'MED_HISTORY.NEXT_DUE' | translate }}</label>
-          <input id="im-next-due" type="date" [(ngModel)]="immunizationForm.nextDoseDueDate" />
+          <input
+            id="im-next-due"
+            data-server-field="nextDoseDueDate"
+            type="date"
+            [(ngModel)]="immunizationForm.nextDoseDueDate"
+          />
         </div>
         <div class="checkbox-row">
           <label>

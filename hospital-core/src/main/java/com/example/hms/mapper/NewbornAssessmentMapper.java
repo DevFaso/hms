@@ -6,6 +6,9 @@ import com.example.hms.model.neonatal.NewbornAssessment;
 import com.example.hms.model.neonatal.NewbornAssessmentAlert;
 import com.example.hms.payload.dto.clinical.newborn.NewbornAssessmentAlertDTO;
 import com.example.hms.payload.dto.clinical.newborn.NewbornAssessmentResponseDTO;
+import com.example.hms.service.i18n.NotificationLocalizer;
+import com.example.hms.service.maternity.ObstetricAlertText;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -13,6 +16,21 @@ import java.util.Set;
 
 @Component
 public class NewbornAssessmentMapper {
+
+    private static final String ALERT_MSG_PREFIX = "newborn.alert.msg.";
+    private static final String ALERT_TRIGGER_PREFIX = "newborn.alert.trigger.";
+
+    private final NotificationLocalizer localizer;
+
+    /** Without a localizer every alert shows its stored text. */
+    public NewbornAssessmentMapper() {
+        this(null);
+    }
+
+    @Autowired
+    public NewbornAssessmentMapper(NotificationLocalizer localizer) {
+        this.localizer = localizer;
+    }
 
     public NewbornAssessmentResponseDTO toResponse(NewbornAssessment assessment) {
         if (assessment == null) {
@@ -80,8 +98,9 @@ public class NewbornAssessmentMapper {
                 .type(alert.getType())
                 .severity(alert.getSeverity())
                 .code(alert.getCode())
-                .message(alert.getMessage())
-                .triggeredBy(alert.getTriggeredBy())
+                // QA D1427: the stored copy is in the staff language; the reader reads hers.
+                .message(ObstetricAlertText.render(localizer, ALERT_MSG_PREFIX, alert.getCode(), List.of(), alert.getMessage()))
+                .triggeredBy(ObstetricAlertText.render(localizer, ALERT_TRIGGER_PREFIX, alert.getCode(), List.of(), alert.getTriggeredBy()))
                 .createdAt(alert.getCreatedAt())
                 .build())
             .toList();

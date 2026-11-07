@@ -57,6 +57,8 @@ describe('UltrasoundTabComponent', () => {
       'followUpRequired',
       'anomalies',
       'cancelOrder',
+      'createOrder',
+      'updateOrder',
       'submitReport',
     ]);
     service.pendingOrders.and.returnValue(of([]));
@@ -117,6 +119,54 @@ describe('UltrasoundTabComponent', () => {
       o.textContent?.trim(),
     );
     expect(options).toEqual(['Routine', 'Urgente', 'Immédiat (STAT)']);
+  });
+
+  it('QA D1447: a past date and a scan count below 1 are refused on the field, and the time is a time input', () => {
+    create(['ROLE_MIDWIFE']);
+    const cmp = fixture.componentInstance;
+    const sent = service.createOrder.and.returnValue(of(order()) as never);
+    (cmp as unknown as { hospitalId: string }).hospitalId = 'h1';
+    cmp.openCreateOrder();
+    fixture.detectChanges();
+    expect(host().querySelector<HTMLInputElement>('#us-time')?.type).toBe('time');
+    expect(host().querySelector<HTMLInputElement>('#us-date')?.min).toBe(cmp.orderDateMin());
+
+    cmp.orderForm.patientId = 'p1';
+    cmp.orderForm.scheduledDate = '2026-09-01';
+    cmp.submitOrder();
+    expect(sent).not.toHaveBeenCalled();
+    expect(host().querySelector('#us-date')?.getAttribute('aria-invalid')).toBe('true');
+
+    cmp.orderForm.scheduledDate = undefined;
+    cmp.orderForm.scanCountForPregnancy = -1;
+    cmp.submitOrder();
+    expect(sent).not.toHaveBeenCalled();
+    expect(host().querySelector('#us-scan-count')?.getAttribute('aria-invalid')).toBe('true');
+    expect(host().querySelector('#us-date')?.getAttribute('aria-invalid')).not.toBe('true');
+
+    cmp.orderForm.scanCountForPregnancy = 2;
+    cmp.submitOrder();
+    expect(sent).toHaveBeenCalledTimes(1);
+  });
+
+  it('QA D1447: an order whose date has passed stays editable on its other fields', () => {
+    create(['ROLE_MIDWIFE']);
+    const cmp = fixture.componentInstance;
+    const sent = service.updateOrder.and.returnValue(of(order()) as never);
+    (cmp as unknown as { hospitalId: string }).hospitalId = 'h1';
+    cmp.openEditOrder(
+      order({
+        scheduledDate: '2026-09-01',
+        scanCountForPregnancy: -1,
+        scheduledTime: '99:99 demain',
+      }),
+    );
+    fixture.detectChanges();
+    expect(cmp.orderDateMin()).toBe('2026-09-01');
+    cmp.orderForm.clinicalIndication = 'contrôle';
+    cmp.submitOrder();
+    expect(sent).toHaveBeenCalledTimes(1);
+    expect(sent.calls.mostRecent().args[1].scheduledTime).toBe('99:99 demain');
   });
 
   it('QA D1144: the cancel prompt takes the keyboard, and gives it back to "Cancel the order"', fakeAsync(() => {

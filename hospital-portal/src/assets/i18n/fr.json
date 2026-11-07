@@ -10193,6 +10193,11 @@
     "SOURCE_HOSPITAL": "Émis par l’établissement"
   },
   "MED_HISTORY": {
+    "IMM_NEXT_BEFORE_DOSE": "La prochaine dose ne peut pas être prévue avant la dose administrée.",
+    "IMM_DOSE_ABOVE_SERIES": "Le numéro de dose ne peut pas dépasser le nombre de doses de la série.",
+    "IMM_SERIES_BELOW_ONE": "Le nombre de doses de la série commence à 1.",
+    "IMM_DOSE_BELOW_ONE": "Le numéro de dose commence à 1.",
+    "IMM_DATE_FUTURE": "Une vaccination ne peut pas être datée dans le futur.",
     "SOURCE_OF_RECORD": "Source",
     "SOURCE_UNKNOWN": "Non renseignée",
     "TAB": "Historique",
@@ -10498,6 +10503,8 @@
     "DELIVERED_ON": "Accouchée le {{date}}"
   },
   "ULTRASOUND": {
+    "SCAN_COUNT_INVALID": "Le nombre d'échographies commence à 1.",
+    "SCHEDULED_DATE_PAST": "La date du rendez-vous ne peut pas être dans le passé.",
     "WORKLIST_ALL": "Toutes les demandes",
     "WORKLIST_PENDING": "En attente",
     "WORKLIST_HIGH_RISK": "Haut risque",
@@ -10734,6 +10741,7 @@
     }
   },
   "POSTPARTUM": {
+    "SPO2": "SpO2 %",
     "MOTHER_TAB": "Mère",
     "NEWBORN_TAB": "Nouveau-né",
     "OBSERVATIONS": "Observations post-partum",
@@ -12506,6 +12514,7 @@
     "VOIDED": "Annulé avec la délivrance : à rembourser"
   },
   "VITAL_LIMITS": {
+    "BP_ORDER": "La pression diastolique doit être inférieure à la pression systolique.",
     "TEMPERATURE": "La température doit être comprise entre {{min}} et {{max}} °C.",
     "HEART_RATE": "La fréquence cardiaque doit être comprise entre {{min}} et {{max}} bpm.",
     "RESPIRATORY_RATE": "La fréquence respiratoire doit être comprise entre {{min}} et {{max}} cycles par minute.",

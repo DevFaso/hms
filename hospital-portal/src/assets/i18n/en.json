@@ -10193,6 +10193,11 @@
     "SOURCE_HOSPITAL": "Issued by the hospital"
   },
   "MED_HISTORY": {
+    "IMM_NEXT_BEFORE_DOSE": "The next dose cannot be due before the dose given.",
+    "IMM_DOSE_ABOVE_SERIES": "The dose number cannot be above the number of doses in the series.",
+    "IMM_SERIES_BELOW_ONE": "The number of doses in the series starts at 1.",
+    "IMM_DOSE_BELOW_ONE": "The dose number starts at 1.",
+    "IMM_DATE_FUTURE": "A vaccination cannot be dated in the future.",
     "SOURCE_OF_RECORD": "Source",
     "SOURCE_UNKNOWN": "Not recorded",
     "TAB": "History",
@@ -10498,6 +10503,8 @@
     "DELIVERED_ON": "Delivered on {{date}}"
   },
   "ULTRASOUND": {
+    "SCAN_COUNT_INVALID": "The scan count starts at 1.",
+    "SCHEDULED_DATE_PAST": "The appointment date cannot be in the past.",
     "WORKLIST_ALL": "All orders",
     "WORKLIST_PENDING": "Pending",
     "WORKLIST_HIGH_RISK": "High risk",
@@ -10734,6 +10741,7 @@
     }
   },
   "POSTPARTUM": {
+    "SPO2": "SpO2 %",
     "MOTHER_TAB": "Mother",
     "NEWBORN_TAB": "Newborn",
     "OBSERVATIONS": "Postpartum observations",
@@ -12506,6 +12514,7 @@
     "VOIDED": "Cancelled with the dispense: to be refunded"
   },
   "VITAL_LIMITS": {
+    "BP_ORDER": "The diastolic pressure must be lower than the systolic pressure.",
     "TEMPERATURE": "Temperature must be between {{min}} and {{max}} °C.",
     "HEART_RATE": "Heart rate must be between {{min}} and {{max}} bpm.",
     "RESPIRATORY_RATE": "Respiratory rate must be between {{min}} and {{max}} breaths per minute.",

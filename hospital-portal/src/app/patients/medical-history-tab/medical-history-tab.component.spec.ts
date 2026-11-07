@@ -58,6 +58,63 @@ describe('MedicalHistoryTabComponent — past PEV doses (QA D1003)', () => {
     expect(sent.vaccineCode).toBe('102');
   });
 
+  describe('impossible doses (QA D1425)', () => {
+    const FUTURE = '2999-01-01';
+
+    function filled(over: Partial<typeof component.immunizationForm>): void {
+      component.openCreateImmunization();
+      component.immunizationForm = {
+        ...component.immunizationForm,
+        vaccineDisplay: 'BCG (tuberculose)',
+        ...over,
+      };
+    }
+
+    for (const [label, over] of [
+      ['a future date', { administrationDate: FUTURE }],
+      ['dose 0', { doseNumber: 0 }],
+      ['dose -1', { doseNumber: -1 }],
+      ['dose 5 of 2', { doseNumber: 5, totalDosesInSeries: 2 }],
+      ['a series of 0', { totalDosesInSeries: 0 }],
+      [
+        'a next dose before this one',
+        { administrationDate: '2024-05-05', nextDoseDueDate: '2024-01-01' },
+      ],
+    ] as const) {
+      it(`${label} is refused before sending`, () => {
+        filled(over);
+        component.submitImmunization();
+        expect(history.createImmunization).not.toHaveBeenCalled();
+      });
+    }
+
+    it('a plain dose is still sent', () => {
+      filled({ doseNumber: 1, totalDosesInSeries: 2 });
+      component.submitImmunization();
+      expect(history.createImmunization).toHaveBeenCalled();
+    });
+
+    it('a stored wrong row stays editable on its other fields, until its wrong value is touched', () => {
+      history.updateImmunization.and.returnValue(of({ id: 'im9', patientId: 'p1' }));
+      component.openEditImmunization({
+        id: 'im9',
+        patientId: 'p1',
+        vaccineDisplay: 'RR',
+        administrationDate: FUTURE,
+        status: 'COMPLETED',
+        doseNumber: -1,
+        totalDosesInSeries: 2,
+      } as never);
+      component.immunizationForm.notes = 'ajouté plus tard';
+      component.submitImmunization();
+      expect(history.updateImmunization).toHaveBeenCalledTimes(1);
+
+      component.immunizationForm.doseNumber = 0;
+      component.submitImmunization();
+      expect(history.updateImmunization).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it('a dose given today is credited to the clinician who records it', () => {
     component.openCreateImmunization();
     component.immunizationForm.vaccineDisplay = 'BCG (tuberculose)';

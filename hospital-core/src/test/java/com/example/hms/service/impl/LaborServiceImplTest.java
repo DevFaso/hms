@@ -1502,4 +1502,87 @@ class LaborServiceImplTest {
         assertThat(old.isActive()).isFalse();
         verify(postpartumCarePlanRepository).save(old);
     }
+
+    /** QA D1427: the same row, read by a reader of each language. */
+    private static java.util.List<String> readIn(java.util.Locale locale,
+                                                 java.util.function.Supplier<java.util.List<com.example.hms.payload.dto.clinical.labor.LaborAlertDTO>> read) {
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(locale);
+        try {
+            return read.get().stream().map(com.example.hms.payload.dto.clinical.labor.LaborAlertDTO::getMessage).toList();
+        } finally {
+            org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+        }
+    }
+
+    @Test
+    void d1427_everyPartographAlertIsReadInTheReadersLanguageWithTheValuesItWasStoredWith() {
+        episode.setActivePhaseStartAt(LocalDateTime.now().minusHours(8));
+        PartographEntryRequestDTO request = entryRequest();
+        request.setFetalHeartRateBpm(90);
+        request.setLiquorColour(com.example.hms.enums.LiquorColour.MECONIUM_STAINED);
+        request.setCervicalDilationCm(5);
+        request.setTemperatureCelsius(38.5);
+        request.setPulseBpm(130);
+        request.setSystolicBpMmHg(170);
+        request.setDiastolicBpMmHg(115);
+
+        service.addEntry(patientId, episodeId, recorderUserId, request);
+        ArgumentCaptor<LaborPartographEntry> saved = ArgumentCaptor.forClass(LaborPartographEntry.class);
+        verify(entryRepository, org.mockito.Mockito.atLeastOnce()).save(saved.capture());
+        LaborPartographEntry entry = saved.getValue();
+        // Read back from the database: the in-memory arguments are gone.
+        java.util.List<String> stored = entry.getAlerts().stream().map(com.example.hms.model.labor.LaborAlert::getMessage).toList();
+        assertThat(stored).hasSizeGreaterThanOrEqualTo(6);
+
+        LaborMapper reader = new LaborMapper(new com.example.hms.service.i18n.NotificationLocalizer(
+            com.example.hms.i18n.TestMessageSources.bundles()));
+        LocalDateTime anchor = episode.getActivePhaseStartAt();
+        java.util.function.Supplier<java.util.List<com.example.hms.payload.dto.clinical.labor.LaborAlertDTO>> read =
+            () -> reader.toEntryResponse(entry, anchor).getAlerts();
+
+        assertThat(readIn(java.util.Locale.FRENCH, read)).as("French: exactly the stored sentences").isEqualTo(stored);
+        assertThat(readIn(java.util.Locale.ENGLISH, read))
+            .anyMatch(m -> m.contains("Fetal heart rate 90 bpm below 110"))
+            .anyMatch(m -> m.contains("Severe hypertension 170/115"))
+            .anyMatch(m -> m.contains("Liquor meconium"))
+            .noneMatch(stored::contains);
+        assertThat(readIn(java.util.Locale.forLanguageTag("es"), read)).noneMatch(stored::contains);
+    }
+
+    @Test
+    void d1427_everyDeliveryAlertIsReadInTheReadersLanguageWithTheValuesItWasStoredWith() {
+        DeliveryRecordRequestDTO request = deliveryRequest();
+        request.setEstimatedBloodLossMl(650);
+        request.setApgarFiveMinute(3);
+        request.setPlacentaComplete(false);
+        request.setLiveBirth(false);
+
+        service.recordDelivery(patientId, episodeId, recorderUserId, request);
+        ArgumentCaptor<DeliveryRecord> saved = ArgumentCaptor.forClass(DeliveryRecord.class);
+        verify(deliveryRecordRepository, org.mockito.Mockito.atLeastOnce()).save(saved.capture());
+        DeliveryRecord delivery = saved.getValue();
+        java.util.List<String> stored = delivery.getAlerts().stream().map(com.example.hms.model.labor.LaborAlert::getMessage).toList();
+        assertThat(stored).hasSizeGreaterThanOrEqualTo(4);
+
+        LaborMapper reader = new LaborMapper(new com.example.hms.service.i18n.NotificationLocalizer(
+            com.example.hms.i18n.TestMessageSources.bundles()));
+        java.util.function.Supplier<java.util.List<com.example.hms.payload.dto.clinical.labor.LaborAlertDTO>> read =
+            () -> reader.toDeliveryResponse(delivery).getAlerts();
+
+        assertThat(readIn(java.util.Locale.FRENCH, read)).isEqualTo(stored);
+        assertThat(readIn(java.util.Locale.ENGLISH, read)).noneMatch(stored::contains);
+    }
+
+    @Test
+    void d1427_aPressureAloneReadsAsADashNotNull() {
+        PartographEntryRequestDTO request = entryRequest();
+        request.setDiastolicBpMmHg(115);
+
+        PartographEntryResponseDTO response = service.addEntry(patientId, episodeId, recorderUserId, request);
+
+        assertThat(response.getAlerts()).anySatisfy(alert -> {
+            assertThat(alert.getCode()).isEqualTo("labor-severe-hypertension");
+            assertThat(alert.getMessage()).contains("—/115").doesNotContain("null");
+        });
+    }
 }
