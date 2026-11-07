@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 import { RoleContextService } from '../core/role-context.service';
 import { roleContextStub } from '../testing/role-context.stub';
@@ -98,6 +98,9 @@ describe('RegistrationsComponent deactivation', () => {
 
   it('the reason goes with the PUT; the row shows it once saved', () => {
     const { fixture, http, el } = page();
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', { COMMON: { REASON_VALUE: 'Motif : {{reason}}' } });
+    translate.use('fr');
     fixture.componentInstance.deactivate(row as never, 'Parti vivre ailleurs');
     const put = http.expectOne((r) => r.method === 'PUT' && r.url.endsWith('/r1'));
     expect(put.request.body.active).toBeFalse();

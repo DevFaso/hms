@@ -587,8 +587,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         com.example.hms.model.scheduling.AppointmentSlot patientSlot = null;
         if (!isStaffOrAdmin) {
             patientSlot = slotPolicy.requirePublishedFreeSlot(staff.getId(), requestedStart, hospital.getId(), null);
-            AppointmentSlotRules.requirePatientBookable(requestedStart, requestedEnd,
-                com.example.hms.utility.HospitalCalendar.now(hospital));
+            AppointmentSlotRules.requirePatientBookable(requestedStart, requestedEnd, nowAt(hospital));
         }
         String overbookReason = isStaffOrAdmin
             ? slotPolicy.overbookReasonOffSlot(staff.getId(), requestedStart, hospital.getId(), request.getOverbookReason())
@@ -993,6 +992,10 @@ public class AppointmentServiceImpl implements AppointmentService {
         sendRescheduleEmailIfMoved(saved, oldDate, oldStart, oldEnd);
 
         return appointmentMapper.toAppointmentResponseDTO(saved);
+    }
+
+    private static LocalDateTime nowAt(Hospital hospital) {
+        return com.example.hms.utility.HospitalCalendar.now(hospital);
     }
 
     /**
