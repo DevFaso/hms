@@ -105,6 +105,21 @@ describe('BpaPanelComponent', () => {
     expect(fixture.nativeElement.querySelector('[data-testid="bpa-panel-error"]')).not.toBeNull();
   });
 
+  it('can hide empty chrome while retaining active advisories and errors', () => {
+    fixture.componentRef.setInput('hideWhenEmpty', true);
+    bpaSpy.evaluate.and.returnValue(of([]));
+    setPatient('p-empty');
+    expect(fixture.nativeElement.querySelector('[data-testid="bpa-panel"]')).toBeNull();
+
+    bpaSpy.evaluate.and.returnValue(of([sampleCard('warning', 'Review required')]));
+    setPatient('p-warning');
+    expect(fixture.nativeElement.querySelector('[data-testid="bpa-panel-cards"]')).not.toBeNull();
+
+    bpaSpy.evaluate.and.returnValue(throwError(() => new Error('network')));
+    setPatient('p-error');
+    expect(fixture.nativeElement.querySelector('[data-testid="bpa-panel-error"]')).not.toBeNull();
+  });
+
   it('forwards encounterId to the service when provided', () => {
     bpaSpy.evaluate.and.returnValue(of([]));
     fixture.componentRef.setInput('patientId', 'p-1');
