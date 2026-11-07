@@ -156,6 +156,77 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   private readonly phoneQuery = globalThis.matchMedia?.(MOBILE_SIDEBAR_QUERY);
   private readonly onPhoneQueryChange = (event: MediaQueryListEvent): void =>
     this.phoneViewport.set(event.matches);
+  readonly sidebarMinWidth = 240;
+  readonly sidebarMaxWidth = 420;
+  readonly sidebarWidth = signal(this.savedSidebarWidth());
+  readonly sidebarResizing = signal(false);
+  private sidebarPointerId: number | null = null;
+  private sidebarDragStart = { x: 0, width: 260 };
+
+  private savedSidebarWidth(): number {
+    try {
+      const saved = Number(globalThis.localStorage?.getItem('hms.sidebar.width'));
+      return Number.isFinite(saved) && saved >= 240 && saved <= 420 ? saved : 260;
+    } catch {
+      return 260;
+    }
+  }
+
+  private saveSidebarWidth(): void {
+    try {
+      globalThis.localStorage?.setItem('hms.sidebar.width', String(this.sidebarWidth()));
+    } catch {
+      // Width remains usable when browser storage is unavailable.
+    }
+  }
+
+  startSidebarResize(event: PointerEvent): void {
+    if (event.button !== 0 || this.sidebarCollapsed() || isMobileViewport()) return;
+    event.preventDefault();
+    this.sidebarPointerId = event.pointerId;
+    this.sidebarDragStart = { x: event.clientX, width: this.sidebarWidth() };
+    this.sidebarResizing.set(true);
+    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+  }
+
+  moveSidebarResize(event: PointerEvent): void {
+    if (this.sidebarPointerId !== event.pointerId) return;
+    const width = this.sidebarDragStart.width + event.clientX - this.sidebarDragStart.x;
+    this.sidebarWidth.set(
+      Math.round(Math.min(this.sidebarMaxWidth, Math.max(this.sidebarMinWidth, width))),
+    );
+  }
+
+  endSidebarResize(event: PointerEvent, cancelled = false): void {
+    if (this.sidebarPointerId !== event.pointerId) return;
+    if (cancelled) this.sidebarWidth.set(this.sidebarDragStart.width);
+    const handle = event.currentTarget as HTMLElement;
+    this.sidebarPointerId = null;
+    this.sidebarResizing.set(false);
+    if (handle.hasPointerCapture(event.pointerId)) handle.releasePointerCapture(event.pointerId);
+    if (!cancelled) this.saveSidebarWidth();
+  }
+
+  resizeSidebarWithKey(event: KeyboardEvent): void {
+    const widths: Record<string, number> = {
+      ArrowLeft: this.sidebarWidth() - 16,
+      ArrowRight: this.sidebarWidth() + 16,
+      Home: this.sidebarMinWidth,
+      End: this.sidebarMaxWidth,
+    };
+    if (!(event.key in widths)) return;
+    event.preventDefault();
+    this.sidebarWidth.set(
+      Math.min(this.sidebarMaxWidth, Math.max(this.sidebarMinWidth, widths[event.key])),
+    );
+    this.saveSidebarWidth();
+  }
+
+  resetSidebarWidth(): void {
+    this.sidebarWidth.set(260);
+    this.saveSidebarWidth();
+  }
+
   profileMenuOpen = signal(false);
   notifPanelOpen = signal(false);
   unreadCount = signal(0);
@@ -1947,6 +2018,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   // ── Other handlers ───────────────────────────────────────────
 
   toggleSidebar(): void {
+    this.sidebarPointerId = null;
+    this.sidebarResizing.set(false);
     this.sidebarCollapsed.update((v) => !v);
   }
 

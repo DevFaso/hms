@@ -1,6 +1,7 @@
-<div class="page-container">
-  <div class="page-header">
+<div class="page-container encounters-dashboard">
+  <div class="page-header dashboard-header">
     <div>
+      <p class="dashboard-eyebrow">{{ 'ENCOUNTERS.WORKSPACE' | translate }}</p>
       <h1 class="page-title">{{ 'ENCOUNTERS.TITLE' | translate }}</h1>
       <p class="page-subtitle">{{ 'ENCOUNTERS.SUBTITLE' | translate }}</p>
     </div>
@@ -17,196 +18,311 @@
     </div>
   </div>
 
-  <div class="summary-cards">
-    <div class="summary-card">
-      <span class="material-symbols-outlined card-icon open">meeting_room</span>
-      <div class="card-info">
-        <span class="card-value">{{ countByStatus('SCHEDULED') }}</span>
-        <span class="card-label">{{ 'ENCOUNTERS.SCHEDULED' | translate }}</span>
+  <section class="overview-panel" [attr.aria-label]="'ENCOUNTERS.SCOPE_OVERVIEW' | translate">
+    <div class="overview-heading">
+      <div>
+        <h2>{{ 'ENCOUNTERS.SCOPE_OVERVIEW' | translate }}</h2>
+        <p>{{ 'ENCOUNTERS.SCOPE_OVERVIEW_HELP' | translate }}</p>
       </div>
-    </div>
-    <div class="summary-card">
-      <span class="material-symbols-outlined card-icon progress">how_to_reg</span>
-      <div class="card-info">
-        <span class="card-value">{{ countByStatus('ARRIVED') }}</span>
-        <span class="card-label">{{ 'ENCOUNTERS.ARRIVED' | translate }}</span>
-      </div>
-    </div>
-    <div class="summary-card">
-      <span class="material-symbols-outlined card-icon progress">monitor_heart</span>
-      <div class="card-info">
-        <span class="card-value">{{ countByStatus('TRIAGE') }}</span>
-        <span class="card-label">{{ 'ENCOUNTERS.TRIAGE' | translate }}</span>
-      </div>
-    </div>
-    <div class="summary-card">
-      <span class="material-symbols-outlined card-icon warning">person_search</span>
-      <div class="card-info">
-        <span class="card-value">{{ countByStatus('WAITING_FOR_PHYSICIAN') }}</span>
-        <span class="card-label">{{ 'ENCOUNTERS.WAITING_FOR_MD' | translate }}</span>
-      </div>
-    </div>
-    <div class="summary-card">
-      <span class="material-symbols-outlined card-icon progress">pending</span>
-      <div class="card-info">
-        <span class="card-value">{{ countByStatus('IN_PROGRESS') }}</span>
-        <span class="card-label">{{ 'ENCOUNTERS.IN_PROGRESS' | translate }}</span>
-      </div>
-    </div>
-    <div class="summary-card">
-      <span class="material-symbols-outlined card-icon completed">check_circle</span>
-      <div class="card-info">
-        <span class="card-value">{{ countByStatus('COMPLETED') }}</span>
-        <span class="card-label">{{ 'ENCOUNTERS.COMPLETED' | translate }}</span>
-      </div>
-    </div>
-    <div class="summary-card">
-      <span class="material-symbols-outlined card-icon total">bar_chart</span>
-      <div class="card-info">
-        <span class="card-value">{{ encounters().length }}</span>
-        <span class="card-label">{{ 'COMMON.TOTAL' | translate }}</span>
-      </div>
-    </div>
-  </div>
-
-  <div class="filter-bar">
-    <div class="tabs">
-      <button class="tab-btn" [class.active]="activeTab() === 'all'" (click)="setTab('all')">
-        {{ 'COMMON.ALL' | translate }}
-      </button>
-      <button class="tab-btn" [class.active]="activeTab() === 'open'" (click)="setTab('open')">
-        {{ 'COMMON.ACTIVE' | translate }}
-      </button>
       <button
-        class="tab-btn"
-        [class.active]="activeTab() === 'completed'"
-        (click)="setTab('completed')"
+        type="button"
+        class="refresh-button"
+        (click)="loadEncounters()"
+        [disabled]="loading()"
       >
-        {{ 'ENCOUNTERS.COMPLETED' | translate }}
+        <span class="material-symbols-outlined" aria-hidden="true">refresh</span>
+        {{ 'ENCOUNTERS.REFRESH' | translate }}
       </button>
     </div>
-    <div class="search-box">
-      <span class="material-symbols-outlined">search</span>
-      <input
-        [attr.aria-label]="'ENCOUNTERS.SEARCH' | translate"
-        type="text"
-        [placeholder]="'ENCOUNTERS.SEARCH' | translate"
-        [(ngModel)]="searchTerm"
-        (input)="applyFilter()"
-      />
-    </div>
-  </div>
-
-  @if (loading()) {
-    <div class="loading-state">
-      <div class="spinner"></div>
-      <p>{{ 'ENCOUNTERS.LOADING' | translate }}</p>
-    </div>
-  }
-
-  @if (!loading() && filtered().length === 0) {
-    <div class="empty-state">
-      <span class="material-symbols-outlined empty-icon">medical_services</span>
-      @if (isSuperAdmin() && globalView()) {
-        <h3>{{ 'HOSPITAL_SCOPE.EMPTY_GLOBAL.ENCOUNTERS' | translate }}</h3>
-      } @else {
-        <h3>{{ 'ENCOUNTERS.NO_ENCOUNTERS' | translate }}</h3>
+    <div class="summary-cards">
+      <button
+        type="button"
+        class="summary-card total-card"
+        (click)="resetFilters()"
+        [disabled]="loading()"
+      >
+        <span class="card-label">{{ 'ENCOUNTERS.LOADED_TOTAL' | translate }}</span>
+        <strong class="card-value">{{
+          loading() || loadError() ? '—' : encounters().length
+        }}</strong>
+        <span class="total-card-caption"
+          >{{ 'ENCOUNTERS.VIEW_ALL' | translate
+          }}<span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span></span
+        >
+      </button>
+      @for (metric of summaryMetrics(); track metric.status) {
+        <button
+          type="button"
+          class="summary-card"
+          [class.metric-selected]="selectedStatus() === metric.status"
+          [attr.aria-pressed]="selectedStatus() === metric.status"
+          [attr.data-status]="metric.status"
+          (click)="toggleMetric(metric.status)"
+          [disabled]="loading()"
+        >
+          <span
+            class="material-symbols-outlined card-icon"
+            [ngClass]="metric.tone"
+            aria-hidden="true"
+            >{{ metric.icon }}</span
+          >
+          <strong class="card-value">{{ loading() || loadError() ? '—' : metric.count }}</strong>
+          <span class="card-label">{{ metric.label | translate }}</span>
+        </button>
       }
-      <p>{{ 'ENCOUNTERS.EMPTY_MSG' | translate }}</p>
     </div>
-  }
+  </section>
 
-  @if (!loading() && filtered().length > 0) {
-    <div class="encounter-table">
-      <table>
-        <thead>
-          <tr>
-            @if (isSuperAdmin() && globalView()) {
-              <th scope="col">{{ 'HOSPITAL_SCOPE.HOSPITAL_COLUMN' | translate }}</th>
-            }
-            <th scope="col">{{ 'PATIENTS.PATIENT_NAME' | translate }}</th>
-            <th scope="col">{{ 'ENCOUNTERS.PROVIDER' | translate }}</th>
-            <th scope="col">{{ 'STAFF.DEPARTMENT' | translate }}</th>
-            <th scope="col">{{ 'COMMON.TYPE' | translate }}</th>
-            <th scope="col">{{ 'COMMON.DATE' | translate }}</th>
-            <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
-            <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (enc of filtered(); track enc.id) {
-            <tr class="data-row">
-              @if (isSuperAdmin() && globalView()) {
-                <td>
-                  <div class="cell-primary">{{ enc.hospitalName || '—' }}</div>
-                </td>
-              }
-              <td>
-                <div class="cell-primary">
-                  {{ enc.patientName || ('COMMON.UNKNOWN' | translate) }}
-                </div>
-                @if (enc.code) {
-                  <div class="cell-secondary">{{ enc.code }}</div>
-                }
-              </td>
-              <td>{{ enc.staffName || '—' }}</td>
-              <td>{{ enc.departmentName || '—' }}</td>
-              <td>
-                <span class="type-badge">
-                  <span class="material-symbols-outlined type-icon">{{
-                    getTypeIcon(enc.encounterType)
-                  }}</span>
-                  {{ enc.encounterType ? (enc.encounterType | enumLabel: 'encounterType') : '—' }}
-                </span>
-              </td>
-              <td>
-                {{
-                  enc.encounterDate ? (enc.encounterDate | serverTime | date: 'mediumDate') : '—'
-                }}
-              </td>
-              <td>
-                <span class="status-badge {{ getStatusClass(enc.status) }}">{{
-                  enc.status | enumLabel: 'encounterStatus'
-                }}</span>
-              </td>
-              <td>
-                <div class="action-group">
-                  <button
-                    [attr.aria-label]="'ENCOUNTERS.VIEW_DETAILS' | translate"
-                    class="btn-icon"
-                    [title]="'ENCOUNTERS.VIEW_DETAILS' | translate"
-                    (click)="selectEncounter(enc)"
-                  >
-                    <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
-                  </button>
-                  @if (canEditEncounter() && !isClosedVisit(enc)) {
-                    <button
-                      [attr.aria-label]="'ENCOUNTERS.EDIT' | translate"
-                      class="btn-icon"
-                      [title]="'ENCOUNTERS.EDIT' | translate"
-                      (click)="openEdit(enc)"
-                    >
-                      <span class="material-symbols-outlined" aria-hidden="true">edit</span>
-                    </button>
-                  }
-                  @if (canDeleteEncounter() && !isClosedVisit(enc)) {
-                    <button
-                      [attr.aria-label]="'ENCOUNTERS.DELETE' | translate"
-                      class="btn-icon danger"
-                      [title]="'ENCOUNTERS.DELETE' | translate"
-                      (click)="confirmDelete(enc)"
-                    >
-                      <span class="material-symbols-outlined" aria-hidden="true">delete</span>
-                    </button>
-                  }
-                </div>
-              </td>
-            </tr>
-          }
-        </tbody>
-      </table>
+  <section class="list-panel" [attr.aria-label]="'ENCOUNTERS.PATIENT_LIST' | translate">
+    <div class="list-heading">
+      <div>
+        <h2>{{ 'ENCOUNTERS.PATIENT_LIST' | translate }}</h2>
+        <p role="status">
+          {{ 'ENCOUNTERS.RESULT_COUNT' | translate: { count: filtered().length } }}
+        </p>
+      </div>
     </div>
-  }
+    <div class="filter-bar">
+      <div class="tabs">
+        <button class="tab-btn" [class.active]="activeTab() === 'all'" (click)="setTab('all')">
+          {{ 'COMMON.ALL' | translate }}
+        </button>
+        <button class="tab-btn" [class.active]="activeTab() === 'open'" (click)="setTab('open')">
+          {{ 'COMMON.ACTIVE' | translate }}
+        </button>
+        <button
+          class="tab-btn"
+          [class.active]="activeTab() === 'completed'"
+          (click)="setTab('completed')"
+        >
+          {{ 'ENCOUNTERS.COMPLETED' | translate }}
+        </button>
+      </div>
+      <div class="search-box">
+        <span class="material-symbols-outlined">search</span>
+        <input
+          [attr.aria-label]="'ENCOUNTERS.SEARCH' | translate"
+          type="text"
+          [placeholder]="'ENCOUNTERS.SEARCH' | translate"
+          [(ngModel)]="searchTerm"
+          (input)="applyFilter()"
+        />
+      </div>
+    </div>
+
+    <div class="filter-options">
+      <label
+        ><span>{{ 'COMMON.STATUS' | translate }}</span>
+        <select [ngModel]="selectedStatus()" (ngModelChange)="setStatusFilter($event)">
+          <option value="">{{ 'COMMON.ALL' | translate }}</option>
+          @for (status of statusOptions; track status) {
+            <option [value]="status">{{ status | enumLabel: 'encounterStatus' }}</option>
+          }
+        </select>
+      </label>
+      <label
+        ><span>{{ 'COMMON.TYPE' | translate }}</span>
+        <select [ngModel]="typeFilter()" (ngModelChange)="typeFilter.set($event); applyFilter()">
+          <option value="">{{ 'ENCOUNTERS.ALL_TYPES' | translate }}</option>
+          @for (type of encounterTypes; track type) {
+            <option [value]="type">{{ type | enumLabel: 'encounterType' }}</option>
+          }
+        </select>
+      </label>
+      <label
+        ><span>{{ 'STAFF.DEPARTMENT' | translate }}</span>
+        <select
+          [ngModel]="departmentFilter()"
+          (ngModelChange)="departmentFilter.set($event); applyFilter()"
+        >
+          <option value="">{{ 'ENCOUNTERS.ALL_DEPARTMENTS' | translate }}</option>
+          @for (department of departmentOptions(); track department) {
+            <option [value]="department">{{ department }}</option>
+          }
+        </select>
+      </label>
+      <label
+        ><span>{{ 'ENCOUNTERS.SORT_BY' | translate }}</span>
+        <select [ngModel]="sortOrder()" (ngModelChange)="sortOrder.set($event); applyFilter()">
+          <option value="newest">{{ 'ENCOUNTERS.NEWEST_FIRST' | translate }}</option>
+          <option value="oldest">{{ 'ENCOUNTERS.OLDEST_FIRST' | translate }}</option>
+          <option value="patient">{{ 'PATIENTS.PATIENT_NAME' | translate }}</option>
+        </select>
+      </label>
+      <button type="button" class="reset-button" (click)="resetFilters()">
+        {{ 'ENCOUNTERS.CLEAR_FILTERS' | translate }}
+      </button>
+    </div>
+    @if (!loading() && loadError()) {
+      <div class="load-error" role="alert">
+        <span class="material-symbols-outlined" aria-hidden="true">cloud_off</span>
+        <p>{{ 'ENCOUNTERS.LOAD_FAILED' | translate }}</p>
+        <button type="button" class="refresh-button" (click)="loadEncounters()">
+          {{ 'ENCOUNTERS.RETRY' | translate }}
+        </button>
+      </div>
+    }
+    @if (loading()) {
+      <div class="loading-state">
+        <div class="spinner"></div>
+        <p>{{ 'ENCOUNTERS.LOADING' | translate }}</p>
+      </div>
+    }
+
+    @if (!loading() && !loadError() && filtered().length === 0) {
+      <div class="empty-state">
+        <span class="material-symbols-outlined empty-icon">medical_services</span>
+        @if (isSuperAdmin() && globalView()) {
+          <h3>{{ 'HOSPITAL_SCOPE.EMPTY_GLOBAL.ENCOUNTERS' | translate }}</h3>
+        } @else {
+          <h3>{{ 'ENCOUNTERS.NO_ENCOUNTERS' | translate }}</h3>
+        }
+        <p>{{ 'ENCOUNTERS.EMPTY_MSG' | translate }}</p>
+        <button type="button" class="reset-button" (click)="resetFilters()">
+          {{ 'ENCOUNTERS.CLEAR_FILTERS' | translate }}
+        </button>
+      </div>
+    }
+
+    @if (!loading() && filtered().length > 0) {
+      <div class="encounter-table">
+        <table>
+          <caption class="sr-only">
+            {{
+              'ENCOUNTERS.PATIENT_LIST' | translate
+            }}
+          </caption>
+          <thead>
+            <tr>
+              @if (isSuperAdmin() && globalView()) {
+                <th scope="col">{{ 'HOSPITAL_SCOPE.HOSPITAL_COLUMN' | translate }}</th>
+              }
+              <th scope="col">{{ 'PATIENTS.PATIENT_NAME' | translate }}</th>
+              <th scope="col">{{ 'ENCOUNTERS.PROVIDER' | translate }}</th>
+              <th scope="col">{{ 'STAFF.DEPARTMENT' | translate }}</th>
+              <th scope="col">{{ 'COMMON.TYPE' | translate }}</th>
+              <th scope="col">{{ 'COMMON.DATE' | translate }}</th>
+              <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+              <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (enc of pagedEncounters(); track enc.id) {
+              <tr class="data-row">
+                @if (isSuperAdmin() && globalView()) {
+                  <td>
+                    <div class="cell-primary">{{ enc.hospitalName || '—' }}</div>
+                  </td>
+                }
+                <td>
+                  <div class="cell-primary">
+                    {{ enc.patientName || ('COMMON.UNKNOWN' | translate) }}
+                  </div>
+                  @if (enc.code) {
+                    <div class="cell-secondary">{{ enc.code }}</div>
+                  }
+                </td>
+                <td>{{ enc.staffName || '—' }}</td>
+                <td>{{ enc.departmentName || '—' }}</td>
+                <td>
+                  <span class="type-badge">
+                    <span class="material-symbols-outlined type-icon">{{
+                      getTypeIcon(enc.encounterType)
+                    }}</span>
+                    {{ enc.encounterType ? (enc.encounterType | enumLabel: 'encounterType') : '—' }}
+                  </span>
+                </td>
+                <td>
+                  {{
+                    enc.encounterDate ? (enc.encounterDate | serverTime | date: 'mediumDate') : '—'
+                  }}
+                </td>
+                <td>
+                  <span class="status-badge {{ getStatusClass(enc.status) }}">{{
+                    enc.status | enumLabel: 'encounterStatus'
+                  }}</span>
+                </td>
+                <td>
+                  <div class="action-group">
+                    <button
+                      [attr.aria-label]="'ENCOUNTERS.VIEW_DETAILS' | translate"
+                      class="btn-icon"
+                      [title]="'ENCOUNTERS.VIEW_DETAILS' | translate"
+                      (click)="selectEncounter(enc)"
+                    >
+                      <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
+                    </button>
+                    @if (canEditEncounter() && !isClosedVisit(enc)) {
+                      <button
+                        [attr.aria-label]="'ENCOUNTERS.EDIT' | translate"
+                        class="btn-icon"
+                        [title]="'ENCOUNTERS.EDIT' | translate"
+                        (click)="openEdit(enc)"
+                      >
+                        <span class="material-symbols-outlined" aria-hidden="true">edit</span>
+                      </button>
+                    }
+                    @if (canDeleteEncounter() && !isClosedVisit(enc)) {
+                      <button
+                        [attr.aria-label]="'ENCOUNTERS.DELETE' | translate"
+                        class="btn-icon danger"
+                        [title]="'ENCOUNTERS.DELETE' | translate"
+                        (click)="confirmDelete(enc)"
+                      >
+                        <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+                      </button>
+                    }
+                  </div>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+
+    @if (!loading() && filtered().length > 0) {
+      <div class="pagination-bar">
+        <p>
+          {{
+            'ENCOUNTERS.RESULT_RANGE'
+              | translate: { start: resultStart(), end: resultEnd(), total: filtered().length }
+          }}
+        </p>
+        <label class="page-size"
+          >{{ 'ENCOUNTERS.ROWS_PER_PAGE' | translate }}
+          <select [ngModel]="pageSize()" (ngModelChange)="pageSize.set(+$event); setPage(0)">
+            <option [ngValue]="10">10</option>
+            <option [ngValue]="25">25</option>
+            <option [ngValue]="50">50</option>
+          </select>
+        </label>
+        <div class="page-navigation">
+          <button
+            type="button"
+            class="page-button"
+            [disabled]="currentPage() === 0"
+            (click)="setPage(currentPage() - 1)"
+            [attr.aria-label]="'ENCOUNTERS.PREVIOUS_PAGE' | translate"
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
+          </button>
+          <span>{{
+            'ENCOUNTERS.PAGE_OF' | translate: { page: currentPage() + 1, total: totalPages() }
+          }}</span>
+          <button
+            type="button"
+            class="page-button"
+            [disabled]="currentPage() + 1 >= totalPages()"
+            (click)="setPage(currentPage() + 1)"
+            [attr.aria-label]="'ENCOUNTERS.NEXT_PAGE' | translate"
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">chevron_right</span>
+          </button>
+        </div>
+      </div>
+    }
+  </section>
 
   @if (selectedEncounter(); as enc) {
     <div class="detail-overlay" tabindex="-1" (keydown.escape)="closeDetail()">

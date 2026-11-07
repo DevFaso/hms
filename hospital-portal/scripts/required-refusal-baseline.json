@@ -273,10 +273,6 @@
       "count": 1,
       "why": "not a field: a server download error for the record PDF"
     },
-    "src/app/patients/patient-detail.ts::unmarked-refusal::setChartRestriction::PATIENTS.CHART_RESTRICTION_REASON_REQUIRED": {
-      "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
-    },
     "src/app/patients/patient-form.ts::toast-only-refusal::onSubmit::PATIENTS.MATCH_DECIDE": {
       "count": 1,
       "why": "not a field: a decision between the match card buttons (Link / Dismiss), which the card itself presents"

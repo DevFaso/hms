@@ -20,6 +20,7 @@ import {
 } from '../services/bed.service';
 import { ToastService } from '../core/toast.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { MeasurePipe } from '../shared/pipes/measure.pipe';
 import { DepartmentLookupService, DepartmentOption } from '../services/department-lookup.service';
 import { RoleContextService } from '../core/role-context.service';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
@@ -40,6 +41,7 @@ import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
     FormsModule,
     TranslateModule,
     EnumLabelPipe,
+    MeasurePipe,
   ],
   templateUrl: './bed-management.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -88,6 +90,82 @@ export class BedManagementComponent implements OnInit {
   saving = signal(false);
 
   selectedWard = computed(() => this.wards().find((w) => w.id === this.selectedWardId()) ?? null);
+  readonly wardSearch = signal('');
+  readonly wardTypeFilter = signal<WardType | ''>('');
+  readonly wardSort = signal<'name' | 'available' | 'occupied'>('name');
+  readonly bedSearch = signal('');
+  readonly bedFilter = signal<BedStatus | ''>('');
+  readonly loadError = signal(false);
+  readonly bedsError = signal(false);
+  private wardRequest = 0;
+  private bedRequest = 0;
+  readonly allBedStatuses: BedStatus[] = [
+    'AVAILABLE',
+    'OCCUPIED',
+    'RESERVED',
+    'MAINTENANCE',
+    'OUT_OF_SERVICE',
+  ];
+  readonly totals = computed(() =>
+    this.wards()
+      .filter((w) => w.active)
+      .reduce(
+        (sum, w) => ({
+          wards: sum.wards + 1,
+          beds: sum.beds + w.totalBeds,
+          available: sum.available + w.availableBeds,
+          occupied: sum.occupied + w.occupiedBeds,
+        }),
+        { wards: 0, beds: 0, available: 0, occupied: 0 },
+      ),
+  );
+  readonly occupancyRate = computed(() =>
+    this.totals().beds ? Math.round((this.totals().occupied / this.totals().beds) * 1000) / 10 : 0,
+  );
+  readonly filteredWards = computed(() => {
+    const term = this.wardSearch().toLowerCase().trim();
+    return this.wards()
+      .filter(
+        (w) =>
+          (!this.wardTypeFilter() || w.wardType === this.wardTypeFilter()) &&
+          (!term ||
+            [w.code, w.name, w.departmentName].some((v) => v?.toLowerCase().includes(term))),
+      )
+      .sort((a, b) =>
+        this.wardSort() === 'available'
+          ? b.availableBeds - a.availableBeds
+          : this.wardSort() === 'occupied'
+            ? b.occupiedBeds - a.occupiedBeds
+            : a.name.localeCompare(b.name),
+      );
+  });
+  readonly filteredBeds = computed(() => {
+    const term = this.bedSearch().toLowerCase().trim();
+    return this.beds().filter(
+      (b) =>
+        (!this.bedFilter() || b.status === this.bedFilter()) &&
+        (!term ||
+          [b.bedNumber, b.roomNumber, b.bedType, b.notes].some((v) =>
+            v?.toLowerCase().includes(term),
+          )),
+    );
+  });
+
+  resetWardFilters(): void {
+    this.wardSearch.set('');
+    this.wardTypeFilter.set('');
+    this.wardSort.set('name');
+  }
+  closeWard(): void {
+    this.selectedWardId.set(null);
+    this.beds.set([]);
+    ++this.bedRequest;
+    this.bedsLoading.set(false);
+  }
+  retryBeds(): void {
+    const id = this.selectedWardId();
+    if (id) this.loadBeds(id);
+  }
 
   /* Ward modal */
   wardModalOpen = signal(false);
@@ -104,9 +182,12 @@ export class BedManagementComponent implements OnInit {
   }
 
   loadWards(): void {
+    const request = ++this.wardRequest;
     this.loading.set(true);
+    this.loadError.set(false);
     this.bedService.getWards(this.showInactive()).subscribe({
       next: (wards) => {
+        if (request !== this.wardRequest) return;
         this.wards.set(wards);
         this.loading.set(false);
         const selected = this.selectedWardId();
@@ -116,6 +197,10 @@ export class BedManagementComponent implements OnInit {
         }
       },
       error: () => {
+        if (request !== this.wardRequest) return;
+        this.loadError.set(true);
+        this.wards.set([]);
+        this.closeWard();
         this.toast.error(this.translate.instant('BEDS.TOAST.LOAD_FAILED'));
         this.loading.set(false);
       },
@@ -129,17 +214,26 @@ export class BedManagementComponent implements OnInit {
 
   selectWard(ward: WardResponse): void {
     this.selectedWardId.set(ward.id);
+    this.beds.set([]);
+    this.bedSearch.set('');
+    this.bedFilter.set('');
     this.loadBeds(ward.id);
   }
 
   private loadBeds(wardId: string): void {
+    const request = ++this.bedRequest;
     this.bedsLoading.set(true);
+    this.bedsError.set(false);
     this.bedService.getBeds(wardId).subscribe({
       next: (beds) => {
+        if (request !== this.bedRequest || wardId !== this.selectedWardId()) return;
         this.beds.set(beds);
         this.bedsLoading.set(false);
       },
       error: () => {
+        if (request !== this.bedRequest || wardId !== this.selectedWardId()) return;
+        this.beds.set([]);
+        this.bedsError.set(true);
         this.toast.error(this.translate.instant('BEDS.TOAST.LOAD_FAILED'));
         this.bedsLoading.set(false);
       },
@@ -155,7 +249,8 @@ export class BedManagementComponent implements OnInit {
   /* ── Ward CRUD ─────────────────────────────────────────── */
 
   private loadDepartments(): void {
-    const hid = this.roleContext.activeHospitalId;
+    const hid =
+      this.roleContext.effectiveHospitalIdForRequest() ?? this.roleContext.activeHospitalId;
     if (!hid) {
       this.departments.set([]);
       return;

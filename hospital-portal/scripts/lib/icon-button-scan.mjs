@@ -22,10 +22,13 @@
  */
 import { tags, innerHtml, attrValue } from './html-tags.mjs';
 
+// Prettier splits the closing tag (`</span` then `>` on the next line) when the
+// icon's text is glued to its tags; reading only `</span>` ran the icon on to the NEXT span's close and
+// swallowed the visible label in between (a summary card read as icon-only).
 const ICON_SPAN =
-  /<span\b[^>]*class="[^"]*\bmaterial-(?:symbols-outlined|symbols-rounded|icons)\b[^"]*"[^>]*>[\s\S]*?<\/span>/g;
+  /<span\b[^>]*class="[^"]*\bmaterial-(?:symbols-outlined|symbols-rounded|icons)\b[^"]*"[^>]*>[\s\S]*?<\/span\s*>/g;
 const ICON_SPAN_BOUND =
-  /<span\b[^>]*\[class(?:\.[^\]]+)?\]="[^"]*material-[^"]*"[^>]*>[\s\S]*?<\/span>/g;
+  /<span\b[^>]*\[class(?:\.[^\]]+)?\]="[^"]*material-[^"]*"[^>]*>[\s\S]*?<\/span\s*>/g;
 const MAT_ICON = /<mat-icon\b[^>]*>[\s\S]*?<\/mat-icon>/g;
 const SVG = /<svg\b[^>]*>[\s\S]*?<\/svg>/g;
 const I_TAG = /<i\b[^>]*><\/i>/g;

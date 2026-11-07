@@ -18,6 +18,11 @@ import { CdsAcknowledgementService } from '../services/cds-acknowledgement.servi
 import { StoryboardService } from '../services/storyboard.service';
 import { CHART_REVIEW_VIEW_ROLES } from './patient-chart/chart-access';
 import { BreakGlassService } from '../services/break-glass.service';
+import {
+  expectEmptySubmitRefusal,
+  expectFieldsMarked,
+  fieldErrorsResponse,
+} from '../testing/form-refusal-behaviour';
 import { AuthService } from '../auth/auth.service';
 import { FluidBalanceService } from '../services/fluid-balance.service';
 import { MicroService } from '../services/micro.service';
@@ -242,10 +247,168 @@ describe('PatientDetailComponent', () => {
     });
   });
 
+  it('groups navigation without fetching clinical lists on overview', () => {
+    roleContextSpy.hasAnyActiveRole.and.returnValue(true);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelectorAll('.section-tab').length).toBe(5);
+    expect(vitalServiceSpy.getRecent).not.toHaveBeenCalled();
+    expect(encounterServiceSpy.list).not.toHaveBeenCalled();
+    expect(appointmentServiceSpy.list).not.toHaveBeenCalled();
+
+    fixture.nativeElement.querySelector('[data-testid="clinical-section-button"]').click();
+    fixture.detectChanges();
+    expect(component.activeTab()).toBe('medical');
+    expect(fixture.nativeElement.querySelector('[data-testid="vitals-tab-button"]')).toBeTruthy();
+  });
+
+  it('keeps restriction controls in Administration and out of the summary', () => {
+    roleContextSpy.hasAnyActiveRole.and.returnValue(true);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-testid="restriction-card"]')).toBeNull();
+    component.setSection('administration');
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-testid="restriction-card"]')).toBeTruthy();
+    // QA D1124: the button stays pressable; the guard says why it refuses.
+    const apply = fixture.nativeElement.querySelector('[data-testid="apply-restriction"]');
+    expect(apply.disabled).toBeFalse();
+  });
+
+  it('QA D1245 / D1272: an empty restriction reason is refused on the field, and nothing is sent', () => {
+    roleContextSpy.hasAnyActiveRole.and.returnValue(true);
+    const send = jasmine.createSpy('setChartRestriction');
+    (patientServiceSpy as unknown as Record<string, unknown>)['setChartRestriction'] = send;
+    document.body.appendChild(fixture.nativeElement);
+    fixture.detectChanges();
+    component.setSection('administration');
+    fixture.detectChanges();
+
+    const marked = expectEmptySubmitRefusal(fixture, {
+      button: '[data-testid="apply-restriction"]',
+      sent: send,
+    });
+
+    expect(marked).toEqual(['restriction-reason']);
+    (fixture.nativeElement as HTMLElement).remove();
+  });
+
+  it('marks the reason with the reason a 400 gives for it', () => {
+    roleContextSpy.hasAnyActiveRole.and.returnValue(true);
+    (patientServiceSpy as unknown as Record<string, unknown>)['setChartRestriction'] = jasmine
+      .createSpy('setChartRestriction')
+      .and.returnValue(
+        throwError(() => fieldErrorsResponse({ reason: 'Le motif est trop court.' })),
+      );
+    document.body.appendChild(fixture.nativeElement);
+    fixture.detectChanges();
+    component.setSection('administration');
+    fixture.detectChanges();
+    component.restrictionReason.set('Motif documenté');
+    fixture.detectChanges();
+    component.setChartRestriction(true);
+    fixture.detectChanges();
+
+    expectFieldsMarked(fixture, { 'restriction-reason': 'Le motif est trop court.' });
+    (fixture.nativeElement as HTMLElement).remove();
+  });
+
+  it('keeps restriction controls hidden for a non-manager in summary and Administration', () => {
+    fixture.detectChanges();
+    expect(component.canManageRestriction()).toBeFalse();
+    const privacy = fixture.nativeElement.querySelector('.privacy-card');
+    expect(privacy).toBeTruthy();
+    expect(privacy.querySelector('button')).toBeNull();
+
+    component.setSection('administration');
+    fixture.detectChanges();
+    expect(component.activeTab()).toBe('administration');
+    expect(fixture.nativeElement.querySelector('[data-testid="restriction-card"]')).toBeNull();
+    expect(fixture.nativeElement.querySelector('[data-testid="apply-restriction"]')).toBeNull();
+    expect(fixture.nativeElement.querySelector('[data-testid="lift-restriction"]')).toBeNull();
+  });
+
+  it('does not expose restricted clinical subtabs through grouped navigation', () => {
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-testid="care-section-button"]')).toBeNull();
+    component.setSection('clinical');
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-testid="vitals-tab-button"]')).toBeNull();
+    expect(fixture.nativeElement.querySelector('[data-testid="micro-tab-button"]')).toBeNull();
+    component.setSection('care');
+    expect(component.activeTab()).toBe('medical');
+    component.setTab('appointments');
+    expect(appointmentServiceSpy.list).not.toHaveBeenCalled();
+  });
+
+  it('displays guardian details and treats missing contact information as undocumented', () => {
+    patientServiceSpy.getById.and.returnValue(
+      of({
+        ...mockPatient,
+        emergencyContactName: 'Cdx Guardian',
+        emergencyContactRelationship: 'Parent',
+        emergencyContactPhone: '+22600000000',
+      }),
+    );
+    fixture.detectChanges();
+    const contact = fixture.nativeElement.querySelector('.contact-card');
+    expect(contact.textContent).toContain('Cdx Guardian');
+    expect(contact.querySelector('a').getAttribute('href')).toBe('tel:+22600000000');
+    component.patient.set({ ...mockPatient });
+    fixture.detectChanges();
+    // QA D926: no guardian at all reads as one "none recorded" line, not three blanks.
+    expect(contact.textContent).toContain('PATIENTS.EC_NONE');
+    expect(contact.querySelector('a')).toBeNull();
+    component.patient.set({ ...mockPatient, emergencyContactName: 'Cdx Guardian' });
+    fixture.detectChanges();
+    expect(contact.textContent).toContain('PATIENTS.NOT_DOCUMENTED');
+    expect(contact.querySelector('a')).toBeNull();
+  });
+
+  it('explains narrowed records without hiding the documented global history summary', () => {
+    patientServiceSpy.getById.and.returnValue(
+      of({
+        ...mockPatient,
+        recordsWithheld: true,
+        allergiesWithheld: true,
+        allergies: '',
+        medicalHistorySummary: 'Documented history',
+      }),
+    );
+    fixture.detectChanges();
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="overview-records-withheld"]').textContent,
+    ).toContain('CHART.LIST_WITHHELD');
+    expect(fixture.nativeElement.querySelector('.essentials-card').textContent).toContain(
+      'Documented history',
+    );
+    component.setTab('medical');
+    fixture.detectChanges();
+    const medical = fixture.nativeElement.querySelector('.info-grid');
+    expect(medical.textContent).toContain('CHART.ALLERGIES_WITHHELD');
+    expect(medical.textContent).not.toContain('PATIENTS.NOT_DOCUMENTED');
+  });
+
   it('should load patient on init', () => {
     fixture.detectChanges();
     expect(patientServiceSpy.getById).toHaveBeenCalledWith('p1', 'h1');
     expect(component.patient()).toEqual(mockPatient);
+  });
+
+  it('hides previously loaded identity when a reload reports a restricted chart', () => {
+    fixture.detectChanges();
+    patientServiceSpy.getById.and.returnValue(
+      throwError(
+        () =>
+          new HttpErrorResponse({
+            status: 403,
+            error: { code: 'CHART_RESTRICTED' },
+          }),
+      ),
+    );
+    component.loadPatient('p1');
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-testid="restricted-chart"]')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('.detail-header')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.patient-navigation')).toBeNull();
   });
 
   it('should switch to vitals tab and load vitals', () => {
@@ -376,6 +539,9 @@ describe('PatientDetailComponent', () => {
     fixture.detectChanges();
     const page = fixture.nativeElement as HTMLElement;
     expect(page.querySelector('app-storyboard-banner')).toBeNull();
+    // The redesigned summary's clinical essentials (blood type, history) are clinical too.
+    expect(page.querySelector('.essentials-card')).toBeNull();
+    expect(page.querySelector('[data-testid="guardian-card"]')).not.toBeNull();
 
     // A second clinical or administrative role lifts it, as on the server.
     for (const role of ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_HOSPITAL_ADMIN']) {
@@ -592,6 +758,8 @@ describe('PatientDetailComponent', () => {
       fixture.detectChanges();
 
       expect(component.showGrowthTab()).toBeTrue();
+      component.setSection('clinical');
+      fixture.detectChanges();
       const btn = fixture.nativeElement.querySelector('[data-testid="growth-tab-button"]');
       expect(btn).toBeTruthy();
 
@@ -619,6 +787,8 @@ describe('PatientDetailComponent', () => {
         roles.includes('ROLE_NURSE'),
       );
       fixture.detectChanges(); // mockPatient is an adult — no age gate here
+      component.setSection('clinical');
+      fixture.detectChanges();
 
       const btn = fixture.nativeElement.querySelector('[data-testid="fluid-balance-tab-button"]');
       expect(btn).toBeTruthy();
@@ -648,6 +818,8 @@ describe('PatientDetailComponent', () => {
       );
       fixture.detectChanges();
 
+      component.setSection('clinical');
+      fixture.detectChanges();
       const btn = fixture.nativeElement.querySelector('[data-testid="micro-tab-button"]');
       expect(btn).toBeTruthy();
 

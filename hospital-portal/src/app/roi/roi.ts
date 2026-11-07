@@ -81,6 +81,34 @@ export class RoiComponent implements OnInit, OnDestroy {
   total = signal(0);
   loading = signal(false);
   loadFailed = signal(false);
+  readonly searchTerm = signal('');
+  readonly requesterFilter = signal<RoiRequesterType | ''>('');
+  readonly visibleRows = computed(() => {
+    const term = this.searchTerm().trim().toLocaleLowerCase();
+    return this.rows().filter(
+      (row) =>
+        (!this.requesterFilter() || row.requesterType === this.requesterFilter()) &&
+        (!term ||
+          [
+            row.patientName,
+            row.patientId,
+            row.requesterName,
+            row.purpose,
+            row.scopeDescription,
+          ].some((value) => value?.toLocaleLowerCase().includes(term))),
+    );
+  });
+  readonly patientRequestsLoaded = computed(
+    () => this.rows().filter((r) => r.requesterType === 'PATIENT').length,
+  );
+  readonly thirdPartyRequestsLoaded = computed(
+    () => this.rows().filter((r) => r.requesterType === 'THIRD_PARTY').length,
+  );
+
+  clearFilters(): void {
+    this.searchTerm.set('');
+    this.requesterFilter.set('');
+  }
 
   /* ── intake modal ── */
   showIntake = signal(false);
@@ -149,6 +177,7 @@ export class RoiComponent implements OnInit, OnDestroy {
 
   setStatus(status: RoiRequestStatus): void {
     this.activeStatus.set(status);
+    this.clearFilters();
     this.load$.next(status);
   }
 

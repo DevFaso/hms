@@ -1,6 +1,7 @@
-<div class="page-container">
-  <div class="page-header">
+<div class="page-container admissions-dashboard">
+  <div class="page-header dashboard-header">
     <div>
+      <p class="dashboard-eyebrow">{{ 'ADMISSIONS.WORKSPACE' | translate }}</p>
       <h1 class="page-title">{{ 'ADMISSIONS.TITLE' | translate }}</h1>
       <p class="page-subtitle">{{ 'ADMISSIONS.SUBTITLE' | translate }}</p>
     </div>
@@ -16,238 +17,374 @@
       }
     </div>
   </div>
-  <div class="summary-cards">
-    <div
-      class="summary-card"
-      role="button"
-      tabindex="0"
-      (click)="setTab('admitted')"
-      (keydown.enter)="setTab('admitted')"
-      (keydown.space)="setTab('admitted')"
-    >
-      <span class="material-symbols-outlined card-icon admitted">hotel</span>
-      <div class="card-info">
-        <span class="card-value">{{ countByStatus('ACTIVE') }}</span
-        ><span class="card-label">{{ 'ADMISSIONS.ADMITTED' | translate }}</span>
+  <section class="overview-panel" [attr.aria-label]="'ADMISSIONS.SCOPE_OVERVIEW' | translate">
+    <div class="overview-heading">
+      <div>
+        <h2>{{ 'ADMISSIONS.SCOPE_OVERVIEW' | translate }}</h2>
+        <p>{{ 'ADMISSIONS.SCOPE_OVERVIEW_HELP' | translate }}</p>
       </div>
-    </div>
-    <div
-      class="summary-card"
-      role="button"
-      tabindex="0"
-      (click)="setTab('discharged')"
-      (keydown.enter)="setTab('discharged')"
-      (keydown.space)="setTab('discharged')"
-    >
-      <span class="material-symbols-outlined card-icon discharged">logout</span>
-      <div class="card-info">
-        <span class="card-value">{{ countByStatus('DISCHARGED') }}</span
-        ><span class="card-label">{{ 'ADMISSIONS.DISCHARGED' | translate }}</span>
-      </div>
-    </div>
-    <div class="summary-card">
-      <span class="material-symbols-outlined card-icon pending">schedule</span>
-      <div class="card-info">
-        <span class="card-value">{{ countByStatus('PENDING') }}</span
-        ><span class="card-label">{{ 'ADMISSIONS.PENDING' | translate }}</span>
-      </div>
-    </div>
-    <div
-      class="summary-card"
-      role="button"
-      tabindex="0"
-      (click)="setTab('all')"
-      (keydown.enter)="setTab('all')"
-      (keydown.space)="setTab('all')"
-    >
-      <span class="material-symbols-outlined card-icon total">bar_chart</span>
-      <div class="card-info">
-        <span class="card-value">{{ admissions().length }}</span
-        ><span class="card-label">{{ 'COMMON.TOTAL' | translate }}</span>
-      </div>
-    </div>
-  </div>
-  <div class="filter-bar">
-    <div class="tabs">
-      <button class="tab-btn" [class.active]="activeTab() === 'all'" (click)="setTab('all')">
-        {{ 'COMMON.ALL' | translate }}
+      <button type="button" class="refresh-button" (click)="load()" [disabled]="loading()">
+        <span class="material-symbols-outlined" aria-hidden="true">refresh</span>
+        {{ 'ADMISSIONS.REFRESH' | translate }}
       </button>
+    </div>
+    <div class="summary-cards">
       <button
-        class="tab-btn"
-        [class.active]="activeTab() === 'admitted'"
-        (click)="setTab('admitted')"
+        type="button"
+        class="summary-card total-card"
+        (click)="resetFilters()"
+        [disabled]="loading()"
       >
-        {{ 'ADMISSIONS.ADMITTED' | translate }}
+        <span class="card-label">{{ 'ADMISSIONS.LOADED_TOTAL' | translate }}</span>
+        <strong class="card-value">{{
+          loading() || loadError() ? '—' : admissions().length
+        }}</strong>
+        <span class="total-card-caption"
+          >{{ 'ADMISSIONS.VIEW_ALL' | translate
+          }}<span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span></span
+        >
       </button>
-      <button
-        class="tab-btn"
-        [class.active]="activeTab() === 'discharged'"
-        (click)="setTab('discharged')"
-      >
-        {{ 'ADMISSIONS.DISCHARGED' | translate }}
-      </button>
-    </div>
-    <div class="search-box">
-      <span class="material-symbols-outlined">search</span
-      ><input
-        [attr.aria-label]="'ADMISSIONS.SEARCH' | translate"
-        type="text"
-        [placeholder]="'ADMISSIONS.SEARCH' | translate"
-        [title]="'ADMISSIONS.SEARCH' | translate"
-        [(ngModel)]="searchTerm"
-        (input)="applyFilter()"
-      />
-    </div>
-  </div>
-  @if (loading()) {
-    <div class="loading-state">
-      <div class="spinner"></div>
-      <p>{{ 'ADMISSIONS.LOADING' | translate }}</p>
-    </div>
-  }
-  @if (!loading() && filtered().length === 0) {
-    <div class="empty-state">
-      <span class="material-symbols-outlined empty-icon">hotel</span>
-      @if (isSuperAdmin() && globalView()) {
-        <h3>{{ 'HOSPITAL_SCOPE.EMPTY_GLOBAL.ADMISSIONS' | translate }}</h3>
-      } @else {
-        <h3>{{ 'ADMISSIONS.NO_RESULTS' | translate }}</h3>
+      @for (metric of summaryMetrics(); track metric.id) {
+        <button
+          type="button"
+          class="summary-card"
+          [class.metric-selected]="selectedMetric() === metric.id"
+          [attr.aria-pressed]="selectedMetric() === metric.id"
+          [attr.data-metric]="metric.id"
+          (click)="selectMetric(metric.id)"
+          [disabled]="loading()"
+        >
+          <span
+            class="material-symbols-outlined card-icon"
+            [ngClass]="metric.tone"
+            aria-hidden="true"
+            >{{ metric.icon }}</span
+          >
+          <strong class="card-value">{{ loading() || loadError() ? '—' : metric.count }}</strong>
+          <span class="card-label">{{ metric.label | translate }}</span>
+        </button>
       }
-      <p>{{ 'ADMISSIONS.EMPTY_MESSAGE' | translate }}</p>
     </div>
-  }
-  @if (!loading() && filtered().length > 0) {
-    <div class="data-table">
-      <table>
-        <thead>
-          <tr>
-            @if (isSuperAdmin() && globalView()) {
-              <th scope="col">{{ 'HOSPITAL_SCOPE.HOSPITAL_COLUMN' | translate }}</th>
-            }
-            <th scope="col">{{ 'PATIENTS.PATIENT_NAME' | translate }}</th>
-            <th scope="col">{{ 'ADMISSIONS.ROOM_BED' | translate }}</th>
-            <th scope="col">{{ 'ADMISSIONS.TYPE' | translate }}</th>
-            <th scope="col">{{ 'ADMISSIONS.ACUITY' | translate }}</th>
-            <th scope="col">{{ 'ADMISSIONS.CHIEF_COMPLAINT' | translate }}</th>
-            <th scope="col">{{ 'ADMISSIONS.ADMITTED' | translate }}</th>
-            <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
-            <th scope="col" class="actions-col">{{ 'COMMON.ACTIONS' | translate }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (a of filtered(); track a.id) {
-            <tr class="data-row">
-              @if (isSuperAdmin() && globalView()) {
-                <td>
-                  <div class="cell-primary">{{ a.hospitalName || '—' }}</div>
-                </td>
-              }
-              <td>
-                <div class="cell-primary">
-                  {{ a.patientName ? a.patientName : ('COMMON.UNKNOWN' | translate) }}
-                </div>
-                @if (a.encounterCode) {
-                  <div class="cell-secondary" [title]="'BILLING.ENCOUNTER_REFERENCE' | translate">
-                    {{ a.encounterCode }}
-                  </div>
-                }
-              </td>
-              <td>{{ a.roomBed || '—' }}</td>
-              <td>{{ a.admissionType ? (a.admissionType | enumLabel: 'admissionType') : '—' }}</td>
-              <td>
-                <span class="acuity-badge {{ getAcuityClass(a.acuityLevel) }}">{{
-                  acuityLabel[a.acuityLevel] || a.acuityLevel
-                }}</span>
-              </td>
-              <td class="complaint-cell">{{ a.chiefComplaint || '—' }}</td>
-              <td>
-                {{
-                  a.admissionDateTime
-                    ? (fromServerDateTime(a.admissionDateTime) | date: 'mediumDate')
-                    : '—'
-                }}
-              </td>
-              <td>
-                <span class="status-badge {{ getStatusClass(a.status) }}">{{
-                  a.status | enumLabel: 'admissionStatus'
-                }}</span>
-              </td>
-              <td>
-                <div class="action-group">
-                  @if (a.status === 'ACTIVE') {
-                    @if (canDischarge()) {
-                      <button
-                        [attr.aria-label]="'ADMISSIONS.DISCHARGE' | translate"
-                        class="action-link discharge-link"
-                        (click)="confirmDischarge(a)"
-                        [attr.title]="'ADMISSIONS.DISCHARGE' | translate"
-                      >
-                        <span class="material-symbols-outlined" aria-hidden="true"
-                          >exit_to_app</span
-                        >
-                      </button>
-                    }
-                    @if (canApplyOrderSets()) {
-                      <button
-                        [attr.aria-label]="'ORDER_SETS.OPEN_PICKER' | translate"
-                        class="action-link"
-                        (click)="openOrderSetPicker(a)"
-                        [attr.title]="'ORDER_SETS.OPEN_PICKER' | translate"
-                        data-testid="open-order-set-picker"
-                      >
-                        <span class="material-symbols-outlined" aria-hidden="true"
-                          >playlist_add_check</span
-                        >
-                      </button>
-                    }
-                    @if (canAssignBed()) {
-                      <button
-                        [attr.aria-label]="'ADMISSIONS.ASSIGN_BED' | translate"
-                        class="action-link"
-                        (click)="openBedAssign(a)"
-                        [attr.title]="'ADMISSIONS.ASSIGN_BED' | translate"
-                        data-testid="open-bed-assign"
-                      >
-                        <span class="material-symbols-outlined" aria-hidden="true">bed</span>
-                      </button>
-                    }
-                    @if (a.bedId && canUnassignBed()) {
-                      <button
-                        [attr.aria-label]="'ADMISSIONS.UNASSIGN_BED' | translate"
-                        class="action-link"
-                        (click)="openUnassignBed(a)"
-                        [attr.title]="'ADMISSIONS.UNASSIGN_BED' | translate"
-                      >
-                        <span class="material-symbols-outlined" aria-hidden="true">bed_off</span>
-                      </button>
-                    }
-                  }
-                  @if (canEditAdmission() && isEditable(a)) {
-                    <button
-                      [attr.aria-label]="'COMMON.EDIT' | translate"
-                      class="action-link edit-link"
-                      (click)="openEdit(a)"
-                    >
-                      <span class="material-symbols-outlined" aria-hidden="true">edit</span>
-                    </button>
-                  }
-                  @if (canCancelAdmission() && isCancellable(a)) {
-                    <button
-                      [attr.aria-label]="'COMMON.DELETE' | translate"
-                      class="action-link delete-link"
-                      (click)="confirmDelete(a)"
-                    >
-                      <span class="material-symbols-outlined" aria-hidden="true">delete</span>
-                    </button>
-                  }
-                </div>
-              </td>
-            </tr>
+  </section>
+
+  <section class="list-panel" [attr.aria-label]="'ADMISSIONS.PATIENT_LIST' | translate">
+    <div class="list-heading">
+      <div>
+        <h2>{{ 'ADMISSIONS.PATIENT_LIST' | translate }}</h2>
+        <p role="status">
+          {{ 'ADMISSIONS.RESULT_COUNT' | translate: { count: filtered().length } }}
+        </p>
+      </div>
+    </div>
+    <div class="filter-bar">
+      <div class="tabs">
+        <button class="tab-btn" [class.active]="activeTab() === 'all'" (click)="setTab('all')">
+          {{ 'COMMON.ALL' | translate }}
+        </button>
+        <button
+          class="tab-btn"
+          [class.active]="activeTab() === 'admitted'"
+          (click)="setTab('admitted')"
+        >
+          {{ 'ADMISSIONS.ADMITTED' | translate }}
+        </button>
+        <button
+          class="tab-btn"
+          [class.active]="activeTab() === 'discharged'"
+          (click)="setTab('discharged')"
+        >
+          {{ 'ADMISSIONS.DISCHARGED' | translate }}
+        </button>
+      </div>
+      <div class="search-box">
+        <span class="material-symbols-outlined">search</span
+        ><input
+          [attr.aria-label]="'ADMISSIONS.SEARCH' | translate"
+          type="text"
+          [placeholder]="'ADMISSIONS.SEARCH' | translate"
+          [title]="'ADMISSIONS.SEARCH' | translate"
+          [(ngModel)]="searchTerm"
+          (input)="applyFilter()"
+        />
+      </div>
+    </div>
+
+    <div class="filter-options">
+      <label
+        ><span>{{ 'COMMON.STATUS' | translate }}</span
+        ><select [ngModel]="statusFilter()" (ngModelChange)="setStatusFilter($event)">
+          <option value="">{{ 'COMMON.ALL' | translate }}</option>
+          @for (status of statusOptions; track status) {
+            <option [value]="status">{{ status | enumLabel: 'admissionStatus' }}</option>
           }
-        </tbody>
-      </table>
+        </select></label
+      >
+      <label
+        ><span>{{ 'ADMISSIONS.TYPE' | translate }}</span
+        ><select [ngModel]="typeFilter()" (ngModelChange)="typeFilter.set($event); applyFilter()">
+          <option value="">{{ 'ADMISSIONS.ALL_TYPES' | translate }}</option>
+          @for (type of admissionTypes; track type) {
+            <option [value]="type">{{ type | enumLabel: 'admissionType' }}</option>
+          }
+        </select></label
+      >
+      <label
+        ><span>{{ 'ADMISSIONS.ACUITY' | translate }}</span
+        ><select
+          [ngModel]="acuityFilter()"
+          (ngModelChange)="acuityFilter.set($event); applyFilter()"
+        >
+          <option value="">{{ 'COMMON.ALL' | translate }}</option>
+          @for (level of acuityLevels; track level) {
+            <option [value]="level">{{ acuityLabel[level] }}</option>
+          }
+        </select></label
+      >
+      <label
+        ><span>{{ 'ADMISSIONS.ROOM_BED' | translate }}</span
+        ><select [ngModel]="bedFilter()" (ngModelChange)="bedFilter.set($event); applyFilter()">
+          <option value="">{{ 'COMMON.ALL' | translate }}</option>
+          <option value="missing">{{ 'ADMISSIONS.BED_NOT_RECORDED' | translate }}</option>
+          <option value="recorded">{{ 'ADMISSIONS.BED_RECORDED' | translate }}</option>
+        </select></label
+      >
+      <label
+        ><span>{{ 'ADMISSIONS.SORT_BY' | translate }}</span
+        ><select [ngModel]="sortOrder()" (ngModelChange)="sortOrder.set($event); applyFilter()">
+          <option value="newest">{{ 'ADMISSIONS.NEWEST_FIRST' | translate }}</option>
+          <option value="oldest">{{ 'ADMISSIONS.OLDEST_FIRST' | translate }}</option>
+          <option value="patient">{{ 'PATIENTS.PATIENT_NAME' | translate }}</option>
+        </select></label
+      >
+      <button type="button" class="reset-button" (click)="resetFilters()">
+        {{ 'ADMISSIONS.CLEAR_FILTERS' | translate }}
+      </button>
     </div>
-  }
+    @if (!loading() && loadError()) {
+      <div class="load-error" role="alert">
+        <span class="material-symbols-outlined" aria-hidden="true">cloud_off</span>
+        <p>{{ 'ADMISSIONS.LOAD_FAILED' | translate }}</p>
+        <button type="button" class="refresh-button" (click)="load()">
+          {{ 'ADMISSIONS.RETRY' | translate }}
+        </button>
+      </div>
+    }
+    @if (loading()) {
+      <div class="loading-state">
+        <div class="spinner"></div>
+        <p>{{ 'ADMISSIONS.LOADING' | translate }}</p>
+      </div>
+    }
+    @if (!loading() && !loadError() && filtered().length === 0) {
+      <div class="empty-state">
+        <span class="material-symbols-outlined empty-icon">hotel</span>
+        @if (isSuperAdmin() && globalView()) {
+          <h3>{{ 'HOSPITAL_SCOPE.EMPTY_GLOBAL.ADMISSIONS' | translate }}</h3>
+        } @else {
+          <h3>{{ 'ADMISSIONS.NO_RESULTS' | translate }}</h3>
+        }
+        <p>{{ 'ADMISSIONS.EMPTY_MESSAGE' | translate }}</p>
+        <button type="button" class="reset-button" (click)="resetFilters()">
+          {{ 'ADMISSIONS.CLEAR_FILTERS' | translate }}
+        </button>
+      </div>
+    }
+    @if (!loading() && filtered().length > 0) {
+      <div class="data-table">
+        <table>
+          <caption class="sr-only">
+            {{
+              'ADMISSIONS.PATIENT_LIST' | translate
+            }}
+          </caption>
+          <thead>
+            <tr>
+              @if (isSuperAdmin() && globalView()) {
+                <th scope="col">{{ 'HOSPITAL_SCOPE.HOSPITAL_COLUMN' | translate }}</th>
+              }
+              <th scope="col">{{ 'PATIENTS.PATIENT_NAME' | translate }}</th>
+              <th scope="col">{{ 'ADMISSIONS.ROOM_BED' | translate }}</th>
+              <th scope="col">{{ 'ADMISSIONS.TYPE' | translate }}</th>
+              <th scope="col">{{ 'ADMISSIONS.ACUITY' | translate }}</th>
+              <th scope="col">{{ 'ADMISSIONS.CHIEF_COMPLAINT' | translate }}</th>
+              <th scope="col">{{ 'ADMISSIONS.ADMITTED' | translate }}</th>
+              <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+              <th scope="col" class="actions-col">{{ 'COMMON.ACTIONS' | translate }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (a of pagedAdmissions(); track a.id) {
+              <tr class="data-row">
+                @if (isSuperAdmin() && globalView()) {
+                  <td>
+                    <div class="cell-primary">{{ a.hospitalName || '—' }}</div>
+                  </td>
+                }
+                <td>
+                  <div class="cell-primary">
+                    {{ a.patientName ? a.patientName : ('COMMON.UNKNOWN' | translate) }}
+                  </div>
+                  @if (a.encounterCode) {
+                    <div class="cell-secondary" [title]="'BILLING.ENCOUNTER_REFERENCE' | translate">
+                      {{ a.encounterCode }}
+                    </div>
+                  }
+                </td>
+                <td>
+                  <span
+                    class="bed-label"
+                    [class.bed-missing]="a.status === 'ACTIVE' && !hasRecordedBed(a)"
+                    >{{
+                      a.roomBed ||
+                        (a.bedId
+                          ? ('ADMISSIONS.BED_RECORDED' | translate)
+                          : ('ADMISSIONS.BED_NOT_RECORDED' | translate))
+                    }}</span
+                  >
+                </td>
+                <td>
+                  {{ a.admissionType ? (a.admissionType | enumLabel: 'admissionType') : '—' }}
+                </td>
+                <td>
+                  <span class="acuity-badge {{ getAcuityClass(a.acuityLevel) }}">{{
+                    acuityLabel[a.acuityLevel] || a.acuityLevel
+                  }}</span>
+                </td>
+                <td class="complaint-cell" [title]="a.chiefComplaint">
+                  {{ a.chiefComplaint || '—' }}
+                </td>
+                <td>
+                  {{
+                    a.admissionDateTime
+                      ? (fromServerDateTime(a.admissionDateTime) | date: 'mediumDate')
+                      : '—'
+                  }}
+                </td>
+                <td>
+                  <span class="status-badge {{ getStatusClass(a.status) }}">{{
+                    a.status | enumLabel: 'admissionStatus'
+                  }}</span>
+                </td>
+                <td>
+                  <div class="action-group">
+                    @if (a.status === 'ACTIVE') {
+                      @if (canDischarge()) {
+                        <button
+                          [attr.aria-label]="'ADMISSIONS.DISCHARGE' | translate"
+                          class="action-link discharge-link"
+                          (click)="confirmDischarge(a)"
+                          [attr.title]="'ADMISSIONS.DISCHARGE' | translate"
+                        >
+                          <span class="material-symbols-outlined" aria-hidden="true"
+                            >exit_to_app</span
+                          >
+                        </button>
+                      }
+                      @if (canApplyOrderSets()) {
+                        <button
+                          [attr.aria-label]="'ORDER_SETS.OPEN_PICKER' | translate"
+                          class="action-link"
+                          (click)="openOrderSetPicker(a)"
+                          [attr.title]="'ORDER_SETS.OPEN_PICKER' | translate"
+                          data-testid="open-order-set-picker"
+                        >
+                          <span class="material-symbols-outlined" aria-hidden="true"
+                            >playlist_add_check</span
+                          >
+                        </button>
+                      }
+                      @if (canAssignBed()) {
+                        <button
+                          [attr.aria-label]="'ADMISSIONS.ASSIGN_BED' | translate"
+                          class="action-link"
+                          (click)="openBedAssign(a)"
+                          [attr.title]="'ADMISSIONS.ASSIGN_BED' | translate"
+                          data-testid="open-bed-assign"
+                        >
+                          <span class="material-symbols-outlined" aria-hidden="true">bed</span>
+                        </button>
+                      }
+                      @if (a.bedId && canUnassignBed()) {
+                        <button
+                          [attr.aria-label]="'ADMISSIONS.UNASSIGN_BED' | translate"
+                          class="action-link"
+                          (click)="openUnassignBed(a)"
+                          [attr.title]="'ADMISSIONS.UNASSIGN_BED' | translate"
+                        >
+                          <span class="material-symbols-outlined" aria-hidden="true"
+                            >remove_circle_outline</span
+                          >
+                        </button>
+                      }
+                    }
+                    @if (canEditAdmission() && isEditable(a)) {
+                      <button
+                        [attr.aria-label]="'COMMON.EDIT' | translate"
+                        class="action-link edit-link"
+                        (click)="openEdit(a)"
+                      >
+                        <span class="material-symbols-outlined" aria-hidden="true">edit</span>
+                      </button>
+                    }
+                    @if (canCancelAdmission() && isCancellable(a)) {
+                      <button
+                        [attr.aria-label]="'COMMON.DELETE' | translate"
+                        class="action-link delete-link"
+                        (click)="confirmDelete(a)"
+                      >
+                        <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+                      </button>
+                    }
+                  </div>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+    @if (!loading() && filtered().length > 0) {
+      <div class="pagination-bar">
+        <p>
+          {{
+            'ADMISSIONS.RESULT_RANGE'
+              | translate: { start: resultStart(), end: resultEnd(), total: filtered().length }
+          }}
+        </p>
+        <label class="page-size"
+          >{{ 'ADMISSIONS.ROWS_PER_PAGE' | translate }}
+          <select [ngModel]="pageSize()" (ngModelChange)="pageSize.set(+$event); setPage(0)">
+            <option [ngValue]="10">10</option>
+            <option [ngValue]="25">25</option>
+            <option [ngValue]="50">50</option>
+          </select>
+        </label>
+        <div class="page-navigation">
+          <button
+            type="button"
+            class="page-button"
+            [disabled]="currentPage() === 0"
+            (click)="setPage(currentPage() - 1)"
+            [attr.aria-label]="'ADMISSIONS.PREVIOUS_PAGE' | translate"
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
+          </button>
+          <span>{{
+            'ADMISSIONS.PAGE_OF' | translate: { page: currentPage() + 1, total: totalPages() }
+          }}</span>
+          <button
+            type="button"
+            class="page-button"
+            [disabled]="currentPage() + 1 >= totalPages()"
+            (click)="setPage(currentPage() + 1)"
+            [attr.aria-label]="'ADMISSIONS.NEXT_PAGE' | translate"
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">chevron_right</span>
+          </button>
+        </div>
+      </div>
+    }
+  </section>
 </div>
 
 <!-- ═══ ORDER-SET PICKER OVERLAY ═══ -->

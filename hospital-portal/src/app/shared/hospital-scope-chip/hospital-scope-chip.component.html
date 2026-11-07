@@ -21,7 +21,8 @@
       [attr.aria-expanded]="overlayOpen()"
       [attr.aria-label]="
         globalView()
-          ? ('HOSPITAL_SCOPE.ALL_HOSPITALS' | translate)
+          ? ((hospitalRequired ? 'HOSPITAL_SCOPE.GATE_TITLE' : 'HOSPITAL_SCOPE.ALL_HOSPITALS')
+            | translate)
           : (selectedHospitalName() ?? ('HOSPITAL_SCOPE.SCOPED' | translate))
       "
       (click)="toggleOverlay()"
@@ -29,7 +30,10 @@
       @if (globalView()) {
         <span class="material-icons hospital-scope-chip__icon" aria-hidden="true">public</span>
         <span class="hospital-scope-chip__label">
-          {{ 'HOSPITAL_SCOPE.ALL_HOSPITALS' | translate }}
+          {{
+            (hospitalRequired ? 'HOSPITAL_SCOPE.GATE_TITLE' : 'HOSPITAL_SCOPE.ALL_HOSPITALS')
+              | translate
+          }}
         </span>
       } @else {
         <span class="material-icons hospital-scope-chip__icon" aria-hidden="true"
@@ -42,7 +46,7 @@
       <span class="material-icons hospital-scope-chip__caret" aria-hidden="true">expand_more</span>
     </button>
 
-    @if (!globalView()) {
+    @if (!globalView() && !hospitalRequired) {
       <button
         type="button"
         class="hospital-scope-chip__clear"
@@ -58,6 +62,7 @@
     @if (overlayOpen()) {
       <div class="hospital-scope-chip__overlay" data-testid="hospital-scope-chip-overlay">
         <app-hospital-typeahead
+          [hideAllOption]="hospitalRequired"
           (selectAll)="onSelectAll()"
           (selectHospital)="onSelectHospital($event)"
           (dismiss)="closeOverlay()"

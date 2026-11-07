@@ -4,7 +4,12 @@
 -->
 <app-skip-link target="#main-content" [label]="'A11Y.SKIP_TO_MAIN' | translate" />
 
-<div class="shell" [class.collapsed]="sidebarCollapsed()">
+<div
+  class="shell"
+  [class.collapsed]="sidebarCollapsed()"
+  [class.sidebar-resizing]="sidebarResizing()"
+  [style.--sidebar-expanded-width]="sidebarWidth() + 'px'"
+>
   <!--
     Sidebar.
     The accessible name belongs on the inner <nav> (the navigation
@@ -36,6 +41,10 @@
       </div>
       <button
         class="toggle-btn"
+        type="button"
+        data-testid="sidebar-toggle"
+        [attr.aria-expanded]="!sidebarCollapsed()"
+        aria-controls="primary-navigation"
         (click)="toggleSidebar()"
         [attr.aria-label]="'SHELL.TOGGLE_SIDEBAR' | translate"
       >
@@ -81,7 +90,11 @@
       </div>
     }
 
-    <nav class="sidebar-nav" [attr.aria-label]="'SHELL.PRIMARY_NAV_ARIA' | translate">
+    <nav
+      id="primary-navigation"
+      class="sidebar-nav"
+      [attr.aria-label]="'SHELL.PRIMARY_NAV_ARIA' | translate"
+    >
       @for (group of navGroups(); track group.id) {
         <!--
           role="group" + aria-labelledby so the heading names the set for a
@@ -183,6 +196,27 @@
         </div>
       }
     </div>
+    @if (!sidebarCollapsed()) {
+      <div
+        class="sidebar-resize-handle"
+        role="separator"
+        tabindex="0"
+        aria-orientation="vertical"
+        [attr.aria-label]="'SHELL.RESIZE_SIDEBAR' | translate"
+        [title]="'SHELL.RESIZE_SIDEBAR_HINT' | translate"
+        [attr.aria-valuemin]="sidebarMinWidth"
+        [attr.aria-valuemax]="sidebarMaxWidth"
+        [attr.aria-valuenow]="sidebarWidth()"
+        data-testid="sidebar-resize-handle"
+        (pointerdown)="startSidebarResize($event)"
+        (pointermove)="moveSidebarResize($event)"
+        (pointerup)="endSidebarResize($event)"
+        (pointercancel)="endSidebarResize($event, true)"
+        (lostpointercapture)="endSidebarResize($event, true)"
+        (keydown)="resizeSidebarWithKey($event)"
+        (dblclick)="resetSidebarWidth()"
+      ></div>
+    }
   </aside>
 
   @if (!sidebarCollapsed()) {
@@ -467,13 +501,19 @@
              scoped request into global view; the chip is the way in. -->
         <section class="scope-gate" data-testid="scope-gate">
           <h1 class="scope-gate__title">{{ 'HOSPITAL_SCOPE.GATE_TITLE' | translate }}</h1>
-          <app-hospital-scope-chip [preserveScope]="true" />
+          <span class="material-symbols-outlined scope-gate__icon" aria-hidden="true"
+            >local_hospital</span
+          >
+          <app-hospital-scope-chip [preserveScope]="true" [hospitalRequired]="true" />
           <app-hospital-scope-hint />
         </section>
       } @else {
         @if (scopeGate.showChip()) {
           <div class="scope-bar" data-testid="scope-bar">
-            <app-hospital-scope-chip [preserveScope]="true" />
+            <app-hospital-scope-chip
+              [preserveScope]="true"
+              [hospitalRequired]="!scopeGate.allowsGlobal()"
+            />
           </div>
         }
         <!-- The key advances on a scope change while the route is gated, so the

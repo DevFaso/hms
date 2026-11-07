@@ -1,4 +1,5 @@
 @use '../shared/styles/page-common';
+@use '../shared/styles/operations-dashboard';
 
 .filter-bar {
   display: flex;
@@ -454,3 +455,5 @@
     font-size: 1.15rem;
   }
 }
+
+@include operations-dashboard.layout;

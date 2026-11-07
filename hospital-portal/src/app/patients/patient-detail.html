@@ -32,7 +32,7 @@
     </section>
   }
 
-  @if (!loading() && patient(); as p) {
+  @if (!loading() && !restricted() && patient(); as p) {
     <!-- Header -->
     <div class="detail-header">
       <app-patient-photo
@@ -94,7 +94,9 @@
           } @else {
             {{ ' '
             }}<span class="status-badge" [class.active]="p.active" [class.inactive]="!p.active">{{
-              p.active ? ('COMMON.ACTIVE' | translate) : ('COMMON.INACTIVE' | translate)
+              p.active
+                ? ('PATIENTS.RECORD_OPEN' | translate)
+                : ('PATIENTS.RECORD_INACTIVE' | translate)
             }}</span>
           }
           @if (p.chartRestricted) {
@@ -109,44 +111,46 @@
           }
         </div>
       </div>
-      @if (canEditDemographics()) {
-        <!-- QA D926: the desk corrects the identity, contact and guardian. -->
-        <button
-          type="button"
-          class="btn-secondary wristband-btn"
-          data-testid="edit-demographics"
-          (click)="editingDemographics.set(true)"
-        >
-          <span class="material-symbols-outlined" aria-hidden="true">edit</span>
-          {{ 'PATIENTS.EDIT_BUTTON' | translate }}
-        </button>
-      }
-      @if (canDownloadRecord()) {
-        <button
-          type="button"
-          class="btn-secondary wristband-btn"
-          data-testid="download-record"
-          (click)="downloadRecord()"
-          [disabled]="recordDownloadLoading()"
-          [title]="'PATIENTS.DOWNLOAD_RECORD_TITLE' | translate"
-        >
-          <span class="material-symbols-outlined">picture_as_pdf</span>
-          {{ 'PATIENTS.DOWNLOAD_RECORD' | translate }}
-        </button>
-      }
-      @if (canPrintWristband()) {
-        <button
-          type="button"
-          class="btn-secondary wristband-btn"
-          data-testid="print-wristband"
-          (click)="printWristband()"
-          [disabled]="wristbandLoading()"
-          [title]="'PATIENTS.PRINT_WRISTBAND_TITLE' | translate"
-        >
-          <span class="material-symbols-outlined">print</span>
-          {{ 'PATIENTS.PRINT_WRISTBAND' | translate }}
-        </button>
-      }
+      <div class="header-actions">
+        @if (canEditDemographics()) {
+          <!-- QA D926: the desk corrects the identity, contact and guardian. -->
+          <button
+            type="button"
+            class="btn-secondary wristband-btn"
+            data-testid="edit-demographics"
+            (click)="editingDemographics.set(true)"
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">edit</span>
+            {{ 'PATIENTS.EDIT_BUTTON' | translate }}
+          </button>
+        }
+        @if (canDownloadRecord()) {
+          <button
+            type="button"
+            class="btn-secondary wristband-btn"
+            data-testid="download-record"
+            (click)="downloadRecord()"
+            [disabled]="recordDownloadLoading()"
+            [title]="'PATIENTS.DOWNLOAD_RECORD_TITLE' | translate"
+          >
+            <span class="material-symbols-outlined">picture_as_pdf</span>
+            {{ 'PATIENTS.DOWNLOAD_RECORD' | translate }}
+          </button>
+        }
+        @if (canPrintWristband()) {
+          <button
+            type="button"
+            class="btn-secondary wristband-btn"
+            data-testid="print-wristband"
+            (click)="printWristband()"
+            [disabled]="wristbandLoading()"
+            [title]="'PATIENTS.PRINT_WRISTBAND_TITLE' | translate"
+          >
+            <span class="material-symbols-outlined">print</span>
+            {{ 'PATIENTS.PRINT_WRISTBAND' | translate }}
+          </button>
+        }
+      </div>
     </div>
 
     <!-- Orders held by a disputed death: rendered when there is a row, and it outlives the dispute. -->
@@ -173,158 +177,51 @@
     <app-break-glass-banner
       [patientId]="p.id"
       [hospitalId]="currentHospitalId()"
+      [compactWhenIdle]="true"
       (sessionChanged)="onBreakGlassSessionChanged()"
     />
 
     <!-- Best-Practice Advisories — runs the patient-view CDS hook on chart load (clinicians only) -->
     @if (canSeeBpaPanel()) {
-      <app-bpa-panel [patientId]="p.id" />
+      <app-bpa-panel [patientId]="p.id" [hideWhenEmpty]="true" />
     }
 
-    <!-- Tabs -->
-    <div class="tabs">
-      <button
-        class="tab"
-        [class.active]="activeTab() === 'overview'"
-        (click)="setTab('overview')"
-        [title]="'PATIENTS.OVERVIEW_TITLE' | translate"
-      >
-        {{ 'PATIENTS.OVERVIEW' | translate }}
-      </button>
-      <button
-        class="tab"
-        [class.active]="activeTab() === 'medical'"
-        (click)="setTab('medical')"
-        [title]="'PATIENTS.MEDICAL_TITLE' | translate"
-      >
-        {{ 'PATIENTS.MEDICAL' | translate }}
-      </button>
-      @if (canViewChart()) {
-        <button
-          class="tab"
-          [class.active]="activeTab() === 'chart'"
-          (click)="setTab('chart')"
-          [title]="'CHART.TAB_TITLE' | translate"
-        >
-          {{ 'CHART.TAB' | translate }}
-        </button>
+    <nav class="patient-navigation" [attr.aria-label]="'PATIENTS.RECORD_SECTIONS' | translate">
+      <div class="section-tabs">
+        @for (section of sections; track section.key) {
+          @if (sectionVisible(section.key)) {
+            <button
+              type="button"
+              class="section-tab"
+              [class.active]="activeSection() === section.key"
+              [attr.aria-current]="activeSection() === section.key ? 'page' : null"
+              [attr.data-testid]="section.key + '-section-button'"
+              (click)="setSection(section.key)"
+            >
+              <span class="material-symbols-outlined" aria-hidden="true">{{ section.icon }}</span>
+              {{ section.label | translate }}
+            </button>
+          }
+        }
+      </div>
+      @if (sectionTabs().length > 1) {
+        <div class="tabs sub-tabs">
+          @for (tab of sectionTabs(); track tab.key) {
+            <button
+              type="button"
+              class="tab"
+              [class.active]="activeTab() === tab.key"
+              [attr.aria-current]="activeTab() === tab.key ? 'page' : null"
+              [attr.data-testid]="tab.key + '-tab-button'"
+              (click)="setTab(tab.key)"
+            >
+              {{ tab.label | translate }}
+            </button>
+          }
+        </div>
       }
-      @if (canViewMedHistory()) {
-        <button
-          class="tab"
-          [class.active]="activeTab() === 'med-history'"
-          (click)="setTab('med-history')"
-          [title]="'MED_HISTORY.TAB_TITLE' | translate"
-        >
-          {{ 'MED_HISTORY.TAB' | translate }}
-        </button>
-      }
-      @if (canViewCoverage()) {
-        <button
-          class="tab"
-          [class.active]="activeTab() === 'coverage'"
-          (click)="setTab('coverage')"
-          [title]="'COVERAGE.TAB_TITLE' | translate"
-        >
-          {{ 'COVERAGE.TAB' | translate }}
-        </button>
-      }
-      @if (canViewDocuments()) {
-        <button
-          class="tab"
-          [class.active]="activeTab() === 'documents'"
-          (click)="setTab('documents')"
-          [title]="'PATIENT_DOCUMENTS.TAB_TITLE' | translate"
-        >
-          {{ 'PATIENT_DOCUMENTS.TAB' | translate }}
-        </button>
-      }
-      @if (canViewVitals()) {
-        <button
-          class="tab"
-          [class.active]="activeTab() === 'vitals'"
-          (click)="setTab('vitals')"
-          [title]="'PATIENTS.VITALS_TITLE' | translate"
-        >
-          {{ 'PATIENTS.VITALS' | translate }}
-        </button>
-      }
-      @if (showGrowthTab()) {
-        <button
-          class="tab"
-          data-testid="growth-tab-button"
-          [class.active]="activeTab() === 'growth'"
-          (click)="setTab('growth')"
-          [title]="'GROWTH.TAB_TITLE' | translate"
-        >
-          {{ 'GROWTH.TAB' | translate }}
-        </button>
-      }
-      @if (canViewFluidBalance()) {
-        <button
-          class="tab"
-          data-testid="fluid-balance-tab-button"
-          [class.active]="activeTab() === 'fluid-balance'"
-          (click)="setTab('fluid-balance')"
-          [title]="'FLUID_BALANCE.TAB_TITLE' | translate"
-        >
-          {{ 'FLUID_BALANCE.TAB' | translate }}
-        </button>
-      }
-      @if (canViewMicro()) {
-        <button
-          class="tab"
-          data-testid="micro-tab-button"
-          [class.active]="activeTab() === 'micro'"
-          (click)="setTab('micro')"
-          [title]="'MICRO.TAB_TITLE' | translate"
-        >
-          {{ 'MICRO.TAB' | translate }}
-        </button>
-      }
-      @if (canViewChartReview()) {
-        <button
-          class="tab"
-          [class.active]="activeTab() === 'chart-review'"
-          (click)="setTab('chart-review')"
-          [title]="'CHART_REVIEW.TAB_TITLE' | translate"
-        >
-          {{ 'CHART_REVIEW.TAB_LABEL' | translate }}
-        </button>
-      }
-      @if (canViewEncounters()) {
-        <button
-          class="tab"
-          [class.active]="activeTab() === 'encounters'"
-          (click)="setTab('encounters')"
-          [title]="'PATIENTS.ENCOUNTERS_TITLE' | translate"
-        >
-          {{ 'PATIENTS.ENCOUNTERS_TAB' | translate }}
-        </button>
-      }
-      @if (canViewAppointments()) {
-        <button
-          class="tab"
-          [class.active]="activeTab() === 'appointments'"
-          (click)="setTab('appointments')"
-          [title]="'PATIENTS.APPOINTMENTS_TITLE' | translate"
-        >
-          {{ 'PATIENTS.APPOINTMENTS_TAB' | translate }}
-        </button>
-      }
-      @if (canViewDirectives()) {
-        <button
-          class="tab"
-          [class.active]="activeTab() === 'directives'"
-          (click)="setTab('directives')"
-          [title]="'DIRECTIVES.TAB_TITLE' | translate"
-        >
-          {{ 'DIRECTIVES.TAB_LABEL' | translate }}
-        </button>
-      }
-    </div>
+    </nav>
 
-    <!-- ═══ Chart Tab (structured allergies / problems / updates / timeline) ═══ -->
     @if (activeTab() === 'chart' && canViewChart()) {
       <!-- QA D504: every chart section is narrowed by the opt-out, not only allergies. -->
       @if (patient()!.recordsWithheld) {
@@ -351,8 +248,35 @@
     }
 
     <!-- ═══ Chart restriction (E8 #54): the hospital administrator's act ═══ -->
-    @if (canManageRestriction()) {
-      <section class="restriction-card" data-testid="restriction-card">
+    @if (activeTab() === 'administration') {
+      <div class="info-card">
+        <h3>
+          <span class="material-symbols-outlined">local_hospital</span>
+          {{ 'PATIENTS.HOSPITAL_INFO' | translate }}
+        </h3>
+        <div class="info-rows">
+          <div class="info-row">
+            <span class="label">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</span
+            ><span class="value">{{ p.hospitalName | dash }}</span>
+          </div>
+          <div class="info-row">
+            <span class="label">{{ 'PATIENTS.MRN' | translate }}</span
+            ><span class="value">{{ p.mrn | dash }}</span>
+          </div>
+          <div class="info-row">
+            <span class="label">{{ 'PATIENTS.USERNAME' | translate }}</span
+            ><span class="value">{{ p.username || '—' }}</span>
+          </div>
+          <div class="info-row">
+            <span class="label">{{ 'PATIENTS.REGISTERED' | translate }}</span
+            ><span class="value">{{ p.createdAt | serverTime | date: 'mediumDate' }}</span>
+          </div>
+        </div>
+      </div>
+    }
+
+    @if (activeTab() === 'administration' && canManageRestriction()) {
+      <section class="restriction-card" data-testid="restriction-card" data-submit-scope>
         <h3>{{ 'PATIENTS.CHART_RESTRICTION_TITLE' | translate }}</h3>
         @if (p.chartRestricted) {
           <p>
@@ -373,21 +297,30 @@
         } @else {
           <p>{{ 'PATIENTS.CHART_RESTRICTION_HELP' | translate }}</p>
           <label>
-            {{ 'PATIENTS.CHART_RESTRICTION_REASON' | translate }}
+            {{ 'PATIENTS.CHART_RESTRICTION_REASON' | translate }} *
             <input
               type="text"
               maxlength="512"
+              minlength="5"
+              required
+              id="restriction-reason"
               data-testid="restriction-reason"
+              aria-describedby="restriction-reason-help"
               [ngModel]="restrictionReason()"
               (ngModelChange)="restrictionReason.set($event)"
             />
           </label>
+          <p id="restriction-reason-help">
+            {{ 'PATIENTS.CHART_RESTRICTION_REASON_REQUIRED' | translate }}
+          </p>
           <button
             type="button"
-            class="btn-danger"
+            class="btn-primary"
             data-testid="apply-restriction"
             (click)="setChartRestriction(true)"
             [disabled]="restrictionSubmitting()"
+            [appSubmitGuard]="restrictionReason().trim().length < 5"
+            [submitGuardFields]="['restriction-reason']"
           >
             {{ 'PATIENTS.CHART_RESTRICTION_APPLY' | translate }}
           </button>
@@ -442,152 +375,224 @@
 
     <!-- ═══ Overview Tab ═══ -->
     @if (activeTab() === 'overview') {
-      <div class="info-grid">
-        <div class="info-card">
-          <h3>
-            <span class="material-symbols-outlined">person</span>
-            {{ 'PATIENTS.PERSONAL_INFO' | translate }}
-          </h3>
-          <div class="info-rows">
-            <div class="info-row">
-              <span class="label">{{ 'PATIENTS.FULL_NAME' | translate }}</span
-              ><span class="value">{{ fullName(p) }}</span>
-            </div>
-            <div class="info-row">
-              <span class="label">{{ 'PATIENTS.EMAIL' | translate }}</span
-              ><span class="value">{{ p.email || '—' }}</span>
-            </div>
-            <div class="info-row">
-              <span class="label">{{ 'PATIENTS.PHONE' | translate }}</span
-              ><span class="value">{{ p.phoneNumberPrimary | dash }}</span>
-            </div>
-            <!-- QA D1036 / D926: the second number and the postal code were
-                 stored at registration and shown nowhere. -->
-            <div class="info-row">
-              <span class="label">{{ 'PATIENTS.PHONE_SECONDARY' | translate }}</span
-              ><span class="value">{{ p.phoneNumberSecondary || '—' }}</span>
-            </div>
-            <div class="info-row">
-              <span class="label">{{ 'PATIENTS.DOB' | translate }}</span
-              ><span class="value">{{
-                p.dateOfBirth ? (p.dateOfBirth | serverTime | date: 'mediumDate') : '—'
-              }}</span>
-            </div>
-            <div class="info-row">
-              <span class="label">{{ 'PATIENTS.GENDER' | translate }}</span
-              ><span class="value">{{ p.gender ? (p.gender | enumLabel: 'gender') : '—' }}</span>
-            </div>
-            <div class="info-row">
-              <span class="label">{{ 'PATIENTS.COUNTRY' | translate }}</span
-              ><span class="value">{{ p.country | dash }}</span>
-            </div>
-            <div class="info-row">
-              <span class="label">{{ 'PATIENTS.CITY' | translate }}</span
-              ><span class="value">{{ p.city | dash }}</span>
-            </div>
-            <div class="info-row">
-              <span class="label">{{ 'PATIENTS.STATE' | translate }}</span
-              ><span class="value">{{ p.state | dash }}</span>
-            </div>
-            <div class="info-row">
-              <span class="label">{{ 'PATIENTS.ZIP_CODE' | translate }}</span
-              ><span class="value">{{ p.zipCode || '—' }}</span>
-            </div>
-            <div class="info-row">
-              <span class="label">{{ 'PATIENTS.ADDRESS' | translate }}</span
-              ><span class="value">{{ p.address | dash }}</span>
-            </div>
-            <div class="info-row">
-              <span class="label">{{ 'PATIENTS.ETHNICITY' | translate }}</span
-              ><span class="value">{{ p.ethnicity | dash }}</span>
-            </div>
-          </div>
-          @if (!addressHistoryLoaded()) {
-            <button
-              type="button"
-              class="btn-link address-history-toggle"
-              data-testid="load-address-history"
-              (click)="loadAddressHistory()"
-            >
-              {{ 'PATIENTS.ADDRESS_HISTORY' | translate }}
-            </button>
-          } @else if (addressHistory().length === 0) {
-            <p class="address-history-empty">{{ 'PATIENTS.ADDRESS_HISTORY_EMPTY' | translate }}</p>
-          } @else {
-            <div class="address-history">
-              <h4>{{ 'PATIENTS.ADDRESS_HISTORY' | translate }}</h4>
-              <ul>
-                @for (entry of addressHistory(); track entry.id) {
-                  <li>
-                    <span class="value">{{ entry.address || entry.city | dash }}</span>
-                    <span class="until">
-                      {{
-                        'PATIENTS.ADDRESS_UNTIL'
-                          | translate
-                            : { date: (entry.replacedAt | serverTime | date: 'mediumDate') }
-                      }}
-                    </span>
-                  </li>
+      <div class="info-grid overview-grid">
+        <div class="overview-main">
+          <!-- RCPT-CLIN: blood type and history are clinical; the front desk does not see them. -->
+          @if (!isFrontDeskOnly()) {
+            <section class="info-card essentials-card">
+              <h3>
+                <span class="material-symbols-outlined" aria-hidden="true">clinical_notes</span>
+                {{ 'PATIENTS.CLINICAL_ESSENTIALS' | translate }}
+              </h3>
+              <p class="medical-text">{{ 'PATIENTS.CLINICAL_SUMMARY_HELP' | translate }}</p>
+              @if (p.recordsWithheld) {
+                <p role="note" data-testid="overview-records-withheld">
+                  {{ 'CHART.LIST_WITHHELD' | translate }}
+                </p>
+              }
+              <div class="info-rows clinical-summary">
+                <div class="info-row">
+                  <span class="label">{{ 'PATIENTS.BLOOD_TYPE' | translate }}</span>
+                  <span class="value">{{
+                    p.bloodType || ('PATIENTS.NOT_DOCUMENTED' | translate)
+                  }}</span>
+                </div>
+                <div class="info-row">
+                  <span class="label">{{ 'PATIENTS.MEDICAL_HISTORY' | translate }}</span>
+                  <span class="value">{{
+                    p.medicalHistorySummary || ('PATIENTS.NOT_DOCUMENTED' | translate)
+                  }}</span>
+                </div>
+              </div>
+              <div class="quick-links">
+                <button type="button" class="btn-outline" (click)="setTab('medical')">
+                  {{ 'PATIENTS.MEDICAL_DETAILS' | translate }}
+                </button>
+                @if (canViewChartReview()) {
+                  <button type="button" class="btn-outline" (click)="setTab('chart-review')">
+                    {{ 'CHART_REVIEW.TAB_LABEL' | translate }}
+                  </button>
                 }
-              </ul>
-            </div>
+                @if (canViewEncounters()) {
+                  <button type="button" class="btn-outline" (click)="setTab('encounters')">
+                    {{ 'PATIENTS.ENCOUNTERS_TAB' | translate }}
+                  </button>
+                }
+              </div>
+            </section>
           }
-        </div>
-        <!-- QA D926: the parent or contact to call, captured at registration, shown on the chart. -->
-        <div class="info-card" data-testid="guardian-card">
-          <h3>
-            <span class="material-symbols-outlined" aria-hidden="true">family_restroom</span>
-            {{ 'PATIENTS.GUARDIAN_CARD' | translate }}
-          </h3>
-          @if (p.emergencyContactName || p.emergencyContactPhone) {
+
+          <div class="info-card">
+            <h3>
+              <span class="material-symbols-outlined">person</span>
+              {{ 'PATIENTS.PERSONAL_INFO' | translate }}
+            </h3>
             <div class="info-rows">
               <div class="info-row">
-                <span class="label">{{ 'PATIENTS.EC_NAME' | translate }}</span
-                ><span class="value">{{ p.emergencyContactName || '—' }}</span>
+                <span class="label">{{ 'PATIENTS.FULL_NAME' | translate }}</span
+                ><span class="value">{{ fullName(p) }}</span>
               </div>
               <div class="info-row">
-                <span class="label">{{ 'PATIENTS.EC_RELATIONSHIP' | translate }}</span
-                ><span class="value">{{ p.emergencyContactRelationship || '—' }}</span>
+                <span class="label">{{ 'PATIENTS.EMAIL' | translate }}</span
+                ><span class="value">{{ p.email || '—' }}</span>
               </div>
               <div class="info-row">
-                <span class="label">{{ 'PATIENTS.EC_PHONE' | translate }}</span
-                ><span class="value">
-                  @if (p.emergencyContactPhone) {
-                    <a [href]="'tel:' + p.emergencyContactPhone">{{ p.emergencyContactPhone }}</a>
-                  } @else {
-                    —
+                <span class="label">{{ 'PATIENTS.PHONE' | translate }}</span
+                ><span class="value">{{ p.phoneNumberPrimary | dash }}</span>
+              </div>
+              <!-- QA D1036 / D926: the second number and the postal code were
+                   stored at registration and shown nowhere. -->
+              <div class="info-row">
+                <span class="label">{{ 'PATIENTS.PHONE_SECONDARY' | translate }}</span
+                ><span class="value">{{ p.phoneNumberSecondary || '—' }}</span>
+              </div>
+              <div class="info-row">
+                <span class="label">{{ 'PATIENTS.DOB' | translate }}</span
+                ><span class="value">{{
+                  p.dateOfBirth ? (p.dateOfBirth | serverTime | date: 'mediumDate') : '—'
+                }}</span>
+              </div>
+              <div class="info-row">
+                <span class="label">{{ 'PATIENTS.GENDER' | translate }}</span
+                ><span class="value">{{ p.gender ? (p.gender | enumLabel: 'gender') : '—' }}</span>
+              </div>
+              <div class="info-row">
+                <span class="label">{{ 'PATIENTS.COUNTRY' | translate }}</span
+                ><span class="value">{{ p.country | dash }}</span>
+              </div>
+              <div class="info-row">
+                <span class="label">{{ 'PATIENTS.CITY' | translate }}</span
+                ><span class="value">{{ p.city | dash }}</span>
+              </div>
+              <div class="info-row">
+                <span class="label">{{ 'PATIENTS.STATE' | translate }}</span
+                ><span class="value">{{ p.state | dash }}</span>
+              </div>
+              <div class="info-row">
+                <span class="label">{{ 'PATIENTS.ZIP_CODE' | translate }}</span
+                ><span class="value">{{ p.zipCode || '—' }}</span>
+              </div>
+              <div class="info-row">
+                <span class="label">{{ 'PATIENTS.ADDRESS' | translate }}</span
+                ><span class="value">{{ p.address | dash }}</span>
+              </div>
+              <div class="info-row">
+                <span class="label">{{ 'PATIENTS.ETHNICITY' | translate }}</span
+                ><span class="value">{{ p.ethnicity | dash }}</span>
+              </div>
+            </div>
+            @if (!addressHistoryLoaded()) {
+              <button
+                type="button"
+                class="btn-link address-history-toggle"
+                data-testid="load-address-history"
+                (click)="loadAddressHistory()"
+              >
+                {{ 'PATIENTS.ADDRESS_HISTORY' | translate }}
+              </button>
+            } @else if (addressHistory().length === 0) {
+              <p class="address-history-empty">
+                {{ 'PATIENTS.ADDRESS_HISTORY_EMPTY' | translate }}
+              </p>
+            } @else {
+              <div class="address-history">
+                <h4>{{ 'PATIENTS.ADDRESS_HISTORY' | translate }}</h4>
+                <ul>
+                  @for (entry of addressHistory(); track entry.id) {
+                    <li>
+                      <span class="value">{{ entry.address || entry.city | dash }}</span>
+                      <span class="until">
+                        {{
+                          'PATIENTS.ADDRESS_UNTIL'
+                            | translate
+                              : { date: (entry.replacedAt | serverTime | date: 'mediumDate') }
+                        }}
+                      </span>
+                    </li>
                   }
-                </span>
+                </ul>
               </div>
-            </div>
-          } @else {
-            <p class="address-history-empty">{{ 'PATIENTS.EC_NONE' | translate }}</p>
-          }
-        </div>
-        <div class="info-card">
-          <h3>
-            <span class="material-symbols-outlined">local_hospital</span>
-            {{ 'PATIENTS.HOSPITAL_INFO' | translate }}
-          </h3>
-          <div class="info-rows">
-            <div class="info-row">
-              <span class="label">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</span
-              ><span class="value">{{ p.hospitalName | dash }}</span>
-            </div>
-            <div class="info-row">
-              <span class="label">{{ 'PATIENTS.MRN' | translate }}</span
-              ><span class="value">{{ p.mrn | dash }}</span>
-            </div>
-            <div class="info-row">
-              <span class="label">{{ 'PATIENTS.USERNAME' | translate }}</span
-              ><span class="value">{{ p.username || '—' }}</span>
-            </div>
-            <div class="info-row">
-              <span class="label">{{ 'PATIENTS.REGISTERED' | translate }}</span
-              ><span class="value">{{ p.createdAt | serverTime | date: 'mediumDate' }}</span>
-            </div>
+            }
           </div>
         </div>
+        <aside class="overview-side">
+          <!-- QA D926: the parent or contact to call, captured at registration, shown on the chart. -->
+          <div class="info-card contact-card" data-testid="guardian-card">
+            <h3>
+              <span class="material-symbols-outlined" aria-hidden="true">family_restroom</span>
+              {{ 'PATIENTS.GUARDIAN_CONTACT' | translate }}
+            </h3>
+            @if (!p.emergencyContactName && !p.emergencyContactPhone) {
+              <p class="address-history-empty">{{ 'PATIENTS.EC_NONE' | translate }}</p>
+            } @else {
+              <div class="info-rows">
+                <div class="info-row">
+                  <span class="label">{{ 'PATIENTS.CONTACT_NAME' | translate }}</span>
+                  <span class="value">{{
+                    p.emergencyContactName || ('PATIENTS.NOT_DOCUMENTED' | translate)
+                  }}</span>
+                </div>
+                <div class="info-row">
+                  <span class="label">{{ 'PATIENTS.CONTACT_RELATIONSHIP' | translate }}</span>
+                  <span class="value">{{
+                    p.emergencyContactRelationship || ('PATIENTS.NOT_DOCUMENTED' | translate)
+                  }}</span>
+                </div>
+                <div class="info-row">
+                  <span class="label">{{ 'PATIENTS.PHONE' | translate }}</span>
+                  <span class="value">
+                    @if (p.emergencyContactPhone) {
+                      <a [href]="'tel:' + p.emergencyContactPhone">{{ p.emergencyContactPhone }}</a>
+                    } @else {
+                      {{ 'PATIENTS.NOT_DOCUMENTED' | translate }}
+                    }
+                  </span>
+                </div>
+              </div>
+            }
+          </div>
+          <div class="info-card">
+            <h3>
+              <span class="material-symbols-outlined">local_hospital</span>
+              {{ 'PATIENTS.HOSPITAL_INFO' | translate }}
+            </h3>
+            <div class="info-rows">
+              <div class="info-row">
+                <span class="label">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</span
+                ><span class="value">{{ p.hospitalName | dash }}</span>
+              </div>
+              <div class="info-row">
+                <span class="label">{{ 'PATIENTS.MRN' | translate }}</span
+                ><span class="value">{{ p.mrn | dash }}</span>
+              </div>
+              <div class="info-row">
+                <span class="label">{{ 'PATIENTS.USERNAME' | translate }}</span
+                ><span class="value">{{ p.username || '—' }}</span>
+              </div>
+              <div class="info-row">
+                <span class="label">{{ 'PATIENTS.REGISTERED' | translate }}</span
+                ><span class="value">{{ p.createdAt | serverTime | date: 'mediumDate' }}</span>
+              </div>
+            </div>
+          </div>
+          <div class="info-card privacy-card">
+            <h3>
+              <span class="material-symbols-outlined" aria-hidden="true">shield</span>
+              {{ 'PATIENTS.CONFIDENTIALITY' | translate }}
+            </h3>
+            <p class="medical-text">
+              {{
+                (p.chartRestricted ? 'PATIENTS.CHART_RESTRICTED_CHIP' : 'PATIENTS.STANDARD_ACCESS')
+                  | translate
+              }}
+            </p>
+            @if (canManageRestriction()) {
+              <button type="button" class="btn-outline" (click)="setSection('administration')">
+                {{ 'PATIENTS.MANAGE_ACCESS' | translate }}
+              </button>
+            }
+          </div>
+        </aside>
       </div>
     }
 
@@ -608,11 +613,14 @@
               <div class="info-row">
                 <span class="label">{{ 'PATIENTS.ALLERGIES' | translate }}</span
                 ><span class="value">{{
-                  p.allergies ?? ('PATIENTS.NONE_RECORDED' | translate)
+                  p.allergies ||
+                    ((p.allergiesWithheld ? 'CHART.ALLERGIES_WITHHELD' : 'PATIENTS.NOT_DOCUMENTED')
+                      | translate)
                 }}</span>
               </div>
             }
-            @if (p.allergiesWithheld) {
+            <!-- RCPT-CLIN: the front desk sees no allergy row, so it is still told the list is withheld. -->
+            @if (p.allergiesWithheld && (p.allergies || isFrontDeskOnly())) {
               <p class="info-row" role="note">{{ 'CHART.ALLERGIES_WITHHELD' | translate }}</p>
             }
           </div>
@@ -624,7 +632,7 @@
               {{ 'PATIENTS.MEDICAL_HISTORY' | translate }}
             </h3>
             <p class="medical-text">
-              {{ p.medicalHistorySummary ?? ('PATIENTS.NO_MEDICAL_HISTORY' | translate) }}
+              {{ p.medicalHistorySummary || ('PATIENTS.NOT_DOCUMENTED' | translate) }}
             </p>
           </div>
         }

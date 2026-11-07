@@ -23,6 +23,11 @@ describe('HospitalScopeGateService', () => {
           { path: 'open', component: BlankComponent },
           { path: 'gated', component: BlankComponent, data: { requiresHospitalScope: true } },
           {
+            path: 'network',
+            component: BlankComponent,
+            data: { requiresHospitalScope: true, supportsGlobalHospitalView: true },
+          },
+          {
             path: 'parent',
             data: { roles: ['ROLE_SUPER_ADMIN'] },
             children: [
@@ -65,6 +70,47 @@ describe('HospitalScopeGateService', () => {
     expect(gate.required()).toBeTrue();
     expect(gate.blocked()).toBeFalse();
     expect(gate.showChip()).toBeFalse();
+  });
+
+  it('allows an explicitly supported global read without weakening facility-only routes', async () => {
+    asSuperAdminInGlobalView();
+    await router.navigateByUrl('/network');
+    expect(gate.blocked()).toBeFalse();
+    expect(gate.allowsGlobal()).toBeTrue();
+    expect(gate.showChip()).toBeTrue();
+    await router.navigateByUrl('/gated');
+    expect(gate.allowsGlobal()).toBeFalse();
+    expect(gate.blocked()).toBeTrue();
+  });
+
+  it('waits for explicit global mode when a super-admin has no resolved hospital', async () => {
+    roleContext.setRoles(['ROLE_SUPER_ADMIN']);
+    await router.navigateByUrl('/network');
+    expect(roleContext.globalView()).toBeFalse();
+    expect(gate.blocked()).toBeTrue();
+    roleContext.markSuperAdminGlobalDefaults();
+    expect(gate.blocked()).toBeFalse();
+  });
+
+  it('does not grant an unassigned non-super-admin the global capability', async () => {
+    roleContext.setRoles(['ROLE_NURSE']);
+    await router.navigateByUrl('/network');
+    expect(gate.blocked()).toBeTrue();
+  });
+
+  it('rebuilds the outlet between a network overview and a selected hospital', async () => {
+    asSuperAdminInGlobalView();
+    await router.navigateByUrl('/network');
+    TestBed.tick();
+    const networkKey = gate.outletKey();
+    roleContext.scopeToHospital('h1');
+    TestBed.tick();
+    expect(gate.outletKey()).not.toBe(networkKey);
+    const scopedKey = gate.outletKey();
+    roleContext.enableGlobalView();
+    TestBed.tick();
+    expect(gate.outletKey()).not.toBe(scopedKey);
+    expect(gate.blocked()).toBeFalse();
   });
 
   it('reads the flag from a child route under an unflagged parent', async () => {

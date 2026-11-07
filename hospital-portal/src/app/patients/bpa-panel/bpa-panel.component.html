@@ -1,4 +1,4 @@
-@if (patientId() && permitted()) {
+@if (patientId() && permitted() && !(hideWhenEmpty() && state() === 'empty')) {
   <section class="bpa-panel" data-testid="bpa-panel" [attr.data-state]="state()">
     <header class="bpa-panel__header">
       <h2 class="bpa-panel__title">{{ 'BPA.HEADING' | translate }}</h2>

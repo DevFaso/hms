@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
-import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 
@@ -70,6 +70,47 @@ describe('HospitalScopeChipComponent', () => {
         '[data-testid="hospital-scope-chip-overlay"]',
       ),
     ).toBeTruthy();
+  });
+
+  it('updates the name after an external drill-down and discards an old hospital lookup', () => {
+    asSuperAdmin();
+    component.preserveScope = true;
+    fixture.detectChanges();
+    const http = TestBed.inject(HttpTestingController);
+    roleContext.scopeToHospital('h1');
+    fixture.detectChanges();
+    const old = http.expectOne('/hospitals/h1');
+    roleContext.scopeToHospital('h2');
+    fixture.detectChanges();
+    expect(old.cancelled).toBeTrue();
+    http.expectOne('/hospitals/h2').flush({ id: 'h2', name: 'Cdx Hospital Two' });
+    fixture.detectChanges();
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="hospital-scope-chip-name"]',
+      )?.textContent,
+    ).toContain('Cdx Hospital Two');
+  });
+
+  it('labels a required hospital honestly and hides the all-hospital option', () => {
+    asSuperAdmin();
+    component.hospitalRequired = true;
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('[data-testid="hospital-scope-chip-button"]')?.textContent).toContain(
+      'HOSPITAL_SCOPE.GATE_TITLE',
+    );
+    el.querySelector<HTMLButtonElement>('[data-testid="hospital-scope-chip-button"]')!.click();
+    fixture.detectChanges();
+    expect(el.querySelector('[data-testid="hospital-typeahead-all"]')).toBeNull();
+    const emissions: (string | null)[] = [];
+    component.scopeChange.subscribe((id) => emissions.push(id));
+    component['onSelectHospital']({ id: 'h1', name: 'Cdx Hospital' } as HospitalResponse);
+    fixture.detectChanges();
+    expect(el.querySelector('[data-testid="hospital-scope-chip-clear"]')).toBeNull();
+    component['onSelectAll']();
+    expect(roleContext.selectedHospitalId()).toBe('h1');
+    expect(emissions).toEqual(['h1']);
   });
 
   it('onSelectHospital pins RoleContext + emits scopeChange + closes the overlay', () => {

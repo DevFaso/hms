@@ -1,281 +1,437 @@
-<div class="page-container">
-  <div class="page-header">
+<div class="page-container bed-board-dashboard">
+  <div class="page-header dashboard-header">
     <div>
+      <p class="dashboard-eyebrow">{{ 'BED_BOARD.WORKSPACE' | translate }}</p>
       <h1 class="page-title">{{ 'BED_BOARD.TITLE' | translate }}</h1>
       <p class="page-subtitle">{{ 'BED_BOARD.SUBTITLE' | translate }}</p>
     </div>
     <div class="page-actions">
-      <button class="btn-secondary" (click)="loadBoard()" [disabled]="loading()">
+      <button class="btn-secondary" (click)="refresh()" [disabled]="loading()">
         <span class="material-symbols-outlined">refresh</span>
         {{ 'BED_BOARD.REFRESH' | translate }}
       </button>
     </div>
   </div>
 
-  <!-- An airborne case in a ward that cannot contain it. This is the board's
+  @if (loadError()) {
+    <div class="load-error" role="alert">
+      <span class="material-symbols-outlined" aria-hidden="true">cloud_off</span>
+      <p>{{ 'BED_BOARD.LOAD_ERROR' | translate }}</p>
+      <button type="button" class="btn-secondary" (click)="refresh()">
+        {{ 'BED_BOARD.REFRESH' | translate }}
+      </button>
+    </div>
+  }
+  @if (isNetworkView()) {
+    <section class="network-overview" [attr.aria-label]="'BED_BOARD.NETWORK_TITLE' | translate">
+      <div class="section-heading">
+        <div>
+          <h2>{{ 'BED_BOARD.NETWORK_TITLE' | translate }}</h2>
+          <p>{{ 'BED_BOARD.NETWORK_HELP' | translate }}</p>
+        </div>
+        <span class="network-scope"
+          ><span class="material-symbols-outlined" aria-hidden="true">public</span>
+          {{ 'HOSPITAL_SCOPE.ALL_HOSPITALS' | translate }}</span
+        >
+      </div>
+      @if (loading()) {
+        <p role="status">{{ 'COMMON.LOADING' | translate }}</p>
+      }
+      @if (!loading() && !loadError()) {
+        <div class="network-metrics">
+          <div class="network-metric primary">
+            <span class="material-symbols-outlined" aria-hidden="true">bed</span
+            ><strong>{{ networkTotals().total }}</strong
+            ><span>{{ 'BED_BOARD.CONFIGURED_BEDS' | translate }}</span>
+          </div>
+          <div class="network-metric">
+            <span class="material-symbols-outlined" aria-hidden="true">check_circle</span
+            ><strong>{{ networkTotals().available }}</strong
+            ><span>{{ 'BED_BOARD.AVAILABLE' | translate }}</span>
+          </div>
+          <div class="network-metric">
+            <span class="material-symbols-outlined" aria-hidden="true">hotel</span
+            ><strong>{{ networkTotals().occupied }}</strong
+            ><span>{{ 'BED_BOARD.OCCUPIED_BEDS' | translate }}</span>
+          </div>
+          <div class="network-metric">
+            <span class="material-symbols-outlined" aria-hidden="true">pie_chart</span
+            ><strong>{{
+              occupancy(networkTotals().occupied, networkTotals().total) | measure: '%'
+            }}</strong
+            ><span>{{ 'BED_BOARD.OCCUPANCY' | translate }}</span>
+          </div>
+        </div>
+      }
+    </section>
+    @if (!loading() && !loadError()) {
+      @if (hospitalNamesError()) {
+        <p class="warn-banner" role="status">{{ 'BED_BOARD.HOSPITAL_NAMES_ERROR' | translate }}</p>
+      }
+      <section class="hospital-directory">
+        <div class="section-heading">
+          <h2>{{ 'BED_BOARD.HOSPITAL_CAPACITY' | translate }}</h2>
+          <label class="board-search"
+            ><span class="material-symbols-outlined" aria-hidden="true">search</span
+            ><input
+              [attr.aria-label]="'BED_BOARD.SEARCH_HOSPITALS' | translate"
+              [placeholder]="'BED_BOARD.SEARCH_HOSPITALS' | translate"
+              [ngModel]="searchTerm()"
+              (ngModelChange)="searchTerm.set($event)"
+          /></label>
+        </div>
+        <div class="hospital-grid">
+          @for (h of visibleHospitals(); track h.hospitalId) {
+            <article class="hospital-card">
+              <header>
+                <span class="material-symbols-outlined hospital-icon" aria-hidden="true"
+                  >local_hospital</span
+                >
+                <div>
+                  <h3>{{ h.name }}</h3>
+                  <p>{{ 'BED_BOARD.ACTIVE_WARDS' | translate: { count: h.wards } }}</p>
+                </div>
+              </header>
+              <div class="capacity-values">
+                <div>
+                  <strong>{{ h.available }}</strong
+                  ><span>{{ 'BED_BOARD.AVAILABLE' | translate }}</span>
+                </div>
+                <div>
+                  <strong>{{ h.occupied }}</strong
+                  ><span>{{ 'BED_BOARD.OCCUPIED_BEDS' | translate }}</span>
+                </div>
+                <div>
+                  <strong>{{ h.total }}</strong
+                  ><span>{{ 'BED_BOARD.CONFIGURED_BEDS' | translate }}</span>
+                </div>
+              </div>
+              <div class="occupancy-line">
+                <span>{{ 'BED_BOARD.OCCUPANCY' | translate }}</span
+                ><strong>{{ occupancy(h.occupied, h.total) | measure: '%' }}</strong>
+              </div>
+              <div class="occupancy-track" aria-hidden="true">
+                <span [style.width.%]="occupancy(h.occupied, h.total)"></span>
+              </div>
+              <button type="button" class="open-hospital" (click)="openHospital(h.hospitalId)">
+                {{ 'BED_BOARD.OPEN_HOSPITAL' | translate
+                }}<span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span>
+              </button>
+            </article>
+          } @empty {
+            <p class="empty-state">{{ 'BED_BOARD.NO_HOSPITAL_MATCH' | translate }}</p>
+          }
+        </div>
+      </section>
+    }
+  } @else {
+    <!-- An airborne case in a ward that cannot contain it. This is the board's
        reason for existing, so it sits above everything else. -->
 
-  @if (mismatches().length > 0) {
-    <div class="alert-banner" role="alert">
-      <span class="material-symbols-outlined">coronavirus</span>
-      <div>
-        <strong>{{ 'BED_BOARD.MISMATCH_TITLE' | translate }}</strong>
-        <ul class="mismatch-list">
-          @for (m of mismatches(); track m.admissionId) {
-            <li>{{ 'BED_BOARD.MISMATCH_ROW' | translate: { name: m.patientName } }}</li>
-          }
-        </ul>
-      </div>
-    </div>
-  }
-
-  <!-- A bed marked OCCUPIED that no admission points at cannot be allocated
-       by anyone, and stays lost until something says so. -->
-  @if (hasOrphanedBeds) {
-    <div class="warn-banner" role="status">
-      <span class="material-symbols-outlined">report</span>
-      <span>
-        {{
-          'BED_BOARD.ORPHANED_BEDS'
-            | translate: { count: board()?.census?.orphanedOccupiedBeds ?? 0 }
-        }}
-      </span>
-    </div>
-  }
-
-  <!-- Ordered but not yet carried out. The destination bed is held RESERVED
-       for each of these, so a stale one takes a bed out of circulation. -->
-  @if (pendingTransfers().length > 0) {
-    <section
-      class="transfer-worklist"
-      [attr.aria-label]="'BED_BOARD.PENDING_TRANSFERS' | translate"
-    >
-      <h2>
-        {{ 'BED_BOARD.PENDING_TRANSFERS' | translate }}
-        <span class="count">{{ pendingTransfers().length }}</span>
-      </h2>
-      <ul>
-        @for (t of pendingTransfers(); track t.id) {
-          <li [class.override]="t.isolationOverride">
-            <div class="transfer-who">
-              <strong>{{ t.patientName }}</strong>
-              @if (t.mrn) {
-                <span class="occupant-mrn">{{ t.mrn }}</span>
-              }
-              @for (p of t.isolationPrecautions; track p) {
-                <span [class]="precautionClass(p)">{{
-                  p | enumLabel: 'isolationPrecautionType'
-                }}</span>
-              }
-              @if (t.isolationOverride) {
-                {{ ' '
-                }}<span class="chip chip-mismatch">{{ 'BED_BOARD.OVERRIDE' | translate }}</span>
-              }
-            </div>
-            <div class="transfer-route">
-              <span>{{ t.fromBedLabel || ('BED_BOARD.NO_BED' | translate) }}</span>
-              <span class="material-symbols-outlined">arrow_forward</span>
-              <span>{{ t.toBedLabel }}</span>
-              <span class="ward-type">{{ t.toWardName }}</span>
-            </div>
-            <div class="transfer-reason">{{ t.reason }}</div>
-            @if (canTransfer) {
-              <div class="transfer-actions">
-                <button class="btn-primary small" (click)="completeTransfer(t)">
-                  {{ 'BED_BOARD.TRANSFER_COMPLETE' | translate }}
-                </button>
-                <button class="btn-link danger" (click)="cancelTransfer(t)">
-                  {{ 'BED_BOARD.TRANSFER_CANCEL' | translate }}
-                </button>
-              </div>
+    @if (mismatches().length > 0) {
+      <div class="alert-banner" role="alert">
+        <span class="material-symbols-outlined">coronavirus</span>
+        <div>
+          <strong>{{ 'BED_BOARD.MISMATCH_TITLE' | translate }}</strong>
+          <ul class="mismatch-list">
+            @for (m of mismatches(); track m.admissionId) {
+              <li>{{ 'BED_BOARD.MISMATCH_ROW' | translate: { name: m.patientName } }}</li>
             }
-          </li>
-        }
-      </ul>
-    </section>
-  }
+          </ul>
+        </div>
+      </div>
+    }
 
-  @if (board(); as b) {
-    <section class="census-grid" [attr.aria-label]="'BED_BOARD.CENSUS' | translate">
-      <div class="census-tile">
-        <span class="census-value">{{ b.census.inpatientCount }}</span>
-        <span class="census-label">{{ 'BED_BOARD.INPATIENTS' | translate }}</span>
+    <!-- A bed marked OCCUPIED that no admission points at cannot be allocated
+       by anyone, and stays lost until something says so. -->
+    @if (hasOrphanedBeds) {
+      <div class="warn-banner" role="status">
+        <span class="material-symbols-outlined">report</span>
+        <span>
+          {{
+            'BED_BOARD.ORPHANED_BEDS'
+              | translate: { count: board()?.census?.orphanedOccupiedBeds ?? 0 }
+          }}
+        </span>
       </div>
-      <div class="census-tile">
-        <span class="census-value">{{ b.census.availableBeds }}</span>
-        <span class="census-label">{{ 'BED_BOARD.AVAILABLE' | translate }}</span>
-      </div>
-      <div class="census-tile">
-        <span class="census-value">{{ b.census.occupancyRate | measure: '%' }}</span>
-        <span class="census-label">{{ 'BED_BOARD.OCCUPANCY' | translate }}</span>
-      </div>
-      <div class="census-tile">
-        <span class="census-value">{{ b.census.expectedDischargesToday }}</span>
-        <span class="census-label">{{ 'BED_BOARD.DISCHARGES_TODAY' | translate }}</span>
-      </div>
-      <div class="census-tile">
-        <span class="census-value">{{ b.census.patientsOnIsolation }}</span>
-        <span class="census-label">{{ 'BED_BOARD.ON_ISOLATION' | translate }}</span>
-      </div>
-      <div class="census-tile">
-        <span class="census-value">{{ b.census.outOfServiceBeds }}</span>
-        <span class="census-label">{{ 'BED_BOARD.OUT_OF_SERVICE' | translate }}</span>
-      </div>
-    </section>
+    }
 
-    <section class="filters">
-      <label for="ward-filter">{{ 'BED_BOARD.FILTER_WARD' | translate }}</label>
-      <select
-        id="ward-filter"
-        [ngModel]="wardFilter()"
-        (ngModelChange)="wardFilter.set($event)"
-        name="wardFilter"
+    <!-- Ordered but not yet carried out. The destination bed is held RESERVED
+       for each of these, so a stale one takes a bed out of circulation. -->
+    @if (pendingTransfers().length > 0) {
+      <section
+        class="transfer-worklist"
+        [attr.aria-label]="'BED_BOARD.PENDING_TRANSFERS' | translate"
       >
-        <option value="">{{ 'BED_BOARD.ALL_WARDS' | translate }}</option>
-        @for (w of b.wards; track w.wardId) {
-          <option [value]="w.wardId">{{ w.wardName }}</option>
-        }
-      </select>
-
-      <label class="check">
-        <input
-          type="checkbox"
-          [ngModel]="showOnlyAvailable()"
-          (ngModelChange)="showOnlyAvailable.set($event)"
-          name="availableOnly"
-        />
-        {{ 'BED_BOARD.ONLY_AVAILABLE' | translate }}
-      </label>
-
-      <label class="check">
-        <input
-          type="checkbox"
-          [ngModel]="showOnlyIsolation()"
-          (ngModelChange)="showOnlyIsolation.set($event)"
-          name="isolationOnly"
-        />
-        {{ 'BED_BOARD.ONLY_ISOLATION' | translate }}
-      </label>
-    </section>
-
-    @if (loading()) {
-      <p class="muted">{{ 'COMMON.LOADING' | translate }}</p>
-    } @else if (visibleWards().length === 0) {
-      <p class="empty-state">{{ 'BED_BOARD.EMPTY' | translate }}</p>
-    } @else {
-      @for (ward of visibleWards(); track ward.wardId) {
-        <section class="ward-block">
-          <header class="ward-header">
-            <h2>
-              {{ ward.wardName }}
-              <span class="ward-code">{{ ward.wardCode }}</span>
-              <span class="ward-type">{{ ward.wardType | enumLabel: 'wardType' }}</span>
-              @if (ward.isolationCapable) {
-                {{ ' '
-                }}<span class="chip chip-capable">{{
-                  'BED_BOARD.ISOLATION_CAPABLE' | translate
-                }}</span>
-              }
-            </h2>
-            <span class="ward-stats">
-              {{
-                'BED_BOARD.WARD_STATS'
-                  | translate
-                    : {
-                        occupied: ward.occupiedBeds,
-                        total: ward.totalBeds,
-                        rate: (ward.occupancyRate | number: '1.0-1'),
-                      }
-              }}
-            </span>
-          </header>
-
-          @for (room of ward.rooms; track room.roomNumber) {
-            <div class="room-block">
-              <h3 class="room-title">
-                {{
-                  room.roomNumber
-                    ? ('BED_BOARD.ROOM' | translate: { room: room.roomNumber })
-                    : ('BED_BOARD.NO_ROOM' | translate)
-                }}
-              </h3>
-              <div class="bed-grid">
-                @for (bed of room.beds; track bed.bedId) {
-                  <article [class]="bedStatusClass(bed)">
-                    <header class="bed-head">
-                      <span class="bed-number">{{ bed.bedNumber }}</span>
-                      <span class="bed-status">{{ bed.status | enumLabel: 'bedStatus' }}</span>
-                    </header>
-
-                    @if (bed.occupant; as o) {
-                      <div class="occupant">
-                        <span class="occupant-name">{{ o.patientName }}</span>
-                        @if (o.mrn) {
-                          <span class="occupant-mrn">{{ o.mrn }}</span>
-                        }
-                        <dl class="occupant-meta">
-                          <div>
-                            <dt>{{ 'BED_BOARD.LOS' | translate }}</dt>
-                            <dd>
-                              {{ 'BED_BOARD.DAYS' | translate: { count: o.lengthOfStayDays } }}
-                            </dd>
-                          </div>
-                          @if (o.expectedDischargeAt) {
-                            <div>
-                              <dt>{{ 'BED_BOARD.EDD' | translate }}</dt>
-                              <dd>{{ o.expectedDischargeAt | serverTime | date: 'shortDate' }}</dd>
-                            </div>
-                          }
-                          @if (o.attendingPhysicianName) {
-                            <div>
-                              <dt>{{ 'BED_BOARD.ATTENDING' | translate }}</dt>
-                              <dd>{{ o.attendingPhysicianName }}</dd>
-                            </div>
-                          }
-                        </dl>
-
-                        @if (o.isolationPrecautions.length > 0) {
-                          <div class="precautions">
-                            @for (p of o.isolationPrecautions; track p) {
-                              <span [class]="precautionClass(p)">{{
-                                p | enumLabel: 'isolationPrecautionType'
-                              }}</span>
-                            }
-                            @if (o.isolationMismatch) {
-                              {{ ' '
-                              }}<span class="chip chip-mismatch">{{
-                                'BED_BOARD.WRONG_WARD' | translate
-                              }}</span>
-                            }
-                          </div>
-                        }
-
-                        <div class="bed-actions">
-                          @if (canManagePrecautions) {
-                            <button class="btn-link" (click)="openPrecautions(o)">
-                              {{ 'BED_BOARD.MANAGE_PRECAUTIONS' | translate }}
-                            </button>
-                          }
-                          @if (canTransfer) {
-                            <button class="btn-link" (click)="openTransfer(o)">
-                              {{ 'BED_BOARD.TRANSFER' | translate }}
-                            </button>
-                          }
-                        </div>
-                      </div>
-                    } @else {
-                      <p class="bed-empty">{{ 'BED_BOARD.EMPTY_BED' | translate }}</p>
-                    }
-                  </article>
+        <h2>
+          {{ 'BED_BOARD.PENDING_TRANSFERS' | translate }}
+          <span class="count">{{ pendingTransfers().length }}</span>
+        </h2>
+        <ul>
+          @for (t of pendingTransfers(); track t.id) {
+            <li [class.override]="t.isolationOverride">
+              <div class="transfer-who">
+                <strong>{{ t.patientName }}</strong>
+                @if (t.mrn) {
+                  <span class="occupant-mrn">{{ t.mrn }}</span>
+                }
+                @for (p of t.isolationPrecautions; track p) {
+                  <span [class]="precautionClass(p)">{{
+                    p | enumLabel: 'isolationPrecautionType'
+                  }}</span>
+                }
+                @if (t.isolationOverride) {
+                  {{ ' '
+                  }}<span class="chip chip-mismatch">{{ 'BED_BOARD.OVERRIDE' | translate }}</span>
                 }
               </div>
-            </div>
+              <div class="transfer-route">
+                <span>{{ t.fromBedLabel || ('BED_BOARD.NO_BED' | translate) }}</span>
+                <span class="material-symbols-outlined">arrow_forward</span>
+                <span>{{ t.toBedLabel }}</span>
+                <span class="ward-type">{{ t.toWardName }}</span>
+              </div>
+              <div class="transfer-reason">{{ t.reason }}</div>
+              @if (canTransfer) {
+                <div class="transfer-actions">
+                  <button class="btn-primary small" (click)="completeTransfer(t)">
+                    {{ 'BED_BOARD.TRANSFER_COMPLETE' | translate }}
+                  </button>
+                  <button class="btn-link danger" (click)="cancelTransfer(t)">
+                    {{ 'BED_BOARD.TRANSFER_CANCEL' | translate }}
+                  </button>
+                </div>
+              }
+            </li>
           }
-        </section>
-      }
+        </ul>
+      </section>
     }
-  } @else if (loading()) {
-    <p class="muted">{{ 'COMMON.LOADING' | translate }}</p>
+
+    @if (board(); as b) {
+      <section class="census-grid" [attr.aria-label]="'BED_BOARD.CENSUS' | translate">
+        <div class="census-tile">
+          <span class="census-value">{{ b.census.inpatientCount }}</span>
+          <span class="census-label">{{ 'BED_BOARD.INPATIENTS' | translate }}</span>
+        </div>
+        <div class="census-tile">
+          <span class="census-value">{{ b.census.availableBeds }}</span>
+          <span class="census-label">{{ 'BED_BOARD.AVAILABLE' | translate }}</span>
+        </div>
+        <div class="census-tile">
+          <span class="census-value">{{ b.census.occupancyRate | measure: '%' }}</span>
+          <span class="census-label">{{ 'BED_BOARD.OCCUPANCY' | translate }}</span>
+        </div>
+        <div class="census-tile">
+          <span class="census-value">{{ b.census.expectedDischargesToday }}</span>
+          <span class="census-label">{{ 'BED_BOARD.DISCHARGES_TODAY' | translate }}</span>
+        </div>
+        <div class="census-tile">
+          <span class="census-value">{{ b.census.patientsOnIsolation }}</span>
+          <span class="census-label">{{ 'BED_BOARD.ON_ISOLATION' | translate }}</span>
+        </div>
+        <div class="census-tile">
+          <span class="census-value">{{ b.census.outOfServiceBeds }}</span>
+          <span class="census-label">{{ 'BED_BOARD.OUT_OF_SERVICE' | translate }}</span>
+        </div>
+      </section>
+
+      <div class="board-heading">
+        <div>
+          <h2>{{ 'BED_BOARD.WARD_OVERVIEW' | translate }}</h2>
+          <p>
+            {{ 'BED_BOARD.SNAPSHOT_AT' | translate }}
+            {{ b.generatedAt | serverTime | date: 'short' }}
+          </p>
+        </div>
+        <label class="board-search"
+          ><span class="material-symbols-outlined" aria-hidden="true">search</span
+          ><input
+            [attr.aria-label]="'BED_BOARD.SEARCH_BEDS' | translate"
+            [placeholder]="'BED_BOARD.SEARCH_BEDS' | translate"
+            [ngModel]="searchTerm()"
+            (ngModelChange)="searchTerm.set($event)"
+        /></label>
+      </div>
+      <section class="filters">
+        <label for="ward-filter">{{ 'BED_BOARD.FILTER_WARD' | translate }}</label>
+        <select
+          id="ward-filter"
+          [ngModel]="wardFilter()"
+          (ngModelChange)="wardFilter.set($event)"
+          name="wardFilter"
+        >
+          <option value="">{{ 'BED_BOARD.ALL_WARDS' | translate }}</option>
+          @for (w of b.wards; track w.wardId) {
+            <option [value]="w.wardId">{{ w.wardName }}</option>
+          }
+        </select>
+
+        <label class="check">
+          <input
+            type="checkbox"
+            [ngModel]="showOnlyAvailable()"
+            (ngModelChange)="showOnlyAvailable.set($event)"
+            name="availableOnly"
+          />
+          {{ 'BED_BOARD.ONLY_AVAILABLE' | translate }}
+        </label>
+
+        <label class="check">
+          <input
+            type="checkbox"
+            [ngModel]="showOnlyIsolation()"
+            (ngModelChange)="showOnlyIsolation.set($event)"
+            name="isolationOnly"
+          />
+          {{ 'BED_BOARD.ONLY_ISOLATION' | translate }}
+        </label>
+      </section>
+
+      <div class="board-legend" [attr.aria-label]="'BED_BOARD.LEGEND' | translate">
+        <span class="legend-available">{{ 'PORTAL.ENUM.BED_STATUS.AVAILABLE' | translate }}</span
+        ><span class="legend-occupied">{{ 'PORTAL.ENUM.BED_STATUS.OCCUPIED' | translate }}</span
+        ><span class="legend-isolation">{{ 'BED_BOARD.ON_ISOLATION' | translate }}</span
+        ><span class="legend-unavailable">{{ 'BED_BOARD.OUT_OF_SERVICE' | translate }}</span>
+      </div>
+      @if (loading()) {
+        <p class="muted">{{ 'COMMON.LOADING' | translate }}</p>
+      } @else if (visibleWards().length === 0) {
+        <p class="empty-state">{{ 'BED_BOARD.EMPTY' | translate }}</p>
+      } @else {
+        @for (ward of visibleWards(); track ward.wardId) {
+          <section class="ward-block">
+            <header class="ward-header">
+              <h2>
+                {{ ward.wardName }}
+                <span class="ward-code">{{ ward.wardCode }}</span>
+                <span class="ward-type">{{ ward.wardType | enumLabel: 'wardType' }}</span>
+                @if (ward.isolationCapable) {
+                  {{ ' '
+                  }}<span class="chip chip-capable">{{
+                    'BED_BOARD.ISOLATION_CAPABLE' | translate
+                  }}</span>
+                }
+              </h2>
+              <span class="ward-stats">
+                {{
+                  'BED_BOARD.WARD_STATS'
+                    | translate
+                      : {
+                          occupied: ward.occupiedBeds,
+                          total: ward.totalBeds,
+                          rate: (ward.occupancyRate | number: '1.0-1'),
+                        }
+                }}
+              </span>
+              <div class="occupancy-track ward-occupancy" aria-hidden="true">
+                <span [style.width.%]="ward.occupancyRate"></span>
+              </div>
+            </header>
+
+            @for (room of ward.rooms; track room.roomNumber) {
+              <div class="room-block">
+                <h3 class="room-title">
+                  {{
+                    room.roomNumber
+                      ? ('BED_BOARD.ROOM' | translate: { room: room.roomNumber })
+                      : ('BED_BOARD.NO_ROOM' | translate)
+                  }}
+                </h3>
+                <div class="bed-grid">
+                  @for (bed of room.beds; track bed.bedId) {
+                    <article [class]="bedStatusClass(bed)">
+                      <header class="bed-head">
+                        <span class="bed-number"
+                          ><span class="material-symbols-outlined" aria-hidden="true">bed</span
+                          >{{ bed.bedNumber }}</span
+                        >
+                        <span class="bed-status">{{ bed.status | enumLabel: 'bedStatus' }}</span>
+                      </header>
+
+                      @if (bed.occupant; as o) {
+                        <div class="occupant">
+                          <span class="occupant-name">{{ o.patientName }}</span>
+                          @if (o.mrn) {
+                            <span class="occupant-mrn">{{ o.mrn }}</span>
+                          }
+                          <dl class="occupant-meta">
+                            <div>
+                              <dt>{{ 'BED_BOARD.LOS' | translate }}</dt>
+                              <dd>
+                                {{
+                                  o.lengthOfStayDays === null
+                                    ? '—'
+                                    : ('BED_BOARD.DAYS' | translate: { count: o.lengthOfStayDays })
+                                }}
+                              </dd>
+                            </div>
+                            @if (o.expectedDischargeAt) {
+                              <div>
+                                <dt>{{ 'BED_BOARD.EDD' | translate }}</dt>
+                                <dd>
+                                  {{ o.expectedDischargeAt | serverTime | date: 'shortDate' }}
+                                </dd>
+                              </div>
+                            }
+                            @if (o.attendingPhysicianName) {
+                              <div>
+                                <dt>{{ 'BED_BOARD.ATTENDING' | translate }}</dt>
+                                <dd>{{ o.attendingPhysicianName }}</dd>
+                              </div>
+                            }
+                          </dl>
+
+                          @if (o.isolationPrecautions.length > 0) {
+                            <div class="precautions">
+                              @for (p of o.isolationPrecautions; track p) {
+                                <span [class]="precautionClass(p)">{{
+                                  p | enumLabel: 'isolationPrecautionType'
+                                }}</span>
+                              }
+                              @if (o.isolationMismatch) {
+                                {{ ' '
+                                }}<span class="chip chip-mismatch">{{
+                                  'BED_BOARD.WRONG_WARD' | translate
+                                }}</span>
+                              }
+                            </div>
+                          }
+
+                          <div class="bed-actions">
+                            @if (canManagePrecautions) {
+                              <button class="btn-link" (click)="openPrecautions(o)">
+                                {{ 'BED_BOARD.MANAGE_PRECAUTIONS' | translate }}
+                              </button>
+                            }
+                            @if (canTransfer) {
+                              <button class="btn-link" (click)="openTransfer(o)">
+                                {{ 'BED_BOARD.TRANSFER' | translate }}
+                              </button>
+                            }
+                          </div>
+                        </div>
+                      } @else {
+                        <p class="bed-empty">
+                          {{
+                            (bed.status === 'AVAILABLE'
+                              ? 'BED_BOARD.EMPTY_BED'
+                              : 'BED_BOARD.NO_OCCUPANT'
+                            ) | translate
+                          }}
+                        </p>
+                      }
+                    </article>
+                  }
+                </div>
+              </div>
+            }
+          </section>
+        }
+      }
+    } @else if (loading()) {
+      <p class="muted">{{ 'COMMON.LOADING' | translate }}</p>
+    }
   }
 </div>
 

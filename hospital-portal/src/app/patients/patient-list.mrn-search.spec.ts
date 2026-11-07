@@ -19,20 +19,22 @@ describe('PatientListComponent: an MRN search (QA D1218)', () => {
     }) as PatientResponse;
 
   function filter(term: string, rows: PatientResponse[]): string[] {
-    const page = Object.assign(
-      Object.create(PatientListComponent.prototype) as PatientListComponent,
-      {
-        patients: signal(rows),
-        filtered: signal<PatientResponse[]>([]),
-        searchTerm: term,
-        genderFilter: '',
-        statusFilter: '',
-        bloodTypeFilter: '',
-        hospitalFilter: '',
-        sortField: signal('name'),
-        sortDir: signal('asc'),
-      },
-    );
+    const bare = Object.create(PatientListComponent.prototype) as PatientListComponent;
+    // The hospital filter is a getter/setter over this private signal since the directory redesign.
+    (bare as unknown as Record<string, unknown>)['selectedHospital'] = signal('');
+    const page = Object.assign(bare, {
+      patients: signal(rows),
+      currentPage: signal(0),
+      pageSize: 10,
+      filtered: signal<PatientResponse[]>([]),
+      searchTerm: term,
+      genderFilter: '',
+      statusFilter: '',
+      bloodTypeFilter: '',
+      contactFilter: '',
+      sortField: signal('name'),
+      sortDir: signal('asc'),
+    });
     page.applyFilter();
     return page.filtered().map((p) => p.mrn ?? '');
   }

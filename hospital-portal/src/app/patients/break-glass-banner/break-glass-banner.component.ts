@@ -51,6 +51,7 @@ type LoadState = 'idle' | 'loading' | 'ready' | 'error';
 })
 export class BreakGlassBannerComponent implements OnChanges, OnDestroy {
   readonly patientId = input<string | null | undefined>(null);
+  readonly compactWhenIdle = input(false);
   readonly hospitalId = input<string | null | undefined>(null);
 
   /** Emitted whenever a session is declared or revoked, so the parent can refresh dependent data. */

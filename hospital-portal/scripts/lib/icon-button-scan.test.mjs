@@ -46,6 +46,29 @@ test('a button with visible text, a translated label or an <img alt> is named by
   assert.deepEqual(rules(html), []);
 });
 
+test('an icon whose closing tag Prettier split does not swallow the label after it', () => {
+  // The summary cards of the redesigned dashboards: `</span` and `>` on two lines.
+  const html = `<button (click)="pick()">
+      <span class="material-symbols-outlined card-icon" aria-hidden="true"
+        >{{ metric.icon }}</span
+      >
+      <strong class="card-value">{{ metric.count }}</strong
+      ><span class="card-label">{{ metric.label | translate }}</span>
+    </button>`;
+  assert.deepEqual(rules(html), []);
+  assert.equal(
+    visibleText(`<span class="material-symbols-outlined">edit</span
+      ><span>Modifier</span>`),
+    'Modifier',
+  );
+  // Still icon-only when nothing follows the split close.
+  assert.deepEqual(
+    rules(`<button (click)="e()"><span class="material-symbols-outlined">edit</span
+      ></button>`),
+    ['icon-button:button edit (click)=e()'],
+  );
+});
+
 test('an <a (click)>, <a routerLink>, <a href> or role="button" element is a control too; <img alt=""> is an icon', () => {
   const html = `<a (click)="open()"><span class="material-symbols-outlined">open_in_new</span></a>
     <div role="button" (click)="x()"><img src="i.svg" alt="" /></div>

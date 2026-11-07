@@ -19,6 +19,7 @@ import {
   AdmissionResponse,
   AdmissionRequest,
   AdmissionType,
+  AdmissionStatus,
   AcuityLevel,
 } from '../services/admission.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
@@ -39,7 +40,12 @@ import {
 } from '../services/order-set.service';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
-import { fromServerDateTime, toLocalInputValue, toServerDateTime } from '../shared/date-utils';
+import {
+  fromServerDateTime,
+  serverInstant,
+  toLocalInputValue,
+  toServerDateTime,
+} from '../shared/date-utils';
 import { BedService, BedResponse } from '../services/bed.service';
 import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
 import { BackdropCloseDirective } from '../shared/a11y/backdrop-close.directive';
@@ -136,6 +142,136 @@ export class AdmissionsComponent implements OnInit {
   loading = signal(true);
   searchTerm = '';
   activeTab = signal<'all' | 'admitted' | 'discharged'>('all');
+  readonly statusFilter = signal<AdmissionStatus | ''>('');
+  readonly typeFilter = signal<AdmissionType | ''>('');
+  readonly acuityFilter = signal<AcuityLevel | ''>('');
+  readonly bedFilter = signal<'' | 'missing' | 'recorded'>('');
+  readonly sortOrder = signal<'newest' | 'oldest' | 'patient'>('newest');
+  readonly pageIndex = signal(0);
+  readonly pageSize = signal(10);
+  readonly loadError = signal(false);
+  private listRequest = 0;
+  readonly statusOptions: AdmissionStatus[] = [
+    'PENDING',
+    'ACTIVE',
+    'ON_LEAVE',
+    'AWAITING_DISCHARGE',
+    'DISCHARGED',
+    'CANCELLED',
+    'TRANSFERRED',
+    'DECEASED',
+  ];
+  readonly summaryMetrics = computed(() => [
+    {
+      id: 'active',
+      label: 'ADMISSIONS.ADMITTED',
+      icon: 'hotel',
+      tone: 'open',
+      count: this.countByStatus('ACTIVE'),
+    },
+    {
+      id: 'pending',
+      label: 'ADMISSIONS.PENDING',
+      icon: 'schedule',
+      tone: 'progress',
+      count: this.countByStatus('PENDING'),
+    },
+    {
+      id: 'missing-bed',
+      label: 'ADMISSIONS.ACTIVE_WITHOUT_BED',
+      icon: 'bed',
+      tone: 'warning',
+      count: this.admissions().filter((a) => a.status === 'ACTIVE' && !this.hasRecordedBed(a))
+        .length,
+    },
+    {
+      id: 'awaiting-discharge',
+      label: 'ADMISSIONS.DISCHARGE_PREPARATION',
+      icon: 'assignment_turned_in',
+      tone: 'progress',
+      count: this.countByStatus('AWAITING_DISCHARGE'),
+    },
+    {
+      id: 'discharged',
+      label: 'ADMISSIONS.DISCHARGED',
+      icon: 'logout',
+      tone: 'completed',
+      count: this.countByStatus('DISCHARGED'),
+    },
+  ]);
+  readonly selectedMetric = computed(() => {
+    if (this.statusFilter() === 'ACTIVE' && this.bedFilter() === 'missing') return 'missing-bed';
+    if (this.bedFilter()) return '';
+    return (
+      (
+        {
+          ACTIVE: 'active',
+          PENDING: 'pending',
+          AWAITING_DISCHARGE: 'awaiting-discharge',
+          DISCHARGED: 'discharged',
+        } as Partial<Record<AdmissionStatus, string>>
+      )[this.statusFilter() as AdmissionStatus] ?? ''
+    );
+  });
+  readonly totalPages = computed(() =>
+    Math.max(1, Math.ceil(this.filtered().length / this.pageSize())),
+  );
+  readonly currentPage = computed(() => Math.min(this.pageIndex(), this.totalPages() - 1));
+  readonly pagedAdmissions = computed(() =>
+    this.filtered().slice(
+      this.currentPage() * this.pageSize(),
+      (this.currentPage() + 1) * this.pageSize(),
+    ),
+  );
+  readonly resultStart = computed(() =>
+    this.filtered().length ? this.currentPage() * this.pageSize() + 1 : 0,
+  );
+  readonly resultEnd = computed(() =>
+    Math.min((this.currentPage() + 1) * this.pageSize(), this.filtered().length),
+  );
+
+  hasRecordedBed(a: AdmissionResponse): boolean {
+    return !!(a.bedId || a.roomBed?.trim());
+  }
+
+  setStatusFilter(status: AdmissionStatus | ''): void {
+    this.activeTab.set('all');
+    this.statusFilter.set(status);
+    this.applyFilter();
+  }
+
+  selectMetric(id: string): void {
+    if (this.selectedMetric() === id) {
+      this.resetFilters();
+      return;
+    }
+    this.resetFilters();
+    const statuses: Record<string, AdmissionStatus> = {
+      active: 'ACTIVE',
+      pending: 'PENDING',
+      'missing-bed': 'ACTIVE',
+      'awaiting-discharge': 'AWAITING_DISCHARGE',
+      discharged: 'DISCHARGED',
+    };
+    this.statusFilter.set(statuses[id] ?? '');
+    if (id === 'missing-bed') this.bedFilter.set('missing');
+    this.applyFilter();
+  }
+
+  resetFilters(): void {
+    this.searchTerm = '';
+    this.activeTab.set('all');
+    this.statusFilter.set('');
+    this.typeFilter.set('');
+    this.acuityFilter.set('');
+    this.bedFilter.set('');
+    this.sortOrder.set('newest');
+    this.applyFilter();
+  }
+
+  setPage(index: number): void {
+    this.pageIndex.set(Math.max(0, Math.min(index, this.totalPages() - 1)));
+  }
 
   /**
    * When non-null, the order-set picker is rendered as a modal-style
@@ -291,6 +427,8 @@ export class AdmissionsComponent implements OnInit {
     // for global view). See docs/super-admin-cross-tenant-design.md.
     this.scopeUrl.applyUrlScopeSync(this.route);
 
+    const tab = this.route.snapshot.queryParamMap.get('tab');
+    if (tab === 'admitted' || tab === 'discharged') this.activeTab.set(tab);
     this.load();
     this.loadAssignedHospitals();
     // ── TENANT ISOLATION: scope staff list to the stay's hospital ──
@@ -311,11 +449,6 @@ export class AdmissionsComponent implements OnInit {
       this.roleContext.effectiveHospitalIdForRequest() ?? this.roleContext.activeHospitalId,
     );
     this.initPatientSearch();
-
-    const tab = this.route.snapshot.queryParamMap.get('tab');
-    if (tab === 'admitted' || tab === 'discharged') {
-      this.activeTab.set(tab);
-    }
   }
 
   emptyForm(): AdmissionRequest {
@@ -771,21 +904,30 @@ export class AdmissionsComponent implements OnInit {
 
   /** Re-fetch under the new cross-tenant scope when the chip emits. */
   onScopeChange(_hospitalId: string | null): void {
+    this.closeOrderSetPicker();
+    this.closeBedAssign();
     this.load();
   }
 
   load(): void {
+    const request = ++this.listRequest;
     this.loading.set(true);
+    this.loadError.set(false);
     // Re-fetch under the current cross-tenant scope (header alone
     // drives the backend; super-admin global view sends no header,
     // backend falls through to unscoped findAll).
     this.admissionService.getAll().subscribe({
       next: (list) => {
+        if (request !== this.listRequest) return;
         this.admissions.set(list ?? []);
         this.applyFilter();
         this.loading.set(false);
       },
       error: () => {
+        if (request !== this.listRequest) return;
+        this.admissions.set([]);
+        this.filtered.set([]);
+        this.loadError.set(true);
         this.toast.error(this.translate.instant('ADMISSIONS.LOAD_FAILED'));
         this.loading.set(false);
       },
@@ -794,6 +936,8 @@ export class AdmissionsComponent implements OnInit {
 
   setTab(tab: 'all' | 'admitted' | 'discharged'): void {
     this.activeTab.set(tab);
+    this.statusFilter.set('');
+    this.bedFilter.set('');
     this.applyFilter();
   }
 
@@ -802,16 +946,35 @@ export class AdmissionsComponent implements OnInit {
     const tab = this.activeTab();
     if (tab === 'admitted') list = list.filter((a) => a.status === 'ACTIVE');
     else if (tab === 'discharged') list = list.filter((a) => a.status === 'DISCHARGED');
+    if (this.statusFilter()) list = list.filter((a) => a.status === this.statusFilter());
+    if (this.typeFilter()) list = list.filter((a) => a.admissionType === this.typeFilter());
+    if (this.acuityFilter()) list = list.filter((a) => a.acuityLevel === this.acuityFilter());
+    if (this.bedFilter())
+      list = list.filter((a) => this.hasRecordedBed(a) === (this.bedFilter() === 'recorded'));
     const term = this.searchTerm.toLowerCase().trim();
     if (term) {
       list = list.filter(
         (a) =>
           textMatches(a.patientName, term) ||
           (a.chiefComplaint ?? '').toLowerCase().includes(term) ||
-          (a.roomBed ?? '').toLowerCase().includes(term),
+          (a.roomBed ?? '').toLowerCase().includes(term) ||
+          (a.encounterCode ?? '').toLowerCase().includes(term) ||
+          (a.patientMrn ?? '').toLowerCase().includes(term) ||
+          (a.hospitalName ?? '').toLowerCase().includes(term) ||
+          (a.departmentName ?? '').toLowerCase().includes(term),
       );
     }
+    const timestamp = (a: AdmissionResponse): number => {
+      const value = a.admissionDateTime ? serverInstant(a.admissionDateTime).getTime() : 0;
+      return Number.isFinite(value) ? value : 0;
+    };
+    list = [...list].sort((a, b) =>
+      this.sortOrder() === 'patient'
+        ? (a.patientName ?? '').localeCompare(b.patientName ?? '')
+        : (timestamp(a) - timestamp(b)) * (this.sortOrder() === 'oldest' ? 1 : -1),
+    );
     this.filtered.set(list);
+    this.pageIndex.set(0);
   }
 
   getStatusClass(status: string): string {
@@ -824,6 +987,14 @@ export class AdmissionsComponent implements OnInit {
         return 'status-pending';
       case 'TRANSFERRED':
         return 'status-transferred';
+      case 'DECEASED':
+        return 'status-deceased';
+      case 'CANCELLED':
+        return 'status-cancelled';
+      case 'ON_LEAVE':
+        return 'status-leave';
+      case 'AWAITING_DISCHARGE':
+        return 'status-pending';
       default:
         return '';
     }

@@ -21,6 +21,7 @@ import {
   EncounterResponse,
   isClosedEncounterStatus,
   EncounterType,
+  EncounterStatus,
   EncounterNoteResponse,
   AfterVisitSummary,
   EncounterNoteRequest,
@@ -46,7 +47,7 @@ import { CheckoutDialogComponent } from '../checkout/checkout-dialog/checkout-di
 import { actionRoles, SERVICE_RULE_ROLES } from '../core/action-permissions';
 import { CloseUnseenDialogComponent } from '../reception/close-unseen-dialog/close-unseen-dialog.component';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
-import { serverLocalDate, toServerDateTime } from '../shared/date-utils';
+import { serverInstant, serverLocalDate, toServerDateTime } from '../shared/date-utils';
 import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import {
@@ -165,6 +166,97 @@ export class EncountersComponent implements OnInit {
   loading = signal(true);
   searchTerm = '';
   activeTab = signal<'all' | 'open' | 'completed'>('all');
+  readonly selectedStatus = signal<EncounterStatus | ''>('');
+  readonly typeFilter = signal<EncounterType | ''>('');
+  readonly departmentFilter = signal('');
+  readonly sortOrder = signal<'newest' | 'oldest' | 'patient'>('newest');
+  readonly pageIndex = signal(0);
+  readonly pageSize = signal(10);
+  readonly loadError = signal(false);
+  private listRequest = 0;
+  readonly statusOptions: EncounterStatus[] = [
+    'SCHEDULED',
+    'ARRIVED',
+    'TRIAGE',
+    'WAITING_FOR_PHYSICIAN',
+    'IN_PROGRESS',
+    'AWAITING_RESULTS',
+    'READY_FOR_DISCHARGE',
+    'COMPLETED',
+    'CANCELLED',
+    'LEFT_WITHOUT_BEING_SEEN',
+  ];
+  readonly overviewMetrics: {
+    status: EncounterStatus;
+    label: string;
+    icon: string;
+    tone: string;
+  }[] = [
+    { status: 'SCHEDULED', label: 'ENCOUNTERS.SCHEDULED', icon: 'calendar_today', tone: 'open' },
+    { status: 'ARRIVED', label: 'ENCOUNTERS.ARRIVED', icon: 'how_to_reg', tone: 'progress' },
+    { status: 'TRIAGE', label: 'ENCOUNTERS.TRIAGE', icon: 'monitor_heart', tone: 'progress' },
+    {
+      status: 'WAITING_FOR_PHYSICIAN',
+      label: 'ENCOUNTERS.WAITING_FOR_MD',
+      icon: 'person_search',
+      tone: 'warning',
+    },
+    { status: 'IN_PROGRESS', label: 'ENCOUNTERS.IN_PROGRESS', icon: 'stethoscope', tone: 'open' },
+    { status: 'COMPLETED', label: 'ENCOUNTERS.COMPLETED', icon: 'task_alt', tone: 'completed' },
+  ];
+  readonly departmentOptions = computed(() =>
+    [
+      ...new Set(
+        this.encounters()
+          .map((e) => e.departmentName)
+          .filter((name): name is string => !!name),
+      ),
+    ].sort(),
+  );
+  readonly summaryMetrics = computed(() =>
+    this.overviewMetrics.map((metric) => ({ ...metric, count: this.countByStatus(metric.status) })),
+  );
+  readonly totalPages = computed(() =>
+    Math.max(1, Math.ceil(this.filtered().length / this.pageSize())),
+  );
+  readonly currentPage = computed(() => Math.min(this.pageIndex(), this.totalPages() - 1));
+  readonly pagedEncounters = computed(() =>
+    this.filtered().slice(
+      this.currentPage() * this.pageSize(),
+      (this.currentPage() + 1) * this.pageSize(),
+    ),
+  );
+  readonly resultStart = computed(() =>
+    this.filtered().length ? this.currentPage() * this.pageSize() + 1 : 0,
+  );
+  readonly resultEnd = computed(() =>
+    Math.min((this.currentPage() + 1) * this.pageSize(), this.filtered().length),
+  );
+
+  setStatusFilter(status: EncounterStatus | ''): void {
+    this.activeTab.set('all');
+    this.selectedStatus.set(status);
+    this.applyFilter();
+  }
+
+  toggleMetric(status: EncounterStatus): void {
+    this.setStatusFilter(this.selectedStatus() === status ? '' : status);
+  }
+
+  resetFilters(): void {
+    this.searchTerm = '';
+    this.activeTab.set('all');
+    this.selectedStatus.set('');
+    this.typeFilter.set('');
+    this.departmentFilter.set('');
+    this.sortOrder.set('newest');
+    this.applyFilter();
+  }
+
+  setPage(index: number): void {
+    this.pageIndex.set(Math.max(0, Math.min(index, this.totalPages() - 1)));
+  }
+
   selectedEncounter = signal<EncounterResponse | null>(null);
   showNoteForm = signal(false);
   savingNote = signal(false);
@@ -633,11 +725,15 @@ export class EncountersComponent implements OnInit {
    * itself; we just re-fetch under the new scope.
    */
   onScopeChange(_hospitalId: string | null): void {
+    this.closeDetail();
+    this.departmentFilter.set('');
     this.loadEncounters();
   }
 
   loadEncounters(): void {
+    const request = ++this.listRequest;
     this.loading.set(true);
+    this.loadError.set(false);
     // ── Tenant isolation ──────────────────────────────────────────
     // Use the cross-tenant aware hospital id: null for super-admin in
     // global view, the selected hospital for scoped super-admin, the
@@ -647,12 +743,17 @@ export class EncountersComponent implements OnInit {
     const hospitalId = this.roleContext.effectiveHospitalIdForRequest() ?? undefined;
     this.encounterService.list(hospitalId ? { hospitalId } : undefined).subscribe({
       next: (data) => {
+        if (request !== this.listRequest) return;
         const list = Array.isArray(data) ? data : [];
         this.encounters.set(list);
         this.applyFilter();
         this.loading.set(false);
       },
       error: () => {
+        if (request !== this.listRequest) return;
+        this.encounters.set([]);
+        this.filtered.set([]);
+        this.loadError.set(true);
         this.toast.error(this.translate.instant('ENCOUNTERS.LOAD_FAILED'));
         this.loading.set(false);
       },
@@ -661,6 +762,7 @@ export class EncountersComponent implements OnInit {
 
   setTab(tab: 'all' | 'open' | 'completed'): void {
     this.activeTab.set(tab);
+    this.selectedStatus.set('');
     this.applyFilter();
   }
 
@@ -681,6 +783,10 @@ export class EncountersComponent implements OnInit {
     } else if (tab === 'completed') {
       list = list.filter((e) => e.status === 'COMPLETED');
     }
+    if (this.selectedStatus()) list = list.filter((e) => e.status === this.selectedStatus());
+    if (this.typeFilter()) list = list.filter((e) => e.encounterType === this.typeFilter());
+    if (this.departmentFilter())
+      list = list.filter((e) => e.departmentName === this.departmentFilter());
     const term = this.searchTerm.toLowerCase().trim();
     if (term) {
       list = list.filter(
@@ -688,10 +794,22 @@ export class EncountersComponent implements OnInit {
           textMatches(e.patientName, term) ||
           textMatches(e.staffName, term) ||
           (e.departmentName ?? '').toLowerCase().includes(term) ||
-          (e.notes ?? '').toLowerCase().includes(term),
+          (e.notes ?? '').toLowerCase().includes(term) ||
+          (e.hospitalName ?? '').toLowerCase().includes(term) ||
+          (e.code ?? '').toLowerCase().includes(term),
       );
     }
+    const timestamp = (enc: EncounterResponse): number => {
+      const time = enc.encounterDate ? serverInstant(enc.encounterDate).getTime() : 0;
+      return Number.isFinite(time) ? time : 0;
+    };
+    list = [...list].sort((a, b) =>
+      this.sortOrder() === 'patient'
+        ? (a.patientName ?? '').localeCompare(b.patientName ?? '')
+        : (timestamp(a) - timestamp(b)) * (this.sortOrder() === 'oldest' ? 1 : -1),
+    );
     this.filtered.set(list);
+    this.pageIndex.set(0);
   }
 
   selectEncounter(enc: EncounterResponse): void {

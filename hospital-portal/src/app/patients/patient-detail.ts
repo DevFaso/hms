@@ -10,6 +10,7 @@ import {
   signal,
   viewChild,
   ChangeDetectionStrategy,
+  ElementRef,
 } from '@angular/core';
 import { saveBlob } from '../shared/download-file';
 import { CommonModule } from '@angular/common';
@@ -59,12 +60,20 @@ import { NursingNotesPanelComponent } from '../encounters/nursing-notes-panel/nu
 import { NursingNoteService } from '../services/nursing-note.service';
 import { PatientDemographicsEditComponent } from './patient-demographics-edit/patient-demographics-edit.component';
 import { isGrowthAge } from '../shared/patient-measures';
-import { refusalReason } from '../shared/refusal-reason';
+import { refusalReason, refusedFieldReasons } from '../shared/refusal-reason';
+import { refuseFields } from '../shared/forms/invalid-fields';
 import { DashPipe } from '../shared/pipes/dash.pipe';
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { DateTimePipe } from '../shared/pipes/date-time.pipe';
+
+/** The chart-restriction reason box: the server names it `reason` in a 400. */
+const RESTRICTION_REASON_FIELD = 'restriction-reason';
+
+type SectionKey = 'overview' | 'clinical' | 'documents' | 'care' | 'administration';
 
 type TabKey =
   | 'overview'
+  | 'administration'
   | 'medical'
   | 'chart'
   | 'chart-review'
@@ -85,6 +94,7 @@ type TabKey =
   imports: [
     DateTimePipe,
     DashPipe,
+    SubmitGuardDirective,
     LocaleNumberPipe,
     MeasurePipe,
     NursingNotesPanelComponent,
@@ -129,10 +139,108 @@ export class PatientDetailComponent implements OnInit {
   protected readonly permissions = inject(PermissionService);
   private readonly roleContext = inject(RoleContextService);
   private readonly printService = inject(PrintLabelService);
+  // Optional: a few specs build the component outside a view (no ElementRef there).
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef, { optional: true });
 
   patient = signal<PatientResponse | null>(null);
   loading = signal(true);
   activeTab = signal<TabKey>('overview');
+
+  readonly sections: { key: SectionKey; label: string; icon: string }[] = [
+    { key: 'overview', label: 'PATIENTS.SUMMARY', icon: 'space_dashboard' },
+    { key: 'clinical', label: 'PATIENTS.CLINICAL_RECORD', icon: 'clinical_notes' },
+    { key: 'documents', label: 'PATIENT_DOCUMENTS.TAB', icon: 'folder_open' },
+    { key: 'care', label: 'PATIENTS.CARE_PATHWAY', icon: 'event_note' },
+    { key: 'administration', label: 'PATIENTS.ADMINISTRATION', icon: 'admin_panel_settings' },
+  ];
+
+  readonly navigationTabs = computed(() => {
+    const tabs: { key: TabKey; section: SectionKey; label: string; visible: boolean }[] = [
+      { key: 'overview', section: 'overview', label: 'PATIENTS.SUMMARY', visible: true },
+      { key: 'medical', section: 'clinical', label: 'PATIENTS.MEDICAL', visible: true },
+      { key: 'chart', section: 'clinical', label: 'CHART.TAB', visible: this.canViewChart() },
+      {
+        key: 'med-history',
+        section: 'clinical',
+        label: 'MED_HISTORY.TAB',
+        visible: this.canViewMedHistory(),
+      },
+      {
+        key: 'vitals',
+        section: 'clinical',
+        label: 'PATIENTS.VITALS',
+        visible: this.canViewVitals(),
+      },
+      { key: 'growth', section: 'clinical', label: 'GROWTH.TAB', visible: this.showGrowthTab() },
+      {
+        key: 'fluid-balance',
+        section: 'clinical',
+        label: 'FLUID_BALANCE.TAB',
+        visible: this.canViewFluidBalance(),
+      },
+      { key: 'micro', section: 'clinical', label: 'MICRO.TAB', visible: this.canViewMicro() },
+      {
+        key: 'chart-review',
+        section: 'clinical',
+        label: 'CHART_REVIEW.TAB_LABEL',
+        visible: this.canViewChartReview(),
+      },
+      {
+        key: 'directives',
+        section: 'clinical',
+        label: 'DIRECTIVES.TAB_LABEL',
+        visible: this.canViewDirectives(),
+      },
+      {
+        key: 'documents',
+        section: 'documents',
+        label: 'PATIENT_DOCUMENTS.TAB',
+        visible: this.canViewDocuments(),
+      },
+      {
+        key: 'encounters',
+        section: 'care',
+        label: 'PATIENTS.ENCOUNTERS_TAB',
+        visible: this.canViewEncounters(),
+      },
+      {
+        key: 'appointments',
+        section: 'care',
+        label: 'PATIENTS.APPOINTMENTS_TAB',
+        visible: this.canViewAppointments(),
+      },
+      {
+        key: 'administration',
+        section: 'administration',
+        label: 'PATIENTS.HOSPITAL_INFO',
+        visible: true,
+      },
+      {
+        key: 'coverage',
+        section: 'administration',
+        label: 'COVERAGE.TAB',
+        visible: this.canViewCoverage(),
+      },
+    ];
+    return tabs.filter((tab) => tab.visible);
+  });
+
+  readonly activeSection = computed<SectionKey>(() => {
+    return this.navigationTabs().find((tab) => tab.key === this.activeTab())?.section ?? 'overview';
+  });
+
+  sectionVisible(section: SectionKey): boolean {
+    return this.navigationTabs().some((tab) => tab.section === section);
+  }
+
+  readonly sectionTabs = computed(() => {
+    return this.navigationTabs().filter((tab) => tab.section === this.activeSection());
+  });
+
+  setSection(section: SectionKey): void {
+    const first = this.navigationTabs().find((tab) => tab.section === section);
+    if (first) this.setTab(first.key);
+  }
 
   /* Sub-tab data */
   vitals = signal<VitalSignResponse[]>([]);
@@ -267,9 +375,17 @@ export class PatientDetailComponent implements OnInit {
     if (!p || this.restrictionSubmitting()) return;
     const reason = this.restrictionReason().trim();
     if (restricted && reason.length < 5) {
-      this.toast.error(this.translate.instant('PATIENTS.CHART_RESTRICTION_REASON_REQUIRED'));
+      const message = this.translate.instant('PATIENTS.CHART_RESTRICTION_REASON_REQUIRED');
+      refuseFields(
+        this.host?.nativeElement,
+        [RESTRICTION_REASON_FIELD],
+        [RESTRICTION_REASON_FIELD],
+        message,
+      );
+      this.toast.error(message);
       return;
     }
+    refuseFields(this.host?.nativeElement, [], [RESTRICTION_REASON_FIELD], '');
     this.restrictionSubmitting.set(true);
     this.patientService
       .setChartRestriction(p.id, restricted, restricted ? reason : undefined)
@@ -288,6 +404,15 @@ export class PatientDetailComponent implements OnInit {
         },
         error: (err: HttpErrorResponse) => {
           this.restrictionSubmitting.set(false);
+          // A 400 that names the reason is shown on the field, not only in a toast.
+          const named = refusedFieldReasons(err, { reason: RESTRICTION_REASON_FIELD });
+          if (named.length) {
+            refuseFields(
+              this.host?.nativeElement,
+              named.map(([id, message]) => ({ id, message })),
+              [RESTRICTION_REASON_FIELD],
+            );
+          }
           this.toast.error(
             err?.error?.message ?? this.translate.instant('PATIENTS.CHART_RESTRICTION_FAILED'),
           );
@@ -631,7 +756,8 @@ export class PatientDetailComponent implements OnInit {
       this.loadVitals();
     if (tab === 'encounters' && this.canViewEncounters() && this.encounters().length === 0)
       this.loadEncounters();
-    if (tab === 'appointments' && this.appointments().length === 0) this.loadAppointments();
+    if (tab === 'appointments' && this.canViewAppointments() && this.appointments().length === 0)
+      this.loadAppointments();
   }
 
   private loadVitals(): void {

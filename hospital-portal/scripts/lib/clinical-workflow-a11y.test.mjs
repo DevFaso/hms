@@ -45,7 +45,9 @@ const sources = FOLDERS.flatMap((f) => files(join(appDir, f), '.ts'));
 const where = (p, text, index) =>
   `${relative(appDir, p)}:${text.slice(0, index).split('\n').length}`;
 
-const ICON = /<span\b[^>]*material-symbols[^>]*>[\s\S]*?<\/span>/g;
+// `</span` and `>` may sit on two lines (Prettier); reading only `</span>` ran the
+// icon on to the next span's close and swallowed the label between them.
+const ICON = /<span\b[^>]*material-symbols[^>]*>[\s\S]*?<\/span\s*>/g;
 const ICON_TAG = /<span\b([^>]*material-symbols[^>]*)>/g;
 
 /**

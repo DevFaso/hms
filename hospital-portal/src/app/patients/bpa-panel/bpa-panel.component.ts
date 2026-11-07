@@ -47,6 +47,7 @@ import { refusalReason } from '../../shared/refusal-reason';
   styleUrls: ['./bpa-panel.component.scss'],
 })
 export class BpaPanelComponent implements OnChanges, OnDestroy {
+  readonly hideWhenEmpty = input(false);
   readonly patientId = input<string | null | undefined>(null);
   readonly encounterId = input<string | null | undefined>(null);
 
