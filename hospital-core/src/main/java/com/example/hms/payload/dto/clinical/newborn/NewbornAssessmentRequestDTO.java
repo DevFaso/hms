@@ -63,26 +63,26 @@ public class NewbornAssessmentRequestDTO {
     @DecimalMin(value = VitalSignLimits.TEMPERATURE_MIN_C, message = "{vitals.temperature.range}")
     @DecimalMax(value = VitalSignLimits.TEMPERATURE_MAX_C, message = "{vitals.temperature.range}")
     private Double temperatureCelsius;
-    // QA D1424: 1000 bpm, 500 /min and SpO2 150 % reached the chart. The same
-    // bounds as every other vitals form (VitalSignLimits). There is no separate
-    // neonatal range in the repo, and these were set to span neonates.
-    @Min(value = VitalSignLimits.HEART_RATE_MIN, message = "{vitals.heartRate.range}")
-    @Max(value = VitalSignLimits.HEART_RATE_MAX, message = "{vitals.heartRate.range}")
+    // QA D1424: 1000 bpm, 500 /min and SpO2 150 % reached the chart. Only what cannot
+    // physically be is refused (VitalSignLimits.NEWBORN_FLOOR): a newborn's real
+    // extremes must save, because saving is what raises the urgent alert.
+    @Min(value = VitalSignLimits.NEWBORN_FLOOR, message = "{newborn.vitals.heartRate.range}")
+    @Max(value = VitalSignLimits.HEART_RATE_MAX, message = "{newborn.vitals.heartRate.range}")
     private Integer heartRateBpm;
-    @Min(value = VitalSignLimits.RESPIRATORY_RATE_MIN, message = "{vitals.respiratoryRate.range}")
-    @Max(value = VitalSignLimits.RESPIRATORY_RATE_MAX, message = "{vitals.respiratoryRate.range}")
+    @Min(value = VitalSignLimits.NEWBORN_FLOOR, message = "{newborn.vitals.respiratoryRate.range}")
+    @Max(value = VitalSignLimits.NEWBORN_RESPIRATORY_RATE_MAX, message = "{newborn.vitals.respiratoryRate.range}")
     private Integer respirationsPerMin;
-    @Min(value = VitalSignLimits.SYSTOLIC_MIN, message = "{vitals.systolic.range}")
-    @Max(value = VitalSignLimits.SYSTOLIC_MAX, message = "{vitals.systolic.range}")
+    @Min(value = VitalSignLimits.NEWBORN_FLOOR, message = "{newborn.vitals.systolic.range}")
+    @Max(value = VitalSignLimits.SYSTOLIC_MAX, message = "{newborn.vitals.systolic.range}")
     private Integer systolicBpMmHg;
-    @Min(value = VitalSignLimits.DIASTOLIC_MIN, message = "{vitals.diastolic.range}")
-    @Max(value = VitalSignLimits.DIASTOLIC_MAX, message = "{vitals.diastolic.range}")
+    @Min(value = VitalSignLimits.NEWBORN_FLOOR, message = "{newborn.vitals.diastolic.range}")
+    @Max(value = VitalSignLimits.DIASTOLIC_MAX, message = "{newborn.vitals.diastolic.range}")
     private Integer diastolicBpMmHg;
     @Min(value = VitalSignLimits.SPO2_MIN, message = "{vitals.spo2.range}")
     @Max(value = VitalSignLimits.SPO2_MAX, message = "{vitals.spo2.range}")
     private Integer oxygenSaturationPercent;
-    @Min(value = VitalSignLimits.GLUCOSE_MIN, message = "{vitals.glucose.range}")
-    @Max(value = VitalSignLimits.GLUCOSE_MAX, message = "{vitals.glucose.range}")
+    @Min(value = VitalSignLimits.NEWBORN_FLOOR, message = "{newborn.vitals.glucose.range}")
+    @Max(value = VitalSignLimits.GLUCOSE_MAX, message = "{newborn.vitals.glucose.range}")
     private Integer glucoseMgDl;
 
     private String examGeneralAppearance;

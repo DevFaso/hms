@@ -718,7 +718,7 @@
             <input
               id="nb-hr"
               type="number"
-              min="20"
+              min="0"
               max="300"
               [(ngModel)]="assessmentForm.heartRateBpm"
             />
@@ -728,13 +728,13 @@
             <input
               id="nb-resp"
               type="number"
-              min="4"
-              max="80"
+              min="0"
+              max="300"
               [(ngModel)]="assessmentForm.respirationsPerMin"
             />
           </div>
           <div class="field">
-            <label for="nb-spo2">{{ 'POSTPARTUM.SPO2' | translate }}</label>
+            <label for="nb-spo2">{{ 'NURSE.SPO2' | translate }}</label>
             <input
               id="nb-spo2"
               type="number"
@@ -748,7 +748,7 @@
             <input
               id="nb-glucose"
               type="number"
-              min="20"
+              min="0"
               max="800"
               [(ngModel)]="assessmentForm.glucoseMgDl"
             />

@@ -99,7 +99,8 @@ class BloodPressurePairGuardTest {
             boolean isSystolic = f == systolic;
             Min min = f.getAnnotation(Min.class);
             Max max = f.getAnnotation(Max.class);
-            int floor = isSystolic ? VitalSignLimits.SYSTOLIC_MIN : VitalSignLimits.DIASTOLIC_MIN;
+            int floor = type == NewbornAssessmentRequestDTO.class ? VitalSignLimits.NEWBORN_FLOOR
+                : isSystolic ? VitalSignLimits.SYSTOLIC_MIN : VitalSignLimits.DIASTOLIC_MIN;
             int ceiling = isSystolic ? VitalSignLimits.SYSTOLIC_MAX : VitalSignLimits.DIASTOLIC_MAX;
             if (min == null || max == null || min.value() < floor || max.value() > ceiling) {
                 problems.add(name + "." + f.getName() + ": bounded within VitalSignLimits (" + floor + "-" + ceiling + ")");
@@ -133,7 +134,7 @@ class BloodPressurePairGuardTest {
     @ParameterizedTest(name = "{0}={1}")
     @CsvSource({
         "heartRateBpm,1000", "heartRateBpm,-1", "respirationsPerMin,500", "oxygenSaturationPercent,150",
-        "glucoseMgDl,-5", "systolicBpMmHg,10", "diastolicBpMmHg,300"
+        "glucoseMgDl,-5", "systolicBpMmHg,400", "diastolicBpMmHg,300"
     })
     @DisplayName("the newborn form refuses what no newborn can present with")
     void theNewbornFormBoundsItsVitals(String field, int value) throws ReflectiveOperationException {
@@ -145,10 +146,12 @@ class BloodPressurePairGuardTest {
     }
 
     @Test
-    @DisplayName("values at the alert thresholds of the newborn form still save, so they still alert")
+    @DisplayName("a newborn's real extremes still save, so they still raise the urgent alert")
     void realNewbornValuesPass() {
-        assertThat(rejected(NewbornAssessmentRequestDTO.builder().heartRateBpm(70).respirationsPerMin(75)
-            .oxygenSaturationPercent(85).glucoseMgDl(30).build())).isEmpty();
+        assertThat(rejected(NewbornAssessmentRequestDTO.builder().heartRateBpm(0).respirationsPerMin(0)
+            .oxygenSaturationPercent(40).glucoseMgDl(18).build())).isEmpty();
+        assertThat(rejected(NewbornAssessmentRequestDTO.builder().heartRateBpm(250).respirationsPerMin(85)
+            .glucoseMgDl(0).systolicBpMmHg(35).diastolicBpMmHg(18).build())).isEmpty();
     }
 
     @Test

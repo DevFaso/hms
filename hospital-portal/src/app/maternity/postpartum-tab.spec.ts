@@ -3,6 +3,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, Subject, throwError } from 'rxjs';
 
 import { PostpartumTabComponent } from './postpartum-tab';
+import { expectFieldsMarked, fieldErrorsResponse } from '../testing/form-refusal-behaviour';
 import {
   NewbornAssessmentResponse,
   PostpartumObservationResponse,
@@ -219,8 +220,8 @@ describe('PostpartumTabComponent — screening', () => {
       expect(host.querySelector(id)?.getAttribute('aria-invalid')).withContext(id).toBe('true');
     }
     postpartumSpy.createNewbornAssessment.and.returnValue(of({ alerts: [] }) as never);
-    // A heart rate of 70 is an emergency, not a typing slip: it saves, and it alerts.
-    cmp.assessmentForm = { heartRateBpm: 70, glucoseMgDl: 30 };
+    // A newborn's real extremes are emergencies, not typing slips: they save, and they alert.
+    cmp.assessmentForm = { heartRateBpm: 0, respirationsPerMin: 85, glucoseMgDl: 18 };
     cmp.submitAssessment();
     expect(postpartumSpy.createNewbornAssessment).toHaveBeenCalled();
   });

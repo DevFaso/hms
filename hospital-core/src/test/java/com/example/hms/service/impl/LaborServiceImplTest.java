@@ -1556,13 +1556,17 @@ class LaborServiceImplTest {
         request.setApgarFiveMinute(3);
         request.setPlacentaComplete(false);
         request.setLiveBirth(false);
+        request.setGestationalAgeWeeksAtBirth(30);
+        request.setBirthWeightGrams(4200);
 
         service.recordDelivery(patientId, episodeId, recorderUserId, request);
         ArgumentCaptor<DeliveryRecord> saved = ArgumentCaptor.forClass(DeliveryRecord.class);
         verify(deliveryRecordRepository, org.mockito.Mockito.atLeastOnce()).save(saved.capture());
         DeliveryRecord delivery = saved.getValue();
         java.util.List<String> stored = delivery.getAlerts().stream().map(com.example.hms.model.labor.LaborAlert::getMessage).toList();
-        assertThat(stored).hasSizeGreaterThanOrEqualTo(4);
+        assertThat(delivery.getAlerts()).extracting(com.example.hms.model.labor.LaborAlert::getCode)
+            .contains("labor-preterm", "labor-weight-implausible", "labor-pph", "labor-retained-placenta",
+                "labor-apgar-critical", "labor-stillbirth");
 
         LaborMapper reader = new LaborMapper(new com.example.hms.service.i18n.NotificationLocalizer(
             com.example.hms.i18n.TestMessageSources.bundles()));

@@ -10741,7 +10741,6 @@
     }
   },
   "POSTPARTUM": {
-    "SPO2": "SpO2 %",
     "MOTHER_TAB": "Madre",
     "NEWBORN_TAB": "Recién nacido",
     "OBSERVATIONS": "Observaciones posparto",

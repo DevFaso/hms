@@ -15,8 +15,9 @@ import java.util.Optional;
  * QA D1427: the arguments of each labour alert's sentence, read back from the
  * row that raised it. Partograph entries and delivery records are never edited,
  * so these are the values the sentence was written with, for a row stored
- * before this class as well; {@code LaborAlertTextTest} holds every code of the
- * bundle to that, by comparing the rendering with the text the service stores.
+ * before this class as well. {@code LaborServiceImplTest} compares the rendering
+ * with the text the service stores; {@code StoredAlertReaderLanguageGuardTest} holds
+ * every code of the bundle to having its arguments here.
  */
 public final class LaborAlertArgs {
 

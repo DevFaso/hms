@@ -113,6 +113,19 @@ describe('MedicalHistoryTabComponent — past PEV doses (QA D1003)', () => {
       component.submitImmunization();
       expect(history.updateImmunization).toHaveBeenCalledTimes(1);
     });
+
+    it('a row turned into a completed dose is judged on its date, even unchanged', () => {
+      component.openEditImmunization({
+        id: 'im9',
+        patientId: 'p1',
+        vaccineDisplay: 'RR',
+        administrationDate: FUTURE,
+        status: 'DEFERRED',
+      } as never);
+      component.immunizationForm.status = 'COMPLETED';
+      component.submitImmunization();
+      expect(history.updateImmunization).not.toHaveBeenCalled();
+    });
   });
 
   it('a dose given today is credited to the clinician who records it', () => {

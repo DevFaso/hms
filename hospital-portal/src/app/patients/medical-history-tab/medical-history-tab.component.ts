@@ -38,7 +38,7 @@ import { DashPipe } from '../../shared/pipes/dash.pipe';
 import { missingRequiredMessage } from '../../shared/required-fields';
 
 /** QA D1425: the vaccination form's fields checked before sending. */
-const IMMUNIZATION_CHECKED_IDS = ['im-date', 'im-dose', 'im-total', 'im-next-due'];
+const IMMUNIZATION_CHECKED_IDS = ['im-display', 'im-date', 'im-dose', 'im-total', 'im-next-due'];
 
 /** QA D1148: what a social-history version records; one of them is required. */
 const SOCIAL_CONTENT_FIELDS = [
@@ -481,8 +481,10 @@ export class MedicalHistoryTabComponent implements OnInit {
     const form = this.immunizationForm;
     const stored = this.editedImmunization;
     const date = form.administrationDate;
+    const becomesCompleted =
+      !!stored?.status && form.status === 'COMPLETED' && stored.status !== 'COMPLETED';
     if (
-      date !== stored?.administrationDate &&
+      (date !== stored?.administrationDate || becomesCompleted) &&
       date > this.todayIso() &&
       form.status !== 'DEFERRED'
     ) {
@@ -590,12 +592,17 @@ export class MedicalHistoryTabComponent implements OnInit {
     // QA D1003: the CVX code is optional (a PEV vaccine may have none).
     if (!form.vaccineDisplay.trim() || !form.administrationDate) {
       // QA D1358: name the blank fields, not a fixed list.
-      this.toast.error(
+      const message =
         missingRequiredMessage(this.translate, [
           { labelKey: 'MED_HISTORY.VACCINE', value: form.vaccineDisplay },
           { labelKey: 'MED_HISTORY.ADMINISTERED', value: form.administrationDate },
-        ]) ?? this.translate.instant('COMMON.SUBMIT_BLOCKED_REQUIRED'),
-      );
+        ]) ?? this.translate.instant('COMMON.SUBMIT_BLOCKED_REQUIRED');
+      const blank = [
+        ...(form.vaccineDisplay.trim() ? [] : ['im-display']),
+        ...(form.administrationDate ? [] : ['im-date']),
+      ];
+      refuseFields(this.host.nativeElement, blank, IMMUNIZATION_CHECKED_IDS, message);
+      this.toast.error(message);
       return;
     }
     const problem = this.immunizationProblem();

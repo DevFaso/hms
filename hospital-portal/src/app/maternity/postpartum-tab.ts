@@ -69,11 +69,12 @@ export const NEWBORN_LIMITS: readonly FieldLimit[] = [
   { field: 'apgarFiveMinute', labelKey: 'POSTPARTUM.APGAR_FIVE', min: 0, max: 10 },
   { field: 'apgarTenMinute', labelKey: 'POSTPARTUM.APGAR_TEN', min: 0, max: 10 },
   { field: 'temperatureCelsius', labelKey: 'POSTPARTUM.TEMPERATURE', min: 25, max: 44 },
-  // QA D1424: VitalSignLimits, as on every other vitals form (1000 bpm reached the chart).
-  { field: 'heartRateBpm', labelKey: 'POSTPARTUM.PULSE', min: 20, max: 300 },
-  { field: 'respirationsPerMin', labelKey: 'POSTPARTUM.RESP', min: 4, max: 80 },
-  { field: 'oxygenSaturationPercent', labelKey: 'POSTPARTUM.SPO2', min: 0, max: 100 },
-  { field: 'glucoseMgDl', labelKey: 'POSTPARTUM.GLUCOSE', min: 20, max: 800 },
+  // QA D1424: only what cannot physically be (1000 bpm reached the chart). A newborn's
+  // real extremes must save, because saving raises the urgent alert (VitalSignLimits).
+  { field: 'heartRateBpm', labelKey: 'POSTPARTUM.PULSE', min: 0, max: 300 },
+  { field: 'respirationsPerMin', labelKey: 'POSTPARTUM.RESP', min: 0, max: 300 },
+  { field: 'oxygenSaturationPercent', labelKey: 'NURSE.SPO2', min: 0, max: 100 },
+  { field: 'glucoseMgDl', labelKey: 'POSTPARTUM.GLUCOSE', min: 0, max: 800 },
 ];
 
 /**

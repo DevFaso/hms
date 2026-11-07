@@ -62,7 +62,7 @@ class AllergyActiveReadersGuardTest {
         Map.entry("service/allergy/LegacyAllergyTextImporter.java",
             new Reader("allergyRepository.save", "an import's dedupe, shows nothing to a reader")),
         Map.entry("service/allergy/AllergySharingVisibility.java",
-            new Reader("Every row the reader may see", "the shared read itself: every row, for the callers above")));
+            new Reader("repository.findVisibleAt", "the shared read itself: every row, for the callers above")));
 
     @Test
     @DisplayName("a reader of the allergy rows is listed, and still handles a deactivated row as listed")
@@ -75,15 +75,15 @@ class AllergyActiveReadersGuardTest {
                 if (rel.startsWith("repository/")) {
                     continue;
                 }
-                String raw = Files.readString(file, StandardCharsets.UTF_8);
-                if (!READS_ROWS.matcher(SourceScan.stripComments(raw)).find()) {
+                String code = SourceScan.stripComments(Files.readString(file, StandardCharsets.UTF_8));
+                if (!READS_ROWS.matcher(code).find()) {
                     continue;
                 }
                 found.add(rel);
                 Reader known = KNOWN.get(rel);
                 if (known == null) {
                     problems.add(rel + " reads allergy rows and is not listed: active only, or history with a mark?");
-                } else if (!raw.contains(known.token())) {
+                } else if (!code.contains(known.token())) {
                     problems.add(rel + " no longer holds `" + known.token() + "`: " + known.reason());
                 }
             }

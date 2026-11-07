@@ -156,6 +156,32 @@ class ImmunizationPlausibilityTest {
     }
 
     @Test
+    @DisplayName("turning a row into a completed dose claims its date and its lot, even unchanged; voiding it does not")
+    void aStatusFlipIsJudged() {
+        ImmunizationRequestDTO deferred = dose();
+        deferred.setStatus(ImmunizationStatus.COMPLETED);
+        deferred.setAdministrationDate(TODAY.plusDays(30));
+        PatientImmunization storedDeferred = storedFrom(deferred);
+        storedDeferred.setStatus("DEFERRED");
+        refusedOn("administrationDate", "dateFuture",
+            () -> ImmunizationPlausibility.requireAt(deferred, BORN, storedDeferred, CLOCK));
+
+        ImmunizationRequestDTO refused = dose();
+        refused.setExpirationDate(refused.getAdministrationDate().minusDays(1));
+        PatientImmunization storedRefused = storedFrom(refused);
+        storedRefused.setStatus("REFUSED");
+        refusedOn("expirationDate", "lotExpired",
+            () -> ImmunizationPlausibility.requireAt(refused, BORN, storedRefused, CLOCK));
+
+        ImmunizationRequestDTO voided = dose();
+        voided.setStatus(ImmunizationStatus.ENTERED_IN_ERROR);
+        voided.setAdministrationDate(TODAY.plusDays(30));
+        PatientImmunization storedWrong = storedFrom(voided);
+        storedWrong.setStatus("COMPLETED");
+        assertThatCode(() -> ImmunizationPlausibility.requireAt(voided, BORN, storedWrong, CLOCK)).doesNotThrowAnyException();
+    }
+
+    @Test
     @DisplayName("an edit that changes a wrong value to another wrong value is refused")
     void anEditIsJudgedOnWhatItChanges() {
         ImmunizationRequestDTO legacy = dose();

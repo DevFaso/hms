@@ -37,17 +37,28 @@ final class ImmunizationPlausibility {
         requireProductAndNextDose(request, current);
     }
 
+    /**
+     * A row turned into a completed dose claims its date and its lot for the first time, even when
+     * neither value changes: the reminder and export queries key on that status.
+     */
+    private static boolean becomesCompleted(ImmunizationRequestDTO request, PatientImmunization current) {
+        return current != null && current.getStatus() != null && request.getStatus() == ImmunizationStatus.COMPLETED
+            && !ImmunizationStatus.COMPLETED.name().equals(current.getStatus());
+    }
+
     private static void requireAdministrationDate(ImmunizationRequestDTO request, LocalDate dateOfBirth,
                                                   PatientImmunization current, Clock clock) {
         LocalDate date = request.getAdministrationDate();
-        if (date == null || (current != null && date.equals(current.getAdministrationDate()))) {
+        if (date == null) {
             return;
         }
+        boolean dateChanged = current == null || !date.equals(current.getAdministrationDate());
         // A deferred dose names the day it is put off to; every other status records a day that happened.
-        if (request.getStatus() != ImmunizationStatus.DEFERRED && !PickedDayNotInFutureValidator.isAllowed(date, clock)) {
+        if ((dateChanged || becomesCompleted(request, current)) && request.getStatus() != ImmunizationStatus.DEFERRED
+            && !PickedDayNotInFutureValidator.isAllowed(date, clock)) {
             throw new FieldBusinessException("administrationDate", "immunization.r34.dateFuture");
         }
-        if (dateOfBirth != null && date.isBefore(dateOfBirth)) {
+        if (dateChanged && dateOfBirth != null && date.isBefore(dateOfBirth)) {
             throw new FieldBusinessException("administrationDate", "immunization.r34.dateBeforeBirth");
         }
     }
@@ -90,7 +101,7 @@ final class ImmunizationPlausibility {
         LocalDate expiry = request.getExpirationDate();
         // Only a dose that was given used the lot: a refused or missed one may name an expired one.
         if (request.getStatus() == ImmunizationStatus.COMPLETED && expiry != null && expiry.isBefore(date)
-            && (dateChanged || !expiry.equals(current.getExpirationDate()))) {
+            && (dateChanged || !expiry.equals(current.getExpirationDate()) || becomesCompleted(request, current))) {
             throw new FieldBusinessException("expirationDate", "immunization.r34.lotExpired");
         }
     }
