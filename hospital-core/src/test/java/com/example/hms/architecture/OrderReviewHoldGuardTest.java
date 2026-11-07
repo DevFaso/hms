@@ -64,7 +64,7 @@ class OrderReviewHoldGuardTest {
     private static final String NOT_A_USE = """
         Prescription#create | a new order written after the dispute follows the normal workflow
         Prescription#pediatricDoseReview,requestClarification,resolveClarification | a review note: nothing leaves, signing and dispensing are refused
-        Prescription#update,delete | an edit moves the version, so an older reconfirmation is refused; a withdrawal stops the order
+        Prescription#update,delete | an edit holds the order again (reviewAgainAfterChange, pinned below); a withdrawal stops the order
         Dispense#claimQueueRow,takeOverQueueRow,releaseQueueRow | the work queue: nothing leaves the pharmacy
         Dispense#cancelReady,cancelDispense | hands stock back
         NurseTask#createHandoff,completeHandoff,captureVitals,createNursingTask,completeNursingTask,markInboxRead,createCareNote | no order
@@ -108,6 +108,13 @@ class OrderReviewHoldGuardTest {
             }
         }
         assertThat(missing).as("uses a held order").isEmpty();
+    }
+
+    @Test
+    @DisplayName("an edit of an order invalidates its reconfirmation")
+    void anEditHoldsTheOrderAgain() throws IOException {
+        String source = SourceScan.stripComments(Files.readString(services().get("PrescriptionServiceImpl"), StandardCharsets.UTF_8));
+        assertThat(bodyOf(source, "updatePrescription")).contains("OrderReviewHoldGuard.reviewAgainAfterChange(");
     }
 
     /** A service that moves an order on, or a bag out, sits behind a classified controller. */

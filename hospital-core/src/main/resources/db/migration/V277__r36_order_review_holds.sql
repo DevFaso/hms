@@ -1,6 +1,7 @@
--- V277: orders existing when a recorded death is disputed need a prescriber's reconfirmation before use (user
--- ruling, round 36). A row per order, snapshotted in the dispute's own transaction, and never by the death date,
--- which may itself be wrong. The row outlives the dispute: neither outcome of a dispute clears it.
+-- V277: orders outstanding when a death is recorded, or when it is disputed, need a prescriber's reconfirmation before
+-- use (user ruling, round 36). A row per order, snapshotted in the event's own transaction, and never by the death
+-- date, which may itself be corrected. The row outlives both: no administrative correction clears it. A row from
+-- the death event has no dispute until one opens at that hospital.
 --
 -- RUNNING_TRANSFUSION rows are not holds: treatment already running goes on, flagged until a clinician records an
 -- assessment. Idempotent by rule.
@@ -10,7 +11,8 @@ ALTER TABLE clinical.transfusion_requests
 
 CREATE TABLE IF NOT EXISTS clinical.order_review_holds (
     id                      UUID          NOT NULL DEFAULT gen_random_uuid(),
-    dispute_id              UUID          NOT NULL,
+    death_record_id         UUID          NOT NULL,
+    dispute_id              UUID,
     hospital_id             UUID          NOT NULL,
     patient_id              UUID          NOT NULL,
     order_type              VARCHAR(30)   NOT NULL,
@@ -27,6 +29,7 @@ CREATE TABLE IF NOT EXISTS clinical.order_review_holds (
     updated_at              TIMESTAMP     NOT NULL DEFAULT now(),
 
     CONSTRAINT pk_order_review_holds       PRIMARY KEY (id),
+    CONSTRAINT fk_order_review_record      FOREIGN KEY (death_record_id) REFERENCES clinical.death_records(id),
     CONSTRAINT fk_order_review_dispute     FOREIGN KEY (dispute_id)  REFERENCES clinical.death_disputes(id),
     CONSTRAINT fk_order_review_hospital    FOREIGN KEY (hospital_id) REFERENCES hospital.hospitals(id),
     CONSTRAINT fk_order_review_patient     FOREIGN KEY (patient_id)  REFERENCES clinical.patients(id),

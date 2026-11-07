@@ -29,6 +29,7 @@ public class OrderReviewHoldGuard implements InitializingBean {
     public static final String BLOOD_KEY = "order.review.held.bloodRequest";
 
     private static volatile BiPredicate<OrderReviewType, UUID> held;
+    private static volatile java.util.function.Consumer<UUID> reviewAgain;
 
     private final OrderReviewHoldRepository holds;
 
@@ -41,6 +42,18 @@ public class OrderReviewHoldGuard implements InitializingBean {
     /** For the unit tests that walk the rule; Spring sets it at startup. */
     public static void useHolds(BiPredicate<OrderReviewType, UUID> lookup) {
         held = lookup;
+    }
+
+    /** Set at startup by the review service, which owns the row; none means a test with no store. */
+    public static void useReviewAgain(java.util.function.Consumer<UUID> action) {
+        reviewAgain = action;
+    }
+
+    /** A relevant change after a reconfirmation invalidates it. Called in the transaction of the change. */
+    public static void reviewAgainAfterChange(UUID prescriptionId) {
+        if (reviewAgain != null) {
+            reviewAgain.accept(prescriptionId);
+        }
     }
 
     /** THE rule. A running treatment's row answers whether its assessment is due: its flag, never a refusal. */

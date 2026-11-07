@@ -1628,6 +1628,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         releaseQueueClaimOnEdit(existing, currentUserId);
 
         Prescription saved = prescriptionRepository.save(existing);
+        com.example.hms.service.support.OrderReviewHoldGuard.reviewAgainAfterChange(saved.getId());
         PrescriptionResponseDTO response = prescriptionMapper.toResponseDTO(saved);
         response.setCdsAdvisories(advisories);
         return response;

@@ -49,6 +49,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -68,6 +69,7 @@ import static org.mockito.Mockito.when;
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
+@org.junit.jupiter.api.Timeout(120)
 class OrderReviewHoldPostgresIT {
 
     @Container
@@ -89,7 +91,7 @@ class OrderReviewHoldPostgresIT {
         registry.add("spring.sql.init.mode", () -> "never");
     }
 
-    private static final List<String> SEEDED = List.of("clinical.prescriptions", "clinical.transfusion_requests",
+    private static final List<String> SEEDED = List.of("clinical.patients", "hospital.hospitals", "\"security\".users", "hospital.staff", "clinical.encounters", "clinical.prescriptions", "clinical.transfusion_requests",
         "clinical.death_records", "clinical.death_disputes", "clinical.order_review_holds");
 
     @Autowired private OrderReviewHoldRepository holds;
@@ -112,6 +114,8 @@ class OrderReviewHoldPostgresIT {
     private UUID hospital;
     private UUID actor;
     private UUID record;
+    private UUID staff;
+    private UUID encounter;
 
     @BeforeEach
     void setUp() {
@@ -126,10 +130,14 @@ class OrderReviewHoldPostgresIT {
         new OrderReviewHoldGuard(holds).afterPropertiesSet();
 
         SEEDED.forEach(table -> jdbc.execute("ALTER TABLE " + table + " DISABLE TRIGGER ALL"));
-        patient = UUID.randomUUID();
-        hospital = UUID.randomUUID();
+        patient = insert("clinical.patients", Map.of());
+        hospital = insert("hospital.hospitals", Map.of());
         actor = UUID.randomUUID();
         record = UUID.randomUUID();
+        UUID user = insert("\"security\".users", Map.of());
+        staff = insert("hospital.staff", Map.of("user_id", user, "hospital_id", hospital, "employment_type", "FULL_TIME", "job_title", "DOCTOR"));
+        encounter = insert("clinical.encounters", Map.of("patient_id", patient, "hospital_id", hospital, "staff_id", staff,
+            "encounter_type", "CONSULTATION", "status", "IN_PROGRESS"));
         jdbc.update("INSERT INTO clinical.death_records (id, patient_id, hospital_id, died_at, immediate_cause) VALUES (?, ?, ?, ?, 'Cause')",
             record, patient, hospital, Timestamp.valueOf(LocalDateTime.now().minusDays(1)));
         Patient chart = new Patient();
@@ -146,8 +154,25 @@ class OrderReviewHoldPostgresIT {
 
     @AfterEach
     void tearDown() {
-        SEEDED.forEach(table -> jdbc.execute("ALTER TABLE " + table + " ENABLE TRIGGER ALL"));
+        // A test that left a row locked fails here, in 15 seconds, instead of hanging the worker.
+        tx.executeWithoutResult(status -> {
+            jdbc.execute("SET LOCAL lock_timeout = '15s'");
+            SEEDED.forEach(table -> jdbc.execute("ALTER TABLE " + table + " ENABLE TRIGGER ALL"));
+        });
         OrderReviewHoldGuard.useHolds(null);
+    }
+
+    private static void awaitBounded(CountDownLatch latch) {
+        try {
+            assertThat(latch.await(60, TimeUnit.SECONDS)).as("the other transaction moved on").isTrue();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private void markDeathEnteredInError() {
+        jdbc.update("UPDATE clinical.death_records SET entered_in_error_at = now() WHERE id = ?", record);
     }
 
     /** A row with only what its table refuses to go without; the schema names those, not this test. */
@@ -161,7 +186,7 @@ class OrderReviewHoldPostgresIT {
             marks.append(", ?");
             args.add(value.getValue());
         }
-        String[] name = table.split("\\.");
+        String[] name = table.replace("\"", "").split("\\.");
         for (Map<String, Object> column : jdbc.queryForList("""
                 SELECT column_name, data_type FROM information_schema.columns
                 WHERE table_schema = ? AND table_name = ? AND is_nullable = 'NO' AND column_default IS NULL
@@ -185,13 +210,17 @@ class OrderReviewHoldPostgresIT {
             case "numeric" -> java.math.BigDecimal.ONE;
             case "date" -> java.sql.Date.valueOf("2026-01-01");
             case "timestamp without time zone", "timestamp with time zone" -> Timestamp.valueOf(LocalDateTime.now());
-            default -> "x";
+            default -> UUID.randomUUID().toString().substring(0, 6);
         };
     }
 
+    private UUID order(UUID at, String status, String name, boolean takeHome) {
+        return insert("clinical.prescriptions", Map.of("patient_id", patient, "hospital_id", at, "status", status,
+            "medication_name", name, "take_home", takeHome, "staff_id", staff, "encounter_id", encounter, "version", 0L));
+    }
+
     private UUID signedMorphine() {
-        return insert("clinical.prescriptions", Map.of("patient_id", patient, "hospital_id", hospital, "status", "SIGNED",
-            "medication_name", "Morphine", "take_home", false));
+        return order(hospital, "SIGNED", "Morphine", false);
     }
 
     private UUID bloodRequest() {
@@ -209,8 +238,9 @@ class OrderReviewHoldPostgresIT {
             .filter(row -> row.getOrderId().equals(order)).findFirst().orElseThrow();
     }
 
-    private OrderReviewDecisionDTO reconfirm(long version) {
-        return OrderReviewDecisionDTO.builder().reason("Still indicated").orderVersion(version).build();
+    private OrderReviewDecisionDTO reconfirm(UUID order, long version) {
+        return OrderReviewDecisionDTO.builder().reason("Still indicated").orderVersion(version)
+            .disputeId(holdOf(order).getDisputeId()).build();
     }
 
     @Test
@@ -229,8 +259,8 @@ class OrderReviewHoldPostgresIT {
         UUID newOrder = signedMorphine();
         assertThatCode(() -> OrderReviewHoldGuard.refusePrescriptionIfHeld(newOrder, "prescriptionId")).doesNotThrowAnyException();
 
-        tx.executeWithoutResult(status -> review.continueOrder(holdOf(morphine).getId(), reconfirm(0)));
-        tx.executeWithoutResult(status -> review.continueOrder(holdOf(blood).getId(), reconfirm(0)));
+        tx.executeWithoutResult(status -> review.continueOrder(holdOf(morphine).getId(), reconfirm(morphine, 0)));
+        tx.executeWithoutResult(status -> review.continueOrder(holdOf(blood).getId(), reconfirm(blood, 0)));
         assertThatCode(() -> OrderReviewHoldGuard.refusePrescriptionIfHeld(morphine, "prescriptionId")).doesNotThrowAnyException();
         assertThatCode(() -> OrderReviewHoldGuard.refuseBloodRequestIfHeld(blood, "requestId")).doesNotThrowAnyException();
     }
@@ -238,14 +268,10 @@ class OrderReviewHoldPostgresIT {
     @Test
     @DisplayName("cancelled and dispensed take-home orders are not held, nor another hospital's")
     void whatIsNotHeld() {
-        UUID cancelled = insert("clinical.prescriptions", Map.of("patient_id", patient, "hospital_id", hospital, "status", "CANCELLED",
-            "medication_name", "A", "take_home", false));
-        UUID takeHome = insert("clinical.prescriptions", Map.of("patient_id", patient, "hospital_id", hospital, "status", "DISPENSED",
-            "medication_name", "B", "take_home", true));
-        UUID ward = insert("clinical.prescriptions", Map.of("patient_id", patient, "hospital_id", hospital, "status", "DISPENSED",
-            "medication_name", "C", "take_home", false));
-        UUID elsewhere = insert("clinical.prescriptions", Map.of("patient_id", patient, "hospital_id", UUID.randomUUID(), "status", "SIGNED",
-            "medication_name", "D", "take_home", false));
+        UUID cancelled = order(hospital, "CANCELLED", "A", false);
+        UUID takeHome = order(hospital, "DISPENSED", "B", true);
+        UUID ward = order(hospital, "DISPENSED", "C", false);
+        UUID elsewhere = order(insert("hospital.hospitals", Map.of()), "SIGNED", "D", false);
 
         dispute();
 
@@ -286,8 +312,9 @@ class OrderReviewHoldPostgresIT {
         dispute();
         jdbc.update("UPDATE clinical.prescriptions SET version = version + 1 WHERE id = ?", morphine);
         UUID id = holdOf(morphine).getId();
+        OrderReviewDecisionDTO old = reconfirm(morphine, 0);
 
-        assertThatThrownBy(() -> tx.executeWithoutResult(status -> review.continueOrder(id, reconfirm(0))))
+        assertThatThrownBy(() -> tx.executeWithoutResult(status -> review.continueOrder(id, old)))
             .isInstanceOfSatisfying(FieldBusinessException.class, e -> assertThat(e.getField()).isEqualTo("orderVersion"));
         assertThat(holdOf(morphine).getStatus()).isEqualTo(OrderReviewStatus.HELD);
     }
@@ -299,24 +326,28 @@ class OrderReviewHoldPostgresIT {
         CountDownLatch held = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
         ExecutorService pool = Executors.newFixedThreadPool(2);
-        Future<?> dispensing = pool.submit(() -> tx.executeWithoutResult(status -> {
-            assertThat(prescriptions.findByIdAndHospitalIdForUpdate(morphine, hospital)).isPresent();
-            jdbc.update("UPDATE clinical.prescriptions SET status = 'PARTIALLY_FILLED', version = version + 1 WHERE id = ?", morphine);
-            held.countDown();
-            try {
-                release.await();
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
+        try {
+            Future<?> dispensing = pool.submit(() -> tx.executeWithoutResult(status -> {
+                assertThat(prescriptions.findByIdAndHospitalIdForUpdate(morphine, hospital)).isPresent();
+                jdbc.update("UPDATE clinical.prescriptions SET status = 'PARTIALLY_FILLED', version = version + 1 WHERE id = ?", morphine);
+                held.countDown();
+                awaitBounded(release);
+            }));
+            assertThat(held.await(30, TimeUnit.SECONDS)).as("the dispense holds the order").isTrue();
+            Future<?> disputing = pool.submit(this::dispute);
+            Thread.sleep(400);
+            if (disputing.isDone()) {
+                disputing.get(1, TimeUnit.SECONDS);
             }
-        }));
-        held.await();
-        Future<?> disputing = pool.submit(this::dispute);
-        Thread.sleep(400);
-        assertThat(disputing.isDone()).as("the snapshot waits for the order's lock").isFalse();
-        release.countDown();
-        dispensing.get();
-        disputing.get();
-        pool.shutdown();
+            assertThat(disputing.isDone()).as("the snapshot waits for the order's lock").isFalse();
+            release.countDown();
+            dispensing.get(30, TimeUnit.SECONDS);
+            disputing.get(30, TimeUnit.SECONDS);
+        } finally {
+            release.countDown();
+            pool.shutdownNow();
+            pool.awaitTermination(30, TimeUnit.SECONDS);
+        }
 
         assertThat(holdOf(morphine).getOrderVersion()).as("the version the dispense left").isEqualTo(1L);
         assertThat(holdOf(morphine).getStatus()).isEqualTo(OrderReviewStatus.HELD);
@@ -328,26 +359,87 @@ class OrderReviewHoldPostgresIT {
         UUID morphine = signedMorphine();
         dispute();
         UUID id = holdOf(morphine).getId();
+        OrderReviewDecisionDTO decision = reconfirm(morphine, 0);
         CountDownLatch start = new CountDownLatch(1);
         ExecutorService pool = Executors.newFixedThreadPool(2);
-        List<Future<String>> results = new java.util.ArrayList<>();
-        for (int i = 0; i < 2; i++) {
-            results.add(pool.submit(() -> {
-                start.await();
-                try {
-                    tx.executeWithoutResult(status -> review.continueOrder(id, reconfirm(0)));
-                    return "done";
-                } catch (com.example.hms.exception.BusinessException e) {
-                    return "refused";
-                }
-            }));
+        try {
+            List<Future<String>> results = new java.util.ArrayList<>();
+            for (int i = 0; i < 2; i++) {
+                results.add(pool.submit(() -> {
+                    awaitBounded(start);
+                    try {
+                        tx.executeWithoutResult(status -> review.continueOrder(id, decision));
+                        return "done";
+                    } catch (com.example.hms.exception.BusinessException e) {
+                        return "refused";
+                    }
+                }));
+            }
+            start.countDown();
+            List<String> outcomes = new java.util.ArrayList<>();
+            for (Future<String> result : results) {
+                outcomes.add(result.get(30, TimeUnit.SECONDS));
+            }
+            assertThat(outcomes).containsExactlyInAnyOrder("done", "refused");
+        } finally {
+            start.countDown();
+            pool.shutdownNow();
+            pool.awaitTermination(30, TimeUnit.SECONDS);
         }
-        start.countDown();
-        pool.shutdown();
-        List<String> outcomes = new java.util.ArrayList<>();
-        for (Future<String> result : results) {
-            outcomes.add(result.get());
-        }
-        assertThat(outcomes).containsExactlyInAnyOrder("done", "refused");
+    }
+
+    @Test
+    @DisplayName("the death event holds orders at every hospital; a later date correction and entered in error clear nothing")
+    void theDeathEventHolds() {
+        UUID morphine = signedMorphine();
+        UUID blood = bloodRequest();
+        UUID elsewhere = insert("hospital.hospitals", Map.of());
+        UUID otherOrder = order(elsewhere, "SIGNED", "E", false);
+
+        atTheDeathEvent();
+
+        assertThat(holdOf(morphine).getDisputeId()).isNull();
+        assertThat(holdOf(blood).getStatus()).isEqualTo(OrderReviewStatus.HELD);
+        assertThat(holds.findByPatientIdAndHospitalIdOrderByCreatedAtDesc(patient, elsewhere))
+            .extracting(OrderReviewHold::getOrderId).containsExactly(otherOrder);
+
+        jdbc.update("UPDATE clinical.death_records SET died_at = died_at - interval '3 days' WHERE id = ?", record);
+        markDeathEnteredInError();
+
+        assertThatThrownBy(() -> OrderReviewHoldGuard.refusePrescriptionIfHeld(morphine, "prescriptionId"))
+            .isInstanceOf(FieldBusinessException.class);
+    }
+
+    @Test
+    @DisplayName("a dispute after the death event binds its hospital's rows and adds no second one")
+    void aDisputeBindsTheDeathEventsRows() {
+        UUID morphine = signedMorphine();
+        atTheDeathEvent();
+
+        dispute();
+
+        assertThat(holds.findByPatientIdAndHospitalIdOrderByCreatedAtDesc(patient, hospital)).hasSize(1);
+        assertThat(holdOf(morphine).getDisputeId()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("an edit after the reconfirmation holds the order again")
+    void aChangeInvalidates() {
+        UUID morphine = signedMorphine();
+        dispute();
+        tx.executeWithoutResult(status -> review.continueOrder(holdOf(morphine).getId(), reconfirm(morphine, 0)));
+        assertThatCode(() -> OrderReviewHoldGuard.refusePrescriptionIfHeld(morphine, "prescriptionId")).doesNotThrowAnyException();
+
+        tx.executeWithoutResult(status -> review.reviewAgainAfterChange(morphine));
+
+        assertThatThrownBy(() -> OrderReviewHoldGuard.refusePrescriptionIfHeld(morphine, "prescriptionId"))
+            .isInstanceOf(FieldBusinessException.class);
+        assertThat(holds.findByPatientIdAndHospitalIdOrderByCreatedAtDesc(patient, hospital))
+            .extracting(OrderReviewHold::getStatus)
+            .containsExactlyInAnyOrder(OrderReviewStatus.HELD, OrderReviewStatus.CONTINUED);
+    }
+
+    private void atTheDeathEvent() {
+        tx.executeWithoutResult(status -> review.snapshotAtDeath(records.findById(record).orElseThrow()));
     }
 }

@@ -29,12 +29,12 @@ public interface TransfusionRequestRepository extends JpaRepository<TransfusionR
     List<UUID> findOpenIds(@Param("patientId") UUID patientId, @Param("hospitalId") UUID hospitalId);
 
     /** QA D972: a visit's transfusion requests in the given statuses, for the checkout charge. */
-    /** Order review: this patient's open requests here, under their locks, in id order. */
+    /** Order review: this patient's open requests, under their locks, in id order. */
     @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
-    @Query("SELECT r FROM TransfusionRequest r WHERE r.patient.id = :patientId AND r.hospital.id = :hospitalId "
+    @Query("SELECT r FROM TransfusionRequest r WHERE r.patient.id = :patientId "
         + "AND r.status NOT IN (com.example.hms.enums.TransfusionRequestStatus.COMPLETED, "
         + "com.example.hms.enums.TransfusionRequestStatus.CANCELLED) ORDER BY r.id")
-    List<TransfusionRequest> lockOpenForPatient(@Param("patientId") UUID patientId, @Param("hospitalId") UUID hospitalId);
+    List<TransfusionRequest> lockOpenForPatient(@Param("patientId") UUID patientId);
 
     /** Order review: what can replace a held request: written since, not cancelled. */
     @Query("SELECT r FROM TransfusionRequest r WHERE r.patient.id = :patientId AND r.hospital.id = :hospitalId "

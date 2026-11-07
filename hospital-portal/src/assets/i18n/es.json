@@ -1547,6 +1547,7 @@
     "WRITE_DELETE": "Eliminación: {{entity}}",
     "WRITE_ENTITY_UNKNOWN": "registro",
     "DESC": {
+      "ORDER_REVIEW_HELD_AGAIN": "Orden retenida de nuevo tras un cambio: {{type}} {{order}} cambió tras su reconfirmación, impugnación {{dispute}}",
       "DEATH_RECORD_ENTERED_IN_ERROR": "Registro de fallecimiento {{record}} marcado como introducido por error; el paciente deja de figurar como fallecido. Lo que el fallecimiento cerró no se reabrió. Motivo: {{reason}}",
       "DEATH_DISPUTED": "Estado de fallecimiento impugnado en el hospital {{hospital}} por el médico {{doctor}}, registro {{record}} versión {{version}}: evaluado vivo e identidad verificada. Atención permitida pendiente de revisión. Motivo: {{reason}}",
       "DEATH_UPHELD": "Fallecimiento confirmado: impugnación {{dispute}} cerrada por {{actor}}, el bloqueo de la atención vuelve al hospital {{hospital}}. Motivo: {{reason}}",
@@ -12781,7 +12782,7 @@
   },
   "ORDER_REVIEW": {
     "TITLE": "Órdenes por revisar tras un fallecimiento impugnado",
-    "HINT": "Estas órdenes existían cuando se impugnó el fallecimiento registrado. Cada una se rechaza hasta que un prescriptor de este hospital la revise; no tiene que ser su autor. El motivo de la impugnación no reconfirma nada. Estas retenciones permanecen sea cual sea el resultado de la impugnación.",
+    "HINT": "Estas órdenes estaban en curso cuando se registró o impugnó un fallecimiento. Cada una se rechaza hasta que un prescriptor autorizado de este hospital la revise; no tiene que ser su autor. El motivo de una impugnación no reconfirma nada. Estas retenciones permanecen tras cualquier corrección del registro de fallecimiento.",
     "ORDER": "Orden",
     "STATE": "Estado",
     "DECIDED": "Revisada",

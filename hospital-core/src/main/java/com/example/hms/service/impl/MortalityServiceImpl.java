@@ -127,6 +127,7 @@ public class MortalityServiceImpl implements MortalityService {
     private final RoleValidator roleValidator;
     private final com.example.hms.service.BedAssignmentService bedAssignmentService;
     private final com.example.hms.repository.DeathDisputeRepository disputeRepository;
+    private final com.example.hms.service.OrderReviewHoldService orderReview;
     private final com.example.hms.service.InBasketService inBasketService;
     /** QA D972: a visit a death closes is handed to billing like a checkout (null in hand-built tests). */
     private final org.springframework.context.ApplicationEventPublisher eventPublisher;
@@ -183,6 +184,9 @@ public class MortalityServiceImpl implements MortalityService {
 
         DeathRecord saved = deathRecordRepository.save(deathRecord);
         DeathClosureSummaryDTO closure = closeOpenRecords(patient, hospitalId, saved);
+        // After the cascade, so an order that ended with its stay is left as it is. Against this event, not the date
+        // on the record: correcting that date later cannot evade the hold, and no correction clears it.
+        orderReview.snapshotAtDeath(saved);
 
         if (saved.isWhoMaternalDeath()) {
             log.warn("MATERNAL DEATH recorded for patient {} at hospital {} — timing {}",

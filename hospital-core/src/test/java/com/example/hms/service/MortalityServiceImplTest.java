@@ -91,6 +91,7 @@ class MortalityServiceImplTest {
     @Mock private RoleValidator roleValidator;
     @Mock private com.example.hms.service.BedAssignmentService bedAssignmentService;
     @Mock private com.example.hms.repository.DeathDisputeRepository disputeRepository;
+    @Mock private com.example.hms.service.OrderReviewHoldService orderReview;
     @Mock private com.example.hms.service.InBasketService inBasketService;
     @Mock private org.springframework.context.ApplicationEventPublisher eventPublisher;
     @Spy private Clock clock = Clock.systemDefaultZone();
@@ -366,6 +367,15 @@ class MortalityServiceImplTest {
         assertThatThrownBy(() -> service.markEnteredInError(id, body)).isInstanceOf(BusinessException.class);
         DeathRecordAmendmentDTO amendment = DeathRecordAmendmentDTO.builder().amendmentReason("Autopsy").build();
         assertThatThrownBy(() -> service.amendDeathRecord(id, amendment)).isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    void theDeathEventSnapshotsOutstandingOrdersAfterItsCascade() {
+        service.recordDeath(base().build());
+
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(recallRepository, orderReview);
+        order.verify(recallRepository).findByPatient_IdAndStatusIn(any(), any());
+        order.verify(orderReview).snapshotAtDeath(any());
     }
 
     @Test

@@ -3,7 +3,7 @@ package com.example.hms.controller;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.payload.dto.clinical.InBasketSummaryDTO;
 import com.example.hms.service.InBasketService;
-import com.example.hms.security.ControllerAuthUtils;
+import com.example.hms.controller.support.ControllerAuthUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

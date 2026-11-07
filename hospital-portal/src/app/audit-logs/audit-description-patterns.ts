@@ -999,6 +999,12 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     params: ['dispute', 'actor', 'hospital', 'reason'],
   },
   {
+    key: 'AUDIT.DESC.ORDER_REVIEW_HELD_AGAIN',
+    re: /^Order held again after a change: (\S+) (\S+) changed after its reconfirmation, dispute (\S+)$/,
+    params: ['type', 'order', 'dispute'],
+    localise: { type: 'enum' },
+  },
+  {
     key: 'AUDIT.DESC.ORDER_REVIEW_CONTINUED',
     re: /^Order reconfirmed unchanged: (\S+) (\S+) version (\S+), dispute (\S+), by (\S+)\. Reason: ([\s\S]*)$/,
     params: ['type', 'order', 'version', 'dispute', 'actor', 'reason'],

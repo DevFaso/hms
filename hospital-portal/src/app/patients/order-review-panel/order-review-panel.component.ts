@@ -28,6 +28,7 @@ const FIELD_IDS = {
   reason: 'ore-reason',
   replacementOrderId: 'ore-replacement',
   orderVersion: 'ore-reason',
+  disputeId: 'ore-reason',
 };
 
 const PRESCRIBER_ROLES = ['ROLE_DOCTOR', 'ROLE_SURGEON', 'ROLE_MIDWIFE'];
@@ -135,6 +136,7 @@ export class OrderReviewPanelComponent implements OnInit {
       .decide(row.id, action, {
         reason,
         orderVersion: row.currentOrderVersion,
+        disputeId: row.disputeId,
         replacementOrderId: action === 'replace' ? this.replacementOrderId : null,
         password: this.password || null,
         mfaCode: this.mfaCode || null,

@@ -21,9 +21,9 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 /**
- * An order that existed when a recorded death was disputed (user ruling, round 36; NOT clinically approved). Snapshot
- * in the dispute's own transaction, keyed to that event and never to the death date, which may itself be wrong. A
- * prescriber at that hospital continues, replaces or stops it; no outcome of the dispute clears it.
+ * An order outstanding when a death was recorded or disputed (user ruling, round 36; NOT clinically approved). Snapshot
+ * in that event's own transaction, and never derived from the death date, which may itself be corrected. An authorized
+ * prescriber at the order's hospital continues, replaces or stops it; no administrative correction clears it.
  *
  * <p>Plain ids and no associations: {@code OrderReviewHoldGuard} asks it during any use of an order.
  */
@@ -45,7 +45,11 @@ import java.util.UUID;
 @ToString(onlyExplicitlyIncluded = true)
 public class OrderReviewHold extends BaseEntity {
 
-    @Column(name = "dispute_id", nullable = false)
+    @Column(name = "death_record_id", nullable = false)
+    private UUID deathRecordId;
+
+    /** Null for a row from the death event, until a dispute opens at this hospital. */
+    @Column(name = "dispute_id")
     private UUID disputeId;
 
     @Column(name = "hospital_id", nullable = false)

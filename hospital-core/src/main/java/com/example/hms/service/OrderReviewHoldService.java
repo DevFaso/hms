@@ -1,6 +1,7 @@
 package com.example.hms.service;
 
 import com.example.hms.model.DeathDispute;
+import com.example.hms.model.DeathRecord;
 import com.example.hms.payload.dto.review.OrderReviewDecisionDTO;
 import com.example.hms.payload.dto.review.OrderReviewRowDTO;
 
@@ -13,8 +14,17 @@ import java.util.UUID;
  */
 public interface OrderReviewHoldService {
 
-    /** In the dispute's own transaction: holds its hospital's existing orders, flags its running treatment. */
+    /**
+     * In the death event's own transaction: holds the patient's outstanding orders at every hospital, each to be
+     * reviewed at its own, and flags running treatment. Later correcting the death's date cannot evade this.
+     */
+    void snapshotAtDeath(DeathRecord record);
+
+    /** In the dispute's own transaction: binds this hospital's standing rows to it, and holds what is new. */
     void snapshot(DeathDispute dispute);
+
+    /** A relevant change after a reconfirmation invalidates it: the order is held again, the history kept. */
+    void reviewAgainAfterChange(UUID prescriptionId);
 
     /** The chart's list at the acting hospital, standing or decided. */
     List<OrderReviewRowDTO> forPatient(UUID patientId);

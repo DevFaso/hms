@@ -96,7 +96,13 @@ class OrderReviewHoldServiceImplTest {
         order.setVersion(4L);
         order.setStatus(PrescriptionStatus.SIGNED);
         order.setMedicationName("Morphine");
-        hold = OrderReviewHold.builder().disputeId(UUID.randomUUID()).hospitalId(hospital).patientId(patient)
+        com.example.hms.model.Patient chart = new com.example.hms.model.Patient();
+        chart.setId(patient);
+        order.setPatient(chart);
+        com.example.hms.model.Hospital here = new com.example.hms.model.Hospital();
+        here.setId(hospital);
+        order.setHospital(here);
+        hold = OrderReviewHold.builder().deathRecordId(UUID.randomUUID()).disputeId(UUID.randomUUID()).hospitalId(hospital).patientId(patient)
             .orderType(OrderReviewType.PRESCRIPTION).orderId(order.getId()).orderVersion(4L)
             .status(OrderReviewStatus.HELD).build();
         hold.setId(UUID.randomUUID());
@@ -106,12 +112,13 @@ class OrderReviewHoldServiceImplTest {
         when(prescriptions.findById(order.getId())).thenReturn(Optional.of(order));
     }
 
-    private static OrderReviewDecisionDTO reconfirm(long version) {
-        return OrderReviewDecisionDTO.builder().reason("Still indicated after assessment").orderVersion(version).build();
+    private OrderReviewDecisionDTO reconfirm(long version) {
+        return OrderReviewDecisionDTO.builder().reason("Still indicated after assessment").orderVersion(version)
+            .disputeId(hold.getDisputeId()).build();
     }
 
     private DeathDispute dispute() {
-        DeathDispute dispute = DeathDispute.builder().patientId(patient).hospitalId(hospital).build();
+        DeathDispute dispute = DeathDispute.builder().deathRecordId(UUID.randomUUID()).patientId(patient).hospitalId(hospital).build();
         dispute.setId(UUID.randomUUID());
         return dispute;
     }
@@ -136,7 +143,7 @@ class OrderReviewHoldServiceImplTest {
     @Test
     @DisplayName("no reason, no reconfirmation: the reason given when disputing the death reconfirms nothing")
     void needsItsOwnReason() {
-        OrderReviewDecisionDTO blank = OrderReviewDecisionDTO.builder().orderVersion(4L).reason(" ").build();
+        OrderReviewDecisionDTO blank = OrderReviewDecisionDTO.builder().orderVersion(4L).reason(" ").disputeId(hold.getDisputeId()).build();
         UUID id = hold.getId();
 
         assertThatThrownBy(() -> service.continueOrder(id, blank))
@@ -194,7 +201,7 @@ class OrderReviewHoldServiceImplTest {
         when(reauthentication.requireForControlledSigning(actor, order.getId(), "pw", "123"))
             .thenThrow(new BusinessException("prescription.reauth.failed"));
         UUID id = hold.getId();
-        OrderReviewDecisionDTO decision = OrderReviewDecisionDTO.builder().reason("x").orderVersion(4L)
+        OrderReviewDecisionDTO decision = OrderReviewDecisionDTO.builder().reason("x").orderVersion(4L).disputeId(hold.getDisputeId())
             .password("pw").mfaCode("123").build();
 
         assertThatThrownBy(() -> service.continueOrder(id, decision)).isInstanceOf(BusinessException.class);
@@ -290,9 +297,19 @@ class OrderReviewHoldServiceImplTest {
         Prescription ended = new Prescription();
         ended.setId(UUID.randomUUID());
         ended.setEncounter(closed);
+        ended.setPatient(order.getPatient());
+        ended.setHospital(order.getHospital());
         Prescription already = new Prescription();
         already.setId(UUID.randomUUID());
-        when(prescriptions.lockUncompletedForReview(eq(patient), eq(hospital), any())).thenReturn(List.of(order, ended, already));
+        already.setPatient(order.getPatient());
+        already.setHospital(order.getHospital());
+        com.example.hms.model.Hospital elsewhere = new com.example.hms.model.Hospital();
+        elsewhere.setId(UUID.randomUUID());
+        Prescription otherHospital = new Prescription();
+        otherHospital.setId(UUID.randomUUID());
+        otherHospital.setPatient(order.getPatient());
+        otherHospital.setHospital(elsewhere);
+        when(prescriptions.lockUncompletedForReview(eq(patient), any())).thenReturn(List.of(order, ended, already, otherHospital));
         when(holds.findByOrderTypeAndOrderIdAndStatusAndHospitalId(OrderReviewType.PRESCRIPTION, already.getId(), OrderReviewStatus.HELD, hospital))
             .thenReturn(Optional.of(hold));
 
@@ -312,12 +329,10 @@ class OrderReviewHoldServiceImplTest {
         nurse.setId(UUID.randomUUID());
         Staff staff = new Staff();
         staff.setUser(nurse);
-        TransfusionAdministration bag = TransfusionAdministration.builder().administeredBy(staff)
+        TransfusionAdministration bag = TransfusionAdministration.builder().administeredBy(staff).hospital(order.getHospital())
             .status(TransfusionAdministrationStatus.IN_PROGRESS).build();
         bag.setId(UUID.randomUUID());
-        TransfusionAdministration ended = TransfusionAdministration.builder().status(TransfusionAdministrationStatus.COMPLETED).build();
-        ended.setId(UUID.randomUUID());
-        when(administrations.findByPatient_IdAndHospital_IdOrderByStartedAtDesc(patient, hospital)).thenReturn(List.of(bag, ended));
+        when(administrations.findByPatient_IdAndStatus(patient, TransfusionAdministrationStatus.IN_PROGRESS)).thenReturn(List.of(bag));
 
         service.snapshot(dispute());
 
@@ -359,5 +374,125 @@ class OrderReviewHoldServiceImplTest {
 
         assertThatThrownBy(() -> service.forPatient(patient)).isInstanceOf(ResourceNotFoundException.class);
         verify(holds, never()).findByPatientIdAndHospitalIdOrderByCreatedAtDesc(any(), any());
+    }
+
+    @Test
+    @DisplayName("a review-only role is not an authorized prescriber: a pharmacist or a nurse decides nothing")
+    void reviewOnlyRole() {
+        when(roles.isSigningPhysician(actor, hospital)).thenReturn(false);
+        when(roles.hasRole(any(), any(), any())).thenReturn(true);
+        UUID id = hold.getId();
+        OrderReviewDecisionDTO decision = reconfirm(4);
+
+        assertThatThrownBy(() -> service.continueOrder(id, decision)).isInstanceOf(AccessDeniedException.class);
+        assertThat(hold.getStatus()).isEqualTo(OrderReviewStatus.HELD);
+    }
+
+    @Test
+    @DisplayName("a different authorized prescriber may decide: the order's author is not asked for")
+    void alternatePrescriber() {
+        Staff author = new Staff();
+        User other = new User();
+        other.setId(UUID.randomUUID());
+        author.setUser(other);
+        order.setStaff(author);
+
+        service.continueOrder(hold.getId(), reconfirm(4));
+
+        assertThat(hold.getDecidedById()).isEqualTo(actor);
+    }
+
+    @Test
+    @DisplayName("bound to the dispute: a page read under another dispute is refused")
+    void boundToTheDispute() {
+        UUID id = hold.getId();
+        OrderReviewDecisionDTO other = OrderReviewDecisionDTO.builder().reason("x").orderVersion(4L).disputeId(UUID.randomUUID()).build();
+
+        assertThatThrownBy(() -> service.continueOrder(id, other))
+            .isInstanceOfSatisfying(FieldBusinessException.class, e -> assertThat(e.getField()).isEqualTo("disputeId"));
+        assertThat(hold.getStatus()).isEqualTo(OrderReviewStatus.HELD);
+    }
+
+    @Test
+    @DisplayName("a stay-ended or discontinued order stays inactive: it is not continued")
+    void inactiveStaysInactive() {
+        com.example.hms.model.Encounter closed = new com.example.hms.model.Encounter();
+        closed.setAdmissionId(UUID.randomUUID());
+        closed.setStatus(com.example.hms.enums.EncounterStatus.COMPLETED);
+        order.setEncounter(closed);
+        UUID id = hold.getId();
+        OrderReviewDecisionDTO decision = reconfirm(4);
+        assertThatThrownBy(() -> service.continueOrder(id, decision)).isInstanceOf(BusinessException.class);
+
+        order.setEncounter(null);
+        order.setStatus(PrescriptionStatus.DISCONTINUED);
+        assertThatThrownBy(() -> service.continueOrder(id, decision)).isInstanceOf(BusinessException.class);
+        assertThat(hold.getStatus()).isEqualTo(OrderReviewStatus.HELD);
+    }
+
+    @Test
+    @DisplayName("a relevant change after a reconfirmation holds the order again; the reconfirmation stays on record")
+    void aChangeInvalidates() {
+        service.continueOrder(hold.getId(), reconfirm(4));
+        when(holds.findByOrderTypeAndOrderIdAndStatus(OrderReviewType.PRESCRIPTION, order.getId(), OrderReviewStatus.CONTINUED))
+            .thenReturn(List.of(hold));
+        order.setVersion(5L);
+
+        service.reviewAgainAfterChange(order.getId());
+
+        ArgumentCaptor<OrderReviewHold> saved = ArgumentCaptor.forClass(OrderReviewHold.class);
+        verify(holds, org.mockito.Mockito.atLeastOnce()).save(saved.capture());
+        OrderReviewHold again = saved.getAllValues().get(saved.getAllValues().size() - 1);
+        assertThat(again.getStatus()).isEqualTo(OrderReviewStatus.HELD);
+        assertThat(again.getOrderVersion()).isEqualTo(5L);
+        assertThat(again.getDisputeId()).isEqualTo(hold.getDisputeId());
+        assertThat(hold.getStatus()).as("history kept").isEqualTo(OrderReviewStatus.CONTINUED);
+    }
+
+    @Test
+    @DisplayName("an edit of an order never reconfirmed adds nothing")
+    void anEditOfAHeldOrderAddsNothing() {
+        service.reviewAgainAfterChange(order.getId());
+        verify(holds, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("at the death event: outstanding orders at every hospital, each its own, with no dispute yet")
+    void atTheDeathEvent() {
+        com.example.hms.model.Hospital elsewhere = new com.example.hms.model.Hospital();
+        elsewhere.setId(UUID.randomUUID());
+        Prescription other = new Prescription();
+        other.setId(UUID.randomUUID());
+        other.setPatient(order.getPatient());
+        other.setHospital(elsewhere);
+        when(prescriptions.lockUncompletedForReview(eq(patient), any())).thenReturn(List.of(order, other));
+        com.example.hms.model.DeathRecord record = com.example.hms.model.DeathRecord.builder().patient(order.getPatient()).build();
+        record.setId(UUID.randomUUID());
+
+        service.snapshotAtDeath(record);
+
+        ArgumentCaptor<OrderReviewHold> saved = ArgumentCaptor.forClass(OrderReviewHold.class);
+        verify(holds, org.mockito.Mockito.times(2)).save(saved.capture());
+        assertThat(saved.getAllValues()).extracting(OrderReviewHold::getHospitalId).containsExactlyInAnyOrder(hospital, elsewhere.getId());
+        assertThat(saved.getAllValues()).allSatisfy(row -> {
+            assertThat(row.getDisputeId()).isNull();
+            assertThat(row.getDeathRecordId()).isEqualTo(record.getId());
+            assertThat(row.getStatus()).isEqualTo(OrderReviewStatus.HELD);
+        });
+    }
+
+    @Test
+    @DisplayName("a dispute binds the standing row from the death event, and adds nothing")
+    void aDisputeBindsTheStandingRow() {
+        hold.setDisputeId(null);
+        when(prescriptions.lockUncompletedForReview(eq(patient), any())).thenReturn(List.of(order));
+        when(holds.findByOrderTypeAndOrderIdAndStatusAndHospitalId(OrderReviewType.PRESCRIPTION, order.getId(), OrderReviewStatus.HELD, hospital))
+            .thenReturn(Optional.of(hold));
+        DeathDispute dispute = dispute();
+
+        service.snapshot(dispute);
+
+        assertThat(hold.getDisputeId()).isEqualTo(dispute.getId());
+        verify(holds, never()).save(any());
     }
 }

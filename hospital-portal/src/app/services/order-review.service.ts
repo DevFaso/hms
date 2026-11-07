@@ -7,7 +7,7 @@ export type OrderReviewStatus =
 
 export interface OrderReviewRow {
   id: string;
-  disputeId: string;
+  disputeId: string | null;
   orderType: 'PRESCRIPTION' | 'TRANSFUSION_REQUEST' | 'RUNNING_TRANSFUSION';
   orderId: string;
   orderLabel: string | null;
@@ -25,6 +25,7 @@ export interface OrderReviewRow {
 export interface OrderReviewDecision {
   reason: string;
   orderVersion?: number | null;
+  disputeId?: string | null;
   replacementOrderId?: string | null;
   password?: string | null;
   mfaCode?: string | null;

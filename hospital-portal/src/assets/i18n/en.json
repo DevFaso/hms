@@ -1547,6 +1547,7 @@
     "WRITE_DELETE": "Deleted: {{entity}}",
     "WRITE_ENTITY_UNKNOWN": "record",
     "DESC": {
+      "ORDER_REVIEW_HELD_AGAIN": "Order held again after a change: {{type}} {{order}} changed after its reconfirmation, dispute {{dispute}}",
       "DEATH_RECORD_ENTERED_IN_ERROR": "Death record {{record}} marked entered in error; the patient is no longer recorded as deceased. What the death closed was not reopened. Reason: {{reason}}",
       "DEATH_DISPUTED": "Death status disputed at hospital {{hospital}} by doctor {{doctor}}, death record {{record}} version {{version}}: assessed alive and identity verified. Care permitted pending review. Reason: {{reason}}",
       "DEATH_UPHELD": "Death upheld: dispute {{dispute}} closed by {{actor}}, the block on care is back at hospital {{hospital}}. Reason: {{reason}}",
@@ -12781,7 +12782,7 @@
   },
   "ORDER_REVIEW": {
     "TITLE": "Orders to review after a disputed death",
-    "HINT": "These orders existed when the recorded death was disputed. Each one is refused until a prescriber at this hospital reviews it: they need not be its author. The reason given for the dispute reconfirms nothing. These holds stay whatever the outcome of the dispute.",
+    "HINT": "These orders were outstanding when a death was recorded or disputed. Each one is refused until an authorized prescriber at this hospital reviews it: they need not be its author. The reason given for a dispute reconfirms nothing. These holds stay after any correction of the death record.",
     "ORDER": "Order",
     "STATE": "State",
     "DECIDED": "Reviewed",

@@ -61,6 +61,7 @@ import static org.mockito.Mockito.when;
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
+@org.junit.jupiter.api.Timeout(120)
 class DeathDisputeConcurrencyPostgresIT {
 
     @Container
@@ -261,12 +262,15 @@ class DeathDisputeConcurrencyPostgresIT {
         held.await();
         Future<List<DeathDispute>> list = pool.submit(() -> tx.execute(status -> records.lockById(record).map(id ->
             disputes.lockOpenForRecord(id)).orElseThrow()));
-        Thread.sleep(300);
-        assertThat(list.isDone()).as("it waits for the lock").isFalse();
-        release.countDown();
-        upholding.get();
-        assertThat(list.get()).as("what was decided meanwhile is not closed twice").isEmpty();
-        pool.shutdown();
+        try {
+            Thread.sleep(300);
+            assertThat(list.isDone()).as("it waits for the lock").isFalse();
+        } finally {
+            release.countDown();
+            pool.shutdown();
+        }
+        upholding.get(30, java.util.concurrent.TimeUnit.SECONDS);
+        assertThat(list.get(30, java.util.concurrent.TimeUnit.SECONDS)).as("what was decided meanwhile is not closed twice").isEmpty();
     }
 
     @Test
@@ -284,12 +288,15 @@ class DeathDisputeConcurrencyPostgresIT {
         held.await();
         Future<java.util.Optional<UUID>> disputing = pool.submit(() -> tx.execute(status ->
             records.lockLiveByPatientId(patient).map(com.example.hms.model.DeathRecord::getId)));
-        Thread.sleep(300);
-        assertThat(disputing.isDone()).as("it waits for the lock").isFalse();
-        release.countDown();
-        correcting.get();
-        assertThat(disputing.get()).as("no death is left to dispute").isEmpty();
-        pool.shutdown();
+        try {
+            Thread.sleep(300);
+            assertThat(disputing.isDone()).as("it waits for the lock").isFalse();
+        } finally {
+            release.countDown();
+            pool.shutdown();
+        }
+        correcting.get(30, java.util.concurrent.TimeUnit.SECONDS);
+        assertThat(disputing.get(30, java.util.concurrent.TimeUnit.SECONDS)).as("no death is left to dispute").isEmpty();
     }
 
     @Test
@@ -313,7 +320,9 @@ class DeathDisputeConcurrencyPostgresIT {
 
     private static void await(CountDownLatch latch) {
         try {
-            latch.await();
+            if (!latch.await(60, java.util.concurrent.TimeUnit.SECONDS)) {
+                throw new IllegalStateException("the other transaction did not move on");
+            }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException(e);

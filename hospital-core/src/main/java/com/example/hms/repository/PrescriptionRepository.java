@@ -102,10 +102,10 @@ public interface PrescriptionRepository extends JpaRepository<Prescription, UUID
      * take-home order has none.
      */
     @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
-    @Query("SELECT rx FROM Prescription rx WHERE rx.patient.id = :patientId AND rx.hospital.id = :hospitalId "
+    @Query("SELECT rx FROM Prescription rx WHERE rx.patient.id = :patientId "
         + "AND (rx.status IN :uncompleted OR (rx.status = com.example.hms.enums.PrescriptionStatus.DISPENSED "
         + "AND rx.takeHome = FALSE)) ORDER BY rx.id")
-    List<Prescription> lockUncompletedForReview(@Param("patientId") UUID patientId, @Param("hospitalId") UUID hospitalId,
+    List<Prescription> lockUncompletedForReview(@Param("patientId") UUID patientId,
                                                 @Param("uncompleted") java.util.Collection<com.example.hms.enums.PrescriptionStatus> uncompleted);
 
     /** Order review: what can replace a held order: written since, not withdrawn. */

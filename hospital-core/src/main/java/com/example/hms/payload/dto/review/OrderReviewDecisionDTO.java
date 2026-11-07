@@ -26,6 +26,9 @@ public class OrderReviewDecisionDTO {
     /** The version of the order the prescriber read: continuing an older one is refused. */
     private Long orderVersion;
 
+    /** The dispute it was read under: a reconfirmation is bound to it. */
+    private UUID disputeId;
+
     /** The new order, for a replacement. */
     private UUID replacementOrderId;
 

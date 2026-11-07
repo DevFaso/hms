@@ -26,6 +26,8 @@ public interface OrderReviewHoldRepository extends JpaRepository<OrderReviewHold
     /** What the chart shows at this hospital, standing ones first by the status order of the screen. */
     List<OrderReviewHold> findByPatientIdAndHospitalIdOrderByCreatedAtDesc(UUID patientId, UUID hospitalId);
 
+    List<OrderReviewHold> findByOrderTypeAndOrderIdAndStatus(OrderReviewType orderType, UUID orderId, OrderReviewStatus status);
+
     /** Hospital is part of the question: a row at another hospital answers as missing. */
     Optional<OrderReviewHold> findByOrderTypeAndOrderIdAndStatusAndHospitalId(
         OrderReviewType orderType, UUID orderId, OrderReviewStatus status, UUID hospitalId);
