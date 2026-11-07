@@ -104,7 +104,10 @@ public class AdultParacetamolRule implements CdsRule {
 
     @Override
     public List<CdsCard> evaluate(CdsRuleContext context) {
-        if (context.paracetamolFacts() == ParacetamolFacts.READ_FAILED) {
+        // A child's failed read is said by the paediatric rule, beside its cap and its review by age.
+        if (context.paracetamolFacts() == ParacetamolFacts.READ_FAILED
+                && (context.patient() == null || context.patient().getDateOfBirth() == null
+                    || PediatricDoseRule.isAdult(context.patient()))) {
             return List.of(CdsRuleEngine.doseCheckFailed(text, context.proposedMedicationName(), id()));
         }
         if (context.patient() != null && context.paracetamolFacts().nameNotRecognised()) {

@@ -184,7 +184,7 @@ class PediatricDoseRouteLimitTest {
         assertThat(rule.evaluate(new CdsRuleContext(childAgedMonths(6), UUID.randomUUID(), "Paracétamol", null, null,
                 100d, null, SIX_MONTH_KG, List.of(), List.of(), "3 fois par jour", null, null, null,
                 ParacetamolFacts.READ_FAILED).withRoute("PO", null)))
-            .singleElement().satisfies(card -> assertThat(card.needsReasonAtSignature()).isTrue());
+            .anySatisfy(card -> assertThat(card.needsReasonAtSignature()).isTrue());
     }
 
     /** The urgent exception (provisional) reaches the cannot-assess cards, and only those. */
@@ -223,5 +223,22 @@ class PediatricDoseRouteLimitTest {
             .noneMatch(CdsCard::needsReasonAtSignature);
         assertThat(evaluate(limit(null, PediatricDoseLimitStatus.APPROVED), "200 mg", "PO", null))
             .noneMatch(CdsCard::needsReasonAtSignature);
+    }
+
+    /** A failed read adds its card: the cap still stops, and a seven-week-old still needs the second person. */
+    @Test
+    void aFailedReadReplacesNeitherTheCapNorTheReviewByAge() {
+        MedicationCatalogItem item = limit("PO", PediatricDoseLimitStatus.APPROVED);
+        Patient infant = childAgedMonths(2);
+        List<CdsCard> underCap = rule.evaluate(new CdsRuleContext(infant, UUID.randomUUID(), "Paracétamol", null, null, 30d,
+            item, 4d, List.of(), List.of(), "3 fois par jour", null, LocalDateTime.now(ZoneId.systemDefault()), null,
+            ParacetamolFacts.READ_FAILED).withRoute("PO", null));
+        assertThat(underCap).anySatisfy(card -> assertThat(card.requiresReview()).isTrue())
+            .anySatisfy(card -> assertThat(card.needsReasonAtSignature()).isTrue());
+
+        List<CdsCard> overCap = rule.evaluate(new CdsRuleContext(infant, UUID.randomUUID(), "Paracétamol", null, null, 900d,
+            item, 4d, List.of(), List.of(), "3 fois par jour", null, LocalDateTime.now(ZoneId.systemDefault()), null,
+            ParacetamolFacts.READ_FAILED).withRoute("PO", null));
+        assertThat(overCap).first().satisfies(card -> assertThat(card.blocksOverride()).isTrue());
     }
 }

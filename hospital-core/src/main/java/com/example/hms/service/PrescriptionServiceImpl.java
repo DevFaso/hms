@@ -104,8 +104,11 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private static final java.util.Set<String> URGENT_REVIEW_PHARMACY_ROLES = java.util.Set.of(
         com.example.hms.config.SecurityConstants.ROLE_PHARMACIST,
         com.example.hms.config.SecurityConstants.ROLE_PHARMACY_VERIFIER);
+    /** The same roles as {@code RoleValidator.isSigningPhysician}, who may record the review. */
     private static final java.util.Set<String> URGENT_REVIEW_PHYSICIAN_ROLES = java.util.Set.of(
-        com.example.hms.config.SecurityConstants.ROLE_DOCTOR);
+        com.example.hms.config.SecurityConstants.ROLE_DOCTOR, "ROLE_PHYSICIAN",
+        com.example.hms.config.SecurityConstants.ROLE_SURGEON);
+    private static final String URGENT_REVIEW_NOBODY_BODY_KEY = "prescription.urgentException.noSecondPerson.inBasketBody";
 
     /** {@code Prescription.overrideReason}'s {@code @Size}. */
     private static final int OVERRIDE_REASON_MAX = 1024;
@@ -528,6 +531,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         String urgentToken = urgentReason == null ? null : doseExceptionToken(prescription, signer, signingCards);
         // A child's dose above the limit: the prescriber's own decision signs it, with nobody else needed. Marked urgent, the review follows.
         boolean urgentAboveLimit = contraindicationReason != null && reauthentication != null
+            && prescription.getPediatricDoseReviewedAt() == null
             && Boolean.TRUE.equals(reauthentication.getUrgentDoseException()) && signingCards.stream()
                 .anyMatch(c -> c.exceptionKey() != null && c.exceptionKey().startsWith("paedAbove:"));
         // QA D1183 (round 23): Septrin and Totapen were SIGNED for allergic
@@ -873,7 +877,14 @@ public class PrescriptionServiceImpl implements PrescriptionService {
      * a pharmacist verification (Tier 2 item 33), voids a recorded review: it
      * vouched for a dose that is no longer the one ordered.
      */
-    private static void applyDoseReviewOnUpdate(Prescription existing, List<CdsCard> advisories) {
+    private void applyDoseReviewOnUpdate(Prescription existing, List<CdsCard> advisories, boolean orderChanged) {
+        // CR-01: an edit that leaves what is ordered as it was leaves the review an urgent exception owes.
+        if (existing.getPediatricDoseUrgentExceptionAt() != null) {
+            if (!orderChanged) {
+                return;
+            }
+            closeUrgentReviewItems(existing);
+        }
         existing.setPediatricDoseReviewRequired(requiresDoseReview(advisories));
         existing.setPediatricDoseReviewedAt(null);
         existing.setPediatricDoseReviewedBy(null);
@@ -942,9 +953,11 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     }
 
     /**
-     * CR-01: an urgent item for whoever can do the review after the fact: the hospital's pharmacists,
-     * else its other doctors, else the signer, who is then the one left who can answer. After the
-     * commit, as a filed item must never undo a signature; ids and names read before it.
+     * CR-01: an urgent item for whoever can record the review after the fact: the hospital's pharmacists,
+     * else its other physicians. When there is nobody, the signer is told so in the item, and the review
+     * stays open: the signer cannot record it ({@link #requireDoseReviewer}). Someone who joins later is
+     * not told (tasklist.md). After the commit, as a filed item must never undo a signature, and one
+     * recipient's failure must not cost the others theirs; ids and names read before it.
      */
     private void fileUrgentReviewAfterCommit(Prescription prescription, Staff signer) {
         UUID hospitalId = prescription.getHospital() != null ? prescription.getHospital().getId() : null;
@@ -958,38 +971,56 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             if (urgentReviewBasket == null || hospitalId == null) {
                 return;
             }
+            List<UUID> reviewers;
             try {
-                Object[] titleArgs = {medication};
-                Object[] bodyArgs = {medication, patientName};
-                for (UUID recipient : urgentReviewers(hospitalId, signerUserId)) {
-                    com.example.hms.payload.dto.clinical.CreateInBasketItemRequest item =
-                        new com.example.hms.payload.dto.clinical.CreateInBasketItemRequest();
-                    item.setRecipientUserId(recipient);
-                    item.setHospitalId(hospitalId);
-                    item.setItemType(com.example.hms.enums.InBasketItemType.TASK);
-                    item.setPriority(com.example.hms.enums.InBasketPriority.URGENT);
-                    item.setReferenceId(prescriptionId);
-                    item.setReferenceType(URGENT_REVIEW_REFERENCE_TYPE);
-                    item.setEncounterId(encounterId);
-                    item.setPatientId(patientId);
-                    item.setPatientName(patientName);
-                    item.setTitleKey(URGENT_REVIEW_TITLE_KEY);
-                    item.setBodyKey(URGENT_REVIEW_BODY_KEY);
-                    item.setTitleArgs(titleArgs);
-                    item.setBodyArgs(bodyArgs);
+                reviewers = urgentReviewers(hospitalId, signerUserId);
+            } catch (RuntimeException ex) {
+                logger.error("Urgent dose reviewers not read for prescription {}: {}", prescriptionId,
+                    ex.getClass().getSimpleName(), ex);
+                reviewers = List.of();
+            }
+            boolean nobodyElse = reviewers.isEmpty();
+            String bodyKey = nobodyElse ? URGENT_REVIEW_NOBODY_BODY_KEY : URGENT_REVIEW_BODY_KEY;
+            Object[] titleArgs = {medication};
+            Object[] bodyArgs = {medication, patientName};
+            for (UUID recipient : nobodyElse && signerUserId != null ? List.of(signerUserId) : reviewers) {
+                com.example.hms.payload.dto.clinical.CreateInBasketItemRequest item =
+                    new com.example.hms.payload.dto.clinical.CreateInBasketItemRequest();
+                item.setRecipientUserId(recipient);
+                item.setHospitalId(hospitalId);
+                item.setItemType(com.example.hms.enums.InBasketItemType.TASK);
+                item.setPriority(com.example.hms.enums.InBasketPriority.URGENT);
+                item.setReferenceId(prescriptionId);
+                item.setReferenceType(URGENT_REVIEW_REFERENCE_TYPE);
+                item.setEncounterId(encounterId);
+                item.setPatientId(patientId);
+                item.setPatientName(patientName);
+                item.setTitleKey(URGENT_REVIEW_TITLE_KEY);
+                item.setBodyKey(bodyKey);
+                item.setTitleArgs(titleArgs);
+                item.setBodyArgs(bodyArgs);
+                try {
                     item.setTitle(com.example.hms.utility.MessageUtil.resolve(
                         com.example.hms.service.i18n.NotificationLocales.STAFF, URGENT_REVIEW_TITLE_KEY, titleArgs));
                     item.setBody(com.example.hms.utility.MessageUtil.resolve(
-                        com.example.hms.service.i18n.NotificationLocales.STAFF, URGENT_REVIEW_BODY_KEY, bodyArgs));
+                        com.example.hms.service.i18n.NotificationLocales.STAFF, bodyKey, bodyArgs));
                     urgentReviewBasket.createItemInNewTransaction(item);
+                } catch (RuntimeException ex) {
+                    logger.error("Urgent dose review item not filed for prescription {}: {}", prescriptionId,
+                        ex.getClass().getSimpleName(), ex);
                 }
-            } catch (RuntimeException ex) {
-                logger.error("Urgent dose review item not filed for prescription {}: {}", prescriptionId,
-                    ex.getClass().getSimpleName(), ex);
             }
         });
     }
 
+    /** The items nobody needs any more: the review is recorded, the order is withdrawn or changed. */
+    private void closeUrgentReviewItems(Prescription prescription) {
+        if (urgentReviewBasket != null && prescription.getPediatricDoseUrgentExceptionAt() != null) {
+            urgentReviewBasket.removeOpenItemsForReference(prescription.getId(), URGENT_REVIEW_REFERENCE_TYPE);
+        }
+    }
+
+    /** Pharmacists first, else physicians; never the signer, who cannot record it. Empty when nobody else can. */
     private List<UUID> urgentReviewers(UUID hospitalId, UUID signerUserId) {
         for (java.util.Set<String> roles : List.of(URGENT_REVIEW_PHARMACY_ROLES, URGENT_REVIEW_PHYSICIAN_ROLES)) {
             List<UUID> found = urhaRepository.findLiveUsersAtHospitalWithRoleCodes(hospitalId, roles).stream()
@@ -1000,7 +1031,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                 return found;
             }
         }
-        return signerUserId == null ? List.of() : List.of(signerUserId);
+        return List.of();
     }
 
     @Override
@@ -1041,6 +1072,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         prescription.setPediatricDoseReviewedBy(reviewer);
         prescription.setPediatricDoseReviewReason(trimmed);
         Prescription saved = prescriptionRepository.save(prescription);
+        closeUrgentReviewItems(saved);
         auditDoseReviewAfterCommit(saved, callerId, trimmed);
         return prescriptionMapper.toResponseDTO(saved);
     }
@@ -1063,6 +1095,12 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         Staff prescriber = prescription.getStaff();
         if (prescriber != null && prescriber.getUser() != null && callerId.equals(prescriber.getUser().getId())) {
             throw new BusinessException("prescription.pediatricReview.ownOrder");
+        }
+        // CR-01: the signer of an urgent exception is not its second pair of eyes, whoever drafted the order.
+        Staff signer = prescription.getSignedBy();
+        if (prescription.getPediatricDoseUrgentExceptionAt() != null && signer != null && signer.getUser() != null
+                && callerId.equals(signer.getUser().getId())) {
+            throw new BusinessException("prescription.pediatricReview.ownUrgentException");
         }
     }
 
@@ -1818,6 +1856,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         requireKnownRouteOnEdit(existing, request);
         String frequencyBefore = existing.getFrequency();
         boolean tickedBefore = com.example.hms.service.impl.PrnMinInterval.isAsNeeded(existing);
+        boolean orderChanged = changesWhatIsOrdered(existing, request);
         prescriptionMapper.updateEntity(existing, request, patient, staff, encounter);
         existing.setAssignment(prescriberAssignment);
         // QA round 30: an edit of an as-needed order keeps (or names) its
@@ -1830,7 +1869,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // stay withdrawable; the dispense refuses it until a quantity is set.
         applyAllergyOverrideOnUpdate(existing, allergyOverride, overrideBefore, currentUserId);
         applyCdsOverrideOnUpdate(existing, request, advisories, currentUserId);
-        applyDoseReviewOnUpdate(existing, advisories);
+        applyDoseReviewOnUpdate(existing, advisories, orderChanged);
         closePartnerOffersOnWithdrawal(existing, statusBefore);
         // Tier 2 item 33: an edit invalidates any pharmacist verification.
         // updateEntity rewrites medicationName, dosage and frequency, and
@@ -1963,6 +2002,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         }
         existing.setStatus(requested);
         existing.setWithdrawalReason(reason);
+        closeUrgentReviewItems(existing);
         closePartnerOffersOnWithdrawal(existing, statusBefore);
         voidPreparedFillOnEdit(existing, statusBefore);
         releaseQueueClaimOnEdit(existing, currentUserId);

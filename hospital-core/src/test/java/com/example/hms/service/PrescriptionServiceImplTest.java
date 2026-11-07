@@ -7261,4 +7261,188 @@ class PrescriptionServiceImplTest {
         verify(auditEventLogService).logEvent(org.mockito.ArgumentMatchers.argThat(e ->
             "Urgent paediatric dose exception recorded at signature".equals(e.getEventDescription())));
     }
+
+    /* ── Review of #1071: the review an urgent exception owes ──────────────────────────── */
+
+    /** A nurse drafts, Dr A signs urgent, Dr A tries to record the review. */
+    @Test
+    void review_theSignerOfAnUrgentExceptionCannotRecordItsReview() {
+        UUID nurse = UUID.randomUUID();
+        Prescription rx = signablePrescription(nurse);
+        com.example.hms.model.User doctorUser = new com.example.hms.model.User();
+        doctorUser.setId(UUID.randomUUID());
+        Staff doctor = Staff.builder().build();
+        doctor.setId(UUID.randomUUID());
+        doctor.setUser(doctorUser);
+        rx.setSignedBy(doctor);
+        rx.setStatus(com.example.hms.enums.PrescriptionStatus.SIGNED);
+        rx.setPediatricDoseReviewRequired(true);
+        rx.setPediatricDoseUrgentExceptionAt(java.time.LocalDateTime.now());
+        UUID hospital = rx.getHospital().getId();
+        UUID id = rx.getId();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospital);
+        when(roleValidator.getCurrentUserId()).thenReturn(doctorUser.getId());
+        when(roleValidator.isSigningPhysician(doctorUser.getId(), hospital)).thenReturn(true);
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(id, hospital)).thenReturn(Optional.of(rx));
+
+        assertThatThrownBy(() -> prescriptionService.recordPediatricDoseReview(id, "Checked", Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .extracting("messageKey").isEqualTo("prescription.pediatricReview.ownUrgentException");
+        assertThat(rx.getPediatricDoseReviewedAt()).isNull();
+    }
+
+    /** A note on the order does not cancel what the urgent exception owes; the pharmacist can still record it. */
+    @Test
+    void review_anEditThatLeavesWhatIsOrderedKeepsTheReviewOwed() {
+        UUID id = UUID.randomUUID();
+        Prescription existing = cr01_editable(id, "PO");
+        existing.setStatus(com.example.hms.enums.PrescriptionStatus.PENDING_CLARIFICATION);
+        existing.setDosage(TEST_DOSAGE);
+        existing.setFrequency(TEST_FREQUENCY);
+        existing.setPediatricDoseReviewRequired(true);
+        java.time.LocalDateTime at = java.time.LocalDateTime.now();
+        existing.setPediatricDoseUrgentExceptionAt(at);
+        cr02_findings(paed_aboveLimit("paedAbove:singleDose:900.0:500"));
+        PrescriptionRequestDTO noteOnly = buildRequest();
+        noteOnly.setNotes("Please call the ward");
+        noteOnly.setForceOverride(true);
+        noteOnly.setOverrideReason("Still above: reason of the edit");
+
+        prescriptionService.updatePrescription(id, noteOnly, Locale.ENGLISH);
+
+        assertThat(existing.isPediatricDoseReviewRequired()).isTrue();
+        assertThat(existing.getPediatricDoseUrgentExceptionAt()).isEqualTo(at);
+    }
+
+    /** What is ordered changed, back within the limits: the exception no longer applies, its items close. */
+    @Test
+    void review_anEditOfWhatIsOrderedEndsTheExceptionAndClosesItsItems() {
+        UUID id = UUID.randomUUID();
+        Prescription existing = cr01_editable(id, "PO");
+        existing.setStatus(com.example.hms.enums.PrescriptionStatus.PENDING_CLARIFICATION);
+        existing.setDosage("900 mg");
+        existing.setFrequency(TEST_FREQUENCY);
+        existing.setPediatricDoseReviewRequired(true);
+        existing.setPediatricDoseUrgentExceptionAt(java.time.LocalDateTime.now());
+        com.example.hms.service.InBasketService basket = mock(com.example.hms.service.InBasketService.class);
+        prescriptionService.setUrgentReviewBasket(basket);
+
+        prescriptionService.updatePrescription(id, buildRequest(), Locale.ENGLISH);
+
+        assertThat(existing.getPediatricDoseUrgentExceptionAt()).isNull();
+        verify(basket).removeOpenItemsForReference(id, "PRESCRIPTION_URGENT_DOSE_EXCEPTION");
+    }
+
+    private Prescription review_signUrgently(UUID user, com.example.hms.service.InBasketService basket) {
+        Prescription rx = cr01_childOrder(user, paed_aboveLimit("paedAbove:singleDose:900.0:500"));
+        cr02_mapsTheSave();
+        prescriptionService.setUrgentReviewBasket(basket);
+        String token = cr02_tokenOfARefusal(rx);
+        prescriptionService.signPrescription(rx.getId(), cr01_urgent("Crise", token), Locale.ENGLISH);
+        return rx;
+    }
+
+    /** Nobody else: the signer is told so, in its own words, and the review stays open. */
+    @Test
+    void review_withNoOtherReviewerTheItemSaysSoAndTheReviewStaysOpen() {
+        UUID user = UUID.randomUUID();
+        com.example.hms.service.InBasketService basket = mock(com.example.hms.service.InBasketService.class);
+        com.example.hms.model.User self = new com.example.hms.model.User();
+        self.setId(user);
+        when(urhaRepository.findLiveUsersAtHospitalWithRoleCodes(any(), any())).thenReturn(List.of(self));
+
+        Prescription rx = review_signUrgently(user, basket);
+
+        verify(basket).createItemInNewTransaction(org.mockito.ArgumentMatchers.argThat(item ->
+            user.equals(item.getRecipientUserId())
+                && "prescription.urgentException.noSecondPerson.inBasketBody".equals(item.getBodyKey())));
+        assertThat(rx.getPediatricDoseReviewedAt()).isNull();
+    }
+
+    /** Every physician role that may record the review is asked, as the review's own check admits them. */
+    @Test
+    void review_thePhysiciansAskedAreThoseWhoMayRecordIt() {
+        UUID user = UUID.randomUUID();
+        com.example.hms.service.InBasketService basket = mock(com.example.hms.service.InBasketService.class);
+        com.example.hms.model.User surgeon = new com.example.hms.model.User();
+        surgeon.setId(UUID.randomUUID());
+        when(urhaRepository.findLiveUsersAtHospitalWithRoleCodes(any(), any())).thenAnswer(inv -> {
+            java.util.Set<String> codes = inv.getArgument(1);
+            return codes.containsAll(java.util.Set.of("ROLE_DOCTOR", "ROLE_PHYSICIAN", "ROLE_SURGEON"))
+                ? List.of(surgeon) : List.of();
+        });
+
+        review_signUrgently(user, basket);
+
+        verify(basket).createItemInNewTransaction(org.mockito.ArgumentMatchers.argThat(item ->
+            surgeon.getId().equals(item.getRecipientUserId())
+                && "prescription.urgentException.inBasketBody".equals(item.getBodyKey())));
+    }
+
+    @Test
+    void review_oneRecipientsFailureDoesNotCostTheOthersTheirs() {
+        UUID user = UUID.randomUUID();
+        com.example.hms.service.InBasketService basket = mock(com.example.hms.service.InBasketService.class);
+        com.example.hms.model.User one = new com.example.hms.model.User();
+        one.setId(UUID.randomUUID());
+        com.example.hms.model.User two = new com.example.hms.model.User();
+        two.setId(UUID.randomUUID());
+        when(urhaRepository.findLiveUsersAtHospitalWithRoleCodes(any(), any())).thenReturn(List.of(one, two));
+        when(basket.createItemInNewTransaction(any())).thenThrow(new IllegalStateException("boom"))
+            .thenReturn(null);
+
+        review_signUrgently(user, basket);
+
+        verify(basket, org.mockito.Mockito.times(2)).createItemInNewTransaction(any());
+    }
+
+    @Test
+    void review_recordingTheReviewClosesTheOthersItems() {
+        UUID prescriber = UUID.randomUUID();
+        UUID pharmacist = UUID.randomUUID();
+        Prescription rx = signablePrescription(prescriber);
+        rx.setStatus(com.example.hms.enums.PrescriptionStatus.SIGNED);
+        rx.setPediatricDoseReviewRequired(true);
+        rx.setPediatricDoseUrgentExceptionAt(java.time.LocalDateTime.now());
+        UUID hospital = rx.getHospital().getId();
+        UUID id = rx.getId();
+        com.example.hms.service.InBasketService basket = mock(com.example.hms.service.InBasketService.class);
+        prescriptionService.setUrgentReviewBasket(basket);
+        com.example.hms.repository.UserRepository users = mock(com.example.hms.repository.UserRepository.class);
+        prescriptionService.setDoseReviewUsers(users);
+        com.example.hms.model.User reviewer = new com.example.hms.model.User();
+        reviewer.setId(pharmacist);
+        when(users.findById(pharmacist)).thenReturn(Optional.of(reviewer));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospital);
+        when(roleValidator.getCurrentUserId()).thenReturn(pharmacist);
+        when(roleValidator.hasAnyAuthority("PHARMACIST", "PHARMACY_VERIFIER", "SUPER_ADMIN")).thenReturn(true);
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(id, hospital)).thenReturn(Optional.of(rx));
+        cr02_mapsTheSave();
+
+        prescriptionService.recordPediatricDoseReview(id, "Checked", Locale.ENGLISH);
+
+        assertThat(rx.getPediatricDoseReviewedAt()).isNotNull();
+        verify(basket).removeOpenItemsForReference(id, "PRESCRIPTION_URGENT_DOSE_EXCEPTION");
+    }
+
+    /** An order already reviewed: the urgent box stamps nothing and files nothing. */
+    @Test
+    void review_anOrderAlreadyReviewedGetsNoStampAndNoItem() {
+        UUID user = UUID.randomUUID();
+        Prescription rx = cr01_childOrder(user, paed_aboveLimit("paedAbove:singleDose:900.0:500"));
+        com.example.hms.model.User pharmacist = new com.example.hms.model.User();
+        pharmacist.setId(UUID.randomUUID());
+        rx.setPediatricDoseReviewedAt(java.time.LocalDateTime.now());
+        rx.setPediatricDoseReviewedBy(pharmacist);
+        cr02_mapsTheSave();
+        com.example.hms.service.InBasketService basket = mock(com.example.hms.service.InBasketService.class);
+        prescriptionService.setUrgentReviewBasket(basket);
+        String token = cr02_tokenOfARefusal(rx);
+
+        prescriptionService.signPrescription(rx.getId(), cr01_urgent("Crise", token), Locale.ENGLISH);
+
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.SIGNED);
+        assertThat(rx.getPediatricDoseUrgentExceptionAt()).isNull();
+        verify(basket, never()).createItemInNewTransaction(any());
+    }
 }

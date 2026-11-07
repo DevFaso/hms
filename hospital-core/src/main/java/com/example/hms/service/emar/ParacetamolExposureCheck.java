@@ -38,8 +38,11 @@ public class ParacetamolExposureCheck {
         this.text = text;
     }
 
-    /** Throws when the read fails: the caller answers {@link #unknownCard} and the dose stands. */
-    @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
+    /**
+     * Throws when the read fails: the caller answers {@link #unknownCard} and the dose stands. Not
+     * marked read-only: it must see the commit just made, whatever a read-only transaction is routed to.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public List<CdsCard> cards(UUID prescriptionId, UUID hospitalId, boolean doseJustRecorded) {
         Prescription rx = prescriptions.findById(prescriptionId).orElse(null);
         if (rx == null) {

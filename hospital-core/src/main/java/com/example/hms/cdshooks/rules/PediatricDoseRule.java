@@ -84,10 +84,6 @@ public class PediatricDoseRule implements CdsRule {
 
     @Override
     public List<CdsCard> evaluate(CdsRuleContext context) {
-        if (context.paracetamolFacts() == ParacetamolFacts.READ_FAILED && context.patient() != null
-                && !isAdult(context.patient())) {
-            return List.of(CdsRuleEngine.doseCheckFailed(text, context.proposedMedicationName(), id()));
-        }
         if (context.patient() == null) return List.of();
         LocalDate dob = context.patient().getDateOfBirth();
         if (dob == null) return List.of();
@@ -103,6 +99,10 @@ public class PediatricDoseRule implements CdsRule {
         // QA D1455: the hard stop says it itself. CR-01: with no verdict on this route, no daily limit is in play.
         if (hardStop.isEmpty() && check.noVerdictOnThisRoute().isEmpty()) {
             check.dailyTotalUnknown().ifPresent(cards::add);
+        }
+        // CR-02: a failed read adds to the absolute cap and the review by age, and replaces neither.
+        if (context.paracetamolFacts() == ParacetamolFacts.READ_FAILED) {
+            cards.add(CdsRuleEngine.doseCheckFailed(text, context.proposedMedicationName(), id()));
         }
         return cards;
     }
