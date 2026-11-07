@@ -10861,7 +10861,7 @@
     "RESP_SUPPORT": "Respiratory support",
     "GLUCOSE_PROTOCOL": "Glucose protocol",
     "THERMO_SUPPORT": "Thermoregulation support",
-    "INTERVENTIONS_HINT": "Tick only what was actually started. An alert recommends; it never ticks these for you.",
+    "INTERVENTIONS_HINT": "Respiratory, glucose and thermoregulation support: tick only what was actually started. An alert recommends support; it never records it as started.",
     "DANGER_SIGNS": "Danger signs",
     "DANGER_SIGNS_HINT": "Provisional WHO postnatal pathway, not every sign of it: early jaundice is not recorded here. Leave a sign as not assessed if it was not looked for. Any sign present raises an urgent alert.",
     "DANGER_POOR_FEEDING": "Poor feeding",

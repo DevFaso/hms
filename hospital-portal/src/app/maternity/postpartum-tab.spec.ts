@@ -292,6 +292,19 @@ describe('PostpartumTabComponent — screening', () => {
     expect(cmp.assessmentForm.convulsions).toBeUndefined();
   });
 
+  it('CR-04: an urgent temperature reads as its sentence too, at the WHO band and beyond it', () => {
+    const cmp = TestBed.createComponent(PostpartumTabComponent).componentInstance;
+    const read = (code: string) =>
+      cmp.newbornAlertsToRead({
+        id: 'a',
+        patientId: 'p',
+        alerts: [{ type: 'THERMOREGULATION', severity: 'URGENT', code, message: code }],
+      } as NewbornAssessmentResponse).length;
+    expect(read('newborn-temperature-who-danger')).toBe(1);
+    expect(read('newborn-temperature-critical')).toBe(1);
+    expect(read('newborn-heart-rate')).toBe(0);
+  });
+
   it('CR-05: the chart shows each sign as recorded, and a row nobody looked at never reads as absent', () => {
     postpartumSpy.recentNewbornAssessments.and.returnValue(
       of([

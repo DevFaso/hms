@@ -74,7 +74,6 @@ public final class NewbornAlertRules {
     /** Older than the sources and stricter: stays urgent. */
     public static final int RESPIRATORY_LOW = 30;
     private static final double CAUTION_TEMPERATURE_LOW = 36.5;
-    private static final double CAUTION_TEMPERATURE_HIGH = 37.5;
 
     /** The gestational age below which a birth is preterm (the labour module's own). */
     public static final int PRETERM_BELOW_WEEKS = 37;

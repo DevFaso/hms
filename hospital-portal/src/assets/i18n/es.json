@@ -10861,7 +10861,7 @@
     "RESP_SUPPORT": "Soporte respiratorio",
     "GLUCOSE_PROTOCOL": "Protocolo de glucosa",
     "THERMO_SUPPORT": "Soporte de termorregulación",
-    "INTERVENTIONS_HINT": "Marque solo lo que realmente se inició. Una alerta recomienda; nunca marca estas casillas por usted.",
+    "INTERVENTIONS_HINT": "Soporte respiratorio, protocolo de glucosa y soporte de termorregulación: marque solo lo que realmente se inició. Una alerta recomienda; nunca registra un soporte como iniciado.",
     "DANGER_SIGNS": "Signos de peligro",
     "DANGER_SIGNS_HINT": "Vía posnatal provisional de la OMS, no todos sus signos: la ictericia precoz no se registra aquí. Deje «No evaluado» si el signo no se buscó. Cualquier signo presente genera una alerta urgente.",
     "DANGER_POOR_FEEDING": "Alimentación deficiente",

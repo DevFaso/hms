@@ -27,7 +27,7 @@ import java.util.UUID;
 public class NewbornAssessmentRequestDTO {
 
     private static final String DANGER_SIGN_DOC = "Danger sign, provisional WHO postnatal pathway (not every sign of it). "
-        + "Blank or NOT_ASSESSED means not assessed, never absent. PRESENT raises its own urgent finding. Never required.";
+        + "Omitted, null or NOT_ASSESSED means not assessed, never absent. PRESENT raises its own urgent finding. Never required.";
     private static final String SUPPORT_ATTESTATION = "True only when the clinician attests that this support was "
         + "actually started. Stored as submitted: an alert never sets it; alerts only recommend and request follow-up.";
 

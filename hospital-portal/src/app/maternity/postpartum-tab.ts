@@ -794,9 +794,13 @@ export class PostpartumTabComponent {
     return !!alert.code?.startsWith('newborn-check-');
   }
 
-  /** CR-04, CR-05: a danger sign stands out, and its sentence names the provisional pathway. */
+  /** CR-04, CR-05: a danger sign or urgent temperature stands out; its sentence names the provisional pathway. */
   isNewbornDangerSign(alert: NewbornAlert): boolean {
-    return alert.type === 'DANGER_SIGN' || alert.code === 'newborn-temperature-who-danger';
+    return (
+      alert.type === 'DANGER_SIGN' ||
+      alert.code === 'newborn-temperature-who-danger' ||
+      alert.code === 'newborn-temperature-critical'
+    );
   }
 
   /** QA D1424: a request to remeasure, or an acceptable-range notice, reads as its sentence on the chart. */

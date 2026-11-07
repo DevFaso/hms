@@ -10861,7 +10861,7 @@
     "RESP_SUPPORT": "Assistance respiratoire",
     "GLUCOSE_PROTOCOL": "Protocole glycémie",
     "THERMO_SUPPORT": "Soutien thermorégulation",
-    "INTERVENTIONS_HINT": "Cocher seulement ce qui a réellement été commencé. Une alerte recommande ; elle ne coche jamais ces cases à votre place.",
+    "INTERVENTIONS_HINT": "Assistance respiratoire, protocole glycémie et soutien thermorégulation : cocher seulement ce qui a réellement été commencé. Une alerte recommande ; elle n'enregistre jamais un soutien comme commencé.",
     "DANGER_SIGNS": "Signes de danger",
     "DANGER_SIGNS_HINT": "Parcours postnatal OMS provisoire, pas tous ses signes : l'ictère précoce n'est pas saisi ici. Laisser « Non évalué » si le signe n'a pas été recherché. Tout signe présent déclenche une alerte urgente.",
     "DANGER_POOR_FEEDING": "Mauvaise alimentation",
