@@ -74,6 +74,10 @@ class PrenatalSchedulingServiceImplTest {
     private com.example.hms.repository.DeliveryRecordRepository deliveryRecordRepository;
     @Mock
     private com.example.hms.repository.LaborEpisodeRepository laborEpisodeRepository;
+    @Mock
+    private com.example.hms.repository.MaternalHistoryRepository maternalHistoryRepository;
+    @Mock
+    private com.example.hms.repository.HighRiskPregnancyCarePlanRepository carePlanRepository;
 
     private PrenatalSchedulingServiceImpl service;
     private static final String SCHEDULER_USERNAME = "scheduler";
@@ -97,7 +101,9 @@ class PrenatalSchedulingServiceImplTest {
             fixedClock,
             TestMessageSources.bundles(),
             deliveryRecordRepository,
-            laborEpisodeRepository
+            laborEpisodeRepository,
+            maternalHistoryRepository,
+            carePlanRepository
         );
         // The patient in these fixtures states no language: the resolver
         // answers the fallback, which is what production does too.
@@ -307,7 +313,8 @@ class PrenatalSchedulingServiceImplTest {
             appointmentRepository, patientRepository, hospitalRepository, staffRepository,
             appointmentService, notificationService,
             Clock.fixed(Instant.parse("2024-04-07T10:00:00Z"), ZoneId.of("UTC")),
-            TestMessageSources.bundles(), deliveryRecordRepository, laborEpisodeRepository);
+            TestMessageSources.bundles(), deliveryRecordRepository, laborEpisodeRepository,
+            maternalHistoryRepository, carePlanRepository);
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(appointmentRepository.findByHospital_IdAndPatient_Id(hospitalId, patientId)).thenReturn(List.of());

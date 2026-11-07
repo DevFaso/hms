@@ -567,6 +567,48 @@ class MaternalHistoryServiceImplTest {
         verify(maternalHistoryRepository, never()).delete(any());
     }
 
+    /** A score equal to the old one is still a new assessment, and a review is not one. */
+    @Test
+    void theAssessmentDateMovesWithAScoreAndNotWithAReview() {
+        UUID historyId = UUID.randomUUID();
+        java.time.LocalDateTime longAgo = java.time.LocalDateTime.of(2020, 1, 1, 9, 0);
+        maternalHistory.setRiskCategory("HIGH");
+        maternalHistory.setRiskAssessedAt(longAgo);
+        maternalHistory.setHospital(hospital);
+        maternalHistory.setPreeclampsiaHistory(true);
+        maternalHistory.setEclampsiaHistory(true);
+        maternalHistory.setHellpSyndromeHistory(true);
+        when(maternalHistoryRepository.findById(historyId)).thenReturn(Optional.of(maternalHistory));
+        when(maternalHistoryRepository.save(any(MaternalHistory.class))).thenReturn(maternalHistory);
+        when(maternalHistoryMapper.toResponseDTO(maternalHistory)).thenReturn(responseDTO);
+
+        maternalHistoryService.markAsReviewed(historyId, username);
+        assertThat(maternalHistory.getRiskAssessedAt()).isEqualTo(longAgo);
+
+        maternalHistoryService.calculateRiskScore(historyId, username);
+        assertThat(maternalHistory.getRiskCategory()).isEqualTo("HIGH");
+        assertThat(maternalHistory.getRiskAssessedAt()).isAfter(longAgo);
+    }
+
+    /** The score sets the cadence the prenatal planner gives the owning hospital, so it is written only from there. */
+    @Test
+    void calculateRiskScore_isRefusedAtAnotherHospital() {
+        UUID historyId = UUID.randomUUID();
+        UUID elsewhere = UUID.randomUUID();
+        maternalHistory.setHospital(hospital);
+        when(maternalHistoryRepository.findById(historyId)).thenReturn(Optional.of(maternalHistory));
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .principalUserId(userId)
+            .activeHospitalId(elsewhere)
+            .permittedHospitalIds(Set.of(elsewhere))
+            .superAdmin(false)
+            .build());
+
+        assertThatThrownBy(() -> maternalHistoryService.calculateRiskScore(historyId, username))
+            .isInstanceOf(ResourceNotFoundException.class);
+        verify(maternalHistoryRepository, never()).save(any());
+    }
+
     @Test
     void calculateRiskScore_shouldCalculateLowRisk() {
         UUID historyId = UUID.randomUUID();

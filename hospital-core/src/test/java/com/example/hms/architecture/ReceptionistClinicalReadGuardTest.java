@@ -179,7 +179,7 @@ class ReceptionistClinicalReadGuardTest {
         Map.entry("PatientRequestDTO#medicalHistorySummary", "a NEW patient; on a PUT the desk's value is dropped and the stored one kept (PatientServiceImpl#updatePatient)"),
         Map.entry("PaymentReasonRequestDTO#reason", "why a payment was refused"),
         Map.entry("PrenatalRescheduleRequestDTO#notes", "booking notes the desk writes"),
-        Map.entry("PrenatalScheduleRequestDTO#highRisk", "ignored for the desk: PrenatalSchedulingServiceImpl; a read-only calculation that stores nothing"),
+        Map.entry("PrenatalScheduleRequestDTO#highRisk", "ignored for the desk: PrenatalSchedulingServiceImpl, which plans from what clinicians recorded; a read-only calculation that stores nothing"),
         Map.entry("PrenatalScheduleRequestDTO#notes", "a read-only calculation; stores nothing"),
         Map.entry("RecallRequestDTO#notes", "the desk's own recall notes"),
         Map.entry("RecallRequestDTO#reason", "the desk's own recall"),
@@ -334,6 +334,62 @@ class ReceptionistClinicalReadGuardTest {
         Set<String> stale = new TreeSet<>(THE_DESK_WRITES_IT.keySet());
         stale.removeAll(sent);
         assertThat(stale).as("listed, and the role no longer sends it").isEmpty();
+    }
+
+    /**
+     * A high-risk flag the role can send: the desk's box does not count, and refusing to count it must not
+     * leave the decision on a value nobody can correct. Each one names the class that decides from what
+     * clinicians recorded instead; that class reads the flag only with the role taken out, and passes the
+     * recorded value on to the decision. No other class calls such a flag's getter, by name or by method
+     * reference. This holds the inventory and the wiring; {@code PrenatalRecordedRiskCadenceTest} holds the
+     * behaviour.
+     */
+    private static final Map<String, String> THE_RECORD_DECIDES_INSTEAD = Map.of(
+        "PrenatalScheduleRequestDTO#highRisk", "service/PrenatalSchedulingServiceImpl.java");
+    private static final java.nio.file.Path MAIN = java.nio.file.Paths.get("src/main/java/com/example/hms");
+
+    @Test
+    @DisplayName("a high-risk flag the role can send is read in one place, which also reads what clinicians recorded")
+    void aRiskFlagTheRoleCanSendDecidesNothingAlone() throws java.io.IOException {
+        Set<String> sent = new TreeSet<>();
+        for (HandlerMethod handler : handlers().values()) {
+            String admits = RoleExpression.admits(handler, RECEPTIONIST);
+            if (RoleExpression.YES.equals(admits) || RoleExpression.NONE.equals(admits)) {
+                for (org.springframework.core.MethodParameter parameter : handler.getMethodParameters()) {
+                    if (parameter.hasParameterAnnotation(org.springframework.web.bind.annotation.RequestBody.class)) {
+                        walkBody(parameter.getGenericParameterType(), new HashSet<>(), sent);
+                    }
+                }
+            }
+        }
+        Set<String> flags = new TreeSet<>();
+        sent.stream().filter(field -> field.toLowerCase(java.util.Locale.ROOT).contains("highrisk")).forEach(flags::add);
+        assertThat(flags).as("a flag the desk sends, and where the record decides instead")
+            .isEqualTo(new TreeSet<>(THE_RECORD_DECIDES_INSTEAD.keySet()));
+
+        StringBuilder getters = new StringBuilder();
+        for (String flag : flags) {
+            String field = flag.substring(flag.indexOf('#') + 1);
+            String capital = Character.toUpperCase(field.charAt(0)) + field.substring(1);
+            getters.append(getters.isEmpty() ? "" : "|").append("get").append(capital).append("|is").append(capital);
+        }
+        Pattern readsTheFlag = Pattern.compile("(?:\\.|::)(?:" + getters + ")\\b");
+        Set<String> readers = new TreeSet<>();
+        try (java.util.stream.Stream<java.nio.file.Path> files = java.nio.file.Files.walk(MAIN)) {
+            for (java.nio.file.Path file : files.filter(path -> path.toString().endsWith(".java")).toList()) {
+                if (readsTheFlag.matcher(java.nio.file.Files.readString(file)).find()) {
+                    readers.add(MAIN.relativize(file).toString().replace('\\', '/'));
+                }
+            }
+        }
+        assertThat(readers).as("the classes that read the flag").isEqualTo(new TreeSet<>(THE_RECORD_DECIDES_INSTEAD.values()));
+
+        for (String reader : readers) {
+            String source = java.nio.file.Files.readString(MAIN.resolve(reader)).replaceAll("\\s+", " ");
+            assertThat(source).as(reader + ": the box is not the desk's")
+                .contains("Boolean.TRUE.equals(request.getHighRisk()) && !receptionist");
+            assertThat(source).as(reader + ": the record reaches the cadence").contains("currentWeek, boxTicked || recordedHighRisk,");
+        }
     }
 
     private static void walkBody(Type type, Set<Class<?>> seen, Set<String> sent) {
