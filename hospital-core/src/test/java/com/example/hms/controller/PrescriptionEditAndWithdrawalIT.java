@@ -344,44 +344,95 @@ class PrescriptionEditAndWithdrawalIT extends BaseIT {
     }
 
     /**
-     * QA D1391 / D1395 (round 33), over the real endpoint: an unticked order is
-     * accepted only with a fixed schedule; a limit, a clause or a wording that
-     * states no schedule is refused on the tick, and nothing is created.
+     * QA D1391 / D1395 (round 33) and QA D1419 / D1434 (round 34, changed
+     * assertions: a limit and a wording that states no schedule were refused on
+     * the tick), over the real endpoint: a condition is refused on the tick;
+     * anything the reader cannot place is asked about once on frequencyConfirmed,
+     * controlled drug included, and the same order with the answer is created,
+     * never as-needed; a schedule is created at once.
      */
     @Test
     @DisplayName("QA D1391 / D1395: an unticked order states a fixed schedule, in FR, ES and EN")
     void d1391_d1395_anUntickedOrderStatesAFixedSchedule() throws Exception {
         long before = prescriptionRepository.count();
         for (String wording : new String[] {"pour douleur", "toutes les 6 h pour douleur", "q6h si fièvre",
-            "para el dolor", "in case of pain", "max 4/j", "jusqu'à 4 fois par jour", "1 à 3 fois par jour",
-            "up to 4 times a day", "douleur", "pain", "selon prescription médicale", "SP + AQ", "ad lib"}) {
+            "para el dolor", "in case of pain", "douleur", "pain", "ad lib", "SOS", "for pain"}) {
             mockMvc.perform(post(API_CONTEXT + "/prescriptions")
                     .contextPath(API_CONTEXT)
                     .with(as(authorUser))
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(createBody(wording)))
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors.asNeeded").exists())
+                .andExpect(jsonPath("$.fieldErrors.frequencyConfirmed").doesNotExist());
+            // Confirming does not answer a condition.
+            mockMvc.perform(post(API_CONTEXT + "/prescriptions")
+                    .contextPath(API_CONTEXT)
+                    .with(as(authorUser))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(createBody(wording).replace("\"quantity\":3", "\"quantity\":3,\"frequencyConfirmed\":true")))
+                .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.fieldErrors.asNeeded").exists());
         }
-        assertThat(prescriptionRepository.count()).isEqualTo(before);
-
-        for (String wording : new String[] {"Prise unique (TPI-SP 2)", "TPI-SP", "SP dose unique",
-            "SP-AQ 1 fois par jour", "SMC : SP + AQ, 1 fois par mois", "4 cp 2 fois par jour (poids > 35 kg)",
-            "3 fois par jour selon ordonnance", "2 fois par jour selon protocole", "Q6H", "cada 6 horas",
-            "3 times a day"}) {
-            String answer = mockMvc.perform(post(API_CONTEXT + "/prescriptions")
+        String[] asked = {"max 4/j", "jusqu'à 4 fois par jour", "1 à 3 fois par jour", "up to 4 times a day",
+            "selon prescription médicale", "SP + AQ", "selon ordonnance", "CPS", "protocole national", "5 jours", "x3"};
+        for (String wording : asked) {
+            mockMvc.perform(post(API_CONTEXT + "/prescriptions")
                     .contextPath(API_CONTEXT)
                     .with(as(authorUser))
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(createBody(wording)))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.asNeeded").value(false))
-                .andReturn().getResponse().getContentAsString();
-            UUID created = UUID.fromString(com.jayway.jsonpath.JsonPath.read(answer, "$.id"));
-            auditEventLogRepository.deleteAllInBatch(auditEventLogRepository.findAll().stream()
-                .filter(row -> created.toString().equals(row.getResourceId())).toList());
-            prescriptionRepository.deleteById(created);
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors.frequencyConfirmed").exists())
+                .andExpect(jsonPath("$.fieldErrors.asNeeded").doesNotExist());
         }
+        assertThat(prescriptionRepository.count()).isEqualTo(before);
+
+        for (String wording : asked) {
+            createdOnce(createBody(wording).replace("\"quantity\":3",
+                "\"quantity\":3,\"controlledSubstance\":true,\"frequencyConfirmed\":true"));
+        }
+
+        for (String wording : new String[] {"Prise unique (TPI-SP 2)", "TPI-SP", "SP dose unique",
+            "SP-AQ 1 fois par jour", "SMC : SP + AQ, 1 fois par mois", "4 cp 2 fois par jour (poids > 35 kg)",
+            "3 fois par jour selon ordonnance", "2 fois par jour selon protocole", "Q6H", "cada 6 horas",
+            "3 times a day", "prendre 1 comprimé 3 fois par jour", "take 1 tablet twice daily", "H0 H8 H24 H36 H48 H60",
+            "J1 J2 J3", "au coucher", "chaque semaine", "perfusion continue", "bolus"}) {
+            createdOnce(createBody(wording));
+        }
+    }
+
+    private void createdOnce(String body) throws Exception {
+        String answer = mockMvc.perform(post(API_CONTEXT + "/prescriptions")
+                .contextPath(API_CONTEXT)
+                .with(as(authorUser))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body))
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.asNeeded").value(false))
+            .andReturn().getResponse().getContentAsString();
+        UUID created = UUID.fromString(com.jayway.jsonpath.JsonPath.read(answer, "$.id"));
+        auditEventLogRepository.deleteAllInBatch(auditEventLogRepository.findAll().stream()
+            .filter(row -> created.toString().equals(row.getResourceId())).toList());
+        prescriptionRepository.deleteById(created);
+    }
+
+    /** QA D1433, over the real endpoint: a fraction of an hour is refused on its field, not cut down; a whole one stands. */
+    @Test
+    @DisplayName("QA D1433: a non-integer PRN interval is refused on its field")
+    void d1433_aFractionOfAnHourIsRefusedOnItsField() throws Exception {
+        long before = prescriptionRepository.count();
+        for (String hours : new String[] {"1.5", "2.9", "6.5", "0.5"}) {
+            mockMvc.perform(post(API_CONTEXT + "/prescriptions")
+                    .contextPath(API_CONTEXT)
+                    .with(as(authorUser))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(createBody("si besoin").replace("\"quantity\":3",
+                        "\"quantity\":3,\"asNeeded\":true,\"prnMinIntervalHours\":" + hours)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors.prnMinIntervalHours").exists());
+        }
+        assertThat(prescriptionRepository.count()).isEqualTo(before);
     }
 
     private String createBody(String frequency) {
@@ -416,15 +467,37 @@ class PrescriptionEditAndWithdrawalIT extends BaseIT {
         assertThat(edited.getFrequency()).as("the old text is kept as written").isEqualTo("SOS");
         assertThat(edited.isAsNeeded()).isFalse();
 
-        for (String refused : new String[] {"pour douleur", "max 4/j"}) {
-            mockMvc.perform(put(API_CONTEXT + UPDATE_PATH, prescription.getId())
-                    .contextPath(API_CONTEXT)
-                    .with(as(authorUser))
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(body("Amoxicilline 500 mg", null, null).replace("3x/day", refused)))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.fieldErrors.asNeeded").exists());
-        }
+        mockMvc.perform(put(API_CONTEXT + UPDATE_PATH, prescription.getId())
+                .contextPath(API_CONTEXT)
+                .with(as(authorUser))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body("Amoxicilline 500 mg", null, null).replace("3x/day", "pour douleur")))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.fieldErrors.asNeeded").exists());
+        // QA D1419 (changed: this was refused on the tick): an edit that writes a wording not read is asked
+        // once on its own field, and the answer saves it; the text is kept as written, not as-needed.
+        mockMvc.perform(put(API_CONTEXT + UPDATE_PATH, prescription.getId())
+                .contextPath(API_CONTEXT)
+                .with(as(authorUser))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body("Amoxicilline 500 mg", null, null).replace("3x/day", "max 4/j")))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.fieldErrors.frequencyConfirmed").exists());
+        mockMvc.perform(put(API_CONTEXT + UPDATE_PATH, prescription.getId())
+                .contextPath(API_CONTEXT)
+                .with(as(authorUser))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body("Amoxicilline 500 mg", null, null)
+                    .replace("\"3x/day\"", "\"max 4/j\",\"frequencyConfirmed\":true")))
+            .andExpect(status().isOk());
+        assertThat(prescriptionRepository.findById(prescription.getId()).orElseThrow().isAsNeeded()).isFalse();
+        // An edit that leaves that wording as it is needs no answer.
+        mockMvc.perform(put(API_CONTEXT + UPDATE_PATH, prescription.getId())
+                .contextPath(API_CONTEXT)
+                .with(as(authorUser))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body("Amoxicilline 500 mg", null, null).replace("3x/day", "max 4/j")))
+            .andExpect(status().isOk());
 
         prescription = prescriptionRepository.findById(prescription.getId()).orElseThrow();
         prescription.setStatus(PrescriptionStatus.SIGNED);

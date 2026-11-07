@@ -1298,7 +1298,7 @@ describe('PrescriptionsComponent — signing', () => {
           })),
         );
         submit('q6h');
-        expect(component.formError()).toBe('dose');
+        expect(component['formError']()).toBe('dose');
       });
     });
 
