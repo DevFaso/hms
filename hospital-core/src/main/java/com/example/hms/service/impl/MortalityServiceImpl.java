@@ -336,7 +336,9 @@ public class MortalityServiceImpl implements MortalityService {
     public DeathRecordResponseDTO getForPatient(UUID patientId) {
         UUID hospitalId = requireHospital();
         patientChartAccess.require(patientId, hospitalId);
+        // A patient registered at two hospitals: the record stays with the one that wrote it.
         return deathRecordRepository.findByPatient_Id(patientId)
+            .filter(death -> death.getHospital() != null && hospitalId.equals(death.getHospital().getId()))
             .map(mapper::toDto)
             .orElseThrow(() -> new ResourceNotFoundException(MSG_DEATH_NOT_FOUND, patientId));
     }

@@ -254,10 +254,11 @@ class DeathDisputeEmergencyPathwayTest {
         dose.setStatus("GIVEN");
         UUID orderId = order.getId();
 
+        // A refusal of the order's own state: not the death's, and not a stub falling over.
         assertThatThrownBy(() -> prescriptions.signPrescription(orderId, null, Locale.ENGLISH))
-            .isNotInstanceOf(AssertionError.class).hasMessageNotContaining(DEATH_REFUSAL);
+            .isInstanceOf(com.example.hms.exception.BusinessException.class).hasMessageNotContaining(DEATH_REFUSAL);
         assertThatThrownBy(() -> nursing.recordMedicationAdministration(orderId, doctorId, hospitalId, dose))
-            .isNotInstanceOf(AssertionError.class).hasMessageNotContaining(DEATH_REFUSAL);
+            .isNotInstanceOf(NullPointerException.class).hasMessageNotContaining(DEATH_REFUSAL);
 
         assertThat(order.getStatus()).isEqualTo(PrescriptionStatus.CANCELLED);
         Mockito.verify(mockOf(PrescriptionRepository.class), Mockito.never()).save(any());

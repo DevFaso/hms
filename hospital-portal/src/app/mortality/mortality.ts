@@ -183,7 +183,18 @@ export class MortalityComponent implements OnInit {
   /** Entered in error from a dispute: the row it needs is on the register, when this hospital recorded the death. */
   openEnteredInErrorFor(dispute: DeathDispute): void {
     const record = this.register()?.deaths.find((d) => d.id === dispute.deathRecordId);
-    if (record) this.openEnteredInError(record);
+    if (record) {
+      this.openEnteredInError(record);
+      return;
+    }
+    // A death outside the period shown: the same action, on its own record.
+    this.mortality.getForPatient(dispute.patientId).subscribe({
+      next: (found) => this.openEnteredInError(found),
+      error: (err: unknown) =>
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('MORTALITY.ENTERED_IN_ERROR_FAILED'),
+        ),
+    });
   }
 
   loadRegister(): void {

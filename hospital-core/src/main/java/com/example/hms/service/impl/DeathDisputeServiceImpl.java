@@ -84,7 +84,7 @@ public class DeathDisputeServiceImpl implements DeathDisputeService {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         UUID actorId = roleValidator.getCurrentUserId();
         // The role at THIS hospital, not the union of the caller's assignments.
-        if (hospitalId == null || actorId == null || !roleValidator.isDoctor(actorId, hospitalId)) {
+        if (hospitalId == null || actorId == null || !roleValidator.isSigningPhysician(actorId, hospitalId)) {
             throw new AccessDeniedException("Only a doctor with an active assignment at this hospital can dispute a death.");
         }
         Patient patient = patientChartAccess.require(patientId, hospitalId);
@@ -116,7 +116,7 @@ public class DeathDisputeServiceImpl implements DeathDisputeService {
         } else {
             log.error("Dispute {} of a death has no hospital administrator to review it; the sweep keeps trying", dispute.getId());
         }
-        audit(dispute, actorId, "Death status disputed at hospital " + hospitalId + " by doctor " + actorId
+        audit(dispute, hospitalId, actorId, "Death status disputed at hospital " + hospitalId + " by doctor " + actorId
             + ", death record " + record.getId() + " version " + dispute.getDeathRecordVersion()
             + ": assessed alive and identity verified. Care permitted pending review. Reason: " + dispute.getReason());
         return toDto(dispute, patient, hospitalId);
@@ -129,6 +129,7 @@ public class DeathDisputeServiceImpl implements DeathDisputeService {
         if (hospitalId == null) {
             throw new BusinessException("mortality.hospitalRequired");
         }
+        requireDecider(roleValidator.getCurrentUserId(), hospitalId);
         return disputeRepository.findOpenForReview(hospitalId).stream()
             .map(dispute -> toDto(dispute, patientRepository.findByIdUnscoped(dispute.getPatientId()).orElse(null), hospitalId))
             .toList();
@@ -149,14 +150,12 @@ public class DeathDisputeServiceImpl implements DeathDisputeService {
         if (scope != null && !scope.equals(dispute.getHospitalId()) && !scope.equals(recordHospital)) {
             throw new ResourceNotFoundException(NOT_FOUND_KEY, disputeId);
         }
-        if (!roleValidator.isSuperAdminFromAuth() && (scope == null || !roleValidator.isHospitalAdmin(actorId, scope))) {
-            throw new AccessDeniedException("Only a hospital administrator of this hospital can decide a dispute.");
-        }
+        requireDecider(actorId, scope);
         if (!dispute.isOpen()) {
             throw new BusinessException("mortality.dispute.closed");
         }
         close(dispute, DeathDisputeStatus.UPHELD, actorId, currentUsername(), reason, LocalDateTime.now(clock));
-        audit(dispute, actorId, "Death upheld: dispute " + dispute.getId() + " closed by " + actorId
+        audit(dispute, scope != null ? scope : dispute.getHospitalId(), actorId, "Death upheld: dispute " + dispute.getId() + " closed by " + actorId
             + ", the block on care is back at hospital " + dispute.getHospitalId() + ". Reason: " + reason);
         return toDto(dispute, patientRepository.findByIdUnscoped(dispute.getPatientId()).orElse(null), scope);
     }
@@ -165,7 +164,14 @@ public class DeathDisputeServiceImpl implements DeathDisputeService {
     public int escalateUnreviewed() {
         LocalDateTime now = LocalDateTime.now(clock);
         int filed = 0;
-        for (DeathDispute dispute : disputeRepository.findDueForEscalation(now.minusHours(escalationHours))) {
+        LocalDateTime before = now.minusHours(escalationHours);
+        for (UUID id : disputeRepository.findDueForEscalation(before)) {
+            // Under its lock and first read here: a decision taken since the list was read is seen, and the
+            // writes below cannot put a decided dispute back to open.
+            DeathDispute dispute = disputeRepository.lockById(id).filter(DeathDispute::isOpen).orElse(null);
+            if (dispute == null) {
+                continue;
+            }
             UUID recordHospital = deathRecordRepository.findById(dispute.getDeathRecordId())
                 .map(record -> record.getHospital().getId()).orElse(dispute.getHospitalId());
             boolean escalating = dispute.getReviewFiledAt() != null;
@@ -186,6 +192,13 @@ public class DeathDisputeServiceImpl implements DeathDisputeService {
             filed += items;
         }
         return filed;
+    }
+
+    /** The role at the acting hospital: the controller's check reads the union of the caller's assignments. */
+    private void requireDecider(UUID actorId, UUID scope) {
+        if (!roleValidator.isSuperAdminFromAuth() && (scope == null || !roleValidator.isHospitalAdmin(actorId, scope))) {
+            throw new AccessDeniedException("Only a hospital administrator of this hospital can review a dispute.");
+        }
     }
 
     /** Entered in error ends every open dispute of the record. The record's lock is already held by the caller. */
@@ -265,7 +278,7 @@ public class DeathDisputeServiceImpl implements DeathDisputeService {
     }
 
     /** Ids only: the audit service writes in its own transaction. */
-    private void audit(DeathDispute dispute, UUID actorId, String description) {
+    private void audit(DeathDispute dispute, UUID hospitalId, UUID actorId, String description) {
         try {
             auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                 .eventType(AuditEventType.PATIENT_UPDATE)
@@ -273,7 +286,7 @@ public class DeathDisputeServiceImpl implements DeathDisputeService {
                 .entityType(AUDIT_ENTITY)
                 .resourceId(String.valueOf(dispute.getId()))
                 .patientId(dispute.getPatientId())
-                .hospitalId(dispute.getHospitalId())
+                .hospitalId(hospitalId)
                 .userId(actorId)
                 .userName(currentUsername())
                 .eventDescription(description)

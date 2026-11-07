@@ -32,7 +32,7 @@ public interface DeathDisputeRepository extends JpaRepository<DeathDispute, UUID
     /** Locked: entered in error ends them all, and one upheld meanwhile drops out of this list. */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT d FROM DeathDispute d WHERE d.deathRecordId = :recordId "
-        + "AND d.status = com.example.hms.enums.DeathDisputeStatus.OPEN")
+        + "AND d.status = com.example.hms.enums.DeathDisputeStatus.OPEN ORDER BY d.id")
     List<DeathDispute> lockOpenForRecord(@Param("recordId") UUID recordId);
 
     @Query("SELECT DISTINCT d.deathRecordId FROM DeathDispute d WHERE d.deathRecordId IN :recordIds "
@@ -46,7 +46,7 @@ public interface DeathDisputeRepository extends JpaRepository<DeathDispute, UUID
     List<DeathDispute> findOpenForReview(@Param("hospitalId") UUID hospitalId);
 
     /** Open, and no review item reached anyone, or the last one has gone unreviewed since {@code before}. */
-    @Query("SELECT d FROM DeathDispute d WHERE d.status = com.example.hms.enums.DeathDisputeStatus.OPEN "
-        + "AND (d.reviewFiledAt IS NULL OR COALESCE(d.lastEscalatedAt, d.reviewFiledAt) < :before)")
-    List<DeathDispute> findDueForEscalation(@Param("before") LocalDateTime before);
+    @Query("SELECT d.id FROM DeathDispute d WHERE d.status = com.example.hms.enums.DeathDisputeStatus.OPEN "
+        + "AND (d.reviewFiledAt IS NULL OR COALESCE(d.lastEscalatedAt, d.reviewFiledAt) < :before) ORDER BY d.id")
+    List<UUID> findDueForEscalation(@Param("before") LocalDateTime before);
 }

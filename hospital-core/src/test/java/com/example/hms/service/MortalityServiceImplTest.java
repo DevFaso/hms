@@ -217,6 +217,18 @@ class MortalityServiceImplTest {
     // ── QA D1488: entered in error ────────────────────────────────
 
     @Test
+    void anotherHospitalDoesNotReadThisRecordThroughTheChart() {
+        Hospital other = new Hospital();
+        other.setId(UUID.randomUUID());
+        DeathRecord elsewhere = DeathRecord.builder().patient(patient).hospital(other)
+            .diedAt(LocalDateTime.now().minusDays(1)).immediateCause("Private").build();
+        when(deathRecordRepository.findByPatient_Id(patientId)).thenReturn(Optional.of(elsewhere));
+
+        assertThatThrownBy(() -> service.getForPatient(patientId))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+    }
+
+    @Test
     void enteredInErrorEndsEveryOpenDisputeOfTheRecord() {
         DeathRecord existing = recordedDeath();
         com.example.hms.model.DeathDispute open = com.example.hms.model.DeathDispute.builder()

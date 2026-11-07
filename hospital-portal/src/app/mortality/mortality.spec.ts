@@ -128,6 +128,14 @@ describe('MortalityComponent, QA D1488 / D1490', () => {
     fixture.nativeElement.remove();
   });
 
+  it('entered in error from a dispute reaches a death outside the period shown', () => {
+    fixtureComponent.register.set(mockRegister({ deaths: [] }));
+    spy.getForPatient.and.returnValue(of(mockDeath()));
+    fixtureComponent.openEnteredInErrorFor({ patientId: 'p1', deathRecordId: 'd1' } as DeathDispute);
+    expect(spy.getForPatient).toHaveBeenCalledWith('p1');
+    expect(fixtureComponent.errorRecord()?.id).toBe('d1');
+  });
+
   it('upholding needs a reason: empty is marked and nothing is sent', () => {
     const fixture = TestBed.createComponent(MortalityComponent);
     document.body.appendChild(fixture.nativeElement);

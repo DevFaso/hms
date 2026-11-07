@@ -119,7 +119,7 @@ class DeathDisputeConcurrencyPostgresIT {
         when(chartAccess.require(patient, hospital)).thenReturn(chart);
         when(roles.requireActiveHospitalId()).thenReturn(hospital);
         when(roles.getCurrentUserId()).thenReturn(actor);
-        when(roles.isDoctor(actor, hospital)).thenReturn(true);
+        when(roles.isSigningPhysician(actor, hospital)).thenReturn(true);
         when(roles.isHospitalAdmin(actor, hospital)).thenReturn(true);
         User admin = new User();
         admin.setId(UUID.randomUUID());
@@ -181,7 +181,7 @@ class DeathDisputeConcurrencyPostgresIT {
     }
 
     private List<UUID> dueIds(LocalDateTime before) {
-        return disputes.findDueForEscalation(before).stream().map(DeathDispute::getId).toList();
+        return disputes.findDueForEscalation(before);
     }
 
     @Test
@@ -191,8 +191,8 @@ class DeathDisputeConcurrencyPostgresIT {
 
         tx.executeWithoutResult(status -> service.dispute(patient, statement()));
 
-        assertThat(disputes.findDueForEscalation(LocalDateTime.now().minusYears(1)))
-            .extracting(DeathDispute::getDeathRecordId).contains(record);
+        UUID id = disputes.findOpen(record, hospital).orElseThrow().getId();
+        assertThat(disputes.findDueForEscalation(LocalDateTime.now().minusYears(1))).contains(id);
     }
 
     @Test
@@ -267,6 +267,44 @@ class DeathDisputeConcurrencyPostgresIT {
         upholding.get();
         assertThat(list.get()).as("what was decided meanwhile is not closed twice").isEmpty();
         pool.shutdown();
+    }
+
+    @Test
+    @DisplayName("the record's scalar lock really locks: a dispute waits for entered in error, then finds no death")
+    void aDisputeWaitsForEnteredInError() throws Exception {
+        CountDownLatch held = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        Future<?> correcting = pool.submit(() -> tx.executeWithoutResult(status -> {
+            assertThat(records.lockById(record)).contains(record);
+            jdbc.update("UPDATE clinical.death_records SET entered_in_error_at = now() WHERE id = ?", record);
+            held.countDown();
+            await(release);
+        }));
+        held.await();
+        Future<java.util.Optional<UUID>> disputing = pool.submit(() -> tx.execute(status ->
+            records.lockLiveByPatientId(patient).map(com.example.hms.model.DeathRecord::getId)));
+        Thread.sleep(300);
+        assertThat(disputing.isDone()).as("it waits for the lock").isFalse();
+        release.countDown();
+        correcting.get();
+        assertThat(disputing.get()).as("no death is left to dispute").isEmpty();
+        pool.shutdown();
+    }
+
+    @Test
+    @DisplayName("the sweep, racing an upholding, leaves the dispute decided")
+    void theSweepRacingAnUpholding() throws Exception {
+        DeathDisputeResponseDTO first = tx.execute(status -> service.dispute(patient, statement()));
+        jdbc.update("UPDATE clinical.death_disputes SET review_filed_at = now() - interval '9 hours' WHERE id = ?", first.getId());
+        List<Callable<Object>> calls = List.of(
+            () -> service.uphold(first.getId(), DeathDisputeOutcomeDTO.builder().reason("a").build()),
+            service::escalateUnreviewed);
+        for (Future<Object> result : together(calls)) {
+            result.get();
+        }
+        assertThat(jdbc.queryForObject("SELECT status FROM clinical.death_disputes WHERE id = ?", String.class, first.getId()))
+            .isEqualTo("UPHELD");
     }
 
     private void entityManagerFlush() {

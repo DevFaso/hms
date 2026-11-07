@@ -94,7 +94,7 @@ class DeathDisputeServiceImplTest {
         record.setId(UUID.randomUUID());
         when(roles.requireActiveHospitalId()).thenReturn(hospitalB);
         when(roles.getCurrentUserId()).thenReturn(doctor);
-        when(roles.isDoctor(doctor, hospitalB)).thenReturn(true);
+        when(roles.isSigningPhysician(doctor, hospitalB)).thenReturn(true);
         when(chartAccess.require(patientId, hospitalB)).thenReturn(patient);
         when(records.lockLiveByPatientId(patientId)).thenReturn(Optional.of(record));
         when(records.findById(record.getId())).thenReturn(Optional.of(record));
@@ -156,9 +156,9 @@ class DeathDisputeServiceImplTest {
     @Test
     @DisplayName("only a doctor at THIS hospital: the union of assignments, an admin, and a doctor elsewhere are refused")
     void onlyADoctorHere() {
-        when(roles.isDoctor(doctor, hospitalB)).thenReturn(false);
+        when(roles.isSigningPhysician(doctor, hospitalB)).thenReturn(false);
         when(roles.isHospitalAdmin(doctor, hospitalB)).thenReturn(true);
-        when(roles.isDoctor(doctor, hospitalA)).thenReturn(true);
+        when(roles.isSigningPhysician(doctor, hospitalA)).thenReturn(true);
         when(roles.isSuperAdminFromAuth()).thenReturn(true);
         DeathDisputeRequestDTO body = statement();
 
@@ -302,7 +302,8 @@ class DeathDisputeServiceImplTest {
         assertThat(row.getValue().getReviewFiledAt()).isNull();
         assertThat(row.getValue().isOpen()).isTrue();
 
-        when(disputes.findDueForEscalation(any())).thenReturn(List.of(row.getValue()));
+        when(disputes.findDueForEscalation(any())).thenReturn(List.of(row.getValue().getId()));
+        when(disputes.lockById(row.getValue().getId())).thenReturn(Optional.of(row.getValue()));
         assertThat(service.escalateUnreviewed()).isZero();
         assertThat(row.getValue().getReviewFiledAt()).isNull();
 
@@ -316,7 +317,7 @@ class DeathDisputeServiceImplTest {
     @DisplayName("unreviewed: escalated under its own reference, and the dispute stays open, however long")
     void escalates() {
         DeathDispute open = openDispute();
-        when(disputes.findDueForEscalation(NOW.minusHours(4))).thenReturn(List.of(open));
+        when(disputes.findDueForEscalation(NOW.minusHours(4))).thenReturn(List.of(open.getId()));
 
         assertThat(service.escalateUnreviewed()).isEqualTo(2);
         assertThat(service.escalateUnreviewed()).isEqualTo(2);
@@ -327,5 +328,41 @@ class DeathDisputeServiceImplTest {
         assertThat(open.getEscalationCount()).isEqualTo(2);
         assertThat(open.getLastEscalatedAt()).isEqualTo(NOW);
         assertThat(open.isOpen()).as("an unresolved dispute never expires").isTrue();
+    }
+
+    @Test
+    @DisplayName("the sweep reads the row under its lock: a dispute decided since the list was read stays decided")
+    void theSweepNeverReopens() {
+        DeathDispute open = openDispute();
+        open.setStatus(DeathDisputeStatus.UPHELD);
+        when(disputes.findDueForEscalation(any())).thenReturn(List.of(open.getId()));
+
+        assertThat(service.escalateUnreviewed()).isZero();
+        assertThat(open.getStatus()).isEqualTo(DeathDisputeStatus.UPHELD);
+        assertThat(open.getEscalationCount()).isZero();
+        verify(inBasket, never()).createItem(any());
+    }
+
+    @Test
+    @DisplayName("the review list asks the role at the acting hospital, not the union of assignments")
+    void theReviewListAsksTheRoleHere() {
+        assertThatThrownBy(() -> service.openForReview()).isInstanceOf(AccessDeniedException.class);
+
+        actingAdminAt(hospitalB);
+        when(disputes.findOpenForReview(hospitalB)).thenReturn(List.of());
+        assertThat(service.openForReview()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("an outcome is audited at the hospital where it was decided")
+    void theOutcomeAuditIsAnchoredWhereDecided() {
+        DeathDispute open = openDispute();
+        actingAdminAt(hospitalA);
+
+        service.uphold(open.getId(), DeathDisputeOutcomeDTO.builder().reason("x").build());
+
+        ArgumentCaptor<AuditEventRequestDTO> event = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(audit).logEvent(event.capture());
+        assertThat(event.getValue().getHospitalId()).isEqualTo(hospitalA);
     }
 }

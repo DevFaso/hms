@@ -6310,4 +6310,5 @@ For the clinician list (proposed alert logic, pending sign-off):
 - D1488: the chart still offers actions the server now refuses for a deceased patient; the refusal is clean and localized.
 - D1489: `appointment-detail.html:59` still offers check-in on a deactivated registration or a deceased patient (branch 3's file); the refusal is clean.
 - D1489 class: the consent `try/catch` inside the check-in and pre-check-in transactions stays: both now refuse first, but any other failure of `TreatmentConsentService.record` would still mark the transaction rollback-only and answer 500.
+- Dispute: an in-basket item filed by the sweep, with no tenant context, keeps the patient's name and loses its patient link (`InBasketServiceImpl.fileItem`). Reminder and recall sweeps still skip a deceased patient under dispute (`AppointmentRepository`, `PatientRecallRepository`). Entered in error's audit does not name the disputes it ended; their rows do.
 - D1495: the refusal is on `hospitalId`, as booking's is, and that field is not on the reschedule form: it reads as a banner.
