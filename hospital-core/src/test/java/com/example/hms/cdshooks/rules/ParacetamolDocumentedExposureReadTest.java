@@ -152,4 +152,25 @@ class ParacetamolDocumentedExposureReadTest {
 
         assertThat(documented.doses().size() + documented.unreadable().size()).isEqualTo(1);
     }
+
+    /** QA D1223 at the dose: the typed name contradicts the paracetamol item it is linked to, so no strength comes from it. */
+    @Test
+    void aTypedNameThatContradictsTheLinkedItemNeverLendsItItsStrength() {
+        MedicationAdministrationRecord row = given("Amoxicilline 500 mg", "2 cp", PrescriptionStatus.SIGNED,
+            LocalDateTime.now(ZoneId.systemDefault()));
+        row.getPrescription().setMedicationCatalogItemId(tablet.getId());
+        when(mar.findGivenSince(any(), any(), any())).thenReturn(List.of(row));
+
+        assertThat(read().doses()).singleElement().satisfies(dose -> assertThat(dose.item()).isNull());
+    }
+
+    @Test
+    void aTypedNameThatAgreesWithTheLinkedItemGivesItsStrength() {
+        MedicationAdministrationRecord row = given("Paracétamol", "2 cp", PrescriptionStatus.SIGNED,
+            LocalDateTime.now(ZoneId.systemDefault()));
+        row.getPrescription().setMedicationCatalogItemId(tablet.getId());
+        when(mar.findGivenSince(any(), any(), any())).thenReturn(List.of(row));
+
+        assertThat(read().doses()).singleElement().satisfies(dose -> assertThat(dose.item()).isEqualTo(tablet));
+    }
 }
