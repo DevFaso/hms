@@ -161,7 +161,7 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
         boolean receptionist = ReceptionistResponseShaping.isReceptionistOnly();
         boolean boxTicked = Boolean.TRUE.equals(request.getHighRisk()) && !receptionist;
         boolean recordedHighRisk = recordedHighRisk(patient.getId(), hospital.getId(), lmp);
-        Boolean reportedHighRisk = receptionist ? null : reportedHighRisk(boxTicked, recordedHighRisk);
+        Boolean reportedHighRisk = reportedHighRisk(boxTicked, recordedHighRisk);
     List<Integer> supplementalWeeks = Optional.ofNullable(request.getSupplementalVisitWeeks()).orElse(List.of());
 
     List<PrenatalVisitRecommendationDTO> recommendations = buildRecommendations(lmp, today, currentWeek, boxTicked || recordedHighRisk, supplementalWeeks, futureAppointments, textLocale);
@@ -335,10 +335,11 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
     }
 
     /**
-     * What the response says about the risk, to a caller who is not the desk. The recorded value is
-     * said only to a role that may read that record. A hospital admin may not, so they read back their
-     * own box and nothing else; for them an empty box is absent rather than false, which would either
-     * claim the pregnancy is not high risk or, set apart from a recorded one, give it away.
+     * What the response says about the risk. The recorded value is said only to a role that may read
+     * that record. A hospital admin may not, so they read back their own box and nothing else; for them
+     * an empty box is absent rather than false, which would either claim the pregnancy is not high risk
+     * or, set apart from a recorded one, give it away. A receptionist holds no such role and their box
+     * was not counted, so for them it is always absent, with no alert.
      */
     private static Boolean reportedHighRisk(boolean boxTicked, boolean recordedHighRisk) {
         if (callerReadsTheAssessment()) {
