@@ -24,6 +24,9 @@ import java.util.UUID;
 @Builder
 public class NewbornAssessmentRequestDTO {
 
+    private static final String SUPPORT_ATTESTATION = "True only when the clinician attests that this support was "
+        + "actually started. Stored as submitted: an alert never sets it; alerts only recommend and request follow-up.";
+
     private UUID hospitalId;
     private UUID registrationId;
     private UUID recordedByStaffId;
@@ -107,8 +110,11 @@ public class NewbornAssessmentRequestDTO {
     private Boolean parentEducationCompleted;
 
     private Boolean escalationRecommended;
+    @io.swagger.v3.oas.annotations.media.Schema(description = SUPPORT_ATTESTATION)
     private Boolean respiratorySupportInitiated;
+    @io.swagger.v3.oas.annotations.media.Schema(description = SUPPORT_ATTESTATION)
     private Boolean glucoseProtocolInitiated;
+    @io.swagger.v3.oas.annotations.media.Schema(description = SUPPORT_ATTESTATION)
     private Boolean thermoregulationSupportInitiated;
 
     /** QA D1424: 5.6 means nothing without its unit, and the alerts read the number. */

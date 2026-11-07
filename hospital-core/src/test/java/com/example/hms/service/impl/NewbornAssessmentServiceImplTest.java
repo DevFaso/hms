@@ -490,7 +490,55 @@ class NewbornAssessmentServiceImplTest {
         NewbornAssessmentResponseDTO response = service.recordAssessment(patientId, NewbornAssessmentRequestDTO.builder()
             .hospitalId(hospitalId).respirationsPerMin(85).build(), recorderId);
         assertTrue(codesOf(response).contains("newborn-respiratory"));
+        org.junit.jupiter.api.Assertions.assertFalse(response.isRespiratorySupportInitiated(), "an alert is not support somebody started");
+    }
+
+    /** The values that used to flip a flag, either side of every band the rules had. */
+    private static java.util.stream.Stream<NewbornAssessmentRequestDTO.NewbornAssessmentRequestDTOBuilder> readingsThatUsedToFlipAFlag() {
+        return java.util.stream.Stream.of(
+            NewbornAssessmentRequestDTO.builder().temperatureCelsius(35.9),
+            NewbornAssessmentRequestDTO.builder().temperatureCelsius(38.1),
+            NewbornAssessmentRequestDTO.builder().respirationsPerMin(29),
+            NewbornAssessmentRequestDTO.builder().respirationsPerMin(71),
+            NewbornAssessmentRequestDTO.builder().glucoseMgDl(44),
+            NewbornAssessmentRequestDTO.builder().glucoseValue(2.4).glucoseUnit(com.example.hms.enums.GlucoseUnit.MMOL_L));
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.MethodSource("readingsThatUsedToFlipAFlag")
+    void cr06_aSubmittedFalseStaysFalse_andTheRecommendationStays(NewbornAssessmentRequestDTO.NewbornAssessmentRequestDTOBuilder reading) {
+        NewbornAssessmentResponseDTO response = service.recordAssessment(patientId, reading.hospitalId(hospitalId)
+            .respiratorySupportInitiated(false).glucoseProtocolInitiated(false).thermoregulationSupportInitiated(false)
+            .build(), recorderId);
+
+        org.junit.jupiter.api.Assertions.assertFalse(response.isRespiratorySupportInitiated());
+        org.junit.jupiter.api.Assertions.assertFalse(response.isGlucoseProtocolInitiated());
+        org.junit.jupiter.api.Assertions.assertFalse(response.isThermoregulationSupportInitiated());
+        assertTrue(response.isEscalationRecommended(), "the alert still escalates");
+        org.junit.jupiter.api.Assertions.assertFalse(response.getFollowUpActions().isEmpty(), "the follow-up is still requested");
+        org.junit.jupiter.api.Assertions.assertFalse(response.getAlerts().isEmpty(), "the alert still stands");
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.MethodSource("readingsThatUsedToFlipAFlag")
+    void cr06_noSubmittedValueIsReadAsFalse(NewbornAssessmentRequestDTO.NewbornAssessmentRequestDTOBuilder reading) {
+        NewbornAssessmentResponseDTO response = service.recordAssessment(patientId, reading.hospitalId(hospitalId).build(), recorderId);
+
+        org.junit.jupiter.api.Assertions.assertFalse(response.isRespiratorySupportInitiated());
+        org.junit.jupiter.api.Assertions.assertFalse(response.isGlucoseProtocolInitiated());
+        org.junit.jupiter.api.Assertions.assertFalse(response.isThermoregulationSupportInitiated());
+    }
+
+    @Test
+    void cr06_aSubmittedTrueIsKept_withNoAlertAtAll() {
+        NewbornAssessmentResponseDTO response = service.recordAssessment(patientId, NewbornAssessmentRequestDTO.builder()
+            .hospitalId(hospitalId).temperatureCelsius(36.8)
+            .respiratorySupportInitiated(true).glucoseProtocolInitiated(true).thermoregulationSupportInitiated(true)
+            .build(), recorderId);
+
         assertTrue(response.isRespiratorySupportInitiated());
+        assertTrue(response.isGlucoseProtocolInitiated());
+        assertTrue(response.isThermoregulationSupportInitiated());
     }
 
     @Test

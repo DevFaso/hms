@@ -61,8 +61,6 @@ public final class NewbornAlertRules {
     public static final int GLUCOSE_CRITICAL_MG_DL = 45;
     /** Older than the sources and stricter: stays urgent. */
     public static final int RESPIRATORY_LOW = 30;
-    /** Above this the record also says respiratory support was started, as it always has. */
-    public static final int RESPIRATORY_SUPPORT_HIGH = 70;
     private static final double CAUTION_TEMPERATURE_LOW = 36.5;
     private static final double CAUTION_TEMPERATURE_HIGH = 37.5;
 
@@ -87,11 +85,15 @@ public final class NewbornAlertRules {
         }
     }
 
-    /** One warning, and what it adds to the record. */
+    /**
+     * One warning, and the follow-up it requests. CR-06: a finding recommends; it never records
+     * that treatment was given. Whether support was started is only what the clinician submitted
+     * (NewbornSupportFlagGuardTest).
+     */
     public record Finding(NewbornAlertType type, NewbornAlertSeverity severity, String code,
-                          NewbornFollowUpAction followUp, boolean startsSupport) {
+                          NewbornFollowUpAction followUp) {
         private static Finding of(NewbornAlertType type, NewbornAlertSeverity severity, String code) {
-            return new Finding(type, severity, code, null, false);
+            return new Finding(type, severity, code, null);
         }
     }
 
@@ -132,11 +134,8 @@ public final class NewbornAlertRules {
             return;
         }
         if (temperature < CONCERN_TEMPERATURE_LOW || temperature >= CONCERN_TEMPERATURE_HIGH) {
-            // 38.0 itself is new to the urgent band: it alerts, and the record does not
-            // claim that support started, which it has only ever said above 38.
             findings.add(new Finding(NewbornAlertType.THERMOREGULATION, NewbornAlertSeverity.URGENT,
-                "newborn-temperature-critical", NewbornFollowUpAction.THERMAL_SUPPORT,
-                temperature < CONCERN_TEMPERATURE_LOW || temperature > CONCERN_TEMPERATURE_HIGH));
+                "newborn-temperature-critical", NewbornFollowUpAction.THERMAL_SUPPORT));
         } else if (temperature < CAUTION_TEMPERATURE_LOW || temperature > CAUTION_TEMPERATURE_HIGH) {
             findings.add(Finding.of(NewbornAlertType.THERMOREGULATION, NewbornAlertSeverity.CAUTION, "newborn-temperature"));
         }
@@ -152,7 +151,7 @@ public final class NewbornAlertRules {
             // alerts and asks for a recheck; only a previous reading of the same baby says more.
             findings.add(new Finding(NewbornAlertType.CARDIOVASCULAR, NewbornAlertSeverity.URGENT,
                 reading.previousHeartRateOfConcern() ? "newborn-heart-rate-repeated" : "newborn-heart-rate",
-                NewbornFollowUpAction.NICU_CONSULT, false));
+                NewbornFollowUpAction.NICU_CONSULT));
         }
         if (heartRate < REFERENCE_HEART_RATE_LOW || heartRate > REFERENCE_HEART_RATE_HIGH) {
             findings.add(referenceNotice(NewbornAlertType.CARDIOVASCULAR, "newborn-reference-heart-rate", reading.preterm()));
@@ -166,8 +165,7 @@ public final class NewbornAlertRules {
         }
         if (respirations >= CONCERN_RESPIRATORY_HIGH || respirations < RESPIRATORY_LOW) {
             findings.add(new Finding(NewbornAlertType.RESPIRATORY, NewbornAlertSeverity.URGENT, "newborn-respiratory",
-                NewbornFollowUpAction.RESPIRATORY_SUPPORT,
-                respirations < RESPIRATORY_LOW || respirations > RESPIRATORY_SUPPORT_HIGH));
+                NewbornFollowUpAction.RESPIRATORY_SUPPORT));
         }
         if (respirations < REFERENCE_RESPIRATORY_LOW || respirations > REFERENCE_RESPIRATORY_HIGH) {
             findings.add(referenceNotice(NewbornAlertType.RESPIRATORY, "newborn-reference-respiratory", reading.preterm()));
@@ -181,7 +179,7 @@ public final class NewbornAlertRules {
     private static void oxygenation(Integer spo2, List<Finding> findings) {
         if (spo2 != null && spo2 < CONCERN_SPO2) {
             findings.add(new Finding(NewbornAlertType.OXYGENATION, NewbornAlertSeverity.URGENT, "newborn-oxygenation",
-                NewbornFollowUpAction.OXYGEN_THERAPY, false));
+                NewbornFollowUpAction.OXYGEN_THERAPY));
         }
     }
 
@@ -192,7 +190,7 @@ public final class NewbornAlertRules {
         }
         if (exactMgDl(reading) < GLUCOSE_CRITICAL_MG_DL) {
             findings.add(new Finding(NewbornAlertType.GLUCOSE, NewbornAlertSeverity.URGENT, "newborn-glucose",
-                NewbornFollowUpAction.GLUCOSE_MONITORING, true));
+                NewbornFollowUpAction.GLUCOSE_MONITORING));
             return;
         }
         Long hours = reading.hoursSinceBirth();
@@ -200,11 +198,11 @@ public final class NewbornAlertRules {
             if (below(reading, GLUCOSE_FIRST_PERIOD_MMOL, GLUCOSE_FIRST_PERIOD_MG_DL)) {
                 findings.add(new Finding(NewbornAlertType.GLUCOSE, NewbornAlertSeverity.URGENT,
                     hours == null ? "newborn-glucose-unknown-age" : "newborn-glucose-first-72h",
-                    NewbornFollowUpAction.GLUCOSE_MONITORING, false));
+                    NewbornFollowUpAction.GLUCOSE_MONITORING));
             }
         } else if (below(reading, GLUCOSE_AFTER_MMOL, GLUCOSE_AFTER_MG_DL)) {
             findings.add(new Finding(NewbornAlertType.GLUCOSE, NewbornAlertSeverity.CAUTION, "newborn-glucose-after-72h",
-                NewbornFollowUpAction.GLUCOSE_MONITORING, false));
+                NewbornFollowUpAction.GLUCOSE_MONITORING));
         }
     }
 

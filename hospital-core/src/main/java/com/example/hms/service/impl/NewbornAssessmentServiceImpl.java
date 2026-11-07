@@ -286,9 +286,6 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
             if (finding.followUp() != null) {
                 assessment.addFollowUpAction(finding.followUp());
             }
-            if (finding.startsSupport()) {
-                markSupportStarted(assessment, finding.type());
-            }
             urgentDetected |= finding.severity() == NewbornAlertSeverity.URGENT;
         }
         alerts.forEach(assessment::addAlert);
@@ -336,16 +333,6 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
                 && Objects.equals(previous.getDeliveryRecord().getId(), delivery.getId())))
             .filter(previous -> NewbornAlertRules.heartRateOfConcern(previous.getHeartRateBpm()))
             .isPresent();
-    }
-
-    /** The record says support started in the bands where it always has. */
-    private static void markSupportStarted(NewbornAssessment assessment, NewbornAlertType type) {
-        switch (type) {
-            case THERMOREGULATION -> assessment.setThermoregulationSupportInitiated(true);
-            case RESPIRATORY -> assessment.setRespiratorySupportInitiated(true);
-            case GLUCOSE -> assessment.setGlucoseProtocolInitiated(true);
-            default -> { /* no support flag for the other types */ }
-        }
     }
 
     private boolean evaluateApgar(NewbornAssessment assessment, List<NewbornAssessmentAlert> alerts) {

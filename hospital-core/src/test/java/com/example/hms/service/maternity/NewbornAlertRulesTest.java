@@ -91,13 +91,14 @@ class NewbornAlertRulesTest {
         assertExactly(codes(breaths(value, false)), urgent, notice);
     }
 
-    @ParameterizedTest(name = "RR {0} says support started: {1}")
-    @CsvSource({"29,true", "30,false", "60,false", "70,false", "71,true"})
-    @DisplayName("the record claims support only in the bands where it always did")
-    void respiratorySupportFlag(int value, boolean started) {
+    @ParameterizedTest(name = "RR {0} asks for respiratory support as follow-up")
+    @CsvSource({"29", "60", "70", "71"})
+    @DisplayName("CR-06: an abnormal rate requests the follow-up; it records nothing as done")
+    void respiratoryFollowUpIsARequest(int value) {
         assertThat(NewbornAlertRules.evaluate(breaths(value, false)))
             .filteredOn(f -> "newborn-respiratory".equals(f.code()))
-            .allSatisfy(f -> assertThat(f.startsSupport()).isEqualTo(started));
+            .singleElement()
+            .satisfies(f -> assertThat(f.followUp()).isEqualTo(com.example.hms.enums.NewbornFollowUpAction.RESPIRATORY_SUPPORT));
     }
 
     @ParameterizedTest(name = "SpO2 {0}: {1}")
@@ -180,14 +181,14 @@ class NewbornAlertRulesTest {
         assertThat(codes(glucose(GlucoseUnit.MMOL_L.toMgDl(2.49), 2.49, 100L))).containsEntry("newborn-glucose", NewbornAlertSeverity.URGENT);
     }
 
-    @ParameterizedTest(name = "T {0} says support started: {1}")
-    @CsvSource({"35.9,true", "38.0,false", "38.1,true"})
-    @DisplayName("38.0 is urgent, and the record does not claim support started")
-    void temperatureSupportFlag(double value, boolean started) {
+    @ParameterizedTest(name = "T {0} asks for thermal support as follow-up")
+    @CsvSource({"35.9", "38.0", "38.1"})
+    @DisplayName("CR-06: an urgent temperature requests the follow-up; it records nothing as done")
+    void temperatureFollowUpIsARequest(double value) {
         assertThat(NewbornAlertRules.evaluate(new NewbornAlertRules.Reading(value, null, null, null, null, null, null, null, 1L, false, false)))
             .filteredOn(f -> "newborn-temperature-critical".equals(f.code()))
             .singleElement()
-            .satisfies(f -> assertThat(f.startsSupport()).isEqualTo(started));
+            .satisfies(f -> assertThat(f.followUp()).isEqualTo(com.example.hms.enums.NewbornFollowUpAction.THERMAL_SUPPORT));
     }
 
     @Test
