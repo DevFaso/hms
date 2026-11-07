@@ -1,5 +1,15 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  OnInit,
+  DestroyRef,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { serverInstant } from '../shared/date-utils';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
@@ -40,6 +50,107 @@ export class RegistrationsComponent implements OnInit {
   private readonly translate = inject(TranslateService);
 
   private hospitalId: string | null = null;
+  private readonly destroyRef = inject(DestroyRef);
+  private listRequest = 0;
+  readonly searchTerm = signal('');
+  readonly stayFilter = signal<PatientStayStatus | ''>('');
+  readonly sortOrder = signal<'name' | 'newest'>('name');
+  readonly pageIndex = signal(0);
+  readonly pageSize = signal(10);
+  readonly limitedResults = signal(false);
+  readonly filtered = computed(() => {
+    const term = this.searchTerm().toLowerCase().trim();
+    const stamp = (r: HospitalRegistration) => {
+      const value = r.registrationDate ? serverInstant(r.registrationDate).getTime() : 0;
+      return Number.isFinite(value) ? value : 0;
+    };
+    return this.registrations()
+      .filter(
+        (r) =>
+          (!this.stayFilter() || r.stayStatus === this.stayFilter()) &&
+          (!term ||
+            [
+              r.patientFullName,
+              r.patientUsername,
+              r.mri,
+              r.registrationCode,
+              r.currentRoom,
+              r.currentBed,
+              r.attendingPhysicianName,
+              r.patientEmail,
+              r.patientPhone,
+            ].some((v) => v?.toLowerCase().includes(term))),
+      )
+      .sort((a, b) =>
+        this.sortOrder() === 'newest'
+          ? stamp(b) - stamp(a)
+          : (a.patientFullName ?? a.patientUsername ?? '').localeCompare(
+              b.patientFullName ?? b.patientUsername ?? '',
+            ),
+      );
+  });
+  readonly metrics = computed(
+    () =>
+      [
+        {
+          id: '',
+          label: 'REGISTRATIONS.LOADED',
+          icon: 'how_to_reg',
+          count: this.registrations().length,
+        },
+        {
+          id: 'ADMITTED',
+          label: 'REGISTRATIONS.STAY_ADMITTED',
+          icon: 'hotel',
+          count: this.registrations().filter((r) => r.stayStatus === 'ADMITTED').length,
+        },
+        {
+          id: 'READY_FOR_DISCHARGE',
+          label: 'REGISTRATIONS.STAY_READY_FOR_DISCHARGE',
+          icon: 'assignment_turned_in',
+          count: this.registrations().filter((r) => r.stayStatus === 'READY_FOR_DISCHARGE').length,
+        },
+        {
+          id: 'HOLD',
+          label: 'REGISTRATIONS.STAY_HOLD',
+          icon: 'pause_circle',
+          count: this.registrations().filter((r) => r.stayStatus === 'HOLD').length,
+        },
+      ] as const,
+  );
+  readonly totalPages = computed(() =>
+    Math.max(1, Math.ceil(this.filtered().length / this.pageSize())),
+  );
+  readonly currentPage = computed(() => Math.min(this.pageIndex(), this.totalPages() - 1));
+  readonly pagedRows = computed(() =>
+    this.filtered().slice(
+      this.currentPage() * this.pageSize(),
+      (this.currentPage() + 1) * this.pageSize(),
+    ),
+  );
+  readonly resultStart = computed(() =>
+    this.filtered().length ? this.currentPage() * this.pageSize() + 1 : 0,
+  );
+  readonly resultEnd = computed(() =>
+    Math.min((this.currentPage() + 1) * this.pageSize(), this.filtered().length),
+  );
+  setPage(page: number): void {
+    this.pageIndex.set(Math.max(0, Math.min(page, this.totalPages() - 1)));
+  }
+  filterChanged(): void {
+    this.pageIndex.set(0);
+  }
+  selectMetric(status: PatientStayStatus | ''): void {
+    this.stayFilter.set(status);
+    this.searchTerm.set('');
+    this.filterChanged();
+  }
+  clearFilters(): void {
+    this.stayFilter.set('');
+    this.searchTerm.set('');
+    this.sortOrder.set('name');
+    this.filterChanged();
+  }
 
   readonly canManage = this.roleContext.hasAnyActiveRole([
     'ROLE_RECEPTIONIST',
@@ -84,16 +195,21 @@ export class RegistrationsComponent implements OnInit {
   deleteBusy = signal(false);
 
   ngOnInit(): void {
-    this.hospitalId = this.roleContext.activeHospitalId ?? this.auth.getHospitalId();
+    this.hospitalId =
+      this.roleContext.effectiveHospitalIdForRequest() ??
+      this.roleContext.activeHospitalId ??
+      this.auth.getHospitalId();
     this.load();
   }
 
   setActiveFilter(filter: ActiveFilter): void {
     this.activeFilter.set(filter);
+    this.pageIndex.set(0);
     this.load();
   }
 
   load(): void {
+    const request = ++this.listRequest;
     this.loading.set(true);
     this.loadError.set(false);
     const filter = this.activeFilter();
@@ -103,12 +219,17 @@ export class RegistrationsComponent implements OnInit {
         active: filter === 'all' ? undefined : filter === 'active',
         size: 200,
       })
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (registrations) => {
+          if (request !== this.listRequest) return;
+          this.limitedResults.set((registrations?.length ?? 0) >= 200);
           this.registrations.set(registrations ?? []);
           this.loading.set(false);
         },
         error: () => {
+          if (request !== this.listRequest) return;
+          this.registrations.set([]);
           this.loadError.set(true);
           this.loading.set(false);
           this.toast.error(this.translate.instant('REGISTRATIONS.LOAD_ERROR'));

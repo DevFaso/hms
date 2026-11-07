@@ -1,10 +1,15 @@
-<div class="page-container">
+<div class="page-container operations-dashboard">
   <div class="page-header">
     <div>
-      <h1>{{ 'BEDS.TITLE' | translate }}</h1>
+      <p class="dashboard-eyebrow">{{ 'BEDS.WORKSPACE' | translate }}</p>
+      <h1 class="page-title">{{ 'BEDS.TITLE' | translate }}</h1>
       <p class="page-subtitle">{{ 'BEDS.SUBTITLE' | translate }}</p>
     </div>
     <div class="header-actions">
+      <button type="button" class="btn-secondary" (click)="loadWards()" [disabled]="loading()">
+        <span class="material-symbols-outlined" aria-hidden="true">refresh</span
+        >{{ 'COMMON.REFRESH' | translate }}
+      </button>
       <label class="toggle-inactive">
         <input type="checkbox" [checked]="showInactive()" (change)="toggleInactive()" />
         {{ 'BEDS.SHOW_INACTIVE' | translate }}
@@ -16,81 +21,177 @@
     </div>
   </div>
 
-  <!-- ═══════════ WARDS ═══════════ -->
-  @if (!loading() && wards().length === 0) {
-    <div class="empty-state">
-      <span class="material-symbols-outlined empty-icon">domain</span>
-      <h3>{{ 'BEDS.NO_WARDS' | translate }}</h3>
-      <p>{{ 'BEDS.NO_WARDS_HINT' | translate }}</p>
+  <section class="dashboard-overview">
+    <div class="panel-heading">
+      <div>
+        <h2>{{ 'BEDS.CAPACITY_OVERVIEW' | translate }}</h2>
+        <p>{{ 'BEDS.CAPACITY_HELP' | translate }}</p>
+      </div>
     </div>
-  }
-  @if (wards().length > 0) {
-    <div class="data-table">
-      <table>
-        <thead>
-          <tr>
-            <th scope="col">{{ 'BEDS.WARD_CODE' | translate }}</th>
-            <th scope="col">{{ 'BEDS.WARD_NAME' | translate }}</th>
-            <th scope="col">{{ 'BEDS.WARD_TYPE' | translate }}</th>
-            <th scope="col">{{ 'BEDS.FLOOR' | translate }}</th>
-            <th scope="col">{{ 'BEDS.TOTAL_BEDS' | translate }}</th>
-            <th scope="col">{{ 'BEDS.AVAILABLE' | translate }}</th>
-            <th scope="col">{{ 'BEDS.OCCUPIED' | translate }}</th>
-            <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
-            <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (w of wards(); track w.id) {
-            <tr
-              class="data-row ward-row"
-              [class.selected]="selectedWardId() === w.id"
-              (click)="selectWard(w)"
-              (keydown.enter)="selectWard(w)"
-              tabindex="0"
-            >
-              <td class="cell-primary">{{ w.code }}</td>
-              <td>{{ w.name }}</td>
-              <td>{{ w.wardType | enumLabel: 'wardType' }}</td>
-              <td>{{ w.floor ?? '—' }}</td>
-              <td>{{ w.totalBeds }}</td>
-              <td class="count-available">{{ w.availableBeds }}</td>
-              <td class="count-occupied">{{ w.occupiedBeds }}</td>
-              <td>
-                <span class="status-pill" [class.pill-inactive]="!w.active">
-                  {{ (w.active ? 'BEDS.ACTIVE' : 'BEDS.INACTIVE') | translate }}
-                </span>
-              </td>
-              <td>
-                <div class="action-group">
-                  <button
-                    class="icon-btn"
-                    (click)="openEditWard(w); $event.stopPropagation()"
-                    [title]="'COMMON.EDIT' | translate"
-                  >
-                    <span class="material-symbols-outlined">edit</span>
-                  </button>
-                  @if (w.totalBeds === 0) {
-                    <button
-                      class="icon-btn icon-danger"
-                      (click)="deleteWard(w); $event.stopPropagation()"
-                      [title]="'COMMON.DELETE' | translate"
-                    >
-                      <span class="material-symbols-outlined">delete</span>
-                    </button>
-                  }
-                </div>
-              </td>
-            </tr>
+    <div class="summary-cards five">
+      <div class="summary-card total-card">
+        <span class="material-symbols-outlined metric-icon" aria-hidden="true">bed</span
+        ><strong>{{ loading() || loadError() ? '—' : totals().beds }}</strong
+        ><span>{{ 'BEDS.TOTAL_BEDS' | translate }}</span>
+      </div>
+      <div class="summary-card">
+        <span class="material-symbols-outlined metric-icon" aria-hidden="true">check_circle</span
+        ><strong>{{ loading() || loadError() ? '—' : totals().available }}</strong
+        ><span>{{ 'BEDS.AVAILABLE' | translate }}</span>
+      </div>
+      <div class="summary-card">
+        <span class="material-symbols-outlined metric-icon" aria-hidden="true">hotel</span
+        ><strong>{{ loading() || loadError() ? '—' : totals().occupied }}</strong
+        ><span>{{ 'BEDS.OCCUPIED' | translate }}</span>
+      </div>
+      <div class="summary-card">
+        <span class="material-symbols-outlined metric-icon" aria-hidden="true">pie_chart</span
+        ><strong>{{ loading() || loadError() ? '—' : occupancyRate() + '%' }}</strong
+        ><span>{{ 'BEDS.OCCUPANCY_RATE' | translate }}</span>
+      </div>
+      <div class="summary-card">
+        <span class="material-symbols-outlined metric-icon" aria-hidden="true">domain</span
+        ><strong>{{ loading() || loadError() ? '—' : totals().wards }}</strong
+        ><span>{{ 'BEDS.ACTIVE_WARDS' | translate }}</span>
+      </div>
+    </div>
+  </section>
+  <section class="directory-panel">
+    <div class="panel-heading">
+      <div>
+        <h2>{{ 'BEDS.UNIT_DIRECTORY' | translate }}</h2>
+        <p>{{ 'BEDS.SELECT_WARD_HELP' | translate }}</p>
+      </div>
+      <span class="result-count" role="status">{{
+        'BEDS.MATCHING_WARDS' | translate: { count: filteredWards().length }
+      }}</span>
+    </div>
+    <div class="dashboard-filters">
+      <label class="dashboard-search"
+        ><span class="material-symbols-outlined" aria-hidden="true">search</span
+        ><input
+          [attr.aria-label]="'BEDS.SEARCH_WARDS' | translate"
+          [placeholder]="'BEDS.SEARCH_WARDS' | translate"
+          [ngModel]="wardSearch()"
+          (ngModelChange)="wardSearch.set($event)" /></label
+      ><label
+        >{{ 'BEDS.WARD_TYPE' | translate
+        }}<select [ngModel]="wardTypeFilter()" (ngModelChange)="wardTypeFilter.set($event)">
+          <option value="">{{ 'COMMON.ALL' | translate }}</option>
+          @for (type of wardTypes; track type) {
+            <option [value]="type">{{ type | enumLabel: 'wardType' }}</option>
           }
-        </tbody>
-      </table>
+        </select></label
+      ><label
+        >{{ 'BEDS.SORT_BY' | translate
+        }}<select [ngModel]="wardSort()" (ngModelChange)="wardSort.set($event)">
+          <option value="name">{{ 'BEDS.SORT_NAME' | translate }}</option>
+          <option value="available">{{ 'BEDS.SORT_AVAILABLE' | translate }}</option>
+          <option value="occupied">{{ 'BEDS.SORT_OCCUPIED' | translate }}</option>
+        </select></label
+      ><button type="button" class="filter-reset" (click)="resetWardFilters()">
+        {{ 'COMMON.CLEAR_ALL_FILTERS' | translate }}
+      </button>
     </div>
-  }
+    @if (loading()) {
+      <p class="loading-state" role="status">{{ 'COMMON.LOADING' | translate }}</p>
+    }
+    @if (loadError()) {
+      <div class="dashboard-error" role="alert">
+        <p>{{ 'BEDS.TOAST.LOAD_FAILED' | translate }}</p>
+        <button type="button" class="btn-secondary" (click)="loadWards()">
+          {{ 'COMMON.RETRY' | translate }}
+        </button>
+      </div>
+    }
+    <!-- ═══════════ WARDS ═══════════ -->
+    @if (!loading() && !loadError() && filteredWards().length === 0) {
+      <div class="empty-state">
+        <span class="material-symbols-outlined empty-icon">domain</span>
+        <h3>{{ 'BEDS.NO_WARDS' | translate }}</h3>
+        <p>{{ 'BEDS.NO_WARDS_HINT' | translate }}</p>
+      </div>
+    }
+    @if (!loading() && filteredWards().length > 0) {
+      <div
+        class="data-table"
+        tabindex="0"
+        role="region"
+        [attr.aria-label]="'BEDS.UNIT_DIRECTORY' | translate"
+      >
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">{{ 'BEDS.WARD_CODE' | translate }}</th>
+              <th scope="col">{{ 'BEDS.WARD_NAME' | translate }}</th>
+              <th scope="col">{{ 'BEDS.WARD_TYPE' | translate }}</th>
+              <th scope="col">{{ 'BEDS.FLOOR' | translate }}</th>
+              <th scope="col">{{ 'BEDS.TOTAL_BEDS' | translate }}</th>
+              <th scope="col">{{ 'BEDS.AVAILABLE' | translate }}</th>
+              <th scope="col">{{ 'BEDS.OCCUPIED' | translate }}</th>
+              <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+              <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (w of filteredWards(); track w.id) {
+              <tr class="data-row ward-row" [class.selected]="selectedWardId() === w.id">
+                <td class="cell-primary">{{ w.code }}</td>
+                <td>
+                  <button
+                    type="button"
+                    class="ward-select"
+                    [attr.aria-pressed]="selectedWardId() === w.id"
+                    (click)="selectWard(w)"
+                    data-testid="select-ward"
+                  >
+                    {{ w.name
+                    }}<span class="material-symbols-outlined" aria-hidden="true"
+                      >arrow_forward</span
+                    >
+                  </button>
+                </td>
+                <td>{{ w.wardType | enumLabel: 'wardType' }}</td>
+                <td>{{ w.floor ?? '—' }}</td>
+                <td>{{ w.totalBeds }}</td>
+                <td class="count-available">{{ w.availableBeds }}</td>
+                <td class="count-occupied">{{ w.occupiedBeds }}</td>
+                <td>
+                  <span class="status-pill" [class.pill-inactive]="!w.active">
+                    {{ (w.active ? 'BEDS.ACTIVE' : 'BEDS.INACTIVE') | translate }}
+                  </span>
+                </td>
+                <td>
+                  <div class="action-group">
+                    <button
+                      class="icon-btn"
+                      (click)="openEditWard(w); $event.stopPropagation()"
+                      [title]="'COMMON.EDIT' | translate"
+                    >
+                      <span class="material-symbols-outlined">edit</span>
+                    </button>
+                    @if (w.totalBeds === 0) {
+                      <button
+                        class="icon-btn icon-danger"
+                        (click)="deleteWard(w); $event.stopPropagation()"
+                        [title]="'COMMON.DELETE' | translate"
+                      >
+                        <span class="material-symbols-outlined">delete</span>
+                      </button>
+                    }
+                  </div>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </section>
 
   <!-- ═══════════ BEDS OF SELECTED WARD ═══════════ -->
   @if (selectedWard(); as ward) {
-    <div class="beds-section">
+    <section class="beds-section" data-testid="selected-ward-panel">
       <div class="beds-header">
         <h2>{{ 'BEDS.BEDS_IN' | translate: { ward: ward.name } }}</h2>
         <button class="btn-primary" (click)="openCreateBed()">
@@ -99,14 +200,50 @@
         </button>
       </div>
 
-      @if (!bedsLoading() && beds().length === 0) {
+      <div class="dashboard-filters">
+        <label class="dashboard-search"
+          ><span class="material-symbols-outlined" aria-hidden="true">search</span
+          ><input
+            [attr.aria-label]="'BEDS.SEARCH_BEDS' | translate"
+            [placeholder]="'BEDS.SEARCH_BEDS' | translate"
+            [ngModel]="bedSearch()"
+            (ngModelChange)="bedSearch.set($event)" /></label
+        ><label
+          >{{ 'COMMON.STATUS' | translate
+          }}<select [ngModel]="bedFilter()" (ngModelChange)="bedFilter.set($event)">
+            <option value="">{{ 'COMMON.ALL' | translate }}</option>
+            @for (status of allBedStatuses; track status) {
+              <option [value]="status">{{ status | enumLabel: 'bedStatus' }}</option>
+            }
+          </select></label
+        ><button type="button" class="filter-reset" (click)="closeWard()">
+          {{ 'COMMON.CLOSE' | translate }}
+        </button>
+      </div>
+      @if (bedsLoading()) {
+        <p class="loading-state" role="status">{{ 'COMMON.LOADING' | translate }}</p>
+      }
+      @if (bedsError()) {
+        <div class="dashboard-error" role="alert">
+          <p>{{ 'BEDS.TOAST.LOAD_FAILED' | translate }}</p>
+          <button type="button" class="btn-secondary" (click)="retryBeds()">
+            {{ 'COMMON.RETRY' | translate }}
+          </button>
+        </div>
+      }
+      @if (!bedsLoading() && !bedsError() && filteredBeds().length === 0) {
         <div class="empty-state">
           <span class="material-symbols-outlined empty-icon">bed</span>
           <h3>{{ 'BEDS.NO_BEDS' | translate }}</h3>
         </div>
       }
-      @if (beds().length > 0) {
-        <div class="data-table">
+      @if (!bedsLoading() && filteredBeds().length > 0) {
+        <div
+          class="data-table"
+          tabindex="0"
+          role="region"
+          [attr.aria-label]="'BEDS.BEDS_IN' | translate: { ward: ward.name }"
+        >
           <table>
             <thead>
               <tr>
@@ -120,7 +257,7 @@
               </tr>
             </thead>
             <tbody>
-              @for (b of beds(); track b.id) {
+              @for (b of filteredBeds(); track b.id) {
                 <tr class="data-row" [class.row-inactive]="!b.active">
                   <td class="cell-primary">{{ b.bedNumber }}</td>
                   <td>{{ b.roomNumber || '—' }}</td>
@@ -173,7 +310,7 @@
           </table>
         </div>
       }
-    </div>
+    </section>
   }
 </div>
 
