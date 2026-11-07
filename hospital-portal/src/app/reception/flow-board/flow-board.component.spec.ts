@@ -290,4 +290,29 @@ describe('FlowBoardComponent', () => {
       expect(component.statusChanged.emit).not.toHaveBeenCalled();
     });
   });
+
+  describe('QA D1445: no empty walk-in column', () => {
+    it('draws no walk-in column, and a card the server files apart is with the arrived ones', () => {
+      expect(component.columns.map((c) => c.key)).not.toContain('walkIn');
+      const card = makeItem({ status: 'WALK_IN', appointmentId: null });
+      component.board = {
+        scheduled: [],
+        confirmed: [],
+        arrived: [],
+        inProgress: [],
+        completed: [],
+        noShow: [],
+        walkIn: [card],
+      } as never;
+      component.ngOnChanges({ board: {} as never });
+      expect(component.localBoard.arrived).toEqual([card]);
+      expect(component.localBoard.walkIn).toEqual([]);
+    });
+
+    it('its card keeps its drop rule: to no-show it asks to close the unseen visit', () => {
+      spyOn(component.closeUnseenRequested, 'emit');
+      component.drop(makeDropEvent([makeItem({ status: 'WALK_IN' })], []), 'noShow');
+      expect(component.closeUnseenRequested.emit).toHaveBeenCalled();
+    });
+  });
 });

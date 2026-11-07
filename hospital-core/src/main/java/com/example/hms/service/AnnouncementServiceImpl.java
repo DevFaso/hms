@@ -61,7 +61,7 @@ public class AnnouncementServiceImpl implements AnnouncementService {
     @Transactional(readOnly = true)
     public AnnouncementResponseDTO getAnnouncement(UUID id) {
         Announcement announcement = announcementRepository.findById(id)
-            .orElseThrow(() -> new RuntimeException("Announcement not found"));
+            .orElseThrow(() -> new com.example.hms.exception.ResourceNotFoundException(ANNOUNCEMENT_NOT_FOUND_KEY, id));
         return toDTO(announcement);
     }
 
@@ -109,7 +109,7 @@ public class AnnouncementServiceImpl implements AnnouncementService {
     @Transactional
     public AnnouncementResponseDTO updateAnnouncement(UUID id, String text) {
         Announcement announcement = announcementRepository.findById(id)
-            .orElseThrow(() -> new RuntimeException("Announcement not found"));
+            .orElseThrow(() -> new com.example.hms.exception.ResourceNotFoundException(ANNOUNCEMENT_NOT_FOUND_KEY, id));
         // QA r5 tenancy sweep: a write loads under the tenant guard.
         com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(announcement.getHospital(), ANNOUNCEMENT_NOT_FOUND_KEY, id);
         announcement.setText(text);

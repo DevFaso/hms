@@ -101,7 +101,8 @@
                       >&#x2713; {{ 'TRACKER.PRE_CHECKIN_BADGE' | translate }}</span
                     >
                   }
-                  @if (col.key === 'triage' || col.key === 'arrived') {
+                  <!-- QA D1431 (RCPT-CLIN): triage is a clinician's act; the server refuses the desk too. -->
+                  @if (!frontDeskOnly && (col.key === 'triage' || col.key === 'arrived')) {
                     <button
                       class="btn-complete-triage"
                       (click)="openTriage(item)"

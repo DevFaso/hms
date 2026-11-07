@@ -67,6 +67,7 @@ public class PatientHospitalRegistrationMapper {
             // Registration
             .registrationDate(entity.getRegistrationDate())
             .active(entity.isActive())
+            .deactivationReason(entity.getDeactivationReason())
             .stayStatus(entity.getStayStatus())
             .stayStatusUpdatedAt(entity.getStayStatusUpdatedAt())
             .currentRoom(entity.getCurrentRoom())
@@ -109,6 +110,7 @@ public class PatientHospitalRegistrationMapper {
             // Registration
             .registrationDate(row.registrationDate())
             .active(Boolean.TRUE.equals(row.active()))
+            .deactivationReason(row.deactivationReason())
             .stayStatus(row.stayStatus())
             .stayStatusUpdatedAt(row.stayStatusUpdatedAt())
             .currentRoom(row.currentRoom())

@@ -2072,7 +2072,7 @@ describe('QA D254: dashboard billing widget', () => {
     balance: 0,
     status: 'PAID',
     facility: 'Clinic',
-    description: 'Consultation',
+    visitType: 'CONSULTATION',
     ...over,
   });
 

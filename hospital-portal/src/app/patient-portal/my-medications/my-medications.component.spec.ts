@@ -1,3 +1,4 @@
+import { HttpHeaders, HttpResponse } from '@angular/common/http';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
@@ -19,7 +20,13 @@ describe('MyMedicationsComponent', () => {
     getMyPrescriptions: () => of([]),
     getMyRefills: () => of([]),
     requestRefill: () => of({}),
-    getMyPrintedPrescription: (_id: string) => of(new Blob(['%PDF-1.4'])),
+    getMyPrintedPrescription: (_id: string) =>
+      of(
+        new HttpResponse({
+          body: new Blob(['%PDF-1.4']),
+          headers: new HttpHeaders({ 'Content-Disposition': 'inline; filename="ordonnance.pdf"' }),
+        }),
+      ),
   };
 
   const mockToast = {
@@ -76,12 +83,22 @@ describe('MyMedicationsComponent', () => {
     const el: HTMLElement = fixture.nativeElement;
     expect(el.querySelector('[data-testid="rx-printed-copy-rx-s"]')).toBeNull();
     const fetch = spyOn(mockPortalService, 'getMyPrintedPrescription').and.callThrough();
-    const open = spyOn(window, 'open');
+    // QA D1443: saved under the server's readable name, never a tab named after a random id.
+    const links: HTMLAnchorElement[] = [];
+    const create = document.createElement.bind(document);
+    spyOn(document, 'createElement').and.callFake((tag: string) => {
+      const made = create(tag);
+      if (tag === 'a') {
+        spyOn(made as HTMLAnchorElement, 'click');
+        links.push(made as HTMLAnchorElement);
+      }
+      return made;
+    });
 
     (el.querySelector('[data-testid="rx-printed-copy-rx-p"]') as HTMLButtonElement).click();
 
     expect(fetch).toHaveBeenCalledWith('rx-p');
-    expect(open).toHaveBeenCalled();
+    expect(links[0].download).toBe('ordonnance.pdf');
   });
 
   it('should toggle medication expand', () => {
@@ -497,5 +514,27 @@ describe('MyMedicationsComponent — ready for collection', () => {
       expect(el.querySelector('[data-testid="medications-load-failed"]')).not.toBeNull();
       expect(el.querySelector('.portal-empty')).toBeNull();
     });
+  });
+
+  it('QA D1442: the prescriptions show a page and the total, and every one is a click away', () => {
+    component.prescriptions.set(
+      Array.from({ length: 45 }, (_, i) => ({ id: 'rx' + i, medicationName: 'M' + i }) as never),
+    );
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    expect(el.querySelector('[data-testid="rx-count"]')?.textContent).toContain('PORTAL_PAGING');
+    expect(component.prescriptionRows.shown().length).toBe(20);
+    expect(component.prescriptionRows.total()).toBe(45);
+
+    (el.querySelector('[data-testid="rx-more"]') as HTMLButtonElement).click();
+    (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
+      '[data-testid="rx-more"]',
+    );
+    fixture.detectChanges();
+    expect(component.prescriptionRows.shown().length).toBe(40);
+    (el.querySelector('[data-testid="rx-more"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    expect(component.prescriptionRows.shown().length).toBe(45);
+    expect(el.querySelector('[data-testid="rx-more"]')).toBeNull();
   });
 });

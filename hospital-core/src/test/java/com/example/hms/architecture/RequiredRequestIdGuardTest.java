@@ -563,6 +563,11 @@ class RequiredRequestIdGuardTest {
         Map.entry("HospitalRequestDTO.state", "KNOWN GAP D1300: the address rule depends on the country"),
         Map.entry("HospitalRequestDTO.zipCode", "KNOWN GAP D1300: the address rule depends on the country"),
         Map.entry("ImagingReportUpsertRequestDTO.imagingOrderId", "KNOWN GAP D1300: create only; the upsert body edits"),
+        Map.entry("PatientHospitalRegistrationRequestDTO.patientId",
+            "KNOWN GAP D1300: create only, by id or username; the same body edits. Its only constraint is the length of"
+                + " deactivationReason (D1430), and validateRequest names both references in one refusal (D1299)"),
+        Map.entry("PatientHospitalRegistrationRequestDTO.hospitalName",
+            "KNOWN GAP D1300: filled from the caller's scope when absent, after binding; validateRequest names it (D1299)"),
         Map.entry("LabSpecimenRequestDTO.labOrderId", "the controller sets it from the path after binding: never absent"));
 
     /** The field carries @NotNull / @NotBlank / @NotEmpty (any group), or a class-level @OneOf lists it. */

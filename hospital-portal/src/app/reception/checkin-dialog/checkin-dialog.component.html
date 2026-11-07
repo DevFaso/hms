@@ -49,7 +49,7 @@
             <span class="label"
               >{{ 'RECEPTION.APPOINTMENT_TIME' | translate }}{{ 'COMMON.COLON' | translate }}</span
             >
-            <span class="value">{{ queueItem.appointmentTime }}</span>
+            <span class="value">{{ queueItem.appointmentTime | clockTime }}</span>
           </div>
         }
         @if (queueItem.providerName) {

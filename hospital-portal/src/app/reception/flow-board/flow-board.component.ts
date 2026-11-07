@@ -55,7 +55,6 @@ export class FlowBoardComponent implements OnChanges {
     { key: 'inProgress', labelKey: 'RECEPTION.IN_PROGRESS', colorClass: 'col-in-progress' },
     { key: 'completed', labelKey: 'RECEPTION.COMPLETED', colorClass: 'col-completed' },
     { key: 'noShow', labelKey: 'RECEPTION.NO_SHOW', colorClass: 'col-no-show' },
-    { key: 'walkIn', labelKey: 'RECEPTION.WALKIN', colorClass: 'col-walk-in' },
   ];
 
   /** Mutable local copy so CDK can splice arrays */
@@ -76,11 +75,14 @@ export class FlowBoardComponent implements OnChanges {
       this.localBoard = {
         scheduled: [...(this.board.scheduled ?? [])],
         confirmed: [...(this.board.confirmed ?? [])],
-        arrived: [...(this.board.arrived ?? [])],
+        // QA D1445: no column of its own, which stayed empty: walk-ins sit in their status
+        // column, and one the server still files apart is on the board with the arrived ones.
+        // Its card keeps its WALK_IN status, so the drop rules read it as before.
+        arrived: [...(this.board.arrived ?? []), ...(this.board.walkIn ?? [])],
         inProgress: [...(this.board.inProgress ?? [])],
         completed: [...(this.board.completed ?? [])],
         noShow: [...(this.board.noShow ?? [])],
-        walkIn: [...(this.board.walkIn ?? [])],
+        walkIn: [],
       };
     }
   }

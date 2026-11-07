@@ -181,15 +181,13 @@ class AnnouncementServiceImplTest {
         }
 
         @Test
-        @DisplayName("throws RuntimeException when not found")
+        @DisplayName("QA D1437: an unknown id is a 404, never a bare RuntimeException (500)")
         void notFound() {
             UUID id = UUID.randomUUID();
             when(announcementRepository.findById(id)).thenReturn(Optional.empty());
 
-            RuntimeException ex = assertThrows(RuntimeException.class,
+            assertThrows(com.example.hms.exception.ResourceNotFoundException.class,
                 () -> service.getAnnouncement(id));
-
-            assertEquals("Announcement not found", ex.getMessage());
         }
     }
 
@@ -308,15 +306,13 @@ class AnnouncementServiceImplTest {
         }
 
         @Test
-        @DisplayName("throws RuntimeException when not found")
+        @DisplayName("QA D1437: an unknown id is a 404, never a bare RuntimeException (500)")
         void notFound() {
             UUID id = UUID.randomUUID();
             when(announcementRepository.findById(id)).thenReturn(Optional.empty());
 
-            RuntimeException ex = assertThrows(RuntimeException.class,
+            assertThrows(com.example.hms.exception.ResourceNotFoundException.class,
                 () -> service.updateAnnouncement(id, "text"));
-
-            assertEquals("Announcement not found", ex.getMessage());
         }
     }
 

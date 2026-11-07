@@ -35,7 +35,6 @@ export interface BillingInvoiceResponse {
   hospitalCode: string;
   hospitalAddress: string;
   encounterCode?: string;
-  encounterDescription: string;
   encounterType: string;
   encounterStatus: string;
   encounterDate: string;

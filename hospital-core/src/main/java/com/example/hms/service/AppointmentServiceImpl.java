@@ -2,6 +2,7 @@ package com.example.hms.service;
 
 
 import com.example.hms.enums.AppointmentStatus;
+import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.platform.WebhookEventType;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.FieldBusinessException;
@@ -139,6 +140,8 @@ public class AppointmentServiceImpl implements AppointmentService {
     private final com.example.hms.repository.EncounterRepository encounterRepository;
     /** QA D1060 / D1063: the slot rules set the visit length and refuse a slot held for an offer. */
     private final com.example.hms.service.scheduling.AppointmentSlotPolicy slotPolicy;
+    /** QA D1429: an overbooking is on the audit trail. */
+    private final AuditEventLogService auditEventLogService;
 
     @org.springframework.beans.factory.annotation.Value("${app.frontend.base-url}")
     private String frontendBaseUrl;
@@ -579,6 +582,14 @@ public class AppointmentServiceImpl implements AppointmentService {
             ));
         }
 
+        // QA D1429: staff may book outside a published free slot, with a reason; a
+        // patient reaching this endpoint books a published free slot, like on the portal.
+        com.example.hms.model.scheduling.AppointmentSlot patientSlot = isStaffOrAdmin ? null
+            : slotPolicy.requirePublishedFreeSlot(staff.getId(), requestedStart, hospital.getId(), null);
+        String overbookReason = isStaffOrAdmin
+            ? slotPolicy.overbookReasonOffSlot(staff.getId(), requestedStart, hospital.getId(), request.getOverbookReason())
+            : null;
+
         // --- Create only scheduling data ---
         Appointment appointment = new Appointment();
         appointment.setPatient(patient);
@@ -595,8 +606,13 @@ public class AppointmentServiceImpl implements AppointmentService {
         appointment.setStatusReason(requireStatusReason(status, request.getStatusReason()));
         appointment.setCreatedBy(currentUser);
         appointment.setAssignment(assignment);
+        appointment.setOverbookReason(overbookReason);
 
         Appointment saved = appointmentRepository.save(appointment);
+        if (patientSlot != null) {
+            slotPolicy.takeSlot(patientSlot, saved);
+        }
+        auditOverbooking(saved, hospital, AuditEventType.APPOINTMENT_CREATED);
         // QA D985: the recall this visit answers is now scheduled.
         if (recallService != null && AppointmentStatus.holdsSlot(saved.getStatus())) {
             recallService.scheduleOpenRecallFor(saved, request.getRecallId());
@@ -891,6 +907,11 @@ public class AppointmentServiceImpl implements AppointmentService {
 
         requireStaffScheduledForEdit(staff, request, requestedStart, locale);
         requireNoConflictForEdit(id, existing, staff, request, requestedStart, requestedEnd, locale);
+        // QA D1429: a move outside a published free slot needs its reason, and a move
+        // onto one drops the old reason; an edit that keeps the time keeps what is there.
+        String overbookReason = moved
+            ? slotPolicy.overbookReasonOffSlot(staff.getId(), requestedStart, hospital.getId(), request.getOverbookReason())
+            : existing.getOverbookReason();
 
         // Capture old schedule before mapper overwrites fields
         LocalDate   oldDate  = existing.getAppointmentDate();
@@ -928,6 +949,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         appointmentMapper.updateAppointmentFromDto(request, existing, patient, staff, hospital);
         existing.setDepartment(department);
         existing.setAssignment(assignment);
+        existing.setOverbookReason(overbookReason);
         existing.setUpdatedAt(LocalDateTime.now());
         if (statusMoved) {
             existing.setStatusReason(statusReason);
@@ -941,6 +963,9 @@ public class AppointmentServiceImpl implements AppointmentService {
         entityManager.refresh(saved);
         if (statusMoved) {
             afterEditMovedStatus(saved);
+        }
+        if (moved) {
+            auditOverbooking(saved, hospital, AuditEventType.APPOINTMENT_UPDATED);
         }
 
         // QA D1013 (sibling): a visit moved off the inventory slot it was
@@ -967,6 +992,29 @@ public class AppointmentServiceImpl implements AppointmentService {
      * QA D1060: whether an edit moves the visit (another date, start or
      * clinician); a moved visit takes the slot length where it lands.
      */
+    /**
+     * QA D1429: an overbooking is on the audit trail, with no free text (the reason stays
+     * on the appointment). A failed audit never breaks the booking.
+     */
+    private void auditOverbooking(Appointment saved, Hospital hospital, AuditEventType eventType) {
+        if (saved == null || saved.getOverbookReason() == null) {
+            return;
+        }
+        try {
+            auditEventLogService.logEvent(com.example.hms.payload.dto.AuditEventRequestDTO.builder()
+                .eventType(eventType)
+                .status(com.example.hms.enums.AuditStatus.SUCCESS)
+                .entityType("Appointment")
+                .resourceId(saved.getId() != null ? saved.getId().toString() : null)
+                .userName(com.example.hms.security.context.HospitalContextHolder.getContextOrEmpty().getPrincipalUsername())
+                .hospitalName(hospital.getName())
+                .eventDescription("Appointment overbooked outside the published slots")
+                .build());
+        } catch (RuntimeException ex) {
+            log.warn("Failed to audit the overbooking of appointment {}: {}", saved.getId(), ex.getMessage());
+        }
+    }
+
     private static boolean movesTheVisit(AppointmentRequestDTO request, Appointment existing, Staff staff) {
         return !request.getAppointmentDate().equals(existing.getAppointmentDate())
             || !request.getStartTime().equals(existing.getStartTime())

@@ -177,6 +177,13 @@
               {{ ' ' }}<span class="field-value">{{ appt.statusReason }}</span>
             </div>
           }
+          <!-- QA D1429: why this visit is outside the published slots. -->
+          @if (appt.overbookReason) {
+            <div class="field-row" data-testid="overbook-reason">
+              <span class="field-label">{{ 'APPOINTMENTS.OVERBOOK_REASON' | translate }}</span>
+              {{ ' ' }}<span class="field-value">{{ appt.overbookReason }}</span>
+            </div>
+          }
           <div class="field-row">
             <span class="field-label">{{ 'APPOINTMENTS.CREATED_BY' | translate }}</span>
             <span class="field-value">{{ appt.createdByName }}</span>
@@ -299,6 +306,7 @@
               id="reschedDate"
               type="date"
               [(ngModel)]="rescheduleDate"
+              (ngModelChange)="checkRescheduleSlot()"
               name="reschedDate"
               data-server-field="appointmentDate"
               required
@@ -310,6 +318,7 @@
               id="reschedStart"
               type="time"
               [(ngModel)]="rescheduleStart"
+              (ngModelChange)="checkRescheduleSlot()"
               name="reschedStart"
               data-server-field="startTime"
               required
@@ -319,6 +328,23 @@
               'APPOINTMENTS.DURATION_SET_BY_SLOTS' | translate
             }}</small>
           </div>
+          @if (rescheduleOffSlot()) {
+            <!-- QA D1429: the desk may overbook, with a reason the appointment keeps. -->
+            <div class="field" data-testid="resched-overbook">
+              <label for="overbookReason">{{ 'APPOINTMENTS.OVERBOOK_REASON' | translate }} *</label>
+              <textarea
+                id="overbookReason"
+                name="overbookReason"
+                rows="2"
+                maxlength="500"
+                required
+                aria-required="true"
+                data-server-field="overbookReason"
+                [(ngModel)]="rescheduleOverbookReason"
+              ></textarea>
+              <small class="field-hint">{{ 'APPOINTMENTS.OVERBOOK_HINT' | translate }}</small>
+            </div>
+          }
           <!-- QA D1018 / D923: the clinician, the department and the reason
                can change with the time. -->
           <div class="field">

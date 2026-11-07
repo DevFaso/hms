@@ -63,6 +63,8 @@ class JavaTimeParameterBindingIT {
     }
 
     @Autowired
+    private com.example.hms.repository.PatientHospitalRegistrationRepository registrationRepository;
+    @Autowired
     private IntegrationMessageEventRepository integrationMessageEventRepository;
     @Autowired
     private AuditEventLogRepository auditEventLogRepository;
@@ -70,6 +72,13 @@ class JavaTimeParameterBindingIT {
     private BillingInvoiceRepository billingInvoiceRepository;
     @Autowired
     private PermissionMatrixAuditEventRepository permissionMatrixAuditEventRepository;
+
+    /** QA D1430: the desk's list projects the new column; V270 and the JPQL on the real engine. */
+    @Test
+    void theRegistrationDeskRowsReadTheDeactivationReason() {
+        assertThatCode(() -> registrationRepository.findDeskRowsByHospitalId(java.util.UUID.randomUUID()))
+            .doesNotThrowAnyException();
+    }
 
     @Test
     void theMessageLogSearchAcceptsEmptyDates() {

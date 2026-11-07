@@ -10,6 +10,12 @@
  *  1. the destructive calls of the portal: every `http.delete(`, and every
  *     service method named as ending something (`DESTRUCTIVE_NAME`) that writes
  *     (`.post(` `.put(` `.patch(` `.delete(`);
+ *     QA D1430 (the gate missed it): a service's plain `update` that a component
+ *     uses to end something. The name of the SERVICE method said nothing, so
+ *     `/registrations` deactivated a patient on one click through
+ *     `update(id, { active: false })`. A component method that writes through a
+ *     service counts too when it is itself named as ending something, or sends
+ *     `active: false`;
  *  2. in each component, the methods that make such a call, directly through
  *     `this.http` or through an injected service, and those that reach them
  *     through `this.other()` in the same class;
@@ -117,6 +123,7 @@ const CLASS_NAME = /export\s+(?:abstract\s+)?class\s+([A-Z][\w$]*)/;
  */
 export function destructiveServiceMethods(sources) {
   const out = new Map();
+  writingServiceMethods.clear();
   for (const { text } of sources) {
     if (!/@Injectable/.test(text) || !HTTP_CLIENT.test(text)) continue;
     const cls = CLASS_NAME.exec(text)?.[1];
@@ -127,6 +134,10 @@ export function destructiveServiceMethods(sources) {
       const writes = /\.\s*(?:post|put|patch|delete)\s*(?:<[^(]*>)?\s*\(/.test(body);
       const named = DESTRUCTIVE_NAME.test(name) || PLATFORM_WIDE.has(`${cls}.${name}`);
       if (deletes || (writes && named)) found.add(name);
+      if (writes) {
+        if (!writingServiceMethods.has(cls)) writingServiceMethods.set(cls, new Set());
+        writingServiceMethods.get(cls).add(name);
+      }
     }
     if (found.size > 0) out.set(cls, found);
   }
@@ -134,6 +145,12 @@ export function destructiveServiceMethods(sources) {
 }
 
 const ASKS = /\.\s*ask\s*\(/;
+
+/** Every writing method of every service, read by {@link destructiveServiceMethods} (QA D1430). */
+const writingServiceMethods = new Map();
+
+/** A flag in a write that takes the record out of use: `active: false`. */
+const ENDS_BY_FLAG = /\bactive\s*:\s*false\b/;
 
 /**
  * Per method of a component: the destructive targets it reaches with nothing
@@ -151,7 +168,12 @@ function unaskedTargets(text, services) {
     }
     for (const m of body.matchAll(/this\.([\w$]+)\s*\.\s*([\w$]+)\s*(?:<[^(]*>)?\s*\(/g)) {
       const type = fields.get(m[1]);
-      if (type && services.get(type)?.has(m[2])) targets.add(`${type}.${m[2]}`);
+      const namedByTheService = type && services.get(type)?.has(m[2]);
+      const endedByTheCaller =
+        type &&
+        writingServiceMethods.get(type)?.has(m[2]) &&
+        (DESTRUCTIVE_NAME.test(name) || ENDS_BY_FLAG.test(body));
+      if (namedByTheService || endedByTheCaller) targets.add(`${type}.${m[2]}`);
     }
     direct.set(name, targets);
   }

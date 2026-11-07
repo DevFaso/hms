@@ -45,6 +45,8 @@ export interface AppointmentResponse {
   notes?: string | null;
   /** QA D1126 / D1132: why the visit was cancelled or marked a no-show. */
   statusReason?: string | null;
+  /** QA D1429: why this visit was booked outside any published free slot. */
+  overbookReason?: string | null;
   appointmentDate: string;
   startTime: string;
   endTime: string;
@@ -69,6 +71,8 @@ export interface AppointmentUpsertRequest {
   notes?: string;
   /** QA D985: the recall this booking answers (booked from the recall list). */
   recallId?: string;
+  /** QA D1429: why the visit is booked outside any published free slot; required then. */
+  overbookReason?: string;
 }
 
 export interface AppointmentFilterRequest {

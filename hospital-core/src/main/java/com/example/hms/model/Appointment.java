@@ -110,6 +110,14 @@ public class Appointment extends BaseEntity {
     @Column(name = "status_reason", length = 500)
     private String statusReason;
 
+    /**
+     * QA D1429 (V270): why the desk booked this visit outside any published free
+     * slot. Null for a booking on a slot. Required by
+     * {@code AppointmentSlotPolicy#overbookReasonOffSlot} on every staff booking or move.
+     */
+    @Column(name = "overbook_reason", length = 500)
+    private String overbookReason;
+
     /** Timestamp when the patient was checked in by the receptionist (MVP 1). */
     @Column(name = "checked_in_at")
     private LocalDateTime checkedInAt;

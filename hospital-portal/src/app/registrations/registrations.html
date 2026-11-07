@@ -149,6 +149,12 @@
                   <span class="status-badge status-cancelled">
                     {{ 'COMMON.INACTIVE' | translate }}
                   </span>
+                  @if (r.deactivationReason) {
+                    <!-- QA D1430: why it was deactivated -->
+                    <span class="muted" data-testid="registration-deactivation-reason">{{
+                      r.deactivationReason
+                    }}</span>
+                  }
                 }
               </td>
               <td class="actions-cell">
@@ -168,7 +174,8 @@
                       class="btn-secondary btn-sm"
                       [title]="'REGISTRATIONS.DEACTIVATE' | translate"
                       [attr.aria-label]="'REGISTRATIONS.DEACTIVATE' | translate"
-                      (click)="deactivate(r)"
+                      data-testid="registration-deactivate"
+                      (click)="askDeactivate(r)"
                     >
                       <span class="material-symbols-outlined">person_off</span>
                     </button>
@@ -260,6 +267,22 @@
             </label>
           </div>
         </div>
+        @if (endsTheRegistration) {
+          <div class="field">
+            <label for="reg-deactivation-reason"
+              >{{ 'REGISTRATIONS.DEACTIVATE_REASON' | translate }} *</label
+            >
+            <textarea
+              id="reg-deactivation-reason"
+              rows="2"
+              maxlength="500"
+              required
+              aria-required="true"
+              data-server-field="deactivationReason"
+              [(ngModel)]="form.deactivationReason"
+            ></textarea>
+          </div>
+        }
         <div class="form-row">
           <div class="field">
             <label for="reg-room">{{ 'REGISTRATIONS.ROOM' | translate }}</label>
@@ -301,6 +324,23 @@
 }
 
 <!-- ══ Hard-delete confirm ══ -->
+<!-- QA D1430: it asks first and takes the reason, as the delete beside it asks. -->
+@if (deactivating(); as target) {
+  <app-reason-dialog
+    titleKey="REGISTRATIONS.DEACTIVATE_TITLE"
+    messageKey="REGISTRATIONS.DEACTIVATE_BODY"
+    labelKey="REGISTRATIONS.DEACTIVATE_REASON"
+    confirmKey="REGISTRATIONS.DEACTIVATE"
+    [busy]="deactivateBusy()"
+    (confirmed)="deactivate(target, $event)"
+    (cancelled)="deactivating.set(null)"
+  >
+    <p data-testid="registration-deactivate-who">
+      {{ target.patientFullName || target.patientUsername }}
+    </p>
+  </app-reason-dialog>
+}
+
 @if (deleteTarget(); as target) {
   <div
     class="modal-backdrop"

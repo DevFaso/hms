@@ -12,9 +12,11 @@ import {
 
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { of, Subject } from 'rxjs';
+import { Subject, of } from 'rxjs';
 import { debounceTime, map, switchMap } from 'rxjs/operators';
 import { AppointmentService, AppointmentUpsertRequest } from '../services/appointment.service';
+import { SlotInventoryService } from '../services/slot-inventory.service';
+import { OVERBOOK_REASON_FIELD, isOffSlot, refusesForOverbookReason } from './published-slot';
 import { PatientService, PatientResponse } from '../services/patient.service';
 import { StaffService, isClinicalProvider, StaffResponse } from '../services/staff.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
@@ -35,6 +37,7 @@ const APPOINTMENT_FIELD_LABELS: Readonly<Record<string, string>> = {
   endTime: 'APPOINTMENTS.END_TIME',
   reason: 'APPOINTMENTS.REASON',
   notes: 'APPOINTMENTS.NOTES',
+  overbookReason: 'APPOINTMENTS.OVERBOOK_REASON',
 };
 
 /** The clinician picker's search field. */
@@ -71,8 +74,13 @@ export class AppointmentFormComponent implements OnInit {
   private readonly roleContext = inject(RoleContextService);
   private readonly translate = inject(TranslateService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly slots = inject(SlotInventoryService);
 
   saving = signal(false);
+
+  /** QA D1429: the chosen time is not a published free slot, so the form asks why. */
+  offSlot = signal(false);
+  private readonly slotCheck$ = new Subject<void>();
 
   // ── Patient picker ──────────────────────────────────────
   patientQuery = signal('');
@@ -170,7 +178,9 @@ export class AppointmentFormComponent implements OnInit {
 
     this.initPatientSearch();
     this.initStaffSearch();
+    this.initSlotCheck();
     this.applyPrefill();
+    this.checkSlot();
   }
 
   /**
@@ -214,6 +224,22 @@ export class AppointmentFormComponent implements OnInit {
         error: () => undefined,
       });
     }
+  }
+
+  private initSlotCheck(): void {
+    this.slotCheck$
+      .pipe(
+        debounceTime(220),
+        switchMap(() =>
+          isOffSlot(this.slots, this.form.staffId, this.form.appointmentDate, this.form.startTime),
+        ),
+      )
+      .subscribe((off) => this.offSlot.set(off));
+  }
+
+  /** The clinician, the date or the time changed: is it still a published free slot? */
+  checkSlot(): void {
+    this.slotCheck$.next();
   }
 
   // ── Patient search ──────────────────────────────────────
@@ -400,6 +426,7 @@ export class AppointmentFormComponent implements OnInit {
     delete this.form.staffEmail;
     this.staffDropdownOpen.set(false);
     this.staffQuery.set('');
+    this.checkSlot();
     // Auto-fill hospital when staff is selected (unrestricted users only —
     // locked users already have selectedHospitalId set from ngOnInit)
     if (s.hospitalId && !this.selectedHospitalId()) {
@@ -413,6 +440,7 @@ export class AppointmentFormComponent implements OnInit {
     this.selectedStaff.set(null);
     delete this.form.staffId;
     this.staffQuery.set('');
+    this.checkSlot();
   }
 
   staffInitials(s: StaffResponse): string {
@@ -483,6 +511,15 @@ export class AppointmentFormComponent implements OnInit {
       { id: 'start', labelKey: 'APPOINTMENTS.START_TIME', value: this.form.startTime },
       { id: 'apptPatientSearch', labelKey: 'PATIENTS.PATIENT', value: this.form.patientId },
       { id: STAFF_FIELD, labelKey: 'APPOINTMENTS.DOCTOR_STAFF', value: this.form.staffId },
+      ...(this.offSlot()
+        ? [
+            {
+              id: OVERBOOK_REASON_FIELD,
+              labelKey: 'APPOINTMENTS.OVERBOOK_REASON',
+              value: this.form.overbookReason?.trim(),
+            },
+          ]
+        : []),
     ];
     const allIds = required.map((f) => f.id);
     const missing = missingRequiredMessage(this.translate, required);
@@ -518,6 +555,19 @@ export class AppointmentFormComponent implements OnInit {
         // the visit without it, as the refusal says.
         if ((err as { error?: { field?: unknown } } | null)?.error?.field === 'recallId') {
           delete this.form.recallId;
+        }
+        // QA D1429: the slot changed since the form looked: the field opens, on the refusal.
+        if (refusesForOverbookReason(err)) {
+          this.offSlot.set(true);
+          const message = this.translate.instant('APPOINTMENTS.OVERBOOK_HINT');
+          setTimeout(() =>
+            refuseFields(
+              this.host.nativeElement,
+              [OVERBOOK_REASON_FIELD],
+              [OVERBOOK_REASON_FIELD],
+              message,
+            ),
+          );
         }
         // QA D984: a validation refusal names the field and its reason
         // ("Date : must be today or later"), not the generic text.

@@ -1,10 +1,10 @@
 import { RoleContextService } from '../../core/role-context.service';
 import { isFrontDeskOnly } from '../patient-chart/chart-access';
 import { refuseFields } from '../../shared/forms/invalid-fields';
+import { refusedFieldReasons } from '../../shared/refusal-reason';
 import {
-  birthDateRefusalKey,
   earliestBirthDate,
-  isMadeOfDigits,
+  identityRefusals,
   latestBirthDate,
 } from '../../shared/patient-identity';
 import {
@@ -48,6 +48,14 @@ const DEMOGRAPHICS_FIELD_IDS: Readonly<Record<string, string>> = {
   gender: 'demoGender',
   phoneNumberPrimary: 'demoPhone',
 };
+
+/** The fields the identity rules can refuse; a corrected one loses its mark (QA D1422). */
+const IDENTITY_FIELD_IDS: readonly string[] = [
+  'demoDob',
+  'demoFirstName',
+  'demoMiddleName',
+  'demoLastName',
+];
 
 /** The label each required field is shown under, to name it when it is blank (QA D1358). */
 const DEMOGRAPHICS_LABEL_KEYS: Readonly<Record<string, string>> = {
@@ -186,15 +194,22 @@ export class PatientDemographicsEditComponent implements OnInit {
     return out;
   }
 
-  private identityRefusal(body: PatientDemographicsPatch): string | null {
-    const dobKey = body.dateOfBirth ? birthDateRefusalKey(body.dateOfBirth) : null;
-    if (dobKey) {
-      return this.translate.instant(dobKey);
-    }
-    const digits = [body.firstName, body.middleName, body.lastName].some(
-      (name) => !!name && isMadeOfDigits(name),
+  /** QA D1422: the changed identity fields the rules refuse, each marked on itself. */
+  private refuseIdentity(body: PatientDemographicsPatch): boolean {
+    const refused = identityRefusals(
+      {
+        dateOfBirth: { id: DEMOGRAPHICS_FIELD_IDS['dateOfBirth'], value: body.dateOfBirth },
+        names: [
+          { id: DEMOGRAPHICS_FIELD_IDS['firstName'], value: body.firstName },
+          { id: 'demoMiddleName', value: body.middleName },
+          { id: DEMOGRAPHICS_FIELD_IDS['lastName'], value: body.lastName },
+        ],
+      },
+      (key) => this.translate.instant(key),
     );
-    return digits ? this.translate.instant('PATIENTS.NAME_DIGITS_ONLY') : null;
+    refuseFields(this.host.nativeElement, refused, IDENTITY_FIELD_IDS);
+    this.error.set(joinReasons([...new Set(refused.map((r) => r.message))]));
+    return refused.length > 0;
   }
 
   submit(): void {
@@ -241,12 +256,9 @@ export class PatientDemographicsEditComponent implements OnInit {
     }
     // QA D1403 + D1414: only a change is judged, as on the server: a record stored
     // before the rule stays editable on its other fields.
-    const impossible = this.identityRefusal(body);
-    if (impossible) {
-      this.error.set(impossible);
+    if (this.refuseIdentity(body)) {
       return;
     }
-    this.error.set(null);
     this.saving.set(true);
     this.patientService.patchDemographics(this.patient.id, body).subscribe({
       next: (updated) => {
@@ -256,6 +268,14 @@ export class PatientDemographicsEditComponent implements OnInit {
       },
       error: (err) => {
         this.saving.set(false);
+        // QA D1422: the server's own refusal of a field is marked on it too.
+        const refused = refusedFieldReasons(err, {
+          ...DEMOGRAPHICS_FIELD_IDS,
+          middleName: 'demoMiddleName',
+        }).map(([id, message]) => ({ id, message }));
+        if (refused.length > 0) {
+          refuseFields(this.host.nativeElement, refused, IDENTITY_FIELD_IDS);
+        }
         this.error.set(err?.error?.message ?? this.translate.instant('PATIENTS.EDIT_FAILED'));
       },
     });

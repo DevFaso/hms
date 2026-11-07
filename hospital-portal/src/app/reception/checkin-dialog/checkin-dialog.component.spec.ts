@@ -270,4 +270,12 @@ describe('CheckinDialogComponent', () => {
       expect(msgOf('copayAmount')).toBe('Trop');
     });
   });
+
+  it('QA D1444: the time of the visit reads without seconds, whichever page opened the dialog', () => {
+    component.queueItem = { ...component.queueItem!, appointmentTime: '09:00:00' };
+    fixture.detectChanges();
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('09:00');
+    expect(text).not.toContain('09:00:00');
+  });
 });

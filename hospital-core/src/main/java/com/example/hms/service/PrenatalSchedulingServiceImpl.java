@@ -192,6 +192,7 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
             .departmentId(appointment.getDepartment() != null ? appointment.getDepartment().getId() : null)
             .reason(appointment.getReason())
             .notes(Optional.ofNullable(request.getNotes()).orElse(appointment.getNotes()))
+            .overbookReason(request.getOverbookReason())
             .build();
 
         return appointmentService.updateAppointment(appointment.getId(), updateDto, locale, username);

@@ -19,7 +19,7 @@ import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { currentMedications } from '../current-medications';
 import { ToastService } from '../../core/toast.service';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
-import { PrintLabelService } from '../../services/print-label.service';
+import { saveResponse } from '../../shared/download-file';
 import { refusalReason } from '../../shared/refusal-reason';
 import { ShownRows } from '../shown-rows';
 
@@ -35,9 +35,6 @@ export class MyMedicationsComponent implements OnInit {
   private readonly portal = inject(PatientPortalService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
-  /** Review of #975: the one open-for-print idiom the pharmacy pages use. */
-  private readonly printLabel = inject(PrintLabelService);
-
   medications = signal<MedicationSummary[]>([]);
   /** QA D1399: the medicines could not be read: said so, never "no medicines". */
   medicationsFailed = signal(false);
@@ -63,6 +60,8 @@ export class MyMedicationsComponent implements OnInit {
     ].filter((g) => g.meds.length > 0);
   });
   prescriptions = signal<PortalPrescription[]>([]);
+  /** QA D1442: every prescription one click away, with the total, as the past medicines. */
+  readonly prescriptionRows = new ShownRows(this.prescriptions);
   refills = signal<MedicationRefill[]>([]);
   loading = signal(true);
   expandedMedId = signal<string | null>(null);
@@ -76,7 +75,8 @@ export class MyMedicationsComponent implements OnInit {
   openPrintedCopy(rxId: string, event?: Event): void {
     event?.stopPropagation();
     this.portal.getMyPrintedPrescription(rxId).subscribe({
-      next: (blob) => this.printLabel.openForPrint(blob),
+      // QA D1443: saved under the server's readable name; a viewer tab named it after a random id.
+      next: (response) => saveResponse(response, 'ordonnance.pdf'),
       error: (err: unknown) =>
         this.toast.error(
           refusalReason(err) ?? this.translate.instant('PORTAL.MEDICATIONS.PRINTED_COPY_FAILED'),

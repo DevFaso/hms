@@ -32,7 +32,6 @@ public class BillingInvoiceResponseDTO {
     // Encounter
     /** The encounter's code, which the edit form sends back as encounterReference (QA D148). */
     private String encounterCode;
-    private String encounterDescription;
     private String encounterType;
     private String encounterStatus;
     private String encounterDate;

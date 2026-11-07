@@ -625,4 +625,39 @@ describe('PatientTrackerComponent — the acuity badge is labelled (QA D528/D663
     expect(badges).toContain('Rutinario');
     expect(badges).not.toContain('ROUTINE');
   });
+
+  it('QA D1431 (RCPT-CLIN): the desk sees no triage action; a nurse keeps both', () => {
+    const card = {
+      encounterId: 'e1',
+      patientId: 'p1',
+      patientName: 'Awa',
+      currentStatus: 'ARRIVED',
+      arrivalTimestamp: '2026-11-06T08:00:00',
+    };
+    trackerSpy.getTrackerBoard.and.returnValue(
+      of({
+        arrived: [card],
+        triage: [],
+        waitingForPhysician: [],
+        inProgress: [],
+        awaitingResults: [],
+        readyForDischarge: [],
+        totalPatients: 1,
+        averageWaitMinutes: 0,
+      } as never),
+    );
+    const roles = TestBed.inject(RoleContextService);
+    const active = spyOn(roles, 'hasAnyActiveRole');
+    const triageButtons = (): number => {
+      component.ngOnInit();
+      fixture.detectChanges();
+      return (fixture.nativeElement as HTMLElement).querySelectorAll('.btn-complete-triage').length;
+    };
+
+    active.and.callFake((asked: string[]) => asked.includes('ROLE_RECEPTIONIST'));
+    expect(triageButtons()).toBe(0);
+
+    active.and.callFake((asked: string[]) => asked.includes('ROLE_NURSE'));
+    expect(triageButtons()).toBeGreaterThanOrEqual(2);
+  });
 });

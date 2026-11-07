@@ -1,5 +1,12 @@
 import { allRowsOfArrays } from '../shared/all-pages';
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  OnInit,
+  inject,
+  signal,
+} from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -20,8 +27,13 @@ import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { refusalReason } from '../shared/refusal-reason';
+import { refuseFields } from '../shared/forms/invalid-fields';
+import { ReasonDialogComponent } from '../shared/reason-dialog/reason-dialog.component';
 import { isFrontDeskOnly } from '../patients/patient-chart/chart-access';
 type ActiveFilter = 'all' | 'active' | 'inactive';
+
+/** QA D1430: the reason box of the edit form. */
+const DEACTIVATION_REASON_FIELD = 'reg-deactivation-reason';
 
 /**
  * Multi-hospital registrations admin (Phase 3 task 17). Writes are
@@ -39,6 +51,7 @@ type ActiveFilter = 'all' | 'active' | 'inactive';
     TranslateModule,
     PatientPickerComponent,
     ModalDialogDirective,
+    ReasonDialogComponent,
   ],
   templateUrl: './registrations.html',
   styleUrl: './registrations.scss',
@@ -49,8 +62,13 @@ export class RegistrationsComponent implements OnInit {
   private readonly roleContext = inject(RoleContextService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   private hospitalId: string | null = null;
+
+  /** QA D1430: the registration the reason dialog is asking about. */
+  readonly deactivating = signal<HospitalRegistration | null>(null);
+  readonly deactivateBusy = signal(false);
 
   /** RCPT-CLIN: the desk neither reads the discharge note nor writes it; the server keeps the stored one. */
   readonly frontDeskOnly = isFrontDeskOnly((roles) => this.roleContext.hasAnyActiveRole(roles));
@@ -169,6 +187,11 @@ export class RegistrationsComponent implements OnInit {
 
   /* ── Create / edit ── */
 
+  /** The edit form is about to deactivate an active registration: it asks why (QA D1430). */
+  get endsTheRegistration(): boolean {
+    return !!this.editingRegistration()?.active && !this.form.active;
+  }
+
   openCreate(): void {
     this.form = { stayStatus: 'REGISTERED', active: true };
     this.formPatient.set(null);
@@ -182,6 +205,7 @@ export class RegistrationsComponent implements OnInit {
       patientId: registration.patientId,
       hospitalId: registration.hospitalId,
       active: registration.active,
+      deactivationReason: registration.deactivationReason ?? '',
       currentRoom: registration.currentRoom ?? '',
       currentBed: registration.currentBed ?? '',
       attendingPhysicianName: registration.attendingPhysicianName ?? '',
@@ -206,6 +230,18 @@ export class RegistrationsComponent implements OnInit {
     const editing = this.editingRegistration();
     if (!editing && !this.form.patientId) {
       this.toast.error(this.translate.instant('REGISTRATIONS.PATIENT_REQUIRED'));
+      return;
+    }
+    // QA D1430: the box in the edit form ends the registration as the row's button does.
+    const reasonMissing = this.endsTheRegistration && !this.form.deactivationReason?.trim();
+    refuseFields(
+      this.host.nativeElement,
+      reasonMissing ? [DEACTIVATION_REASON_FIELD] : [],
+      [DEACTIVATION_REASON_FIELD],
+      this.translate.instant('COMMON.FIELD_REQUIRED'),
+    );
+    if (reasonMissing) {
+      this.toast.error(this.translate.instant('REGISTRATIONS.DEACTIVATE_REASON_REQUIRED'));
       return;
     }
     this.formSaving.set(true);
@@ -239,13 +275,20 @@ export class RegistrationsComponent implements OnInit {
     });
   }
 
-  /** Deactivate = PUT with active:false (never the hard DELETE). */
-  deactivate(registration: HospitalRegistration): void {
+  /** QA D1430: the row's button only asks; one click deactivated the patient's registration. */
+  askDeactivate(registration: HospitalRegistration): void {
+    this.deactivating.set(registration);
+  }
+
+  /** Deactivate = PUT with active:false (never the hard DELETE), from the dialog that took the reason. */
+  deactivate(registration: HospitalRegistration, reason: string): void {
+    this.deactivateBusy.set(true);
     this.registrationService
       .update(registration.id, {
         patientId: registration.patientId,
         hospitalId: registration.hospitalId,
         active: false,
+        deactivationReason: reason,
         currentRoom: registration.currentRoom,
         currentBed: registration.currentBed,
         attendingPhysicianName: registration.attendingPhysicianName,
@@ -255,12 +298,16 @@ export class RegistrationsComponent implements OnInit {
       .subscribe({
         next: (saved) => {
           this.toast.success(this.translate.instant('REGISTRATIONS.DEACTIVATED'));
+          this.deactivateBusy.set(false);
+          this.deactivating.set(null);
           this.registrations.update((list) => list.map((r) => (r.id === saved.id ? saved : r)));
         },
-        error: (err: unknown) =>
+        error: (err: unknown) => {
+          this.deactivateBusy.set(false);
           this.toast.error(
             refusalReason(err) ?? this.translate.instant('REGISTRATIONS.SAVE_ERROR'),
-          ),
+          );
+        },
       });
   }
 

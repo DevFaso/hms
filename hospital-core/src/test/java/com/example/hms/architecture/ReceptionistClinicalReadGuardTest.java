@@ -51,7 +51,9 @@ class ReceptionistClinicalReadGuardTest {
             + "|soap|assessment|chiefcomplaint|problem|complaint|clinical|historysummary|careteamnotes|reason|notes?"
             + "|followupinstruction|treatment|symptom|immuniz|procedure|bloodtype|gestation"
             // User decision 2026-11-06: the desk's vocabulary, named one by one.
-            + "|bloodgroup|abogroup|rhfactor|antibody|triage|isolation|highrisk).*");
+            + "|bloodgroup|abogroup|rhfactor|antibody|triage|isolation|highrisk"
+            // QA D1421: a visit's text under a name that reads as nothing clinical.
+            + "|encounterdescription|visitdescription|hospitalcourse|encountersummary).*");
 
     /** The surfaces refused outright. */
     private static final List<String> REFUSED = List.of(
@@ -63,7 +65,10 @@ class ReceptionistClinicalReadGuardTest {
         "DigitalSignatureController#verifySignature",
         "RecordAccessController#decide",
         // It writes the discharge diagnoses and the instructions, which the role cannot read.
-        "EncounterController#checkOut");
+        "EncounterController#checkOut",
+        // QA D1431: ending a triage and declaring a patient ready to leave are clinical acts.
+        "EncounterController#completeTriage",
+        "EncounterController#markReadyForDischarge");
 
     /**
      * Type#field the role still receives, and why: what the desk's workflow reads
@@ -90,6 +95,8 @@ class ReceptionistClinicalReadGuardTest {
         Map.entry("AppointmentResponseDTO#reason", "the visit reason the desk books and reschedules"),
         Map.entry("AppointmentResponseDTO#notes", "booking notes the desk writes"),
         Map.entry("AppointmentResponseDTO#statusReason", "why the appointment was cancelled or moved"),
+        Map.entry("AppointmentResponseDTO#overbookReason", "QA D1429: why the desk booked outside the published slots"),
+        Map.entry("PatientHospitalRegistrationResponseDTO#deactivationReason", "QA D1430: why the desk deactivated the registration"),
         Map.entry("AppointmentResponseDTO#treatmentId", "the booked service"),
         Map.entry("AppointmentResponseDTO#treatmentName", "the booked service"),
         Map.entry("AppointmentResponseDTO#treatmentDescription", "the booked service"),
@@ -152,6 +159,9 @@ class ReceptionistClinicalReadGuardTest {
         Map.entry("AppointmentRequestDTO#notes", "booking notes the desk writes"),
         Map.entry("AppointmentRequestDTO#reason", "the visit reason the desk books"),
         Map.entry("AppointmentRequestDTO#statusReason", "why the appointment moved"),
+        Map.entry("AppointmentRequestDTO#overbookReason", "QA D1429: why the desk books outside the published slots"),
+        Map.entry("PatientHospitalRegistrationRequestDTO#deactivationReason", "QA D1430: why the desk deactivates the registration"),
+        Map.entry("PrenatalRescheduleRequestDTO#overbookReason", "QA D1429: why the desk moves the visit outside the published slots"),
         Map.entry("AppointmentStatusChangeRequestDTO#reason", "why the appointment moved"),
         Map.entry("CheckInRequestDTO#chiefComplaint", "typed at check-in, before any clinician; a blank never clears it"),
         Map.entry("CheckInRequestDTO#notes", "the desk's check-in note"),
@@ -334,6 +344,119 @@ class ReceptionistClinicalReadGuardTest {
         Set<String> stale = new TreeSet<>(THE_DESK_WRITES_IT.keySet());
         stale.removeAll(sent);
         assertThat(stale).as("listed, and the role no longer sends it").isEmpty();
+    }
+
+    /**
+     * QA D1421: the vocabulary above reads field NAMES, and an invoice's {@code encounterDescription}
+     * held the visit's nursing text under a name that reads as nothing. So the check also stands at the
+     * source, on the compiled calls (a variable's name cannot hide it): who reads an encounter's clinical
+     * text at all, and that none of the classes behind a billing, front-desk or scheduling answer does.
+     */
+    private static final Set<String> ENCOUNTER_CLINICAL_READS = Set.of("getNotes", "getChiefComplaint",
+        "getFollowUpInstructions", "getDischargeDiagnoses", "getEncounterNotes", "getEsiScore", "getExtraFields");
+
+    private static final List<String> ENCOUNTER_OWNERS = List.of(
+        "com/example/hms/model/Encounter", "com/example/hms/payload/dto/EncounterResponseDTO");
+
+    /** A class behind an answer that is not a clinical record, by the name the codebase gives it. */
+    private static final Pattern NON_CLINICAL_CLASS = Pattern.compile(
+        ".*(Billing|Invoice|Payment|Receipt|Cashier|Copay|Claim|Insurance|Guarantor|Announcement|Registration"
+            + "|Appointment|Reception|Waitlist|Recall|Slot|Reminder|Notification|Portal).*");
+
+    /** Class#getter a non-clinical class still calls, and why it reaches nobody it should not. */
+    private static final Map<String, String> NON_CLINICAL_CLASS_READS = Map.of(
+        "ReceptionServiceImpl#Encounter.getChiefComplaint",
+        "the queue's visit reason, which ReceptionistResponseShaping replaces with what the desk itself typed "
+            + "for the role; a clinician on the queue reads it, and at check-in it is the desk's own text");
+
+    /** Every class that reads Encounter.notes, and who receives it. A new reader is a decision, not a side effect. */
+    private static final Map<String, String> ENCOUNTER_NOTES_READERS = Map.of(
+        "AdmissionStayEncounterService", "fills an empty note from the stay's own discharge summary: a write, no answer",
+        "ChartReviewServiceImpl", "compares with the prescription anchor; the chart review refuses the role (REFUSED above)",
+        "ClinicalDashboardServiceImpl", "the roomed patients of the clinician's own dashboard",
+        "DischargeSummaryServiceImpl", "the clinician's discharge summary",
+        "EncounterMapper", "EncounterResponseDTO, whose notes ReceptionistResponseShaping removes for the role",
+        "EncounterServiceImpl", "the encounter's history row and the after-visit summary's hospital course",
+        "PatientServiceImpl", "the doctor's timeline: POST /patients/{id}/doctor-timeline admits ROLE_DOCTOR only",
+        "PatientSnapshotServiceImpl", "the clinician's snapshot: GET /me/patients/{id}/snapshot admits clinicians only");
+
+    private static Set<String> clinicalReads() throws java.io.IOException {
+        Set<String> reads = new TreeSet<>();
+        var resolver = new org.springframework.core.io.support.PathMatchingResourcePatternResolver();
+        for (org.springframework.core.io.Resource resource : resolver.getResources("classpath*:com/example/hms/**/*.class")) {
+            String location = resource.getURL().toString();
+            if (location.contains("/test/") || location.contains("/model/Encounter")
+                    || location.contains("/dto/EncounterResponseDTO")) {
+                continue;
+            }
+            try (java.io.InputStream in = resource.getInputStream()) {
+                readsOf(new org.springframework.asm.ClassReader(in), reads);
+            }
+        }
+        return reads;
+    }
+
+    private static void readsOf(org.springframework.asm.ClassReader reader, Set<String> reads) {
+        String simple = reader.getClassName().substring(reader.getClassName().lastIndexOf('/') + 1).replaceFirst("[$].*", "");
+        reader.accept(new org.springframework.asm.ClassVisitor(org.springframework.asm.SpringAsmInfo.ASM_VERSION) {
+            @Override
+            public org.springframework.asm.MethodVisitor visitMethod(int access, String name, String descriptor,
+                                                                     String signature, String[] exceptions) {
+                return new org.springframework.asm.MethodVisitor(org.springframework.asm.SpringAsmInfo.ASM_VERSION) {
+                    @Override
+                    public void visitMethodInsn(int opcode, String owner, String method, String desc, boolean itf) {
+                        if (ENCOUNTER_OWNERS.contains(owner) && ENCOUNTER_CLINICAL_READS.contains(method)) {
+                            reads.add(simple + "#" + owner.substring(owner.lastIndexOf('/') + 1) + "." + method);
+                        }
+                    }
+                };
+            }
+        }, org.springframework.asm.ClassReader.SKIP_DEBUG | org.springframework.asm.ClassReader.SKIP_FRAMES);
+    }
+
+    /** What the desk may write on an encounter: a new walk-in visit, and closing a visit nobody saw. */
+    private static final Set<String> ENCOUNTER_WRITES_OF_THE_DESK = Set.of(
+        "EncounterController#create", "EncounterController#closeUnseen");
+
+    @Test
+    @DisplayName("QA D1431: the only encounter writes the role reaches are a new walk-in and closing an unseen visit")
+    void theDeskWritesNothingClinicalOnAnEncounter() {
+        Set<String> writes = new TreeSet<>();
+        ControllerMappingRegistry.mapping().getHandlerMethods().forEach((info, handler) -> {
+            boolean read = info.getMethodsCondition().getMethods().stream().allMatch(
+                method -> method == org.springframework.web.bind.annotation.RequestMethod.GET);
+            if (!read && handler.getBeanType() == com.example.hms.controller.EncounterController.class
+                    && RoleExpression.YES.equals(RoleExpression.admits(handler, RECEPTIONIST))) {
+                writes.add(name(handler));
+            }
+        });
+        assertThat(writes).isEqualTo(ENCOUNTER_WRITES_OF_THE_DESK);
+    }
+
+    @Test
+    @DisplayName("QA D1421: no billing, front-desk or scheduling class reads an encounter's clinical text")
+    void noNonClinicalClassReadsAnEncountersClinicalText() throws java.io.IOException {
+        Set<String> reads = new TreeSet<>();
+        for (String read : clinicalReads()) {
+            if (NON_CLINICAL_CLASS.matcher(read.substring(0, read.indexOf('#'))).matches()) {
+                reads.add(read);
+            }
+        }
+        assertThat(reads).as("an invoice, an appointment or a desk answer never needs this; name the visit by type and date")
+            .isEqualTo(NON_CLINICAL_CLASS_READS.keySet());
+    }
+
+    @Test
+    @DisplayName("QA D1421: every reader of Encounter.notes is named, with who receives the text")
+    void everyReaderOfEncounterNotesIsNamed() throws java.io.IOException {
+        Set<String> readers = new TreeSet<>();
+        for (String read : clinicalReads()) {
+            if (read.endsWith("#Encounter.getNotes")) {
+                readers.add(read.substring(0, read.indexOf('#')));
+            }
+        }
+        assertThat(readers).as("Encounter.notes holds nursing text and diagnoses: say who this class hands them to")
+            .isEqualTo(ENCOUNTER_NOTES_READERS.keySet());
     }
 
     private static void walkBody(Type type, Set<Class<?>> seen, Set<String> sent) {

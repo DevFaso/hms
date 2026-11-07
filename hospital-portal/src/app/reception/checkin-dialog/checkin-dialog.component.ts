@@ -1,3 +1,4 @@
+import { ClockTimePipe } from '../../shared/pipes/clock-time.pipe';
 import { DialogFocusDirective } from '../../shared/a11y/dialog-focus.directive';
 import {
   Component,
@@ -46,7 +47,7 @@ export function copayAmountMessageKey(amount: number | string | null | undefined
 @Component({
   selector: 'app-checkin-dialog',
   standalone: true,
-  imports: [DialogFocusDirective, FormsModule, TranslateModule],
+  imports: [ClockTimePipe, DialogFocusDirective, FormsModule, TranslateModule],
   templateUrl: './checkin-dialog.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './checkin-dialog.component.scss',

@@ -77,7 +77,8 @@ public class BillingInvoiceMapper {
         if (encounter == null) return;
 
         dto.setEncounterCode(encounter.getCode());
-        dto.setEncounterDescription(encounter.getNotes());
+        // QA D1421: never Encounter.notes (nursing text, diagnoses), for any reader. A visit is
+        // named on an invoice by its type and date, below. Guard: ReceptionistClinicalReadGuardTest.
         dto.setEncounterType(encounter.getEncounterType() != null ? encounter.getEncounterType().name() : null);
         dto.setEncounterStatus(encounter.getStatus() != null ? encounter.getStatus().name() : null);
         dto.setEncounterDate(encounter.getEncounterDate() != null ? encounter.getEncounterDate().toString() : null);

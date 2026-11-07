@@ -3078,7 +3078,9 @@
               <div class="patient-bill-row">
                 <div class="bill-info">
                   <span class="bill-desc">{{
-                    inv.description || inv.facility || ('DASHBOARD.MEDICAL_SERVICES' | translate)
+                    inv.visitType
+                      ? (inv.visitType | enumLabel: 'encounterType')
+                      : inv.facility || ('DASHBOARD.MEDICAL_SERVICES' | translate)
                   }}</span>
                   <span class="bill-date">{{ inv.date | serverTime | date: 'mediumDate' }}</span>
                 </div>

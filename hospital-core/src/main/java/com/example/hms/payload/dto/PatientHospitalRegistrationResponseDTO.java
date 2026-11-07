@@ -46,6 +46,8 @@ public class PatientHospitalRegistrationResponseDTO {
 
     private LocalDate registrationDate;
     private boolean active;
+    /** QA D1430: why the registration was deactivated. */
+    private String deactivationReason;
 
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

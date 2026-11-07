@@ -127,6 +127,44 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
         return mapper.toResponseDTO(saved);
     }
 
+    /**
+     * QA D1430: deactivating takes a reason, refused on its field, and the reason is shown on the
+     * row; reactivating clears it. A row that stays inactive keeps the reason it was given.
+     */
+    private void applyActive(PatientHospitalRegistration registration, PatientHospitalRegistrationRequestDTO dto) {
+        if (registration.isActive() && !dto.isActive()) {
+            String reason = dto.getDeactivationReason();
+            if (reason == null || reason.isBlank()) {
+                throw new com.example.hms.exception.FieldBusinessException("deactivationReason",
+                    "registration.deactivation.reasonRequired");
+            }
+            registration.setDeactivationReason(reason.trim());
+        } else if (dto.isActive()) {
+            registration.setDeactivationReason(null);
+        }
+        registration.setActive(dto.isActive());
+    }
+
+    /** QA D1430: ending a patient's registration is on the audit trail; the reason stays on the row. */
+    private void auditIfDeactivated(PatientHospitalRegistration saved, boolean wasActive) {
+        if (!wasActive || saved.isActive()) {
+            return;
+        }
+        try {
+            auditService.logEvent(AuditEventRequestDTO.builder()
+                .eventType(AuditEventType.PATIENT_UPDATE)
+                .status(AuditStatus.SUCCESS)
+                .entityType("PatientHospitalRegistration")
+                .resourceId(saved.getId() != null ? saved.getId().toString() : null)
+                .userName(HospitalContextHolder.getContextOrEmpty().getPrincipalUsername())
+                .hospitalName(saved.getHospital() != null ? saved.getHospital().getName() : null)
+                .eventDescription("Patient registration deactivated")
+                .build());
+        } catch (RuntimeException ex) {
+            log.warn("Failed to emit audit for registration {}: {}", saved.getId(), ex.getMessage());
+        }
+    }
+
     /** Linking a patient grants this hospital ongoing chart access — auditable. */
     private void emitRegistrationAudit(PatientHospitalRegistration saved, Patient patient, Hospital hospital) {
         try {
@@ -298,6 +336,7 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
         applyEditableFields(registration, dto, true);
         requireClinicalOnReactivation(registration, wasActive);
         PatientHospitalRegistration updated = registrationRepository.save(registration);
+        auditIfDeactivated(updated, wasActive);
         log.info("✅ Patched registration mrn: {}", mrn);
         return mapper.toResponseDTO(updated);
     }
@@ -326,7 +365,9 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
         boolean wasActive = registration.isActive();
         applyEditableFields(registration, dto, false);
         requireClinicalOnReactivation(registration, wasActive);
-        return mapper.toResponseDTO(registrationRepository.save(registration));
+        PatientHospitalRegistration saved = registrationRepository.save(registration);
+        auditIfDeactivated(saved, wasActive);
+        return mapper.toResponseDTO(saved);
     }
 
     // -------------------- helpers --------------------
@@ -370,7 +411,7 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
         }
 
         if (!isPatch || dto.isActive() != registration.isActive()) {
-            registration.setActive(dto.isActive());
+            applyActive(registration, dto);
         }
 
         if (!isPatch || dto.getCurrentRoom() != null) {

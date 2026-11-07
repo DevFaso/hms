@@ -1,3 +1,4 @@
+import { refusesForOverbookReason } from '../appointments/published-slot';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import {
   ChangeDetectionStrategy,
@@ -116,6 +117,9 @@ export class PrenatalTabComponent implements OnInit {
   rescheduleDate = '';
   rescheduleTime = '';
   rescheduleNotes = '';
+  /** QA D1429: the new time is off the published slots: the server asked why. */
+  rescheduleOverbook = signal(false);
+  rescheduleOverbookReason = '';
   rescheduleBusy = signal(false);
 
   /* ── Reminder modal ── */
@@ -213,6 +217,8 @@ export class PrenatalTabComponent implements OnInit {
     this.rescheduleDate = '';
     this.rescheduleTime = appointment.startTime?.substring(0, 5) ?? '';
     this.rescheduleNotes = '';
+    this.rescheduleOverbook.set(false);
+    this.rescheduleOverbookReason = '';
     this.showRescheduleModal.set(true);
   }
 
@@ -234,6 +240,7 @@ export class PrenatalTabComponent implements OnInit {
         newAppointmentDate: this.rescheduleDate,
         newStartTime: this.rescheduleTime,
         notes: this.rescheduleNotes.trim() || undefined,
+        overbookReason: this.rescheduleOverbookReason.trim() || undefined,
       })
       .subscribe({
         next: () => {
@@ -261,6 +268,9 @@ export class PrenatalTabComponent implements OnInit {
           this.closeReschedule();
         },
         error: (err: unknown) => {
+          if (refusesForOverbookReason(err)) {
+            this.rescheduleOverbook.set(true);
+          }
           this.toast.error(this.reasonOr(err, 'PRENATAL.RESCHEDULE_ERROR'));
           this.rescheduleBusy.set(false);
         },

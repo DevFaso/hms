@@ -1,3 +1,4 @@
+import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 import { refusalReason } from '../shared/refusal-reason';
 import {
   Component,
@@ -72,6 +73,7 @@ export class ProfileComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   private readonly translate = inject(TranslateService);
+  private readonly confirm = inject(ConfirmService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly oidcAuth = inject(OidcAuthService);
   private readonly auditDescriptions = inject(AuditDescriptionService);
@@ -522,7 +524,13 @@ export class ProfileComponent implements OnInit {
     });
   }
 
-  removeRecoveryContact(contact: RecoveryContact): void {
+  /** QA D1430 sibling: the gate now sees this write; a recovery contact is not removed on one click. */
+  async removeRecoveryContact(contact: RecoveryContact): Promise<void> {
+    const confirmed = await this.confirm.ask({
+      titleKey: 'PROFILE.RECOVERY_REMOVE_CONFIRM',
+      confirmKey: 'COMMON.REMOVE',
+    });
+    if (!confirmed) return;
     this.recoverySaving.set(true);
     const remaining = (this.credentials()?.recoveryContacts ?? [])
       .filter((rc) => rc.id !== contact.id)

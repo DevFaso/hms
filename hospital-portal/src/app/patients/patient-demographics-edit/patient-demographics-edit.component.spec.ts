@@ -189,4 +189,47 @@ describe('PatientDemographicsEditComponent (QA D926)', () => {
       addressLine1: 'Secteur 15',
     });
   });
+
+  describe('QA D1422: a refused identity is marked on its field', () => {
+    const marked = (fixture: ReturnType<typeof create>): string[] =>
+      Array.from(
+        (fixture.nativeElement as HTMLElement).querySelectorAll('[aria-invalid="true"]'),
+      ).map((el) => el.id);
+
+    for (const dob of ['2030-01-01', '1800-01-01']) {
+      it(`the birth date ${dob}: aria-invalid, described and focused, nothing sent`, () => {
+        const fixture = create();
+        fixture.detectChanges();
+        fixture.componentInstance.form.dateOfBirth = dob;
+        fixture.componentInstance.submit();
+        fixture.detectChanges();
+
+        expect(patients.patchDemographics).not.toHaveBeenCalled();
+        expect(marked(fixture)).toEqual(['demoDob']);
+        const el = (fixture.nativeElement as HTMLElement).querySelector('#demoDob') as HTMLElement;
+        expect(el.getAttribute('aria-describedby')).toContain('demoDob');
+        expect(document.activeElement).toBe(el);
+        expect(fixture.componentInstance.error()).toBeTruthy();
+      });
+    }
+
+    it('a digit-only name: each one marked; correcting it clears the mark and saves', () => {
+      const fixture = create();
+      fixture.detectChanges();
+      const c = fixture.componentInstance;
+      c.form.firstName = '12345';
+      c.form.lastName = '678';
+      c.submit();
+      fixture.detectChanges();
+      expect(marked(fixture)).toEqual(['demoFirstName', 'demoLastName']);
+      expect(patients.patchDemographics).not.toHaveBeenCalled();
+
+      c.form.firstName = 'Awa';
+      c.form.lastName = 'Traoré';
+      c.submit();
+      fixture.detectChanges();
+      expect(marked(fixture)).toEqual([]);
+      expect(patients.patchDemographics).toHaveBeenCalled();
+    });
+  });
 });

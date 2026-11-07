@@ -80,6 +80,10 @@ public class PatientHospitalRegistration extends BaseEntity {
     @Builder.Default
     private boolean active = true;
 
+    /** QA D1430 (V270): why this registration was deactivated; null while it is active. */
+    @Column(name = "deactivation_reason", length = 500)
+    private String deactivationReason;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "stay_status", nullable = false, length = 40)
     // QA D764: a registration is not a stay. It is REGISTERED until an
