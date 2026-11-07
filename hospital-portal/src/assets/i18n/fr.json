@@ -7472,6 +7472,10 @@
       "ALLERGY_REASON": "Motif de dérogation à l’alerte d’allergie",
       "CDS_REASON": "Motif du passage outre l’alerte critique"
     },
+    "SIGN_CRITICAL": {
+      "TITLE": "Alerte critique : signer malgré tout ?",
+      "REASON": "Motif de signature malgré l'alerte"
+    },
     "SIGN_ALLERGY": {
       "TITLE": "Alerte allergie : signer malgré tout ?",
       "REASON": "Motif de la signature malgré l’alerte allergie"

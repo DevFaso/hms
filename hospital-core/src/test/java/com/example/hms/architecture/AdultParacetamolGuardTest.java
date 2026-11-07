@@ -64,8 +64,9 @@ class AdultParacetamolGuardTest {
             .contains("ALERT = CdsCard.Indicator.WARNING")
             .containsOnlyOnce("Indicator.CRITICAL")
             .contains("contraindication.detail")
-            .doesNotContain("Boolean.TRUE")
+            .containsOnlyOnce("Boolean.TRUE);")
             // The eight-argument card: no hardStop, no reviewRequired.
+            .contains("null, null, null, UUID.randomUUID().toString(), null, null, Boolean.TRUE);")
             .contains("null, null, null, UUID.randomUUID().toString());");
     }
 

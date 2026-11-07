@@ -74,8 +74,22 @@ public final class CdsHookDtos {
          * not signed until that review is recorded on it. Absent (null) on
          * every other card, so the CDS Hooks wire shape is unchanged for them.
          */
-        Boolean reviewRequired
+        Boolean reviewRequired,
+        /*
+         * True on a critical card that is also checked at the signature: an order saved
+         * before the condition was recorded is signed only with a reason. Absent (null) on
+         * every other card, which keeps the rule of passing a critical card at creation.
+         */
+        Boolean reasonAtSignature
     ) {
+        /** A card with the round-18 and round-19 flags. */
+        public CdsCard(String summary, String detail, Indicator indicator, Source source,
+                       List<CdsLink> links, List<CdsSuggestion> suggestions,
+                       String selectionBehavior, String uuid, Boolean hardStop, Boolean reviewRequired) {
+            this(summary, detail, indicator, source, links, suggestions, selectionBehavior, uuid, hardStop,
+                reviewRequired, null);
+        }
+
         /** A card any critical-override path may pass with a reason (every card before round 18). */
         public CdsCard(String summary, String detail, Indicator indicator, Source source,
                        List<CdsLink> links, List<CdsSuggestion> suggestions,
@@ -93,7 +107,12 @@ public final class CdsHookDtos {
         /** This card with another {@code uuid}; every other field is kept. */
         public CdsCard withUuid(String newUuid) {
             return new CdsCard(summary, detail, indicator, source, links, suggestions, selectionBehavior, newUuid,
-                hardStop, reviewRequired);
+                hardStop, reviewRequired, reasonAtSignature);
+        }
+
+        /** Whether the signature needs a reason on record for this card. */
+        public boolean needsReasonAtSignature() {
+            return Boolean.TRUE.equals(reasonAtSignature);
         }
 
         /** Whether no override may pass this card. */

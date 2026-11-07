@@ -267,13 +267,14 @@ public final class MarDoseSchedule {
      * Round 18 (QA D935): doses in 24 hours for a fixed repeat, or {@code null}
      * when the frequency is not one. Unlike {@link #intervalHours}, a count
      * that does not divide the day ("5 fois par jour") is still read, and an
-     * interval longer than a day gives a fraction ("q48h" = 0.5).
+     * interval longer than a day gives a fraction ("q48h" = 0.5). A sentence with several
+     * counts ("2 fois par jour puis 4 fois par jour") gives the highest, for a limit.
      */
     public static Double dosesPerDay(String frequency) {
         if (frequency == null || frequency.isBlank() || isAsNeeded(frequency)) {
             return null;
         }
-        Integer perDay = timesPerDay(normalize(FrequencyCadence.withoutDoseParts(accentlessUpper(frequency))));
+        Integer perDay = highestTimesPerDay(normalize(FrequencyCadence.withoutDoseParts(accentlessUpper(frequency))));
         if (perDay != null) {
             return perDay > 0 ? (double) perDay : null;
         }
@@ -292,6 +293,10 @@ public final class MarDoseSchedule {
         Reading reading = read(frequency);
         if (reading.repeating()) {
             return reading.intervalMinutes();
+        }
+        if (reading.kind() == Kind.UNREAD) {
+            // "toutes les 2 a 3 h" is no schedule, but it allows the shorter gap.
+            return FrequencyCadence.shorterOfTwoHourIntervals(normalize(accentlessUpper(frequency)));
         }
         if (reading.kind() != Kind.COURSE) {
             return null;
@@ -411,6 +416,35 @@ public final class MarDoseSchedule {
     private static boolean perDayAt(String f, int from) {
         return PER_DAY_SLASH.matcher(f).region(from, f.length()).lookingAt()
             || PER_DAY_WORDS.matcher(f).region(from, f.length()).lookingAt();
+    }
+
+    /** {@link #timesPerDay}, reading every count and every "every n hours" of a sentence, not its first. */
+    private static Integer highestTimesPerDay(String f) {
+        Integer first = timesPerDay(f);
+        if (first == null) {
+            return null;
+        }
+        int highest = first;
+        Matcher times = TIMES.matcher(f);
+        while (times.find()) {
+            if (perDayAt(f, times.end())) {
+                highest = higherCount(highest, times.group(1));
+            }
+        }
+        Matcher bare = BARE_PER_DAY.matcher(f);
+        while (bare.find()) {
+            highest = higherCount(highest, bare.group(1));
+        }
+        Integer hours = hoursOf(f);
+        if (hours != null && hours <= HOURS_PER_DAY) {
+            highest = Math.max(highest, HOURS_PER_DAY / hours);
+        }
+        return highest;
+    }
+
+    private static int higherCount(int highest, String written) {
+        int count = Integer.parseInt(written);
+        return count <= MAX_DOSES_PER_DAY ? Math.max(highest, count) : highest;
     }
 
     /** The count of a "3 fois par jour" (or "1-0-1") frequency, or {@code null}. */

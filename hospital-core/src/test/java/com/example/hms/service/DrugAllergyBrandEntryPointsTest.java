@@ -176,7 +176,8 @@ class DrugAllergyBrandEntryPointsTest {
         "service/PrescriptionServiceImpl.java",
         "service/pharmacy/DispenseVerificationService.java",
         "cdshooks/service/MedicationAllergyCdsService.java",
-        "cdshooks/rules/OrderedDrugIdentityRule.java");
+        "cdshooks/rules/OrderedDrugIdentityRule.java",
+        "cdshooks/rules/ParacetamolFactsReader.java");
 
     /** Readers of an order's catalogue item that are not an identity decision, and why. */
     private static final Map<String, String> NOT_IDENTITY_CHECKS = Map.ofEntries(

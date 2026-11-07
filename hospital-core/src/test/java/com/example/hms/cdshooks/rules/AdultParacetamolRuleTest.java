@@ -38,7 +38,9 @@ class AdultParacetamolRuleTest {
     private static final String CONTRA = "is contraindicated";
     private static final String UNREAD = "could not be read";
     private static final String LOWER_GROUPS = "may apply";
-    private static final String LEFT_OUT = "are not counted in the total";
+    private static final String LEFT_OUT = "not counted in the paracetamol total";
+    private static final String OTHERS = "from other active orders";
+    private static final String DEGREE = "no degree recorded";
     private static final String AGE = "no date of birth";
 
     private final AdultParacetamolRule rule = new AdultParacetamolRule();
@@ -114,12 +116,14 @@ class AdultParacetamolRuleTest {
             Prescription.builder().medicationName("Doliprane").dosage(dose).frequency(frequency).build(), tablet500());
     }
 
-    /** By letter: S single, D daily, I interval, N 3 to 4 g, R lower groups, P left out, U unread, C contraindication, A age. */
+    /** By letter: O at least from other orders, Z degree not recorded, S single, D daily, I interval, N 3 to 4 g, R lower groups, P left out, U unread, C contraindication, A age. */
     private static String letters(List<CdsCard> cards) {
         Set<String> out = new TreeSet<>();
         for (CdsCard card : cards) {
             String summary = card.summary();
-            if (summary.contains(SINGLE)) out.add("S");
+            if (summary.contains(OTHERS)) out.add("O");
+            else if (summary.contains(DEGREE)) out.add("Z");
+            else if (summary.contains(SINGLE)) out.add("S");
             else if (summary.contains(DAILY)) out.add("D");
             else if (summary.contains(INFO)) out.add("N");
             else if (summary.contains(LOWER_GROUPS)) out.add("R");
@@ -287,9 +291,13 @@ class AdultParacetamolRuleTest {
         assertThat(letters(evaluate(any))).isEqualTo("C");
         // A dose nobody can read is still contraindicated; the general ceiling stands beside it.
         assertThat(letters(evaluate(new Order("5 ml", "3 fois par jour").risks(ParacetamolRisk.SEVERE_HEPATIC)))).isEqualTo("C");
-        // No "up to 4 g on medical advice" beside a contraindication.
-        assertThat(letters(evaluate(new Order("1 g", "4 fois par jour").risks(ParacetamolRisk.SEVERE_HEPATIC)))).isEqualTo("C");
-        assertThat(letters(evaluate(new Order("1 g", "5 fois par jour").risks(ParacetamolRisk.SEVERE_HEPATIC)))).isEqualTo("CD");
+        // M1: severe sets the lowest ceiling, with the rule saying contraindicated.
+        List<CdsCard> capped = evaluate(new Order("1 g", "4 fois par jour").risks(ParacetamolRisk.SEVERE_HEPATIC));
+        assertThat(letters(capped)).isEqualTo("CD");
+        assertThat(capped.get(1).summary()).contains("maximum of 2000 mg per day");
+        assertThat(capped.get(1).detail()).contains("Daily limit: 2000 mg").contains("set by the contraindication");
+        // No "up to 4 g on medical advice" beside a contraindication, under the ceiling too.
+        assertThat(letters(evaluate(new Order("500 mg", "4 fois par jour").risks(ParacetamolRisk.SEVERE_HEPATIC)))).isEqualTo("C");
     }
 
     @Test
@@ -340,7 +348,7 @@ class AdultParacetamolRuleTest {
         List<CdsCard> cards = evaluate(new Order(dose, frequency).others(other(otherDose, otherFrequency)));
         assertThat(letters(cards)).isEqualTo(expected);
         if (total != null) {
-            assertThat(cards.get(0).summary()).contains(total + " mg per day of paracetamol from all active orders");
+            assertThat(cards.get(0).summary()).contains(total + " mg per day of paracetamol from active orders at this hospital");
             assertThat(cards.get(0).detail()).contains("counts 1 other active order");
         }
     }
@@ -404,6 +412,8 @@ class AdultParacetamolRuleTest {
         all.addAll(evaluate(new Order("1 g", "4 fois par jour").risks(ParacetamolRisk.TWO_GRAM_GROUP,
             ParacetamolRisk.CHRONIC_ALCOHOLISM)));
         assertThat(all).hasSizeGreaterThanOrEqualTo(6);
+        assertThat(evaluate(new Order("1 g", null).risks(ParacetamolRisk.SEVERE_HEPATIC)).get(0).needsReasonAtSignature()).isTrue();
+        assertThat(all).noneMatch(CdsCard::needsReasonAtSignature);
         assertThat(all).allSatisfy(card -> {
             assertThat(card.indicator()).isNotEqualTo(CdsCard.Indicator.CRITICAL);
             assertThat(card.blocksOverride()).isFalse();
@@ -430,6 +440,143 @@ class AdultParacetamolRuleTest {
         assertThat(PediatricDoseRule.isAdult(patient)).isFalse();
         patient.setDateOfBirth(LocalDate.now().minusYears(18));
         assertThat(PediatricDoseRule.isAdult(patient)).isTrue();
+    }
+
+    /** H1: an unread proposed dose still judges the other orders. */
+    @ParameterizedTest(name = "unread {0}: [{1}]")
+    @CsvSource(delimiter = '|', value = {"10 ml | O", "1000 | O"})
+    void anUnreadDoseStillJudgesTheOtherOrders(String dose, String expected) {
+        List<CdsCard> cards = evaluate(new Order(dose, "toutes les 6 heures").others(other("1 g", "toutes les 4 heures")));
+        assertThat(letters(cards)).isEqualTo(expected);
+        assertThat(cards.get(0).indicator()).isEqualTo(CdsCard.Indicator.WARNING);
+        assertThat(cards.get(0).summary()).contains("at least 6000 mg").contains("dose of this order could not be read");
+        assertThat(cards.get(0).detail()).contains("at least 6000 mg from other orders");
+    }
+
+    @Test
+    void anUnreadDoseUnderTheCeilingIsInformationAndNoOtherOrderIsSilent() {
+        List<CdsCard> cards = evaluate(new Order("10 ml", "3 fois par jour").others(other("500 mg", "3 fois par jour")));
+        assertThat(letters(cards)).isEqualTo("O");
+        assertThat(cards.get(0).indicator()).isEqualTo(CdsCard.Indicator.INFO);
+        assertThat(evaluate(new Order("10 ml", "3 fois par jour"))).isEmpty();
+    }
+
+    /** H3: an order whose dose is unread is named, even with nothing else to say. */
+    @ParameterizedTest(name = "other dose {0}")
+    @CsvSource({"1000", "20 cp"})
+    void anUncountedOrderIsNamedWhenNothingElseFires(String otherDose) {
+        ParacetamolFacts.OtherOrder bare = new ParacetamolFacts.OtherOrder(Prescription.builder()
+            .medicationName("Efferalgan").dosage(otherDose).frequency("toutes les 6 heures").build(), null);
+        List<CdsCard> cards = evaluate(new Order("500 mg", "toutes les 12 heures").others(bare));
+        assertThat(letters(cards)).isEqualTo("P");
+        assertThat(cards.get(0).summary()).contains("Efferalgan");
+    }
+
+    /** M2. */
+    @Test
+    void aDegreeNotRecordedAtALowDoseStillSpeaks() {
+        List<CdsCard> cards = evaluate(new Order("500 mg", "2 fois par jour")
+            .risks(ParacetamolRisk.TWO_GRAM_GROUP, ParacetamolRisk.HEPATIC_DEGREE_UNRECORDED));
+        assertThat(letters(cards)).isEqualTo("Z");
+        assertThat(cards.get(0).indicator()).isEqualTo(CdsCard.Indicator.INFO);
+        assertThat(cards.get(0).summary()).contains("contraindicated if it is severe");
+    }
+
+    /** M3. */
+    @Test
+    void aContraindicationIsNotHiddenByAMissingBirthDate() {
+        Order order = new Order("500 mg", "3 fois par jour").risks(ParacetamolRisk.SEVERE_HEPATIC);
+        order.patient = Patient.builder().build();
+        assertThat(letters(evaluate(order))).isEqualTo("AC");
+    }
+
+    /** M3: a child gets this card only, with no adult limit in it. */
+    @Test
+    void aChildGetsOnlyTheContraindication() {
+        Order order = new Order("2 g", "6 fois par jour").risks(ParacetamolRisk.SEVERE_HEPATIC);
+        order.patient = agedYears(10);
+        List<CdsCard> cards = evaluate(order);
+        assertThat(letters(cards)).isEqualTo("C");
+        assertThat(cards.get(0).indicator()).isEqualTo(CdsCard.Indicator.CRITICAL);
+        assertThat(cards.get(0).detail()).doesNotContain("Daily limit").doesNotContain("4000").doesNotContain("Lower limits");
+        Order noRisk = new Order("2 g", "6 fois par jour");
+        noRisk.patient = agedYears(10);
+        assertThat(evaluate(noRisk)).isEmpty();
+    }
+
+    /** M4. */
+    @Test
+    void theScopeIsNamedOnEveryCard() {
+        List<CdsCard> cards = evaluate(new Order("2 g", "toutes les 2 heures").risks(ParacetamolRisk.SEVERE_HEPATIC));
+        assertThat(cards).isNotEmpty().allSatisfy(card -> assertThat(card.detail()).contains("this hospital only: check other facilities"));
+        assertThat(cards).noneMatch(card -> card.summary().contains("all active orders"));
+    }
+
+    /** M5. */
+    @Test
+    void aProposedCombinationIsJudgedWithItsDoseUnknown() {
+        ParacetamolFacts severe = new ParacetamolFacts(true, List.of(), Set.of(ParacetamolRisk.SEVERE_HEPATIC),
+            List.of(), List.of(), true, false, false);
+        assertThat(letters(evaluateWith(new Order("2 000 mg", "3 fois par jour"), severe))).isEqualTo("C");
+
+        ParacetamolFacts withOthers = new ParacetamolFacts(true, List.of(other("1 g", "4 fois par jour"), other("1 g", "1 fois par jour")), Set.of(),
+            List.of(), List.of(), true, false, false);
+        List<CdsCard> cards = evaluateWith(new Order("2 000 mg", "3 fois par jour"), withOthers);
+        assertThat(letters(cards)).isEqualTo("O");
+        assertThat(cards.get(0).summary()).contains("at least 5000 mg");
+
+        ParacetamolFacts alone = new ParacetamolFacts(true, List.of(), Set.of(), List.of(), List.of(), true, false, false);
+        assertThat(letters(evaluateWith(new Order("1 cp", "3 fois par jour"), alone))).isEqualTo("P");
+    }
+
+    /** L1, L2. */
+    @Test
+    void aSentenceWithSeveralCountsIsReadAtItsHighest() {
+        assertThat(evaluate(new Order("1 g", "2 fois par jour puis 4 fois par jour")).get(0).summary()).contains("4000 mg per day");
+        assertThat(evaluate(new Order("1 g", "2/j puis 5/j")).get(0).summary()).contains("5000 mg per day");
+        assertThat(evaluate(new Order("1 g", "2 fois par jour puis 4/j")).get(0).summary()).contains("4000 mg per day");
+        assertThat(evaluate(new Order("1 g", "2 fois par jour puis toutes les 4 h")).get(0).summary()).contains("6000 mg per day");
+        assertThat(evaluate(new Order("500 mg", "2 fois par jour puis 4 fois par jour"))).isEmpty();
+    }
+
+    @Test
+    void anUnreadFrequencyCountedAsOneDoseSaysSo() {
+        assertThat(evaluate(new Order("5 g", "selon la douleur")).get(1).detail())
+            .contains("counted as one dose: its frequency \"selon la douleur\" could not be read");
+    }
+
+    /** L3. */
+    @ParameterizedTest(name = "{0}: [{1}]")
+    @CsvSource(delimiter = '|', value = {
+        "toutes les 2 à 3 h | IU", "toutes les 4 à 6 h | U", "every 2 to 3 hours | IU", "toutes les 2 à 3 jours | U"})
+    void aRangeOfIntervalsReadsTheShorterGap(String frequency, String expected) {
+        assertThat(letters(evaluate(new Order("500 mg", frequency)))).isEqualTo(expected);
+    }
+
+    /** L5. */
+    @Test
+    void whatCouldNotBeReadWithNoHospitalIsToldOnTheCard() {
+        ParacetamolFacts withheld = new ParacetamolFacts(true, List.of(), Set.of(), List.of(), List.of(), false, true, false);
+        // Whatever the rows: no count, so the card discloses nothing about them.
+        assertThat(evaluateWith(new Order("2 g", null), withheld).get(0).detail())
+            .contains("problems tagged sensitive are not read").doesNotContainPattern("\\d+ sensitive");
+        ParacetamolFacts none = new ParacetamolFacts(true, List.of(), Set.of(), List.of(), List.of(), true, true, true);
+        assertThat(evaluateWith(new Order("2 g", null), none).get(0).detail()).contains("No hospital is active");
+    }
+
+    /** L6. */
+    @Test
+    void noFrequencySentIsSaid() {
+        assertThat(evaluate(new Order("2 g", null)).get(0).detail())
+            .contains("as no frequency was sent").doesNotContain("Calculated 24-hour total");
+    }
+
+    /** L8. */
+    @Test
+    void anOldWeightIsToldAtAnyWeight() {
+        Order order = new Order("2 g", "3 fois par jour").weight(70d);
+        order.weighedAt = LocalDateTime.now().minusDays(31);
+        assertThat(evaluate(order).get(0).detail()).contains("recorded 31 days ago");
     }
 
     @Test

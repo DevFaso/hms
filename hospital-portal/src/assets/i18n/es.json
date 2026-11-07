@@ -7472,6 +7472,10 @@
       "ALLERGY_REASON": "Motivo de la excepción por alergia",
       "CDS_REASON": "Motivo de excepción a la alerta crítica"
     },
+    "SIGN_CRITICAL": {
+      "TITLE": "Alerta crítica: ¿firmar de todos modos?",
+      "REASON": "Motivo para firmar pese a la alerta"
+    },
     "SIGN_ALLERGY": {
       "TITLE": "Alerta de alergia: ¿firmar de todos modos?",
       "REASON": "Motivo para firmar pese a la alerta de alergia"
