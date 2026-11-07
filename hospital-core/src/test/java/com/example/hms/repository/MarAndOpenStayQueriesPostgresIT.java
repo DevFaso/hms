@@ -222,6 +222,16 @@ class MarAndOpenStayQueriesPostgresIT {
         }
     }
 
+    /**
+     * A wall-clock time as the application stores it: hibernate.jdbc.time_zone is UTC, so a LocalDateTime
+     * bound or written through JPA is shifted from the JVM's zone, and a row written here in raw SQL must be too.
+     */
+    private static String stored(String local) {
+        java.time.format.DateTimeFormatter format = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+        return java.time.LocalDateTime.parse(local, format).atZone(java.time.ZoneId.systemDefault())
+            .withZoneSameInstant(java.time.ZoneOffset.UTC).format(format);
+    }
+
     private void order(String status) {
         replica("INSERT INTO clinical.prescriptions (id, patient_id, staff_id, encounter_id, hospital_id, assignment_id, "
             + "medication_name, refills_used, controlled_substance, inpatient_order, take_home, allergies_reviewed, "
@@ -234,14 +244,14 @@ class MarAndOpenStayQueriesPostgresIT {
     /** CR-03: every shape the one caller meets: the window across midnight, status, hospital and patient. */
     @Test
     void cr03_theDosesGivenSinceAMomentAcrossMidnight() {
-        UUID justInside = dose("GIVEN", "2026-11-06 00:30:00", "2026-11-06 00:30:00", "2026-11-06 00:30:00");
-        UUID yesterdayEvening = dose("GIVEN", "2026-11-06 23:50:00", "2026-11-06 23:50:00", "2026-11-06 23:50:00");
-        UUID afterMidnight = dose("GIVEN", "2026-11-07 00:10:00", "2026-11-07 00:10:00", "2026-11-07 00:10:00");
-        dose("GIVEN", "2026-11-06 00:29:00", "2026-11-06 00:29:59", "2026-11-06 00:29:00");
-        dose("HELD", "2026-11-06 23:00:00", "2026-11-06 23:00:00", "2026-11-06 23:00:00");
-        dose("REFUSED", "2026-11-06 23:00:00", "2026-11-06 23:00:00", "2026-11-06 23:00:00");
-        dose("MISSED", "2026-11-06 23:00:00", "2026-11-06 23:00:00", "2026-11-06 23:00:00");
-        dose("PENDING", "2026-11-06 23:00:00", null, "2026-11-06 23:00:00");
+        UUID justInside = dose("GIVEN", stored("2026-11-06 00:30:00"), stored("2026-11-06 00:30:00"), stored("2026-11-06 00:30:00"));
+        UUID yesterdayEvening = dose("GIVEN", stored("2026-11-06 23:50:00"), stored("2026-11-06 23:50:00"), stored("2026-11-06 23:50:00"));
+        UUID afterMidnight = dose("GIVEN", stored("2026-11-07 00:10:00"), stored("2026-11-07 00:10:00"), stored("2026-11-07 00:10:00"));
+        dose("GIVEN", stored("2026-11-06 00:29:00"), stored("2026-11-06 00:29:59"), stored("2026-11-06 00:29:00"));
+        dose("HELD", stored("2026-11-06 23:00:00"), stored("2026-11-06 23:00:00"), stored("2026-11-06 23:00:00"));
+        dose("REFUSED", stored("2026-11-06 23:00:00"), stored("2026-11-06 23:00:00"), stored("2026-11-06 23:00:00"));
+        dose("MISSED", stored("2026-11-06 23:00:00"), stored("2026-11-06 23:00:00"), stored("2026-11-06 23:00:00"));
+        dose("PENDING", stored("2026-11-06 23:00:00"), null, stored("2026-11-06 23:00:00"));
         // The order behind the doses, discontinued: its doses still count.
         order("DISCONTINUED");
         replica("INSERT INTO clinical.medication_administration_records (id, prescription_id, patient_id, hospital_id, "
