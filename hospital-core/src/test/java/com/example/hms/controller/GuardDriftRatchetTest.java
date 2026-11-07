@@ -117,6 +117,8 @@ class GuardDriftRatchetTest {
         "The physician's own dashboard panels; /critical-alerts is question (a) as found 2026-09-26, pending the clinical decision in tasklist \"Nurse/midwife read drift\"";
     private static final String MEDICATIONHISTORYCONTROLLER_REASON =
         "Pharmacy fills; the pharmacy files are owned by another PR of this batch";
+    private static final String ORDER_REVIEW_REASON =
+        "A held order is decided on current prescribing authority, by the user's ruling; a nurse's role is not that";
     private static final String MORTALITYCONTROLLER_REASON =
         "Certifying and amending a death record is a physician act";
     private static final String OBGYNREFERRALCONTROLLER_REASON =
@@ -211,6 +213,9 @@ class GuardDriftRatchetTest {
         listed.put("MedicationHistoryController.createPharmacyFill", MEDICATIONHISTORYCONTROLLER_REASON);
         listed.put("MedicationHistoryController.updatePharmacyFill", MEDICATIONHISTORYCONTROLLER_REASON);
         listed.put("MortalityController.amendDeathRecord", MORTALITYCONTROLLER_REASON);
+        listed.put("OrderReviewHoldController.continueOrder", ORDER_REVIEW_REASON);
+        listed.put("OrderReviewHoldController.replaceOrder", ORDER_REVIEW_REASON);
+        listed.put("OrderReviewHoldController.stopOrder", ORDER_REVIEW_REASON);
         listed.put("MortalityController.disputeDeath", "The user's ruling: only a doctor at that hospital disputes a recorded death");
         listed.put("MortalityController.recordDeath", MORTALITYCONTROLLER_REASON);
         listed.put("ObgynReferralController.acknowledgeReferral", OBGYNREFERRALCONTROLLER_REASON);

@@ -1704,6 +1704,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         UUID actingHospitalId = roleValidator.requireActiveHospitalId();
         Prescription existing = lockForUpdateInActingHospital(id, actingHospitalId);
         PrescriptionStatus statusBefore = existing.getStatus();
+        com.example.hms.service.support.CancelledOrders.requireNotCancelled(statusBefore, "prescription.withdrawn.readOnly");
         if (statusBefore != null && statusBefore.isWithdrawn()) {
             return;
         }

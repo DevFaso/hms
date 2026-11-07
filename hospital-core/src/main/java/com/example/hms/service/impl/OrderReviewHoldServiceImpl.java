@@ -21,6 +21,7 @@ import com.example.hms.model.TransfusionRequest;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.clinical.CreateInBasketItemRequest;
 import com.example.hms.payload.dto.review.OrderReviewDecisionDTO;
+import com.example.hms.payload.dto.review.OrderReviewReplacementDTO;
 import com.example.hms.payload.dto.review.OrderReviewRowDTO;
 import com.example.hms.repository.OrderReviewHoldRepository;
 import com.example.hms.repository.PrescriptionRepository;
@@ -272,15 +273,15 @@ public class OrderReviewHoldServiceImpl implements OrderReviewHoldService, org.s
     }
 
     @Override
-    public OrderReviewRowDTO replaceOrder(UUID holdId, OrderReviewDecisionDTO decision) {
-        String reason = requireReason(decision);
-        if (decision.getReplacementOrderId() == null) {
-            throw new FieldBusinessException("replacementOrderId", "order.review.replacementRequired");
+    public OrderReviewRowDTO replaceOrder(UUID holdId, OrderReviewReplacementDTO request) {
+        String reason = request == null || request.getReason() == null ? "" : request.getReason().trim();
+        if (reason.isEmpty()) {
+            throw new FieldBusinessException(FIELD_REASON, "order.review.reasonRequired");
         }
         OrderReviewHold hold = loadHeld(holdId);
         UUID actor = roleValidator.getCurrentUserId();
         requireAuthorized(hold, actor);
-        UUID replacement = decision.getReplacementOrderId();
+        UUID replacement = request.getReplacementOrderId();
         if (hold.getOrderType() == OrderReviewType.PRESCRIPTION) {
             Prescription held = lockPrescription(hold);
             requireReplacement(replacement, hold, prescriptionRepository.findById(replacement)

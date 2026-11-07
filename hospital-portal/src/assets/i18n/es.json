@@ -6906,6 +6906,7 @@
         "GENERAL": "General"
       },
       "AUDIT_ENTITY_TYPE": {
+        "ORDER_REVIEW_HOLD": "Retención para revisión de orden",
         "DEATH_DISPUTE": "Impugnación de fallecimiento",
         "DEATH_RECORD": "Registro de fallecimiento",
         "ORDER_REVIEW": "Revisión de orden",

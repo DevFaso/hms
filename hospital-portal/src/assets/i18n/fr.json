@@ -6872,6 +6872,7 @@
         "GENERAL": "Général"
       },
       "AUDIT_ENTITY_TYPE": {
+        "ORDER_REVIEW_HOLD": "Blocage pour revue de prescription",
         "DEATH_DISPUTE": "Contestation de décès",
         "DEATH_RECORD": "Enregistrement de décès",
         "ORDER_REVIEW": "Revue de prescription",

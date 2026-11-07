@@ -3,6 +3,7 @@ package com.example.hms.service;
 import com.example.hms.model.DeathDispute;
 import com.example.hms.model.DeathRecord;
 import com.example.hms.payload.dto.review.OrderReviewDecisionDTO;
+import com.example.hms.payload.dto.review.OrderReviewReplacementDTO;
 import com.example.hms.payload.dto.review.OrderReviewRowDTO;
 
 import java.util.List;
@@ -33,7 +34,7 @@ public interface OrderReviewHoldService {
     OrderReviewRowDTO continueOrder(UUID holdId, OrderReviewDecisionDTO decision);
 
     /** Closes the held order and links the new one, written and signed the normal way. */
-    OrderReviewRowDTO replaceOrder(UUID holdId, OrderReviewDecisionDTO decision);
+    OrderReviewRowDTO replaceOrder(UUID holdId, OrderReviewReplacementDTO replacement);
 
     /** Stops the order through its own stop path. */
     OrderReviewRowDTO stopOrder(UUID holdId, OrderReviewDecisionDTO decision);

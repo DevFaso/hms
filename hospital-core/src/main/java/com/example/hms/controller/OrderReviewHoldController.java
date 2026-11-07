@@ -1,6 +1,7 @@
 package com.example.hms.controller;
 
 import com.example.hms.payload.dto.review.OrderReviewDecisionDTO;
+import com.example.hms.payload.dto.review.OrderReviewReplacementDTO;
 import com.example.hms.payload.dto.review.OrderReviewRowDTO;
 import com.example.hms.service.OrderReviewHoldService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -56,8 +57,8 @@ public class OrderReviewHoldController {
     @PreAuthorize(PRESCRIBER)
     @Operation(summary = "Close the order, linked to the new one written and signed the normal way")
     public ResponseEntity<OrderReviewRowDTO> replaceOrder(@PathVariable UUID holdId,
-                                                          @Valid @RequestBody OrderReviewDecisionDTO decision) {
-        return ResponseEntity.ok(service.replaceOrder(holdId, decision));
+                                                          @Valid @RequestBody OrderReviewReplacementDTO replacement) {
+        return ResponseEntity.ok(service.replaceOrder(holdId, replacement));
     }
 
     @PostMapping("/{holdId}/stop")

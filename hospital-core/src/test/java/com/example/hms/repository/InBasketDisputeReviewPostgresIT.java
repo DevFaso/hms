@@ -58,15 +58,16 @@ class InBasketDisputeReviewPostgresIT {
     @Autowired private JdbcTemplate jdbc;
 
     private void item(UUID user, UUID hospital, String referenceType) {
-        StringBuilder columns = new StringBuilder("id, recipient_user_id, hospital_id, reference_type, status");
-        StringBuilder marks = new StringBuilder("?, ?, ?, ?, 'UNREAD'");
+        StringBuilder columns = new StringBuilder("id, recipient_user_id, hospital_id, reference_type, status, item_type, priority");
+        StringBuilder marks = new StringBuilder("?, ?, ?, ?, 'UNREAD', 'TASK', 'URGENT'");
         java.util.List<Object> args = new java.util.ArrayList<>(java.util.List.of(UUID.randomUUID(), user, hospital, referenceType));
         for (Map<String, Object> column : jdbc.queryForList("""
                 SELECT column_name, data_type FROM information_schema.columns
                 WHERE table_schema = 'clinical' AND table_name = 'in_basket_items' AND is_nullable = 'NO' AND column_default IS NULL
                 """)) {
             String col = (String) column.get("column_name");
-            if (!java.util.Set.of("id", "recipient_user_id", "hospital_id", "reference_type", "status").contains(col)) {
+            if (!java.util.Set.of("id", "recipient_user_id", "hospital_id", "reference_type", "status").contains(col)
+                    && !java.util.Set.of("item_type", "priority").contains(col)) {
                 columns.append(", ").append(col);
                 marks.append(", ?");
                 args.add(switch ((String) column.get("data_type")) {

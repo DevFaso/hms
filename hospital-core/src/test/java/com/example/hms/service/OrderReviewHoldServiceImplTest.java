@@ -270,14 +270,11 @@ class OrderReviewHoldServiceImplTest {
         when(prescriptions.findById(fresh.getId())).thenReturn(Optional.of(fresh));
         UUID id = hold.getId();
 
-        OrderReviewDecisionDTO none = OrderReviewDecisionDTO.builder().reason("x").build();
-        assertThatThrownBy(() -> service.replaceOrder(id, none))
-            .isInstanceOfSatisfying(FieldBusinessException.class, e -> assertThat(e.getField()).isEqualTo("replacementOrderId"));
-
         com.example.hms.model.Patient other = new com.example.hms.model.Patient();
         other.setId(UUID.randomUUID());
         fresh.setPatient(other);
-        OrderReviewDecisionDTO toOther = OrderReviewDecisionDTO.builder().reason("x").replacementOrderId(fresh.getId()).build();
+        com.example.hms.payload.dto.review.OrderReviewReplacementDTO toOther =
+            com.example.hms.payload.dto.review.OrderReviewReplacementDTO.builder().reason("x").replacementOrderId(fresh.getId()).build();
         assertThatThrownBy(() -> service.replaceOrder(id, toOther)).isInstanceOf(FieldBusinessException.class);
         verify(prescriptionService, never()).stopHeldOrder(any(), any());
 
@@ -374,6 +371,21 @@ class OrderReviewHoldServiceImplTest {
 
         assertThatThrownBy(() -> service.forPatient(patient)).isInstanceOf(ResourceNotFoundException.class);
         verify(holds, never()).findByPatientIdAndHospitalIdOrderByCreatedAtDesc(any(), any());
+    }
+
+    @Test
+    @DisplayName("every decision takes a reason of its own: blank is refused on the field, and the row stays")
+    void everyDecisionNeedsAReason() {
+        UUID id = hold.getId();
+        OrderReviewDecisionDTO blank = OrderReviewDecisionDTO.builder().reason(" ").orderVersion(4L).disputeId(hold.getDisputeId()).build();
+        com.example.hms.payload.dto.review.OrderReviewReplacementDTO blankReplacement =
+            com.example.hms.payload.dto.review.OrderReviewReplacementDTO.builder().reason(" ").replacementOrderId(UUID.randomUUID()).build();
+
+        assertThatThrownBy(() -> service.continueOrder(id, blank)).isInstanceOf(FieldBusinessException.class);
+        assertThatThrownBy(() -> service.replaceOrder(id, blankReplacement)).isInstanceOf(FieldBusinessException.class);
+        assertThatThrownBy(() -> service.stopOrder(id, blank)).isInstanceOf(FieldBusinessException.class);
+        assertThatThrownBy(() -> service.recordAssessment(id, blank)).isInstanceOf(FieldBusinessException.class);
+        assertThat(hold.getStatus()).isEqualTo(OrderReviewStatus.HELD);
     }
 
     @Test

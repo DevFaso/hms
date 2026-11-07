@@ -470,7 +470,7 @@ public class TransfusionServiceImpl implements TransfusionService {
             throw new com.example.hms.exception.ClientSafeAccessDeniedException(
                 com.example.hms.utility.MessageUtil.resolveOrRaw("transfusion.request.cancel.requesterOnly"));
         }
-        return toDetail(closeRequest(request, requestId, reason));
+        return toDetail(cancelRequestRow(request, requestId, reason));
     }
 
     @Override
@@ -478,12 +478,16 @@ public class TransfusionServiceImpl implements TransfusionService {
         requestRepository.lockById(requestId);
         TransfusionRequest request = loadRequestScoped(requestId);
         if (!request.isTerminal()) {
-            closeRequest(request, requestId, reason);
+            cancelRequestRow(request, requestId, reason);
         }
     }
 
     /** The one way a request closes: its bags go back, unless blood is running, which closes nothing. */
-    private TransfusionRequest closeRequest(TransfusionRequest request, UUID requestId, String reason) {
+    private TransfusionRequest cancelRequestRow(TransfusionRequest request, UUID requestId, String reason) {
+        com.example.hms.service.support.CancelledOrders.requireCancelReason(reason, FIELD_REASON);
+        if (request.isTerminal()) {
+            throw new BusinessException("transfusion.request.closed");
+        }
         // The bags on this request take turns with a hang or a release of them.
         unitRepository.lockByRequestId(requestId);
         // QA CX-008 sibling: blood is running. Cancelling would close the request

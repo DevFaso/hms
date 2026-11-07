@@ -29,9 +29,6 @@ public class OrderReviewDecisionDTO {
     /** The dispute it was read under: a reconfirmation is bound to it. */
     private UUID disputeId;
 
-    /** The new order, for a replacement. */
-    private UUID replacementOrderId;
-
     /** The step-up a controlled drug's signature takes. */
     private String password;
     private String mfaCode;

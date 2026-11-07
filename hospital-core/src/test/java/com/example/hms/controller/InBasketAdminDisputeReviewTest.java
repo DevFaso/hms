@@ -39,7 +39,7 @@ import static org.mockito.Mockito.when;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class InBasketAdminDisputeReviewTest {
 
-    @Mock private InBasketService service;
+    @Mock private InBasketService inBasketService;
     @Mock private ControllerAuthUtils authUtils;
     @InjectMocks private InBasketController controller;
 
@@ -51,10 +51,10 @@ class InBasketAdminDisputeReviewTest {
     void setUp() {
         when(authUtils.resolveUserId(auth)).thenReturn(Optional.of(user));
         when(authUtils.resolveHospitalScope(any(), any(), any(), any(boolean.class))).thenReturn(hospital);
-        when(service.getItems(any(), any(), any(), any(), any())).thenReturn(Page.empty());
-        when(service.getDisputeReviewItems(any(), any(), any(), any())).thenReturn(Page.empty());
-        when(service.getSummary(any(), any())).thenReturn(InBasketSummaryDTO.builder().build());
-        when(service.getDisputeReviewSummary(any(), any())).thenReturn(InBasketSummaryDTO.builder().build());
+        when(inBasketService.getItems(any(), any(), any(), any(), any())).thenReturn(Page.empty());
+        when(inBasketService.getDisputeReviewItems(any(), any(), any(), any())).thenReturn(Page.empty());
+        when(inBasketService.getSummary(any(), any())).thenReturn(InBasketSummaryDTO.builder().build());
+        when(inBasketService.getDisputeReviewSummary(any(), any())).thenReturn(InBasketSummaryDTO.builder().build());
     }
 
     private void holds(String... roles) {
@@ -69,10 +69,10 @@ class InBasketAdminDisputeReviewTest {
         controller.list(null, null, hospital, Pageable.unpaged(), auth);
         controller.summary(hospital, auth);
 
-        verify(service).getDisputeReviewItems(eq(user), any(), any(), any());
-        verify(service).getDisputeReviewSummary(eq(user), any());
-        verify(service, never()).getItems(any(), any(), any(), any(), any());
-        verify(service, never()).getSummary(any(), any());
+        verify(inBasketService).getDisputeReviewItems(eq(user), any(), any(), any());
+        verify(inBasketService).getDisputeReviewSummary(eq(user), any());
+        verify(inBasketService, never()).getItems(any(), any(), any(), any(), any());
+        verify(inBasketService, never()).getSummary(any(), any());
     }
 
     @Test
@@ -80,13 +80,13 @@ class InBasketAdminDisputeReviewTest {
     void administratorTouchesNoOtherItem() {
         holds("ROLE_HOSPITAL_ADMIN");
         UUID item = UUID.randomUUID();
-        doThrow(new ResourceNotFoundException("inbasket.item.notFound", item)).when(service).requireDisputeReviewItem(item, user);
+        doThrow(new ResourceNotFoundException("inbasket.item.notFound", item)).when(inBasketService).requireDisputeReviewItem(item, user);
 
         assertThatThrownBy(() -> controller.markAsRead(item, auth)).isInstanceOf(ResourceNotFoundException.class);
         assertThatThrownBy(() -> controller.acknowledge(item, auth)).isInstanceOf(ResourceNotFoundException.class);
 
-        verify(service, never()).markAsRead(any(), any());
-        verify(service, never()).acknowledge(any(), any());
+        verify(inBasketService, never()).markAsRead(any(), any());
+        verify(inBasketService, never()).acknowledge(any(), any());
     }
 
     @Test
@@ -97,7 +97,7 @@ class InBasketAdminDisputeReviewTest {
         controller.list(null, null, hospital, Pageable.unpaged(), auth);
         controller.markAsRead(UUID.randomUUID(), auth);
 
-        verify(service).getItems(eq(user), any(), any(), any(), any());
-        verify(service, never()).requireDisputeReviewItem(any(), any());
+        verify(inBasketService).getItems(eq(user), any(), any(), any(), any());
+        verify(inBasketService, never()).requireDisputeReviewItem(any(), any());
     }
 }

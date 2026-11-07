@@ -6906,6 +6906,7 @@
         "GENERAL": "General"
       },
       "AUDIT_ENTITY_TYPE": {
+        "ORDER_REVIEW_HOLD": "Order review hold",
         "DEATH_DISPUTE": "Death dispute",
         "DEATH_RECORD": "Death record",
         "ORDER_REVIEW": "Order review",
