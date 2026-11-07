@@ -124,6 +124,90 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
 
   afterEach(() => TestBed.resetTestingModule());
 
+  describe('sidebar width controls', () => {
+    let previousWidth: string | null;
+    const make = () =>
+      createComponent({
+        activeRole: 'ROLE_PATIENT',
+        roles: ['ROLE_PATIENT'],
+        wildcardPermission: false,
+      }).component;
+
+    beforeEach(() => {
+      previousWidth = localStorage.getItem('hms.sidebar.width');
+      localStorage.removeItem('hms.sidebar.width');
+      spyOn(globalThis, 'matchMedia').and.returnValue({ matches: false } as MediaQueryList);
+    });
+    afterEach(() => {
+      if (previousWidth === null) localStorage.removeItem('hms.sidebar.width');
+      else localStorage.setItem('hms.sidebar.width', previousWidth);
+    });
+
+    it('restores valid width preferences and rejects invalid browser storage', () => {
+      localStorage.setItem('hms.sidebar.width', '360');
+      expect(make().sidebarWidth()).toBe(360);
+      TestBed.resetTestingModule();
+      localStorage.setItem('hms.sidebar.width', 'NaN');
+      expect(make().sidebarWidth()).toBe(260);
+    });
+
+    it('resizes by keyboard within bounds and keeps the width after collapse and expansion', () => {
+      const component = make();
+      const key = (name: string) =>
+        component.resizeSidebarWithKey(
+          new KeyboardEvent('keydown', { key: name, cancelable: true }),
+        );
+      key('ArrowRight');
+      expect(component.sidebarWidth()).toBe(276);
+      key('End');
+      key('ArrowRight');
+      expect(component.sidebarWidth()).toBe(420);
+      component.toggleSidebar();
+      component.toggleSidebar();
+      expect(component.sidebarCollapsed()).toBeFalse();
+      expect(component.sidebarWidth()).toBe(420);
+      key('Home');
+      key('ArrowLeft');
+      expect(component.sidebarWidth()).toBe(240);
+      expect(localStorage.getItem('hms.sidebar.width')).toBe('240');
+      component.resetSidebarWidth();
+      expect(component.sidebarWidth()).toBe(260);
+    });
+
+    it('captures a drag, clamps its width, ignores other pointers, and restores cancelled drags', () => {
+      const component = make();
+      const target = {
+        setPointerCapture: jasmine.createSpy(),
+        hasPointerCapture: () => true,
+        releasePointerCapture: jasmine.createSpy(),
+      };
+      const event = (x: number, pointerId = 7) =>
+        ({
+          button: 0,
+          pointerId,
+          clientX: x,
+          preventDefault: () => undefined,
+          currentTarget: target,
+        }) as unknown as PointerEvent;
+      component.startSidebarResize(event(260));
+      component.moveSidebarResize(event(350, 8));
+      expect(component.sidebarWidth()).toBe(260);
+      component.moveSidebarResize(event(900));
+      expect(component.sidebarWidth()).toBe(420);
+      component.endSidebarResize(event(900), true);
+      expect(component.sidebarWidth()).toBe(260);
+      expect(component.sidebarResizing()).toBeFalse();
+      component.startSidebarResize(event(260));
+      component.moveSidebarResize(event(350));
+      component.endSidebarResize(event(350));
+      expect(component.sidebarWidth()).toBe(350);
+      expect(localStorage.getItem('hms.sidebar.width')).toBe('350');
+      component.toggleSidebar();
+      component.startSidebarResize(event(350));
+      expect(component.sidebarResizing()).toBeFalse();
+    });
+  });
+
   it('starts with the drawer closed on a phone, so it does not cover the topbar (D116)', () => {
     spyOn(globalThis, 'matchMedia').and.callFake(
       (q: string) => ({ matches: q === '(max-width: 768px)' }) as MediaQueryList,

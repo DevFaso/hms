@@ -9,6 +9,7 @@
     "build green."
   ],
   "pinned": [
+    "src/app/encounters/encounters.html::<option>department",
     "src/app/admin-governance/credentials-tab.html::contact.contactType",
     "src/app/admin-governance/credentials-tab.html::mfa.channel",
     "src/app/admin-governance/credentials-tab.html::mfa.method",
