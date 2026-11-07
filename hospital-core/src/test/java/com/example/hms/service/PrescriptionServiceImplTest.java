@@ -6915,4 +6915,76 @@ class PrescriptionServiceImplTest {
         verify(cdsRuleEngine).evaluateProposedPrescription(any(), any(), org.mockito.ArgumentMatchers.argThat(
             order -> order.route() == null));
     }
+
+    /** CR-01 and CR-02 on the way in: the order's route and the item's form reach the rules, and the draft is kept. */
+    @Test
+    void cr02_aHeldFindingStillSavesTheDraftAndCr01TheRulesReadTheRouteAndForm() {
+        PrescriptionRequestDTO request = buildRequest();
+        request.setRoute("IV");
+        request.setMedicationCode("PARA");
+        com.example.hms.model.medication.MedicationCatalogItem item = catalogItem(TEST_MEDICATION, false);
+        item.setRoute("PO");
+        item.setForm("comprimé");
+        Prescription mappedEntity = mappedOrder();
+        stubCreateContext(request, mappedEntity);
+        when(catalogRepo.findByHospitalIdAndCode(hospitalId, "PARA")).thenReturn(Optional.of(item));
+        cr02_findings(cr02_heldFinding("route:NO_LIMIT:IV"));
+
+        prescriptionService.createPrescription(request, Locale.ENGLISH);
+
+        verify(prescriptionRepository).save(mappedEntity);
+        verify(cdsRuleEngine).evaluateProposedPrescription(any(), any(), org.mockito.ArgumentMatchers.argThat(
+            o -> "IV".equals(o.route()) && "comprimé".equals(o.formulation())));
+    }
+
+    private Prescription cr01_editable(UUID prescriptionId, String storedRoute) {
+        Prescription existing = new Prescription();
+        existing.setId(prescriptionId);
+        existing.setMedicationName(TEST_MEDICATION);
+        existing.setRoute(storedRoute);
+        UserRoleHospitalAssignment staffAssignment = new UserRoleHospitalAssignment();
+        staffAssignment.setId(UUID.randomUUID());
+        staffAssignment.setHospital(encounter.getHospital());
+        staff.setAssignment(staffAssignment);
+        UUID currentUser = staff.getUser().getId();
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(existing));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(authService.getCurrentUserId()).thenReturn(currentUser);
+        when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
+        when(prescriptionRepository.save(existing)).thenReturn(existing);
+        when(prescriptionMapper.toResponseDTO(existing)).thenReturn(PrescriptionResponseDTO.builder().build());
+        return existing;
+    }
+
+    /** A route change after a recorded review: judged on the new route, and the review it rested on is gone. */
+    @Test
+    void cr01_aRouteChangedAfterTheReviewIsJudgedOnTheNewRouteAndVoidsTheReview() {
+        UUID id = UUID.randomUUID();
+        Prescription existing = cr01_editable(id, "PO");
+        existing.setPediatricDoseReviewRequired(true);
+        existing.setPediatricDoseReviewedAt(java.time.LocalDateTime.now());
+        existing.setPediatricDoseReviewReason("Checked as oral");
+        PrescriptionRequestDTO request = buildRequest();
+        request.setRoute("IV");
+
+        prescriptionService.updatePrescription(id, request, Locale.ENGLISH);
+
+        verify(cdsRuleEngine).evaluateProposedPrescription(any(), any(), org.mockito.ArgumentMatchers.argThat(
+            o -> "IV".equals(o.route())));
+        assertThat(existing.getPediatricDoseReviewedAt()).isNull();
+        assertThat(existing.getPediatricDoseReviewReason()).isNull();
+    }
+
+    @Test
+    void cr01_anEditThatSendsNoRouteIsJudgedOnTheStoredOne() {
+        UUID id = UUID.randomUUID();
+        cr01_editable(id, "PR");
+
+        prescriptionService.updatePrescription(id, buildRequest(), Locale.ENGLISH);
+
+        verify(cdsRuleEngine).evaluateProposedPrescription(any(), any(), org.mockito.ArgumentMatchers.argThat(
+            o -> "PR".equals(o.route())));
+    }
 }

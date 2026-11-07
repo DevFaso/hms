@@ -495,6 +495,8 @@ public class AdultParacetamolRule implements CdsRule {
             names.addAll(facts.combinations());
             names.addAll(others.uncountedNames);
             names.addAll(facts.notRecognised());
+            // CR-03: given, with a content that cannot be read: unknown, never a silent zero.
+            given.unknownNames.stream().filter(name -> !names.contains(name)).forEach(names::add);
             // QA D1462: "4 cp" of a cited brand: its strength is on no item, and its name is all there is.
             boolean countUnread = context.proposedDoseMg() == null && context.proposedDoseUnits() != null
                 && com.example.hms.service.allergy.DrugClassAllergy.carriesBrand(medication);

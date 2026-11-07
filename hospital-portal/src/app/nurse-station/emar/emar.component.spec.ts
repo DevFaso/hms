@@ -43,7 +43,7 @@ describe('EmarComponent (P1 #8 — five-rights barcode-scan loop)', () => {
     nurseSpy.getAdministrationWitnessCandidates.and.returnValue(
       of([{ userId: 'u-witness', displayName: 'Awa Kaboré' }]),
     );
-    toastSpy = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error', 'info']);
+    toastSpy = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error', 'info', 'warning']);
 
     await TestBed.configureTestingModule({
       imports: [EmarComponent, TranslateModule.forRoot()],
@@ -321,6 +321,35 @@ describe('EmarComponent (P1 #8 — five-rights barcode-scan loop)', () => {
       status: 'GIVEN',
       witnessUserId: 'u-witness',
     });
+  });
+
+  /** CR-03: a warning, and the dose stands. */
+  it('warns on the documented exposure the answer carries, after recording the dose', () => {
+    nurseSpy.getMedicationMAR.and.returnValue(of([sampleTask]));
+    nurseSpy.administerMedication.and.returnValue(
+      of({
+        ...sampleTask,
+        cdsAdvisories: [
+          { summary: '3500 mg enregistrés', indicator: 'warning', source: { label: 'x' } },
+          { summary: 'pour information', indicator: 'info', source: { label: 'x' } },
+        ],
+      }),
+    );
+    fixture.detectChanges();
+    component['selectTask'](sampleTask);
+    component['verification'].set({
+      marId: sampleTask.id,
+      outcomes: { PATIENT: true, DRUG: true, DOSE: true, ROUTE: true, TIME: true },
+      failedChecks: [],
+      failureReasons: {},
+      allPassed: true,
+      verifiedAt: '2026-04-30T08:01:00',
+    });
+
+    component['administer']('GIVEN');
+
+    expect(nurseSpy.administerMedication).toHaveBeenCalled();
+    expect(toastSpy.warning).toHaveBeenCalledOnceWith('3500 mg enregistrés');
   });
 
   it('records GIVEN with the override reason when the five-rights check failed', () => {

@@ -6325,3 +6325,11 @@ For the clinician list (proposed alert logic, pending sign-off):
 ## Round 36 Lows left for later
 
 From docs/qa/dev-qa-run-2026-11-07-round36.md (steps and likely code there). They do not block: D1493, D1496, D1497, D1498, D1499, D1500, D1501, D1502, D1503, D1504, D1506, D1509, D1510, D1511, D1513.
+
+## Standing debt: clinical rules wave (fix/cr-paracetamol)
+
+- **CR-02 class, reported and not changed:** other dose-limit findings still pass the signature. Paediatric soft stops (`PediatricDoseRule.softStop`, critical) are passed once at creation with a reason and are not asked again at signing. Paediatric warnings with no hold: stale weight, frequency unread, dose unread in mg, weight band unread, no limit on file. Adult warnings with no hold: a frequency that could not be read, another order counted at one dose or at its stated count. Awaiting a clinical decision.
+- **CR-02, paths that reach SIGNED with no signature:** `RefillApprovalServiceImpl` (a refill of a signed order) and `StockOutRoutingServiceImpl` (partner no-show) return an order to SIGNED, and the rules are not run again. Neither starts from a draft, so neither skips the exception, but a refill does not see the doses given since.
+- **CR-03, before the dose on the nurse-station table:** the eMAR shows the documented exposure at the bedside verification, before the dose. The Give prompt of the nurse-station table reads the ward list, which does not carry it (one read per paracetamol row of a ward): that nurse reads it in the answer, after the dose.
+- **Paediatric limits:** the catalogue records no version and no age band for a limit, only the manual-review age, the source text and the status. A limit's route is its item's `route`. A separate limit per route would need a schema change and a pharmacy screen.
+- **CDS hooks:** a hook still sends no frequency (standing since round 34), so its daily total counts one dose.
