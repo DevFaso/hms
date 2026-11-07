@@ -290,6 +290,14 @@ describe('SuperAdminComponent', () => {
     expect(c.errored()).toBeFalse();
     expect(c.stats()).toEqual([]);
     expect(c.platformActions()?.pendingIntegrations).toBe(2);
+    const dom: HTMLElement = fixture.nativeElement;
+    const clinicalPanel = dom.querySelector('#clinical-heading')?.parentElement;
+    const auditPanel = dom.querySelector('.audit-panel');
+    expect(clinicalPanel?.textContent).toContain('SUPER_ADMIN.SUMMARY_UNAVAILABLE');
+    expect(auditPanel?.textContent).toContain('SUPER_ADMIN.RECENT_AUDIT');
+    expect(auditPanel?.textContent).toContain('SUPER_ADMIN.SUMMARY_UNAVAILABLE');
+    expect(auditPanel?.querySelector('.audit-filters')).toBeNull();
+    expect(dom.querySelector('.platform-strip')).not.toBeNull();
   });
 
   it('filters only the loaded recent audit sample', () => {

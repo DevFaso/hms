@@ -76,10 +76,10 @@
     <div class="insights-grid">
       <section class="dashboard-panel">
         <!-- Clinical stats grid -->
+        <h2 class="section-heading" id="clinical-heading">
+          {{ 'SUPER_ADMIN.CLINICAL_OVERVIEW' | translate }}
+        </h2>
         @if (clinicalStats().length > 0) {
-          <h2 class="section-heading" id="clinical-heading">
-            {{ 'SUPER_ADMIN.CLINICAL_OVERVIEW' | translate }}
-          </h2>
           <div class="stats-grid" data-test="clinical-stats-grid">
             @for (stat of clinicalStats(); track stat.key) {
               <a class="stat-card" [routerLink]="stat.route">
@@ -97,6 +97,10 @@
               </a>
             }
           </div>
+        } @else if (summaryUnavailable()) {
+          <p class="availability-note" role="status">
+            {{ 'SUPER_ADMIN.SUMMARY_UNAVAILABLE' | translate }}
+          </p>
         }
       </section>
       <section class="dashboard-panel platform-panel">
@@ -210,8 +214,8 @@
       </section>
       <section class="dashboard-panel audit-panel">
         <!-- Recent audit events -->
+        <h2 class="section-heading">{{ 'SUPER_ADMIN.RECENT_AUDIT' | translate }}</h2>
         @if (!summaryUnavailable()) {
-          <h2 class="section-heading">{{ 'SUPER_ADMIN.RECENT_AUDIT' | translate }}</h2>
           <div
             class="audit-filters"
             role="group"
@@ -279,6 +283,10 @@
               <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span>
             </a>
           </div>
+        } @else {
+          <p class="availability-note" role="status">
+            {{ 'SUPER_ADMIN.SUMMARY_UNAVAILABLE' | translate }}
+          </p>
         }
       </section>
     </div>
