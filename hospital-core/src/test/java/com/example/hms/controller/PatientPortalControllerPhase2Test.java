@@ -151,7 +151,12 @@ class PatientPortalControllerPhase2Test {
                 .andExpect(status().isOk())
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content()
                         .contentType(MediaType.APPLICATION_PDF))
-                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().bytes(pdf));
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().bytes(pdf))
+            // QA D1443: a readable name, with no database id.
+            .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string(
+                org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
+                org.hamcrest.Matchers.allOf(org.hamcrest.Matchers.containsString("ordonnance.pdf"),
+                    org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString(prescriptionId.toString())))));
     }
 
     // ══════════════════════════════════════════════════════════════════════
