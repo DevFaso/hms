@@ -1,10 +1,15 @@
-<div class="page-container">
+<div class="page-container operations-dashboard">
   <div class="page-header">
     <div>
+      <p class="dashboard-eyebrow">{{ 'REGISTRATIONS.WORKSPACE' | translate }}</p>
       <h1 class="page-title">{{ 'REGISTRATIONS.TITLE' | translate }}</h1>
       <p class="page-subtitle">{{ 'REGISTRATIONS.SUBTITLE' | translate }}</p>
     </div>
     <div class="page-actions">
+      <button type="button" class="btn-secondary" (click)="load()" [disabled]="loading()">
+        <span class="material-symbols-outlined" aria-hidden="true">refresh</span
+        >{{ 'COMMON.REFRESH' | translate }}
+      </button>
       @if (canSeeMultiHospital) {
         <button type="button" class="btn-secondary" (click)="toggleMultiHospital()">
           <span class="material-symbols-outlined">hub</span>
@@ -20,6 +25,34 @@
     </div>
   </div>
 
+  <section class="dashboard-overview">
+    <div class="panel-heading">
+      <div>
+        <h2>{{ 'REGISTRATIONS.OVERVIEW' | translate }}</h2>
+        <p>{{ 'REGISTRATIONS.LOADED_HELP' | translate }}</p>
+      </div>
+    </div>
+    <div class="summary-cards">
+      @for (metric of metrics(); track metric.id) {
+        <button
+          type="button"
+          class="summary-card"
+          [class.total-card]="metric.id === ''"
+          [class.metric-selected]="stayFilter() === metric.id"
+          [attr.aria-pressed]="stayFilter() === metric.id"
+          [attr.data-metric]="metric.id || 'all'"
+          [disabled]="loading() || loadError()"
+          (click)="selectMetric(metric.id)"
+        >
+          <span class="material-symbols-outlined metric-icon" aria-hidden="true">{{
+            metric.icon
+          }}</span
+          ><strong>{{ loading() || loadError() ? '—' : metric.count }}</strong
+          ><span>{{ metric.label | translate }}</span>
+        </button>
+      }
+    </div>
+  </section>
   @if (showMultiHospital()) {
     <div class="multi-panel">
       <h3 class="section-heading">{{ 'REGISTRATIONS.MULTI_TITLE' | translate }}</h3>
@@ -28,7 +61,12 @@
       } @else if (multiHospitalRows().length === 0) {
         <p class="muted">{{ 'REGISTRATIONS.MULTI_EMPTY' | translate }}</p>
       } @else {
-        <div class="data-table">
+        <div
+          class="data-table"
+          tabindex="0"
+          role="region"
+          [attr.aria-label]="'REGISTRATIONS.MULTI_TITLE' | translate"
+        >
           <table>
             <thead>
               <tr>
@@ -50,143 +88,245 @@
     </div>
   }
 
-  <div class="filter-bar">
-    <div class="tabs">
-      <button
-        type="button"
-        class="tab-btn"
-        [class.active]="activeFilter() === 'active'"
-        (click)="setActiveFilter('active')"
-      >
-        {{ 'COMMON.ACTIVE' | translate }}
-      </button>
-      <button
-        type="button"
-        class="tab-btn"
-        [class.active]="activeFilter() === 'inactive'"
-        (click)="setActiveFilter('inactive')"
-      >
-        {{ 'COMMON.INACTIVE' | translate }}
-      </button>
-      <button
-        type="button"
-        class="tab-btn"
-        [class.active]="activeFilter() === 'all'"
-        (click)="setActiveFilter('all')"
-      >
-        {{ 'COMMON.ALL' | translate }}
-      </button>
+  <section class="directory-panel">
+    <div class="panel-heading">
+      <div>
+        <h2>{{ 'REGISTRATIONS.REGISTER' | translate }}</h2>
+        <p role="status">
+          {{ 'REGISTRATIONS.RESULT_COUNT' | translate: { count: filtered().length } }}
+        </p>
+      </div>
     </div>
-  </div>
+    <div class="filter-bar">
+      <div class="tabs">
+        <button
+          type="button"
+          class="tab-btn"
+          [class.active]="activeFilter() === 'active'"
+          (click)="setActiveFilter('active')"
+        >
+          {{ 'COMMON.ACTIVE' | translate }}
+        </button>
+        <button
+          type="button"
+          class="tab-btn"
+          [class.active]="activeFilter() === 'inactive'"
+          (click)="setActiveFilter('inactive')"
+        >
+          {{ 'COMMON.INACTIVE' | translate }}
+        </button>
+        <button
+          type="button"
+          class="tab-btn"
+          [class.active]="activeFilter() === 'all'"
+          (click)="setActiveFilter('all')"
+        >
+          {{ 'COMMON.ALL' | translate }}
+        </button>
+      </div>
+    </div>
 
-  @if (loading()) {
-    <div class="loading-state">
-      <div class="spinner"></div>
-      <p>{{ 'COMMON.LOADING' | translate }}</p>
-    </div>
-  }
-  @if (!loading() && loadError()) {
-    <div class="empty-state">
-      <span class="material-symbols-outlined empty-icon">error</span>
-      <h3>{{ 'REGISTRATIONS.LOAD_ERROR' | translate }}</h3>
-      <button type="button" class="btn-secondary btn-sm" (click)="load()">
-        {{ 'COMMON.RETRY' | translate }}
+    <div class="dashboard-filters">
+      <label class="dashboard-search"
+        ><span class="material-symbols-outlined" aria-hidden="true">search</span
+        ><input
+          [attr.aria-label]="'REGISTRATIONS.SEARCH' | translate"
+          [placeholder]="'REGISTRATIONS.SEARCH' | translate"
+          [ngModel]="searchTerm()"
+          (ngModelChange)="searchTerm.set($event); filterChanged()" /></label
+      ><label
+        >{{ 'REGISTRATIONS.STAY_STATUS' | translate
+        }}<select
+          [ngModel]="stayFilter()"
+          (ngModelChange)="stayFilter.set($event); filterChanged()"
+        >
+          <option value="">{{ 'COMMON.ALL' | translate }}</option>
+          @for (status of stayStatuses; track status) {
+            <option [value]="status">{{ 'REGISTRATIONS.STAY_' + status | translate }}</option>
+          }
+        </select></label
+      ><label
+        >{{ 'REGISTRATIONS.SORT_BY' | translate
+        }}<select [ngModel]="sortOrder()" (ngModelChange)="sortOrder.set($event); filterChanged()">
+          <option value="name">{{ 'REGISTRATIONS.SORT_NAME' | translate }}</option>
+          <option value="newest">{{ 'REGISTRATIONS.SORT_NEWEST' | translate }}</option>
+        </select></label
+      ><button type="button" class="filter-reset" (click)="clearFilters()">
+        {{ 'COMMON.CLEAR_ALL_FILTERS' | translate }}
       </button>
     </div>
-  }
-  @if (!loading() && !loadError() && registrations().length === 0) {
-    <div class="empty-state">
-      <span class="material-symbols-outlined empty-icon">how_to_reg</span>
-      <h3>{{ 'REGISTRATIONS.NONE' | translate }}</h3>
-    </div>
-  }
-  @if (!loading() && !loadError() && registrations().length > 0) {
-    <div class="data-table">
-      <table>
-        <thead>
-          <tr>
-            <th scope="col">{{ 'REGISTRATIONS.PATIENT' | translate }}</th>
-            <th scope="col">{{ 'REGISTRATIONS.MRN' | translate }}</th>
-            <th scope="col">{{ 'REGISTRATIONS.STAY_STATUS' | translate }}</th>
-            <th scope="col">{{ 'REGISTRATIONS.LOCATION' | translate }}</th>
-            <th scope="col">{{ 'REGISTRATIONS.PHYSICIAN' | translate }}</th>
-            <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
-            <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (r of registrations(); track r.id) {
-            <tr class="data-row">
-              <td>
-                {{ r.patientFullName || r.patientUsername || '—' }}
-                @if (r.patientEmail) {
-                  <span class="muted">{{ r.patientEmail }}</span>
-                }
-              </td>
-              <td>{{ r.mri || r.registrationCode || '—' }}</td>
-              <td>
-                @if (r.stayStatus) {
-                  <span class="{{ stayStatusClass(r.stayStatus) }}">
-                    {{ 'REGISTRATIONS.STAY_' + r.stayStatus | translate }}
-                  </span>
-                } @else {
-                  <span class="muted">—</span>
-                }
-              </td>
-              <td>
-                {{ r.currentRoom || '—' }}
-                @if (r.currentBed) {
-                  / {{ r.currentBed }}
-                }
-              </td>
-              <td>{{ r.attendingPhysicianName || '—' }}</td>
-              <td>
-                @if (r.active) {
-                  <span class="status-badge status-completed">{{
-                    'COMMON.ACTIVE' | translate
-                  }}</span>
-                } @else {
-                  <span class="status-badge status-cancelled">
-                    {{ 'COMMON.INACTIVE' | translate }}
-                  </span>
-                }
-              </td>
-              <td class="actions-cell">
-                @if (canManage) {
-                  <button
-                    type="button"
-                    class="btn-secondary btn-sm"
-                    [title]="'COMMON.EDIT' | translate"
-                    (click)="openEdit(r)"
-                  >
-                    <span class="material-symbols-outlined">edit</span>
-                  </button>
-                  @if (r.active) {
-                    <button
-                      type="button"
-                      class="btn-secondary btn-sm"
-                      [title]="'REGISTRATIONS.DEACTIVATE' | translate"
-                      (click)="deactivate(r)"
-                    >
-                      <span class="material-symbols-outlined">person_off</span>
-                    </button>
-                  }
-                  <button
-                    type="button"
-                    class="btn-secondary btn-sm danger"
-                    [title]="'COMMON.DELETE' | translate"
-                    (click)="confirmDelete(r)"
-                  >
-                    <span class="material-symbols-outlined">delete_forever</span>
-                  </button>
-                }
-              </td>
+    @if (!loading() && !loadError() && limitedResults()) {
+      <p class="loaded-notice" role="status">{{ 'REGISTRATIONS.LIMIT_NOTICE' | translate }}</p>
+    }
+    @if (loading()) {
+      <div class="loading-state">
+        <div class="spinner"></div>
+        <p>{{ 'COMMON.LOADING' | translate }}</p>
+      </div>
+    }
+    @if (!loading() && loadError()) {
+      <div class="empty-state">
+        <span class="material-symbols-outlined empty-icon">error</span>
+        <h3>{{ 'REGISTRATIONS.LOAD_ERROR' | translate }}</h3>
+        <button type="button" class="btn-secondary btn-sm" (click)="load()">
+          {{ 'COMMON.RETRY' | translate }}
+        </button>
+      </div>
+    }
+    @if (!loading() && !loadError() && filtered().length === 0) {
+      <div class="empty-state">
+        <span class="material-symbols-outlined empty-icon">how_to_reg</span>
+        @if (registrations().length === 0) {
+          <h3>{{ 'REGISTRATIONS.NONE' | translate }}</h3>
+        } @else {
+          <h3>{{ 'REGISTRATIONS.NO_MATCHES' | translate }}</h3>
+          <button type="button" class="btn-secondary" (click)="clearFilters()">
+            {{ 'REGISTRATIONS.CLEAR_FILTERS' | translate }}
+          </button>
+        }
+      </div>
+    }
+    @if (!loading() && !loadError() && filtered().length > 0) {
+      <div
+        class="data-table"
+        tabindex="0"
+        role="region"
+        [attr.aria-label]="'REGISTRATIONS.REGISTER' | translate"
+      >
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">{{ 'REGISTRATIONS.PATIENT' | translate }}</th>
+              <th scope="col">{{ 'REGISTRATIONS.MRN' | translate }}</th>
+              <th scope="col">{{ 'REGISTRATIONS.STAY_STATUS' | translate }}</th>
+              <th scope="col">{{ 'REGISTRATIONS.LOCATION' | translate }}</th>
+              <th scope="col">{{ 'REGISTRATIONS.PHYSICIAN' | translate }}</th>
+              <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+              @if (canManage) {
+                <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+              }
             </tr>
-          }
-        </tbody>
-      </table>
-    </div>
-  }
+          </thead>
+          <tbody>
+            @for (r of pagedRows(); track r.id) {
+              <tr class="data-row">
+                <td>
+                  <span class="patient-name">{{
+                    r.patientFullName || r.patientUsername || '—'
+                  }}</span>
+                  @if (r.patientEmail) {
+                    <span class="muted">{{ r.patientEmail }}</span>
+                  }
+                </td>
+                <td>
+                  <span class="mrn-label">{{ r.mri || r.registrationCode || '—' }}</span>
+                </td>
+                <td>
+                  @if (r.stayStatus) {
+                    <span class="{{ stayStatusClass(r.stayStatus) }}">
+                      {{ 'REGISTRATIONS.STAY_' + r.stayStatus | translate }}
+                    </span>
+                  } @else {
+                    <span class="muted">—</span>
+                  }
+                </td>
+                <td>
+                  {{ r.currentRoom || '—' }}
+                  @if (r.currentBed) {
+                    / {{ r.currentBed }}
+                  }
+                </td>
+                <td>{{ r.attendingPhysicianName || '—' }}</td>
+                <td>
+                  @if (r.active) {
+                    <span class="status-badge status-completed">{{
+                      'COMMON.ACTIVE' | translate
+                    }}</span>
+                  } @else {
+                    <span class="status-badge status-cancelled">
+                      {{ 'COMMON.INACTIVE' | translate }}
+                    </span>
+                  }
+                </td>
+                @if (canManage) {
+                  <td class="actions-cell">
+                    @if (canManage) {
+                      <button
+                        type="button"
+                        class="btn-secondary btn-sm"
+                        [title]="'COMMON.EDIT' | translate"
+                        (click)="openEdit(r)"
+                      >
+                        <span class="material-symbols-outlined">edit</span>
+                      </button>
+                      @if (r.active) {
+                        <button
+                          type="button"
+                          class="btn-secondary btn-sm"
+                          [title]="'REGISTRATIONS.DEACTIVATE' | translate"
+                          (click)="deactivate(r)"
+                        >
+                          <span class="material-symbols-outlined">person_off</span>
+                        </button>
+                      }
+                      <button
+                        type="button"
+                        class="btn-secondary btn-sm danger"
+                        [title]="'COMMON.DELETE' | translate"
+                        (click)="confirmDelete(r)"
+                      >
+                        <span class="material-symbols-outlined">delete_forever</span>
+                      </button>
+                    }
+                  </td>
+                }
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+    @if (!loading() && !loadError() && filtered().length > 0) {
+      <div class="pagination-bar">
+        <p>
+          {{
+            'REGISTRATIONS.RESULT_RANGE'
+              | translate: { start: resultStart(), end: resultEnd(), total: filtered().length }
+          }}
+        </p>
+        <label
+          >{{ 'REGISTRATIONS.ROWS_PER_PAGE' | translate
+          }}<select [ngModel]="pageSize()" (ngModelChange)="pageSize.set(+$event); setPage(0)">
+            <option [ngValue]="10">10</option>
+            <option [ngValue]="25">25</option>
+            <option [ngValue]="50">50</option>
+          </select></label
+        >
+        <div class="page-navigation">
+          <button
+            type="button"
+            class="page-button"
+            [disabled]="currentPage() === 0"
+            (click)="setPage(currentPage() - 1)"
+            [attr.aria-label]="'COMMON.PREVIOUS' | translate"
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span></button
+          ><span>{{
+            'REGISTRATIONS.PAGE_OF' | translate: { page: currentPage() + 1, total: totalPages() }
+          }}</span
+          ><button
+            type="button"
+            class="page-button"
+            [disabled]="currentPage() + 1 >= totalPages()"
+            (click)="setPage(currentPage() + 1)"
+            [attr.aria-label]="'COMMON.NEXT' | translate"
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">chevron_right</span>
+          </button>
+        </div>
+      </div>
+    }
+  </section>
 </div>
 
 <!-- ══ Create/edit modal ══ -->
