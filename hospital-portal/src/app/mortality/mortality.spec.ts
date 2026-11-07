@@ -15,6 +15,7 @@ import { PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
+import { expectEmptySubmitRefusal } from '../testing/form-refusal-behaviour';
 
 function mockDeath(overrides: Partial<DeathRecordResponse> = {}): DeathRecordResponse {
   return {
@@ -74,7 +75,11 @@ describe('MortalityComponent, QA D1488 / D1490', () => {
         { provide: ConfirmService, useValue: confirmSpy },
         {
           provide: RoleContextService,
-          useValue: { hasAnyActiveRole: () => true, isSuperAdmin: () => false, activeHospitalId: 'h1' },
+          useValue: {
+            hasAnyActiveRole: () => true,
+            isSuperAdmin: () => false,
+            activeHospitalId: 'h1',
+          },
         },
       ],
     }).compileComponents();
@@ -102,6 +107,20 @@ describe('MortalityComponent, QA D1488 / D1490', () => {
     expect(confirmSpy.ask).toHaveBeenCalled();
     expect(spy.markEnteredInError).toHaveBeenCalledWith(mockDeath().id, 'Wrong patient');
     expect(fixtureComponent.errorRecord()).toBeNull();
+  });
+
+  it('an empty reason is starred and marked, and nothing is sent', () => {
+    const fixture = TestBed.createComponent(MortalityComponent);
+    document.body.appendChild(fixture.nativeElement);
+    fixture.detectChanges();
+    fixture.componentInstance.openEnteredInError(mockDeath());
+    fixture.detectChanges();
+    const marked = expectEmptySubmitRefusal(fixture, {
+      button: '[data-testid="mort-entered-in-error-submit"]',
+      sent: spy.markEnteredInError,
+    });
+    expect(marked).toContain('e-reason');
+    fixture.nativeElement.remove();
   });
 
   it('sends nothing when the confirmation is declined', async () => {

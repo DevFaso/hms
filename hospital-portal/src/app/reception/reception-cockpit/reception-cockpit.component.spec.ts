@@ -196,7 +196,9 @@ describe('ReceptionCockpitComponent', () => {
     const base = { appointmentId: 'a1', patientId: 'p1', patientName: 'A', status: 'SCHEDULED' };
     expect(component.canCheckIn({ ...base, registrationInactive: true } as any)).toBeFalse();
     expect(component.canCheckIn({ ...base, patientDeceased: true } as any)).toBeFalse();
-    expect(component.canCheckIn({ ...base, registrationInactive: false, patientDeceased: false } as any)).toBeTrue();
+    expect(
+      component.canCheckIn({ ...base, registrationInactive: false, patientDeceased: false } as any),
+    ).toBeTrue();
   });
 
   it('should allow check-in for SCHEDULED items with an appointmentId', () => {

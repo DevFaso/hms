@@ -82,7 +82,10 @@ export class MortalityComponent implements OnInit {
   ]);
 
   /** QA D1488: who may mark a record entered in error; the server holds them to their own hospital. */
-  readonly canCorrect = this.roleContext.hasAnyActiveRole(['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN']);
+  readonly canCorrect = this.roleContext.hasAnyActiveRole([
+    'ROLE_HOSPITAL_ADMIN',
+    'ROLE_SUPER_ADMIN',
+  ]);
 
   readonly placesOfDeath: PlaceOfDeath[] = ['FACILITY', 'HOME', 'IN_TRANSIT', 'OTHER', 'UNKNOWN'];
   readonly mannersOfDeath: MannerOfDeath[] = [

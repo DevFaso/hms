@@ -222,7 +222,7 @@
               <td>{{ e.diedAt | serverTime | date: 'short' }}</td>
               <td>{{ e.enteredInErrorAt | serverTime | date: 'short' }}</td>
               <td>{{ e.enteredInErrorByName || '—' }}</td>
-              <td>{{ e.enteredInErrorReason }}</td>
+              <td>{{ 'COMMON.REASON_VALUE' | translate: { reason: e.enteredInErrorReason } }}</td>
             </tr>
           }
         </tbody>
@@ -505,6 +505,7 @@
           <button
             submitGuardRequired
             class="btn-danger"
+            data-testid="mort-entered-in-error-submit"
             (click)="submitEnteredInError()"
             [disabled]="errorSubmitting()"
             [appSubmitGuard]="!errorReason.trim()"

@@ -640,7 +640,8 @@ export class TransfusionComponent implements OnInit {
     const request = this.selectedRequest();
     if (!request || !this.crossmatchForm.bloodUnitId) return;
     // QA D1507: an incompatible crossmatch records why.
-    if (!this.crossmatchForm.compatible && !this.crossmatchForm.incompatibilityReason.trim()) return;
+    if (!this.crossmatchForm.compatible && !this.crossmatchForm.incompatibilityReason.trim())
+      return;
     this.crossmatchSubmitting.set(true);
     this.transfusion
       .recordCrossmatch(request.id, {

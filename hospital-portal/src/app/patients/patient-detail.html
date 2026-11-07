@@ -71,8 +71,8 @@
               ><span class="material-symbols-outlined">bloodtype</span> {{ p.bloodType }}</span
             >
           }
-          {{ ' '
-          }}@if (p.deceased) {
+          {{ ' ' }}
+          @if (p.deceased) {
             <!-- QA D1488: a recorded death is shown, never "Active". -->
             <span class="status-badge deceased" data-testid="patient-deceased">{{
               'PATIENTS.DECEASED_ON' | translate: { date: p.deceasedAt | serverTime | dateTime }
