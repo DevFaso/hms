@@ -513,6 +513,7 @@ describe('PrescriptionsComponent — signing', () => {
   it('QA D706: a new prescription without a quantity to dispense is not sent', () => {
     component.openCreate();
     component.form.medicationName = 'Morphine 10 mg';
+    component.form.frequency = 'q6h';
     component.form.quantity = null;
     component.submitForm();
 
@@ -524,6 +525,7 @@ describe('PrescriptionsComponent — signing', () => {
     prescriptionService.create.and.returnValue(of({ id: 'rx-new' } as PrescriptionResponse));
     component.openCreate();
     component.form.medicationName = 'Morphine 10 mg';
+    component.form.frequency = 'q6h';
     component.form.quantity = 3;
     component.form.quantityUnit = 'ampoules';
     component.submitForm();
@@ -1064,7 +1066,12 @@ describe('PrescriptionsComponent — signing', () => {
         : of(rx('rx-9', 'DRAFT'));
     });
     component.openCreate();
-    component.form = { ...component.form, medicationName: 'Septrine', quantity: 10 } as never;
+    component.form = {
+      ...component.form,
+      medicationName: 'Septrine',
+      frequency: 'q6h',
+      quantity: 10,
+    } as never;
     component.submitForm();
     fixture.detectChanges();
     const host = fixture.nativeElement as HTMLElement;
@@ -1099,6 +1106,7 @@ describe('PrescriptionsComponent — signing', () => {
     component.form = {
       ...component.form,
       medicationName: 'Paracétamol 500 mg',
+      frequency: 'q6h',
       quantity: 9,
     } as never;
     component.submitForm();
@@ -1187,6 +1195,34 @@ describe('PrescriptionsComponent — signing', () => {
       expect(prescriptionService.create.calls.mostRecent().args[0]).toEqual(
         jasmine.objectContaining({ frequency: 'SOS', asNeeded: true, prnMinIntervalHours: 4 }),
       );
+    });
+
+    it('QA D1491: a new order states its frequency; an older order written with none stays editable', () => {
+      prescriptionService.create.calls.reset();
+      prescriptionService.update.calls.reset();
+      prescriptionService.update.and.returnValue(of(rx('rx-old', 'DRAFT')));
+      component.openCreate();
+      fixture.detectChanges();
+      expect(host().querySelector('label[for="rx-frequency"]')?.textContent).toContain('*');
+      component.form = {
+        ...component.form,
+        medicationName: 'Amoxicilline',
+        quantity: 3,
+        frequency: '   ',
+      } as never;
+      component.submitForm();
+      expect(prescriptionService.create).not.toHaveBeenCalled();
+      expect(component['formError']()).toBe('PRESCRIPTIONS.FREQUENCY_REQUIRED');
+
+      component.openEdit({ ...rx('rx-old', 'DRAFT'), frequency: undefined } as never);
+      component.submitForm();
+      expect(prescriptionService.update).withContext('as it was').toHaveBeenCalled();
+
+      prescriptionService.update.calls.reset();
+      component.openEdit({ ...rx('rx-old', 'DRAFT'), frequency: 'q6h' } as never);
+      component.form.frequency = '';
+      component.submitForm();
+      expect(prescriptionService.update).withContext('emptied').not.toHaveBeenCalled();
     });
 
     it('QA D1406: ticking clears the refusal that asked for the tick, and so does a new frequency', () => {

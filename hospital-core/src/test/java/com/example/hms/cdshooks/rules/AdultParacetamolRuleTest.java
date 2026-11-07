@@ -555,6 +555,14 @@ class AdultParacetamolRuleTest {
             .get(0).summary()).contains("counted at what their frequency states");
     }
 
+    /** QA D1491: another order with no frequency stays open on the MAR: no known one dose, and the card says so. */
+    @Test
+    void d1491_anotherOrderWithNoFrequencyIsCountedAsUnread() {
+        String withNone = evaluate(new Order("3 g", "1 fois par jour").others(other("2 g", ""))).get(0).detail();
+        String unread = evaluate(new Order("3 g", "1 fois par jour").others(other("2 g", "selon protocole"))).get(0).detail();
+        assertThat(withNone).isEqualTo(unread);
+    }
+
     /** QA D1455: over the ceiling on what the sentence states: "at least", and the total is unknown. */
     @Test
     void d1455_aStatedCountOverTheCeilingSaysAtLeast() {

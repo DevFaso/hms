@@ -35,6 +35,11 @@ import java.util.regex.Pattern;
  * now, and at apply nobody can answer: {@link #requireValidToApply} lets that one
  * question pass. The order is created from the wording as written and flagged on
  * the MAR, never given a wrong cadence. A condition is still refused by name.
+ *
+ * <p>QA D1491 (round 36): a medication item states a frequency, at every save. A set
+ * saved before with an item that has none still applies, for the same reason: its
+ * order is created, stays open on the MAR and is flagged, where it used to close
+ * after one dose. Editing that set asks for the frequency, by name.
  */
 public final class OrderSetItemPrnRules {
 
@@ -70,7 +75,8 @@ public final class OrderSetItemPrnRules {
                 continue;
             }
             PrnMinInterval.Refusal refusal = refusalOf(item);
-            boolean unanswerable = saved && refusal != null && PrnMinInterval.CONFIRMED_FIELD.equals(refusal.field());
+            boolean unanswerable = saved && refusal != null && (PrnMinInterval.CONFIRMED_FIELD.equals(refusal.field())
+                || PrnMinInterval.FREQUENCY_FIELD.equals(refusal.field()));
             if (refusal != null && !unanswerable) {
                 throw new FieldBusinessException(ITEMS_FIELD + "[" + i + "]." + refusal.field(), ITEM_REFUSED_KEY,
                     i + 1, nameOf(item), MessageUtil.resolve(refusal.key()));
@@ -103,8 +109,9 @@ public final class OrderSetItemPrnRules {
      * before the wording was asked about, which reaches the MAR flagged ({@link #requireValidToApply}).
      */
     static boolean frequencyAnsweredAtApply(Map<String, Object> item) {
-        if (frequencyConfirmed(item) || !(item.get("frequency") instanceof String written)) {
-            return frequencyConfirmed(item);
+        String written = item.get("frequency") instanceof String text ? text : null;
+        if (frequencyConfirmed(item) || PrnMinInterval.missingFrequency(written) != null) {
+            return true;
         }
         PrnMinInterval.Refusal refusal = PrnMinInterval.safetyNet(written);
         return refusal != null && PrnMinInterval.CONFIRMED_FIELD.equals(refusal.field());

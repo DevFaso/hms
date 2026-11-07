@@ -337,7 +337,12 @@
                         }}<span
                           class="status-badge status-advisory"
                           [attr.data-testid]="'med-frequency-unread-' + m.id"
-                          [title]="'EMAR.FREQUENCY_UNREAD_LABEL' | translate"
+                          [title]="
+                            (m.lastOutcome
+                              ? 'EMAR.FREQUENCY_UNREAD_LABEL'
+                              : 'EMAR.FREQUENCY_UNREAD_FIRST_LABEL'
+                            ) | translate
+                          "
                           ><span aria-hidden="true">{{
                             'EMAR.FREQUENCY_UNREAD_CHIP' | translate
                           }}</span

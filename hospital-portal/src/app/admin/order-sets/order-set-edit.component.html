@@ -182,12 +182,16 @@
                   </select>
                 </label>
                 <label>
-                  <span>{{ 'ORDER_SETS.FIELD_FREQUENCY' | translate }}</span>
+                  <span>{{ 'ORDER_SETS.FIELD_FREQUENCY' | translate }} *</span>
                   <select
                     [ngModel]="item.frequency"
                     (ngModelChange)="onFrequencyChange(item, $event)"
                     [name]="'frequency-' + i"
+                    [id]="'order-set-item-frequency-' + i"
                     [attr.data-testid]="'order-set-item-frequency-' + i"
+                    [attr.data-server-field]="'orderItems[' + i + '].frequency'"
+                    [attr.aria-required]="'true'"
+                    [attr.aria-invalid]="itemMissingFrequency(i) ? 'true' : null"
                   >
                     <option value=""></option>
                     @for (f of frequencyPresets; track f.value) {

@@ -62,6 +62,9 @@ public final class MarDoseInterval {
     /** The refusal's message key when the frequency cannot be read as a schedule (QA D1237). */
     public static final String FREQUENCY_UNREAD_KEY = "nurse.mar.frequencyUnread";
 
+    /** What the refusal quotes when no frequency was written, as the screens show it. */
+    private static final String NOTHING_WRITTEN = "\u2014";
+
     /** QA round 30: an older as-needed order with no minimum interval written on it. */
     public static final String PRN_INTERVAL_MISSING_KEY = "nurse.mar.prnIntervalMissing";
 
@@ -122,7 +125,9 @@ public final class MarDoseInterval {
         if (reading.kind() == MarDoseSchedule.Kind.UNREAD) {
             // QA D1237: the course stays open, but the MAR cannot say when the
             // next dose is due, so every later dose says why it is given now.
-            return requireReason(reason, FREQUENCY_UNREAD_KEY, rx.getFrequency().trim());
+            // QA D1491: an older order with no frequency at all is read the same way.
+            String written = MarDoseSchedule.nothingWritten(rx.getFrequency()) ? NOTHING_WRITTEN : rx.getFrequency().trim();
+            return requireReason(reason, FREQUENCY_UNREAD_KEY, written);
         }
         if (reading.kind() == MarDoseSchedule.Kind.AS_NEEDED) {
             return requireAsNeededIntervalOrReason(rx, lastGiven.get(), now, reason);

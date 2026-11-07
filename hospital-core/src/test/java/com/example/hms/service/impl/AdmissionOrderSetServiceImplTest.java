@@ -115,7 +115,7 @@ class AdmissionOrderSetServiceImplTest {
         r.setDescription("Updated");
         r.setAdmissionType(AdmissionType.EMERGENCY);
         r.setHospitalId(HOSPITAL_ID);
-        r.setOrderItems(List.of(Map.of("orderType", "MEDICATION", "medicationName", "Ceftriaxone")));
+        r.setOrderItems(List.of(Map.of("orderType", "MEDICATION", "medicationName", "Ceftriaxone", "frequency", "Q24H")));
         r.setCreatedByStaffId(STAFF_ID);
         return r;
     }

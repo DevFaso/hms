@@ -165,6 +165,8 @@ export class OrderSetEditComponent implements OnInit {
    * (an item without one is not applied). The items that lack it.
    */
   protected readonly itemsMissingPrnInterval = signal<number[]>([]);
+  /** QA D1491: the medication items with no frequency, marked on the press of Save. */
+  protected readonly itemsMissingFrequency = signal<number[]>([]);
   protected readonly prnMaxIntervalHours = PRN_MAX_INTERVAL_HOURS;
   /**
    * QA D1396: the catalogue items an item's name answers to, by item row. A
@@ -228,6 +230,7 @@ export class OrderSetEditComponent implements OnInit {
   protected removeItem(index: number): void {
     this.items.update((rows) => rows.filter((_, i) => i !== index));
     this.itemsMissingName.set([]);
+    this.itemsMissingFrequency.set([]);
   }
 
   protected itemMissingName(index: number): boolean {
@@ -299,6 +302,10 @@ export class OrderSetEditComponent implements OnInit {
     if (asked.length > 0) this.itemsAskedToConfirm.update((all) => [...all, ...asked]);
   }
 
+  protected itemMissingFrequency(index: number): boolean {
+    return this.itemsMissingFrequency().includes(index);
+  }
+
   protected itemMissingPrnInterval(index: number): boolean {
     return this.itemsMissingPrnInterval().includes(index);
   }
@@ -330,9 +337,13 @@ export class OrderSetEditComponent implements OnInit {
           : -1,
       )
       .filter((i) => i !== -1);
+    const noFrequency = itemsOut
+      .map((it, i) => (this.isMedicationLike(it.orderType) && !it.frequency?.trim() ? i : -1))
+      .filter((i) => i !== -1);
     this.nameMissing.set(nameMissing);
     this.itemsMissingName.set(unnamed);
     this.itemsMissingPrnInterval.set(noInterval);
+    this.itemsMissingFrequency.set(noFrequency);
     // QA D1256 class (round 27): every gap on the first press — the name, an
     // empty list, each unnamed item — instead of one per press.
     const gaps = joinReasons([
@@ -342,6 +353,9 @@ export class OrderSetEditComponent implements OnInit {
         this.translate.instant('ORDER_SETS.ITEM_NAME_MISSING', { position: i + 1 }),
       ),
       noInterval.length > 0 && this.translate.instant('PRESCRIPTIONS.PRN_MIN_INTERVAL_REQUIRED'),
+      ...noFrequency.map((i) =>
+        this.translate.instant('ORDER_SETS.ITEM_FREQUENCY_MISSING', { position: i + 1 }),
+      ),
     ]);
     if (gaps) {
       // QA D1306 (round 28): focus the first marked field, not only a toast.
@@ -350,6 +364,7 @@ export class OrderSetEditComponent implements OnInit {
         ...(itemsOut.length === 0 ? ['order-set-item-add'] : []),
         ...unnamed.map((i) => `order-set-item-name-${i}`),
         ...noInterval.map((i) => `order-set-item-prn-${i}`),
+        ...noFrequency.map((i) => `order-set-item-frequency-${i}`),
       ];
       focusFirstInvalid(this.host.nativeElement, refused);
       this.toast.error(gaps);

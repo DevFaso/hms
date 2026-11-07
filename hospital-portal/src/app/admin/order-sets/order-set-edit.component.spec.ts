@@ -247,6 +247,7 @@ describe('OrderSetEditComponent', () => {
     expect(select()!.querySelectorAll('option').length).toBe(3);
 
     c.items()[0]['medicationCatalogItemId'] = 'm30';
+    c.items()[0]['frequency'] = 'Q6H';
     c.items()[0]['quantity'] = 6;
     c.save();
     expect(svc.create.calls.mostRecent().args[0].orderItems[0].medicationCatalogItemId).toBe('m30');
@@ -304,6 +305,30 @@ describe('OrderSetEditComponent', () => {
     expect('frequencyConfirmed' in svc.create.calls.mostRecent().args[0].orderItems[0]).toBeFalse();
   });
 
+  it('QA D1491: a medication item states its frequency, marked and named on the press of Save', async () => {
+    await configure('new');
+    fixture = TestBed.createComponent(OrderSetEditComponent);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    const c = fixture.componentInstance as unknown as {
+      form: { name: string };
+      items: () => Record<string, unknown>[];
+      save(): void;
+    };
+    c.form.name = 'Douleur';
+    Object.assign(c.items()[0], { medicationName: 'Morphine', frequency: '' });
+    svc.create.calls.reset();
+    c.save();
+    fixture.detectChanges();
+    expect(svc.create).not.toHaveBeenCalled();
+    const field = host.querySelector('[data-testid="order-set-item-frequency-0"]');
+    expect(field?.getAttribute('aria-invalid')).toBe('true');
+    expect(field?.getAttribute('data-server-field')).toBe('orderItems[0].frequency');
+    Object.assign(c.items()[0], { frequency: 'Q6H' });
+    c.save();
+    expect(svc.create).toHaveBeenCalled();
+  });
+
   it('QA D1396: the quantity and unit are saved with the item, and a blank one is not sent', async () => {
     await configure('new');
     fixture = TestBed.createComponent(OrderSetEditComponent);
@@ -323,6 +348,7 @@ describe('OrderSetEditComponent', () => {
     c.form.name = 'Douleur';
     Object.assign(c.items()[0], {
       medicationName: 'Morphine',
+      frequency: 'Q6H',
       quantity: 6,
       quantityUnit: 'ampoules',
     });

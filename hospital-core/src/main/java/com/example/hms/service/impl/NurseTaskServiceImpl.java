@@ -1367,7 +1367,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
      */
     private NurseMedicationTaskResponseDTO withOrderReading(NurseMedicationTaskResponseDTO task, Prescription rx,
                                                              MarNextDose.Due due, LocalDateTime now, boolean controlled) {
-        task.setFrequencyUnread(due.frequencyUnread());
+        task.setFrequencyUnread(MarNextDose.flaggedUnread(rx, due));
         task.setContinuousInfusion(due.continuous());
         // QA round 30: an as-needed order, with the prescriber's minimum interval.
         task.setAsNeeded(due.asNeeded());

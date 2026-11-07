@@ -142,7 +142,13 @@
                  server's refusal). -->
             @if (task.frequencyUnread) {
               <p class="emar__blocked" role="note" data-testid="emar-frequency-unread">
-                {{ 'EMAR.FREQUENCY_UNREAD_LABEL' | translate }}
+                <!-- QA D1508: flagged from the start; the first dose asks for nothing. -->
+                {{
+                  (task.lastOutcome
+                    ? 'EMAR.FREQUENCY_UNREAD_LABEL'
+                    : 'EMAR.FREQUENCY_UNREAD_FIRST_LABEL'
+                  ) | translate
+                }}
               </p>
             }
             <!-- QA round 30: an as-needed order: given on demand, at least the

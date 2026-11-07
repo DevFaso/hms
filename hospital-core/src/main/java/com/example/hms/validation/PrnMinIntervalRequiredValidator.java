@@ -10,7 +10,8 @@ import jakarta.validation.ConstraintValidatorContext;
  * create. The tick absent means not as-needed. Ticked: the interval is
  * required. Not ticked: an interval is refused, a condition is refused on
  * {@code asNeeded} and a wording the MAR cannot schedule is asked about on
- * {@code frequencyConfirmed} (the wording rule, QA D1419) - each reported on
+ * {@code frequencyConfirmed} (the wording rule, QA D1419), and a missing
+ * frequency is refused on {@code frequency} (QA D1491) - each reported on
  * its own field with every other refusal of the request (the D1349 rule).
  * With an explicit {@code asNeeded: false} only the safety net is checked
  * here; its interval is {@link PrnMinIntervalOnlyWhenAsNeededValidator}'s,
@@ -26,8 +27,10 @@ public class PrnMinIntervalRequiredValidator
         }
         boolean confirmed = Boolean.TRUE.equals(request.getFrequencyConfirmed());
         if (Boolean.FALSE.equals(request.getAsNeeded())) {
-            // The interval half is the Default-group constraint's; only the safety net here.
-            return PrnRefusalReport.report(context, PrnMinInterval.safetyNet(request.getFrequency(), confirmed));
+            // The interval half is the Default-group constraint's; only the frequency and the safety net here.
+            PrnMinInterval.Refusal missing = PrnMinInterval.missingFrequency(request.getFrequency());
+            return PrnRefusalReport.report(context,
+                missing != null ? missing : PrnMinInterval.safetyNet(request.getFrequency(), confirmed));
         }
         return PrnRefusalReport.report(context, PrnMinInterval.refusalOf(
             Boolean.TRUE.equals(request.getAsNeeded()), request.getPrnMinIntervalHours(), request.getFrequency(),

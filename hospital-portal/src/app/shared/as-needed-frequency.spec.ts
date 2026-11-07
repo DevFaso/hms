@@ -1,5 +1,6 @@
 import {
   frequencyReading,
+  GRAMMAR_LINES,
   PRN_MAX_INTERVAL_HOURS,
   unTickedFrequencyVerdict,
 } from './as-needed-frequency';
@@ -109,6 +110,39 @@ describe('as-needed-frequency (QA D1391 / D1395: the mirror of the server rule)'
       }
     }
     expect(counted).toBeGreaterThan(2500);
+  });
+
+  it('QA D1486, D1487, D1512: every number slot of the grammar has its bound, as on the server', () => {
+    const bounds = cases.slotBounds as Record<string, { in: string[]; out: string[] }>;
+    const sample = cases.slotSample as Record<string, string>;
+    let inRange = 0;
+    let outOfRange = 0;
+    for (const { meaning, tokens } of GRAMMAR_LINES) {
+      if (!tokens.includes('#')) continue;
+      const instance = (n: string): string =>
+        tokens.map((t) => (t === '#' ? n : (sample[t] ?? t))).join(' ');
+      const bound = bounds[meaning];
+      if (!bound) fail(`no bound for ${meaning}: ${tokens.join(' ')}`);
+      for (const n of bound.in) {
+        if (frequencyReading(instance(n)).kind === 'UNREAD') fail(`asked: ${instance(n)}`);
+        inRange++;
+      }
+      for (const n of bound.out) {
+        if (frequencyReading(instance(n)).kind !== 'UNREAD') fail(`read: ${instance(n)}`);
+        if (unTickedFrequencyVerdict(instance(n)) !== 'UNREADABLE')
+          fail(`not asked: ${instance(n)}`);
+        outOfRange++;
+      }
+    }
+    expect(inRange).toBeGreaterThan(150);
+    expect(outOfRange).toBeGreaterThan(200);
+  });
+
+  it('QA D1491: nothing written is unread, so a course never ends on it; the form refuses it', () => {
+    for (const blank of [null, undefined, '', '   ', '\u00a0', '.', '-', '()', '\u200b']) {
+      expect(frequencyReading(blank).kind).toBe('UNREAD');
+      expect(unTickedFrequencyVerdict(blank)).toBe('FIXED');
+    }
   });
 
   it('QA D1460: "dormir" and an accented "si" are no conditions; "si" with no accent is', () => {

@@ -25,6 +25,9 @@
  * guesses. A text is a schedule only when ALL of it is one form of the closed
  * grammar below, every token consumed; anything else is asked once. A wording is
  * added by a line here, in `FrequencyCadence.java` and in the fixture.
+ *
+ * QA D1486, D1487, D1512 (round 36): every number and joining word of the grammar has
+ * its bound, on both sides; what falls outside is asked once.
  */
 
 /** The longest minimum interval written, in hours (the server's `PrnMinInterval.MAX_HOURS`). */
@@ -78,6 +81,23 @@ const BEFORE_BARE_CLOCK = words('AT LAS');
 const BEFORE_CLOCK = words('A AT LAS VERS');
 const AFTER_SPANISH_ELEVEN = words('VECES HORA HORAS');
 const BARE_SLASH_HOURS = words('4 6 8 12');
+const MARKED_SLASH_HOURS = words('1 2 3 4 6 8 12');
+const LONG_INTERVAL_HOURS = words('36 48 72');
+const FRENCH_COUNT_WORDS = words('UNE UN DEUX TROIS QUATRE CINQ SIX SEPT HUIT NEUF DIX ONZE DOUZE');
+const SPANISH_COUNT_WORDS = words(
+  'UN UNA UNO DOS TRES CUATRO CINCO SEIS SIETE OCHO NUEVE DIEZ ONCE DOCE',
+);
+const ENGLISH_COUNT_WORDS = words('ONE TWO THREE FOUR FIVE SIX SEVEN EIGHT NINE TEN ELEVEN TWELVE');
+const FRENCH_FORM_WORDS = words(
+  'TOUTES TOUTE TOUS TTES TT LES PAR DANS JOURNEE FOIS HEURE HEURES ' +
+    'J JR JRS JOUR JOURS SEMAINE SEMAINES MOIS HEBDOMADAIRE',
+);
+const SPANISH_FORM_WORDS = words(
+  'CADA C POR AL VECES VEZ HORA HORAS DIA DIAS SEMANA SEMANAS MES MESES SEMANAL',
+);
+const ENGLISH_FORM_WORDS = words(
+  'EVERY Q PER TIMES TIME HOUR HOURS DAY DAYS DAILY WEEK WEEKS W MONTH MONTHS WEEKLY',
+);
 /* word-lists:end */
 
 /* grammar:start (`FrequencyCadence.GRAMMAR`, held equal by FrequencyWordingTest) */
@@ -138,9 +158,7 @@ PD | # TIMES EN 24 HOUR
 PD | # TIMES / 24 HOUR
 PD | # TIMES / 24
 PD | # TIMES DANS LA JOURNEE
-PD | # / DAY
-P24 | # / 24 HOUR
-P24 | # / 24
+BD | # / DAY
 =1440 | ONCE A DAY
 =1440 | ONCE DAILY
 =1440 | ONCE PER DAY
@@ -193,7 +211,7 @@ PW | # TIMES A WEEK
 PW | # TIMES A LA WEEK
 PW | # TIMES / WEEK
 PW | # TIMES WEEKLYWORD
-PW | # / WEEK
+BW | # / WEEK
 =10080 | ONCE A WEEK
 =10080 | ONCE WEEKLY
 =10080 | ONCE PER WEEK
@@ -212,7 +230,7 @@ PM | # TIMES PER MONTH
 PM | # TIMES AL MONTH
 PM | # TIMES A MONTH
 PM | # TIMES / MONTH
-PM | # / MONTH
+BM | # / MONTH
 =43200 | ONCE A MONTH
 *43200 | MONTHLY
 *43200 | MENSUEL
@@ -365,6 +383,8 @@ function lines(table: string): Line[] {
 }
 
 const FORMS = lines(GRAMMAR);
+/** Every line of the grammar: for the spec's generated bound on each number slot, nothing else. */
+export const GRAMMAR_LINES: readonly { meaning: string; tokens: readonly string[] }[] = FORMS;
 /** The longest first: "LE SOIR AU COUCHER" before "LE SOIR". */
 const PART_PHRASES = lines(PARTS).sort((a, b) => b.tokens.length - a.tokens.length);
 
@@ -446,6 +466,22 @@ const MINUTES_PER_DAY = 1440;
 const MINUTES_PER_WEEK = 7 * MINUTES_PER_DAY;
 const MINUTES_PER_MONTH = 30 * MINUTES_PER_DAY;
 const MAX_COURSE_ENTRIES = 31;
+const MAX_COURSE_DAY = MAX_COURSE_ENTRIES;
+const MAX_INTERVAL_HOURS = 72;
+const FIRST_LONE_CLOCK_HOUR = 5;
+/** `FrequencyCadence.MOST_BY_MEANING`. */
+const MOST_BY_MEANING: ReadonlyMap<string, number> = new Map([
+  ['H', MAX_INTERVAL_HOURS],
+  ['D', MAX_COURSE_DAY],
+  ['W', 12],
+  ['PD', 24],
+  ['BD', 4],
+  ['PW', 7],
+  ['BW', 3],
+  ['PM', MAX_COURSE_DAY],
+  ['BM', 2],
+  ['ONE', 5],
+]);
 const MIN_CLOCK_GAP_HOURS = 4;
 const DECIMAL = 'DECIMAL';
 const COMPARISON = /[<>≤≥]/;
@@ -456,6 +492,7 @@ const ONLY_DIGITS = /^\d{1,4}$/;
 const SEPARATOR = /^[\s\p{Z}\uFEFF_.,'\u2019]$/u;
 const LABEL_AND_CODE = /^([^()]*)\(([^()]*)\)\s*$/;
 /** Spanish "si" with its accent is "yes", never "if": `FrequencyWording.ACCENTED_SI`. */
+const VERY = /(?<!\p{L})tr[\u00e8\u00e9]s(?!\p{L})/giu;
 const ACCENTED_SI = /(?<!\p{L})[sS][\u00ed\u00cd](?!\p{L})/gu;
 
 /** A count of doses written as a word, `MarDoseSchedule.countDigitOf`. English "once" is no eleven here. */
@@ -505,7 +542,8 @@ function countOver(count: number, period: number): FrequencyReading | null {
 /** `FrequencyCadence.tokensOf`. */
 function tokensOf(upper: string): string[] {
   const joined = upper
-    .replaceAll(/\b(\d{1,2})[:H][0-5]\d\b/g, '$1HMIN')
+    .replaceAll(/\b(2[0-3]|[01]?\d|24(?=[:H]00))[:H][0-5]\d\b/g, '$1HMIN')
+    .replaceAll(/(?<![\d.,])0{1,4}[.,]0{1,3}(?![\d.,])/g, ' 0 ')
     .replaceAll(/(?<![\d.,])\d{1,4}[.,]\d{1,3}(?![\d.,])/g, ` ${DECIMAL} `)
     .replaceAll('VINGT-QUATRE', '24')
     .replaceAll('VEINTICUATRO', '24')
@@ -523,7 +561,8 @@ function wholeNumber(token: string): number | null {
 }
 
 function isDoseNumber(token: string): boolean {
-  return token === DECIMAL || ONLY_DIGITS.test(token) || wholeNumber(token) !== null;
+  if (ONLY_DIGITS.test(token)) return !/^0+$/.test(token);
+  return token === DECIMAL || wholeNumber(token) !== null;
 }
 
 function fits(expected: string, token: string): boolean {
@@ -536,6 +575,27 @@ function isSpanishEleven(tokens: readonly string[], at: number): boolean {
   return tokens[at] === 'ONCE' && AFTER_SPANISH_ELEVEN.has(tokens[at + 1] ?? '');
 }
 
+function noneIn(
+  tokens: readonly string[],
+  one: ReadonlySet<string>,
+  other: ReadonlySet<string>,
+): boolean {
+  return !tokens.some((token) => one.has(token) || other.has(token));
+}
+
+/** `FrequencyCadence.speaksAsItsForm`. */
+function speaksAsItsForm(number: string, tokens: readonly string[]): boolean {
+  const french = FRENCH_COUNT_WORDS.has(number);
+  const spanish = SPANISH_COUNT_WORDS.has(number);
+  const english = ENGLISH_COUNT_WORDS.has(number);
+  if (!french && !spanish && !english) return true;
+  return (
+    (french && noneIn(tokens, SPANISH_FORM_WORDS, ENGLISH_FORM_WORDS)) ||
+    (spanish && noneIn(tokens, FRENCH_FORM_WORDS, ENGLISH_FORM_WORDS)) ||
+    (english && noneIn(tokens, FRENCH_FORM_WORDS, SPANISH_FORM_WORDS))
+  );
+}
+
 function matched(form: readonly string[], tokens: readonly string[]): number[] | null {
   if (form.length !== tokens.length) return null;
   const numbers: number[] = [];
@@ -543,6 +603,7 @@ function matched(form: readonly string[], tokens: readonly string[]): number[] |
     if (form[i] === '#') {
       const number = wholeNumber(tokens[i]);
       if (number === null && !isSpanishEleven(tokens, i)) return null;
+      if (!speaksAsItsForm(tokens[i], tokens)) return null;
       numbers.push(number ?? 11);
     } else if (!fits(form[i], tokens[i])) {
       return null;
@@ -553,15 +614,20 @@ function matched(form: readonly string[], tokens: readonly string[]): number[] |
 
 function readingOf(meaning: string, numbers: readonly number[]): FrequencyReading | null {
   const n = numbers[0] ?? 0;
+  if (numbers.length > 0 && (n === 0 || n > (MOST_BY_MEANING.get(meaning) ?? Infinity))) {
+    return null;
+  }
   switch (meaning) {
     case 'ONE':
       return ONE_OFF;
     case 'CONT':
       return CONTINUOUS;
     case 'H':
-      return n <= 72 ? every(n * MINUTES_PER_HOUR) : null;
+      return n <= 24 || LONG_INTERVAL_HOURS.has(String(n)) ? every(n * MINUTES_PER_HOUR) : null;
     case 'S':
-      return n === numbers[1] && n < 24 ? every(n * MINUTES_PER_HOUR) : null;
+      return n === numbers[1] && MARKED_SLASH_HOURS.has(String(n))
+        ? every(n * MINUTES_PER_HOUR)
+        : null;
     case 'B':
       return n === numbers[1] && BARE_SLASH_HOURS.has(String(n))
         ? every(n * MINUTES_PER_HOUR)
@@ -571,12 +637,13 @@ function readingOf(meaning: string, numbers: readonly number[]): FrequencyReadin
     case 'W':
       return every(n * MINUTES_PER_WEEK);
     case 'PD':
+    case 'BD':
       return countOver(n, MINUTES_PER_DAY);
-    case 'P24':
-      return n <= 4 ? countOver(n, MINUTES_PER_DAY) : null;
     case 'PW':
+    case 'BW':
       return countOver(n, MINUTES_PER_WEEK);
     case 'PM':
+    case 'BM':
       return countOver(n, MINUTES_PER_MONTH);
     default:
       return every(Number(meaning.slice(1)));
@@ -611,6 +678,7 @@ function partsOfDay(tokens: readonly string[]): FrequencyReading | null {
   while (at < tokens.length) {
     const part = partAt(tokens, at);
     if (!part || seen.includes(part.meaning)) return null;
+    if (!joined && seen.length > 0 && BEFORE_CLOCK.has(part.tokens[0])) return null;
     if (!joined && part.meaning === 'B' && seen.at(-1) === 'E') return null;
     seen.push(part.meaning);
     const next = at + part.tokens.length;
@@ -625,10 +693,9 @@ function partsOfDay(tokens: readonly string[]): FrequencyReading | null {
 }
 
 function entryAt(tokens: readonly string[], at: number, letter: string): number | null {
-  const digits = tokens[at + 1];
-  const anEntry =
-    tokens[at] === letter && digits !== undefined && ONLY_DIGITS.test(digits) && digits.length <= 3;
-  return anEntry ? Number(digits) : null;
+  const value = tokens[at] === letter ? wholeDigits(tokens[at + 1]) : null;
+  const most = letter === 'H' ? MAX_INTERVAL_HOURS : MAX_COURSE_DAY;
+  return value !== null && value <= most ? value : null;
 }
 
 /** `FrequencyCadence.course`. */
@@ -664,18 +731,25 @@ class ClockList {
   readonly hours: number[] = [];
   private marked = false;
 
-  readOneAt(tokens: readonly string[], at: number): number {
-    let i = at;
-    if (tokens[i] === 'A' && tokens[i + 1] === 'LAS') i++;
+  readOneAt(tokens: readonly string[], at: number, mayOpen: boolean): number {
+    const i = tokens[at] === 'A' && tokens[at + 1] === 'LAS' ? at + 1 : at;
     const before = BEFORE_CLOCK.has(tokens[i]) ? tokens[i] : '';
-    if (before) i++;
-    const number = wholeDigits(tokens[i]);
+    if (before && !mayOpen) return -1;
+    const time = before ? i + 1 : i;
+    const number = wholeDigits(tokens[time]);
     if (number === null) return -1;
-    const after = tokens[i + 1] ?? '';
-    if (after === 'AM' || after === 'PM') return this.add(hourOf(number, after), true, i + 2);
-    if (after === 'HMIN') return this.add(number, true, i + 2);
-    if (after === 'H') return this.add(number, before !== '', i + 2);
-    return BEFORE_BARE_CLOCK.has(before) ? this.add(number, true, i + 1) : -1;
+    return this.readItsMark(number, tokens[time + 1] ?? '', before, time + 2);
+  }
+
+  private readItsMark(number: number, after: string, before: string, next: number): number {
+    if (after === 'AM' || after === 'PM') {
+      return number < 1 || number > 12 ? -1 : this.add(hourOf(number, after), true, next);
+    }
+    if (after === 'HMIN') {
+      return this.add(number, before !== '' || number >= FIRST_LONE_CLOCK_HOUR, next);
+    }
+    if (after === 'H') return this.add(number, before !== '', next);
+    return BEFORE_BARE_CLOCK.has(before) ? this.add(number, true, next - 1) : -1;
   }
 
   private add(hour: number, isMarked: boolean, next: number): number {
@@ -698,10 +772,12 @@ class ClockList {
 function clockTimes(tokens: readonly string[]): FrequencyReading | null {
   const list = new ClockList();
   let at = 0;
+  let mayOpen = true;
   while (at < tokens.length) {
-    const next = list.readOneAt(tokens, at);
+    const next = list.readOneAt(tokens, at, mayOpen);
     at = next < 0 ? -1 : afterJoin(tokens, next);
     if (at < 0) return null;
+    mayOpen = at !== next;
   }
   return list.reading();
 }
@@ -709,7 +785,7 @@ function clockTimes(tokens: readonly string[]): FrequencyReading | null {
 /** `FrequencyCadence.posology`: "1-0-1", the whole text (QA D1291, user decision). */
 function posology(tokens: readonly string[]): FrequencyReading | null {
   if (tokens.length !== 5 && tokens.length !== 7) return null;
-  const shaped = tokens.every((token, i) => (i % 2 === 1 ? token === '-' : /^\d$/.test(token)));
+  const shaped = tokens.every((token, i) => (i % 2 === 1 ? token === '-' : /^[0-4]$/.test(token)));
   if (!shaped) return null;
   const doses = tokens.filter((token, i) => i % 2 === 0 && token !== '0').length;
   return countOver(doses, MINUTES_PER_DAY);
@@ -761,10 +837,15 @@ function sameReading(a: FrequencyReading, b: FrequencyReading | null): boolean {
   );
 }
 
+/** QA D1491: a letter or a digit: `MarDoseSchedule.nothingWritten`, the other way round. */
+export function frequencyWritten(frequency: string | null | undefined): frequency is string {
+  return !!frequency && /[\p{L}\p{N}]/u.test(frequency);
+}
+
 /** `MarDoseSchedule.read(String)`: the one reader of a frequency. */
 export function frequencyReading(frequency: string | null | undefined): FrequencyReading {
-  if (!frequency?.trim()) return ONE_OFF;
-  const upper = accentlessUpper(frequency);
+  if (!frequencyWritten(frequency)) return UNREAD;
+  const upper = accentlessUpper(frequency.normalize('NFC').replaceAll(VERY, ' ? '));
   const label = LABEL_AND_CODE.exec(upper);
   if (label) {
     const words = readWithDose(tokensOf(label[1]));
@@ -859,7 +940,7 @@ function isWeightBand(bracketed: string): boolean {
  * reads it: `FrequencyWording.classify`.
  */
 export function unTickedFrequencyVerdict(frequency: string | null | undefined): FrequencyVerdict {
-  if (!frequency?.trim()) return 'FIXED';
+  if (!frequencyWritten(frequency)) return 'FIXED';
   if (frequencyReading(frequency).kind !== 'UNREAD') return 'FIXED';
   const text = accentlessUpper(frequency.normalize('NFC').replaceAll(ACCENTED_SI, ' '))
     .replaceAll(/\([^()]*\)/g, (part) => (isWeightBand(part) ? ' ' : part))

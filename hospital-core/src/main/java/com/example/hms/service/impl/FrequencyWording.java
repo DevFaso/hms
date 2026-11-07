@@ -75,9 +75,6 @@ public final class FrequencyWording {
     /** Separators and any kind of space, read as one space, as the portal's mirror reads them. */
     private static final Pattern SEPARATORS = Pattern.compile("[_.,\\s\\p{Z}\\uFEFF]++");
 
-    /** Nothing but spaces, of any kind. */
-    private static final Pattern NOTHING_WRITTEN = Pattern.compile("[\\s\\p{Z}\\uFEFF]*+");
-
     /**
      * Words that make a frequency a condition, in EN, FR and ES (upper case,
      * accents removed; a run of single letters is one word, so "p.r.n." is PRN
@@ -128,9 +125,12 @@ public final class FrequencyWording {
         return Set.of(list.split(" "));
     }
 
-    /** What an unticked frequency says ({@code null} and blank: nothing written, {@link Verdict#FIXED}). */
+    /**
+     * What an unticked frequency says ({@code null} and blank: no wording to judge, {@link Verdict#FIXED};
+     * QA D1491: {@link PrnMinInterval#refusalOf} refuses it on its own field, before this rule is asked).
+     */
     public static Verdict classify(String frequency) {
-        if (frequency == null || NOTHING_WRITTEN.matcher(frequency).matches()) {
+        if (MarDoseSchedule.nothingWritten(frequency)) {
             return Verdict.FIXED;
         }
         // The one reader first, on what was written: what it reads, the MAR schedules.

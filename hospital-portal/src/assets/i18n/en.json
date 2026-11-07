@@ -1147,6 +1147,7 @@
     "ITEMS": "items",
     "ITEMS_TITLE": "Order items",
     "ITEM_NAME_MISSING": "Item #{{position}} is missing a name",
+    "ITEM_FREQUENCY_MISSING": "Item #{{position}} is missing a frequency",
     "ITEM_REQUIRED": "Add at least one order item",
     "MISSING_ORDERING_STAFF": "No clinician profile is signed in — cannot open the order-set picker.",
     "NEW": "New order set",
@@ -7521,6 +7522,7 @@
     "PRN_MIN_INTERVAL": "Minimum interval between doses (hours)",
     "PRN_MIN_INTERVAL_HINT": "Required for an as-needed (PRN) order: the MAR offers the next dose once this time has passed since the last one.",
     "PRN_MIN_INTERVAL_REQUIRED": "Enter the minimum interval between two doses (1 to 72 hours).",
+    "FREQUENCY_REQUIRED": "Enter the frequency: how often the medicine is given.",
     "PRN_MIN_INTERVAL_VALUE": "At least {{hours}} h between doses"
   },
   "PROFILE": {
@@ -12183,6 +12185,7 @@
     },
     "FREQUENCY_UNREAD_CHIP": "Frequency not recognised",
     "FREQUENCY_UNREAD_LABEL": "Frequency not recognised — check the prescription. The next dose time is unknown: a dose given now asks for a reason.",
+    "FREQUENCY_UNREAD_FIRST_LABEL": "Frequency not recognised — check the prescription. The first dose is given as usual; each dose after it asks for a reason.",
     "FREQUENCY_UNREAD_DIALOG": {
       "TITLE": "Frequency not recognised",
       "REASON_LABEL": "The next dose time cannot be worked out from this frequency. Why give this dose now?",

@@ -1147,6 +1147,7 @@
     "ITEMS": "éléments",
     "ITEMS_TITLE": "Éléments de l'ordre",
     "ITEM_NAME_MISSING": "L'élément n° {{position}} n'a pas de nom",
+    "ITEM_FREQUENCY_MISSING": "L'élément n° {{position}} n'a pas de fréquence",
     "ITEM_REQUIRED": "Ajoutez au moins un élément",
     "MISSING_ORDERING_STAFF": "Aucun profil clinicien connecté — impossible d'ouvrir le sélecteur d'ensembles.",
     "NEW": "Nouvel ensemble",
@@ -7521,6 +7522,7 @@
     "PRN_MIN_INTERVAL": "Intervalle minimum entre deux doses (heures)",
     "PRN_MIN_INTERVAL_HINT": "Obligatoire pour une prescription « si besoin » : le registre propose la dose suivante une fois ce délai écoulé depuis la précédente.",
     "PRN_MIN_INTERVAL_REQUIRED": "Indiquez l’intervalle minimum entre deux doses (de 1 à 72 heures).",
+    "FREQUENCY_REQUIRED": "Indiquez la fréquence : à quel rythme le médicament est donné.",
     "PRN_MIN_INTERVAL_VALUE": "Au moins {{hours}} h entre deux doses"
   },
   "PROFILE": {
@@ -12183,6 +12185,7 @@
     },
     "FREQUENCY_UNREAD_CHIP": "Fréquence non reconnue",
     "FREQUENCY_UNREAD_LABEL": "Fréquence non reconnue — vérifier l’ordonnance. L’heure de la prochaine dose est inconnue : une dose donnée maintenant demande un motif.",
+    "FREQUENCY_UNREAD_FIRST_LABEL": "Fréquence non reconnue — vérifier l’ordonnance. La première dose se donne normalement ; chaque dose suivante demande un motif.",
     "FREQUENCY_UNREAD_DIALOG": {
       "TITLE": "Fréquence non reconnue",
       "REASON_LABEL": "L’heure de la prochaine dose ne peut pas être calculée à partir de cette fréquence. Pourquoi donner cette dose maintenant ?",

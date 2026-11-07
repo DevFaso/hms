@@ -6321,3 +6321,7 @@ For the clinician list (proposed alert logic, pending sign-off):
 - **D1314, an unsigned order's prescriber:** `awaitingPhysicianSignature` is two role queries per distinct prescriber on a page: bounded by the page, not by the table.
 - **D1314, `HospitalAdminDashboardServiceImpl.buildStaffingMetrics`:** `staffAvailabilityRepository.findAll()` then a filter in memory, on every hospital's rows. Not measured.
 - **D1314, `allRows` readers:** `PrescriptionService.list` still reads every page where a caller needs the whole of one visit, and for a status this build has no name for (the attention tab only). Both are bounded by what they read; neither is a search any more.
+
+## Round 36 Lows left for later
+
+From docs/qa/dev-qa-run-2026-11-07-round36.md (steps and likely code there). They do not block: D1493, D1496, D1497, D1498, D1499, D1500, D1501, D1502, D1503, D1504, D1506, D1509, D1510, D1511, D1513.

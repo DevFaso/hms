@@ -1147,6 +1147,7 @@
     "ITEMS": "elementos",
     "ITEMS_TITLE": "Elementos del conjunto",
     "ITEM_NAME_MISSING": "Al elemento n.º {{position}} le falta el nombre",
+    "ITEM_FREQUENCY_MISSING": "Al elemento n.º {{position}} le falta la frecuencia",
     "ITEM_REQUIRED": "Añada al menos un elemento",
     "MISSING_ORDERING_STAFF": "No hay un perfil clínico conectado — no se puede abrir el selector de conjuntos.",
     "NEW": "Nuevo conjunto",
@@ -7521,6 +7522,7 @@
     "PRN_MIN_INTERVAL": "Intervalo mínimo entre dos dosis (horas)",
     "PRN_MIN_INTERVAL_HINT": "Obligatorio en una prescripción «si es necesario»: el registro ofrece la dosis siguiente cuando ha pasado este tiempo desde la anterior.",
     "PRN_MIN_INTERVAL_REQUIRED": "Indique el intervalo mínimo entre dos dosis (de 1 a 72 horas).",
+    "FREQUENCY_REQUIRED": "Indique la frecuencia: cada cuánto se administra el medicamento.",
     "PRN_MIN_INTERVAL_VALUE": "Al menos {{hours}} h entre dosis"
   },
   "PROFILE": {
@@ -12183,6 +12185,7 @@
     },
     "FREQUENCY_UNREAD_CHIP": "Frecuencia no reconocida",
     "FREQUENCY_UNREAD_LABEL": "Frecuencia no reconocida — revise la receta. Se desconoce la hora de la próxima dosis: una dosis administrada ahora pide un motivo.",
+    "FREQUENCY_UNREAD_FIRST_LABEL": "Frecuencia no reconocida — revise la receta. La primera dosis se administra con normalidad; cada dosis siguiente pide un motivo.",
     "FREQUENCY_UNREAD_DIALOG": {
       "TITLE": "Frecuencia no reconocida",
       "REASON_LABEL": "La hora de la próxima dosis no puede calcularse con esta frecuencia. ¿Por qué administrar esta dosis ahora?",

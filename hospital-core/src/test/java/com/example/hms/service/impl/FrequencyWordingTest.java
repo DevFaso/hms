@@ -168,7 +168,7 @@ class FrequencyWordingTest {
         JsonNode filed = new ObjectMapper().readTree(Files.readString(MarDoseScheduleTest.AS_NEEDED_CASES)).get("filed");
         int counted = 0;
         for (String defect : List.of("D1419", "D1426", "D1452", "D1453", "D1454", "D1455", "D1456", "D1457", "D1458",
-            "D1459", "D1460", "D1472")) {
+            "D1459", "D1460", "D1472", "D1486", "D1487", "D1512", "R36-slots")) {
             for (JsonNode node : filed.get(defect)) {
                 String wording = node.asText();
                 long outcomes = java.util.stream.Stream.of(fixed, conditional, unreadable)
@@ -407,14 +407,64 @@ class FrequencyWordingTest {
         List<String> out = new ArrayList<>();
         FrequencyCadence.GRAMMAR.lines().map(line -> line.split(" \\| ")[1]).forEach(tokens -> out.add(Arrays.stream(
             tokens.split(" ")).map(token -> switch (token) {
-                // The bare "3/3" is asked: the bare slash reads only 4, 6, 8 and 12.
-                case "#" -> "# / #".equals(tokens) ? "6" : "3";
+                // The bare "3/3" is asked: the bare slash reads only 4, 6, 8 and 12. QA D1487: so is "3/mois".
+                case "#" -> instanceOfTheNumber(tokens);
                 case "~" -> "125";
                 default -> oneWord.getOrDefault(token, token);
             }).collect(java.util.stream.Collectors.joining(" "))));
         FrequencyCadence.PARTS.lines().map(line -> line.split(" \\| ")[1])
             .filter(words -> !List.of("MANANA", "TARDE").contains(words)).forEach(out::add);
         return out;
+    }
+
+    private static String instanceOfTheNumber(String tokens) {
+        return switch (tokens) {
+            case "# / #" -> "6";
+            case "# / MONTH" -> "2";
+            default -> "3";
+        };
+    }
+
+    /**
+     * THE GUARD of round 36 (QA D1486, D1487, D1512, one class: a number in a slot of the grammar that takes a
+     * value no prescriber means). Generated, not listed: every line of the grammar holding a number, with every
+     * number the fixture's {@code slotBounds} says its kind of form reads, and with every one it says is asked. A
+     * new line, or a new kind of form, with no bound fails here. {@code as-needed-frequency.spec.ts} runs the
+     * same on the mirror.
+     */
+    @Test
+    void everyNumberSlotOfTheGrammarHasItsBound() throws IOException {
+        JsonNode cases = cases();
+        JsonNode bounds = cases.get("slotBounds");
+        JsonNode sample = cases.get("slotSample");
+        int read = 0;
+        int asked = 0;
+        for (String line : FrequencyCadence.GRAMMAR.lines().toList()) {
+            String[] cell = line.strip().split(" \\| ");
+            if (!List.of(cell[1].split(" ")).contains("#")) {
+                continue;
+            }
+            assertThat(bounds.has(cell[0])).as("the bound of \"%s\"", line).isTrue();
+            for (JsonNode number : bounds.get(cell[0]).get("in")) {
+                String wording = instance(cell[1], number.asText(), sample);
+                assertThat(MarDoseSchedule.read(wording).kind()).as(wording).isNotEqualTo(MarDoseSchedule.Kind.UNREAD);
+                read++;
+            }
+            for (JsonNode number : bounds.get(cell[0]).get("out")) {
+                String wording = instance(cell[1], number.asText(), sample);
+                assertThat(MarDoseSchedule.read(wording).kind()).as(wording).isEqualTo(MarDoseSchedule.Kind.UNREAD);
+                assertThat(FrequencyWording.classify(wording)).as(wording).isEqualTo(FrequencyWording.Verdict.UNREADABLE);
+                asked++;
+            }
+        }
+        assertThat(read).as("the numbers in range").isGreaterThan(150);
+        assertThat(asked).as("the numbers out of range").isGreaterThan(200);
+    }
+
+    private static String instance(String tokens, String number, JsonNode sample) {
+        return Arrays.stream(tokens.split(" "))
+            .map(token -> "#".equals(token) ? number : sample.path(token).asText(token))
+            .collect(java.util.stream.Collectors.joining(" "));
     }
 
     /** QA D1452: every form of the closed grammar states its cadence in the fixture, and reads it. */
@@ -510,10 +560,34 @@ class FrequencyWordingTest {
             assertThat(readingOf(wording)).as(wording).isEqualTo("CONTINUOUS");
         }
         assertThat(readingOf("8h30")).isEqualTo("REPEATING:1440");
+        // QA round 36: alone with no word before it, "1h30" may say how long; with one it is a time.
+        assertThat(readingOf("1h30")).isEqualTo("UNREAD");
+        assertThat(readingOf("\u00e0 1h30")).isEqualTo("REPEATING:1440");
         assertThat(readingOf("8h,20h")).isEqualTo("REPEATING:720");
         assertThat(readingOf("ma\u00f1ana y noche")).isEqualTo("REPEATING:720");
         assertThat(readingOf("ma\u00f1ana, tarde y noche")).isEqualTo("REPEATING:480");
         assertThat(MarDoseSchedule.dosesPerDay("1/2/j")).as("a fraction is no count").isNull();
+    }
+
+    /**
+     * QA D1491: nothing written is no wording to judge; {@link PrnMinInterval#refusalOf} refuses it, on its own
+     * field, and {@link MarDoseSchedule#read(String)} reads it as unread, so it never ends a course.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"", "   ", "\u00a0", "\t", ".", "-", "()", "\u200b"})
+    void d1491_aBlankFrequencyIsRefusedAndNeverEndsACourse(String blank) {
+        assertThat(MarDoseSchedule.read(blank).kind()).isEqualTo(MarDoseSchedule.Kind.UNREAD);
+        assertThat(dueAfterOneDose(blank).finished()).isFalse();
+        assertThat(dueAfterOneDose(blank).frequencyUnread()).isTrue();
+        PrnMinInterval.Refusal required =
+            new PrnMinInterval.Refusal(PrnMinInterval.FREQUENCY_FIELD, PrnMinInterval.FREQUENCY_REQUIRED_KEY);
+        assertThat(PrnMinInterval.refusalOf(false, null, blank)).isEqualTo(required);
+        assertThat(PrnMinInterval.refusalOf(false, null, blank, true)).as("confirming does not answer it").isEqualTo(required);
+        assertThat(PrnMinInterval.refusalOf(true, 4, blank)).as("ticked").isEqualTo(required);
+        assertThat(MarDoseSchedule.writtenWithNoCount(blank)).as("nothing written, no card").isFalse();
+        assertThat(MarDoseSchedule.dosesPerDay(blank)).isNull();
+        assertThat(MarDoseSchedule.shortestMinutesBetweenDoses(blank)).isNull();
+        assertThat(MarDoseSchedule.intervalHours(blank)).isNull();
     }
 
     /** QA D1460: a schedule is not told it reads as needed; a real condition still is. */

@@ -663,6 +663,46 @@ class PrescriptionEditAndWithdrawalIT extends BaseIT {
         assertThat(prescriptionRepository.count()).isEqualTo(before);
     }
 
+    /**
+     * QA D1491 on the real endpoints: no frequency is refused on its field, in the reader's language and
+     * whatever the answer sent; an older order written with none is edited as it was, and an edit that empties a
+     * frequency is refused. Its course stays open: {@code frequencyUnread} on the response.
+     */
+    @Test
+    @DisplayName("QA D1491: no frequency is refused on create; an older order keeps working")
+    void d1491_noFrequencyIsRefusedOnCreateAndAnOlderOrderKeepsWorking() throws Exception {
+        for (String missing : List.of("\"frequency\":\"\",", "\"frequency\":\"   \",", "\"frequency\":\"\u00a0\",", "",
+            "\"frequency\":\"\",\"frequencyConfirmed\":true,")) {
+            mockMvc.perform(post(API_CONTEXT + "/prescriptions").contextPath(API_CONTEXT).with(as(authorUser))
+                    .header("Accept-Language", "fr")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(createBody("q6h").replace("\"frequency\":\"q6h\",", missing)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors.frequency").value(org.hamcrest.Matchers.containsString("fréquence")));
+        }
+
+        prescription.setFrequency(null);
+        prescription = prescriptionRepository.save(prescription);
+        mockMvc.perform(put(API_CONTEXT + UPDATE_PATH, prescription.getId()).contextPath(API_CONTEXT).with(as(authorUser))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body("Amoxicilline 500 mg", null, null).replace("\"frequency\":\"3x/day\"", "\"frequency\":\"\"")
+                    .replace("\"dosage\":\"500 mg\"", "\"dosage\":\"1 g\"")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.frequencyUnread").value(true));
+        assertThat(prescriptionRepository.findById(prescription.getId()).orElseThrow().getDosage()).isEqualTo("1 g");
+
+        prescription = prescriptionRepository.findById(prescription.getId()).orElseThrow();
+        prescription.setFrequency("q6h");
+        prescription = prescriptionRepository.save(prescription);
+        mockMvc.perform(put(API_CONTEXT + UPDATE_PATH, prescription.getId()).contextPath(API_CONTEXT).with(as(authorUser))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body("Amoxicilline 500 mg", null, null)
+                    .replace("\"frequency\":\"3x/day\"", "\"frequency\":\" \",\"frequencyConfirmed\":true")))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.fieldErrors.frequency").exists());
+        assertThat(prescriptionRepository.findById(prescription.getId()).orElseThrow().getFrequency()).isEqualTo("q6h");
+    }
+
     private String createBody(String frequency) {
         return "{\"patientId\":\"" + patient.getId() + "\",\"staffId\":\"" + authorStaff.getId()
             + "\",\"encounterId\":\"" + encounter.getId() + "\",\"medicationName\":\"Fansidar\","
