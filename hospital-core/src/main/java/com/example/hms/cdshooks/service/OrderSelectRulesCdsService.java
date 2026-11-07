@@ -88,7 +88,8 @@ public class OrderSelectRulesCdsService implements CdsHookService {
                 hospitalId,
                 proposed.name(),
                 proposed.code(),
-                proposed.dose()
+                proposed.dose(),
+                proposed.route()
             ).stream())
             .toList();
         return CdsHookResponse.of(cards);

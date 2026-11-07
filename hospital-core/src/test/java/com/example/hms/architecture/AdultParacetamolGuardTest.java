@@ -21,8 +21,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * context is built, so no path can reach the rules without the paracetamol facts. (A CDS hook sends
  * no frequency, so there the daily total counts one dose of its draft: tasklist.md.) The rule stays
  * what the guidance calls it, an alert, with one card above that: the contraindication, which saves
- * only with a reason. No hard stop or review was asked, and raising another card is a clinician's
- * decision, not a side effect.
+ * only with a reason. CR-02 (provisional, awaiting the named approver): a finding outside the limits
+ * stays a warning on the draft and holds the signature for the prescriber's exception. No hard stop
+ * or review was asked, and raising another card is a clinician's decision, not a side effect.
  */
 @DisplayName("Adult paracetamol: one engine reaches every path, and its cards stay alerts")
 class AdultParacetamolGuardTest {
@@ -49,7 +50,9 @@ class AdultParacetamolGuardTest {
                 builders.add(MAIN.relativize(source).toString().replace('\\', '/'));
             }
         }
-        assertThat(builders).containsExactly("cdshooks/rules/CdsRuleEngine.java");
+        // CR-01: the record's own copy with a route is the only other: it keeps every field it was built with.
+        assertThat(builders).containsExactlyInAnyOrder("cdshooks/rules/CdsRuleEngine.java",
+            "cdshooks/rules/CdsRuleContext.java");
     }
 
     @Test
@@ -64,9 +67,9 @@ class AdultParacetamolGuardTest {
             .contains("ALERT = CdsCard.Indicator.WARNING")
             .containsOnlyOnce("Indicator.CRITICAL")
             .contains("contraindication.detail")
-            .containsOnlyOnce("Boolean.TRUE);")
-            // The eight-argument card: no hardStop, no reviewRequired.
+            // The contraindication, and the held finding: never a hardStop, never a reviewRequired.
             .contains("null, null, null, UUID.randomUUID().toString(), null, null, Boolean.TRUE);")
+            .contains("null, null, null, UUID.randomUUID().toString(), null, null, Boolean.TRUE, key);")
             .contains("null, null, null, UUID.randomUUID().toString());");
     }
 

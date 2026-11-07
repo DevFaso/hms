@@ -1679,11 +1679,13 @@
       <div class="modal-header">
         <h2 id="rx-sign-reauth-title">
           {{
-            (signAlertIsCritical()
-              ? 'PRESCRIPTIONS.SIGN_CRITICAL.TITLE'
-              : signAllergyCards().length
-                ? 'PRESCRIPTIONS.SIGN_ALLERGY.TITLE'
-                : 'PRESCRIPTIONS.SIGN_REAUTH.TITLE'
+            (signAlertIsException()
+              ? 'PRESCRIPTIONS.SIGN_EXCEPTION.TITLE'
+              : signAlertIsCritical()
+                ? 'PRESCRIPTIONS.SIGN_CRITICAL.TITLE'
+                : signAllergyCards().length
+                  ? 'PRESCRIPTIONS.SIGN_ALLERGY.TITLE'
+                  : 'PRESCRIPTIONS.SIGN_REAUTH.TITLE'
             ) | translate
           }}
         </h2>
@@ -1707,9 +1709,11 @@
             <div class="field">
               <label for="rx-sign-allergy-reason"
                 >{{
-                  (signAlertIsCritical()
-                    ? 'PRESCRIPTIONS.SIGN_CRITICAL.REASON'
-                    : 'PRESCRIPTIONS.SIGN_ALLERGY.REASON'
+                  (signAlertIsException()
+                    ? 'PRESCRIPTIONS.SIGN_EXCEPTION.REASON'
+                    : signAlertIsCritical()
+                      ? 'PRESCRIPTIONS.SIGN_CRITICAL.REASON'
+                      : 'PRESCRIPTIONS.SIGN_ALLERGY.REASON'
                   ) | translate
                 }}
                 *</label

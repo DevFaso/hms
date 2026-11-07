@@ -120,13 +120,18 @@ public class CdsRuleEngine {
         return TERMINAL_STATUSES.contains(status);
     }
 
-    /** Build a context for the given proposed order; never null. */
+    /**
+     * Build a context for the given proposed order; never null. CR-01: the route the order states
+     * ({@code null} when it states none) is part of the order, so no entry point exists without it
+     * (OrderRouteEntryPointGuardTest).
+     */
     public CdsRuleContext buildContext(Patient patient, UUID hospitalId,
                                        String proposedMedicationName,
                                        String proposedMedicationCode,
-                                       String proposedDosage) {
-        return buildContext(patient, hospitalId, proposedMedicationName, proposedMedicationCode,
-            proposedDosage, null, null);
+                                       String proposedDosage,
+                                       String proposedRoute) {
+        return buildContext(patient, hospitalId, new ProposedOrder(proposedMedicationName, proposedMedicationCode,
+            proposedDosage, null, null, null, null, proposedRoute, null));
     }
 
     /**
@@ -138,32 +143,30 @@ public class CdsRuleEngine {
      *        {@code null} the item is resolved from the code, as before
      * @param excludedPrescriptionId the prescription being edited, which is
      *        not "another active order" of itself (D970); {@code null} on create
+     * @param proposedRoute the route the order states; {@code null} when it states none
      */
     public CdsRuleContext buildContext(Patient patient, UUID hospitalId,
                                        String proposedMedicationName,
                                        String proposedMedicationCode,
                                        String proposedDosage,
                                        MedicationCatalogItem proposedCatalogItem,
-                                       UUID excludedPrescriptionId) {
+                                       UUID excludedPrescriptionId,
+                                       String proposedRoute) {
         return buildContext(patient, hospitalId, new ProposedOrder(proposedMedicationName, proposedMedicationCode,
-            proposedDosage, null, proposedCatalogItem, excludedPrescriptionId));
+            proposedDosage, null, proposedCatalogItem, excludedPrescriptionId, null, proposedRoute, null));
     }
 
     /**
      * The order being written, as the rules read it: its name and code, the
      * dose and frequency as typed, the catalogue item picked or resolved (may
      * be null), and the order being edited, left out of the duplicate check
-     * (null on a create).
+     * (null on a create). CR-01: the route is the one this order states, null when
+     * it states none, and never the catalogue item's; the formulation is the
+     * ordered product's, the catalogue item's form when none is given.
      */
     public record ProposedOrder(String medicationName, String medicationCode, String dosage, String frequency,
                                 MedicationCatalogItem catalogItem, UUID excludedPrescriptionId,
-                                Double prnDosesPerDay) {
-
-        /** An order with no as-needed interval. */
-        public ProposedOrder(String medicationName, String medicationCode, String dosage, String frequency,
-                             MedicationCatalogItem catalogItem, UUID excludedPrescriptionId) {
-            this(medicationName, medicationCode, dosage, frequency, catalogItem, excludedPrescriptionId, null);
-        }
+                                Double prnDosesPerDay, String route, String formulation) {
     }
 
     /**
@@ -216,7 +219,9 @@ public class CdsRuleEngine {
             parseDoseUnits(proposedDosage),
             weighedAt,
             order.prnDosesPerDay(),
-            readParacetamolFacts(patient, hospitalId, proposedMedicationName, catalogItem, excludedPrescriptionId)
+            readParacetamolFacts(patient, hospitalId, proposedMedicationName, catalogItem, excludedPrescriptionId),
+            OrderedRoute.of(order.route(),
+                order.formulation() != null || catalogItem == null ? order.formulation() : catalogItem.getForm())
         );
     }
 
@@ -263,9 +268,10 @@ public class CdsRuleEngine {
     public List<CdsCard> evaluateProposedPrescription(Patient patient, UUID hospitalId,
                                                        String proposedMedicationName,
                                                        String proposedMedicationCode,
-                                                       String proposedDosage) {
+                                                       String proposedDosage,
+                                                       String proposedRoute) {
         return evaluate(buildContext(patient, hospitalId,
-            proposedMedicationName, proposedMedicationCode, proposedDosage));
+            proposedMedicationName, proposedMedicationCode, proposedDosage, proposedRoute));
     }
 
     /** Round 18: build context (with the frequency, a resolved item and an edited order) + evaluate. */
@@ -279,9 +285,44 @@ public class CdsRuleEngine {
                                                        String proposedMedicationCode,
                                                        String proposedDosage,
                                                        MedicationCatalogItem proposedCatalogItem,
-                                                       UUID excludedPrescriptionId) {
+                                                       UUID excludedPrescriptionId,
+                                                       String proposedRoute) {
         return evaluate(buildContext(patient, hospitalId, proposedMedicationName, proposedMedicationCode,
-            proposedDosage, proposedCatalogItem, excludedPrescriptionId));
+            proposedDosage, proposedCatalogItem, excludedPrescriptionId, proposedRoute));
+    }
+
+    /**
+     * CR-03: the adult paracetamol exposure at the moment of a dose, as warnings that refuse nothing.
+     * {@code beforeReadingDoses} runs once the drug is known to be paracetamol and before the doses
+     * are read: the MAR passes its lock there, so a second dose given at the same moment on another
+     * order of this patient waits for the first and counts it. Empty for any other drug and for a
+     * failed read, as a rule that throws costs its cards, never the dose (QA D1121).
+     */
+    public List<CdsCard> paracetamolAtAdministration(Patient patient, UUID hospitalId, ProposedOrder order,
+                                                     Runnable beforeReadingDoses) {
+        AdultParacetamolRule rule = rules.stream().filter(AdultParacetamolRule.class::isInstance)
+            .map(AdultParacetamolRule.class::cast).findFirst().orElse(null);
+        if (rule == null || patient == null) {
+            return List.of();
+        }
+        try {
+            MedicationCatalogItem item = order.catalogItem() != null
+                ? order.catalogItem() : resolveCatalogItem(hospitalId, order.medicationCode());
+            ParacetamolFacts facts = readParacetamolFacts(patient, hospitalId, order.medicationName(), item,
+                order.excludedPrescriptionId());
+            if (!facts.applies()) {
+                return List.of();
+            }
+            beforeReadingDoses.run();
+            return rule.atAdministration(buildContext(patient, hospitalId, order));
+        } catch (RuntimeException ex) {
+            if (failFast) {
+                throw ex;
+            }
+            logger.error("CDS paracetamol check at administration threw {}: {}", ex.getClass().getSimpleName(),
+                ex.getMessage(), ex);
+            return List.of();
+        }
     }
 
     /* =====================================================================

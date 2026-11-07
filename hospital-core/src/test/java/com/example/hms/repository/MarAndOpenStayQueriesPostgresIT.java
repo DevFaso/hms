@@ -219,4 +219,38 @@ class MarAndOpenStayQueriesPostgresIT {
                 .extracting(MedicationAdministrationRecord::getId).containsExactlyElementsOf(byId);
         }
     }
+
+    /** CR-03: every shape the one caller meets: the window across midnight, status, hospital and patient. */
+    @Test
+    void cr03_theDosesGivenSinceAMomentAcrossMidnight() {
+        UUID justInside = dose("GIVEN", "2026-11-06 00:30:00", "2026-11-06 00:30:00", "2026-11-06 00:30:00");
+        UUID yesterdayEvening = dose("GIVEN", "2026-11-06 23:50:00", "2026-11-06 23:50:00", "2026-11-06 23:50:00");
+        UUID afterMidnight = dose("GIVEN", "2026-11-07 00:10:00", "2026-11-07 00:10:00", "2026-11-07 00:10:00");
+        dose("GIVEN", "2026-11-06 00:29:00", "2026-11-06 00:29:59", "2026-11-06 00:29:00");
+        dose("HELD", "2026-11-06 23:00:00", "2026-11-06 23:00:00", "2026-11-06 23:00:00");
+        dose("REFUSED", "2026-11-06 23:00:00", "2026-11-06 23:00:00", "2026-11-06 23:00:00");
+        dose("MISSED", "2026-11-06 23:00:00", "2026-11-06 23:00:00", "2026-11-06 23:00:00");
+        dose("PENDING", "2026-11-06 23:00:00", null, "2026-11-06 23:00:00");
+        // The order behind the doses, discontinued: its doses still count.
+        replica("INSERT INTO clinical.prescriptions (id, patient_id, staff_id, encounter_id, assignment_id, hospital_id, "
+            + "medication_name, dosage, frequency, duration, status, created_at, updated_at) "
+            + "VALUES (?, ?, ?, ?, ?, ?, 'Paracetamol', '500 mg', '4 fois par jour', '3 jours', 'DISCONTINUED', now(), now())",
+            RX, PATIENT, STAFF, UUID.randomUUID(), ASSIGNMENT, HOSPITAL);
+        replica("INSERT INTO clinical.medication_administration_records (id, prescription_id, patient_id, hospital_id, "
+            + "medication_name, scheduled_time, administered_at, status, created_at, updated_at) "
+            + "VALUES (?, ?, ?, ?, 'X', now(), '2026-11-06 23:00:00'::timestamp, 'GIVEN', now(), now())",
+            UUID.randomUUID(), RX, OTHER_PATIENT, HOSPITAL);
+        replica("INSERT INTO clinical.medication_administration_records (id, prescription_id, patient_id, hospital_id, "
+            + "medication_name, scheduled_time, administered_at, status, created_at, updated_at) "
+            + "VALUES (?, ?, ?, ?, 'X', now(), '2026-11-06 23:00:00'::timestamp, 'GIVEN', now(), now())",
+            UUID.randomUUID(), RX, PATIENT, OTHER_HOSPITAL);
+
+        List<MedicationAdministrationRecord> given = mar.findGivenSince(PATIENT, HOSPITAL,
+            java.time.LocalDateTime.of(2026, 11, 6, 0, 30));
+
+        assertThat(given).extracting(MedicationAdministrationRecord::getId)
+            .containsExactly(afterMidnight, yesterdayEvening, justInside);
+        assertThat(given.get(0).getPrescription().getStatus())
+            .isEqualTo(com.example.hms.enums.PrescriptionStatus.DISCONTINUED);
+    }
 }

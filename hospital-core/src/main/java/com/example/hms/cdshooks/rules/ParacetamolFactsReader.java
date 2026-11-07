@@ -2,11 +2,13 @@ package com.example.hms.cdshooks.rules;
 
 import com.example.hms.enums.ProblemStatus;
 import com.example.hms.model.Admission;
+import com.example.hms.model.MedicationAdministrationRecord;
 import com.example.hms.model.Patient;
 import com.example.hms.model.PatientProblem;
 import com.example.hms.model.Prescription;
 import com.example.hms.model.medication.MedicationCatalogItem;
 import com.example.hms.repository.AdmissionRepository;
+import com.example.hms.repository.MedicationAdministrationRecordRepository;
 import com.example.hms.repository.MedicationCatalogItemRepository;
 import com.example.hms.repository.PatientProblemRepository;
 import com.example.hms.repository.PrescriptionRepository;
@@ -51,12 +53,18 @@ import java.util.regex.Pattern;
  * it is filed on a stay that is still open. Past that window it is not counted, and it is not
  * dropped either: nothing shows it was stopped, so the card names it as possibly still in use.
  * A combination product is named too, never counted.
+ *
+ * <p>CR-03: the doses recorded as given are read apart from all that: the last 24 hours by the clock,
+ * across midnight, at this hospital, from any order whatever became of it. The MAR has no return or
+ * correction of a dose (a GIVEN row is final), so there is nothing to net off; a dose given elsewhere,
+ * before a transfer or outside the hospital is not on record, and the card says so.
  */
 @Service
 public class ParacetamolFactsReader {
 
     private static final Duration NO_DURATION_WINDOW = DuplicateMedicationOrderRule.LOOKBACK;
     private static final Duration ONE_OFF_WINDOW = Duration.ofHours(24);
+    private static final Duration ROLLING_WINDOW = Duration.ofHours(24);
     private static final int DAYS_PER_WEEK = 7;
     private static final Pattern DURATION = Pattern.compile(
         "(\\d{1,5}+)\\s*+(jours?+|j|days?+|dias?+|semaines?+|sem|weeks?+|semanas?+|mois|months?+|mes|meses)\\b");
@@ -65,13 +73,29 @@ public class ParacetamolFactsReader {
     private final MedicationCatalogItemRepository catalogue;
     private final PatientProblemRepository problems;
     private final AdmissionRepository admissions;
+    private final MedicationAdministrationRecordRepository administrations;
+    private java.time.Clock clock = java.time.Clock.systemDefaultZone();
 
+    /** No record of the doses given: a card then says that exposure is unknown. */
     public ParacetamolFactsReader(PrescriptionRepository prescriptions, MedicationCatalogItemRepository catalogue,
                                   PatientProblemRepository problems, AdmissionRepository admissions) {
+        this(prescriptions, catalogue, problems, admissions, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public ParacetamolFactsReader(PrescriptionRepository prescriptions, MedicationCatalogItemRepository catalogue,
+                                  PatientProblemRepository problems, AdmissionRepository admissions,
+                                  MedicationAdministrationRecordRepository administrations) {
         this.prescriptions = prescriptions;
         this.catalogue = catalogue;
         this.problems = problems;
         this.admissions = admissions;
+        this.administrations = administrations;
+    }
+
+    /** For a test at a chosen hour. */
+    void setClock(java.time.Clock clock) {
+        this.clock = clock;
     }
 
     /**
@@ -111,9 +135,44 @@ public class ParacetamolFactsReader {
         List<PatientProblem> surfaced = live.stream()
             .filter(p -> CrossHospitalRows.maySurface(scope, acting, p.getSensitivityCategory()))
             .toList();
+        ParacetamolFacts.Documented documented = child ? ParacetamolFacts.Documented.NOT_READ
+            : documented(patient.getId(), scope, paracetamol, combinations, active);
         return new ParacetamolFacts(true, orders.counted, ParacetamolRisk.of(surfaced), orders.mayStillBeInUse,
             orders.combinations, combination, acting == null, scope == null,
-            item == null && named ? freeTextLimits(paracetamol) : null, orders.notRecognised, false);
+            item == null && named ? freeTextLimits(paracetamol) : null, orders.notRecognised, false, documented);
+    }
+
+    /** CR-03: see the class comment. A dose of another drug is not read; one this cannot place is named. */
+    private ParacetamolFacts.Documented documented(UUID patientId, UUID hospitalId, List<MedicationCatalogItem> paracetamol,
+                                                   List<MedicationCatalogItem> combinations, List<MedicationCatalogItem> active) {
+        if (hospitalId == null || administrations == null) {
+            return ParacetamolFacts.Documented.NOT_READ;
+        }
+        LocalDateTime since = LocalDateTime.now(clock).minus(ROLLING_WINDOW);
+        List<ParacetamolFacts.Dose> doses = new java.util.ArrayList<>();
+        java.util.Set<String> unreadable = new java.util.LinkedHashSet<>();
+        for (MedicationAdministrationRecord given : administrations.findGivenSince(patientId, hospitalId, since)) {
+            Prescription rx = given.getPrescription();
+            if (isCombination(rx, paracetamol, combinations)) {
+                unreadable.add(rx.getMedicationName());
+                continue;
+            }
+            ParacetamolFacts.OtherOrder alone = otherOrder(rx, paracetamol);
+            if (alone != null) {
+                doses.add(new ParacetamolFacts.Dose(given.getAdministeredAt(), rx.getMedicationName(),
+                    readableDose(given, rx), alone.item()));
+            } else if (rx.getMedicationCatalogItemId() == null && rx.getMedicationName() != null
+                    && !recognised(rx.getMedicationName(), active)) {
+                unreadable.add(rx.getMedicationName());
+            }
+        }
+        return new ParacetamolFacts.Documented(true, List.copyOf(doses), List.copyOf(unreadable));
+    }
+
+    /** What the row says was given; the order's dose when the row has only "See order". */
+    private static String readableDose(MedicationAdministrationRecord given, Prescription rx) {
+        String dose = given.getDose();
+        return dose == null || dose.isBlank() || !Character.isDigit(dose.trim().charAt(0)) ? rx.getDosage() : dose;
     }
 
     /** A catalogue item or a cited brand names it, or it carries a class member's INN stem. */
@@ -137,6 +196,8 @@ public class ParacetamolFactsReader {
                 || i.getPediatricMaxDailyMgPerKg() != null || i.getPediatricMaxSingleDoseMg() != null)
             .findFirst()
             .map(i -> MedicationCatalogItem.builder()
+                // CR-01: the route these limits are for, only when every item with limits says the same one.
+                .route(oneRoute(items))
                 .pediatricMaxDailyMg(oneCap ? caps.get(0) : null)
                 .pediatricMaxDoseMgPerKg(i.getPediatricMaxDoseMgPerKg())
                 .pediatricMaxDailyMgPerKg(i.getPediatricMaxDailyMgPerKg())
@@ -145,6 +206,15 @@ public class ParacetamolFactsReader {
                 .pediatricDoseStatus(i.getPediatricDoseStatus())
                 .build())
             .orElse(null);
+    }
+
+    private static String oneRoute(List<MedicationCatalogItem> items) {
+        List<String> routes = items.stream()
+            .filter(i -> i.getPediatricMaxDailyMg() != null || i.getPediatricMaxDoseMgPerKg() != null
+                || i.getPediatricMaxDailyMgPerKg() != null || i.getPediatricMaxSingleDoseMg() != null)
+            .map(i -> com.example.hms.service.emar.MedicationRoutes.canonical(i.getRoute()))
+            .distinct().toList();
+        return routes.size() == 1 ? routes.get(0) : null;
     }
 
     private static boolean namesACombination(String name, List<MedicationCatalogItem> paracetamol,

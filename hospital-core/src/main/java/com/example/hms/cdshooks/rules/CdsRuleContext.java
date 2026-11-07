@@ -59,6 +59,10 @@ import java.util.UUID;
  * @param paracetamolFacts         what the adult paracetamol check reads beyond
  *                                 the order; {@link ParacetamolFacts#NONE} for
  *                                 another drug or a child
+ * @param proposedRoute            CR-01: the route and formulation of THIS order, never
+ *                                 null and never the catalogue item's route standing in
+ *                                 for it; {@link OrderedRoute#NOT_STATED} when none was
+ *                                 given, which a dose rule reads as "cannot assess"
  */
 public record CdsRuleContext(
     Patient patient,
@@ -75,8 +79,31 @@ public record CdsRuleContext(
     Double proposedDoseUnits,
     java.time.LocalDateTime patientWeightRecordedAt,
     Double proposedPrnDosesPerDay,
-    ParacetamolFacts paracetamolFacts
+    ParacetamolFacts paracetamolFacts,
+    OrderedRoute proposedRoute
 ) {
+
+    /** A context with no route: {@link OrderedRoute#NOT_STATED}, so no route-bound limit is judged. */
+    public CdsRuleContext(Patient patient, UUID hospitalId, String proposedMedicationName,
+                          String proposedMedicationCode, String proposedRxnormCode, Double proposedDoseMg,
+                          MedicationCatalogItem proposedCatalogItem, Double patientWeightKg,
+                          List<Prescription> activePrescriptions, List<String> activePrescriptionRxnorms,
+                          String proposedFrequency, Double proposedDoseUnits,
+                          java.time.LocalDateTime patientWeightRecordedAt, Double proposedPrnDosesPerDay,
+                          ParacetamolFacts paracetamolFacts) {
+        this(patient, hospitalId, proposedMedicationName, proposedMedicationCode, proposedRxnormCode,
+            proposedDoseMg, proposedCatalogItem, patientWeightKg, activePrescriptions,
+            activePrescriptionRxnorms, proposedFrequency, proposedDoseUnits, patientWeightRecordedAt,
+            proposedPrnDosesPerDay, paracetamolFacts, OrderedRoute.NOT_STATED);
+    }
+
+    /** This context for an order written with this route and formulation. */
+    public CdsRuleContext withRoute(String route, String formulation) {
+        return new CdsRuleContext(patient, hospitalId, proposedMedicationName, proposedMedicationCode,
+            proposedRxnormCode, proposedDoseMg, proposedCatalogItem, patientWeightKg, activePrescriptions,
+            activePrescriptionRxnorms, proposedFrequency, proposedDoseUnits, patientWeightRecordedAt,
+            proposedPrnDosesPerDay, paracetamolFacts, OrderedRoute.of(route, formulation));
+    }
 
     /** The context of an order the adult paracetamol check does not read. */
     public CdsRuleContext(Patient patient, UUID hospitalId, String proposedMedicationName,
@@ -116,6 +143,7 @@ public record CdsRuleContext(
     /** Defensive copy + null guards to keep the record fully immutable. */
     public CdsRuleContext {
         paracetamolFacts = paracetamolFacts == null ? ParacetamolFacts.NONE : paracetamolFacts;
+        proposedRoute = proposedRoute == null ? OrderedRoute.NOT_STATED : proposedRoute;
         activePrescriptions = activePrescriptions == null
             ? List.of() : List.copyOf(activePrescriptions);
         activePrescriptionRxnorms = activePrescriptionRxnorms == null

@@ -1342,6 +1342,10 @@ export class PrescriptionsComponent implements OnInit {
   readonly signAlertIsCritical = computed(() =>
     this.signAllergyCards().some((c) => !!c.reasonAtSignature),
   );
+  /** CR-02: the dialog is for an explicit prescribing exception, which a reason answers with its token. */
+  readonly signAlertIsException = computed(() =>
+    this.signAllergyCards().some((c) => !!c.exceptionKey),
+  );
   signAllergyReason = '';
 
   signPrescription(p: PrescriptionResponse): void {
@@ -1407,6 +1411,8 @@ export class PrescriptionsComponent implements OnInit {
     }
     if (this.signAllergyCards().length > 0) {
       body.allergyOverrideReason = this.signAllergyReason.trim();
+      const token = this.signAllergyCards().find((c) => !!c.exceptionKey)?.exceptionKey;
+      if (token) body.doseExceptionToken = token;
     }
     this.doSign(target, body);
   }
@@ -1443,6 +1449,13 @@ export class PrescriptionsComponent implements OnInit {
         const cards = this.extractCdsCards(err);
         if (cards.length > 0 && !body?.allergyOverrideReason) {
           this.openSignAllergy(p, cards);
+          return;
+        }
+        // CR-02: the order or its findings changed under the exception: the current cards, the
+        // reason asked again, and the server's sentence saying why.
+        if (cards.some((c) => !!c.exceptionKey)) {
+          this.openSignAllergy(p, cards);
+          this.signReauthError.set(msg);
           return;
         }
         // Round 18: a refused re-authentication (missing, wrong, locked) is

@@ -670,7 +670,11 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   ): void {
     this.actionInProgress.set(prompt.taskId);
     this.nurseService.administerMedication(prompt.taskId, payload).subscribe({
-      next: () => {
+      next: (recorded) => {
+        // CR-03: the documented exposure counts this dose: a warning, the dose stands.
+        for (const card of recorded?.cdsAdvisories ?? []) {
+          if (card.indicator === 'warning') this.toast.warning(card.summary);
+        }
         // prompt.action is already 'HELD' | 'REFUSED' (see promptHoldRefuse
         // signature), so feed it directly into the NURSE.MED_ACTION.* key.
         // The prior `=== 'HOLD'` check was always false and silently coerced

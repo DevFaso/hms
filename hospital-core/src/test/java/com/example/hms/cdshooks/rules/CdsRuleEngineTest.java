@@ -99,7 +99,7 @@ class CdsRuleEngineTest {
 
         CdsRuleEngine engine = engineWith(List.of());
         CdsRuleContext ctx = engine.buildContext(p, hospitalId,
-            "Amoxicillin 500", "AMOX-500", "500 mg");
+            "Amoxicillin 500", "AMOX-500", "500 mg", null);
 
         assertThat(ctx.proposedRxnormCode()).isEqualTo("723");
         assertThat(ctx.proposedDoseMg()).isEqualTo(500.0);
@@ -120,7 +120,7 @@ class CdsRuleEngineTest {
             .thenReturn(List.of());
 
         CdsRuleContext ctx = engineWith(List.of()).buildContext(p, hospitalId,
-            "Amoxicillin", null, "500 mg");
+            "Amoxicillin", null, "500 mg", null);
 
         assertThat(ctx.patientWeightKg()).isEqualTo(20.0);
     }

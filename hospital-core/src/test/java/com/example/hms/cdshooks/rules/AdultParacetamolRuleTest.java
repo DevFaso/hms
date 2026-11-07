@@ -70,7 +70,7 @@ class AdultParacetamolRuleTest {
         Double doseMg = CdsRuleEngine.parseDoseMg(order.dose, weight, order.item);
         return rule.evaluate(new CdsRuleContext(order.patient, UUID.randomUUID(), "Paracétamol", null, null, doseMg,
             order.item, weight, List.of(), List.of(), order.frequency, CdsRuleEngine.parseDoseUnits(order.dose),
-            order.weighedAt, prn(order.prnHours), facts));
+            order.weighedAt, prn(order.prnHours), facts).withRoute("PO", null));
     }
 
     /** One proposed order and what the rule reads around it. */
@@ -187,14 +187,14 @@ class AdultParacetamolRuleTest {
         // A frequency nobody can read: says so, and still judges the dose it knows.
         "1 g | selon la douleur | null | U",
         // A bare number is no unit: never read as mg, in either direction.
-        "2 | 4 fois par jour | null | ''",
-        "2000 | 3 fois par jour | null | ''",
-        "1/2 | 3 fois par jour | null | ''",
+        "2 | 4 fois par jour | null | U",
+        "2000 | 3 fois par jour | null | U",
+        "1/2 | 3 fois par jour | null | U",
         "2 | toutes les 2 heures | null | I",
         "2 g | selon la douleur | null | SU",
         "5 g | selon la douleur | null | DS",
         // A dose that is not mg is silent, never read as mg; the interval needs no dose.
-        "5 ml | 3 fois par jour | null | ''",
+        "5 ml | 3 fois par jour | null | U",
         "5 ml | toutes les 2 heures | null | I",
     })
     void generalAdultLimits(String dose, String frequency, Integer prnHours, String expected) {
@@ -202,17 +202,17 @@ class AdultParacetamolRuleTest {
     }
 
     @Test
-    void aCountOfTabletsWithNoStrengthIsSilent() {
+    void aCountOfTabletsWithNoStrengthIsSaidNotReadAsMg() {
         Order order = new Order("20 cp", "3 fois par jour");
         order.item = null;
-        assertThat(evaluate(order)).isEmpty();
+        assertThat(letters(evaluate(order))).isEqualTo("U");
     }
 
     @Test
     void aCombinedStrengthIsNotReadAsMg() {
         Order order = new Order("20 cp", "3 fois par jour");
         order.item = MedicationCatalogItem.builder().genericName("Paracetamol").strength("500/30").strengthUnit("mg").build();
-        assertThat(evaluate(order)).isEmpty();
+        assertThat(letters(evaluate(order))).isEqualTo("U");
     }
 
     @ParameterizedTest(name = "{0} kg, {1} {2}: [{3}] ceiling {4}")
@@ -403,7 +403,7 @@ class AdultParacetamolRuleTest {
     }
 
     @Test
-    void everyCardIsAnAlertNoneBlocks() {
+    void everyCardIsAnAlertAndNoneIsAHardStop() {
         List<CdsCard> all = new ArrayList<>();
         all.addAll(evaluate(new Order("2 000 mg", "3 fois par jour")));
         all.addAll(evaluate(new Order("1 g", "si besoin").prn(1)));
@@ -412,11 +412,13 @@ class AdultParacetamolRuleTest {
         all.addAll(evaluate(new Order("1 g", "4 fois par jour").risks(ParacetamolRisk.TWO_GRAM_GROUP,
             ParacetamolRisk.CHRONIC_ALCOHOLISM)));
         assertThat(evaluate(new Order("1 g", null).risks(ParacetamolRisk.SEVERE_HEPATIC)).get(0).needsReasonAtSignature()).isTrue();
-        assertThat(all).hasSizeGreaterThanOrEqualTo(6).noneMatch(CdsCard::needsReasonAtSignature).allSatisfy(card -> {
+        // CR-02: a finding outside the limits holds the signature and says so; every other card does not block.
+        assertThat(all).hasSizeGreaterThanOrEqualTo(6).allSatisfy(card -> {
             assertThat(card.indicator()).isNotEqualTo(CdsCard.Indicator.CRITICAL);
             assertThat(card.blocksOverride()).isFalse();
             assertThat(card.reviewRequired()).isNull();
-            assertThat(card.detail()).contains("does not block").contains("EFFERALGANSTIX").contains("FDA");
+            assertThat(card.detail()).contains("EFFERALGANSTIX").contains("FDA")
+                .contains(card.needsReasonAtSignature() ? "explicit exception" : "does not block");
         });
         assertThat(evaluate(new Order("1 g", "4 fois par jour")).get(0).indicator()).isEqualTo(CdsCard.Indicator.INFO);
         assertThat(evaluate(new Order("2 g", null)).get(0).indicator()).isEqualTo(CdsCard.Indicator.WARNING);
@@ -448,7 +450,7 @@ class AdultParacetamolRuleTest {
         assertThat(letters(cards)).isEqualTo(expected);
         assertThat(cards.get(0).indicator()).isEqualTo(CdsCard.Indicator.WARNING);
         assertThat(cards.get(0).summary()).contains("at least 6000 mg").contains("dose of this order could not be read");
-        assertThat(cards.get(0).detail()).contains("at least 6000 mg from other orders");
+        assertThat(cards.get(0).detail()).contains("at least 6000 mg per 24 h from other orders");
     }
 
     @Test
@@ -456,7 +458,7 @@ class AdultParacetamolRuleTest {
         List<CdsCard> cards = evaluate(new Order("10 ml", "3 fois par jour").others(other("500 mg", "3 fois par jour")));
         assertThat(letters(cards)).isEqualTo("O");
         assertThat(cards.get(0).indicator()).isEqualTo(CdsCard.Indicator.INFO);
-        assertThat(evaluate(new Order("10 ml", "3 fois par jour"))).isEmpty();
+        assertThat(letters(evaluate(new Order("10 ml", "3 fois par jour")))).isEqualTo("U");
     }
 
     /** H3: an order whose dose is unread is named, even with nothing else to say. */
@@ -541,7 +543,7 @@ class AdultParacetamolRuleTest {
             .noneMatch(summary -> summary.contains("2000 mg per day"));
         assertThat(cards.stream().map(CdsCard::detail))
             .allMatch(detail -> detail.contains("could not be calculated from this frequency: at least 2000 mg"))
-            .noneMatch(detail -> detail.contains("Calculated 24-hour total"));
+            .noneMatch(detail -> detail.contains("Estimated scheduled exposure: 2000 mg"));
     }
 
     /** QA D1455: another order counted at what its unread sentence states says it may be more. */
@@ -613,7 +615,7 @@ class AdultParacetamolRuleTest {
     @Test
     void noFrequencySentIsSaid() {
         assertThat(evaluate(new Order("2 g", null)).get(0).detail())
-            .contains("as no frequency was sent").doesNotContain("Calculated 24-hour total");
+            .contains("as no frequency was sent").doesNotContain("Estimated scheduled exposure: 2000 mg");
     }
 
     /** L8. */
@@ -644,7 +646,8 @@ class AdultParacetamolRuleTest {
         all.addAll(evaluate(new Order("1 g", "selon la douleur")));
         assertThat(letters(all)).isEqualTo("CDINRSU");
         assertThat(all).allSatisfy(card -> assertThat(card.detail())
-            .contains("24-hour total").contains("prescribed orders, not actual use")
+            .contains("Estimated scheduled exposure").contains("current orders, not doses given")
+            .contains("Documented administered exposure").contains("Unknown, not zero")
             .contains("Combination products are not counted")
             .contains("nonprescription medicines, actual use and risk factors")
             .contains("may still be present"));
@@ -671,7 +674,7 @@ class AdultParacetamolRuleTest {
     @Test
     void theTotalIsToldUnknownWhenTheDoseIsNotMg() {
         assertThat(evaluate(new Order("5 ml", "toutes les 2 heures")).get(0).detail())
-            .contains("24-hour total could not be calculated");
+            .contains("scheduled exposure could not be calculated");
     }
 
     @Test
@@ -702,7 +705,7 @@ class AdultParacetamolRuleTest {
     @Test
     void anotherDrugIsSilent() {
         assertThat(rule.evaluate(new CdsRuleContext(agedYears(40), UUID.randomUUID(), "Amoxicilline", null, null, 5000d,
-            null, 70d, List.of(), List.of()))).isEmpty();
+            null, 70d, List.of(), List.of()).withRoute("PO", null))).isEmpty();
     }
 
     @Test
@@ -751,7 +754,7 @@ class AdultParacetamolRuleTest {
     @Test
     void aCountWithNoStrengthIsNamedBesideTheTotal() {
         List<CdsCard> cards = rule.evaluate(new CdsRuleContext(agedYears(40), UUID.randomUUID(), "Efferalgan", null, null, null,
-            null, 70d, List.of(), List.of(), "6 fois par jour", 4d, null, null, new ParacetamolFacts(true, List.of(), Set.of())));
+            null, 70d, List.of(), List.of(), "6 fois par jour", 4d, null, null, new ParacetamolFacts(true, List.of(), Set.of())).withRoute("PO", null));
         assertThat(cards).hasSize(1);
         assertThat(cards.get(0).summary()).contains("not counted in the paracetamol total");
     }

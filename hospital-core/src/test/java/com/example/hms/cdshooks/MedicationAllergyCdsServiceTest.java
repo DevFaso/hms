@@ -93,7 +93,7 @@ class MedicationAllergyCdsServiceTest {
         when(allergyRepo.findByPatient_Id(patientId)).thenReturn(List.of(a));
         // DDI returns nothing for the allergy-only assertions.
         when(patientRepo.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-        when(ruleEngine.buildContext(any(), any(), any(), any(), any()))
+        when(ruleEngine.buildContext(any(), any(), any(), any(), any(), any()))
             .thenReturn(mock(CdsRuleContext.class));
         when(ddiRule.evaluate(any())).thenReturn(List.of());
 
@@ -126,7 +126,7 @@ class MedicationAllergyCdsServiceTest {
         when(allergyRepo.findByPatient_Id(patientId)).thenReturn(List.of(a));
         when(patientRepo.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         CdsRuleContext context = mock(CdsRuleContext.class);
-        when(ruleEngine.buildContext(any(), any(), any(), any(), any())).thenReturn(context);
+        when(ruleEngine.buildContext(any(), any(), any(), any(), any(), any())).thenReturn(context);
         when(ddiRule.evaluate(any())).thenReturn(List.of());
 
         CdsHookResponse response = service.evaluate(signRequest(patientId, medication));
@@ -146,7 +146,7 @@ class MedicationAllergyCdsServiceTest {
         resolved.setActive(false);
         when(allergyRepo.findByPatient_Id(patientId)).thenReturn(List.of(resolved));
         when(patientRepo.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-        when(ruleEngine.buildContext(any(), any(), any(), any(), any()))
+        when(ruleEngine.buildContext(any(), any(), any(), any(), any(), any()))
             .thenReturn(mock(CdsRuleContext.class));
         when(ddiRule.evaluate(any())).thenReturn(List.of());
 
@@ -161,7 +161,7 @@ class MedicationAllergyCdsServiceTest {
         Patient patient = patient(patientId, UUID.randomUUID());
         when(allergyRepo.findByPatient_Id(patientId)).thenReturn(List.of());
         when(patientRepo.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-        when(ruleEngine.buildContext(any(), any(), any(), any(), any()))
+        when(ruleEngine.buildContext(any(), any(), any(), any(), any(), any()))
             .thenReturn(mock(CdsRuleContext.class));
         when(ddiRule.evaluate(any())).thenReturn(List.of());
 
@@ -184,7 +184,7 @@ class MedicationAllergyCdsServiceTest {
         CdsRuleContext ctx = mock(CdsRuleContext.class);
         when(ruleEngine.buildContext(
             eq(patient), eq(hospitalId),
-            eq("Warfarin"), eq("11289"), any()))
+            eq("Warfarin"), eq("11289"), any(), any()))
             .thenReturn(ctx);
 
         CdsCard ddiCard = new CdsCard(
@@ -220,7 +220,7 @@ class MedicationAllergyCdsServiceTest {
         when(patientRepo.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
 
         CdsRuleContext ctx = mock(CdsRuleContext.class);
-        when(ruleEngine.buildContext(any(), any(), any(), any(), any())).thenReturn(ctx);
+        when(ruleEngine.buildContext(any(), any(), any(), any(), any(), any())).thenReturn(ctx);
 
         CdsCard ddiCard = new CdsCard(
             "Drug-drug interaction: Aspirin ↔ Warfarin (MAJOR)",
@@ -252,7 +252,7 @@ class MedicationAllergyCdsServiceTest {
         when(allergyRepo.findByPatient_Id(patientId)).thenReturn(List.of(a));
         when(patientRepo.findByIdUnscoped(patientId)).thenReturn(Optional.empty());
         // ruleEngine + ddiRule must not be consulted when patient is null.
-        lenient().when(ruleEngine.buildContext(any(), any(), any(), any(), any()))
+        lenient().when(ruleEngine.buildContext(any(), any(), any(), any(), any(), any()))
             .thenReturn(mock(CdsRuleContext.class));
         lenient().when(ddiRule.evaluate(any())).thenReturn(List.of());
 
@@ -271,7 +271,7 @@ class MedicationAllergyCdsServiceTest {
         Patient patient = patient(patientId, UUID.randomUUID());
         when(allergyRepo.findByPatient_Id(patientId)).thenReturn(List.of());
         when(patientRepo.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-        when(ruleEngine.buildContext(any(), any(), any(), any(), any()))
+        when(ruleEngine.buildContext(any(), any(), any(), any(), any(), any()))
             .thenReturn(mock(CdsRuleContext.class));
         when(ddiRule.evaluate(any())).thenReturn(List.of());
 
@@ -326,7 +326,7 @@ class MedicationAllergyCdsServiceTest {
         when(allergyRepo.findByPatient_Id(patientId)).thenReturn(List.of(a));
         when(patientRepo.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         CdsRuleContext ctx = mock(CdsRuleContext.class);
-        when(ruleEngine.buildContext(any(), any(), any(), any(), any())).thenReturn(ctx);
+        when(ruleEngine.buildContext(any(), any(), any(), any(), any(), any())).thenReturn(ctx);
         when(ddiRule.evaluate(any())).thenReturn(List.of());
         return service.evaluate(signRequest(patientId, medText));
     }

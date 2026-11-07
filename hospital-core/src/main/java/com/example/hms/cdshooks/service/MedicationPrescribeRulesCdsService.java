@@ -116,7 +116,8 @@ public class MedicationPrescribeRulesCdsService implements CdsHookService {
                 patient, hospitalId,
                 proposed.name(),
                 proposed.code(),
-                proposed.dose()
+                proposed.dose(),
+                proposed.route()
             ));
 
             tallManAdvisory(hospitalId, proposed).ifPresent(cards::add);

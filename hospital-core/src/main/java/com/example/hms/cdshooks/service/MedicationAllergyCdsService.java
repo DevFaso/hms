@@ -44,7 +44,7 @@ import java.util.UUID;
  * reflect the broader scope.
  *
  * <p>The DDI evaluation reuses the engine's
- * {@link CdsRuleEngine#buildContext(Patient, UUID, String, String, String)}
+ * {@link CdsRuleEngine#buildContext(Patient, UUID, String, String, String, String)}
  * to inherit the active-prescription scoping, RxNorm batch resolution,
  * and the V93 RxNorm crosswalk fallback in a single place. We invoke
  * {@link DrugDrugInteractionRule} directly rather than the full engine
@@ -325,7 +325,8 @@ public class MedicationAllergyCdsService implements CdsHookService {
             patient.getHospitalId(),
             proposed.name(),
             proposed.code(),
-            proposed.dose()
+            proposed.dose(),
+            proposed.route()
         );
         if (context == null) return List.of();
         List<CdsCard> cards = drugDrugInteractionRule.evaluate(context);
