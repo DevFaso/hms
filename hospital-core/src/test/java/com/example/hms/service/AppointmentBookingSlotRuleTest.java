@@ -8,6 +8,8 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.doThrow;
 
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.exception.FieldBusinessException;
@@ -248,5 +250,60 @@ class AppointmentBookingSlotRuleTest {
 
         verify(slotPolicy).takeSlot(eq(slot), any(Appointment.class));
         verify(appointmentRepository).save(argThat(a -> a.getOverbookReason() == null));
+    }
+
+    @Test
+    @DisplayName("QA D1473: an overbook reason does not book a time already gone")
+    void aTimeAlreadyGoneIsRefusedOnStartTime() {
+        AppointmentRequestDTO gone = request("Urgence");
+        gone.setAppointmentDate(LocalDate.now(java.time.ZoneId.systemDefault()).minusDays(1));
+
+        assertThatThrownBy(() -> service.createAppointment(gone, Locale.FRENCH, "desk"))
+            .isInstanceOfSatisfying(FieldBusinessException.class, refused -> {
+                assertThat(refused.getField()).isEqualTo("startTime");
+                assertThat(refused.getMessageKey()).isEqualTo("portal.booking.pastTime");
+            });
+        verify(appointmentRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("QA D1476: a deactivated registration is not booked")
+    void aDeactivatedRegistrationIsNotBooked() {
+        doThrow(new FieldBusinessException("patientId", "patient.registration.inactive"))
+            .when(patientRegistrationGuard).refuseDeactivatedRegistration(patient.getId(), hospital.getId());
+
+        AppointmentRequestDTO request = request(null);
+        assertThatThrownBy(() -> service.createAppointment(request, Locale.FRENCH, "desk"))
+            .isInstanceOf(FieldBusinessException.class);
+        verify(appointmentRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("QA D1474: the booking's own reason for a taken or past time, asked while typing; a free time has none")
+    void theDeskIsToldAtOnce() {
+        when(messageSource.getMessage(eq("appointment.staff.unavailable"), any(), any()))
+            .thenReturn("TAKEN");
+        when(messageSource.getMessage(eq("portal.booking.pastTime"), any(), any()))
+            .thenReturn("PAST");
+
+        assertThat(
+            service.bookingTimeRefusal(staff.getId(), DAY, TIME, null, Locale.FRENCH, "desk")).isNull();
+
+        LocalDate yesterday = LocalDate.now(java.time.ZoneId.systemDefault()).minusDays(1);
+        assertThat(
+            service.bookingTimeRefusal(staff.getId(), yesterday, TIME, null, Locale.FRENCH, "desk")).isEqualTo("PAST");
+
+        com.example.hms.model.Appointment held = new com.example.hms.model.Appointment();
+        held.setId(UUID.randomUUID());
+        held.setStatus(com.example.hms.enums.AppointmentStatus.SCHEDULED);
+        held.setAppointmentDate(DAY);
+        held.setStartTime(TIME);
+        held.setEndTime(TIME.plusMinutes(30));
+        when(appointmentRepository.findByStaff_IdAndAppointmentDate(staff.getId(), DAY)).thenReturn(List.of(held));
+        assertThat(
+            service.bookingTimeRefusal(staff.getId(), DAY, TIME, null, Locale.FRENCH, "desk")).isEqualTo("TAKEN");
+        // The visit being moved never conflicts with itself.
+        assertThat(
+            service.bookingTimeRefusal(staff.getId(), DAY, TIME, held.getId(), Locale.FRENCH, "desk")).isNull();
     }
 }

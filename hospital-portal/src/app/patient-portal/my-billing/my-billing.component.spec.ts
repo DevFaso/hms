@@ -4,7 +4,11 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 import { HttpHeaders, HttpResponse } from '@angular/common/http';
 import { MyBillingComponent } from './my-billing.component';
-import { PatientPortalService, PortalInvoice } from '../../services/patient-portal.service';
+import {
+  PatientPortalService,
+  PortalInvoice,
+  mapPortalInvoice,
+} from '../../services/patient-portal.service';
 import { formatCfa } from '../../shared/i18n/app-locale';
 import fr from '../../../assets/i18n/fr.json';
 
@@ -528,5 +532,18 @@ describe('MyBillingComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
     expect(el.querySelector('.pli-title')?.textContent).toContain('CHU de Bogodogo');
     expect(el.querySelector('[data-testid="invoice-hospital-f"]')).toBeNull();
+  });
+
+  it('QA D1466: maps the refund due; nothing is owed on it', () => {
+    const mapped = mapPortalInvoice({
+      id: 'v',
+      totalAmount: 3000,
+      amountPaid: 5000,
+      balanceDue: 0,
+      refundDue: 2000,
+      status: 'PAID',
+    });
+    expect(mapped.balance).toBe(0);
+    expect(mapped.refundDue).toBe(2000);
   });
 });

@@ -600,9 +600,9 @@ public class PatientServiceImpl implements PatientService {
      */
     private static Map<String, Object> demographicsOf(Patient p) {
         Map<String, Object> m = new LinkedHashMap<>();
-        m.put("firstName", p.getFirstName());
-        m.put("lastName", p.getLastName());
-        m.put("middleName", p.getMiddleName());
+        m.put(FIELD_FIRST_NAME, p.getFirstName());
+        m.put(FIELD_LAST_NAME, p.getLastName());
+        m.put(FIELD_MIDDLE_NAME, p.getMiddleName());
         m.put("dateOfBirth", p.getDateOfBirth());
         m.put("gender", p.getGender());
         m.put(FIELD_PHONE_PRIMARY, p.getPhoneNumberPrimary());

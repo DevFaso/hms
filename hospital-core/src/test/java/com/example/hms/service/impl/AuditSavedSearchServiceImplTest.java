@@ -1,6 +1,5 @@
 package com.example.hms.service.impl;
 
-import com.example.hms.exception.BusinessRuleException;
 import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.exception.UnauthorizedException;
@@ -119,7 +118,7 @@ class AuditSavedSearchServiceImplTest {
         AuditSavedSearchRequestDTO req = request("   ", "{}", false);
         assertThatThrownBy(() -> service.create(req))
             .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
-            .hasMessageContaining("name is required");
+            .extracting("messageKey").isEqualTo("auditSavedSearch.nameRequired");
     }
 
     @Test
@@ -128,7 +127,7 @@ class AuditSavedSearchServiceImplTest {
         AuditSavedSearchRequestDTO req = request("name", "", false);
         assertThatThrownBy(() -> service.create(req))
             .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
-            .hasMessageContaining("filterJson is required");
+            .extracting("messageKey").isEqualTo("auditSavedSearch.filterRequired");
     }
 
     @Test

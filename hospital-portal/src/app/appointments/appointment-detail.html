@@ -327,8 +327,14 @@
             <small class="field-hint" data-testid="resched-duration-note">{{
               'APPOINTMENTS.DURATION_SET_BY_SLOTS' | translate
             }}</small>
+            @if (rescheduleTimeRefusal(); as refusal) {
+              <!-- QA D1474: said at once, before any overbook reason is asked. -->
+              <small class="field-refusal" role="alert" data-testid="resched-time-refusal">{{
+                refusal
+              }}</small>
+            }
           </div>
-          @if (rescheduleOffSlot()) {
+          @if (rescheduleOffSlot() && !rescheduleTimeRefusal()) {
             <!-- QA D1429: the desk may overbook, with a reason the appointment keeps. -->
             <div class="field" data-testid="resched-overbook">
               <label for="overbookReason">{{ 'APPOINTMENTS.OVERBOOK_REASON' | translate }} *</label>

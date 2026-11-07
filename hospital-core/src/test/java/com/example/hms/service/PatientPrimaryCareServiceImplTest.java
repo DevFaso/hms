@@ -158,7 +158,7 @@ class PatientPrimaryCareServiceImplTest {
 
             assertThatThrownBy(() -> service.assignPrimaryCare(patientId, requestDTO))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("mismatch");
+                    .extracting("messageKey").isEqualTo("primaryCare.assignmentHospitalMismatch");
         }
 
         @Test
@@ -384,7 +384,7 @@ class PatientPrimaryCareServiceImplTest {
 
             assertThatThrownBy(() -> service.updatePrimaryCare(pcpId, req))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("mismatch");
+                    .extracting("messageKey").isEqualTo("primaryCare.assignmentHospitalMismatch");
         }
 
         @Test
@@ -439,7 +439,7 @@ class PatientPrimaryCareServiceImplTest {
             LocalDate endDate = LocalDate.of(2025, 5, 1);
             assertThatThrownBy(() -> service.endPrimaryCare(pcpId, endDate))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("before startDate");
+                    .extracting("messageKey").isEqualTo("primaryCare.endBeforeStart");
         }
 
         @Test

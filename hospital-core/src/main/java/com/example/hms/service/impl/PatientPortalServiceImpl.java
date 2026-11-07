@@ -132,6 +132,10 @@ public class PatientPortalServiceImpl implements PatientPortalService {
 
 
     private static final String PROXY_VIEW_LAB_RESULTS = "VIEW_LAB_RESULTS";
+    private static final String PROXY_VIEW_MEDICATIONS = "VIEW_MEDICATIONS";
+    private static final String PROXY_VIEW_APPOINTMENTS = "VIEW_APPOINTMENTS";
+    private static final String PROXY_VIEW_BILLING = "VIEW_BILLING";
+    private static final String PROXY_VIEW_RECORDS = "VIEW_RECORDS";
     private static final String APPOINTMENT_NOT_FOUND_KEY = "appointment.notFound";
     private static final String PROVIDER_UNAVAILABLE_KEY = "portal.booking.providerUnavailable";
     /** QA D717: the only states a patient may still cancel or reschedule from the portal. */
@@ -1859,11 +1863,11 @@ public class PatientPortalServiceImpl implements PatientPortalService {
      * VIEW_* form. Normalize so legacy grants keep working.
      */
     private static final Map<String, String> LEGACY_PERMISSION_ALIASES = Map.of(
-            "APPOINTMENTS", "VIEW_APPOINTMENTS",
-            "MEDICATIONS", "VIEW_MEDICATIONS",
+            "APPOINTMENTS", PROXY_VIEW_APPOINTMENTS,
+            "MEDICATIONS", PROXY_VIEW_MEDICATIONS,
             "LAB_RESULTS", PROXY_VIEW_LAB_RESULTS,
-            "BILLING", "VIEW_BILLING",
-            "RECORDS", "VIEW_RECORDS");
+            "BILLING", PROXY_VIEW_BILLING,
+            "RECORDS", PROXY_VIEW_RECORDS);
 
     private static Set<String> normalizedPermissions(String raw) {
         if (raw == null || raw.isBlank()) {
@@ -1877,8 +1881,8 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     }
 
     /** What a grant may name: the scopes {@code verifyProxyAccess} checks, and ALL. */
-    private static final Set<String> KNOWN_PROXY_PERMISSIONS = Set.of("ALL", "VIEW_APPOINTMENTS", "VIEW_MEDICATIONS",
-            PROXY_VIEW_LAB_RESULTS, "VIEW_BILLING", "VIEW_RECORDS");
+    private static final Set<String> KNOWN_PROXY_PERMISSIONS = Set.of("ALL", PROXY_VIEW_APPOINTMENTS, PROXY_VIEW_MEDICATIONS,
+            PROXY_VIEW_LAB_RESULTS, PROXY_VIEW_BILLING, PROXY_VIEW_RECORDS);
 
     /**
      * QA D1468: BANANA was saved, and listed as a grant that opened nothing. Only a new grant is
@@ -1901,7 +1905,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Override
     @Transactional(readOnly = true)
     public List<AppointmentResponseDTO> getProxyAppointments(Authentication auth, UUID patientId, Locale locale) {
-        Patient patient = verifyProxyAccess(auth, patientId, "VIEW_APPOINTMENTS");
+        Patient patient = verifyProxyAccess(auth, patientId, PROXY_VIEW_APPOINTMENTS);
         // The verified-patient variant, NOT the username-scoped one: passing
         // null for username threw inside getUserOrThrow before any query ran,
         // so this tab returned 500 for every proxy while its unit test stubbed
@@ -1912,7 +1916,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Override
     @Transactional(readOnly = true)
     public List<PatientMedicationResponseDTO> getProxyMedications(Authentication auth, UUID patientId, int limit) {
-        Patient patient = verifyProxyAccess(auth, patientId, "VIEW_MEDICATIONS");
+        Patient patient = verifyProxyAccess(auth, patientId, PROXY_VIEW_MEDICATIONS);
         UUID hospitalId = resolvePatientHospitalId(patient);
         return medicationService.getMedicationsForPatientPortal(patient.getId(), hospitalId, limit);
     }
@@ -1920,7 +1924,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Override
     @Transactional(readOnly = true)
     public Page<PatientMedicationResponseDTO> getProxyMedicationsPage(Authentication auth, UUID patientId, Pageable pageable) {
-        Patient patient = verifyProxyAccess(auth, patientId, "VIEW_MEDICATIONS");
+        Patient patient = verifyProxyAccess(auth, patientId, PROXY_VIEW_MEDICATIONS);
         return medicationService.getMedicationsPageForPatientPortal(patient.getId(), pageable);
     }
 
@@ -1957,14 +1961,14 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Override
     @Transactional(readOnly = true)
     public Page<BillingInvoiceResponseDTO> getProxyBilling(Authentication auth, UUID patientId, Pageable pageable, Locale locale) {
-        Patient patient = verifyProxyAccess(auth, patientId, "VIEW_BILLING");
+        Patient patient = verifyProxyAccess(auth, patientId, PROXY_VIEW_BILLING);
         return billingInvoiceService.getInvoicesForPortalPatient(patient.getId(), pageable, locale);
     }
 
     @Override
     @Transactional(readOnly = true)
     public HealthSummaryDTO getProxyRecords(Authentication auth, UUID patientId, Locale locale) {
-        Patient patient = verifyProxyAccess(auth, patientId, "VIEW_RECORDS");
+        Patient patient = verifyProxyAccess(auth, patientId, PROXY_VIEW_RECORDS);
         UUID hospitalId = resolvePatientHospitalId(patient);
         return HealthSummaryDTO.builder()
                 .profile(toProfileDTO(patient))

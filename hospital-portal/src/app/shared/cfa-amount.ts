@@ -30,10 +30,10 @@ export function cfaAmountProblem(
  * QA D1483: a price: the amount rules, and within what the invoice can hold. Marked on its
  * field here; the server's refusal said `<10 digits>.<2 digits>` in a toast.
  */
-export function cfaPriceProblem(amount: number | string | null | undefined): CfaAmountProblem | null {
-  return (
-    cfaAmountProblem(amount) ?? (Number(amount) > CFA_MAX_PRICE ? 'tooLarge' : null)
-  );
+export function cfaPriceProblem(
+  amount: number | string | null | undefined,
+): CfaAmountProblem | null {
+  return cfaAmountProblem(amount) ?? (Number(amount) > CFA_MAX_PRICE ? 'tooLarge' : null);
 }
 
 /**

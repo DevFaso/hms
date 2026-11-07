@@ -376,3 +376,10 @@
   color: var(--danger, #b42318);
   font-size: 0.8rem;
 }
+
+/* QA D1474: why this time cannot be booked. */
+.field-refusal {
+  display: block;
+  margin-top: 4px;
+  color: var(--danger, #b42318);
+}

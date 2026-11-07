@@ -12,11 +12,11 @@ import {
 
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { Subject, forkJoin, of } from 'rxjs';
+import { Subject, of } from 'rxjs';
 import { catchError, debounceTime, map, switchMap } from 'rxjs/operators';
 import { AppointmentService, AppointmentUpsertRequest } from '../services/appointment.service';
 import { SlotInventoryService } from '../services/slot-inventory.service';
-import { OVERBOOK_REASON_FIELD, isOffSlot, refusesForOverbookReason } from './published-slot';
+import { OVERBOOK_REASON_FIELD, freeSlotTimes, refusesForOverbookReason } from './published-slot';
 import { PatientService, PatientResponse } from '../services/patient.service';
 import { StaffService, isClinicalProvider, StaffResponse } from '../services/staff.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
@@ -234,25 +234,31 @@ export class AppointmentFormComponent implements OnInit {
     this.slotCheck$
       .pipe(
         debounceTime(220),
-        switchMap(() =>
-          forkJoin({
-            off: isOffSlot(
-              this.slots,
-              this.form.staffId,
-              this.form.appointmentDate,
-              this.form.startTime,
-            ),
-            refusal: this.readTimeRefusal(),
-            free: this.readFreeSlots(),
-          }),
-        ),
+        switchMap(() => freeSlotTimes(this.slots, this.form.staffId, this.form.appointmentDate)),
       )
-      .subscribe(({ off, refusal, free }) => {
-        this.timeRefusal.set(refusal);
-        // QA D1474: a time that cannot be booked asks for no overbook reason.
-        this.offSlot.set(off && !refusal);
-        this.freeSlots.set(free);
+      .subscribe((free) => {
+        this.freeSlots.set(free ?? []);
+        const time = this.form.startTime?.slice(0, 5);
+        // A failed read asks for nothing: the server decides, and its refusal opens the field.
+        this.offSlot.set(!!free && !!time && !free.includes(time));
       });
+    // QA D1474: on its own stream, so a slow answer never holds the slots back.
+    this.slotCheck$
+      .pipe(
+        debounceTime(220),
+        switchMap(() => this.readTimeRefusal()),
+      )
+      .subscribe((refusal) => this.timeRefusal.set(refusal));
+  }
+
+  /** QA D1474: a time that cannot be booked at all asks for no overbook reason. */
+  needsOverbookReason(): boolean {
+    return this.offSlot() && !this.timeRefusal();
+  }
+
+  /** The clinician, the date or the time changed: is it still a published free slot? */
+  checkSlot(): void {
+    this.slotCheck$.next();
   }
 
   /** Only the desk's warning: the server still decides at the booking, so a failed read says nothing. */
@@ -265,31 +271,10 @@ export class AppointmentFormComponent implements OnInit {
     );
   }
 
-  private readFreeSlots() {
-    const { staffId, appointmentDate } = this.form;
-    if (!staffId || !appointmentDate) return of([] as string[]);
-    return this.slots
-      .searchAllOpenInBackground({ staffId, from: appointmentDate, to: appointmentDate })
-      .pipe(
-        map(({ rows }) =>
-          rows
-            .filter((slot) => slot.startAt?.startsWith(appointmentDate))
-            .map((slot) => slot.startAt.slice(11, 16))
-            .sort((a, b) => a.localeCompare(b)),
-        ),
-        catchError(() => of([] as string[])),
-      );
-  }
-
   /** QA D1475: a free slot picked from the list is the time. */
   pickFreeSlot(time: string): void {
     this.form.startTime = time;
     this.checkSlot();
-  }
-
-  /** The clinician, the date or the time changed: is it still a published free slot? */
-  checkSlot(): void {
-    this.slotCheck$.next();
   }
 
   // ── Patient search ──────────────────────────────────────
@@ -561,7 +546,7 @@ export class AppointmentFormComponent implements OnInit {
       { id: 'start', labelKey: 'APPOINTMENTS.START_TIME', value: this.form.startTime },
       { id: 'apptPatientSearch', labelKey: 'PATIENTS.PATIENT', value: this.form.patientId },
       { id: STAFF_FIELD, labelKey: 'APPOINTMENTS.DOCTOR_STAFF', value: this.form.staffId },
-      ...(this.offSlot()
+      ...(this.needsOverbookReason()
         ? [
             {
               id: OVERBOOK_REASON_FIELD,

@@ -416,7 +416,8 @@
                 formatCurrency(inv.balanceDue)
               }}</span>
               @if (inv.refundDue) {
-                <span class="field-hint" data-testid="refund-due-detail">{{
+                {{ ' '
+                }}<span class="field-hint" data-testid="refund-due-detail">{{
                   'BILLING.REFUND_DUE' | translate: { amount: formatCurrency(inv.refundDue) }
                 }}</span>
               }

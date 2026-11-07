@@ -174,7 +174,7 @@ export const ACTION_PERMISSIONS = {
     roles: ['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
   },
   encounterCheckout: {
-    endpoint: 'EncounterController#checkout',
+    endpoint: 'EncounterController#checkOut',
     roles: ['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
   },
   encounterStart: {

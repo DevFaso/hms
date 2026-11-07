@@ -43,6 +43,7 @@ describe('AppointmentDetailComponent', () => {
     getById: jasmine.createSpy('getById').and.returnValue(of(mockAppointment)),
     update: jasmine.createSpy('update').and.returnValue(of(mockAppointment)),
     updateStatus: jasmine.createSpy('updateStatus').and.returnValue(of(mockAppointment)),
+    bookingTimeCheck: jasmine.createSpy('bookingTimeCheck').and.returnValue(of({})),
   };
 
   const mockReceptionService = {

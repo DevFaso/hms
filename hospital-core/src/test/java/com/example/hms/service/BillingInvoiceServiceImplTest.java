@@ -3233,4 +3233,146 @@ class BillingInvoiceServiceImplTest {
         a.setCreatedAt(made);
         return a;
     }
+
+    // ── QA D1466: a copay above the visit total ─────────────────────────
+
+    private BillingInvoice[] issuedVisitOf(String visitTotal) {
+        BillingInvoice[] pair = visitAndCopay(InvoiceStatus.SENT, BigDecimal.ZERO);
+        pair[0].setTotalAmount(new BigDecimal(visitTotal));
+        when(invoiceRepository.findLockedById(pair[1].getId())).thenReturn(Optional.of(pair[1]));
+        return pair;
+    }
+
+    @Test
+    void creditCopay_aboveTheVisit_foldsWhole_nothingIsOwed_theExcessIsTheRefundDue_D1466() {
+        BillingInvoice[] pair = issuedVisitOf("2000");
+        PaymentTransaction row = PaymentTransaction.builder().invoice(pair[1]).amount(new BigDecimal("2500"))
+            .status(PaymentStatus.CONFIRMED).build();
+        when(paymentTransactionRepository.findByInvoice_IdOrderByCreatedAtAsc(pair[1].getId())).thenReturn(List.of(row));
+
+        billingInvoiceService.creditCheckInCopays(pair[0].getId());
+
+        assertEquals(InvoiceStatus.PAID, pair[0].getStatus());
+        assertEquals(0, new BigDecimal("2500").compareTo(pair[0].getAmountPaid()));
+        assertEquals(0, BigDecimal.ZERO.compareTo(com.example.hms.utility.InvoiceBalance.dueOf(pair[0])));
+        assertEquals(0, new BigDecimal("500").compareTo(com.example.hms.utility.InvoiceBalance.refundDueOf(pair[0])));
+        // The money moved once: the copay holds nothing and owes nothing, the row sits on the visit.
+        assertEquals(InvoiceStatus.CANCELLED, pair[1].getStatus());
+        assertEquals(0, BigDecimal.ZERO.compareTo(pair[1].getAmountPaid()));
+        assertEquals(pair[0], pair[1].getCreditedToInvoice());
+        assertEquals(pair[0], row.getInvoice());
+        assertEquals(0, BigDecimal.ZERO.compareTo(com.example.hms.utility.InvoiceBalance.refundDueOf(pair[1])));
+    }
+
+    @Test
+    void creditCopay_equalToTheVisit_foldsAsBefore_noRefund_D1466() {
+        BillingInvoice[] pair = issuedVisitOf("2500");
+
+        billingInvoiceService.creditCheckInCopays(pair[0].getId());
+
+        assertEquals(InvoiceStatus.PAID, pair[0].getStatus());
+        assertEquals(0, new BigDecimal("2500").compareTo(pair[0].getAmountPaid()));
+        assertEquals(0, BigDecimal.ZERO.compareTo(com.example.hms.utility.InvoiceBalance.refundDueOf(pair[0])));
+        assertEquals(InvoiceStatus.CANCELLED, pair[1].getStatus());
+    }
+
+    @Test
+    void creditCopay_belowTheVisit_foldsAsBefore_theBalanceRemains_noRefund_D1466() {
+        BillingInvoice[] pair = issuedVisitOf("7450");
+
+        billingInvoiceService.creditCheckInCopays(pair[0].getId());
+
+        assertEquals(InvoiceStatus.PARTIALLY_PAID, pair[0].getStatus());
+        assertEquals(0, new BigDecimal("4950").compareTo(com.example.hms.utility.InvoiceBalance.dueOf(pair[0])));
+        assertEquals(0, BigDecimal.ZERO.compareTo(com.example.hms.utility.InvoiceBalance.refundDueOf(pair[0])));
+    }
+
+    @Test
+    void creditCopay_isNeverCountedTwice_D1466() {
+        BillingInvoice[] pair = issuedVisitOf("2000");
+
+        billingInvoiceService.creditCheckInCopays(pair[0].getId());
+        billingInvoiceService.creditCheckInCopays(pair[0].getId());
+
+        assertEquals(0, new BigDecimal("2500").compareTo(pair[0].getAmountPaid()));
+        assertEquals(0, new BigDecimal("500").compareTo(com.example.hms.utility.InvoiceBalance.refundDueOf(pair[0])));
+    }
+
+    @Test
+    void creditCopay_aboveTheVisit_waitsForADeclarationStillPending_D1466() {
+        BillingInvoice[] pair = issuedVisitOf("2000");
+        when(paymentTransactionRepository.sumAmountByInvoiceAndStatus(pair[0].getId(), PaymentStatus.PENDING))
+            .thenReturn(new BigDecimal("500"));
+
+        billingInvoiceService.creditCheckInCopays(pair[0].getId());
+
+        assertEquals(InvoiceStatus.SENT, pair[0].getStatus());
+        assertEquals(InvoiceStatus.PAID, pair[1].getStatus());
+    }
+
+    @Test
+    void anInvoiceHoldingARefund_echoesItsTotal_andReversingTheCopayBillsTheVisitAgain_D1466() {
+        BillingInvoice invoice = existingInvoice(InvoiceStatus.PAID, "2500");
+        invoice.setTotalAmount(new BigDecimal("2000"));
+
+        BillingInvoiceResponseDTO echoed = billingInvoiceService.updateInvoice(invoice.getId(),
+            editOf().totalAmount(new BigDecimal("2000")).build(), Locale.ENGLISH);
+
+        assertEquals(0, new BigDecimal("500").compareTo(echoed.getRefundDue()));
+        assertEquals(0, BigDecimal.ZERO.compareTo(echoed.getBalanceDue()));
+    }
+
+    // ── QA D1467: lines at 0 F CFA ──────────────────────────────────────
+
+    private BillingInvoice draftWithLines(String... pricedDescriptions) {
+        BillingInvoice invoice = existingInvoice(InvoiceStatus.DRAFT, "0");
+        invoice.setTotalAmount(new BigDecimal("5000"));
+        when(invoiceRepository.hasItems(invoice.getId())).thenReturn(true);
+        List<com.example.hms.model.InvoiceItem> lines = new java.util.ArrayList<>();
+        for (String entry : pricedDescriptions) {
+            String[] parts = entry.split("=");
+            com.example.hms.model.InvoiceItem line = new com.example.hms.model.InvoiceItem();
+            line.setItemDescription(parts[0]);
+            line.setTotalPrice(new BigDecimal(parts[1]));
+            lines.add(line);
+        }
+        when(invoiceItemRepository.findByBillingInvoiceId(invoice.getId())).thenReturn(lines);
+        return invoice;
+    }
+
+    @Test
+    void issuing_withALineAtZero_isRefusedOnItsField_namingTheLines_D1467() {
+        BillingInvoice invoice = draftWithLines("Consultation=5000", "TDR=0", "Radio=0.00");
+        BillingInvoiceRequestDTO issue = editOf().status(InvoiceStatus.SENT).build();
+
+        com.example.hms.exception.FieldBusinessException refused = assertThrows(
+            com.example.hms.exception.FieldBusinessException.class,
+            () -> billingInvoiceService.updateInvoice(invoice.getId(), issue, Locale.ENGLISH));
+
+        assertEquals("confirmUnpricedLines", refused.getField());
+        assertEquals("billing.invoice.unpricedLines", refused.getMessageKey());
+        assertEquals("TDR, Radio", refused.getArgs()[0]);
+        assertEquals(InvoiceStatus.DRAFT, invoice.getStatus());
+    }
+
+    @Test
+    void issuing_withALineAtZero_onTheClerksWord_goesThrough_aFreeLineStaysPossible_D1467() {
+        BillingInvoice invoice = draftWithLines("Consultation=5000", "Certificat offert=0");
+
+        billingInvoiceService.updateInvoice(invoice.getId(),
+            editOf().status(InvoiceStatus.SENT).confirmUnpricedLines(true).build(), Locale.ENGLISH);
+
+        assertEquals(InvoiceStatus.SENT, invoice.getStatus());
+    }
+
+    @Test
+    void issuing_withEveryLinePriced_asksNothing_andAnEditOfADraftIsNotAnIssue_D1467() {
+        BillingInvoice priced = draftWithLines("Consultation=5000");
+        billingInvoiceService.updateInvoice(priced.getId(), editOf().status(InvoiceStatus.SENT).build(), Locale.ENGLISH);
+        assertEquals(InvoiceStatus.SENT, priced.getStatus());
+
+        BillingInvoice stillDraft = draftWithLines("Consultation=5000", "TDR=0");
+        billingInvoiceService.updateInvoice(stillDraft.getId(), editOf().notes("n").build(), Locale.ENGLISH);
+        assertEquals(InvoiceStatus.DRAFT, stillDraft.getStatus());
+    }
 }

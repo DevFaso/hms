@@ -12,6 +12,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.TreeMap;
@@ -59,7 +60,8 @@ class ExceptionProseRatchetTest {
 
     /** {@code new FieldBusinessException("field", "message", ...)}: the message is the second argument. */
     static final Pattern FIELD_PROSE = Pattern.compile(
-        "new\\s+(?:[a-z]\\w*\\s*\\.\\s*)*FieldBusinessException\\s*\\(\\s*\"[^\"]*\"\\s*,\\s*"
+        // QA D1469: the field is a literal, a constant or an expression: FIELD_CODE hid a sentence from this scan.
+        "new\\s+(?:[a-z]\\w*\\s*\\.\\s*)*FieldBusinessException\\s*\\(\\s*[^,()]*+\\s*,\\s*"
             + "(?:(?:String|MessageFormat)\\s*\\.\\s*format\\s*\\(\\s*)?\"((?:[^\"\\\\]|\\\\.)*)\"");
 
     static boolean isProse(String literal) {
@@ -398,7 +400,11 @@ class ExceptionProseRatchetTest {
         "com/example/hms/service/impl/PatientPortalServiceImpl.java",
         "com/example/hms/service/impl/PatientGuarantorServiceImpl.java",
         "com/example/hms/service/impl/PatientPhotoServiceImpl.java",
-        "com/example/hms/service/impl/AdvanceDirectiveServiceImpl.java");
+        "com/example/hms/service/impl/AdvanceDirectiveServiceImpl.java",
+        // QA D1469: the portal's records request, screening and primary-care refusals.
+        "com/example/hms/service/roi/RoiRequestService.java",
+        "com/example/hms/service/pro/ProResponseService.java",
+        "com/example/hms/service/PatientPrimaryCareServiceImpl.java");
 
     @Test
     @DisplayName("QA D1187: the front-desk, portal, scheduling and registry refusals are keys only")
@@ -652,5 +658,52 @@ class ExceptionProseRatchetTest {
             out.add(text.substring(start).trim());
         }
         return out;
+    }
+
+    /** QA D1469: not a ratchet. A refusal on a field names a key; an English sentence there fails at once, in every file. */
+    @Test
+    @DisplayName("QA D1469: no field refusal anywhere carries a literal sentence")
+    void noFieldRefusalCarriesASentence() throws IOException {
+        List<String> found = new ArrayList<>();
+        try (Stream<Path> files = Files.walk(MAIN_JAVA)) {
+            for (Path p : files.filter(f -> f.toString().endsWith(".java")).toList()) {
+                String rel = MAIN_JAVA.relativize(p).toString().replace('\\', '/');
+                Matcher f = FIELD_PROSE.matcher(Files.readString(p, StandardCharsets.UTF_8));
+                while (f.find()) {
+                    if (isProse(f.group(1))) {
+                        found.add(rel + ": " + f.group(1));
+                    }
+                }
+            }
+        }
+        assertThat(found).as("new FieldBusinessException(field, <sentence>): use a messages*.properties key").isEmpty();
+    }
+
+    /** QA D1469: the keys those refusals name exist in every language, and in the reader's words. */
+    @Test
+    @DisplayName("QA D1469: the converted refusals are really translated")
+    void theFieldRefusalKeysAreTranslated() {
+        Locale fr = Locale.FRENCH;
+        org.springframework.context.MessageSource source = TestMessageSources.bundles();
+        for (String key : List.of("roi.request.dateInFuture", "pro.response.administeredInFuture",
+                "primaryCare.assignmentHospitalMismatch", "breakGlass.ttl.tooShort", "referenceCatalog.codeExists",
+                "smartPhrase.ownerRequired", "apiKey.expiryInPast", "auditSavedSearch.nameRequired",
+                "cds.acknowledgement.overrideReasonRequired", "impersonation.notYourself", "panel.assignedOn.future",
+                "platform.enabledRequired", "pro.instrument.versionLocked", "frontendAudit.typeRequired")) {
+            String english = source.getMessage(key, new Object[] {"x", "y"}, Locale.ENGLISH);
+            String french = source.getMessage(key, new Object[] {"x", "y"}, fr);
+            String spanish = source.getMessage(key, new Object[] {"x", "y"}, Locale.of("es"));
+            assertThat(french).as(key + " fr").isNotEqualTo(english);
+            assertThat(spanish).as(key + " es").isNotEqualTo(english).isNotEqualTo(french);
+        }
+    }
+
+    @Test
+    @DisplayName("QA D1469: the scan sees a sentence behind a constant field name, on one or several lines")
+    void theFieldScanSeesTheShapesTheDefectHad() {
+        assertThat(countProse("throw new FieldBusinessException(FIELD_CODE, \"Catalog code cannot be blank\");")).isEqualTo(1);
+        assertThat(countProse("throw new com.example.hms.exception.FieldBusinessException(\"requesterType\", \n"
+            + "    \"A third-party request needs a name\" + x);")).isEqualTo(1);
+        assertThat(countProse("throw new FieldBusinessException(\"status\", \"billing.invoice.zeroTotal\");")).isZero();
     }
 }

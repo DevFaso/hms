@@ -57,6 +57,19 @@ describe('MyFamilyAccessComponent', () => {
     component.grantAccess();
     expect(mockToast.error).toHaveBeenCalled();
   });
+
+  it('QA D1464: a typed past end date is refused on its field; nothing is sent', () => {
+    const grant = spyOn(mockPortalService, 'grantProxy').and.callThrough();
+    component.form = {
+      proxyUsername: 'marie',
+      relationship: 'PARENT',
+      permissions: 'ALL',
+    } as typeof component.form;
+    component.expiresOn = '2020-01-01';
+    component.grantAccess();
+    expect(grant).not.toHaveBeenCalled();
+    expect(mockToast.error).toHaveBeenCalled();
+  });
 });
 
 /* ── P1 #9: canonical VIEW_* scopes + drill-in to the proxy data viewer ── */

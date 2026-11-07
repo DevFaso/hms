@@ -73,12 +73,13 @@
                     }
                   </div>
                 } @else {
-                  <small class="field-hint">{{ 'APPOINTMENTS.NO_FREE_SLOTS' | translate }}</small>
+                  {{ ' '
+                  }}<small class="field-hint">{{ 'APPOINTMENTS.NO_FREE_SLOTS' | translate }}</small>
                 }
               </div>
             </div>
           }
-          @if (offSlot()) {
+          @if (needsOverbookReason()) {
             <!-- QA D1429: the desk may overbook, with a reason the appointment keeps. -->
             <div class="field-row">
               <div class="field" data-testid="appt-overbook">

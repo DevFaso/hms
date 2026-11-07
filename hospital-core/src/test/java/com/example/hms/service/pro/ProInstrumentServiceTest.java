@@ -174,7 +174,7 @@ class ProInstrumentServiceTest {
 
             assertThatThrownBy(() -> ProInstrumentService.validateStructure(def))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("Positive threshold 6 exceeds the instrument's maximum score 5");
+                .extracting("messageKey").isEqualTo("pro.instrument.thresholdTooHigh");
             // The maximum itself is reachable: a perfect score screens positive.
             def.setPositiveThreshold(5);
             ProInstrumentService.validateStructure(def);
@@ -187,7 +187,7 @@ class ProInstrumentServiceTest {
 
             assertThatThrownBy(() -> ProInstrumentService.validateStructure(def))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("Critical item 10");
+                .extracting("messageKey").isEqualTo("pro.instrument.criticalItemUnknown");
         }
 
         @Test
@@ -445,8 +445,7 @@ class ProInstrumentServiceTest {
 
             assertThatThrownBy(() -> service.importDefinition(sameVersion))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("has recorded responses under version 1")
-                .hasMessageContaining("needs a new version");
+                .extracting("messageKey").isEqualTo("pro.instrument.versionLocked");
             ProInstrumentDefinitionDTO noVersion = definition();
             noVersion.setVersion("  ");
             assertThatThrownBy(() -> service.importDefinition(noVersion))

@@ -55,7 +55,14 @@ describe('AppointmentFormComponent — prefill from the prenatal calendar', () =
         },
         {
           provide: AppointmentService,
-          useValue: jasmine.createSpyObj('AppointmentService', ['create']),
+          useValue: (() => {
+            const service = jasmine.createSpyObj('AppointmentService', [
+              'create',
+              'bookingTimeCheck',
+            ]);
+            service.bookingTimeCheck.and.returnValue(of({}));
+            return service;
+          })(),
         },
         { provide: PatientService, useValue: patients },
         { provide: StaffService, useValue: staff },
@@ -384,6 +391,60 @@ describe('AppointmentFormComponent — prefill from the prenatal calendar', () =
       expect(service.create).not.toHaveBeenCalled();
       tick(300);
       TestBed.inject(HttpTestingController).match(() => true);
+    }));
+  });
+
+  describe('QA D1474 / D1475: what the desk sees while it chooses a time', () => {
+    const askAt = (
+      component: AppointmentFormComponent,
+      refusal: string | undefined,
+      slotTimes: string[],
+    ): void => {
+      const http = TestBed.inject(HttpTestingController);
+      const service = TestBed.inject(AppointmentService) as jasmine.SpyObj<AppointmentService>;
+      service.bookingTimeCheck.and.returnValue(of(refusal ? { refusal } : {}));
+      component.form.staffId = 's-1';
+      component.form.appointmentDate = inDays(5);
+      component.form.startTime = '09:07';
+      component.checkSlot();
+      tick(300);
+      const page = {
+        content: slotTimes.map((t, i) => ({ id: 's' + i, startAt: `${inDays(5)}T${t}:00` })),
+        totalElements: slotTimes.length,
+        totalPages: 1,
+        number: 0,
+        last: true,
+      };
+      http.expectOne((r) => r.url === '/slots/search/page').flush(page);
+      tick();
+    };
+
+    it('a taken time says so at once and asks no overbook reason', fakeAsync(() => {
+      const component = create({});
+      askAt(component, 'Le personnel n’est pas disponible', ['09:20']);
+      expect(component.timeRefusal()).toContain('pas disponible');
+      expect(component.needsOverbookReason()).toBeFalse();
+    }));
+
+    it('a free off-slot time still asks its reason', fakeAsync(() => {
+      const component = create({});
+      askAt(component, undefined, ['09:20']);
+      expect(component.timeRefusal()).toBeNull();
+      expect(component.needsOverbookReason()).toBeTrue();
+    }));
+
+    it('the free slots of the day are listed, in order; picking one is the time', fakeAsync(() => {
+      const component = create({});
+      askAt(component, undefined, ['10:00', '09:20']);
+      expect(component.freeSlots()).toEqual(['09:20', '10:00']);
+      component.pickFreeSlot('09:20');
+      expect(component.form.startTime).toBe('09:20');
+      tick(300);
+      TestBed.inject(HttpTestingController)
+        .match(() => true)
+        .forEach((r) =>
+          r.flush({ content: [], totalElements: 0, totalPages: 1, number: 0, last: true }),
+        );
     }));
   });
 });
