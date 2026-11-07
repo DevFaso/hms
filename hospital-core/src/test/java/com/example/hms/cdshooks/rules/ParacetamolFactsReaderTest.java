@@ -507,4 +507,67 @@ class ParacetamolFactsReaderTest {
         assertThat(ParacetamolIdentity.names("Efferalgan-Odis", doliprane)).isTrue();
         assertThat(ParacetamolIdentity.namesCatalogueItem("Doliprane codéine", doliprane)).isFalse();
     }
+
+    /** QA D1462: a brand a source names is the drug, wherever it is typed. */
+    @ParameterizedTest(name = "typed {0}")
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"Efferalgan 1 g", "EFFERALGAN", "Efferalganstix 1000 mg", "Tylenol 500 mg"})
+    void aCitedBrandIsTheDrugWithNoCatalogueItem(String typed) {
+        ParacetamolFacts facts = reader.read(adult, hospitalId, typed, null, null);
+        assertThat(facts.applies()).isTrue();
+        assertThat(facts.proposedCombination()).isFalse();
+        assertThat(facts.nameNotRecognised()).isFalse();
+    }
+
+    @Test
+    void aCitedBrandWithASecondDrugIsACombination() {
+        assertThat(reader.read(adult, hospitalId, "Efferalgan codéine", null, null).proposedCombination()).isTrue();
+    }
+
+    @Test
+    void anActiveCitedBrandCountsInTheTotal() {
+        Prescription efferalgan = order("Efferalgan 1 g", PrescriptionStatus.SIGNED);
+        assertThat(read().otherOrders()).extracting(ParacetamolFacts.OtherOrder::order).contains(efferalgan);
+    }
+
+    /** QA D1462: what cannot be matched is said, for the order and for the ones beside it. */
+    @ParameterizedTest(name = "typed {0}")
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"Dafalgan 1 g", "Panadol", "Paralgan 500 mg"})
+    void aNameNothingNamesIsSaidNotPassedInSilence(String typed) {
+        ParacetamolFacts facts = reader.read(adult, hospitalId, typed, null, null);
+        assertThat(facts.applies()).isFalse();
+        assertThat(facts.nameNotRecognised()).isTrue();
+    }
+
+    @Test
+    void aNameTheCatalogueOrACitedBrandNamesIsNotUnrecognised() {
+        assertThat(reader.read(adult, hospitalId, "Amoxicilline 500 mg", null, null).nameNotRecognised()).isFalse();
+        assertThat(reader.read(adult, hospitalId, "Amoxicillin 500 mg", null, null).nameNotRecognised()).isFalse();
+        assertThat(reader.read(adult, hospitalId, "Bactrim forte", null, null).nameNotRecognised()).isFalse();
+        // No hospital: nothing could be read, so nothing is claimed about the catalogue.
+        assertThat(reader.read(adult, null, "Dafalgan", null, null).nameNotRecognised()).isFalse();
+    }
+
+    /** Named beside the total, since it may hold paracetamol; a linked or stopped order is not. */
+    @Test
+    void anActiveOrderNothingNamesIsListedBesideTheTotal() {
+        order("Dafalgan 2 g", PrescriptionStatus.SIGNED);
+        order("Panadol", PrescriptionStatus.CANCELLED);
+        Prescription linked = order("Dafalgan linked", PrescriptionStatus.SIGNED);
+        linked.setMedicationCatalogItemId(UUID.randomUUID());
+        order("Amoxicilline 500 mg", PrescriptionStatus.SIGNED);
+        assertThat(read().notRecognised()).containsExactly("Dafalgan 2 g");
+    }
+
+    /** QA D1462: a child's free-text brand reads the hospital's limits for the drug. */
+    @Test
+    void aFreeTextBrandReadsTheStrictestLimitsOfTheDrug() {
+        MedicationCatalogItem loose = item("Paracétamol", "Sirop", "120");
+        loose.setPediatricMaxDailyMg(java.math.BigDecimal.valueOf(4000));
+        MedicationCatalogItem strict = item("Paracétamol", "Comprimé", "500");
+        strict.setPediatricMaxDailyMg(java.math.BigDecimal.valueOf(3000));
+        items.add(loose);
+        items.add(strict);
+        assertThat(reader.read(adult, hospitalId, "Efferalgan 1 g", null, null).limits()).isSameAs(strict);
+        assertThat(reader.read(adult, hospitalId, "Efferalgan 1 g", doliprane, null).limits()).isNull();
+    }
 }

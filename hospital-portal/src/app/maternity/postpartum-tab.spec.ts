@@ -264,6 +264,22 @@ describe('PostpartumTabComponent — screening', () => {
     expect(cmp.newbornValueToCheck('glucose')).toBeFalse();
   });
 
+  it('QA D1482: a value below what other forms accept asks to remeasure, a blank one does not', () => {
+    const cmp = TestBed.createComponent(PostpartumTabComponent).componentInstance;
+    cmp.assessmentForm = { temperatureCelsius: 10, heartRateBpm: 5, respirationsPerMin: 2 };
+    expect(cmp.newbornValueToCheck('temperatureCelsius')).toBeTrue();
+    expect(cmp.newbornValueToCheck('heartRateBpm')).toBeTrue();
+    expect(cmp.newbornValueToCheck('respiratoryRateBpm')).toBeTrue();
+    cmp.assessmentForm = { glucoseValue: 5, glucoseUnit: 'MG_DL' };
+    expect(cmp.newbornValueToCheck('glucose')).toBeTrue();
+    cmp.assessmentForm = { temperatureCelsius: 25, heartRateBpm: 20 };
+    expect(cmp.newbornValueToCheck('temperatureCelsius')).toBeFalse();
+    expect(cmp.newbornValueToCheck('heartRateBpm')).toBeFalse();
+    cmp.assessmentForm = {};
+    expect(cmp.newbornValueToCheck('temperatureCelsius')).toBeFalse();
+    expect(cmp.newbornValueToCheck('glucose')).toBeFalse();
+  });
+
   it('QA D1424: the chart reads a request to remeasure and a range notice as sentences', () => {
     const cmp = TestBed.createComponent(PostpartumTabComponent).componentInstance;
     const read = cmp.newbornAlertsToRead({

@@ -115,7 +115,7 @@
           @if (item.waitMinutes !== null) {
             <div class="wl-wait" [class.wait-long]="(item.waitMinutes ?? 0) > 30">
               <span class="material-symbols-outlined">hourglass_top</span>
-              {{ item.waitMinutes }}m
+              {{ item.waitMinutes | elapsed }}
             </div>
           }
           @if (item.alerts && item.alerts.length > 0) {

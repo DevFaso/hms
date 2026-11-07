@@ -399,6 +399,9 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
 
     private LocalDate resolveDueDate(PrenatalScheduleRequestDTO request, LocalDate lmp) {
         if (request.getEstimatedDueDate() != null) {
+            // QA D1465: a calendar is built from the LMP; a due date that contradicts it is refused.
+            com.example.hms.utility.GestationalDating.requireDueDateFitsLmp(lmp, request.getEstimatedDueDate(),
+                "estimatedDueDate");
             return request.getEstimatedDueDate();
         }
         return lmp.plusWeeks(40);

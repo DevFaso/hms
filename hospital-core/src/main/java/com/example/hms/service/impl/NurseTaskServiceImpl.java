@@ -905,6 +905,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         if (!patient.isRegisteredInHospital(hospitalId)) {
             throw new com.example.hms.exception.FieldBusinessException("patientId", "nurse.patient.notRegisteredHere");
         }
+        // QA D1477: nobody hands over a patient who has gone: the visit or the stay has ended.
+        requireNotDischargedWithoutVisit(patient.getId(), hospitalId, "nurse.handoff.patientDischarged");
 
         // QA D235: a handoff type from the fixed list, not free text.
         String direction = request.getDirection() == null ? ""

@@ -9,7 +9,11 @@ import { HttpErrorResponse } from '@angular/common/http';
 import fr from '../../assets/i18n/fr.json';
 
 import { MaternityComponent, historyFormProblem } from './maternity';
-import { MaternityService, MaternalHistoryResponse } from '../services/maternity.service';
+import {
+  MaternityService,
+  MaternalHistoryRequest,
+  MaternalHistoryResponse,
+} from '../services/maternity.service';
 import { ObgynReferralService } from '../services/obgyn-referral.service';
 import { PatientService } from '../services/patient.service';
 import { AuthService } from '../auth/auth.service';
@@ -401,6 +405,53 @@ describe('MaternityComponent — new history for a patient who already has one (
     expect(notice()).toBeNull();
     expect(heldElsewhere()).not.toBeNull();
     expect(isSubmitBlocked(saveButton())).toBeTrue();
+  });
+});
+
+describe('historyFormProblem (QA D1465)', () => {
+  const now = new Date('2026-11-07T12:00:00');
+  const form = (over: Partial<MaternalHistoryRequest>): MaternalHistoryRequest =>
+    ({
+      patientId: 'p',
+      hospitalId: 'h',
+      recordedDate: '2026-11-07T10:00',
+      ...over,
+    }) as MaternalHistoryRequest;
+
+  it('refuses a due date on or before the last menstrual period', () => {
+    const dated = (estimatedDueDate: string) =>
+      form({ menstrualHistory: { lastMenstrualPeriod: '2026-06-10', estimatedDueDate } });
+    expect(historyFormProblem(dated('2026-01-10'), now)).toBe('MATERNITY.EDD_BEFORE_LMP');
+    expect(historyFormProblem(dated('2026-06-10'), now)).toBe('MATERNITY.EDD_BEFORE_LMP');
+    expect(historyFormProblem(dated('2027-03-17'), now)).toBeNull();
+  });
+
+  it('refuses living children above parity until a multiple birth is stated', () => {
+    const counts = form({ obstetricHistory: { gravida: 2, para: 1, livingChildren: 7 } });
+    expect(historyFormProblem(counts, now)).toBe('MATERNITY.LIVING_ABOVE_PARA');
+    const twins = form({
+      obstetricHistory: { gravida: 1, para: 1, livingChildren: 2, multipleBirth: true },
+    });
+    expect(historyFormProblem(twins, now)).toBeNull();
+  });
+
+  it('refuses births above parity, and compares nothing with a blank parity', () => {
+    expect(
+      historyFormProblem(
+        form({ obstetricHistory: { para: 1, termBirths: 1, pretermBirths: 1 } }),
+        now,
+      ),
+    ).toBe('MATERNITY.TERM_PRETERM_ABOVE_PARA');
+    expect(
+      historyFormProblem(form({ obstetricHistory: { para: 1, previousCesareanSections: 2 } }), now),
+    ).toBe('MATERNITY.CESAREANS_ABOVE_PARA');
+    expect(historyFormProblem(form({ obstetricHistory: { livingChildren: 3 } }), now)).toBeNull();
+  });
+
+  it('holds no ceiling on gravidity: no source gives one', () => {
+    expect(
+      historyFormProblem(form({ obstetricHistory: { gravida: 99, para: 1 } }), now),
+    ).toBeNull();
   });
 });
 

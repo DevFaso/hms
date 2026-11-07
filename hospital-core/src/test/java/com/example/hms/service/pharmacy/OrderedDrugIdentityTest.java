@@ -189,4 +189,22 @@ class OrderedDrugIdentityTest {
         lot.setId(UUID.randomUUID());
         return lot;
     }
+
+    /** QA D1462: a cited paracetamol brand on the Paracétamol item. It closes that half of D1264 for Efferalgan. */
+    @org.junit.jupiter.api.Test
+    void aCitedParacetamolBrandAgreesWithTheItemAndGivesItNoStrength() {
+        MedicationCatalogItem plain = item("Paracétamol", "Paracétamol", null);
+        org.assertj.core.api.Assertions.assertThat(OrderedDrugIdentity.agrees("Efferalgan 1 g", plain)).isTrue();
+        org.assertj.core.api.Assertions.assertThat(OrderedDrugIdentity.namesOnlyThroughCitedBrand("Efferalgan 1 g", plain)).isTrue();
+        org.assertj.core.api.Assertions.assertThat(OrderedDrugIdentity.namesOnlyThroughCitedBrand("Paracétamol 1 g", plain)).isFalse();
+        org.assertj.core.api.Assertions.assertThat(OrderedDrugIdentity.namesOnlyThroughCitedBrand("Doliprane 1 g", PARACETAMOL)).isFalse();
+        org.assertj.core.api.Assertions.assertThat(OrderedDrugIdentity.namesOnlyThroughCitedBrand(null, plain)).isFalse();
+        org.assertj.core.api.Assertions.assertThat(OrderedDrugIdentity.namesOnlyThroughCitedBrand("Efferalgan", null)).isFalse();
+    }
+
+    @org.junit.jupiter.api.Test
+    void aCitedBrandWithASecondDrugDoesNotNameTheItemAlone() {
+        org.assertj.core.api.Assertions.assertThat(
+            OrderedDrugIdentity.contradicts("Efferalgan codéine", item("Paracétamol", "Paracétamol", null))).isTrue();
+    }
 }

@@ -384,4 +384,24 @@ class PediatricDoseRuleRound18Test {
             LocaleContextHolder.resetLocaleContext();
         }
     }
+
+    /** QA D1462: a free-text brand reads the limits the reader found for the drug; a count stays unread. */
+    @Test
+    void aFreeTextBrandIsStoppedLikeAPickedItem() {
+        MedicationCatalogItem limits = MedicationCatalogItem.builder().genericName("Paracétamol")
+            .pediatricMaxDailyMg(java.math.BigDecimal.valueOf(1000)).build();
+        ParacetamolFacts facts = new ParacetamolFacts(true, List.of(), java.util.Set.of(), List.of(), List.of(), false, false, false,
+            limits, List.of(), false);
+        Patient child = Patient.builder().dateOfBirth(java.time.LocalDate.now().minusYears(6)).build();
+        CdsRuleContext context = new CdsRuleContext(child, java.util.UUID.randomUUID(), "Efferalgan 1 g", null, null, 1000d,
+            null, 19d, List.of(), List.of(), "4 fois par jour", null, java.time.LocalDateTime.now(), null, facts);
+        List<com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard> cards = new PediatricDoseRule().evaluate(context);
+        org.assertj.core.api.Assertions.assertThat(cards)
+            .anySatisfy(card -> org.assertj.core.api.Assertions.assertThat(card.hardStop()).isTrue());
+
+        CdsRuleContext noFacts = new CdsRuleContext(child, java.util.UUID.randomUUID(), "Efferalgan 1 g", null, null, 1000d,
+            null, 19d, List.of(), List.of(), "4 fois par jour", null, java.time.LocalDateTime.now(), null, ParacetamolFacts.NONE);
+        org.assertj.core.api.Assertions.assertThat(new PediatricDoseRule().evaluate(noFacts))
+            .noneSatisfy(card -> org.assertj.core.api.Assertions.assertThat(card.hardStop()).isTrue());
+    }
 }

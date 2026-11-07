@@ -701,4 +701,25 @@ class AdultParacetamolRuleTest {
             LocaleContextHolder.resetLocaleContext();
         }
     }
+
+    /** QA D1462: what the check cannot read it says, at any age, and it does not block. */
+    @Test
+    void aNameItCannotReadIsSaid() {
+        List<CdsCard> cards = evaluateWith(new Order("2 g", "3 fois par jour"), ParacetamolFacts.NOT_RECOGNISED);
+        assertThat(cards).hasSize(1);
+        assertThat(cards.get(0).indicator()).isEqualTo(CdsCard.Indicator.WARNING);
+        assertThat(cards.get(0).summary()).contains("could not be checked as paracetamol");
+        assertThat(cards.get(0).detail()).contains("does not block");
+        assertThat(cards.get(0).hardStop()).isNotEqualTo(Boolean.TRUE);
+    }
+
+    @Test
+    void anOrderItCannotReadIsNamedBesideTheTotal() {
+        ParacetamolFacts facts = new ParacetamolFacts(true, List.of(), Set.of(), List.of(), List.of(), false, false, false,
+            null, List.of("Dafalgan 2 g"), false);
+        List<CdsCard> cards = evaluateWith(new Order("100 mg", null), facts);
+        assertThat(cards).hasSize(1);
+        assertThat(cards.get(0).summary()).contains("Dafalgan 2 g");
+        assertThat(cards.get(0).detail()).contains("not counted if they hold paracetamol: Dafalgan 2 g.");
+    }
 }

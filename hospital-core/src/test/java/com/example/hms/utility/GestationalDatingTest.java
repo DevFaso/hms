@@ -28,4 +28,34 @@ class GestationalDatingTest {
         assertThat(GestationalDating.isPlausibleCurrentLmp(TODAY.minusWeeks(12), TODAY)).isTrue();
     }
 
+    /** QA D1465: a due date on either side of what the LMP allows. */
+    @org.junit.jupiter.params.ParameterizedTest(name = "{0} weeks after the LMP: {1}")
+    @org.junit.jupiter.params.provider.CsvSource({
+        "-20, maternity.dating.dueDateBeforeLmp",
+        "0, maternity.dating.dueDateBeforeLmp",
+        "19, maternity.dating.dueDateContradictsLmp",
+        "20, ",
+        "40, ",
+        "44, ",
+        "45, maternity.dating.dueDateContradictsLmp",
+    })
+    void aDueDateMustFitTheLmp(int weeks, String refusal) {
+        LocalDate lmp = LocalDate.of(2026, 6, 10);
+        org.assertj.core.api.ThrowableAssert.ThrowingCallable check =
+            () -> GestationalDating.requireDueDateFitsLmp(lmp, lmp.plusWeeks(weeks), "edd");
+        if (refusal == null) {
+            org.assertj.core.api.Assertions.assertThatCode(check).doesNotThrowAnyException();
+        } else {
+            org.assertj.core.api.Assertions.assertThatThrownBy(check)
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class).hasMessage(refusal);
+        }
+    }
+
+    @org.junit.jupiter.api.Test
+    void aBlankDateIsNotCompared() {
+        org.assertj.core.api.Assertions.assertThatCode(() -> {
+            GestationalDating.requireDueDateFitsLmp(null, LocalDate.of(2026, 1, 1), "edd");
+            GestationalDating.requireDueDateFitsLmp(LocalDate.of(2026, 1, 1), null, "edd");
+        }).doesNotThrowAnyException();
+    }
 }

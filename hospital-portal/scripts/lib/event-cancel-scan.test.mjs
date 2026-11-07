@@ -4,7 +4,8 @@ import assert from 'node:assert/strict';
 
 import { booleanMethods, canBeFalse, eventCancelFindings } from './event-cancel-scan.mjs';
 
-const dialog = (binding) => `<div class="modal-backdrop" ${binding}><div class="modal"><input type="checkbox" /></div></div>`;
+const dialog = (binding) =>
+  `<div class="modal-backdrop" ${binding}><div class="modal"><input type="checkbox" /></div></div>`;
 
 test('the D1451 idiom is refused on an ancestor of a field, and names the expression', () => {
   const [hit, ...rest] = eventCancelFindings(

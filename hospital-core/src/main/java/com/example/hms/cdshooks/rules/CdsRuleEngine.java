@@ -196,7 +196,10 @@ public class CdsRuleEngine {
             ? Optional.empty() : loadLatestWeighing(patient.getId(), hospitalId);
         Double weight = weighed.map(PatientVitalSign::getWeightKg).orElse(null);
         java.time.LocalDateTime weighedAt = weighed.map(PatientVitalSign::getRecordedAt).orElse(null);
-        Double doseMg = parseDoseMg(proposedDosage, weight, catalogItem);
+        // QA D1462: a cited brand on an item says the INN is the item's, not the strength.
+        Double doseMg = parseDoseMg(proposedDosage, weight,
+            com.example.hms.service.pharmacy.OrderedDrugIdentity.namesOnlyThroughCitedBrand(proposedMedicationName, catalogItem)
+                ? null : catalogItem);
 
         return new CdsRuleContext(
             patient,

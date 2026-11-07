@@ -1,5 +1,7 @@
 package com.example.hms.utility;
 
+import com.example.hms.exception.FieldBusinessException;
+
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 
@@ -19,6 +21,12 @@ public final class GestationalDating {
     /** Beyond this many weeks since the LMP, a current pregnancy is implausible. */
     public static final int MAX_PLAUSIBLE_WEEKS = 44;
 
+    /** The most weeks a gestational age is recorded at: the labour admission's ceiling and the forms'. */
+    public static final int MAX_RECORDED_WEEKS = 45;
+
+    /** Below this many weeks from the LMP nothing is a birth (labour admission's floor), let alone term. */
+    private static final int MIN_WEEKS_TO_DUE_DATE = 20;
+
     private static final int REFERENCE_CYCLE_DAYS = 28;
     private static final int MIN_CYCLE_DAYS = 21;
     private static final int MAX_CYCLE_DAYS = 45;
@@ -32,6 +40,23 @@ public final class GestationalDating {
             return false;
         }
         return ChronoUnit.DAYS.between(lmp, today) <= MAX_PLAUSIBLE_WEEKS * 7L;
+    }
+
+    /**
+     * QA D1465: refuses a due date that contradicts the LMP. On or before it, by logic. Otherwise the
+     * date must fall where the code already reads a pregnancy: not before {@link #MIN_WEEKS_TO_DUE_DATE}
+     * weeks and not past {@link #MAX_PLAUSIBLE_WEEKS}. An ultrasound may move a date; not by that much.
+     */
+    public static void requireDueDateFitsLmp(LocalDate lmp, LocalDate dueDate, String field) {
+        if (lmp == null || dueDate == null) {
+            return;
+        }
+        if (!dueDate.isAfter(lmp)) {
+            throw new FieldBusinessException(field, "maternity.dating.dueDateBeforeLmp");
+        }
+        if (dueDate.isBefore(lmp.plusWeeks(MIN_WEEKS_TO_DUE_DATE)) || dueDate.isAfter(lmp.plusWeeks(MAX_PLAUSIBLE_WEEKS))) {
+            throw new FieldBusinessException(field, "maternity.dating.dueDateContradictsLmp");
+        }
     }
 
     /** The estimated due date for {@code lmp}, or null when there is no LMP. */

@@ -101,7 +101,7 @@ public class MaternalHistoryServiceImpl implements MaternalHistoryService {
         maternalHistory.setRecordedBy(staff);
         
         maternalHistoryMapper.updateEntityFromRequest(maternalHistory, request);
-        requireConsistentObstetricCounts(maternalHistory);
+        requireConsistentObstetricCounts(maternalHistory, request);
         deriveEstimatedDueDate(maternalHistory);
         
         MaternalHistory saved = maternalHistoryRepository.save(maternalHistory);
@@ -169,7 +169,7 @@ public class MaternalHistoryServiceImpl implements MaternalHistoryService {
         newVersion.setRecordedBy(staff);
         
         maternalHistoryMapper.updateEntityFromRequest(newVersion, request);
-        requireConsistentObstetricCounts(newVersion);
+        requireConsistentObstetricCounts(newVersion, request);
         deriveEstimatedDueDate(newVersion);
         
         MaternalHistory saved = maternalHistoryRepository.save(newVersion);
@@ -377,9 +377,19 @@ public class MaternalHistoryServiceImpl implements MaternalHistoryService {
      * QA D809: "G1 P3" was saved. The counts of a new record or a new version
      * must describe one possible history; the refusal names the form field.
      */
-    private static void requireConsistentObstetricCounts(MaternalHistory history) {
+    private static void requireConsistentObstetricCounts(MaternalHistory history, MaternalHistoryRequestDTO request) {
         com.example.hms.utility.ObstetricCounts.requireConsistent(
             history.getGravida(), history.getPara(), history.getAbortions(), "obstetricHistory.");
+        // QA D1465: what the form could also write and nothing compared.
+        boolean multipleBirth = request.getObstetricHistory() != null
+            && Boolean.TRUE.equals(request.getObstetricHistory().getMultipleBirth());
+        com.example.hms.utility.ObstetricCounts.requireConsistentWithParity(history.getPara(), history.getTermBirths(),
+            history.getPretermBirths(), history.getLivingChildren(), history.getPreviousCesareanSections(),
+            multipleBirth, "obstetricHistory.");
+        GestationalDating.requireDueDateFitsLmp(history.getLastMenstrualPeriod(), history.getEstimatedDueDate(),
+            "menstrualHistory.estimatedDueDate");
+        GestationalDating.requireDueDateFitsLmp(history.getLastMenstrualPeriod(),
+            history.getEstimatedDueDateByUltrasound(), "menstrualHistory.estimatedDueDateByUltrasound");
     }
 
     /**

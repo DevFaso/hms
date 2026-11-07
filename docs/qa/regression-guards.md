@@ -1009,3 +1009,17 @@ Rounds 27, 28 and 29 each found 20–30 new siblings of the required-field class
 | `scripts/lib/maternity-date-server-marks.test.mjs` (new) | A date or time input of the maternity screens that the server's `fieldErrors` key cannot reach (no `data-server-field`, no field map) | none |
 | `service/maternity/NewbornAlertRulesTest` (new) | Every sourced newborn number at and either side of its boundary, in both glucose units: a threshold moved, a rule dropped, an older stricter urgent alert lost. Each rule was moved by one step and the test failed | none |
 | `validation/ClinicalTimestampFutureValidationTest#d1449_*` | A date-only field refused with the wording about a time of day | none |
+
+## Guards added or widened by round 35 (fix/r35-clinical-lab)
+
+| Guard | Catches | Baseline |
+|---|---|---|
+| `npm run guards` -> `check-event-cancel.mjs` (new; `lib/event-cancel-scan.mjs` + `.test.mjs`) | D1451: a template event expression that can answer `false` (`a && b()`, `!x`, a comparison, `x = false`, a method declared boolean) on a cancelable event of an element that holds or is a field, label, link, button or component. Angular cancels the event and every checkbox inside goes dead. The sanctioned backdrop is `appBackdropClose`. | 0 sites, must stay 0 |
+| `architecture/InBasketRecipientGuardTest` (new) | D1461: a class that files an in-basket item for a role the controller, the portal route or the nav link shuts out. The roles are read from the code that picks the recipients; a new sender fails until it is listed. | 5 classes listed, none excused |
+| `architecture/PregnancyDatingGuardTest` (new) | D1465 + D1481: a request taking a due date whose service skips `GestationalDating.requireDueDateFitsLmp`; a request's gestational age with no `@Max`. It found `ObgynReferralCreateRequestDTO`, fixed. | none |
+| `architecture/ClosedRecordWriteGuardTest#theNamedWritesKeepTheirCheck` (6 pins added) | D1477: vitals, nursing task, handoff, precaution and the chart's vitals keep `DischargedPatientGuard`; a precaution named on an ended stay is refused. | 6 pins |
+| `service/support/DischargedPatientGuardTest` (new) | D1477: stay and visit outcomes, one row each. | none |
+| `cdshooks/rules/ParacetamolFactsReaderTest`, `DuplicateMedicationOrderRuleTest`, `AdultParacetamolRuleTest`, `PediatricDoseRuleRound18Test` (widened) | D1462 + D1478: a cited brand is the drug; a name nothing names is said, for the order and beside the total; the same drug under another name is a duplicate. | none |
+| `service/maternity/NewbornAlertRulesTest#aLowValueAsksToRemeasure` (new) | D1482: the check flag at the low end. | none |
+| `scripts/lib/round35-clinical.test.mjs` (new) | D1479: a count of minutes written by hand in a template. D1480: a button built at run time with no global style. | none |
+| `e2e/dialog-checkboxes.spec.ts` (new) | D1451 in a browser: mouse, label and a trusted Space key, on the crossmatch box, the O-negative statement and the mortality boxes. | none |

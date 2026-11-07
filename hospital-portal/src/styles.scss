@@ -259,6 +259,28 @@ button {
   font-weight: 600;
 }
 
+/* QA D1480: a dialog's own .btn-danger is encapsulated in its component and never reaches these
+   buttons, which are built at run time. The shape and colours are the dialogs' own. */
+.dialog-discard button {
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.dialog-discard .btn-secondary {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  color: #475569;
+}
+
+.dialog-discard .btn-danger {
+  background: #b42318;
+  border: none;
+  color: #fff;
+}
+
 /* QA D1203 (round 22): a fieldset's default min-width is its content's
    min-content, so a row of inputs inside one widened the dialog past the
    screen. Every fieldset of the portal shrinks with its container. */

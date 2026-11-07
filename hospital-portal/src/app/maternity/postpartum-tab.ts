@@ -736,25 +736,30 @@ export class PostpartumTabComponent {
   }
 
   /**
-   * QA D1424: a value above what the other vitals forms accept saves on this form; the
-   * reader is asked to check it. The numbers only choose when to ask.
+   * QA D1424, D1482: a value outside what the other vitals forms accept, at either end, saves on
+   * this form; the reader is asked to check it. The numbers only choose when to ask.
    */
   newbornValueToCheck(
     field: 'temperatureCelsius' | 'heartRateBpm' | 'respiratoryRateBpm' | 'glucose',
   ): boolean {
     const form = this.assessmentForm;
+    const outside = (raw: unknown, limit: { min: number; max: number }, read = Number(raw)) =>
+      raw !== null && raw !== undefined && raw !== '' && (read > limit.max || read < limit.min);
     if (field === 'temperatureCelsius') {
-      return Number(form.temperatureCelsius) > VITAL_SIGN_LIMITS.temperatureCelsius.max;
+      return outside(form.temperatureCelsius, VITAL_SIGN_LIMITS.temperatureCelsius);
     }
     if (field === 'heartRateBpm') {
-      return Number(form.heartRateBpm) > VITAL_SIGN_LIMITS.heartRateBpm.max;
+      return outside(form.heartRateBpm, VITAL_SIGN_LIMITS.heartRateBpm);
     }
     if (field === 'respiratoryRateBpm') {
-      return Number(form.respirationsPerMin) > VITAL_SIGN_LIMITS.respiratoryRateBpm.max;
+      return outside(form.respirationsPerMin, VITAL_SIGN_LIMITS.respiratoryRateBpm);
     }
     const value = Number(form.glucoseValue);
-    const mgDl = form.glucoseUnit === 'MMOL_L' ? glucoseMmolToMgDl(value) : value;
-    return mgDl > VITAL_SIGN_LIMITS.bloodGlucoseMgDl.max;
+    return outside(
+      form.glucoseValue,
+      VITAL_SIGN_LIMITS.bloodGlucoseMgDl,
+      form.glucoseUnit === 'MMOL_L' ? glucoseMmolToMgDl(value) : value,
+    );
   }
 
   /** QA D1424: a request to remeasure stands out on the chart; a range notice does not. */

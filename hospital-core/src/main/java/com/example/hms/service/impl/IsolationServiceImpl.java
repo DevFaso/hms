@@ -52,6 +52,7 @@ public class IsolationServiceImpl implements IsolationService {
     private final PatientChartAccess patientChartAccess;
     private final IsolationMapper mapper;
     private final RoleValidator roleValidator;
+    private final com.example.hms.service.support.DischargedPatientGuard dischargedPatientGuard;
 
     @Override
     public IsolationPrecautionResponseDTO startPrecaution(IsolationPrecautionRequestDTO request) {
@@ -61,6 +62,9 @@ public class IsolationServiceImpl implements IsolationService {
         if (!StringUtils.hasText(request.getReason())) {
             throw new com.example.hms.exception.FieldBusinessException("reason", "isolation.precaution.reasonRequired");
         }
+        // QA D1477: a precaution is for a patient under care here. Lifting one stays open.
+        dischargedPatientGuard.requireNotDischargedWithoutVisit(patient.getId(), hospitalId,
+            "isolation.precaution.patientDischarged");
         precautionRepository.findActiveOfType(patient.getId(), request.getPrecautionType())
             .ifPresent(existing -> {
                 throw new com.example.hms.exception.FieldBusinessException("precautionType", "isolation.precaution.alreadyActive",
@@ -165,6 +169,8 @@ public class IsolationServiceImpl implements IsolationService {
         if (!samePatient || !sameHospital) {
             throw new ResourceNotFoundException("admission.notFound", admissionId);
         }
+        // QA D1477: named on a stay that has ended, while another is open.
+        admission.requireOpen();
         return admission;
     }
 

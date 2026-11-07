@@ -188,6 +188,13 @@ class ClosedRecordWriteGuardTest {
         new String[] {"DischargeSummaryServiceImpl.java", "enrichSparseExistingSummaries", "getIsFinalized()"},
         new String[] {"EncounterTreatmentServiceImpl.java", "addTreatmentToEncounter", "ENDED_UNSEEN"},
         new String[] {"impl/NurseTaskServiceImpl.java", "verifyMedicationAdministration", "nurse.mar.alreadyRecorded"},
+        // QA D1477: every nursing write on a patient goes through DischargedPatientGuard.
+        new String[] {"impl/NurseTaskServiceImpl.java", "captureVitals", "requireNotDischargedWithoutVisit("},
+        new String[] {"impl/NurseTaskServiceImpl.java", "createNursingTask", "nurse.task.patientDischarged"},
+        new String[] {"impl/NurseTaskServiceImpl.java", "createHandoff", "nurse.handoff.patientDischarged"},
+        new String[] {"impl/IsolationServiceImpl.java", "startPrecaution", "isolation.precaution.patientDischarged"},
+        new String[] {"impl/IsolationServiceImpl.java", "resolveAdmission", "requireOpen("},
+        new String[] {"impl/PatientVitalSignServiceImpl.java", "recordVital", "dischargedPatientGuard.requireNotDischargedWithoutVisit("},
         new String[] {"../fhir/write/EncounterFhirWriteService.java", "doUpdate", "isClosed()"},
         new String[] {"LabResultServiceImpl.java", "updateLabResult", "withdrawSignature("},
         new String[] {"LabResultServiceImpl.java", "deleteLabResult", "labresult.signed.noDelete"},

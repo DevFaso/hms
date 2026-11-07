@@ -130,6 +130,12 @@ public class MaternalHistoryRequestDTO {
         @PositiveOrZero
         private Integer livingChildren;
 
+        /**
+         * QA D1465: a previous multiple birth, stated on the form. A twin birth counts once in parity,
+         * so only this lets living children stand above it. It is a check of this request, not stored.
+         */
+        private Boolean multipleBirth;
+
         @PositiveOrZero
         private Integer previousCesareanSections;
 
