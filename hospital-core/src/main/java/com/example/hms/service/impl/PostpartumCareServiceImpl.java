@@ -108,6 +108,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
         // body's hospital id is a claim), for a patient registered there.
         com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(hospital, HOSPITAL_NOT_FOUND, hospital.getId());
         patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
+        com.example.hms.service.support.DeceasedPatientGuard.refuseCareAfterDeath(patient, request.getObservationTime(), "observationTime");
         requireRecordedDelivery(patient.getId());
         requireObservationFindings(request);
         Staff staff = resolveRecorderStaff(request.getRecordedByStaffId(), recorderUserId, hospital);

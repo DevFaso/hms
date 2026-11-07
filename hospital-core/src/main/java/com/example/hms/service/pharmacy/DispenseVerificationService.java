@@ -238,7 +238,10 @@ public class DispenseVerificationService {
         // name when it is the whole first part of the prescribed text,
         // ending on a word boundary ("paracetamol 500 mg" matches, a longer
         // word that merely starts with the name does not).
-        return namesCatalogItem(prescribedName, item);
+        // QA D1492: one reading of a drug. The limits and allergy checks read a cited brand as its generic,
+        // so the pharmacy does too, by the same map. A brand with no mapping stays refused.
+        return namesCatalogItem(prescribedName, item)
+            || OrderedDrugIdentity.citedBrandIsThisDrug(prescribedName, item);
     }
 
     /**

@@ -313,13 +313,19 @@
               <td>
                 <span
                   class="status-badge with-dot"
-                  [class.active]="patient.active"
-                  [class.inactive]="!patient.active"
+                  [class.active]="patient.active && !patient.deceased"
+                  [class.inactive]="!patient.active || patient.deceased"
                 >
                   <span class="status-dot"></span>
-                  {{
-                    patient.active ? ('COMMON.ACTIVE' | translate) : ('COMMON.INACTIVE' | translate)
-                  }}
+                  @if (patient.deceased) {
+                    {{ 'PATIENTS.DECEASED' | translate }}
+                  } @else {
+                    {{
+                      patient.active
+                        ? ('COMMON.ACTIVE' | translate)
+                        : ('COMMON.INACTIVE' | translate)
+                    }}
+                  }
                 </span>
               </td>
               <td>

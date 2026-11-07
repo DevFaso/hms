@@ -95,6 +95,7 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
         // QA D401: the patient must be registered at the hospital the row is written in.
         patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
 
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
         var context = new TreatmentPlanMapper.TreatmentPlanContext(hospital, encounter, assignment, author, supervising, signOff);
         TreatmentPlan plan = treatmentPlanMapper.toEntity(requestDTO, patient, context);
         applyFollowUps(plan, requestDTO.getFollowUps());

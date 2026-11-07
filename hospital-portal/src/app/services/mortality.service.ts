@@ -44,6 +44,11 @@ export interface DeathRecordResponse {
   notes: string | null;
   recordedByName: string | null;
   createdAt: string;
+  /** QA D1488: marked entered in error, with who, when and why. Such a row counts as no death. */
+  enteredInError?: boolean;
+  enteredInErrorAt?: string | null;
+  enteredInErrorByName?: string | null;
+  enteredInErrorReason?: string | null;
 }
 
 export interface DeathRecordRequest {
@@ -106,6 +111,8 @@ export interface MortalityRegister {
   perinatalDeaths: number;
   stillbirths: number;
   deaths: DeathRecordResponse[];
+  /** QA D1488: kept and shown, in none of the counts above. */
+  enteredInError?: DeathRecordResponse[];
 }
 
 @Injectable({ providedIn: 'root' })
@@ -119,6 +126,13 @@ export class MortalityService {
 
   amendDeathRecord(recordId: string, req: DeathRecordAmendment): Observable<DeathRecordResponse> {
     return this.http.post<DeathRecordResponse>(`${this.baseUrl}/deaths/${recordId}/amend`, req);
+  }
+
+  markEnteredInError(recordId: string, reason: string): Observable<DeathRecordResponse> {
+    return this.http.post<DeathRecordResponse>(
+      `${this.baseUrl}/deaths/${recordId}/entered-in-error`,
+      { reason },
+    );
   }
 
   getForPatient(patientId: string): Observable<DeathRecordResponse> {

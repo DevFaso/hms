@@ -62,6 +62,7 @@ public class IsolationServiceImpl implements IsolationService {
         if (!StringUtils.hasText(request.getReason())) {
             throw new com.example.hms.exception.FieldBusinessException("reason", "isolation.precaution.reasonRequired");
         }
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
         // QA D1477: a precaution is for a patient under care here. Lifting one stays open.
         dischargedPatientGuard.requireNotDischargedWithoutVisit(patient.getId(), hospitalId,
             "isolation.precaution.patientDischarged");

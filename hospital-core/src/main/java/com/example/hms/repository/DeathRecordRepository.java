@@ -12,13 +12,25 @@ import java.util.UUID;
 
 public interface DeathRecordRepository extends JpaRepository<DeathRecord, UUID> {
 
-    /** A person dies once — backed by the unique index uq_death_record_patient. */
-    Optional<DeathRecord> findByPatient_Id(UUID patientId);
+    /**
+     * A person dies once, backed by the partial unique index uq_death_record_patient_live. A row entered in
+     * error is no death (QA D1488), so neither of these two sees it.
+     */
+    @Query("SELECT d FROM DeathRecord d WHERE d.patient.id = :patientId AND d.enteredInErrorAt IS NULL")
+    Optional<DeathRecord> findByPatient_Id(@Param("patientId") UUID patientId);
 
-    boolean existsByPatient_Id(UUID patientId);
+    @Query("SELECT COUNT(d) > 0 FROM DeathRecord d WHERE d.patient.id = :patientId AND d.enteredInErrorAt IS NULL")
+    boolean existsByPatient_Id(@Param("patientId") UUID patientId);
+
+    /** QA D1488: the rows marked entered in error in a period, listed apart from the register's counts. */
+    @Query("SELECT d FROM DeathRecord d WHERE d.hospital.id = :hospitalId AND d.enteredInErrorAt IS NOT NULL "
+        + "AND d.diedAt >= :from AND d.diedAt < :to ORDER BY d.enteredInErrorAt DESC")
+    List<DeathRecord> findEnteredInError(@Param("hospitalId") UUID hospitalId,
+                                         @Param("from") LocalDateTime from,
+                                         @Param("to") LocalDateTime to);
 
     /** The mortality register for a period. */
-    @Query("SELECT d FROM DeathRecord d WHERE d.hospital.id = :hospitalId "
+    @Query("SELECT d FROM DeathRecord d WHERE d.hospital.id = :hospitalId AND d.enteredInErrorAt IS NULL "
         + "AND d.diedAt >= :from AND d.diedAt < :to ORDER BY d.diedAt DESC")
     List<DeathRecord> findRegister(@Param("hospitalId") UUID hospitalId,
                                    @Param("from") LocalDateTime from,
@@ -32,7 +44,7 @@ public interface DeathRecordRepository extends JpaRepository<DeathRecord, UUID> 
      * late maternal death is reported separately. Including it here would
      * overstate the facility's ratio.
      */
-    @Query("SELECT d FROM DeathRecord d WHERE d.hospital.id = :hospitalId "
+    @Query("SELECT d FROM DeathRecord d WHERE d.hospital.id = :hospitalId AND d.enteredInErrorAt IS NULL "
         + "AND d.maternalDeath = true "
         + "AND d.maternalDeathTiming <> com.example.hms.enums.MaternalDeathTiming.LATE_MATERNAL "
         + "AND d.diedAt >= :from AND d.diedAt < :to ORDER BY d.diedAt DESC")
@@ -40,7 +52,7 @@ public interface DeathRecordRepository extends JpaRepository<DeathRecord, UUID> 
                                          @Param("from") LocalDateTime from,
                                          @Param("to") LocalDateTime to);
 
-    @Query("SELECT d FROM DeathRecord d WHERE d.hospital.id = :hospitalId "
+    @Query("SELECT d FROM DeathRecord d WHERE d.hospital.id = :hospitalId AND d.enteredInErrorAt IS NULL "
         + "AND d.perinatalDeath = true "
         + "AND d.diedAt >= :from AND d.diedAt < :to ORDER BY d.diedAt DESC")
     List<DeathRecord> findPerinatalDeaths(@Param("hospitalId") UUID hospitalId,

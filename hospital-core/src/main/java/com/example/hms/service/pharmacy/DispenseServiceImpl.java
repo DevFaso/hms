@@ -522,6 +522,7 @@ public class DispenseServiceImpl implements DispenseService {
         // retry must answer as the first call did.
         requireNotesFit(dispense, request);
 
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(prescription.getPatient());
         // AC-6: the order, re-read under the lock, must still be dispensable.
         if (!DISPENSABLE_STATUSES.contains(prescription.getStatus())) {
             throw new ConflictException(MessageUtil.resolve("dispense.ready.prescriptionNotDispensable"));
@@ -849,6 +850,7 @@ public class DispenseServiceImpl implements DispenseService {
         // QA D1141: every fill (one-step or prepared) carries its unit.
         dto.setUnit(requireUnit(dto.getUnit(), prescription));
         // Checked under the prescription lock taken just above.
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(prescription.getPatient());
         requireNoOpenPreparation(prescription, openPreparationKey);
         requireWithinPrescribedQuantity(prescription, dto);
 

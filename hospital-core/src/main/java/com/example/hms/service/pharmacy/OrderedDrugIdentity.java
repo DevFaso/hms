@@ -69,6 +69,27 @@ public final class OrderedDrugIdentity {
     }
 
     /**
+     * QA D1492: the free-text order names a cited brand, and this lot is that brand's generic: the same drug, so
+     * the lot may be dispensed against it. Stricter than {@link #agrees}, whose first-INN reading only says two
+     * inputs do not contradict each other: a lot leaves the shelf on this, so a combination brand (Augmentin,
+     * Bactrim, Fansidar) is never filled from one of its ingredients alone, nor a single-ingredient brand from a
+     * combination.
+     */
+    public static boolean citedBrandIsThisDrug(String typedName, MedicationCatalogItem item) {
+        if (item == null || !brandNamesGeneric(typedName, item.getGenericName())) {
+            return false;
+        }
+        return DrugClassAllergy.carriesCombinationBrand(typedName) == isCombinationGeneric(item.getGenericName());
+    }
+
+    private static boolean isCombinationGeneric(String genericName) {
+        String generic = DrugClassAllergy.normalize(genericName);
+        return generic.contains("+") || generic.contains("/") || generic.contains(",")
+            || generic.contains(" et ") || generic.contains(" and ") || generic.contains(" y ")
+            || generic.contains("trimoxazol");
+    }
+
+    /**
      * The catalogue name, in its spelling form, is the whole first part of the
      * typed name's spelling form, ending on a word boundary - the
      * {@code namesCatalogItem} rule, read through {@link #spellingForm}.

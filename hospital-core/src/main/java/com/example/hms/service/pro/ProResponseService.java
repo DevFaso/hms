@@ -246,6 +246,7 @@ public class ProResponseService {
 
     private ProResponse persist(Patient patient, UUID hospitalId, ProResponseCreateDTO request,
                                 ProResponseSource source, UUID recordedByUserId) {
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
         ProInstrument instrument = instrumentService.requireActive(request.getInstrumentCode());
         ProScoring.ProScoreResult score = ProScoring.score(instrument, request.getAnswers());
         Hospital hospital = hospitalRepository.findClinicalById(hospitalId)

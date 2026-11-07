@@ -4902,6 +4902,8 @@
     "SHOWING_FIRST": "Mostrando las primeras {{shown}} de {{total}} solicitudes."
   },
   "PATIENTS": {
+    "DECEASED": "Fallecido",
+    "DECEASED_ON": "Fallecido el {{date}}",
     "DOB_NOT_PAST": "La fecha de nacimiento debe ser una fecha pasada.",
     "DOB_IMPOSSIBLE": "Esta fecha de nacimiento es imposible: tiene más de 130 años.",
     "NAME_DIGITS_ONLY": "Un nombre no puede estar compuesto solo por dígitos.",
@@ -11945,6 +11947,16 @@
     "CANCEL_REQUEST_CONFIRM": "Cancelar la solicitud"
   },
   "MORTALITY": {
+    "ENTERED_IN_ERROR": "Introducido por error",
+    "MARK_ENTERED_IN_ERROR": "Marcar como introducido por error",
+    "ENTERED_IN_ERROR_HINT": "Para un fallecimiento registrado en el paciente equivocado. El registro se conserva y se marca con quién, cuándo y por qué. Sale del registro y de los indicadores, el paciente deja de figurar como fallecido y la atención vuelve a ser posible. Las hospitalizaciones, consultas, citas y recordatorios cerrados por el fallecimiento NO se reabren: deben abrirse de nuevo a mano.",
+    "ENTERED_IN_ERROR_REASON": "Motivo",
+    "ENTERED_IN_ERROR_CONFIRM": "¿Marcar este registro de fallecimiento como introducido por error? El paciente dejará de figurar como fallecido. Lo que el fallecimiento cerró sigue cerrado.",
+    "ENTERED_IN_ERROR_DONE": "Registro de fallecimiento marcado como introducido por error.",
+    "ENTERED_IN_ERROR_FAILED": "No se pudo marcar el registro de fallecimiento como introducido por error.",
+    "ENTERED_IN_ERROR_LIST": "Registros marcados como introducidos por error (en ningún recuento)",
+    "ENTERED_IN_ERROR_BY": "Marcado por",
+    "ENTERED_IN_ERROR_ON": "Marcado el",
     "TITLE": "Registro de mortalidad",
     "SUBTITLE": "Actas de defunción, causas y los indicadores maternos y perinatales",
     "RECORD_DEATH": "Registrar una defunción",
@@ -11982,8 +11994,8 @@
     "PERINATAL_TYPE": "Tipo",
     "PERINATAL_TYPE_HINT": "Un mortinato nunca nació vivo, por lo que mortinatos y muertes neonatales nunca se suman.",
     "AUTOPSY": "Autopsia solicitada",
-    "RECORD_HINT": "Registrar una defunción es irreversible. Marca al paciente como fallecido y cierra sus ingresos y consultas abiertos, sus citas futuras y sus recordatorios.",
-    "RECORD_CONFIRM": "Registrar una defunción no se puede deshacer. Se cerrarán los ingresos y consultas abiertos de este paciente y se cancelarán sus citas y recordatorios futuros. ¿Continuar?",
+    "RECORD_HINT": "Registrar un fallecimiento marca al paciente como fallecido, rechaza la atención nueva y cierra sus hospitalizaciones y consultas abiertas, sus citas futuras y sus recordatorios. Solo un administrador del hospital puede corregir un fallecimiento registrado en el paciente equivocado, marcándolo como introducido por error, y lo que cerró sigue cerrado.",
+    "RECORD_CONFIRM": "Registrar un fallecimiento cierra las hospitalizaciones y consultas abiertas de este paciente, cancela sus citas y recordatorios futuros y rechaza la atención nueva. Solo un administrador del hospital puede corregirlo, y lo que cerró sigue cerrado. ¿Continuar?",
     "CLOSURE_TITLE": "Defunción registrada. Se cerró lo siguiente:",
     "CLOSURE_ADMISSIONS": "{{count}} ingreso(s) cerrado(s)",
     "CLOSURE_ENCOUNTERS": "{{count}} consulta(s) cerrada(s)",

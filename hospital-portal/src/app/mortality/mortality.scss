@@ -56,7 +56,37 @@
    Maternal and perinatal get their own accent because they are the two
    numbers the facility is actually measured on. */
 
+/* QA D1505: the counters were glued to their labels, stacked and unstyled: no stylesheet held these classes. */
+.summary-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
 .summary-card {
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+
+  .card-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .card-value {
+    font-size: 1.6rem;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+
+  .card-label {
+    font-size: 0.88rem;
+    color: #46585e;
+  }
+
   &.maternal .card-value {
     color: #b3261e;
   }
@@ -70,6 +100,11 @@
   margin-top: 2px;
   font-size: 0.74rem;
   color: #5a6672;
+}
+
+.error-list-title {
+  margin: 22px 0 8px;
+  font-size: 1rem;
 }
 
 /* ── Flags ── */

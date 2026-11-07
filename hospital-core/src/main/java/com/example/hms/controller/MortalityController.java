@@ -1,6 +1,7 @@
 package com.example.hms.controller;
 
 import com.example.hms.payload.dto.mortality.DeathRecordAmendmentDTO;
+import com.example.hms.payload.dto.mortality.DeathRecordEnteredInErrorDTO;
 import com.example.hms.payload.dto.mortality.DeathRecordRequestDTO;
 import com.example.hms.payload.dto.mortality.DeathRecordResponseDTO;
 import com.example.hms.payload.dto.mortality.MortalityRegisterDTO;
@@ -36,8 +37,8 @@ import java.util.UUID;
  *
  * <p>Which makes the <b>class-level {@code @PreAuthorize} load-bearing</b>: with
  * no matcher, a method whose annotation was forgotten would be reachable by
- * every authenticated principal — and this endpoint set both writes an
- * irreversible state and reads cause-of-death detail about named people.
+ * every authenticated principal: this endpoint set both writes a patient's
+ * death and reads cause-of-death detail about named people.
  *
  * <p>Recording a death is deliberately narrow: a clinician or a records officer,
  * not the whole desk. Reading the register is wider, because the people who
@@ -55,6 +56,9 @@ public class MortalityController {
     /** Who may certify or record a death. */
     private static final String RECORDER =
         "hasAnyRole('SUPER_ADMIN','DOCTOR','SURGEON','MIDWIFE')";
+
+    /** QA D1488: who may mark a death record entered in error; the service holds it to their own hospital. */
+    private static final String CORRECTOR = "hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN')";
 
     /** Who may read the register and individual records. */
     private static final String READER =
@@ -87,6 +91,19 @@ public class MortalityController {
         @Valid @RequestBody DeathRecordAmendmentDTO request
     ) {
         return ResponseEntity.ok(mortalityService.amendDeathRecord(recordId, request));
+    }
+
+    @PostMapping("/deaths/{recordId}/entered-in-error")
+    @PreAuthorize(CORRECTOR)
+    @Operation(summary = "Mark a death record entered in error",
+               description = "For a death recorded on the wrong patient. The row is kept with who, when and "
+                   + "why, it leaves the register and the indicators, the patient is no longer deceased and "
+                   + "care reopens. Stays, visits and appointments the death closed are not reopened.")
+    public ResponseEntity<DeathRecordResponseDTO> markEnteredInError(
+        @PathVariable UUID recordId,
+        @Valid @RequestBody DeathRecordEnteredInErrorDTO request
+    ) {
+        return ResponseEntity.ok(mortalityService.markEnteredInError(recordId, request));
     }
 
     @GetMapping("/deaths/patient/{patientId}")

@@ -81,6 +81,9 @@ export interface PatientResponse {
   departmentName?: string;
   organizationId?: string;
   active: boolean;
+  /** QA D1488: a death is on record. `active` is the administrative flag, not this. */
+  deceased?: boolean;
+  deceasedAt?: string | null;
   /** E8 #54 — every read of this chart needs a live break-the-glass session. */
   chartRestricted?: boolean;
   chartRestrictionReason?: string | null;

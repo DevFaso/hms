@@ -73,6 +73,7 @@ public class UltrasoundServiceImpl implements UltrasoundService {
         Hospital hospital = hospitalRepository.findClinicalById(request.getHospitalId())
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
 
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
         // Validate gestational age for scan type
         validateGestationalAgeForScanType(request.getScanType(), request.getGestationalAgeAtOrder());
         requirePlausibleSchedule(request, null);

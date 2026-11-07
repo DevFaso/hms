@@ -118,6 +118,7 @@ public class ConsultationServiceImpl implements ConsultationService {
         Patient patient = patientRepository.findByIdUnscoped(request.getPatientId())
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));
 
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
         Hospital hospital = hospitalRepository.findClinicalById(request.getHospitalId())
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
 
@@ -538,6 +539,7 @@ public class ConsultationServiceImpl implements ConsultationService {
     public ConsultationResponseDTO scheduleConsultation(UUID consultationId, LocalDateTime scheduledAt, String scheduleNote) {
         Consultation consultation = getConsultationInScope(consultationId);
 
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(consultation.getPatient());
         if (consultation.getStatus() == ConsultationStatus.COMPLETED ||
             consultation.getStatus() == ConsultationStatus.CANCELLED ||
             consultation.getStatus() == ConsultationStatus.DECLINED) {
@@ -561,6 +563,7 @@ public class ConsultationServiceImpl implements ConsultationService {
     public ConsultationResponseDTO startConsultation(UUID consultationId) {
         Consultation consultation = getConsultationInScope(consultationId);
 
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(consultation.getPatient());
         if (consultation.getStatus() != ConsultationStatus.SCHEDULED &&
             consultation.getStatus() != ConsultationStatus.ACKNOWLEDGED &&
             consultation.getStatus() != ConsultationStatus.ASSIGNED) {

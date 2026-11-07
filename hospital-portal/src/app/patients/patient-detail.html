@@ -72,9 +72,16 @@
             >
           }
           {{ ' '
-          }}<span class="status-badge" [class.active]="p.active" [class.inactive]="!p.active">{{
-            p.active ? ('COMMON.ACTIVE' | translate) : ('COMMON.INACTIVE' | translate)
-          }}</span>
+          }}@if (p.deceased) {
+            <!-- QA D1488: a recorded death is shown, never "Active". -->
+            <span class="status-badge deceased" data-testid="patient-deceased">{{
+              'PATIENTS.DECEASED_ON' | translate: { date: p.deceasedAt | serverTime | dateTime }
+            }}</span>
+          } @else {
+            <span class="status-badge" [class.active]="p.active" [class.inactive]="!p.active">{{
+              p.active ? ('COMMON.ACTIVE' | translate) : ('COMMON.INACTIVE' | translate)
+            }}</span>
+          }
           @if (p.chartRestricted) {
             <span
               class="meta-tag restricted"

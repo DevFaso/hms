@@ -144,6 +144,14 @@ public final class DrugClassAllergy {
         return out.toString();
     }
 
+    /** QA D1492: the brands of {@link #BRAND_GENERICS} that hold more than one drug. */
+    private static final Pattern COMBINATION_BRANDS = Pattern.compile("\\b(?:bactrim|septra|septrin|eusaprim|fansidar|augmentin)\\b");
+
+    /** Whether the name carries a cited brand that is a combination of drugs. */
+    public static boolean carriesCombinationBrand(String medication) {
+        return COMBINATION_BRANDS.matcher(normalize(medication)).find();
+    }
+
     /** Whether the name carries one of the cited brands ({@link #BRAND_GENERICS}). */
     public static boolean carriesBrand(String medication) {
         String med = normalize(medication);

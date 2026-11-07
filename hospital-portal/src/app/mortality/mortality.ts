@@ -27,13 +27,16 @@ import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { refusalReason } from '../shared/refusal-reason';
 import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 import { DateTimePipe } from '../shared/pipes/date-time.pipe';
+import { isRecordedMale } from '../shared/patient-measures';
 /**
  * The mortality register (Tier 2 item 29) — the first and only caller of every
  * `/mortality` endpoint.
  *
- * <p>Recording a death is irreversible and cascades: it closes admissions,
- * encounters, future appointments and recalls. So the form confirms first, and
- * the result reports exactly what was closed rather than doing it silently.
+ * <p>Recording a death cascades: it closes admissions, encounters, future
+ * appointments and recalls, and refuses new care. So the form confirms first, and
+ * the result reports exactly what was closed rather than doing it silently. The one
+ * way back (QA D1488) is an administrator's "entered in error", which leaves what
+ * was closed closed.
  */
 @Component({
   selector: 'app-mortality',
@@ -78,6 +81,9 @@ export class MortalityComponent implements OnInit {
     'ROLE_SUPER_ADMIN',
   ]);
 
+  /** QA D1488: who may mark a record entered in error; the server holds them to their own hospital. */
+  readonly canCorrect = this.roleContext.hasAnyActiveRole(['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN']);
+
   readonly placesOfDeath: PlaceOfDeath[] = ['FACILITY', 'HOME', 'IN_TRANSIT', 'OTHER', 'UNKNOWN'];
   readonly mannersOfDeath: MannerOfDeath[] = [
     'NATURAL',
@@ -105,6 +111,11 @@ export class MortalityComponent implements OnInit {
   showAmendModal = signal(false);
   amending = signal(false);
   amendForm = { amendmentReason: '', immediateCause: '', underlyingCause: '', notes: '' };
+
+  /* ── Entered in error (QA D1488) ── */
+  errorRecord = signal<DeathRecordResponse | null>(null);
+  errorSubmitting = signal(false);
+  errorReason = '';
 
   ngOnInit(): void {
     const today = new Date();
@@ -143,11 +154,20 @@ export class MortalityComponent implements OnInit {
   onPatientPicked(patient: PatientResponse | null): void {
     this.selectedPatient.set(patient);
     this.form.patientId = patient?.id ?? '';
+    // QA D1490: the maternal fields are hidden for a patient recorded male, so nothing stays ticked behind them.
+    if (this.maternalHidden()) {
+      this.form.maternalDeath = false;
+    }
+  }
+
+  /** QA D1490: a maternal death is not offered for a patient recorded male; unknown sex keeps it. */
+  maternalHidden(): boolean {
+    return isRecordedMale(this.selectedPatient()?.gender);
   }
 
   async submitRecord(): Promise<void> {
     if (!this.form.patientId || !this.form.diedAt || !this.form.immediateCause.trim()) return;
-    // Irreversible and cascading — there is no un-death path, so ask first.
+    // Cascading, and only an administrator can correct it, so ask first.
     if (
       !(await this.confirmService.ask({
         titleKey: 'MORTALITY.RECORD_CONFIRM',
@@ -241,6 +261,44 @@ export class MortalityComponent implements OnInit {
           this.amending.set(false);
         },
       });
+  }
+
+  openEnteredInError(record: DeathRecordResponse): void {
+    this.errorReason = '';
+    this.errorRecord.set(record);
+  }
+
+  closeEnteredInError(): void {
+    this.errorRecord.set(null);
+  }
+
+  async submitEnteredInError(): Promise<void> {
+    const record = this.errorRecord();
+    const reason = this.errorReason.trim();
+    if (!record || !reason) return;
+    if (
+      !(await this.confirmService.ask({
+        titleKey: 'MORTALITY.ENTERED_IN_ERROR_CONFIRM',
+        confirmKey: 'MORTALITY.MARK_ENTERED_IN_ERROR',
+      }))
+    )
+      return;
+    this.errorSubmitting.set(true);
+    this.mortality.markEnteredInError(record.id, reason).subscribe({
+      next: () => {
+        this.toast.success(this.translate.instant('MORTALITY.ENTERED_IN_ERROR_DONE'));
+        this.errorSubmitting.set(false);
+        this.errorRecord.set(null);
+        this.selected.set(null);
+        this.loadRegister();
+      },
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('MORTALITY.ENTERED_IN_ERROR_FAILED'),
+        );
+        this.errorSubmitting.set(false);
+      },
+    });
   }
 
   dismissClosure(): void {

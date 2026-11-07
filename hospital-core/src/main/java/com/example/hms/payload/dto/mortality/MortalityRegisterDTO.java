@@ -27,4 +27,6 @@ public class MortalityRegisterDTO {
     private int perinatalDeaths;
     private int stillbirths;
     private List<DeathRecordResponseDTO> deaths;
+    /** QA D1488: rows marked entered in error: kept and shown, in none of the counts above. */
+    private List<DeathRecordResponseDTO> enteredInError;
 }

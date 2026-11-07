@@ -89,6 +89,7 @@ public class BirthPlanServiceImpl implements BirthPlanService {
             hospital = getHospitalByIdOrThrow(request.getHospitalId());
             patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
         }
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
         ObstetricEligibility.requireObstetricEligible(patient);
 
         // Create birth plan

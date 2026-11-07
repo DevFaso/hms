@@ -68,6 +68,7 @@ public class IntakeOutputServiceImpl implements IntakeOutputService {
             throw new BusinessException("intakeOutput.patientNotRegistered");
         }
 
+        com.example.hms.service.support.DeceasedPatientGuard.refuseCareAfterDeath(patient, observationTime, "observationTime");
         IntakeOutputEntry entry = IntakeOutputEntry.builder()
             .patient(patient)
             .hospital(hospital)

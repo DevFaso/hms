@@ -407,6 +407,22 @@ class TransfusionServiceImplTest {
     }
 
     @Test
+    void anIncompatibleVerdictWithNoReasonIsRefusedOnTheReason_D1507() {
+        TransfusionRequest req = request(group(AboGroup.O, RhFactor.POSITIVE, AntibodyScreenResult.NEGATIVE),
+            TransfusionUrgency.ROUTINE);
+        BloodUnit donor = unit(AboGroup.A, RhFactor.POSITIVE, BloodProductType.PACKED_RED_CELLS,
+            BloodUnitStatus.AVAILABLE);
+        UUID requestId = req.getId();
+        CrossmatchRequestDTO blank = CrossmatchRequestDTO.builder()
+            .bloodUnitId(donor.getId()).compatible(Boolean.FALSE).incompatibilityReason("  ").build();
+
+        assertThatThrownBy(() -> service.recordCrossmatch(requestId, blank))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                e -> assertThat(e.getField()).isEqualTo("incompatibilityReason"));
+        verify(crossmatchRepository, never()).save(any());
+    }
+
+    @Test
     void anIncompatibleVerdictIsRecordedAndDoesNotReserveTheUnit() {
         TransfusionRequest req = request(group(AboGroup.O, RhFactor.POSITIVE, AntibodyScreenResult.NEGATIVE),
             TransfusionUrgency.ROUTINE);

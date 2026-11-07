@@ -1,6 +1,7 @@
 package com.example.hms.service;
 
 import com.example.hms.payload.dto.mortality.DeathRecordAmendmentDTO;
+import com.example.hms.payload.dto.mortality.DeathRecordEnteredInErrorDTO;
 import com.example.hms.payload.dto.mortality.DeathRecordRequestDTO;
 import com.example.hms.payload.dto.mortality.DeathRecordResponseDTO;
 import com.example.hms.payload.dto.mortality.MortalityRegisterDTO;
@@ -29,9 +30,8 @@ public interface MortalityService {
      * and close what is still open — admissions, encounters, future
      * appointments and pending recalls.
      *
-     * <p>Refuses a second death record for the same patient. There is
-     * deliberately no un-death path: reversing a death is a data-correction
-     * exercise, not something a form should be able to trigger.
+     * <p>Refuses a second death record for the same patient. A death recorded on
+     * the wrong patient is corrected by {@link #markEnteredInError}, nothing else.
      */
     RecordDeathResponseDTO recordDeath(DeathRecordRequestDTO request);
 
@@ -41,6 +41,13 @@ public interface MortalityService {
      * is amendable, the fact is not.
      */
     DeathRecordResponseDTO amendDeathRecord(UUID recordId, DeathRecordAmendmentDTO request);
+
+    /**
+     * QA D1488: a death recorded on the wrong patient. The row is kept and marked with who, when and why, it
+     * leaves the register and the indicators, the patient's {@code deceasedAt} is cleared and care reopens. It
+     * does not reopen what the death closed. A hospital administrator of that hospital or a super admin.
+     */
+    DeathRecordResponseDTO markEnteredInError(UUID recordId, DeathRecordEnteredInErrorDTO request);
 
     DeathRecordResponseDTO getForPatient(UUID patientId);
 

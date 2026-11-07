@@ -60,6 +60,29 @@ class OrderedDrugIdentityTest {
 
     private static final MedicationCatalogItem PARACETAMOL = item("Paracétamol", "Paracétamol", "Doliprane");
 
+    /** QA D1492: the pharmacy reads a cited brand as its generic; a lot leaves the shelf only for the same drug. */
+    @ParameterizedTest(name = "\"{0}\" from a {1} lot: {2}")
+    @CsvSource({
+        "Efferalgan, Paracétamol, true",
+        "Tylenol 500 mg, Paracétamol, true",
+        "Clamoxyl 500 mg, Amoxicilline, true",
+        "Efferalgan codéine, Paracétamol, false",
+        "Efferalgan, Paracétamol + codéine, false",
+        "Augmentin, Amoxicilline, false",
+        "Clamoxyl, Amoxicilline + Acide clavulanique, false",
+        "Augmentin, Amoxicilline + Acide clavulanique, true",
+        "Bactrim, Sulfaméthoxazole, false",
+        "Bactrim, Co-trimoxazole, true",
+        "Dafalgan, Paracétamol, false",
+        "Panadol, Paracétamol, false",
+        "Efferalgan, Ibuprofène, false",
+    })
+    void aCitedBrandIsThisDrugOnlyForItsOwnGeneric(String typed, String generic, boolean expected) {
+        org.assertj.core.api.Assertions.assertThat(
+                OrderedDrugIdentity.citedBrandIsThisDrug(typed, item(generic, generic, null)))
+            .isEqualTo(expected);
+    }
+
     @ParameterizedTest(name = "\"{0}\" names {1}")
     @CsvSource({
         // The portal's label: French name, strength, form.

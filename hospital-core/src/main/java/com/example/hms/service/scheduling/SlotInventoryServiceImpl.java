@@ -340,6 +340,7 @@ public class SlotInventoryServiceImpl implements SlotInventoryService {
         if (!patient.isRegisteredInHospital(hospitalId)) {
             throw new BusinessException("slot.patient.notRegistered");
         }
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
 
         Staff staff = slot.getStaff();
         if (staff.getUser() == null) {

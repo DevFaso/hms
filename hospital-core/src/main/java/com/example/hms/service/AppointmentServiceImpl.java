@@ -525,6 +525,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         if (isStaffOrAdmin) {
             patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
         }
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
         patientRegistrationGuard.refuseDeactivatedRegistration(patient.getId(), hospital.getId());
 
         // --- Staff resolution ---
@@ -930,6 +931,7 @@ public class AppointmentServiceImpl implements AppointmentService {
             // above, which names the worse fault first). Giving a visit under way to another
             // clinician keeps its time, and stays possible.
             requireNotAlreadyPast(requestedStart, hospital);
+            com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
             // QA D1476: nor moved on for a registration the desk deactivated; keeping its time,
             // it can still take a note, another clinician or a cancellation.
             patientRegistrationGuard.refuseDeactivatedRegistration(patient.getId(), hospital.getId());

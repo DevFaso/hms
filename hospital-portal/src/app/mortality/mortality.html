@@ -178,6 +178,16 @@
                         <span class="material-symbols-outlined">edit_note</span>
                       </button>
                     }
+                    @if (canCorrect) {
+                      <button
+                        class="action-link"
+                        (click)="openEnteredInError(d)"
+                        [title]="'MORTALITY.MARK_ENTERED_IN_ERROR' | translate"
+                        [attr.aria-label]="'MORTALITY.MARK_ENTERED_IN_ERROR' | translate"
+                      >
+                        <span class="material-symbols-outlined">report_off</span>
+                      </button>
+                    }
                   </div>
                 </td>
               </tr>
@@ -186,6 +196,38 @@
         </table>
       </div>
     }
+  }
+
+  <!-- QA D1488: kept, with who, when and why, and in none of the counts above. -->
+  @if (!loading() && register()?.enteredInError?.length) {
+    <h2 class="error-list-title">{{ 'MORTALITY.ENTERED_IN_ERROR_LIST' | translate }}</h2>
+    <div class="data-table">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">{{ 'PATIENTS.PATIENT_NAME' | translate }}</th>
+            <th scope="col">{{ 'MORTALITY.DIED_AT' | translate }}</th>
+            <th scope="col">{{ 'MORTALITY.ENTERED_IN_ERROR_ON' | translate }}</th>
+            <th scope="col">{{ 'MORTALITY.ENTERED_IN_ERROR_BY' | translate }}</th>
+            <th scope="col">{{ 'MORTALITY.ENTERED_IN_ERROR_REASON' | translate }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (e of register()?.enteredInError; track e.id) {
+            <tr class="data-row">
+              <td>
+                <div class="cell-primary">{{ e.patientName }}</div>
+                <div class="cell-secondary">{{ e.patientMrn || '—' }}</div>
+              </td>
+              <td>{{ e.diedAt | serverTime | date: 'short' }}</td>
+              <td>{{ e.enteredInErrorAt | serverTime | date: 'short' }}</td>
+              <td>{{ e.enteredInErrorByName || '—' }}</td>
+              <td>{{ e.enteredInErrorReason }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
   }
 
   <!-- ══ Detail ══ -->
@@ -359,20 +401,24 @@
             <textarea id="d-contributing" rows="2" [(ngModel)]="form.contributingCauses"></textarea>
           </div>
 
-          <label class="checkbox-field">
-            <input type="checkbox" [(ngModel)]="form.maternalDeath" />
-            {{ 'MORTALITY.IS_MATERNAL' | translate }}
-          </label>
-          @if (form.maternalDeath) {
-            <div class="field">
-              <label for="d-maternal-timing">{{ 'MORTALITY.MATERNAL_TIMING' | translate }} *</label>
-              <select required id="d-maternal-timing" [(ngModel)]="form.maternalDeathTiming">
-                @for (t of maternalTimings; track t) {
-                  <option [value]="t">{{ 'MORTALITY.TIMING_' + t | translate }}</option>
-                }
-              </select>
-              <small class="field-hint">{{ 'MORTALITY.MATERNAL_TIMING_HINT' | translate }}</small>
-            </div>
+          @if (!maternalHidden()) {
+            <label class="checkbox-field">
+              <input type="checkbox" [(ngModel)]="form.maternalDeath" />
+              {{ 'MORTALITY.IS_MATERNAL' | translate }}
+            </label>
+            @if (form.maternalDeath) {
+              <div class="field">
+                <label for="d-maternal-timing"
+                  >{{ 'MORTALITY.MATERNAL_TIMING' | translate }} *</label
+                >
+                <select required id="d-maternal-timing" [(ngModel)]="form.maternalDeathTiming">
+                  @for (t of maternalTimings; track t) {
+                    <option [value]="t">{{ 'MORTALITY.TIMING_' + t | translate }}</option>
+                  }
+                </select>
+                <small class="field-hint">{{ 'MORTALITY.MATERNAL_TIMING_HINT' | translate }}</small>
+              </div>
+            }
           }
 
           <label class="checkbox-field">
@@ -414,6 +460,57 @@
             [submitGuardFields]="['mort-patientSearch', 'd-when', 'd-immediate']"
           >
             {{ 'MORTALITY.RECORD_DEATH' | translate }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ══ Entered in error (QA D1488) ══ -->
+  @if (errorRecord(); as rec) {
+    <div
+      class="modal-backdrop"
+      tabindex="-1"
+      appBackdropClose
+      (backdropClose)="closeEnteredInError()"
+      (keydown.escape)="closeEnteredInError()"
+    >
+      <div
+        class="modal"
+        appModalDialog
+        aria-labelledby="mortality-dialog-3-title"
+        (escaped)="closeEnteredInError()"
+      >
+        <div class="modal-header">
+          <h2 id="mortality-dialog-3-title">
+            {{ 'MORTALITY.MARK_ENTERED_IN_ERROR' | translate }}
+          </h2>
+          <button class="modal-close" (click)="closeEnteredInError()">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-hint warn">{{ 'MORTALITY.ENTERED_IN_ERROR_HINT' | translate }}</p>
+          <p>
+            <strong>{{ rec.patientName }}</strong> {{ rec.patientMrn || '' }} —
+            {{ rec.diedAt | serverTime | dateTime }}
+          </p>
+          <div class="field">
+            <label for="e-reason">{{ 'MORTALITY.ENTERED_IN_ERROR_REASON' | translate }} *</label>
+            <input required id="e-reason" type="text" maxlength="500" [(ngModel)]="errorReason" />
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn-secondary" (click)="closeEnteredInError()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+          <button
+            submitGuardRequired
+            class="btn-danger"
+            (click)="submitEnteredInError()"
+            [disabled]="errorSubmitting()"
+            [appSubmitGuard]="!errorReason.trim()"
+            [submitGuardFields]="['e-reason']"
+          >
+            {{ 'MORTALITY.MARK_ENTERED_IN_ERROR' | translate }}
           </button>
         </div>
       </div>

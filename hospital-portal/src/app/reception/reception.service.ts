@@ -28,6 +28,9 @@ export type QueueStatus =
   | string;
 
 export interface ReceptionQueueItem {
+  /** QA D1489: a check-in on either is refused, so the row does not offer one. */
+  patientDeceased?: boolean;
+  registrationInactive?: boolean;
   appointmentId: string | null;
   patientId: string;
   patientName: string;

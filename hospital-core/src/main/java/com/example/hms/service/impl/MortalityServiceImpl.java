@@ -20,6 +20,7 @@ import com.example.hms.model.Staff;
 import com.example.hms.model.scheduling.PatientRecall;
 import com.example.hms.payload.dto.mortality.DeathClosureSummaryDTO;
 import com.example.hms.payload.dto.mortality.DeathRecordAmendmentDTO;
+import com.example.hms.payload.dto.mortality.DeathRecordEnteredInErrorDTO;
 import com.example.hms.payload.dto.mortality.DeathRecordRequestDTO;
 import com.example.hms.payload.dto.mortality.DeathRecordResponseDTO;
 import com.example.hms.payload.dto.mortality.MortalityRegisterDTO;
@@ -96,7 +97,16 @@ public class MortalityServiceImpl implements MortalityService {
 
     private static final String CLOSURE_REASON = "Patient deceased";
 
+    /** QA D1488: the entered-in-error reason's column size. */
+    private static final int MAX_ERROR_REASON_LENGTH = 500;
+
     private com.example.hms.service.AdmissionStayEncounterService stayEncounters;
+    private com.example.hms.service.AuditEventLogService auditEventLogService;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setAuditEventLogService(com.example.hms.service.AuditEventLogService auditEventLogService) {
+        this.auditEventLogService = auditEventLogService;
+    }
 
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     void setStayEncounters(com.example.hms.service.AdmissionStayEncounterService stayEncounters) {
@@ -131,6 +141,16 @@ public class MortalityServiceImpl implements MortalityService {
             throw new com.example.hms.exception.FieldBusinessException("diedAt", "mortality.timeInFuture");
         }
         validateMortalityFlags(request);
+        // QA D1490: a wrong date, and a classification this patient cannot have. With the classification
+        // left off, the death still saves.
+        com.example.hms.service.support.DeathClassificationRules.requireDiedAfterBirth(patient, request.getDiedAt());
+        if (Boolean.TRUE.equals(request.getMaternalDeath())) {
+            com.example.hms.service.support.DeathClassificationRules.requireMaternalPossible(patient);
+        }
+        if (Boolean.TRUE.equals(request.getPerinatalDeath())) {
+            com.example.hms.service.support.DeathClassificationRules.requirePerinatalPossible(
+                patient, request.getPerinatalType(), request.getDiedAt());
+        }
 
         DeathRecord deathRecord = DeathRecord.builder()
             .patient(patient)
@@ -179,6 +199,18 @@ public class MortalityServiceImpl implements MortalityService {
             throw new com.example.hms.exception.FieldBusinessException("amendmentReason", "mortality.amendmentReasonRequired");
         }
         DeathRecord deathRecord = loadScoped(recordId);
+        if (deathRecord.isEnteredInError()) {
+            throw new BusinessException("mortality.enteredInError.closed");
+        }
+        // QA D1490: an amendment reaches the same two classifications. Only what this amendment sets is judged:
+        // an autopsy's new cause is never refused over an older row's flags.
+        if (Boolean.TRUE.equals(request.getMaternalDeath())) {
+            com.example.hms.service.support.DeathClassificationRules.requireMaternalPossible(deathRecord.getPatient());
+        }
+        if (Boolean.TRUE.equals(request.getPerinatalDeath())) {
+            com.example.hms.service.support.DeathClassificationRules.requirePerinatalPossible(
+                deathRecord.getPatient(), request.getPerinatalType(), deathRecord.getDiedAt());
+        }
 
         if (request.getImmediateCause() != null) {
             deathRecord.setImmediateCause(request.getImmediateCause());
@@ -224,6 +256,65 @@ public class MortalityServiceImpl implements MortalityService {
         deathRecord.setAmendmentReason(request.getAmendmentReason());
 
         return mapper.toDto(deathRecordRepository.save(deathRecord));
+    }
+
+    @Override
+    public DeathRecordResponseDTO markEnteredInError(UUID recordId, DeathRecordEnteredInErrorDTO request) {
+        String reason = request == null || request.getReason() == null ? "" : request.getReason().trim();
+        if (reason.isEmpty()) {
+            throw new com.example.hms.exception.FieldBusinessException("reason", "mortality.enteredInError.reasonRequired");
+        }
+        if (reason.length() > MAX_ERROR_REASON_LENGTH) {
+            throw new com.example.hms.exception.FieldBusinessException("reason", "mortality.enteredInError.reasonTooLong",
+                MAX_ERROR_REASON_LENGTH);
+        }
+        DeathRecord deathRecord = loadScoped(recordId);
+        if (deathRecord.isEnteredInError()) {
+            throw new BusinessException("mortality.enteredInError.closed");
+        }
+        UUID actorId = roleValidator.getCurrentUserId();
+        String actorName = currentUsername();
+        deathRecord.setEnteredInErrorAt(LocalDateTime.now(clock));
+        deathRecord.setEnteredInErrorById(actorId);
+        deathRecord.setEnteredInErrorByName(actorName);
+        deathRecord.setEnteredInErrorReason(reason);
+        DeathRecord saved = deathRecordRepository.save(deathRecord);
+
+        Patient patient = deathRecord.getPatient();
+        patient.setDeceasedAt(null);
+        patientRepository.save(patient);
+
+        auditEnteredInError(saved, patient.getId(), actorId, actorName, reason);
+        return mapper.toDto(saved);
+    }
+
+    /** Ids only: the audit service writes in its own transaction, with no persistence context of this one. */
+    private void auditEnteredInError(DeathRecord record, UUID patientId, UUID actorId, String actorName, String reason) {
+        if (auditEventLogService == null) {
+            return;
+        }
+        try {
+            auditEventLogService.logEvent(com.example.hms.payload.dto.AuditEventRequestDTO.builder()
+                .eventType(com.example.hms.enums.AuditEventType.PATIENT_UPDATE)
+                .status(com.example.hms.enums.AuditStatus.SUCCESS)
+                .entityType("DEATH_RECORD")
+                .resourceId(record.getId().toString())
+                .patientId(patientId)
+                .hospitalId(record.getHospital() != null ? record.getHospital().getId() : null)
+                .userId(actorId)
+                .userName(actorName)
+                .eventDescription("Death record " + record.getId() + " marked entered in error; the patient is no "
+                    + "longer recorded as deceased. Stays, visits and appointments the death closed were not "
+                    + "reopened. Reason: " + reason)
+                .build());
+        } catch (RuntimeException ex) {
+            log.warn("Failed to audit death record {} entered in error: {}", record.getId(), ex.getMessage());
+        }
+    }
+
+    private static String currentUsername() {
+        var authentication = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        return authentication != null ? authentication.getName() : null;
     }
 
     @Override
@@ -274,6 +365,8 @@ public class MortalityServiceImpl implements MortalityService {
             .perinatalDeaths(perinatal)
             .stillbirths(stillbirths)
             .deaths(all.stream().map(mapper::toDto).toList())
+            .enteredInError(deathRecordRepository.findEnteredInError(hospitalId, start, end).stream()
+                .map(mapper::toDto).toList())
             .build();
     }
 

@@ -84,6 +84,7 @@ public class AdvanceDirectiveServiceImpl implements AdvanceDirectiveService {
             throw new ResourceNotFoundException("patient.notFound", patientId);
         }
 
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
         AdvanceDirective directive = new AdvanceDirective();
         directive.setPatient(patient);
         directive.setHospital(hospital);

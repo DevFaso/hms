@@ -1880,6 +1880,38 @@ class ReceptionServiceImplTest {
         }
 
         @Test
+        @DisplayName("QA D1489: a deactivated registration is refused on the patient, consent ticked or not, and nothing is written")
+        void aDeactivatedRegistrationIsRefused_D1489() {
+            Appointment appointment = scheduledAppointment();
+            when(appointmentRepo.lockById(appointment.getId())).thenReturn(Optional.of(appointment));
+            when(registrationRepo.existsByPatientIdAndHospitalIdAndActiveFalse(patient.getId(), hospitalId)).thenReturn(true);
+
+            for (Boolean consent : new Boolean[] {Boolean.TRUE, Boolean.FALSE, null}) {
+                CheckInRequestDTO request = CheckInRequestDTO.builder().appointmentId(appointment.getId())
+                        .identityConfirmed(true).consentObtained(consent).build();
+                assertThatThrownBy(() -> service.checkInPatient(request, hospitalId, "receptionist1"))
+                        .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                                e -> org.assertj.core.api.Assertions.assertThat(e.getField()).isEqualTo("patientId"));
+            }
+            org.mockito.Mockito.verifyNoInteractions(treatmentConsentService);
+            verify(encounterRepo, org.mockito.Mockito.never()).save(any());
+        }
+
+        @Test
+        @DisplayName("QA D1488: a recorded death refuses the check-in")
+        void aDeadPatientIsRefused_D1488() {
+            Appointment appointment = scheduledAppointment();
+            when(appointmentRepo.lockById(appointment.getId())).thenReturn(Optional.of(appointment));
+            patient.setDeceasedAt(java.time.LocalDateTime.now().minusHours(1));
+            CheckInRequestDTO request = CheckInRequestDTO.builder().appointmentId(appointment.getId())
+                    .identityConfirmed(true).build();
+
+            assertThatThrownBy(() -> service.checkInPatient(request, hospitalId, "receptionist1"))
+                    .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
+            verify(encounterRepo, org.mockito.Mockito.never()).save(any());
+        }
+
+        @Test
         @DisplayName("QA D149: the copay entered at check-in is recorded on the encounter, not dropped")
         void copayIsRecordedOnTheEncounter_D149() {
             Appointment appointment = scheduledAppointment();

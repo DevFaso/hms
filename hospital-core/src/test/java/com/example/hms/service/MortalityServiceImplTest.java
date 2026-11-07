@@ -146,6 +146,154 @@ class MortalityServiceImplTest {
 
     // ── Recording ───────────────────────────────────────────────────────
 
+    // ── QA D1490: the classification, never the death ────────────────
+
+    @Test
+    void aDeathOutsideThePerinatalPeriodSavesWithoutTheClassification() {
+        patient.setDateOfBirth(java.time.LocalDate.of(1940, 1, 1));
+
+        service.recordDeath(base().build());
+
+        assertThat(patient.isDeceased()).isTrue();
+        verify(deathRecordRepository).save(any());
+    }
+
+    @Test
+    void theSameDeathIsRefusedOnlyWithTheClassification() {
+        patient.setDateOfBirth(java.time.LocalDate.of(1940, 1, 1));
+        DeathRecordRequestDTO classified = base().perinatalDeath(true)
+            .perinatalType(com.example.hms.enums.PerinatalDeathType.STILLBIRTH).build();
+
+        assertThatThrownBy(() -> service.recordDeath(classified))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                e -> assertThat(e.getField()).isEqualTo("perinatalType"));
+        assertThat(patient.isDeceased()).isFalse();
+
+        service.recordDeath(base().build());
+        assertThat(patient.isDeceased()).isTrue();
+    }
+
+    @Test
+    void aMalePatientSavesWithoutTheMaternalClassificationAndIsRefusedWithIt() {
+        patient.setGender("M");
+        DeathRecordRequestDTO classified = base().maternalDeath(true)
+            .maternalDeathTiming(com.example.hms.enums.MaternalDeathTiming.DURING_PREGNANCY).build();
+
+        assertThatThrownBy(() -> service.recordDeath(classified))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                e -> assertThat(e.getField()).isEqualTo("maternalDeath"));
+
+        service.recordDeath(base().build());
+        assertThat(patient.isDeceased()).isTrue();
+    }
+
+    @Test
+    void aDeathBeforeTheBirthIsRefusedOnTheDate() {
+        patient.setDateOfBirth(java.time.LocalDate.now().minusDays(1));
+        DeathRecordRequestDTO before = base().diedAt(LocalDateTime.now().minusDays(5)).build();
+
+        assertThatThrownBy(() -> service.recordDeath(before))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                e -> assertThat(e.getField()).isEqualTo("diedAt"));
+    }
+
+    @Test
+    void anAmendmentCannotClassifyWhatTheRecordCannotBe() {
+        patient.setGender("male");
+        DeathRecord existing = DeathRecord.builder().patient(patient).hospital(hospital)
+            .diedAt(LocalDateTime.now().minusDays(1)).immediateCause("x").build();
+        existing.setId(UUID.randomUUID());
+        when(deathRecordRepository.findById(existing.getId())).thenReturn(Optional.of(existing));
+        UUID id = existing.getId();
+        DeathRecordAmendmentDTO amendment = DeathRecordAmendmentDTO.builder().amendmentReason("Autopsy")
+            .maternalDeath(true).maternalDeathTiming(com.example.hms.enums.MaternalDeathTiming.DURING_PREGNANCY).build();
+
+        assertThatThrownBy(() -> service.amendDeathRecord(id, amendment))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
+    }
+
+    // ── QA D1488: entered in error ────────────────────────────────
+
+    private DeathRecord recordedDeath() {
+        patient.setDeceasedAt(LocalDateTime.now().minusDays(1));
+        DeathRecord existing = DeathRecord.builder().patient(patient).hospital(hospital)
+            .diedAt(patient.getDeceasedAt()).immediateCause("x").build();
+        existing.setId(UUID.randomUUID());
+        when(deathRecordRepository.findById(existing.getId())).thenReturn(Optional.of(existing));
+        return existing;
+    }
+
+    @Test
+    void enteredInErrorKeepsTheRowMarkedAndReopensCare() {
+        DeathRecord existing = recordedDeath();
+        when(roleValidator.getCurrentUserId()).thenReturn(callerUserId);
+
+        var result = service.markEnteredInError(existing.getId(),
+            com.example.hms.payload.dto.mortality.DeathRecordEnteredInErrorDTO.builder().reason(" Wrong patient ").build());
+
+        assertThat(patient.isDeceased()).isFalse();
+        verify(patientRepository).save(patient);
+        assertThat(existing.isEnteredInError()).isTrue();
+        assertThat(existing.getEnteredInErrorById()).isEqualTo(callerUserId);
+        assertThat(existing.getEnteredInErrorReason()).isEqualTo("Wrong patient");
+        assertThat(result.isEnteredInError()).isTrue();
+        assertThat(result.getEnteredInErrorReason()).isEqualTo("Wrong patient");
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
+    }
+
+    @Test
+    void enteredInErrorIsAudited() {
+        DeathRecord existing = recordedDeath();
+        var audit = org.mockito.Mockito.mock(com.example.hms.service.AuditEventLogService.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "auditEventLogService", audit);
+
+        service.markEnteredInError(existing.getId(),
+            com.example.hms.payload.dto.mortality.DeathRecordEnteredInErrorDTO.builder().reason("Wrong patient").build());
+
+        var captor = org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+        verify(audit).logEvent(captor.capture());
+        assertThat(captor.getValue().getEntityType()).isEqualTo("DEATH_RECORD");
+        assertThat(captor.getValue().getPatientId()).isEqualTo(patientId);
+        assertThat(captor.getValue().getHospitalId()).isEqualTo(hospitalId);
+        assertThat(captor.getValue().getEventDescription()).contains("entered in error").contains("Wrong patient");
+    }
+
+    @Test
+    void enteredInErrorNeedsAReason() {
+        DeathRecord existing = recordedDeath();
+        UUID id = existing.getId();
+        var blank = com.example.hms.payload.dto.mortality.DeathRecordEnteredInErrorDTO.builder().reason("  ").build();
+
+        assertThatThrownBy(() -> service.markEnteredInError(id, blank))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                e -> assertThat(e.getField()).isEqualTo("reason"));
+        assertThat(patient.isDeceased()).isTrue();
+    }
+
+    @Test
+    void enteredInErrorAtAnotherHospitalAnswersAsMissing() {
+        DeathRecord existing = recordedDeath();
+        UUID id = existing.getId();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
+        var body = com.example.hms.payload.dto.mortality.DeathRecordEnteredInErrorDTO.builder().reason("Wrong").build();
+
+        assertThatThrownBy(() -> service.markEnteredInError(id, body))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        assertThat(patient.isDeceased()).isTrue();
+    }
+
+    @Test
+    void aRowEnteredInErrorIsNotMarkedTwiceNorAmended() {
+        DeathRecord existing = recordedDeath();
+        UUID id = existing.getId();
+        var body = com.example.hms.payload.dto.mortality.DeathRecordEnteredInErrorDTO.builder().reason("Wrong").build();
+        service.markEnteredInError(id, body);
+
+        assertThatThrownBy(() -> service.markEnteredInError(id, body)).isInstanceOf(BusinessException.class);
+        DeathRecordAmendmentDTO amendment = DeathRecordAmendmentDTO.builder().amendmentReason("Autopsy").build();
+        assertThatThrownBy(() -> service.amendDeathRecord(id, amendment)).isInstanceOf(BusinessException.class);
+    }
+
     @Test
     void recordingADeathMarksThePatientDeceased() {
         RecordDeathResponseDTO result = service.recordDeath(base().build());

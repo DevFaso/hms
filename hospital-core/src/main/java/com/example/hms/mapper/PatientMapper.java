@@ -199,6 +199,8 @@ public class PatientMapper {
             .careTeamNotes(patient.getCareTeamNotes())
             .chronicConditions(parseChronicConditions(patient.getChronicConditions()))
             .active(patient.isActive())
+            .deceased(patient.isDeceased())
+            .deceasedAt(patient.getDeceasedAt())
             .chartRestricted(patient.isChartRestricted())
             .chartRestrictionReason(patient.getChartRestrictionReason())
             .chartRestrictedAt(patient.getChartRestrictedAt())

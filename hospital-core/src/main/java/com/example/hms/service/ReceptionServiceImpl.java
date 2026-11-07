@@ -452,6 +452,10 @@ public class ReceptionServiceImpl implements ReceptionService {
                 .hasInsuranceIssue(ReceptionQueueFilters.expectedAtTheDesk(row.status())
                         && detectInsuranceIssue(pid, hospitalId))
                 .hasOutstandingBalance(detectOutstandingBalance(pid, hospitalId))
+                // QA D1489: the row does not offer a check-in that can only be refused.
+                .patientDeceased(p.isDeceased())
+                .registrationInactive(ReceptionQueueFilters.expectedAtTheDesk(row.status())
+                        && registrationRepo.existsByPatientIdAndHospitalIdAndActiveFalse(pid, hospitalId))
                 .build();
     }
 
@@ -788,6 +792,7 @@ public class ReceptionServiceImpl implements ReceptionService {
         if (!registrationRepo.existsByPatientIdAndHospitalId(req.getPatientId(), hospitalId)) {
             throw new ResourceNotFoundException("patient.notfound", req.getPatientId());
         }
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
         // QA D1476: nor is a deactivated registration put on the waitlist.
         com.example.hms.service.support.PatientRegistrationGuard.refuseDeactivatedRegistration(
                 registrationRepo, req.getPatientId(), hospitalId);
@@ -831,6 +836,7 @@ public class ReceptionServiceImpl implements ReceptionService {
         if (!WAITLIST_STATUS_WAITING.equals(entry.getStatus())) {
             throw new BusinessException("reception.offer.notWaiting");
         }
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(entry.getPatient());
         if (slotId == null) {
             throw new com.example.hms.exception.FieldBusinessException("slotId", "reception.offer.slotRequired");
         }
@@ -874,6 +880,7 @@ public class ReceptionServiceImpl implements ReceptionService {
         if (!WAITLIST_STATUS_OFFERED.equals(entry.getStatus()) || entry.getOfferedSlot() == null) {
             throw new BusinessException("reception.offer.none");
         }
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(entry.getPatient());
         LocalDateTime now = LocalDateTime.now();
         if (entry.getOfferExpiresAt() != null && entry.getOfferExpiresAt().isBefore(now)) {
             throw new BusinessException("reception.offer.expired");
@@ -1139,6 +1146,13 @@ public class ReceptionServiceImpl implements ReceptionService {
         if (appointment.getAppointmentDate() != null && !appointment.getAppointmentDate().equals(now.toLocalDate())) {
             throw new com.example.hms.exception.FieldBusinessException("appointmentId", "reception.checkin.notToday", DisplayDates.date(appointment.getAppointmentDate()));
         }
+
+        // QA D1489: refused here, on the patient, as booking and walk-in are. It used to reach the
+        // consent call below, whose failure inside this transaction answered 500, and without consent
+        // it opened a visit on a registration the desk had deactivated.
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(appointment.getPatient());
+        com.example.hms.service.support.PatientRegistrationGuard.refuseDeactivatedRegistration(
+                registrationRepo, appointment.getPatient().getId(), appointment.getHospital().getId());
 
         // 2. Transition appointment to CHECKED_IN
         appointment.setStatus(AppointmentStatus.CHECKED_IN);

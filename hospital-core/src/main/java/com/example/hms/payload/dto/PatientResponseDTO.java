@@ -112,6 +112,9 @@ public class PatientResponseDTO {
     private LocalDate registrationDate   = LocalDate.of(1970, 1, 1);
 
     private boolean active;
+    /** QA D1488: set when a death is on record. {@code active} is the administrative flag, not this. */
+    private boolean deceased;
+    private LocalDateTime deceasedAt;
     /** E8 #54 — every read of this chart needs a live break-the-glass session. */
     private boolean chartRestricted;
     private String chartRestrictionReason;

@@ -88,6 +88,7 @@ public class ProgramEnrollmentService {
         UUID hospitalId = requireHospital();
         Patient patient = requirePatientInTenant(patientId, hospitalId);
 
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
         enrollmentRepository.findByPatientIdAndHospitalIdAndProgramAndStatus(
                 patientId, hospitalId, request.getProgram(), ProgramEnrollmentStatus.ACTIVE)
             .ifPresent(existing -> {
@@ -181,6 +182,7 @@ public class ProgramEnrollmentService {
         UUID hospitalId = requireHospital();
         ProgramEnrollment enrollment = requireEnrollmentInTenant(enrollmentId, patientId, hospitalId);
 
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(enrollment.getPatient());
         if (enrollment.getStatus() != ProgramEnrollmentStatus.ACTIVE) {
             throw new BusinessException("program.enrollment.visitNotActive");
         }

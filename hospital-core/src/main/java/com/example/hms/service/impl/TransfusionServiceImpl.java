@@ -369,6 +369,7 @@ public class TransfusionServiceImpl implements TransfusionService {
         UUID hospitalId = requireHospital();
         Patient patient = patientChartAccess.require(request.getPatientId(), hospitalId);
 
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
         TransfusionUrgency urgency = request.getUrgency() != null
             ? request.getUrgency() : TransfusionUrgency.ROUTINE;
 
@@ -592,6 +593,11 @@ public class TransfusionServiceImpl implements TransfusionService {
                 + "compatible for group B recipient on request {}. Permitted by the 2026-08-25 "
                 + "sign-off; whether the O-to-B exception is intended is still open.",
                 unit.getUnitNumber(), transfusionRequest.getId());
+        }
+
+        // QA D1507: an incompatible crossmatch records why (the user's rule).
+        if (Boolean.FALSE.equals(request.getCompatible()) && !hasText(request.getIncompatibilityReason())) {
+            throw new FieldBusinessException("incompatibilityReason", "transfusion.crossmatch.reasonRequired");
         }
 
         LocalDateTime now = LocalDateTime.now(clock);
@@ -877,6 +883,7 @@ public class TransfusionServiceImpl implements TransfusionService {
         requestRepository.lockById(requestId);
         unitRepository.lockById(unitId);
         TransfusionRequest request = loadRequestScoped(requestId);
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(request.getPatient());
         BloodUnit unit = issuableUnit(request, unitId);
 
         TransfusionCrossmatch crossmatch = crossmatchRepository
@@ -916,6 +923,7 @@ public class TransfusionServiceImpl implements TransfusionService {
         requestRepository.lockById(requestId);
         unitRepository.lockById(release.getBloodUnitId());
         TransfusionRequest request = loadRequestScoped(requestId);
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(request.getPatient());
         if (!request.isEmergency()) {
             throw new BusinessException("transfusion.emergency.notEmergency");
         }
@@ -1276,6 +1284,7 @@ public class TransfusionServiceImpl implements TransfusionService {
         if (transfusionRequest.isTerminal()) {
             throw new FieldBusinessException("requestId", "transfusion.request.closed");
         }
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(transfusionRequest.getPatient());
         UUID hospitalId = transfusionRequest.getHospital().getId();
         BloodUnit unit = loadUnitScoped(request.getBloodUnitId());
         requireSameHospital(unit, transfusionRequest);

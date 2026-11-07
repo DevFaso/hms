@@ -161,6 +161,7 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
         // REQUESTED rather than sitting at APPROVED with nothing dispensable
         // behind it — which is exactly the dead-end this endpoint used to be.
         if (newStatus == RefillStatus.APPROVED) {
+            com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(prescription.getPatient());
             releaseRefillToPharmacy(prescription);
         }
 

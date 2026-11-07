@@ -43,4 +43,7 @@ public class ReceptionQueueItemDTO {
     private UUID encounterId;
     private boolean hasInsuranceIssue;
     private boolean hasOutstandingBalance;
+    /** QA D1489: a check-in on either is refused, so the row does not offer one. */
+    private boolean patientDeceased;
+    private boolean registrationInactive;
 }

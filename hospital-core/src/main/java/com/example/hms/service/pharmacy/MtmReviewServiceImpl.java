@@ -89,6 +89,7 @@ public class MtmReviewServiceImpl implements MtmReviewService {
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound", dto.getHospitalId()));
         // QA D401: the patient must be registered at the hospital the row is written in.
         patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
         User pharmacist = resolveCurrentUser();
         // QA D886: a follow-up dated 2020-01-01 was accepted.
         requireFollowUpNotInPast(dto.getFollowUpDate(), null, hospital);

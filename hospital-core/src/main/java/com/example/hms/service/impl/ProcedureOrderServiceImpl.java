@@ -70,6 +70,7 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
         Patient patient = patientRepository.findById(request.getPatientId())
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));
 
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
         Hospital hospital = hospitalRepository.findClinicalById(request.getHospitalId())
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
 
