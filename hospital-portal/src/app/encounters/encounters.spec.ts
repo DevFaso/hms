@@ -328,6 +328,71 @@ describe('EncountersComponent', () => {
     expect(component).toBeTruthy();
   });
 
+  it('filters a status metric without changing the loaded totals or fetching again', () => {
+    component.loadEncounters();
+    encounterSpy.list.calls.reset();
+    component.toggleMetric('COMPLETED');
+    expect(component.filtered().map((e) => e.id)).toEqual(['e2']);
+    expect(component.encounters().length).toBe(3);
+    expect(component.countByStatus('IN_PROGRESS')).toBe(1);
+    expect(encounterSpy.list).not.toHaveBeenCalled();
+    component.toggleMetric('COMPLETED');
+    expect(component.filtered().length).toBe(3);
+    component.setTab('open');
+    expect(component.filtered().length).toBe(2);
+  });
+
+  it('combines type, department and code search and resets pagination when filters change', () => {
+    component.encounters.set(
+      Array.from({ length: 26 }, (_, index) =>
+        mockEncounter({
+          id: `e${index}`,
+          code: `CDX-${index}`,
+          departmentName: index === 25 ? 'Cdx Surgery' : 'Cdx Clinic',
+          encounterType: index === 25 ? 'SURGERY' : 'OUTPATIENT',
+        }),
+      ),
+    );
+    component.applyFilter();
+    expect(component.pageCount()).toBe(3);
+    component.setPage(2);
+    expect(component.pagedEncounters().length).toBe(6);
+    component.typeFilter.set('SURGERY');
+    component.departmentFilter.set('Cdx Surgery');
+    component.searchTerm = 'CDX-25';
+    component.applyFilter();
+    expect(component.currentPage()).toBe(0);
+    expect(component.filtered().map((e) => e.id)).toEqual(['e25']);
+    component.resetFilters();
+    expect(component.filtered().length).toBe(26);
+  });
+
+  it('does not let an older hospital response replace a newer scoped list', () => {
+    const first = new Subject<EncounterResponse[]>();
+    const second = new Subject<EncounterResponse[]>();
+    encounterSpy.list.and.returnValues(first, second);
+    component.loadEncounters();
+    roleCtx.effectiveHospitalIdForRequest = () => 'h2';
+    component.onScopeChange('h2');
+    second.next([mockEncounter({ id: 'new', hospitalId: 'h2' })]);
+    first.next([mockEncounter({ id: 'old', hospitalId: 'h1' })]);
+    expect(component.encounters().map((e) => e.id)).toEqual(['new']);
+    expect(component.loading()).toBeFalse();
+    first.error(new Error('stale error'));
+    expect(component.loadError()).toBeFalse();
+  });
+
+  it('clears previous hospital data when the current scoped reload fails', () => {
+    component.loadEncounters();
+    component.selectedEncounter.set(mockEncounter());
+    encounterSpy.list.and.returnValue(throwError(() => new Error('offline')));
+    component.onScopeChange('h2');
+    expect(component.encounters()).toEqual([]);
+    expect(component.filtered()).toEqual([]);
+    expect(component.selectedEncounter()).toBeNull();
+    expect(component.loadError()).toBeTrue();
+  });
+
   it('loads encounters scoped to the effective hospital on init', () => {
     component.ngOnInit();
     expect(encounterSpy.list).toHaveBeenCalledWith({ hospitalId: 'h1' });
