@@ -428,6 +428,70 @@ class TransfusionEmergencyReleasePostgresIT {
         assertThat(service.getRequest(requestId).getStatus().name()).isEqualTo("CANCELLED");
     }
 
+    @Test
+    @DisplayName("independent review: finishing the last bag waits for a release in flight, so the request stays open and the new bag can hang")
+    void aCompletionWaitsForTheRelease() throws Exception {
+        TransfusionRequestResponseDTO request = emergencyRequest();
+        UUID requestId = request.getId();
+        UUID first = bag(AboGroup.O, RhFactor.NEGATIVE).getId();
+        UUID second = bag(AboGroup.O, RhFactor.NEGATIVE).getId();
+        service.issueUnit(requestId, first);
+        TransfusionAdministrationResponseDTO running = hang(requestId, first);
+        java.util.concurrent.ExecutorService other = java.util.concurrent.Executors.newSingleThreadExecutor();
+        try {
+            java.util.concurrent.atomic.AtomicReference<java.util.concurrent.Future<?>> completion = new java.util.concurrent.atomic.AtomicReference<>();
+            new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+                service.issueUnit(requestId, second);
+                completion.set(other.submit(() -> service.completeAdministration(running.getId(), 300)));
+                assertThatThrownBy(() -> completion.get().get(1, java.util.concurrent.TimeUnit.SECONDS))
+                    .as("waits on the request's lock").isInstanceOf(java.util.concurrent.TimeoutException.class);
+            });
+            completion.get().get(20, java.util.concurrent.TimeUnit.SECONDS);
+        } finally {
+            other.shutdownNow();
+        }
+        assertThat(service.getRequest(requestId).getStatus().name()).isEqualTo("ISSUED");
+        hang(requestId, second);
+    }
+
+    @Test
+    @DisplayName("independent review: a repeat screen waits for a cancel and does not write over it")
+    void aRepeatScreenDoesNotUndoACancel() throws Exception {
+        TransfusionRequestResponseDTO request = emergencyRequest();
+        UUID requestId = request.getId();
+        java.util.concurrent.ExecutorService other = java.util.concurrent.Executors.newSingleThreadExecutor();
+        try {
+            java.util.concurrent.atomic.AtomicReference<java.util.concurrent.Future<?>> screen = new java.util.concurrent.atomic.AtomicReference<>();
+            signedInAsDoctor(() -> new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+                service.cancelRequest(requestId, "Bleeding controlled");
+                screen.set(other.submit(() -> typed(AboGroup.A, RhFactor.POSITIVE, AntibodyScreenResult.NEGATIVE)));
+                assertThatThrownBy(() -> screen.get().get(1, java.util.concurrent.TimeUnit.SECONDS))
+                    .as("waits on the request's lock").isInstanceOf(java.util.concurrent.TimeoutException.class);
+            }));
+            screen.get().get(20, java.util.concurrent.TimeUnit.SECONDS);
+        } finally {
+            other.shutdownNow();
+        }
+        TransfusionRequestResponseDTO detail = service.getRequest(requestId);
+        assertThat(detail.getStatus().name()).isEqualTo("CANCELLED");
+        assertThat(detail.getCancelReason()).isEqualTo("Bleeding controlled");
+    }
+
+    @Test
+    @DisplayName("independent review: a bag that was ever hung is not O negative in stock")
+    void aHungBagIsNotStock() {
+        TransfusionRequestResponseDTO request = emergencyRequest();
+        UUID negative = bag(AboGroup.O, RhFactor.NEGATIVE).getId();
+        service.issueUnit(request.getId(), negative);
+        hang(request.getId(), negative);
+        new TransactionTemplate(transactionManager).executeWithoutResult(status ->
+            entityManager.createNativeQuery("UPDATE clinical.blood_units SET status = 'RETURNED' WHERE id = :id")
+                .setParameter("id", negative).executeUpdate());
+
+        assertThat(unitRepository.existsAvailable(hospital, patient, BloodProductType.PACKED_RED_CELLS, AboGroup.O, RhFactor.NEGATIVE, LocalDate.now())).isFalse();
+        assertThat(service.emergencyReleaseOptions(request.getId()).getUnits()).extracting(EmergencyReleaseOptionsDTO.Unit::getId).doesNotContain(negative);
+    }
+
     private void signedInAsDoctor(Runnable work) {
         com.example.hms.model.User requester = new com.example.hms.model.User();
         requester.setId(doctorUser);

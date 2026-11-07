@@ -712,6 +712,18 @@ class TransfusionEmergencyReleaseTest {
     }
 
     @Test
+    @DisplayName("ordinary issue refuses a group O bag with an incompatible result too, for the adult male who needs no step")
+    void ordinaryIssueRefusesGroupOFoundIncompatible() {
+        adultMale();
+        for (RhFactor rh : RhFactor.values()) {
+            TransfusionRequest request = emergency();
+            BloodUnit unit = bag(AboGroup.O, rh, BloodUnitStatus.RETURNED);
+            resultOnFile(request, unit, false);
+            refused(request, unit, "came back incompatible");
+        }
+    }
+
+    @Test
     @DisplayName("two bags on one request are two records, each tied to its unit")
     void eachBagIsItsOwnRecord() {
         typed(AboGroup.A, RhFactor.POSITIVE, AntibodyScreenResult.POSITIVE);

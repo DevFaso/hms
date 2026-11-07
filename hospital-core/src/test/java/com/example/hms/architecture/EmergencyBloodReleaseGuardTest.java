@@ -97,6 +97,26 @@ class EmergencyBloodReleaseGuardTest {
     }
 
     @Test
+    @DisplayName("every write on a bag takes the request's lock, then the bag's, before reading either")
+    void oneLockOrder() throws IOException {
+        String source = read(SERVICE);
+        for (String signature : List.of("public CrossmatchResponseDTO recordCrossmatch(", "public BloodUnitResponseDTO issueUnit(",
+                "public BloodUnitResponseDTO emergencyRelease(", "startAdministration(")) {
+            String body = method(source, signature);
+            assertThat(body.indexOf("requestRepository.lockById(")).as(signature).isNotNegative()
+                .isLessThan(body.indexOf("unitRepository.lockById("));
+            assertThat(body.indexOf("unitRepository.lockById(")).as(signature)
+                .isLessThan(body.indexOf("loadUnitScoped") < 0 ? body.indexOf("issuableUnit(") : body.indexOf("loadUnitScoped"));
+        }
+        for (String signature : List.of("public TransfusionAdministrationResponseDTO completeAdministration(",
+                "public TransfusionAdministrationResponseDTO stopAdministration(", "public TransfusionReactionResponseDTO recordReaction(")) {
+            String body = method(source, signature);
+            assertThat(body.indexOf("lockAdministrationTargets(")).as(signature).isNotNegative()
+                .isLessThan(body.indexOf("loadAdministrationScoped("));
+        }
+    }
+
+    @Test
     @DisplayName("who may receive O positive is decided in EmergencyReleasePolicy and AboGroup, read by the service only")
     void theRulesLiveInOnePlace() throws IOException {
         assertThat(filesContaining("EmergencyReleasePolicy.oPositiveStep(")).containsExactly("service/impl/TransfusionServiceImpl.java");

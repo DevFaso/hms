@@ -22,6 +22,12 @@ public interface TransfusionRequestRepository extends JpaRepository<TransfusionR
     @Query("SELECT r FROM TransfusionRequest r WHERE r.id = :id")
     Optional<TransfusionRequest> lockById(@Param("id") UUID id);
 
+    /** The patient's requests still being worked, by id, so they are locked in one order before any is read. */
+    @Query("SELECT r.id FROM TransfusionRequest r WHERE r.patient.id = :patientId AND r.hospital.id = :hospitalId "
+        + "AND r.status NOT IN (com.example.hms.enums.TransfusionRequestStatus.COMPLETED, "
+        + "com.example.hms.enums.TransfusionRequestStatus.CANCELLED) ORDER BY r.id")
+    List<UUID> findOpenIds(@Param("patientId") UUID patientId, @Param("hospitalId") UUID hospitalId);
+
     /** QA D972: a visit's transfusion requests in the given statuses, for the checkout charge. */
     List<TransfusionRequest> findByEncounter_IdAndStatusIn(UUID encounterId, java.util.Collection<TransfusionRequestStatus> statuses);
 

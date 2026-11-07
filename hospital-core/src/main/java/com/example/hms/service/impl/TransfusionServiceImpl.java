@@ -222,6 +222,10 @@ public class TransfusionServiceImpl implements TransfusionService {
      * screen; one that is closed keeps the screen it was decided on, as history.
      */
     private void moveOpenRequestsOnto(PatientBloodGroup screen) {
+        // Saving a request writes the whole row: each is read under its lock, so a cancel
+        // committed meanwhile is seen and not written over.
+        requestRepository.findOpenIds(screen.getPatient().getId(), screen.getHospital().getId())
+            .forEach(requestRepository::lockById);
         requestRepository
             .findByPatient_IdAndHospital_IdOrderByRequestedAtDesc(screen.getPatient().getId(), screen.getHospital().getId())
             .stream()
@@ -1168,7 +1172,8 @@ public class TransfusionServiceImpl implements TransfusionService {
                 || (bag.getStatus() == BloodUnitStatus.ISSUED && decisionStep && documentedRelease(request, bag) == null
                     && AboGroup.isEmergencyOPositive(bag.getAboGroup(), bag.getRhFactor(), bag.getProductType())))
             .forEach(bag -> bags.put(bag.getId(), bag));
-        unitRepository.findAssignable(request.getHospital().getId(), today)
+        unitRepository.findAssignable(request.getHospital().getId(), today).stream()
+            .filter(bag -> administrationRepository.findByBloodUnit_Id(bag.getId()).isEmpty())
             .forEach(bag -> bags.put(bag.getId(), bag));
         List<UUID> incompatible = request.getPatient() == null ? List.of()
             : crossmatchRepository.findIncompatibleUnitIdsForPatient(request.getPatient().getId());
@@ -1348,6 +1353,7 @@ public class TransfusionServiceImpl implements TransfusionService {
         if (volumeMl != null && (volumeMl < 0 || volumeMl > MAX_UNIT_VOLUME_ML)) {
             throw new BusinessException("transfusion.administration.volumeOutOfRange");
         }
+        lockAdministrationTargets(administrationId);
         TransfusionAdministration administration = loadAdministrationScoped(administrationId);
         if (!administration.isInProgress()) {
             throw new BusinessException("transfusion.administration.closed");
@@ -1373,6 +1379,7 @@ public class TransfusionServiceImpl implements TransfusionService {
         if (reason.trim().length() > MAX_REASON_LENGTH) {
             throw new FieldBusinessException(FIELD_REASON, "transfusion.administration.stopReasonTooLong", MAX_REASON_LENGTH);
         }
+        lockAdministrationTargets(administrationId);
         TransfusionAdministration administration = loadAdministrationScoped(administrationId);
         if (!administration.isInProgress()) {
             throw new BusinessException("transfusion.administration.closed");
@@ -1406,6 +1413,7 @@ public class TransfusionServiceImpl implements TransfusionService {
         // 201. A reaction is observed, so its onset is in the past (a few
         // minutes of clock skew between the ward PC and the server aside).
         requireNotInFuture(request.getOnsetAt(), "onsetAt", "transfusion.reaction.onsetInFuture");
+        lockAdministrationTargets(administrationId);
         TransfusionAdministration administration = loadAdministrationScoped(administrationId);
         // QA D901: reaction 7b374e6a was saved with an onset ten days before
         // administration 36dc2b02 was hung. A reaction to a transfusion begins
@@ -1748,6 +1756,18 @@ public class TransfusionServiceImpl implements TransfusionService {
             .orElseThrow(() -> new ResourceNotFoundException(MSG_UNIT_NOT_FOUND, unitId));
         requireInScope(unit.getHospital(), MSG_UNIT_NOT_FOUND, unitId);
         return unit;
+    }
+
+    /**
+     * Ending a bag closes its request when it was the last one, so it takes the same locks in the same
+     * order as a release, a crossmatch and a cancel: a bag going out meanwhile is seen, and neither
+     * side holds what the other waits for. Before anything is read, so what is read is current.
+     */
+    private void lockAdministrationTargets(UUID administrationId) {
+        administrationRepository.findLockTarget(administrationId).ifPresent(target -> {
+            requestRepository.lockById(target.getRequestId());
+            unitRepository.lockById(target.getUnitId());
+        });
     }
 
     private TransfusionAdministration loadAdministrationScoped(UUID administrationId) {

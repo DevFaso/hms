@@ -55,12 +55,14 @@ public interface BloodUnitRepository extends JpaRepository<BloodUnit, UUID> {
     /**
      * A bag of this kind in stock at this hospital that could go to this patient: on hand and in
      * date as {@link #findAssignable} has it, so a bag returned to the lab counts. One already found
-     * incompatible for them is not available to them. A bag's last day counts as expired.
+     * incompatible for them is not available to them, and one ever hung can go out to nobody. A bag's
+     * last day counts as expired.
      */
     @Query("SELECT (COUNT(u) > 0) FROM BloodUnit u WHERE u.hospital.id = :hospitalId "
         + "AND u.productType = :product AND u.aboGroup = :abo AND u.rhFactor = :rh "
         + "AND u.status IN (com.example.hms.enums.BloodUnitStatus.AVAILABLE, "
         + "com.example.hms.enums.BloodUnitStatus.RETURNED) AND u.expiresOn > :today "
+        + "AND NOT EXISTS (SELECT a.id FROM TransfusionAdministration a WHERE a.bloodUnit = u) "
         + "AND NOT EXISTS (SELECT c.id FROM TransfusionCrossmatch c WHERE c.bloodUnit = u "
         + "AND c.request.patient.id = :patientId AND c.compatible = FALSE)")
     boolean existsAvailable(@Param("hospitalId") UUID hospitalId,
