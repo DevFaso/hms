@@ -487,13 +487,19 @@
              scoped request into global view; the chip is the way in. -->
         <section class="scope-gate" data-testid="scope-gate">
           <h1 class="scope-gate__title">{{ 'HOSPITAL_SCOPE.GATE_TITLE' | translate }}</h1>
-          <app-hospital-scope-chip [preserveScope]="true" />
+          <span class="material-symbols-outlined scope-gate__icon" aria-hidden="true"
+            >local_hospital</span
+          >
+          <app-hospital-scope-chip [preserveScope]="true" [hospitalRequired]="true" />
           <app-hospital-scope-hint />
         </section>
       } @else {
         @if (scopeGate.showChip()) {
           <div class="scope-bar" data-testid="scope-bar">
-            <app-hospital-scope-chip [preserveScope]="true" />
+            <app-hospital-scope-chip
+              [preserveScope]="true"
+              [hospitalRequired]="!scopeGate.allowsGlobal()"
+            />
           </div>
         }
         <!-- The key advances on a scope change while the route is gated, so the

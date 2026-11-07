@@ -1104,3 +1104,22 @@ $sidebar-active-text: #23b79c; // 6.2:1 on the active row
     display: none;
   }
 }
+
+.scope-gate {
+  background: #fff;
+  border: 1px solid #dfe7ef;
+  border-radius: 16px;
+  padding: 28px;
+  box-sizing: border-box;
+  margin: 24px auto;
+  min-width: 0;
+  width: 100%;
+}
+.scope-gate__icon {
+  order: -1;
+  color: #08685b;
+  background: #def3ec;
+  padding: 14px;
+  border-radius: 14px;
+  font-size: 32px;
+}
