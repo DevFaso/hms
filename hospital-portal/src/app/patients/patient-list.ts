@@ -4,18 +4,18 @@ import {
   OnDestroy,
   OnInit,
   signal,
+  computed,
   ChangeDetectionStrategy,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
-import { Subject, debounceTime, distinctUntilChanged, takeUntil } from 'rxjs';
+import { Subject, Subscription, debounceTime, takeUntil } from 'rxjs';
 import { PatientService, PatientResponse } from '../services/patient.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { PermissionService } from '../core/permission.service';
-import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
-import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { TranslateModule } from '@ngx-translate/core';
 
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 type SortField = 'name' | 'mrn' | 'gender' | 'status' | 'createdAt';
@@ -33,9 +33,7 @@ export class PatientListComponent implements OnInit, OnDestroy {
   private readonly patientService = inject(PatientService);
   private readonly hospitalService = inject(HospitalService);
   private readonly permissions = inject(PermissionService);
-  private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
-  private readonly translate = inject(TranslateService);
   private readonly destroy$ = new Subject<void>();
   private readonly searchInput$ = new Subject<string>();
 
@@ -49,8 +47,102 @@ export class PatientListComponent implements OnInit, OnDestroy {
   genderFilter = '';
   statusFilter = '';
   bloodTypeFilter = '';
-  hospitalFilter = '';
-  showFilters = signal(false);
+  private readonly selectedHospital = signal('');
+  get hospitalFilter(): string {
+    return this.selectedHospital();
+  }
+  set hospitalFilter(value: string) {
+    this.selectedHospital.set(value);
+  }
+  showFilters = signal(true);
+  contactFilter = '';
+  readonly loadError = signal(false);
+  private listRequest = 0;
+  private listSubscription?: Subscription;
+
+  get scopedPatients(): PatientResponse[] {
+    return this.patients().filter(
+      (p) => !this.hospitalFilter || p.hospitalId === this.hospitalFilter,
+    );
+  }
+
+  private readonly metrics = computed(() => {
+    const rows = this.scopedPatients;
+    return [
+      {
+        id: 'all',
+        label: 'PATIENTS.LOADED_RECORDS',
+        icon: 'people',
+        count: rows.length,
+        tone: 'total',
+      },
+      {
+        id: 'active',
+        label: 'PATIENTS.ACTIVE_REGISTRATIONS',
+        icon: 'how_to_reg',
+        count: rows.filter((p) => p.active).length,
+        tone: 'active',
+      },
+      {
+        id: 'inactive',
+        label: 'PATIENTS.INACTIVE_REGISTRATIONS',
+        icon: 'person_off',
+        count: rows.filter((p) => !p.active).length,
+        tone: 'inactive',
+      },
+      {
+        id: 'no-contact',
+        label: 'PATIENTS.NO_CONTACT',
+        icon: 'contact_phone',
+        count: rows.filter((p) => !this.hasContact(p)).length,
+        tone: 'contact',
+      },
+    ];
+  });
+
+  get directoryMetrics() {
+    return this.metrics();
+  }
+
+  hasContact(p: PatientResponse): boolean {
+    return !!(this.displayPhone(p) || this.displayEmail(p));
+  }
+
+  displayPhone(p: PatientResponse): string {
+    return p.phoneNumberPrimary?.trim() || p.phoneNumberSecondary?.trim() || '';
+  }
+
+  displayEmail(p: PatientResponse): string {
+    return p.email?.trim() || '';
+  }
+
+  metricSelected(id: string): boolean {
+    if (id === 'all')
+      return (
+        !this.statusFilter &&
+        !this.contactFilter &&
+        !this.searchTerm.trim() &&
+        !this.genderFilter &&
+        !this.bloodTypeFilter
+      );
+    if (id === 'no-contact') return this.contactFilter === 'missing' && !this.statusFilter;
+    return this.statusFilter === id && !this.contactFilter;
+  }
+
+  selectMetric(id: string): void {
+    this.genderFilter = '';
+    this.bloodTypeFilter = '';
+    this.searchTerm = '';
+    this.statusFilter = id === 'active' || id === 'inactive' ? id : '';
+    this.contactFilter = id === 'no-contact' ? 'missing' : '';
+    this.onFilterChange();
+  }
+
+  changePageSize(size: number): void {
+    if (![10, 20, 50].includes(size)) return;
+    this.pageSize = size;
+    this.currentPage.set(0);
+  }
 
   /* Sort */
   sortField = signal<SortField>('name');
@@ -67,9 +159,13 @@ export class PatientListComponent implements OnInit, OnDestroy {
   readonly bloodTypes = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
 
   get activeFilterCount(): number {
-    return [this.genderFilter, this.statusFilter, this.bloodTypeFilter, this.hospitalFilter].filter(
-      Boolean,
-    ).length;
+    return [
+      this.genderFilter,
+      this.statusFilter,
+      this.bloodTypeFilter,
+      this.hospitalFilter,
+      this.contactFilter,
+    ].filter(Boolean).length;
   }
 
   get pagedFiltered(): PatientResponse[] {
@@ -83,12 +179,10 @@ export class PatientListComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     // Debounce the search input
-    this.searchInput$
-      .pipe(debounceTime(300), distinctUntilChanged(), takeUntil(this.destroy$))
-      .subscribe(() => {
-        this.currentPage.set(0);
-        this.applyFilter();
-      });
+    this.searchInput$.pipe(debounceTime(300), takeUntil(this.destroy$)).subscribe(() => {
+      this.currentPage.set(0);
+      this.applyFilter();
+    });
 
     this.loadPatients();
     this.loadHospitals();
@@ -105,18 +199,29 @@ export class PatientListComponent implements OnInit, OnDestroy {
   }
 
   loadPatients(): void {
+    const request = ++this.listRequest;
+    this.listSubscription?.unsubscribe();
     this.loading.set(true);
-    this.patientService.list().subscribe({
-      next: (data) => {
-        this.patients.set(data);
-        this.applyFilter();
-        this.loading.set(false);
-      },
-      error: () => {
-        this.toast.error(this.translate.instant('PATIENTS.LOAD_FAILED'));
-        this.loading.set(false);
-      },
-    });
+    this.loadError.set(false);
+    this.listSubscription = this.patientService
+      .list()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (data) => {
+          if (request !== this.listRequest) return;
+          this.patients.set(data ?? []);
+          this.applyFilter();
+          this.loading.set(false);
+        },
+        error: () => {
+          if (request !== this.listRequest) return;
+          this.patients.set([]);
+          this.filtered.set([]);
+          this.currentPage.set(0);
+          this.loadError.set(true);
+          this.loading.set(false);
+        },
+      });
   }
 
   loadHospitals(): void {
@@ -140,13 +245,20 @@ export class PatientListComponent implements OnInit, OnDestroy {
 
     const term = this.searchTerm.toLowerCase().trim();
     if (term) {
+      const tokens = term.split(/\s+/);
       result = result.filter(
         (p) =>
-          p.firstName.toLowerCase().includes(term) ||
-          p.lastName.toLowerCase().includes(term) ||
+          tokens.every((token) =>
+            [p.firstName, p.middleName, p.lastName]
+              .filter(Boolean)
+              .join(' ')
+              .toLowerCase()
+              .includes(token),
+          ) ||
           (p.email?.toLowerCase().includes(term) ?? false) ||
           (p.mrn?.toLowerCase().includes(term) ?? false) ||
-          (p.phoneNumberPrimary?.includes(term) ?? false),
+          (p.phoneNumberPrimary?.includes(term) ?? false) ||
+          (p.phoneNumberSecondary?.includes(term) ?? false),
       );
     }
     if (this.genderFilter) {
@@ -160,6 +272,9 @@ export class PatientListComponent implements OnInit, OnDestroy {
     if (this.hospitalFilter) {
       result = result.filter((p) => p.hospitalId === this.hospitalFilter);
     }
+
+    if (this.contactFilter)
+      result = result.filter((p) => this.hasContact(p) === (this.contactFilter === 'recorded'));
 
     // Sort
     const field = this.sortField();
@@ -182,6 +297,7 @@ export class PatientListComponent implements OnInit, OnDestroy {
     });
 
     this.filtered.set(result);
+    this.currentPage.set(Math.max(0, Math.min(this.currentPage(), this.totalPages - 1)));
   }
 
   sort(field: SortField): void {
@@ -205,16 +321,18 @@ export class PatientListComponent implements OnInit, OnDestroy {
     this.statusFilter = '';
     this.bloodTypeFilter = '';
     this.hospitalFilter = '';
+    this.contactFilter = '';
     this.searchTerm = '';
     this.currentPage.set(0);
     this.applyFilter();
   }
 
-  removeFilter(key: 'gender' | 'status' | 'bloodType' | 'hospital'): void {
+  removeFilter(key: 'gender' | 'status' | 'bloodType' | 'hospital' | 'contact'): void {
     if (key === 'gender') this.genderFilter = '';
     if (key === 'status') this.statusFilter = '';
     if (key === 'bloodType') this.bloodTypeFilter = '';
     if (key === 'hospital') this.hospitalFilter = '';
+    if (key === 'contact') this.contactFilter = '';
     this.currentPage.set(0);
     this.applyFilter();
   }
