@@ -73,6 +73,6 @@ class AdultParacetamolGuardTest {
     void childrenStayWithThePaediatricRule() throws IOException {
         assertThat(code(RULE)).contains("PediatricDoseRule.isAdult(context.patient())")
             .contains("PediatricDoseRule.dosesOnADosingDay(")
-            .doesNotContain("getDateOfBirth").doesNotContain("Period.between");
+            .doesNotContain("Period.between");
     }
 }

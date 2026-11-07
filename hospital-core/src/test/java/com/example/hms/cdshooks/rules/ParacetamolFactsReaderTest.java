@@ -150,7 +150,7 @@ class ParacetamolFactsReaderTest {
         "3 mois, 80, true",
         "3 mois, 100, false",
         "1 mes, 40, false",
-        // No readable duration: the window the duplicate-order check uses.
+        // No readable duration: counted inside the window the duplicate-order check uses.
         "'', 6, true",
         "'', 8, false",
         "au long cours, 6, true",
@@ -161,6 +161,44 @@ class ParacetamolFactsReaderTest {
         rx.setDuration(duration);
         rx.setCreatedAt(LocalDateTime.now().minusDays(daysAgo));
         assertThat(read().otherOrders()).hasSize(counted ? 1 : 0);
+    }
+
+    /** Past the window with no readable duration: named, not counted, never dropped. A stated end is over. */
+    @Test
+    void anOldOrderWithNoDurationMayStillBeInUseAndIsNamed() {
+        Prescription old = order("Paracétamol 500 mg", PrescriptionStatus.DISPENSED);
+        old.setCreatedAt(LocalDateTime.now().minusDays(30));
+        Prescription finished = order("Paracétamol fini", PrescriptionStatus.DISPENSED);
+        finished.setDuration("5 jours");
+        finished.setCreatedAt(LocalDateTime.now().minusDays(30));
+        Prescription recent = order("Paracétamol récent", PrescriptionStatus.SIGNED);
+        ParacetamolFacts facts = read();
+        assertThat(facts.mayStillBeInUse()).containsExactly("Paracétamol 500 mg");
+        assertThat(facts.otherOrders()).extracting(ParacetamolFacts.OtherOrder::order).containsExactly(recent);
+        assertThat(facts.otherOrders().get(0).durationRead()).isFalse();
+        recent.setDuration("5 jours");
+        assertThat(read().otherOrders().get(0).durationRead()).isTrue();
+    }
+
+    @Test
+    void activeCombinationsAreNamedAndNotCounted() {
+        order("Paracétamol + codéine 500/30", PrescriptionStatus.SIGNED);
+        order("Codoliprane", PrescriptionStatus.SIGNED);
+        order("Doliprane codéine", PrescriptionStatus.SIGNED);
+        Prescription ended = order("Tramadol/paracétamol", PrescriptionStatus.SIGNED);
+        ended.setDuration("5 jours");
+        ended.setCreatedAt(LocalDateTime.now().minusDays(30));
+        order("Tramadol/paracétamol", PrescriptionStatus.CANCELLED);
+        ParacetamolFacts facts = read();
+        assertThat(facts.combinations()).containsExactly("Paracétamol + codéine 500/30", "Codoliprane", "Doliprane codéine");
+        assertThat(facts.otherOrders()).isEmpty();
+    }
+
+    @Test
+    void noBirthDateStillReadsTheFacts() {
+        Patient unknown = Patient.builder().build();
+        unknown.setId(adult.getId());
+        assertThat(reader.read(unknown, hospitalId, "Paracétamol", null, null).applies()).isTrue();
     }
 
     @Test

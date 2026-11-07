@@ -414,7 +414,8 @@ class PrescriptionEditAndWithdrawalIT extends BaseIT {
     void adultParacetamolAlertsComeBackOnACreatedOrder() throws Exception {
         assertThat(paracetamolCards("2 000 mg", "3 fois par jour", ""))
             .containsExactlyInAnyOrder("warning", "warning");
-        assertThat(paracetamolCards("1 g", "3 fois par jour", "")).isEmpty();
+        assertThat(paracetamolCards("1 g", "3 fois par jour", "")).containsExactly("info");
+        assertThat(paracetamolCards("500 mg", "4 fois par jour", "")).isEmpty();
         assertThat(paracetamolCards("1 g", "4 fois par jour", "")).containsExactly("info");
         assertThat(paracetamolCards("1 g", "si besoin", ",\"asNeeded\":true,\"prnMinIntervalHours\":1"))
             .containsExactlyInAnyOrder("warning", "warning");
@@ -438,9 +439,9 @@ class PrescriptionEditAndWithdrawalIT extends BaseIT {
             assertThat(lastSummaries).anyMatch(s -> s.contains("2500 mg") && s.contains("2000 mg"));
             patientProblemRepository.deleteById(gilbert.getId());
             gilbert = null;
-            // No group now: 2.5 g in all, under the general ceiling and under the usual dose.
-            paracetamolCards("500 mg", "1 fois par jour", "");
-            assertThat(lastSummaries).noneMatch(s -> s.contains("2500 mg"));
+            // No code now: 2.5 g in all is under the ceiling, and the groups are still named: information.
+            assertThat(paracetamolCards("500 mg", "1 fois par jour", "")).contains("info").doesNotContain("critical");
+            assertThat(lastSummaries).noneMatch(s -> s.contains("2500 mg") && s.contains("4000 mg"));
             // Each order alone is fine; 5 g together is over the general ceiling.
             paracetamolCards("1 g", "3 fois par jour", "");
             assertThat(lastSummaries).anyMatch(s -> s.contains("5000 mg") && s.contains("4000 mg"));

@@ -46,7 +46,9 @@ import java.util.regex.Pattern;
  * sign-off): not stopped; not past the duration it states, in English, French or Spanish; not ended
  * with its stay; a one-off only for 24 hours; and an order with no readable duration only for
  * {@link #NO_DURATION_WINDOW}, the window the duplicate-order check already uses, or for as long as
- * it is filed on a stay that is still open.
+ * it is filed on a stay that is still open. Past that window it is not counted, and it is not
+ * dropped either: nothing shows it was stopped, so the card names it as possibly still in use.
+ * A combination product is named too, never counted.
  */
 @Service
 public class ParacetamolFactsReader {
@@ -77,7 +79,8 @@ public class ParacetamolFactsReader {
     @Transactional(readOnly = true, noRollbackFor = RuntimeException.class)
     public ParacetamolFacts read(Patient patient, UUID hospitalId, String medicationName,
                                  MedicationCatalogItem item, UUID editedOrderId) {
-        if (patient == null || !PediatricDoseRule.isAdult(patient)) {
+        // No date of birth is not a child: the rule says the age is unknown.
+        if (patient == null || (patient.getDateOfBirth() != null && !PediatricDoseRule.isAdult(patient))) {
             return ParacetamolFacts.NONE;
         }
         UUID acting = actingHospital();
@@ -87,48 +90,85 @@ public class ParacetamolFactsReader {
         if (!named && (item != null || medicationName == null || medicationName.isBlank())) {
             return ParacetamolFacts.NONE;
         }
-        List<MedicationCatalogItem> paracetamol = paracetamolInCatalogue(scope);
+        List<MedicationCatalogItem> active = activeCatalogue(scope);
+        List<MedicationCatalogItem> paracetamol = active.stream().filter(ParacetamolIdentity::isParacetamolAlone).toList();
+        List<MedicationCatalogItem> combinations = active.stream().filter(ParacetamolIdentity::isCombination).toList();
         if (!named && paracetamol.stream()
                 .noneMatch(i -> ParacetamolIdentity.namesCatalogueItem(medicationName, i))) {
             return ParacetamolFacts.NONE;
         }
-        return new ParacetamolFacts(true, otherOrders(patient.getId(), scope, editedOrderId, paracetamol),
-            ParacetamolRisk.of(activeProblems(patient.getId(), scope, acting)));
+        Orders orders = otherOrders(patient.getId(), scope, editedOrderId, paracetamol, combinations);
+        return new ParacetamolFacts(true, orders.counted, ParacetamolRisk.of(activeProblems(patient.getId(), scope, acting)),
+            orders.mayStillBeInUse, orders.combinations);
     }
+
+    /** The orders, by what the total does with them. */
+    private record Orders(List<ParacetamolFacts.OtherOrder> counted, List<String> mayStillBeInUse, List<String> combinations) {
+    }
+
+    /** What the order's dates say about it. */
+    private enum Running { COUNTED, COUNTED_NO_DURATION, MAY_STILL_BE_IN_USE, ENDED }
 
     private static UUID actingHospital() {
         HospitalContext context = HospitalContextHolder.getContext().orElse(null);
         return context == null ? null : context.getActiveHospitalId();
     }
 
-    /** This hospital's and the national list's active items that are paracetamol alone. */
-    private List<MedicationCatalogItem> paracetamolInCatalogue(UUID hospitalId) {
+    /** This hospital's and the national list's active items. */
+    private List<MedicationCatalogItem> activeCatalogue(UUID hospitalId) {
         if (hospitalId == null) {
             return List.of();
         }
         Page<MedicationCatalogItem> page = catalogue.findActivePage(hospitalId, Pageable.unpaged());
-        return page == null ? List.of()
-            : page.getContent().stream().filter(ParacetamolIdentity::isParacetamolAlone).toList();
+        return page == null ? List.of() : page.getContent();
     }
 
-    private List<ParacetamolFacts.OtherOrder> otherOrders(UUID patientId, UUID hospitalId, UUID editedOrderId,
-                                                          List<MedicationCatalogItem> paracetamol) {
+    private Orders otherOrders(UUID patientId, UUID hospitalId, UUID editedOrderId,
+                               List<MedicationCatalogItem> paracetamol, List<MedicationCatalogItem> combinations) {
         if (hospitalId == null) {
-            return List.of();
+            return new Orders(List.of(), List.of(), List.of());
         }
-        List<ParacetamolFacts.OtherOrder> others = prescriptions.findByPatient_IdAndHospital_Id(patientId, hospitalId).stream()
+        List<Prescription> live = prescriptions.findByPatient_IdAndHospital_Id(patientId, hospitalId).stream()
             .filter(rx -> rx.getStatus() != null && !CdsRuleEngine.isTerminal(rx.getStatus()))
             .filter(rx -> !rx.getId().equals(editedOrderId))
+            .toList();
+        List<Prescription> combined = live.stream().filter(rx -> isCombination(rx, paracetamol, combinations)).toList();
+        List<ParacetamolFacts.OtherOrder> alone = live.stream()
+            .filter(rx -> !combined.contains(rx))
             .map(rx -> otherOrder(rx, paracetamol))
             .filter(Objects::nonNull)
             .toList();
-        if (others.isEmpty()) {
-            return others;
+        if (alone.isEmpty() && combined.isEmpty()) {
+            return new Orders(List.of(), List.of(), List.of());
         }
         List<Admission> closedStays = admissions.findByPatientIdOrderByAdmissionDateTimeDesc(patientId).stream()
             .filter(a -> a.getActualDischargeDateTime() != null)
             .toList();
-        return others.stream().filter(other -> stillRunning(other.order(), closedStays)).toList();
+        List<ParacetamolFacts.OtherOrder> counted = new java.util.ArrayList<>();
+        java.util.Set<String> mayStillBeInUse = new java.util.LinkedHashSet<>();
+        for (ParacetamolFacts.OtherOrder other : alone) {
+            Running running = running(other.order(), closedStays);
+            if (running == Running.MAY_STILL_BE_IN_USE) {
+                mayStillBeInUse.add(other.order().getMedicationName());
+            } else if (running != Running.ENDED) {
+                counted.add(new ParacetamolFacts.OtherOrder(other.order(), other.item(), running == Running.COUNTED));
+            }
+        }
+        List<String> combinedNames = combined.stream()
+            .filter(rx -> running(rx, closedStays) != Running.ENDED)
+            .map(Prescription::getMedicationName)
+            .distinct()
+            .toList();
+        return new Orders(counted, List.copyOf(mayStillBeInUse), combinedNames);
+    }
+
+    private static boolean isCombination(Prescription rx, List<MedicationCatalogItem> paracetamol,
+                                         List<MedicationCatalogItem> combinations) {
+        String name = rx.getMedicationName();
+        return ParacetamolIdentity.isCombinationName(name)
+            || paracetamol.stream().anyMatch(i -> ParacetamolIdentity.namesItWithAnother(name, i))
+            || combinations.stream().anyMatch(i -> carries(rx, i) || ParacetamolIdentity.namesCatalogueItem(name, i)
+                || ParacetamolIdentity.namesItWithAnother(name, i));
     }
 
     /** The order as a paracetamol order, or {@code null} when it is another drug. */
@@ -157,23 +197,24 @@ public class ParacetamolFactsReader {
     }
 
     /** See the class comment. A draft counts: it is about to be given. */
-    private static boolean stillRunning(Prescription rx, List<Admission> closedStays) {
+    private static Running running(Prescription rx, List<Admission> closedStays) {
         if (InpatientOrderEnd.endedWithAStay(rx, closedStays)) {
-            return false;
+            return Running.ENDED;
         }
         LocalDateTime written = rx.getCreatedAt();
         if (written == null) {
-            return true;
+            return Running.COUNTED_NO_DURATION;
         }
         LocalDateTime now = LocalDateTime.now(ZoneId.systemDefault());
         if (MarDoseSchedule.read(rx).kind() == MarDoseSchedule.Kind.ONE_OFF) {
-            return !written.plus(ONE_OFF_WINDOW).isBefore(now);
+            return written.plus(ONE_OFF_WINDOW).isBefore(now) ? Running.ENDED : Running.COUNTED;
         }
         LocalDate end = endDate(rx, written.toLocalDate());
         if (end != null) {
-            return !end.isBefore(now.toLocalDate());
+            return end.isBefore(now.toLocalDate()) ? Running.ENDED : Running.COUNTED;
         }
-        return onAnOpenStay(rx) || !written.plus(NO_DURATION_WINDOW).isBefore(now);
+        return onAnOpenStay(rx) || !written.plus(NO_DURATION_WINDOW).isBefore(now)
+            ? Running.COUNTED_NO_DURATION : Running.MAY_STILL_BE_IN_USE;
     }
 
     /** The stated end: {@code MedicationCourseStatus}'s reading, else the same in French and Spanish. */

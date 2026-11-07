@@ -83,7 +83,18 @@ final class ParacetamolIdentity {
             && (parts.length == 1 || !ANOTHER_INGREDIENT.matcher(parts[1]).find());
     }
 
-    private static boolean isCombination(MedicationCatalogItem item) {
+    /** The text names paracetamol, or an item of it, together with another ingredient. */
+    static boolean isCombinationName(String typedName) {
+        String text = DrugClassAllergy.normalize(typedName);
+        return NAMED_ANYWHERE.matcher(text).find() && !nameIsParacetamolAlone(text);
+    }
+
+    /** Free text names this item alone with another ingredient beside it: "Doliprane codéine". */
+    static boolean namesItWithAnother(String typedName, MedicationCatalogItem item) {
+        return namesAnotherIngredient(typedName) && DispenseVerificationService.namesCatalogItem(typedName, item);
+    }
+
+    static boolean isCombination(MedicationCatalogItem item) {
         String generic = DrugClassAllergy.normalize(item.getGenericName());
         return NAMED_ANYWHERE.matcher(generic).find() && !nameIsParacetamolAlone(generic);
     }

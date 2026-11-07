@@ -37,6 +37,9 @@ class AdultParacetamolRuleTest {
     private static final String INFO = "The usual adult dose";
     private static final String CONTRA = "is contraindicated";
     private static final String UNREAD = "could not be read";
+    private static final String LOWER_GROUPS = "may apply";
+    private static final String LEFT_OUT = "are not counted in the total";
+    private static final String AGE = "no date of birth";
 
     private final AdultParacetamolRule rule = new AdultParacetamolRule();
 
@@ -57,12 +60,15 @@ class AdultParacetamolRuleTest {
     }
 
     private List<CdsCard> evaluate(Order order) {
+        return evaluateWith(order, new ParacetamolFacts(true, order.others, order.risks));
+    }
+
+    private List<CdsCard> evaluateWith(Order order, ParacetamolFacts facts) {
         Double weight = order.weight;
         Double doseMg = CdsRuleEngine.parseDoseMg(order.dose, weight, order.item);
         return rule.evaluate(new CdsRuleContext(order.patient, UUID.randomUUID(), "Paracétamol", null, null, doseMg,
             order.item, weight, List.of(), List.of(), order.frequency, CdsRuleEngine.parseDoseUnits(order.dose),
-            order.weighedAt, prn(order.prnHours),
-            new ParacetamolFacts(true, order.others, order.risks)));
+            order.weighedAt, prn(order.prnHours), facts));
     }
 
     /** One proposed order and what the rule reads around it. */
@@ -108,7 +114,7 @@ class AdultParacetamolRuleTest {
             Prescription.builder().medicationName("Doliprane").dosage(dose).frequency(frequency).build(), tablet500());
     }
 
-    /** The alerts by letter: S single, D daily, I interval, N information, U unread, C contraindication. */
+    /** By letter: S single, D daily, I interval, N 3 to 4 g, R lower groups, P left out, U unread, C contraindication, A age. */
     private static String letters(List<CdsCard> cards) {
         Set<String> out = new TreeSet<>();
         for (CdsCard card : cards) {
@@ -116,6 +122,9 @@ class AdultParacetamolRuleTest {
             if (summary.contains(SINGLE)) out.add("S");
             else if (summary.contains(DAILY)) out.add("D");
             else if (summary.contains(INFO)) out.add("N");
+            else if (summary.contains(LOWER_GROUPS)) out.add("R");
+            else if (summary.contains(LEFT_OUT)) out.add("P");
+            else if (summary.contains(AGE)) out.add("A");
             else if (summary.contains(UNREAD)) out.add("U");
             else if (summary.contains(CONTRA)) out.add("C");
             else if (summary.contains(INTERVAL)) out.add("I");
@@ -128,7 +137,8 @@ class AdultParacetamolRuleTest {
     @CsvSource(nullValues = "null", delimiter = '|', value = {
         // The brief's four cases.
         "2 000 mg | 3 fois par jour | null | DS",
-        "1 g | 3 fois par jour | null | ''",
+        // 3 g: no ceiling alert, but above the lowest ceiling with nothing coded (user, 2026-11-07).
+        "1 g | 3 fois par jour | null | R",
         "1 g | 4 fois par jour | null | N",
         "1 g | null | 1 | DI",
         // Per administration: at the limit, just above, every way of writing it.
@@ -151,17 +161,19 @@ class AdultParacetamolRuleTest {
         "667 mg | 6 fois par jour | null | D",
         "1 g | 5 fois par jour | null | D",
         "1 g | toutes les 4 heures | null | D",
-        // 3 g/day is no information; above it is.
-        "750 mg | 4 fois par jour | null | ''",
+        // The usual dose and the lowest ceiling, at each and just above.
+        "500 mg | 4 fois par jour | null | ''",
+        "501 mg | 4 fois par jour | null | R",
+        "750 mg | 4 fois par jour | null | R",
         "751 mg | 4 fois par jour | null | N",
         // The interval: exactly 4 hours passes, shorter does not, also when the total is fine.
-        "500 mg | 6 fois par jour | null | ''",
-        "500 mg | toutes les 4 heures | null | ''",
+        "500 mg | 6 fois par jour | null | R",
+        "500 mg | toutes les 4 heures | null | R",
         "500 mg | 7 fois par jour | null | IN",
         "250 mg | toutes les 3 heures | null | I",
-        "1 g | H0 H2 H4 | null | I",
+        "1 g | H0 H2 H4 | null | IR",
         // A ticked as-needed order: 24 / interval, and its interval.
-        "500 mg | si besoin | 4 | ''",
+        "500 mg | si besoin | 4 | R",
         "500 mg | si besoin | 3 | IN",
         "1 g | si besoin | 6 | N",
         "1 g | si besoin | 5 | D",
@@ -207,8 +219,9 @@ class AdultParacetamolRuleTest {
         "50 | 1 g | 5 fois par jour | D | 4000",
         // 49.9 kg is under 50: 2994 mg/day. 45 kg gives 2,700.
         "49.9 | 1 g | 3 fois par jour | D | 2994",
-        "49.9 | 998 mg | 3 fois par jour | '' | null",
-        "45 | 900 mg | 3 fois par jour | '' | null",
+        "49.9 | 998 mg | 3 fois par jour | R | null",
+        "45 | 900 mg | 3 fois par jour | R | null",
+        "45 | 660 mg | 3 fois par jour | '' | null",
         "45 | 901 mg | 3 fois par jour | D | 2700",
     })
     void weightOnFile(Double kg, String dose, String frequency, String expected, String ceiling) {
@@ -222,9 +235,9 @@ class AdultParacetamolRuleTest {
     @ParameterizedTest(name = "{0} {1} kg {2} {3}: [{4}] ceiling {5}")
     @CsvSource(nullValues = "null", delimiter = '|', value = {
         // Malnutrition or dehydration: 60 mg/kg/day or 3,000 mg/day, the lower.
-        "MALNUTRITION_OR_DEHYDRATION | null | 1 g | 3 fois par jour | '' | null",
+        "MALNUTRITION_OR_DEHYDRATION | null | 1 g | 3 fois par jour | R | null",
         "MALNUTRITION_OR_DEHYDRATION | null | 751 mg | 4 fois par jour | D | 3000",
-        "MALNUTRITION_OR_DEHYDRATION | 70 | 1 g | 3 fois par jour | '' | null",
+        "MALNUTRITION_OR_DEHYDRATION | 70 | 1 g | 3 fois par jour | R | null",
         "MALNUTRITION_OR_DEHYDRATION | 70 | 751 mg | 4 fois par jour | D | 3000",
         "MALNUTRITION_OR_DEHYDRATION | 50 | 751 mg | 4 fois par jour | D | 3000",
         "MALNUTRITION_OR_DEHYDRATION | 45 | 901 mg | 3 fois par jour | D | 2700",
@@ -270,7 +283,7 @@ class AdultParacetamolRuleTest {
 
     @Test
     void severeHepaticInsufficiencyIsAContraindicationNotALowerDose() {
-        Order any = new Order("500 mg", "3 fois par jour").risks(ParacetamolRisk.SEVERE_HEPATIC);
+        Order any = new Order("500 mg", "1 fois par jour").risks(ParacetamolRisk.SEVERE_HEPATIC);
         assertThat(letters(evaluate(any))).isEqualTo("C");
         // A dose nobody can read is still contraindicated; the general ceiling stands beside it.
         assertThat(letters(evaluate(new Order("5 ml", "3 fois par jour").risks(ParacetamolRisk.SEVERE_HEPATIC)))).isEqualTo("C");
@@ -307,7 +320,7 @@ class AdultParacetamolRuleTest {
         "500 mg | 1 fois par jour | 500 mg | 7 fois par jour | D | 4000.0",
         // Exactly at the ceiling across two orders: no ceiling alert.
         "1 g | 2 fois par jour | 1 g | 2 fois par jour | N | null",
-        "500 mg | 3 fois par jour | 500 mg | 3 fois par jour | '' | null",
+        "500 mg | 3 fois par jour | 500 mg | 3 fois par jour | R | null",
         // A count of tablets on the other order, through its strength.
         "1 g | 3 fois par jour | 3 cp | 1 fois par jour | D | 4500",
         // An unread frequency on the other order counts one dose at least.
@@ -386,6 +399,7 @@ class AdultParacetamolRuleTest {
         List<CdsCard> all = new ArrayList<>();
         all.addAll(evaluate(new Order("2 000 mg", "3 fois par jour")));
         all.addAll(evaluate(new Order("1 g", "si besoin").prn(1)));
+        all.addAll(evaluate(new Order("1 g", "3 fois par jour")));
         all.addAll(evaluate(new Order("1 g", "selon la douleur")));
         all.addAll(evaluate(new Order("1 g", "4 fois par jour").risks(ParacetamolRisk.TWO_GRAM_GROUP,
             ParacetamolRisk.CHRONIC_ALCOHOLISM)));
@@ -419,10 +433,82 @@ class AdultParacetamolRuleTest {
     }
 
     @Test
-    void noBirthDateAndAnotherDrugAreSilent() {
+    void noBirthDateSaysSoAndJudgesNoLimit() {
         Order noBirthDate = new Order("2 000 mg", "3 fois par jour");
         noBirthDate.patient = Patient.builder().build();
-        assertThat(evaluate(noBirthDate)).isEmpty();
+        List<CdsCard> cards = evaluate(noBirthDate);
+        assertThat(letters(cards)).isEqualTo("A");
+        assertThat(cards.get(0).indicator()).isEqualTo(CdsCard.Indicator.INFO);
+        assertThat(cards.get(0).detail()).contains("6000 mg").contains("No limit was judged").contains("reconcile");
+    }
+
+    /** Every card: total, limit, rule, what is missing, the request to reconcile. */
+    @Test
+    void everyCardShowsTheTotalTheLimitItsRuleAndAsksToReconcile() {
+        List<CdsCard> all = new ArrayList<>();
+        all.addAll(evaluate(new Order("2 000 mg", "toutes les 2 heures").risks(ParacetamolRisk.SEVERE_HEPATIC)));
+        all.addAll(evaluate(new Order("1 g", "4 fois par jour")));
+        all.addAll(evaluate(new Order("1 g", "3 fois par jour")));
+        all.addAll(evaluate(new Order("1 g", "selon la douleur")));
+        assertThat(letters(all)).isEqualTo("CDINRSU");
+        assertThat(all).allSatisfy(card -> assertThat(card.detail())
+            .contains("24-hour total").contains("prescribed orders, not actual use")
+            .contains("Combination products are not counted")
+            .contains("nonprescription medicines, actual use and risk factors")
+            .contains("may still be present"));
+        assertThat(all).filteredOn(card -> card.indicator() != CdsCard.Indicator.CRITICAL)
+            .allSatisfy(card -> assertThat(card.detail()).contains("Daily limit:").contains("set by"));
+    }
+
+    @ParameterizedTest(name = "{0} kg, {1}: the limit is set by {2}")
+    @CsvSource(nullValues = "null", delimiter = '|', value = {
+        "70 | null | general adult ceiling",
+        "45 | null | the weight on file",
+        "70 | MALNUTRITION_OR_DEHYDRATION | coded malnutrition or dehydration",
+        "70 | TWO_GRAM_GROUP | coded hepatocellular insufficiency",
+        "30 | TWO_GRAM_GROUP | the weight on file",
+    })
+    void theCardNamesTheRuleThatSetTheLimit(Double kg, ParacetamolRisk risk, String rule) {
+        Order order = new Order("1 g", "6 fois par jour").weight(kg);
+        if (risk != null) {
+            order.risks(risk);
+        }
+        assertThat(evaluate(order).get(0).detail()).containsPattern("Daily limit: \\d+ mg per 24 h, set by [^.]*" + rule);
+    }
+
+    @Test
+    void theTotalIsToldUnknownWhenTheDoseIsNotMg() {
+        assertThat(evaluate(new Order("5 ml", "toutes les 2 heures")).get(0).detail())
+            .contains("24-hour total could not be calculated");
+    }
+
+    @Test
+    void ordersLeftOutAreNamedOnEveryCardAndNeverSilently() {
+        ParacetamolFacts facts = new ParacetamolFacts(true, List.of(), Set.of(), List.of("Doliprane 1000"), List.of("Codoliprane"));
+        Order quiet = new Order("500 mg", "1 fois par jour");
+        List<CdsCard> cards = evaluateWith(quiet, facts);
+        assertThat(letters(cards)).isEqualTo("P");
+        assertThat(cards.get(0).indicator()).isEqualTo(CdsCard.Indicator.INFO);
+        assertThat(cards.get(0).summary()).contains("Doliprane 1000").contains("Codoliprane");
+        assertThat(cards.get(0).detail()).contains("May still be in use, not counted: Doliprane 1000.")
+            .contains("cannot be read (Codoliprane)");
+
+        List<CdsCard> loud = evaluateWith(new Order("2 000 mg", "3 fois par jour"), facts);
+        assertThat(letters(loud)).isEqualTo("DS");
+        assertThat(loud).allSatisfy(card -> assertThat(card.detail()).contains("May still be in use, not counted: Doliprane 1000."));
+    }
+
+    @Test
+    void anOtherOrderWithNoReadableDurationIsTold() {
+        ParacetamolFacts.OtherOrder noDuration = new ParacetamolFacts.OtherOrder(
+            Prescription.builder().medicationName("Paracétamol").dosage("1 g").frequency("3 fois par jour").build(),
+            tablet500(), false);
+        assertThat(evaluate(new Order("1 g", "2 fois par jour").others(noDuration)).get(0).detail())
+            .contains("1 other active order(s) state no readable duration");
+    }
+
+    @Test
+    void anotherDrugIsSilent() {
         assertThat(rule.evaluate(new CdsRuleContext(agedYears(40), UUID.randomUUID(), "Amoxicilline", null, null, 5000d,
             null, 70d, List.of(), List.of()))).isEmpty();
     }
@@ -446,10 +532,18 @@ class AdultParacetamolRuleTest {
                 cards.addAll(evaluate(new Order("1 g", "toutes les 2 heures").weight(45d).others(other("20 cp", null))));
                 cards.addAll(evaluate(new Order("501 mg", "4 fois par jour").risks(ParacetamolRisk.values())));
                 cards.addAll(evaluate(new Order("500 mg", "3 fois par jour").others(other("1 g", "selon la douleur"))));
+                cards.addAll(evaluate(new Order("1 g", "3 fois par jour")));
+                cards.addAll(evaluateWith(new Order("100 mg", null),
+                    new ParacetamolFacts(true, List.of(), Set.of(), List.of("A"), List.of("B"))));
+                Order noBirthDate = new Order("1 g", null);
+                noBirthDate.patient = Patient.builder().build();
+                cards.addAll(evaluate(noBirthDate));
+                cards.addAll(evaluate(new Order("5 ml", "toutes les 2 heures")));
                 assertThat(cards).hasSizeGreaterThanOrEqualTo(8).allSatisfy(card -> {
                     assertThat(card.summary() + " " + card.detail())
                         .doesNotContain("per day").doesNotContain("between doses").doesNotContain("does not block")
-                        .doesNotContain("''").doesNotContain("{").doesNotContain("guidance").doesNotContain("order(s)");
+                        .doesNotContain("''").doesNotContain("{").doesNotContain("guidance").doesNotContain("order(s)")
+                        .doesNotContain("nonprescription").doesNotContain("actual use").doesNotContain("set by");
                     assertThat(card.source().label()).doesNotContain("Check");
                     if (reader.equals(Locale.FRENCH)) {
                         assertThat(card.source().label()).contains("l'adulte");
