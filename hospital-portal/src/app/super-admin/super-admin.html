@@ -212,7 +212,11 @@
         <!-- Recent audit events -->
         @if (!summaryUnavailable()) {
           <h2 class="section-heading">{{ 'SUPER_ADMIN.RECENT_AUDIT' | translate }}</h2>
-          <div class="audit-filters">
+          <div
+            class="audit-filters"
+            role="group"
+            [attr.aria-label]="'SUPER_ADMIN.RECENT_AUDIT' | translate"
+          >
             <button
               type="button"
               [attr.aria-pressed]="!auditFailuresOnly()"
@@ -235,7 +239,12 @@
             [attr.aria-label]="'SUPER_ADMIN.RECENT_AUDIT' | translate"
           >
             @if (visibleAudit().length === 0) {
-              <p class="activity-empty">{{ 'SUPER_ADMIN.AUDIT_EMPTY' | translate }}</p>
+              <p class="activity-empty">
+                {{
+                  (auditFailuresOnly() ? 'SUPER_ADMIN.AUDIT_EMPTY' : 'SUPER_ADMIN.AUDIT_NONE')
+                    | translate
+                }}
+              </p>
             }
             @for (event of visibleAudit(); track event.id) {
               <div class="audit-row" [class.audit-failed]="event.status === 'FAILURE'">
@@ -276,8 +285,8 @@
     <details class="dashboard-panel tools-directory">
       <!-- Quick links grid -->
       <summary>
-        {{ 'SUPER_ADMIN.QUICK_LINKS' | translate
-        }}<span>{{ 'SUPER_ADMIN.TOOLS_HELP' | translate }}</span
+        <h2>{{ 'SUPER_ADMIN.QUICK_LINKS' | translate }}</h2>
+        <span>{{ 'SUPER_ADMIN.TOOLS_HELP' | translate }}</span
         ><span class="material-symbols-outlined" aria-hidden="true">expand_more</span>
       </summary>
       <div class="links-grid" data-test="links-grid">

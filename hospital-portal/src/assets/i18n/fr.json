@@ -329,6 +329,7 @@
     }
   },
   "SUPER_ADMIN": {
+    "AUDIT_NONE": "Aucun événement d’audit récent disponible.",
     "NETWORK_WORKSPACE": "Pilotage de la plateforme",
     "NETWORK_OVERVIEW": "Votre réseau hospitalier en un regard",
     "NETWORK_HELP": "Totaux du réseau et comptes actifs",

@@ -447,7 +447,7 @@ summary:focus-visible,
 .tools-directory summary::-webkit-details-marker {
   display: none;
 }
-.tools-directory summary > span:first-child {
+.tools-directory summary > span:first-of-type {
   font-size: 12px;
   font-weight: 400;
   color: #52667b;
@@ -609,7 +609,7 @@ summary:focus-visible,
     flex-wrap: wrap;
     padding: 16px;
   }
-  .tools-directory summary > span:first-child {
+  .tools-directory summary > span:first-of-type {
     width: 80%;
   }
   .activity-row {
@@ -629,5 +629,23 @@ summary:focus-visible,
   *::after {
     transition: none !important;
     animation: none !important;
+  }
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.tools-directory summary h2 {
+  margin: 0;
+  font: inherit;
+}
+@media (prefers-reduced-motion: reduce) {
+  .spin {
+    animation: none;
   }
 }

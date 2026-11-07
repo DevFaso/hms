@@ -1,4 +1,4 @@
-import { TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
@@ -102,6 +102,7 @@ const auditEvent = (id: string, status: 'SUCCESS' | 'FAILURE' = 'SUCCESS'): Rece
 describe('SuperAdminComponent', () => {
   let dashboard: jasmine.SpyObj<DashboardService>;
   let platform: jasmine.SpyObj<PlatformService>;
+  let fixture: ComponentFixture<SuperAdminComponent>;
 
   function stubAllRecent(): void {
     // F5: super-admin.ts now fetches the aggregate /recent-activity
@@ -122,7 +123,7 @@ describe('SuperAdminComponent', () => {
         { provide: PlatformService, useValue: platform },
       ],
     });
-    const fixture = TestBed.createComponent(SuperAdminComponent);
+    fixture = TestBed.createComponent(SuperAdminComponent);
     fixture.detectChanges();
     return fixture.componentInstance;
   }
@@ -137,6 +138,57 @@ describe('SuperAdminComponent', () => {
   });
 
   afterEach(() => TestBed.resetTestingModule());
+
+  it('uses registered canonical destinations and warns only for nonzero attention counts', () => {
+    dashboard.getSummary.and.returnValue(of(fakeSummary()));
+    platform.getSummary.and.returnValue(of(fakePlatformSummary()));
+    setup();
+    const dom: HTMLElement = fixture.nativeElement;
+    const cards = Array.from(
+      dom.querySelectorAll<HTMLAnchorElement>('[data-test="platform-strip"] a'),
+    );
+    expect(cards.length).toBe(4);
+    expect(cards.every((card) => card.getAttribute('href') === '/super-admin/platform')).toBeTrue();
+    expect(dom.querySelector('.audit-footer')?.getAttribute('href')).toBe(
+      '/super-admin/audit-logs',
+    );
+    expect(cards.map((card) => card.classList.contains('warn'))).toEqual([
+      false,
+      true,
+      true,
+      false,
+    ]);
+    const clear = fakePlatformSummary();
+    clear.actions.pendingIntegrations = 0;
+    clear.actions.disabledLinks = 0;
+    platform.getSummary.and.returnValue(of(clear));
+    fixture.componentInstance.loadAll();
+    fixture.detectChanges();
+    expect(dom.querySelectorAll('.strip-card.warn').length).toBe(0);
+  });
+
+  it('shows unavailable rather than perpetual loading when a platform response lacks actions', () => {
+    dashboard.getSummary.and.returnValue(of(fakeSummary()));
+    platform.getSummary.and.returnValue(
+      of({ modules: [], automationTasks: [] } as unknown as PlatformSummary),
+    );
+    setup();
+    const panel: HTMLElement = fixture.nativeElement.querySelector('.platform-panel');
+    expect(panel.textContent).toContain('SUPER_ADMIN.PLATFORM_UNAVAILABLE');
+    expect(panel.textContent).not.toContain('COMMON.LOADING');
+  });
+
+  it('distinguishes an empty audit sample from an empty failure filter', () => {
+    dashboard.getSummary.and.returnValue(of(fakeSummary()));
+    platform.getSummary.and.returnValue(of(fakePlatformSummary()));
+    const c = setup();
+    const list: HTMLElement = fixture.nativeElement.querySelector('.audit-list');
+    expect(list.textContent).toContain('SUPER_ADMIN.AUDIT_NONE');
+    c.auditFailuresOnly.set(true);
+    fixture.detectChanges();
+    expect(list.textContent).toContain('SUPER_ADMIN.AUDIT_EMPTY');
+    expect(list.textContent).not.toContain('SUPER_ADMIN.AUDIT_NONE');
+  });
 
   it('reads an audit entity token in the reader language (D619)', () => {
     dashboard.getSummary.and.returnValue(of(fakeSummary()));

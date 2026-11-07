@@ -55,7 +55,7 @@
       </div>
       <span class="material-symbols-outlined directory-icon" aria-hidden="true">folder_shared</span>
     </div>
-    <div class="tabs" [attr.aria-label]="'ROI.STATUS_FILTER' | translate">
+    <div class="tabs" role="group" [attr.aria-label]="'ROI.STATUS_FILTER' | translate">
       @for (s of statuses; track s) {
         <button
           type="button"

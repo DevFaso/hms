@@ -26,9 +26,9 @@ import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 interface ControlTowerStat {
   key: string;
   labelKey: string;
-  value: number | string;
+  value: number;
   sublabelKey?: string;
-  subvalue?: number | string;
+  subvalue?: number;
   icon: string;
   color: string;
   route: string;
@@ -504,7 +504,7 @@ export class SuperAdminComponent implements OnInit {
           platformFailed.set(true);
         }
         this.platformSummary.set(res);
-        this.platformUnavailable.set(res === null);
+        this.platformUnavailable.set(res?.actions == null);
         this.errored.set(summaryFailed() && platformFailed());
       });
 

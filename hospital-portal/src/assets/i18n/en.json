@@ -329,6 +329,7 @@
     }
   },
   "SUPER_ADMIN": {
+    "AUDIT_NONE": "No recent audit events are available.",
     "NETWORK_WORKSPACE": "Platform operations",
     "NETWORK_OVERVIEW": "Your hospital network, at a glance",
     "NETWORK_HELP": "Network totals and active accounts",
@@ -4706,7 +4707,7 @@
     "STATUS_TOTAL": "Requests in this status",
     "PATIENT_LOADED": "Patient requests loaded",
     "THIRD_PARTY_LOADED": "Third-party requests loaded",
-    "REQUEST_DIRECTORY": "Requests to review",
+    "REQUEST_DIRECTORY": "Request tracking",
     "QUEUE_HELP": "One hospital queue, ordered oldest first.",
     "STATUS_FILTER": "Filter requests by status",
     "SEARCH": "Search patient, requester or request details",
