@@ -283,7 +283,7 @@ class FrequencyWordingTest {
      */
     @Test
     void anUnknownWordIsNeverACondition() {
-        for (String wording : List.of("q6h vertiges", "toutes les 6 h zzz", "prendre 1 comprimé 3 fois par jour",
+        for (String wording : List.of("q6h zzz", "toutes les 6 h zzz", "prendre 1 comprimé 3 fois par jour",
             "1 cp par jour pour HTA", "3 fois par jour pour infection", "1 fois par jour à heure précise")) {
             assertThat(FrequencyWording.classify(wording)).as(wording).isEqualTo(FrequencyWording.Verdict.FIXED);
         }

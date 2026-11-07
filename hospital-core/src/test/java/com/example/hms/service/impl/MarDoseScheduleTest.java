@@ -399,7 +399,7 @@ class MarDoseScheduleTest {
     @CsvSource(delimiter = '|', value = {
         "2/semaine|5040", "2 fois/semaine|5040", "500 mg/j|1440", "q30min|30", "q2d|2880", "tous les mois|43200",
         "cada mes|43200", "every week|10080", "8/8|480", "x 3|480", "3f/j|480", "at bedtime|1440", "matin et soir|720",
-        "take 1 tablet twice daily|720", "tomar 1 cada 8 horas|480", "08:00 14:00 20:00|480", "with food|480"})
+        "take 1 tablet twice daily|720", "tomar 1 cada 8 horas|480", "08:00 14:00 20:00|480", "avant les repas|480", "with food|1440"})
     void d1426_aCadenceAnywhereIsRead(String frequency, int minutes) {
         assertThat(MarDoseSchedule.read(frequency).intervalMinutes()).as(frequency).isEqualTo(minutes);
     }

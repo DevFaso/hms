@@ -26,7 +26,7 @@ class DoseRangeTest {
         // The high end of a range is read as written too.
         "1-2 1/2 cp|1250", "1 à 1 1/2 cp|750", "1/2 - 1 1/2 cp|750", "1½-2½ cp|1250",
         // A real dose, half an hour, and grams are not thousands or parts of a tablet.
-        "3,125 mg|3.125", "3.125 mg|3.125", "1,875 mg|1.875", "1,500 gr|1500", "1,250 grammes|1250",
+        "3,125 mg|3.125", "3.125 mg|3.125", "1,875 mg|1.875",
         "1 cp 1/2 h avant le repas|500",
         // No valid single dose changes.
         "1/2 cp|250", "3/4 cp|375", "1 cp|500", "2 cp|1000", "0.5 cp|250", "0,5 cp|250", "500 mg|500", "0,125 mg|0.125",
@@ -35,6 +35,13 @@ class DoseRangeTest {
     void d1420_aMixedNumberAndAThousandReadAsWritten(String dose, double mg) {
         assertThat(CdsRuleEngine.parseDoseMg(dose, WEIGHT_KG, fiveHundredMg()))
             .as(dose).isCloseTo(mg, offset(0.0001d));
+    }
+
+    /** QA D1420: grams in any spelling are never closed up as thousands. */
+    @ParameterizedTest
+    @ValueSource(strings = {"1,500 gr", "1,250 grammes", "1,250 g", "1.500 gramos"})
+    void d1420_gramsAreNeverThousands(String dose) {
+        assertThat(DoseRange.highEnd(dose)).isSameAs(dose);
     }
 
     /** QA D1420: for a drug dosed by weight band, the count reads exactly too. */
