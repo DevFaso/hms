@@ -980,7 +980,6 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                 reviewers = List.of();
             }
             boolean nobodyElse = reviewers.isEmpty();
-            String bodyKey = nobodyElse ? URGENT_REVIEW_NOBODY_BODY_KEY : URGENT_REVIEW_BODY_KEY;
             Object[] titleArgs = {medication};
             Object[] bodyArgs = {medication, patientName};
             for (UUID recipient : nobodyElse && signerUserId != null ? List.of(signerUserId) : reviewers) {
@@ -996,14 +995,18 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                 item.setPatientId(patientId);
                 item.setPatientName(patientName);
                 item.setTitleKey(URGENT_REVIEW_TITLE_KEY);
-                item.setBodyKey(bodyKey);
+                if (nobodyElse) {
+                    item.setBodyKey(URGENT_REVIEW_NOBODY_BODY_KEY);
+                } else {
+                    item.setBodyKey(URGENT_REVIEW_BODY_KEY);
+                }
                 item.setTitleArgs(titleArgs);
                 item.setBodyArgs(bodyArgs);
                 try {
                     item.setTitle(com.example.hms.utility.MessageUtil.resolve(
                         com.example.hms.service.i18n.NotificationLocales.STAFF, URGENT_REVIEW_TITLE_KEY, titleArgs));
                     item.setBody(com.example.hms.utility.MessageUtil.resolve(
-                        com.example.hms.service.i18n.NotificationLocales.STAFF, bodyKey, bodyArgs));
+                        com.example.hms.service.i18n.NotificationLocales.STAFF, item.getBodyKey(), bodyArgs));
                     urgentReviewBasket.createItemInNewTransaction(item);
                 } catch (RuntimeException ex) {
                     logger.error("Urgent dose review item not filed for prescription {}: {}", prescriptionId,
