@@ -111,14 +111,15 @@ describe('RegistrationsComponent deactivation', () => {
     expect(fixture.componentInstance.deactivating()).toBeNull();
   });
 
-  it('the box in the edit form asks too: refused on the field until there is a reason', () => {
+  it('the box in the edit form asks too: refused on the field until there is a reason', async () => {
     const { fixture, http, el } = page();
     const c = fixture.componentInstance;
     c.openEdit(row as never);
     fixture.detectChanges();
     expect(el.querySelector('#reg-deactivation-reason')).toBeNull();
 
-    c.form.active = false;
+    await fixture.whenStable();
+    (el.querySelector('.checkbox-field input') as HTMLInputElement).click();
     fixture.detectChanges();
     const box = el.querySelector('#reg-deactivation-reason') as HTMLElement;
     expect(box).not.toBeNull();

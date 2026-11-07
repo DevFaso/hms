@@ -101,6 +101,28 @@ describe('MyMedicationsComponent', () => {
     expect(links[0].download).toBe('ordonnance.pdf');
   });
 
+  it('QA D1442: the prescriptions show a page and the total, and every one is a click away', () => {
+    component.prescriptions.set(
+      Array.from({ length: 45 }, (_, i) => ({ id: 'rx' + i, medicationName: 'M' + i }) as never),
+    );
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    expect(el.querySelector('[data-testid="rx-count"]')?.textContent).toContain('PORTAL_PAGING');
+    expect(component.prescriptionRows.shown().length).toBe(20);
+    expect(component.prescriptionRows.total()).toBe(45);
+
+    (el.querySelector('[data-testid="rx-more"]') as HTMLButtonElement).click();
+    (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
+      '[data-testid="rx-more"]',
+    );
+    fixture.detectChanges();
+    expect(component.prescriptionRows.shown().length).toBe(40);
+    (el.querySelector('[data-testid="rx-more"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    expect(component.prescriptionRows.shown().length).toBe(45);
+    expect(el.querySelector('[data-testid="rx-more"]')).toBeNull();
+  });
+
   it('should toggle medication expand', () => {
     component.toggleMed('m1');
     expect(component.expandedMedId()).toBe('m1');
@@ -514,27 +536,5 @@ describe('MyMedicationsComponent — ready for collection', () => {
       expect(el.querySelector('[data-testid="medications-load-failed"]')).not.toBeNull();
       expect(el.querySelector('.portal-empty')).toBeNull();
     });
-  });
-
-  it('QA D1442: the prescriptions show a page and the total, and every one is a click away', () => {
-    component.prescriptions.set(
-      Array.from({ length: 45 }, (_, i) => ({ id: 'rx' + i, medicationName: 'M' + i }) as never),
-    );
-    fixture.detectChanges();
-    const el: HTMLElement = fixture.nativeElement;
-    expect(el.querySelector('[data-testid="rx-count"]')?.textContent).toContain('PORTAL_PAGING');
-    expect(component.prescriptionRows.shown().length).toBe(20);
-    expect(component.prescriptionRows.total()).toBe(45);
-
-    (el.querySelector('[data-testid="rx-more"]') as HTMLButtonElement).click();
-    (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
-      '[data-testid="rx-more"]',
-    );
-    fixture.detectChanges();
-    expect(component.prescriptionRows.shown().length).toBe(40);
-    (el.querySelector('[data-testid="rx-more"]') as HTMLButtonElement).click();
-    fixture.detectChanges();
-    expect(component.prescriptionRows.shown().length).toBe(45);
-    expect(el.querySelector('[data-testid="rx-more"]')).toBeNull();
   });
 });

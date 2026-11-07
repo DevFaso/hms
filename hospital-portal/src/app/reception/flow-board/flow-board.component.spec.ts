@@ -119,8 +119,9 @@ describe('FlowBoardComponent', () => {
     expect(wait?.textContent?.trim()).toBe('Attente : 706 min');
   });
 
-  it('should have 7 columns', () => {
-    expect(component.columns.length).toBe(7);
+  // QA D1445: the walk-in column, which stayed empty, is gone.
+  it('should have 6 columns', () => {
+    expect(component.columns.length).toBe(6);
   });
 
   it('should emit patientClicked', () => {

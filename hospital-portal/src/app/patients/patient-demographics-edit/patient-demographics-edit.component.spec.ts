@@ -226,6 +226,7 @@ describe('PatientDemographicsEditComponent (QA D926)', () => {
 
       c.form.firstName = 'Awa';
       c.form.lastName = 'Traoré';
+      patients.patchDemographics.and.returnValue(of({} as PatientResponse));
       c.submit();
       fixture.detectChanges();
       expect(marked(fixture)).toEqual([]);
