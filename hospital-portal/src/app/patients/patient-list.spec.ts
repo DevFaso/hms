@@ -101,6 +101,29 @@ describe('PatientListComponent directory', () => {
     expect(patients.list).toHaveBeenCalledTimes(1);
   });
 
+  it('marks all loaded records selected only without extra facets and resets them on metric click', () => {
+    const fixture = make();
+    fixture.detectChanges();
+    const c = fixture.componentInstance;
+    const all = (): HTMLButtonElement => fixture.nativeElement.querySelector('[data-metric="all"]');
+    c.hospitalFilter = 'h1';
+    c.onFilterChange();
+    fixture.detectChanges();
+    expect(all().getAttribute('aria-pressed')).toBe('true');
+    for (const facet of ['searchTerm', 'genderFilter', 'bloodTypeFilter'] as const) {
+      c[facet] = facet === 'searchTerm' ? 'Second' : facet === 'genderFilter' ? 'FEMALE' : 'O+';
+      c.onFilterChange();
+      fixture.detectChanges();
+      expect(all().getAttribute('aria-pressed')).toBe('false');
+      all().click();
+      fixture.detectChanges();
+      expect(c[facet]).toBe('');
+      expect(c.hospitalFilter).toBe('h1');
+      expect(c.filtered().map((p) => p.id)).toEqual(['cdx-1']);
+      expect(all().getAttribute('aria-pressed')).toBe('true');
+    }
+  });
+
   it('treats either phone or email as contact, including phone-first and secondary-only records', () => {
     const c = make().componentInstance;
     c.patients.set([

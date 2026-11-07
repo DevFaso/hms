@@ -117,7 +117,14 @@ export class PatientListComponent implements OnInit, OnDestroy {
   }
 
   metricSelected(id: string): boolean {
-    if (id === 'all') return !this.statusFilter && !this.contactFilter;
+    if (id === 'all')
+      return (
+        !this.statusFilter &&
+        !this.contactFilter &&
+        !this.searchTerm.trim() &&
+        !this.genderFilter &&
+        !this.bloodTypeFilter
+      );
     if (id === 'no-contact') return this.contactFilter === 'missing' && !this.statusFilter;
     return this.statusFilter === id && !this.contactFilter;
   }

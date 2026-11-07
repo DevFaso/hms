@@ -12,7 +12,7 @@
       </button>
       @if (canCreate) {
         <a routerLink="/patients/new" class="btn-primary">
-          <span class="material-symbols-outlined">person_add</span>
+          <span class="material-symbols-outlined" aria-hidden="true">person_add</span>
           {{ 'PATIENTS.REGISTER' | translate }}
         </a>
       }
@@ -74,7 +74,7 @@
     <!-- Search + Filter toolbar -->
     <div class="filter-toolbar">
       <div class="search-bar toolbar-search">
-        <span class="material-symbols-outlined search-icon">search</span>
+        <span class="material-symbols-outlined search-icon" aria-hidden="true">search</span>
         <input
           [attr.aria-label]="'PATIENTS.SEARCH' | translate"
           type="text"
@@ -101,7 +101,7 @@
         (click)="showFilters.set(!showFilters())"
         [title]="'PATIENTS.TOGGLE_FILTERS' | translate"
       >
-        <span class="material-symbols-outlined">tune</span>
+        <span class="material-symbols-outlined" aria-hidden="true">tune</span>
         {{ 'COMMON.FILTERS' | translate }}
         @if (activeFilterCount > 0) {
           <span class="filter-badge">{{ activeFilterCount }}</span>
@@ -295,7 +295,9 @@
               >
                 <button type="button" class="sort-button" (click)="sort('name')">
                   {{ 'PATIENTS.PATIENT_NAME' | translate }}
-                  <span class="material-symbols-outlined sort-icon">{{ sortIcon('name') }}</span>
+                  <span class="material-symbols-outlined sort-icon" aria-hidden="true">{{
+                    sortIcon('name')
+                  }}</span>
                 </button>
               </th>
               <th
@@ -311,7 +313,9 @@
               >
                 <button type="button" class="sort-button" (click)="sort('mrn')">
                   {{ 'PATIENTS.MRN' | translate }}
-                  <span class="material-symbols-outlined sort-icon">{{ sortIcon('mrn') }}</span>
+                  <span class="material-symbols-outlined sort-icon" aria-hidden="true">{{
+                    sortIcon('mrn')
+                  }}</span>
                 </button>
               </th>
               <th scope="col">{{ 'PATIENTS.CONTACT_DETAILS' | translate }}</th>
@@ -328,7 +332,9 @@
               >
                 <button type="button" class="sort-button" (click)="sort('gender')">
                   {{ 'PATIENTS.GENDER' | translate }}
-                  <span class="material-symbols-outlined sort-icon">{{ sortIcon('gender') }}</span>
+                  <span class="material-symbols-outlined sort-icon" aria-hidden="true">{{
+                    sortIcon('gender')
+                  }}</span>
                 </button>
               </th>
               <th scope="col">{{ 'PATIENTS.BLOOD_TYPE' | translate }}</th>
@@ -345,7 +351,9 @@
               >
                 <button type="button" class="sort-button" (click)="sort('status')">
                   {{ 'COMMON.STATUS' | translate }}
-                  <span class="material-symbols-outlined sort-icon">{{ sortIcon('status') }}</span>
+                  <span class="material-symbols-outlined sort-icon" aria-hidden="true">{{
+                    sortIcon('status')
+                  }}</span>
                 </button>
               </th>
               <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
