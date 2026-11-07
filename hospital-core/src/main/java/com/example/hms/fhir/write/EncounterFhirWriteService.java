@@ -151,8 +151,7 @@ public class EncounterFhirWriteService {
             ));
         // QA D1428 class: a closed visit's record is protected on this path too.
         if (existing.getStatus() != null && existing.getStatus().isClosed()) {
-            throw new com.example.hms.exception.BusinessException("encounter.closed.readOnly",
-                existing.getStatus().localizedLabel());
+            throw forbidden("Encounter " + encounterId + " is closed: its record can no longer be changed.");
         }
 
         // Defence-in-depth: the repository scope already filters by hospital,

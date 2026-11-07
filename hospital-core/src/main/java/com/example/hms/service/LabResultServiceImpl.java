@@ -828,11 +828,11 @@ public class LabResultServiceImpl implements LabResultService {
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         requireResultInActiveHospital(labResult);
         requireNotReleased(labResult);
-        // QA D1428 class: a signature covers the value it was given to; a value
-        // changed after it would carry a signature nobody gave. Release, then supersede.
-        if (labResult.getSignedAt() != null) {
-            throw new BusinessException("labresult.signed.immutable");
-        }
+        // QA D1428 class: a signature covers the value it was given to. Before
+        // release the lab still corrects a typo (sending a known wrong value to
+        // the chart first is worse), so the signature and the acknowledgment
+        // that came with it are withdrawn, and the clinician signs the new value.
+        withdrawSignature(labResult);
 
         // Amending a result is entering one. Same gate — otherwise a bedside
         // role blocked from creating a lab-performed result could simply
@@ -977,8 +977,27 @@ public class LabResultServiceImpl implements LabResultService {
             .orElseThrow(() -> new ResourceNotFoundException(LAB_RESULT_NOT_FOUND));
         requireResultInActiveHospital(labResult);
         requireNotReleased(labResult);
+        // QA D1428 class: nor is the signature taken away with the row.
+        if (labResult.getSignedAt() != null) {
+            throw new BusinessException("labresult.signed.noDelete");
+        }
         clearSupersededBackLink(labResult);
         labResultRepository.deleteById(id);
+    }
+
+    private static void withdrawSignature(LabResult labResult) {
+        if (labResult.getSignedAt() == null) {
+            return;
+        }
+        labResult.setSignedAt(null);
+        labResult.setSignedByUserId(null);
+        labResult.setSignedByDisplay(null);
+        labResult.setSignatureValue(null);
+        labResult.setSignatureNotes(null);
+        labResult.setAcknowledged(false);
+        labResult.setAcknowledgedAt(null);
+        labResult.setAcknowledgedByUserId(null);
+        labResult.setAcknowledgedByDisplay(null);
     }
 
     /**

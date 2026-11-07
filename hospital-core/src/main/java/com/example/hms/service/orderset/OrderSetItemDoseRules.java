@@ -23,8 +23,8 @@ final class OrderSetItemDoseRules {
 
     static final String DOSE_UNIT_KEY = "doseUnit";
 
-    /** A number or a range of numbers and nothing else: "2", "2,5", "2-4". */
-    private static final Pattern BARE_NUMBER = Pattern.compile("\\d++(?:[.,]\\d++)?+(?:\\s*+-\\s*+\\d++(?:[.,]\\d++)?+)?+");
+    /** Digits and the marks between them and nothing else: "2", "2,5", ".5", "1/2", "2-4", "2 \u2013 4". */
+    private static final Pattern BARE_NUMBER = Pattern.compile("[\\d.,/\\s\u2013-]++");
 
     private OrderSetItemDoseRules() {
     }
@@ -47,7 +47,7 @@ final class OrderSetItemDoseRules {
     }
 
     private static boolean isBareNumber(String amount) {
-        return BARE_NUMBER.matcher(amount.strip()).matches();
+        return BARE_NUMBER.matcher(amount).matches() && amount.chars().anyMatch(Character::isDigit);
     }
 
     private static String rangeOf(Map<String, Object> item) {

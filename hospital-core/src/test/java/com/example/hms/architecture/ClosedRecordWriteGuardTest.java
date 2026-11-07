@@ -39,6 +39,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ClosedRecordWriteGuardTest {
 
     private static final Path SERVICES = Path.of("src/main/java/com/example/hms/service");
+    private static final Path FHIR_WRITES = Path.of("src/main/java/com/example/hms/fhir/write");
 
     /** Every method declaration at class level; the name is the word before the parenthesis. */
     private static final Pattern METHOD = Pattern.compile(
@@ -47,11 +48,11 @@ class ClosedRecordWriteGuardTest {
 
     /** A refusal keyed on the record's state, or a helper named for one. */
     private static final Pattern STATE_CHECK = Pattern.compile(
-        "requireOpen\\(|requireWritableBy\\(|requirePlanOpen\\(|requireNot\\w*+\\(|requireDispensedOrderKept\\("
-            + "|isClosedStatus\\(|isClosed\\(|isTerminal\\(|isSigned\\(|getSignedAt\\(|getIsFinalized\\("
-            + "|isEnteredInError\\(|isWithdrawn\\(|validateStatusTransition\\(|[lL]ocked\"|readOnly\"|immutable\""
-            + "|CLOSED_TO_EDIT|RESULTED_STATUSES|_LOCKED\\b|getStatus\\(\\)\\s*+==|NoEdit\""
-            + "|applyCorrectionGuard\\(|requireLegalUpdate\\(");
+        "requireOpen\\(|requireWritableBy\\(|requirePlanOpen\\(|requireNotCancelled\\(|requireNotReleased\\(|requireNotWithdrawn\\("
+            + "|requireNotVoided\\(|requireDispensedOrderKept\\(|isClosedStatus\\(|isClosed\\(|isTerminal\\(|isSigned\\("
+            + "|getIsFinalized\\(|isWithdrawn\\(|validateStatusTransition\\(|CLOSED_TO_EDIT|RESULTED_STATES"
+            + "|getStatus\\(\\)\\s*+==\\s*+\\w++\\.(?:COMPLETED|CANCELLED|REVOKED|ENTERED_IN_ERROR)"
+            + "|[lL]ocked\"|NoEdit\"|readOnly\"|applyCorrectionGuard\\(|requireLegalUpdate\\(");
 
     private static final String NO_TERMINAL_STATE =
         "this record has no terminal state (master data, an account, or a living history)";
@@ -117,6 +118,17 @@ class ClosedRecordWriteGuardTest {
         "PatientEducationServiceImpl#updateProgress", 1, NO_TERMINAL_STATE,
         "PatientEducationServiceImpl#updateVisitDocumentation", 1, NO_TERMINAL_STATE,
         "PatientPortalServiceImpl#updateMyEducationProgress", 1, NO_TERMINAL_STATE,
+        "BedManagementServiceImpl#updateBed", 1, NO_TERMINAL_STATE,
+        "BedManagementServiceImpl#updateBedStatus", 1, NO_TERMINAL_STATE,
+        "InventoryServiceImpl#updateStockLot", 1, NO_TERMINAL_STATE,
+        "SubscriptionServiceImpl#updatePlan", 1, NO_TERMINAL_STATE,
+        "UserRoleHospitalAssignmentServiceImpl#updateAssignment", 1, NO_TERMINAL_STATE,
+        "WebhookEndpointService#update", 1, NO_TERMINAL_STATE,
+        "PatientFhirWriteService#update", 1, NO_TERMINAL_STATE,
+        "EncounterFhirWriteService#update", 2, "both delegate to doUpdate, pinned in NAMED_WRITES",
+        "ObservationFhirWriteService#updateLabResult", 1, "QA D1428 open, tasklist: appends notes to a released result; FHIR writes are off by default",
+        "StaffSchedulingServiceImpl#updateShift", 1, "a roster shift, not a clinical record",
+        "StaffSchedulingServiceImpl#updateShiftStatus", 1, "a roster shift, not a clinical record",
         "AppointmentServiceImpl#updateAppointment", 1, "scheduling, not a clinical record: its status rule is requireValidStatusChange, read by the edit further down",
         "HighRiskPregnancyCarePlanServiceImpl#updatePlan", 1, "QA D1428 open, tasklist: the active flag on the same body is how a plan is closed and reopened, so an inactive plan's edit needs a product rule first",
         "ImmunizationServiceImpl#updateImmunization", 1, "QA D1428 open, tasklist: fix/r34-maternity-records owns this file in round 34; an entered-in-error dose can be edited back",
@@ -133,7 +145,7 @@ class ClosedRecordWriteGuardTest {
     void everyEditMethodRefusesAClosedRecordOrSaysWhyNot() throws IOException {
         Map<String, Integer> actual = new TreeMap<>();
         int edits = 0;
-        try (Stream<Path> files = Files.walk(SERVICES)) {
+        try (Stream<Path> files = Stream.concat(Files.walk(SERVICES), Files.walk(FHIR_WRITES))) {
             for (Path file : files.filter(f -> f.toString().endsWith(".java")).sorted().toList()) {
                 String source = SourceScan.stripComments(Files.readString(file, StandardCharsets.UTF_8));
                 if (!source.contains(" class ")) {
@@ -176,11 +188,14 @@ class ClosedRecordWriteGuardTest {
         new String[] {"DischargeSummaryServiceImpl.java", "enrichSparseExistingSummaries", "getIsFinalized()"},
         new String[] {"EncounterTreatmentServiceImpl.java", "addTreatmentToEncounter", "ENDED_UNSEEN"},
         new String[] {"impl/NurseTaskServiceImpl.java", "verifyMedicationAdministration", "nurse.mar.alreadyRecorded"},
+        new String[] {"../fhir/write/EncounterFhirWriteService.java", "doUpdate", "isClosed()"},
+        new String[] {"LabResultServiceImpl.java", "updateLabResult", "withdrawSignature("},
+        new String[] {"LabResultServiceImpl.java", "deleteLabResult", "labresult.signed.noDelete"},
         new String[] {"TreatmentPlanServiceImpl.java", "addFollowUp", "requirePlanOpen("},
         new String[] {"TreatmentPlanServiceImpl.java", "updateFollowUp", "requirePlanOpen("},
         new String[] {"TreatmentPlanServiceImpl.java", "addReview", "requirePlanOpen("},
         new String[] {"PrescriptionServiceImpl.java", "updatePrescription", "requireDispensedOrderKept("},
-        new String[] {"PrescriptionServiceImpl.java", "deletePrescription", "DISPENSED_FROM"},
+        new String[] {"PrescriptionServiceImpl.java", "deletePrescription", "hasBeenDispensedFrom("},
         new String[] {"impl/ImagingReportServiceImpl.java", "updateReportStatus", "requireNotVoided("},
         // QA D1435: every way a stay ends closes its nursing work.
         new String[] {"AdmissionStayEncounterService.java", "recordCancellation", "closeNursingWorkOfCancelledStay("},

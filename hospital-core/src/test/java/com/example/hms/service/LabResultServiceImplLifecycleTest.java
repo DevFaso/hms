@@ -2018,21 +2018,36 @@ class LabResultServiceImplLifecycleTest {
         verify(labResultRepository, never()).save(any(LabResult.class));
     }
 
-    /** QA D1428 class: a signature covers the value it was given to. */
+    /** QA D1428 class: a signature covers the value it was given to: the amend withdraws it. */
     @Test
-    void qaD1428_aSignedResultIsNotAmended() {
+    void qaD1428_anAmendOfASignedResultWithdrawsTheSignature() {
+        org.mockito.Mockito.lenient().when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        stubEntryPath();
+        LabResult existing = resultOn(order, false);
+        existing.setSignedAt(java.time.LocalDateTime.now());
+        existing.setSignedByDisplay("Dr A");
+        existing.setAcknowledged(true);
+        when(labResultRepository.findById(existing.getId())).thenReturn(Optional.of(existing));
+        LabResultRequestDTO request = entryRequest();
+        request.setResultValue("9.9");
+
+        service.updateLabResult(existing.getId(), request, Locale.ENGLISH);
+
+        assertThat(existing.getSignedAt()).isNull();
+        assertThat(existing.getSignedByDisplay()).isNull();
+        assertThat(existing.isAcknowledged()).isFalse();
+    }
+
+    @Test
+    void qaD1428_aSignedResultIsNotDeleted() {
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         LabResult existing = resultOn(order, false);
         existing.setSignedAt(java.time.LocalDateTime.now());
-        existing.setResultValue("7.1");
         when(labResultRepository.findById(existing.getId())).thenReturn(Optional.of(existing));
-        com.example.hms.payload.dto.LabResultRequestDTO request = new com.example.hms.payload.dto.LabResultRequestDTO();
-        request.setResultValue("9.9");
 
-        assertThatThrownBy(() -> service.updateLabResult(existing.getId(), request, Locale.ENGLISH))
+        assertThatThrownBy(() -> service.deleteLabResult(existing.getId(), Locale.ENGLISH))
             .isInstanceOf(com.example.hms.exception.BusinessException.class)
-            .hasFieldOrPropertyWithValue("messageKey", "labresult.signed.immutable");
-        assertThat(existing.getResultValue()).isEqualTo("7.1");
-        verify(labResultRepository, never()).save(any());
+            .hasFieldOrPropertyWithValue("messageKey", "labresult.signed.noDelete");
+        verify(labResultRepository, never()).deleteById(any());
     }
 }

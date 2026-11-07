@@ -266,6 +266,16 @@ describe('LabComponent — performing laboratory', () => {
     expect(component.specimenForm.specimenType).toBe('Sang total EDTA');
   });
 
+  it('QA D1428 class: a resulted or cancelled order offers no edit', () => {
+    const row = (status: string) => ({ status }) as unknown as LabOrderResponse;
+    for (const status of ['VERIFIED', 'COMPLETED', 'CANCELLED', 'ENTERED_IN_ERROR']) {
+      expect(component.isEditable(row(status)))
+        .withContext(status)
+        .toBeFalse();
+    }
+    expect(component.isEditable(row('ORDERED'))).toBeTrue();
+  });
+
   it('QA D820: a voided order offers neither Receive nor Collect in its specimens modal', async () => {
     await setup(['ROLE_LAB_SCIENTIST'], []);
     const collected = {

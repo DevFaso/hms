@@ -84,6 +84,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private static final String AUDIT_ENTITY_PRESCRIPTION = "Prescription";
 
     private final PrescriptionRepository prescriptionRepository;
+    /** QA D1432: whether medicine has left the counter under an order. */
+    private final com.example.hms.repository.pharmacy.DispenseRepository dispenseRepository;
     private final PatientRepository patientRepository;
     private final com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
     private final PatientAllergyRepository patientAllergyRepository;
@@ -1432,11 +1434,11 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // security finding 3); a super-admin in global view has none.
         UUID actingHospitalId = roleValidator.requireActiveHospitalId();
         Prescription existing = lockForUpdateInActingHospital(id, actingHospitalId);
+        requireDispensedOrderKept(existing, request);
         // QA D660: a signed order is no longer rewritten by edit.
         if (existing.getStatus() == PrescriptionStatus.SIGNED) {
             return withdrawSignedPrescription(existing, request);
         }
-        requireDispensedOrderKept(existing, request);
         // QA D1161 (round 21): withdrawing an order a signature led to (sent,
         // partly filled, at a partner, printed, awaiting a clarification) is
         // the withdrawal of a signed order, under the same rule: its author,
@@ -1689,7 +1691,10 @@ public class PrescriptionServiceImpl implements PrescriptionService {
      * it was withdrawn while the patient had it and the dispense stayed billable.
      *
      * <ul>
-     *   <li>CANCELLED ("never given") is refused, whole fill or part. What a
+     *   <li>CANCELLED ("never given") is refused, whole fill or part, whatever
+     *       status the row holds now: a part fill moves on to PENDING_STOCK, a
+     *       partner or a clarification, and a refill release returns to SIGNED,
+     *       so the fills decide ({@link #hasBeenDispensedFrom}). What a
      *       pharmacy does with a part fill is stop the balance: DISCONTINUED,
      *       under the signed-order rule (a reason, audited). The fill and its
      *       charge stand, and the rest is no longer dispensable. The same stop
@@ -1699,15 +1704,12 @@ public class PrescriptionServiceImpl implements PrescriptionService {
      *       (G13/G15: the edit voids a prepared fill).</li>
      * </ul>
      */
-    private static void requireDispensedOrderKept(Prescription existing, PrescriptionRequestDTO request) {
-        PrescriptionStatus current = existing.getStatus();
-        if (current == null || !DISPENSED_FROM.contains(current)) {
-            return;
-        }
-        if (request.getStatus() == PrescriptionStatus.CANCELLED) {
+    private void requireDispensedOrderKept(Prescription existing, PrescriptionRequestDTO request) {
+        if (request.getStatus() == PrescriptionStatus.CANCELLED && hasBeenDispensedFrom(existing)) {
             throw new com.example.hms.exception.FieldBusinessException(FIELD_STATUS, "prescription.dispensed.noCancel");
         }
-        if (current == PrescriptionStatus.PARTIALLY_FILLED) {
+        PrescriptionStatus current = existing.getStatus();
+        if (current != PrescriptionStatus.DISPENSED && current != PrescriptionStatus.PARTNER_DISPENSED) {
             return;
         }
         boolean plainStop = request.getStatus() == PrescriptionStatus.DISCONTINUED && !changesSignedContent(existing, request);
@@ -1715,6 +1717,16 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             throw new com.example.hms.exception.FieldBusinessException(FIELD_STATUS, request.getStatus() == null
                 || request.getStatus().isWithdrawn() ? "prescription.dispensed.readOnly" : "prescription.status.notAssertable");
         }
+    }
+
+    /** QA D1432: medicine has left the counter under this order, by its status or by a fill on record. */
+    private boolean hasBeenDispensedFrom(Prescription prescription) {
+        if (prescription.getStatus() != null && DISPENSED_FROM.contains(prescription.getStatus())) {
+            return true;
+        }
+        java.math.BigDecimal filled = dispenseRepository.sumQuantityDispensedForPrescription(
+            prescription.getId(), com.example.hms.repository.pharmacy.DispenseRepository.NOT_A_FILL);
+        return filled != null && filled.signum() > 0;
     }
 
     /**
@@ -1871,7 +1883,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             throw new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND);
         }
         // QA D1432: the order a dispense was made from outlives any delete.
-        if (prescription.getStatus() != null && DISPENSED_FROM.contains(prescription.getStatus())) {
+        if (hasBeenDispensedFrom(prescription)) {
             throw new BusinessException("prescription.dispensed.readOnly");
         }
 

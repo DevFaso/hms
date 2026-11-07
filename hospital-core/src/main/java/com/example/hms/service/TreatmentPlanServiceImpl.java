@@ -129,8 +129,9 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
         // QA D1127: the edit is the author's, so it never moves the plan to APPROVED.
         requireNotApprovedByWrite(plan.getStatus(), requestDTO.getStatus());
         // QA D1066 class (round 21, with D1162): a cancelled plan is closed to edits too.
-        // QA D1428 class: and an archived one.
-        requirePlanOpen(plan);
+        // An archived one is not: this form is the only way back from a mistaken archive.
+        com.example.hms.service.support.CancelledOrders.requireNotCancelled(plan.getStatus(),
+            "treatmentPlan.cancelled.locked");
         validateEncounterContext(encounter, hospital, patient);
         // QA D401: the patient must be registered at the hospital the row is written in.
         patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());

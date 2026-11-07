@@ -410,7 +410,7 @@ export class OrderSetPickerComponent implements OnChanges, OnDestroy {
       // QA D1436: a bare number and its unit read together, as on the order.
       const written = String(dose).trim();
       const unit = item['doseUnit'];
-      return unit && /^[\d.,\s-]+$/.test(written) ? `${written} ${unit as string}` : written;
+      return unit && /^[\d.,/\s\u2013-]+$/.test(written) ? `${written} ${unit as string}` : written;
     }
     const min = item['doseRangeMin'];
     const max = item['doseRangeMax'];

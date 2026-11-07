@@ -37,6 +37,8 @@ public class AdmissionStayEncounterService {
 
     /** nursing_tasks.completed_by_name and nurse_handoffs.completed_by_name. */
     private static final int CLOSER_MAX = 200;
+    /** Room for the sentence around the reason, so its closing parenthesis stays. */
+    private static final int CLOSER_REASON_MAX = 150;
 
     private final EncounterRepository encounterRepository;
     private final StaffRepository staffRepository;
@@ -204,7 +206,7 @@ public class AdmissionStayEncounterService {
         LocalDateTime opened = stayOpenedAt(admission);
         LocalDateTime now = LocalDateTime.now(java.time.ZoneId.systemDefault());
         String reason = admission.getCancellationReason();
-        String closedBy = messageSource.getMessage("nurse.work.closedByStayCancel", new Object[] {reason},
+        String closedBy = messageSource.getMessage("nurse.work.closedByStayCancel", new Object[] {truncate(reason, CLOSER_REASON_MAX)},
             "Closed: stay cancelled", org.springframework.context.i18n.LocaleContextHolder.getLocale());
         String closer = truncate(closedBy, CLOSER_MAX);
 

@@ -42,9 +42,6 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
 
     /** QA D1066: refused on any write to a cancelled order. */
     private static final String IMAGING_ORDER_CANCELLED_LOCKED = "imaging.order.cancelled.locked";
-    /** QA D1428 class: the study has been done. */
-    private static final java.util.Set<ImagingOrderStatus> RESULTED_STATUSES = java.util.EnumSet.of(
-        ImagingOrderStatus.COMPLETED, ImagingOrderStatus.RESULTS_AVAILABLE);
     /** QA D1098: an imaging order's resulted states, in lifecycle order. */
     private static final List<ImagingOrderStatus> RESULTED_STATES =
         List.of(ImagingOrderStatus.COMPLETED, ImagingOrderStatus.RESULTS_AVAILABLE);
@@ -156,7 +153,7 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         com.example.hms.service.support.CancelledOrders.requireNotCancelled(order.getStatus(),
             IMAGING_ORDER_CANCELLED_LOCKED);
         // QA D1428 class: a study done is what was done; a correction is a new order.
-        if (RESULTED_STATUSES.contains(order.getStatus())) {
+        if (RESULTED_STATES.contains(order.getStatus())) {
             throw new com.example.hms.exception.BusinessException("imaging.order.resulted.locked");
         }
 
@@ -223,6 +220,10 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         // cancelled nor sent back to ORDERED - and every cancel states why.
         com.example.hms.service.support.CancelledOrders.requireResultStaysClosed(order.getStatus(),
             request.getStatus(), RESULTED_STATES);
+        // QA D1428 class: nor does a same-status write rewrite its schedule and notes.
+        if (RESULTED_STATES.contains(order.getStatus()) && request.getStatus() == order.getStatus()) {
+            throw new com.example.hms.exception.FieldBusinessException("status", "imaging.order.resulted.locked");
+        }
         if (cancelling) {
             requireCancelAuthor(order);
         }

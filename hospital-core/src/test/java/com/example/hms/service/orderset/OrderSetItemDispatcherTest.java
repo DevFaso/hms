@@ -392,6 +392,8 @@ class OrderSetItemDispatcherTest {
             org.junit.jupiter.params.provider.Arguments.of(Map.of("dose", 2, "doseUnit", "mg"), "2 mg IV"),
             org.junit.jupiter.params.provider.Arguments.of(Map.of("dose", "2-4", "doseUnit", "mg"), "2-4 mg IV"),
             org.junit.jupiter.params.provider.Arguments.of(Map.of("dose", "2 mg", "doseUnit", "mg"), "2 mg IV"),
+            org.junit.jupiter.params.provider.Arguments.of(Map.of("dose", ".5", "doseUnit", "mg"), ".5 mg IV"),
+            org.junit.jupiter.params.provider.Arguments.of(Map.of("dose", "1/2", "doseUnit", "cp"), "1/2 cp IV"),
             org.junit.jupiter.params.provider.Arguments.of(Map.of("dose", "2 g"), "2 g IV"),
             org.junit.jupiter.params.provider.Arguments.of(Map.of("doseRangeMin", 2, "doseRangeMax", 4, "doseUnit", "mg"), "2-4 mg IV"),
             org.junit.jupiter.params.provider.Arguments.of(Map.of(), "IV"));

@@ -607,8 +607,9 @@ public class EncounterServiceImpl implements EncounterService {
         if (note == null) {
             throw new com.example.hms.exception.FieldBusinessException("note", ENCOUNTER_CLOSED_READ_ONLY, label);
         }
-        upsertEncounterNoteInternal(closed, resolveSessionNoteAuthor(closed, note.getAuthorStaffId(),
-            note.getAuthorUserId(), note.getAuthorName(), locale), note, locale, request.getUpdatedBy(), closed.getStatus(), false);
+        // QA D1151 class: an empty note here would lock the real one out for good (D513).
+        requireNoteContent(upsertEncounterNoteInternal(closed, resolveSessionNoteAuthor(closed, note.getAuthorStaffId(),
+            note.getAuthorUserId(), note.getAuthorName(), locale), note, locale, request.getUpdatedBy(), closed.getStatus(), false));
         return encounterMapper.toEncounterResponseDTO(closed);
     }
 
