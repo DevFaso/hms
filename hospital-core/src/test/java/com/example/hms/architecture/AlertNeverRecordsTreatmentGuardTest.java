@@ -32,13 +32,21 @@ class AlertNeverRecordsTreatmentGuardTest {
     private static final String CAPITALISED_FLAG = "HemorrhageProtocolActivated";
     private static final Pattern FLAG_BUILD = Pattern.compile("\\." + FLAG + "\\(([^;\\n]*)\\)");
 
-    /** A flag set to a constant true in clinical code says something happened that nobody submitted. */
-    private static final Pattern FORCED_TRUE = Pattern.compile(
-        "\\.(?:set[A-Z]|[a-z])\\w{0,80}(?:Initiated|Activated|Started|Given|Performed|Administered|Treated|Transfused)"
-            + "\\((?:true|Boolean\\.TRUE)\\)");
+    private static final String TREATMENT_NAME =
+        "\\w{0,80}(?:Initiated|Activated|Started|Given|Performed|Administered|Treated|Transfused)";
 
-    /** Removed by CR-06 itself on fix/cr-newborn: delete this entry when that branch is merged. */
-    private static final Set<String> FILED = Set.of("NewbornAssessmentServiceImpl.java");
+    /** A flag built or set to a constant true says something happened that nobody submitted. */
+    private static final Pattern FORCED_TRUE = Pattern.compile(
+        "\\.(?:set[A-Z]|[a-z])" + TREATMENT_NAME + "\\s*\\(\\s*(?:true|Boolean\\.TRUE)\\s*\\)");
+
+    /** A flag set from anything but a submitted value: a computed indicator is the same defect as a constant. */
+    private static final Pattern SET_FROM = Pattern.compile("\\.set[A-Z]" + TREATMENT_NAME + "\\s*\\(([^;\\n]*)\\)");
+
+    /** Removed by CR-06 itself on fix/cr-newborn: delete these entries when that branch is merged. */
+    private static final Set<String> FILED = Set.of(
+        ".setThermoregulationSupportInitiated(true)",
+        ".setRespiratorySupportInitiated(true)",
+        ".setGlucoseProtocolInitiated(true)");
 
     private static final List<String> CLINICAL_CODE =
         List.of("service", "cdshooks", "hl7", "fhir", "mapper", "model", "controller");
@@ -88,18 +96,27 @@ class AlertNeverRecordsTreatmentGuardTest {
     }
 
     @Test
-    @DisplayName("across clinical code, no initiated, activated, started, given or performed flag is forced to true")
+    @DisplayName("across clinical code, no initiated, activated, started, given or performed flag is forced or computed")
     void noTreatmentFlagIsForcedToTrue() throws IOException {
         List<String> offenders = new ArrayList<>();
         for (String area : CLINICAL_CODE) {
             try (Stream<Path> files = Files.walk(HMS.resolve(area))) {
                 for (Path file : files.filter(p -> p.toString().endsWith(".java")).toList()) {
-                    if (FILED.contains(file.getFileName().toString())) {
-                        continue;
-                    }
-                    Matcher forced = FORCED_TRUE.matcher(Files.readString(file));
+                    String source = Files.readString(file);
+                    Matcher forced = FORCED_TRUE.matcher(source);
                     while (forced.find()) {
-                        offenders.add(MAIN.relativize(file) + ": " + forced.group());
+                        if (!FILED.contains(forced.group())) {
+                            offenders.add(MAIN.relativize(file) + ": " + forced.group());
+                        }
+                    }
+                    Matcher set = SET_FROM.matcher(source);
+                    while (set.find()) {
+                        boolean constant = FORCED_TRUE.matcher(set.group()).matches();
+                        boolean clears = set.group(1).matches("\\s*(?:false|Boolean\\.FALSE|null)\\s*");
+                        boolean submitted = set.group(1).contains("request.get") || set.group(1).contains("dto.get");
+                        if (!constant && !clears && !submitted) {
+                            offenders.add(MAIN.relativize(file) + ": " + set.group());
+                        }
                     }
                 }
             }

@@ -54,7 +54,7 @@ class PostpartumHaemorrhageOnPlanPostgresIT {
     @Autowired private JdbcTemplate jdbc;
 
     /** The foreign keys are off for these inserts: the plan, patient and hospital rows say nothing about this query. */
-    private UUID observation(UUID plan, boolean protocolActivated, String alertType) {
+    private UUID observation(UUID plan, boolean protocolActivated, String... alertTypes) {
         UUID id = UUID.randomUUID();
         jdbc.execute("ALTER TABLE clinical.postpartum_observations DISABLE TRIGGER ALL");
         jdbc.execute("ALTER TABLE clinical.postpartum_observation_alerts DISABLE TRIGGER ALL");
@@ -72,12 +72,12 @@ class PostpartumHaemorrhageOnPlanPostgresIT {
                     false, false, false, false, false, false, false, false, false, false, false,
                     false, false, false, false, false, false)
                 """, id, plan, UUID.randomUUID(), UUID.randomUUID(), protocolActivated);
-            if (alertType != null) {
+            for (int order = 0; order < alertTypes.length; order++) {
                 jdbc.update("""
                     INSERT INTO clinical.postpartum_observation_alerts (observation_id, alert_order, alert_type,
                         alert_severity, alert_message, created_at)
-                    VALUES (?, 0, ?, 'URGENT', 'text', now())
-                    """, id, alertType);
+                    VALUES (?, ?, ?, 'URGENT', 'text', now())
+                    """, id, order, alertTypes[order]);
             }
         } finally {
             jdbc.execute("ALTER TABLE clinical.postpartum_observation_alerts ENABLE TRIGGER ALL");
@@ -106,7 +106,7 @@ class PostpartumHaemorrhageOnPlanPostgresIT {
     @DisplayName("a true attested with no alert keeps the checks")
     void anAttestedTrueWithNoAlertCounts() {
         UUID plan = UUID.randomUUID();
-        observation(plan, true, null);
+        observation(plan, true);
         assertThat(repository.existsHaemorrhageOnPlan(plan)).isTrue();
     }
 
@@ -114,10 +114,22 @@ class PostpartumHaemorrhageOnPlanPostgresIT {
     @DisplayName("an earlier signal counts among later quiet rows")
     void oneRowOfManyCounts() {
         UUID plan = UUID.randomUUID();
-        observation(plan, false, null);
+        observation(plan, false);
         observation(plan, false, "HEMORRHAGE");
         observation(plan, false, "PAIN");
         assertThat(repository.existsHaemorrhageOnPlan(plan)).isTrue();
+    }
+
+    @Test
+    @DisplayName("a row with several alerts counts when one of them is a haemorrhage, wherever it sits")
+    void severalAlertsOnOneRow() {
+        UUID plan = UUID.randomUUID();
+        observation(plan, false, "INFECTION", "PAIN", "HEMORRHAGE");
+        UUID without = UUID.randomUUID();
+        observation(without, false, "INFECTION", "PAIN");
+
+        assertThat(repository.existsHaemorrhageOnPlan(plan)).isTrue();
+        assertThat(repository.existsHaemorrhageOnPlan(without)).isFalse();
     }
 
     @Test
@@ -126,7 +138,7 @@ class PostpartumHaemorrhageOnPlanPostgresIT {
         UUID infection = UUID.randomUUID();
         observation(infection, false, "INFECTION");
         UUID quiet = UUID.randomUUID();
-        observation(quiet, false, null);
+        observation(quiet, false);
         observation(UUID.randomUUID(), true, "HEMORRHAGE");
 
         assertThat(repository.existsHaemorrhageOnPlan(infection)).isFalse();
