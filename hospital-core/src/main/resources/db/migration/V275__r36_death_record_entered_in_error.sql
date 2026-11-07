@@ -19,9 +19,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_death_record_patient_live
 
 -- QA CX-012: an incompatible result on a bag issued to a request stands, and the bag's status cannot say so:
 -- an issued bag found incompatible goes back to RETURNED, as a never-issued one does. The row keeps the fact.
--- For rows already written the history is not on file. A RETURNED bag still linked to its request, on a request
--- that reached ISSUED, may have been held but never issued itself: it is taken as issued, so a result stands
--- rather than one being erased. The laboratory can record a new crossmatch on a new request of another patient.
+-- For rows already written the history is not on file, so a choice is made and it is this: a result stands rather
+-- than risk one being erased. An incompatible row on a request that reached ISSUED or COMPLETED is taken as
+-- issued, even if that request issued another bag and not this one. A row on a request since CANCELLED cannot be
+-- told apart, and is left: that request takes no compatible result itself.
 
 ALTER TABLE clinical.transfusion_crossmatches
     ADD COLUMN IF NOT EXISTS unit_issued BOOLEAN NOT NULL DEFAULT false;
@@ -31,8 +32,8 @@ UPDATE clinical.transfusion_crossmatches c
   FROM clinical.blood_units u, clinical.transfusion_requests r
  WHERE u.id = c.blood_unit_id
    AND r.id = c.request_id
-   AND ((u.request_id = c.request_id
-         AND (u.status = 'ISSUED' OR (u.status = 'RETURNED' AND r.status = 'ISSUED')))
+   AND ((u.request_id = c.request_id AND u.status = 'ISSUED')
+        OR (c.compatible = false AND r.status IN ('ISSUED', 'COMPLETED'))
         OR EXISTS (SELECT 1 FROM clinical.transfusion_administrations a
                     WHERE a.blood_unit_id = c.blood_unit_id AND a.request_id = c.request_id)
         OR EXISTS (SELECT 1 FROM clinical.emergency_blood_releases e

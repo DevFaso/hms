@@ -614,8 +614,9 @@ public class TransfusionServiceImpl implements TransfusionService {
         boolean alreadyIncompatible = crossmatch.getId() != null && !Boolean.TRUE.equals(crossmatch.getCompatible());
 
         // QA CX-012: a result written on a bag out for this request carries that fact, because the bag's status moves
-        // on just below. Enough for every path: an issued bag leaves ISSUED only by a result here or by a cancelled
-        // request, and a closed request takes no compatible result. A release leaves the row alone, as ever.
+        // on just below. Enough with the checks around it: a bag back at the lab came by a result here or a cancelled
+        // request, which takes no compatible result; discarded and given bags are terminal or have an administration;
+        // a false row on file at a knowing release is read from the release, as a release leaves the row alone.
         if (hung != null || (unit.getStatus() == BloodUnitStatus.ISSUED && issuedTo(unit, requestId))) {
             crossmatch.setUnitIssued(true);
         }
