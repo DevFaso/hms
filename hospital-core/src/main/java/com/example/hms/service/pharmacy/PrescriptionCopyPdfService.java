@@ -75,6 +75,7 @@ public class PrescriptionCopyPdfService {
         Prescription prescription = prescriptionRepository.findById(prescriptionId)
                 .filter(rx -> rx.getHospital() != null && hospitalId.equals(rx.getHospital().getId()))
                 .orElseThrow(() -> new ResourceNotFoundException(NOT_FOUND));
+        com.example.hms.service.support.OrderReviewHoldGuard.refuseCopyIfReviewPending(prescription);
         return render(prescription, LocaleContextHolder.getLocale());
     }
 
@@ -85,6 +86,7 @@ public class PrescriptionCopyPdfService {
                 .filter(rx -> rx.getPatient() != null && patientId != null
                         && patientId.equals(rx.getPatient().getId()))
                 .orElseThrow(() -> new ResourceNotFoundException(NOT_FOUND));
+        com.example.hms.service.support.OrderReviewHoldGuard.refuseCopyIfReviewPending(prescription);
         return render(prescription, LocaleContextHolder.getLocale());
     }
 

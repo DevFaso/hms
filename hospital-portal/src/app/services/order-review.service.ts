@@ -18,6 +18,7 @@ export interface OrderReviewRow {
   decidedByName: string | null;
   decidedAt: string | null;
   reason: string | null;
+  dosesGivenBeforeHold?: { administeredAt: string; note: string | null }[];
   replacementOrderId: string | null;
   replacementCandidates: { id: string; label: string | null }[] | null;
 }

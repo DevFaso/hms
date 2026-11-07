@@ -35,6 +35,8 @@ import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive'
 import { ReasonDialogComponent } from '../../shared/reason-dialog/reason-dialog.component';
 import { MarDoseHistoryComponent } from '../mar-dose-history/mar-dose-history.component';
 import { earlyDoseDialogKeys, earlyDoseRefusal } from '../early-dose';
+import { givenBeforeHoldRefusal } from '../given-before-hold';
+import { toServerDateTime } from '../../shared/date-utils';
 import { joinReasons } from '../../shared/required-fields';
 
 type LoadState = 'loading' | 'ready' | 'empty' | 'error';
@@ -399,6 +401,25 @@ export class EmarComponent implements OnInit, OnDestroy {
     earlyDoseDialogKeys(this.activeTask()?.frequencyUnread),
   );
 
+  /** The order is held for review: the refusal, and the dose to chart if it was given before the hold. */
+  protected readonly givenBeforeHold = signal<{
+    taskId: string;
+    payload: MedicationAdministrationRequest;
+    why: string;
+  } | null>(null);
+  protected readonly givenBeforeAt = signal('');
+
+  protected confirmGivenBeforeHold(reason: string): void {
+    const prior = this.givenBeforeHold();
+    if (!prior || this.administerInFlight()) return;
+    // No time is the server's to refuse, on its field, and the dialog says so.
+    this.sendAdministration(prior.taskId, {
+      ...prior.payload,
+      givenBeforeHoldAt: this.givenBeforeAt() ? toServerDateTime(this.givenBeforeAt()) : undefined,
+      givenBeforeHoldReason: reason,
+    });
+  }
+
   /** QA D1210: the same dose again, with the nurse's reason for giving it early. */
   protected confirmEarlyDose(reason: string): void {
     const early = this.earlyDose();
@@ -416,6 +437,7 @@ export class EmarComponent implements OnInit, OnDestroy {
         next: () => {
           this.administerInFlight.set(false);
           this.earlyDose.set(null);
+          this.givenBeforeHold.set(null);
           this.toast.success(
             this.translate.instant('EMAR.TOAST.RECORDED', {
               status: this.translate.instant(`EMAR.ADMIN_STATUS.${status}`),
@@ -426,6 +448,12 @@ export class EmarComponent implements OnInit, OnDestroy {
         },
         error: (err: HttpErrorResponse) => {
           this.administerInFlight.set(false);
+          const held = givenBeforeHoldRefusal(err);
+          if (held) {
+            this.givenBeforeHold.set({ taskId, payload, why: held });
+            return;
+          }
+          this.givenBeforeHold.set(null);
           // QA D1210: too soon after the last dose. Say why and ask for the
           // reason to give it early, instead of a dead-end toast.
           const tooSoon = earlyDoseRefusal(err);

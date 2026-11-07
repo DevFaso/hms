@@ -5373,4 +5373,104 @@ class NurseTaskServiceImplTest {
             .extracting("messageKey").isEqualTo("nurse.mar.alreadyRecorded");
         assertThat(mar.getPatientScanValue()).isEqualTo("as scanned");
     }
+
+    /** F6, provisional and for the clinical lead: a held order gives no new dose; a withheld or refused one is documented. */
+    @Test
+    void f6_aHeldOrderTakesAWithheldOrRefusedDoseAndNoNewOne() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "toutes les 6 heures");
+        when(prescriptionRepository.findByIdForUpdate(rx.getId())).thenReturn(Optional.of(rx));
+        when(marRepository.save(any(MedicationAdministrationRecord.class))).thenAnswer(call -> call.getArgument(0));
+        com.example.hms.service.support.OrderReviewHoldGuard.useHolds((type, id) -> id.equals(rx.getId()));
+        try {
+            UUID rxId = rx.getId();
+            UUID nurseId = UUID.randomUUID();
+            NurseMedicationAdministrationRequestDTO given = givenRequest();
+            assertThatThrownBy(() -> service.recordMedicationAdministration(rxId, nurseId, hospitalId, given))
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                .hasFieldOrPropertyWithValue("field", "givenBeforeHoldAt");
+            verify(marRepository, never()).save(any(MedicationAdministrationRecord.class));
+
+            for (String status : List.of("HELD", "REFUSED")) {
+                NurseMedicationAdministrationRequestDTO withheld = new NurseMedicationAdministrationRequestDTO();
+                withheld.setStatus(status);
+                withheld.setNote("Patient asleep");
+                assertThatCode(() -> service.recordMedicationAdministration(rxId, nurseId, hospitalId, withheld)).as(status)
+                    .doesNotThrowAnyException();
+            }
+        } finally {
+            com.example.hms.service.support.OrderReviewHoldGuard.useHolds(null);
+        }
+    }
+
+    /** F6: a dose given before the hold is chartable, at its own time, with a reason, or a double dose becomes possible. */
+    @Test
+    void f6_aDoseGivenBeforeTheHoldIsChartedAtItsTimeAndAudited() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "toutes les 6 heures");
+        LocalDateTime held = LocalDateTime.now().minusMinutes(30);
+        rx.setCreatedAt(held.minusDays(1));
+        when(prescriptionRepository.findByIdForUpdate(rx.getId())).thenReturn(Optional.of(rx));
+        com.example.hms.service.OrderReviewHoldService review = mock(com.example.hms.service.OrderReviewHoldService.class);
+        when(review.pendingSince(rx)).thenReturn(held);
+        when(marRepository.save(any(MedicationAdministrationRecord.class))).thenAnswer(call -> call.getArgument(0));
+        com.example.hms.service.support.OrderReviewHoldGuard.useReview(review);
+        try {
+            UUID rxId = rx.getId();
+            UUID nurseId = UUID.randomUUID();
+            NurseMedicationAdministrationRequestDTO noReason = givenRequest();
+            noReason.setGivenBeforeHoldAt(held.minusHours(1));
+            assertThatThrownBy(() -> service.recordMedicationAdministration(rxId, nurseId, hospitalId, noReason))
+                .hasFieldOrPropertyWithValue("field", "givenBeforeHoldReason");
+            for (LocalDateTime wrong : List.of(held, held.plusMinutes(5), held.minusDays(2))) {
+                NurseMedicationAdministrationRequestDTO late = givenRequest();
+                late.setGivenBeforeHoldAt(wrong);
+                late.setGivenBeforeHoldReason("Charted late");
+                assertThatThrownBy(() -> service.recordMedicationAdministration(rxId, nurseId, hospitalId, late)).as(wrong.toString())
+                    .hasFieldOrPropertyWithValue("field", "givenBeforeHoldAt");
+            }
+            verify(marRepository, never()).save(any(MedicationAdministrationRecord.class));
+
+            NurseMedicationAdministrationRequestDTO prior = givenRequest();
+            prior.setOverrideReason("No scan at the time");
+            LocalDateTime at = held.minusHours(1);
+            prior.setGivenBeforeHoldAt(at);
+            prior.setGivenBeforeHoldReason("Charted late at handover");
+            service.recordMedicationAdministration(rxId, nurseId, hospitalId, prior);
+
+            ArgumentCaptor<MedicationAdministrationRecord> row = ArgumentCaptor.forClass(MedicationAdministrationRecord.class);
+            verify(marRepository, org.mockito.Mockito.atLeastOnce()).save(row.capture());
+            assertThat(row.getValue().getAdministeredAt()).isEqualTo(at);
+            assertThat(row.getValue().getNotes()).contains("Charted late at handover");
+            verify(review).doseGivenBeforeHold(rx, at, "Charted late at handover");
+        } finally {
+            com.example.hms.service.support.OrderReviewHoldGuard.useReview(null);
+        }
+    }
+
+    /** F8: a finished order an event stands over gives no dose, by a direct POST or a stale panel. */
+    @Test
+    void f8_aFinishedOrderUnderAnEventGivesNoDose() {
+        UUID hospitalId = UUID.randomUUID();
+        for (PrescriptionStatus finished : List.of(PrescriptionStatus.PARTNER_DISPENSED, PrescriptionStatus.PRINTED_FOR_PATIENT, PrescriptionStatus.DISPENSED)) {
+            Prescription rx = scheduledRx(hospitalId, "toutes les 6 heures");
+            rx.setStatus(finished);
+            rx.setTakeHome(finished == PrescriptionStatus.DISPENSED);
+            when(prescriptionRepository.findByIdForUpdate(rx.getId())).thenReturn(Optional.of(rx));
+            com.example.hms.service.OrderReviewHoldService review = mock(com.example.hms.service.OrderReviewHoldService.class);
+            when(review.pendingSince(rx)).thenReturn(LocalDateTime.now().minusHours(1));
+            com.example.hms.service.support.OrderReviewHoldGuard.useReview(review);
+            try {
+                UUID rxId = rx.getId();
+                UUID nurseId = UUID.randomUUID();
+                NurseMedicationAdministrationRequestDTO given = givenRequest();
+                assertThatThrownBy(() -> service.recordMedicationAdministration(rxId, nurseId, hospitalId, given)).as(finished.name())
+                    .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                    .hasFieldOrPropertyWithValue("messageKey", com.example.hms.service.support.OrderReviewHoldGuard.FINISHED_KEY);
+            } finally {
+                com.example.hms.service.support.OrderReviewHoldGuard.useReview(null);
+            }
+        }
+        verify(marRepository, never()).save(any(MedicationAdministrationRecord.class));
+    }
 }

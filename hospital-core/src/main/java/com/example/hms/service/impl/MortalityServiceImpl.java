@@ -299,8 +299,10 @@ public class MortalityServiceImpl implements MortalityService {
         patient.setDeceasedAt(null);
         patientRepository.save(patient);
 
-        DeathDisputeServiceImpl.closeAll(disputeRepository.lockOpenForRecord(recordId), inBasketService, actorId, actorName,
-            reason, deathRecord.getEnteredInErrorAt());
+        List<com.example.hms.model.DeathDispute> open = disputeRepository.lockOpenForRecord(recordId);
+        DeathDisputeServiceImpl.closeAll(open, inBasketService, actorId, actorName, reason, deathRecord.getEnteredInErrorAt());
+        // The holds stand and stay visible; none stays bound to a dispute now closed.
+        open.forEach(dispute -> orderReview.disputeClosed(dispute.getId()));
 
         auditEnteredInError(saved, patient.getId(), actorId, actorName, reason);
         return mapper.toDto(saved);

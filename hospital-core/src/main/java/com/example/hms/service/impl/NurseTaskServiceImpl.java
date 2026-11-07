@@ -200,6 +200,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     );
 
     /** Only prescriptions in these statuses are shown on the MAR. */
+    private static final String MEDICATION_TASK_FIELD = "medicationTaskId";
+    private static final String GIVEN_BEFORE_HOLD_FIELD = "givenBeforeHoldAt";
     private static final Set<PrescriptionStatus> ACTIVE_RX_STATUSES = com.example.hms.service.emar.MarWardReader.ON_MAR_STATUSES;
 
     /* ── Dependencies ─────────────────────────────────────────────────── */
@@ -361,7 +363,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
                               java.util.Map<UUID, List<Prescription>> orders,
                               java.util.Map<UUID, List<Admission>> closedStays,
                               java.util.Map<UUID, List<MedicationAdministrationRecord>> doseRows,
-                              Set<UUID> controlled) {
+                              Set<UUID> controlled,
+                              Set<UUID> heldForReview) {
 
         List<Prescription> ordersOf(UUID patientId) {
             return orders.getOrDefault(patientId, List.of());
@@ -401,7 +404,9 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .forEach(running::add));
         return new WardOrders(stays, orders, closedStays,
             marWardReader.doseRowsByPrescription(running.stream().map(Prescription::getId).filter(Objects::nonNull).toList()),
-            marWardReader.controlledOrders(running));
+            marWardReader.controlledOrders(running),
+            com.example.hms.service.support.OrderReviewHoldGuard.heldAmong(com.example.hms.enums.OrderReviewType.PRESCRIPTION, hospitalId,
+                running.stream().map(Prescription::getId).filter(Objects::nonNull).toList()));
     }
 
     /** Build medication tasks for a single patient from their real prescriptions. */
@@ -423,8 +428,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             String marStatus = resolveMarStatus(due, now);
             if (!isFilteredOut(statusFilter, marStatus)) {
                 result.add(withDoseHistory(withOrderReading(NurseMedicationTaskResponseDTO.builder()
-                    .heldForReview(com.example.hms.service.support.OrderReviewHoldGuard.isHeld(
-                        com.example.hms.enums.OrderReviewType.PRESCRIPTION, rx.getId()))
+                    .heldForReview(ward.heldForReview().contains(rx.getId()))
                     .id(rx.getId())
                     .patientId(ctx.patientId())
                     .patientName(ctx.displayName())
@@ -561,11 +565,15 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             Prescription rx = rxOpt.get();
             validateHospitalMatch(rx.getHospital(), hospitalId);
             requireOrderStillStands(rx, hospitalId);
+            LocalDateTime givenBeforeHold = requireReviewAllows(rx, marStatus, request);
             requirePharmacistVerification(rx, marStatus);
             // QA D922: a controlled dose is given with a witness, refused before anything is written.
             User witness = controlledAdministrationWitness.resolve(rx, marStatus, witnessUserId, nurseUserId);
-            return persistMarRecord(rx, nurseUserId, hospitalId,
-                new AdministrationOutcome(marStatus, note, overrideReason, witness, earlyDoseReason));
+            NurseMedicationTaskResponseDTO recorded = persistMarRecord(rx, nurseUserId, hospitalId,
+                new AdministrationOutcome(marStatus, chartNote(note, givenBeforeHold, request), overrideReason, witness, earlyDoseReason,
+                    givenBeforeHold));
+            chartGivenBeforeHold(rx, givenBeforeHold, request);
+            return recorded;
         }
 
         // Fall back: check existing MAR records
@@ -577,6 +585,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             // withdrawal committed while this panel was open is seen here.
             lockOrderOf(marRecord, hospitalId);
             requireOrderStillStands(marRecord.getPrescription(), hospitalId);
+            LocalDateTime givenBeforeHold = requireReviewAllows(marRecord.getPrescription(), marStatus, request);
             requireStillPending(marRecord, hospitalId);
             requirePharmacistVerification(marRecord.getPrescription(), marStatus);
             requireScanByAdministeringNurse(marRecord, marStatus, nurseUserId, hospitalId);
@@ -586,8 +595,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             // QA D1210: never sooner than the minimum interval since the last GIVEN, without a reason.
             String early = requireDoseInterval(marRecord.getPrescription(), marStatus, marRecord.getId(), earlyDoseReason);
             marRecord.setStatus(marStatus);
-            marRecord.setAdministeredAt(LocalDateTime.now());
-            marRecord.setNotes(note);
+            marRecord.setAdministeredAt(givenBeforeHold != null ? givenBeforeHold : LocalDateTime.now());
+            marRecord.setNotes(chartNote(note, givenBeforeHold, request));
             if (marStatus == MedicationAdministrationStatus.HELD
                 || marStatus == MedicationAdministrationStatus.REFUSED) {
                 marRecord.setReason(note);
@@ -598,6 +607,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             resolveNurseStaff(nurseUserId, hospitalId).ifPresent(marRecord::setAdministeredByStaff);
             recordOverrideOnAdminister(marRecord, marStatus, overrideReason);
             marRepository.save(marRecord);
+            chartGivenBeforeHold(marRecord.getPrescription(), givenBeforeHold, request);
 
             Patient patient = marRecord.getPatient();
             return answerAfterDose(NurseMedicationTaskResponseDTO.builder()
@@ -707,6 +717,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             validateHospitalMatch(row.getHospital(), hospitalId);
             // QA D1392: a bedside check of a withdrawn order is refused, as its dose is.
             requireOrderStillStands(row.getPrescription(), hospitalId);
+            com.example.hms.service.support.OrderReviewHoldGuard.refuseIfReviewPending(row.getPrescription(), MEDICATION_TASK_FIELD);
             return row;
         }
 
@@ -714,6 +725,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .orElseThrow(() -> new ResourceNotFoundException("nurse.mar.notFound", marId));
         validateHospitalMatch(rx.getHospital(), hospitalId);
         requireOrderStillStands(rx, hospitalId);
+        com.example.hms.service.support.OrderReviewHoldGuard.refuseIfReviewPending(rx, MEDICATION_TASK_FIELD);
 
         // Re-verifying the same dose reuses its PENDING row instead of
         // leaving one orphan row per verify call (D77).
@@ -1624,7 +1636,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .dose(buildDoseDisplay(rx))
             .route(rx.getRoute())
             .scheduledTime(slot)
-            .administeredAt(LocalDateTime.now())
+            .administeredAt(outcome.givenAt())
             .status(status)
             .reason(status == MedicationAdministrationStatus.HELD
                 || status == MedicationAdministrationStatus.REFUSED ? note : early)
@@ -1672,7 +1684,11 @@ public class NurseTaskServiceImpl implements NurseTaskService {
      */
     private record AdministrationOutcome(
         MedicationAdministrationStatus status, String note, String overrideReason, User witness,
-        String earlyDoseReason) {
+        String earlyDoseReason, LocalDateTime givenBeforeHold) {
+
+        LocalDateTime givenAt() {
+            return givenBeforeHold != null ? givenBeforeHold : LocalDateTime.now();
+        }
     }
 
     private NurseMedicationTaskResponseDTO finalizeVerifiedRow(
@@ -1688,7 +1704,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         String early = requireDoseInterval(rx, status, marRecord.getId(), outcome.earlyDoseReason());
         marRecord.setWitnessUser(witness);
         marRecord.setStatus(status);
-        marRecord.setAdministeredAt(LocalDateTime.now());
+        marRecord.setAdministeredAt(outcome.givenAt());
         marRecord.setNotes(note);
         if (status == MedicationAdministrationStatus.HELD || status == MedicationAdministrationStatus.REFUSED) {
             marRecord.setReason(note);
@@ -1779,12 +1795,58 @@ public class NurseTaskServiceImpl implements NurseTaskService {
      */
     private void requireOrderStillStands(Prescription rx, UUID hospitalId) {
         com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(rx != null ? rx.getPatient() : null);
-        com.example.hms.service.support.OrderReviewHoldGuard.refusePrescriptionIfHeld(rx != null ? rx.getId() : null, "medicationTaskId");
         requireOrderNotEndedByDischarge(rx, hospitalId);
         if (com.example.hms.service.InpatientOrderEnd.endedWithItsStay(rx)) {
             throw new com.example.hms.exception.ConflictException("nurse.mar.stayEnded");
         }
         com.example.hms.service.emar.MarOrderStanding.requireStands(rx);
+    }
+
+    /**
+     * A held order gives no new dose (user ruling; provisional coordinator's call for the rest, NOT clinically approved).
+     * A withheld or refused dose can always be documented. A dose given before the hold must be chartable too, or a
+     * double dose becomes possible: with its own earlier time and a reason. Every ordinary check still runs.
+     *
+     * @return the time it was given, when charted that way; null for an ordinary record
+     */
+    private LocalDateTime requireReviewAllows(Prescription rx, MedicationAdministrationStatus status,
+                                              NurseMedicationAdministrationRequestDTO request) {
+        if (status != MedicationAdministrationStatus.GIVEN) {
+            return null;
+        }
+        LocalDateTime since = com.example.hms.service.support.OrderReviewHoldGuard.reviewPendingSince(rx);
+        if (since == null) {
+            return null;
+        }
+        LocalDateTime at = request != null ? request.getGivenBeforeHoldAt() : null;
+        String why = request != null ? request.getGivenBeforeHoldReason() : null;
+        boolean noReason = why == null || why.isBlank();
+        if (at == null && noReason) {
+            throw new com.example.hms.exception.FieldBusinessException(GIVEN_BEFORE_HOLD_FIELD,
+                com.example.hms.service.support.OrderReviewHoldGuard.pendingKey(rx));
+        }
+        if (noReason) {
+            throw new com.example.hms.exception.FieldBusinessException("givenBeforeHoldReason", "order.review.given.reasonRequired");
+        }
+        if (at == null || !at.isBefore(since) || at.isAfter(LocalDateTime.now())
+                || (rx.getCreatedAt() != null && at.isBefore(rx.getCreatedAt()))) {
+            throw new com.example.hms.exception.FieldBusinessException(GIVEN_BEFORE_HOLD_FIELD, "order.review.given.notBeforeHold");
+        }
+        return at;
+    }
+
+    private static String chartNote(String note, LocalDateTime givenBeforeHold, NurseMedicationAdministrationRequestDTO request) {
+        if (givenBeforeHold == null) {
+            return note;
+        }
+        String why = request.getGivenBeforeHoldReason().trim();
+        return note == null || note.isBlank() ? why : note.trim() + " | " + why;
+    }
+
+    private static void chartGivenBeforeHold(Prescription rx, LocalDateTime givenBeforeHold, NurseMedicationAdministrationRequestDTO request) {
+        if (givenBeforeHold != null) {
+            com.example.hms.service.support.OrderReviewHoldGuard.doseGivenBeforeHold(rx, givenBeforeHold, request.getGivenBeforeHoldReason().trim());
+        }
     }
 
     /** The lock {@link #requireStillPending} takes again; a foreign or missing order is refused there. */

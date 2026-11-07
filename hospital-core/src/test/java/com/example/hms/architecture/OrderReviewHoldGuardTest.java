@@ -39,6 +39,7 @@ class OrderReviewHoldGuardTest {
     private static final Pattern ENDPOINT = Pattern.compile("\\n\\s*+public\\s[^;{=(]*+\\(");
     private static final Pattern ANY_METHOD = Pattern.compile("\\n    (?:public|private|protected)\\s[^;{=(]*+\\(");
     private static final String GUARD_CALL = "OrderReviewHoldGuard.refuse";
+    private static final String PENDING_CALL = "OrderReviewHoldGuard.reviewPendingSince(";
 
     /** {@code Controller#endpoint | ServiceClass#method} holding the call. */
     private static final String GATED = """
@@ -49,8 +50,8 @@ class OrderReviewHoldGuardTest {
         Dispense#dispense | DispenseServiceImpl#validateFill
         Dispense#markReady | DispenseServiceImpl#validateFill
         Dispense#handOver | DispenseServiceImpl#handOver
-        NurseTask#verifyMedication | NurseTaskServiceImpl#requireOrderStillStands
-        NurseTask#administerMedication | NurseTaskServiceImpl#requireOrderStillStands
+        NurseTask#verifyMedication | NurseTaskServiceImpl#loadOrMaterializeMar
+        NurseTask#administerMedication | NurseTaskServiceImpl#requireReviewAllows
         Transfusion#issueUnit | TransfusionServiceImpl#issueUnit
         Transfusion#emergencyRelease | TransfusionServiceImpl#emergencyRelease
         Transfusion#startAdministration | TransfusionServiceImpl#startAdministration
@@ -104,7 +105,7 @@ class OrderReviewHoldGuardTest {
             Path file = services().get(target[0]);
             assertThat(file).as(target[0]).isNotNull();
             String body = bodyOf(SourceScan.stripComments(Files.readString(file, StandardCharsets.UTF_8)), target[1]);
-            if (body == null || !body.contains(GUARD_CALL)) {
+            if (body == null || !(body.contains(GUARD_CALL) || body.contains(PENDING_CALL))) {
                 missing.add(row.getKey() + " -> " + row.getValue());
             }
         }
@@ -132,6 +133,34 @@ class OrderReviewHoldGuardTest {
         String source = SourceScan.stripComments(Files.readString(services().get("PartnerExchangeService"), StandardCharsets.UTF_8));
         assertThat(bodyOf(source, "applyReply")).contains("OrderReviewHoldGuard.isHeld(").contains("withdrawnOrders.recallOffer(")
             .contains("withdrawnOrders.raiseDispenseOfHeld(");
+    }
+
+    @Test
+    @DisplayName("a printed copy is something to take to a pharmacy: both downloads ask")
+    void aPrintedCopyAsksTheGuard() throws IOException {
+        String source = SourceScan.stripComments(Files.readString(services().get("PrescriptionCopyPdfService"), StandardCharsets.UTF_8));
+        assertThat(bodyOf(source, "copyForStaff")).contains("OrderReviewHoldGuard.refuseCopyIfReviewPending(");
+        assertThat(bodyOf(source, "copyForPatient")).contains("OrderReviewHoldGuard.refuseCopyIfReviewPending(");
+    }
+
+    @Test
+    @DisplayName("a cancelled fill asks whether an event stands over the order it puts back in use")
+    void aCancelledFillAsks() throws IOException {
+        String source = SourceScan.stripComments(Files.readString(services().get("DispenseServiceImpl"), StandardCharsets.UTF_8));
+        assertThat(bodyOf(source, "cancelDispense")).contains("OrderReviewHoldGuard.holdIfEventStands(");
+    }
+
+    @Test
+    @DisplayName("a screen's rows ask once: no row-by-row question on the MAR, the pharmacy queue or a transfusion list")
+    void aScreenAsksOnce() throws IOException {
+        for (String service : List.of("NurseTaskServiceImpl", "DispenseServiceImpl")) {
+            String source = SourceScan.stripComments(Files.readString(services().get(service), StandardCharsets.UTF_8));
+            assertThat(source).as(service).doesNotContain("OrderReviewHoldGuard.isHeld(");
+        }
+        String transfusion = SourceScan.stripComments(Files.readString(services().get("TransfusionServiceImpl"), StandardCharsets.UTF_8));
+        assertThat(bodyOf(transfusion, "listRequests")).doesNotContain("isHeld(");
+        assertThat(bodyOf(transfusion, "rowsWithHolds")).contains("OrderReviewHoldGuard.heldAmong(");
+        assertThat(bodyOf(transfusion, "listAdministrationsForPatient")).contains("OrderReviewHoldGuard.heldAmong(").doesNotContain("isHeld(");
     }
 
     @Test

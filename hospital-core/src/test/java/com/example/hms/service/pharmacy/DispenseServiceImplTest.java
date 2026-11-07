@@ -2054,6 +2054,25 @@ class DispenseServiceImplTest {
         }
 
         @Test
+        @DisplayName("F1: a cancel that puts an order back in use asks whether an event stands over it")
+        void aCancelAsksForAHold() {
+            Dispense dispense = buildDispense(DispenseStatus.COMPLETED);
+            dispense.getPrescription().setStatus(PrescriptionStatus.DISPENSED);
+            when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(dispenseRepository.save(any(Dispense.class))).thenReturn(dispense);
+            com.example.hms.service.OrderReviewHoldService review = org.mockito.Mockito.mock(com.example.hms.service.OrderReviewHoldService.class);
+            com.example.hms.service.support.OrderReviewHoldGuard.useReview(review);
+            try {
+                service.cancelDispense(dispenseId, null, CANCEL_REASON);
+
+                verify(review).holdIfEventStands(dispense.getPrescription());
+            } finally {
+                com.example.hms.service.support.OrderReviewHoldGuard.useReview(null);
+            }
+        }
+
+        @Test
         @DisplayName("QA D404: a paid fill's payment is voided after the dispense row is locked")
         void voidsThePaymentOfACancelledFill() {
             Dispense dispense = buildDispense(DispenseStatus.COMPLETED);

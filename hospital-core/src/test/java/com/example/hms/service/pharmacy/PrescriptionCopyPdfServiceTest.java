@@ -166,4 +166,21 @@ class PrescriptionCopyPdfServiceTest {
         rx.setPrnMinIntervalHours(null);
         assertThat(textOf(service.copyForStaff(rx.getId()))).doesNotContain("Si besoin");
     }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("F11: no new copy of a held order, for the staff or the patient, and a clear message")
+    void aHeldOrderHasNoNewCopy() {
+        com.example.hms.service.support.OrderReviewHoldGuard.useHolds((type, id) -> id.equals(rx.getId()));
+        try {
+            UUID id = rx.getId();
+            UUID patientId = rx.getPatient().getId();
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.copyForStaff(id))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                .hasFieldOrPropertyWithValue("messageKey", com.example.hms.service.support.OrderReviewHoldGuard.COPY_KEY);
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.copyForPatient(id, patientId))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class);
+        } finally {
+            com.example.hms.service.support.OrderReviewHoldGuard.useHolds(null);
+        }
+    }
 }

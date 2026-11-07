@@ -73,7 +73,10 @@ class OrderReviewHoldServiceImplTest {
     @Mock private TransfusionService transfusionService;
     @Mock private InBasketService inBasket;
     @Mock private AuditEventLogService audit;
-    @Mock private com.example.hms.service.pharmacy.partner.WithdrawnOrderPartnerHandler partnerOffers;
+    @Mock private com.example.hms.service.impl.OrderReviewAfterCommit afterCommit;
+    @Mock private com.example.hms.repository.DeathRecordRepository deathRecords;
+    @Mock private com.example.hms.repository.DeathDisputeRepository disputes;
+    @Mock private com.example.hms.repository.MedicationAdministrationRecordRepository doses;
 
     private OrderReviewHoldServiceImpl service;
     private final UUID hospital = UUID.randomUUID();
@@ -88,11 +91,13 @@ class OrderReviewHoldServiceImplTest {
         LocaleContextHolder.setLocale(Locale.ENGLISH);
         service = new OrderReviewHoldServiceImpl(Clock.fixed(Instant.parse("2026-11-07T10:00:00Z"), ZoneOffset.UTC),
             holds, prescriptions, requests, administrations, chartAccess, roles, controlled, reauthentication,
-            prescriptionService, transfusionService, inBasket, audit, partnerOffers);
+            prescriptionService, transfusionService, inBasket, audit, afterCommit, deathRecords, disputes, doses);
+        when(disputes.findById(any())).thenAnswer(call -> Optional.of(DeathDispute.builder().build()));
         when(roles.requireActiveHospitalId()).thenReturn(hospital);
         when(roles.getCurrentUserId()).thenReturn(actor);
         when(roles.isDoctor(actor, hospital)).thenReturn(true);
         when(roles.isSigningPhysician(actor, hospital)).thenReturn(true);
+        when(roles.isClinicianOrPharmacist(actor, hospital)).thenReturn(true);
         order = new Prescription();
         order.setId(UUID.randomUUID());
         order.setVersion(4L);
@@ -345,10 +350,10 @@ class OrderReviewHoldServiceImplTest {
         assertThat(saved.getValue().getOrderType()).isEqualTo(OrderReviewType.RUNNING_TRANSFUSION);
         assertThat(saved.getValue().getStatus()).isEqualTo(OrderReviewStatus.ASSESSMENT_DUE);
         assertThat(bag.getStatus()).as("nothing stopped or restarted").isEqualTo(TransfusionAdministrationStatus.IN_PROGRESS);
-        ArgumentCaptor<CreateInBasketItemRequest> item = ArgumentCaptor.forClass(CreateInBasketItemRequest.class);
-        verify(inBasket).createItem(item.capture());
-        assertThat(item.getValue().getPriority()).isEqualTo(InBasketPriority.URGENT);
-        assertThat(item.getValue().getRecipientUserId()).isEqualTo(nurse.getId());
+        ArgumentCaptor<com.example.hms.service.impl.OrderReviewAfterCommit.Notice> item =
+            ArgumentCaptor.forClass(com.example.hms.service.impl.OrderReviewAfterCommit.Notice.class);
+        verify(afterCommit).file(item.capture());
+        assertThat(item.getValue().recipients()).containsExactly(nurse.getId());
 
         OrderReviewHold flag = saved.getValue();
         flag.setId(UUID.randomUUID());
@@ -600,12 +605,12 @@ class OrderReviewHoldServiceImplTest {
     void theOfferIsRecalledOnceOnTheNewHold() {
         when(prescriptions.lockUncompletedForReview(eq(patient), any())).thenReturn(List.of(order));
         service.snapshot(dispute());
-        verify(partnerOffers).recallForReview(order);
+        verify(afterCommit).recallPartnerOffers(order.getId());
 
         when(holds.findByOrderTypeAndOrderIdAndStatusAndHospitalId(OrderReviewType.PRESCRIPTION, order.getId(), OrderReviewStatus.HELD, hospital))
             .thenReturn(Optional.of(hold));
         service.snapshot(dispute());
-        verify(partnerOffers).recallForReview(order);
+        verify(afterCommit).recallPartnerOffers(order.getId());
     }
 
     @Test
@@ -667,6 +672,7 @@ class OrderReviewHoldServiceImplTest {
     @Test
     @DisplayName("the row offers only what the service would accept as a replacement")
     void theRowOffersOnlyLiveReplacements() {
+        when(roles.isClinicianOrPharmacist(actor, hospital)).thenReturn(true);
         hold.setCreatedAt(LocalDateTime.of(2026, 11, 7, 9, 0));
         Prescription signed = finished(PrescriptionStatus.SIGNED);
         signed.setCreatedAt(LocalDateTime.of(2026, 11, 7, 9, 30));
@@ -732,8 +738,210 @@ class OrderReviewHoldServiceImplTest {
 
         service.snapshot(dispute());
 
-        ArgumentCaptor<CreateInBasketItemRequest> item = ArgumentCaptor.forClass(CreateInBasketItemRequest.class);
-        verify(inBasket).createItem(item.capture());
-        assertThat(item.getValue().getReferenceId()).isEqualTo(flag);
+        ArgumentCaptor<com.example.hms.service.impl.OrderReviewAfterCommit.Notice> item =
+            ArgumentCaptor.forClass(com.example.hms.service.impl.OrderReviewAfterCommit.Notice.class);
+        verify(afterCommit).file(item.capture());
+        assertThat(item.getValue().reference()).isEqualTo(flag);
+    }
+
+    private com.example.hms.model.DeathRecord liveDeath(LocalDateTime recorded) {
+        com.example.hms.model.DeathRecord death = new com.example.hms.model.DeathRecord();
+        death.setId(UUID.randomUUID());
+        death.setCreatedAt(recorded);
+        when(deathRecords.findByPatient_Id(patient)).thenReturn(Optional.of(death));
+        return death;
+    }
+
+    @Test
+    @DisplayName("F1: a cancelled fill puts an order back in use: it is held while an event stands, a controlled drug too")
+    void aCancelledFillIsHeldWhileAnEventStands() {
+        liveDeath(LocalDateTime.of(2026, 11, 7, 8, 0));
+        order.setCreatedAt(LocalDateTime.of(2026, 11, 1, 8, 0));
+        order.setControlledSubstance(true);
+        order.setStatus(PrescriptionStatus.SIGNED);
+
+        service.holdIfEventStands(order);
+
+        ArgumentCaptor<OrderReviewHold> saved = ArgumentCaptor.forClass(OrderReviewHold.class);
+        verify(holds).save(saved.capture());
+        assertThat(saved.getValue().getOrderId()).isEqualTo(order.getId());
+        assertThat(saved.getValue().getStatus()).isEqualTo(OrderReviewStatus.HELD);
+    }
+
+    @Test
+    @DisplayName("F1: no event, an order written after it, or one this dispute reconfirmed: nothing is held")
+    void aCancelledFillIsNotHeldOtherwise() {
+        order.setCreatedAt(LocalDateTime.of(2026, 11, 1, 8, 0));
+        service.holdIfEventStands(order);
+
+        com.example.hms.model.DeathRecord death = liveDeath(LocalDateTime.of(2026, 11, 7, 8, 0));
+        order.setCreatedAt(LocalDateTime.of(2026, 11, 7, 9, 0));
+        service.holdIfEventStands(order);
+
+        order.setCreatedAt(LocalDateTime.of(2026, 11, 1, 8, 0));
+        DeathDispute open = dispute();
+        open.setDisputedAt(LocalDateTime.of(2026, 11, 7, 9, 0));
+        when(disputes.findOpen(death.getId(), hospital)).thenReturn(Optional.of(open));
+        OrderReviewHold reconfirmed = OrderReviewHold.builder().status(OrderReviewStatus.CONTINUED).disputeId(open.getId()).build();
+        when(holds.findByOrderTypeAndOrderId(OrderReviewType.PRESCRIPTION, order.getId())).thenReturn(List.of(reconfirmed));
+        service.holdIfEventStands(order);
+
+        verify(holds, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("F8: a finished order waits on a prescriber while an event stands; not otherwise, and an open one has its row")
+    void aFinishedOrderIsPendingUnderAnEvent() {
+        order.setCreatedAt(LocalDateTime.of(2026, 11, 1, 8, 0));
+        for (PrescriptionStatus finished : List.of(PrescriptionStatus.PARTNER_DISPENSED, PrescriptionStatus.PRINTED_FOR_PATIENT, PrescriptionStatus.DISPENSED)) {
+            order.setStatus(finished);
+            assertThat(service.pendingSince(order)).as("no event: " + finished).isNull();
+        }
+        LocalDateTime recorded = LocalDateTime.of(2026, 11, 7, 8, 0);
+        liveDeath(recorded);
+        for (PrescriptionStatus finished : List.of(PrescriptionStatus.PARTNER_DISPENSED, PrescriptionStatus.PRINTED_FOR_PATIENT, PrescriptionStatus.DISPENSED)) {
+            order.setStatus(finished);
+            assertThat(service.pendingSince(order)).as(finished.name()).isEqualTo(recorded);
+        }
+        order.setStatus(PrescriptionStatus.SIGNED);
+        assertThat(service.pendingSince(order)).as("no row, not finished").isNull();
+    }
+
+    @Test
+    @DisplayName("F6: a dose charted as given before the hold is audited, with a digest, and shows on the review list")
+    void aDoseGivenBeforeTheHoldReachesTheList() {
+        LocalDateTime held = LocalDateTime.of(2026, 11, 7, 8, 0);
+        hold.setCreatedAt(held);
+        when(holds.findByOrderTypeAndOrderIdAndStatus(OrderReviewType.PRESCRIPTION, order.getId(), OrderReviewStatus.HELD)).thenReturn(List.of(hold));
+        when(roles.isClinicianOrPharmacist(actor, hospital)).thenReturn(true);
+        when(holds.findByPatientIdAndHospitalIdOrderByCreatedAtDesc(patient, hospital)).thenReturn(List.of(hold));
+        com.example.hms.model.MedicationAdministrationRecord dose = com.example.hms.model.MedicationAdministrationRecord.builder()
+            .status(com.example.hms.enums.MedicationAdministrationStatus.GIVEN).administeredAt(held.minusHours(1)).notes("Charted late").build();
+        dose.setUpdatedAt(held.plusHours(1));
+        com.example.hms.model.MedicationAdministrationRecord ordinary = com.example.hms.model.MedicationAdministrationRecord.builder()
+            .status(com.example.hms.enums.MedicationAdministrationStatus.GIVEN).administeredAt(held.minusDays(1)).build();
+        ordinary.setUpdatedAt(held.minusDays(1));
+        when(doses.findByPrescription_IdOrderByScheduledTimeDesc(order.getId())).thenReturn(List.of(dose, ordinary));
+
+        service.doseGivenBeforeHold(order, held.minusHours(1), "Given at handover");
+
+        ArgumentCaptor<AuditEventRequestDTO> event = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(audit).logEvent(event.capture());
+        assertThat(event.getValue().getEventDescription()).startsWith("Dose charted as given before the hold").doesNotContain("Given at handover");
+        assertThat(service.forPatient(patient).get(0).getDosesGivenBeforeHold())
+            .extracting(com.example.hms.payload.dto.review.OrderReviewRowDTO.PriorDose::getAdministeredAt).containsExactly(held.minusHours(1));
+    }
+
+    @Test
+    @DisplayName("F5: an edit after a reconfirmation holds the order again and reaches a partner who accepted")
+    void aReHoldRecallsThePartner() {
+        hold.setStatus(OrderReviewStatus.CONTINUED);
+        when(holds.findByOrderTypeAndOrderIdAndStatus(OrderReviewType.PRESCRIPTION, order.getId(), OrderReviewStatus.CONTINUED)).thenReturn(List.of(hold));
+
+        service.reviewAgainAfterChange(OrderReviewType.PRESCRIPTION, order.getId());
+
+        verify(afterCommit).recallPartnerOffers(order.getId());
+    }
+
+    @Test
+    @DisplayName("F2: a page that read a dispute the row has left, or a row bound to a closed dispute, reconfirms nothing")
+    void aClosedDisputeReconfirmsNothing() {
+        UUID id = hold.getId();
+        when(disputes.findById(hold.getDisputeId())).thenReturn(Optional.of(
+            DeathDispute.builder().status(com.example.hms.enums.DeathDisputeStatus.UPHELD).build()));
+        OrderReviewDecisionDTO onTheRow = reconfirm(4);
+        assertThatThrownBy(() -> service.continueOrder(id, onTheRow))
+            .isInstanceOfSatisfying(FieldBusinessException.class, e -> assertThat(e.getField()).isEqualTo("disputeId"));
+
+        UUID closed = hold.getDisputeId();
+        when(holds.findByDisputeIdAndStatusIn(eq(closed), any())).thenReturn(List.of(hold));
+        service.disputeClosed(closed);
+        assertThat(hold.getDisputeId()).as("the row stands, bound to nothing closed").isNull();
+        assertThat(hold.getStatus()).isEqualTo(OrderReviewStatus.HELD);
+        OrderReviewDecisionDTO stalePage = OrderReviewDecisionDTO.builder().reason("x").orderVersion(4L).disputeId(closed).build();
+        assertThatThrownBy(() -> service.continueOrder(id, stalePage))
+            .isInstanceOfSatisfying(FieldBusinessException.class, e -> assertThat(e.getField()).isEqualTo("disputeId"));
+
+        OrderReviewDecisionDTO unbound = OrderReviewDecisionDTO.builder().reason("Still indicated").orderVersion(4L).build();
+        service.continueOrder(id, unbound);
+        assertThat(hold.getStatus()).isEqualTo(OrderReviewStatus.CONTINUED);
+    }
+
+    @Test
+    @DisplayName("F2: every event rebinds what still stands, an order since finished included; a dispute only at its own hospital")
+    void everyEventRebindsTheStandingRows() {
+        OrderReviewHold elsewhere = OrderReviewHold.builder().hospitalId(UUID.randomUUID()).disputeId(UUID.randomUUID())
+            .deathRecordId(UUID.randomUUID()).status(OrderReviewStatus.HELD).build();
+        UUID elsewhereDispute = elsewhere.getDisputeId();
+        when(holds.findByPatientIdAndStatusIn(eq(patient), any())).thenReturn(List.of(hold, elsewhere));
+        DeathDispute later = dispute();
+
+        service.snapshot(later);
+        assertThat(hold.getDeathRecordId()).isEqualTo(later.getDeathRecordId());
+        assertThat(hold.getDisputeId()).isEqualTo(later.getId());
+        assertThat(elsewhere.getDisputeId()).isEqualTo(elsewhereDispute);
+
+        com.example.hms.model.DeathRecord fresh = liveDeath(LocalDateTime.of(2026, 11, 8, 8, 0));
+        fresh.setPatient(order.getPatient());
+        service.snapshotAtDeath(fresh);
+        assertThat(hold.getDeathRecordId()).isEqualTo(fresh.getId());
+        assertThat(hold.getDisputeId()).isNull();
+        assertThat(elsewhere.getDeathRecordId()).isEqualTo(fresh.getId());
+        assertThat(elsewhere.getDisputeId()).isNull();
+    }
+
+    @Test
+    @DisplayName("F7: one item per hospital of the event, to the orders' prescribers, for each hospital's own")
+    void oneNoticePerHospital() {
+        User doctor = new User();
+        doctor.setId(UUID.randomUUID());
+        Staff prescriber = new Staff();
+        prescriber.setUser(doctor);
+        prescriber.setActive(true);
+        order.setStaff(prescriber);
+        Prescription another = finished(PrescriptionStatus.SIGNED);
+        another.setStaff(prescriber);
+        com.example.hms.model.Hospital elsewhere = new com.example.hms.model.Hospital();
+        elsewhere.setId(UUID.randomUUID());
+        Prescription atB = finished(PrescriptionStatus.SIGNED);
+        atB.setHospital(elsewhere);
+        when(prescriptions.lockUncompletedForReview(eq(patient), any())).thenReturn(List.of(order, another, atB));
+        com.example.hms.model.DeathRecord death = liveDeath(LocalDateTime.of(2026, 11, 7, 8, 0));
+        death.setPatient(order.getPatient());
+
+        service.snapshotAtDeath(death);
+
+        ArgumentCaptor<com.example.hms.service.impl.OrderReviewAfterCommit.Notice> item =
+            ArgumentCaptor.forClass(com.example.hms.service.impl.OrderReviewAfterCommit.Notice.class);
+        verify(afterCommit, org.mockito.Mockito.times(2)).file(item.capture());
+        assertThat(item.getAllValues()).extracting(com.example.hms.service.impl.OrderReviewAfterCommit.Notice::hospital)
+            .containsExactlyInAnyOrder(hospital, elsewhere.getId());
+        assertThat(item.getAllValues()).filteredOn(n -> n.hospital().equals(hospital)).singleElement()
+            .satisfies(n -> assertThat(n.recipients()).containsExactly(doctor.getId()));
+        assertThat(item.getAllValues()).filteredOn(n -> n.hospital().equals(elsewhere.getId())).singleElement()
+            .satisfies(n -> assertThat(n.recipients()).as("the fallback's to find").isEmpty());
+    }
+
+    @Test
+    @DisplayName("F9, F7: a recall or a notice that throws after commit does not undo recording the death")
+    void whatFollowsTheEventCannotUndoIt() {
+        org.mockito.Mockito.doThrow(new IllegalStateException("Staff.hospital must match Prescription.hospital"))
+            .when(afterCommit).recallPartnerOffers(order.getId());
+        org.mockito.Mockito.doThrow(new IllegalStateException("no such user")).when(afterCommit).file(any());
+        when(prescriptions.lockUncompletedForReview(eq(patient), any())).thenReturn(List.of(order));
+        com.example.hms.model.DeathRecord death = liveDeath(LocalDateTime.of(2026, 11, 7, 8, 0));
+        death.setPatient(order.getPatient());
+
+        org.assertj.core.api.Assertions.assertThatCode(() -> service.snapshotAtDeath(death)).doesNotThrowAnyException();
+
+        verify(holds).save(any(OrderReviewHold.class));
+    }
+
+    @Test
+    @DisplayName("F3: the list asks the role at the acting hospital")
+    void theListAsksTheActingHospital() {
+        when(roles.isClinicianOrPharmacist(actor, hospital)).thenReturn(false);
+        assertThatThrownBy(() -> service.forPatient(patient)).isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        verify(holds, never()).findByPatientIdAndHospitalIdOrderByCreatedAtDesc(any(), any());
     }
 }

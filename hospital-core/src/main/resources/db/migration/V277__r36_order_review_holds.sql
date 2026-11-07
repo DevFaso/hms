@@ -47,3 +47,7 @@ CREATE INDEX IF NOT EXISTS idx_order_review_patient
 
 CREATE INDEX IF NOT EXISTS idx_order_review_dispute
     ON clinical.order_review_holds (dispute_id);
+
+-- One question per screen: the standing rows of this hospital.
+CREATE INDEX ix_order_review_standing_hospital ON clinical.order_review_holds (hospital_id, order_type)
+    WHERE status IN ('HELD', 'ASSESSMENT_DUE');

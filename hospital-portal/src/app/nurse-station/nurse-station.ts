@@ -99,6 +99,7 @@ import { refusalReason } from '../shared/refusal-reason';
 import { ReasonDialogComponent } from '../shared/reason-dialog/reason-dialog.component';
 import { MarDoseHistoryComponent } from './mar-dose-history/mar-dose-history.component';
 import { earlyDoseDialogKeys, earlyDoseRefusal } from './early-dose';
+import { givenBeforeHoldRefusal } from './given-before-hold';
 import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 type FilterMode = 'me' | 'unit' | 'all';
 type SectionType =
@@ -657,6 +658,25 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
     return earlyDoseDialogKeys(task?.frequencyUnread);
   });
 
+  /** The order is held for review: the refusal, and the dose to chart if it was given before the hold. */
+  readonly givenBeforeHold = signal<{
+    prompt: { taskId: string; action: 'GIVEN' | 'HELD' | 'REFUSED' };
+    payload: MedicationAdministrationRequest;
+    why: string;
+  } | null>(null);
+  readonly givenBeforeAt = signal('');
+
+  confirmGivenBeforeHold(reason: string): void {
+    const prior = this.givenBeforeHold();
+    if (!prior || this.actionInProgress()) return;
+    // No time is the server's to refuse, on its field, and the dialog says so.
+    this.sendAdministration(prior.prompt, {
+      ...prior.payload,
+      givenBeforeHoldAt: this.givenBeforeAt() ? toServerDateTime(this.givenBeforeAt()) : undefined,
+      givenBeforeHoldReason: reason,
+    });
+  }
+
   /** QA D1210: the same dose again, with the nurse's reason for giving it early. */
   confirmEarlyDose(reason: string): void {
     const early = this.earlyDose();
@@ -682,11 +702,18 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
         );
         this.actionInProgress.set(null);
         this.earlyDose.set(null);
+        this.givenBeforeHold.set(null);
         this.reasonPrompt.set(null);
         this.loadAll();
       },
       error: (err: unknown) => {
         this.actionInProgress.set(null);
+        const held = givenBeforeHoldRefusal(err);
+        if (held) {
+          this.givenBeforeHold.set({ prompt, payload, why: held });
+          return;
+        }
+        this.givenBeforeHold.set(null);
         // QA D1210: too soon after the last dose: say why and ask for the reason.
         const tooSoon = earlyDoseRefusal(err);
         if (tooSoon && !payload.earlyDoseReason) {

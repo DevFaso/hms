@@ -35,4 +35,13 @@ public class NurseMedicationAdministrationRequestDTO {
      */
     @Size(max = 1024)
     private String earlyDoseReason;
+
+    /**
+     * An order held for review gives no new dose. A dose given before the hold is charted with the time it was given,
+     * earlier than the hold, and {@link #givenBeforeHoldReason}.
+     */
+    private java.time.LocalDateTime givenBeforeHoldAt;
+
+    @Size(max = 500)
+    private String givenBeforeHoldReason;
 }

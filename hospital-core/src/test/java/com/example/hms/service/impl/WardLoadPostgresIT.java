@@ -221,6 +221,16 @@ class WardLoadPostgresIT {
 
     /* ── the reads ───────────────────────────────────────────────────── */
 
+    /** F4: nobody on this ward has a hold: the hold flags add one question for the whole screen, whatever its rows. */
+    @Test
+    @DisplayName("a ward where nobody died asks about holds once")
+    void aWardWhereNobodyDiedAsksAboutHoldsOnce() {
+        Measured m = measure("mar-list-holds", () -> (long) nurseTasks.getMedicationTasks(nurseUser, HOSPITAL, null).size());
+        assertThat(m.rows()).isEqualTo(wardRowsExpected);
+        assertThat(StatementShapes.SEEN.getOrDefault("clinical.order_review_holds", new java.util.concurrent.atomic.LongAdder()).sum())
+            .as("one question for the whole screen").isLessThanOrEqualTo(1);
+    }
+
     @Test
     @DisplayName("the MAR list of the whole ward")
     void marList() {

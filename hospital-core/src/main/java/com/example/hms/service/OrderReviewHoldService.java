@@ -27,6 +27,18 @@ public interface OrderReviewHoldService {
     /** A relevant change after a reconfirmation invalidates it: the order is held again, the history kept. */
     void reviewAgainAfterChange(com.example.hms.enums.OrderReviewType type, UUID orderId);
 
+    /** An order a cancelled fill put back in use: held if a death event stands over it. Under the order's lock. */
+    void holdIfEventStands(com.example.hms.model.Prescription order);
+
+    /** Since when this order waits on a prescriber, or null. */
+    java.time.LocalDateTime pendingSince(com.example.hms.model.Prescription order);
+
+    /** A dose charted as given before the hold: audited, and on the review list. */
+    void doseGivenBeforeHold(com.example.hms.model.Prescription order, java.time.LocalDateTime at, String why);
+
+    /** The dispute closed: a standing row is bound to no closed dispute, and stays standing. */
+    void disputeClosed(UUID disputeId);
+
     /** The chart's list at the acting hospital, standing or decided. */
     List<OrderReviewRowDTO> forPatient(UUID patientId);
 

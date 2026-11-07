@@ -35,6 +35,17 @@ public class OrderReviewRowDTO {
     private UUID replacementOrderId;
     /** New orders of the same kind written since the dispute, which a replacement can name. */
     private List<Candidate> replacementCandidates;
+    /** Doses charted since the hold as given before it: the prescriber deciding this order must see them. */
+    private List<PriorDose> dosesGivenBeforeHold;
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class PriorDose {
+        private LocalDateTime administeredAt;
+        private String note;
+    }
 
     @Data
     @Builder

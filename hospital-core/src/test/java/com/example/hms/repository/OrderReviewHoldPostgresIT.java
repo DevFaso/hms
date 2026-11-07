@@ -106,6 +106,7 @@ class OrderReviewHoldPostgresIT {
     @Autowired private PlatformTransactionManager transactions;
 
     private final RoleValidator roles = mock(RoleValidator.class);
+    private final com.example.hms.service.impl.OrderReviewAfterCommit afterCommit = mock(com.example.hms.service.impl.OrderReviewAfterCommit.class);
     private final PatientChartAccess chartAccess = mock(PatientChartAccess.class);
     private final UserRoleHospitalAssignmentRepository assignments = mock(UserRoleHospitalAssignmentRepository.class);
     private DeathDisputeServiceImpl disputeService;
@@ -126,7 +127,7 @@ class OrderReviewHoldPostgresIT {
         review = new OrderReviewHoldServiceImpl(Clock.systemDefaultZone(), holds, prescriptions, requests, administrations,
             chartAccess, roles, mock(PrescriptionControlledResolver.class), mock(PrescriberReauthenticationService.class),
             mock(PrescriptionService.class), mock(TransfusionService.class), inBasket, audit,
-            mock(com.example.hms.service.pharmacy.partner.WithdrawnOrderPartnerHandler.class));
+            afterCommit, records, disputes, mock(com.example.hms.repository.MedicationAdministrationRecordRepository.class));
         disputeService = new DeathDisputeServiceImpl(Clock.systemDefaultZone(), disputes, records, patients, chartAccess, roles,
             assignments, inBasket, audit, review);
         new OrderReviewHoldGuard(holds).afterPropertiesSet();
@@ -460,5 +461,77 @@ class OrderReviewHoldPostgresIT {
 
     private void atTheDeathEvent() {
         tx.executeWithoutResult(status -> review.snapshotAtDeath(records.findById(record).orElseThrow()));
+    }
+
+    @Test
+    @DisplayName("F2: death, dispute, entered in error, a new death, a new dispute: the row follows, and an old page reconfirms nothing")
+    void aStaleHoldIsNeverBoundToAClosedDispute() {
+        UUID morphine = signedMorphine();
+        atTheDeathEvent();
+        dispute();
+        UUID firstDispute = holdOf(morphine).getDisputeId();
+        assertThat(firstDispute).isNotNull();
+
+        // Entered in error: what MortalityServiceImpl does to the dispute and to the rows.
+        tx.executeWithoutResult(status -> {
+            jdbc.update("UPDATE clinical.death_disputes SET status = 'ENTERED_IN_ERROR', resolved_at = now() WHERE id = ?", firstDispute);
+            review.disputeClosed(firstDispute);
+        });
+        markDeathEnteredInError();
+        assertThat(holdOf(morphine).getDisputeId()).as("standing, bound to no closed dispute").isNull();
+        assertThat(holdOf(morphine).getStatus()).isEqualTo(OrderReviewStatus.HELD);
+        assertThatThrownBy(() -> tx.executeWithoutResult(status -> review.continueOrder(holdOf(morphine).getId(),
+            com.example.hms.payload.dto.review.OrderReviewDecisionDTO.builder().reason("x").orderVersion(0L).disputeId(firstDispute).build())))
+            .isInstanceOf(FieldBusinessException.class);
+
+        UUID secondRecord = UUID.randomUUID();
+        jdbc.update("INSERT INTO clinical.death_records (id, patient_id, hospital_id, died_at, immediate_cause) VALUES (?, ?, ?, ?, 'Cause')",
+            secondRecord, patient, hospital, Timestamp.valueOf(LocalDateTime.now().minusHours(1)));
+        tx.executeWithoutResult(status -> review.snapshotAtDeath(records.findById(secondRecord).orElseThrow()));
+        assertThat(holdOf(morphine).getDeathRecordId()).as("no row bound to a voided death").isEqualTo(secondRecord);
+
+        dispute();
+        UUID secondDispute = holdOf(morphine).getDisputeId();
+        assertThat(secondDispute).isNotNull().isNotEqualTo(firstDispute);
+        assertThat(holdOf(morphine).getDeathRecordId()).isEqualTo(secondRecord);
+        assertThat(holds.findByPatientIdAndHospitalIdOrderByCreatedAtDesc(patient, hospital)).as("one row, still").hasSize(1);
+        assertThatThrownBy(() -> tx.executeWithoutResult(status -> review.continueOrder(holdOf(morphine).getId(),
+            com.example.hms.payload.dto.review.OrderReviewDecisionDTO.builder().reason("x").orderVersion(0L).disputeId(firstDispute).build())))
+            .isInstanceOf(FieldBusinessException.class);
+        tx.executeWithoutResult(status -> review.continueOrder(holdOf(morphine).getId(),
+            com.example.hms.payload.dto.review.OrderReviewDecisionDTO.builder().reason("Still indicated").orderVersion(0L).disputeId(secondDispute).build()));
+        assertThat(holdOf(morphine).getStatus()).isEqualTo(OrderReviewStatus.CONTINUED);
+    }
+
+    @Test
+    @DisplayName("F9: a recall and a notice that throw after commit: the event committed, and the hold stands")
+    void whatFollowsCannotUndoTheEvent() {
+        org.mockito.Mockito.doThrow(new IllegalStateException("Staff.hospital must match Prescription.hospital"))
+            .when(afterCommit).recallPartnerOffers(any());
+        org.mockito.Mockito.doThrow(new IllegalStateException("no such user")).when(afterCommit).file(any());
+        UUID morphine = signedMorphine();
+
+        assertThatCode(this::atTheDeathEvent).doesNotThrowAnyException();
+
+        org.mockito.Mockito.verify(afterCommit).recallPartnerOffers(morphine);
+        assertThat(holdOf(morphine).getStatus()).isEqualTo(OrderReviewStatus.HELD);
+    }
+
+    @Test
+    @DisplayName("F1: a fill cancelled while an event stands: a finished controlled order comes back held, on a real row")
+    void aCancelledFillComesBackHeld() {
+        UUID morphine = order(hospital, "DISPENSED", "Morphine", true);
+        jdbc.update("UPDATE clinical.prescriptions SET controlled_substance = TRUE, created_at = now() - interval '2 days' WHERE id = ?", morphine);
+        jdbc.update("UPDATE clinical.death_records SET created_at = now() - interval '1 hour' WHERE id = ?", record);
+        atTheDeathEvent();
+        assertThatCode(() -> OrderReviewHoldGuard.refusePrescriptionIfHeld(morphine, "prescriptionId")).doesNotThrowAnyException();
+
+        tx.executeWithoutResult(status -> {
+            jdbc.update("UPDATE clinical.prescriptions SET status = 'SIGNED' WHERE id = ?", morphine);
+            review.holdIfEventStands(prescriptions.findById(morphine).orElseThrow());
+        });
+
+        assertThatThrownBy(() -> OrderReviewHoldGuard.refusePrescriptionIfHeld(morphine, "prescriptionId"))
+            .isInstanceOf(FieldBusinessException.class);
     }
 }
