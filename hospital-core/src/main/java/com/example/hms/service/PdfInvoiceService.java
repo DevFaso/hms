@@ -65,6 +65,15 @@ public class PdfInvoiceService {
                                      List<InvoiceItem> items,
                                      List<PaymentTransaction> payments,
                                      Locale locale) {
+        return generateInvoicePdf(invoice, items, payments, List.of(), locale);
+    }
+
+    /** QA D974: with the discounts, waivers and credit notes printed between the lines and the total. */
+    public byte[] generateInvoicePdf(BillingInvoice invoice,
+                                     List<InvoiceItem> items,
+                                     List<PaymentTransaction> payments,
+                                     List<com.example.hms.model.InvoiceAdjustment> adjustments,
+                                     Locale locale) {
         PdfLabels t = PdfLabels.of(messageSource, locale);
         try (var doc = new PDDocument()) {
             var w = new Writer(doc);
@@ -101,6 +110,16 @@ public class PdfInvoiceService {
                     it.getQuantity() != null ? String.valueOf(it.getQuantity()) : "",
                     money(it.getUnitPrice()),
                     money(lineTotal(it)));
+            }
+
+            for (var adjustment : adjustments) {
+                w.ensureRoom(16);
+                w.down(16);
+                String kind = t.get("pdf.invoice.adjustment." + adjustment.getType().name());
+                w.text(BODY, 10, MARGIN, adjustment.getReason() == null || adjustment.getReason().isBlank()
+                    ? t.get("pdf.invoice.adjustmentLineNoReason", kind, money(adjustment.getAmount()))
+                    : t.get("pdf.invoice.adjustmentLine", kind, shortReason(adjustment.getReason()),
+                        money(adjustment.getAmount())));
             }
 
             BigDecimal total = nz(invoice.getTotalAmount());
@@ -390,5 +409,11 @@ public class PdfInvoiceService {
                 return baos.toByteArray();
             }
         }
+    }
+
+    /** QA D974: a reason fits one printed line (the full text stays on the adjustment). */
+    private static String shortReason(String reason) {
+        String text = reason == null ? "" : reason.strip();
+        return text.length() > 60 ? text.substring(0, 59) + "…" : text;
     }
 }

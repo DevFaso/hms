@@ -125,6 +125,17 @@ class PdfInvoiceServiceTest {
     }
 
     @Test
+    void printsTheDiscountsWaiversAndCreditNotesBeforeTheTotal_D974() throws Exception {
+        com.example.hms.model.InvoiceAdjustment waiver = com.example.hms.model.InvoiceAdjustment.builder()
+            .type(com.example.hms.enums.InvoiceAdjustmentType.WAIVER)
+            .amount(new BigDecimal("500.00")).reason("Gratuité").build();
+
+        String text = textOf(service.generateInvoicePdf(invoice, items, List.of(), List.of(waiver), Locale.FRENCH));
+
+        assertThat(text).contains("pdf.invoice.adjustmentLine pdf.invoice.adjustment.WAIVER Gratuité 500 F CFA");
+    }
+
+    @Test
     void fallsBackToFrenchWhenNoLocaleIsGiven() throws Exception {
         // An invoice drawn with no request behind it (a job) is French, the product's first language.
         String text = textOf(service.generateInvoicePdf(invoice, items, null));

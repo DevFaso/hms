@@ -253,3 +253,61 @@
     transform: rotate(360deg);
   }
 }
+
+/* QA D982: the invoice behind the card. */
+.detail-btn,
+.detail-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--primary, #0e7c6b);
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.pli-pending {
+  color: #92400e;
+}
+
+.invoice-detail {
+  margin: -0.25rem 0 0.75rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-top: none;
+  border-radius: 0 0 0.75rem 0.75rem;
+  background: var(--surface-muted, #f9fafb);
+  overflow-x: auto;
+}
+
+.detail-title {
+  font-size: 0.95rem;
+  margin: 0.5rem 0;
+}
+
+.detail-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+
+  th,
+  td {
+    text-align: left;
+    padding: 0.375rem 0.5rem;
+    border-bottom: 1px solid var(--border-color, #e5e7eb);
+  }
+}
+
+.detail-payments {
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+
+  li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.25rem 0;
+  }
+}

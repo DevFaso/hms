@@ -11,6 +11,9 @@ GET /me/patient/after-visit-summaries
 GET /me/patient/appointments
 GET /me/patient/appointments/{appointmentId}/questionnaires
 GET /me/patient/billing/invoices
+GET /me/patient/billing/invoices/{invoiceId}
+GET /me/patient/billing/invoices/{invoiceId}/payments/{paymentId}/receipt
+GET /me/patient/billing/invoices/{invoiceId}/pdf
 GET /me/patient/booking/hospitals
 GET /me/patient/booking/hospitals/{hospitalId}/departments
 GET /me/patient/booking/hospitals/{hospitalId}/departments/{departmentId}/providers

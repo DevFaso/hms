@@ -203,6 +203,15 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
      * A copay larger than what the invoice still owes stays where it is.
      */
     private void creditCheckInCopays(BillingInvoice target) {
+        creditCheckInCopays(target, BigDecimal.ZERO);
+    }
+
+    /**
+     * As above, keeping {@code reserved} of what is owed free: a payment the
+     * patient declared and the cashier has not confirmed yet (QA D724) must
+     * still fit once the copay is moved, or it could never be confirmed.
+     */
+    private void creditCheckInCopays(BillingInvoice target, BigDecimal reserved) {
         if (target.getEncounter() == null || target.getEncounter().getId() == null
                 || target.isCheckInCopay() || !COPAY_CREDITABLE.contains(target.getStatus())) {
             return;
@@ -213,7 +222,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             return;
         }
         for (BillingInvoice candidate : copays) {
-            BillingInvoice copay = lockCreditableCopay(candidate, target);
+            BillingInvoice copay = lockCreditableCopay(candidate, target, reserved);
             if (copay != null) {
                 moveCopayOnto(copay, target);
             }
@@ -221,19 +230,25 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     }
 
     /** The copay, locked and re-read, when it may be credited to the target; else null. */
-    private BillingInvoice lockCreditableCopay(BillingInvoice candidate, BillingInvoice target) {
+    private BillingInvoice lockCreditableCopay(BillingInvoice candidate, BillingInvoice target, BigDecimal reserved) {
         if (candidate.getId() == null || candidate.getId().equals(target.getId())) {
             return null;
         }
         // Locked and re-read: two invoices issued at once must not both take the same copay.
         BillingInvoice copay = invoiceRepository.findLockedById(candidate.getId()).orElse(null);
+        if (copay != null && entityManager != null) {
+            // The list read above put the copay in the session; a locking query hands that
+            // instance back as it was before the wait, so it is re-read under the lock.
+            entityManager.refresh(copay);
+        }
         if (copay == null || copay.getStatus() != InvoiceStatus.PAID || copay.getPatient() == null
                 || target.getPatient() == null || !copay.getPatient().getId().equals(target.getPatient().getId())) {
             return null;
         }
         BigDecimal credit = copayCredit(copay);
         BigDecimal paid = target.getAmountPaid() != null ? target.getAmountPaid() : BigDecimal.ZERO;
-        BigDecimal owed = (target.getTotalAmount() != null ? target.getTotalAmount() : BigDecimal.ZERO).subtract(paid);
+        BigDecimal owed = (target.getTotalAmount() != null ? target.getTotalAmount() : BigDecimal.ZERO).subtract(paid)
+            .subtract(reserved);
         return credit.signum() <= 0 || credit.compareTo(owed) > 0 ? null : copay;
     }
 
@@ -444,6 +459,248 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         // QA D101: a DRAFT invoice is not yet issued to the patient.
         return invoiceRepository.findByPatient_IdAndStatusNot(patientId, InvoiceStatus.DRAFT, pageable)
             .map(this::toPortalResponse);
+    }
+
+    private com.example.hms.mapper.InvoiceItemMapper invoiceItemMapper;
+
+    /** Re-reads a copay under its row lock (see lockCreditableCopay). Setter-injected; absent in unit tests. */
+    private jakarta.persistence.EntityManager entityManager;
+
+    @jakarta.persistence.PersistenceContext
+    void setEntityManager(jakarta.persistence.EntityManager entityManager) {
+        this.entityManager = entityManager;
+    }
+
+    /** QA D974: the adjustments ledger. Setter-injected, like the other late additions. */
+    private com.example.hms.repository.InvoiceAdjustmentRepository adjustmentRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setAdjustmentRepository(com.example.hms.repository.InvoiceAdjustmentRepository adjustmentRepository) {
+        this.adjustmentRepository = adjustmentRepository;
+    }
+
+    /** QA D974: an adjustment lowers what is owed on an issued invoice; a draft's lines are edited instead. */
+    private static final java.util.Set<InvoiceStatus> ADJUSTABLE =
+        java.util.EnumSet.of(InvoiceStatus.SENT, InvoiceStatus.PARTIALLY_PAID);
+
+    @Override
+    @Transactional
+    public BillingInvoiceResponseDTO addAdjustment(UUID invoiceId,
+                                                   com.example.hms.payload.dto.InvoiceAdjustmentRequestDTO request,
+                                                   UUID staffId, Locale locale) {
+        requireAdjustmentLedger();
+        BillingInvoice invoice = loadInScopeForUpdate(invoiceId);
+        if (!ADJUSTABLE.contains(invoice.getStatus())) {
+            throw new BusinessException("billing.adjustment.notIssued");
+        }
+        String reason = request.getReason() != null ? request.getReason().trim() : "";
+        if (reason.isEmpty()) {
+            throw new BusinessException("billing.adjustment.reasonRequired");
+        }
+        boolean creditNote = request.getType() == com.example.hms.enums.InvoiceAdjustmentType.CREDIT_NOTE;
+        if (creditNote && request.getInvoiceItemId() == null) {
+            throw new BusinessException("billing.adjustment.lineRequired");
+        }
+        BigDecimal total = nz(invoice.getTotalAmount());
+        BigDecimal paid = nz(invoice.getAmountPaid());
+        BigDecimal pending = nz(paymentTransactionRepository.sumAmountByInvoiceAndStatus(invoice.getId(),
+            PaymentStatus.PENDING));
+        // A discount or a waiver may name a line too: it is then held against that line.
+        InvoiceItem line = request.getInvoiceItemId() != null ? lineOf(invoice, request.getInvoiceItemId()) : null;
+        BigDecimal amount = line != null
+            ? amountAgainstLine(line, request.getAmount(), creditNote, total.subtract(paid).subtract(pending), locale)
+            : request.getAmount();
+        if (amount == null || amount.signum() <= 0) {
+            throw new BusinessException("billing.adjustment.amountPositive");
+        }
+        requireWholeAmount(amount);
+        // Earlier discounts may already have lowered the total under the line.
+        if (amount.compareTo(total) > 0) {
+            throw new BusinessException("billing.adjustment.moreThanTotal", formatFrancs(total, locale));
+        }
+        BigDecimal newTotal = total.subtract(amount);
+        requireRoomUnderPayments(newTotal, paid, pending);
+        adjustmentRepository.save(com.example.hms.model.InvoiceAdjustment.builder()
+            .invoice(invoice)
+            .invoiceItem(line)
+            .type(request.getType())
+            .amount(amount)
+            .reason(reason)
+            .createdBy(staffId)
+            .build());
+        invoice.setTotalAmount(newTotal);
+        if (paid.compareTo(newTotal) >= 0) {
+            invoice.setStatus(InvoiceStatus.PAID);
+        } else if (paid.signum() > 0) {
+            invoice.setStatus(InvoiceStatus.PARTIALLY_PAID);
+        }
+        BillingInvoice saved = invoiceRepository.save(invoice);
+        // QA D936: like a payment (D272), an adjustment is a moment the copay paid at
+        // check-in after the invoice was issued is taken, when it still fits what is owed
+        // beside the payments the patient declared and the cashier has not confirmed (D724).
+        creditCheckInCopays(saved, pending);
+        auditAdjustmentAfterCommit(staffId, saved, request.getType());
+        return toPortalResponse(saved);
+    }
+
+    private static BigDecimal nz(BigDecimal value) {
+        return value != null ? value : BigDecimal.ZERO;
+    }
+
+    /** The line the adjustment names; it must be a line of this invoice. */
+    private InvoiceItem lineOf(BillingInvoice invoice, UUID itemId) {
+        return invoiceItemRepository.findById(itemId)
+            .filter(item -> item.getBillingInvoice() != null && invoice.getId().equals(item.getBillingInvoice().getId()))
+            .orElseThrow(() -> new BusinessException("billing.adjustment.lineNotOnInvoice"));
+    }
+
+    /**
+     * What a line-bound adjustment takes off the line: never more than is left
+     * on it; a credit note with no amount takes all that is left, and says how
+     * much could be credited when a payment would have to be reversed first.
+     */
+    private BigDecimal amountAgainstLine(InvoiceItem line, BigDecimal requested, boolean creditNote,
+                                         BigDecimal room, Locale locale) {
+        BigDecimal left = nz(line.getTotalPrice()).subtract(nz(adjustmentRepository.sumByInvoiceItemId(line.getId())));
+        if (left.signum() <= 0) {
+            throw new BusinessException("billing.adjustment.lineFullyCredited");
+        }
+        BigDecimal amount = requested;
+        if (amount == null && creditNote) {
+            if (left.compareTo(room) > 0) {
+                throw new BusinessException("billing.adjustment.creditBeyondUnpaid",
+                    formatFrancs(room.max(BigDecimal.ZERO), locale));
+            }
+            amount = left;
+        }
+        if (amount != null && amount.compareTo(left) > 0) {
+            throw new BusinessException("billing.adjustment.moreThanLine", formatFrancs(left, locale));
+        }
+        return amount;
+    }
+
+    /**
+     * Money already received is never written off silently (reverse the payment
+     * first), nor is a payment the patient declared and the cashier has not
+     * confirmed yet (QA D724: lowering the total under it would orphan it).
+     */
+    private static void requireRoomUnderPayments(BigDecimal newTotal, BigDecimal paid, BigDecimal pending) {
+        if (newTotal.compareTo(paid) < 0) {
+            throw new BusinessException("billing.adjustment.belowPaid");
+        }
+        if (newTotal.compareTo(paid.add(pending)) < 0) {
+            throw new BusinessException("billing.adjustment.belowPending");
+        }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<com.example.hms.payload.dto.InvoiceAdjustmentResponseDTO> listAdjustments(UUID invoiceId) {
+        requireAdjustmentLedger();
+        BillingInvoice invoice = loadInScope(invoiceId);
+        return adjustmentRepository.findByInvoice_IdOrderByCreatedAtAsc(invoice.getId()).stream()
+            .map(com.example.hms.payload.dto.InvoiceAdjustmentResponseDTO::from)
+            .toList();
+    }
+
+    /** The ledger is a Spring bean in every running context; a test that builds the service by hand sets it. */
+    private void requireAdjustmentLedger() {
+        java.util.Objects.requireNonNull(adjustmentRepository, "adjustmentRepository");
+    }
+
+    /** Whole francs grouped as the reader writes them ("4 000", "4,000", "4.000"). */
+    private static String formatFrancs(BigDecimal amount, Locale locale) {
+        java.text.NumberFormat format = java.text.NumberFormat.getIntegerInstance(
+            locale != null ? locale : LocaleContextHolder.getLocale());
+        format.setGroupingUsed(true);
+        return format.format(amount.setScale(0, java.math.RoundingMode.HALF_UP).longValueExact())
+            .replace('\u00a0', ' ').replace('\u202f', ' ');
+    }
+
+    /** QA D974: who lowered which invoice and how (ids and the kind only, as the payment audit: no amount, no reason text). */
+    private void auditAdjustmentAfterCommit(UUID actorId, BillingInvoice invoice,
+                                            com.example.hms.enums.InvoiceAdjustmentType type) {
+        if (auditEventLogService == null) {
+            return;
+        }
+        String invoiceIdText = String.valueOf(invoice.getId());
+        com.example.hms.utility.TransactionCallbacks.afterCommit(() -> {
+            try {
+                auditEventLogService.logEvent(com.example.hms.payload.dto.AuditEventRequestDTO.builder()
+                    .eventType(AuditEventType.INVOICE_UPDATED)
+                    .status(com.example.hms.enums.AuditStatus.SUCCESS)
+                    .userId(actorId)
+                    .eventDescription("Invoice adjustment " + type + " on invoice " + invoiceIdText)
+                    .entityType("BillingInvoice")
+                    .resourceId(invoiceIdText)
+                    .build());
+            } catch (RuntimeException ex) {
+                LOG.warn("Adjustment audit not written for invoice {}: {}", invoiceIdText, ex.getClass().getSimpleName());
+            }
+        });
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setInvoiceItemMapper(com.example.hms.mapper.InvoiceItemMapper invoiceItemMapper) {
+        this.invoiceItemMapper = invoiceItemMapper;
+    }
+
+    /**
+     * QA D982: the patient's own issued invoice. Another patient's, or one
+     * still in draft, answers exactly as a missing one.
+     */
+    private BillingInvoice requirePortalVisible(BillingInvoice invoice, UUID patientId) {
+        if (invoice.getPatient() == null || !invoice.getPatient().getId().equals(patientId)
+                || invoice.getStatus() == InvoiceStatus.DRAFT) {
+            throw new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND, invoice.getId());
+        }
+        return invoice;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public com.example.hms.payload.dto.portal.PortalInvoiceDetailDTO getPortalInvoiceDetail(UUID invoiceId, UUID patientId) {
+        BillingInvoice invoice = requirePortalVisible(invoiceRepository.findByIdWithRefs(invoiceId)
+            .orElseThrow(() -> new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND, invoiceId)), patientId);
+        List<com.example.hms.payload.dto.InvoiceItemResponseDTO> items = invoiceItemRepository
+            .findByBillingInvoiceId(invoiceId).stream()
+            .map((invoiceItemMapper != null ? invoiceItemMapper : new com.example.hms.mapper.InvoiceItemMapper())
+                ::toInvoiceItemResponseDTO)
+            .toList();
+        List<PaymentTransactionResponseDTO> payments = paymentTransactionRepository
+            .findByInvoice_IdOrderByCreatedAtAsc(invoiceId).stream()
+            .map(PaymentTransactionResponseDTO::from)
+            // The cashier's notes and reversal reasons stay with the cashier.
+            .map(row -> new PaymentTransactionResponseDTO(row.id(), row.amount(), row.paymentDate(),
+                row.paymentMethod(), row.referenceNumber(), null, row.status(), null,
+                row.reversedAt(), row.createdAt()))
+            .toList();
+        List<com.example.hms.payload.dto.InvoiceAdjustmentResponseDTO> adjustments = adjustmentRepository == null
+            ? List.of()
+            : adjustmentRepository.findByInvoice_IdOrderByCreatedAtAsc(invoiceId).stream()
+                .map(com.example.hms.payload.dto.InvoiceAdjustmentResponseDTO::from)
+                .map(a -> new com.example.hms.payload.dto.InvoiceAdjustmentResponseDTO(a.id(), a.type(), a.amount(),
+                    null, a.invoiceItemId(), a.invoiceItemDescription(), a.createdAt()))
+                .toList();
+        return new com.example.hms.payload.dto.portal.PortalInvoiceDetailDTO(toPortalResponse(invoice), items, payments,
+            adjustments);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public InvoicePdfResponseDTO getPortalInvoicePdf(UUID invoiceId, UUID patientId, Locale locale) {
+        BillingInvoice invoice = requirePortalVisible(invoiceRepository.findByIdWithRefs(invoiceId)
+            .orElseThrow(() -> new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND, invoiceId)), patientId);
+        // QA D974: the clerk's reason stays with billing, on paper too.
+        return renderInvoicePdf(invoice, locale, false);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public InvoicePdfResponseDTO getPortalReceiptPdf(UUID invoiceId, UUID paymentId, UUID patientId, Locale locale) {
+        BillingInvoice invoice = requirePortalVisible(invoiceRepository.findByIdWithRefs(invoiceId)
+            .orElseThrow(() -> new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND, invoiceId)), patientId);
+        return renderReceiptPdf(invoice, paymentId, locale);
     }
 
     /** QA D421: the patient's invoice with what they already declared and staff have not confirmed. */
@@ -701,7 +958,15 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         }
         // QA D142: a paid or partly paid invoice is cancelled or re-drafted
         // only once its payments are reversed; the message says so.
-        if (hasPayments || current == InvoiceStatus.PAID || current == InvoiceStatus.PARTIALLY_PAID) {
+        // QA D974: an invoice a waiver settled took no money; it may still be
+        // cancelled (and re-issued) when the waiver was a mistake.
+        if (current == InvoiceStatus.PAID && !hasPayments) {
+            if (requested != InvoiceStatus.CANCELLED) {
+                throw new BusinessException("billing.invoice.statusLockedByPayments");
+            }
+            return requested;
+        }
+        if (hasPayments || current == InvoiceStatus.PARTIALLY_PAID) {
             throw new BusinessException("billing.invoice.statusLockedByPayments");
         }
         return requested;
@@ -746,14 +1011,28 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
                 && !activeHospitalId.equals(invoice.getHospital().getId())) {
             throw new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND, invoiceId);
         }
+        return renderInvoicePdf(invoice, locale, true);
+    }
 
+    /** The invoice PDF of an invoice the caller may already read; the adjustment reasons for staff only. */
+    private InvoicePdfResponseDTO renderInvoicePdf(BillingInvoice invoice, Locale locale, boolean withReasons) {
+        UUID invoiceId = invoice.getId();
         List<InvoiceItem> items = invoiceItemRepository.findByBillingInvoiceId(invoiceId);
         Locale effectiveLocale = locale != null ? locale : LocaleContextHolder.getLocale();
 
         // QA D141: the confirmed payments are printed under the totals.
         List<PaymentTransaction> payments = paymentTransactionRepository.findByInvoice_IdOrderByCreatedAtAsc(invoiceId);
+        // QA D974: the adjustments are on the paper too, so lines and total agree.
+        List<com.example.hms.model.InvoiceAdjustment> adjustments = adjustmentRepository != null
+            ? adjustmentRepository.findByInvoice_IdOrderByCreatedAtAsc(invoiceId) : List.of();
+        if (!withReasons && adjustments != null) {
+            adjustments = adjustments.stream()
+                .map(a -> com.example.hms.model.InvoiceAdjustment.builder().invoice(a.getInvoice())
+                    .invoiceItem(a.getInvoiceItem()).type(a.getType()).amount(a.getAmount()).build())
+                .toList();
+        }
         byte[] pdf = pdfInvoiceService.generateInvoicePdf(invoice, items,
-            payments != null ? payments : List.of(), effectiveLocale);
+            payments != null ? payments : List.of(), adjustments != null ? adjustments : List.of(), effectiveLocale);
         return new InvoicePdfResponseDTO(pdf, invoice.getInvoiceNumber(), invoice.getId());
     }
 
@@ -767,6 +1046,12 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
                 && !activeHospitalId.equals(invoice.getHospital().getId())) {
             throw new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND, invoiceId);
         }
+        return renderReceiptPdf(invoice, paymentId, locale);
+    }
+
+    /** The receipt of one confirmed payment on an invoice the caller may already read. */
+    private InvoicePdfResponseDTO renderReceiptPdf(BillingInvoice invoice, UUID paymentId, Locale locale) {
+        UUID invoiceId = invoice.getId();
         PaymentTransaction row = loadPaymentRow(invoice, paymentId);
         // A receipt says money was received: never for a pending, rejected or reversed row.
         if (row.getStatus() != PaymentStatus.CONFIRMED) {
@@ -825,8 +1110,9 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         UUID effectiveHospitalId = (searchRequest != null ? searchRequest.getHospitalId() : null);
         if (activeHospitalId != null) {
             // QA D230: another hospital named in the body is refused, not rewritten.
+            // QA D1011: with a search message, not the invoice-create one.
             if (effectiveHospitalId != null && !effectiveHospitalId.equals(activeHospitalId)) {
-                throw new BusinessException("billing.invoice.hospitalMismatch");
+                throw new BusinessException("billing.search.otherHospital");
             }
             effectiveHospitalId = activeHospitalId;
         }
@@ -1296,6 +1582,17 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             return;
         }
         requireWholeAmount(amount);
+        // QA D936 (class): two check-ins of one appointment are serialised by the
+        // appointment lock in ReceptionServiceImpl.checkInPatient (each makes a new
+        // encounter). This check is the second line: a copay recorded again on the
+        // same encounter (a retried call) is not billed twice.
+        if (encounter.getId() != null && invoiceRepository
+                .findByEncounter_IdAndStatusNot(encounter.getId(), InvoiceStatus.DRAFT).stream()
+                .anyMatch(existing -> existing.isCheckInCopay()
+                    && (existing.getStatus() != InvoiceStatus.CANCELLED || existing.getCreditedToInvoice() != null))) {
+            LOG.info("Check-in copay already recorded for encounter {}; not billed again", encounter.getId());
+            return;
+        }
         Hospital hospital = encounter.getHospital();
         LocalDate today = LocalDate.now(java.time.ZoneId.systemDefault());
         BillingInvoice invoice = BillingInvoice.builder()

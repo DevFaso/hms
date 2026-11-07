@@ -86,6 +86,8 @@ public class BillingInvoiceMapper {
 
     private void populateInvoiceDetails(BillingInvoiceResponseDTO dto, BillingInvoice invoice) {
         dto.setInvoiceNumber(invoice.getInvoiceNumber());
+        // QA D936: the form tells the clerk which paid copays are still standing.
+        dto.setCheckInCopay(invoice.isCheckInCopay());
         // QA D428: a folded check-in copay names the invoice it went to.
         if (invoice.getCreditedToInvoice() != null) {
             dto.setCreditedToInvoiceNumber(invoice.getCreditedToInvoice().getInvoiceNumber());

@@ -5,10 +5,14 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   PatientPortalService,
   PortalInvoice,
+  PortalInvoiceDetail,
+  PortalInvoicePayment,
   PatientPaymentRequest,
 } from '../../services/patient-portal.service';
+import { saveResponse } from '../../shared/download-file';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { CfaPipe } from '../../shared/pipes/cfa.pipe';
+import { DialogA11yDirective } from '../../shared/a11y/dialog-a11y.directive';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { formatCfa } from '../../shared/i18n/app-locale';
 
@@ -23,6 +27,7 @@ import { formatCfa } from '../../shared/i18n/app-locale';
     EnumLabelPipe,
     TranslateModule,
     CfaPipe,
+    DialogA11yDirective,
   ],
   templateUrl: './my-billing.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -34,6 +39,64 @@ export class MyBillingComponent implements OnInit {
   invoices = signal<PortalInvoice[]>([]);
   loading = signal(true);
   totalBalance = signal(0);
+
+  /**
+   * QA D982: the card opens on the invoice itself: its lines, every payment
+   * with its state, and the invoice and receipt PDFs.
+   */
+  openDetailId = signal<string | null>(null);
+  detail = signal<PortalInvoiceDetail | null>(null);
+  detailLoading = signal(false);
+  detailError = signal(false);
+  /** A failed PDF download, shown beside the detail instead of replacing it. */
+  downloadError = signal(false);
+
+  toggleDetail(inv: PortalInvoice): void {
+    if (this.openDetailId() === inv.id) {
+      this.openDetailId.set(null);
+      this.detail.set(null);
+      return;
+    }
+    this.openDetailId.set(inv.id);
+    this.detail.set(null);
+    this.detailError.set(false);
+    this.detailLoading.set(true);
+    this.portal.getMyInvoiceDetail(inv.id).subscribe({
+      next: (d) => {
+        if (this.openDetailId() !== inv.id) return;
+        this.detail.set(d);
+        this.detailLoading.set(false);
+      },
+      error: () => {
+        if (this.openDetailId() !== inv.id) return;
+        this.detailError.set(true);
+        this.detailLoading.set(false);
+      },
+    });
+  }
+
+  downloadInvoice(inv: PortalInvoice): void {
+    this.portal.getMyInvoicePdf(inv.id).subscribe({
+      next: (res) => {
+        this.downloadError.set(false);
+        saveResponse(res, `invoice-${inv.invoiceNumber}.pdf`);
+      },
+      error: () => this.downloadError.set(true),
+    });
+  }
+
+  downloadReceipt(inv: PortalInvoice, p: PortalInvoicePayment): void {
+    this.portal.getMyReceiptPdf(inv.id, p.id).subscribe({
+      next: (res) => {
+        this.downloadError.set(false);
+        saveResponse(
+          res,
+          `receipt-${inv.invoiceNumber}-${(p.paymentDate ?? '').substring(0, 10)}.pdf`,
+        );
+      },
+      error: () => this.downloadError.set(true),
+    });
+  }
 
   // Payment dialog state
   payingInvoice = signal<PortalInvoice | null>(null);
@@ -52,6 +115,12 @@ export class MyBillingComponent implements OnInit {
     this.portal.getMyInvoices().subscribe({
       next: (inv) => {
         this.invoices.set(inv);
+        // QA D982: an open detail follows a payment just declared.
+        const open = inv.find((i) => i.id === this.openDetailId());
+        if (open) {
+          this.openDetailId.set(null);
+          this.toggleDetail(open);
+        }
         this.totalBalance.set(
           inv.filter((i) => this.isPayable(i)).reduce((sum, i) => sum + (i.balance ?? 0), 0),
         );

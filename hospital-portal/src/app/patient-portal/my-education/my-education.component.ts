@@ -16,6 +16,7 @@ import {
 } from '../../services/patient-portal.service';
 import { ToastService } from '../../core/toast.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
+import { DialogA11yDirective } from '../../shared/a11y/dialog-a11y.directive';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
 type EducationTab = 'assigned' | 'completed' | 'questions';
@@ -23,7 +24,15 @@ type EducationTab = 'assigned' | 'completed' | 'questions';
 @Component({
   selector: 'app-my-education',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, DatePipe, FormsModule, EnumLabelPipe, TranslateModule],
+  imports: [
+    ServerTimePipe,
+    CommonModule,
+    DatePipe,
+    FormsModule,
+    EnumLabelPipe,
+    TranslateModule,
+    DialogA11yDirective,
+  ],
   templateUrl: './my-education.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./my-education.component.scss', '../patient-portal-pages.scss'],

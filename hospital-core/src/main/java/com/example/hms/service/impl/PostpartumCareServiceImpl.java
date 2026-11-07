@@ -792,7 +792,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
             notificationService.createNotification("postpartum.alert.notification",
                 new Object[]{typeKey, patientArg,
                     com.example.hms.service.maternity.ObstetricAlertEscalationWorker.alertMessageArg(
-                        messageKey, null, alert.getMessage())}, documentedBy.getUsername(), null);
+                        messageKey, null, alert.getMessage())}, documentedBy.getUsername(), "MATERNITY_ALERT");
         } catch (RuntimeException ex) {
             log.warn("Failed to create postpartum alert notification: {}", ex.getMessage());
         }

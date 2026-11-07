@@ -211,6 +211,10 @@ class PatientServiceImplTest {
     @Mock
     private PatientAccountLinkGuard accountLinkGuard;
 
+    /** QA D959 — the visit rows have their own test (VisitTimelineRowsTest); none here. */
+    @Mock
+    private com.example.hms.service.timeline.VisitTimelineRows visitTimelineRows;
+
     @InjectMocks
     private PatientServiceImpl patientService;
 
@@ -868,6 +872,57 @@ class PatientServiceImplTest {
         ))
             .isInstanceOf(BusinessException.class)
             .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("patient.r7.diagnosisRemoveReasonRequired"));
+    }
+
+    @Test
+    void getDoctorTimelineNamesTheTestAndTheVisitTypeInTheReadersLanguage_D958_D996() {
+        org.springframework.context.MessageSource previous = (org.springframework.context.MessageSource)
+            org.springframework.test.util.ReflectionTestUtils.getField(com.example.hms.utility.MessageUtil.class, "messageSource");
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
+        try {
+            UserRoleHospitalAssignment assignment = new UserRoleHospitalAssignment();
+            assignment.setId(UUID.randomUUID());
+            assignment.setHospital(hospital);
+            Encounter stay = Encounter.builder().patient(patient).hospital(hospital)
+                .encounterDate(LocalDateTime.now().minusDays(1)).encounterType(EncounterType.INPATIENT).build();
+            stay.setId(UUID.randomUUID());
+            com.example.hms.model.LabTestDefinition glycemia = new com.example.hms.model.LabTestDefinition();
+            glycemia.setName("Glycémie à jeun");
+            glycemia.setUnit("g/L");
+            LabOrder order = LabOrder.builder().patient(patient).hospital(hospital)
+                .labTestDefinition(glycemia)
+                .clinicalIndication("Fièvre 39,2 °C, suspicion de paludisme")
+                .orderingStaff(Staff.builder().hospital(hospital).build())
+                .build();
+            order.setId(UUID.randomUUID());
+            LabResult result = LabResult.builder().labOrder(order).released(true).resultValue("0.92")
+                .resultDate(LocalDateTime.now().minusHours(2)).build();
+            result.setId(UUID.randomUUID());
+            when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+            when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
+            when(encounterRepository.findByPatient_Id(patientId)).thenReturn(List.of(stay));
+            when(labResultRepository.findPatientResultsReadableAt(patientId, Set.of(hospitalId), hospitalId, false,
+                Pageable.unpaged())).thenReturn(List.of(result));
+
+            PatientTimelineResponseDTO response = patientService.getDoctorTimeline(patientId, hospitalId,
+                UUID.randomUUID(), assignment,
+                PatientTimelineAccessRequestDTO.builder().accessReason("Suivi").includeSensitiveData(true).build());
+
+            assertThat(response.getEntries())
+                .filteredOn(entry -> "LAB_RESULT".equals(entry.getCategory()))
+                .singleElement()
+                .extracting(PatientTimelineEntryDTO::getSummary)
+                .isEqualTo("Glycémie à jeun: 0.92 g/L");
+            assertThat(response.getEntries())
+                .filteredOn(entry -> "ENCOUNTER".equals(entry.getCategory()))
+                .singleElement()
+                .extracting(PatientTimelineEntryDTO::getSummary)
+                .isEqualTo("Hospitalisation");
+        } finally {
+            org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+            com.example.hms.utility.MessageUtil.setMessageSource(previous);
+        }
     }
 
     @Test

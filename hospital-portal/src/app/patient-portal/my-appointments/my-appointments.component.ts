@@ -19,7 +19,9 @@ import {
   SchedulingProvider,
 } from '../../services/patient-portal.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
+import { DialogA11yDirective } from '../../shared/a11y/dialog-a11y.directive';
 import { localDateString } from '../../shared/date-utils';
+import { currentLocale } from '../../shared/i18n/app-locale';
 import { PreCheckinFormComponent } from './pre-checkin-form/pre-checkin-form.component';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { ClockTimePipe } from '../../shared/pipes/clock-time.pipe';
@@ -41,6 +43,7 @@ function visitKey(a: PortalAppointment): string {
     TranslateModule,
     FormsModule,
     PreCheckinFormComponent,
+    DialogA11yDirective,
   ],
   templateUrl: './my-appointments.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -202,6 +205,39 @@ export class MyAppointmentsComponent implements OnInit {
    * The backend rejects only COMPLETED and CANCELLED, but only offer the
    * actions on states a patient can sensibly act on.
    */
+  /** Whole days from today to the appointment, local calendar; null when the date is unreadable. */
+  private daysUntil(appt: PortalAppointment): number | null {
+    const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(appt.date ?? '');
+    if (!match) return null;
+    const day = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    return Math.round((day.getTime() - today.getTime()) / 86_400_000);
+  }
+
+  /**
+   * QA D940: the server takes a pre-check-in from 7 days before the
+   * appointment to the day itself; outside that window the button was offered
+   * and the patient learned it only after three steps, in English.
+   */
+  preCheckInOpen(appt: PortalAppointment): boolean {
+    const days = this.daysUntil(appt);
+    return days !== null && days >= 0 && days <= 7;
+  }
+
+  /** QA D940: the day the window opens, for an appointment still too far away. */
+  preCheckInOpensOn(appt: PortalAppointment): Date | null {
+    const days = this.daysUntil(appt);
+    if (days === null || days <= 7) return null;
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate() + days - 7);
+  }
+
+  /** The opening day as the reader writes a date ("3 novembre 2026"); a local calendar day, not a server instant. */
+  preCheckInOpensOnLabel(day: Date): string {
+    return new Intl.DateTimeFormat(currentLocale(), { dateStyle: 'long' }).format(day);
+  }
+
   canModify(appt: PortalAppointment): boolean {
     return ['SCHEDULED', 'CONFIRMED', 'PENDING', 'RESCHEDULED'].includes(appt.status);
   }

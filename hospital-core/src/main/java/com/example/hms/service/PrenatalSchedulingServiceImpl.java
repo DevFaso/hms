@@ -208,10 +208,10 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
         // A custom message is the scheduler's own words and is stored as given.
         String custom = request.getCustomMessage();
         if (custom != null && !custom.isBlank()) {
-            notificationService.createLiteralNotification(custom, patientUsername, null);
+            notificationService.createLiteralNotification(custom, patientUsername, "PRENATAL_REMINDER");
         } else {
             notificationService.createNotification("prenatal.reminder.default",
-                defaultReminderArgs(appointment, request.getDaysBefore()), patientUsername, null);
+                defaultReminderArgs(appointment, request.getDaysBefore()), patientUsername, "PRENATAL_REMINDER");
         }
     }
 

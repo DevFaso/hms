@@ -3118,4 +3118,14 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- V242 (round 16): discounts, waivers and credit notes on an issued
+         invoice, each with a mandatory reason (QA D974). Plain statements,
+         no DO block. Idempotent. -->
+    <changeSet id="V242-invoice-adjustments" author="hms-team" runOnChange="false">
+        <sqlFile path="V242__invoice_adjustments.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

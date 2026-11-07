@@ -56,7 +56,7 @@
             @if (isExpanded(group.id)) {
               <div class="vitals-grid">
                 @for (v of group.vitals; track v.id) {
-                  <div class="vital-card">
+                  <div class="vital-card" [class.out-of-range]="!!rangeFlag(v)">
                     <div class="vc-icon">
                       <span class="material-symbols-outlined">{{ getVitalIcon(v.type) }}</span>
                     </div>
@@ -66,6 +66,20 @@
                       <span class="vc-value"
                         >{{ displayValue(v.value) }} <small>{{ unitLabel(v.unit) }}</small></span
                       >
+                      @if (rangeFlag(v); as flag) {
+                        <!-- QA D980: an out-of-range reading says so, in words and not by colour alone. -->
+                        <span
+                          class="vc-flag"
+                          [attr.data-flag]="flag"
+                          [attr.data-testid]="'flag-' + v.id"
+                          >{{
+                            (flag === 'HIGH'
+                              ? 'PORTAL.VITALS.ABOVE_NORMAL'
+                              : 'PORTAL.VITALS.BELOW_NORMAL'
+                            ) | translate
+                          }}</span
+                        >
+                      }
                       @if (getNormalRange(v.type)) {
                         <span class="vc-range"
                           >{{ 'PORTAL.VITALS.NORMAL_PREFIX' | translate }}:

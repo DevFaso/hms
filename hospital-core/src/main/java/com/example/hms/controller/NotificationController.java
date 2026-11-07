@@ -59,7 +59,7 @@ public class NotificationController {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN')")
     public ResponseEntity<Notification> createNotification(@RequestParam String message, @RequestParam String recipientUsername) {
         // Typed by the administrator: shown as written, in every language.
-        Notification notification = notificationService.createLiteralNotification(message, recipientUsername, null);
+        Notification notification = notificationService.createLiteralNotification(message, recipientUsername, "ADMIN_MESSAGE");
         return ResponseEntity.ok(notification);
     }
 

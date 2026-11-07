@@ -71,6 +71,140 @@ public class DisclosureAccountingServiceImpl implements DisclosureAccountingServ
             .map(this::toEntry);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public DisclosureAccountingDTO getAccountingAsPatientSees(UUID patientId, LocalDateTime from,
+                                                              LocalDateTime to, Pageable pageable) {
+        Set<AuditEventType> accountable = DisclosureCategory.accountableEventTypes();
+        Map<DisclosureCategory, Long> counts = countByCategory(patientId, accountable, from, to);
+        Page<AccessLogEntryDTO> folded = foldedEntries(patientId, accountable, from, to, pageable);
+        return DisclosureAccountingDTO.builder()
+            .from(from)
+            .to(to)
+            .countsByCategory(counts)
+            .totalEvents(counts.values().stream().mapToLong(Long::longValue).sum())
+            .externalDisclosures(counts.entrySet().stream()
+                .filter(e -> e.getKey().isExternalDisclosure())
+                .mapToLong(Map.Entry::getValue)
+                .sum())
+            .entries(folded.getContent())
+            .totalPages(folded.getTotalPages())
+            .page(folded.getNumber())
+            .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<AccessLogEntryDTO> getEntriesAsPatientSees(UUID patientId, LocalDateTime from,
+                                                           LocalDateTime to, Pageable pageable) {
+        return foldedEntries(patientId, DisclosureCategory.accountableEventTypes(), from, to, pageable);
+    }
+
+    /**
+     * The patient's list: the most recent rows folded (whatever sort the client
+     * asks for: the query orders newest first, and the list has one order),
+     * then paged with the folded totals, so a repeat across a page boundary
+     * shows once. A record read more than {@link #PATIENT_FOLD_WINDOW} times:
+     * the older rows follow as they are, read a window-sized page at a time.
+     */
+    private Page<AccessLogEntryDTO> foldedEntries(UUID patientId, Set<AuditEventType> accountable,
+                                                  LocalDateTime from, LocalDateTime to, Pageable pageable) {
+        if (pageable.isUnpaged()) {
+            return new org.springframework.data.domain.PageImpl<>(
+                foldRepeats(queryEntries(patientId, accountable, from, to, pageable).getContent()));
+        }
+        Page<AccessLogEntryDTO> window = queryEntries(patientId, accountable, from, to, windowPage(0));
+        List<AccessLogEntryDTO> lines = foldRepeats(window.getContent());
+        long older = Math.max(0, window.getTotalElements() - window.getContent().size());
+        long total = lines.size() + older;
+        long start = (long) pageable.getPageNumber() * pageable.getPageSize();
+        long end = Math.min(start + pageable.getPageSize(), total);
+        List<AccessLogEntryDTO> content = new java.util.ArrayList<>();
+        for (long i = start; i < Math.min(end, lines.size()); i++) {
+            content.add(lines.get((int) i));
+        }
+        if (end > lines.size()) {
+            content.addAll(olderRows(patientId, accountable, from, to,
+                PATIENT_FOLD_WINDOW + Math.max(0, start - lines.size()), PATIENT_FOLD_WINDOW + (end - lines.size())));
+        }
+        return new org.springframework.data.domain.PageImpl<>(content, pageable, total);
+    }
+
+    /** Audit rows [fromRow, toRow) past the fold window, in audit order, a window-sized page at a time. */
+    private List<AccessLogEntryDTO> olderRows(UUID patientId, Set<AuditEventType> accountable,
+                                              LocalDateTime from, LocalDateTime to, long fromRow, long toRow) {
+        List<AccessLogEntryDTO> rows = new java.util.ArrayList<>();
+        for (long pageIndex = fromRow / PATIENT_FOLD_WINDOW; pageIndex * PATIENT_FOLD_WINDOW < toRow; pageIndex++) {
+            List<AccessLogEntryDTO> page = queryEntries(patientId, accountable, from, to,
+                windowPage((int) pageIndex)).getContent();
+            long base = pageIndex * PATIENT_FOLD_WINDOW;
+            for (int k = 0; k < page.size(); k++) {
+                long row = base + k;
+                if (row >= fromRow && row < toRow) {
+                    rows.add(page.get(k));
+                }
+            }
+        }
+        return rows;
+    }
+
+    private static Pageable windowPage(int index) {
+        return org.springframework.data.domain.PageRequest.of(index, PATIENT_FOLD_WINDOW);
+    }
+
+    /** QA D979: the most recent audit rows folded for the patient's list (older ones are in the staff accounting). */
+    private static final int PATIENT_FOLD_WINDOW = 2000;
+
+    /** QA D979: the window in which the same person reading the same way again shows once. */
+    private static final java.time.Duration REPEAT_WINDOW = java.time.Duration.ofMinutes(30);
+
+    /** QA D979: the categories a repeat of folds into one line; every emergency, copy or insurer row stays. */
+    private static final Set<DisclosureCategory> FOLDABLE =
+        java.util.EnumSet.of(DisclosureCategory.TREATMENT_ACCESS, DisclosureCategory.SHARED_WITH_PROVIDER);
+
+    /**
+     * QA D979: Joséphine Hien appeared five times in 40 seconds as "shared
+     * with a provider" (every chart and timeline read writes a RECORD_SHARE),
+     * although the page says repeat views during one visit show once. The
+     * audit keeps every row and the counts still add them all up; only the
+     * list the patient reads folds a repeat, by the same person, of the same
+     * kind, from the same hospital, within 30 minutes of the line kept.
+     */
+    static List<AccessLogEntryDTO> foldRepeats(List<AccessLogEntryDTO> entries) {
+        List<AccessLogEntryDTO> kept = new java.util.ArrayList<>(entries.size());
+        Map<String, LocalDateTime> lastKept = new java.util.HashMap<>();
+        for (AccessLogEntryDTO entry : entries) {
+            String key = foldKey(entry);
+            if (key != null && isRepeat(lastKept.get(key), entry.getTimestamp())) {
+                continue;
+            }
+            if (key != null) {
+                lastKept.put(key, entry.getTimestamp());
+            }
+            kept.add(entry);
+        }
+        return kept;
+    }
+
+    /** A row within the repeat window of the line kept for its key (none kept yet: not a repeat). */
+    private static boolean isRepeat(LocalDateTime lastKeptAt, LocalDateTime when) {
+        return lastKeptAt != null && withinRepeatWindow(when, lastKeptAt);
+    }
+
+    /** What a repeat is a repeat of; null for a row that is never folded. */
+    private static String foldKey(AccessLogEntryDTO entry) {
+        if (entry.getCategory() == null || !FOLDABLE.contains(entry.getCategory()) || entry.getTimestamp() == null) {
+            return null;
+        }
+        return entry.getCategory() + "|" + entry.getActor() + "|" + entry.getHospitalName() + "|" + entry.getDescription();
+    }
+
+    /** Audit timestamps are UTC wall-clock values; compared as such. */
+    private static boolean withinRepeatWindow(LocalDateTime a, LocalDateTime b) {
+        return java.time.Duration.between(a.atOffset(java.time.ZoneOffset.UTC), b.atOffset(java.time.ZoneOffset.UTC))
+            .abs().compareTo(REPEAT_WINDOW) <= 0;
+    }
+
     /**
      * Per-category totals across the whole window.
      *

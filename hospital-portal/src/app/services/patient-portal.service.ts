@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { currentLocale } from '../shared/i18n/app-locale';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpResponse } from '@angular/common/http';
 import { Observable, map, catchError, of } from 'rxjs';
 
 /* ── DTOs matching backend PatientPortalController ── */
@@ -13,7 +13,8 @@ export interface PatientProfileDTO {
   dateOfBirth: string;
   gender: string;
   email: string;
-  phone: string;
+  /** The record's phone, as the backend names it (the hospital calls this one). */
+  phoneNumberPrimary: string;
   address: string;
   emergencyContactName: string;
   emergencyContactPhone: string;
@@ -427,6 +428,8 @@ interface EncounterApiResponse {
   departmentName: string;
   hospitalName: string;
   appointmentReason: string;
+  /** QA D981: the reason the visit or stay was opened (an admission's reason too). */
+  chiefComplaint?: string;
   notes: string;
   status: string;
   note?: {
@@ -481,6 +484,42 @@ export function mapPortalInvoice(api: InvoiceApiResponse): PortalInvoice {
     pending: Number(api.pendingDeclaredAmount ?? 0),
     creditedTo: api.creditedToInvoiceNumber ?? null,
   };
+}
+
+/** QA D982: one line of an invoice, as the cashier priced it. */
+export interface PortalInvoiceLine {
+  id: string;
+  itemDescription: string;
+  itemCategory?: string | null;
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
+}
+
+/** QA D982: one payment on an invoice and where it stands. */
+export interface PortalInvoicePayment {
+  id: string;
+  amount: number;
+  paymentDate?: string | null;
+  paymentMethod?: string | null;
+  referenceNumber?: string | null;
+  status: 'PENDING' | 'CONFIRMED' | 'REJECTED' | 'REVERSED' | string;
+  reversalReason?: string | null;
+  createdAt?: string | null;
+}
+
+/** QA D982: the invoice behind a portal card: its lines and every payment. */
+export interface PortalInvoiceDetail {
+  invoice: PortalInvoice;
+  lines: PortalInvoiceLine[];
+  payments: PortalInvoicePayment[];
+  /** QA D974: what was discounted, waived or credited. */
+  adjustments: {
+    id: string;
+    type: string;
+    amount: number;
+    invoiceItemDescription?: string | null;
+  }[];
 }
 
 export interface PortalInvoice {
@@ -1067,6 +1106,17 @@ export class PatientPortalService {
       .pipe(map((r) => r.data));
   }
 
+  /**
+   * QA D939: the patient's own contact details on the patient record (PUT
+   * /me/patient/profile). The account phone (PUT /users/{id}) is the login
+   * contact only; the hospital calls the record's phone.
+   */
+  updateMyProfile(changes: { phoneNumberPrimary?: string }): Observable<PatientProfileDTO> {
+    return this.http
+      .put<ApiWrapper<PatientProfileDTO>>(`${this.base}/profile`, changes)
+      .pipe(map((r) => r.data));
+  }
+
   getHealthSummary(): Observable<HealthSummaryDTO> {
     return this.http
       .get<ApiWrapper<HealthSummaryRaw>>(`${this.base}/health-summary`)
@@ -1145,7 +1195,10 @@ export class PatientPortalService {
           type: e.encounterType ?? '',
           providerName: e.staffName ?? e.staffFullName ?? '',
           department: e.departmentName ?? '',
-          chiefComplaint: e.note?.chiefComplaint ?? '',
+          // QA D981: the note's complaint, else the visit's own reason (an
+          // admission's reason lives there), else the booking reason.
+          chiefComplaint: e.note?.chiefComplaint || e.chiefComplaint || e.appointmentReason || '',
+          // The doctor's assessment, labelled as such (it is not a coded diagnosis).
           diagnosisSummary: e.note?.assessment ?? '',
           status: e.status ?? '',
           notes: e.notes ?? '',
@@ -1164,6 +1217,54 @@ export class PatientPortalService {
         map((r) => (r.data?.content ?? []).map(mapPortalInvoice)),
         catchError(() => of([])),
       );
+  }
+
+  /** QA D982: one of my invoices with its lines and every payment. */
+  getMyInvoiceDetail(invoiceId: string): Observable<PortalInvoiceDetail> {
+    return this.http
+      .get<
+        ApiWrapper<{
+          invoice: InvoiceApiResponse;
+          items: PortalInvoiceLine[] | null;
+          payments: PortalInvoicePayment[] | null;
+          adjustments?: PortalInvoiceDetail['adjustments'] | null;
+        }>
+      >(`${this.base}/billing/invoices/${invoiceId}`)
+      .pipe(
+        map((r) => ({
+          invoice: mapPortalInvoice(r.data.invoice),
+          lines: (r.data.items ?? []).map((l) => ({
+            ...l,
+            quantity: Number(l.quantity ?? 0),
+            unitPrice: Number(l.unitPrice ?? 0),
+            totalPrice: Number(l.totalPrice ?? 0),
+          })),
+          payments: (r.data.payments ?? []).map((p) => ({ ...p, amount: Number(p.amount ?? 0) })),
+          adjustments: (r.data.adjustments ?? []).map((a) => ({
+            ...a,
+            amount: Number(a.amount ?? 0),
+          })),
+        })),
+      );
+  }
+
+  /** QA D982: my invoice PDF, with the server's file name. */
+  getMyInvoicePdf(invoiceId: string): Observable<HttpResponse<Blob>> {
+    return this.http.get(`${this.base}/billing/invoices/${invoiceId}/pdf`, {
+      responseType: 'blob',
+      observe: 'response',
+    });
+  }
+
+  /** QA D982: the receipt of one of my confirmed payments. */
+  getMyReceiptPdf(invoiceId: string, paymentId: string): Observable<HttpResponse<Blob>> {
+    return this.http.get(
+      `${this.base}/billing/invoices/${invoiceId}/payments/${paymentId}/receipt`,
+      {
+        responseType: 'blob',
+        observe: 'response',
+      },
+    );
   }
 
   payInvoice(invoiceId: string, payment: PatientPaymentRequest): Observable<PortalInvoice> {

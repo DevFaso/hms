@@ -1,5 +1,6 @@
 import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
+import { CfaPipe } from '../../../shared/pipes/cfa.pipe';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import {
@@ -56,6 +57,7 @@ function normalizeScopes(csv: string | null | undefined): Set<string> {
     RouterLink,
     EnumLabelPipe,
     TranslateModule,
+    CfaPipe,
   ],
   templateUrl: './proxy-data-viewer.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,

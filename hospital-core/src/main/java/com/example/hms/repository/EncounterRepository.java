@@ -358,4 +358,5 @@ public interface EncounterRepository
 
     /** E8 #48 — every encounter of this patient here; the resolver applies the status/decay rule. */
     List<Encounter> findByPatient_IdAndHospital_Id(UUID patientId, UUID hospitalId);
+
 }

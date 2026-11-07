@@ -1,13 +1,16 @@
 <div class="pre-checkin-overlay" (click)="close()" (keydown.escape)="close()" tabindex="-1">
   <div
     class="pre-checkin-panel"
+    appDialogA11y
     tabindex="-1"
+    aria-labelledby="precheckin-dialog-title-1"
+    (dialogClose)="close()"
     (click)="$event.stopPropagation()"
     (keydown)="$event.stopPropagation()"
   >
     <!-- Header -->
     <div class="panel-header">
-      <h3>{{ 'PRE_CHECKIN.TITLE' | translate }}</h3>
+      <h3 id="precheckin-dialog-title-1">{{ 'PRE_CHECKIN.TITLE' | translate }}</h3>
       <button
         class="close-btn"
         (click)="close()"

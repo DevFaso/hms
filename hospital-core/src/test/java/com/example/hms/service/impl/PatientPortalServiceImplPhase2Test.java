@@ -1394,7 +1394,7 @@ class PatientPortalServiceImplPhase2Test {
                     .build();
 
             Pageable pageable = PageRequest.of(0, 20);
-            when(disclosureAccountingService.getEntries(patientId, null, null, pageable))
+            when(disclosureAccountingService.getEntriesAsPatientSees(patientId, null, null, pageable))
                     .thenReturn(new PageImpl<>(List.of(expected), pageable, 1));
 
             Page<AccessLogEntryDTO> result = service.getMyAccessLog(auth, pageable);
@@ -1416,12 +1416,12 @@ class PatientPortalServiceImplPhase2Test {
             // emergency override and every disclosure to an insurer.
             stubPatientResolution();
             Pageable pageable = PageRequest.of(0, 20);
-            when(disclosureAccountingService.getEntries(patientId, null, null, pageable))
+            when(disclosureAccountingService.getEntriesAsPatientSees(patientId, null, null, pageable))
                     .thenReturn(Page.empty(pageable));
 
             service.getMyAccessLog(auth, pageable);
 
-            verify(disclosureAccountingService).getEntries(patientId, null, null, pageable);
+            verify(disclosureAccountingService).getEntriesAsPatientSees(patientId, null, null, pageable);
             // No "never called the old query" assertion here: the service no
             // longer holds an AuditEventLogService at all, so the compiler
             // enforces that far harder than a mock verification could.
@@ -1432,7 +1432,7 @@ class PatientPortalServiceImplPhase2Test {
         void getAccessLog_empty() {
             stubPatientResolution();
             Pageable pageable = PageRequest.of(0, 20);
-            when(disclosureAccountingService.getEntries(patientId, null, null, pageable))
+            when(disclosureAccountingService.getEntriesAsPatientSees(patientId, null, null, pageable))
                     .thenReturn(Page.empty(pageable));
 
             Page<AccessLogEntryDTO> result = service.getMyAccessLog(auth, pageable);
@@ -1452,14 +1452,14 @@ class PatientPortalServiceImplPhase2Test {
             LocalDateTime to = LocalDateTime.of(2026, 8, 1, 0, 0);
             DisclosureAccountingDTO expected =
                     DisclosureAccountingDTO.builder().totalEvents(4).build();
-            when(disclosureAccountingService.getAccounting(patientId, from, to, pageable))
+            when(disclosureAccountingService.getAccountingAsPatientSees(patientId, from, to, pageable))
                     .thenReturn(expected);
 
             DisclosureAccountingDTO result =
                     service.getMyDisclosureAccounting(auth, from, to, pageable);
 
             assertThat(result).isSameAs(expected);
-            verify(disclosureAccountingService).getAccounting(patientId, from, to, pageable);
+            verify(disclosureAccountingService).getAccountingAsPatientSees(patientId, from, to, pageable);
         }
     }
 
@@ -1990,6 +1990,25 @@ class PatientPortalServiceImplPhase2Test {
                     service.getProvidersForDepartment(auth, hospId, deptId);
 
             assertThat(result).isEmpty();
+        }
+    }
+
+    @Nested
+    @DisplayName("portal invoice detail (QA D982)")
+    class PortalInvoiceDetail {
+        @Test
+        void theDetailThePdfAndTheReceiptAreThePatientsOwn() {
+            stubPatientResolution();
+            UUID invoiceId = UUID.randomUUID();
+            UUID paymentId = UUID.randomUUID();
+
+            service.getMyInvoiceDetail(auth, invoiceId);
+            service.getMyInvoicePdf(auth, invoiceId, java.util.Locale.FRENCH);
+            service.getMyReceiptPdf(auth, invoiceId, paymentId, java.util.Locale.FRENCH);
+
+            verify(billingInvoiceService).getPortalInvoiceDetail(invoiceId, patientId);
+            verify(billingInvoiceService).getPortalInvoicePdf(invoiceId, patientId, java.util.Locale.FRENCH);
+            verify(billingInvoiceService).getPortalReceiptPdf(invoiceId, paymentId, patientId, java.util.Locale.FRENCH);
         }
     }
 }

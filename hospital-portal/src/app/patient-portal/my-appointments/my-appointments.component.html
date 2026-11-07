@@ -20,12 +20,15 @@
     >
       <div
         class="booking-form-card"
+        appDialogA11y
         tabindex="-1"
+        aria-labelledby="appt-dialog-title-1"
+        (dialogClose)="closeBookingForm()"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="closeBookingForm()"
+        (keydown.escape)="$event.stopPropagation()"
       >
         <div class="booking-header">
-          <h2>
+          <h2 id="appt-dialog-title-1">
             <span class="material-symbols-outlined">event_available</span>
             {{ 'PORTAL.APPOINTMENTS.BOOKING.FORM_TITLE' | translate }}
           </h2>
@@ -273,13 +276,23 @@
                     (appt.status === 'SCHEDULED' || appt.status === 'CONFIRMED') &&
                     !appt.preCheckedIn
                   ) {
-                    <button
-                      class="precheckin-btn"
-                      (click)="openPreCheckIn(appt); $event.stopPropagation()"
-                    >
-                      <span class="material-symbols-outlined">fact_check</span>
-                      {{ 'PORTAL.APPOINTMENTS.BOOKING.PRECHECKIN_BTN' | translate }}
-                    </button>
+                    @if (preCheckInOpen(appt)) {
+                      <button
+                        class="precheckin-btn"
+                        data-testid="precheckin-open"
+                        (click)="openPreCheckIn(appt); $event.stopPropagation()"
+                      >
+                        <span class="material-symbols-outlined" aria-hidden="true">fact_check</span>
+                        {{ 'PORTAL.APPOINTMENTS.BOOKING.PRECHECKIN_BTN' | translate }}
+                      </button>
+                    } @else if (preCheckInOpensOn(appt); as opensOn) {
+                      <span class="precheckin-later" data-testid="precheckin-later">
+                        {{
+                          'PORTAL.APPOINTMENTS.BOOKING.PRECHECKIN_OPENS_ON'
+                            | translate: { date: preCheckInOpensOnLabel(opensOn) }
+                        }}
+                      </span>
+                    }
                   }
                   @if (appt.preCheckedIn) {
                     <span class="precheckin-done">
@@ -407,12 +420,15 @@
     >
       <div
         class="booking-form-card"
+        appDialogA11y
         tabindex="-1"
+        aria-labelledby="appt-dialog-title-2"
+        (dialogClose)="closeCancel()"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="closeCancel()"
+        (keydown.escape)="$event.stopPropagation()"
       >
         <div class="booking-header">
-          <h2>
+          <h2 id="appt-dialog-title-2">
             <span class="material-symbols-outlined">event_busy</span>
             {{ 'PORTAL.APPOINTMENTS.CANCEL.TITLE' | translate }}
           </h2>
@@ -487,12 +503,15 @@
     >
       <div
         class="booking-form-card"
+        appDialogA11y
         tabindex="-1"
+        aria-labelledby="appt-dialog-title-3"
+        (dialogClose)="closeReschedule()"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="closeReschedule()"
+        (keydown.escape)="$event.stopPropagation()"
       >
         <div class="booking-header">
-          <h2>
+          <h2 id="appt-dialog-title-3">
             <span class="material-symbols-outlined">edit_calendar</span>
             {{ 'PORTAL.APPOINTMENTS.RESCHEDULE.TITLE' | translate }}
           </h2>

@@ -228,6 +228,26 @@ class AnnouncementServiceImplTest {
         }
 
         @Test
+        @DisplayName("QA D983: staff are notified with the ANNOUNCEMENT type; a patient-only account is not")
+        void notifiesStaffWithItsType() {
+            ActingScopeTestSupport.globalSuperAdmin(UUID.randomUUID());
+            when(announcementRepository.save(any(Announcement.class))).thenAnswer(inv -> inv.getArgument(0));
+            User nurse = User.builder().username("nurse1").build();
+            nurse.getUserRoles().add(com.example.hms.model.UserRole.builder().user(nurse)
+                .role(com.example.hms.model.Role.builder().code("ROLE_NURSE").build()).build());
+            User patient = User.builder().username("patient1").build();
+            patient.getUserRoles().add(com.example.hms.model.UserRole.builder().user(patient)
+                .role(com.example.hms.model.Role.builder().code("ROLE_PATIENT").build()).build());
+            when(userRepository.findByIsDeletedFalse()).thenReturn(List.of(nurse, patient));
+
+            service.createAnnouncement("Staff meeting");
+
+            verify(notificationService).createNotification(eq("announcement.new.notification"), any(),
+                eq("nurse1"), eq("ANNOUNCEMENT"));
+            verify(notificationService, never()).createNotification(any(), any(), eq("patient1"), any());
+        }
+
+        @Test
         @DisplayName("without a hospital, only a super-admin in global view posts a platform-wide announcement")
         void noHospitalCannotPostPlatformWide() {
             assertThrows(com.example.hms.exception.BusinessException.class,

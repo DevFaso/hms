@@ -50,11 +50,12 @@
         <div
           class="notification-item portal-card"
           [class.unread]="!n.read"
-          (click)="markRead(n)"
+          (click)="open(n)"
           role="button"
           tabindex="0"
-          (keydown.enter)="markRead(n)"
-          (keydown.space)="$event.preventDefault(); markRead(n)"
+          [attr.data-testid]="'notification-' + n.id"
+          (keydown.enter)="open(n)"
+          (keydown.space)="$event.preventDefault(); open(n)"
         >
           <div class="notif-content">
             <div class="notif-header">

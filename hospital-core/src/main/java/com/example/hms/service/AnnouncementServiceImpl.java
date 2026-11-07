@@ -96,7 +96,7 @@ public class AnnouncementServiceImpl implements AnnouncementService {
             }
             try {
                 notificationService.createNotification("announcement.new.notification", notificationArgs,
-                    user.getUsername(), null);
+                    user.getUsername(), "ANNOUNCEMENT");
             } catch (Exception e) {
                 log.warn("Failed to notify user {}: {}", user.getUsername(), e.getMessage());
             }

@@ -28,6 +28,8 @@ public class InvoiceEmailService {
     private final PdfInvoiceService pdfInvoiceService;
     private final EmailService emailService;
     private final RoleValidator roleValidator;
+    /** QA D974: the adjustments go on the mailed paper too, so lines and total agree. */
+    private final com.example.hms.repository.InvoiceAdjustmentRepository adjustmentRepository;
 
     @Transactional(readOnly = true)
     public void emailInvoice(UUID invoiceId, EmailInvoiceRequest req) {
@@ -55,7 +57,7 @@ public class InvoiceEmailService {
         Locale locale = req.locale() != null ? Locale.forLanguageTag(req.locale()) : Locale.FRENCH /* French-first: a missing locale must not mail an English invoice */;
 
         byte[] pdf = req.attachPdf()
-            ? pdfInvoiceService.generateInvoicePdf(invoice, items, locale)
+            ? pdfInvoiceService.generateInvoicePdf(invoice, items, List.of(), adjustmentsWithoutReasons(invoiceId), locale)
             : null;
 
         String subject = "Invoice " + nullSafe(invoice.getInvoiceNumber());
@@ -87,4 +89,15 @@ public class InvoiceEmailService {
     }
 
     private static String nullSafe(Object o) { return o == null ? "" : String.valueOf(o); }
+
+    /** QA D974: the mail may reach the patient; the clerk's reason stays with billing. */
+    private List<com.example.hms.model.InvoiceAdjustment> adjustmentsWithoutReasons(UUID invoiceId) {
+        if (adjustmentRepository == null) {
+            return List.of();
+        }
+        return adjustmentRepository.findByInvoice_IdOrderByCreatedAtAsc(invoiceId).stream()
+            .map(a -> com.example.hms.model.InvoiceAdjustment.builder().invoice(a.getInvoice())
+                .invoiceItem(a.getInvoiceItem()).type(a.getType()).amount(a.getAmount()).build())
+            .toList();
+    }
 }

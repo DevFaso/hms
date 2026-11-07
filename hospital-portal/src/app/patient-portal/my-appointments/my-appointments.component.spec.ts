@@ -371,6 +371,39 @@ describe('MyAppointmentsComponent — cancel and reschedule', () => {
     ]);
   });
 
+  describe('pre-check-in window (QA D940)', () => {
+    const inDays = (n: number) => {
+      const now = new Date();
+      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + n);
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      return `${d.getFullYear()}-${mm}-${dd}`;
+    };
+
+    it('is open from 7 days before the appointment to the day itself', () => {
+      expect(component.preCheckInOpen(appt({ date: inDays(0) }))).toBeTrue();
+      expect(component.preCheckInOpen(appt({ date: inDays(7) }))).toBeTrue();
+      expect(component.preCheckInOpen(appt({ date: inDays(10) }))).toBeFalse();
+      expect(component.preCheckInOpen(appt({ date: inDays(-1) }))).toBeFalse();
+    });
+
+    it('says when it opens instead of offering the button 10 days ahead', () => {
+      portal.getMyAppointments.and.returnValue(of([appt({ id: 'far', date: inDays(10) })]));
+      fixture.detectChanges();
+      component.toggleExpand('far');
+      fixture.detectChanges();
+      const card: HTMLElement = fixture.nativeElement;
+      expect(card.querySelector('[data-testid="precheckin-open"]')).toBeNull();
+      expect(card.querySelector('[data-testid="precheckin-later"]')).not.toBeNull();
+      const opensOn = component.preCheckInOpensOn(appt({ date: inDays(10) }))!;
+      const expected = new Date();
+      expected.setHours(0, 0, 0, 0);
+      expected.setDate(expected.getDate() + 3);
+      expect(opensOn.getTime()).toBe(expected.getTime());
+      expect(component.preCheckInOpensOn(appt({ date: inDays(5) }))).toBeNull();
+    });
+  });
+
   it('offers cancel/reschedule only on actionable statuses', () => {
     expect(component.canModify(appt({ status: 'SCHEDULED' }))).toBeTrue();
     expect(component.canModify(appt({ status: 'CONFIRMED' }))).toBeTrue();

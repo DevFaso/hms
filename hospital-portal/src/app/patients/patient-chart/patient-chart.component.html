@@ -581,7 +581,8 @@
             <div>
               <div class="timeline-summary">{{ e.summary }}</div>
               <div class="timeline-date">
-                {{ e.category | enumLabel: 'timelineCategory' }} ·
+                @let kind = timelineKind(e);
+                {{ kind.value | enumLabel: kind.domain }} ·
                 {{ e.occurredAt | serverTime | date: 'medium' }}
               </div>
               <!--

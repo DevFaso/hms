@@ -44,6 +44,9 @@ public class BillingInvoiceResponseDTO {
     /** QA D428: the visit invoice a folded check-in copay was credited to. */
     private String creditedToInvoiceNumber;
 
+    /** QA D936: a copay taken at check-in, credited to the visit invoice once one is issued. */
+    private boolean checkInCopay;
+
     /**
      * QA D421: what the patient has declared and staff have not confirmed
      * yet. Set on the patient portal's reads; it counts against the balance.

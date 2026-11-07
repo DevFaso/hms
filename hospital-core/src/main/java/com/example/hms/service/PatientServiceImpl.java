@@ -224,6 +224,8 @@ public class PatientServiceImpl implements PatientService {
     private final AdvanceDirectiveMapper advanceDirectiveMapper;
     private final UltrasoundOrderRepository ultrasoundOrderRepository;
     private final UltrasoundReportRepository ultrasoundReportRepository;
+    /** QA D959: diagnoses, pending orders, signed notes and referrals on the chronology. */
+    private final com.example.hms.service.timeline.VisitTimelineRows visitTimelineRows;
     private final UltrasoundMapper ultrasoundMapper;
     private final NursingNoteRepository nursingNoteRepository;
     private final CrossHospitalReachRecorder reachRecorder;
@@ -894,6 +896,8 @@ public class PatientServiceImpl implements PatientService {
         aggregatedEntries.addAll(collectAllergyEntries(patientId, hospitalId, categoryFilters));
         aggregatedEntries.addAll(collectImagingEntries(patientId, readableHospitalIds, hospitalId, categoryFilters, unlocked));
         aggregatedEntries.addAll(collectProcedureEntries(patientId, readableHospitalIds, hospitalId, categoryFilters));
+        // QA D959: the rest of the visit (acting hospital's rows; see VisitTimelineRows).
+        aggregatedEntries.addAll(visitTimelineRows.collect(patientId, hospitalId, categoryFilters));
 
         recordCrossHospitalDisclosure(patientId, hospitalId, requesterUserId, assignment, aggregatedEntries,
             performedHereLabEntryIds);
@@ -2529,7 +2533,10 @@ public class PatientServiceImpl implements PatientService {
     }
 
     private String formatEncounterSummary(Encounter encounter) {
-        String type = encounter.getEncounterType() != null ? encounter.getEncounterType().name() : "Encounter";
+        // QA D996: the visit type in the reader's language ("Hospitalisation"), not "INPATIENT".
+        String type = encounter.getEncounterType() != null
+            ? com.example.hms.service.timeline.VisitTimelineRows.label(encounter.getEncounterType())
+            : com.example.hms.utility.MessageUtil.resolveOrRaw("timeline.category.ENCOUNTER");
         StringBuilder summary = new StringBuilder(type);
         if (encounter.getDepartment() != null && encounter.getDepartment().getName() != null) {
             summary.append(" · ").append(encounter.getDepartment().getName());
@@ -2543,7 +2550,8 @@ public class PatientServiceImpl implements PatientService {
     private String formatPrescriptionSummary(Prescription prescription) {
         String medication = Optional.ofNullable(prescription.getMedicationDisplayName())
             .orElse(prescription.getMedicationName());
-        StringBuilder summary = new StringBuilder(medication != null ? medication : "Prescription");
+        StringBuilder summary = new StringBuilder(medication != null ? medication
+            : com.example.hms.utility.MessageUtil.resolveOrRaw("timeline.category.PRESCRIPTION"));
         if (prescription.getDosage() != null) {
             summary.append(" · ").append(prescription.getDosage());
         }
@@ -2554,11 +2562,15 @@ public class PatientServiceImpl implements PatientService {
     }
 
     private String formatLabResultSummary(LabResult result) {
-        String testName = Optional.ofNullable(result.getLabOrder())
-            .map(LabOrder::getClinicalIndication)
-            .filter(s -> s != null && !s.isBlank())
-            .orElse("Lab Result");
-        StringBuilder summary = new StringBuilder(testName);
+        // QA D958: the test's name ("Glycémie à jeun"), never the clinical
+        // indication ("Fièvre 39,2 °C … suspicion de paludisme").
+        com.example.hms.model.LabTestDefinition test = Optional.ofNullable(result.getLabOrder())
+            .map(LabOrder::getLabTestDefinition)
+            .orElse(null);
+        String testName = test == null ? null
+            : Optional.ofNullable(test.getName()).filter(s -> !s.isBlank()).orElse(test.getTestCode());
+        StringBuilder summary = new StringBuilder(testName != null && !testName.isBlank() ? testName
+            : com.example.hms.utility.MessageUtil.resolveOrRaw("timeline.category.LAB_RESULT"));
         // QA D740: an unreleased value stays in the laboratory.
         if (!ClinicalLabResultView.showsValue(result)) {
             return summary.append(": ")
@@ -2566,14 +2578,20 @@ public class PatientServiceImpl implements PatientService {
                 .toString();
         }
         summary.append(": ").append(result.getResultValue());
-        if (result.getResultUnit() != null && !result.getResultUnit().isBlank()) {
-            summary.append(" ").append(result.getResultUnit());
+        // QA D958: the unit of the result, else the test's own unit.
+        String unit = result.getResultUnit();
+        if ((unit == null || unit.isBlank()) && test != null) {
+            unit = test.getUnit();
+        }
+        if (unit != null && !unit.isBlank()) {
+            summary.append(" ").append(unit);
         }
         return summary.toString();
     }
 
     private String formatAllergySummary(PatientAllergy allergy) {
-        String allergen = Optional.ofNullable(allergy.getAllergenDisplay()).orElse("Allergy");
+        String allergen = Optional.ofNullable(allergy.getAllergenDisplay())
+            .orElseGet(() -> com.example.hms.utility.MessageUtil.resolveOrRaw("timeline.category.ALLERGY"));
         // QA D333: the severity in the reader's language, not the enum constant.
         String severity = com.example.hms.utility.MessageUtil.resolveOrRaw("cds.enum."
             + (allergy.getSeverity() != null ? allergy.getSeverity().name() : LOG_UNKNOWN));
@@ -2582,8 +2600,8 @@ public class PatientServiceImpl implements PatientService {
 
     private String formatImagingOrderSummary(UltrasoundOrder order) {
         String modality = Optional.ofNullable(order.getScanType())
-            .map(Enum::name)
-            .orElse("Imaging Order");
+            .map(com.example.hms.service.timeline.VisitTimelineRows::label)
+            .orElseGet(() -> com.example.hms.utility.MessageUtil.resolveOrRaw("timeline.category.IMAGING"));
         StringBuilder summary = new StringBuilder(modality);
         if (order.getClinicalIndication() != null && !order.getClinicalIndication().isBlank()) {
             summary.append(" · ").append(truncate(order.getClinicalIndication()));
@@ -2594,8 +2612,8 @@ public class PatientServiceImpl implements PatientService {
     private String formatImagingReportSummary(UltrasoundReport report) {
         String scan = Optional.ofNullable(report.getUltrasoundOrder())
             .map(UltrasoundOrder::getScanType)
-            .map(Enum::name)
-            .orElse("Imaging Report");
+            .map(com.example.hms.service.timeline.VisitTimelineRows::label)
+            .orElseGet(() -> com.example.hms.utility.MessageUtil.resolveOrRaw("timeline.category.IMAGING"));
         StringBuilder summary = new StringBuilder(scan);
         if (report.getFindingsSummary() != null && !report.getFindingsSummary().isBlank()) {
             summary.append(" — ").append(truncate(report.getFindingsSummary()));

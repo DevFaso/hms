@@ -39,6 +39,7 @@ class InvoiceEmailServiceTest {
     @Mock private PdfInvoiceService pdfInvoiceService;
     @Mock private EmailService emailService;
     @Mock private RoleValidator roleValidator;
+    @Mock private com.example.hms.repository.InvoiceAdjustmentRepository adjustmentRepository;
     @InjectMocks private InvoiceEmailService service;
 
     private final UUID hospitalA = UUID.randomUUID();
@@ -118,5 +119,28 @@ class InvoiceEmailServiceTest {
 
         assertEquals(InvoiceStatus.PAID, invoice.getStatus());
         verify(billingInvoiceRepository, never()).save(any());
+    }
+
+    @Test
+    void theMailedPdfCarriesTheAdjustmentsWithoutTheReason_D974() {
+        BillingInvoice invoice = invoiceAtA(InvoiceStatus.SENT);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalA);
+        when(invoiceItemRepository.findByBillingInvoiceId(invoice.getId())).thenReturn(List.of());
+        when(adjustmentRepository.findByInvoice_IdOrderByCreatedAtAsc(invoice.getId())).thenReturn(List.of(
+            com.example.hms.model.InvoiceAdjustment.builder().invoice(invoice)
+                .type(com.example.hms.enums.InvoiceAdjustmentType.WAIVER)
+                .amount(new java.math.BigDecimal("500")).reason("indigent").build()));
+        when(pdfInvoiceService.generateInvoicePdf(any(), any(), any(), any(), any())).thenReturn(new byte[] {1});
+
+        service.emailInvoice(invoice.getId(),
+            new EmailInvoiceRequest(List.of("billing@example.test"), null, null, null, "fr", true));
+
+        @SuppressWarnings("unchecked")
+        org.mockito.ArgumentCaptor<List<com.example.hms.model.InvoiceAdjustment>> printed =
+            org.mockito.ArgumentCaptor.forClass(List.class);
+        verify(pdfInvoiceService).generateInvoicePdf(any(), any(), any(), printed.capture(), any());
+        assertEquals(1, printed.getValue().size());
+        assertEquals(com.example.hms.enums.InvoiceAdjustmentType.WAIVER, printed.getValue().get(0).getType());
+        org.junit.jupiter.api.Assertions.assertNull(printed.getValue().get(0).getReason());
     }
 }

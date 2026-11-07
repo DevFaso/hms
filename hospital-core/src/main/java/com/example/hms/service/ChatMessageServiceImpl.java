@@ -187,10 +187,11 @@ public class ChatMessageServiceImpl implements ChatMessageService {
         List<ChatAttachment> persistedAttachments = persistAttachments(saved, dto.getAttachments());
 
         // The bell entry is read by the RECIPIENT, so it is rendered in the
-        // language they read it in, never the sender's (QA D665).
+        // language they read it in, never the sender's (QA D665). QA D983: typed
+        // CHAT_MESSAGE, so the bell labels it and opens the conversation.
         notificationService.createNotification("chat.newMessage.notification",
             new Object[]{(sender.getFirstName() + " " + sender.getLastName()).trim()},
-            recipient.getUsername(), null);
+            recipient.getUsername(), "CHAT_MESSAGE");
 
         return chatMessageMapper.toChatMessageResponseDTO(saved, persistedAttachments);
     }
