@@ -6,7 +6,8 @@
     "",
     "Pinning one is a claim that a person looked and decided it is free text a",
     "human typed, or that its domain is not yet traced — not a way to make the",
-    "build green."
+    "build green.",
+    "Tracker department options are Department.name free text, traced through PatientTrackerMapper.departmentName; not an enum."
   ],
   "pinned": [
     "src/app/encounters/encounters.html::<option>department",
@@ -126,6 +127,7 @@
     "src/app/patient-portal/my-screenings/my-screenings.component.html::<option>lang",
     "src/app/patient-portal/my-summaries/my-summaries.component.html::m.frequency",
     "src/app/patient-portal/my-vitals/my-vitals.component.html::v.type",
+    "src/app/patient-tracker/patient-tracker.component.html::<option>dept",
     "src/app/patients/chart-review/chart-review.component.html::i.studyType",
     "src/app/patients/chart-review/chart-review.component.html::img.studyType",
     "src/app/patients/chart-review/chart-review.component.html::m.frequency",

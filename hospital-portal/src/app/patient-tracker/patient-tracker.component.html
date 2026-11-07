@@ -1,26 +1,91 @@
 <section class="tracker-container" [attr.aria-label]="'TRACKER.TITLE' | translate">
-  <!-- Header -->
   <header class="tracker-header">
-    <h1 class="tracker-title">{{ 'TRACKER.TITLE' | translate }}</h1>
+    <div>
+      <p class="dashboard-eyebrow">{{ 'TRACKER.WORKSPACE' | translate }}</p>
+      <h1 class="tracker-title">{{ 'TRACKER.TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'TRACKER.SUBTITLE' | translate }}</p>
+    </div>
     <div class="tracker-meta">
-      <span class="meta-badge">
-        <strong>{{ totalPatients() }}</strong> {{ 'TRACKER.PATIENTS_COUNT' | translate }}
-      </span>
-      <span class="meta-badge">
-        {{ 'TRACKER.AVG_WAIT' | translate }}: <strong>{{ averageWait() }}</strong>
-        {{ 'TRACKER.MIN' | translate }}
-      </span>
       @if (lastRefreshed()) {
-        <span class="meta-muted">
-          {{ 'TRACKER.UPDATED' | translate }} {{ lastRefreshed() | serverTime | date: 'shortTime' }}
-        </span>
+        <span class="meta-muted"
+          >{{ 'TRACKER.UPDATED' | translate }}
+          {{ lastRefreshed() | serverTime | date: 'shortTime' }}</span
+        >
       }
-      <button class="btn-refresh" (click)="refresh()" [disabled]="loading()">
-        &#x21bb; {{ 'TRACKER.REFRESH' | translate }}
+      <button type="button" class="btn-refresh" (click)="refresh()" [disabled]="loading()">
+        <span class="material-symbols-outlined" aria-hidden="true">refresh</span
+        >{{ 'TRACKER.REFRESH' | translate }}
       </button>
     </div>
   </header>
-
+  <div class="flow-metrics">
+    <div class="flow-metric primary-metric">
+      <span class="material-symbols-outlined" aria-hidden="true">groups</span
+      ><strong>{{ board() ? (totalPatients() | number) : '—' }}</strong
+      ><span>{{ 'TRACKER.BOARD_TOTAL' | translate }}</span>
+    </div>
+    <div class="flow-metric">
+      <span class="material-symbols-outlined" aria-hidden="true">schedule</span
+      ><strong>{{ board() ? formatWait(averageWait()) : '—' }}</strong
+      ><span>{{ 'TRACKER.AVG_WAIT' | translate }}</span>
+    </div>
+    <div class="flow-metric">
+      <span class="material-symbols-outlined" aria-hidden="true">stethoscope</span
+      ><strong>{{ board() ? getColumnItems('inProgress').length : '—' }}</strong
+      ><span>{{ 'TRACKER.COL_IN_PROGRESS' | translate }}</span>
+    </div>
+    <div class="flow-metric">
+      <span class="material-symbols-outlined" aria-hidden="true">exit_to_app</span
+      ><strong>{{ board() ? getColumnItems('readyForDischarge').length : '—' }}</strong
+      ><span>{{ 'TRACKER.COL_READY_DISCHARGE' | translate }}</span>
+    </div>
+  </div>
+  @if (loadFailed()) {
+    <div class="board-error" role="alert">
+      <span class="material-symbols-outlined" aria-hidden="true">cloud_off</span
+      ><span>{{ (board() ? 'TRACKER.STALE_BOARD' : 'TRACKER.LOAD_FAILED') | translate }}</span
+      ><button type="button" class="btn-refresh" (click)="refresh()">
+        {{ 'COMMON.RETRY' | translate }}
+      </button>
+    </div>
+  }
+  <div class="board-toolbar">
+    <label class="board-search"
+      ><span class="material-symbols-outlined" aria-hidden="true">search</span
+      ><input
+        type="search"
+        [attr.aria-label]="'TRACKER.SEARCH' | translate"
+        [placeholder]="'TRACKER.SEARCH' | translate"
+        [ngModel]="searchTerm()"
+        (ngModelChange)="searchTerm.set($event)" /></label
+    ><label
+      ><span class="sr-only">{{ 'TRACKER.DEPT' | translate }}</span
+      ><select [ngModel]="departmentFilter()" (ngModelChange)="departmentFilter.set($event)">
+        <option value="">{{ 'TRACKER.ALL_DEPARTMENTS' | translate }}</option>
+        @for (dept of departments(); track dept) {
+          <option [value]="dept">{{ dept }}</option>
+        }
+      </select></label
+    ><label
+      ><span class="sr-only">{{ 'TRACKER.STAGE' | translate }}</span
+      ><select [ngModel]="stageFilter()" (ngModelChange)="stageFilter.set($event)">
+        <option value="">{{ 'TRACKER.ALL_STAGES' | translate }}</option>
+        @for (col of columns; track col.key) {
+          <option [value]="col.key">{{ col.label | translate }}</option>
+        }
+      </select></label
+    >
+    @if (searchTerm() || departmentFilter() || stageFilter()) {
+      <button type="button" class="btn-clear" (click)="clearFilters()">
+        {{ 'TRACKER.CLEAR_FILTERS' | translate }}
+      </button>
+    }
+  </div>
+  @if (board()) {
+    <p class="board-caption">
+      {{ 'TRACKER.FILTER_SCOPE' | translate: { count: visibleCount(), total: totalPatients() } }}
+    </p>
+  }
   @if (loading() && !board()) {
     <output class="tracker-loading" aria-live="polite">
       <p>{{ 'TRACKER.LOADING' | translate }}</p>
@@ -29,8 +94,14 @@
 
   <!-- Kanban columns -->
   @if (board()) {
-    <div class="tracker-board">
-      @for (col of columns; track col.key) {
+    <div
+      class="tracker-board"
+      tabindex="0"
+      role="region"
+      [attr.aria-label]="'TRACKER.TITLE' | translate"
+      [class.single-stage]="stageFilter()"
+    >
+      @for (col of visibleColumns(); track col.key) {
         <div class="tracker-column" [class]="col.colorClass">
           <div class="column-header">
             <h2 class="column-title">{{ col.label | translate }}</h2>
@@ -44,7 +115,7 @@
             "
             appRovingFocus=".patient-card"
           >
-            @for (item of getColumnItems(col.key); track item.encounterId) {
+            @for (item of getVisibleColumnItems(col.key); track item.encounterId) {
               <li class="patient-card" [class]="getAcuityClass(item.acuityLevel)">
                 <div class="card-header">
                   <span class="patient-name">{{ item.patientName }}</span>
@@ -73,8 +144,12 @@
                   }
                 </div>
                 <div class="card-footer">
-                  <span class="wait-badge" [class]="getWaitClass(item.currentWaitMinutes)">
-                    {{ item.currentWaitMinutes }} {{ 'TRACKER.MIN' | translate }}
+                  <span
+                    class="wait-badge"
+                    [class]="getWaitClass(item.currentWaitMinutes)"
+                    [title]="item.currentWaitMinutes + ' ' + ('TRACKER.MIN' | translate)"
+                  >
+                    {{ formatWait(item.currentWaitMinutes) }}
                   </span>
                   <span class="acuity-badge">{{
                     item.acuityLevel | enumLabel: 'trackerAcuity'
@@ -137,7 +212,12 @@
                 </div>
               </li>
             } @empty {
-              <li class="column-empty">{{ 'TRACKER.NO_PATIENTS' | translate }}</li>
+              <li class="column-empty">
+                {{
+                  (getColumnItems(col.key).length ? 'TRACKER.NO_MATCHES' : 'TRACKER.NO_PATIENTS')
+                    | translate
+                }}
+              </li>
             }
           </ul>
         </div>

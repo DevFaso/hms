@@ -1,10 +1,20 @@
-<div class="page-container">
+<div class="page-container operations-dashboard discharge-dashboard">
   <div class="page-header">
     <div>
+      <p class="dashboard-eyebrow">{{ 'DISCHARGE.WORKSPACE' | translate }}</p>
       <h1 class="page-title">{{ 'DISCHARGE.TITLE' | translate }}</h1>
       <p class="page-subtitle">{{ 'DISCHARGE.SUBTITLE' | translate }}</p>
     </div>
     <div class="page-actions">
+      <button
+        type="button"
+        class="btn-secondary"
+        [disabled]="activeTab() === 'approvals' ? approvalsLoading() : summariesLoading()"
+        (click)="activeTab() === 'approvals' ? loadApprovals() : loadSummaries()"
+      >
+        <span class="material-symbols-outlined" aria-hidden="true">refresh</span
+        >{{ 'COMMON.REFRESH' | translate }}
+      </button>
       @if (activeTab() === 'approvals' && canRequest) {
         <button class="btn-primary" (click)="openRequest()">
           <span class="material-symbols-outlined">add</span>
@@ -20,246 +30,364 @@
     </div>
   </div>
 
-  <div class="filter-bar">
-    <div class="tabs">
-      <button
-        class="tab-btn"
-        [class.active]="activeTab() === 'approvals'"
-        (click)="setTab('approvals')"
-      >
-        {{ 'DISCHARGE.APPROVALS_TAB' | translate }}
-      </button>
+  <section class="dashboard-overview" aria-labelledby="discharge-overview">
+    <div class="panel-heading">
+      <div>
+        <h2 id="discharge-overview">{{ 'DISCHARGE.OVERVIEW' | translate }}</h2>
+        <p>{{ 'DISCHARGE.COUNTS_HELP' | translate }}</p>
+      </div>
+      <span class="material-symbols-outlined overview-icon" aria-hidden="true">logout</span>
+    </div>
+    <div class="summary-cards">
+      <div class="summary-card total-card">
+        <span class="material-symbols-outlined metric-icon" aria-hidden="true">fact_check</span
+        ><strong>{{ approvalsLoading() || approvalsFailed() ? '—' : approvals().length }}</strong
+        ><span>{{ 'DISCHARGE.APPROVALS_LOADED' | translate }}</span>
+      </div>
+      <div class="summary-card">
+        <span class="material-symbols-outlined metric-icon" aria-hidden="true">hourglass_top</span
+        ><strong>{{ approvalsLoading() || approvalsFailed() ? '—' : pendingLoaded() }}</strong
+        ><span>{{ 'DISCHARGE.PENDING_LOADED' | translate }}</span>
+      </div>
       @if (canViewSummaries) {
-        <button
-          class="tab-btn"
-          [class.active]="activeTab() === 'summaries'"
-          (click)="setTab('summaries')"
-        >
-          {{ 'DISCHARGE.SUMMARIES_TAB' | translate }}
-        </button>
-      }
-    </div>
-  </div>
-
-  <!-- ══ Approvals tab ══ -->
-  @if (activeTab() === 'approvals') {
-    <div class="filter-bar">
-      <div class="tabs">
-        @for (f of approvalFilters; track f) {
-          <button
-            class="tab-btn"
-            [class.active]="approvalFilter() === f"
-            (click)="setApprovalFilter(f)"
-          >
-            {{ 'DISCHARGE.STATUS_' + f | translate }}
-          </button>
-        }
-      </div>
-    </div>
-
-    @if (approvalsLoading()) {
-      <div class="loading-state">
-        <div class="spinner"></div>
-        <p>{{ 'COMMON.LOADING' | translate }}</p>
-      </div>
-    }
-    @if (!approvalsLoading() && approvals().length === 0) {
-      <div class="empty-state">
-        <span class="material-symbols-outlined empty-icon">logout</span>
-        <h3>{{ 'DISCHARGE.NO_APPROVALS' | translate }}</h3>
-        <p>{{ 'DISCHARGE.NO_APPROVALS_HINT' | translate }}</p>
-      </div>
-    }
-    @if (!approvalsLoading() && approvals().length > 0) {
-      <div class="data-table">
-        <table>
-          <thead>
-            <tr>
-              <th scope="col">{{ 'DISCHARGE.PATIENT' | translate }}</th>
-              <th scope="col">{{ 'DISCHARGE.REQUESTED_BY' | translate }}</th>
-              <th scope="col">{{ 'DISCHARGE.REQUESTED_AT' | translate }}</th>
-              <th scope="col">{{ 'DISCHARGE.NURSE_SUMMARY' | translate }}</th>
-              <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
-              <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (a of approvals(); track a.id) {
-              <tr>
-                <td>{{ a.patientName }}</td>
-                <td>{{ a.nurseName }}</td>
-                <td>{{ a.requestedAt | serverTime | date: 'short' }}</td>
-                <td class="truncate-cell">{{ a.nurseSummary || '—' }}</td>
-                <td>
-                  <span class="status-badge" [class]="statusClass(a.status)">
-                    {{ 'DISCHARGE.STATUS_' + a.status | translate }}
-                  </span>
-                </td>
-                <td class="actions-cell">
-                  @if (a.status === 'PENDING' && canDecide) {
-                    <button
-                      class="btn-secondary btn-sm"
-                      (click)="openDecision(a, 'approve')"
-                      [title]="'DISCHARGE.APPROVE' | translate"
-                    >
-                      {{ 'DISCHARGE.APPROVE' | translate }}
-                    </button>
-                    <button
-                      class="btn-danger btn-sm"
-                      (click)="openDecision(a, 'reject')"
-                      [title]="'DISCHARGE.REJECT' | translate"
-                    >
-                      {{ 'DISCHARGE.REJECT' | translate }}
-                    </button>
-                  }
-                  @if (a.status === 'PENDING' && canRequest) {
-                    <button
-                      class="btn-secondary btn-sm"
-                      (click)="openCancel(a)"
-                      [title]="'COMMON.CANCEL' | translate"
-                    >
-                      {{ 'COMMON.CANCEL' | translate }}
-                    </button>
-                  }
-                  @if (a.status === 'REJECTED' && a.rejectionReason) {
-                    <span class="muted" [title]="a.rejectionReason">
-                      {{ 'DISCHARGE.SEE_REASON' | translate }}
-                    </span>
-                  }
-                </td>
-              </tr>
-            }
-          </tbody>
-        </table>
-      </div>
-    }
-  }
-
-  <!-- ══ Summaries tab ══ -->
-  @if (activeTab() === 'summaries') {
-    <div class="filter-bar">
-      <div class="tabs">
-        @if (canEditSummaries) {
-          <button
-            class="tab-btn"
-            [class.active]="summaryFilter() === 'unfinalized'"
-            (click)="setSummaryFilter('unfinalized')"
-          >
-            {{ 'DISCHARGE.FILTER_UNFINALIZED' | translate }}
-          </button>
-        }
-        <button
-          class="tab-btn"
-          [class.active]="summaryFilter() === 'pending-results'"
-          (click)="setSummaryFilter('pending-results')"
-        >
-          {{ 'DISCHARGE.FILTER_PENDING_RESULTS' | translate }}
-        </button>
-        <button
-          class="tab-btn"
-          [class.active]="summaryFilter() === 'range'"
-          (click)="setSummaryFilter('range')"
-        >
-          {{ 'DISCHARGE.FILTER_BY_DATE' | translate }}
-        </button>
-      </div>
-      @if (summaryFilter() === 'range') {
-        <div class="range-picker">
-          <input
-            type="date"
-            [(ngModel)]="rangeStart"
-            [attr.aria-label]="'DISCHARGE.START_DATE' | translate"
-          />
-          <span>—</span>
-          <input
-            type="date"
-            [(ngModel)]="rangeEnd"
-            [attr.aria-label]="'DISCHARGE.END_DATE' | translate"
-          />
-          <button class="btn-secondary btn-sm" (click)="loadSummaries()">
-            {{ 'COMMON.APPLY' | translate }}
-          </button>
+        <div class="summary-card">
+          <span class="material-symbols-outlined metric-icon" aria-hidden="true">description</span
+          ><strong>{{ summariesLoading() || summariesFailed() ? '—' : summaries().length }}</strong
+          ><span>{{ 'DISCHARGE.SUMMARIES_LOADED' | translate }}</span>
         </div>
       }
     </div>
+  </section>
+  <section class="directory-panel">
+    <div class="filter-bar workspace-tabs">
+      <div class="tabs" role="group" [attr.aria-label]="'DISCHARGE.FILTERS' | translate">
+        <button
+          class="tab-btn"
+          [class.active]="activeTab() === 'approvals'"
+          [attr.aria-pressed]="activeTab() === 'approvals'"
+          (click)="setTab('approvals')"
+        >
+          {{ 'DISCHARGE.APPROVALS_TAB' | translate }}
+        </button>
+        @if (canViewSummaries) {
+          <button
+            class="tab-btn"
+            [class.active]="activeTab() === 'summaries'"
+            [attr.aria-pressed]="activeTab() === 'summaries'"
+            (click)="setTab('summaries')"
+          >
+            {{ 'DISCHARGE.SUMMARIES_TAB' | translate }}
+          </button>
+        }
+      </div>
+    </div>
 
-    @if (summariesLoading()) {
-      <div class="loading-state">
-        <div class="spinner"></div>
-        <p>{{ 'COMMON.LOADING' | translate }}</p>
+    <div class="search-toolbar">
+      <label class="dashboard-search"
+        ><span class="material-symbols-outlined" aria-hidden="true">search</span
+        ><input
+          type="search"
+          [attr.aria-label]="'DISCHARGE.SEARCH' | translate"
+          [placeholder]="'DISCHARGE.SEARCH' | translate"
+          [ngModel]="searchTerm()"
+          (ngModelChange)="searchTerm.set($event)"
+      /></label>
+      @if (searchTerm()) {
+        <button type="button" class="btn-secondary" (click)="searchTerm.set('')">
+          {{ 'DISCHARGE.CLEAR_SEARCH' | translate }}
+        </button>
+      }
+    </div>
+    <!-- ══ Approvals tab ══ -->
+    @if (activeTab() === 'approvals') {
+      <div class="filter-bar">
+        <div class="tabs" role="group" [attr.aria-label]="'DISCHARGE.FILTERS' | translate">
+          @for (f of approvalFilters; track f) {
+            <button
+              class="tab-btn"
+              [class.active]="approvalFilter() === f"
+              [attr.aria-pressed]="approvalFilter() === f"
+              (click)="setApprovalFilter(f)"
+            >
+              {{ 'DISCHARGE.STATUS_' + f | translate }}
+            </button>
+          }
+        </div>
       </div>
-    }
-    @if (!summariesLoading() && summaries().length === 0) {
-      <div class="empty-state">
-        <span class="material-symbols-outlined empty-icon">summarize</span>
-        <h3>{{ 'DISCHARGE.NO_SUMMARIES' | translate }}</h3>
-        <p>{{ 'DISCHARGE.NO_SUMMARIES_HINT' | translate }}</p>
-      </div>
-    }
-    @if (!summariesLoading() && summaries().length > 0) {
-      <div class="data-table">
-        <table>
-          <thead>
-            <tr>
-              <th scope="col">{{ 'DISCHARGE.PATIENT' | translate }}</th>
-              <th scope="col">{{ 'DISCHARGE.DISCHARGE_DATE' | translate }}</th>
-              <th scope="col">{{ 'DISCHARGE.DISPOSITION' | translate }}</th>
-              <th scope="col">{{ 'DISCHARGE.PROVIDER' | translate }}</th>
-              <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
-              <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (s of summaries(); track s.id) {
+
+      @if (approvalsFailed()) {
+        <div class="dashboard-error" role="alert">
+          <span>{{ 'DISCHARGE.LOAD_APPROVALS_ERROR' | translate }}</span
+          ><button type="button" class="btn-secondary" (click)="loadApprovals()">
+            {{ 'COMMON.RETRY' | translate }}
+          </button>
+        </div>
+      }
+      @if (
+        !approvalsLoading() &&
+        !approvalsFailed() &&
+        approvals().length > 0 &&
+        visibleApprovals().length === 0
+      ) {
+        <div class="empty-state">
+          <span class="material-symbols-outlined empty-icon" aria-hidden="true">search_off</span>
+          <h3>{{ 'DISCHARGE.NO_MATCHES' | translate }}</h3>
+          <button type="button" class="btn-secondary" (click)="searchTerm.set('')">
+            {{ 'DISCHARGE.CLEAR_SEARCH' | translate }}
+          </button>
+        </div>
+      }
+      @if (approvalsLoading()) {
+        <div class="loading-state">
+          <div class="spinner"></div>
+          <p>{{ 'COMMON.LOADING' | translate }}</p>
+        </div>
+      }
+      @if (!approvalsLoading() && !approvalsFailed() && approvals().length === 0) {
+        <div class="empty-state">
+          <span class="material-symbols-outlined empty-icon">logout</span>
+          <h3>{{ 'DISCHARGE.NO_APPROVALS' | translate }}</h3>
+          <p>{{ 'DISCHARGE.NO_APPROVALS_HINT' | translate }}</p>
+        </div>
+      }
+      @if (!approvalsLoading() && !approvalsFailed() && visibleApprovals().length > 0) {
+        <div
+          class="data-table"
+          tabindex="0"
+          role="region"
+          [attr.aria-label]="'DISCHARGE.TITLE' | translate"
+        >
+          <table>
+            <thead>
               <tr>
-                <td>{{ s.patientName }}</td>
-                <td>{{ s.dischargeDate | serverTime | date: 'mediumDate' }}</td>
-                <td>{{ 'DISCHARGE.DISPOSITION_' + s.disposition | translate }}</td>
-                <td>{{ s.dischargingProviderName }}</td>
-                <td>
-                  <span class="finalized-badge" [class.draft]="!s.isFinalized">
-                    {{ (s.isFinalized ? 'DISCHARGE.FINALIZED' : 'DISCHARGE.DRAFT') | translate }}
-                  </span>
-                </td>
-                <td class="actions-cell">
-                  <button
-                    class="btn-secondary btn-sm"
-                    (click)="openView(s)"
-                    [title]="'COMMON.VIEW' | translate"
-                  >
-                    {{ 'COMMON.VIEW' | translate }}
-                  </button>
-                  @if (!s.isFinalized && canEditSummaries) {
+                <th scope="col">{{ 'DISCHARGE.PATIENT' | translate }}</th>
+                <th scope="col">{{ 'DISCHARGE.REQUESTED_BY' | translate }}</th>
+                <th scope="col">{{ 'DISCHARGE.REQUESTED_AT' | translate }}</th>
+                <th scope="col">{{ 'DISCHARGE.NURSE_SUMMARY' | translate }}</th>
+                <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+                <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (a of visibleApprovals(); track a.id) {
+                <tr>
+                  <td>{{ a.patientName }}</td>
+                  <td>{{ a.nurseName }}</td>
+                  <td>{{ a.requestedAt | serverTime | date: 'short' }}</td>
+                  <td class="note-cell">
+                    @if (a.nurseSummary) {
+                      <details>
+                        <summary>
+                          <span>{{ a.nurseSummary | slice: 0 : 96 }}</span
+                          ><small>{{ 'DISCHARGE.READ_NOTE' | translate }}</small>
+                        </summary>
+                        <p>{{ a.nurseSummary }}</p>
+                      </details>
+                    } @else {
+                      <span>&mdash;</span>
+                    }
+                  </td>
+                  <td>
+                    <span class="status-badge" [class]="statusClass(a.status)">
+                      {{ 'DISCHARGE.STATUS_' + a.status | translate }}
+                    </span>
+                  </td>
+                  <td class="actions-cell">
+                    @if (a.status === 'PENDING' && canDecide) {
+                      <button
+                        class="btn-secondary btn-sm"
+                        (click)="openDecision(a, 'approve')"
+                        [title]="'DISCHARGE.APPROVE' | translate"
+                      >
+                        {{ 'DISCHARGE.APPROVE' | translate }}
+                      </button>
+                      <button
+                        class="btn-danger btn-sm"
+                        (click)="openDecision(a, 'reject')"
+                        [title]="'DISCHARGE.REJECT' | translate"
+                      >
+                        {{ 'DISCHARGE.REJECT' | translate }}
+                      </button>
+                    }
+                    @if (a.status === 'PENDING' && canRequest) {
+                      <button
+                        class="btn-secondary btn-sm"
+                        (click)="openCancel(a)"
+                        [title]="'COMMON.CANCEL' | translate"
+                      >
+                        {{ 'COMMON.CANCEL' | translate }}
+                      </button>
+                    }
+                    @if (a.status === 'REJECTED' && a.rejectionReason) {
+                      <span class="muted" [title]="a.rejectionReason">
+                        {{ 'DISCHARGE.SEE_REASON' | translate }}
+                      </span>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    }
+
+    <!-- ══ Summaries tab ══ -->
+    @if (activeTab() === 'summaries') {
+      <div class="filter-bar">
+        <div class="tabs" role="group" [attr.aria-label]="'DISCHARGE.FILTERS' | translate">
+          @if (canEditSummaries) {
+            <button
+              class="tab-btn"
+              [class.active]="summaryFilter() === 'unfinalized'"
+              [attr.aria-pressed]="summaryFilter() === 'unfinalized'"
+              (click)="setSummaryFilter('unfinalized')"
+            >
+              {{ 'DISCHARGE.FILTER_UNFINALIZED' | translate }}
+            </button>
+          }
+          <button
+            class="tab-btn"
+            [class.active]="summaryFilter() === 'pending-results'"
+            [attr.aria-pressed]="summaryFilter() === 'pending-results'"
+            (click)="setSummaryFilter('pending-results')"
+          >
+            {{ 'DISCHARGE.FILTER_PENDING_RESULTS' | translate }}
+          </button>
+          <button
+            class="tab-btn"
+            [class.active]="summaryFilter() === 'range'"
+            [attr.aria-pressed]="summaryFilter() === 'range'"
+            (click)="setSummaryFilter('range')"
+          >
+            {{ 'DISCHARGE.FILTER_BY_DATE' | translate }}
+          </button>
+        </div>
+        @if (summaryFilter() === 'range') {
+          <div class="range-picker">
+            <input
+              type="date"
+              [(ngModel)]="rangeStart"
+              [attr.aria-label]="'DISCHARGE.START_DATE' | translate"
+            />
+            <span>—</span>
+            <input
+              type="date"
+              [(ngModel)]="rangeEnd"
+              [attr.aria-label]="'DISCHARGE.END_DATE' | translate"
+            />
+            <button class="btn-secondary btn-sm" (click)="loadSummaries()">
+              {{ 'COMMON.APPLY' | translate }}
+            </button>
+          </div>
+        }
+      </div>
+
+      @if (summariesFailed()) {
+        <div class="dashboard-error" role="alert">
+          <span>{{ 'DISCHARGE.LOAD_SUMMARIES_ERROR' | translate }}</span
+          ><button type="button" class="btn-secondary" (click)="loadSummaries()">
+            {{ 'COMMON.RETRY' | translate }}
+          </button>
+        </div>
+      }
+      @if (
+        !summariesLoading() &&
+        !summariesFailed() &&
+        summaries().length > 0 &&
+        visibleSummaries().length === 0
+      ) {
+        <div class="empty-state">
+          <span class="material-symbols-outlined empty-icon" aria-hidden="true">search_off</span>
+          <h3>{{ 'DISCHARGE.NO_MATCHES' | translate }}</h3>
+          <button type="button" class="btn-secondary" (click)="searchTerm.set('')">
+            {{ 'DISCHARGE.CLEAR_SEARCH' | translate }}
+          </button>
+        </div>
+      }
+      @if (summariesLoading()) {
+        <div class="loading-state">
+          <div class="spinner"></div>
+          <p>{{ 'COMMON.LOADING' | translate }}</p>
+        </div>
+      }
+      @if (!summariesLoading() && !summariesFailed() && summaries().length === 0) {
+        <div class="empty-state">
+          <span class="material-symbols-outlined empty-icon">summarize</span>
+          <h3>{{ 'DISCHARGE.NO_SUMMARIES' | translate }}</h3>
+          <p>{{ 'DISCHARGE.NO_SUMMARIES_HINT' | translate }}</p>
+        </div>
+      }
+      @if (!summariesLoading() && !summariesFailed() && visibleSummaries().length > 0) {
+        <div
+          class="data-table"
+          tabindex="0"
+          role="region"
+          [attr.aria-label]="'DISCHARGE.TITLE' | translate"
+        >
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">{{ 'DISCHARGE.PATIENT' | translate }}</th>
+                <th scope="col">{{ 'DISCHARGE.DISCHARGE_DATE' | translate }}</th>
+                <th scope="col">{{ 'DISCHARGE.DISPOSITION' | translate }}</th>
+                <th scope="col">{{ 'DISCHARGE.PROVIDER' | translate }}</th>
+                <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+                <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (s of visibleSummaries(); track s.id) {
+                <tr>
+                  <td>{{ s.patientName }}</td>
+                  <td>{{ s.dischargeDate | serverTime | date: 'mediumDate' }}</td>
+                  <td>{{ 'DISCHARGE.DISPOSITION_' + s.disposition | translate }}</td>
+                  <td>{{ s.dischargingProviderName }}</td>
+                  <td>
+                    <span class="finalized-badge" [class.draft]="!s.isFinalized">
+                      {{ (s.isFinalized ? 'DISCHARGE.FINALIZED' : 'DISCHARGE.DRAFT') | translate }}
+                    </span>
+                  </td>
+                  <td class="actions-cell">
                     <button
                       class="btn-secondary btn-sm"
-                      (click)="openEditSummary(s)"
-                      [title]="'COMMON.EDIT' | translate"
+                      (click)="openView(s)"
+                      [title]="'COMMON.VIEW' | translate"
                     >
-                      {{ 'COMMON.EDIT' | translate }}
+                      {{ 'COMMON.VIEW' | translate }}
                     </button>
-                    <button
-                      class="btn-primary btn-sm"
-                      (click)="openFinalize(s)"
-                      [title]="'DISCHARGE.FINALIZE' | translate"
-                    >
-                      {{ 'DISCHARGE.FINALIZE' | translate }}
-                    </button>
-                    <button
-                      class="btn-danger btn-sm"
-                      (click)="openDelete(s)"
-                      [title]="'COMMON.DELETE' | translate"
-                    >
-                      {{ 'COMMON.DELETE' | translate }}
-                    </button>
-                  }
-                </td>
-              </tr>
-            }
-          </tbody>
-        </table>
-      </div>
+                    @if (!s.isFinalized && canEditSummaries) {
+                      <button
+                        class="btn-secondary btn-sm"
+                        (click)="openEditSummary(s)"
+                        [title]="'COMMON.EDIT' | translate"
+                      >
+                        {{ 'COMMON.EDIT' | translate }}
+                      </button>
+                      <button
+                        class="btn-primary btn-sm"
+                        (click)="openFinalize(s)"
+                        [title]="'DISCHARGE.FINALIZE' | translate"
+                      >
+                        {{ 'DISCHARGE.FINALIZE' | translate }}
+                      </button>
+                      <button
+                        class="btn-danger btn-sm"
+                        (click)="openDelete(s)"
+                        [title]="'COMMON.DELETE' | translate"
+                      >
+                        {{ 'COMMON.DELETE' | translate }}
+                      </button>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
     }
-  }
+  </section>
 </div>
 
 <!-- ══ Decision modal (approve / reject) ══ -->
