@@ -182,12 +182,12 @@ public class OrderReviewHoldServiceImpl implements OrderReviewHoldService, org.s
      * takes a new signature) or a dose can still be given: a dispense for a visit still open, not one for home.
      * A refill approved past the prescribed allowance is that prescriber's own new decision, not an existing order.
      */
-    private static boolean stillToBeUsed(Prescription order) {
+    private boolean stillToBeUsed(Prescription order) {
         PrescriptionStatus status = order.getStatus();
         if (status == null || !FINISHED.contains(status)) {
             return true;
         }
-        boolean refillLeft = !order.isControlledSubstance() && order.getRefillsRemaining() != null && order.getRefillsRemaining() > 0;
+        boolean refillLeft = order.getRefillsRemaining() != null && order.getRefillsRemaining() > 0 && !controlledResolver.isControlled(order);
         boolean visitOpen = order.getEncounter() == null || order.getEncounter().getStatus() == null
             || !order.getEncounter().getStatus().isClosed();
         return refillLeft || (status == PrescriptionStatus.DISPENSED && !order.isTakeHome() && visitOpen);

@@ -575,7 +575,7 @@ class OrderReviewHoldServiceImplTest {
         spent.setRefillsRemaining(0);
         Prescription controlled = finished(PrescriptionStatus.PRINTED_FOR_PATIENT);
         controlled.setRefillsRemaining(1);
-        controlled.setControlledSubstance(true);
+        when(this.controlled.isControlled(controlled)).thenReturn(true);
 
         assertThat(heldBySnapshot(takeHome, partner, printed, spent, controlled))
             .containsExactlyInAnyOrder(takeHome.getId(), partner.getId(), printed.getId());
