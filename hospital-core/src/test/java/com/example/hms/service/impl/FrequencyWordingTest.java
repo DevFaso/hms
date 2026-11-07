@@ -199,6 +199,55 @@ class FrequencyWordingTest {
         assertThat(FrequencyWording.classify(wording)).as(wording).isEqualTo(FrequencyWording.Verdict.UNREADABLE);
     }
 
+        /** The second independent review: a second phase, a stated gap, a ceiling, two intervals: never the first cadence. */
+    @ParameterizedTest
+    @ValueSource(strings = {"3 x 2,5 mg par semaine", "3 x 1 cp par semaine", "2 fois 1 cp par semaine",
+        "2 fois 1 g à 7 jours d'intervalle", "2 prises à 4 semaines d'intervalle", "2 prises à J1 et J8",
+        "3 prises sur 3 jours", "3 prises en 1 semaine", "2 tomas separadas 7 días", "2 prises en tout",
+        "6 h entre deux prises", "1 g stat puis 500 mg toutes les 8 h", "stat then q6h",
+        "3 fois par jour pendant 3 jours puis 2 fois par jour", "q6h for 2 days then q12h",
+        "twice daily for 1 week then once daily", "toutes les 4h à 6h", "every 4 hours to 6 hours", "q4h-q6h", "q4h/q6h",
+        "toutes les 8 h ou 12 h", "2 fois par jour ou 3 fois par jour", "1 cp le matin ou 2 cp le soir",
+        "ne pas dépasser 4 par jour", "do not exceed 4 per day", "sin superar 3 al día", "limité à 3 par jour",
+        "every other night", "un soir sur deux", "tous les 2 soirs", "cada dos noches", "toutes les 1 h 30",
+        "every hour and a half", "toutes les 8h00", "bolus ensuite perfusion", "dose de charge, ensuite 500 mg",
+        "maintenant et dans 6 h", "1 dose à renouveler", "1 dose aujourd'hui et 1 dose demain", "ce soir et demain soir",
+        "1 g IVD 3 fois", "IPTp 3 doses", "à toutes les CPN", "aux CPN", "TPI-SP à chaque CPN", "jusqu'à demain",
+        "le matin sauf le dimanche", "lundi matin et soir", "3 jours de suite par mois", "2,4 MUI IM x 3", "1 dose x 3",
+        "tomar mañana", "ac and hs", "bi-quotidien", "semi-weekly", "de 8h à 20h", "6h-8h", "entre 8 h et 20 h",
+        "primera dosis ahora", "1 cp/j du lundi au vendredi", "au minimum 2 fois par jour"})
+    void secondReviewOfRound34_whatIsNotCertainIsAsked(String wording) {
+        assertThat(FrequencyWording.classify(wording)).as(wording).isEqualTo(FrequencyWording.Verdict.UNREADABLE);
+    }
+
+    /** The same review: a chronic drug whose name holds STAT is not one dose, and a split wins over the day's total. */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource(delimiter = '|', value = {
+        "nystatine 4 fois par jour|360", "atorvastatine 1 cp le soir|1440", "1500 mg/j en 3 doses|480",
+        "three times weekly|3360", "3 fois hebdomadaire|3360", "cada 12 hs|720", "3 cp/24h|480", "aux 2 repas|720",
+        "avant le petit déjeuner, le déjeuner et le dîner|480", "3 fois par 24 heures|480",
+        "q8h for 5 to 7 days|480", "1 cp/j 5 jours|1440"})
+    void secondReviewOfRound34_readsAsWritten(String wording, int minutes) {
+        assertThat(MarDoseSchedule.read(wording).intervalMinutes()).as(wording).isEqualTo(minutes);
+    }
+
+    /** The same review: a dose at a clock time is still one dose; a regular course is not refused for a diluent or a band. */
+    @Test
+    void secondReviewOfRound34_oneDoseAndRegularCourses() {
+        for (String wording : List.of("dose unique à 8 h", "dosis única a las 8", "once at 8 am", "1 dose à 8 h",
+            "demain à 8 h", "ce soir à 20 h", "tonight at 10 pm")) {
+            assertThat(MarDoseSchedule.read(wording).kind()).as(wording).isEqualTo(MarDoseSchedule.Kind.ONE_OFF);
+        }
+        for (String wording : List.of("1 g dans 100 ml de glucosé 5% toutes les 8 h", "poids > 35 kg : 4 cp 2 fois par jour",
+            "enfant < 5 ans 1 cp par jour", "2 fois par jour prévention des convulsions")) {
+            assertThat(FrequencyWording.classify(wording)).as(wording).isEqualTo(FrequencyWording.Verdict.FIXED);
+        }
+        for (String wording : List.of("q4h for wheezing", "q6h for diarrhoea", "toutes les 6 h pour crampes", "q6h para mareos",
+            "toutes les 8 h dès l'apparition des signes", "dès les premiers symptômes")) {
+            assertThat(FrequencyWording.classify(wording)).as(wording).isEqualTo(FrequencyWording.Verdict.CONDITIONAL);
+        }
+    }
+
     /** The same review: a symptom or a measured value beside a cadence is a condition, not a schedule. */
     @ParameterizedTest
     @ValueSource(strings = {"toutes les 6 h pour hyperthermie", "q4h for anxiety", "toutes les 8 h pour diarrhée",
@@ -284,10 +333,12 @@ class FrequencyWordingTest {
     @Test
     void anUnknownWordIsNeverACondition() {
         for (String wording : List.of("q6h zzz", "toutes les 6 h zzz", "prendre 1 comprimé 3 fois par jour",
-            "1 cp par jour pour HTA", "3 fois par jour pour infection", "1 fois par jour à heure précise")) {
+            "1 fois par jour à heure précise", "1 cp le matin avec un peu de pain")) {
             assertThat(FrequencyWording.classify(wording)).as(wording).isEqualTo(FrequencyWording.Verdict.FIXED);
         }
-        for (String wording : List.of("zzz", "pour HTA", "selon ordonnance")) {
+                // A reason is asked about, beside a cadence too: not a condition, and no list of symptoms will finish.
+        for (String wording : List.of("zzz", "pour HTA", "selon ordonnance", "1 cp par jour pour HTA",
+            "3 fois par jour pour infection", "toutes les 6 h pour migraine des zzz", "q8h para zzz")) {
             assertThat(FrequencyWording.classify(wording)).as(wording).isEqualTo(FrequencyWording.Verdict.UNREADABLE);
         }
         assertThat(FrequencyWording.classify("3 fois par jour quand il tousse")).isEqualTo(FrequencyWording.Verdict.CONDITIONAL);
@@ -308,7 +359,9 @@ class FrequencyWordingTest {
         before.put("Prise unique (TPI-SP 2)", MarDoseSchedule.Kind.ONE_OFF);
         before.put("pour douleur", MarDoseSchedule.Kind.UNREAD);
         before.put("max 4/j", MarDoseSchedule.Kind.UNREAD);
-        before.put("toutes les 6 h pour douleur", MarDoseSchedule.Kind.REPEATING);
+                before.put("toutes les 6 h pour douleur", MarDoseSchedule.Kind.UNREAD);
+        before.put("q6h si douleur", MarDoseSchedule.Kind.REPEATING);
+
         before.put("si douleur", MarDoseSchedule.Kind.UNREAD);
         before.put("q6h", MarDoseSchedule.Kind.REPEATING);
         before.put("Prise unique", MarDoseSchedule.Kind.ONE_OFF);

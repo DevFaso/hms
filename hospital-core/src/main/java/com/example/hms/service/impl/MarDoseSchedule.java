@@ -120,7 +120,7 @@ public final class MarDoseSchedule {
     private static final int MAX_INTERVAL_HOURS = 72;
 
     /** The hour units in English, French and Spanish (accents removed before matching). */
-    private static final String HOUR_UNIT = "(?:H|HR|HRS|HOUR|HOURS|HEURE|HEURES|HORA|HORAS)";
+    private static final String HOUR_UNIT = "(?:H|HR|HRS|HS|HOUR|HOURS|HEURE|HEURES|HORA|HORAS)";
     private static final String EVERY = "(?:EVERY|TOUTES LES|CHAQUE|CADA)";
 
     private static final Pattern Q_HOURS = Pattern.compile("\\bQ\\s*(\\d{1,2})\\s*H\\b");
@@ -200,6 +200,8 @@ public final class MarDoseSchedule {
     /** Any run of characters that is not a letter or a digit (one class, no backtracking). */
     private static final Pattern NOT_ALPHANUMERIC = Pattern.compile("[^A-Z0-9]+");
 
+    private static final Pattern STAT_WORD = Pattern.compile("\\bSTAT\\b");
+
     /** Any kind of space, read as one: "toutes  les", and the comma of "toutes, les" once it is a space. */
     private static final Pattern SPACES = Pattern.compile("[\\s\\p{Z}\\uFEFF]++");
 
@@ -236,12 +238,17 @@ public final class MarDoseSchedule {
             return Reading.ONE_OFF;
         }
         String upper = normalize(frequency);
-        if (upper.contains("STAT")) {
-            return Reading.ONE_OFF;
-        }
         // The digits of a decimal or a fraction are part of a dose, never a count or a list.
         String written = FrequencyCadence.withoutDoseParts(accentlessUpper(frequency));
-        if (isAsNeeded(frequency) || FrequencyCadence.statesNoFixedSchedule(written)) {
+        // Before STAT: "1 g stat puis 500 mg toutes les 8 h" is more than one dose.
+        if (FrequencyCadence.statesNoFixedSchedule(written)) {
+            return Reading.UNREAD;
+        }
+        // A word: atorvastatine and nystatine are not one dose.
+        if (STAT_WORD.matcher(upper).find()) {
+            return Reading.ONE_OFF;
+        }
+        if (isAsNeeded(frequency)) {
             return Reading.UNREAD;
         }
         Integer minutes = intervalMinutesOf(written);

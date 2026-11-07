@@ -48,6 +48,10 @@ public final class FrequencyWording {
     /** A threshold ("si EVA > 4", "T >= 38,5") is a condition; a weight band in brackets was removed before. */
     private static final Pattern COMPARISON = Pattern.compile("[<>≤≥]");
 
+    /** "poids > 35 kg", "enfant < 5 ans", ">= 15 ans": who gets the dose, outside brackets too. */
+    private static final Pattern WHO_GETS_IT = Pattern.compile(
+        "[<>≤≥]=? ?\\d{1,3}+ ?(?:KG|ANS|YEARS?+|ANOS|MOIS)\\b");
+
     /** "S/P" with its slash (Spanish "si precisa"); a bare SP is the regimen sulfadoxine-pyrimethamine. */
     private static final Pattern SLASH_SP = Pattern.compile("\\bS\\s*+/\\s*+P\\b");
 
@@ -81,7 +85,16 @@ public final class FrequencyWording {
         + "HEADACHES TOUX TOS COUGH VOLONTE LIBITUM REQUERIMIENTO DISCRECION OCCASIONNELLEMENT PONCTUELLEMENT "
         + "INTERMITTENCE HYPERTHERMIE ANXIETY ANXIETE ANSIEDAD ANGOISSE DIARRHEE DIARRHEA DIARREA DYSPNEE DYSPNEA "
         + "DISNEA VERTIGE VERTIGES VERTIGO PRURIT ITCH ITCHING WHEEZE SIFFLEMENT SPASME SPASMES CONVULSION "
-        + "CONVULSIONS SAIGNEMENT BLEEDING HEMORRAGIE HEMORRHAGE GLYCEMIE GLUCEMIA GLUCOSE DEXTRO EFFORT EXERCISE");
+        + "CONVULSIONS SAIGNEMENT BLEEDING HEMORRAGIE HEMORRHAGE GLYCEMIE GLUCEMIA DEXTRO EFFORT EXERCISE MAUX SIFFLEMENTS "
+        + "SAIGNEMENTS HEMORRAGIES WHEEZING DIARRHOEA SPASM INSOMNIA VOMITS FIEBRES CONVULSIONES ESPASMOS HEMORRAGIA "
+        + "INSOMNIO MIGRAINE CRAMPS RASH SEIZURES DIZZINESS HEARTBURN HIVES RESTLESSNESS SOB CRAMPES DEMANGEAISONS "
+        + "BRULURES PALPITATIONS AIGREURS ESSOUFFLEMENT MAREOS PICAZON PRURITO SANGRADO CEFALEA MIGRANA ATAQUES DORMIR "
+        + "SYMPTOMES SINTOMAS SYMPTOMS TEMPERATURE TEMPERATURA ONSET PARFOIS SOMETIMES POUSSEES FEBRILE APPARITION SIGNES "
+        + "SIGNS");
+
+    /** From here on a sentence prevents what it names: "2 fois par jour pour prevenir les crises". */
+    static final Set<String> PREVENTION_WORDS = words(
+        "PREVENIR PREVENTION PROPHYLAXIE PREVENCION PREVENT PROPHYLAXIS PROFILAXIS");
 
     /**
      * A name holding a condition word, which is no condition: a diagnosis, a food,
@@ -90,7 +103,8 @@ public final class FrequencyWording {
      */
     private static final List<String> NOT_A_CONDITION = List.of(
         "FIEVRE TYPHOIDE", "FIEVRE JAUNE", "TYPHOID FEVER", "YELLOW FEVER", "FIEBRE TIFOIDEA", "FIEBRE AMARILLA",
-        "DU PAIN", "AVEC PAIN", "BEFORE SLEEP");
+        "DU PAIN", "AVEC PAIN", "DE PAIN", "BEFORE SLEEP", "FIEVRE RHUMATISMALE", "RHEUMATIC FEVER", "FIEVRE DE LASSA",
+        "FIEVRE THYPHOIDE", "MAL DE POTT");
 
     /** Phrases that make a frequency a condition (words separated by one space). */
     private static final List<String> CONDITIONAL_PHRASES = List.of(
@@ -144,7 +158,7 @@ public final class FrequencyWording {
     }
 
     private static boolean readsConditional(String text, List<String> words) {
-        if (COMPARISON.matcher(text).find() || SLASH_SP.matcher(text).find() || MarDoseSchedule.isAsNeeded(text)) {
+        if (COMPARISON.matcher(WHO_GETS_IT.matcher(text).replaceAll(" ")).find() || SLASH_SP.matcher(text).find() || MarDoseSchedule.isAsNeeded(text)) {
             return true;
         }
         List<String> named = withoutNames(words);
@@ -155,7 +169,14 @@ public final class FrequencyWording {
             || containsPhrase(named, CONDITIONAL_PHRASES) || containsPhrase(joined, CONDITIONAL_PHRASES);
     }
 
-    private static List<String> withoutNames(List<String> words) {
+    private static List<String> withoutNames(List<String> all) {
+        List<String> words = all;
+        for (int i = 0; i < all.size(); i++) {
+            if (PREVENTION_WORDS.contains(all.get(i))) {
+                words = all.subList(0, i);
+                break;
+            }
+        }
         String spaced = " " + String.join(" ", words) + " ";
         for (String name : NOT_A_CONDITION) {
             spaced = spaced.replace(" " + name + " ", " ");
