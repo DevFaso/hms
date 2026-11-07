@@ -24,7 +24,6 @@ import {
   OrderSetService,
   OrderSetSummary,
 } from '../../services/order-set.service';
-import { unTickedFrequencyVerdict } from '../../shared/as-needed-frequency';
 import { CdsCardListComponent } from '../../shared/cds-card/cds-card.component';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { refusalReason } from '../../shared/refusal-reason';
@@ -392,18 +391,17 @@ export class OrderSetPickerComponent implements OnChanges, OnDestroy {
   private asNeededText(item: Record<string, unknown>): string {
     if (item['asNeeded'] !== true) return '';
     const frequency = item['frequency'];
-    const says =
-      typeof frequency === 'string' &&
-      (frequency.trim().toUpperCase() === 'PRN' ||
-        unTickedFrequencyVerdict(frequency) === 'CONDITIONAL');
+    const says = typeof frequency === 'string' && frequency.trim().toUpperCase() === 'PRN';
     return says ? '' : this.translate.instant('ORDER_SETS.FREQUENCY.PRN');
   }
 
   /** QA D1438: the route in the reader's language, whichever word the item stored it in. */
   private routeText(route: unknown): string {
     if (typeof route !== 'string') return '';
-    const code = route.trim().toUpperCase();
-    return this.codedText('ORDER_SETS.ROUTE', ROUTE_CODES[code] ?? code) || route.trim();
+    const upper = route.trim().toUpperCase();
+    const code = ROUTE_CODES[upper] ?? upper;
+    const label = this.labelFor('ORDER_SETS.ROUTE', code);
+    return label === code ? route.trim() : label;
   }
 
   private doseText(item: Record<string, unknown>): string {

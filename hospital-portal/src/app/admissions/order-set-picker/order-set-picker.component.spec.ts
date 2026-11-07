@@ -350,7 +350,9 @@ describe('OrderSetPickerComponent', () => {
 
   describe('QA D1438 / D1439 / D1436: what the preview says of an item', () => {
     const detail = (item: Record<string, unknown>): string =>
-      (fixture.componentInstance as unknown as { orderItemDetail(i: unknown): string }).orderItemDetail(item);
+      (
+        fixture.componentInstance as unknown as { orderItemDetail(i: unknown): string }
+      ).orderItemDetail(item);
 
     beforeEach(() => {
       const translate = TestBed.inject(TranslateService);
@@ -384,7 +386,9 @@ describe('OrderSetPickerComponent', () => {
         'Si besoin (PRN) · Au moins 6 h entre deux doses',
       );
       expect(detail({ asNeeded: true })).toBe('Si besoin (PRN)');
-      expect(detail({ frequency: 'si fièvre', asNeeded: true })).toBe('si fièvre');
+      expect(detail({ frequency: 'si fièvre', asNeeded: true })).toBe(
+        'si fièvre · Si besoin (PRN)',
+      );
       expect(detail({ frequency: 'Q4H', asNeeded: true })).toBe(
         'Toutes les 4 heures (Q4H) · Si besoin (PRN)',
       );
