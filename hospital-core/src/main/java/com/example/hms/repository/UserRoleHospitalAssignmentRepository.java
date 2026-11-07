@@ -210,6 +210,19 @@ public interface UserRoleHospitalAssignmentRepository extends JpaRepository<User
                                 @Param("hospitalId") UUID hospitalId,
                                 @Param("roleCodes") Set<String> roleCodes);
 
+    /** The live holders of these roles at one hospital; the same test {@link #existsActiveWitness} applies. */
+    @Query("""
+        SELECT a.user
+        FROM UserRoleHospitalAssignment a
+        WHERE a.active = TRUE
+          AND a.user.isActive = TRUE
+          AND a.user.isDeleted = FALSE
+          AND a.hospital.id = :hospitalId
+          AND UPPER(a.role.code) IN (:roleCodes)
+    """)
+    List<com.example.hms.model.User> findLiveUsersAtHospitalWithRoleCodes(@Param("hospitalId") UUID hospitalId,
+                                                                          @Param("roleCodes") Set<String> roleCodes);
+
     /* ------------ Fetch graphs for DTO mapping ------------ */
 
     /** Deep enough for most response DTOs (user/hospital/role/registeredBy). */

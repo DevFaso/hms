@@ -54,7 +54,7 @@ public class PediatricDoseRule implements CdsRule {
 
     private static final String ID = "pediatric-dose";
     private static final String SOURCE_LABEL = "HMS Pediatric Dose Check";
-    private static final int PEDIATRIC_AGE_THRESHOLD_YEARS = 18;
+    public static final int PEDIATRIC_AGE_THRESHOLD_YEARS = 18;
     /** No automatic mg/kg verdict below this age unless the item says otherwise. */
     static final int DEFAULT_MANUAL_REVIEW_UNDER_MONTHS = 3;
     /** A weight older than this is flagged. */

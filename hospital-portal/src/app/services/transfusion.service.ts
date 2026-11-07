@@ -180,6 +180,60 @@ export interface VerifierCandidate {
   displayName: string;
 }
 
+export type EmergencyReleaseType =
+  'UNCROSSMATCHED' | 'O_POSITIVE_DECISION' | 'SEROLOGICALLY_INCOMPATIBLE';
+
+/** One bag's emergency release, as the request detail shows it. */
+export interface EmergencyBloodRelease {
+  id: string;
+  bloodUnitId: string;
+  unitNumber: string;
+  releaseType: EmergencyReleaseType;
+  reason: string | null;
+  authoriserName: string | null;
+  issuedByName: string | null;
+  issuedAt: string;
+  antibodyWarning: boolean;
+}
+
+export interface EmergencyReleaseUnitOption {
+  id: string;
+  unitNumber: string;
+  aboGroup: AboGroup;
+  rhFactor: RhFactor;
+  expiresOn: string;
+  /** O positive that the server will release only on a documented decision. */
+  decisionRequired: boolean;
+}
+
+export interface IncompatibleUnitOption {
+  id: string;
+  unitNumber: string;
+  aboGroup: AboGroup;
+  rhFactor: RhFactor;
+  incompatibilityReason: string | null;
+  /** False when the patient's group excludes the bag or O negative must go first. */
+  releasable: boolean;
+}
+
+/** What the server's emergency rules say for one request. The server still decides on submit. */
+export interface EmergencyReleaseOptions {
+  antibodyWarning: boolean;
+  antibodyDetail: string | null;
+  oNegativeFirst: boolean;
+  units: EmergencyReleaseUnitOption[];
+  incompatibleUnits: IncompatibleUnitOption[];
+  deciders: VerifierCandidate[];
+  authorisers: VerifierCandidate[];
+}
+
+export interface EmergencyReleaseRequest {
+  bloodUnitId: string;
+  releaseType: EmergencyReleaseType;
+  reason: string;
+  authoriserUserId: string;
+}
+
 export interface TransfusionAdministrationRequest {
   requestId: string;
   bloodUnitId: string;
@@ -214,6 +268,8 @@ export interface TransfusionRequestResponse {
   screenCurrent: boolean;
   units: BloodUnitResponse[];
   crossmatches: CrossmatchResponse[];
+  /** Every emergency release on this request, one per bag; absent on a list row. */
+  emergencyReleases?: EmergencyBloodRelease[];
 }
 
 export interface TransfusionRequestRequest {
@@ -333,6 +389,22 @@ export class TransfusionService {
     return this.http.post<BloodUnitResponse>(
       `${this.baseUrl}/requests/${requestId}/issue/${unitId}`,
       null,
+    );
+  }
+
+  emergencyReleaseOptions(requestId: string): Observable<EmergencyReleaseOptions> {
+    return this.http.get<EmergencyReleaseOptions>(
+      `${this.baseUrl}/requests/${requestId}/emergency-release/options`,
+    );
+  }
+
+  emergencyRelease(
+    requestId: string,
+    release: EmergencyReleaseRequest,
+  ): Observable<BloodUnitResponse> {
+    return this.http.post<BloodUnitResponse>(
+      `${this.baseUrl}/requests/${requestId}/emergency-release`,
+      release,
     );
   }
 

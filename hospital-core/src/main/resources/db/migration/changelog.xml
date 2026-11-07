@@ -3372,4 +3372,11 @@
                  stripComments="false"/>
     </changeSet>
 
+    <changeSet id="V266-r34-emergency-blood-releases" author="hms-team" runOnChange="false">
+        <sqlFile path="V266__r34_emergency_blood_releases.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>
