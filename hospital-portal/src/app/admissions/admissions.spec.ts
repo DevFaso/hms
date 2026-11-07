@@ -249,6 +249,72 @@ describe('AdmissionsComponent', () => {
   });
 
   describe('loading and filters', () => {
+    it('counts only active stays with no structured or free-text bed in the missing-bed card', () => {
+      component.admissions.set([
+        adm({ id: 'missing', roomBed: '  ', bedId: null }),
+        adm({ id: 'structured', roomBed: '', bedId: 'bed-1' }),
+        adm({ id: 'legacy', roomBed: 'CDX-12', bedId: null }),
+        adm({ id: 'closed', status: 'DISCHARGED', roomBed: '' }),
+      ]);
+      component.selectMetric('missing-bed');
+      expect(component.filtered().map((a) => a.id)).toEqual(['missing']);
+      expect(component.summaryMetrics().find((m) => m.id === 'missing-bed')?.count).toBe(1);
+      expect(component.admissions().length).toBe(4);
+      expect(admissionService.getAll).not.toHaveBeenCalled();
+      component.selectMetric('missing-bed');
+      expect(component.filtered().length).toBe(4);
+    });
+
+    it('combines facets and MRN/reference searches, sorts UTC instants and resets paging', () => {
+      component.admissions.set(
+        Array.from({ length: 26 }, (_, i) =>
+          adm({
+            id: `cdx-${i}`,
+            patientMrn: `CDX-MRN-${i}`,
+            encounterCode: `CDX-ENC-${i}`,
+            admissionType: i === 25 ? 'EMERGENCY' : 'ELECTIVE',
+            acuityLevel: 'LEVEL_4_SEVERE',
+            admissionDateTime: i === 25 ? '2026-11-07T12:00:00' : '2026-11-07T11:00:00Z',
+          }),
+        ),
+      );
+      component.applyFilter();
+      expect(component.pagedAdmissions()[0].id).toBe('cdx-25');
+      expect(component.pageCount()).toBe(3);
+      component.setPage(2);
+      expect(component.pagedAdmissions().length).toBe(6);
+      component.typeFilter.set('EMERGENCY');
+      component.acuityFilter.set('LEVEL_4_SEVERE');
+      component.searchTerm = 'CDX-MRN-25';
+      component.applyFilter();
+      expect(component.filtered().map((a) => a.id)).toEqual(['cdx-25']);
+      expect(component.currentPage()).toBe(0);
+      component.searchTerm = 'CDX-ENC-25';
+      component.applyFilter();
+      expect(component.filtered().length).toBe(1);
+      component.resetFilters();
+      expect(component.filtered().length).toBe(26);
+    });
+
+    it('ignores stale scoped responses and clears data on a current reload error', () => {
+      const old = new Subject<AdmissionResponse[]>();
+      const current = new Subject<AdmissionResponse[]>();
+      admissionService.getAll.and.returnValues(old, current);
+      component.load();
+      component.onScopeChange('h2');
+      current.next([adm({ id: 'new', hospitalId: 'h2' })]);
+      old.next([adm({ id: 'old', hospitalId: 'h1' })]);
+      expect(component.admissions().map((a) => a.id)).toEqual(['new']);
+      old.error(new Error('stale'));
+      expect(component.loadError()).toBeFalse();
+      expect(toast.error).not.toHaveBeenCalled();
+      admissionService.getAll.and.returnValue(throwError(() => new Error('offline')));
+      component.onScopeChange('h1');
+      expect(component.admissions()).toEqual([]);
+      expect(component.filtered()).toEqual([]);
+      expect(component.loadError()).toBeTrue();
+    });
+
     it('locks a non-super-admin to their hospital and honours the tab query', () => {
       queryTab = 'discharged';
       component.ngOnInit();
@@ -257,6 +323,7 @@ describe('AdmissionsComponent', () => {
       expect(component.hospitalLocked).toBeTrue();
       expect(component.lockedHospitalName).toBe('CHU Ouaga');
       expect(component.activeTab()).toBe('discharged');
+      expect(component.filtered().map((a) => a.id)).toEqual(['a2']);
     });
 
     it('lets a super admin choose any hospital', () => {
