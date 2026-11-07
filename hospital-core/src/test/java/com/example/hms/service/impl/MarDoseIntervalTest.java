@@ -159,13 +159,14 @@ class MarDoseIntervalTest {
 
     /** QA D1426 (changed from "apres les repas", now read): a wording read as a schedule keeps its own gap, with no unread reason. */
     @Test
-    void d1426_aMealWordingKeepsAGap() {
-        Optional<LocalDateTime> soon = Optional.of(NOW.minusHours(1));
-        assertThatThrownBy(() -> MarDoseInterval.requireIntervalOrReason(rx("après les repas"),
-                MedicationAdministrationStatus.GIVEN, soon, NOW, WINDOW, null))
-            .hasFieldOrPropertyWithValue("messageKey", MarDoseInterval.TOO_SOON_KEY);
-        assertThat(MarDoseInterval.requireIntervalOrReason(rx("après les repas"),
-            MedicationAdministrationStatus.GIVEN, Optional.of(NOW.minusHours(8)), NOW, WINDOW, null)).isNull();
+    void d1426_aMealWordingIsUnreadAndEveryLaterDoseAsksAReason() {
+        // Round 35: outside the closed grammar. It was read as three doses a day; now nobody guesses.
+        for (int hoursAgo : new int[] {1, 8}) {
+            Optional<LocalDateTime> last = Optional.of(NOW.minusHours(hoursAgo));
+            assertThatThrownBy(() -> MarDoseInterval.requireIntervalOrReason(rx("après les repas"),
+                    MedicationAdministrationStatus.GIVEN, last, NOW, WINDOW, null))
+                .hasFieldOrPropertyWithValue("messageKey", MarDoseInterval.FREQUENCY_UNREAD_KEY);
+        }
     }
 
     /** QA D1419: a course keeps the gap of its own step: H0 H8 H24: 8 h after the first, 16 h after the second. */

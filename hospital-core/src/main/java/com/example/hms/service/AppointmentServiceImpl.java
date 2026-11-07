@@ -1029,8 +1029,11 @@ public class AppointmentServiceImpl implements AppointmentService {
     }
 
     /** The visit being moved keeps its time: only another clinician is asked about, not the past. */
-    private boolean keepsItsTime(UUID movedAppointmentId, java.time.LocalDate date, java.time.LocalTime time) {
+    private boolean keepsItsTime(UUID movedAppointmentId, java.time.LocalDate date, java.time.LocalTime time,
+                                 Hospital hospital) {
         return movedAppointmentId != null && appointmentRepository.findById(movedAppointmentId)
+            // The id comes from the request: another hospital's visit answers as no visit.
+            .filter(moved -> moved.getHospital() != null && hospital.getId().equals(moved.getHospital().getId()))
             .filter(moved -> date.equals(moved.getAppointmentDate()) && time.equals(moved.getStartTime()))
             .isPresent();
     }
@@ -1056,7 +1059,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         LocalTime endTime = slotPolicy.endFor(staffId, date, time);
         LocalDateTime start = LocalDateTime.of(date, time);
         LocalDateTime end = LocalDateTime.of(date, endTime);
-        if (isAlreadyPast(start, hospital) && !keepsItsTime(movedAppointmentId, date, time)) {
+        if (isAlreadyPast(start, hospital) && !keepsItsTime(movedAppointmentId, date, time, hospital)) {
             return messageSource.getMessage("portal.booking.pastTime", null, locale);
         }
         Object[] args = {staffId, DisplayDates.date(date, locale), DisplayDates.time(time, locale),

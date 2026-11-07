@@ -98,6 +98,7 @@ class ServiceWriteTenantLoadCoverageTest {
     private static final Map<String, String> RECORDED = Map.ofEntries(
         entry("AppointmentServiceImpl.resolvePatient#findByIdUnscoped", PATIENT),
         entry("AppointmentServiceImpl.resolveStaff#findById", ACTOR),
+        entry("AppointmentServiceImpl.bookingTimeRefusal#findById", ACTOR + "; hasHospitalAccess answers another hospital's as unknown"),
         entry("AuditEventLogServiceImpl.resolveAssignment#findById", "the caller's own assignment, checked against the caller"),
         entry("BillingInvoiceServiceImpl.creditCheckInCopays#findById", CALLER_CHECKS + " (invoice writes load through loadInScope)"),
         entry("BillingInvoiceServiceImpl.recomputeAndPersistTotals#findById", CALLER_CHECKS + " (invoice item writes check writableInvoice first)"),

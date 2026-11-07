@@ -1626,6 +1626,7 @@ describe('ShellComponent — route-level hospital scope gate', () => {
         'lab-release-worklist',
         'lab-staff',
         'maternity',
+        'mortality',
         'nurse-station',
         'patient-tracker',
         'procedure-orders',
