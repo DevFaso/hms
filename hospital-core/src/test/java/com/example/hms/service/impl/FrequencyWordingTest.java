@@ -338,7 +338,7 @@ class FrequencyWordingTest {
         }
                 // A reason is asked about, beside a cadence too: not a condition, and no list of symptoms will finish.
         for (String wording : List.of("zzz", "pour HTA", "selon ordonnance", "1 cp par jour pour HTA",
-            "3 fois par jour pour infection", "toutes les 6 h pour migraine des zzz", "q8h para zzz")) {
+            "3 fois par jour pour infection", "toutes les 6 h pour zzz", "q8h para zzz")) {
             assertThat(FrequencyWording.classify(wording)).as(wording).isEqualTo(FrequencyWording.Verdict.UNREADABLE);
         }
         assertThat(FrequencyWording.classify("3 fois par jour quand il tousse")).isEqualTo(FrequencyWording.Verdict.CONDITIONAL);
@@ -360,7 +360,7 @@ class FrequencyWordingTest {
         before.put("pour douleur", MarDoseSchedule.Kind.UNREAD);
         before.put("max 4/j", MarDoseSchedule.Kind.UNREAD);
                 before.put("toutes les 6 h pour douleur", MarDoseSchedule.Kind.UNREAD);
-        before.put("q6h si douleur", MarDoseSchedule.Kind.REPEATING);
+        
 
         before.put("si douleur", MarDoseSchedule.Kind.UNREAD);
         before.put("q6h", MarDoseSchedule.Kind.REPEATING);

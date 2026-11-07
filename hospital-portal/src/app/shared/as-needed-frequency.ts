@@ -1166,7 +1166,8 @@ function statesADuration(t: readonly string[]): boolean {
   return t.some((word, i) => {
     const number = i + 1 < t.length ? numberOf(word) : null;
     if (number === null) return false;
-    return periodOf(t[i + 1]) !== null || (HOUR_WORDS.has(t[i + 1]) && number >= 12);
+    const aClock = i > 0 && BEFORE_CLOCK.has(t[i - 1]);
+    return periodOf(t[i + 1]) !== null || (HOUR_WORDS.has(t[i + 1]) && number >= 12 && !aClock);
   });
 }
 

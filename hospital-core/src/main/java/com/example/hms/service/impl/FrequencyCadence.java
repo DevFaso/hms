@@ -366,7 +366,7 @@ final class FrequencyCadence {
         for (int i = 0; i + 1 < t.size(); i++) {
             Integer number = numberOf(t.get(i));
             if (number != null && (periodOf(t.get(i + 1)) != null
-                || (HOUR_WORDS.contains(t.get(i + 1)) && number >= NOON))) {
+                || (HOUR_WORDS.contains(t.get(i + 1)) && number >= NOON && !(i > 0 && BEFORE_CLOCK.contains(t.get(i - 1)))))) {
                 return true;
             }
         }
