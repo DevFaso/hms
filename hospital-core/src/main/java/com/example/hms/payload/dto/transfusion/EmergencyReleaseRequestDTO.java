@@ -29,4 +29,10 @@ public class EmergencyReleaseRequestDTO {
     /** The person making the decision, picked from the options the server offers. */
     @NotNull
     private UUID authoriserUserId;
+
+    /**
+     * For O positive when the system shows O negative in stock: the person states it cannot be
+     * obtained in time. Required then, on its field; ignored otherwise.
+     */
+    private Boolean negativeUnobtainable;
 }

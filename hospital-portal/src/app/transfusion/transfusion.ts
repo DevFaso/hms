@@ -672,6 +672,7 @@ export class TransfusionComponent implements OnInit {
   emergencyUnitId = '';
   emergencyReason = '';
   emergencyAuthoriserId = '';
+  emergencyNegativeStated = false;
 
   /** The server's uncrossmatched release had no way in: a bag only reached the row by a crossmatch. */
   canReleaseInEmergency(request: TransfusionRequestResponse): boolean {
@@ -691,7 +692,32 @@ export class TransfusionComponent implements OnInit {
       ?.decisionRequired;
   }
 
+  /** The bag picked goes out ahead of O negative the system shows: a statement first. */
+  emergencyStatementRequired(): boolean {
+    const options = this.emergencyOptions();
+    const id = this.emergencyUnitId;
+    return !!(
+      options?.units.find((u) => u.id === id)?.statementRequired ||
+      options?.incompatibleUnits.find((u) => u.id === id)?.statementRequired
+    );
+  }
+
+  /** The unit numbers the form names beside the statement. */
+  negativeStockNumbers(): string {
+    return (this.emergencyOptions()?.negativeStock ?? []).map((u) => u.unitNumber).join(', ');
+  }
+
+  /** A refusal can mean the stock moved: the form asks for what the server now asks. */
+  private refreshEmergencyOptions(request: TransfusionRequestResponse): void {
+    this.transfusion.emergencyReleaseOptions(request.id).subscribe({
+      next: (options) => {
+        if (this.selectedRequest()?.id === request.id) this.emergencyOptions.set(options);
+      },
+    });
+  }
+
   private loadEmergencyOptions(request: TransfusionRequestResponse): void {
+    this.emergencyNegativeStated = false;
     this.emergencyUnitId = '';
     this.emergencyReason = '';
     this.emergencyAuthoriserId = '';
@@ -719,6 +745,8 @@ export class TransfusionComponent implements OnInit {
     if (!request || !this.emergencyUnitId || this.emergencySubmitting()) return;
     const documented = this.emergencyDecisionRequired();
     if (documented && (!this.emergencyReason.trim() || !this.emergencyAuthoriserId)) return;
+    const stating = this.emergencyStatementRequired();
+    if (stating && !this.emergencyNegativeStated) return;
     this.emergencySubmitting.set(true);
     const release = documented
       ? this.transfusion.emergencyRelease(request.id, {
@@ -726,6 +754,7 @@ export class TransfusionComponent implements OnInit {
           releaseType: 'O_POSITIVE_DECISION',
           reason: this.emergencyReason.trim(),
           authoriserUserId: this.emergencyAuthoriserId,
+          ...(stating ? { negativeUnobtainable: true } : {}),
         })
       : this.transfusion.issueUnit(request.id, this.emergencyUnitId);
     release.subscribe({
@@ -738,6 +767,7 @@ export class TransfusionComponent implements OnInit {
       error: (err: unknown) => {
         this.emergencySubmitting.set(false);
         this.toast.error(refusalReason(err) ?? this.translate.instant('TRANSFUSION.ISSUE_ERROR'));
+        this.refreshEmergencyOptions(request);
       },
     });
   }
@@ -775,6 +805,8 @@ export class TransfusionComponent implements OnInit {
     ) {
       return;
     }
+    const stating = this.emergencyStatementRequired();
+    if (stating && !this.emergencyNegativeStated) return;
     this.incompatibleSubmitting.set(true);
     this.transfusion
       .emergencyRelease(request.id, {
@@ -782,6 +814,7 @@ export class TransfusionComponent implements OnInit {
         releaseType: 'SEROLOGICALLY_INCOMPATIBLE',
         reason: this.emergencyReason.trim(),
         authoriserUserId: this.emergencyAuthoriserId,
+        ...(stating ? { negativeUnobtainable: true } : {}),
       })
       .subscribe({
         next: () => {
@@ -793,6 +826,7 @@ export class TransfusionComponent implements OnInit {
         error: (err: unknown) => {
           this.incompatibleSubmitting.set(false);
           this.toast.error(refusalReason(err) ?? this.translate.instant('TRANSFUSION.ISSUE_ERROR'));
+          this.refreshEmergencyOptions(request);
         },
       });
   }

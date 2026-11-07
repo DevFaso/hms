@@ -117,6 +117,7 @@ public class TransfusionServiceImpl implements TransfusionService {
     private static final String FIELD_RELEASE_TYPE = "releaseType";
     private static final String FIELD_AUTHORISER = "authoriserUserId";
     private static final String FIELD_COMPATIBLE = "compatible";
+    private static final String FIELD_NEGATIVE_UNOBTAINABLE = "negativeUnobtainable";
     private static final Set<String> LAB_DIRECTOR_ROLE_CODES = Set.of(SecurityConstants.ROLE_LAB_DIRECTOR);
 
     /** Default life of an antibody screen and of a crossmatch reservation. */
@@ -799,7 +800,7 @@ public class TransfusionServiceImpl implements TransfusionService {
      * against which request, of which type, ids only: the callback has no session.
      */
     private EmergencyBloodRelease recordRelease(TransfusionRequest request, BloodUnit unit, EmergencyReleaseType type,
-                                                String reason, UUID authoriserUserId) {
+                                                String reason, UUID authoriserUserId, List<BloodUnit> negativeShown) {
         UUID actorUserId = roleValidator.getCurrentUserId();
         EmergencyBloodRelease saved = releaseRepository.save(EmergencyBloodRelease.builder()
             .request(request)
@@ -811,11 +812,14 @@ public class TransfusionServiceImpl implements TransfusionService {
             .issuedBy(actorUserId != null ? userRepository.getReferenceById(actorUserId) : null)
             .issuedAt(LocalDateTime.now(clock))
             .antibodyWarning(positiveScreenOnRecord(request) != null)
+            .negativeUnobtainableStated(!negativeShown.isEmpty())
+            .negativeUnitsShown(negativeShown.isEmpty() ? null
+                : negativeShown.stream().map(BloodUnit::getUnitNumber).collect(java.util.stream.Collectors.joining(", ")))
             .build());
         UUID hospitalId = request.getHospital().getId();
         UUID requestId = request.getId();
         UUID unitId = unit.getId();
-        String description = releaseAuditDescription(type, unitId, requestId);
+        String description = releaseAuditDescription(type, unitId, requestId, negativeShown);
         com.example.hms.utility.TransactionCallbacks.afterCommit(() -> {
             try {
                 auditEventLogService.logEvent(com.example.hms.payload.dto.AuditEventRequestDTO.builder()
@@ -836,13 +840,16 @@ public class TransfusionServiceImpl implements TransfusionService {
     }
 
     /** Each type its own sentence: the audit screen renders them in the reader's language by pattern. */
-    private static String releaseAuditDescription(EmergencyReleaseType type, UUID unitId, UUID requestId) {
+    private static String releaseAuditDescription(EmergencyReleaseType type, UUID unitId, UUID requestId, List<BloodUnit> negativeShown) {
         String release = switch (type) {
             case UNCROSSMATCHED -> "Emergency uncrossmatched release";
             case O_POSITIVE_DECISION -> "Emergency release on a documented O positive decision";
             case SEROLOGICALLY_INCOMPATIBLE -> "Emergency release, serologically incompatible,";
         };
-        return release + " of blood unit " + unitId + " against transfusion request " + requestId;
+        String description = release + " of blood unit " + unitId + " against transfusion request " + requestId;
+        return negativeShown.isEmpty() ? description
+            : description + ", O negative stated not obtainable in time, stock shown "
+                + negativeShown.stream().map(bag -> bag.getId().toString()).collect(java.util.stream.Collectors.joining(","));
     }
 
     @Override
@@ -870,7 +877,7 @@ public class TransfusionServiceImpl implements TransfusionService {
             requireUncrossmatchedRelease(request, unit, crossmatch, refusal);
             log.warn("EMERGENCY uncrossmatched release of unit {} against request {}",
                 unit.getUnitNumber(), requestId);
-            recordRelease(request, unit, EmergencyReleaseType.UNCROSSMATCHED, null, null);
+            recordRelease(request, unit, EmergencyReleaseType.UNCROSSMATCHED, null, null, List.of());
         }
         return putOut(request, unit);
     }
@@ -914,10 +921,15 @@ public class TransfusionServiceImpl implements TransfusionService {
         } else {
             requireIncompatibleReleaseAllowed(request, unit, crossmatch);
         }
+        List<BloodUnit> negativeShown = negativeStockAhead(request, unit);
+        if (!negativeShown.isEmpty() && !Boolean.TRUE.equals(release.getNegativeUnobtainable())) {
+            throw new FieldBusinessException(FIELD_NEGATIVE_UNOBTAINABLE, "transfusion.emergency.negativeStatementRequired",
+                unit.getUnitNumber(), negativeShown.stream().map(BloodUnit::getUnitNumber).collect(java.util.stream.Collectors.joining(", ")));
+        }
         requireAnswerableAuthoriser(request, release);
         log.warn("EMERGENCY {} release of unit {} against request {}",
             release.getReleaseType(), unit.getUnitNumber(), requestId);
-        EmergencyBloodRelease saved = recordRelease(request, unit, release.getReleaseType(), reason, release.getAuthoriserUserId());
+        EmergencyBloodRelease saved = recordRelease(request, unit, release.getReleaseType(), reason, release.getAuthoriserUserId(), negativeShown);
         if (release.getReleaseType() == EmergencyReleaseType.SEROLOGICALLY_INCOMPATIBLE) {
             notifySafely(() -> fileReleaseReviewAfterCommit(request, unit, saved), saved.getId());
         }
@@ -1003,11 +1015,7 @@ public class TransfusionServiceImpl implements TransfusionService {
                 || !AboGroup.isEmergencyOPositive(unit.getAboGroup(), unit.getRhFactor(), unit.getProductType())) {
             throw refusal;
         }
-        EmergencyReleasePolicy.OPositiveStep step = oPositiveStep(request);
-        if (step == EmergencyReleasePolicy.OPositiveStep.O_NEGATIVE_FIRST) {
-            requireNoONegativeAvailable(request, unit);
-        }
-        if (step != EmergencyReleasePolicy.OPositiveStep.NONE) {
+        if (oPositiveStep(request) != EmergencyReleasePolicy.OPositiveStep.NONE) {
             throw new FieldBusinessException(FIELD_AUTHORISER, "transfusion.emergency.decisionRequired", unit.getUnitNumber());
         }
     }
@@ -1038,9 +1046,6 @@ public class TransfusionServiceImpl implements TransfusionService {
         if (crossmatch != null && !Boolean.TRUE.equals(crossmatch.getCompatible())) {
             throw new BusinessException("transfusion.issue.crossmatchIncompatible", unit.getUnitNumber());
         }
-        if (oPositiveStep(request) == EmergencyReleasePolicy.OPositiveStep.O_NEGATIVE_FIRST) {
-            requireNoONegativeAvailable(request, unit);
-        }
     }
 
     /**
@@ -1056,20 +1061,24 @@ public class TransfusionServiceImpl implements TransfusionService {
         if (!documentedReleaseAllows(request, unit)) {
             throw new FieldBusinessException(FIELD_BLOOD_UNIT_ID, "transfusion.emergency.groupExcludes", unit.getUnitNumber());
         }
-        if (AboGroup.isEmergencyOPositive(unit.getAboGroup(), unit.getRhFactor(), unit.getProductType())
-                && oPositiveStep(request) == EmergencyReleasePolicy.OPositiveStep.O_NEGATIVE_FIRST) {
-            requireNoONegativeAvailable(request, unit);
-        }
     }
 
-    private void requireNoONegativeAvailable(TransfusionRequest request, BloodUnit unit) {
-        if (oNegativeAvailable(request)) {
-            throw new FieldBusinessException(FIELD_BLOOD_UNIT_ID, "transfusion.emergency.oNegativeFirst", unit.getUnitNumber());
+    /**
+     * The O negative this O positive bag would go out ahead of, by what the system shows: empty when
+     * the bag is not O positive, or this patient does not take O negative first. The system can be
+     * wrong (a bag recorded as returned can still be on the ward), so this asks for a statement and
+     * never refuses outright: the documented decision must not become a block on transfusion.
+     */
+    private List<BloodUnit> negativeStockAhead(TransfusionRequest request, BloodUnit unit) {
+        if (!AboGroup.isEmergencyOPositive(unit.getAboGroup(), unit.getRhFactor(), unit.getProductType())
+                || oPositiveStep(request) != EmergencyReleasePolicy.OPositiveStep.O_NEGATIVE_FIRST) {
+            return List.of();
         }
+        return negativeStock(request);
     }
 
-    private boolean oNegativeAvailable(TransfusionRequest request) {
-        return unitRepository.existsAvailable(request.getHospital().getId(), request.getPatient().getId(), request.getProductType(),
+    private List<BloodUnit> negativeStock(TransfusionRequest request) {
+        return unitRepository.findStockForPatient(request.getHospital().getId(), request.getPatient().getId(), request.getProductType(),
             AboGroup.emergencyReleaseGroup(), AboGroup.emergencyReleaseRh(), LocalDate.now(clock));
     }
 
@@ -1142,13 +1151,15 @@ public class TransfusionServiceImpl implements TransfusionService {
         UUID hospitalId = request.getHospital().getId();
         PatientBloodGroup positive = positiveScreenOnRecord(request);
         EmergencyReleasePolicy.OPositiveStep step = oPositiveStep(request);
-        boolean oNegativeFirst = step == EmergencyReleasePolicy.OPositiveStep.O_NEGATIVE_FIRST && oNegativeAvailable(request);
+        List<BloodUnit> shown = step == EmergencyReleasePolicy.OPositiveStep.O_NEGATIVE_FIRST ? negativeStock(request) : List.of();
         return EmergencyReleaseOptionsDTO.builder()
             .antibodyWarning(positive != null)
             .antibodyDetail(positive != null ? positive.getAntibodyDetail() : null)
-            .oNegativeFirst(oNegativeFirst)
-            .units(uncrossmatchedOptions(request, step, oNegativeFirst))
-            .incompatibleUnits(incompatibleOptions(request, step, oNegativeFirst))
+            .negativeStock(shown.stream().map(bag -> EmergencyReleaseOptionsDTO.Unit.builder()
+                .id(bag.getId()).unitNumber(bag.getUnitNumber())
+                .aboGroup(bag.getAboGroup()).rhFactor(bag.getRhFactor()).expiresOn(bag.getExpiresOn()).build()).toList())
+            .units(uncrossmatchedOptions(request, step, !shown.isEmpty()))
+            .incompatibleUnits(incompatibleOptions(request, !shown.isEmpty()))
             .deciders(candidates(hospitalId, EmergencyReleasePolicy.O_POSITIVE_DECIDER_ROLE_CODES, null))
             .authorisers(candidates(hospitalId, EmergencyReleasePolicy.INCOMPATIBLE_AUTHORISER_ROLE_CODES,
                 roleValidator.getCurrentUserId()))
@@ -1162,7 +1173,7 @@ public class TransfusionServiceImpl implements TransfusionService {
      */
     private List<EmergencyReleaseOptionsDTO.Unit> uncrossmatchedOptions(TransfusionRequest request,
                                                                         EmergencyReleasePolicy.OPositiveStep step,
-                                                                        boolean oNegativeFirst) {
+                                                                        boolean negativeShown) {
         LocalDate today = LocalDate.now(clock);
         boolean decisionStep = step != EmergencyReleasePolicy.OPositiveStep.NONE;
         Map<UUID, BloodUnit> bags = new LinkedHashMap<>();
@@ -1185,11 +1196,12 @@ public class TransfusionServiceImpl implements TransfusionService {
             boolean oNegative = bag.getAboGroup() == AboGroup.emergencyReleaseGroup()
                 && bag.getRhFactor() == AboGroup.emergencyReleaseRh();
             if (bag.getProductType() == request.getProductType() && !incompatible.contains(bag.getId())
-                    && (oNegative || (oPositive && !oNegativeFirst))) {
+                    && (oNegative || oPositive)) {
                 options.add(EmergencyReleaseOptionsDTO.Unit.builder()
                     .id(bag.getId()).unitNumber(bag.getUnitNumber())
                     .aboGroup(bag.getAboGroup()).rhFactor(bag.getRhFactor()).expiresOn(bag.getExpiresOn())
                     .decisionRequired(oPositive && decisionStep)
+                    .statementRequired(oPositive && negativeShown)
                     .build());
             }
         }
@@ -1197,8 +1209,7 @@ public class TransfusionServiceImpl implements TransfusionService {
     }
 
     private List<EmergencyReleaseOptionsDTO.IncompatibleUnit> incompatibleOptions(TransfusionRequest request,
-                                                                                  EmergencyReleasePolicy.OPositiveStep step,
-                                                                                  boolean oNegativeFirst) {
+                                                                                  boolean negativeShown) {
         LocalDate today = LocalDate.now(clock);
         return crossmatchRepository.findByRequest_IdOrderByPerformedAtDesc(request.getId()).stream()
             .filter(result -> !Boolean.TRUE.equals(result.getCompatible()))
@@ -1210,15 +1221,15 @@ public class TransfusionServiceImpl implements TransfusionService {
             })
             .map(result -> {
                 BloodUnit bag = result.getBloodUnit();
-                boolean heldBack = (oNegativeFirst && step == EmergencyReleasePolicy.OPositiveStep.O_NEGATIVE_FIRST
-                    && AboGroup.isEmergencyOPositive(bag.getAboGroup(), bag.getRhFactor(), bag.getProductType()))
-                    || (bag.getStatus() == BloodUnitStatus.CROSSMATCHED && bag.getRequest() != null
-                        && !Objects.equals(bag.getRequest().getId(), request.getId()));
+                boolean heldBack = bag.getStatus() == BloodUnitStatus.CROSSMATCHED && bag.getRequest() != null
+                    && !Objects.equals(bag.getRequest().getId(), request.getId());
                 return EmergencyReleaseOptionsDTO.IncompatibleUnit.builder()
                     .id(bag.getId()).unitNumber(bag.getUnitNumber())
                     .aboGroup(bag.getAboGroup()).rhFactor(bag.getRhFactor())
                     .incompatibilityReason(result.getIncompatibilityReason())
                     .releasable(!heldBack && documentedReleaseAllows(request, bag))
+                    .statementRequired(negativeShown
+                        && AboGroup.isEmergencyOPositive(bag.getAboGroup(), bag.getRhFactor(), bag.getProductType()))
                     .build();
             })
             .toList();

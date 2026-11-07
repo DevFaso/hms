@@ -835,7 +835,7 @@ describe('TransfusionComponent: a transfusion in progress (QA CX-008)', () => {
     const options = (over: Partial<EmergencyReleaseOptions> = {}): EmergencyReleaseOptions => ({
       antibodyWarning: false,
       antibodyDetail: null,
-      oNegativeFirst: false,
+      negativeStock: [],
       units: [],
       incompatibleUnits: [],
       deciders: [{ userId: 'doc', displayName: 'Dr A' }],
@@ -921,10 +921,51 @@ describe('TransfusionComponent: a transfusion in progress (QA CX-008)', () => {
       expect(txSpy.issueUnit).not.toHaveBeenCalled();
     });
 
+    it('O negative showing in stock: O positive needs the statement, and it is sent', async () => {
+      await open(['ROLE_LAB_TECHNICIAN']);
+      stubOptions({
+        negativeStock: [unitOption('ONEG-1')],
+        units: [{ ...unitOption('opos', true), statementRequired: true }, unitOption('ONEG-1')],
+      });
+      txSpy.emergencyRelease = jasmine
+        .createSpy()
+        .and.returnValue(of(mockUnit({ id: 'opos', status: 'ISSUED' })));
+      component.openEmergencyRelease(emergency);
+      component.emergencyUnitId = 'opos';
+      component.emergencyAuthoriserId = 'doc';
+      component.emergencyReason = 'Hémorragie';
+      fixture.detectChanges();
+      expect(el('o-negative-first')).not.toBeNull();
+      expect(component.negativeStockNumbers()).toBe('ONEG-1');
+      expect(el('negative-statement')).not.toBeNull();
+
+      component.submitEmergencyRelease();
+      expect(txSpy.emergencyRelease).not.toHaveBeenCalled();
+
+      component.emergencyNegativeStated = true;
+      component.submitEmergencyRelease();
+      expect(txSpy.emergencyRelease).toHaveBeenCalledWith('req-1', {
+        bloodUnitId: 'opos',
+        releaseType: 'O_POSITIVE_DECISION',
+        reason: 'Hémorragie',
+        authoriserUserId: 'doc',
+        negativeUnobtainable: true,
+      });
+    });
+
+    it('no O negative showing: no statement is asked or sent', async () => {
+      await open(['ROLE_LAB_TECHNICIAN']);
+      stubOptions({ units: [unitOption('opos', true)] });
+      component.openEmergencyRelease(emergency);
+      component.emergencyUnitId = 'opos';
+      fixture.detectChanges();
+      expect(el('negative-statement')).toBeNull();
+    });
+
     it('says O negative goes first and warns of a positive screen, without blocking the form', async () => {
       await open(['ROLE_LAB_TECHNICIAN']);
       stubOptions({
-        oNegativeFirst: true,
+        negativeStock: [unitOption('oneg')],
         antibodyWarning: true,
         antibodyDetail: 'Anti-D',
         units: [unitOption('oneg')],
@@ -1110,6 +1151,8 @@ describe('TransfusionComponent: a transfusion in progress (QA CX-008)', () => {
             issuedByName: 'Tech Ouedraogo',
             issuedAt: '2026-11-06T10:00:00',
             antibodyWarning: true,
+            negativeUnobtainableStated: true,
+            negativeUnitsShown: 'ONEG-1',
           },
           {
             id: 'r2',
@@ -1129,6 +1172,7 @@ describe('TransfusionComponent: a transfusion in progress (QA CX-008)', () => {
       component.openRequest(released);
       fixture.detectChanges();
       expect(el('type-specific-reminder')).not.toBeNull();
+      expect(el('release-negative-statement')).not.toBeNull();
       const table = el('emergency-releases')!;
       expect(table.querySelectorAll('tbody tr').length).toBe(2);
       for (const text of [

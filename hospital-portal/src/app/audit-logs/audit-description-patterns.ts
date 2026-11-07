@@ -1288,6 +1288,16 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     params: ['unit', 'request'],
   },
   {
+    key: 'AUDIT.DESC.EMERGENCY_BLOOD_RELEASED_O_POSITIVE_STATED',
+    re: /^Emergency release on a documented O positive decision of blood unit (\S+) against transfusion request (\S+), O negative stated not obtainable in time, stock shown (\S+)$/,
+    params: ['unit', 'request', 'shown'],
+  },
+  {
+    key: 'AUDIT.DESC.EMERGENCY_BLOOD_RELEASED_INCOMPATIBLE_STATED',
+    re: /^Emergency release, serologically incompatible, of blood unit (\S+) against transfusion request (\S+), O negative stated not obtainable in time, stock shown (\S+)$/,
+    params: ['unit', 'request', 'shown'],
+  },
+  {
     key: 'AUDIT.DESC.EMERGENCY_BLOOD_RELEASED_O_POSITIVE',
     re: /^Emergency release on a documented O positive decision of blood unit (\S+) against transfusion request (\S+)$/,
     params: ['unit', 'request'],

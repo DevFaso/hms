@@ -156,6 +156,8 @@ public class TransfusionMapper {
             .issuedByName(userName(release.getIssuedBy()))
             .issuedAt(release.getIssuedAt())
             .antibodyWarning(Boolean.TRUE.equals(release.getAntibodyWarning()))
+            .negativeUnobtainableStated(Boolean.TRUE.equals(release.getNegativeUnobtainableStated()))
+            .negativeUnitsShown(release.getNegativeUnitsShown())
             .build();
     }
 

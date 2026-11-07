@@ -229,6 +229,10 @@ class TransfusionEmergencyReleasePostgresIT {
         return running;
     }
 
+    private boolean stockShows(UUID hospitalId, UUID patientId, BloodProductType product, AboGroup abo, RhFactor rh, LocalDate today) {
+        return !unitRepository.findStockForPatient(hospitalId, patientId, product, abo, rh, today).isEmpty();
+    }
+
     private String status(UUID bagId) {
         return (String) entityManager.createNativeQuery("SELECT status FROM clinical.blood_units WHERE id = :id")
             .setParameter("id", bagId).getSingleResult();
@@ -245,14 +249,14 @@ class TransfusionEmergencyReleasePostgresIT {
             .extracting(com.example.hms.model.User::getId).containsExactlyInAnyOrder(doctorUser, directorUser, techUser);
 
         LocalDate today = LocalDate.now();
-        assertThat(unitRepository.existsAvailable(hospital, patient, BloodProductType.PACKED_RED_CELLS, AboGroup.O, RhFactor.NEGATIVE, today)).isFalse();
+        assertThat(stockShows(hospital, patient, BloodProductType.PACKED_RED_CELLS, AboGroup.O, RhFactor.NEGATIVE, today)).isFalse();
         bag(AboGroup.O, RhFactor.POSITIVE);
-        assertThat(unitRepository.existsAvailable(hospital, patient, BloodProductType.PACKED_RED_CELLS, AboGroup.O, RhFactor.NEGATIVE, today)).isFalse();
+        assertThat(stockShows(hospital, patient, BloodProductType.PACKED_RED_CELLS, AboGroup.O, RhFactor.NEGATIVE, today)).isFalse();
         bag(AboGroup.O, RhFactor.NEGATIVE);
-        assertThat(unitRepository.existsAvailable(hospital, patient, BloodProductType.PACKED_RED_CELLS, AboGroup.O, RhFactor.NEGATIVE, today)).isTrue();
-        assertThat(unitRepository.existsAvailable(hospital, patient, BloodProductType.WHOLE_BLOOD, AboGroup.O, RhFactor.NEGATIVE, today)).isFalse();
-        assertThat(unitRepository.existsAvailable(UUID.randomUUID(), patient, BloodProductType.PACKED_RED_CELLS, AboGroup.O, RhFactor.NEGATIVE, today)).isFalse();
-        assertThat(unitRepository.existsAvailable(hospital, patient, BloodProductType.PACKED_RED_CELLS, AboGroup.O, RhFactor.NEGATIVE, today.plusDays(20)))
+        assertThat(stockShows(hospital, patient, BloodProductType.PACKED_RED_CELLS, AboGroup.O, RhFactor.NEGATIVE, today)).isTrue();
+        assertThat(stockShows(hospital, patient, BloodProductType.WHOLE_BLOOD, AboGroup.O, RhFactor.NEGATIVE, today)).isFalse();
+        assertThat(stockShows(UUID.randomUUID(), patient, BloodProductType.PACKED_RED_CELLS, AboGroup.O, RhFactor.NEGATIVE, today)).isFalse();
+        assertThat(stockShows(hospital, patient, BloodProductType.PACKED_RED_CELLS, AboGroup.O, RhFactor.NEGATIVE, today.plusDays(20)))
             .as("a bag's last day counts as expired").isFalse();
     }
 
@@ -268,13 +272,13 @@ class TransfusionEmergencyReleasePostgresIT {
         EmergencyReleaseRequestDTO decision = documented(positiveId, EmergencyReleaseType.O_POSITIVE_DECISION);
 
         EmergencyReleaseOptionsDTO first = service.emergencyReleaseOptions(requestId);
-        assertThat(first.isONegativeFirst()).isTrue();
-        assertThat(first.getUnits()).extracting(EmergencyReleaseOptionsDTO.Unit::getId).containsExactly(negative.getId());
-        assertThatThrownBy(() -> service.emergencyRelease(requestId, decision)).hasMessageContaining("first");
+        assertThat(first.getNegativeStock()).extracting(EmergencyReleaseOptionsDTO.Unit::getId).containsExactly(negative.getId());
+        assertThat(first.getUnits()).extracting(EmergencyReleaseOptionsDTO.Unit::getId).containsExactlyInAnyOrder(negative.getId(), positiveId);
+        assertThatThrownBy(() -> service.emergencyRelease(requestId, decision)).hasMessageContaining("cannot be obtained in time");
 
         service.issueUnit(requestId, negative.getId());
         EmergencyReleaseOptionsDTO after = service.emergencyReleaseOptions(requestId);
-        assertThat(after.isONegativeFirst()).isFalse();
+        assertThat(after.getNegativeStock()).isEmpty();
         assertThat(after.getUnits()).extracting(EmergencyReleaseOptionsDTO.Unit::getId).contains(positiveId);
 
         service.emergencyRelease(requestId, decision);
@@ -366,9 +370,9 @@ class TransfusionEmergencyReleasePostgresIT {
         TransfusionRequestResponseDTO first = emergencyRequest();
         UUID negative = bag(AboGroup.O, RhFactor.NEGATIVE).getId();
         result(first.getId(), negative, false);
-        assertThat(unitRepository.existsAvailable(hospital, patient, BloodProductType.PACKED_RED_CELLS, AboGroup.O, RhFactor.NEGATIVE, LocalDate.now()))
+        assertThat(stockShows(hospital, patient, BloodProductType.PACKED_RED_CELLS, AboGroup.O, RhFactor.NEGATIVE, LocalDate.now()))
             .as("not available to this patient").isFalse();
-        assertThat(unitRepository.existsAvailable(hospital, UUID.randomUUID(), BloodProductType.PACKED_RED_CELLS, AboGroup.O, RhFactor.NEGATIVE, LocalDate.now()))
+        assertThat(stockShows(hospital, UUID.randomUUID(), BloodProductType.PACKED_RED_CELLS, AboGroup.O, RhFactor.NEGATIVE, LocalDate.now()))
             .as("still available to anyone else").isTrue();
 
         TransfusionRequestResponseDTO second = emergencyRequest();
@@ -376,7 +380,7 @@ class TransfusionEmergencyReleasePostgresIT {
         assertThatThrownBy(() -> service.issueUnit(secondId, negative)).hasMessageContaining("on another request");
         EmergencyReleaseOptionsDTO options = service.emergencyReleaseOptions(secondId);
         assertThat(options.getUnits()).extracting(EmergencyReleaseOptionsDTO.Unit::getId).doesNotContain(negative);
-        assertThat(options.isONegativeFirst()).isFalse();
+        assertThat(options.getNegativeStock()).isEmpty();
 
         UUID positive = bag(AboGroup.O, RhFactor.POSITIVE).getId();
         service.emergencyRelease(secondId, documented(positive, EmergencyReleaseType.O_POSITIVE_DECISION));
@@ -400,8 +404,33 @@ class TransfusionEmergencyReleasePostgresIT {
         UUID secondId = second.getId();
         UUID positive = bag(AboGroup.O, RhFactor.POSITIVE).getId();
         EmergencyReleaseRequestDTO decision = documented(positive, EmergencyReleaseType.O_POSITIVE_DECISION);
-        assertThat(service.emergencyReleaseOptions(secondId).isONegativeFirst()).isTrue();
-        assertThatThrownBy(() -> service.emergencyRelease(secondId, decision)).hasMessageContaining("first");
+        assertThat(service.emergencyReleaseOptions(secondId).getNegativeStock()).extracting(EmergencyReleaseOptionsDTO.Unit::getId).containsExactly(negative);
+        assertThatThrownBy(() -> service.emergencyRelease(secondId, decision)).hasMessageContaining("cannot be obtained in time");
+    }
+
+    @Test
+    @DisplayName("O negative showing and stated not obtainable in time: the bag goes out and hangs, row, detail and audit say so with the units shown")
+    void theStatementReleasesTheBag() {
+        TransfusionRequestResponseDTO request = emergencyRequest();
+        UUID requestId = request.getId();
+        BloodUnitResponseDTO shown = bag(AboGroup.O, RhFactor.NEGATIVE);
+        UUID positive = bag(AboGroup.O, RhFactor.POSITIVE).getId();
+        EmergencyReleaseRequestDTO stated = documented(positive, EmergencyReleaseType.O_POSITIVE_DECISION);
+        stated.setNegativeUnobtainable(Boolean.TRUE);
+        clearInvocations(auditEventLogService);
+
+        service.emergencyRelease(requestId, stated);
+
+        assertThat(status(positive)).isEqualTo("ISSUED");
+        assertThat(status(shown.getId())).isEqualTo("AVAILABLE");
+        ArgumentCaptor<AuditEventRequestDTO> audit = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(audit.capture());
+        assertThat(audit.getValue().getEventDescription()).contains("stated not obtainable in time").contains(shown.getId().toString());
+        hang(requestId, positive);
+        assertThat(service.getRequest(requestId).getEmergencyReleases()).singleElement().satisfies(row -> {
+            assertThat(row.isNegativeUnobtainableStated()).isTrue();
+            assertThat(row.getNegativeUnitsShown()).isEqualTo(shown.getUnitNumber());
+        });
     }
 
     @Test
@@ -488,7 +517,7 @@ class TransfusionEmergencyReleasePostgresIT {
             entityManager.createNativeQuery("UPDATE clinical.blood_units SET status = 'RETURNED' WHERE id = :id")
                 .setParameter("id", negative).executeUpdate());
 
-        assertThat(unitRepository.existsAvailable(hospital, patient, BloodProductType.PACKED_RED_CELLS, AboGroup.O, RhFactor.NEGATIVE, LocalDate.now())).isFalse();
+        assertThat(stockShows(hospital, patient, BloodProductType.PACKED_RED_CELLS, AboGroup.O, RhFactor.NEGATIVE, LocalDate.now())).isFalse();
         assertThat(service.emergencyReleaseOptions(request.getId()).getUnits()).extracting(EmergencyReleaseOptionsDTO.Unit::getId).doesNotContain(negative);
     }
 

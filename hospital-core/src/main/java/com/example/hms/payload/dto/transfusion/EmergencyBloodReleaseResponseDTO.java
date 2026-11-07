@@ -25,4 +25,8 @@ public class EmergencyBloodReleaseResponseDTO {
     private String issuedByName;
     private LocalDateTime issuedAt;
     private boolean antibodyWarning;
+    /** O negative showed in stock and was stated not obtainable in time. */
+    private boolean negativeUnobtainableStated;
+    /** The O negative bags shown then, by the number on the bag. */
+    private String negativeUnitsShown;
 }

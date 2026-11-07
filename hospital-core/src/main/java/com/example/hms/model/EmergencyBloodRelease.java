@@ -89,4 +89,16 @@ public class EmergencyBloodRelease extends BaseEntity {
     @Column(name = "antibody_warning", nullable = false)
     @Builder.Default
     private Boolean antibodyWarning = Boolean.FALSE;
+
+    /**
+     * The system showed O negative of this product in stock and the person releasing O positive stated
+     * it cannot be obtained in time. The stock can be wrong, so it asks and never refuses outright.
+     */
+    @Column(name = "negative_unobtainable_stated", nullable = false)
+    @Builder.Default
+    private Boolean negativeUnobtainableStated = Boolean.FALSE;
+
+    /** The O negative bags the system showed then, by the number on the bag. */
+    @Column(name = "negative_units_shown", columnDefinition = "TEXT")
+    private String negativeUnitsShown;
 }

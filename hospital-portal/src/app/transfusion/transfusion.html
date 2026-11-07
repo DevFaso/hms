@@ -335,6 +335,14 @@
                             {{ 'TRANSFUSION.RELEASE_ANTIBODY_FLAG' | translate }}
                           </div>
                         }
+                        @if (r.negativeUnobtainableStated) {
+                          <div class="warn-inline" data-testid="release-negative-statement">
+                            {{
+                              'TRANSFUSION.RELEASE_NEGATIVE_STATEMENT'
+                                | translate: { units: r.negativeUnitsShown }
+                            }}
+                          </div>
+                        }
                       </td>
                       <td>{{ r.reason || '—' }}</td>
                       <td>{{ r.authoriserName || '—' }}</td>
@@ -1032,9 +1040,9 @@
                 </span>
               </div>
             }
-            @if (options.oNegativeFirst) {
+            @if (options.negativeStock.length) {
               <p class="modal-hint warn" data-testid="o-negative-first">
-                {{ 'TRANSFUSION.O_NEGATIVE_FIRST' | translate }}
+                {{ 'TRANSFUSION.O_NEGATIVE_FIRST' | translate: { units: negativeStockNumbers() } }}
               </p>
             }
           }
@@ -1073,6 +1081,18 @@
               ></textarea>
             </div>
           }
+          @if (emergencyStatementRequired()) {
+            <label class="checkbox-field">
+              <input
+                type="checkbox"
+                required
+                id="em-statement"
+                data-testid="negative-statement"
+                [(ngModel)]="emergencyNegativeStated"
+              />
+              {{ 'TRANSFUSION.NEGATIVE_UNOBTAINABLE_STATEMENT' | translate }}
+            </label>
+          }
         </div>
         <div class="modal-actions">
           <button class="btn-secondary" (click)="closeEmergencyRelease()">
@@ -1085,9 +1105,11 @@
             [disabled]="emergencySubmitting()"
             [appSubmitGuard]="
               !emergencyUnitId ||
-              (emergencyDecisionRequired() && (!emergencyAuthoriserId || !emergencyReason.trim()))
+              (emergencyDecisionRequired() &&
+                (!emergencyAuthoriserId || !emergencyReason.trim())) ||
+              (emergencyStatementRequired() && !emergencyNegativeStated)
             "
-            [submitGuardFields]="['em-unit', 'em-decider', 'em-reason']"
+            [submitGuardFields]="['em-unit', 'em-decider', 'em-reason', 'em-statement']"
           >
             {{ 'TRANSFUSION.ISSUE' | translate }}
           </button>
@@ -1162,6 +1184,20 @@
               [(ngModel)]="emergencyReason"
             ></textarea>
           </div>
+          @if (emergencyStatementRequired()) {
+            <p class="modal-hint warn" data-testid="si-o-negative-first">
+              {{ 'TRANSFUSION.O_NEGATIVE_FIRST' | translate: { units: negativeStockNumbers() } }}
+            </p>
+            <label class="checkbox-field">
+              <input
+                type="checkbox"
+                required
+                id="si-statement"
+                [(ngModel)]="emergencyNegativeStated"
+              />
+              {{ 'TRANSFUSION.NEGATIVE_UNOBTAINABLE_STATEMENT' | translate }}
+            </label>
+          }
         </div>
         <div class="modal-actions">
           <button class="btn-secondary" (click)="closeIncompatibleRelease()">
@@ -1172,8 +1208,13 @@
             data-testid="submit-incompatible-release"
             (click)="submitIncompatibleRelease()"
             [disabled]="incompatibleSubmitting()"
-            [appSubmitGuard]="!emergencyUnitId || !emergencyAuthoriserId || !emergencyReason.trim()"
-            [submitGuardFields]="['si-unit', 'si-authoriser', 'si-reason']"
+            [appSubmitGuard]="
+              !emergencyUnitId ||
+              !emergencyAuthoriserId ||
+              !emergencyReason.trim() ||
+              (emergencyStatementRequired() && !emergencyNegativeStated)
+            "
+            [submitGuardFields]="['si-unit', 'si-authoriser', 'si-reason', 'si-statement']"
           >
             {{ 'TRANSFUSION.INCOMPATIBLE_RELEASE' | translate }}
           </button>

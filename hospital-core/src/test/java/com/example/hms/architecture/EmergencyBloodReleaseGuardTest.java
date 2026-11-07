@@ -97,6 +97,16 @@ class EmergencyBloodReleaseGuardTest {
     }
 
     @Test
+    @DisplayName("O negative stock asks for a statement and is no refusal: the stock can be wrong")
+    void oNegativeFirstIsNeverAnAbsoluteBlock() throws IOException {
+        String source = read(SERVICE);
+        assertThat(source).doesNotContain("transfusion.emergency.oNegativeFirst");
+        assertThat(count(source, "negativeStockAhead(")).as("defined, read once by the documented release").isEqualTo(2);
+        assertThat(method(source, "public BloodUnitResponseDTO emergencyRelease(")).contains("negativeStockAhead(")
+            .contains("transfusion.emergency.negativeStatementRequired");
+    }
+
+    @Test
     @DisplayName("every write on a bag takes the request's lock, then the bag's, before reading either")
     void oneLockOrder() throws IOException {
         String source = read(SERVICE);

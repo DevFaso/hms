@@ -26,8 +26,11 @@ public class EmergencyReleaseOptionsDTO {
     private boolean antibodyWarning;
     /** What the laboratory wrote with that screen, when it wrote anything. */
     private String antibodyDetail;
-    /** O positive is held back from {@link #units}: an O negative bag of this product is available. */
-    private boolean oNegativeFirst;
+    /**
+     * O negative of this product the system shows in stock, when this patient takes O negative first.
+     * It can be wrong: O positive stays offered, with a statement that this cannot be obtained in time.
+     */
+    private List<Unit> negativeStock;
 
     /** Group O bags that can go out with no crossmatch. */
     private List<Unit> units;
@@ -50,6 +53,8 @@ public class EmergencyReleaseOptionsDTO {
         private RhFactor rhFactor;
         private LocalDate expiresOn;
         private boolean decisionRequired;
+        /** Releasing it needs the statement that the O negative shown cannot be obtained in time. */
+        private boolean statementRequired;
     }
 
     @Data
@@ -62,7 +67,9 @@ public class EmergencyReleaseOptionsDTO {
         private AboGroup aboGroup;
         private RhFactor rhFactor;
         private String incompatibilityReason;
-        /** False when the patient's group excludes this bag, or O negative must go first: refused either way. */
+        /** False when the patient's group excludes this bag, or it is held for another request: refused either way. */
         private boolean releasable;
+        /** Releasing it needs the statement that the O negative shown cannot be obtained in time. */
+        private boolean statementRequired;
     }
 }

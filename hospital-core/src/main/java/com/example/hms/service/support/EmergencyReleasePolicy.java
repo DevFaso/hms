@@ -28,7 +28,10 @@ public final class EmergencyReleasePolicy {
         NONE,
         /** A positive antibody screen on an adult male: a warning and a documented decision. */
         DECISION,
-        /** O negative of this product first; once there is none, a documented decision. */
+        /**
+         * A documented decision and, while the system shows O negative of this product in stock, a
+         * statement that it cannot be obtained in time. Never an outright refusal: the stock can be wrong.
+         */
         O_NEGATIVE_FIRST
     }
 

@@ -16,6 +16,8 @@ CREATE TABLE IF NOT EXISTS clinical.emergency_blood_releases (
     issued_by_user_id   UUID,
     issued_at           TIMESTAMP    NOT NULL,
     antibody_warning    BOOLEAN      NOT NULL DEFAULT FALSE,
+    negative_unobtainable_stated BOOLEAN NOT NULL DEFAULT FALSE,
+    negative_units_shown TEXT,
     created_at          TIMESTAMP    NOT NULL DEFAULT now(),
     updated_at          TIMESTAMP    NOT NULL DEFAULT now(),
 
@@ -27,7 +29,8 @@ CREATE TABLE IF NOT EXISTS clinical.emergency_blood_releases (
     CONSTRAINT fk_emergency_release_issuer      FOREIGN KEY (issued_by_user_id)  REFERENCES security.users(id) ON DELETE NO ACTION,
     CONSTRAINT ck_emergency_release_type        CHECK (release_type IN ('UNCROSSMATCHED', 'O_POSITIVE_DECISION', 'SEROLOGICALLY_INCOMPATIBLE')),
     CONSTRAINT ck_emergency_release_documented  CHECK (release_type = 'UNCROSSMATCHED'
-        OR (reason IS NOT NULL AND authoriser_user_id IS NOT NULL))
+        OR (reason IS NOT NULL AND authoriser_user_id IS NOT NULL)),
+    CONSTRAINT ck_emergency_release_statement   CHECK (negative_unobtainable_stated = FALSE OR negative_units_shown IS NOT NULL)
 );
 
 CREATE INDEX IF NOT EXISTS idx_emergency_release_request

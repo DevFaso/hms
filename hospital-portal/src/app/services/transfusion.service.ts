@@ -194,6 +194,10 @@ export interface EmergencyBloodRelease {
   issuedByName: string | null;
   issuedAt: string;
   antibodyWarning: boolean;
+  /** O negative showed in stock and was stated not obtainable in time. */
+  negativeUnobtainableStated?: boolean;
+  /** The O negative bags shown then, by the number on the bag. */
+  negativeUnitsShown?: string | null;
 }
 
 export interface EmergencyReleaseUnitOption {
@@ -204,6 +208,8 @@ export interface EmergencyReleaseUnitOption {
   expiresOn: string;
   /** O positive that the server will release only on a documented decision. */
   decisionRequired: boolean;
+  /** Releasing it needs the statement that the O negative shown cannot be obtained in time. */
+  statementRequired?: boolean;
 }
 
 export interface IncompatibleUnitOption {
@@ -212,15 +218,18 @@ export interface IncompatibleUnitOption {
   aboGroup: AboGroup;
   rhFactor: RhFactor;
   incompatibilityReason: string | null;
-  /** False when the patient's group excludes the bag or O negative must go first. */
+  /** False when the patient's group excludes the bag or it is held for another request. */
   releasable: boolean;
+  /** Releasing it needs the statement that the O negative shown cannot be obtained in time. */
+  statementRequired?: boolean;
 }
 
 /** What the server's emergency rules say for one request. The server still decides on submit. */
 export interface EmergencyReleaseOptions {
   antibodyWarning: boolean;
   antibodyDetail: string | null;
-  oNegativeFirst: boolean;
+  /** O negative the system shows in stock for this patient. It can be wrong: nothing is refused on it alone. */
+  negativeStock: EmergencyReleaseUnitOption[];
   units: EmergencyReleaseUnitOption[];
   incompatibleUnits: IncompatibleUnitOption[];
   deciders: VerifierCandidate[];
@@ -232,6 +241,8 @@ export interface EmergencyReleaseRequest {
   releaseType: EmergencyReleaseType;
   reason: string;
   authoriserUserId: string;
+  /** The statement that the O negative shown cannot be obtained in time. */
+  negativeUnobtainable?: boolean;
 }
 
 export interface TransfusionAdministrationRequest {

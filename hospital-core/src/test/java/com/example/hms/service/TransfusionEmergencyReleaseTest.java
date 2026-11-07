@@ -110,6 +110,7 @@ class TransfusionEmergencyReleaseTest {
     private Hospital hospital;
     private Patient patient;
     private final List<EmergencyBloodRelease> rows = new ArrayList<>();
+    private UUID negativeShownId;
 
     @BeforeEach
     void setUp() {
@@ -190,13 +191,16 @@ class TransfusionEmergencyReleaseTest {
     }
 
     private void noONegativeInStock() {
-        when(unitRepository.existsAvailable(hospitalId, patient.getId(), BloodProductType.PACKED_RED_CELLS, AboGroup.O, RhFactor.NEGATIVE,
-            LocalDate.now())).thenReturn(false);
+        when(unitRepository.findStockForPatient(hospitalId, patient.getId(), BloodProductType.PACKED_RED_CELLS, AboGroup.O, RhFactor.NEGATIVE,
+            LocalDate.now())).thenReturn(List.of());
     }
 
     private void oNegativeInStock() {
-        when(unitRepository.existsAvailable(hospitalId, patient.getId(), BloodProductType.PACKED_RED_CELLS, AboGroup.O, RhFactor.NEGATIVE,
-            LocalDate.now())).thenReturn(true);
+        BloodUnit shown = bag(AboGroup.O, RhFactor.NEGATIVE, BloodUnitStatus.RETURNED);
+        shown.setUnitNumber("ONEG-SHOWN");
+        when(unitRepository.findStockForPatient(hospitalId, patient.getId(), BloodProductType.PACKED_RED_CELLS, AboGroup.O, RhFactor.NEGATIVE,
+            LocalDate.now())).thenReturn(List.of(shown));
+        negativeShownId = shown.getId();
     }
 
     private TransfusionCrossmatch resultOnFile(TransfusionRequest request, BloodUnit unit, boolean compatible) {
@@ -210,6 +214,11 @@ class TransfusionEmergencyReleaseTest {
 
     private EmergencyReleaseRequestDTO decision(BloodUnit unit) {
         return documented(unit, EmergencyReleaseType.O_POSITIVE_DECISION);
+    }
+
+    private EmergencyReleaseRequestDTO stated(EmergencyReleaseRequestDTO release) {
+        release.setNegativeUnobtainable(Boolean.TRUE);
+        return release;
     }
 
     private EmergencyReleaseRequestDTO incompatibleRelease(BloodUnit unit) {
@@ -484,16 +493,84 @@ class TransfusionEmergencyReleaseTest {
     }
 
     @Test
-    @DisplayName("a woman: O positive is refused while O negative is available, documented or not")
-    void oNegativeFirst() {
+    @DisplayName("a woman with O negative showing in stock: refused on its field without the statement, out with it, never an outright refusal")
+    void oNegativeShowingAsksForTheStatement() {
         oNegativeInStock();
         TransfusionRequest request = emergency();
         BloodUnit unit = bag(AboGroup.O, RhFactor.POSITIVE, BloodUnitStatus.AVAILABLE);
-        refused(request, unit, "must be used first");
+        refused(request, unit, "documented emergency decision");
         UUID requestId = request.getId();
-        EmergencyReleaseRequestDTO release = decision(unit);
-        assertThatThrownBy(() -> service.emergencyRelease(requestId, release)).hasMessageContaining("must be used first");
+        EmergencyReleaseRequestDTO silent = decision(unit);
+        assertThatThrownBy(() -> service.emergencyRelease(requestId, silent))
+            .isInstanceOfSatisfying(FieldBusinessException.class, refusal ->
+                assertThat(refusal.getMessage()).contains("ONEG-SHOWN").contains("cannot be obtained in time"));
+        EmergencyReleaseRequestDTO no = decision(unit);
+        no.setNegativeUnobtainable(Boolean.FALSE);
+        assertThatThrownBy(() -> service.emergencyRelease(requestId, no)).isInstanceOf(FieldBusinessException.class);
         assertThat(rows).isEmpty();
+        assertThat(unit.getStatus()).isEqualTo(BloodUnitStatus.AVAILABLE);
+
+        service.emergencyRelease(requestId, stated(decision(unit)));
+
+        assertThat(unit.getStatus()).isEqualTo(BloodUnitStatus.ISSUED);
+        assertThat(rows).singleElement().satisfies(row -> {
+            assertThat(row.getNegativeUnobtainableStated()).isTrue();
+            assertThat(row.getNegativeUnitsShown()).isEqualTo("ONEG-SHOWN");
+            assertThat(row.getReason()).isEqualTo("Massive haemorrhage");
+            assertThat(row.getAuthoriser().getId()).isEqualTo(doctor);
+        });
+        ArgumentCaptor<AuditEventRequestDTO> audit = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(audit.capture());
+        assertThat(audit.getValue().getEventDescription()).contains("stated not obtainable in time")
+            .contains(negativeShownId.toString()).doesNotContain("ONEG-SHOWN");
+    }
+
+    @Test
+    @DisplayName("a woman known Rh positive keeps this path: every female patient")
+    void aWomanKnownRhPositive() {
+        typed(AboGroup.A, RhFactor.POSITIVE, AntibodyScreenResult.NEGATIVE);
+        oNegativeInStock();
+        TransfusionRequest request = emergency();
+        UUID requestId = request.getId();
+        BloodUnit unit = bag(AboGroup.O, RhFactor.POSITIVE, BloodUnitStatus.AVAILABLE);
+        EmergencyReleaseRequestDTO silent = decision(unit);
+        assertThatThrownBy(() -> service.emergencyRelease(requestId, silent)).isInstanceOf(FieldBusinessException.class);
+        service.emergencyRelease(requestId, stated(decision(unit)));
+        assertThat(unit.getStatus()).isEqualTo(BloodUnitStatus.ISSUED);
+    }
+
+    @Test
+    @DisplayName("no O negative showing: no statement asked, and one sent records nothing")
+    void noStockNoStatement() {
+        noONegativeInStock();
+        TransfusionRequest request = emergency();
+        BloodUnit unit = bag(AboGroup.O, RhFactor.POSITIVE, BloodUnitStatus.AVAILABLE);
+        service.emergencyRelease(request.getId(), stated(decision(unit)));
+        assertThat(rows).singleElement().satisfies(row -> {
+            assertThat(row.getNegativeUnobtainableStated()).isFalse();
+            assertThat(row.getNegativeUnitsShown()).isNull();
+        });
+    }
+
+    @Test
+    @DisplayName("an adult male with a positive screen and O negative in stock takes the decision and no statement")
+    void anAdultMaleTakesNoStatement() {
+        adultMale();
+        typed(AboGroup.A, RhFactor.POSITIVE, AntibodyScreenResult.POSITIVE);
+        oNegativeInStock();
+        TransfusionRequest request = emergency();
+        BloodUnit unit = bag(AboGroup.O, RhFactor.POSITIVE, BloodUnitStatus.AVAILABLE);
+        service.emergencyRelease(request.getId(), decision(unit));
+        assertThat(unit.getStatus()).isEqualTo(BloodUnitStatus.ISSUED);
+        assertThat(rows).singleElement().satisfies(row -> assertThat(row.getNegativeUnobtainableStated()).isFalse());
+    }
+
+    @Test
+    @DisplayName("the wire names are the ones the portal reads")
+    void wireNames() {
+        String json = new tools.jackson.databind.json.JsonMapper().writeValueAsString(EmergencyReleaseOptionsDTO.builder()
+            .negativeStock(List.of()).units(List.of(EmergencyReleaseOptionsDTO.Unit.builder().build())).build());
+        assertThat(json).contains("\"negativeStock\"").contains("\"statementRequired\"").contains("\"decisionRequired\"");
     }
 
     @Test
@@ -536,7 +613,7 @@ class TransfusionEmergencyReleaseTest {
         adultMale();
         typed(AboGroup.A, RhFactor.NEGATIVE, AntibodyScreenResult.NEGATIVE);
         oNegativeInStock();
-        refused(emergency(), bag(AboGroup.O, RhFactor.POSITIVE, BloodUnitStatus.AVAILABLE), "must be used first");
+        refused(emergency(), bag(AboGroup.O, RhFactor.POSITIVE, BloodUnitStatus.AVAILABLE), "documented emergency decision");
         noONegativeInStock();
         TransfusionRequest request = emergency();
         BloodUnit unit = bag(AboGroup.O, RhFactor.POSITIVE, BloodUnitStatus.AVAILABLE);
@@ -775,15 +852,17 @@ class TransfusionEmergencyReleaseTest {
     }
 
     @Test
-    @DisplayName("O negative first holds for an O positive bag under this action too")
-    void oNegativeFirstUnderTheAction() {
+    @DisplayName("an O positive bag under this action takes the same statement while O negative shows in stock")
+    void oNegativeShowingUnderTheAction() {
         oNegativeInStock();
         TransfusionRequest request = emergency();
         UUID requestId = request.getId();
         BloodUnit bag = bag(AboGroup.O, RhFactor.POSITIVE, BloodUnitStatus.RETURNED);
         resultOnFile(request, bag, false);
         EmergencyReleaseRequestDTO release = incompatibleRelease(bag);
-        assertThatThrownBy(() -> service.emergencyRelease(requestId, release)).hasMessageContaining("must be used first");
+        assertThatThrownBy(() -> service.emergencyRelease(requestId, release)).hasMessageContaining("cannot be obtained in time");
+        service.emergencyRelease(requestId, stated(incompatibleRelease(bag)));
+        assertThat(rows).singleElement().satisfies(row -> assertThat(row.getNegativeUnobtainableStated()).isTrue());
     }
 
     @Test
@@ -1027,7 +1106,7 @@ class TransfusionEmergencyReleaseTest {
     // ── What the form is told ───────────────────────────────────────────
 
     @Test
-    @DisplayName("the options hold O positive back while O negative is available, and say which bags need a decision")
+    @DisplayName("the options keep O positive offered, list the O negative showing, and say which bags need what")
     void optionsAgreeWithTheRules() {
         TransfusionRequest request = emergency();
         BloodUnit negative = bag(AboGroup.O, RhFactor.NEGATIVE, BloodUnitStatus.AVAILABLE);
@@ -1038,12 +1117,14 @@ class TransfusionEmergencyReleaseTest {
 
         oNegativeInStock();
         EmergencyReleaseOptionsDTO first = service.emergencyReleaseOptions(request.getId());
-        assertThat(first.isONegativeFirst()).isTrue();
-        assertThat(first.getUnits()).extracting(EmergencyReleaseOptionsDTO.Unit::getId).containsExactly(negative.getId());
+        assertThat(first.getNegativeStock()).extracting(EmergencyReleaseOptionsDTO.Unit::getUnitNumber).containsExactly("ONEG-SHOWN");
+        assertThat(first.getUnits()).extracting(EmergencyReleaseOptionsDTO.Unit::getId).containsExactly(negative.getId(), positive.getId());
+        assertThat(first.getUnits()).extracting(EmergencyReleaseOptionsDTO.Unit::isStatementRequired).containsExactly(false, true);
 
         noONegativeInStock();
         EmergencyReleaseOptionsDTO none = service.emergencyReleaseOptions(request.getId());
-        assertThat(none.isONegativeFirst()).isFalse();
+        assertThat(none.getNegativeStock()).isEmpty();
+        assertThat(none.getUnits()).extracting(EmergencyReleaseOptionsDTO.Unit::isStatementRequired).containsExactly(false, false);
         assertThat(none.getUnits()).extracting(EmergencyReleaseOptionsDTO.Unit::isDecisionRequired).containsExactly(false, true);
     }
 
