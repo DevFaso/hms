@@ -195,6 +195,8 @@ describe('OrderReviewPanelComponent', () => {
     );
     fixture.componentInstance.load();
     fixture.detectChanges();
-    expect(host().querySelector('[data-testid="order-review-prior-dose"]')?.textContent).toContain('Late');
+    expect(host().querySelector('[data-testid="order-review-prior-dose"]')?.textContent).toContain(
+      'Late',
+    );
   });
 });
