@@ -33,7 +33,7 @@ import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { AuthService } from '../auth/auth.service';
 import { roleSatisfies } from '../core/role-equivalence';
-import { finalize } from 'rxjs';
+import { catchError, finalize, forkJoin, of } from 'rxjs';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 
@@ -159,23 +159,20 @@ export class BedBoardComponent implements OnInit {
     this.hospitalNamesError.set(false);
     this.board.set(null);
     this.pendingTransfers.set([]);
-    this.hospitalService
-      .list()
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: (hospitals) => {
-          if (request === this.boardRequest) this.networkHospitals.set(hospitals);
-        },
-        error: () => {
+    forkJoin({
+      wards: this.beds.getWards(false),
+      hospitals: this.hospitalService.list().pipe(
+        catchError(() => {
           if (request === this.boardRequest) this.hospitalNamesError.set(true);
-        },
-      });
-    this.beds
-      .getWards()
+          return of<HospitalResponse[]>([]);
+        }),
+      ),
+    })
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: (wards) => {
+        next: ({ wards, hospitals }) => {
           if (request !== this.boardRequest) return;
+          this.networkHospitals.set(hospitals);
           this.networkWards.set(wards);
           this.loading.set(false);
         },

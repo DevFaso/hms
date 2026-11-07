@@ -11351,7 +11351,7 @@
     "CONFIGURED_BEDS": "Configured beds",
     "OCCUPIED_BEDS": "Occupied beds",
     "HOSPITAL_CAPACITY": "Capacity by hospital",
-    "ACTIVE_WARDS": "{{count}} active wards",
+    "ACTIVE_WARDS": "Active wards: {{count}}",
     "OPEN_HOSPITAL": "Open hospital board",
     "SEARCH_HOSPITALS": "Search hospitals",
     "SEARCH_BEDS": "Search patient, MRN, bed or room",

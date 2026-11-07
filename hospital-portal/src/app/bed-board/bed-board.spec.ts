@@ -217,6 +217,31 @@ describe('BedBoardComponent', () => {
     expect(component.occupancy(0, 0)).toBe(0);
   });
 
+  it('waits for hospital names before exposing inventory cards and preserves the names-failure fallback', () => {
+    roleCtx.set({ superAdmin: true, hospitalId: null, roles: ['ROLE_SUPER_ADMIN'] });
+    const names = new Subject<HospitalResponse[]>();
+    const hospitals = spyOn(TestBed.inject(HospitalService), 'list').and.returnValue(names);
+    bedSpy.getWards.and.returnValue(
+      of([
+        { id: 'w1', hospitalId: 'h1', totalBeds: 10, availableBeds: 4, occupiedBeds: 6 },
+      ] as import('../services/bed.service').WardResponse[]),
+    );
+    component.ngOnInit();
+    expect(component.loading()).toBeTrue();
+    expect(component.networkRows()).toEqual([]);
+    names.next([{ id: 'h1', name: 'Cdx Hospital' }] as HospitalResponse[]);
+    names.complete();
+    expect(component.loading()).toBeFalse();
+    expect(component.networkRows()[0].name).toBe('Cdx Hospital');
+    expect(bedSpy.getWards).toHaveBeenCalledWith(false);
+    hospitals.and.returnValue(throwError(() => new Error('directory unavailable')));
+    component.refresh();
+    expect(component.loading()).toBeFalse();
+    expect(component.hospitalNamesError()).toBeTrue();
+    expect(component.networkTotals().total).toBe(10);
+    expect(component.networkRows()[0].name).toBe('h1');
+  });
+
   it('shows a retryable network error instead of a zero-capacity success', () => {
     roleCtx.set({ superAdmin: true, hospitalId: null, roles: ['ROLE_SUPER_ADMIN'] });
     spyOn(TestBed.inject(HospitalService), 'list').and.returnValue(of([]));

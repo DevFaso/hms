@@ -11351,7 +11351,7 @@
     "CONFIGURED_BEDS": "Lits configurés",
     "OCCUPIED_BEDS": "Lits occupés",
     "HOSPITAL_CAPACITY": "Capacité par hôpital",
-    "ACTIVE_WARDS": "{{count}} unités actives",
+    "ACTIVE_WARDS": "Unités actives : {{count}}",
     "OPEN_HOSPITAL": "Ouvrir le tableau de l’hôpital",
     "SEARCH_HOSPITALS": "Rechercher un hôpital",
     "SEARCH_BEDS": "Rechercher patient, dossier, lit ou chambre",

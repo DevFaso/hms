@@ -11351,7 +11351,7 @@
     "CONFIGURED_BEDS": "Camas configuradas",
     "OCCUPIED_BEDS": "Camas ocupadas",
     "HOSPITAL_CAPACITY": "Capacidad por hospital",
-    "ACTIVE_WARDS": "{{count}} unidades activas",
+    "ACTIVE_WARDS": "Unidades activas: {{count}}",
     "OPEN_HOSPITAL": "Abrir tablero del hospital",
     "SEARCH_HOSPITALS": "Buscar hospitales",
     "SEARCH_BEDS": "Buscar paciente, historia, cama o habitación",
