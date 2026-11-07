@@ -1001,6 +1001,61 @@ describe('PrescriptionsComponent — signing', () => {
       expect(toast.success).toHaveBeenCalled();
     });
 
+    /** CR-02: a held dose finding: the token the refusal carried goes back with the reason. */
+    const heldRefusal = (token: string) =>
+      throwError(
+        () =>
+          new HttpErrorResponse({
+            status: 400,
+            error: {
+              message: 'Paracétamol : au-dessus du maximum',
+              cdsAdvisories: [
+                {
+                  summary: 'Paracétamol : 1500 mg par prise',
+                  indicator: 'warning',
+                  source: { label: 'Paracétamol adulte' },
+                  reasonAtSignature: true,
+                  exceptionKey: token,
+                },
+              ],
+            },
+          }),
+      );
+
+    it('CR-02: a dose exception sends its reason with the token of the refusal', () => {
+      prescriptionService.sign.and.returnValues(heldRefusal('tok-1'), of(rx('rx-1', 'SIGNED')));
+      component.signPrescription(rx('rx-1', 'DRAFT'));
+      fixture.detectChanges();
+
+      expect(component.signAlertIsException()).toBeTrue();
+      expect(component.signDialogIncomplete()).withContext('no reason yet').toBeTrue();
+      component.signAllergyReason = 'Dose de charge unique, décision du prescripteur';
+      component.submitSignReauth();
+
+      expect(prescriptionService.sign.calls.mostRecent().args).toEqual([
+        'rx-1',
+        {
+          allergyOverrideReason: 'Dose de charge unique, décision du prescripteur',
+          doseExceptionToken: 'tok-1',
+        },
+      ]);
+      expect(component.signReauthTarget()).toBeNull();
+    });
+
+    it('CR-02: a stale exception reopens on the current alerts, asks again and says why', () => {
+      prescriptionService.sign.and.returnValues(heldRefusal('tok-1'), heldRefusal('tok-2'));
+      component.signPrescription(rx('rx-1', 'DRAFT'));
+      fixture.detectChanges();
+      component.signAllergyReason = 'Décision sur la version précédente';
+      component.submitSignReauth();
+      fixture.detectChanges();
+
+      expect(component.signReauthTarget()).withContext('the dialog stays').not.toBeNull();
+      expect(component.signAllergyCards()[0].exceptionKey).toBe('tok-2');
+      expect(component.signAllergyReason).withContext('the decision is made again').toBe('');
+      expect(component.signReauthError()).toContain('au-dessus du maximum');
+    });
+
     it('a controlled drug asks for the reason and the re-authentication again, sent together', () => {
       const mfa = TestBed.inject(MfaService);
       spyOn(mfa, 'getStatus').and.returnValue(of({ mfaEnabled: false }));

@@ -80,8 +80,24 @@ public final class CdsHookDtos {
          * before the condition was recorded is signed only with a reason. Absent (null) on
          * every other card, which keeps the rule of passing a critical card at creation.
          */
-        Boolean reasonAtSignature
+        Boolean reasonAtSignature,
+        /*
+         * CR-02: on a card signed only with the prescriber's explicit exception, what ties the
+         * exception to this finding: the finding's own key as a rule writes it, and on a refused
+         * signature the token the signature must send back (PrescriptionServiceImpl). Absent (null)
+         * on every other card.
+         */
+        String exceptionKey
     ) {
+        /** A card no exception is tied to. */
+        public CdsCard(String summary, String detail, Indicator indicator, Source source,
+                       List<CdsLink> links, List<CdsSuggestion> suggestions,
+                       String selectionBehavior, String uuid, Boolean hardStop, Boolean reviewRequired,
+                       Boolean reasonAtSignature) {
+            this(summary, detail, indicator, source, links, suggestions, selectionBehavior, uuid, hardStop,
+                reviewRequired, reasonAtSignature, null);
+        }
+
         /** A card with the round-18 and round-19 flags. */
         public CdsCard(String summary, String detail, Indicator indicator, Source source,
                        List<CdsLink> links, List<CdsSuggestion> suggestions,
@@ -107,7 +123,13 @@ public final class CdsHookDtos {
         /** This card with another {@code uuid}; every other field is kept. */
         public CdsCard withUuid(String newUuid) {
             return new CdsCard(summary, detail, indicator, source, links, suggestions, selectionBehavior, newUuid,
-                hardStop, reviewRequired, reasonAtSignature);
+                hardStop, reviewRequired, reasonAtSignature, exceptionKey);
+        }
+
+        /** This card with another {@code exceptionKey}; every other field is kept. */
+        public CdsCard withExceptionKey(String newKey) {
+            return new CdsCard(summary, detail, indicator, source, links, suggestions, selectionBehavior, uuid,
+                hardStop, reviewRequired, reasonAtSignature, newKey);
         }
 
         /** Whether the signature needs a reason on record for this card. */

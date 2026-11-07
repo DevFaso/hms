@@ -27,12 +27,14 @@ import java.util.Set;
  *                      cited brand names: if one holds paracetamol it is not counted, and that is said
  * @param nameNotRecognised QA D1462: the proposed name is of no catalogue item and no cited brand, so
  *                      this rule could not tell whether it holds paracetamol
+ * @param documented    CR-03: the doses recorded as given in the last 24 hours, kept apart from the
+ *                      orders' estimate, which they are never added to
  */
 public record ParacetamolFacts(boolean applies, List<OtherOrder> otherOrders, Set<ParacetamolRisk> risks,
                                List<String> mayStillBeInUse, List<String> combinations,
                                boolean proposedCombination, boolean noActingHospital, boolean noHospital,
                                MedicationCatalogItem limits, List<String> notRecognised,
-                               boolean nameNotRecognised) {
+                               boolean nameNotRecognised, Documented documented) {
 
     /** The rule does not apply: another drug. */
     public static final ParacetamolFacts NONE = new ParacetamolFacts(false, List.of(), Set.of());
@@ -40,6 +42,23 @@ public record ParacetamolFacts(boolean applies, List<OtherOrder> otherOrders, Se
     /** The rule cannot tell: the name is of nothing it knows. */
     public static final ParacetamolFacts NOT_RECOGNISED = new ParacetamolFacts(false, List.of(), Set.of(), List.of(),
         List.of(), false, false, false, null, List.of(), true);
+
+    /**
+     * CR-01: the read itself failed, so nothing is known about this order: the rule says it could not
+     * judge and holds the signature, and never reads that as another drug.
+     */
+    public static final ParacetamolFacts READ_FAILED = new ParacetamolFacts(false, List.of(), Set.of(), List.of(),
+        List.of(), false, false, false, null, List.of(), false);
+
+    /** Facts with no record of the doses given: {@link Documented#NOT_READ}, which is unknown, not zero. */
+    public ParacetamolFacts(boolean applies, List<OtherOrder> otherOrders, Set<ParacetamolRisk> risks,
+                            List<String> mayStillBeInUse, List<String> combinations,
+                            boolean proposedCombination, boolean noActingHospital, boolean noHospital,
+                            MedicationCatalogItem limits, List<String> notRecognised,
+                            boolean nameNotRecognised) {
+        this(applies, otherOrders, risks, mayStillBeInUse, combinations, proposedCombination, noActingHospital,
+            noHospital, limits, notRecognised, nameNotRecognised, Documented.NOT_READ);
+    }
 
     /** Facts with no free-text limits and nothing unrecognised beside them. */
     public ParacetamolFacts(boolean applies, List<OtherOrder> otherOrders, Set<ParacetamolRisk> risks,
@@ -58,6 +77,23 @@ public record ParacetamolFacts(boolean applies, List<OtherOrder> otherOrders, Se
     /** Facts with nothing left out of the total. */
     public ParacetamolFacts(boolean applies, List<OtherOrder> otherOrders, Set<ParacetamolRisk> risks) {
         this(applies, otherOrders, risks, List.of(), List.of());
+    }
+
+    /**
+     * CR-03: what the MAR records as given in the last 24 hours at this hospital.
+     *
+     * @param read      whether the record could be read; if not, the exposure is unknown, never zero
+     * @param doses     the doses of paracetamol alone, whose amount the rule reads
+     * @param unreadable names of the products given whose paracetamol content cannot be read:
+     *                  combinations, and products no catalogue item or cited brand names
+     */
+    public record Documented(boolean read, List<Dose> doses, List<String> unreadable) {
+
+        public static final Documented NOT_READ = new Documented(false, List.of(), List.of());
+    }
+
+    /** One recorded dose: when, what the MAR says was given, and the item that gives a count its strength. */
+    public record Dose(java.time.LocalDateTime givenAt, String name, String dose, MedicationCatalogItem item) {
     }
 
     /**

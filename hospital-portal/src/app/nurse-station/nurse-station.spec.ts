@@ -56,7 +56,13 @@ describe('NurseStationComponent — two-tier polling', () => {
       'getAdministrationWitnessCandidates',
       'createCareNote',
     ]);
-    toastSpy = jasmine.createSpyObj('ToastService', ['info', 'success', 'error', 'warn']);
+    toastSpy = jasmine.createSpyObj('ToastService', [
+      'info',
+      'success',
+      'error',
+      'warn',
+      'warning',
+    ]);
     routerSpy = jasmine.createSpyObj('Router', ['navigate']);
     encounterSpy = jasmine.createSpyObj('EncounterService', ['list']);
     encounterSpy.list.and.returnValue(
@@ -685,6 +691,22 @@ describe('NurseStationComponent — two-tier polling', () => {
       } finally {
         uninstallFocusRescue();
       }
+    });
+
+    /** CR-03: the documented exposure after a dose given from this table: a warning, and the dose stands. */
+    it('warns on the exposure the answer carries', () => {
+      nurseServiceSpy.administerMedication.and.returnValue(
+        of({
+          cdsAdvisories: [
+            { summary: '3500 mg enregistrés', indicator: 'warning', source: { label: 'x' } },
+          ],
+        } as any),
+      );
+      component.reasonPrompt.set({ taskId: 'm3', action: 'HELD' });
+      component.reasonText.set('Patient au bloc');
+      component.confirmHoldRefuse();
+      expect(toastSpy.warning).toHaveBeenCalledOnceWith('3500 mg enregistrés');
+      expect(toastSpy.success).toHaveBeenCalled();
     });
 
     // QA D1265 (round 26): an unreadable frequency is refused on the same

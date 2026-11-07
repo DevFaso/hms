@@ -76,6 +76,8 @@ class MarAndOpenStayQueriesPostgresIT {
     @Autowired private EncounterRepository encounters;
     @Autowired private MedicationAdministrationRecordRepository mar;
     @Autowired private JdbcTemplate jdbc;
+    @Autowired private PatientRepository patients;
+    @Autowired private org.springframework.transaction.PlatformTransactionManager transactions;
 
     @AfterEach
     void noRows() {
@@ -217,6 +219,107 @@ class MarAndOpenStayQueriesPostgresIT {
         for (int read = 0; read < 3; read++) {
             assertThat(mar.findByPrescription_IdOrderByScheduledTimeDesc(RX))
                 .extracting(MedicationAdministrationRecord::getId).containsExactlyElementsOf(byId);
+        }
+    }
+
+    /**
+     * A wall-clock time as the application stores it: hibernate.jdbc.time_zone is UTC, so a LocalDateTime
+     * bound or written through JPA is shifted from the JVM's zone, and a row written here in raw SQL must be too.
+     */
+    private static String stored(String local) {
+        java.time.format.DateTimeFormatter format = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+        return java.time.LocalDateTime.parse(local, format).atZone(java.time.ZoneId.systemDefault())
+            .withZoneSameInstant(java.time.ZoneOffset.UTC).format(format);
+    }
+
+    private void order(String status) {
+        replica("INSERT INTO clinical.prescriptions (id, patient_id, staff_id, encounter_id, hospital_id, assignment_id, "
+            + "medication_name, refills_used, controlled_substance, inpatient_order, take_home, allergies_reviewed, "
+            + "interactions_reviewed, contraindications_reviewed, requires_cosign, pediatric_dose_review_required, "
+            + "status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'Paracetamol', 0, false, false, false, false, "
+            + "false, false, false, false, ?, now(), now())",
+            RX, PATIENT, STAFF, UUID.randomUUID(), HOSPITAL, ASSIGNMENT, status);
+    }
+
+    /** CR-03: every shape the one caller meets: the window across midnight, status, hospital and patient. */
+    @Test
+    void cr03_theDosesGivenSinceAMomentAcrossMidnight() {
+        UUID justInside = dose("GIVEN", stored("2026-11-06 00:30:00"), stored("2026-11-06 00:30:00"), stored("2026-11-06 00:30:00"));
+        UUID yesterdayEvening = dose("GIVEN", stored("2026-11-06 23:50:00"), stored("2026-11-06 23:50:00"), stored("2026-11-06 23:50:00"));
+        UUID afterMidnight = dose("GIVEN", stored("2026-11-07 00:10:00"), stored("2026-11-07 00:10:00"), stored("2026-11-07 00:10:00"));
+        dose("GIVEN", stored("2026-11-06 00:29:00"), stored("2026-11-06 00:29:59"), stored("2026-11-06 00:29:00"));
+        dose("HELD", stored("2026-11-06 23:00:00"), stored("2026-11-06 23:00:00"), stored("2026-11-06 23:00:00"));
+        dose("REFUSED", stored("2026-11-06 23:00:00"), stored("2026-11-06 23:00:00"), stored("2026-11-06 23:00:00"));
+        dose("MISSED", stored("2026-11-06 23:00:00"), stored("2026-11-06 23:00:00"), stored("2026-11-06 23:00:00"));
+        dose("PENDING", stored("2026-11-06 23:00:00"), null, stored("2026-11-06 23:00:00"));
+        // The order behind the doses, discontinued: its doses still count.
+        order("DISCONTINUED");
+        replica("INSERT INTO clinical.medication_administration_records (id, prescription_id, patient_id, hospital_id, "
+            + "medication_name, scheduled_time, administered_at, status, created_at, updated_at) "
+            + "VALUES (?, ?, ?, ?, 'X', now(), '2026-11-06 23:00:00'::timestamp, 'GIVEN', now(), now())",
+            UUID.randomUUID(), RX, OTHER_PATIENT, HOSPITAL);
+        replica("INSERT INTO clinical.medication_administration_records (id, prescription_id, patient_id, hospital_id, "
+            + "medication_name, scheduled_time, administered_at, status, created_at, updated_at) "
+            + "VALUES (?, ?, ?, ?, 'X', now(), '2026-11-06 23:00:00'::timestamp, 'GIVEN', now(), now())",
+            UUID.randomUUID(), RX, PATIENT, OTHER_HOSPITAL);
+
+        List<MedicationAdministrationRecord> given = mar.findGivenSince(PATIENT, HOSPITAL,
+            java.time.LocalDateTime.of(2026, 11, 6, 0, 30));
+
+        assertThat(given).extracting(MedicationAdministrationRecord::getId)
+            .containsExactly(afterMidnight, yesterdayEvening, justInside);
+        assertThat(given.get(0).getPrescription().getStatus())
+            .isEqualTo(com.example.hms.enums.PrescriptionStatus.DISCONTINUED);
+    }
+
+    /**
+     * CR-03: two doses of two orders of one patient hold no common order lock. The MAR takes the
+     * patient's row before reading the exposure, so the second transaction waits for the first and
+     * counts its dose (read committed, a new statement after the lock).
+     */
+    @Test
+    void cr03_aSecondDoseWaitsOnThePatientsRowAndCountsTheFirst() throws Exception {
+        replica("INSERT INTO clinical.patients (id, user_id, first_name, last_name, date_of_birth, phone_number_primary, "
+            + "is_active, created_at, updated_at) VALUES (?, ?, 'Awa', 'Kabore', DATE '1990-06-15', '+226 70 00 00 31', true, now(), now())",
+            PATIENT, UUID.randomUUID());
+        order("SIGNED");
+        org.springframework.transaction.support.TransactionTemplate tx =
+            new org.springframework.transaction.support.TransactionTemplate(transactions);
+        java.util.concurrent.CountDownLatch firstHolds = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.CountDownLatch releaseFirst = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.ExecutorService threads = java.util.concurrent.Executors.newFixedThreadPool(2);
+        try {
+            java.util.concurrent.Future<?> first = threads.submit(() -> tx.executeWithoutResult(status -> {
+                jdbc.execute("SET LOCAL session_replication_role = replica");
+                jdbc.update("INSERT INTO clinical.medication_administration_records (id, prescription_id, patient_id, hospital_id, "
+                    + "medication_name, scheduled_time, administered_at, status, created_at, updated_at) "
+                    + "VALUES (?, ?, ?, ?, 'Paracetamol', now(), '2026-11-07 10:00:00'::timestamp, 'GIVEN', now(), now())",
+                    UUID.randomUUID(), RX, PATIENT, HOSPITAL);
+                patients.lockByIdUnscoped(PATIENT);
+                firstHolds.countDown();
+                try {
+                    releaseFirst.await(30, java.util.concurrent.TimeUnit.SECONDS);
+                } catch (InterruptedException ex) {
+                    Thread.currentThread().interrupt();
+                }
+            }));
+            firstHolds.await(30, java.util.concurrent.TimeUnit.SECONDS);
+            java.util.concurrent.Future<Integer> second = threads.submit(() -> tx.execute(status -> {
+                patients.lockByIdUnscoped(PATIENT);
+                return mar.findGivenSince(PATIENT, HOSPITAL, java.time.LocalDateTime.of(2026, 11, 7, 0, 0)).size();
+            }));
+
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> second.get(1, java.util.concurrent.TimeUnit.SECONDS))
+                .as("the second waits for the first").isInstanceOf(java.util.concurrent.TimeoutException.class);
+            releaseFirst.countDown();
+            first.get(30, java.util.concurrent.TimeUnit.SECONDS);
+
+            assertThat(second.get(30, java.util.concurrent.TimeUnit.SECONDS)).as("and counts its dose").isEqualTo(1);
+        } finally {
+            releaseFirst.countDown();
+            threads.shutdownNow();
+            replica("DELETE FROM clinical.medication_administration_records");
+            replica("DELETE FROM clinical.patients WHERE id = ?", PATIENT);
         }
     }
 }

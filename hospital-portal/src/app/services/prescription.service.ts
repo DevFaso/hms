@@ -21,6 +21,8 @@ export interface SignReauthentication {
  */
 export interface SignPrescriptionBody extends SignReauthentication {
   allergyOverrideReason?: string;
+  /** CR-02: the token the refused signature answered with (`CdsCard.exceptionKey`). */
+  doseExceptionToken?: string;
 }
 import { Injectable, inject } from '@angular/core';
 import { Observable, map } from 'rxjs';

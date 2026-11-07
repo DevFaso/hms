@@ -499,7 +499,10 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // re-authentication, so no code is spent on a refusal.
         List<CdsCard> signingCards = refuseHardStopAtSigning(prescription);
         // A contraindication is signed only with a reason given now. Recorded below, once every check has passed.
-        String contraindicationReason = requireReasonAtSigning(prescription, signingCards, reauthentication);
+        String contraindicationReason = requireReasonAtSigning(prescription, signingCards, reauthentication, signer);
+        // CR-02: read now: the order's version moves when this signature is written.
+        String exceptionToken = heldForException(signingCards) ? doseExceptionToken(prescription, signer, signingCards) : null;
+        Long versionSigned = prescription.getVersion();
         // Round 19 (QA D1096): a dose the check could not judge is signed
         // only once a pharmacist or another physician recorded the review.
         // Before the re-authentication, so no code is spent on a refusal.
@@ -543,8 +546,14 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                 allergyAcknowledgement, "Allergy override recorded at signature");
         }
         if (contraindicationReason != null) {
-            auditCdsOverrideAfterCommit(prescription, signer.getUser() != null ? signer.getUser().getId() : null,
-                contraindicationReason, signingCards, "Critical decision-support alert overridden at signature");
+            UUID signerUserId = signer.getUser() != null ? signer.getUser().getId() : null;
+            if (exceptionToken != null) {
+                auditDoseExceptionAfterCommit(prescription, signerUserId, contraindicationReason, signingCards,
+                    exceptionToken, versionSigned);
+            } else {
+                auditCdsOverrideAfterCommit(prescription, signerUserId, contraindicationReason, signingCards,
+                    "Critical decision-support alert overridden at signature");
+            }
         }
         // QA D793: the signature is the last look before the pharmacy and the
         // ward act on the order, so the cross-reactivity advisory is repeated
@@ -564,24 +573,93 @@ public class PrescriptionServiceImpl implements PrescriptionService {
      * predate the condition. The other critical cards are passed at creation and are not read here.
      * A pending allergy stop is shown with it, since one reason answers both.
      *
+     * <p>CR-02 (proposed policy, provisional, awaiting the named clinical approver): an adult
+     * paracetamol finding outside the limits uses this same mechanism, with one thing more: its card
+     * carries a key, and the reason counts only with the token this method handed back for those
+     * findings, that version of the order and this signer. It is made here, in the signature itself,
+     * so only someone who may sign can make it, and nothing made earlier survives an edit: a reason
+     * typed by anyone at creation or edit, and a pharmacist's review, pass nothing.
+     *
      * @return the reason, not yet recorded; {@code null} when no card asks for one
      */
     private String requireReasonAtSigning(Prescription prescription, List<CdsCard> cards,
-            com.example.hms.payload.dto.SignPrescriptionRequestDTO request) {
-        Optional<CdsCard> card = cards.stream().filter(CdsCard::needsReasonAtSignature).findFirst();
-        if (card.isEmpty()) {
+            com.example.hms.payload.dto.SignPrescriptionRequestDTO request, Staff signer) {
+        List<CdsCard> held = cards.stream().filter(CdsCard::needsReasonAtSignature).toList();
+        if (held.isEmpty()) {
             return null;
         }
+        boolean tied = heldForException(cards);
+        String token = tied ? doseExceptionToken(prescription, signer, cards) : null;
         String reason = request == null || request.getAllergyOverrideReason() == null
             ? "" : request.getAllergyOverrideReason().trim();
-        if (reason.isEmpty()) {
-            List<CdsCard> refused = new java.util.ArrayList<>(List.of(card.get()));
-            pendingAllergyStop(prescription).ifPresent(refused::add);
+        boolean stale = tied && !reason.isEmpty() && !token.equals(request.getDoseExceptionToken());
+        if (reason.isEmpty() || stale) {
             throw new CdsCriticalBlockException(
-                com.example.hms.utility.MessageUtil.resolveOrRaw("prescription.cds.criticalOverrideRequired", card.get().summary()),
-                refused);
+                com.example.hms.utility.MessageUtil.resolveOrRaw(signatureRefusalKey(tied, stale), held.get(0).summary()),
+                refusedAtSignature(prescription, held, token));
         }
         return reason;
+    }
+
+    private static String signatureRefusalKey(boolean tied, boolean stale) {
+        if (stale) {
+            return "prescription.cds.exceptionStale";
+        }
+        return tied ? "prescription.cds.exceptionRequired" : "prescription.cds.criticalOverrideRequired";
+    }
+
+    /** The cards a refused signature answers with, each tied one carrying the token, and a pending allergy stop. */
+    private List<CdsCard> refusedAtSignature(Prescription prescription, List<CdsCard> held, String token) {
+        List<CdsCard> refused = new java.util.ArrayList<>(token == null ? held.subList(0, 1)
+            : held.stream().map(c -> c.exceptionKey() == null ? c : c.withExceptionKey(token)).toList());
+        pendingAllergyStop(prescription).ifPresent(refused::add);
+        return refused;
+    }
+
+    /** CR-02: whether a card of this order is signed only with the prescriber's explicit exception. */
+    private static boolean heldForException(List<CdsCard> cards) {
+        return cards.stream().anyMatch(c -> c.needsReasonAtSignature() && c.exceptionKey() != null);
+    }
+
+    /** CR-02: what an exception answers: this order at this version, these findings, this signer. */
+    private String doseExceptionToken(Prescription prescription, Staff signer, List<CdsCard> cards) {
+        String findings = cards.stream().filter(CdsCard::needsReasonAtSignature)
+            .map(c -> java.util.Objects.toString(c.exceptionKey(), "contraindication"))
+            .sorted().collect(java.util.stream.Collectors.joining(";"));
+        UUID signerUserId = signer.getUser() != null ? signer.getUser().getId() : null;
+        // One reason answers an allergy stop too, so one that appeared since the refusal voids the token and is shown.
+        boolean allergyStop = pendingAllergyStop(prescription).isPresent();
+        return computeSignatureDigest(prescription.getId() + "|" + prescription.getVersion() + "|" + signerUserId + "|" + allergyStop + "|" + findings);
+    }
+
+    /** CR-02, after commit: ids, digests and counts only, as the CDS override's audit (the row is not encrypted). */
+    private void auditDoseExceptionAfterCommit(Prescription prescription, UUID actorId, String reason,
+                                               List<CdsCard> cards, String token, Long version) {
+        UUID prescriptionId = prescription.getId();
+        UUID patientId = prescription.getPatient() != null ? prescription.getPatient().getId() : null;
+        UUID assignmentId = prescription.getAssignment() != null ? prescription.getAssignment().getId() : null;
+        // The kind of each finding (single, daily, interval, route...), never its dose.
+        String findings = cards.stream().map(CdsCard::exceptionKey).filter(java.util.Objects::nonNull)
+            .map(key -> key.split(":", 2)[0]).sorted().collect(java.util.stream.Collectors.joining(","));
+        String details = REASON_DIGEST_PREFIX + computeSignatureDigest(reason) + "\",\"exceptionToken\":\"" + token
+            + "\",\"orderVersion\":" + version + ",\"findings\":\"" + findings + "\"}";
+        com.example.hms.utility.TransactionCallbacks.afterCommit(() -> {
+            try {
+                auditEventLogService.logEvent(com.example.hms.payload.dto.AuditEventRequestDTO.builder()
+                    .eventType(com.example.hms.enums.AuditEventType.PRESCRIPTION_CDS_OVERRIDDEN)
+                    .status(com.example.hms.enums.AuditStatus.SUCCESS)
+                    .userId(actorId)
+                    .assignmentId(assignmentId)
+                    .patientId(patientId)
+                    .eventDescription("Dose exception recorded at signature")
+                    .details(details)
+                    .entityType(AUDIT_ENTITY_PRESCRIPTION)
+                    .resourceId(prescriptionId != null ? prescriptionId.toString() : null)
+                    .build());
+            } catch (RuntimeException ex) {
+                logger.warn("Dose exception audit not written for prescription {}: {}", prescriptionId, ex.getClass().getSimpleName());
+            }
+        });
     }
 
     /** The reason beside any already on the order, within the column's limit; the audit row holds its digest. */
@@ -592,8 +670,12 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         String held = prescription.getOverrideReason();
         if (held == null || held.isBlank()) {
             prescription.setOverrideReason(reason);
-        } else if (!held.contains(reason) && held.length() + reason.length() + SIGNATURE_REASON_SEPARATOR.length() <= OVERRIDE_REASON_MAX) {
-            prescription.setOverrideReason(held + SIGNATURE_REASON_SEPARATOR + reason);
+        } else if (!held.contains(reason)) {
+            // The reason given now is what this signature rests on: when both do not fit, the older one is cut.
+            int room = OVERRIDE_REASON_MAX - reason.length() - SIGNATURE_REASON_SEPARATOR.length();
+            prescription.setOverrideReason(room > 0
+                ? held.substring(0, Math.min(room, held.length())) + SIGNATURE_REASON_SEPARATOR + reason
+                : reason);
         }
     }
 
@@ -661,7 +743,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                 prescription.getId(),
                 com.example.hms.service.impl.PrnMinInterval.highestDosesPerDay(
                     com.example.hms.service.impl.PrnMinInterval.isAsNeeded(prescription),
-                    prescription.getPrnMinIntervalHours())));
+                    prescription.getPrnMinIntervalHours()),
+                prescription.getRoute(), item == null ? null : item.getForm()));
         return cards == null ? List.of() : cards;
     }
 
@@ -1595,6 +1678,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         List<CdsCard> advisories = withCrossReactivityAdvisory(patient, request.getMedicationName(),
             runCdsRuleEngine(patient, hospitalId, request, catalogItem, existing));
 
+        refuseHeldEditOfASignedOrder(existing, request, advisories);
         PrescriptionStatus statusBefore = existing.getStatus();
         String overrideBefore = existing.isAllergiesReviewed() ? existing.getOverrideReason() : null;
         // QA D1359: an edit names a known route, or echoes the order's own.
@@ -1629,6 +1713,37 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         PrescriptionResponseDTO response = prescriptionMapper.toResponseDTO(saved);
         response.setCdsAdvisories(advisories);
         return response;
+    }
+
+    /**
+     * CR-02: an order past its signature (awaiting a clarification, transmitted, partly filled) is
+     * still edited here and no second signature follows, so an edit of what it orders that lands
+     * outside the limits would reach the pharmacy and the MAR with no exception. It is refused: the
+     * prescriber writes a new order, which is signed with its own exception. An edit that leaves the
+     * drug, dose, frequency and route as they were passes, whatever the cards say.
+     */
+    private static void refuseHeldEditOfASignedOrder(Prescription existing, PrescriptionRequestDTO request,
+                                                     List<CdsCard> advisories) {
+        PrescriptionStatus status = existing.getStatus();
+        if (status == null || status == PrescriptionStatus.DRAFT || status == PrescriptionStatus.PENDING_SIGNATURE
+                || !heldForException(advisories) || !changesWhatIsOrdered(existing, request)) {
+            return;
+        }
+        String summary = advisories.stream().filter(c -> c.needsReasonAtSignature() && c.exceptionKey() != null)
+            .map(CdsCard::summary).findFirst().orElse("");
+        throw new BusinessException("prescription.cds.exceptionNewOrder", summary);
+    }
+
+    private static boolean changesWhatIsOrdered(Prescription existing, PrescriptionRequestDTO request) {
+        boolean routeChanged = request.getRoute() != null && (isBlank(request.getRoute())
+            ? !isBlank(existing.getRoute())
+            : !com.example.hms.service.emar.MedicationRoutes.sameRoute(existing.getRoute(), request.getRoute()));
+        return routeChanged || textDiffers(request.getMedicationName(), existing.getMedicationName())
+            || textDiffers(request.getDosage(), existing.getDosage())
+            || textDiffers(request.getFrequency(), existing.getFrequency())
+            || (request.getPrnMinIntervalHours() != null
+                && !request.getPrnMinIntervalHours().equals(existing.getPrnMinIntervalHours()))
+            || flagDiffers(request.getAsNeeded(), existing.isAsNeeded());
     }
 
     /**
@@ -2721,7 +2836,9 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                 request.getFrequency(),
                 catalogItem,
                 edited == null ? null : edited.getId(),
-                prnDosesPerDay(request, edited)));
+                prnDosesPerDay(request, edited),
+                routeOrderedBy(request, edited),
+                catalogItem == null ? null : catalogItem.getForm()));
         if (advisories.isEmpty()) {
             return advisories;
         }
@@ -2734,6 +2851,11 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         return advisories;
     }
 
+
+    /** CR-01: the route the saved order will state. On an edit, null in the request keeps the stored one (the mapper's rule). */
+    private static String routeOrderedBy(PrescriptionRequestDTO request, Prescription edited) {
+        return request.getRoute() == null && edited != null ? edited.getRoute() : request.getRoute();
+    }
 
     /**
      * QA D1397: the most doses a day the order allows from its minimum

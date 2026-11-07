@@ -1070,3 +1070,13 @@ Rounds 27, 28 and 29 each found 20–30 new siblings of the required-field class
 | `filed.D1486`, `filed.D1487`, `filed.D1512`, `filed.R36-slots` in the shared fixture (new, run by every list test of `FrequencyWordingTest` and the spec) | The slots outside the table: clock times joined by "à" or "vers", impossible hours, a lone "1h30", course moments, posology intakes, N/24, zero doses and rates, a number word of another language than its form. Each is asked on both sides and flagged on the MAR. | none |
 | `service/impl/FrequencyWordingTest#d1491_aBlankFrequencyIsRefusedAndNeverEndsACourse`, `PrnMinIntervalTest#d1491_*`, `OrderSetItemDispatcherTest#anItem*NoFrequency*`, `PrescriptionEditAndWithdrawalIT#d1491_*` (new) | D1491: no frequency accepted on a new order, or read as a single dose on an older one. Each path that writes an order is named: create, constraint, edit, emptying edit, untick, withdrawal, order-set save, order-set apply. | none |
 | `service/impl/NurseTaskServiceImplTest#d1508_*` (new) | D1508: an unread order with no `frequencyUnread` on the MAR until its first dose. | none |
+
+## Clinical rules wave: route, exception and exposure (CR-01, CR-02, CR-03)
+
+| Guard | Class it fails on | Allowlist |
+|---|---|---|
+| `architecture/OrderRouteEntryPointGuardTest` (new) | CR-01: a dose rule entry point without the ordered route, so an oral limit judges an IV order: an engine overload, a second way to build the order, a caller passing null or the catalogue item's route, a dose rule that stops reading it. | none |
+| `architecture/AdultParacetamolGuardTest#theRuleOnlyEverAlerts` (changed) | CR-02: the adult card shapes: an alert, the contraindication, or a held finding with its key; never a hard stop, never a review. | none |
+| `cdshooks/rules/AdultParacetamolRouteExposureTest`, `cdshooks/rules/PediatricDoseRouteLimitTest` (new) | The route, held-finding and exposure matrices of the two rules. | none |
+| `service/PrescriptionServiceImplTest#cr02_*`, `#cr01_*` (new) | The exception at the signature: token, version, findings, signer, audit; a reason alone, a stored reason and a pharmacist's review pass nothing. | none |
+| `repository/MarAndOpenStayQueriesPostgresIT#cr03_*` (new) | The documented doses on PostgreSQL across midnight, and the second of two concurrent doses counting the first. | none |
