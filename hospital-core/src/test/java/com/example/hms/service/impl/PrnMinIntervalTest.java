@@ -241,8 +241,9 @@ class PrnMinIntervalTest {
             .hasFieldOrPropertyWithValue("messageKey", PrnMinInterval.FREQUENCY_REQUIRED_KEY);
         // An order-set item saved with none, at apply: its order is created, and flagged on the MAR.
         PrnMinInterval.applyTo(rx, true);
-        // An edit that leaves an older order's frequency as it was.
+        // An edit that leaves an older order's frequency as it was, however the blank is written.
         PrnMinInterval.applyToEdit(rx, blank, false);
+        PrnMinInterval.applyToEdit(rx, "\u00a0", false);
         // An edit that empties one; confirming does not answer it.
         for (boolean confirmed : new boolean[] {false, true}) {
             assertThatThrownBy(() -> PrnMinInterval.applyToEdit(rx, "q6h", false, confirmed))
@@ -263,13 +264,14 @@ class PrnMinIntervalTest {
             .hasFieldOrPropertyWithValue("field", PrnMinInterval.FREQUENCY_FIELD);
 
         // The request constraint: on its field, whatever else the request says.
-        for (Boolean asNeeded : new Boolean[] {null, false}) {
+        for (Boolean asNeeded : new Boolean[] {null, false, true}) {
             for (Boolean confirmed : new Boolean[] {null, false, true}) {
                 PrescriptionRequestDTO request = new PrescriptionRequestDTO();
                 request.setMedicationName("Paracetamol");
                 request.setFrequency(blank);
                 request.setAsNeeded(asNeeded);
                 request.setFrequencyConfirmed(confirmed);
+                request.setPrnMinIntervalHours(Boolean.TRUE.equals(asNeeded) ? Integer.valueOf(4) : null);
                 assertThat(paths(request, Default.class, OnCreate.class)).contains(PrnMinInterval.FREQUENCY_FIELD);
             }
         }

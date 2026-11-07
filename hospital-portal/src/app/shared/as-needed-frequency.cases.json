@@ -2247,7 +2247,19 @@
     "0 mg/h",
     "0 cp 3 fois par jour",
     "0 mg q8h",
-    "0,0 mg q8h"
+    "0,0 mg q8h",
+    "matin à midi",
+    "le matin à midi",
+    "morning at noon",
+    "soir à midi",
+    "très x/sem",
+    "très/sem",
+    "très x/24h",
+    "très x/d",
+    "très cp toutes les 8 h",
+    "très veces al día",
+    "TRÈS FOIS PAR JOUR",
+    "trés fois par jour"
   ],
   "readings": {
     "3 fois par jour": "REPEATING:480",
@@ -3366,7 +3378,19 @@
       "0 mg/h",
       "0 cp 3 fois par jour",
       "0 mg q8h",
-      "0,0 mg q8h"
+      "0,0 mg q8h",
+      "matin à midi",
+      "le matin à midi",
+      "morning at noon",
+      "soir à midi",
+      "très x/sem",
+      "très/sem",
+      "très x/24h",
+      "très x/d",
+      "très cp toutes les 8 h",
+      "très veces al día",
+      "TRÈS FOIS PAR JOUR",
+      "trés fois par jour"
     ]
   },
   "dropdown": ["QD", "BID", "TID", "QID", "Q4H", "Q6H", "Q8H"],

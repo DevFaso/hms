@@ -574,7 +574,7 @@ class FrequencyWordingTest {
      * field, and {@link MarDoseSchedule#read(String)} reads it as unread, so it never ends a course.
      */
     @ParameterizedTest
-    @ValueSource(strings = {"", "   ", "\u00a0", "\t"})
+    @ValueSource(strings = {"", "   ", "\u00a0", "\t", ".", "-", "()", "\u200b"})
     void d1491_aBlankFrequencyIsRefusedAndNeverEndsACourse(String blank) {
         assertThat(MarDoseSchedule.read(blank).kind()).isEqualTo(MarDoseSchedule.Kind.UNREAD);
         assertThat(dueAfterOneDose(blank).finished()).isFalse();

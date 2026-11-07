@@ -139,8 +139,9 @@ describe('as-needed-frequency (QA D1391 / D1395: the mirror of the server rule)'
   });
 
   it('QA D1491: nothing written is unread, so a course never ends on it; the form refuses it', () => {
-    for (const blank of [null, undefined, '', '   ']) {
+    for (const blank of [null, undefined, '', '   ', '\u00a0', '.', '-', '()', '\u200b']) {
       expect(frequencyReading(blank).kind).toBe('UNREAD');
+      expect(unTickedFrequencyVerdict(blank)).toBe('FIXED');
     }
   });
 

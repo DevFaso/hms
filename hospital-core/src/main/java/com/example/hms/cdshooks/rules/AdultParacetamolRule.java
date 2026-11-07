@@ -375,7 +375,9 @@ public class AdultParacetamolRule implements CdsRule {
                     PrnMinInterval.highestDosesPerDay(PrnMinInterval.isAsNeeded(rx), rx.getPrnMinIntervalHours()));
                 totals.mg += mg * (perDay == null ? 1d : perDay);
                 totals.counted++;
-                if (perDay == null && MarDoseSchedule.writtenWithNoCount(rx.getFrequency())) {
+                // QA D1491: an older order with no frequency is read as unread, so it is no known one dose either.
+                if (perDay == null && (MarDoseSchedule.writtenWithNoCount(rx.getFrequency())
+                    || MarDoseSchedule.read(rx).kind() == MarDoseSchedule.Kind.UNREAD)) {
                     totals.unreadFrequency++;
                 } else if (!PrnMinInterval.isAsNeeded(rx) && MarDoseSchedule.writtenWithNoCount(rx.getFrequency())) {
                     totals.statedCountOnly++;

@@ -12154,6 +12154,7 @@
     },
     "FREQUENCY_UNREAD_CHIP": "Fréquence non reconnue",
     "FREQUENCY_UNREAD_LABEL": "Fréquence non reconnue — vérifier l’ordonnance. L’heure de la prochaine dose est inconnue : une dose donnée maintenant demande un motif.",
+    "FREQUENCY_UNREAD_FIRST_LABEL": "Fréquence non reconnue — vérifier l’ordonnance. La première dose se donne normalement ; chaque dose suivante demande un motif.",
     "FREQUENCY_UNREAD_DIALOG": {
       "TITLE": "Fréquence non reconnue",
       "REASON_LABEL": "L’heure de la prochaine dose ne peut pas être calculée à partir de cette fréquence. Pourquoi donner cette dose maintenant ?",

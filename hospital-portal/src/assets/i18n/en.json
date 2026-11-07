@@ -12154,6 +12154,7 @@
     },
     "FREQUENCY_UNREAD_CHIP": "Frequency not recognised",
     "FREQUENCY_UNREAD_LABEL": "Frequency not recognised — check the prescription. The next dose time is unknown: a dose given now asks for a reason.",
+    "FREQUENCY_UNREAD_FIRST_LABEL": "Frequency not recognised — check the prescription. The first dose is given as usual; each dose after it asks for a reason.",
     "FREQUENCY_UNREAD_DIALOG": {
       "TITLE": "Frequency not recognised",
       "REASON_LABEL": "The next dose time cannot be worked out from this frequency. Why give this dose now?",

@@ -492,6 +492,7 @@ const ONLY_DIGITS = /^\d{1,4}$/;
 const SEPARATOR = /^[\s\p{Z}\uFEFF_.,'\u2019]$/u;
 const LABEL_AND_CODE = /^([^()]*)\(([^()]*)\)\s*$/;
 /** Spanish "si" with its accent is "yes", never "if": `FrequencyWording.ACCENTED_SI`. */
+const VERY = /(?<!\p{L})tr[\u00e8\u00e9]s(?!\p{L})/giu;
 const ACCENTED_SI = /(?<!\p{L})[sS][\u00ed\u00cd](?!\p{L})/gu;
 
 /** A count of doses written as a word, `MarDoseSchedule.countDigitOf`. English "once" is no eleven here. */
@@ -677,6 +678,7 @@ function partsOfDay(tokens: readonly string[]): FrequencyReading | null {
   while (at < tokens.length) {
     const part = partAt(tokens, at);
     if (!part || seen.includes(part.meaning)) return null;
+    if (!joined && seen.length > 0 && BEFORE_CLOCK.has(part.tokens[0])) return null;
     if (!joined && part.meaning === 'B' && seen.at(-1) === 'E') return null;
     seen.push(part.meaning);
     const next = at + part.tokens.length;
@@ -730,24 +732,24 @@ class ClockList {
   private marked = false;
 
   readOneAt(tokens: readonly string[], at: number, mayOpen: boolean): number {
-    let i = at;
-    if (tokens[i] === 'A' && tokens[i + 1] === 'LAS') i++;
+    const i = tokens[at] === 'A' && tokens[at + 1] === 'LAS' ? at + 1 : at;
     const before = BEFORE_CLOCK.has(tokens[i]) ? tokens[i] : '';
-    if (before) {
-      if (!mayOpen) return -1;
-      i++;
-    }
-    const number = wholeDigits(tokens[i]);
+    if (before && !mayOpen) return -1;
+    const time = before ? i + 1 : i;
+    const number = wholeDigits(tokens[time]);
     if (number === null) return -1;
-    const after = tokens[i + 1] ?? '';
+    return this.readItsMark(number, tokens[time + 1] ?? '', before, time + 2);
+  }
+
+  private readItsMark(number: number, after: string, before: string, next: number): number {
     if (after === 'AM' || after === 'PM') {
-      return number < 1 || number > 12 ? -1 : this.add(hourOf(number, after), true, i + 2);
+      return number < 1 || number > 12 ? -1 : this.add(hourOf(number, after), true, next);
     }
     if (after === 'HMIN') {
-      return this.add(number, before !== '' || number >= FIRST_LONE_CLOCK_HOUR, i + 2);
+      return this.add(number, before !== '' || number >= FIRST_LONE_CLOCK_HOUR, next);
     }
-    if (after === 'H') return this.add(number, before !== '', i + 2);
-    return BEFORE_BARE_CLOCK.has(before) ? this.add(number, true, i + 1) : -1;
+    if (after === 'H') return this.add(number, before !== '', next);
+    return BEFORE_BARE_CLOCK.has(before) ? this.add(number, true, next - 1) : -1;
   }
 
   private add(hour: number, isMarked: boolean, next: number): number {
@@ -835,10 +837,15 @@ function sameReading(a: FrequencyReading, b: FrequencyReading | null): boolean {
   );
 }
 
+/** QA D1491: a letter or a digit: `MarDoseSchedule.nothingWritten`, the other way round. */
+export function frequencyWritten(frequency: string | null | undefined): frequency is string {
+  return !!frequency && /[\p{L}\p{N}]/u.test(frequency);
+}
+
 /** `MarDoseSchedule.read(String)`: the one reader of a frequency. */
 export function frequencyReading(frequency: string | null | undefined): FrequencyReading {
-  if (!frequency?.trim()) return UNREAD;
-  const upper = accentlessUpper(frequency);
+  if (!frequencyWritten(frequency)) return UNREAD;
+  const upper = accentlessUpper(frequency.normalize('NFC').replaceAll(VERY, ' ? '));
   const label = LABEL_AND_CODE.exec(upper);
   if (label) {
     const words = readWithDose(tokensOf(label[1]));
@@ -933,7 +940,7 @@ function isWeightBand(bracketed: string): boolean {
  * reads it: `FrequencyWording.classify`.
  */
 export function unTickedFrequencyVerdict(frequency: string | null | undefined): FrequencyVerdict {
-  if (!frequency?.trim()) return 'FIXED';
+  if (!frequencyWritten(frequency)) return 'FIXED';
   if (frequencyReading(frequency).kind !== 'UNREAD') return 'FIXED';
   const text = accentlessUpper(frequency.normalize('NFC').replaceAll(ACCENTED_SI, ' '))
     .replaceAll(/\([^()]*\)/g, (part) => (isWeightBand(part) ? ' ' : part))

@@ -4624,6 +4624,12 @@ class NurseTaskServiceImplTest {
 
         assertThat(tasks.get(0).isFrequencyUnread()).as(frequency).isTrue();
         assertThat(tasks.get(0).getDueTime()).as("its slot is the order's").isEqualTo(rx.getCreatedAt());
+        // The flag changes no status: the same row as any schedule before its first dose.
+        Prescription schedule = scheduledRx(hospitalId, "toutes les 6 heures");
+        schedule.setStatus(PrescriptionStatus.SIGNED);
+        schedule.setCreatedAt(rx.getCreatedAt());
+        assertThat(tasks.get(0).getStatus()).as(frequency)
+            .isEqualTo(marFor(UUID.randomUUID(), hospitalId, schedule, null).get(0).getStatus());
     }
 
     /** QA D1508: and only those. */

@@ -41,7 +41,7 @@ import {
 import { encounterOptionLabel } from '../shared/encounter-option-label';
 import { allPages, allRows } from '../shared/all-pages';
 import { RangePagerComponent } from '../shared/range-pager/range-pager.component';
-import { unTickedFrequencyVerdict } from '../shared/as-needed-frequency';
+import { frequencyWritten, unTickedFrequencyVerdict } from '../shared/as-needed-frequency';
 import { serverFieldErrors } from '../shared/forms/server-field-errors';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
@@ -903,8 +903,8 @@ export class PrescriptionsComponent implements OnInit {
 
   /** QA D1491: a new order states its frequency, and an edit does not empty one (the server refuses both). */
   private frequencyMissing(): boolean {
-    if (this.editingSigned() || this.form.frequency?.trim()) return false;
-    return !this.editing() || !!this.frequencyStored.trim();
+    if (this.editingSigned() || frequencyWritten(this.form.frequency)) return false;
+    return !this.editing() || frequencyWritten(this.frequencyStored);
   }
 
   /** QA round 30: a whole number of hours from 1 to the maximum. */

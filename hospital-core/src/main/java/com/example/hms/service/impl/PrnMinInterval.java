@@ -224,8 +224,8 @@ public final class PrnMinInterval {
     }
 
     private static boolean sameText(String before, String after) {
-        String a = before == null ? "" : before.strip();
-        String b = after == null ? "" : after.strip();
+        String a = MarDoseSchedule.nothingWritten(before) ? "" : before.strip();
+        String b = MarDoseSchedule.nothingWritten(after) ? "" : after.strip();
         return a.equals(b);
     }
 

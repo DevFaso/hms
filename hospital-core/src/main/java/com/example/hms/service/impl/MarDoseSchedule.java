@@ -206,6 +206,8 @@ public final class MarDoseSchedule {
     /** Any run of characters that is not a letter or a digit (one class, no backtracking). */
     private static final Pattern NOT_ALPHANUMERIC = Pattern.compile("[^A-Z0-9]+");
 
+    private static final Pattern LETTER_OR_DIGIT = Pattern.compile("[\\p{L}\\p{N}]");
+
     /** Any kind of space, read as one: "toutes  les", and the comma of "toutes, les" once it is a space. */
     private static final Pattern SPACES = Pattern.compile("[\\s\\p{Z}\\uFEFF]++");
 
@@ -495,9 +497,9 @@ public final class MarDoseSchedule {
         return false;
     }
 
-    /** QA D1491: nothing but spaces, of any kind, or nothing at all. */
+    /** QA D1491: no letter and no digit: nothing, spaces of any kind, a lone "-". */
     static boolean nothingWritten(String frequency) {
-        return frequency == null || SPACES.matcher(frequency).replaceAll("").isEmpty();
+        return frequency == null || !LETTER_OR_DIGIT.matcher(frequency).find();
     }
 
     /** Upper case with the accents removed. */

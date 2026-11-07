@@ -2,6 +2,7 @@ package com.example.hms.service.impl;
 
 import com.example.hms.service.impl.MarDoseSchedule.Reading;
 
+import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -430,6 +431,8 @@ final class FrequencyCadence {
     /** QA round 36: one intake of "1-0-1", as a count of tablets; "0-1-6" is no posology. */
     private static final Pattern POSOLOGY_INTAKE = Pattern.compile("[0-4]");
     private static final Pattern ONLY_ZEROS = Pattern.compile("0++");
+    /** QA round 36: "tres" with an accent is the French "very", in any form; accents go before the grammar is read. */
+    private static final Pattern VERY = Pattern.compile("(?iu)(?<!\\p{L})tr[\u00e8\u00e9]s(?!\\p{L})");
     /** A closing bracket that ends the text: a label that carries its code. */
     private static final Pattern LABEL_AND_CODE = Pattern.compile("([^()]*+)\\(([^()]*+)\\)[\\s\\p{Z}\\uFEFF]*+");
 
@@ -458,7 +461,8 @@ final class FrequencyCadence {
 
     /** What the whole of the text says, or {@code null} when it is not exactly one form of the grammar. */
     static Reading read(String frequency) {
-        String upper = MarDoseSchedule.accentlessUpper(frequency);
+        String composed = Normalizer.normalize(frequency, Normalizer.Form.NFC);
+        String upper = MarDoseSchedule.accentlessUpper(VERY.matcher(composed).replaceAll(UNREADABLE_MARK));
         Matcher label = LABEL_AND_CODE.matcher(upper);
         if (label.matches()) {
             return labelWithCode(label.group(1), label.group(2));
@@ -691,7 +695,7 @@ final class FrequencyCadence {
         boolean joined = false;
         while (at < tokens.size()) {
             Line part = partAt(tokens, at);
-            if (part == null || seen.contains(part.meaning()) || (!joined && eveningThenBedtime(seen, part))) {
+            if (part == null || seen.contains(part.meaning()) || (!joined && notInAList(seen, part))) {
                 return null;
             }
             seen.add(part.meaning());
@@ -708,8 +712,16 @@ final class FrequencyCadence {
         return countOver(seen.size(), MINUTES_PER_DAY);
     }
 
-    private static boolean eveningThenBedtime(List<String> seen, Line part) {
-        return BEDTIME.equals(part.meaning()) && !seen.isEmpty() && EVENING.equals(seen.get(seen.size() - 1));
+    /**
+     * With nothing between it and the part before it: "soir coucher", one dose or two; QA D1486's sibling
+     * "matin a midi", where the "a" of "a midi" makes a window as it does between two clock times.
+     */
+    private static boolean notInAList(List<String> seen, Line part) {
+        if (seen.isEmpty()) {
+            return false;
+        }
+        return BEFORE_CLOCK.contains(part.tokens().get(0))
+            || (BEDTIME.equals(part.meaning()) && EVENING.equals(seen.get(seen.size() - 1)));
     }
 
     private static boolean isBareWordOnItsOwn(Line part, int after, List<String> tokens) {
@@ -822,32 +834,32 @@ final class FrequencyCadence {
 
         /** Reads one time at {@code at}: the index after it, or -1. {@code mayOpen}: a word may stand before it. */
         int readOneAt(List<String> tokens, int at, boolean mayOpen) {
-            int i = at;
-            if ("A".equals(tokens.get(i)) && i + 1 < tokens.size() && "LAS".equals(tokens.get(i + 1))) {
-                i++;
-            }
+            boolean aLas = "A".equals(tokens.get(at)) && at + 1 < tokens.size() && "LAS".equals(tokens.get(at + 1));
+            int i = aLas ? at + 1 : at;
             String before = BEFORE_CLOCK.contains(tokens.get(i)) ? tokens.get(i) : "";
-            if (!before.isEmpty()) {
-                if (!mayOpen) {
-                    return -1;
-                }
-                i++;
+            if (!before.isEmpty() && !mayOpen) {
+                return -1;
             }
-            Integer number = i < tokens.size() ? wholeDigits(tokens.get(i)) : null;
+            int time = before.isEmpty() ? i : i + 1;
+            Integer number = time < tokens.size() ? wholeDigits(tokens.get(time)) : null;
             if (number == null) {
                 return -1;
             }
-            String after = i + 1 < tokens.size() ? tokens.get(i + 1) : "";
+            return readItsMark(number, time + 1 < tokens.size() ? tokens.get(time + 1) : "", before, time + 2);
+        }
+
+        /** The number of a time and what follows it; {@code next} is the index after that mark. */
+        private int readItsMark(int number, String after, String before, int next) {
             if (AM.equals(after) || PM.equals(after)) {
-                return number < 1 || number > NOON ? -1 : add(hourOf(number, after), true, i + 2);
+                return number < 1 || number > NOON ? -1 : add(hourOf(number, after), true, next);
             }
             if (CLOCK_WITH_MINUTES.equals(after)) {
-                return add(number, !before.isEmpty() || number >= FIRST_LONE_CLOCK_HOUR, i + 2);
+                return add(number, !before.isEmpty() || number >= FIRST_LONE_CLOCK_HOUR, next);
             }
             if (HOUR_MARK.equals(after)) {
-                return add(number, !before.isEmpty(), i + 2);
+                return add(number, !before.isEmpty(), next);
             }
-            return BEFORE_BARE_CLOCK.contains(before) ? add(number, true, i + 1) : -1;
+            return BEFORE_BARE_CLOCK.contains(before) ? add(number, true, next - 1) : -1;
         }
 
         private int add(int hour, boolean isMarked, int next) {
