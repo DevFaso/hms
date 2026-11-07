@@ -65,7 +65,7 @@
                       <button
                         type="button"
                         class="free-slot"
-                        [class.selected]="form.startTime?.slice(0, 5) === slot"
+                        [class.selected]="form.startTime.slice(0, 5) === slot"
                         (click)="pickFreeSlot(slot)"
                       >
                         {{ slot }}

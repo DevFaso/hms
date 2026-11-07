@@ -164,10 +164,10 @@ describe('MyFamilyAccessComponent — proxy scopes and drill-in', () => {
       relationship: 'CAREGIVER',
       permissions: 'VIEW_APPOINTMENTS',
     };
-    component.expiresOn = '2026-10-24';
+    component.expiresOn = '2099-10-24';
     component.grantAccess();
 
-    const endOfDay = new Date(2026, 9, 24, 23, 59, 59);
+    const endOfDay = new Date(2099, 9, 24, 23, 59, 59);
     const sent = portal.grantProxy.calls.mostRecent().args[0];
     expect(sent.expiresAt).toBe(endOfDay.toISOString().slice(0, 19));
     expect(new Date(`${sent.expiresAt}Z`).getTime()).toBe(endOfDay.getTime());

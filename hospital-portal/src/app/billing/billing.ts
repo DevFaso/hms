@@ -580,7 +580,7 @@ export class BillingComponent implements OnInit {
             }),
           );
         }
-        this.form.confirmUnpricedLines = undefined;
+        this.form = { ...this.form, confirmUnpricedLines: undefined };
         this.closeModal();
         this.saving.set(false);
         this.loadInvoices(this.page());
