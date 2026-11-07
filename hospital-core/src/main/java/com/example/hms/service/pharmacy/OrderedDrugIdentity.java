@@ -84,7 +84,7 @@ public final class OrderedDrugIdentity {
      * (chlorpromazine and chlorpropamide, prednisone and prednisolone) stay
      * apart.
      */
-    static String spellingForm(String value) {
+    public static String spellingForm(String value) {
         String folded = DrugClassAllergy.normalize(value).replaceAll("\\s+", " ");
         if (folded.isEmpty()) {
             return folded;

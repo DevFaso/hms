@@ -13,6 +13,7 @@ import com.example.hms.model.Hospital;
 import com.example.hms.model.Organization;
 import com.example.hms.model.Patient;
 import com.example.hms.model.PatientHospitalRegistration;
+import com.example.hms.model.PatientProblem;
 import com.example.hms.model.Prescription;
 import com.example.hms.model.Role;
 import com.example.hms.model.Staff;
@@ -95,6 +96,9 @@ class PrescriptionEditAndWithdrawalIT extends BaseIT {
     @Autowired private EncounterRepository encounterRepository;
     @Autowired private PrescriptionRepository prescriptionRepository;
     @Autowired private AuditEventLogRepository auditEventLogRepository;
+    @Autowired private com.example.hms.repository.PatientProblemRepository patientProblemRepository;
+    private List<String> lastSummaries = List.of();
+    @Autowired private com.example.hms.cdshooks.service.MedicationPrescribeRulesCdsService medicationPrescribeRules;
 
     private Organization organization;
     private Hospital hospital;
@@ -400,6 +404,139 @@ class PrescriptionEditAndWithdrawalIT extends BaseIT {
             "J1 J2 J3", "au coucher", "chaque semaine", "perfusion continue", "bolus"}) {
             createdOnce(createBody(wording));
         }
+    }
+
+    /**
+     * Adult paracetamol over the real endpoint: the alerts come back on a created order (201,
+     * never a refusal), from the real engine, facts reader and transaction.
+     */
+    @Test
+    void adultParacetamolAlertsComeBackOnACreatedOrder() throws Exception {
+        assertThat(paracetamolCards("2 000 mg", "3 fois par jour", ""))
+            .containsExactlyInAnyOrder("warning", "warning");
+        assertThat(paracetamolCards("1 g", "3 fois par jour", "")).containsExactly("info");
+        assertThat(paracetamolCards("500 mg", "4 fois par jour", "")).isEmpty();
+        assertThat(paracetamolCards("1 g", "4 fois par jour", "")).containsExactly("info");
+        assertThat(paracetamolCards("1 g", "si besoin", ",\"asNeeded\":true,\"prnMinIntervalHours\":1"))
+            .containsExactlyInAnyOrder("warning", "warning");
+    }
+
+    /** All active orders and the problem list, through real rows: the second order tips the total. */
+    @Test
+    void adultParacetamolCountsTheOtherOrdersAndTheCodedProblems() throws Exception {
+        Prescription other = prescriptionRepository.save(Prescription.builder()
+            .patient(patient).staff(authorStaff).encounter(encounter).hospital(hospital)
+            .assignment(authorStaff.getAssignment())
+            .medicationName("Paracétamol 500 mg").medicationDisplayName("Paracétamol 500 mg")
+            .dosage("1 g").frequency("2 fois par jour").quantity(BigDecimal.TEN).quantityUnit("cp")
+            .status(PrescriptionStatus.SIGNED).build());
+        PatientProblem gilbert = patientProblemRepository.save(PatientProblem.builder()
+            .patient(patient).hospital(hospital).recordedBy(authorStaff)
+            .problemCode("E80.4").problemDisplay("Gilbert").build());
+        try {
+            // 2 g already: the ceiling is 2,000 mg with the coded Gilbert syndrome, and this is over it.
+            paracetamolCards("500 mg", "1 fois par jour", "");
+            assertThat(lastSummaries).anyMatch(s -> s.contains("2500 mg") && s.contains("2000 mg"));
+            patientProblemRepository.deleteById(gilbert.getId());
+            gilbert = null;
+            // No code now: 2.5 g in all is under the ceiling, and the groups are still named: information.
+            assertThat(paracetamolCards("500 mg", "1 fois par jour", "")).contains("info").doesNotContain("critical");
+            assertThat(lastSummaries).noneMatch(s -> s.contains("2500 mg") && s.contains("4000 mg"));
+            // Each order alone is fine; 5 g together is over the general ceiling.
+            paracetamolCards("1 g", "3 fois par jour", "");
+            assertThat(lastSummaries).anyMatch(s -> s.contains("5000 mg") && s.contains("4000 mg"));
+        } finally {
+            if (gilbert != null) {
+                patientProblemRepository.deleteById(gilbert.getId());
+            }
+            prescriptionRepository.deleteById(other.getId());
+        }
+    }
+
+    /**
+     * A CDS hook runs with no session (open-in-view is off), and the check of the other orders
+     * reads each one's LAZY encounter: its own transaction carries it (QA D1121). The test
+     * profile rethrows a rule's exception.
+     */
+    @Test
+    void adultParacetamolReadsTheOtherOrdersFromAHookWithNoSession() {
+        Prescription other = prescriptionRepository.save(Prescription.builder()
+            .patient(patient).staff(authorStaff).encounter(encounter).hospital(hospital)
+            .assignment(authorStaff.getAssignment())
+            .medicationName("Paracétamol 500 mg").medicationDisplayName("Paracétamol 500 mg")
+            .dosage("1 g").frequency("4 fois par jour").quantity(BigDecimal.TEN).quantityUnit("cp")
+            .status(PrescriptionStatus.SIGNED).build());
+        try {
+            java.util.Map<String, Object> draft = java.util.Map.of(
+                "resourceType", "MedicationRequest",
+                "medicationCodeableConcept", java.util.Map.of("text", "Paracétamol"),
+                "dosageInstruction", List.of(java.util.Map.of("text", "1 g")));
+            java.util.Map<String, Object> context = java.util.Map.of(
+                "patientId", patient.getId().toString(),
+                "medications", java.util.Map.of("entry", List.of(java.util.Map.of("resource", draft))));
+            var response = medicationPrescribeRules.evaluate(new com.example.hms.cdshooks.dto.CdsHookDtos.CdsHookRequest(
+                "medication-prescribe", "i", null, null, "Practitioner/x", context, null));
+            assertThat(response.cards()).extracting(com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard::summary)
+                .anyMatch(summary -> summary.contains("5000 mg") && summary.contains("4000 mg"));
+        } finally {
+            prescriptionRepository.deleteById(other.getId());
+        }
+    }
+
+    /** The contraindication goes through the existing override: refused, then saved with a recorded reason. */
+    @Test
+    void severeHepaticInsufficiencySavesOnlyWithARecordedReason() throws Exception {
+        PatientProblem severe = patientProblemRepository.save(PatientProblem.builder()
+            .patient(patient).hospital(hospital).recordedBy(authorStaff)
+            .problemCode("K72.9").problemDisplay("Hepatic failure")
+            .severity(com.example.hms.enums.ProblemSeverity.SEVERE).build());
+        String refused = "{\"patientId\":\"" + patient.getId() + "\",\"staffId\":\"" + authorStaff.getId()
+            + "\",\"encounterId\":\"" + encounter.getId() + "\",\"medicationName\":\"Paracétamol\","
+            + "\"dosage\":\"500 mg\",\"frequency\":\"3 fois par jour\",\"route\":\"PO\",\"quantity\":3}";
+        try {
+            mockMvc.perform(post(API_CONTEXT + "/prescriptions").contextPath(API_CONTEXT).with(as(authorUser))
+                    .contentType(MediaType.APPLICATION_JSON).content(refused))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.cdsAdvisories[0].indicator").value("critical"));
+            String noReason = refused.replace("\"quantity\":3", "\"quantity\":3,\"forceOverride\":true");
+            mockMvc.perform(post(API_CONTEXT + "/prescriptions").contextPath(API_CONTEXT).with(as(authorUser))
+                    .contentType(MediaType.APPLICATION_JSON).content(noReason))
+                .andExpect(status().isBadRequest());
+            String reasoned = refused.replace("\"quantity\":3",
+                "\"quantity\":3,\"forceOverride\":true,\"overrideReason\":\"Décision du spécialiste\"");
+            String answer = mockMvc.perform(post(API_CONTEXT + "/prescriptions").contextPath(API_CONTEXT).with(as(authorUser))
+                    .contentType(MediaType.APPLICATION_JSON).content(reasoned))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+            UUID created = UUID.fromString(com.jayway.jsonpath.JsonPath.read(answer, "$.id"));
+            assertThat(prescriptionRepository.findById(created).orElseThrow().getOverrideReason())
+                .isEqualTo("Décision du spécialiste");
+            auditEventLogRepository.deleteAllInBatch(auditEventLogRepository.findAll().stream()
+                .filter(row -> created.toString().equals(row.getResourceId())).toList());
+            prescriptionRepository.deleteById(created);
+        } finally {
+            patientProblemRepository.deleteById(severe.getId());
+        }
+    }
+
+    private List<String> paracetamolCards(String dose, String frequency, String more) throws Exception {
+        String body = "{\"patientId\":\"" + patient.getId() + "\",\"staffId\":\"" + authorStaff.getId()
+            + "\",\"encounterId\":\"" + encounter.getId() + "\",\"medicationName\":\"Paracétamol\","
+            + "\"dosage\":\"" + dose + "\",\"frequency\":\"" + frequency + "\",\"route\":\"PO\",\"quantity\":3" + more + "}";
+        String answer = mockMvc.perform(post(API_CONTEXT + "/prescriptions")
+                .contextPath(API_CONTEXT)
+                .with(as(authorUser))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body))
+            .andExpect(status().isCreated())
+            .andReturn().getResponse().getContentAsString();
+        UUID created = UUID.fromString(com.jayway.jsonpath.JsonPath.read(answer, "$.id"));
+        auditEventLogRepository.deleteAllInBatch(auditEventLogRepository.findAll().stream()
+            .filter(row -> created.toString().equals(row.getResourceId())).toList());
+        prescriptionRepository.deleteById(created);
+        lastSummaries = com.jayway.jsonpath.JsonPath.read(answer, "$.cdsAdvisories[*].summary");
+        List<String> indicators = com.jayway.jsonpath.JsonPath.read(answer, "$.cdsAdvisories[*].indicator");
+        return indicators;
     }
 
     private void createdOnce(String body) throws Exception {

@@ -73,6 +73,7 @@ public class CdsRuleEngine {
     private final PrescriptionRepository prescriptionRepository;
     private final MedicationCatalogItemRepository catalogRepository;
     private final PatientVitalSignRepository vitalSignRepository;
+    private final ParacetamolFactsReader paracetamolFacts;
 
     /**
      * QA D1121 (round 20): a rule that throws is a defect, not a quiet log
@@ -96,10 +97,27 @@ public class CdsRuleEngine {
         MedicationCatalogItemRepository catalogRepository,
         PatientVitalSignRepository vitalSignRepository
     ) {
+        this(rules, prescriptionRepository, catalogRepository, vitalSignRepository, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public CdsRuleEngine(
+        List<CdsRule> rules,
+        PrescriptionRepository prescriptionRepository,
+        MedicationCatalogItemRepository catalogRepository,
+        PatientVitalSignRepository vitalSignRepository,
+        ParacetamolFactsReader paracetamolFacts
+    ) {
         this.rules = List.copyOf(rules);
         this.prescriptionRepository = prescriptionRepository;
         this.catalogRepository = catalogRepository;
         this.vitalSignRepository = vitalSignRepository;
+        this.paracetamolFacts = paracetamolFacts;
+    }
+
+    /** Whether a status ends an order for the active-medication checks. */
+    static boolean isTerminal(PrescriptionStatus status) {
+        return TERMINAL_STATUSES.contains(status);
     }
 
     /** Build a context for the given proposed order; never null. */
@@ -194,8 +212,26 @@ public class CdsRuleEngine {
             proposedFrequency,
             parseDoseUnits(proposedDosage),
             weighedAt,
-            order.prnDosesPerDay()
+            order.prnDosesPerDay(),
+            readParacetamolFacts(patient, hospitalId, proposedMedicationName, catalogItem, excludedPrescriptionId)
         );
+    }
+
+    /** QA D1121: as a rule that throws, a failed read costs its cards, never the order. */
+    private ParacetamolFacts readParacetamolFacts(Patient patient, UUID hospitalId, String name,
+                                                  MedicationCatalogItem item, UUID editedOrderId) {
+        if (paracetamolFacts == null) {
+            return ParacetamolFacts.NONE;
+        }
+        try {
+            return paracetamolFacts.read(patient, hospitalId, name, item, editedOrderId);
+        } catch (RuntimeException ex) {
+            if (failFast) {
+                throw ex;
+            }
+            logger.error("CDS paracetamol facts threw {}: {}", ex.getClass().getSimpleName(), ex.getMessage(), ex);
+            return ParacetamolFacts.NONE;
+        }
     }
 
     /** Run every registered rule against the context. */
@@ -406,6 +442,14 @@ public class CdsRuleEngine {
         "sachet", "sachets", "sobre", "sobres", "unit", "units", "unité", "unités", "unidad", "unidades");
 
     private static final Set<String> MICROGRAM_UNITS = Set.of("mcg", "ug", "\u00b5g", "\u03bcg");
+
+    /**
+     * The dose in mg when it is written with its unit, for a limit that must not read a bare
+     * number as mg: "2" is more likely two tablets. Null for a bare number, as for any unknown.
+     */
+    static Double parseLabelledDoseMg(String dosage, Double weightKg, MedicationCatalogItem item) {
+        return leadingUnit(DoseRange.highEnd(dosage)) == null ? null : parseDoseMg(dosage, weightKg, item);
+    }
 
     /** Number, then the unit word right after it. Possessive quantifiers: no backtracking (CodeQL ReDoS). */
     private static final Pattern LEADING_QUANTITY = Pattern.compile(

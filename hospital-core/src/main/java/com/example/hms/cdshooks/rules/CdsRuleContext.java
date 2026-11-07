@@ -56,6 +56,9 @@ import java.util.UUID;
  * @param proposedPrnDosesPerDay   QA D1397: the most doses a day an as-needed
  *                                 order allows, from its minimum interval
  *                                 (24 / interval); {@code null} for any other
+ * @param paracetamolFacts         what the adult paracetamol check reads beyond
+ *                                 the order; {@link ParacetamolFacts#NONE} for
+ *                                 another drug or a child
  */
 public record CdsRuleContext(
     Patient patient,
@@ -71,8 +74,22 @@ public record CdsRuleContext(
     String proposedFrequency,
     Double proposedDoseUnits,
     java.time.LocalDateTime patientWeightRecordedAt,
-    Double proposedPrnDosesPerDay
+    Double proposedPrnDosesPerDay,
+    ParacetamolFacts paracetamolFacts
 ) {
+
+    /** The context of an order the adult paracetamol check does not read. */
+    public CdsRuleContext(Patient patient, UUID hospitalId, String proposedMedicationName,
+                          String proposedMedicationCode, String proposedRxnormCode, Double proposedDoseMg,
+                          MedicationCatalogItem proposedCatalogItem, Double patientWeightKg,
+                          List<Prescription> activePrescriptions, List<String> activePrescriptionRxnorms,
+                          String proposedFrequency, Double proposedDoseUnits,
+                          java.time.LocalDateTime patientWeightRecordedAt, Double proposedPrnDosesPerDay) {
+        this(patient, hospitalId, proposedMedicationName, proposedMedicationCode, proposedRxnormCode,
+            proposedDoseMg, proposedCatalogItem, patientWeightKg, activePrescriptions,
+            activePrescriptionRxnorms, proposedFrequency, proposedDoseUnits, patientWeightRecordedAt,
+            proposedPrnDosesPerDay, ParacetamolFacts.NONE);
+    }
 
     /** The context of an order with no as-needed interval. */
     public CdsRuleContext(Patient patient, UUID hospitalId, String proposedMedicationName,
@@ -98,6 +115,7 @@ public record CdsRuleContext(
 
     /** Defensive copy + null guards to keep the record fully immutable. */
     public CdsRuleContext {
+        paracetamolFacts = paracetamolFacts == null ? ParacetamolFacts.NONE : paracetamolFacts;
         activePrescriptions = activePrescriptions == null
             ? List.of() : List.copyOf(activePrescriptions);
         activePrescriptionRxnorms = activePrescriptionRxnorms == null

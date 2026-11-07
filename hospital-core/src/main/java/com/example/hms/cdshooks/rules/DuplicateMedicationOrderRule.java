@@ -43,7 +43,7 @@ public class DuplicateMedicationOrderRule implements CdsRule {
     public void setCardText(com.example.hms.cdshooks.CdsCardText text) {
         this.text = text;
     }
-    private static final Duration LOOKBACK = Duration.ofDays(7);
+    static final Duration LOOKBACK = Duration.ofDays(7);
 
     @Override
     public String id() {

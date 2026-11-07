@@ -111,6 +111,33 @@ public class PediatricDoseRule implements CdsRule {
         return cards;
     }
 
+    /** Whether the patient is past the paediatric age: the one line between this rule and the adult checks. */
+    static boolean isAdult(com.example.hms.model.Patient patient) {
+        LocalDate dob = patient.getDateOfBirth();
+        if (dob == null) {
+            return false;
+        }
+        Period age = Period.between(dob, LocalDate.now(java.time.ZoneId.systemDefault()));
+        return !age.isNegative() && age.getYears() >= PEDIATRIC_AGE_THRESHOLD_YEARS;
+    }
+
+    /**
+     * The doses a daily limit counts, or {@code null} when none could be read. QA D1397: a
+     * ticked interval is the most an as-needed order allows, so the daily limits judge it; a
+     * frequency text read beside it can only ask for more doses, never fewer.
+     */
+    static Double dosesOnADosingDay(String frequency, Double prnDosesPerDay) {
+        Double perDay = highest(MarDoseSchedule.dosesPerDay(frequency), prnDosesPerDay);
+        return perDay == null ? null : Double.valueOf(Math.max(1d, perDay));
+    }
+
+    private static Double highest(Double read, Double fromInterval) {
+        if (read == null || fromInterval == null) {
+            return read == null ? fromInterval : read;
+        }
+        return Math.max(read, fromInterval);
+    }
+
     /** One evaluation's facts, so each check reads them the same way. */
     private final class Check {
         private final CdsRuleContext context;
@@ -127,19 +154,7 @@ public class PediatricDoseRule implements CdsRule {
             // Review of round 18: the doses given on a dosing day - at least the
             // dose itself (q48h is still a full dose that day); a count that
             // does not divide the day ("5 fois par jour") is read as written.
-            // QA D1397: a ticked interval is the most an as-needed order allows,
-            // so the daily limits judge it; a frequency text read beside it can
-            // only ask for more doses, never fewer.
-            Double perDay = highest(MarDoseSchedule.dosesPerDay(context.proposedFrequency()),
-                context.proposedPrnDosesPerDay());
-            this.dosesPerDay = perDay == null ? null : Math.max(1d, perDay);
-        }
-
-        private static Double highest(Double read, Double fromInterval) {
-            if (read == null || fromInterval == null) {
-                return read == null ? fromInterval : read;
-            }
-            return Math.max(read, fromInterval);
+            this.dosesPerDay = dosesOnADosingDay(context.proposedFrequency(), context.proposedPrnDosesPerDay());
         }
 
         String medication() {
