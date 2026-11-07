@@ -1071,7 +1071,7 @@ describe('TransfusionComponent: a transfusion in progress (QA CX-008)', () => {
       await start(['ROLE_LAB_TECHNICIAN']);
       txSpy.getRequest.and.returnValue(of(closed));
       txSpy.listAdministrationsForPatient.and.returnValue(of([finished]));
-      txSpy.recordCrossmatch.and.returnValue(of({} as CrossmatchResponse));
+      txSpy.recordCrossmatch = jasmine.createSpy().and.returnValue(of({} as CrossmatchResponse));
       component.openRequest(closed);
       fixture.detectChanges();
       el('late-incompatible-result')!.click();
