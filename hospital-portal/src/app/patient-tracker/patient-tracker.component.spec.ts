@@ -1,7 +1,8 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { RoleContextService } from '../core/role-context.service';
+import { ComponentFixture, fakeAsync, TestBed, tick } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { of, throwError } from 'rxjs';
+import { of, throwError, Subject } from 'rxjs';
 import { PatientTrackerComponent } from './patient-tracker.component';
 import {
   PatientTrackerService,
@@ -18,7 +19,6 @@ import {
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import fr from '../../assets/i18n/fr.json';
 import es from '../../assets/i18n/es.json';
-import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 
 function mockItem(overrides: Partial<PatientTrackerItem> = {}): PatientTrackerItem {
@@ -100,9 +100,14 @@ describe('PatientTrackerComponent', () => {
       ],
     }).compileComponents();
 
+    // The real role context: the tracker's actions ask the role acting (QA D1463) — a
+    // clinician unless a test says otherwise — and the board reads the hospital in scope.
+    const roles = TestBed.inject(RoleContextService);
+    roles.setRoles(['ROLE_NURSE']);
+    (
+      roles as { effectiveHospitalIdForRequest: () => string | null }
+    ).effectiveHospitalIdForRequest = () => authSpy.getHospitalId();
     fixture = TestBed.createComponent(PatientTrackerComponent);
-    // The tracker's actions ask the role acting (QA D1463): a clinician, unless a test says otherwise.
-    TestBed.inject(RoleContextService).setRoles(['ROLE_NURSE']);
     component = fixture.componentInstance;
   });
 
@@ -157,9 +162,95 @@ describe('PatientTrackerComponent', () => {
     expect(triageButtons()).toBeGreaterThanOrEqual(3);
   });
 
+  it('uses the selected hospital for HTTP and WebSocket subscriptions', () => {
+    spyOn(TestBed.inject(RoleContextService), 'effectiveHospitalIdForRequest').and.returnValue(
+      'h2',
+    );
+    fixture.detectChanges();
+    expect(trackerSpy.getTrackerBoard).toHaveBeenCalledWith('h2');
+    expect(trackerWsSpy.connect).toHaveBeenCalledWith('h2');
+  });
+  it('filters patient cards locally without changing full-board totals', () => {
+    fixture.detectChanges();
+    component.searchTerm.set('jane');
+    expect(component.visibleCount()).toBe(1);
+    expect(component.totalPatients()).toBe(2);
+    component.stageFilter.set('arrived');
+    expect(component.visibleCount()).toBe(0);
+    component.clearFilters();
+    expect(component.visibleCount()).toBe(2);
+    expect(trackerSpy.getTrackerBoard.calls.count()).toBe(1);
+  });
+  it('ignores late refresh responses and labels the retained board after a failure', () => {
+    const old = new Subject<PatientTrackerBoard>();
+    trackerSpy.getTrackerBoard.and.returnValue(old);
+    fixture.detectChanges();
+    trackerSpy.getTrackerBoard.and.returnValue(of(mockBoard({ totalPatients: 9 })));
+    component.refresh();
+    old.next(mockBoard({ totalPatients: 1 }));
+    expect(component.totalPatients()).toBe(9);
+    const refreshed = component.lastRefreshed();
+    trackerSpy.getTrackerBoard.and.returnValue(throwError(() => new Error('offline')));
+    component.refresh();
+    fixture.detectChanges();
+    expect(component.loadFailed()).toBeTrue();
+    expect(component.totalPatients()).toBe(9);
+    expect(component.lastRefreshed()).toBe(refreshed);
+    expect(fixture.nativeElement.querySelector('[role="alert"]')).toBeTruthy();
+  });
   it('should create', () => {
     expect(component).toBeTruthy();
   });
+
+  it('keeps the stale-board alert through retries until a current response succeeds', () => {
+    fixture.detectChanges();
+    trackerSpy.getTrackerBoard.and.returnValue(throwError(() => new Error('offline')));
+    component.refresh();
+    fixture.detectChanges();
+    const alert = fixture.nativeElement.querySelector('[role="alert"]');
+    const retry = new Subject<PatientTrackerBoard>();
+    trackerSpy.getTrackerBoard.and.returnValue(retry);
+    component.refresh();
+    fixture.detectChanges();
+    expect(component.loading()).toBeTrue();
+    expect(fixture.nativeElement.querySelector('[role="alert"]')).toBe(alert);
+    retry.error(new Error('still offline'));
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[role="alert"]')).toBe(alert);
+
+    const old = new Subject<PatientTrackerBoard>();
+    trackerSpy.getTrackerBoard.and.returnValue(old);
+    component.refresh();
+    const current = new Subject<PatientTrackerBoard>();
+    trackerSpy.getTrackerBoard.and.returnValue(current);
+    component.refresh();
+    old.next(mockBoard());
+    expect(component.loadFailed()).toBeTrue();
+    current.next(mockBoard());
+    fixture.detectChanges();
+    expect(component.loadFailed()).toBeFalse();
+    expect(fixture.nativeElement.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  it('keeps the selected department visible when its last patient leaves the board', fakeAsync(() => {
+    fixture.detectChanges();
+    component.departmentFilter.set('ER');
+    fixture.detectChanges();
+    tick();
+    trackerSpy.getTrackerBoard.and.returnValue(
+      of(mockBoard({ arrived: [], inProgress: [], totalPatients: 0 })),
+    );
+    component.refresh();
+    fixture.detectChanges();
+    tick();
+    const select: HTMLSelectElement = fixture.nativeElement.querySelector('select');
+    expect(select.selectedOptions[0].textContent).toBe('ER');
+    expect(component.visibleCount()).toBe(0);
+    component.clearFilters();
+    fixture.detectChanges();
+    expect(Array.from(select.options).some((option) => option.textContent === 'ER')).toBeFalse();
+    fixture.destroy();
+  }));
 
   it('should load board on init', () => {
     fixture.detectChanges();
@@ -638,6 +729,15 @@ describe('PatientTrackerComponent — the acuity badge is labelled (QA D528/D663
           provide: AuthService,
           // getUserId: the per-card end-exam rule (QA D1099) reads the signed-in user.
           useValue: { getHospitalId: () => 'h1', hasAnyRole: () => true, getUserId: () => null },
+        },
+        {
+          provide: RoleContextService,
+          // The acuity badge is not shown to the front desk alone (RCPT-CLIN): every role answers yes.
+          useValue: {
+            effectiveHospitalIdForRequest: () => 'h1',
+            hasAnyActiveRole: () => true,
+            isSuperAdmin: () => false,
+          },
         },
         { provide: EncounterService, useValue: {} },
       ],
