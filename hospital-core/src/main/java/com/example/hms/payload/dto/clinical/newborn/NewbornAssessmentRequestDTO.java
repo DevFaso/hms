@@ -63,27 +63,28 @@ public class NewbornAssessmentRequestDTO {
     @DecimalMin(value = VitalSignLimits.TEMPERATURE_MIN_C, message = "{vitals.temperature.range}")
     @DecimalMax(value = VitalSignLimits.TEMPERATURE_MAX_C, message = "{vitals.temperature.range}")
     private Double temperatureCelsius;
-    // QA D1424: 1000 bpm, 500 /min and SpO2 150 % reached the chart. Only what cannot
-    // physically be is refused (VitalSignLimits.NEWBORN_FLOOR): a newborn's real
-    // extremes must save, because saving is what raises the urgent alert.
-    @Min(value = VitalSignLimits.NEWBORN_FLOOR, message = "{newborn.vitals.heartRate.range}")
-    @Max(value = VitalSignLimits.HEART_RATE_MAX, message = "{newborn.vitals.heartRate.range}")
+    // QA D1424: warnings and escalation, never a limit that prevents saving an observation
+    // (NewbornAlertRules holds the sources). Only what cannot exist by definition is refused:
+    // a negative number, a saturation above 100 %. A high value saves, flagged to remeasure,
+    // and its urgent alert fires.
+    @Min(value = 0, message = "{newborn.vitals.negative}")
     private Integer heartRateBpm;
-    @Min(value = VitalSignLimits.NEWBORN_FLOOR, message = "{newborn.vitals.respiratoryRate.range}")
-    @Max(value = VitalSignLimits.NEWBORN_RESPIRATORY_RATE_MAX, message = "{newborn.vitals.respiratoryRate.range}")
+    @Min(value = 0, message = "{newborn.vitals.negative}")
     private Integer respirationsPerMin;
-    @Min(value = VitalSignLimits.NEWBORN_FLOOR, message = "{newborn.vitals.systolic.range}")
-    @Max(value = VitalSignLimits.SYSTOLIC_MAX, message = "{newborn.vitals.systolic.range}")
+    @Min(value = 0, message = "{newborn.vitals.negative}")
     private Integer systolicBpMmHg;
-    @Min(value = VitalSignLimits.NEWBORN_FLOOR, message = "{newborn.vitals.diastolic.range}")
-    @Max(value = VitalSignLimits.DIASTOLIC_MAX, message = "{newborn.vitals.diastolic.range}")
+    @Min(value = 0, message = "{newborn.vitals.negative}")
     private Integer diastolicBpMmHg;
     @Min(value = VitalSignLimits.SPO2_MIN, message = "{vitals.spo2.range}")
     @Max(value = VitalSignLimits.SPO2_MAX, message = "{vitals.spo2.range}")
     private Integer oxygenSaturationPercent;
-    @Min(value = VitalSignLimits.NEWBORN_FLOOR, message = "{newborn.vitals.glucose.range}")
-    @Max(value = VitalSignLimits.GLUCOSE_MAX, message = "{newborn.vitals.glucose.range}")
+    /** The unit is in the field's name. A value in another unit comes as {@link #glucoseValue}. */
+    @Min(value = 0, message = "{newborn.vitals.negative}")
     private Integer glucoseMgDl;
+    /** QA D1424: a glucose as entered; refused on {@link #glucoseUnit} without its unit. */
+    @DecimalMin(value = "0", message = "{newborn.vitals.negative}")
+    private Double glucoseValue;
+    private com.example.hms.enums.GlucoseUnit glucoseUnit;
 
     private String examGeneralAppearance;
     private String examHeadNeck;
@@ -111,6 +112,14 @@ public class NewbornAssessmentRequestDTO {
     private Boolean respiratorySupportInitiated;
     private Boolean glucoseProtocolInitiated;
     private Boolean thermoregulationSupportInitiated;
+
+    /** QA D1424: 5.6 means nothing without its unit, and the alerts read the number. */
+    @com.example.hms.validation.ReportedOn("glucoseUnit")
+    @jakarta.validation.constraints.AssertTrue(message = "{maternity.newborn.glucoseUnitRequired}")
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public boolean isGlucoseUnitGiven() {
+        return glucoseValue == null || glucoseUnit != null;
+    }
 
     /** QA D1424 (D111): a diastolic at or above the systolic is a swapped entry. */
     @com.example.hms.validation.ReportedOn("diastolicBpMmHg")

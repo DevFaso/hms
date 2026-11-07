@@ -99,8 +99,14 @@ class BloodPressurePairGuardTest {
             boolean isSystolic = f == systolic;
             Min min = f.getAnnotation(Min.class);
             Max max = f.getAnnotation(Max.class);
-            int floor = type == NewbornAssessmentRequestDTO.class ? VitalSignLimits.NEWBORN_FLOOR
-                : isSystolic ? VitalSignLimits.SYSTOLIC_MIN : VitalSignLimits.DIASTOLIC_MIN;
+            if (type == NewbornAssessmentRequestDTO.class) {
+                // Refuses only what cannot exist; a high value saves, flagged (NewbornAlertRules).
+                if (f.getAnnotation(Min.class) == null || f.getAnnotation(Min.class).value() != 0) {
+                    problems.add(name + "." + f.getName() + ": a negative pressure is refused");
+                }
+                continue;
+            }
+            int floor = isSystolic ? VitalSignLimits.SYSTOLIC_MIN : VitalSignLimits.DIASTOLIC_MIN;
             int ceiling = isSystolic ? VitalSignLimits.SYSTOLIC_MAX : VitalSignLimits.DIASTOLIC_MAX;
             if (min == null || max == null || min.value() < floor || max.value() > ceiling) {
                 problems.add(name + "." + f.getName() + ": bounded within VitalSignLimits (" + floor + "-" + ceiling + ")");
@@ -133,10 +139,10 @@ class BloodPressurePairGuardTest {
 
     @ParameterizedTest(name = "{0}={1}")
     @CsvSource({
-        "heartRateBpm,1000", "heartRateBpm,-1", "respirationsPerMin,500", "oxygenSaturationPercent,150",
-        "glucoseMgDl,-5", "systolicBpMmHg,400", "diastolicBpMmHg,300"
+        "heartRateBpm,-1", "respirationsPerMin,-1", "oxygenSaturationPercent,150", "oxygenSaturationPercent,101",
+        "oxygenSaturationPercent,-1", "glucoseMgDl,-5", "systolicBpMmHg,-1", "diastolicBpMmHg,-1"
     })
-    @DisplayName("the newborn form refuses what no newborn can present with")
+    @DisplayName("the newborn form refuses only what cannot exist by definition")
     void theNewbornFormBoundsItsVitals(String field, int value) throws ReflectiveOperationException {
         NewbornAssessmentRequestDTO dto = new NewbornAssessmentRequestDTO();
         Field f = NewbornAssessmentRequestDTO.class.getDeclaredField(field);
@@ -146,12 +152,25 @@ class BloodPressurePairGuardTest {
     }
 
     @Test
-    @DisplayName("a newborn's real extremes still save, so they still raise the urgent alert")
+    @DisplayName("a newborn's real extremes and a high value save, so the alert and the flag can fire")
     void realNewbornValuesPass() {
+        assertThat(rejected(NewbornAssessmentRequestDTO.builder().heartRateBpm(1000).respirationsPerMin(200)
+            .glucoseMgDl(900).oxygenSaturationPercent(100).systolicBpMmHg(400).diastolicBpMmHg(300).build())).isEmpty();
+        assertThat(rejected(NewbornAssessmentRequestDTO.builder().glucoseValue(0.0).glucoseUnit(com.example.hms.enums.GlucoseUnit.MG_DL).build())).isEmpty();
+        assertThat(rejected(NewbornAssessmentRequestDTO.builder().glucoseValue(-0.1).build())).contains("glucoseValue");
         assertThat(rejected(NewbornAssessmentRequestDTO.builder().heartRateBpm(0).respirationsPerMin(0)
             .oxygenSaturationPercent(40).glucoseMgDl(18).build())).isEmpty();
         assertThat(rejected(NewbornAssessmentRequestDTO.builder().heartRateBpm(250).respirationsPerMin(85)
             .glucoseMgDl(0).systolicBpMmHg(35).diastolicBpMmHg(18).build())).isEmpty();
+    }
+
+    @Test
+    @DisplayName("a glucose value with no unit is refused; the mg/dL field names its unit")
+    void aGlucoseValueNeedsItsUnit() {
+        assertThat(rejected(NewbornAssessmentRequestDTO.builder().glucoseValue(5.6).build())).contains("glucoseUnitGiven");
+        assertThat(rejected(NewbornAssessmentRequestDTO.builder().glucoseValue(5.6)
+            .glucoseUnit(com.example.hms.enums.GlucoseUnit.MMOL_L).build())).isEmpty();
+        assertThat(rejected(NewbornAssessmentRequestDTO.builder().glucoseMgDl(18).build())).isEmpty();
     }
 
     @Test

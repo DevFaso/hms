@@ -17,6 +17,8 @@ import {
   PostpartumService,
   NewbornAssessmentRequest,
   NewbornAssessmentResponse,
+  NewbornAlert,
+  GlucoseUnit,
   NewbornFollowUpAction,
   PostpartumBladderStatus,
   PostpartumFundusTone,
@@ -41,7 +43,8 @@ import { AuthService } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 import { labelledRefusalReason, refusedFieldReasons } from '../shared/refusal-reason';
-import { bloodPressureReversed } from '../shared/vital-sign-limits';
+import { VITAL_SIGN_LIMITS, bloodPressureReversed } from '../shared/vital-sign-limits';
+import { glucoseMmolToMgDl } from '../shared/glucose-units';
 import { refuseFields } from '../shared/forms/invalid-fields';
 import { hasClinicalContent } from '../shared/forms/clinical-content';
 import { FieldLimit, firstOutOfRange, labelKeysOf, rangeMessage } from '../shared/field-limits';
@@ -69,12 +72,12 @@ export const NEWBORN_LIMITS: readonly FieldLimit[] = [
   { field: 'apgarFiveMinute', labelKey: 'POSTPARTUM.APGAR_FIVE', min: 0, max: 10 },
   { field: 'apgarTenMinute', labelKey: 'POSTPARTUM.APGAR_TEN', min: 0, max: 10 },
   { field: 'temperatureCelsius', labelKey: 'POSTPARTUM.TEMPERATURE', min: 25, max: 44 },
-  // QA D1424: only what cannot physically be (1000 bpm reached the chart). A newborn's
-  // real extremes must save, because saving raises the urgent alert (VitalSignLimits).
-  { field: 'heartRateBpm', labelKey: 'POSTPARTUM.PULSE', min: 0, max: 300 },
-  { field: 'respirationsPerMin', labelKey: 'POSTPARTUM.RESP', min: 0, max: 300 },
+  // QA D1424: warnings and escalation, never a limit that prevents saving an observation.
+  // Only what cannot exist is refused; a high value saves, flagged (NewbornAlertRules).
+  { field: 'heartRateBpm', labelKey: 'POSTPARTUM.PULSE', min: 0 },
+  { field: 'respirationsPerMin', labelKey: 'POSTPARTUM.RESP', min: 0 },
   { field: 'oxygenSaturationPercent', labelKey: 'NURSE.SPO2', min: 0, max: 100 },
-  { field: 'glucoseMgDl', labelKey: 'POSTPARTUM.GLUCOSE', min: 0, max: 800 },
+  { field: 'glucoseValue', labelKey: 'POSTPARTUM.GLUCOSE_VALUE', min: 0 },
 ];
 
 /**
@@ -107,7 +110,8 @@ const NEWBORN_FIELD_IDS: Readonly<Record<string, string>> = {
   heartRateBpm: 'nb-hr',
   respirationsPerMin: 'nb-resp',
   oxygenSaturationPercent: 'nb-spo2',
-  glucoseMgDl: 'nb-glucose',
+  glucoseValue: 'nb-glucose',
+  glucoseUnit: 'nb-glucose-unit',
 };
 /** QA D1446: the template id of each field the server may name under a refusal. */
 const OBSERVATION_SERVER_FIELD_IDS: Readonly<Record<string, string>> = {
@@ -161,7 +165,7 @@ export const NEWBORN_FINDINGS = [
   'heartRateBpm',
   'respirationsPerMin',
   'oxygenSaturationPercent',
-  'glucoseMgDl',
+  'glucoseValue',
   'examGeneralAppearance',
   'examNotes',
 ] as const;
@@ -177,6 +181,9 @@ const OBSERVATION_LABELS: Record<string, string> = {
 
 /** The instrument the postpartum module screens with when the plan does not say. */
 const DEFAULT_SCREENING_INSTRUMENT = 'EPDS';
+
+/** QA D1424: the unit is chosen every time; 5.6 means nothing without it. */
+export const GLUCOSE_UNITS: readonly GlucoseUnit[] = ['MG_DL', 'MMOL_L'];
 
 @Component({
   selector: 'app-postpartum-tab',
@@ -663,6 +670,12 @@ export class PostpartumTabComponent {
       return;
     }
     refuseFields(this.host.nativeElement, [], NEWBORN_IDS, '');
+    if (this.glucoseHasNoUnit()) {
+      const message = this.translate.instant('POSTPARTUM.GLUCOSE_UNIT_REQUIRED');
+      refuseFields(this.host.nativeElement, [NEWBORN_FIELD_IDS['glucoseUnit']], NEWBORN_IDS, message);
+      this.toast.error(message);
+      return;
+    }
     const outOfRange = firstOutOfRange(this.assessmentForm, NEWBORN_LIMITS);
     if (outOfRange) {
       const message = rangeMessage(outOfRange, this.translate);
@@ -703,6 +716,37 @@ export class PostpartumTabComponent {
           this.assessmentSaving.set(false);
         },
       });
+  }
+
+  readonly glucoseUnits = GLUCOSE_UNITS;
+
+  private glucoseHasNoUnit(): boolean {
+    const { glucoseValue, glucoseUnit } = this.assessmentForm;
+    return glucoseValue !== undefined && glucoseValue !== null && !glucoseUnit;
+  }
+
+  /**
+   * QA D1424: a value above what the other vitals forms accept saves on this form; the
+   * reader is asked to check it. The numbers only choose when to ask.
+   */
+  newbornValueToCheck(field: 'heartRateBpm' | 'respiratoryRateBpm' | 'glucose'): boolean {
+    const form = this.assessmentForm;
+    if (field === 'heartRateBpm') {
+      return Number(form.heartRateBpm) > VITAL_SIGN_LIMITS.heartRateBpm.max;
+    }
+    if (field === 'respiratoryRateBpm') {
+      return Number(form.respirationsPerMin) > VITAL_SIGN_LIMITS.respiratoryRateBpm.max;
+    }
+    const value = Number(form.glucoseValue);
+    const mgDl = form.glucoseUnit === 'MMOL_L' ? glucoseMmolToMgDl(value) : value;
+    return mgDl > VITAL_SIGN_LIMITS.bloodGlucoseMgDl.max;
+  }
+
+  /** QA D1424: a request to remeasure, or an acceptable-range notice, reads as its sentence on the chart. */
+  newbornAlertsToRead(a: NewbornAssessmentResponse): NewbornAlert[] {
+    return (a.alerts ?? []).filter(
+      (alert) => alert.code?.startsWith('newborn-check-') || alert.severity === 'INFO',
+    );
   }
 
   /** Marks each field a refusal names under `fieldErrors` with the server's reason. */

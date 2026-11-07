@@ -10741,6 +10741,12 @@
     }
   },
   "POSTPARTUM": {
+    "GLUCOSE_VALUE": "Glucemia",
+    "GLUCOSE_UNIT": "Unidad de glucemia",
+    "GLUCOSE_UNIT_MG_DL": "mg/dL",
+    "GLUCOSE_UNIT_MMOL_L": "mmol/L",
+    "GLUCOSE_UNIT_REQUIRED": "Elija la unidad de esta glucemia (mg/dL o mmol/L).",
+    "CHECK_VALUE": "Compruebe este valor y vuelva a medir: supera lo que aceptan los demás formularios de constantes. Aun así se puede guardar.",
     "MOTHER_TAB": "Madre",
     "NEWBORN_TAB": "Recién nacido",
     "OBSERVATIONS": "Observaciones posparto",

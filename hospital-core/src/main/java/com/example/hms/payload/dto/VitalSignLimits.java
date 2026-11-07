@@ -46,18 +46,6 @@ public final class VitalSignLimits {
     public static final String HEAD_CIRCUMFERENCE_MIN_CM = "15.0";
     public static final String HEAD_CIRCUMFERENCE_MAX_CM = "70.0";
 
-    /**
-     * QA D1424: the newborn form. No neonatal plausibility range exists in the repo or
-     * in the clinical reference values, and a newborn's real emergencies sit outside the
-     * bounds above: a heart rate or a breath count of 0 under resuscitation, a glucose
-     * below 20, a preterm pressure below 40, tachypnoea above 80. Those must save, because
-     * saving is what raises the urgent alert. So only what cannot physically be refuses:
-     * nothing below 0, and the ceilings already used above (no breath rate reaches the
-     * heart-rate ceiling). Replace these with a neonatal range when one is supplied.
-     */
-    public static final int NEWBORN_FLOOR = 0;
-    public static final int NEWBORN_RESPIRATORY_RATE_MAX = HEART_RATE_MAX;
-
     private VitalSignLimits() {
     }
 
